@@ -302,7 +302,7 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
         // cells as tall as a handheld's.
         val narrow = maxWidth < NARROW_BELOW && (maxWidth < maxHeight || maxWidth < TINY_BELOW)
         val small = maxHeight < SMALL_BELOW || maxWidth < NARROW_BELOW
-        val columns = space.columns(narrow, maxWidth)
+        val columns = space.columns(narrow, small, maxWidth)
         val gutter = if (narrow || small) Space.gutterCompact else Space.gutter
         val gapX = if (narrow || small) Space.m else Space.l
         // Rows stay clear of the spark under a focused widget.

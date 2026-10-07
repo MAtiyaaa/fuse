@@ -68,8 +68,11 @@ internal abstract class BoardSpace {
     /** Room above the board, under the top line. */
     open val top: Dp get() = Size.hudHeight
 
-    /** Columns of a board this [width] (dp); [narrow] for a phone held upright or a very thin screen. */
-    abstract fun columns(narrow: Boolean, width: Dp): Int
+    /**
+     * Columns of a board this [width] (dp); [narrow] for a phone held upright or a very thin screen,
+     * [small] for a small screen (a handheld's, either way up).
+     */
+    abstract fun columns(narrow: Boolean, small: Boolean, width: Dp): Int
 
     /** A cell's height for cells [cellW] wide. */
     abstract fun cellHeight(cellW: Dp, narrow: Boolean): Dp
@@ -156,7 +159,7 @@ internal class HomeSpace(
     }
 
     override fun title(w: HomeWidget) = w.kind.title()
-    override fun columns(narrow: Boolean, width: Dp) = if (narrow) 2 else 4
+    override fun columns(narrow: Boolean, small: Boolean, width: Dp) = if (narrow) 2 else 4
 
     // Never shorter than a handheld's cells, which every widget's face is made to fit; a small
     // screen scrolls the board rather than cut a widget's words off.

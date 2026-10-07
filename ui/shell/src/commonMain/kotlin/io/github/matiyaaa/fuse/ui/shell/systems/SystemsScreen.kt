@@ -202,8 +202,7 @@ internal class SystemsSpace(
     override fun shown(c: HomeLayoutConfig, page: Int) = c.boardWidgets(page).filter { it.visible && it.target in byId }
     override fun title(w: HomeWidget) = card(w)?.platform?.name ?: "System"
 
-    // About six cards across a 1080p screen, four on a handheld, never fewer than three wide.
-    override fun columns(narrow: Boolean, width: Dp) = if (narrow) 2 else (width / CARD_TARGET).roundToInt().coerceIn(3, 6)
+    override fun columns(narrow: Boolean, small: Boolean, width: Dp) = SystemsBoard.columns(narrow, small, width)
     override fun cellHeight(cellW: Dp, narrow: Boolean): Dp = (cellW / Aspect.SYSTEM_CARD).coerceIn(CELL_MIN, CELL_MAX)
 
     @Composable
@@ -262,7 +261,6 @@ internal class SystemsSpace(
     }
 
     private companion object {
-        val CARD_TARGET = 300.dp
         val CELL_MIN = 72.dp
         val CELL_MAX = 420.dp
     }
@@ -270,6 +268,24 @@ internal class SystemsSpace(
 
 /** The Systems page's arrangement rules, apart from drawing it. */
 internal object SystemsBoard {
+    private val CARD_TARGET = 300.dp
+
+    /**
+     * Columns of the Systems board for a screen [width] wide: about six cards across a 1080p screen
+     * and a TV, never fewer than three. A handheld's screen ([small]) keeps the grid it always had,
+     * about a seventh of its width a card and never smaller than a thumb (five across a Thor's
+     * upper screen), so its systems stay the size they were; a phone held upright ([narrow]) shows two.
+     */
+    fun columns(narrow: Boolean, small: Boolean, width: Dp): Int = when {
+        narrow -> 2
+        small -> {
+            val usable = width - Space.gutter * 2
+            val target = (width * 0.135f).coerceAtLeast(Size.touch * 2 + Space.l)
+            ((usable + Space.m) / (target + Space.m)).toInt().coerceIn(if (width < Size.touch * 12) 2 else 3, 8)
+        }
+        else -> (width / CARD_TARGET).roundToInt().coerceIn(3, 6)
+    }
+
     /** One system's card on the board, one cell. */
     fun tile(id: String) = HomeWidget(id = "system.$id", kind = io.github.matiyaaa.fuse.model.WidgetKind.SYSTEMS, order = 0, target = id, width = 1, height = 1)
 
