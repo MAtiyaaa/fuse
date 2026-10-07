@@ -202,6 +202,9 @@ interface RommOps {
      * library is known: the ones to send to RomM. [RommNotOnServer.total] counts them all.
      */
     val notOnServer: StateFlow<RommNotOnServer> get() = MutableStateFlow(RommNotOnServer())
+
+    /** Library games on [platform] that RomM has no match for, every one of them (empty until the server's library is known). */
+    fun notOnServerOn(platform: PlatformId): Flow<List<GameCard>> = flowOf(emptyList())
     fun games(slug: String?): Flow<List<RommGame>>
     fun collection(id: String): Flow<List<RommGame>>
     fun search(text: String): Flow<List<RommGame>>
@@ -268,5 +271,5 @@ interface RommOps {
 /** A RomM game Fuse doesn't have yet is shown with this id (never a real game's: those are positive). */
 fun rommGameId(romId: Long): GameId = GameId(-romId)
 
-/** The RomM id behind a [rommGameId], or null for a real game. */
-val GameId.rommOnly: Long? get() = if (value < 0) -value else null
+/** The RomM id behind a [rommGameId], or null for any other game (the library's, or another device's: see [HOUSEHOLD_BASE]). */
+val GameId.rommOnly: Long? get() = if (value < 0 && value > HOUSEHOLD_BASE) -value else null

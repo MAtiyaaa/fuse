@@ -113,6 +113,13 @@ class TransferManager(
         }
     }
 
+    override fun devicesChanged() {
+        scope.launch {
+            update { list -> list.map { if (it.status == TransferStatus.WAITING && it.waiting == WaitReason.DEVICE) it.copy(retryAt = null) else it } }
+            kick()
+        }
+    }
+
     /** The moving numbers of [id]: bytes, speed and time left. */
     override fun live(id: String): StateFlow<TransferLive> = liveOf(id)
 
@@ -295,6 +302,8 @@ class TransferManager(
                 ({ t -> t.copy(status = TransferStatus.WAITING, waiting = WaitReason.NETWORK, phase = null, attempts = t.attempts + 1, retryAt = clock() + TransferScheduler.backoff(t.attempts + 1)) })
             } catch (e: DriveMissing) {
                 ({ t -> t.copy(status = TransferStatus.WAITING, waiting = WaitReason.DRIVE, waitingFor = e.label, phase = null, retryAt = clock() + DRIVE_LOOK_MS) })
+            } catch (e: DeviceAway) {
+                ({ t -> t.copy(status = TransferStatus.WAITING, waiting = WaitReason.DEVICE, waitingFor = e.label, phase = null, retryAt = clock() + DEVICE_LOOK_MS) })
             } catch (e: TransferFailure) {
                 ({ t -> t.copy(status = TransferStatus.FAILED, phase = null, error = e.message, retryable = e.retryable, finishedAt = clock()) })
             } catch (e: Exception) {
@@ -411,6 +420,7 @@ class TransferManager(
         private const val TICK_MS = 500L
         private const val SAVE_EVERY_MS = 3_000L
         private const val DRIVE_LOOK_MS = 30_000L
+        private const val DEVICE_LOOK_MS = 60_000L
         /** A transfer that lost its way this many times in a row stops and says so. */
         const val MAX_ATTEMPTS = 8
 

@@ -386,8 +386,8 @@ internal class DefaultMediaOps(
     override fun fill(mode: MediaFillMode, kinds: Set<MediaKind>, platform: PlatformId?, game: GameId?) =
         startFill(FillJob(mode, kinds, platform, game, everything = false))
 
-    override fun fillEverything(platform: PlatformId?) {
-        startFill(FillJob(MediaFillMode.FILL_MISSING, FILLABLE, platform, game = null, everything = true))
+    override fun fillEverything(platform: PlatformId?, remote: Boolean) {
+        startFill(FillJob(MediaFillMode.FILL_MISSING, FILLABLE, platform, game = null, everything = true, remote = remote))
         // System logos and panels come from the art pack, alongside the games.
         systemArt.start()
     }
@@ -512,7 +512,7 @@ internal class DefaultMediaOps(
             val details = coordinator.providesMetadata(priority, configured)
             val listed: List<GameId> = when {
                 job.game != null -> listOf(job.game)
-                job.everything -> gamesIn(job.platform)
+                job.everything -> gamesIn(job.platform) + if (job.remote) runCatching { ctx.remoteIds(job.platform) }.getOrDefault(emptyList()) else emptyList()
                 // Missing screenshots alone don't make a game worth searching for.
                 job.mode == MediaFillMode.FILL_MISSING -> if (kinds.isEmpty()) emptyList() else media.gamesMissing(MediaKind.needed(kinds), job.platform).keys.toList()
                 else -> gamesIn(job.platform)
@@ -779,6 +779,8 @@ private data class FillJob(
     val everything: Boolean,
     /** Started by Fuse itself (after a scan), not by the user. */
     val auto: Boolean = false,
+    /** Also the games Fuse shows without having them (RomM's, other devices'). */
+    val remote: Boolean = false,
 ) {
     /** A bulk "fill missing" remembers what it didn't find, so the next one can skip the game. */
     val remembers: Boolean get() = game == null && mode == MediaFillMode.FILL_MISSING

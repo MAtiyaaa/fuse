@@ -57,6 +57,9 @@ enum class WaitReason {
     PLAYING,
     /** Only on Wi-Fi, and this connection isn't. */
     WIFI,
+
+    /** The other device it comes from (or goes to) is off or away. [TransferItem.waitingFor] names it. */
+    DEVICE,
 }
 
 /** What an active transfer is doing. */
@@ -216,3 +219,9 @@ class TransferInterrupted(message: String, cause: Throwable? = null) : Exception
 
 /** The drive a transfer needs isn't connected. */
 class DriveMissing(val label: String) : Exception("$label isn't connected")
+
+/**
+ * The only devices that have what a transfer needs are off or away: it waits for one, without
+ * running out of tries (a device can be away for days), and looks again whenever devices change.
+ */
+class DeviceAway(val label: String) : Exception("$label is away")

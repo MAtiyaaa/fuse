@@ -48,6 +48,10 @@ internal class LibraryProfileData(
     suspend fun gameFor(household: String): Long? =
         data.profileState.read().games.firstOrNull { r -> keyOf(r).id == household || candidatesOf(r).any { it.id == household } }?.id
 
+    /** Every library game's ids with the household, the one it is known by first. */
+    suspend fun householdIds(): Map<Long, List<String>> =
+        data.profileState.read().games.associate { r -> r.id to (listOf(keyOf(r).id) + candidatesOf(r).map { it.id }).distinct() }
+
     override suspend fun candidates(): List<List<GameKey>> =
         data.profileState.read().games.map { candidatesOf(it) }.distinct()
 

@@ -144,6 +144,7 @@ class SyncClient(
         bodyHash: String? = null,
         content: OutgoingContent? = null,
         raw: (suspend (io.ktor.client.statement.HttpResponse) -> T)? = null,
+        headers: Map<String, String> = emptyMap(),
     ): T {
         val targets = bases()
         if (targets.isEmpty()) throw SyncException("This device has no address for its host.", "no-address", 0)
@@ -167,6 +168,7 @@ class SyncClient(
                     header(RequestSigning.SIGNATURE, sig)
                     header("X-Fuse-Route", r.name)
                     header(io.ktor.http.HttpHeaders.AcceptEncoding, "gzip")
+                    for ((k, v) in headers) header(k, v)
                     when {
                         content != null -> setBody(content)
                         body != null -> {
@@ -326,6 +328,68 @@ class SyncClient(
         // Several at once: over a slow link each file's round trip, not its size, is what takes the time.
         inParallel(need) { h -> upload(h, store.fileOf(h)) }
         return send(HttpMethod.Post, "/profiles/$profile/revisions", RevisionPush(revision), RevisionPush.serializer(), RevisionResult.serializer())
+    }
+
+    // ---------------------------------------------------------------- the household's games
+
+    /** Sends this device's list of games, gzipped (a big library is a lot of text). */
+    suspend fun publishLibrary(lib: DeviceLibrary) {
+        val packed = Gzip.pack(json.encodeToString(DeviceLibrary.serializer(), lib).toByteArray())
+        call<Unit>(HttpMethod.Post, "/library", packed, null, headers = mapOf(SyncHost.GZIP_BODY to "1"))
+    }
+
+    suspend fun libraries(have: Map<String, String>): LibrariesPage =
+        send(HttpMethod.Post, "/libraries", LibrariesKnown(have), LibrariesKnown.serializer(), LibrariesPage.serializer())
+
+    suspend fun ticket(req: TicketRequest): PeerTicket = send(HttpMethod.Post, "/tickets", req, TicketRequest.serializer(), PeerTicket.serializer())
+
+    /**
+     * A piece of [file] through the host: [sink] reads it as it comes (the host may take it straight
+     * from the device, or have the device send it). Returns what [sink] returns.
+     */
+    suspend fun <T> relay(ticket: String, file: String, offset: Long, length: Long, sink: suspend (java.io.InputStream, Long?) -> T): T {
+        val q = "ticket=" + java.net.URLEncoder.encode(ticket, "UTF-8") + "&file=" + java.net.URLEncoder.encode(file, "UTF-8") + "&offset=$offset&length=$length"
+        return call(HttpMethod.Get, "/relay?$q", null, null, raw = { resp ->
+            val size = resp.headers[SyncHost.PEER_SIZE]?.toLongOrNull()
+            withContext(Dispatchers.IO) { resp.bodyAsChannel().toInputStream().use { sink(it, size) } }
+        })
+    }
+
+    suspend fun relayAsks(): List<RelayAsk> = get("/relays", ListSerializer(RelayAsk.serializer()))
+
+    /** Sends a piece the host asked for: [length] bytes from [open]. */
+    suspend fun relaySend(id: String, length: Long, open: () -> java.io.InputStream) {
+        val content = object : OutgoingContent.WriteChannelContent() {
+            override val contentType = ContentType.Application.OctetStream
+            override val contentLength = length
+            override suspend fun writeTo(channel: ByteWriteChannel) {
+                withContext(Dispatchers.IO) {
+                    open().use { input ->
+                        val buf = ByteArray(64 * 1024)
+                        while (true) {
+                            val n = input.read(buf)
+                            if (n < 0) break
+                            channel.writeFully(buf, 0, n)
+                        }
+                    }
+                }
+            }
+        }
+        call<Unit>(HttpMethod.Put, "/relays/$id", null, null, bodyHash = "relay:$id", content = content)
+    }
+
+    suspend fun ask(c: DeviceCommand): DeviceCommand = send(HttpMethod.Post, "/commands", c, DeviceCommand.serializer(), DeviceCommand.serializer())
+    suspend fun commands(): List<DeviceCommand> = get("/commands", Commands.serializer()).commands
+    suspend fun inbox(): List<DeviceCommand> = get("/commands/inbox", Commands.serializer()).commands
+    suspend fun ack(id: String, ack: CommandAck): DeviceCommand = send(HttpMethod.Post, "/commands/$id/ack", ack, CommandAck.serializer(), DeviceCommand.serializer())
+    suspend fun cancelCommand(id: String): DeviceCommand = call(HttpMethod.Delete, "/commands/$id", ByteArray(0), DeviceCommand.serializer())
+    suspend fun postTransfers(s: TransferSnapshot) = send(HttpMethod.Post, "/transfers", s, TransferSnapshot.serializer(), kotlinx.serialization.json.JsonObject.serializer())
+    suspend fun transfers(): List<TransferSnapshot> = get("/transfers", TransferSnapshots.serializer()).devices
+
+    /** The host this device is linked to, as it says hello now (its features); null when it doesn't answer. */
+    suspend fun helloNow(): HostHello? {
+        for ((_, base) in bases()) hello(base, http)?.let { return it }
+        return null
     }
 
     companion object {

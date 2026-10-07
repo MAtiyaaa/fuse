@@ -415,7 +415,12 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     PageEffect(dragged, listDragged) { if (dragged || listDragged) touchScroll = true }
 
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
-        touchScroll = false
+        if (touchScroll) {
+            touchScroll = false
+            // The controller carries on from what the finger left on screen, never from a row
+            // scrolled out of sight (which would throw the grid back to it).
+            if (!state.inHeader) list?.let { cards -> resumeFromView(state, cards, layout, gridState, listState) }
+        }
         val count = list?.size ?: 0
         if (state.inHeader && header.isNotEmpty()) {
             state.headerIndex = state.headerIndex.coerceIn(0, header.lastIndex)
@@ -638,7 +643,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                         }
                         Spacer(Modifier.height(if (inSystem) lerp(Space.m, Space.s, collapse) else lerp(Space.l, Space.s, collapse)))
                         columns = cols
-                        IconGrid(list, state, gridState, cols, tileBase, metrics.gap, reveal, onTap = { i -> tapAt(i, list) }, onHover = { i -> hoverAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
+                        IconGrid(list, state, gridState, cols, tileBase, metrics.gap, reveal, follow = { !touchScroll }, onTap = { i -> tapAt(i, list) }, onHover = { i -> hoverAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
                     }
                     LibraryLayout.CAPSULE -> {
                         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).padding(horizontal = Space.gutter).reveal(reveal, 1), contentAlignment = Alignment.BottomStart) {
@@ -672,11 +677,11 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                         val coverW = metrics.coverWidth
                         val cols = ((maxW - Space.gutter * 2 + metrics.gap) / (coverW + metrics.gap)).toInt().coerceAtLeast(2)
                         columns = cols
-                        CoverGrid(list, state, gridState, cols, coverW, metrics.gap, reveal, onTap = { i -> tapAt(i, list) }, onHover = { i -> hoverAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
+                        CoverGrid(list, state, gridState, cols, coverW, metrics.gap, reveal, follow = { !touchScroll }, onTap = { i -> tapAt(i, list) }, onHover = { i -> hoverAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
                     }
                     LibraryLayout.COMPACT_LIST -> {
                         columns = 1
-                        CompactList(list, state, listState, reveal, onTap = { i -> tapAt(i, list) }, onHover = { i -> hoverAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
+                        CompactList(list, state, listState, reveal, follow = { !touchScroll }, onTap = { i -> tapAt(i, list) }, onHover = { i -> hoverAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
                     }
                   }
                 }
@@ -816,6 +821,7 @@ private fun IconGrid(
     size: Dp,
     gap: Dp,
     reveal: Reveal,
+    follow: () -> Boolean,
     onTap: (Int) -> Unit,
     onLong: (Int) -> Unit,
     onHover: (Int) -> Unit = {},
@@ -823,7 +829,7 @@ private fun IconGrid(
 ) {
     // The chosen row stays clear of the top's fading edge, and is followed again as tiles shrink with the folding stage.
     val fade = with(androidx.compose.ui.platform.LocalDensity.current) { (Space.xl + Space.s).roundToPx() }
-    FollowSelection(grid, { state.grid.index }, anchor = 0.05f, insetPx = fade, relayout = size)
+    FollowSelection(grid, { state.grid.index }, anchor = 0.05f, enabled = follow, insetPx = fade, relayout = size)
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
         state = grid,
@@ -861,12 +867,13 @@ private fun CoverGrid(
     width: Dp,
     gap: Dp,
     reveal: Reveal,
+    follow: () -> Boolean,
     onTap: (Int) -> Unit,
     onLong: (Int) -> Unit,
     onHover: (Int) -> Unit = {},
     focused: Boolean,
 ) {
-    FollowSelection(grid, { state.grid.index }, anchor = 0.1f)
+    FollowSelection(grid, { state.grid.index }, anchor = 0.1f, enabled = follow)
     val selected = list.getOrNull(state.grid.index)
     val showsSystem = LocalTileShowsSystem.current
     Column {
@@ -908,12 +915,13 @@ private fun CompactList(
     state: LibraryViewState,
     listState: LazyListState,
     reveal: Reveal,
+    follow: () -> Boolean,
     onTap: (Int) -> Unit,
     onLong: (Int) -> Unit,
     onHover: (Int) -> Unit = {},
     focused: Boolean,
 ) {
-    FollowSelection(listState, { state.grid.index }, anchor = 0.35f)
+    FollowSelection(listState, { state.grid.index }, anchor = 0.35f, enabled = follow)
     val selected = list.getOrNull(state.grid.index)
     val showsSystem = LocalTileShowsSystem.current
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -1442,3 +1450,24 @@ private const val THUMB_CORNER_EXTRA = 0.06f
 private const val COLLECTION_ASPECT = 1.6f
 private const val WELL_FILL = 0.08f
 private const val WELL_FILL_LIGHT = 0.06f
+
+/**
+ * After a touch scroll, the selection moves to the first game fully on screen when the one it was
+ * on has scrolled out of sight, so the controller carries on from what the person is looking at.
+ * Tiles are the grid's (and the list's) items in order, so an item's index is its game's.
+ */
+private fun resumeFromView(state: LibraryViewState, list: List<GameCard>, layout: LibraryLayout, grid: LazyGridState, rows: LazyListState) {
+    val index = state.grid.index
+    val visible: List<Pair<Int, Boolean>> = when (layout) {
+        LibraryLayout.ICON, LibraryLayout.COVER_GRID -> grid.layoutInfo.let { info ->
+            info.visibleItemsInfo.map { it.index to (it.offset.y >= info.viewportStartOffset && it.offset.y + it.size.height <= info.viewportEndOffset) }
+        }
+        LibraryLayout.COMPACT_LIST -> rows.layoutInfo.let { info ->
+            info.visibleItemsInfo.map { it.index to (it.offset >= info.viewportStartOffset && it.offset + it.size <= info.viewportEndOffset) }
+        }
+        else -> return
+    }.filter { it.first in list.indices }
+    if (visible.isEmpty() || visible.any { it.first == index && it.second }) return
+    val first = visible.firstOrNull { it.second }?.first ?: visible.first().first
+    state.pick(first, list)
+}

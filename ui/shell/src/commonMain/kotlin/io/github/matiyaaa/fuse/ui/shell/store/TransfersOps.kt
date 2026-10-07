@@ -36,6 +36,12 @@ data class TransferRow(
     val mirrored: String? = null,
     /** The game in Fuse's library this is (a RomM download once it landed, an upload), for its art. */
     val game: io.github.matiyaaa.fuse.model.GameId? = null,
+    /** Another of the household's devices this transfer runs on (null for this device's own). */
+    val device: String? = null,
+    val deviceName: String? = null,
+    val deviceOnline: Boolean = true,
+    /** When that device was last heard from. */
+    val deviceSeen: Long = 0,
 )
 
 /**
@@ -74,6 +80,7 @@ enum class TransferFilter(val label: String) {
     UPLOADS("Uploads"),
     COMPLETED("Completed"),
     FAILED("Failed"),
+    OTHER_DEVICES("Other Devices"),
     ;
 
     fun shows(row: TransferRow): Boolean = when (this) {
@@ -82,6 +89,7 @@ enum class TransferFilter(val label: String) {
         UPLOADS -> row.item.upload && !row.item.status.finished
         COMPLETED -> row.item.status == TransferStatus.DONE
         FAILED -> row.item.status == TransferStatus.FAILED
+        OTHER_DEVICES -> row.device != null
     }
 }
 

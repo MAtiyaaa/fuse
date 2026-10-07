@@ -178,3 +178,25 @@ object RequestSigning {
     fun sign(secret: String, method: String, path: String, time: Long, nonce: String, body: ByteArray): String =
         SyncCrypto.hmac(SyncCrypto.decode(secret), message(method, path, time, nonce, SyncCrypto.sha256(body)))
 }
+
+/**
+ * Requests from one device to another for a game's files ([PeerTicket]): signed with the ticket's
+ * key over the path, the time and a one-off nonce. The key is HMAC(source's secret, the ticket), so
+ * the source checks a request with nothing but its own secret, and only the host could have made it.
+ */
+object PeerSigning {
+    const val TICKET = "X-Fuse-Peer-Ticket"
+
+    fun key(sourceSecret: String, ticket: PeerTicket): String = SyncCrypto.hmac(SyncCrypto.decode(sourceSecret), ticket.message())
+
+    /** Signs a request for [file] of [game] from [offset], [length] bytes (as parsed, so encoding can't change it). */
+    fun sign(key: String, game: String, file: String, offset: Long, length: Long, time: Long, nonce: String): String =
+        SyncCrypto.hmac(key.toByteArray(), RequestSigning.message("GET", "$game\u0000$file\u0000$offset\u0000$length", time, nonce, ""))
+
+    /** The ticket as a header: its claims, without the sealed key. */
+    fun header(ticket: PeerTicket, json: kotlinx.serialization.json.Json): String =
+        SyncCrypto.encode(json.encodeToString(PeerTicket.serializer(), ticket.claims()).toByteArray())
+
+    fun fromHeader(text: String, json: kotlinx.serialization.json.Json): PeerTicket? =
+        runCatching { json.decodeFromString(PeerTicket.serializer(), SyncCrypto.decode(text).decodeToString()) }.getOrNull()
+}

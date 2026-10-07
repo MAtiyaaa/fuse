@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.3.7.5 is the <b>Motion Update</b>, with Fuseline 3.1 and an optimised Android build that undoes 0.3.7.4's slowdown: Fuseline 3, Fuse's animation engine rebuilt so motion never breaks: anything moving carries on from where it is, at the speed it has, whatever interrupts it, with tabs that slide and reverse mid-change, layouts and shared elements that glide, and every input (touch, mouse, trackpad, keyboard, controller and stick) moving things the same way, faster than Fuseline 2 and Compose on every measured benchmark. It follows 0.3.6, the Unity Update (Fuse RomM, one Downloads page, Jellyfin for offline, streaming through Moonlight and saves that reach every device by themselves), and 0.3.5, the Swift Update. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.3.8 is the <b>Reach Update</b>: every game in your household, reachable from every device. With Fuse Sync, see what your other devices have (in the RomM tab, or a Remote Library in the Sync tab), bring any of it here, send a game to any device (even one that is away) or ask the device that has it to upload it to RomM, and see where every game is on its page. Fuse picks the best source by itself, from another device at home to RomM from outside, checks every file and never shows half a game. It follows 0.3.7, the Motion Update (Fuseline 3, where motion never breaks), and 0.3.6, the Unity Update (Fuse RomM, one Downloads page, Jellyfin for offline, streaming through Moonlight and saves that reach every device by themselves). <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -567,7 +567,17 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.3.7.5 "The Motion Update" is still early, and moves like never before.** Fuseline 3, Fuse's
+> **Fuse 0.3.8 "The Reach Update" is still early, and brings every game in your household within
+> reach.** With Fuse Sync, each device sees what your other devices have, in the RomM tab ("Not on
+> RomM, from another device", and each system in sections) or in a Remote Library in the Sync tab,
+> and every game's page says where it is: this device, your other devices and RomM, online or away,
+> verified or not. Bring a game here, send it to any device (one that is away gets it when it is
+> back) or have the device that has it upload it to RomM. Fuse picks the best source by itself (a
+> device at home, RomM at home, a device through your host, RomM from outside), checks every file
+> and never shows half a game; every device's downloads are on the Downloads page. See
+> [the release notes](docs/releases/0.3.8.md).
+>
+> 0.3.7.5, "The Motion Update", moves like never before. Fuseline 3, Fuse's
 > animation engine, keeps every motion continuous: whatever interrupts something moving (a new tab, a
 > finger, a reversal, the window changing size), it carries on from where it is at the speed it has.
 > Fuseline 3.1 keeps all of that and takes work off every frame around it, and is measured against
@@ -602,6 +612,7 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 
 | Version | Name | What it brought |
 |---|---|---|
+| [0.3.8](docs/releases/0.3.8.md) | The Reach Update | Every game in the household within reach: other devices' games in the RomM tab and a Remote Library in the Sync tab, Available On for every game, Send to Another Device (queued while it is away), uploads to RomM asked from any device, the best source chosen by itself, every device's downloads, all remembered offline; Library touch scrolling that stays where you leave it |
 | [0.3.7.5](docs/releases/0.3.7.5.md) | The Motion Update | Fuseline 3.1 (values without coroutines, no invisible frames, decoration that waits for you, paced decoration), measured against Fuseline 3, 2, 1 and Compose; an optimised Android build compiled ahead of time; 0.3.7.4's slowdown on Android undone; selection moves that redraw two items |
 | [0.3.7.4](docs/releases/0.3.7.4.md) | The Motion Update | Each device keeps its own Systems page; systems made too large through Fuse Sync are put back; arranging on a short screen; far less drawn every frame; the slowest frame shown on the device |
 | [0.3.7.3](docs/releases/0.3.7.3.md) | The Motion Update | Systems as small as a game's box art, with a picture of each console you can change; a System size setting; arranging that moves systems along in order; a Systems look for each screen of a two-screen device; RomM uploads that finish; the second screen following Downloads |

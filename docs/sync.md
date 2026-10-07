@@ -15,8 +15,10 @@ It sits beside Fuse's other first-party parts: **Fuse Player by Fuse** (films, s
 - One household, one newest save: a save made on any device reaches every other device that has
   the game by itself, and each game says "Synced everywhere" or "5 of 6 devices current".
 
-Your games themselves are never synced or copied to the host: each device keeps its own games, and
-Fuse Sync carries only what you made playing them.
+Your games themselves are never kept on the host. Each device keeps its own games, and Fuse Sync
+carries what you made playing them. From 0.3.8 a device can also bring a game from another of your
+devices when you ask it to: the game goes device to device, or passes through the host without
+being written there (see [Games across the household](#games-across-the-household)).
 
 Off, Fuse Sync does nothing at all: no Sync tab, no network, nothing in the background. Profiles
 don't need it: a device keeps its own (see [Profiles](#profiles)), and Fuse Sync takes them along
@@ -160,6 +162,75 @@ How sign-ins travel and are kept:
 - To each device, sealed again with that device's own secret. A person's Jellyfin sign-in only goes
   to devices allowed to open their profile (a PIN keeps it to the devices that know it).
 - A host older than 0.3.6.3 doesn't offer any of this, and devices carry on as before.
+
+## Games across the household
+
+From 0.3.8 ("The Reach Update") your devices' games make one library you can reach from any of them.
+
+- **What each device has.** Every device tells the host which games it has: title, system, size,
+  when it was added, its files with their sizes and hashes, and the ids Fuse uses for its art. The
+  games themselves stay where they are. **Share This Device's Games** (Settings, Addons, Remote
+  Library) turns this off for a device; its games then aren't listed anywhere else.
+- **Where you see it.** With Fuse RomM on, the RomM tab ends with **Not on RomM, from Another
+  Device**, and each system's page has three sections: On RomM, Not on RomM (this device's) and Not
+  on RomM, from Another Device. Without RomM, the Sync tab has a **Library** with Recently Added and
+  Systems. A game this device already has is never listed as another device's. Every game's page
+  says where it is (**Available On**): this device, each other device that has it, and RomM, with
+  whether each is online, its size there, whether it is verified, and when it was downloaded or
+  added.
+- **Remembered offline.** What other devices have, and the art and details for their games, are
+  kept on this device, so the Remote Library can be browsed with the host away. Art follows the same
+  rules as RomM's games (Fuse's art order, SteamGridDB and your choices), and **Fill Everything** in
+  Settings can include the Remote Library.
+
+### Bringing a game here, or sending it anywhere
+
+- **Download** on another device's game brings it to this device. **Send to Another Device**, on any
+  game's page or options, asks another device to bring it. A device that is away gets the request
+  when it is back; until then Downloads shows "Waiting for Thor to be back". **Let Other Devices
+  Send Games Here** turns this off for a device, and **Where Games Sent Here Go** chooses a folder
+  (by default each system's folder, as Fuse RomM's downloads choose it).
+- **Upload to RomM** on another device's game asks the device that has it to upload it, with its
+  own RomM upload. Any device can ask; the request waits if that device is away.
+- **The best source, by itself.** Each attempt ranks every place the game is: another device on the
+  same network first, then RomM over its home address, then another device through the host, then
+  RomM over its outside address, the fastest first within each. If a source drops, the next attempt
+  ranks again and carries on from another; a part already downloaded is kept only when the new
+  source has the same file (same hash).
+- **Never half a game.** Every file is checked against its hash. A game made of a folder is put
+  together in a hidden folder (which no scan reads) and moved into place in one step; a game made of
+  several files places its main file last. A cancelled or failed download leaves nothing behind.
+- **Other devices' downloads.** Downloads lists what every other device is downloading under its
+  name ("Downloading to Thor"), and pause, cancel and reordering there act on that device.
+
+### How the bytes travel
+
+- **Device to device.** While Fuse is open, every linked device answers on port 47312 (or the next
+  free one), on the addresses it reports to the host. It serves only files listed as its own games,
+  by game and file; it never takes a path from a request.
+- **Tickets, no new keys.** To fetch a game, a device asks the host for a ticket: the requester, the
+  source, the game, the files and an expiry (one hour). The host makes a key for it from the
+  **source** device's secret, and seals that key with the requester's secret. The source works out
+  the same key from its own secret and checks each request against it (HMAC-SHA256 over the game,
+  file, range, time and a nonce). A revoked device gets no ticket.
+- **Through the host.** When two devices can't reach each other (one is away from home), the host
+  passes the game on, if **Pass Games Through the Host** is on. If the host can reach the source
+  itself, it asks it directly; otherwise it wakes the source, which sends each piece (up to 32 MB) up
+  to the host, and the host hands it straight on. Nothing is written on the host, and the requester
+  checks every file's hash.
+- **Waking devices.** Requests, transfers and library changes wake the other devices through the
+  connection they already keep with the host, without adding to the sync journal.
+
+### Limits
+
+- A device that is off, asleep or (on Android) has Fuse closed can't send. Requests wait as
+  "Waiting for Thor to be back" and start once it is. While an Android device sends, Fuse keeps
+  itself running with a notification ("Sending a game to Gaming PC").
+- Passing through the host needs the host running, and is as fast as the host's upload.
+- **Verified** means the copy's hashes match another copy or RomM's. With nothing to compare against
+  a copy says so, and never claims to be verified. Hashes are worked out in the background, once per
+  file, so a large library shows "Checking" for a while.
+- A host older than 0.3.8 doesn't offer any of this, and devices carry on as before.
 
 ## What syncs, and what stays
 
@@ -441,6 +512,9 @@ with someone at a screen, and the Hub opens on the host computer only.
 - Managing a host that runs as a service uses a token readable only by your user, from this computer only.
 - RomM and Jellyfin sign-ins shared with the household are sealed for each device and kept sealed on
   the host with its own key (see [RomM and Jellyfin for the household](#romm-and-jellyfin-for-the-household)).
+- Games between devices need a ticket from the host, with a key made from the source device's secret
+  and sealed for the requester; a device serves only files it lists as its own games, and every file
+  is checked against its hash (see [How the bytes travel](#how-the-bytes-travel)).
 - Use an https address (or a VPN) from outside: signing protects every request, encryption hides it.
 
 ## Where it keeps things

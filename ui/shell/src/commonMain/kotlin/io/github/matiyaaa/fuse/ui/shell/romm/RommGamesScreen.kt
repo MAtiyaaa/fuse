@@ -40,6 +40,7 @@ import io.github.matiyaaa.fuse.ui.fuseline.PageEffect
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
+import io.github.matiyaaa.fuse.ui.shell.app.gameMenu
 import io.github.matiyaaa.fuse.ui.shell.app.room
 import io.github.matiyaaa.fuse.ui.shell.app.rememberPageState
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
@@ -48,8 +49,10 @@ import io.github.matiyaaa.fuse.ui.shell.store.RommPresence
 
 /**
  * A RomM system's games (or a collection's, or every game) in the grid Fuse's own systems use: the
- * same tiles and art rules, a quiet mark on what isn't here yet. The title scrolls away with the
- * grid; art loads as tiles come into view and stays loaded as they leave.
+ * same tiles and art rules, a quiet mark on what isn't here yet. A system's page is in sections, as
+ * the Library sorts a system: its games on RomM, then the ones on this device RomM hasn't got, then
+ * the ones on the household's other devices RomM hasn't got. The title scrolls away with the grid;
+ * art loads as tiles come into view and stays loaded as they leave.
  */
 @Composable
 fun RommGamesScreen(app: AppState, slug: String?, name: String, collection: String?) {
@@ -57,69 +60,64 @@ fun RommGamesScreen(app: AppState, slug: String?, name: String, collection: Stri
     val flow = remember(slug, collection) { if (collection != null) ops.collection(collection) else ops.games(slug) }
     val games by flow.collectAsState(initial = null)
     val list = games.orEmpty()
-    val sel = rememberPageState(app.navigator, "romm.grid.${slug ?: collection ?: "all"}") { GridSelection() }
-    sel.clamp(list.size)
-    val grid = rememberLazyGridState()
-    val focused = app.focusZone == FocusZone.CONTENT && !app.overlayOpen
-    val tile = LocalTileMetrics.current.icon
-    val here = list.count { it.presence == RommPresence.INSTALLED || it.presence == RommPresence.PARTLY_INSTALLED }
-    PageEffect(focused) {
-        if (focused) app.hints = listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.BACK, "Back"))
-    }
-    // The chosen game's room behind the page, and on the second screen (in either arrangement), as in the Library.
-    val systems by app.store.library.platforms.collectAsState()
-    val chosen = list.getOrNull(sel.index)?.card
-    PageEffect(focused, chosen?.id, chosen?.art) {
-        if (focused) app.hero = chosen?.room(systems.firstOrNull { it.platform.id == chosen.platformId })
-    }
-    BoxWithConstraints(Modifier.fillMaxSize().testTag("romm.grid")) {
-        val gap = LocalTileMetrics.current.gap
-        val usable = maxWidth - Space.gutter * 2
-        val columns = ((usable + gap) / (tile + gap)).toInt().coerceAtLeast(2)
-        InputLayer(enabled = focused) { e ->
-            when (e.action) {
-                NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT, NavAction.PAGE_UP, NavAction.PAGE_DOWN -> sel.move(e.action, list.size, columns)
-                NavAction.SELECT -> { list.getOrNull(sel.index)?.let { g -> app.go(Route.GameInfo(g.game ?: g.card.id)) }; NavResult.ACTIVATED }
-                NavAction.CONTEXT -> { list.getOrNull(sel.index)?.let { g -> app.openContextMenu(gameMenu(app, g)) }; NavResult.ACTIVATED }
-                else -> NavResult.IGNORED
-            }
-        }
-        LaunchedEffect(sel.index, columns) {
-            // The chosen row keeps the one above in view; the title folds away under it.
-            val row = sel.index / columns
-            grid.animateScrollToItem(if (row == 0) 0 else 1 + (row - 1) * columns)
-        }
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(columns),
-            state = grid,
-            modifier = Modifier.fillMaxSize().padding(top = Size.hudHeight),
-            contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.m, bottom = Size.hintHeight + Space.l),
-            horizontalArrangement = Arrangement.spacedBy(gap),
-            verticalArrangement = Arrangement.spacedBy(gap),
-        ) {
-            item("title", span = { GridItemSpan(maxLineSpan) }) {
-                Row(Modifier.fillMaxWidth().padding(bottom = Space.s), verticalAlignment = Alignment.CenterVertically) {
-                    RommMark(40.dp)
-                    Spacer(Modifier.width(Space.m))
-                    Column(Modifier.weight(1f)) {
-                        FText(name, Fuse.type.title, maxLines = 1)
-                        FText(
-                            if (games == null) "Reading your RomM library..." else listOfNotNull("${list.size} games on RomM", "$here here".takeIf { here > 0 }).joinToString("  ·  "),
-                            Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1,
-                        )
-                    }
-                }
-            }
-            if (games == null) {
-                item("wait", span = { GridItemSpan(maxLineSpan) }) { Box(Modifier.fillMaxWidth().padding(Space.xxl), contentAlignment = Alignment.Center) { Spinner(size = 24.dp, color = Fuse.colors.textMuted) } }
-            } else if (list.isEmpty()) {
-                item("none", span = { GridItemSpan(maxLineSpan) }) { Quiet("Nothing here on the server.") }
-            }
-            itemsIndexed(list, key = { _, g: RommGame -> g.romId }) { i, g ->
-                RommTile(
-                    g, focused && sel.index == i, tile,
-                    onClick = { sel.index = i; app.go(Route.GameInfo(g.game ?: g.card.id)) },
-                    onLongClick = { sel.index = i; app.openContextMenu(gameMenu(app, g)) },
+    val systems by ops.systems.collectAsState()
+    val platform = if (collection == null && slug != null) systems.firstOrNull { it.slug == slug }?.platform else null
+    val hereFlow = remember(platform) { platform?.let { ops.notOnServerOn(it) } ?: kotlinx.coroutines.flow.flowOf(emptyList()) }
+    val here by hereFlow.collectAsState(initial = emptyList())
+    val others by app.store.reach.notOnRomm.collectAsState()
+    val theirs = if (platform == null) emptyList() else others.filter { it.card.platformId == platform }
+    val state by ops.state.collectAsState()
+    val sel = rememberPageState(app.navigator, "romm.grid.${slug ?: collection ?: "all"}") { io.github.matiyaaa.fuse.ui.designsystem.focus.SectionedGridSelection() }
+    val onDevice = list.count { it.presence == RommPresence.INSTALLED || it.presence == RommPresence.PARTLY_INSTALLED }
+    val sections = listOf(
+        io.github.matiyaaa.fuse.ui.shell.reach.GameSection(
+            "main", "On RomM", io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons.LibraryBig, listOfNotNull("${list.size}", "$onDevice here".takeIf { onDevice > 0 }).joinToString("  ·  "),
+            list.map { g ->
+                io.github.matiyaaa.fuse.ui.shell.reach.SectionItem(
+                    g.romId, g.card,
+                    tile = { selected, size, onClick, onLong -> RommTile(g, selected, size, onClick = onClick, onLongClick = onLong) },
+                    open = { app.go(Route.GameInfo(g.game ?: g.card.id)) },
+                    options = { app.openContextMenu(gameMenu(app, g)) },
+                )
+            },
+        ),
+        io.github.matiyaaa.fuse.ui.shell.reach.GameSection(
+            "here", "Not on RomM", io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons.Upload, "${here.size} on this device",
+            here.map { c ->
+                io.github.matiyaaa.fuse.ui.shell.reach.SectionItem(
+                    c.id.value, c,
+                    tile = { selected, size, onClick, onLong -> io.github.matiyaaa.fuse.ui.shell.components.GameIconTile(c, selected, size = size, onClick = onClick, onLongClick = onLong) },
+                    open = { app.go(Route.GameInfo(c.id)) },
+                    options = { app.openContextMenu(app.gameMenu(c)) },
+                )
+            },
+        ),
+        io.github.matiyaaa.fuse.ui.shell.reach.GameSection(
+            "others", "Not on RomM, from Another Device", io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons.MonitorSmartphone, "${theirs.size}",
+            theirs.map { g ->
+                io.github.matiyaaa.fuse.ui.shell.reach.SectionItem(
+                    g.id.value, g.card,
+                    tile = { selected, size, onClick, onLong -> io.github.matiyaaa.fuse.ui.shell.reach.HouseholdTile(g, selected, size, onClick = onClick, onLongClick = onLong) },
+                    open = { app.go(Route.GameInfo(g.id)) },
+                    options = { app.openContextMenu(io.github.matiyaaa.fuse.ui.shell.reach.householdMenu(app, g, romm = state.canUpload)) },
+                )
+            },
+        ),
+    )
+    io.github.matiyaaa.fuse.ui.shell.reach.SectionedGameGrid(
+        app, sel, sections, loading = games == null, empty = "Nothing here on the server.", tag = "romm.grid",
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            RommMark(40.dp)
+            Spacer(Modifier.width(Space.m))
+            Column(Modifier.weight(1f)) {
+                FText(name, Fuse.type.title, maxLines = 1)
+                FText(
+                    if (games == null) "Reading your RomM library..." else listOfNotNull(
+                        "${list.size} games on RomM", "$onDevice here".takeIf { onDevice > 0 },
+                        "${here.size + theirs.size} not on RomM".takeIf { here.size + theirs.size > 0 },
+                    ).joinToString("  ·  "),
+                    Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1,
                 )
             }
         }

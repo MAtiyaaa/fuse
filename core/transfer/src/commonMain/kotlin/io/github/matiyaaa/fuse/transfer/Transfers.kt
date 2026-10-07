@@ -58,6 +58,9 @@ interface Transfers {
     fun configure(settings: TransferSettings)
     fun conditions(c: TransferConditions)
     fun drivesChanged()
+
+    /** A device came back or went: transfers waiting for one look again at once. */
+    fun devicesChanged() {}
     fun live(id: String): StateFlow<TransferLive>
     suspend fun enqueue(item: TransferItem): String
     fun pause(id: String): Job

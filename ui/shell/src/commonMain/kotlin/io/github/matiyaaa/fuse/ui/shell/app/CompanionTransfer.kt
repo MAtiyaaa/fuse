@@ -92,13 +92,13 @@ internal fun FocusedTransfer(store: FuseStore, spot: TransferSpot, logoArea: @Co
     val logo = detail?.art?.logo ?: RommImages.model(row.item.art.logo)
     logoArea(logo, detail?.game?.displayTitle ?: row.item.title) {
         Spacer(Modifier.height(Space.xl))
-        TransferCard(row.item, live)
+        TransferCard(row.item, live, device = row.deviceName)
     }
 }
 
 /** How a transfer is going, in the achievements card's place and shape. */
 @Composable
-internal fun TransferCard(t: TransferItem, live: TransferLive, modifier: Modifier = Modifier) {
+internal fun TransferCard(t: TransferItem, live: TransferLive, modifier: Modifier = Modifier, device: String? = null) {
     val c = Fuse.colors
     val shape = RoundedCornerShape(Radius.l)
     val tint = when (t.status) {
@@ -113,7 +113,7 @@ internal fun TransferCard(t: TransferItem, live: TransferLive, modifier: Modifie
         TransferStatus.DONE -> 1f
         else -> live.progress ?: t.progress
     }
-    val headline = when (t.status) {
+    val ownHeadline = when (t.status) {
         TransferStatus.ACTIVE -> when (t.phase) {
             TransferPhase.STARTING -> "Starting"
             TransferPhase.VERIFYING -> "Checking it arrived whole"
@@ -127,12 +127,19 @@ internal fun TransferCard(t: TransferItem, live: TransferLive, modifier: Modifie
             io.github.matiyaaa.fuse.transfer.WaitReason.DRIVE -> "Waiting for ${t.waitingFor ?: "its drive"}"
             io.github.matiyaaa.fuse.transfer.WaitReason.PLAYING -> "Paused while you play"
             io.github.matiyaaa.fuse.transfer.WaitReason.WIFI -> "Waiting for Wi-Fi"
+            io.github.matiyaaa.fuse.transfer.WaitReason.DEVICE -> "Waiting for ${t.waitingFor ?: "the other device"}"
             null -> "Waiting"
         }
         TransferStatus.PAUSED -> "Paused"
         TransferStatus.FAILED -> "It didn't work"
         TransferStatus.DONE -> if (t.upload) "Sent" else "Downloaded"
         TransferStatus.CANCELLED -> "Cancelled"
+    }
+    // Another device's transfer says which device: "Downloading to Thor".
+    val headline = if (device == null) ownHeadline else when (t.status) {
+        TransferStatus.ACTIVE -> if (t.upload) "Uploading from $device" else "Downloading to $device"
+        TransferStatus.WAITING -> if (t.source == "request") "Waiting for $device" else "$ownHeadline on $device"
+        else -> "$ownHeadline on $device"
     }
     val moving = t.status == TransferStatus.ACTIVE && (t.phase == null || t.phase == TransferPhase.TRANSFERRING)
     // The second line: amounts, speed and time left while it moves, else what it waits for or why it stopped.

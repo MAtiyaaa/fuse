@@ -115,7 +115,7 @@ object RangedDownload {
         resp.headers[HttpHeaders.ContentRange]?.removePrefix("bytes ")?.substringBefore('-')?.trim()?.toLongOrNull()
 
     /** What a failed write means: a full drive says so; a drive that went is waited for. */
-    internal fun writeFailure(file: File, e: IOException): Exception {
+    fun writeFailure(file: File, e: IOException): Exception {
         val m = e.message.orEmpty().lowercase()
         return when {
             "no space" in m || "enospc" in m || "not enough space" in m || "disk full" in m ->

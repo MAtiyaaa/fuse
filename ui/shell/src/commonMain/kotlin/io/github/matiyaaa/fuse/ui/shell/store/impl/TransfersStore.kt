@@ -58,8 +58,19 @@ internal class DefaultTransfersOps(
         synchronized(mirroredLive) { storeRows(store) + updateRows(update) + cartridgeRows(cart) }
     }.distinctUntilChanged().stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
 
-    override val rows: StateFlow<List<TransferRow>> = combine(engine.items, mirrored) { own, other ->
-        transferOrder(own.map { TransferRow(it, actionsFor(it)) } + other)
+    /** The household's other devices' transfers ([showRemote]), with what to do when one is acted on. */
+    private val remote = MutableStateFlow<List<TransferRow>>(emptyList())
+    @kotlin.concurrent.Volatile private var remoteAct: (TransferRow, TransferAction) -> Unit = { _, _ -> }
+
+    /** Shows other devices' transfers in Downloads; [act] carries an action to the device it runs on. */
+    fun showRemote(rows: List<TransferRow>, act: (TransferRow, TransferAction) -> Unit) {
+        remoteAct = act
+        for (r in rows) liveFor(r.item.id, r.item.doneBytes, r.item.totalBytes)
+        remote.value = rows
+    }
+
+    override val rows: StateFlow<List<TransferRow>> = combine(engine.items, mirrored, remote) { own, other, theirs ->
+        transferOrder(own.map { TransferRow(it, actionsFor(it)) } + other) + theirs.sortedWith(compareBy({ it.deviceName.orEmpty().lowercase() }, { it.item.order }))
     }.distinctUntilChanged().stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
 
     override val summary: StateFlow<TransferSummary> = combine(engine.summary, mirrored) { own, other ->
@@ -122,6 +133,7 @@ internal class DefaultTransfersOps(
 
     override fun act(id: String, action: TransferAction) {
         val row = rows.value.firstOrNull { it.item.id == id } ?: return
+        if (row.device != null) return remoteAct(row, action)
         when (row.item.source) {
             STORE -> {
                 val key = id.removePrefix("$STORE:")

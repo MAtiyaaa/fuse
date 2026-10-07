@@ -163,8 +163,11 @@ fun FollowSelection(
         followEach(snapshotFlow { if (on()) current() else null }) { state.follow(it, anchor, animate, spec, inset) }
     }
     LaunchedEffect(state, relayout) {
-        if (relayout == null || !on()) return@LaunchedEffect
+        // A finger moving the grid (or its fling) owns the scroll: following the selection again as
+        // the stage folds under it would throw the grid back to where the controller left it.
+        if (relayout == null || !on() || state.isScrollInProgress) return@LaunchedEffect
         withFrameNanos {}
+        if (!on() || state.isScrollInProgress) return@LaunchedEffect
         state.follow(current(), anchor, animate = false, spec = spec, inset = inset)
     }
 }
