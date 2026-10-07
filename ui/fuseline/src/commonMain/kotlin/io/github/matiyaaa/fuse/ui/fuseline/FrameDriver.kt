@@ -144,13 +144,13 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
             if (gone) return
             driven?.freeze()
             leave()
+            stopIfIdle()
         }
 
         fun leave() {
             gone = true
             unschedule(this)
             live--
-            if (live == 0) loop?.cancel()
         }
 
         open fun arrive() {
@@ -358,6 +358,7 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
             // Its value keeps the state it had when its caller was cancelled.
             move.driven?.freeze()
             move.leave()
+            stopIfIdle()
         }
         // A loop that was just told to stop (its last move cancelled) ends a moment later: a move
         // joining in that moment gets a loop of its own rather than that ending.
@@ -376,6 +377,16 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
         onStart?.invoke(move)
         if (!running || loop?.isCancelled == true) start(context)
         return move
+    }
+
+    /**
+     * The last move cancelled: stop waiting for frames now (a clock that never ticks again, its window
+     * closed or a test over, would otherwise hold the driver for ever). A move that arrives needs
+     * nothing of the kind: the loop sees nothing left after the frame and ends by itself, without
+     * the cost of cancelling it.
+     */
+    private fun stopIfIdle() {
+        if (live == 0) loop?.cancel()
     }
 
     private fun start(context: CoroutineContext) {
