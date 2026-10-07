@@ -245,6 +245,16 @@ class JvmSyncService(
                 delay(ADMIN_RETRY_MS)
             }
             if (answer != null) {
+                // The service runs the Fuse it was set up with (an AppImage of its own, say): after an
+                // update it is started again on this one, so the host has what this version has.
+                if (olderThanThis(answer.hello.fuseVersion) && lifetime.supported) {
+                    restartedService(c, answer.hello.fuseVersion)?.let { (newer, status) ->
+                        hostAdmin = newer
+                        adminStatus = status
+                        refreshHostView()
+                        return
+                    }
+                }
                 hostAdmin = admin
                 adminStatus = answer
                 refreshHostView()
@@ -1200,6 +1210,39 @@ class JvmSyncService(
      * share its files), the service starts, and Fuse manages it from then on. Should the service
      * not come up, this process serves again, so the host is never left down.
      */
+    /** True when [version] (a host's) is older than this Fuse, or unknown (hosts before 0.2 didn't say). */
+    private fun olderThanThis(version: String): Boolean {
+        if (fuseVersion.isBlank()) return false
+        if (version.isBlank()) return true
+        fun parts(v: String) = v.split(Regex("[^0-9]+")).filter { it.isNotEmpty() }.map { it.toIntOrNull() ?: 0 }
+        val a = parts(version)
+        val b = parts(fuseVersion)
+        for (i in 0 until maxOf(a.size, b.size)) {
+            val x = a.getOrElse(i) { 0 }
+            val y = b.getOrElse(i) { 0 }
+            if (x != y) return x < y
+        }
+        return false
+    }
+
+    /**
+     * Sets the host's service up again with this Fuse and waits for it to answer as this version.
+     * Null when it didn't (the old one may still be running, and is used as it is).
+     */
+    private suspend fun restartedService(c: SyncSettings, was: String): Pair<HostAdmin, HostStatus>? = withContext(Dispatchers.IO) {
+        log("The host was running Fuse ${was.ifBlank { "from before 0.2" }}: starting it again on $fuseVersion")
+        if (lifetime.install().isFailure) return@withContext null
+        withTimeoutOrNull(SERVICE_WAIT_MS * 2) {
+            var found: Pair<HostAdmin, HostStatus>? = null
+            while (found == null) {
+                val admin = HostAdmin.of(hostDir(c), c.hostPort)
+                val status = admin?.let { runCatching { it.status() }.getOrNull() }
+                if (admin != null && status != null && !olderThanThis(status.hello.fuseVersion)) found = admin to status else delay(ADMIN_RETRY_MS)
+            }
+            found
+        }
+    }
+
     private suspend fun handOver(): Result<ServiceState> {
         val c = config()
         val server = hostServer

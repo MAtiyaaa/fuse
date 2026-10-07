@@ -1673,6 +1673,12 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
                     },
                 ))
             }
+            add(MenuAction(
+                "dev.library", "Library list", FuseIcons.ListChecks,
+                detail = "Every game Fuse found, with its folders, files, updates and DLC, as text to copy or save",
+                trailing = Trailing.Chevron,
+                onSelect = { app.showLibraryList() },
+            ))
             add(toggleRow("dev.skip", "Skip required setup steps", FuseIcons.ChevronsRight, app.dev.skipRequired) { app.dev.skipRequired = it })
             add(toggleRow("dev.frames", "Frame-time overlay", FuseIcons.Activity, app.dev.frameGraph) { app.dev.frameGraph = it })
             add(MenuAction("dev.off", "Turn off developer options", FuseIcons.Power, onSelect = {

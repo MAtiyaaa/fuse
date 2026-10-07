@@ -537,6 +537,22 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
         shoot("ROM folders row focused")
     }
 
+    // A library with one system (or a few left after others went): they start at the left, like a
+    // row of games, never alone in the middle.
+    for ((name, keep) in listOf("one system" to setOf("switch"), "three systems" to setOf("switch", "gba", "psx"))) {
+        scenario("systems", name) {
+            useLibrary()
+            val store = libraryStore
+            val few = object : io.github.matiyaaa.fuse.ui.shell.store.LibraryOps by store.library {
+                override val platforms = kotlinx.coroutines.flow.MutableStateFlow(store.library.platforms.value.filter { it.platform.id.value in keep })
+            }
+            show(object : io.github.matiyaaa.fuse.ui.shell.store.FuseStore by store { override val library = few })
+            tab(Destination.SYSTEMS)
+            waitFor("Arrange")
+            shoot("the board")
+        }
+    }
+
     scenario("systems", "switch settings") {
         useLibrary()
         tab(Destination.SYSTEMS)

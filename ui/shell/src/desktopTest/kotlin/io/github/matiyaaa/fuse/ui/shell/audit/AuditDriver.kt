@@ -45,6 +45,7 @@ import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
 /** What the test window shows: the whole app for one store, or the companion screen. */
@@ -97,7 +98,9 @@ internal class AuditDriver(
     val libraryStore: FuseStore
         get() = library ?: runBlocking { AuditLibrary.store(root, cache, controls, scope) }.let { (store, d) ->
             library = store
-            libraryPrefs = store.prefs.value
+            // The settings as the sample library leaves them, setup finished: read once it is saved,
+            // or every later scenario would put setup back.
+            libraryPrefs = runBlocking { kotlinx.coroutines.withTimeoutOrNull(10_000) { store.prefs.first { it.onboardingDone } } } ?: store.prefs.value.copy(onboardingDone = true)
             data = d
             store
         }
