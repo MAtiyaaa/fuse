@@ -175,3 +175,75 @@ class ShelfSelection(initialRow: Int = 0) {
         }
     }
 }
+
+/**
+ * A grid in sections, each starting on a row of its own under its heading (a system's games on
+ * RomM, then the ones here that RomM hasn't got, then other devices'). The selection is one item
+ * of one section; moving up or down between sections keeps the column, as in one grid, and empty
+ * sections are stepped over.
+ */
+@Stable
+class SectionedGridSelection(initialSection: Int = 0, initialIndex: Int = 0) {
+    var section by mutableIntStateOf(initialSection)
+    var index by mutableIntStateOf(initialIndex)
+
+    /** Keeps the selection on an item that exists, in [sizes] (each section's item count). */
+    fun clamp(sizes: List<Int>) = Snapshot.withoutReadObservation {
+        if (sizes.none { it > 0 }) {
+            section = 0
+            index = 0
+            return@withoutReadObservation
+        }
+        if (section !in sizes.indices || sizes[section] == 0) {
+            section = sizes.indices.firstOrNull { it >= section.coerceAtLeast(0) && sizes[it] > 0 } ?: sizes.indices.last { sizes[it] > 0 }
+        }
+        index = index.coerceIn(0, sizes[section] - 1)
+    }
+
+    fun select(section: Int, index: Int) {
+        this.section = section
+        this.index = index
+    }
+
+    fun move(action: NavAction, sizes: List<Int>, columns: Int): NavResult {
+        if (sizes.none { it > 0 } || section !in sizes.indices) return NavResult.IGNORED
+        val cols = columns.coerceAtLeast(1)
+        val size = sizes[section]
+        val col = index % cols
+        val rows = (size + cols - 1) / cols
+        val row = index / cols
+        when (action) {
+            NavAction.LEFT -> return if (col == 0) NavResult.IGNORED else { index--; NavResult.MOVED }
+            NavAction.RIGHT -> return if (col == cols - 1 || index == size - 1) NavResult.BLOCKED else { index++; NavResult.MOVED }
+            NavAction.UP -> {
+                if (row > 0) { index -= cols; return NavResult.MOVED }
+                var s = section - 1
+                while (s >= 0 && sizes[s] == 0) s--
+                if (s < 0) return NavResult.IGNORED
+                // The same column on the last row of the section above, or its last item when that row is short.
+                val lastRow = (sizes[s] - 1) / cols
+                section = s
+                index = (lastRow * cols + col).coerceAtMost(sizes[s] - 1)
+                return NavResult.MOVED
+            }
+            NavAction.DOWN -> {
+                if (row < rows - 1) { index = (index + cols).coerceAtMost(size - 1); return NavResult.MOVED }
+                var s = section + 1
+                while (s < sizes.size && sizes[s] == 0) s++
+                if (s >= sizes.size) return NavResult.BLOCKED
+                section = s
+                index = col.coerceAtMost(sizes[s] - 1)
+                return NavResult.MOVED
+            }
+            NavAction.PAGE_DOWN -> {
+                repeat(3) { move(NavAction.DOWN, sizes, columns) }
+                return NavResult.MOVED
+            }
+            NavAction.PAGE_UP -> {
+                repeat(3) { move(NavAction.UP, sizes, columns) }
+                return NavResult.MOVED
+            }
+            else -> return NavResult.IGNORED
+        }
+    }
+}

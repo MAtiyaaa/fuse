@@ -849,6 +849,8 @@ private fun PushedPages(app: AppState, current: Route, direction: NavDirection, 
             Route.RommSettings -> io.github.matiyaaa.fuse.ui.shell.romm.RommSettingsScreen(app)
             is Route.RommSetup -> io.github.matiyaaa.fuse.ui.shell.romm.RommSetupScreen(app, route.pairing)
             is Route.RommGames -> io.github.matiyaaa.fuse.ui.shell.romm.RommGamesScreen(app, route.slug, route.name, route.collection)
+            Route.HouseholdLibrary -> io.github.matiyaaa.fuse.ui.shell.reach.HouseholdLibraryScreen(app)
+            is Route.HouseholdGames -> io.github.matiyaaa.fuse.ui.shell.reach.HouseholdGamesScreen(app, route.platform, route.name)
                     is Route.Root -> Unit
                 }
             }

@@ -95,8 +95,17 @@ internal class StoreContext(
     /** Systems Fuse shows without having games for them (a RomM server's), so they get system art too. */
     val shownPlatforms = MutableStateFlow<Set<PlatformId>>(emptySet())
 
-    /** Games Fuse shows but doesn't have (RomM's, by negative id), set by the store that keeps them. */
+    /** Games Fuse shows but doesn't have (RomM's and other devices', by negative id), set by the stores that keep them. */
     @kotlin.concurrent.Volatile var remoteGames: RemoteGames? = null
+
+    /** Adds [games] to [remoteGames] beside any already there (RomM's, the household's). */
+    fun addRemoteGames(games: RemoteGames) {
+        val now = remoteGames
+        remoteGames = if (now == null) games else RemoteGamesHub(listOf(now, games))
+    }
+
+    /** Every game Fuse shows but doesn't have, on [platform] or anywhere: for filling art and details. */
+    @kotlin.concurrent.Volatile var remoteIds: suspend (io.github.matiyaaa.fuse.model.PlatformId?) -> List<io.github.matiyaaa.fuse.model.GameId> = { emptyList() }
 
     /** The games Fuse shows but doesn't have on [PlatformId] (a RomM server's), set by the store that keeps them. */
     @kotlin.concurrent.Volatile var remoteGamesOn: suspend (PlatformId) -> List<GameId> = { emptyList() }
@@ -229,4 +238,26 @@ internal interface RemoteGames {
 
     /** Its art or details changed (a fill, a pick): the lists showing it draw it again. */
     fun changed(id: io.github.matiyaaa.fuse.model.GameId)
+}
+
+/** Several kinds of [RemoteGames] as one: each id goes to the one that owns it. */
+internal class RemoteGamesHub(private val parts: List<RemoteGames>) : RemoteGames {
+    private fun of(id: io.github.matiyaaa.fuse.model.GameId): RemoteGames? = parts.firstOrNull { it.owns(id) }
+    override fun owns(id: io.github.matiyaaa.fuse.model.GameId): Boolean = of(id) != null
+    override suspend fun get(id: io.github.matiyaaa.fuse.model.GameId): io.github.matiyaaa.fuse.model.Game? = of(id)?.get(id)
+    override suspend fun applyMetadata(id: io.github.matiyaaa.fuse.model.GameId, metadata: io.github.matiyaaa.fuse.model.GameMetadata, titleFromMetadata: String?, onlyFillEmpty: Boolean) {
+        of(id)?.applyMetadata(id, metadata, titleFromMetadata, onlyFillEmpty)
+    }
+    override suspend fun replaceMetadata(id: io.github.matiyaaa.fuse.model.GameId, metadata: io.github.matiyaaa.fuse.model.GameMetadata?, titleMetadata: String?) {
+        of(id)?.replaceMetadata(id, metadata, titleMetadata)
+    }
+    override suspend fun updateLinks(id: io.github.matiyaaa.fuse.model.GameId, transform: (io.github.matiyaaa.fuse.model.ExternalLinks) -> io.github.matiyaaa.fuse.model.ExternalLinks) {
+        of(id)?.updateLinks(id, transform)
+    }
+    override suspend fun rename(id: io.github.matiyaaa.fuse.model.GameId, title: String?) {
+        of(id)?.rename(id, title)
+    }
+    override fun changed(id: io.github.matiyaaa.fuse.model.GameId) {
+        of(id)?.changed(id)
+    }
 }

@@ -30,7 +30,7 @@ private fun AuditDriver.syncOff() {
 }
 
 /** The library app with Fuse Sync set up as [asHost] (this PC the host) or a Steam Deck connected to it. */
-private fun AuditDriver.useSync(asHost: Boolean, playing: String? = "mo", prefs: (UiPrefs) -> UiPrefs = { it }) {
+internal fun AuditDriver.useSync(asHost: Boolean, playing: String? = "mo", prefs: (UiPrefs) -> UiPrefs = { it }) {
     syncOff()
     sync.household(asHost, playing)
     useLibrary(prefs = prefs)

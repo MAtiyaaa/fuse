@@ -14,6 +14,7 @@ kotlin {
             api(projects.core.jellyfin)
             api(projects.core.sync)
             api(projects.core.romm)
+            api(projects.core.reach)
             api(projects.ui.player)
             implementation(libs.coil.compose)
             implementation(libs.coil.network.ktor)

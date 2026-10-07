@@ -126,6 +126,11 @@ import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.home.bytesText
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameDetail
+import io.github.matiyaaa.fuse.ui.shell.store.householdOnly
+import io.github.matiyaaa.fuse.ui.shell.reach.copyMenu
+import io.github.matiyaaa.fuse.ui.shell.reach.reachDownload
+import io.github.matiyaaa.fuse.ui.shell.reach.reachUploadToRomm
+import io.github.matiyaaa.fuse.ui.shell.reach.sendPicker
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -164,7 +169,14 @@ fun GameScreen(app: AppState, id: GameId) {
     // A RomM game Fuse doesn't have yet opens on the same page, from Fuse RomM's mirror; once it is
     // downloaded (or found here) the page is the library game's, with Play instead of Download.
     val romOnly = id.rommOnly
-    val local by remember(id) { if (romOnly != null) app.store.romm.libraryGame(romOnly) else kotlinx.coroutines.flow.flowOf(null) }.collectAsState(initial = null)
+    // The same for another device's game: once it comes here, the page is the library game's.
+    val local by remember(id) {
+        when {
+            romOnly != null -> app.store.romm.libraryGame(romOnly)
+            id.householdOnly != null -> app.store.reach.libraryGame(id)
+            else -> kotlinx.coroutines.flow.flowOf(null)
+        }
+    }.collectAsState(initial = null)
     val shown = local ?: id
     val flow = remember(shown) { (shown.rommOnly?.let { app.store.romm.detail(it) } ?: app.store.library.game(shown)).map { d -> if (d == null) GameLoad.Gone else GameLoad.Ready(d) } }
     val load by flow.collectAsState(initial = GameLoad.Loading)
@@ -202,9 +214,30 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val rommFlow = remember(game.id) { if (remote != null) app.store.romm.forRom(remote) else app.store.romm.forGame(game.id) }
     val romm by rommFlow.collectAsState(initial = null)
     val rommButtons = remember(romm, remote) { rommButtonsOf(romm, remote != null) }
+    // The Remote Library: every copy of this game (here, on the household's other devices, on RomM).
+    val household = game.id.householdOnly != null
+    val notHere = remote != null || household
+    val reachState by app.store.reach.state.collectAsState()
+    val copiesFlow = remember(game.id) { app.store.reach.availability(game.id) }
+    val copies by copiesFlow.collectAsState(initial = null)
+    val canSend = reachState.supported && !card.isApp
+    val canUploadHere by produceState(false, game.id, reachState.supported) { value = app.store.reach.canUploadToRomm(game.id) }
+    val rommHasIt = copies?.romm != null || romm != null
+    val shownCopies = copies?.copies.orEmpty().takeIf { list -> reachState.supported || list.any { it.place == io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.DEVICE } }.orEmpty()
 
     // Play first, then the emulator it starts in, then the quick actions, then everything else.
-    val actions = if (remote != null) listOfNotNull(
+    val actions = if (household) listOfNotNull(
+        // Another device's game: Download brings it here from wherever is best.
+        DetailAction(
+            "download", if (copies?.transfer != null) "Downloading" else "Download", FuseIcons.Download, "Download", primary = true,
+        ) { if (copies?.transfer != null) app.go(Route.Downloads) else app.reachDownload(game.id, game.displayTitle) },
+        DetailAction("emu", d.emulator.selected?.name ?: "Choose emulator", if (d.emulator.selected == null) FuseIcons.Warning else FuseIcons.Chip, "Choose emulator") {
+            app.go(Route.PlatformSettings(game.platformId))
+        },
+        DetailAction("send", null, FuseIcons.Share, "Send to another device") { app.sendPicker(game.id, game.displayTitle) },
+        DetailAction("romm.up", null, FuseIcons.CloudUpload, "Upload to RomM from the device that has it") { app.reachUploadToRomm(game.id, game.displayTitle) }
+            .takeIf { canUploadHere && !rommHasIt },
+    ) else if (remote != null) listOfNotNull(
         // Not here yet: Download is the page's first button, and the emulator says what would play it.
         DetailAction(
             "download", if (romm?.transfer != null) "Downloading" else "Download", FuseIcons.Download, "Download", primary = true,
@@ -217,6 +250,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                 app.rommDownload(remote, game.displayTitle, io.github.matiyaaa.fuse.ui.shell.store.RommDownloadWhat.Everything)
             }
         },
+        DetailAction("send", null, FuseIcons.Share, "Send to another device") { app.sendPicker(game.id, game.displayTitle) }.takeIf { canSend },
     ) else listOfNotNull(
         // A game Fuse can't reach right now keeps its Play button (pressing it explains why), drawn
         // as not ready, so the page never promises a start it knows won't happen.
@@ -237,6 +271,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
             app.scope.launch { app.store.library.setFavorite(game.id, !game.favorite) }
         },
         DetailAction("col", null, FuseIcons.ListPlus, "Add to a collection") { app.collectionPicker(game.id, game.displayTitle) },
+        DetailAction("send", null, FuseIcons.Share, "Send to another device") { app.sendPicker(game.id, game.displayTitle) }.takeIf { canSend && d.unavailable == null && !d.missing },
         DetailAction("media", null, FuseIcons.Images, "Manage media") { app.go(Route.Media(MediaOwner.OfGame(game.id), game.displayTitle)) },
         DetailAction("more", null, FuseIcons.More, "Options") { app.openContextMenu(app.gameMenu(card, fromDetail = true)) },
     )
@@ -246,7 +281,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val cards = buildList {
         add(InfoCard.STARTS)
         // A game not here yet has no play time, extras or file of its own to show.
-        if (remote == null) {
+        if (!notHere) {
             add(InfoCard.PLAY)
             if (game.content.isNotEmpty()) add(InfoCard.EXTRAS)
             add(InfoCard.FILE)
@@ -266,6 +301,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
         add("actions")
         // The time played is a stop of its own, so the stick brings it into view on any screen.
         add("playtime")
+        if (shownCopies.isNotEmpty()) add("available")
         if (description != null) add("about")
         if (rommButtons.isNotEmpty() || (romm?.parts?.size ?: 0) > 1) add("romm")
         if (discs.size > 1) add("discs")
@@ -276,6 +312,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     fun sizeOf(key: String) = when (key) {
         "facts", "about", "playtime" -> 1
         "actions" -> actions.size
+        "available" -> shownCopies.size
         "romm" -> rommButtons.size.coerceAtLeast(1)
         "discs" -> discs.size
         "achievements" -> badges.size
@@ -340,6 +377,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
         "playtime" -> "All play time"
         "shots" -> "View full screen"
         "romm" -> rommButtons.getOrNull(col)?.label ?: "Downloads"
+        "available" -> "This copy"
         "actions" -> actions.getOrNull(col)?.name
         "discs" -> "Play this disc"
         else -> when (cardAt(row, col)) {
@@ -416,6 +454,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                     "playtime" -> app.go(Route.PlayTime)
                     "shots" -> viewing = col
                     "romm" -> rommButtons.getOrNull(col)?.let { b -> romm?.let { v -> app.rommDownload(v.romId, game.displayTitle, b.what) } } ?: app.go(Route.Downloads)
+                    "available" -> shownCopies.getOrNull(col)?.let { cp -> app.copyMenu(game.id, game.displayTitle, cp, hereAlready = !notHere, canUpload = canUploadHere, rommHasIt = rommHasIt) }
                     "actions" -> actions.getOrNull(col)?.run?.invoke()
                     "discs" -> discs.getOrNull(col)?.let { disc -> app.play(card, discPath = disc.path) }
                     else -> cardAt(row, col)?.let(::openCard)
@@ -423,8 +462,18 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                 NavResult.ACTIVATED
             }
             NavAction.CONTEXT -> {
-                // A game not here yet has only RomM's options: what to download.
-                if (remote != null) {
+                // Another device's game: bring it here, send it elsewhere, or to RomM from where it is.
+                if (household) {
+                    app.openContextMenu(io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec(
+                        title = game.displayTitle, subtitle = d.platform.name, art = d.art.tile, accent = d.platform.accent,
+                        actions = listOfNotNull(
+                            io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction("h.dl", "Download Here", FuseIcons.Download, detail = "From wherever is best", onSelect = { app.closeOverlays(); app.reachDownload(game.id, game.displayTitle) }),
+                            io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction("h.send", "Send to Another Device", FuseIcons.Share, trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Chevron, onSelect = { app.sendPicker(game.id, game.displayTitle) }),
+                            io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction("h.romm", "Upload to RomM", FuseIcons.CloudUpload, detail = "Sent by the device that has it", onSelect = { app.reachUploadToRomm(game.id, game.displayTitle) })
+                                .takeIf { canUploadHere && !rommHasIt },
+                        ) + io.github.matiyaaa.fuse.ui.shell.romm.rommEditActions(app, game.id, game.displayTitle, owner = "The device that has it"),
+                    ))
+                } else if (remote != null) {
                     app.openContextMenu(io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec(
                         title = game.displayTitle, subtitle = d.platform.name, art = d.art.tile, accent = d.platform.accent,
                         actions = listOf(
@@ -432,6 +481,8 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                             io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction("r.all", "Download Everything", FuseIcons.CloudDownload, detail = "With its updates and DLC, where RomM has them", onSelect = {
                                 app.closeOverlays(); app.rommDownload(remote, game.displayTitle, io.github.matiyaaa.fuse.ui.shell.store.RommDownloadWhat.Everything)
                             }),
+                        ) + listOfNotNull(
+                            io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction("r.send", "Send to Another Device", FuseIcons.Share, trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Chevron, onSelect = { app.sendPicker(game.id, game.displayTitle) }).takeIf { canSend },
                         ) + io.github.matiyaaa.fuse.ui.shell.romm.rommEditActions(app, game.id, game.displayTitle),
                     ))
                 } else {
@@ -556,6 +607,17 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                 .reveal(reveal, index)
 
             Spacer(Modifier.height(Space.x3))
+            if (shownCopies.isNotEmpty()) {
+                Section("Available on", Modifier.section("available", 4), count = availableSummary(shownCopies)) {
+                    AvailableOn(
+                        shownCopies, selected = if (row == "available" && focused) col else -1,
+                        onCopy = { i ->
+                            sel.row = rows.indexOf("available"); sel.setColumn("available", i)
+                            app.copyMenu(game.id, game.displayTitle, shownCopies[i], hereAlready = !notHere, canUpload = canUploadHere, rommHasIt = rommHasIt)
+                        },
+                    )
+                }
+            }
             description?.let {
                 Column(Modifier.section("about", 4).padding(bottom = Space.xxl)) {
                     SectionLabel("About")
@@ -1440,5 +1502,79 @@ private fun RommPartsBlock(v: io.github.matiyaaa.fuse.ui.shell.store.RommGameVie
         } else if (v.transfer != null) {
             FText("Downloading now. Follow it in Downloads.", Fuse.type.caption, color = c.textMuted, maxLines = 1)
         }
+    }
+}
+
+/** "3 places, all the same", "On 2 devices and RomM": the count beside "Available on". */
+private fun availableSummary(copies: List<io.github.matiyaaa.fuse.ui.shell.store.CopyView>): String {
+    val n = copies.size
+    val same = copies.size > 1 && copies.all { it.check == io.github.matiyaaa.fuse.ui.shell.store.CopyCheck.VERIFIED }
+    return (if (n == 1) "1 place" else "$n places") + if (same) ", all the same" else ""
+}
+
+/**
+ * Every copy of the game, side by side: this device, each of the household's devices that has it,
+ * and RomM. Each says whether its device is around, how big the game is there, whether its files
+ * are the same as the others', and when it came. Confirming one shows what can be done with it.
+ */
+@Composable
+private fun AvailableOn(copies: List<io.github.matiyaaa.fuse.ui.shell.store.CopyView>, selected: Int, onCopy: (Int) -> Unit) {
+    val list = rememberLazyListState()
+    FollowSelection(list, { selected.coerceAtLeast(0) }, anchor = 0.1f)
+    val now = io.github.matiyaaa.fuse.ui.shell.reach.nowMs()
+    LazyRow(
+        state = list,
+        horizontalArrangement = Arrangement.spacedBy(Space.l),
+        contentPadding = PaddingValues(top = Space.s, end = Space.gutter, bottom = Space.s),
+    ) {
+        itemsIndexed(copies, key = { _, cp -> cp.place.name + cp.id }) { i, cp ->
+            CopyCard(cp, now, selected == i, onClick = { onCopy(i) }, modifier = Modifier.width(Size.touch * 5).height(IntrinsicSize.Min))
+        }
+    }
+}
+
+@Composable
+private fun CopyCard(copy: io.github.matiyaaa.fuse.ui.shell.store.CopyView, now: Long, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
+    val c = Fuse.colors
+    val here = copy.place == io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.HERE
+    InfoPanel(if (here) "This device" else copy.name, io.github.matiyaaa.fuse.ui.shell.reach.copyIcon(copy), selected, onClick, modifier, actionable = true) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Around now, or away (and since when).
+            Box(Modifier.size(Space.s).clip(androidx.compose.foundation.shape.CircleShape).background(if (copy.online) c.success else c.textFaint))
+            Spacer(Modifier.width(Space.s))
+            FText(
+                when {
+                    here -> copy.name
+                    copy.online -> "Online"
+                    copy.lastSeen > 0 -> "Away, seen ${agoText(copy.lastSeen, now)}"
+                    else -> "Away"
+                },
+                Fuse.type.label, maxLines = 1,
+            )
+        }
+        val check = copy.check
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            FuseIcon(
+                when (check) {
+                    io.github.matiyaaa.fuse.ui.shell.store.CopyCheck.VERIFIED -> FuseIcons.CircleCheck
+                    io.github.matiyaaa.fuse.ui.shell.store.CopyCheck.CHECKING -> FuseIcons.Hourglass
+                    io.github.matiyaaa.fuse.ui.shell.store.CopyCheck.DIFFERENT -> FuseIcons.GitCompare
+                    io.github.matiyaaa.fuse.ui.shell.store.CopyCheck.UNKNOWN -> FuseIcons.CircleHelp
+                },
+                size = Size.iconS,
+                tint = when (check) {
+                    io.github.matiyaaa.fuse.ui.shell.store.CopyCheck.VERIFIED -> c.success
+                    io.github.matiyaaa.fuse.ui.shell.store.CopyCheck.DIFFERENT -> c.warning
+                    else -> c.textMuted
+                },
+            )
+            Spacer(Modifier.width(Space.s))
+            FText(io.github.matiyaaa.fuse.ui.shell.reach.checkWords(check), Fuse.type.caption, color = c.textMuted, maxLines = 1)
+        }
+        Spacer(Modifier.weight(1f))
+        FText(
+            listOfNotNull(copy.sizeBytes.takeIf { it > 0 }?.let(::bytesText), io.github.matiyaaa.fuse.ui.shell.reach.copyDate(copy, now)).joinToString("  ·  ").ifEmpty { " " },
+            Fuse.type.caption, color = c.textFaint, maxLines = 1, modifier = Modifier.padding(top = Space.s),
+        )
     }
 }

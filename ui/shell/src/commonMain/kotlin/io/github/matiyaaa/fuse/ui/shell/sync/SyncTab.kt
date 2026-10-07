@@ -111,6 +111,10 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
     var inRest by remember { mutableStateOf(false) }
     // The column beside the games on wide screens, reached with Right.
     var inSide by remember { mutableStateOf(false) }
+    // The Remote Library's card, between the actions and the games.
+    var inLib by remember { mutableStateOf(false) }
+    val reach by app.store.reach.state.collectAsState()
+    val hasLib = reach.supported || reach.devices.isNotEmpty()
     val sideScroll = rememberScrollState()
     val list = androidx.compose.foundation.lazy.rememberLazyListState()
     io.github.matiyaaa.fuse.ui.shell.components.ReportScroll(list)
@@ -141,6 +145,8 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
                 }
             }
         })
+        // The household's games on its other devices: their own small library.
+        if (hasLib) add(SyncAction("Library", FuseIcons.MonitorSmartphone) { app.go(Route.HouseholdLibrary) })
         add(SyncAction("Switch Profile", FuseIcons.Users) { app.whoAreYou = WhoMode.SWITCH })
         add(SyncAction("New Profile", FuseIcons.UserPlus) { app.whoAreYou = WhoMode.ADD })
         // Any device already in can bring in another: a code here, or saying yes when it asks.
@@ -155,9 +161,10 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
         val g = games.getOrNull(i) ?: return
         app.go(Route.SyncGame(g.game, g.name))
     }
-    PageEffect(focused, inList, inSide, inRest, index) {
+    PageEffect(focused, inList, inSide, inRest, inLib, index) {
         if (focused) app.hints = when {
             inSide || inRest -> listOf(Hint(HintButton.DPAD, "Scroll"), Hint(HintButton.BACK, "Back"))
+            inLib -> listOf(Hint(HintButton.CONFIRM, "Open the Remote Library"), Hint(HintButton.BACK, "Back"))
             inList -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.BACK, "Back"))
             else -> listOf(Hint(HintButton.CONFIRM, actions.getOrNull(index)?.label ?: "Choose"), Hint(HintButton.BACK, "Back"))
         }
@@ -168,7 +175,7 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
         val compact = maxHeight < 560.dp
         val labels = maxWidth >= 900.dp
         // The list's items: the top line, the games' heading, the games, then (no column beside) the rest.
-        val firstGame = 2
+        val firstGame = if (hasLib) 3 else 2
         val rest = if (side) 0 else 3
         InputLayer(enabled = focused) { e ->
             when {
@@ -185,8 +192,19 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
                     NavAction.LEFT, NavAction.RIGHT, NavAction.SELECT -> NavResult.BLOCKED
                     else -> NavResult.IGNORED
                 }
+                inLib -> when (e.action) {
+                    NavAction.UP -> { inLib = false; NavResult.MOVED }
+                    NavAction.DOWN -> when {
+                        games.isNotEmpty() -> { inLib = false; inList = true; NavResult.MOVED }
+                        rest > 0 -> { inLib = false; inRest = true; app.scope.launch { list.animateScrollBy(step) }; NavResult.MOVED }
+                        else -> NavResult.BLOCKED
+                    }
+                    NavAction.SELECT -> { app.go(Route.HouseholdLibrary); NavResult.ACTIVATED }
+                    NavAction.LEFT, NavAction.RIGHT -> NavResult.BLOCKED
+                    else -> NavResult.IGNORED
+                }
                 inList -> when (e.action) {
-                    NavAction.UP -> if (sel.index > 0) { sel.index--; NavResult.MOVED } else { inList = false; NavResult.MOVED }
+                    NavAction.UP -> if (sel.index > 0) { sel.index--; NavResult.MOVED } else { inList = false; inLib = hasLib; NavResult.MOVED }
                     NavAction.DOWN -> when {
                         sel.index < games.size - 1 -> { sel.index++; NavResult.MOVED }
                         rest > 0 -> { inRest = true; app.scope.launch { list.animateScrollBy(step) }; NavResult.MOVED }
@@ -202,6 +220,7 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
                     NavAction.RIGHT -> if (index < actions.size - 1) { index++; NavResult.MOVED } else NavResult.BLOCKED
                     NavAction.SELECT -> { actions.getOrNull(index)?.run?.invoke(); NavResult.ACTIVATED }
                     NavAction.DOWN -> when {
+                        hasLib -> { inLib = true; NavResult.MOVED }
                         games.isNotEmpty() -> { inList = true; NavResult.MOVED }
                         rest > 0 -> { inRest = true; app.scope.launch { list.animateScrollBy(step) }; NavResult.MOVED }
                         else -> NavResult.BLOCKED
@@ -240,10 +259,16 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
                     SyncHeader(
                         hostName = prefs.sync.hostName.ifBlank { "your host" },
                         host = host, words = words, profile = profile, report = report,
-                        actions = actions, selected = if (focused && !inList && !inRest && !inSide) index else -1,
+                        actions = actions, selected = if (focused && !inList && !inRest && !inSide && !inLib) index else -1,
                         busy = syncing || (status as? SyncStatus.Online)?.working == true,
                         labels = labels, compact = compact,
-                        onAction = { i -> index = i; inList = false; inRest = false; actions[i].run() },
+                        onAction = { i -> index = i; inList = false; inRest = false; inLib = false; actions[i].run() },
+                    )
+                }
+                if (hasLib) item("library") {
+                    io.github.matiyaaa.fuse.ui.shell.reach.HouseholdCard(
+                        app, selected = focused && inLib, modifier = Modifier.padding(top = Space.m),
+                        onClick = { inLib = true; inList = false; inRest = false; app.go(Route.HouseholdLibrary) },
                     )
                 }
                 item("games") {

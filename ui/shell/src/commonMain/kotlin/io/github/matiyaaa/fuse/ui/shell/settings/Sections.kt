@@ -778,9 +778,24 @@ fun mediaRows(app: AppState): List<MenuAction> {
                 app.store.media.fill(MediaFillMode.FILL_MISSING, MediaKind.Fillable)
                 app.toasts.show("Looking for missing art. Progress shows here and in the top bar")
             }))
-            add(MenuAction("fill.all", "Fill everything", FuseIcons.Sparkles, detail = "Every kind of art, screenshots and details (description, year, genres, series, rating) for every game, plus system art. Nothing you chose or edited is replaced", onSelect = {
-                app.store.media.fillEverything()
-                app.toasts.show("Filling art and details. Progress shows here and in the top bar")
+            add(MenuAction("fill.all", "Fill everything", FuseIcons.Sparkles, detail = "Every kind of art, screenshots and details (description, year, genres, series, rating) for every game, plus system art. Nothing you chose or edited is replaced", trailing = Trailing.Chevron, onSelect = {
+                fun go(remote: Boolean) {
+                    app.choice = null
+                    app.store.media.fillEverything(null, remote)
+                    app.toasts.show(if (remote) "Filling art and details for your library and the Remote Library. Progress shows here and in the top bar" else "Filling art and details. Progress shows here and in the top bar")
+                }
+                // The Remote Library (RomM's games and other devices', shown without being here) is remembered the same way.
+                val remote = app.store.romm.state.value.usable || app.store.reach.state.value.games > 0
+                if (!remote) go(false)
+                else app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+                    title = "Fill everything",
+                    message = "Art and details are found by the same sources and rules for every game, and kept, so each list opens complete even while a server or device is away.",
+                    icon = FuseIcons.Sparkles,
+                    options = listOf(
+                        MenuAction("fill.lib", "Your Library", FuseIcons.LibraryBig, detail = "The games on this device", onSelect = { go(false) }),
+                        MenuAction("fill.remote", "Library and Remote Library", FuseIcons.MonitorSmartphone, detail = "Also RomM's games and your other devices' games that aren't here", onSelect = { go(true) }),
+                    ),
+                )
             }))
             add(toggleRow(
                 "fill.auto", "Find art by itself", FuseIcons.ScanSearch, p.autoFillArt,

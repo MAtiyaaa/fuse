@@ -100,6 +100,7 @@ internal class DefaultFuseStore private constructor(
     )
     override val transfers = DefaultTransfersOps(ctx, transferEngine, appStore, updates, cartridge)
     override val romm: DefaultRommOps
+    override val reach: DefaultReachOps
     override val streaming: DefaultStreamingOps by lazy { DefaultStreamingOps(ctx) { t -> writeSettings(t) } }
     override val offlineMedia: DefaultOfflineMedia by lazy { DefaultOfflineMedia(ctx, engine, transferEngine, jellyfin) }
 
@@ -151,6 +152,13 @@ internal class DefaultFuseStore private constructor(
             choiceFor = { g -> library.choiceFor(g) },
             details = CartridgeDetails(ctx),
             fillRemote = { ids -> mediaOps.fillRemote(ids) },
+        )
+        reach = DefaultReachOps(
+            ctx, engine, transferEngine, sync.service, romm,
+            householdIds = { profileData.householdIds() },
+            choiceFor = { g -> library.choiceFor(g) },
+            fillRemote = { ids -> mediaOps.fillRemote(ids) },
+            showRemote = { rows, act -> transfers.showRemote(rows, act) },
         )
     }
 
@@ -329,6 +337,7 @@ internal class DefaultFuseStore private constructor(
         // Downloads, and Fuse RomM feeding the library through them.
         transfers.start()
         romm.start()
+        reach.start()
         offlineMedia.start()
         streaming.start()
         ctx.scope.launch { ctx.playing.collect { transfers.conditions(playing = it != null) } }

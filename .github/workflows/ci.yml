@@ -62,6 +62,7 @@ jobs:
           :core:playback:desktopTest
           :core:transfer:desktopTest
           :core:romm:desktopTest
+          :core:reach:desktopTest
           :ui:fuseline:desktopTest
           :ui:player:desktopTest
           :ui:shell:desktopTest

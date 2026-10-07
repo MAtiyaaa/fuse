@@ -212,6 +212,9 @@ interface SyncService {
 
     val status: StateFlow<SyncStatus>
 
+    /** The household's games: the other devices' lists, fetching from them, and requests between devices. */
+    val household: Household get() = Household.None
+
     /** Goes up each time a round with the host ends (what another device sent since is in). */
     val rounds: StateFlow<Int> get() = NoRounds
 

@@ -41,6 +41,7 @@ flowchart TD
     data[core:data]
     transfer[core:transfer]
     romm[core:romm]
+    reach[core:reach]
     ds[ui:designsystem]
     shell[ui:shell]
     link[ui:link]
@@ -60,6 +61,9 @@ flowchart TD
     data --> romm
     integrations --> romm
     romm --> shell
+    transfer --> reach
+    romm --> reach
+    reach --> shell
     data --> shell
     ds --> shell
     shell --> link
@@ -72,7 +76,7 @@ flowchart TD
 Read an arrow as "is used by". Dependencies only point down: `core:*` modules know nothing about
 Compose, `ui:designsystem` knows nothing about the library or launching, and nothing below the apps
 knows which operating system it runs on. The graph is enforced by the `build.gradle.kts` of each
-module; `settings.gradle.kts` lists every module (the graph leaves out playback, Jellyfin, Fuse Sync, Fuseline and the player, covered in their own documents). The two app modules depend on `ui:shell` and
+module; `settings.gradle.kts` lists every module (the graph leaves out playback, Jellyfin, Fuse Sync, Fuseline and the player, covered in their own documents; `core:reach` also uses `core:sync`). The two app modules depend on `ui:shell` and
 implement its `FuseServices` and `PlatformUi` contracts.
 
 Build conventions live in `build-logic/` as precompiled script plugins:
@@ -97,6 +101,7 @@ Namespaces follow the module path (`io.github.matiyaaa.fuse.core.model` for `:co
 | `core:integrations` | HTTP clients for RetroAchievements, SteamGridDB, IGDB, TheGamesDB, ScreenScraper, libretro thumbnails, the Art Book Next system art pack and GitHub Releases; the scrape coordinator and title matcher; the Cartridge bridge protocol | `scrape/ScrapeCoordinator.kt`, `cartridge/CartridgeProtocol.kt`, `FuseHttp.kt` |
 | `core:transfer` | One queue for every download and upload Fuse makes: up to five each way at once, kept across restarts, resumed with HTTP ranges, checked before being put in place, waiting for a missing drive by its id and for the network with back-off. Handlers per kind of job (RomM, Jellyfin, offline moves) plug in through `TransferHandler` | `Transfers.kt`, `Scheduler.kt`, `TransferManager.kt`, `RangedDownload.kt` |
 | `core:romm` | Fuse RomM, Fuse's native RomM integration: the client (capabilities from RomM's OpenAPI document, device pairing, pairing codes), Local, Remote and Automatic routes, the mirror of the server's library in Fuse's database, matching that never joins games on a look-alike name, placement in the system folders Fuse has, BIOS planning that never replaces a file, and download and chunked upload transfers | `RommClient.kt`, `RommMirror.kt`, `RommRules.kt`, `RommTransfers.kt` |
+| `core:reach` | Bringing a game from wherever it is best: another device of the household on the same network, RomM at home, another device through the Fuse Sync host, or RomM from outside, ranked again on every attempt. Every file is checked against its hash, a part is carried on from another source only when the hashes match, and a game appears only once it is whole (a hidden staging folder moved into place in one step). Keeps `core:sync` free of RomM and `core:romm` free of Fuse Sync | `ReachJobs.kt`, `ReachHandler.kt` |
 | `core:data` | SQLDelight database, repositories, the library indexer that reconciles scans, app settings and scoped settings, the `SecretStore` contract | `FuseData.kt`, `repo/LibraryIndexer.kt`, `settings/AppSettings.kt` |
 | `ui:designsystem` | Tokens, colours, typography, shapes, motion, theme presets, focus and selection, input routing, components, icons, sounds, hero backdrop and generated art | `theme/`, `components/`, `input/InputRouter.kt` |
 | `ui:shell` | Every screen and overlay, navigation, onboarding and settings, written against the `FuseStore` and `PlatformUi` interfaces | `app/FuseApp.kt`, `store/FuseStore.kt`, `store/FuseServices.kt` |

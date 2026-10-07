@@ -1,5 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
+import io.github.matiyaaa.fuse.ui.shell.reach.sendPicker
+
 import io.github.matiyaaa.fuse.launch.patches.PatchState
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.FolderPolicy
@@ -346,6 +348,12 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
                     val bytes = store.storage.size(card.id) ?: 0L
                     moveGames(listOf(card.id), listOf(card.title), bytes)
                 }
+            }))
+        }
+        // The Remote Library: to another of the household's devices (now, or once it is back).
+        if (!card.isApp && card.unavailable == null && !card.missing && store.reach.state.value.supported) {
+            add(MenuAction("reach.send", "Send to Another Device", FuseIcons.Share, detail = "Fetched by that device, from wherever is best", trailing = Trailing.Chevron, onSelect = {
+                sendPicker(card.id, card.title)
             }))
         }
         if (!card.isApp) add(MenuAction("folder", "Folder Behaviour", FuseIcons.FolderOpen, trailing = Trailing.Chevron, onSelect = { folderPolicyPicker(card) }))

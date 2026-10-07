@@ -200,7 +200,7 @@ class HostStore(
     val name: String get() = identity.name
 
     fun hello(port: Int, fuseVersion: String) =
-        HostHello(identity.hostId, identity.name, SyncApi.VERSION, port, fuseVersion, outside = outside.address, account = account != null)
+        HostHello(identity.hostId, identity.name, SyncApi.VERSION, port, fuseVersion, outside = outside.address, account = account != null, features = listOf(SyncApi.FEATURE_HOUSEHOLD))
 
     // ---------------------------------------------------------------- the account and the outside address
 

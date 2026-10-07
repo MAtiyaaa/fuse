@@ -1,48 +1,64 @@
-# Fuse 0.3.7.5 - The Motion Update
+# Fuse 0.3.8 - The Reach Update
 
-0.3.7.4 made Fuse slower on Android. This release undoes the change that caused it, runs a
-properly optimised build on your device, and brings Fuseline 3.1. Everything looks and moves
-exactly as it did.
+Every game in your household, reachable from every device. With Fuse Sync, each of your devices
+can see what the others have, bring any of it here, or send a game to another device, even one
+that is away. Fuse picks the best place to bring it from by itself, checks every file, and never
+shows a game until it is whole.
 
 ## New
 
-- **Fuseline 3.1.** Fuse's animation engine keeps every curve, spring and motion of Fuseline 3, and
-  takes work off the frames around them:
-  - **Animated values without coroutines.** The values that follow a tile's focus, a button's
-    colour or a panel's size no longer start a coroutine each. A page of tiles costs a few small
-    objects per value, so tab switches and new Library rows compose faster.
-  - **No invisible frames.** A frame that would move something less than anyone could see is
-    worked out but not drawn again. The long, slow end of a spring stops redrawing the screen.
-  - **Decoration waits for you.** While you press buttons, and while what you pressed is still
-    moving, the theme's room and the background's slow drift hold still, so every frame goes to
-    what you are doing. At rest they move exactly as before, on both screens of a two-screen
-    handheld.
-  - **Paced decoration.** A room that needs 30 updates a second wakes 30 times a second, not 120
-    times on a 120 Hz screen.
-- **Fuseline 3.1 measured against every Fuseline and Compose.** Fuseline 3, 2 and 1 are kept, as
-  they shipped, in Fuse's tests, and the benchmarks compare all five. See
-  [How Fuseline works](../fuseline.md#speed).
+- **Not on RomM, from another device.** With Fuse RomM and Fuse Sync on, the RomM tab ends with a
+  shelf of the games your other devices have that RomM doesn't, each saying which device has it.
+  Games this device already has are never listed.
+- **A system's page in sections.** Each system on the RomM tab shows its games in three sections:
+  On RomM, Not on RomM (this device's) and Not on RomM, from another device. Up and down keep your
+  column as they cross from one section to the next.
+- **A Remote Library without RomM.** With Fuse Sync on and no RomM, the Sync tab has a Library with
+  Recently Added and Systems, laid out and moving like RomM's. Its games can be downloaded here or
+  sent to another device.
+- **Download here, or upload to RomM.** Another device's game can be brought to this device, or
+  uploaded to RomM. The upload is done by the device that has the game, and any device can ask for
+  it: if that device is away, it does it once it is back.
+- **Available on.** Every game's page says where the game is: this device, each of your other
+  devices, and RomM. Each copy shows whether its device is online or away, its size there, whether
+  it is verified (the same files as another copy or RomM), a different version, or still being
+  checked, and when it was downloaded or added.
+- **Send to Another Device.** From any game's page or options, send a game to any of your devices.
+  A device that is away gets it when it is back, and the picker says which devices already have
+  the game or don't take games from others.
+- **The best source, by itself.** Fuse brings a game from another device on the same network
+  first, then RomM at home, then another device through your Fuse Sync host, then RomM from
+  outside, fastest first. It works whichever device is away from home. If a source drops, Fuse
+  carries on from the next one, keeping what was downloaded when the files are the same.
+- **Every device's downloads.** Downloads lists what your other devices are downloading under each
+  device's name ("Downloading to Thor"), with a new Other Devices filter. Pause, cancel and
+  reordering there act on that device.
+- **Remembered offline.** What your other devices have, with its art and details, is kept on this
+  device, so the Remote Library can be browsed with the host away. Art follows the same rules as
+  RomM's games, SteamGridDB included.
+- **Fill Everything, your way.** Fill Everything asks whether to fill your library, or your library
+  and the Remote Library.
+- **Remote Library settings.** Settings, Addons, Remote Library: share this device's games, let
+  other devices send games here, where games sent here go, passing games through the host, and
+  showing other devices' games in RomM.
+- **On the second screen.** A game in focus shows which other devices have it, and another
+  device's download names that device.
 
 ## Changed
 
-- **An optimised Android build.**
-  - The Android app is now built with R8, Android's optimiser. Compose, the toolkit Fuse's
-    interface is built with, runs much faster optimised.
-  - Fuse's interface code and Compose's own code are compiled ahead of time when Fuse is installed
-    (a startup profile), instead of running interpreted until Android gets round to compiling them,
-    which for an app installed from GitHub could take days.
-  - Fuse's interface is compiled without per-screen debugging records it never used.
-- **Moving the selection redraws two items, not the whole view.** In the Library (icons, covers
-  and list), Addons, Apps, Collections and Search, moving the selection now rebuilds only the item
-  it leaves and the one it reaches.
+- **Downloads from another device are safe like every other download.** They use Fuse's one
+  Downloads queue: they resume after a restart, every file is checked against its hash, a game made
+  of a folder is put together out of sight and moved into place in one step, and a cancelled or
+  failed download leaves nothing behind.
+- **Fuse Sync carries games when you ask.** Games go device to device on your network, or pass
+  through your host without being kept there. A device sends only files it lists as its own games,
+  and only to a device holding a ticket from your host. See
+  [Games across the household](../sync.md#games-across-the-household).
+- **RomM downloads use the same sources.** With the Remote Library on, a RomM game another device
+  of yours already has can come from that device when it is closer.
 
 ## Fixed
 
-- **0.3.7.4 made Fuse slower on Android.**
-  - **What went wrong:** 0.3.7.4 drew the room's shading, a resting room and the picture behind
-    every game without art into images painted by the processor. That is quick on a computer
-    drawing without a graphics card, which is where it was measured. On a phone it moved the
-    graphics card's work onto the processor and made the Library's scrolling laggy.
-  - **The fix:** on Android that drawing is now recorded once and kept by the graphics card as a
-    finished picture. Nothing is painted by the processor, and nothing is drawn again until it
-    changes. Computers keep the picture painted once.
+- **Scrolling the Library up by touch jumped back.** After moving down with a controller, dragging
+  the grid back up snapped it to the game the controller had chosen. The grid now stays where your
+  finger leaves it, and the controller carries on from what is on screen.

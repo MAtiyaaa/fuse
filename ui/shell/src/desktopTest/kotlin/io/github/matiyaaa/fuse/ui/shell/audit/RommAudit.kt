@@ -24,7 +24,7 @@ import kotlinx.coroutines.runBlocking
  * A RomM server that answers from the sample library: its games as the server's (some here, some
  * not, one downloading), its systems plus one the library hasn't got, and a collection.
  */
-private class AuditRomm(base: FuseStore) : RommOps by RommOps.None {
+internal class AuditRomm(base: FuseStore) : RommOps by RommOps.None {
     private val cards = runBlocking { base.library.games(GameQuery()).first() }
     private val games = cards.take(24).mapIndexed { i, c ->
         RommGame(

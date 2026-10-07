@@ -23,6 +23,9 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
+import io.ktor.client.request.header
+import io.ktor.client.request.prepareGet
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.utils.io.jvm.javaio.toInputStream
 import io.ktor.utils.io.readRemaining
 import kotlinx.coroutines.Dispatchers
@@ -63,6 +66,27 @@ class SyncHost(
     private val nonces = ConcurrentHashMap<String, Long>()
     private val calls = ConcurrentHashMap<String, Pair<Long, Int>>()
     private val changed = MutableStateFlow(store.seq())
+
+    /** The household's games: each device's list, requests between devices, games passing through. */
+    val household = HouseholdHost(java.io.File(store.dir, "household"), clock)
+
+    /** Tickets this host gave, by id, while they last (a ticket from before a restart is asked for again). */
+    private val tickets = ConcurrentHashMap<String, PeerTicket>()
+
+    /** For trying a device directly when passing a game through (the host is usually at home with it). */
+    @Volatile private var peerClient: io.ktor.client.HttpClient? = null
+    private val peerHttp: io.ktor.client.HttpClient
+        get() = peerClient ?: synchronized(this) {
+            peerClient ?: SyncHttp.client {
+                install(io.ktor.client.plugins.HttpTimeout) { connectTimeoutMillis = 1_500; socketTimeoutMillis = 60_000; requestTimeoutMillis = 10 * 60_000 }
+                expectSuccess = false
+            }.also { peerClient = it }
+        }
+
+    /** Devices the host couldn't reach directly lately, until when: their pieces go the other way meanwhile. */
+    private val unreachable = ConcurrentHashMap<String, Long>()
+
+    private fun liveDevices(): Set<String> = store.devices().filter { !it.revoked }.map { it.id }.toSet()
 
     /** The journal's newest entry, for watching what changes (the Hub's live view). */
     val changes: StateFlow<Long> = changed
@@ -187,6 +211,8 @@ class SyncHost(
     fun stop() {
         server?.stop(500, 2_000)
         server = null
+        // Its client for reaching devices goes too: each one keeps a network thread of its own.
+        synchronized(this) { peerClient?.close(); peerClient = null }
     }
 
     private fun bump() {
@@ -457,12 +483,16 @@ class SyncHost(
                 call.respondOutputStream(ContentType.Application.OctetStream) { withContext(Dispatchers.IO) { store.content.copyTo(hash, this@respondOutputStream) } }
             }
             get("/events") {
-                device() ?: return@get
+                val d = device() ?: return@get
                 val since = call.request.queryParameters["since"]?.toLongOrNull() ?: 0
                 val wait = (call.request.queryParameters["wait"]?.toLongOrNull() ?: 0).coerceIn(0, 30)
-                if (wait > 0 && store.seq() <= since) withTimeoutOrNull(wait * 1000) { changed.first { it > since } }
+                if (wait > 0 && store.seq() <= since && !household.hasWake(d.id)) {
+                    withTimeoutOrNull(wait * 1000) {
+                        kotlinx.coroutines.flow.merge(changed, household.ticks).first { store.seq() > since || household.hasWake(d.id) }
+                    }
+                }
                 // Events carry only ids: what changed is fetched through the calls that check access.
-                call.json(JournalPage.serializer(), store.events(since))
+                call.json(JournalPage.serializer(), store.events(since).copy(wake = household.takeWakes(d.id).toList()))
             }
             // Management from this computer only, with the token in the host's own folder.
             route("/admin") {
@@ -515,7 +545,7 @@ class SyncHost(
                 }
                 delete("/devices/{id}") {
                     if (!admin()) return@delete
-                    store.revokeDevice(call.parameters["id"].orEmpty())
+                    call.parameters["id"].orEmpty().let { store.revokeDevice(it); household.forget(it) }
                     bump()
                     call.respondText("{}", ContentType.Application.Json)
                 }
@@ -568,10 +598,164 @@ class SyncHost(
                 // A device can always unlink itself.
                 if (id != d.id) return@delete call.fail(HttpStatusCode.Forbidden, "Unlink other devices from the host's Hub.", "not-yours")
                 store.revokeDevice(id)
+                household.forget(id)
                 bump()
                 call.respondText("{}", ContentType.Application.Json)
             }
+            householdApi()
         }
+    }
+
+    // ---------------------------------------------------------------- the household's games
+
+    /**
+     * The household's games (see [HouseholdHost]): each device's list, leave to fetch a game from
+     * another device, the game passing through when the two can't reach each other, requests one
+     * device makes of another, and every device's transfers. Every call is signed by a device.
+     */
+    private fun Route.householdApi() {
+        post("/library") {
+            val d = device() ?: return@post
+            val req = signedBody(d, DeviceLibrary.serializer(), packed = call.request.headers[GZIP_BODY] == "1") ?: return@post
+            household.putLibrary(req.copy(device = d.id, name = d.name, platform = d.platform, entries = req.entries.take(MAX_LIBRARY)))
+            household.wake(HouseholdHost.WAKE_LIBRARY, except = d.id, all = ::liveDevices)
+            call.respondText("{}", ContentType.Application.Json)
+        }
+        post("/libraries") {
+            val d = device() ?: return@post
+            val req = signedBody(d, LibrariesKnown.serializer()) ?: return@post
+            val all = store.devices().filter { !it.revoked }
+            call.json(LibrariesPage.serializer(), household.libraries(req.have, d.id, all.map { it.id }.toSet(), all.associate { it.id to it.lastSeen }))
+        }
+        post("/tickets") {
+            val d = device() ?: return@post
+            val req = signedBody(d, TicketRequest.serializer()) ?: return@post
+            val source = store.device(req.source)?.takeIf { !it.revoked && it.id != d.id }
+                ?: return@post call.fail(HttpStatusCode.NotFound, "That device isn't in this household.", "no-device")
+            val lib = household.library(source.id) ?: return@post call.fail(HttpStatusCode.NotFound, "That device hasn't shared its games.", "not-shared")
+            val entry = lib.entries.firstOrNull { it.game == req.game } ?: return@post call.fail(HttpStatusCode.NotFound, "That device doesn't have this game any more.", "no-game")
+            val listed = entry.files.map { it.path }.toSet()
+            if (req.files.isEmpty() || req.files.size > MAX_TICKET_FILES || req.files.any { it !in listed }) return@post call.fail(HttpStatusCode.BadRequest, "Those aren't this game's files.", "bad-files")
+            val now = clock()
+            tickets.values.removeIf { it.until < now }
+            val ticket = PeerTicket(
+                id = "tkt-" + SyncCrypto.token(12), requester = d.id, source = source.id, game = req.game, files = req.files,
+                until = now + TICKET_MS, endpoint = lib.endpoint, relay = true,
+            )
+            tickets[ticket.id] = ticket
+            val salt = SyncCrypto.token(16)
+            val sealed = SyncCrypto.seal(PeerSigning.key(source.secret, ticket).toByteArray(), d.secret, salt)
+            call.json(PeerTicket.serializer(), ticket.copy(sealedKey = sealed, salt = salt))
+        }
+        // A piece of a game, passed through: straight from the device when the host reaches it (it
+        // usually sits at home with it), else the device sends it here and it goes on as it comes.
+        get("/relay") {
+            val d = device() ?: return@get
+            val q = call.request.queryParameters
+            val ticket = tickets[q["ticket"].orEmpty()]?.takeIf { it.requester == d.id && it.until > clock() }
+                ?: return@get call.fail(HttpStatusCode.Forbidden, "That leave ran out. Ask again.", "ticket")
+            val file = q["file"].orEmpty()
+            val offset = q["offset"]?.toLongOrNull()?.takeIf { it >= 0 } ?: 0L
+            val length = (q["length"]?.toLongOrNull() ?: SyncApi.RELAY_PIECE).coerceIn(1, SyncApi.RELAY_PIECE)
+            if (file !in ticket.files) return@get call.fail(HttpStatusCode.BadRequest, "That file isn't part of the leave.", "bad-files")
+            val source = store.device(ticket.source)?.takeIf { !it.revoked } ?: return@get call.fail(HttpStatusCode.NotFound, "That device left the household.", "no-device")
+            if (passDirect(ticket, source, file, offset, length)) return@get
+            val relay = household.openRelay(ticket, file, offset, length)
+            household.wake(HouseholdHost.WAKE_RELAY, listOf(source.id), all = ::liveDevices)
+            val body = withTimeoutOrNull(HouseholdHost.RELAY_WAIT_MS) { relay.body.await() }
+            if (body == null) {
+                household.closeRelay(relay.ask.id)
+                return@get call.fail(HttpStatusCode.ServiceUnavailable, "${source.name} didn't answer. Fuse needs to be open there.", "relay-wait")
+            }
+            try {
+                call.response.headers.append(PEER_OFFSET, offset.toString())
+                call.respondOutputStream(ContentType.Application.OctetStream) {
+                    withContext(Dispatchers.IO) { copyAtMost(body.toInputStream(), this@respondOutputStream, length) }
+                }
+            } finally {
+                household.closeRelay(relay.ask.id)
+            }
+        }
+        get("/relays") { val d = device() ?: return@get; call.json(ListSerializer(RelayAsk.serializer()), household.relayAsks(d.id)) }
+        put("/relays/{id}") {
+            val id = call.parameters["id"].orEmpty()
+            val d = device(bodyHash = "relay:$id") ?: return@put
+            val relay = household.relay(id)?.takeIf { it.source == d.id && !it.body.isCompleted }
+                ?: return@put call.fail(HttpStatusCode.NotFound, "Nobody is waiting for that any more.", "no-relay")
+            relay.body.complete(call.receiveChannel())
+            // The call stays open while the bytes go on to the device that asked.
+            withTimeoutOrNull(10 * 60_000L) { relay.passed.await() }
+            call.respondText("{}", ContentType.Application.Json)
+        }
+        post("/commands") {
+            val d = device() ?: return@post
+            val req = signedBody(d, DeviceCommand.serializer()) ?: return@post
+            val target = store.device(req.target)?.takeIf { !it.revoked } ?: return@post call.fail(HttpStatusCode.NotFound, "That device isn't in this household.", "no-device")
+            if (req.type !in COMMAND_TYPES) return@post call.fail(HttpStatusCode.BadRequest, "That isn't something one device can ask of another.", "bad-command")
+            val made = household.addCommand(req.copy(from = d.id, fromName = d.name, target = target.id, title = req.title.take(200)))
+            household.wake(HouseholdHost.WAKE_COMMANDS, all = ::liveDevices)
+            call.json(DeviceCommand.serializer(), made)
+        }
+        get("/commands") { device() ?: return@get; call.json(Commands.serializer(), Commands(household.allCommands())) }
+        get("/commands/inbox") { val d = device() ?: return@get; call.json(Commands.serializer(), Commands(household.pendingFor(d.id))) }
+        post("/commands/{id}/ack") {
+            val d = device() ?: return@post
+            val req = signedBody(d, CommandAck.serializer()) ?: return@post
+            val c = household.ack(d.id, call.parameters["id"].orEmpty(), req) ?: return@post call.fail(HttpStatusCode.NotFound, "No such request for this device.", "no-command")
+            household.wake(HouseholdHost.WAKE_COMMANDS, all = ::liveDevices)
+            call.json(DeviceCommand.serializer(), c)
+        }
+        delete("/commands/{id}") {
+            val d = device() ?: return@delete
+            val c = household.cancel(d.id, call.parameters["id"].orEmpty()) ?: return@delete call.fail(HttpStatusCode.NotFound, "That request is done or isn't yours.", "no-command")
+            household.wake(HouseholdHost.WAKE_COMMANDS, all = ::liveDevices)
+            call.json(DeviceCommand.serializer(), c)
+        }
+        post("/transfers") {
+            val d = device() ?: return@post
+            val req = signedBody(d, TransferSnapshot.serializer()) ?: return@post
+            household.putSnapshot(req.copy(device = d.id, name = d.name))
+            call.respondText("{}", ContentType.Application.Json)
+        }
+        get("/transfers") {
+            val d = device() ?: return@get
+            call.json(TransferSnapshots.serializer(), TransferSnapshots(household.snapshots(liveDevices() - d.id)))
+        }
+    }
+
+    /**
+     * Passes [file] on from [source] directly, when the host reaches it on the home network: true
+     * once answered. False (nothing sent yet) when the device can't be reached that way.
+     */
+    private suspend fun RoutingContext.passDirect(ticket: PeerTicket, source: DeviceRecord, file: String, offset: Long, length: Long): Boolean {
+        val endpoint = ticket.endpoint?.takeIf { it.port > 0 } ?: return false
+        if ((unreachable[source.id] ?: 0) > clock()) return false
+        val key = PeerSigning.key(source.secret, ticket)
+        for (address in endpoint.addresses.take(4)) {
+            val path = SyncApi.PEER_BASE + "/file?" + PeerFiles.query(ticket.game, file, offset, length)
+            val time = clock()
+            val nonce = SyncCrypto.token(18)
+            val ok = runCatching {
+                peerHttp.prepareGet("http://" + PeerFiles.hostPort(address, endpoint.port) + path) {
+                    header(PeerSigning.TICKET, PeerSigning.header(ticket, json))
+                    header(RequestSigning.TIME, time.toString())
+                    header(RequestSigning.NONCE, nonce)
+                    header(RequestSigning.SIGNATURE, PeerSigning.sign(key, ticket.game, file, offset, length, time, nonce))
+                }.execute { resp ->
+                    if (resp.status != HttpStatusCode.OK) return@execute false
+                    resp.headers[PEER_SIZE]?.let { call.response.headers.append(PEER_SIZE, it) }
+                    call.response.headers.append(PEER_OFFSET, offset.toString())
+                    val input = resp.bodyAsChannel()
+                    call.respondOutputStream(ContentType.Application.OctetStream) {
+                        withContext(Dispatchers.IO) { copyAtMost(input.toInputStream(), this@respondOutputStream, length) }
+                    }
+                    true
+                }
+            }.getOrDefault(false)
+            if (ok) return true
+        }
+        unreachable[source.id] = clock() + UNREACHABLE_MS
+        return false
     }
 
     // ---------------------------------------------------------------- checks
@@ -628,9 +812,12 @@ class SyncHost(
     private val lastBodies = java.util.Collections.synchronizedMap(java.util.WeakHashMap<ApplicationCall, ByteArray>())
 
     /** The body [device] already read and checked, decoded. */
-    private suspend fun <T> RoutingContext.signedBody(d: DeviceRecord, serializer: KSerializer<T>): T? {
-        val bytes = lastBodies.remove(call) ?: ByteArray(0)
-        return runCatching { json.decodeFromString(serializer, bytes.decodeToString()) }.getOrElse {
+    private suspend fun <T> RoutingContext.signedBody(d: DeviceRecord, serializer: KSerializer<T>, packed: Boolean = false): T? {
+        val raw = lastBodies.remove(call) ?: ByteArray(0)
+        return runCatching {
+            val bytes = if (packed) Gzip.unpack(raw, MAX_JSON) else raw
+            json.decodeFromString(serializer, bytes.decodeToString())
+        }.getOrElse {
             call.fail(HttpStatusCode.BadRequest, "That isn't a call this host understands.", "bad-body")
             null
         }
@@ -795,6 +982,43 @@ class SyncHost(
         const val MAX_BLOB = 1L * 1024 * 1024 * 1024
 
         const val CALLS_PER_MINUTE = 1_200
+
+        /** A device's list says it was sent gzipped (signed as sent). */
+        const val GZIP_BODY = "X-Fuse-Gzip"
+
+        /** The answer to a piece of a game: where it starts, and the whole file's size. */
+        const val PEER_OFFSET = "X-Fuse-Offset"
+        const val PEER_SIZE = "X-Fuse-Size"
+        const val PEER_SHA1 = "X-Fuse-Sha1"
+
+        /** The most games one device lists. */
+        const val MAX_LIBRARY = 50_000
+
+        /** The most files one leave covers (a PS3 game's folder can hold thousands). */
+        const val MAX_TICKET_FILES = 20_000
+
+        /** How long leave to fetch a game lasts; a longer download asks again. */
+        const val TICKET_MS = 60 * 60_000L
+
+        /** How long a device the host couldn't reach directly is left to send its pieces itself. */
+        const val UNREACHABLE_MS = 60_000L
+
+        private val COMMAND_TYPES = setOf(DeviceCommand.FETCH, DeviceCommand.ROMM_UPLOAD, DeviceCommand.TRANSFER)
+
+        /** Copies at most [max] bytes from [input] to [out]. */
+        internal fun copyAtMost(input: java.io.InputStream, out: java.io.OutputStream, max: Long): Long {
+            val buf = ByteArray(64 * 1024)
+            var left = max
+            var total = 0L
+            while (left > 0) {
+                val n = input.read(buf, 0, minOf(buf.size.toLong(), left).toInt())
+                if (n < 0) break
+                out.write(buf, 0, n)
+                left -= n
+                total += n
+            }
+            return total
+        }
 
         /** How long a request to join waits for someone to let the device in. */
         const val JOIN_TTL_MS = 5 * 60_000L

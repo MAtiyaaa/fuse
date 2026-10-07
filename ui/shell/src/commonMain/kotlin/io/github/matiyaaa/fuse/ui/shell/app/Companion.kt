@@ -451,8 +451,20 @@ private fun Idle(time: String, room: Boolean) {
 private fun FocusedGame(store: FuseStore, id: GameId, onAchievements: (GameId) -> Unit) {
     val flow = remember(id) { store.library.game(id) }
     val detail by flow.collectAsState(initial = null)
+    // Where else the game is: the household's other devices and RomM, each with a dot when it is around.
+    val copiesFlow = remember(id) { store.reach.availability(id) }
+    val copies by copiesFlow.collectAsState(initial = null)
+    val elsewhere = copies?.copies.orEmpty().filter { it.place != io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.HERE }
     val d = detail ?: return
     GameLogo(d.art.logo, d.game.displayTitle) {
+        if (elsewhere.isNotEmpty()) {
+            Spacer(Modifier.height(Space.l))
+            androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(Space.xs)) {
+                elsewhere.take(4).forEach { cp ->
+                    io.github.matiyaaa.fuse.ui.shell.reach.DeviceChip(cp.name, io.github.matiyaaa.fuse.ui.shell.reach.copyIcon(cp), cp.online)
+                }
+            }
+        }
         d.achievements?.takeIf { it.total > 0 }?.let { a ->
             Spacer(Modifier.height(Space.xl))
             AchievementBar(a, onOpen = { onAchievements(id) })
