@@ -75,3 +75,6 @@ moves exactly as it did; the engine does a great deal less to make it move.
   the same request again and again while the game came over; taken once more just as it landed,
   before its library had found it, the request could fail as it succeeded. Each request is now
   taken once.
+- **A system without pack art always gets its panel from its games.** The PlayStation 5 (and any
+  system the art pack lacks) could stay bare when its games' art arrived before the system was
+  listed; it now gets its panel whichever comes first.
