@@ -616,7 +616,7 @@ private fun RailStep(step: Step, index: Int, current: Int, last: Boolean, onPick
             }
         }
         Spacer(Modifier.width(Space.s))
-        FText(step.eyebrow, if (here) Fuse.type.bodyStrong else Fuse.type.label, color = tint, maxLines = 1, modifier = Modifier.weight(1f))
+        FText(step.eyebrow, if (here) Fuse.type.bodyStrong else Fuse.type.label, color = { tint }, maxLines = 1, modifier = Modifier.weight(1f))
         if (done) FuseIcon(FuseIcons.Check, size = Size.iconXS, tint = c.accent.copy(alpha = 0.8f))
     }
 }

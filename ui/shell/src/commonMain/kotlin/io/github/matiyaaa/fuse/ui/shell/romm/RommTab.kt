@@ -50,6 +50,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.Spinner
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
+import io.github.matiyaaa.fuse.ui.designsystem.effects.background
 import io.github.matiyaaa.fuse.ui.designsystem.focus.ShelfSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
@@ -372,7 +373,7 @@ private fun Pill(a: PillAction, selected: Boolean, label: Boolean, primary: Bool
         else -> c.text
     }
     Row(
-        Modifier.height(40.dp).clip(CircleShape).background(bg)
+        Modifier.height(40.dp).clip(CircleShape).background({ bg })
             .clickable(remember { MutableInteractionSource() }, indication = null, onClick = onClick)
             .padding(horizontal = if (label) Space.m else 10.dp),
         verticalAlignment = Alignment.CenterVertically,

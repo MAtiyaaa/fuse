@@ -54,6 +54,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.FuseButton
 import io.github.matiyaaa.fuse.ui.designsystem.components.ProfileAvatar
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
+import io.github.matiyaaa.fuse.ui.designsystem.effects.background
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
@@ -344,7 +345,7 @@ private fun MergeRow(p: ProfileInfo, choice: MergeChoice, m: ProfileMerge, selec
         MergeChoice.LeaveOut -> "Leave out" to "Saves kept as files"
     }
     Row(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(Fuse.geometry.control)).background(bg)
+        modifier.fillMaxWidth().clip(RoundedCornerShape(Fuse.geometry.control)).background({ bg })
             .clickable(remember { MutableInteractionSource() }, indication = null) { onStep(1) }
             .padding(horizontal = if (compact) Space.m else Space.l, vertical = if (compact) Space.s else Space.m),
         verticalAlignment = Alignment.CenterVertically,

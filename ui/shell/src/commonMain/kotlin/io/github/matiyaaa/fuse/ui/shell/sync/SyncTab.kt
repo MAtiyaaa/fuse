@@ -56,6 +56,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.StatusDot
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.components.handleMenuAction
+import io.github.matiyaaa.fuse.ui.designsystem.effects.background
 import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberReveal
 import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
@@ -371,7 +372,7 @@ private fun ActionPill(a: SyncAction, selected: Boolean, label: Boolean, primary
         else -> c.text
     }
     Row(
-        Modifier.height(40.dp).clip(CircleShape).background(bg)
+        Modifier.height(40.dp).clip(CircleShape).background({ bg })
             .clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = onClick)
             .padding(horizontal = if (label) Space.m else 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -400,7 +401,7 @@ private fun GameRow(g: GameReport, card: io.github.matiyaaa.fuse.ui.shell.store.
     val shape = RoundedCornerShape(Fuse.geometry.control)
     val bg by fuselineColor(if (selected) c.surfaceRaised else c.surface.copy(alpha = 0.55f), Fuse.motion.tween(Durations.FAST), label = "syncGame")
     Row(
-        Modifier.fillMaxWidth().height(height).testTag("sync.game").clip(shape).background(bg)
+        Modifier.fillMaxWidth().height(height).testTag("sync.game").clip(shape).background({ bg })
             .then(if (selected) Modifier.border(Size.focusStroke, c.focus, shape) else Modifier.border(1.dp, c.hairline, shape))
             .clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = onClick)
             .padding(horizontal = if (height < 56.dp) Space.s else Space.m),
