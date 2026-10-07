@@ -231,7 +231,7 @@ private fun remoteLibraryRows(app: AppState, s: io.github.matiyaaa.fuse.data.set
         app.scope.launch { app.store.sync.configure(change) }
     }
     return buildList {
-        if (!reach.supported) add(infoRow("host", "Update Fuse on the host computer", detail = "The Remote Library needs Fuse 0.3.9 or later on the computer that hosts Fuse Sync", icon = FuseIcons.Info))
+        if (!reach.supported) add(infoRow("host", "Update Fuse on the host computer", detail = "The Remote Library needs Fuse 0.3.8 or later on the computer that hosts Fuse Sync", icon = FuseIcons.Info))
         add(MenuAction(
             "open", "Open the Remote Library", FuseIcons.LibraryBig,
             detail = io.github.matiyaaa.fuse.ui.shell.reach.householdWords(reach),

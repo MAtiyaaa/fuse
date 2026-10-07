@@ -1,4 +1,4 @@
-# Fuse 0.3.9 - The Reach Update
+# Fuse 0.3.8 - The Reach Update
 
 Every game in your household, reachable from every device. With Fuse Sync, each of your devices
 can see what the others have, bring any of it here, or send a game to another device, even one

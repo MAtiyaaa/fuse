@@ -225,7 +225,7 @@ data class CommandResult(val state: String, val message: String? = null)
 /**
  * The household's games through Fuse Sync, on this device: the other devices' lists, leave to fetch
  * a game from one, what this device asked of others and others of it, and every device's
- * transfers. Without a host (or with a host before 0.3.9) [supported] is false and nothing happens.
+ * transfers. Without a host (or with a host before 0.3.8) [supported] is false and nothing happens.
  */
 interface Household {
     val supported: StateFlow<Boolean>

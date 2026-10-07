@@ -118,7 +118,7 @@ class HouseholdGamesTest {
         pc.games = listOf(folderGame("PC", "Crash"))
         pc.household.connected()
         thor.household.connected()
-        assertTrue(pc.household.supported.value, "a 0.3.9 host offers the household's games")
+        assertTrue(pc.household.supported.value, "a 0.3.8 host offers the household's games")
         pc.household.publish()
         thor.household.refresh()
         val lib = assertNotNull(thor.household.libraries.value.singleOrNull())

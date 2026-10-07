@@ -16,7 +16,7 @@ It sits beside Fuse's other first-party parts: **Fuse Player by Fuse** (films, s
   the game by itself, and each game says "Synced everywhere" or "5 of 6 devices current".
 
 Your games themselves are never kept on the host. Each device keeps its own games, and Fuse Sync
-carries what you made playing them. From 0.3.9 a device can also bring a game from another of your
+carries what you made playing them. From 0.3.8 a device can also bring a game from another of your
 devices when you ask it to: the game goes device to device, or passes through the host without
 being written there (see [Games across the household](#games-across-the-household)).
 
@@ -165,7 +165,7 @@ How sign-ins travel and are kept:
 
 ## Games across the household
 
-From 0.3.9 ("The Reach Update") your devices' games make one library you can reach from any of them.
+From 0.3.8 ("The Reach Update") your devices' games make one library you can reach from any of them.
 
 - **What each device has.** Every device tells the host which games it has: title, system, size,
   when it was added, its files with their sizes and hashes, and the ids Fuse uses for its art. The
@@ -230,7 +230,7 @@ From 0.3.9 ("The Reach Update") your devices' games make one library you can rea
 - **Verified** means the copy's hashes match another copy or RomM's. With nothing to compare against
   a copy says so, and never claims to be verified. Hashes are worked out in the background, once per
   file, so a large library shows "Checking" for a while.
-- A host older than 0.3.9 doesn't offer any of this, and devices carry on as before.
+- A host older than 0.3.8 doesn't offer any of this, and devices carry on as before.
 
 ## What syncs, and what stays
 

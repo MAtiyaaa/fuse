@@ -22,7 +22,7 @@ object SyncApi {
     const val PEER_PORT = 47312
     const val PEER_BASE = "/peer/v1"
 
-    /** The household's games (0.3.9): lists, requests between devices, passing games through. */
+    /** The household's games (0.3.8): lists, requests between devices, passing games through. */
     const val FEATURE_HOUSEHOLD = "household"
 
     /** The most a piece of a game passed through the host carries (a tunnel refuses big uploads). */
