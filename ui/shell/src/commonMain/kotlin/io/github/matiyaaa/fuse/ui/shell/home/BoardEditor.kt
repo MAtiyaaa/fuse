@@ -117,14 +117,14 @@ internal class BoardEditor {
  * The board's cells in pixels: [cellW] by [cellH] with [gapX] and [gapY] between them, from the
  * board's top left corner.
  */
-internal class BoardGeometry(val columns: Int, val cellW: Float, val cellH: Float, val gapX: Float, val gapY: Float) {
+internal class BoardGeometry(val columns: Int, val cellW: Float, val cellH: Float, val gapX: Float, val gapY: Float, val offsetX: Float = 0f) {
     val stepX: Float get() = cellW + gapX
     val stepY: Float get() = cellH + gapY
 
     fun rect(r: BoardRect): Rect = Rect(
-        r.column * stepX,
+        offsetX + r.column * stepX,
         r.row * stepY,
-        r.column * stepX + r.width * cellW + (r.width - 1) * gapX,
+        offsetX + r.column * stepX + r.width * cellW + (r.width - 1) * gapX,
         r.row * stepY + r.height * cellH + (r.height - 1) * gapY,
     )
 
@@ -144,7 +144,7 @@ internal class BoardGeometry(val columns: Int, val cellW: Float, val cellH: Floa
             return kept.coerceIn(0, max.coerceAtLeast(0))
         }
         return GridSpot(
-            axis(topLeft.x, stepX, current?.column, columns - size.width),
+            axis(topLeft.x - offsetX, stepX, current?.column, columns - size.width),
             axis(topLeft.y, stepY, current?.row, lastRow),
         )
     }
@@ -307,6 +307,8 @@ internal fun Modifier.resizeHandle(
     onEnd: (BoardLayout?) -> Unit,
     /** The board with the widget given a place and size; the board's own rules by default. */
     resize: (BoardLayout, String, BoardRect) -> BoardLayout? = { base, id, rect -> (BoardGrid.resize(base, id, rect) as? BoardChange.Done)?.layout },
+    /** The tallest the widget can be, in rows. */
+    maxHeight: Int = BoardSize.MAX_HEIGHT,
 ): Modifier {
     val currentResize by rememberUpdatedState(resize)
     val currentGeometry by rememberUpdatedState(geometry)
@@ -333,7 +335,7 @@ internal fun Modifier.resizeHandle(
                 val op = editor.op as? BoardOp.Resize ?: return@detectDragGestures
                 moved += delta
                 val g = currentGeometry()
-                val (wanted, fitted) = resized(from, edge, g.cells(moved.x, g.stepX), g.cells(moved.y, g.stepY), g.columns)
+                val (wanted, fitted) = resized(from, edge, g.cells(moved.x, g.stepX), g.cells(moved.y, g.stepY), g.columns, maxHeight)
                 if (wanted != fitted && !limited) currentOnLimit()
                 limited = wanted != fitted
                 if (fitted == op.target) return@detectDragGestures
@@ -354,9 +356,8 @@ internal fun Modifier.resizeHandle(
  * [from] with its [edge] moved [dx] columns and [dy] rows: what was asked for, and the nearest that
  * fits the board (one to four cells across within its columns, one to three down).
  */
-internal fun resized(from: BoardRect, edge: ResizeEdge, dx: Int, dy: Int, columns: Int): Pair<BoardRect, BoardRect> {
+internal fun resized(from: BoardRect, edge: ResizeEdge, dx: Int, dy: Int, columns: Int, maxH: Int = BoardSize.MAX_HEIGHT): Pair<BoardRect, BoardRect> {
     val maxW = BoardGrid.maxWidth(columns)
-    val maxH = BoardSize.MAX_HEIGHT
     var wanted = from
     var fitted = from
     if (edge == ResizeEdge.RIGHT || edge == ResizeEdge.CORNER) {
@@ -388,16 +389,16 @@ internal fun resized(from: BoardRect, edge: ResizeEdge, dx: Int, dy: Int, column
  * Whether [edge] of [rect] can move at all on a board [columns] wide: grow (room and size to spare)
  * or shrink (bigger than a cell). A handle that can do neither is drawn dimmed.
  */
-internal fun canResize(rect: BoardRect, edge: ResizeEdge, columns: Int): Boolean {
+internal fun canResize(rect: BoardRect, edge: ResizeEdge, columns: Int, maxHeight: Int = BoardSize.MAX_HEIGHT): Boolean {
     val maxW = BoardGrid.maxWidth(columns)
     val wider = rect.width < maxW
-    val taller = rect.height < BoardSize.MAX_HEIGHT
+    val taller = rect.height < maxHeight
     return when (edge) {
         ResizeEdge.RIGHT -> (wider && rect.right < columns) || rect.width > 1
         ResizeEdge.LEFT -> (wider && rect.column > 0) || rect.width > 1
         ResizeEdge.BOTTOM -> taller || rect.height > 1
         ResizeEdge.TOP -> (taller && rect.row > 0) || rect.height > 1
-        ResizeEdge.CORNER -> canResize(rect, ResizeEdge.RIGHT, columns) || canResize(rect, ResizeEdge.BOTTOM, columns)
+        ResizeEdge.CORNER -> canResize(rect, ResizeEdge.RIGHT, columns, maxHeight) || canResize(rect, ResizeEdge.BOTTOM, columns, maxHeight)
     }
 }
 

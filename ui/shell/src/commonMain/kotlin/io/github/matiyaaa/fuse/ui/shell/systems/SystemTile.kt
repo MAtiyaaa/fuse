@@ -47,14 +47,14 @@ internal fun defaultTileIcon(card: PlatformCard): String? = SystemIcons.forPlatf
 /** The colour behind a system's small tile in [tone], from its own colour [accent]. */
 internal fun tileBackground(tone: TileTone, accent: Color): Color = when (tone) {
     TileTone.LIGHT -> lerp(Color(0xFFF1F1EE), accent, 0.06f)
-    TileTone.TINT -> lerp(Color.White, accent, 0.22f)
+    TileTone.TINT -> lerp(Color(0xFFF7F7F5), accent, 0.36f)
     TileTone.ACCENT -> accent
     TileTone.DARK -> lerp(Color(0xFF15171C), accent, 0.18f)
 }
 
 /**
- * A system half a card wide, the size of a game's box art: a picture of the system itself (its
- * console or handheld, from Fuse's icon set) on a light patterned background, the way a shelf of
+ * A small system, a square the size of a game's box art: a picture of the system itself (its
+ * console or handheld, from Fuse's icon set) on a patterned background washed in its own colour, the way a shelf of
  * systems looks; its logo where the set has no picture of it, or the person chose the logo; its
  * short name where it has neither. The person can change the picture, the pattern and the colour,
  * and put them back ([systemTileMenu]).
@@ -62,11 +62,12 @@ internal fun tileBackground(tone: TileTone, accent: Color): Color = when (tone) 
 @Composable
 internal fun SystemTileFace(card: PlatformCard, look: SystemTileLook?) {
     val accent = card.platform.accent.toColor()
-    val tone = look?.tone ?: TileTone.LIGHT
+    // Each system's tile is washed in its own colour unless the person chose otherwise.
+    val tone = look?.tone ?: TileTone.TINT
     val pattern = look?.pattern ?: TilePattern.DOTS
     val bg = tileBackground(tone, accent)
     val dark = bg.luminance() < 0.4f
-    val ink = if (dark) Color.White else lerp(Color(0xFF1C1F26), accent, 0.35f)
+    val ink = if (dark) Color.White else lerp(Color(0xFF1C1F26), accent, 0.55f)
     val icon = when (val chosen = look?.icon) {
         null -> defaultTileIcon(card)
         "" -> null
@@ -74,7 +75,7 @@ internal fun SystemTileFace(card: PlatformCard, look: SystemTileLook?) {
     }
     BoxWithConstraints(Modifier.fillMaxSize().background(bg)) {
         val short = minOf(maxWidth, maxHeight)
-        TilePatternLayer(pattern, ink.copy(alpha = if (dark) 0.10f else 0.08f), short.value)
+        TilePatternLayer(pattern, ink.copy(alpha = if (dark) 0.12f else 0.14f), short.value)
         val name: @Composable () -> Unit = {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 val style = Fuse.type.title
@@ -208,7 +209,7 @@ internal fun AppState.systemTileMenu(card: PlatformCard) {
     choice = ChoiceSpec(
         title = "${card.platform.shortName} Small Tile",
         icon = FuseIcons.Palette,
-        message = "How ${card.platform.name} looks when it is half a card wide",
+        message = "How ${card.platform.name} looks as a small square",
         options = listOfNotNull(
             MenuAction("picture", "Picture", FuseIcons.Image, trailing = Trailing.Value(pictureLabel), onSelect = { tilePicturePicker(card, icons, look) { v -> set { it.copy(icon = v) } } }),
             MenuAction("pattern", "Pattern", FuseIcons.Grid, trailing = Trailing.Value((look.pattern ?: TilePattern.DOTS).label), onSelect = {
@@ -223,13 +224,13 @@ internal fun AppState.systemTileMenu(card: PlatformCard) {
                     },
                 )
             }),
-            MenuAction("tone", "Colour", FuseIcons.Palette, trailing = Trailing.Value((look.tone ?: TileTone.LIGHT).label), onSelect = {
+            MenuAction("tone", "Colour", FuseIcons.Palette, trailing = Trailing.Value((look.tone ?: TileTone.TINT).label), onSelect = {
                 choice = ChoiceSpec(
                     title = "Colour",
                     icon = FuseIcons.Palette,
                     options = TileTone.entries.map { t ->
-                        MenuAction(t.name, t.label, null, trailing = Trailing.Check(t == (look.tone ?: TileTone.LIGHT)), onSelect = {
-                            set { it.copy(tone = t.takeIf { x -> x != TileTone.LIGHT }) }
+                        MenuAction(t.name, t.label, null, trailing = Trailing.Check(t == (look.tone ?: TileTone.TINT)), onSelect = {
+                            set { it.copy(tone = t.takeIf { x -> x != TileTone.TINT }) }
                             systemTileMenu(card)
                         })
                     },

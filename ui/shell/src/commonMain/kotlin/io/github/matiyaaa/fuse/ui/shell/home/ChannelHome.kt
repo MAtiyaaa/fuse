@@ -313,13 +313,16 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
         // Rows stay clear of the spark under a focused widget.
         val gapY = Size.sparkClearance
         val cellW = (maxWidth - gutter * 2 - gapX * (columns - 1)) / columns
-        val cellH = space.cellHeight(cellW, gapX, narrow)
+        val cellH = space.cellHeight(cellW, gapX, gapY, narrow)
         val density = LocalDensity.current
-        val geometry = with(density) { BoardGeometry(columns, cellW.toPx(), cellH.toPx(), gapX.toPx(), gapY.toPx()) }
         val packed = space.packed
         val committed = remember(widgets, columns, packed) {
-            BoardGrid.layout(widgets.map { BoardGrid.Item(it.id, it.boardSize, if (packed) null else it.spots[columns]) }, columns)
+            BoardGrid.layout(widgets.map { BoardGrid.Item(it.id, if (packed) space.allowed(it.boardSize, columns) else it.boardSize, if (packed) null else it.spots[columns]) }, columns)
         }
+        // A packed board whose rows all stop short of the edge (small squares in an odd number of
+        // columns) is centred, so the room left over is shared by both sides.
+        val spare = if (packed) (columns - (committed.rects.values.maxOfOrNull { it.right } ?: columns)).coerceAtLeast(0) else 0
+        val geometry = with(density) { BoardGeometry(columns, cellW.toPx(), cellH.toPx(), gapX.toPx(), gapY.toPx(), offsetX = spare * (cellW + gapX).toPx() / 2) }
         val shown = editor.preview ?: committed
         // Arranging: the first free place adds a widget (hidden while something is being changed).
         val addRect = if (arranging && op == null) BoardGrid.layout(
@@ -399,8 +402,8 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                     lastResize = now
                     val rect = committed[w.id] ?: return@InputLayer NavResult.BLOCKED
                     val horizontal = e.action == NavAction.LEFT || e.action == NavAction.RIGHT
-                    val next = BoardGrid.resizeStep(rect, e.action, columns)?.getOrNull()
-                    val change = next?.let { if (space.packed) BoardGrid.resizePacked(committed, w.id, it.size) else BoardGrid.resize(committed, w.id, it) } as? BoardChange.Done
+                    val next = space.resizeStep(rect, e.action, columns)
+                    val change = next?.let { if (space.packed) BoardGrid.resizePacked(committed, w.id, it.size, space.maxHeight) else BoardGrid.resize(committed, w.id, it) } as? BoardChange.Done
                     if (change == null) {
                         editor.bump(w.id, horizontal)
                         NavResult.BLOCKED
@@ -659,14 +662,16 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                                                             haptics.drop()
                                                         },
                                                         resize = if (packed) { base, id, r ->
-                                                            (BoardGrid.resizePacked(base, id, r.size) as? BoardChange.Done)?.layout
+                                                            (BoardGrid.resizePacked(base, id, space.allowed(r.size, columns), space.maxHeight) as? BoardChange.Done)?.layout
                                                         } else { base, id, r -> (BoardGrid.resize(base, id, r) as? BoardChange.Done)?.layout },
+                                                        maxHeight = space.maxHeight,
                                                     )
                                                 },
                                                 onPlaced = { edge, r -> if (r == null) controls.remove("r$edge:${w.id}") else controls["r$edge:${w.id}"] = r },
+                                                maxHeight = space.maxHeight,
                                             )
                                         }
-                                        if (selected && resizeLook) ResizeFrame(rect, columns, shape)
+                                        if (selected && resizeLook) ResizeFrame(rect, columns, shape, space.maxHeight)
                                         }
                                     },
                                 )

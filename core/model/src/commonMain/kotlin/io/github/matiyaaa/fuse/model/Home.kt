@@ -83,18 +83,27 @@ private val RowKinds = setOf(
 
 /**
  * A widget's size on a board, in cells of its grid: one to [MAX_WIDTH] across (never more than the
- * board's columns, so four on Home) and one to [MAX_HEIGHT] down. The Systems page's grid has two
- * columns to a system card, so a card can be half as wide.
+ * board's columns, so four on Home) and one to [MAX_TALL] down; Home's widgets stop at [MAX_HEIGHT].
+ * The Systems page's grid has three columns and two rows to a system card, so a system can also be
+ * a square two by two, the size of a game's box art.
  */
 data class BoardSize(val width: Int, val height: Int) {
     /** This size made to fit a board of [columns] (a phone held upright has two). */
-    fun fit(columns: Int): BoardSize = BoardSize(width.coerceIn(1, minOf(MAX_WIDTH, columns.coerceAtLeast(1))), height.coerceIn(1, MAX_HEIGHT))
+    fun fit(columns: Int): BoardSize = BoardSize(width.coerceIn(1, minOf(MAX_WIDTH, columns.coerceAtLeast(1))), height.coerceIn(1, MAX_TALL))
 
     companion object {
-        const val MAX_WIDTH = 8
+        const val MAX_WIDTH = 12
+
+        /** The tallest a widget on Home can be. */
         const val MAX_HEIGHT = 3
+
+        /** The tallest anything on any board can be (a system three cards tall). */
+        const val MAX_TALL = 6
     }
 }
+
+/** The widest a widget on Home can be: its whole board. */
+private const val HOME_MAX_WIDTH = 4
 
 /** Where a widget's top left corner sits on the board, in cells. */
 @Serializable
@@ -140,9 +149,14 @@ data class HomeWidget(
      */
     val spots: Map<Int, GridSpot> = emptyMap(),
 ) {
-    /** Its size on the board: what it was resized to, else its kind's. */
+    /**
+     * Its size on the board: what it was resized to, else its kind's. Home's widgets stay within
+     * four columns and [BoardSize.MAX_HEIGHT] rows; a system on the Systems page within its finer grid.
+     */
     val boardSize: BoardSize
-        get() = BoardSize(width ?: kind.boardSize.width, height ?: kind.boardSize.height).fit(BoardSize.MAX_WIDTH)
+        get() = BoardSize(width ?: kind.boardSize.width, height ?: kind.boardSize.height).let { s ->
+            if (kind == WidgetKind.SYSTEMS) s.fit(BoardSize.MAX_WIDTH) else BoardSize(s.width.coerceIn(1, HOME_MAX_WIDTH), s.height.coerceIn(1, BoardSize.MAX_HEIGHT))
+        }
 }
 
 @Serializable
@@ -155,8 +169,9 @@ data class HomeLayoutConfig(
     /** The board's pages after the first ([board]), in order; empty while Home is one page. */
     val pages: List<HomePage> = emptyList(),
     /**
-     * Columns of the grid to one system card, for the Systems page: 2 since 0.3.7.3, when a system
-     * could first be made half a card wide; boards kept before then counted whole cards (1).
+     * Columns of the grid to one system card, for the Systems page: 3 since 0.3.7.3 (with two rows
+     * to a card), when a system could first be made a small square; boards kept before then counted
+     * whole cards (1).
      */
     val grain: Int = 1,
 ) {
@@ -253,6 +268,6 @@ data class SystemTileLook(
 @Serializable
 enum class TilePattern(val label: String) { DOTS("Dots"), GRID("Grid"), DIAGONAL("Stripes"), WAVES("Waves"), PLAIN("Plain") }
 
-/** The colour behind a system's small tile: near white, a light wash of its colour, its colour, or dark. */
+/** The colour behind a system's small tile: near white, a wash of its own colour (the usual), its colour itself, or dark. */
 @Serializable
-enum class TileTone(val label: String) { LIGHT("Light"), TINT("Tinted"), ACCENT("Its colour"), DARK("Dark") }
+enum class TileTone(val label: String) { LIGHT("Plain"), TINT("Its colour"), ACCENT("Its colour, strong"), DARK("Dark") }

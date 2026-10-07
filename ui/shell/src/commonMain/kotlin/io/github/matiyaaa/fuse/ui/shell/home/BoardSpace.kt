@@ -81,8 +81,18 @@ internal abstract class BoardSpace {
      */
     abstract fun columns(narrow: Boolean, small: Boolean, width: Dp): Int
 
-    /** A cell's height for cells [cellW] wide, [gapX] apart. */
-    abstract fun cellHeight(cellW: Dp, gapX: Dp, narrow: Boolean): Dp
+    /** A cell's height for cells [cellW] wide, [gapX] apart side by side and [gapY] apart above and below. */
+    abstract fun cellHeight(cellW: Dp, gapX: Dp, gapY: Dp, narrow: Boolean): Dp
+
+    /** The tallest an item can be, in rows. */
+    open val maxHeight: Int get() = BoardSize.MAX_HEIGHT
+
+    /** [size] made one the board allows (the Systems page has a small square and cards); as it is by default. */
+    open fun allowed(size: BoardSize, columns: Int): BoardSize = size
+
+    /** One controller step of resizing [rect] (Options held, the D-pad), or null when it can go no further that way. */
+    open fun resizeStep(rect: BoardRect, action: io.github.matiyaaa.fuse.model.NavAction, columns: Int): BoardRect? =
+        BoardGrid.resizeStep(rect, action, columns)?.getOrNull()
 
     /**
      * Whether the board is packed in reading order (the Systems page): nothing keeps a place of its
@@ -189,7 +199,7 @@ internal class HomeSpace(
 
     // Never shorter than a handheld's cells, which every widget's face is made to fit; a small
     // screen scrolls the board rather than cut a widget's words off.
-    override fun cellHeight(cellW: Dp, gapX: Dp, narrow: Boolean): Dp = (cellW * if (narrow) 0.86f else 0.6f).coerceIn(CELL_MIN, CELL_MAX)
+    override fun cellHeight(cellW: Dp, gapX: Dp, gapY: Dp, narrow: Boolean): Dp = (cellW * if (narrow) 0.86f else 0.6f).coerceIn(CELL_MIN, CELL_MAX)
 
     override fun carousel(w: HomeWidget) = w.kind.isCarousel
 

@@ -5,18 +5,19 @@ uploads finish; and the second screen follows what Downloads has in focus.
 
 ## New
 
-- **Small systems.** A system on the Systems page can now be half a card wide, the size of a game's
-  box art. A small system shows a picture of the system itself (its console or handheld) on a light
-  patterned background, like a shelf of systems. Resize one by its handles or hold Options and use
-  the D-pad: narrower down to a small tile, taller and back again. While arranging, Options offers
+- **Small systems.** A system on the Systems page can now be a small square, the size of a game's
+  box art. A small system shows a picture of the system itself (its console or handheld) on a
+  patterned background washed in that system's own colour, like a shelf of systems. Resize one by
+  its handles or hold Options and use the D-pad: narrower down to the small square, wider a card at a
+  time, taller and back again. While arranging, Options offers
   Make Every System Small and Make Every System a Card.
 - **Change a small tile's look.** Options on a system, Small Tile, changes its picture (every model
   and colour of that system the picture set has, or its logo instead), its pattern (dots, grid,
-  stripes, waves or plain) and its colour (light, tinted, its own colour or dark). Reset Small Tile
+  stripes, waves or plain) and its colour (its own colour, its colour strong, plain or dark). Reset Small Tile
   puts Fuse's own back, and Settings, Systems, Reset small tiles does it for every system.
 - **System size.** Settings, Systems, System size fits one more system in each row of the Systems
   page (Smaller) or two more (Smallest). Every system narrows a little and the rest move up to make
-  room.
+  room. When small squares leave room at the end of their rows, the page is centred.
 - **The second screen follows Downloads.** With Downloads open, the second screen shows the
   transfer you are on: its game's art and logo, and where the achievements card sits for a game, a
   card with how it is going. It shows whether it is downloading or uploading, a progress bar, how

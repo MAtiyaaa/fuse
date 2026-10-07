@@ -445,12 +445,12 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
         val systems = libraryStore.library.platforms.value.filter { it.gameCount > 0 }
         val before = libraryStore.prefs.value
         fun tile(i: Int, w: Int, h: Int) = io.github.matiyaaa.fuse.model.HomeWidget("system.${systems[i].platform.id.value}", io.github.matiyaaa.fuse.model.WidgetKind.SYSTEMS, i, target = systems[i].platform.id.value, width = w, height = h)
-        // Every system half a card, the first two as cards, one tall: the way a shelf of systems looks.
-        val board = systems.indices.map { i -> when (i) { 0 -> tile(i, 2, 1); 1 -> tile(i, 2, 2); else -> tile(i, 1, 1) } }
+        // Every system a small square, the first two as cards, one tall: the way a shelf of systems looks.
+        val board = systems.indices.map { i -> when (i) { 0 -> tile(i, 3, 2); 1 -> tile(i, 3, 4); else -> tile(i, 2, 2) } }
         libraryStore.updatePrefs {
             it.copy(
-                systemsBoard = io.github.matiyaaa.fuse.model.HomeLayoutConfig(board = board, grain = 2),
-                systemTiles = mapOf(systems[3].platform.id.value to io.github.matiyaaa.fuse.model.SystemTileLook(pattern = io.github.matiyaaa.fuse.model.TilePattern.WAVES, tone = io.github.matiyaaa.fuse.model.TileTone.TINT)),
+                systemsBoard = io.github.matiyaaa.fuse.model.HomeLayoutConfig(board = board, grain = 3),
+                systemTiles = mapOf(systems[3].platform.id.value to io.github.matiyaaa.fuse.model.SystemTileLook(pattern = io.github.matiyaaa.fuse.model.TilePattern.WAVES, tone = io.github.matiyaaa.fuse.model.TileTone.LIGHT)),
             )
         }
         try {

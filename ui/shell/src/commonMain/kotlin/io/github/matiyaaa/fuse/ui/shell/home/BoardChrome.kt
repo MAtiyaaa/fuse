@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.home
 
+import kotlin.math.roundToInt
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -95,10 +96,12 @@ internal fun GridWells(
         val cell = squirclePath(geometry.cellW, geometry.cellH, corner, 0.6f)
         val hair = Stroke(1.dp.toPx())
         for (r in 0 until rows) {
-            for (col in 0 until geometry.columns) {
+            // A centred board leaves its last columns' room to both sides: those have no wells.
+            val spare = (geometry.offsetX * 2 / geometry.stepX).roundToInt()
+            for (col in 0 until geometry.columns - spare) {
                 // Cells under a resting widget are covered by it anyway; only the empty ones are drawn.
                 if (occupied.occupant(col, r) != null && target?.contains(col, r) != true) continue
-                translate(col * geometry.stepX, r * geometry.stepY) {
+                translate(geometry.offsetX + col * geometry.stepX, r * geometry.stepY) {
                     drawPath(cell, well, alpha = shown)
                     drawPath(cell, edge, alpha = shown, style = hair)
                 }
@@ -131,9 +134,10 @@ internal fun BoxScope.ResizeHandles(
     active: ResizeEdge?,
     handle: @Composable (ResizeEdge) -> Modifier,
     onPlaced: (ResizeEdge, Rect?) -> Unit,
+    maxHeight: Int = io.github.matiyaaa.fuse.model.BoardSize.MAX_HEIGHT,
 ) {
     for (edge in ResizeEdge.entries) {
-        val enabled = canResize(rect, edge, columns)
+        val enabled = canResize(rect, edge, columns, maxHeight)
         val align = when (edge) {
             ResizeEdge.LEFT -> Alignment.CenterStart
             ResizeEdge.RIGHT -> Alignment.CenterEnd
@@ -205,7 +209,7 @@ private fun Grip(edge: ResizeEdge, lit: Boolean, enabled: Boolean) {
  * lifted look of a widget being moved.
  */
 @Composable
-internal fun BoxScope.ResizeFrame(rect: BoardRect, columns: Int, shape: Shape) {
+internal fun BoxScope.ResizeFrame(rect: BoardRect, columns: Int, shape: Shape, maxHeight: Int = io.github.matiyaaa.fuse.model.BoardSize.MAX_HEIGHT) {
     val c = Fuse.colors
     val accent = c.accent
     Box(
@@ -217,7 +221,7 @@ internal fun BoxScope.ResizeFrame(rect: BoardRect, columns: Int, shape: Shape) {
             },
     )
     val growRight = rect.width < BoardGrid.maxWidth(columns)
-    val growDown = rect.height < io.github.matiyaaa.fuse.model.BoardSize.MAX_HEIGHT
+    val growDown = rect.height < maxHeight
     Arrow(FuseIcons.ChevronRight, growRight, Modifier.align(Alignment.CenterEnd).offset(x = ARROW_OUT))
     Arrow(FuseIcons.ChevronDown, growDown, Modifier.align(Alignment.BottomCenter).offset(y = ARROW_OUT))
     Arrow(FuseIcons.ChevronLeft, rect.width > 1, Modifier.align(Alignment.CenterStart).offset(x = -ARROW_OUT))

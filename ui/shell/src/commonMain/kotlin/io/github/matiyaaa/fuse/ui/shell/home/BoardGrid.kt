@@ -121,9 +121,9 @@ object BoardGrid {
     }
 
     /** Why [rect] can't be a widget's place on a board [columns] wide, or null when it can. */
-    fun sizeLimit(rect: BoardRect, columns: Int): BoardLimit? = when {
+    fun sizeLimit(rect: BoardRect, columns: Int, maxHeight: Int = BoardSize.MAX_HEIGHT): BoardLimit? = when {
         rect.width < 1 || rect.height < 1 -> BoardLimit.SMALLEST
-        rect.width > maxWidth(columns) || rect.height > BoardSize.MAX_HEIGHT -> BoardLimit.LARGEST
+        rect.width > maxWidth(columns) || rect.height > maxHeight -> BoardLimit.LARGEST
         rect.column < 0 || rect.row < 0 || rect.right > columns -> BoardLimit.EDGE
         else -> null
     }
@@ -217,9 +217,9 @@ object BoardGrid {
     }
 
     /** Packed [layout] with [id] made [size], packed again in the same order. */
-    fun resizePacked(layout: BoardLayout, id: String, size: BoardSize): BoardChange {
+    fun resizePacked(layout: BoardLayout, id: String, size: BoardSize, maxHeight: Int = BoardSize.MAX_HEIGHT): BoardChange {
         val from = layout[id] ?: return BoardChange.Blocked(BoardLimit.EDGE)
-        sizeLimit(BoardRect(0, 0, size.width, size.height), layout.columns)?.let { return BoardChange.Blocked(it) }
+        sizeLimit(BoardRect(0, 0, size.width, size.height), layout.columns, maxHeight)?.let { return BoardChange.Blocked(it) }
         if (size == from.size) return BoardChange.Done(layout, emptySet())
         val next = pack(layout.ids, layout.rects.mapValues { if (it.key == id) size else it.value.size }, layout.columns)
         return BoardChange.Done(next, next.rects.keys.filter { it != id && next[it] != layout[it] }.toSet())

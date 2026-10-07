@@ -268,14 +268,21 @@ internal class SystemsSpace(
         return SystemsBoard.columns(cards, step)
     }
 
-    /** A card's height: a card is two columns and the gap between them wide, in the systems' card shape. */
-    override fun cellHeight(cellW: Dp, gapX: Dp, narrow: Boolean): Dp =
-        ((cellW * SystemsBoard.GRAIN + gapX * (SystemsBoard.GRAIN - 1)) / Aspect.SYSTEM_CARD).coerceIn(CELL_MIN, CELL_MAX)
+    /**
+     * A row's height: as tall as a column is wide (with the gaps evened out), so two columns by two
+     * rows is a true square, the size of a game's box art, and a card (three by two) keeps its shape.
+     */
+    override fun cellHeight(cellW: Dp, gapX: Dp, gapY: Dp, narrow: Boolean): Dp =
+        (cellW + (gapX - gapY) / 2).coerceIn(CELL_MIN, CELL_MAX)
+
+    override val maxHeight: Int get() = SystemsBoard.MAX_ROWS
+    override fun allowed(size: io.github.matiyaaa.fuse.model.BoardSize, columns: Int) = SystemsBoard.allowed(size, columns)
+    override fun resizeStep(rect: io.github.matiyaaa.fuse.ui.shell.home.BoardRect, action: NavAction, columns: Int) = SystemsBoard.step(rect, action, columns)
 
     @Composable
     override fun Face(w: HomeWidget, size: io.github.matiyaaa.fuse.model.BoardSize, at: Int) {
         val c = card(w) ?: return
-        // Half a card wide: the system's picture on its tile, the size of a game's box art.
+        // Narrower than a card: the system's picture on its own square tile, the size of a game's box art.
         if (size.width < SystemsBoard.GRAIN) {
             val prefs by app.store.prefs.collectAsState()
             SystemTileFace(c, prefs.systemTiles[c.platform.id.value])
@@ -315,7 +322,7 @@ internal class SystemsSpace(
         app.store.updatePrefs { p ->
             val c = config(p)
             val next = if (page == 0) {
-                c.withBoard(0, c.boardWidgets(0).map { it.copy(visible = true, width = SystemsBoard.GRAIN, height = 1, spots = emptyMap()) })
+                c.withBoard(0, c.boardWidgets(0).map { it.copy(visible = true, width = SystemsBoard.CARD.width, height = SystemsBoard.CARD.height, spots = emptyMap()) })
             } else {
                 c.withBoard(page, emptyList())
             }
@@ -327,21 +334,21 @@ internal class SystemsSpace(
     override val emptyPage = "Put the systems you want together here: handhelds on one page, home consoles on another. The right stick or a swipe turns between pages."
     override val removePageMessage = "Its systems go back to the first page. Their games stay as they are."
 
-    /** Every system on [page] made [width] columns wide (one row tall), kept for Undo like any change. */
-    private fun sizeAll(page: Int, width: Int) {
+    /** Every system on [page] made [size]. */
+    private fun sizeAll(page: Int, size: io.github.matiyaaa.fuse.model.BoardSize) {
         app.store.updatePrefs { p ->
             val c = config(p)
-            keep(p, c.withBoard(page, c.boardWidgets(page).map { it.copy(width = width, height = 1, spots = emptyMap()) }))
+            keep(p, c.withBoard(page, c.boardWidgets(page).map { it.copy(width = size.width, height = size.height, spots = emptyMap()) }))
         }
-        app.toasts.show(if (width < SystemsBoard.GRAIN) "Every system on this page is a small tile" else "Every system on this page is a card")
+        app.toasts.show(if (size == SystemsBoard.SMALL) "Every system on this page is a small tile" else "Every system on this page is a card")
     }
 
     override fun menu(w: HomeWidget?, arranging: Boolean, actions: List<MenuAction>): ContextMenuSpec {
         val c = card(w)
         if (c == null || arranging) {
             val all = if (arranging) listOf(
-                MenuAction("all.small", "Make Every System Small", FuseIcons.Grid, detail = "Each the size of a game's box art, with the system's picture", onSelect = { app.closeOverlays(); sizeAll(shownPage, 1) }),
-                MenuAction("all.cards", "Make Every System a Card", FuseIcons.RectHorizontal, detail = "Each one card, with its art and logo", onSelect = { app.closeOverlays(); sizeAll(shownPage, SystemsBoard.GRAIN) }),
+                MenuAction("all.small", "Make Every System Small", FuseIcons.Grid, detail = "Each the size of a game's box art, with the system's picture", onSelect = { app.closeOverlays(); sizeAll(shownPage, SystemsBoard.SMALL) }),
+                MenuAction("all.cards", "Make Every System a Card", FuseIcons.RectHorizontal, detail = "Each one card, with its art and logo", onSelect = { app.closeOverlays(); sizeAll(shownPage, SystemsBoard.CARD) }),
             ) else emptyList()
             return ContextMenuSpec(title = c?.platform?.name ?: "Systems", subtitle = "Systems", icon = FuseIcons.Grid, actions = actions + all + listOfNotNull(c?.let { tileLookAction(it) }))
         }
@@ -362,8 +369,8 @@ internal class SystemsSpace(
     }
 
     private companion object {
-        val CELL_MIN = 72.dp
-        val CELL_MAX = 420.dp
+        val CELL_MIN = 30.dp
+        val CELL_MAX = 210.dp
     }
 }
 
@@ -371,11 +378,51 @@ internal class SystemsSpace(
 internal object SystemsBoard {
     private val CARD_TARGET = 300.dp
 
-    /** Columns of the grid to one card: a system can be made half a card wide, the size of a game's box art. */
-    const val GRAIN = 2
+    /** Columns of the grid to one card. Rows are as tall as columns are wide, two to a card. */
+    const val GRAIN = 3
+    const val ROWS = 2
 
-    /** A system's usual size: one card, two columns and one row. */
-    val CARD = io.github.matiyaaa.fuse.model.BoardSize(GRAIN, 1)
+    /** A system's usual size: one card, three columns by two rows. */
+    val CARD = io.github.matiyaaa.fuse.model.BoardSize(GRAIN, ROWS)
+
+    /** A small system: a square two by two, the size of a game's box art. */
+    val SMALL = io.github.matiyaaa.fuse.model.BoardSize(2, ROWS)
+
+    /** The tallest a system can be: three cards. */
+    const val MAX_ROWS = ROWS * 3
+
+    /** The widest a system can be: four cards, never wider than the board's whole cards. */
+    private fun maxWidth(columns: Int) = minOf(GRAIN * 4, columns / GRAIN * GRAIN).coerceAtLeast(GRAIN)
+
+    /**
+     * [size] made one a system can be: a small square, or whole cards across; and whole cards
+     * down (a small square can be as tall as a card, two cards or three, like a tall box).
+     */
+    fun allowed(size: io.github.matiyaaa.fuse.model.BoardSize, columns: Int): io.github.matiyaaa.fuse.model.BoardSize {
+        val width = if (size.width < GRAIN) SMALL.width else (kotlin.math.round(size.width / GRAIN.toFloat()).toInt() * GRAIN).coerceIn(GRAIN, maxWidth(columns))
+        val height = (kotlin.math.round(size.height / ROWS.toFloat()).toInt() * ROWS).coerceIn(ROWS, MAX_ROWS)
+        return io.github.matiyaaa.fuse.model.BoardSize(width, height)
+    }
+
+    /**
+     * One controller step of resizing: right makes a small square a card, then a card wider by a
+     * card; left the other way, down to the small square; down and up a card taller or shorter.
+     */
+    fun step(rect: io.github.matiyaaa.fuse.ui.shell.home.BoardRect, action: NavAction, columns: Int): io.github.matiyaaa.fuse.ui.shell.home.BoardRect? {
+        val w = rect.width
+        val h = rect.height
+        return when (action) {
+            NavAction.RIGHT -> (if (w < GRAIN) GRAIN else w + GRAIN).takeIf { it <= maxWidth(columns) }?.let { rect.copy(width = it) }
+            NavAction.LEFT -> when {
+                w > GRAIN -> rect.copy(width = w - GRAIN)
+                w == GRAIN -> rect.copy(width = SMALL.width)
+                else -> null
+            }
+            NavAction.DOWN -> (h + ROWS).takeIf { it <= MAX_ROWS }?.let { rect.copy(height = it) }
+            NavAction.UP -> (h - ROWS).takeIf { it >= ROWS }?.let { rect.copy(height = it) }
+            else -> null
+        }
+    }
 
     /** The two looks' names where they are kept: the menus on top, and below. */
     const val FUSE = "fuse"
@@ -407,22 +454,27 @@ internal object SystemsBoard {
     }
 
     /** One system's card on the board. */
-    fun tile(id: String) = HomeWidget(id = "system.$id", kind = io.github.matiyaaa.fuse.model.WidgetKind.SYSTEMS, order = 0, target = id, width = GRAIN, height = 1)
+    fun tile(id: String) = HomeWidget(id = "system.$id", kind = io.github.matiyaaa.fuse.model.WidgetKind.SYSTEMS, order = 0, target = id, width = CARD.width, height = CARD.height)
 
     /**
-     * [c] in columns of [GRAIN] to a card: an arrangement kept before a system could be half a card
-     * keeps each system's size in cards, and its order. Places come from the order now, so none are kept.
+     * [c] in [GRAIN] columns and [ROWS] rows to a card: an arrangement kept before a system could be
+     * small keeps each system's size in cards, and its order. Places come from the order now, so none
+     * are kept.
      */
     fun migrate(c: HomeLayoutConfig): HomeLayoutConfig {
         if (c.grain >= GRAIN) return c
-        fun scaled(w: HomeWidget) = w.copy(width = ((w.width ?: 1) * GRAIN).coerceAtMost(io.github.matiyaaa.fuse.model.BoardSize.MAX_WIDTH), spots = emptyMap())
+        fun scaled(w: HomeWidget) = w.copy(
+            width = ((w.width ?: 1) * GRAIN).coerceAtMost(GRAIN * 4),
+            height = ((w.height ?: 1) * ROWS).coerceAtMost(MAX_ROWS),
+            spots = emptyMap(),
+        )
         return c.copy(board = c.board?.map(::scaled), pages = c.pages.map { pg -> pg.copy(widgets = pg.widgets.map(::scaled)) }, grain = GRAIN)
     }
 
     /** The lower screen's arrangement before it is first arranged there: [main]'s pages and order, every system one card. */
     fun flippedFrom(main: HomeLayoutConfig): HomeLayoutConfig {
         val m = migrate(main)
-        fun card(w: HomeWidget) = w.copy(width = GRAIN, height = 1, spots = emptyMap())
+        fun card(w: HomeWidget) = w.copy(width = CARD.width, height = CARD.height, spots = emptyMap())
         return m.copy(board = m.board?.map(::card), pages = m.pages.map { pg -> pg.copy(widgets = pg.widgets.map(::card)) })
     }
 

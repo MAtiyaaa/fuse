@@ -19,13 +19,13 @@ class SystemsBoardTest {
     @Test
     fun aNewSystemJoinsTheFirstPageAndArrangedOnesStayWhereTheyAre() {
         val arranged = HomeLayoutConfig(
-            board = listOf(SystemsBoard.tile("psx").copy(width = 4, height = 2), SystemsBoard.tile("snes")),
+            board = listOf(SystemsBoard.tile("psx").copy(width = 6, height = 4), SystemsBoard.tile("snes")),
             pages = listOf(HomePage("page2", listOf(SystemsBoard.tile("gba")))),
             grain = SystemsBoard.GRAIN,
         )
         val c = SystemsBoard.withNew(arranged, listOf("snes", "psx", "gba", "ps5"))
         assertEquals(listOf("psx", "snes", "ps5"), c.boardWidgets(0).map { it.target })
-        assertEquals(4, c.boardWidgets(0).first().boardSize.width)
+        assertEquals(6, c.boardWidgets(0).first().boardSize.width)
         assertEquals(listOf("gba"), c.boardWidgets(1).map { it.target })
         // Nothing new: the very same arrangement.
         assertTrue(SystemsBoard.withNew(c, listOf("snes")) === c)
@@ -67,13 +67,31 @@ class SystemsBoardTest {
     }
 
     @Test
-    fun smallerSystemsFitOneOrTwoMoreInARowAndTheGridHasTwoColumnsToACard() {
-        // Six cards across: twelve columns, so a system can be half a card.
-        assertEquals(12, SystemsBoard.columns(6, 0))
+    fun smallerSystemsFitOneOrTwoMoreInARowAndTheGridHasThreeColumnsToACard() {
+        // Six cards across: eighteen columns, so a small square is two thirds of a card.
+        assertEquals(18, SystemsBoard.columns(6, 0))
         // Smaller: seven across. Smallest: eight. Never more than that.
-        assertEquals(14, SystemsBoard.columns(6, 1))
-        assertEquals(16, SystemsBoard.columns(6, 2))
-        assertEquals(16, SystemsBoard.columns(6, 9))
+        assertEquals(21, SystemsBoard.columns(6, 1))
+        assertEquals(24, SystemsBoard.columns(6, 2))
+        assertEquals(24, SystemsBoard.columns(6, 9))
+    }
+
+    @Test
+    fun aSystemIsASmallSquareOrWholeCardsAndResizesByThem() {
+        fun size(w: Int, h: Int) = io.github.matiyaaa.fuse.model.BoardSize(w, h)
+        // Anything narrower than a card is the small square; wider ones whole cards; heights whole cards.
+        assertEquals(SystemsBoard.SMALL, SystemsBoard.allowed(size(1, 1), 18))
+        assertEquals(SystemsBoard.CARD, SystemsBoard.allowed(size(4, 2), 18))
+        assertEquals(size(6, 4), SystemsBoard.allowed(size(5, 4), 18))
+        assertEquals(size(12, 6), SystemsBoard.allowed(size(30, 30), 18))
+        // The controller: a card narrows to the small square and back, and grows a card at a time.
+        val card = io.github.matiyaaa.fuse.ui.shell.home.BoardRect(0, 0, 3, 2)
+        assertEquals(2, SystemsBoard.step(card, io.github.matiyaaa.fuse.model.NavAction.LEFT, 18)!!.width)
+        assertEquals(null, SystemsBoard.step(card.copy(width = 2), io.github.matiyaaa.fuse.model.NavAction.LEFT, 18))
+        assertEquals(3, SystemsBoard.step(card.copy(width = 2), io.github.matiyaaa.fuse.model.NavAction.RIGHT, 18)!!.width)
+        assertEquals(6, SystemsBoard.step(card, io.github.matiyaaa.fuse.model.NavAction.RIGHT, 18)!!.width)
+        assertEquals(4, SystemsBoard.step(card, io.github.matiyaaa.fuse.model.NavAction.DOWN, 18)!!.height)
+        assertEquals(null, SystemsBoard.step(card, io.github.matiyaaa.fuse.model.NavAction.UP, 18))
     }
 
     @Test
@@ -87,8 +105,8 @@ class SystemsBoardTest {
         )
         val now = SystemsBoard.migrate(old)
         assertEquals(SystemsBoard.GRAIN, now.grain)
-        assertEquals(listOf(4, 2, 2), now.boardWidgets(0).map { it.boardSize.width })
-        assertEquals(listOf(2, 1, 1), now.boardWidgets(0).map { it.boardSize.height })
+        assertEquals(listOf(6, 3, 3), now.boardWidgets(0).map { it.boardSize.width })
+        assertEquals(listOf(4, 2, 2), now.boardWidgets(0).map { it.boardSize.height })
         // Places follow from the order now.
         assertTrue(now.boardWidgets(0).all { it.spots.isEmpty() })
         // Once is enough.
@@ -98,8 +116,8 @@ class SystemsBoardTest {
     @Test
     fun theLowerScreensLookStartsFromTheOrderWithEverySystemOneCard() {
         val main = HomeLayoutConfig(
-            board = listOf(SystemsBoard.tile("psx").copy(width = 1, height = 3), SystemsBoard.tile("snes")),
-            pages = listOf(HomePage("page2", listOf(SystemsBoard.tile("gba").copy(width = 4)))),
+            board = listOf(SystemsBoard.tile("psx").copy(width = 2, height = 6), SystemsBoard.tile("snes")),
+            pages = listOf(HomePage("page2", listOf(SystemsBoard.tile("gba").copy(width = 6)))),
             grain = SystemsBoard.GRAIN,
         )
         val flipped = SystemsBoard.flippedFrom(main)
