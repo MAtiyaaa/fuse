@@ -140,6 +140,9 @@ class HouseholdHost(dir: File, private val clock: () -> Long = System::currentTi
         val i = commands.indexOfFirst { it.id == id }
         if (i < 0 || commands[i].target != device) return null
         val state = ack.state.takeIf { it in ACK_STATES } ?: return null
+        // A request that is settled stays settled: a game that came quickly can be done before
+        // the word that it was taken in arrives, and that late word mustn't open it again.
+        if (!commands[i].open) return commands[i]
         commands[i] = commands[i].copy(state = state, message = ack.message?.take(300), doneAt = if (state == DeviceCommand.DELIVERED) 0 else clock())
         saveCommands()
         commands[i]

@@ -23,6 +23,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -290,5 +291,16 @@ class HouseholdGamesTest {
                 server.stop()
             }
         }
+    }
+
+    @Test
+    fun aRequestThatIsDoneStaysDoneWhenTheWordItWasTakenComesLate() {
+        val hh = HouseholdHost(File(root, "late"))
+        val made = hh.addCommand(DeviceCommand(from = "dev-a", target = "dev-b", type = DeviceCommand.FETCH, game = "g:Mario"))
+        assertNull(hh.ack("dev-a", made.id, CommandAck(DeviceCommand.DONE)), "only the device it was for settles it")
+        assertEquals(DeviceCommand.DONE, hh.ack("dev-b", made.id, CommandAck(DeviceCommand.DONE, "Here now"))?.state)
+        // The game came over before "delivered" was sent: the request stays done.
+        assertEquals(DeviceCommand.DONE, hh.ack("dev-b", made.id, CommandAck(DeviceCommand.DELIVERED))?.state)
+        assertEquals("Here now", hh.ack("dev-b", made.id, CommandAck(DeviceCommand.FAILED, "late"))?.message)
     }
 }
