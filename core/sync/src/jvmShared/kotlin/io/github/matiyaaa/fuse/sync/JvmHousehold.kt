@@ -124,7 +124,8 @@ class JvmHousehold(
         val ok = SyncApi.FEATURE_HOUSEHOLD in hello.features
         _supported.value = ok
         if (!ok) return off()
-        if (config().shareLibrary) runCatching { server.start(peerPort) }
+        // The server for other devices starts with the first list of games (see publish), so a
+        // device with nothing to share yet doesn't keep one open.
         libraryChanged()
         runCatching { refresh() }
         // Who is around, kept fresh: a device that went away shows so within a minute.
