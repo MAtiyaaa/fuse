@@ -36,6 +36,8 @@ import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.GlyphStyle
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.RenderQuality
+import io.github.matiyaaa.fuse.model.NativePresentation
+import io.github.matiyaaa.fuse.model.Host
 import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.ui.designsystem.background.AmbientBackground
 import io.github.matiyaaa.fuse.ui.designsystem.background.CrtOverlay
@@ -257,10 +259,17 @@ private fun FuseAppContent(
     val cpuDrawing = drawing?.gpu == false
     // Drawing that never changes is kept by the graphics card, or painted once without one.
     io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.cpu = cpuDrawing
-    val quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower || cpuDrawing, LocalWindowPx.current)
-    // Motion on Automatic follows the effects this device gets (setup's recommendation, or the
-    // Performance choice); a level the person picked is kept, except calmer when drawn without the graphics card.
-    val recommendedMotion = io.github.matiyaaa.fuse.model.recommendedMotion(prefs.performance, platform.device, prefs.lowPower || cpuDrawing)
+    val quality = NativePresentation.quality(
+        platform.host, prefs.performance, platform.device, prefs.lowPower,
+        softwareRenderer = cpuDrawing, windowPx = LocalWindowPx.current,
+    )
+    // Linux native-art resolution does not depend on the GPU fallback. Effect and motion costs
+    // still follow real renderer capability, while adequately provisioned handhelds avoid a
+    // false LOW tier just because their CPU has four cores.
+    val nativePerformance = NativePresentation.performance(platform.host, prefs.performance, platform.device, prefs.lowPower)
+    val recommendedMotion = io.github.matiyaaa.fuse.model.recommendedMotion(
+        nativePerformance, platform.device, prefs.lowPower || cpuDrawing,
+    )
     val motionProfile = (prefs.motion ?: io.github.matiyaaa.fuse.model.automaticMotion(spec.motion, recommendedMotion)).let { m ->
         if (cpuDrawing && m > io.github.matiyaaa.fuse.model.MotionProfile.MINIMAL) io.github.matiyaaa.fuse.model.MotionProfile.MINIMAL else m
     }
