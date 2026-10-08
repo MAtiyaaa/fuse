@@ -106,7 +106,16 @@ class DesktopPlatformUi(
             api.equals("VULKAN", ignoreCase = true) -> "The graphics card (Vulkan)"
             else -> api
         }
-        if (_drawing.value?.name != name) Log.info("Drawing with $api")
+        if (_drawing.value?.name != name) {
+            Log.info("Drawing with $api")
+            if (os == DesktopOs.LINUX && cpu) {
+                Log.warn(
+                    "Linux graphics acceleration is unavailable: Skiko is drawing with the CPU. " +
+                        "Fuse keeps artwork sharp but disables expensive effects to protect navigation. " +
+                        "Check the OpenGL/Mesa driver and SKIKO_RENDER_API; run with --trace-ui to inspect frame costs.",
+                )
+            }
+        }
         _drawing.value = io.github.matiyaaa.fuse.ui.shell.platform.DrawingInfo(name, gpu = !cpu)
     }
 
