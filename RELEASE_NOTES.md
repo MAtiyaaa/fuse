@@ -1,6 +1,6 @@
-# Fuse 0.4.1 - The Convergence Update
+# Fuse 0.4.1 - The Connected Update
 
-Convergence builds on Fuseline 4, bringing display, profile, library and save foundations closer
+The Connected Update builds on Fuseline 4, bringing display, profile, library and save foundations closer
 together across Fuse devices.
 
 ## New

@@ -1,4 +1,4 @@
-# No-key artwork sources in Convergence
+# No-key artwork sources in The Connected Update
 
 ## GameTDB
 
