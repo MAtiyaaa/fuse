@@ -48,11 +48,6 @@ internal class DesktopStorage(private val dirs: FuseDirs, private val host: Dial
         pick(title, filter = null)?.takeIf { File(it).isDirectory }
     }
 
-    override suspend fun pickSave(title: String): String? = host.withDialog {
-        // The importer copies and bounds the source before inspecting it. The picker never writes.
-        pick(title, SAVES)?.takeIf { File(it).isFile }
-    }
-
     override suspend fun pickImage(title: String): String? {
         val picked = host.withDialog { pick(title, IMAGES) } ?: return null
         return withContext(Dispatchers.IO) { copyIntoMedia(File(picked)) }
@@ -68,7 +63,7 @@ internal class DesktopStorage(private val dirs: FuseDirs, private val host: Dial
      * to a temporary name first and moved into place, so a half-written file never appears.
      */
     suspend fun saveFile(name: String, bytes: ByteArray): String? {
-        val target = host.withDialog { saveDestination(name) } ?: return null
+        val target = host.withDialog { pickSave(name) } ?: return null
         return withContext(Dispatchers.IO) {
             val file = File(target)
             val temp = File(file.absoluteFile.parentFile, ".${file.name}.part")
@@ -96,7 +91,7 @@ internal class DesktopStorage(private val dirs: FuseDirs, private val host: Dial
     }
 
     /** The save dialog: zenity or kdialog on Linux, the system's own on Windows and macOS, else Swing's. */
-    private suspend fun saveDestination(name: String): String? {
+    private suspend fun pickSave(name: String): String? {
         val suggested = File(dirs.home, name).path
         if (DesktopOs.current == DesktopOs.LINUX) {
             val result = withContext(Dispatchers.IO) {
@@ -265,7 +260,6 @@ internal class DesktopStorage(private val dirs: FuseDirs, private val host: Dial
     }
 
     private companion object {
-        val SAVES = Filter("Saves and archives", listOf("zip", "sav", "srm", "dsv", "mcd", "ps2", "eep", "mpk", "sra", "fla", "bin", "dat", "raw", "mcr"))
         val IMAGES = Filter("Images", listOf("png", "jpg", "jpeg", "webp", "gif", "bmp"))
 
         /** What [DesktopMenuMusic] can play. */

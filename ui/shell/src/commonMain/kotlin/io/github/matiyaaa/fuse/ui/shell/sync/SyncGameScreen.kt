@@ -352,7 +352,7 @@ private fun KeptCard(g: GameReport, storePath: String, modifier: Modifier = Modi
     }
 }
 
-private fun reasonText(v: VersionReport): String? = v.provenance.takeIf { it.isNotBlank() } ?: when (v.reason) {
+private fun reasonText(v: VersionReport): String? = when (v.reason) {
     RevisionReason.PLAYED -> "kept for good".takeIf { v.kept }
     RevisionReason.CONFLICT_COPY -> "the other side of a conflict" + if (v.kept) ", kept for good" else ""
     RevisionReason.BEFORE_RESTORE -> "kept before a restore" + if (v.kept) ", kept for good" else ""

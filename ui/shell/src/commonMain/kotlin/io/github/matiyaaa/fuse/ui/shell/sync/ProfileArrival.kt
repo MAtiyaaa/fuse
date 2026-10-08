@@ -1,7 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.sync
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -9,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -54,8 +52,10 @@ import kotlinx.coroutines.launch
 internal fun arrive(app: AppState, p: io.github.matiyaaa.fuse.sync.ProfileInfo, made: Boolean = false) {
     val sync = app.store.sync
     val c = sync.config.value
-    app.arrivalGrand = made || (c.welcomedSeeded && p.id !in c.welcomedProfiles)
-    app.arrivalMade = made
+    if (made || (c.welcomedSeeded && p.id !in c.welcomedProfiles)) {
+        app.arrivalGrand = true
+        app.arrivalMade = made
+    }
     if (p.id !in c.welcomedProfiles) {
         app.scope.launch { sync.configure { s -> s.copy(welcomedProfiles = (s.welcomedProfiles + p.id).distinct()) } }
     }
@@ -63,42 +63,103 @@ internal fun arrive(app: AppState, p: io.github.matiyaaa.fuse.sync.ProfileInfo, 
 }
 
 /**
- * A familiar profile arrives as a brief signature near its HUD home. Normal navigation remains
- * available. One remembered Fuseline value survives A -> B -> C changes, so cancellation retargets
- * from the current position and velocity rather than queuing three cinematic arrivals.
+ * Someone becomes the one playing ([AppState.profileArrival]): their avatar's colours bloom out
+ * from the middle of the screen as a circle, their avatar springs up inside it with "Hi, Mo" under
+ * it, and while everything of theirs arrives behind it the circle gathers itself up into the top
+ * right corner, where their avatar lives in the top line, and is gone. About a second and a half,
+ * every part of it on Fuseline; under reduced motion a short fade. Input waits while it plays.
  */
 @Composable
 internal fun ProfileArrival(app: AppState) {
     val p = app.profileArrival ?: return
     if (app.arrivalGrand) return FirstArrival(app, p)
     val motion = Fuse.motion
-    val progress = remember { FuselineValue(0f) }
-    val colors = Fuse.colors
-    LaunchedEffect(p.id, motion.reduced) {
+    val style = remember(p.avatar) { FuseAvatars.of(p.avatar) }
+    val bloom = remember(p.id) { FuselineValue(0f) }
+    val face = remember(p.id) { FuselineValue(0f) }
+    val words = remember(p.id) { FuselineValue(0f) }
+    val gather = remember(p.id) { FuselineValue(0f) }
+    LaunchedEffect(p.id) {
         app.platform.sounds.play(SoundCue.SELECT)
-        progress.animateTo(1f, if (motion.reduced) Tween(72, curve = Curves.Fade) else Spring(dampingRatio = 1f, stiffness = 1400f))
-        delay(180)
-        progress.animateTo(0f, Tween(if (motion.reduced) 72 else 120, curve = Curves.Fade))
-        if (app.profileArrival?.id == p.id) app.profileArrival = null
-    }
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopEnd) {
-        androidx.compose.foundation.layout.Row(
-            Modifier
-                .padding(top = io.github.matiyaaa.fuse.ui.designsystem.theme.Size.hudHeight + Space.s, end = Space.gutter)
-                .graphicsLayer {
-                    val v = progress.value.coerceIn(0f, 1f)
-                    alpha = v
-                    translationY = if (motion.reduced) 0f else -Space.s.toPx() * (1f - v)
+        if (motion.reduced) {
+            bloom.snapTo(1f)
+            face.snapTo(1f)
+            words.snapTo(1f)
+            delay(500)
+            gather.animateTo(1f, Tween(motion.ms(Durations.BASE), curve = Curves.Fade))
+        } else {
+            coroutineScope {
+                launch { bloom.animateTo(1f, Tween(560, curve = Curves.Enter)) }
+                launch {
+                    delay(140)
+                    face.animateTo(1f, Spring(dampingRatio = 0.55f, stiffness = 380f))
                 }
-                .background(colors.surface, io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape.fraction(Fuse.geometry.tileCornerFraction))
-                .padding(Space.m),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Space.m),
+                launch {
+                    delay(320)
+                    words.animateTo(1f, Tween(420, curve = Curves.Enter))
+                }
+            }
+            delay(420)
+            gather.animateTo(1f, Tween(620, curve = Curves.Sweep))
+        }
+        app.profileArrival = null
+    }
+    // Nothing underneath is pressed while it plays.
+    InputLayer(priority = LayerPriority.DIALOG + 4, modal = true) { NavResult.CONSUMED }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val w = constraints.maxWidth.toFloat()
+        val h = constraints.maxHeight.toFloat()
+        val reach = hypot(w, h)
+        // Where the circle gathers to: the avatar at the top line's far end.
+        val corner = with(androidx.compose.ui.platform.LocalDensity.current) { Offset(w - Space.gutter.toPx() - 24.dp.toPx(), 32.dp.toPx()) }
+        Canvas(Modifier.fillMaxSize()) {
+            val g = gather.value
+            val centre = Offset(size.width / 2f + (corner.x - size.width / 2f) * g, size.height / 2f + (corner.y - size.height / 2f) * g)
+            val r = reach * 0.62f * bloom.value * (1f - g * 0.985f)
+            if (r <= 0.5f) return@Canvas
+            drawCircle(
+                Brush.linearGradient(listOf(style.from, style.to), start = centre - Offset(r, r), end = centre + Offset(r, r)),
+                r, centre, alpha = 1f - g * 0.35f,
+            )
+            // A soft light from the top of the circle, like the avatars' own sheen.
+            drawCircle(
+                Brush.radialGradient(listOf(Color.White.copy(alpha = 0.28f), Color.Transparent), centre - Offset(0f, r * 0.45f), r),
+                r, centre, alpha = 1f - g,
+            )
+        }
+        Column(
+            Modifier.fillMaxSize().graphicsLayer {
+                val g = gather.value
+                alpha = 1f - g
+                val s = 1f - g * 0.6f
+                scaleX = s
+                scaleY = s
+                translationX = (corner.x - w / 2f) * g
+                translationY = (corner.y - h / 2f) * g
+            },
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
-            ProfileAvatar(p.avatar, io.github.matiyaaa.fuse.ui.designsystem.theme.Size.touch, ring = colors.focus)
-            Column {
-                FText(p.name, Fuse.type.title, color = colors.text, maxLines = 1)
-                FText("Your games, saves and Home", Fuse.type.caption, color = colors.textMuted, maxLines = 1)
+            Box(
+                Modifier.graphicsLayer {
+                    val s = 0.4f + 0.6f * face.value
+                    scaleX = s
+                    scaleY = s
+                    alpha = face.value.coerceIn(0f, 1f)
+                },
+            ) {
+                ProfileAvatar(p.avatar, 132.dp, ring = Color.White)
+            }
+            Spacer(Modifier.height(Space.l))
+            Column(
+                Modifier.graphicsLayer {
+                    alpha = words.value
+                    translationY = (1f - words.value) * 18.dp.toPx()
+                },
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                FText("Hi, ${p.name}", Fuse.type.hero, color = Color.White, maxLines = 1, align = TextAlign.Center)
+                FText("Your games, saves and Home", Fuse.type.body, color = Color.White.copy(alpha = 0.85f), maxLines = 1, align = TextAlign.Center)
             }
         }
     }

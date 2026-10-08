@@ -51,7 +51,7 @@ jobs:
       # sources run in the desktopTest task (see build-logic/src/main/kotlin/fuse.kmp.library.gradle.kts).
       - name: Test everything and build the debug APK
         run: >-
-          ./gradlew --refresh-dependencies --stacktrace
+          ./gradlew --stacktrace
           :core:model:desktopTest
           :core:library:desktopTest
           :core:launch:desktopTest
@@ -118,7 +118,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test the shared and desktop code
-        run: ./gradlew --refresh-dependencies --stacktrace :core:library:desktopTest :core:launch:desktopTest :ui:fuseline:desktopTest :app:desktop:test
+        run: ./gradlew --stacktrace :core:library:desktopTest :core:launch:desktopTest :ui:fuseline:desktopTest :app:desktop:test
 
       - name: Build the installer and zip, and self-test them
         run: bash scripts/build-windows.sh
@@ -172,7 +172,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test the shared and desktop code
-        run: ./gradlew --refresh-dependencies --stacktrace :core:library:desktopTest :core:launch:desktopTest :ui:fuseline:desktopTest :app:desktop:test
+        run: ./gradlew --stacktrace :core:library:desktopTest :core:launch:desktopTest :ui:fuseline:desktopTest :app:desktop:test
 
       - name: Build the disk image and self-test the app
         run: bash scripts/build-macos.sh

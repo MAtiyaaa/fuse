@@ -144,14 +144,8 @@ internal object CompanionPage {
  * crossfades behind everything; on the first page the details slide the way the main screen moved.
  */
 @Composable
-fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, onHide: (() -> Unit)? = null, displaySession: io.github.matiyaaa.fuse.ui.shell.store.DisplaySession? = null) {
-    val session = displaySession ?: remember(store) { store.displaySession }
-    if (session.rehearsalOpen) {
-        RehearsalCompanionSurface()
-        return
-    }
+fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, onHide: (() -> Unit)? = null) {
     val prefs by store.prefs.collectAsState()
-    val standby by store.displaySession.standby.collectAsState()
     val spec = prefs.theme
     FuseTheme(
         spec = spec,
@@ -160,14 +154,6 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
         glass = prefs.glass,
         highContrastFocus = prefs.highContrastFocus,
     ) {
-        if (standby) {
-            val wakeScope = rememberCoroutineScope()
-            val wakeRouter = remember { io.github.matiyaaa.fuse.ui.designsystem.input.InputRouter(wakeScope) }
-            CompositionLocalProvider(io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter provides wakeRouter) {
-                StandbyScreen(prefs.clock24h) { store.displaySession.wake() }
-            }
-            return@FuseTheme
-        }
         val home by store.homeFeed.collectAsState()
         val status by platform.status.collectAsState()
         val focus by Spotlight.focused.collectAsState()
@@ -642,13 +628,3 @@ internal fun io.github.matiyaaa.fuse.ui.designsystem.theme.FuseColors.onArt() = 
     shadow = Color.Black,
     isDark = true,
 )
-
-/** A neutral second screen while setup owns the main window; no library or personal flows are read. */
-@Composable
-internal fun RehearsalCompanionSurface() {
-    FuseTheme {
-        Box(Modifier.fillMaxSize().background(Fuse.colors.ink), contentAlignment = Alignment.Center) {
-            FText("Onboarding rehearsal", Fuse.type.title, color = Fuse.colors.text)
-        }
-    }
-}

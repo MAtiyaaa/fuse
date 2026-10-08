@@ -111,12 +111,6 @@ data class DisplayInfo(
     val isOn: Boolean,
     /** Whether Android allows starting another app's activity on this display. Unknown until checked. */
     val canLaunchActivities: Support = Support.UNKNOWN,
-    /** Native-resolution modes of this display, never another display's modes. */
-    val supportedRefreshRates: List<Float> = emptyList(),
-    /** What Fuse requested, separate from the OS-reported active rate above. */
-    val requestedRefreshRate: Float? = null,
-    /** Recent cadence of frames drawn by this window, absent until observed. */
-    val measuredRefreshRate: Float? = null,
 )
 
 @Serializable
@@ -157,8 +151,6 @@ data class DisplayProfile(
      * larger by itself on a big screen with many pixels (a 4K TV), the way it looks on a 1080p one.
      */
     val interfaceSize: Int = 0,
-    /** Zero means this display's maximum. Quality and Low Power change effects, never this cap. */
-    val maxRefreshRate: Int = 0,
 )
 
 /**

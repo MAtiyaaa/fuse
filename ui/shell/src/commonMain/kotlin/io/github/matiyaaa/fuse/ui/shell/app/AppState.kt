@@ -115,14 +115,7 @@ class AppState(
     val phoneLink: PhoneLinkControl? = null,
     /** Where the menus are, kept when their window is made again (see [KeptPlace]). */
     private val kept: KeptPlace = KeptPlace(start),
-    /** Retained by the window owner when its production content leaves composition. */
-    val dev: DevOptions = DevOptions(),
-    val playerSession: io.github.matiyaaa.fuse.ui.player.PlayerSession? = if (io.github.matiyaaa.fuse.ui.player.FusePlayer.available) io.github.matiyaaa.fuse.ui.player.FusePlayer.session else null,
-    val shareWindowFocus: Boolean = true,
 ) {
-    /** Present only in a disposable setup installation. */
-    var finishRehearsal: (() -> Unit)? = null
-
     val navigator = kept.navigator
     val toasts = ToastState()
 
@@ -186,9 +179,7 @@ class AppState(
     var gallery by mutableStateOf<GallerySpec?>(null)
 
     /** Fuse's standby screen is up ([StandbyScreen]): left alone for the user's Standby time. */
-    var standby: Boolean
-        get() = store.displaySession.standby.value
-        set(value) { if (value) store.displaySession.enterStandby() else store.displaySession.wake() }
+    var standby by mutableStateOf(false)
 
     /** A Library view asked for from elsewhere (the Favourites widget), opened once and cleared. */
     var librarySegment by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.library.LibrarySegment?>(null)
@@ -260,6 +251,9 @@ class AppState(
 
     /** What the room is lit by. Screens set it from their selection. */
     var hero by mutableStateOf<HeroSource?>(null)
+
+    /** Developer options: off until the version in About is tapped five times, and only until Fuse closes. */
+    val dev = DevOptions()
 
     /** Hints for the current selection; screens set them. */
     var hints by mutableStateOf<List<Hint>>(emptyList())
@@ -351,7 +345,7 @@ data class LaunchVeil(
  * turns them on for this launch only, and closing Fuse turns them off again.
  */
 @Stable
-class DevOptions(private val displaySession: io.github.matiyaaa.fuse.ui.shell.store.DisplaySession = io.github.matiyaaa.fuse.ui.shell.store.DisplaySession()) {
+class DevOptions {
     /** Taps on the version so far; the fifth turns the options on. */
     var taps by mutableIntStateOf(0)
     var enabled by mutableStateOf(false)
@@ -369,10 +363,13 @@ class DevOptions(private val displaySession: io.github.matiyaaa.fuse.ui.shell.st
      */
     var motionInspector by mutableStateOf(false)
 
-    /** Opens a disposable installation over this window. */
-    var rehearsalOpen: Boolean
-        get() = displaySession.rehearsalOpen
-        set(value) { displaySession.rehearsalOpen = value }
+    /**
+     * While setup is replayed as a rehearsal: the preferences as they were before it started.
+     * Nothing a step does outside preferences is carried out, and these are put back at the end.
+     */
+    var rehearsalPrefs by mutableStateOf<UiPrefs?>(null)
+
+    val rehearsing: Boolean get() = rehearsalPrefs != null
 
     /** Counts a tap on the version; returns how many more it takes (0 once on). */
     fun tap(): Int {

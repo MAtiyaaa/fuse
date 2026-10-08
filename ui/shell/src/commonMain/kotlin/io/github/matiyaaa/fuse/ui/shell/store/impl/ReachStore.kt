@@ -24,7 +24,6 @@ import io.github.matiyaaa.fuse.sync.DeviceInfo
 import io.github.matiyaaa.fuse.sync.DeviceLibrary
 import io.github.matiyaaa.fuse.sync.Household
 import io.github.matiyaaa.fuse.sync.HouseholdLocal
-import io.github.matiyaaa.fuse.sync.GameKey
 import io.github.matiyaaa.fuse.sync.LibraryEntry
 import io.github.matiyaaa.fuse.sync.ONLINE_MS
 import io.github.matiyaaa.fuse.sync.PeerBytes
@@ -85,29 +84,8 @@ import kotlinx.serialization.json.Json
 @Serializable
 internal data class Arrival(val from: String, val at: Long)
 
-/** A title alias cannot bridge two games once a serial or content identity is known. */
-internal fun householdIdentityKeys(keys: Collection<String>, platform: String? = null, serial: String? = null): List<String> {
-    val serialKey = serial?.takeIf { it.isNotBlank() }?.let { GameKey.of(platform.orEmpty(), it, null, "").id }
-    val strong = keys.filter { key ->
-        val identity = GameKey.parse(key)?.identity.orEmpty()
-        identity.startsWith("h.") || (identity.startsWith("s.") && (serialKey == null || key == serialKey))
-    }
-    return (listOfNotNull(serialKey) + strong).distinct().ifEmpty { keys.distinct() }
-}
-
-internal fun householdIdentitiesMatch(left: Collection<String>, right: Collection<String>): Boolean {
-    val a = householdIdentityKeys(left)
-    val b = householdIdentityKeys(right)
-    val serialsA = a.filter { GameKey.parse(it)?.identity?.startsWith("s.") == true }
-    val serialsB = b.filter { GameKey.parse(it)?.identity?.startsWith("s.") == true }
-    if (serialsA.isNotEmpty() && serialsB.isNotEmpty() && serialsA.none { it in serialsB }) return false
-    return a.any { it in b }
-}
-
-private fun LibraryEntry.identityKeys(): List<String> = householdIdentityKeys(listOf(game) + ids, platform, serial)
-
 /**
- * The Fuse Library in the app: the household's other devices' games (through Fuse Sync's
+ * The Remote Library in the app: the household's other devices' games (through Fuse Sync's
  * [Household]), each copy of a game wherever it is, bringing a game here or to another device
  * from wherever is best ([reachHandlers], through Fuse's transfers), sending a game to RomM from
  * the device that has it, and every device's transfers.
@@ -139,9 +117,7 @@ internal class DefaultReachOps(
     private val localByKey = MutableStateFlow<Map<String, Long>>(emptyMap())
 
     /** The household's devices, drawn again whenever the household looks at who is around. */
-    private val devices: StateFlow<List<DeviceInfo>> = combine(service?.devices ?: MutableStateFlow(emptyList()), household.libraries, household.seen) { list, libraries, seen ->
-        io.github.matiyaaa.fuse.sync.HouseholdTopology.reconcile(list, libraries, seen)
-    }
+    private val devices: StateFlow<List<DeviceInfo>> = combine(service?.devices ?: MutableStateFlow(emptyList()), household.seen) { list, _ -> list }
         .stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
 
     /** Seen by the host lately: from the household's own look (every half minute), else the device list. */
@@ -160,36 +136,6 @@ internal class DefaultReachOps(
     fun start() {
         if (service == null) return
         ctx.addRemoteGames(games)
-        val previousClaims = ctx.householdProviderClaims
-        ctx.householdProviderClaims = { game ->
-            val platform = game.platformId.value
-            val serialKey = game.tags.serial?.takeIf { it.isNotBlank() }?.let {
-                GameKey.of(platform, it, null, "").id
-            }
-            val romId = game.links.rommRomId
-            val householdKey = game.id.householdOnly?.let { games.keyOf(game.id) }
-            val mine = household.mine.value.filter { entry ->
-                entry.platform == platform && entry.name == FsPath.name(game.location.path) && entry.sizeBytes == game.location.sizeBytes
-            }.singleOrNull()
-            val matches = household.libraries.value.flatMap { library ->
-                library.entries.filter { entry ->
-                    entry.platform == platform && (
-                        householdKey != null && householdKey in entry.identityKeys() ||
-                        serialKey != null && serialKey in entry.identityKeys() ||
-                        romId != null && entry.rommRomId == romId ||
-                        mine?.fingerprint != null && mine.fingerprint == entry.fingerprint &&
-                            (serialKey == null || entry.serial.isNullOrBlank() || serialKey == GameKey.of(platform, entry.serial, null, "").id)
-                    )
-                }.flatMap { entry ->
-                    entry.providerClaims + listOfNotNull(
-                        entry.steamGridDbId?.let { io.github.matiyaaa.fuse.model.ProviderClaim("steamgriddb", it.toString(), originDeviceId = library.device) },
-                        entry.igdbId?.let { io.github.matiyaaa.fuse.model.ProviderClaim("igdb", it.toString(), originDeviceId = library.device) },
-                    )
-                }
-            }
-            (previousClaims(game) + matches).distinct()
-        }
-
         val otherDetail = ctx.remoteDetail
         ctx.remoteDetail = { id -> if (id.householdOnly != null) detail(id) else otherDetail(id) }
         val otherOn = ctx.remoteGamesOn
@@ -254,11 +200,8 @@ internal class DefaultReachOps(
 
     private suspend fun refreshLocal() {
         val ids = runCatching { householdIds() }.getOrDefault(emptyMap())
-        val safe = ids.mapValues { householdIdentityKeys(it.value) }
-        localIds.value = safe
-        // An ambiguous key cannot say that one specific local game is already present.
-        localByKey.value = safe.flatMap { (game, keys) -> keys.map { it to game } }
-            .groupBy({ it.first }, { it.second }).mapNotNull { (key, games) -> games.distinct().singleOrNull()?.let { key to it } }.toMap()
+        localIds.value = ids
+        localByKey.value = buildMap { for ((game, keys) in ids) for (k in keys) put(k, game) }
     }
 
     private suspend fun settle(command: String, state: String, message: String?) = household.settle(command, state, message)
@@ -278,27 +221,17 @@ internal class DefaultReachOps(
         .mapLatest { (libs, mine) ->
             val self = household.self
             val copies = libs.filter { it.device != self }.flatMap { lib -> lib.entries.map { lib to it } }
-            val gathered = ArrayList<MutableList<Pair<DeviceLibrary, LibraryEntry>>>()
-            val candidates = HashMap<String, MutableList<MutableList<Pair<DeviceLibrary, LibraryEntry>>>>()
-            for (copy in copies) {
-                val keys = copy.second.identityKeys()
-                val group = keys.flatMap { candidates[it].orEmpty() }.distinct().firstOrNull { list ->
-                    list.all { householdIdentitiesMatch(keys, it.second.identityKeys()) }
-                }
-                val into = group ?: arrayListOf<Pair<DeviceLibrary, LibraryEntry>>().also { gathered += it }
-                into += copy
-                for (key in keys) {
-                    val list = candidates.getOrPut(key) { arrayListOf() }
-                    if (list.none { it === into }) list += into
-                }
+            // One game is known by any of its ids: a serial on one device, a title on another.
+            val keyOf = HashMap<String, String>()
+            for ((_, e) in copies) {
+                val k = (listOf(e.game) + e.ids).firstNotNullOfOrNull { keyOf[it] } ?: e.game
+                for (id in listOf(e.game) + e.ids) keyOf.putIfAbsent(id, k)
             }
-            val grouped = gathered.filter { list -> list.none { (_, e) -> e.identityKeys().any { it in mine } } }
-                .associateBy { it.first().second.identityKeys().first() }
+            val grouped = copies.groupBy { keyOf[it.second.game] ?: it.second.game }
+                .filter { (_, list) -> list.none { (_, e) -> (listOf(e.game) + e.ids).any { it in mine } } }
             val ids = games.idsOf(grouped.keys)
             val groups = grouped.map { (k, list) -> Group(k, ids.getValue(k), list.first().second.platform, list) }
-            val aliases = groups.flatMap { g -> g.copies.flatMap { (_, e) -> e.identityKeys().map { it to g } } }
-                .groupBy({ it.first }, { it.second }).mapNotNull { (key, entries) -> entries.distinct().singleOrNull()?.let { key to it } }.toMap()
-            Index(groups, aliases)
+            Index(groups, groups.associateBy { it.key } + groups.flatMap { g -> g.copies.flatMap { (_, e) -> e.ids.map { it to g } } }.toMap())
         }
         .flowOn(Dispatchers.Default)
         .stateIn(ctx.scope, SharingStarted.Eagerly, Index())
@@ -309,7 +242,7 @@ internal class DefaultReachOps(
     private fun copiesOf(keys: Collection<String>): List<Pair<DeviceLibrary, LibraryEntry>> {
         val self = household.self
         return household.libraries.value.filter { it.device != self }.flatMap { lib ->
-            lib.entries.filter { e -> householdIdentitiesMatch(e.identityKeys(), keys) }.map { lib to it }
+            lib.entries.filter { e -> (listOf(e.game) + e.ids).any { it in keys } }.map { lib to it }
         }
     }
 
@@ -415,7 +348,7 @@ internal class DefaultReachOps(
 
     override fun libraryGame(id: GameId): Flow<GameId?> = combine(localByKey, flowOf(id)) { mine, gid ->
         val key = games.keyOf(gid) ?: return@combine null
-        val entryIds = bestEntry(key)?.identityKeys() ?: listOf(key)
+        val entryIds = bestEntry(key)?.let { listOf(it.game) + it.ids } ?: listOf(key)
         entryIds.firstNotNullOfOrNull { mine[it] }?.let(::GameId)
     }.distinctUntilChanged()
 
@@ -448,7 +381,7 @@ internal class DefaultReachOps(
     private suspend fun availabilityNow(id: GameId): GameCopies? {
         val keys = keysOf(id)
         val local: Game? = if (id.value > 0) ctx.data.games.get(id) else null
-        val mineEntry = household.mine.value.firstOrNull { e -> householdIdentitiesMatch(e.identityKeys(), keys) }
+        val mineEntry = household.mine.value.firstOrNull { e -> (listOf(e.game) + e.ids).any { it in keys } }
         val others = if (keys.isEmpty()) emptyList() else copiesOf(keys)
         val romId = id.rommOnly ?: local?.let { romm.romOf(it.id) ?: it.links.rommRomId } ?: others.firstNotNullOfOrNull { it.second.rommRomId }
             ?: others.firstNotNullOfOrNull { (_, e) -> romm.sameOnServer(null, e.files.mapNotNull { it.md5 })?.id }
@@ -529,7 +462,7 @@ internal class DefaultReachOps(
         }
         val sources = same.map { (lib, _) -> ReachSource(ReachSource.PEER, lib.device, devs.firstOrNull { it.id == lib.device }?.name ?: lib.name) } +
             listOfNotNull(rom?.takeIf { rommFiles != null }?.let { ReachSource(ReachSource.ROMM, romm.serverKey, "RomM", romId = it.id) })
-        val folderOf = folderFor(platform, ref.platform) ?: return "Choose where games go first: Settings, Addons, Fuse Library."
+        val folderOf = folderFor(platform, ref.platform) ?: return "Choose where games go first: Settings, Addons, Remote Library."
         val safe = RommPlacement.safeName(ref.name.ifBlank { ref.title })
         val placePath = if (ref.folder) FsPath.join(folderOf, safe) else folderOf
         if (!ref.folder) {
@@ -582,7 +515,7 @@ internal class DefaultReachOps(
         val self = household.self
         val here = SendTarget(self, ctx.services.deviceName, "", if (id.value > 0) SendState.HAS_IT else SendState.THIS_DEVICE)
         val libs = household.libraries.value.associateBy { it.device }
-        listOf(here) + io.github.matiyaaa.fuse.sync.HouseholdTopology.others(self, devs).map { d ->
+        listOf(here) + devs.filter { it.id != self && !it.revoked }.map { d ->
             val state = when {
                 d.id in holders -> SendState.HAS_IT
                 libs[d.id]?.accepts == false -> SendState.REFUSES
@@ -686,16 +619,10 @@ internal class DefaultReachOps(
     // ------------------------------------------------------------------ what this device does for the others
 
     private val local = object : HouseholdLocal {
-        override suspend fun steamIdentities(): List<io.github.matiyaaa.fuse.sync.SteamIdentity> =
-            engine.steamAccounts().map { io.github.matiyaaa.fuse.sync.SteamIdentity(it.steamId, it.personaName, it.mostRecent) }
-
         override suspend fun games(): List<SharedGame> = withContext(Dispatchers.Default) {
             refreshLocal()
             val ids = localIds.value
             val list = ctx.data.games.observeAll().first().filter { !it.isApp && !it.missing && !it.removed }
-            val steamOwners = if (list.any { it.platformId.value == "steam" }) {
-                runCatching { engine.findSteamGames(null) }.getOrDefault(emptyList()).associate { it.appId to it.lastInstalledBy }
-            } else emptyMap()
             list.mapNotNull { s ->
                 val g = ctx.data.games.get(s.id) ?: return@mapNotNull null
                 val keys = ids[s.id.value].orEmpty().ifEmpty { return@mapNotNull null }
@@ -710,11 +637,6 @@ internal class DefaultReachOps(
                     files = rel.map { (p, f) -> PeerFile(p, f.sizeBytes) }, serial = g.tags.serial, rommRomId = romm.romOf(g.id) ?: g.links.rommRomId,
                     steamGridDbId = g.links.steamGridDbGameId, igdbId = g.links.igdbId, summary = g.metadata.description?.take(600),
                     releaseYear = g.metadata.releaseYear, developer = g.metadata.developer, genres = g.metadata.genres.take(6),
-                    providerClaims = io.github.matiyaaa.fuse.data.repo.ProviderClaimRepository(ctx.data.cache).get(g.id) + listOfNotNull(
-                        g.links.steamGridDbGameId?.let { io.github.matiyaaa.fuse.model.ProviderClaim("STEAMGRIDDB", it.toString(), originDeviceId = self) },
-                        g.links.igdbId?.let { io.github.matiyaaa.fuse.model.ProviderClaim("IGDB", it.toString(), originDeviceId = self) },
-                    ),
-                    steamInstalledBy = g.links.steamAppId?.let { steamOwners[it] }.orEmpty().toList(),
                 )
                 SharedGame(entry, rel.associate { (p, f) -> p to f.path })
             }
@@ -722,7 +644,7 @@ internal class DefaultReachOps(
 
         override suspend fun perform(command: DeviceCommand): CommandResult = when (command.type) {
             DeviceCommand.FETCH -> {
-                if (!settings.acceptSends) CommandResult(DeviceCommand.FAILED, "${ctx.services.deviceName} doesn't take games from other devices (Settings, Addons, Fuse Library).")
+                if (!settings.acceptSends) CommandResult(DeviceCommand.FAILED, "${ctx.services.deviceName} doesn't take games from other devices (Settings, Addons, Remote Library).")
                 else {
                     val key = command.game.orEmpty()
                     val romId = key.removePrefix("romm:").takeIf { key.startsWith("romm:") }?.toLongOrNull()

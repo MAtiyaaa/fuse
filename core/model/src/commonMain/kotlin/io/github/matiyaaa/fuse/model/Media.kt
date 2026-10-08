@@ -48,7 +48,7 @@ enum class MediaKind(
  * taken from one of its own games, for systems the pack has nothing for.
  */
 @Serializable
-enum class MediaSource { USER, LOCAL_FOLDER, ROMM, STEAMGRIDDB, IGDB, THEGAMESDB, SCREENSCRAPER, LIBRETRO, GAMETDB, GENERATED, ART_PACK, GAME_ART }
+enum class MediaSource { USER, LOCAL_FOLDER, ROMM, STEAMGRIDDB, IGDB, THEGAMESDB, SCREENSCRAPER, LIBRETRO, GENERATED, ART_PACK, GAME_ART }
 
 /** What a media record belongs to. */
 @Serializable

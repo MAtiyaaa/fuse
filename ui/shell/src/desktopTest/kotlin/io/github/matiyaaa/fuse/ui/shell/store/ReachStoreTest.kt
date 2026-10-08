@@ -32,7 +32,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The Fuse Library through the app's own store: a computer hosting and a handheld connected to
+ * The Remote Library through the app's own store: a computer hosting and a handheld connected to
  * it, each with its own library. Each sees the other's games it doesn't have (one game once,
  * whatever each device calls its file), brings one over from the other device, sees where every
  * game is and whether the copies are the same, and asks the other device to fetch a game.
@@ -129,7 +129,7 @@ class ReachStoreTest {
         }
         val landed = File(deck.roms, "Advance Wars (USA).gba")
         assertContentEquals(bytesOf("Advance Wars "), landed.readBytes())
-        eventually("in the Thor's library, and off its Fuse Library") {
+        eventually("in the Thor's library, and off its Remote Library") {
             deck.store.library.games(GameQuery(platform = PlatformId("gba"))).first().any { it.title.startsWith("Advance Wars") } &&
                 deck.store.reach.games(null).first().isEmpty()
         }

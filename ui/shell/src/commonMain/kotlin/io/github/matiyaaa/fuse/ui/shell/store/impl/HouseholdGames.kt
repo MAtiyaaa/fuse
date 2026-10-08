@@ -27,7 +27,7 @@ import kotlinx.serialization.json.Json
  * (the same on every device), shown with an id of its own on this device that never changes, and
  * with Fuse's own name, details and art for it kept here for good (in the database, art in the
  * media table under its id), found by the same sources and rules as RomM's games and the library's.
- * So the Fuse Library opens at once and stays complete while a device or the host is away.
+ * So the Remote Library opens at once and stays complete while a device or the host is away.
  */
 internal class HouseholdGames(
     private val ctx: StoreContext,
@@ -114,9 +114,9 @@ internal class HouseholdGames(
             platformId = platform.id,
             titles = GameTitles(original = name.substringBeforeLast('.').ifBlank { entry.title }, custom = record?.titleCustom, metadata = record?.titleMetadata ?: entry.title),
             location = GameLocation(LibrarySourceId(0), "household://${entry.game}", if (entry.folder) LocationKind.FOLDER else LocationKind.FILE, "household://${entry.game}/$name", sizeBytes = entry.sizeBytes),
-            tags = FilenameParser.parse(name, hasExtension = '.' in name).tags.let { it.copy(serial = entry.serial ?: it.serial) },
+            tags = FilenameParser.parse(name, hasExtension = '.' in name).tags,
             metadata = record?.metadata?.fillFrom(theirs) ?: theirs,
-            links = ExternalLinks(steamGridDbGameId = record?.steamGridDbId ?: entry.steamGridDbId, igdbId = record?.igdbId ?: entry.igdbId, providerClaims = entry.providerClaims),
+            links = ExternalLinks(steamGridDbGameId = record?.steamGridDbId ?: entry.steamGridDbId, igdbId = record?.igdbId ?: entry.igdbId),
         )
     }
 

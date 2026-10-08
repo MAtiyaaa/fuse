@@ -117,12 +117,6 @@ interface SteamIntegration {
 
     /** Adds Fuse (or brings its entry up to date) for every Steam user here; what happened, in words. */
     suspend fun addFuse(): Result<String>
-
-    /** Safe setup lifecycle: close Steam cleanly, update the shortcut, then restart it. */
-    suspend fun addForSetup(): Result<String> = addFuse()
-
-    /** Repairs only positively identified Fuse entries; existing custom artwork is retained. */
-    suspend fun rebuild(): Result<String> = addFuse()
 }
 
 /** A file the user picked to open: its name and its bytes. */
@@ -252,8 +246,6 @@ interface StorageAccess {
 
     /** Opens a picker for an audio file and copies it into Fuse's storage; returns that copy, or null. */
     suspend fun pickAudio(title: String): PickedFile? = null
-    /** A save file or archive, copied into temporary app storage where document access needs it. */
-    suspend fun pickSave(title: String): String? = null
     fun refresh()
 }
 

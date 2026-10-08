@@ -148,8 +148,8 @@ private class AuditReachTransfers(cards: List<GameCard>) : TransfersOps {
 }
 
 /**
- * The Fuse Library: the RomM tab's other devices' shelf and a system's sections, a game's
- * "Available on" with a copy's options and Send to, the Sync tab's way in and the Fuse Library
+ * The Remote Library: the RomM tab's other devices' shelf and a system's sections, a game's
+ * "Available on" with a copy's options and Send to, the Sync tab's way in and the Remote Library
  * itself, Downloads with another device's transfers, its settings, and the second screen.
  */
 internal fun AuditDriver.reachScreens() {
@@ -234,20 +234,20 @@ internal fun AuditDriver.reachScreens() {
         shoot("down into the other sections, in the same column", 1_200)
     }
 
-    scenario("reach", "sync tab and the Fuse Library") {
+    scenario("reach", "sync tab and the Remote Library") {
         useSync(asHost = false)
         show(withReach(libraryStore, romm = false, transfers = true))
         tab(Destination.CARTRIDGE)
         tap(PadButton.DPAD_UP)
         focusText("Sync") { tap(PadButton.DPAD_RIGHT) }
         tap(PadButton.DPAD_DOWN)
-        waitFor("Fuse Library")
-        shoot("the Sync tab with the Fuse Library", 1_400)
+        waitFor("Remote Library")
+        shoot("the Sync tab with the Remote Library", 1_400)
         tap(PadButton.DPAD_DOWN)
-        shoot("the Fuse Library's card chosen")
+        shoot("the Remote Library's card chosen")
         tap(PadButton.A)
         waitFor("Recently Added")
-        shoot("the Fuse Library", 1_400)
+        shoot("the Remote Library", 1_400)
         tap(PadButton.DPAD_DOWN)
         tap(PadButton.DPAD_RIGHT, 2)
         shoot("a recent game chosen")
@@ -273,9 +273,9 @@ internal fun AuditDriver.reachScreens() {
         openSettings()
         focusText("Addons")
         tap(PadButton.DPAD_RIGHT)
-        tapText("Fuse Library")
+        tapText("Remote Library")
         waitFor("Share This Device's Games")
-        shoot("Settings, Addons, Fuse Library", 1_200)
+        shoot("Settings, Addons, Remote Library", 1_200)
     }
 
     scenario("reach", "second screen") {

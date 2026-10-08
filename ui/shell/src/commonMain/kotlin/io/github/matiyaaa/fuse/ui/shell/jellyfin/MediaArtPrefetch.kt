@@ -7,8 +7,6 @@ import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
-import coil3.request.SuccessResult
-import io.github.matiyaaa.fuse.model.ArtworkSizing
 import io.github.matiyaaa.fuse.jellyfin.MediaItem
 import io.github.matiyaaa.fuse.ui.designsystem.media.heroDecodePx
 import io.github.matiyaaa.fuse.ui.designsystem.media.heroRequest
@@ -33,17 +31,6 @@ internal object MediaArtPrefetch {
     private val gate = Semaphore(3)
 
     private fun firstTime(key: String): Boolean = synchronized(asked) { asked.put(key, Unit) == null }
-    private fun retry(key: String) = synchronized(asked) { asked.remove(key) }
-
-    /** Failed/offline prefetches are not permanently remembered as ready. */
-    private fun prefetch(scope: CoroutineScope, key: String, run: suspend () -> Boolean) {
-        if (!firstTime(key)) return
-        scope.launch {
-            try { gate.withPermit { if (!run()) retry(key) } }
-            catch (e: kotlinx.coroutines.CancellationException) { retry(key); throw e }
-            catch (_: Throwable) { retry(key) }
-        }
-    }
 
     /** Readies [items] around [index]: nearest first, two behind and three ahead. */
     fun around(context: PlatformContext, scope: CoroutineScope, items: List<MediaItem>, index: Int, heroPx: Int) {
@@ -51,14 +38,13 @@ internal object MediaArtPrefetch {
         val order = listOf(0, 1, -1, 2, 3, -2).mapNotNull { items.getOrNull(index + it) }
         val loader = SingletonImageLoader.get(context)
         for (item in order) {
-            val backdrop = (item.backdrop ?: item.thumb ?: item.poster)?.sized(ArtworkSizing.bucket(heroPx))
-            val logoPx = ArtworkSizing.bucket((heroPx / 3).coerceAtLeast(256))
-            val logo = item.logo?.sized(logoPx)
-            if (backdrop != null) prefetch(scope, "b:${backdrop.key}:$heroPx") {
-                loader.execute(heroRequest(context, backdrop, heroPx)) is SuccessResult
+            val backdrop = (item.backdrop ?: item.thumb ?: item.poster)?.sized(BACKDROP_WIDTH)
+            val logo = item.logo?.sized(WIDE_WIDTH)
+            if (backdrop != null && firstTime("b:${item.id}:$heroPx")) {
+                scope.launch { gate.withPermit { loader.execute(heroRequest(context, backdrop, heroPx)) } }
             }
-            if (logo != null) prefetch(scope, "l:${logo.key}:$logoPx") {
-                loader.execute(ImageRequest.Builder(context).data(logo).size(logoPx, logoPx).build()) is SuccessResult
+            if (logo != null && firstTime("l:${item.id}")) {
+                scope.launch { gate.withPermit { loader.execute(ImageRequest.Builder(context).data(logo).build()) } }
             }
         }
     }

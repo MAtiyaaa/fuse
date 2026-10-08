@@ -73,9 +73,6 @@ class InputRouter(
     /** Called after every action with its result (sounds, haptics). Set by the app shell. */
     var feedback: InputFeedback = InputFeedback { _, _ -> },
 ) {
-    /** Temporarily sends host input to an independent nested interface, such as setup rehearsal. */
-    var redirectTo: InputRouter? = null
-
     var profile: InputProfile = profile
         set(value) {
             field = value
@@ -107,7 +104,6 @@ class InputRouter(
      * mouse whose place in the window changed has moved, so hovering may move the highlight.
      */
     fun pointer(mouse: Boolean, x: Float, y: Float, pressed: Boolean) {
-        redirectTo?.let { it.pointer(mouse, x, y, pressed); return }
         this.mouse = mouse
         if (!mouse) return
         if (x != lastMouseX || y != lastMouseY) {
@@ -142,7 +138,6 @@ class InputRouter(
 
     /** The controller now in use calls itself [family] (null: it doesn't say). */
     fun padIdentified(family: io.github.matiyaaa.fuse.model.GlyphStyle?) {
-        redirectTo?.let { it.padIdentified(family); return }
         if (_padFamily.value != family) _padFamily.value = family
     }
 
@@ -206,10 +201,6 @@ class InputRouter(
 
     /** Sends an action through the layer stack. Returns what the handling layer did. */
     fun dispatch(action: NavAction, source: InputSource, repeat: Int = 0): NavResult {
-        redirectTo?.let { return it.dispatch(action, source, repeat) }
-        if (repeat > 0 && action in consumedUntilRelease) return NavResult.CONSUMED
-        val trace = io.github.matiyaaa.fuse.ui.designsystem.effects.UiRenderTrace
-        val started = if (trace.enabled) trace.now() else 0L
         touched()
         _lastSource.value = source
         val modifier = _heldModifier.value?.takeIf { action.isDirection }
@@ -220,7 +211,6 @@ class InputRouter(
         if (result == NavResult.IGNORED && action == NavAction.REORDER) {
             result = route(NavEvent(NavAction.CONTEXT, 0, source))
         }
-        if (result != NavResult.IGNORED) trace.input(started)
         feedback.onResult(event, result)
         return result
     }
@@ -255,10 +245,6 @@ class InputRouter(
     // ---------------------------------------------------------------- raw input
 
     private val held = mutableMapOf<PadButton, Job?>()
-    private val consumedUntilRelease = mutableSetOf<NavAction>()
-
-    /** A wake press must never become navigation repeats after its overlay disappears. */
-    fun consumeUntilRelease(action: NavAction) { consumedUntilRelease += action }
     private val longPressConsumed = mutableSetOf<PadButton>()
 
     /** Sees every physical press and release (the controller test screen uses it). */
@@ -268,10 +254,7 @@ class InputRouter(
      * The text field a hardware keyboard types into while one is open (search, rename). Letters then
      * become text instead of shortcuts; arrows and Escape keep navigating.
      */
-    private var ownTextInput: TextInput? = null
-    var textInput: TextInput?
-        get() { val nested = redirectTo; return if (nested != null) nested.textInput else ownTextInput }
-        set(value) { ownTextInput = value }
+    var textInput: TextInput? = null
 
     /**
      * While set, the next physical presses go only here and never become actions (the button
@@ -304,7 +287,6 @@ class InputRouter(
 
     /** A physical button went down. Platform key repeats must not be forwarded. */
     fun press(button: PadButton, source: InputSource) {
-        redirectTo?.let { it.press(button, source); return }
         io.github.matiyaaa.fuse.ui.fuseline.FramePacing.input()
         touched()
         rawListener?.invoke(button, true)
@@ -367,8 +349,6 @@ class InputRouter(
     }
 
     fun release(button: PadButton, source: InputSource) {
-        redirectTo?.let { it.release(button, source); return }
-        actionFor(button)?.let { consumedUntilRelease.remove(it) }
         rawListener?.invoke(button, false)
         exclusive?.let {
             it(button, false)
@@ -407,7 +387,6 @@ class InputRouter(
 
     /** Releases every held button (focus loss, profile change, window hidden). */
     fun releaseAll() {
-        consumedUntilRelease.clear()
         held.values.forEach { it?.cancel() }
         held.clear()
         longPressConsumed.clear()
@@ -494,7 +473,6 @@ class InputRouter(
      * the user's navigation threshold; the dominant axis wins so diagonals never double-move.
      */
     fun stick(x: Float, y: Float, source: InputSource = InputSource.GAMEPAD) {
-        redirectTo?.let { it.stick(x, y, source); return }
         io.github.matiyaaa.fuse.ui.fuseline.FramePacing.input()
         val threshold = max(profile.navigationThreshold, profile.stickDeadzone)
         // Hysteresis: once pressed, release only when clearly back toward the centre.
@@ -520,7 +498,6 @@ class InputRouter(
      * is one press. Readers that see the stick as buttons already press those directly.
      */
     fun rightStick(x: Float, y: Float, source: InputSource = InputSource.GAMEPAD) {
-        redirectTo?.let { it.rightStick(x, y, source); return }
         val threshold = max(RIGHT_STICK_PRESS, profile.stickDeadzone)
         val dir: PadButton? = when {
             abs(x) >= abs(y) && abs(x) >= threshold -> if (x < 0) PadButton.RSTICK_LEFT else PadButton.RSTICK_RIGHT
@@ -538,7 +515,6 @@ class InputRouter(
 
     /** Analog trigger value 0..1; crossing half travel counts as a press. */
     fun trigger(button: PadButton, value: Float, source: InputSource = InputSource.GAMEPAD) {
-        redirectTo?.let { it.trigger(button, value, source); return }
         val down = value > 0.5f
         if (triggers[button] == down) return
         triggers[button] = down

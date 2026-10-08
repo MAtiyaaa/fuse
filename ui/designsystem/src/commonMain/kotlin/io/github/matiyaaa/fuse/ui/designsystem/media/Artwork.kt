@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,7 +21,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImagePainter
@@ -33,12 +31,6 @@ import coil3.decode.DataSource
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.Scale
-import coil3.size.Dimension
-import coil3.size.Size
-import coil3.size.SizeResolver
-import io.github.matiyaaa.fuse.model.ArtworkSizing
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.graphics.painter.Painter
 import io.github.matiyaaa.fuse.ui.designsystem.effects.shimmer
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.fuseline.Durations
@@ -98,26 +90,9 @@ fun Artwork(
     val context = LocalPlatformContext.current
     val fit = backdrop || contentScale == ContentScale.Fit
     val sizer = rememberConstraintsSizeResolver()
-    var measuredSize by remember { mutableStateOf<IntSize?>(null) }
-    val pixels = remember(measuredSize, zoom) {
-        measuredSize?.let { ArtworkSizing.decode(it.width, it.height, enlargement = maxOf(1.15f, zoom)) }
-    }
-    val decodeSizer = remember(sizer, zoom, pixels) {
-        SizeResolver {
-            val ready = pixels
-            if (ready != null) return@SizeResolver Size(ready.width, ready.height)
-            val measured = sizer.size()
-            val target = ArtworkSizing.decode(
-                (measured.width as? Dimension.Pixels)?.px ?: 512,
-                (measured.height as? Dimension.Pixels)?.px ?: 512,
-                enlargement = maxOf(1.15f, zoom),
-            )
-            Size(target.width, target.height)
-        }
-    }
-    val request = remember(model, context, fit, decodeSizer) {
+    val request = remember(model, context, fit) {
         ImageRequest.Builder(context).data(model).crossfade(false)
-            .size(decodeSizer).scale(if (fit) Scale.FIT else Scale.FILL)
+            .apply { if (fit) size(sizer).scale(Scale.FIT) }
             .build()
     }
     val loader = rememberAsyncImagePainter(request, contentScale = if (backdrop) ContentScale.Fit else contentScale)
@@ -126,15 +101,10 @@ fun Artwork(
     val failed = state is AsyncImagePainter.State.Error
     // Art already shown this session is never faded in again; pinned art is drawn at once while the
     // loader fetches it again.
-    var lastPainter by remember(model) { mutableStateOf<Painter?>(null) }
-    SideEffect { if (success != null) lastPainter = success.painter }
-    val held = if (success == null) lastPainter ?: ShownArt.pinned(model) else null
+    val held = if (success == null) ShownArt.pinned(model) else null
     val painter = held ?: loader
-    // Capture session history before recording this load. Looking it up after shown() makes
-    // every first network result bypass its fade. Keep the decision stable across fade frames.
-    val alreadyShown = remember(model) { ShownArt.wasShown(model) }
-    val fromMemory = success?.result?.dataSource == DataSource.MEMORY_CACHE || held != null || alreadyShown
-    SideEffect { if (success != null) ShownArt.shown(model, if (pin) success.painter else null) }
+    if (success != null) ShownArt.shown(model, if (pin) success.painter else null)
+    val fromMemory = success?.result?.dataSource == DataSource.MEMORY_CACHE || held != null || ShownArt.wasShown(model)
     val alpha = remember(model) { FuselineValue(0f) }
     val fade = Fuse.motion.fade(Durations.BASE)
     // Read through a derived state so the fade itself never recomposes this.
@@ -156,9 +126,7 @@ fun Artwork(
         delay(fallbackDelayMs)
         slow = true
     }
-    Box(modifier.then(sizer).onSizeChanged { measured ->
-        measuredSize = measured
-    }) {
+    Box(if (fit) modifier.then(sizer) else modifier) {
         val waiting = success == null && !failed
         if (placeholder && !failed && !slow && !shown) {
             // Holds the art's place while it loads, so a tile never shows a hole.

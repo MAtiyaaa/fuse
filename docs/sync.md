@@ -179,9 +179,9 @@ From 0.3.8 ("The Reach Update") your devices' games make one library you can rea
   whether each is online, its size there, whether it is verified, and when it was downloaded or
   added.
 - **Remembered offline.** What other devices have, and the art and details for their games, are
-  kept on this device, so the Fuse Library can be browsed with the host away. Art follows the same
+  kept on this device, so the Remote Library can be browsed with the host away. Art follows the same
   rules as RomM's games (Fuse's art order, SteamGridDB and your choices), and **Fill Everything** in
-  Settings can include the Fuse Library.
+  Settings can include the Remote Library.
 
 ### Bringing a game here, or sending it anywhere
 

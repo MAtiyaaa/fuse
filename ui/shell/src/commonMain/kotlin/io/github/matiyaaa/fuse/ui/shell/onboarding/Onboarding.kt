@@ -185,13 +185,23 @@ fun OnboardingScreen(app: AppState) {
         app.platform.sounds.play(if (delta > 0) SoundCue.SELECT else SoundCue.BACK)
     }
 
+    // A rehearsal left any other way (the Home button) still puts the preferences back.
+    DisposableEffect(Unit) {
+        onDispose {
+            app.dev.rehearsalPrefs?.let { before ->
+                app.dev.rehearsalPrefs = null
+                app.store.updatePrefs { before }
+            }
+        }
+    }
+
     // Again when a step's buttons change (back from setting up Fuse Sync, a profile just made), so the
     // selection is always one of them.
     LaunchedEffect(step.id, step.actions.map { it.label }) {
         app.hero = null
         app.hints = buildList {
             add(Hint(HintButton.CONFIRM, "Choose"))
-            if (state.index > 0 || app.finishRehearsal != null) add(Hint(HintButton.BACK, if (state.index > 0) "Back" else "Leave"))
+            if (state.index > 0 || app.dev.rehearsing) add(Hint(HintButton.BACK, if (state.index > 0) "Back" else "Leave"))
             if (step.optional || app.dev.skipRequired) add(Hint(HintButton.MENU, "Skip"))
         }
         // The primary button is the one selected on arrival.
@@ -214,7 +224,7 @@ fun OnboardingScreen(app: AppState) {
             NavAction.BACK -> when {
                 state.index > 0 -> { go(-1); NavResult.CONSUMED }
                 // A rehearsal can be left from its first step.
-                app.finishRehearsal != null -> { app.endRehearsal(); NavResult.CONSUMED }
+                app.dev.rehearsing -> { app.endRehearsal(); NavResult.CONSUMED }
                 else -> NavResult.BLOCKED
             }
             NavAction.QUICK_MENU -> if (step.optional || app.dev.skipRequired) { go(1); NavResult.ACTIVATED } else NavResult.BLOCKED

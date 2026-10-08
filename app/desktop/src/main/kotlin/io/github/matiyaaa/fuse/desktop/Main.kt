@@ -9,10 +9,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.withFrameNanos
-import io.github.matiyaaa.fuse.ui.designsystem.effects.UiRenderTrace
-import io.github.matiyaaa.fuse.ui.designsystem.effects.traceUiRoot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
@@ -58,7 +54,6 @@ fun main(args: Array<String>) {
         val dirs = FuseDirs.fromEnvironment().also { it.ensure() }
         kotlin.system.exitProcess(SyncHostMain.run(dirs))
     }
-    UiRenderTrace.enabled = "--trace-ui" in args
     setX11WmClass()
     // Fuse Player plays on FFmpeg here.
     io.github.matiyaaa.fuse.ui.player.FusePlayer.engineFactory = { io.github.matiyaaa.fuse.ui.player.ffmpeg.FfmpegEngine() }
@@ -115,13 +110,7 @@ private fun ApplicationScope.FuseWindow(session: DesktopSession) {
             DisposableEffect(window) {
                 session.window = window
                 // How the window is drawn: on the processor, Fuse keeps motion light.
-                runCatching {
-                    val renderer = window.renderApi.name
-                    session.platform.noteRenderer(renderer)
-                    UiRenderTrace.renderer = renderer
-                    val rate = window.graphicsConfiguration.device.displayMode.refreshRate
-                    if (rate > 0) UiRenderTrace.expectedFrameNanos = (1e9 / rate).toLong()
-                }
+                runCatching { session.platform.noteRenderer(window.renderApi.name) }
                 val listener = object : WindowFocusListener {
                     override fun windowGainedFocus(e: WindowEvent?) = session.onFocusChanged(true)
                     override fun windowLostFocus(e: WindowEvent?) = session.onFocusChanged(false)
@@ -130,19 +119,8 @@ private fun ApplicationScope.FuseWindow(session: DesktopSession) {
                 if (window.isFocused) session.onFocusChanged(true)
                 onDispose { window.removeWindowFocusListener(listener) }
             }
-            SideEffect { UiRenderTrace.composition() }
-            if (UiRenderTrace.enabled) {
-                LaunchedEffect(window) {
-                    try {
-                        while (true) withFrameNanos { UiRenderTrace.frame(it) }
-                    } finally {
-                        Log.info(UiRenderTrace.report())
-                    }
-                }
-            }
             Box(
                 Modifier
-                    .traceUiRoot()
                     .fillMaxSize()
                     .background(io.github.matiyaaa.fuse.desktop.ui.FuseBrand.Ink)
                     .pointerInput(Unit) {

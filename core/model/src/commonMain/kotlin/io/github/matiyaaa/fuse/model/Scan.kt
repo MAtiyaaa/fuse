@@ -47,10 +47,6 @@ data class PlatformFolderScan(
      * or DLC): an earlier entry for one of them is forgotten, unless the person did something with it.
      */
     val absorbed: Set<String> = emptySet(),
-    /** Proven ownership from scanner consolidation. Never infer migration ownership from a similar title. */
-    val absorbedBy: Map<String, String> = emptyMap(),
-    /** Commit only when this report has been reconciled; interrupted upgrades must retry. */
-    val rulesVersion: Long? = null,
 )
 
 /** A folder the scanner could map to a platform, or could not. */
@@ -80,12 +76,4 @@ interface FolderStateStore {
     suspend fun lastModified(path: String): Long?
     suspend fun remember(path: String, modifiedAt: Long)
     suspend fun forget(pathPrefix: String)
-
-    /** Semantic rule revision, kept separately from filesystem dates so upgrades reinterpret once. */
-    suspend fun rulesVersion(path: String): Long? = lastModified(scannerRulesKey(path))
-    suspend fun rememberRulesVersion(path: String, version: Long) = remember(scannerRulesKey(path), version)
-
 }
-
-/** Virtual folder-state key, never interpreted as a filesystem path. NUL cannot occur in a real path. */
-fun scannerRulesKey(path: String): String = "\u0000fuse-scanner-rules:$path"

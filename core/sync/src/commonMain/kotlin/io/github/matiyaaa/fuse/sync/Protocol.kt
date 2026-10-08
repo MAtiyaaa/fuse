@@ -225,11 +225,7 @@ data class JoinAsk(val id: String, val deviceName: String, val platform: String,
 @Serializable
 data class JoinAnswer(val allow: Boolean)
 
-/**
- * Proven identities for each game, most trusted first. A cleaned title is a fallback only when
- * no strong identity exists; it must not bridge serials, hashes or explicit provider identities.
- * The wire shape stays compatible with older clients, whose title bridges the host discards.
- */
+/** Every id a device may know each game by (serial, title), most trusted first: one list per game. */
 @Serializable
 data class GameClaims(val games: List<List<String>>)
 
@@ -334,7 +330,6 @@ data class VersionReport(
     val files: List<FileReport>,
     /** Kept for good by the person. */
     val kept: Boolean = false,
-    val provenance: String = "",
 )
 
 /** A file of a save: its name in the save, its size, and where the host keeps it (relative to [ProfileReport.storePath]). */

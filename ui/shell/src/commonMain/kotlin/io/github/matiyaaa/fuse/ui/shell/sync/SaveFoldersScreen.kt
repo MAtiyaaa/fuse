@@ -132,7 +132,6 @@ internal fun SaveFoldersScreen(app: AppState) {
 }
 
 private fun saveFolderRows(app: AppState, list: List<EmulatorSaves>?, installed: List<InstalledEmulator>, page: SaveFoldersState): List<MenuAction> = buildList {
-    add(MenuAction("import", "Import Saves", FuseIcons.FileUp, detail = "A save file, folder or ZIP from another device. Preview matches before replacing anything", onSelect = { openSaveImporter(app) }))
     if (list == null) {
         add(infoRow("looking", "Looking at your emulators", icon = FuseIcons.Search))
         return@buildList

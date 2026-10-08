@@ -6,8 +6,6 @@ import coil3.key.Keyer
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import coil3.request.Options
 import coil3.toUri
-import coil3.size.Dimension
-import io.github.matiyaaa.fuse.model.ArtworkSizing
 import io.github.matiyaaa.fuse.jellyfin.JellyfinArt
 import io.github.matiyaaa.fuse.jellyfin.JellyfinService
 import io.ktor.client.HttpClient
@@ -22,23 +20,16 @@ object JellyfinImages {
     @Volatile
     var service: JellyfinService? = null
 
-    /** The legacy width is only a fallback for requests without a measured layout. */
-    internal fun sized(data: JellyfinArt, options: Options): JellyfinArt {
-        val width = (options.size.width as? Dimension.Pixels)?.px
-        return data.sized(ArtworkSizing.bucket(width ?: data.width.takeIf { it > 0 } ?: 1024))
-    }
-
     class Key : Keyer<JellyfinArt> {
-        override fun key(data: JellyfinArt, options: Options): String = sized(data, options).key
+        override fun key(data: JellyfinArt, options: Options): String = data.key
     }
 
     class Fetch(http: HttpClient) : Fetcher.Factory<JellyfinArt> {
         private val network = KtorNetworkFetcherFactory(httpClient = { http })
 
         override fun create(data: JellyfinArt, options: Options, imageLoader: ImageLoader): Fetcher? {
-            val sized = sized(data, options)
-            val url = service?.imageUrl(sized) ?: return null
-            return network.create(url.toUri(), options.copy(diskCacheKey = sized.key), imageLoader)
+            val url = service?.imageUrl(data) ?: return null
+            return network.create(url.toUri(), options.copy(diskCacheKey = data.key), imageLoader)
         }
     }
 }

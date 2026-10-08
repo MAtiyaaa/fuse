@@ -45,9 +45,9 @@ import kotlinx.coroutines.launch
  * A home address is kept as the home address, anything else as the address from outside. The
  * password goes to the server and nowhere else.
  */
-internal fun connectJellyfin(app: AppState, onDone: () -> Unit) {
+internal fun connectJellyfin(app: AppState, live: Boolean, onDone: () -> Unit) {
     val service = app.store.jellyfin
-    if (service == null) {
+    if (service == null || !live) {
         app.store.updatePrefs { it.copy(jellyfin = it.jellyfin.copy(enabled = true)) }
         onDone()
         return

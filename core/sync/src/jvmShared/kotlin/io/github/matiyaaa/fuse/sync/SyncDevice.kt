@@ -121,19 +121,12 @@ class SyncDevice(
 ) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val stateFile = File(dir, "device-state.json")
-    private val importJournal = File(dir, "save-import-transaction.json")
     val store = ContentStore(File(dir, "objects"))
     private val mutex = Mutex()
     private val hlc = HlcClock(deviceId, clock)
     private var state: DeviceState = migrated(
         if (stateFile.isFile) runCatching { json.decodeFromString(DeviceState.serializer(), stateFile.readText()) }.getOrDefault(DeviceState()) else DeviceState(),
     )
-
-    init {
-        SaveImportTransaction.recover(importJournal) { revision -> state.outbox.any { it.revision?.id == revision } }
-        // Device clocks cannot restart at wall time behind a revision they already accepted.
-        (state.metas.values + state.pendingMeta.values).forEach { hlc.seen(it.latestRevision()) }
-    }
 
     /**
      * Before saves were kept per person, a device kept one state for each save: it is the person in
@@ -250,51 +243,6 @@ class SyncDevice(
     }
 
     /**
-     * An explicit import is a normal child revision, with Imported provenance. Existing bytes are
-     * kept under their actual holder before replacement. Both safety history and the new revision
-     * survive restart in the existing outbox, and conflicts still use parent revisions.
-     */
-    suspend fun importSave(profile: String, slot: LocalSlot, format: String, files: Map<String, File>, title: String = ""): SaveRevision = mutex.withLock {
-        SaveImportTransaction.recover(importJournal) { id -> state.outbox.any { it.revision?.id == id } }
-        require(profile.isNotBlank() && slot.available) { "Choose a profile and an available save destination" }
-        require(SaveSlotFormats.compatible(format, slot.format)) { "This save format is not compatible with the selected emulator" }
-        require(files.isNotEmpty() && files.keys.all(SavePath::isSafe)) { "This save has no safe files" }
-        val source = SaveManifest(format, files.map { (name, f) ->
-            require(f.isFile) { "The imported save is no longer available" }
-            SaveFile(name, f.inputStream().use { store.put(it) }, f.length())
-        }.sortedBy { it.path })
-        val incoming = inSlotFormat(slot, source)
-        val (current, hashed) = fingerprintOf(slot)
-        val holder = state.holders[slot.key] ?: profile
-        val waiting = state.outbox.lastOrNull { it.revision?.let { r -> r.profile == profile && r.game == slot.game.id && r.kind == slot.kind && r.canBeNewest } == true }?.revision
-        val revision = SaveRevision(SyncCrypto.token(12), profile, slot.game.id, slot.kind,
-            waiting?.id ?: state.slots[keyOf(profile, slot)]?.base, deviceId, deviceName, hlc.now(), incoming,
-            playSeconds = meta(profile).game(slot.game).totalSeconds, title = title, provenance = "Imported")
-        if (current.files.isNotEmpty() && current.fingerprint != incoming.fingerprint) {
-            for ((lf, h) in hashed) if (!store.has(h)) lf.file.inputStream().use { store.put(it, expected = h) }
-            val kept = SaveRevision(SyncCrypto.token(12), holder, slot.game.id, slot.kind,
-                state.slots[keyOf(holder, slot)]?.base, deviceId, deviceName, hlc.now(), current,
-                reason = RevisionReason.BEFORE_RESTORE, title = title, provenance = "Before import")
-            state = state.copy(outbox = state.outbox + Outgoing(kept.id, Priority.SAVE.rank, holder, kept),
-                parked = if (holder != profile) state.parked + (keyOf(holder, slot) to current) else state.parked)
-            persist()
-        }
-        val beforeImport = state
-        SaveImportTransaction.write(slot, incoming, store, journal = importJournal, revision = revision.id, expectedOriginal = current, commit = {
-            state = state.copy(outbox = state.outbox + Outgoing(revision.id, Priority.SAVE.rank, profile, revision),
-                holders = state.holders + (slot.key to profile))
-            try {
-                persist()
-            } catch (e: Exception) {
-                state = beforeImport
-                try { persist() } catch (restore: Exception) { e.addSuppressed(restore) }
-                throw e
-            }
-        })
-        revision
-    }
-
-    /**
      * Makes [slot]'s folder hold [profile]'s save before they play, on a device more than one person
      * uses. Whoever played last keeps theirs: anything they changed is captured for them first, and
      * their save is parked here by content. Then this person's own comes back from where it was
@@ -398,7 +346,6 @@ class SyncDevice(
      * finds it and it goes to [to] then. Returns how many saves were written out.
      */
     suspend fun forget(profile: String, to: File?): Int = mutex.withLock {
-        SaveImportTransaction.recover(importJournal) { id -> state.outbox.any { it.revision?.id == id } }
         var count = 0
         if (to != null) {
             for (o in state.outbox) {
@@ -688,13 +635,11 @@ class SyncDevice(
      * is kept there as a conflict copy and settled before the next launch.
      */
     suspend fun flush(client: SyncClient, saves: Boolean = true): Int {
-        mutex.withLock { SaveImportTransaction.recover(importJournal) { id -> state.outbox.any { it.revision?.id == id } } }
         var sent = 0
         val profiles = mutex.withLock { state.pendingMeta.keys.toList() }
         for (p in profiles) {
             val pending = mutex.withLock { state.pendingMeta[p] } ?: continue
             val merged = client.pushMeta(p, pending).meta
-            hlc.seen(merged.latestRevision())
             mutex.withLock {
                 // Whatever changed here while that was on its way stays pending.
                 val now = state.pendingMeta[p]
@@ -756,7 +701,6 @@ class SyncDevice(
     /** Fetches the profile's records from the host and merges them in (after sending what changed here). */
     suspend fun pullMeta(client: SyncClient, profile: String): ProfileMeta {
         val m = client.meta(profile).meta
-        hlc.seen(m.latestRevision())
         mutex.withLock {
             state = state.copy(metas = state.metas + (profile to (state.metas[profile] ?: ProfileMeta()).merge(m)))
             persist()

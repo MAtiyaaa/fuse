@@ -782,9 +782,9 @@ fun mediaRows(app: AppState): List<MenuAction> {
                 fun go(remote: Boolean) {
                     app.choice = null
                     app.store.media.fillEverything(null, remote)
-                    app.toasts.show(if (remote) "Filling art and details for your library and the Fuse Library. Progress shows here and in the top bar" else "Filling art and details. Progress shows here and in the top bar")
+                    app.toasts.show(if (remote) "Filling art and details for your library and the Remote Library. Progress shows here and in the top bar" else "Filling art and details. Progress shows here and in the top bar")
                 }
-                // The Fuse Library (RomM's games and other devices', shown without being here) is remembered the same way.
+                // The Remote Library (RomM's games and other devices', shown without being here) is remembered the same way.
                 val remote = app.store.romm.state.value.usable || app.store.reach.state.value.games > 0
                 if (!remote) go(false)
                 else app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
@@ -793,7 +793,7 @@ fun mediaRows(app: AppState): List<MenuAction> {
                     icon = FuseIcons.Sparkles,
                     options = listOf(
                         MenuAction("fill.lib", "Your Library", FuseIcons.LibraryBig, detail = "The games on this device", onSelect = { go(false) }),
-                        MenuAction("fill.remote", "Library and Fuse Library", FuseIcons.MonitorSmartphone, detail = "Also RomM's games and your other devices' games that aren't here", onSelect = { go(true) }),
+                        MenuAction("fill.remote", "Library and Remote Library", FuseIcons.MonitorSmartphone, detail = "Also RomM's games and your other devices' games that aren't here", onSelect = { go(true) }),
                     ),
                 )
             }))
@@ -1256,19 +1256,9 @@ fun displayRows(app: AppState): List<MenuAction> {
     val p by app.store.prefs.collectAsState()
     val log by app.platform.secondScreenLog.collectAsState()
     val d = p.display
-    val connectedDisplays by app.platform.displays.collectAsState()
-    val rates = io.github.matiyaaa.fuse.model.RefreshRates.options(connectedDisplays.flatMap { it.supportedRefreshRates })
     val automaticSize = io.github.matiyaaa.fuse.ui.shell.app.LocalAutomaticInterfaceSize.current
     return buildList {
         labelled("This screen") {
-            if (rates.isNotEmpty()) {
-                val choices = (rates + listOfNotNull(d.maxRefreshRate.takeIf { it > 0 })).distinct().sorted()
-                add(app.choiceRow(
-                    "refresh.maximum", "Max refresh rate", FuseIcons.Gauge, d.maxRefreshRate,
-                    listOf(0 to "Automatic (display maximum)") + choices.map { it to "$it Hz" },
-                    detail = "Each screen uses its highest native rate within this cap. Low Power changes visual effects, not your refresh choice",
-                ) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(maxRefreshRate = v)) } })
-            }
             add(app.choiceRow(
                 "uisize", "Interface size", FuseIcons.Scaling, d.interfaceSize,
                 io.github.matiyaaa.fuse.ui.shell.app.InterfaceSizes.map { v ->
@@ -1415,16 +1405,12 @@ fun performanceRows(app: AppState): List<MenuAction> {
                     for (disp in displays) {
                         add(infoRow(
                             "disp.${disp.id}", disp.name + if (disp.isPrimary) " (main)" else "",
-                            "${disp.widthPx}x${disp.heightPx}  ${disp.refreshRate} Hz active",
-                            detail = listOfNotNull(
-                                disp.requestedRefreshRate?.let { "$it Hz requested" },
-                                disp.measuredRefreshRate?.let { "${(it * 10).toInt() / 10f} Hz observed while drawing" },
-                                when (disp.canLaunchActivities) {
-                                    Support.YES -> "Games can be opened here"
-                                    Support.NO -> "This display can't run other apps"
-                                    Support.UNKNOWN -> if (disp.isPrimary) null else "Fuse checks when you first launch a game here"
-                                },
-                            ).joinToString(" · ").ifEmpty { null },
+                            "${disp.widthPx}x${disp.heightPx}  ${disp.refreshRate.toInt()} Hz",
+                            detail = when (disp.canLaunchActivities) {
+                                Support.YES -> "Games can be opened here"
+                                Support.NO -> "This display can't run other apps"
+                                Support.UNKNOWN -> if (disp.isPrimary) null else "Fuse checks when you first launch a game here"
+                            },
                             icon = FuseIcons.MonitorCheck,
                         ))
                     }
@@ -1448,7 +1434,7 @@ fun displayAndPerformanceRows(app: AppState): List<MenuAction> {
 @Composable
 fun networkRows(app: AppState): List<MenuAction> = buildList {
     if (app.platform.features.wifiSettings) add(MenuAction("wifi", "Wi-Fi settings", FuseIcons.Wifi, trailing = Trailing.Chevron, onSelect = { app.platform.quick.openWifi() }))
-    add(infoRow("where", "What Fuse connects to", detail = "Only services you set up: RetroAchievements, SteamGridDB, IGDB, TheGamesDB, ScreenScraper, libretro thumbnails, GameTDB covers, GitHub to check for updates, and rpcs3.net when you ask how a PS3 game runs. Your library works fully offline", icon = FuseIcons.Globe))
+    add(infoRow("where", "What Fuse connects to", detail = "Only services you set up: RetroAchievements, SteamGridDB, IGDB, TheGamesDB, ScreenScraper, libretro thumbnails, GitHub to check for updates, and rpcs3.net when you ask how a PS3 game runs. Your library works fully offline", icon = FuseIcons.Globe))
 }
 
 /** The services Fuse signs in to or pairs with: RetroAchievements and phones. Cartridge is in Addons. */
@@ -1639,11 +1625,14 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
     if (app.dev.enabled) {
         labelled("Developer") {
             add(MenuAction(
-                "dev.setup", "Start Onboarding", FuseIcons.RotateCcw,
-                detail = "A separate rehearsal with pretend folders, accounts and profiles",
+                "dev.setup", "Replay setup", FuseIcons.RotateCcw,
+                detail = "A rehearsal: every step shows, but nothing is added, removed or kept",
                 trailing = Trailing.Chevron,
                 onSelect = {
-                    app.dev.rehearsalOpen = true
+                    app.dev.rehearsalPrefs = app.store.prefs.value
+                    app.go(Route.Onboarding)
+                    // From the beginning, opening and all.
+                    app.setupOpening = true
                 },
             ))
             add(MenuAction(
@@ -1706,16 +1695,6 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
                 io.github.matiyaaa.fuse.ui.fuseline.MotionInspector.enabled = false
                 io.github.matiyaaa.fuse.ui.fuseline.MotionInspector.clear()
             }))
-            app.platform.steam?.takeIf { app.platform.host == io.github.matiyaaa.fuse.model.Host.LINUX }?.let { steam ->
-                add(MenuAction(
-                    "dev.steam.rebuild", "Rebuild Steam Integration", FuseIcons.RotateCcw,
-                    detail = "Repair Fuse entries and bundled artwork. Custom artwork and unrelated shortcuts stay",
-                    onSelect = { app.scope.launch {
-                        steam.rebuild().onSuccess { app.toasts.show(it) }
-                            .onFailure { app.toasts.show(it.message ?: "Steam could not be repaired", io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.ERROR) }
-                    } },
-                ))
-            }
         }
     }
     // The last crash, if there was one, at the very end: worth finding, never in the way.

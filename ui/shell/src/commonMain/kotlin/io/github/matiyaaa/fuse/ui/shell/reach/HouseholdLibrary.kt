@@ -81,8 +81,8 @@ fun householdWords(s: HouseholdState): String {
 }
 
 /**
- * The Sync tab's way into the Fuse Library: the newest of the other devices' games as small
- * covers, and how many there are where. Confirming it opens the Fuse Library.
+ * The Sync tab's way into the Remote Library: the newest of the other devices' games as small
+ * covers, and how many there are where. Confirming it opens the Remote Library.
  */
 @Composable
 fun HouseholdCard(app: AppState, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
@@ -101,7 +101,7 @@ fun HouseholdCard(app: AppState, selected: Boolean, modifier: Modifier = Modifie
         }
         Spacer(Modifier.width(Space.m))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-            FText("Fuse Library", Fuse.type.bodyStrong, maxLines = 1)
+            FText("Remote Library", Fuse.type.bodyStrong, maxLines = 1)
             FText(householdWords(state), Fuse.type.caption, color = c.textMuted, maxLines = 2)
         }
         // The newest few, overlapping like a fanned hand.
@@ -122,7 +122,7 @@ fun HouseholdCard(app: AppState, selected: Boolean, modifier: Modifier = Modifie
 }
 
 /**
- * The Fuse Library: the household's other devices' games this device doesn't have, as RomM's
+ * The Remote Library: the household's other devices' games this device doesn't have, as RomM's
  * page shows a server's: a slim line with where they are and the few things to do, then what was
  * added lately and the systems. Opens at once and stays browsable while a device or the host is
  * away (Fuse keeps what it learned). With RomM set up, the same games also show at the foot of the
@@ -220,7 +220,7 @@ fun HouseholdLibraryScreen(app: AppState) {
     }
 }
 
-/** The Fuse Library's line: its name, its devices (each around or away), and the few things to do. */
+/** The Remote Library's line: its name, its devices (each around or away), and the few things to do. */
 @Composable
 private fun LibraryHead(state: HouseholdState, actions: List<String>, selected: Int, compact: Boolean, modifier: Modifier, onAction: (Int) -> Unit) {
     val c = Fuse.colors
@@ -231,7 +231,7 @@ private fun LibraryHead(state: HouseholdState, actions: List<String>, selected: 
             }
             Spacer(Modifier.width(Space.m))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-                FText("Fuse Library", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1)
+                FText("Remote Library", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1)
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalAlignment = Alignment.CenterVertically) {
                     state.devices.take(4).forEach { d -> DeviceChip(d.name, deviceIcon(d.platform), d.online) }
                 }

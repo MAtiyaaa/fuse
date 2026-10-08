@@ -21,7 +21,6 @@ kotlin {
             implementation(libs.coil.svg)
             implementation(libs.jb.lifecycle.runtime.compose)
             implementation(libs.kotlinx.datetime)
-            implementation(libs.ktor.client.mock)
         }
         getByName("desktopTest") {
             dependencies {
@@ -116,8 +115,6 @@ tasks.register<Test>("desktopPerf") {
     systemProperty("fuse.perf.lowPower", providers.gradleProperty("fuse.perf.lowPower").getOrElse(""))
     systemProperty("fuse.perf.device", providers.gradleProperty("fuse.perf.device").getOrElse(""))
     systemProperty("fuse.perf.size", providers.gradleProperty("fuse.perf.size").getOrElse(""))
-    systemProperty("fuse.perf.matrix", providers.gradleProperty("fuse.perf.matrix").getOrElse(""))
-    systemProperty("fuse.perf.refresh", providers.gradleProperty("fuse.perf.refresh").getOrElse("60"))
     systemProperty("kotlinx.coroutines.test.default_timeout", "40m")
     maxHeapSize = "1536m"
     testLogging { showStandardStreams = true }

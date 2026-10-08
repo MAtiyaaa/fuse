@@ -213,5 +213,4 @@ data class ExternalLinks(
     /** RomM rom id, when Cartridge reported this file as one of its downloads. */
     val rommRomId: Long? = null,
     val steamAppId: Long? = null,
-    val providerClaims: List<ProviderClaim> = emptyList(),
 )

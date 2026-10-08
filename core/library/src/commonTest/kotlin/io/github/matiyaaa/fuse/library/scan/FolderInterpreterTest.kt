@@ -2,7 +2,6 @@ package io.github.matiyaaa.fuse.library.scan
 
 import io.github.matiyaaa.fuse.library.InMemoryFileSystem
 import io.github.matiyaaa.fuse.library.PlatformCatalog
-import io.github.matiyaaa.fuse.library.content.ContentFixtures
 import io.github.matiyaaa.fuse.model.ContentKind
 import io.github.matiyaaa.fuse.model.FolderInterpretation
 import io.github.matiyaaa.fuse.model.FolderPolicy
@@ -30,56 +29,6 @@ class FolderInterpreterTest {
         .scanPlatformFolder(PlatformCatalog.byId(platform)!!, folder, source, policies)
 
     private fun List<ScannedGame>.byTitle(title: String) = single { it.title == title }
-
-    @Test
-    fun directExtractedRootsKeepTheirOwnershipBoundary() = runTest {
-        val roots = listOf(
-            Triple("ps3", "PS3_GAME/USRDIR/EBOOT.BIN", ""),
-            Triple("psp", "PSP_GAME/SYSDIR/EBOOT.BIN", ""),
-            Triple("wiiu", "code/main.rpx", "code/main.rpx"),
-            Triple("xbox360", "default.xex", "default.xex"),
-            Triple("xbox", "default.xbe", ""),
-        )
-        for ((platform, marker, launch) in roots) {
-            val root = "/direct/$platform/Title"
-            fs.file("$root/$marker", size = 4096)
-            // Resources with otherwise launchable extensions still belong to the recognized title.
-            fs.file("$root/content/runtime.${if (platform == "wiiu") "rpx" else "iso"}", size = 128)
-            val result = scan(platform, root)
-            assertEquals(listOf(root), result.games.map { it.path }, platform)
-            assertEquals(if (launch.isEmpty()) root else "$root/$launch", result.games.single().launchPath, platform)
-            assertEquals(FolderInterpretation.FOLDER_IS_GAME, result.games.single().interpretation, platform)
-            assertTrue(result.skipped.contains("$root/content"), platform)
-        }
-    }
-
-    @Test
-    fun directVitaRootUsesTitleMetadataWithoutScanningResources() = runTest {
-        val root = "/direct/VitaTitle"
-        fs.file("$root/sce_sys/param.sfo", content = "\u0000PSF\u0001TITLE_ID\u0000PCSA00001")
-        fs.file("$root/resources/not-a-title.psvita", size = 32)
-        val result = scan("psvita", root)
-        assertEquals(listOf(root), result.games.map { it.path })
-        assertEquals("PCSA00001", result.games.single().tags.serial)
-    }
-
-    @Test
-    fun explicitFilePolicyStillWalksDirectExtractedRoot() = runTest {
-        val root = "/direct/X360Title"
-        fs.file("$root/default.xex", size = 4096)
-        val result = scan("xbox360", root, object : FolderPolicyResolver {
-            override fun policyFor(platformId: PlatformId, folderPath: String) = FolderPolicy.FILE
-        })
-        assertEquals(listOf("$root/default.xex"), result.games.map { it.path })
-        assertEquals(FolderInterpretation.SINGLE_FILE, result.games.single().interpretation)
-    }
-
-    @Test
-    fun pcRootExecutableDoesNotAbsorbAdjacentGames() = runTest {
-        fs.file("/direct/PC/First.exe", size = 4096)
-        fs.file("/direct/PC/Second/Second.exe", size = 4096)
-        assertEquals(2, scan("win", "/direct/PC").games.size)
-    }
 
     // Acceptance example 1: an extracted PS3 disc is one game.
     @Test
@@ -134,47 +83,6 @@ class FolderInterpreterTest {
         assertEquals("/ROMs/ps4/CUSA00900/sce_sys/pic1.png", game.localMedia[MediaKind.HERO])
         // An update alone stays a game: nothing else would show it.
         assertTrue(games[1].content.isEmpty())
-    }
-
-    @Test
-    fun extractedPs4DlcUsesMetadataAndStaysInEmulatorStorage() = runTest {
-        val root = "/ROMs/ps4"
-        val base = "$root/Harbor"
-        val dlc = "$root/addcont/CUSA00900/EXTRAPACK00000001"
-        fs.file("$base/eboot.bin")
-        fs.bytes("$base/sce_sys/param.sfo", ContentFixtures.sfo("TITLE_ID" to "CUSA00900", "CATEGORY" to "gd"))
-        fs.bytes("$dlc/sce_sys/param.sfo", ContentFixtures.sfo("TITLE_ID" to "CUSA00900", "CATEGORY" to "ac"))
-        fs.file("$dlc/materials/effect.bin")
-        val result = scan("ps4", root)
-        val game = result.games.single()
-        assertEquals(base, game.path)
-        assertEquals(ContentKind.DLC, game.content.single().kind)
-        assertEquals(dlc, game.content.single().path, "scanner never moves installed emulator content")
-        assertEquals(base, result.absorbedBy[dlc])
-    }
-
-    @Test
-    fun modernTitleOwnsEveryInternalResourceTreeIncludingIncompleteDumps() = runTest {
-        for (platform in listOf("ps4", "ps5")) {
-            val root = "/ROMs/$platform"
-            val game = "$root/Harbor"
-            fs.file("$game/eboot.bin", size = 10_000)
-            if (platform == "ps4") fs.file("$game/sce_sys/param.sfo", content = "CUSA00900")
-            else fs.file("$game/sce_sys/param.json", content = "{\"titleId\":\"PPSA01234\"}")
-            fs.file("$game/materials/runtime.bin")
-            fs.file("$game/data/nested/eboot.bin")
-            fs.file("$root/Incomplete/eboot.bin")
-            fs.file("$root/Incomplete/anything/arbitrary.bin")
-            val result = scan(platform, root)
-            assertEquals(setOf(game, "$root/Incomplete"), result.games.map { it.path }.toSet())
-            assertTrue("$game/materials" in result.skipped)
-            assertTrue("$game/data" in result.skipped)
-            assertTrue("$root/Incomplete/anything" in result.skipped)
-            // Direct title-folder sources must establish exactly the same ownership boundary.
-            val direct = scan(platform, game)
-            assertEquals(listOf(game), direct.games.map { it.path })
-            assertTrue("$game/materials" in direct.skipped)
-        }
     }
 
     @Test

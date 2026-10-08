@@ -8,7 +8,6 @@ import io.github.matiyaaa.fuse.library.content.Cia
 import io.github.matiyaaa.fuse.library.content.ContentSourceReader
 import io.github.matiyaaa.fuse.library.content.PackageKind
 import io.github.matiyaaa.fuse.library.content.PsPackages
-import io.github.matiyaaa.fuse.library.disc.ParamSfo
 import io.github.matiyaaa.fuse.library.parse.FilenameParser
 import io.github.matiyaaa.fuse.library.parse.NameFlags
 import io.github.matiyaaa.fuse.library.parse.Serials
@@ -48,7 +47,6 @@ data class FolderScanResult(
     val skipped: Set<String> = emptySet(),
     /** Files that were games of their own and now belong to another game (a copy of it, its update or DLC). */
     val absorbed: Set<String> = emptySet(),
-    val absorbedBy: Map<String, String> = emptyMap(),
 )
 
 /** A folder the person keeps one system's updates or DLC in, outside its games folder. */
@@ -116,15 +114,7 @@ class FolderInterpreter(
         val root = FsPath.normalize(folderPath)
         walk.visited += fs.canonical(root) ?: root
         val children = listing ?: walk.list(root) ?: return walk.result(emptyList())
-        // A platform-folder source may point directly at an extracted title, not its parent.
-        // Establish the title boundary before treating any internal resources as candidate games.
-        val rootPolicy = policies.policyFor(platform.id, root)
-        val rootTitle = if (platform.id.value in STRUCTURED_ROOTS &&
-            rootPolicy in setOf(FolderPolicy.AUTO, FolderPolicy.FOLDER_AS_GAME)
-        ) {
-            fs.stat(root)?.let { structure(it, children, walk) }
-        } else null
-        val games = rootTitle?.let(::listOf) ?: scanLevel(root, children, depth = 0, walk = walk)
+        val games = scanLevel(root, children, depth = 0, walk = walk)
         if (!walk.switch) return walk.result(games)
         // Folders the person keeps updates and DLC in, anywhere: their files join their games.
         val extra = ArrayList<ScannedGame>()
@@ -133,7 +123,7 @@ class FolderInterpreter(
             if (path.isEmpty() || path == root || path.startsWith("$root/")) continue
             extra += contentFiles(path, folder.kind, 0, walk)
         }
-        return walk.result(SwitchContent.consolidate(games + extra, walk::sizeOf, walk.forced, walk.absorbed, walk.absorbedBy))
+        return walk.result(SwitchContent.consolidate(games + extra, walk::sizeOf, walk.forced, walk.absorbed))
     }
 
     /** Every Switch file in [dir] (and its folders, a few levels down), each of [kind]. */
@@ -195,8 +185,6 @@ class FolderInterpreter(
 
         /** Files merged into another game (see [FolderScanResult.absorbed]). */
         val absorbed = HashSet<String>()
-        val absorbedBy = HashMap<String, String>()
-        val folderContentKinds = HashMap<String, ContentKind>()
 
         fun sizeOf(path: String): Long? = sizes[FsPath.normalize(path)]
 
@@ -242,7 +230,7 @@ class FolderInterpreter(
 
         fun result(games: List<ScannedGame>): FolderScanResult {
             val gamePaths = games.map { it.path }.toSet()
-            return FolderScanResult(games, complete, errors.toList(), folders, listed - gamePaths, skipped.toSet(), absorbed - gamePaths, absorbedBy.toMap())
+            return FolderScanResult(games, complete, errors.toList(), folders, listed - gamePaths, skipped.toSet(), absorbed - gamePaths)
         }
     }
 
@@ -270,7 +258,7 @@ class FolderInterpreter(
             games += interpret(sub, if (native && isEmulatorStorage(sub.name)) depth else depth + 1, walk)
         }
         val folded = foldUpdates(games, walk)
-        return if (walk.switch) SwitchContent.consolidate(folded, walk::sizeOf, walk.forced, walk.absorbed, walk.absorbedBy) else folded
+        return if (walk.switch) SwitchContent.consolidate(folded, walk::sizeOf, walk.forced, walk.absorbed) else folded
     }
 
     /** Interprets [folder], dropping games whose files a playlist higher up already owns. */
@@ -314,7 +302,7 @@ class FolderInterpreter(
                 val nested = layout.otherDirs.flatMap { interpret(it, depth + 1, walk) }
                 if (nested.isNotEmpty()) {
                     val here = attach(grouping.groups, walk).map { (g, extra) -> fileGame(g, extra, walk) } + nested
-                    return if (walk.switch) SwitchContent.consolidate(here, walk::sizeOf, walk.forced, walk.absorbed, walk.absorbedBy) else here
+                    return if (walk.switch) SwitchContent.consolidate(here, walk::sizeOf, walk.forced, walk.absorbed) else here
                 }
             }
             return listOf(multiFileGame(folder, children, grouping, layout, walk))
@@ -496,12 +484,8 @@ class FolderInterpreter(
         fun dir(name: String) = byName[name]?.takeIf { it.isDirectory }
         fun file(name: String) = byName[name]?.takeIf { !it.isDirectory }
 
-        suspend fun game(launch: String, serial: String? = null): ScannedGame {
-            // All descendants belong to this recognized title, regardless of their names/extensions.
-            // This also retires legacy resource entries even when no deeper directory was walked.
-            walk.skipped += children.filter { it.isDirectory }.map { it.path }
-            return folderGame(folder, children, launch, FolderInterpretation.FOLDER_IS_GAME, walk, serial = serial)
-        }
+        suspend fun game(launch: String, serial: String? = null) =
+            folderGame(folder, children, launch, FolderInterpretation.FOLDER_IS_GAME, walk, serial = serial)
 
         // PlayStation 3: disc layout, or PSN/HDD layout (USRDIR + PARAM.SFO / EBOOT.BIN).
         if (file("ps3_disc.sfb") != null || dir("ps3_game") != null) {
@@ -517,29 +501,13 @@ class FolderInterpreter(
             val inside = walk.list(sceSys.path).orEmpty()
             val media = sceSysMedia(inside, walk)
             val sfo = inside.firstOrNull { it.name.equals("param.sfo", ignoreCase = true) }
-            if (sfo != null) {
-                val metadata = fs.readBytes(sfo.path, 0, SFO_READ_LIMIT)?.let(ParamSfo::strings).orEmpty()
-                if (walk.platform.id.value == "ps4") {
-                    // shadPS4 src/core/libraries/app_content/app_content.cpp validates CATEGORY ac
-                    // under the configured addcont/title-id directory. Keep that folder in place.
-                    when (metadata["CATEGORY"]?.lowercase()) {
-                        "gp" -> walk.folderContentKinds[folder.path] = ContentKind.UPDATE
-                        "ac" -> walk.folderContentKinds[folder.path] = ContentKind.DLC
-                    }
-                }
-                return game(folder.path, metadata["TITLE_ID"] ?: readSerial(sfo.path)).copy(localMedia = media)
-            }
+            if (sfo != null) return game(folder.path, readSerial(sfo.path)).copy(localMedia = media)
             val json = inside.firstOrNull { it.name.equals("param.json", ignoreCase = true) }
             if (json != null) {
                 // PS5 emulators start eboot.bin itself (SharpEmu takes nothing else; KytyPS5 takes either).
                 val eboot = file("eboot.bin")?.path ?: folder.path
                 return game(eboot, FilenameParser.parse(folder.name, hasExtension = false).tags.serial ?: readSerial(json.path)).copy(localMedia = media)
             }
-        }
-        // An incomplete modern dump may already have the launchable entry point while its
-        // metadata is missing. Its resources are still owned by the title, never loose games.
-        if (walk.platform.id.value in setOf("ps4", "ps5")) {
-            file("eboot.bin")?.let { return game(it.path, sfoSerial(folder, children, walk)) }
         }
         // PSP extracted disc.
         if (dir("psp_game") != null) return game(folder.path)
@@ -552,9 +520,6 @@ class FolderInterpreter(
         }
         // Xbox 360 extracted game.
         file("default.xex")?.let { return game(it.path) }
-        // An original Xbox title owns its extracted resources. Keep the directory launch
-        // target: xemu requires a disc image and must not be handed an XBE as though it were one.
-        if (walk.platform.id.value == "xbox" && file("default.xbe") != null) return game(folder.path)
         // PC games: a folder with a program (or exactly one shortcut) is one game. Several
         // shortcuts and no program is a folder of exported shortcuts, not a game.
         if (walk.platform.family == PlatformFamily.PC) {
@@ -602,22 +567,17 @@ class FolderInterpreter(
      */
     private fun foldUpdates(games: List<ScannedGame>, walk: Walk): List<ScannedGame> {
         if (walk.platform.id.value != "ps4" && walk.platform.id.value != "ps5") return games
-        val updates = games.filter { it.path in walk.folderContentKinds || UPDATE_FOLDER.matches(FsPath.name(it.path)) }
+        val updates = games.filter { UPDATE_FOLDER.matches(FsPath.name(it.path)) }
         if (updates.isEmpty()) return games
         val byName = games.associateBy { FsPath.name(it.path).lowercase() }
         val folded = HashMap<String, List<ChildContent>>()
         val absorbed = HashSet<String>()
         for (u in updates) {
-            val base = UPDATE_FOLDER.matchEntire(FsPath.name(u.path))?.groupValues?.get(1)?.lowercase()
-            val candidates = games.filter { it !== u && it !in updates }
-            val named = base?.let(byName::get)?.takeIf { it in candidates &&
-                (u.tags.serial == null || it.tags.serial == null || u.tags.serial == it.tags.serial) }
-            val owner = named ?: candidates.singleOrNull { it.tags.serial != null && it.tags.serial == u.tags.serial }
+            val base = UPDATE_FOLDER.matchEntire(FsPath.name(u.path))!!.groupValues[1].lowercase()
+            val owner = byName[base] ?: games.firstOrNull { it !== u && it.tags.serial != null && it.tags.serial == u.tags.serial && !UPDATE_FOLDER.matches(FsPath.name(it.path)) }
             if (owner == null) continue
-            val kind = walk.folderContentKinds[u.path] ?: ContentKind.UPDATE
-            folded[owner.path] = folded[owner.path].orEmpty() + ChildContent(kind, FsPath.name(u.path), u.path, isDirectory = true, sizeBytes = u.sizeBytes)
+            folded[owner.path] = folded[owner.path].orEmpty() + ChildContent(ContentKind.UPDATE, FsPath.name(u.path), u.path, isDirectory = true, sizeBytes = u.sizeBytes)
             absorbed += u.path
-            walk.absorbedBy[u.path] = owner.path
         }
         return games.filter { it.path !in absorbed }.map { g -> folded[g.path]?.let { g.copy(content = g.content + it) } ?: g }
     }
@@ -821,9 +781,6 @@ class FolderInterpreter(
         /** Platforms whose games are normally folders: an unrecognised folder is still one game. */
         val UPDATE_FOLDER = Regex("(?i)^(.+?)[-_ ](?:update|patch|upd)$")
         val FOLDER_NATIVE = setOf("ps3", "ps4", "ps5", "psvita", "wiiu", "xbox", "xbox360", "win", "dos", "scummvm")
-        // These markers establish one title even when its folder is the configured source root.
-        // PC roots deliberately remain collections: one program does not own adjacent game folders.
-        val STRUCTURED_ROOTS = setOf("ps3", "ps4", "ps5", "psvita", "psp", "wiiu", "xbox", "xbox360")
 
         val PC_LAUNCHABLE = setOf("desktop", "conf", "exe", "bat", "com")
 

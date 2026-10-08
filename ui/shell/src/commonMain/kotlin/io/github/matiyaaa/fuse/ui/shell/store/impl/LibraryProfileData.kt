@@ -7,12 +7,9 @@ import io.github.matiyaaa.fuse.data.repo.UserGameRow
 import io.github.matiyaaa.fuse.data.repo.UserState
 import io.github.matiyaaa.fuse.data.settings.AppSettings
 import io.github.matiyaaa.fuse.data.settings.ProfileSettings
-import io.github.matiyaaa.fuse.data.settings.ProfileSettingValue
-import io.github.matiyaaa.fuse.data.settings.ProfileSettingRevision
 import io.github.matiyaaa.fuse.sync.CollectionRecord
 import io.github.matiyaaa.fuse.sync.GameKey
 import io.github.matiyaaa.fuse.sync.GameRecord
-import io.github.matiyaaa.fuse.sync.foldAbsorbed
 import io.github.matiyaaa.fuse.sync.Hlc
 import io.github.matiyaaa.fuse.sync.HlcClock
 import io.github.matiyaaa.fuse.sync.Lww
@@ -37,50 +34,26 @@ internal class LibraryProfileData(
     private val settings: suspend () -> AppSettings,
     /** Changes the settings and has the interface follow, at once. */
     private val applySettings: suspend ((AppSettings) -> AppSettings) -> Unit,
-    private val applyProfileSettings: suspend (String, Map<String, ProfileSettingValue>) -> Unit,
 ) : ProfileDataPort {
     private val lock = Mutex()
     private var lastState: UserState? = null
+    private var lastSettings: Map<String, JsonElement> = emptyMap()
 
     /** The id the host gave each game, from the ids this library knows it by (so a serial here and a title on the Thor are one game). */
     @kotlin.concurrent.Volatile private var aliases: Map<String, String> = emptyMap()
 
-    @kotlin.concurrent.Volatile private var absorbed: Map<UserGameRow, GameKey> = emptyMap()
-
     override fun useAliases(aliases: Map<String, String>) { this.aliases = aliases }
 
-    private suspend fun refreshAbsorbed() {
-        val rows = data.profileState.read().games.associateBy { it.id }
-        absorbed = data.profileState.absorbedIdentities().mapNotNull { (child, ownerId) ->
-            rows[ownerId]?.let { child to keyOf(it) }
-        }.toMap()
-    }
-
-    override fun normalize(meta: ProfileMeta): ProfileMeta {
-        val ownership = absorbed.flatMap { (child, owner) ->
-            candidatesOf(child).map { it.id to owner }.filter { it.first != owner.id }
-        }.toMap()
-        return meta.foldAbsorbed(ownership)
-    }
-
     /** The game here the household knows as [household], or null when this library doesn't have it. */
-    suspend fun gameFor(household: String): Long? {
-        refreshAbsorbed()
-        val rows = data.profileState.read().games
-        val direct = rows.firstOrNull { r -> keyOf(r).id == household || candidatesOf(r).any { it.id == household } }?.id
-        if (direct != null) return direct
-        val owner = absorbed.entries.firstOrNull { (child, _) -> candidatesOf(child).any { it.id == household } }?.value ?: return null
-        return rows.firstOrNull { keyOf(it) == owner }?.id
-    }
+    suspend fun gameFor(household: String): Long? =
+        data.profileState.read().games.firstOrNull { r -> keyOf(r).id == household || candidatesOf(r).any { it.id == household } }?.id
 
     /** Every library game's ids with the household, the one it is known by first. */
     suspend fun householdIds(): Map<Long, List<String>> =
         data.profileState.read().games.associate { r -> r.id to (listOf(keyOf(r).id) + candidatesOf(r).map { it.id }).distinct() }
 
-    override suspend fun candidates(): List<List<GameKey>> {
-        refreshAbsorbed()
-        return data.profileState.read().games.map { candidatesOf(it) }.distinct()
-    }
+    override suspend fun candidates(): List<List<GameKey>> =
+        data.profileState.read().games.map { candidatesOf(it) }.distinct()
 
     /** The game's one id: the host's, when it has answered for any of the ids it is known by here. */
     private fun keyOf(r: UserGameRow): GameKey {
@@ -92,10 +65,10 @@ internal class LibraryProfileData(
 
     override suspend fun read(device: String, clock: HlcClock): ProfileMeta = lock.withLock {
         val now = settings()
-        refreshAbsorbed()
         val state = data.profileState.read()
         val mine = personal(now)
         lastState = state
+        lastSettings = mine
         val sync = now.sync
         if (!sync.records && !sync.settings) return ProfileMeta()
         val keys = state.games.associate { it.id to keyOf(it) }
@@ -132,14 +105,7 @@ internal class LibraryProfileData(
                 order = Lww(c.order.toInt(), Hlc.ZERO),
             )
         }
-        val durable = data.settings.profileValues()
-        val values = if (sync.settings) mine.mapValues { (path, value) ->
-            // A UI edit can commit while the library rows are being read. Keep its value and
-            // revision together; attaching its new clock to the earlier snapshot would undo it.
-            val current = durable[path] ?: ProfileSettingValue(value)
-            val r = current.revision
-            Lww(current.value, Hlc(r.millis, r.counter, r.origin))
-        } else emptyMap()
+        val values = if (sync.settings) mine.mapValues { Lww(it.value, Hlc.ZERO) } else emptyMap()
         ProfileMeta(games, collections, values)
     }
 
@@ -193,20 +159,13 @@ internal class LibraryProfileData(
         // Only what the profile has set comes in. What it never set stays as this device has it: a
         // new profile starts with this device's look, Home and settings, which then become its own
         // (sent up on the next round) and are never put back to Fuse's defaults.
-        val profile = now.sync.activeProfile
-        val incoming = if (sync.settings) meta.settings.filterKeys { it in kept(now) }.mapValues { (_, value) ->
-            ProfileSettingValue(value.value, ProfileSettingRevision(value.at.millis, value.at.counter, value.at.device))
-        } else emptyMap()
-        if (incoming.isNotEmpty()) applyProfileSettings(profile, incoming)
+        var incoming = if (sync.settings) meta.settings.mapValues { it.value.value }.filterKeys { p -> p in kept(now) && personal(now)[p] == lastSettings[p] } else emptyMap()
         // Home rejoining the profile's: the profile's Home comes back as it was (this device's was kept apart).
         val rejoin = sync.homeScope == HOME_REJOIN
-        if (rejoin) meta.settings[HOME_LAYOUT]?.let { value ->
-            applyProfileSettings(profile, mapOf(HOME_LAYOUT to ProfileSettingValue(value.value,
-                ProfileSettingRevision(value.at.millis, value.at.counter, value.at.device))))
-        }
-        if (dismissed != now.home.continueDismissed || rejoin) {
+        if (rejoin) meta.settings[HOME_LAYOUT]?.let { incoming = incoming + (HOME_LAYOUT to it.value) }
+        if (incoming.isNotEmpty() || dismissed != now.home.continueDismissed || rejoin) {
             applySettings { s ->
-                val next = s
+                val next = if (incoming.isEmpty()) s else ProfileSettings.apply(s, incoming)
                 next.copy(
                     home = next.home.copy(continueDismissed = dismissed),
                     sync = if (rejoin) next.sync.copy(homeScope = HOME_PROFILE) else next.sync,
@@ -214,13 +173,10 @@ internal class LibraryProfileData(
             }
         }
         lastState = data.profileState.read()
+        lastSettings = personal(settings())
     }
 
-    override suspend fun keyOf(gameId: Long): GameKey? {
-        refreshAbsorbed()
-        return data.profileState.read().games.firstOrNull { it.id == gameId }?.let { keyOf(it) }
-            ?: absorbed.entries.firstOrNull { it.key.id == gameId }?.value
-    }
+    override suspend fun keyOf(gameId: Long): GameKey? = data.profileState.read().games.firstOrNull { it.id == gameId }?.let { keyOf(it) }
 
     /** The person's settings, without Home while this device keeps its own. */
     private fun personal(s: AppSettings): Map<String, JsonElement> = ProfileSettings.extract(s).filterKeys { it in kept(s) }
@@ -238,8 +194,12 @@ internal class LibraryProfileData(
 
         fun keyOf(r: UserGameRow): GameKey = GameKey.of(r.platform, r.serial, null, r.title)
 
-        /** A title is a fallback, never a bridge between strongly identified games. */
-        fun candidatesOf(r: UserGameRow): List<GameKey> = listOf(keyOf(r))
+        /** Every id a game can be known by on some device: by serial when this library knows it, and always by title. */
+        fun candidatesOf(r: UserGameRow): List<GameKey> {
+            val byTitle = GameKey.of(r.platform, null, null, r.title)
+            val first = keyOf(r)
+            return if (first == byTitle) listOf(first) else listOf(first, byTitle)
+        }
 
         /** A collection's id everywhere: when it was made, which every device keeps as it is. */
         fun collectionId(createdAt: Long) = "c$createdAt"

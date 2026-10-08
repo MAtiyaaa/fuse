@@ -9,12 +9,6 @@ kotlin {
             api(projects.ui.fuseline)
             api(libs.coil.compose)
         }
-        getByName("desktopTest") {
-            dependencies {
-                // Pixel tests execute real Skia; compose-ui alone supplies no platform native.
-                implementation(compose.desktop.currentOs)
-            }
-        }
     }
 }
 

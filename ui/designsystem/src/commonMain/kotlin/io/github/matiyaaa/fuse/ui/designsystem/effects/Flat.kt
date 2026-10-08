@@ -25,26 +25,35 @@ object Drawing {
     @Volatile
     var cpu: Boolean = false
 
-    /** Android retains offscreen hardware surfaces; desktop retains drawing commands instead. */
+    /**
+     * The platform keeps a layer drawn by the graphics card as a finished picture until its content
+     * changes (Android's hardware layers). Set by the Android app; elsewhere a layer is drawn again
+     * every frame, so a picture painted once is kept instead.
+     */
     @Volatile
     var cachedLayers: Boolean = false
 }
 
 /**
- * Static drawing retained as commands on GPU renderers, preserving vector detail under transforms.
- * Android may also retain a hardware surface. Desktop deliberately uses Auto compositing: Skiko
- * records a Skia picture rather than painting the commands into a CPU ImageBitmap before upload.
- * See JetBrains' GraphicsLayer.desktop implementation in compose-multiplatform-core.
- * Software rendering keeps the raster fallback, bounded by [SOFTWARE_CACHE_PIXELS].
+ * Drawing that only changes when its inputs do (scrims, a resting room, a tile's generated art),
+ * recorded once and then shown as that recording every frame.
+ *
+ * On Android ([Drawing.cachedLayers]) it is a [GraphicsLayer]: the drawing is recorded once, the
+ * graphics card draws it, and nothing is recorded or painted again until [draw]'s key or size
+ * changes. A [cached] layer is also kept by the graphics card as one finished picture (a hardware
+ * layer), so a stack of screen-sized gradients costs one picture a frame. Nothing is painted by the
+ * processor into a bitmap there: that is slow on a phone, and it was what made 0.3.7.4 slower.
+ *
+ * Elsewhere (desktops, where a layer is drawn again every frame), the drawing is painted once into
+ * a picture and that picture is shown instead.
+ *
+ * What is drawn is the same either way: the layers are composed in the same order, once.
  */
 class FlatLayer(private val layer: GraphicsLayer?, private val cached: Boolean = true) {
     private var image: ImageBitmap? = null
     private var madeFor: IntSize = IntSize.Zero
     private var madeWith: Any? = Unset
     private var recorded = false
-    private var madeDensity = Float.NaN
-    private var madeFontScale = Float.NaN
-    private var madeDirection: androidx.compose.ui.unit.LayoutDirection? = null
 
     /**
      * Draws [paint], recorded again only when the size or [key] changes (compared with equals: pass
@@ -53,33 +62,19 @@ class FlatLayer(private val layer: GraphicsLayer?, private val cached: Boolean =
     fun draw(scope: DrawScope, key: Any?, paint: DrawScope.() -> Unit) {
         val size = IntSize(scope.size.width.roundToInt(), scope.size.height.roundToInt())
         if (size.width <= 0 || size.height <= 0) return
-        val changed = size != madeFor || key != madeWith || scope.density != madeDensity ||
-            scope.fontScale != madeFontScale || scope.layoutDirection != madeDirection
-        madeDensity = scope.density
-        madeFontScale = scope.fontScale
-        madeDirection = scope.layoutDirection
-        val gpu = layer != null && !Drawing.cpu
+        val changed = size != madeFor || key != madeWith
+        val gpu = layer != null && Drawing.cachedLayers && !Drawing.cpu
         if (gpu) {
             val l = layer!!
             if (changed || !recorded || l.isReleased) {
                 image = null
-                l.compositingStrategy = if (cached && Drawing.cachedLayers) CompositingStrategy.Offscreen else CompositingStrategy.Auto
-                UiRenderTrace.recording {
-                    l.record(scope, scope.layoutDirection, size) { paint() }
-                }
+                l.compositingStrategy = if (cached) CompositingStrategy.Offscreen else CompositingStrategy.Auto
+                l.record(scope, scope.layoutDirection, size) { paint() }
                 recorded = true
                 madeFor = size
                 madeWith = key
             }
             scope.drawLayer(l)
-            return
-        }
-        // Uncached generated artwork and very large software surfaces redraw directly. Allocating
-        // a new multi-megabyte bitmap on every live resize is worse than replaying cheap commands.
-        if (!cached || size.width.toLong() * size.height > SOFTWARE_CACHE_PIXELS) {
-            image = null
-            recorded = false
-            scope.paint()
             return
         }
         var picture = image
@@ -88,9 +83,7 @@ class FlatLayer(private val layer: GraphicsLayer?, private val cached: Boolean =
             picture = if (picture != null && size == madeFor) picture else ImageBitmap(size.width, size.height)
             val canvas = Canvas(picture)
             canvas.drawRect(0f, 0f, size.width.toFloat(), size.height.toFloat(), CLEAR)
-            UiRenderTrace.rasterizing(size.width.toLong() * size.height * 4) {
-                CanvasDrawScope().draw(scope, scope.layoutDirection, canvas, Size(size.width.toFloat(), size.height.toFloat())) { paint() }
-            }
+            CanvasDrawScope().draw(scope, scope.layoutDirection, canvas, Size(size.width.toFloat(), size.height.toFloat())) { paint() }
             image = picture
             recorded = false
             madeFor = size
@@ -102,7 +95,6 @@ class FlatLayer(private val layer: GraphicsLayer?, private val cached: Boolean =
     private object Unset
 
     private companion object {
-        const val SOFTWARE_CACHE_PIXELS = 2_097_152L
         /** Clears a reused picture to transparent before it is drawn again. */
         val CLEAR = Paint().apply { blendMode = BlendMode.Clear }
     }

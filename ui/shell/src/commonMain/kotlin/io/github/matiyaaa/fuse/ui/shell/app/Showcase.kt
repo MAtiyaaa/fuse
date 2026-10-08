@@ -97,12 +97,7 @@ val LocalShowcaseElsewhere = compositionLocalOf { false }
  * the clock over the room, with the games played last.
  */
 @Composable
-fun ShowcaseApp(store: FuseStore, platform: PlatformUi, displaySession: io.github.matiyaaa.fuse.ui.shell.store.DisplaySession? = null) {
-    val session = displaySession ?: remember(store) { store.displaySession }
-    if (session.rehearsalOpen) {
-        RehearsalCompanionSurface()
-        return
-    }
+fun ShowcaseApp(store: FuseStore, platform: PlatformUi) {
     val prefs by store.prefs.collectAsState()
     val spec = prefs.theme
     FuseTheme(

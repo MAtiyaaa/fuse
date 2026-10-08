@@ -157,7 +157,6 @@ class HostStore(
             seq = journal.lastOrNull()?.seq ?: 0
             trimJournal()
         }
-        if (repairIdentityAliases()) writeAtomically(aliasFile, json.encodeToString(GameAliasesSerializer, aliases).toByteArray())
     }
 
     private fun profileDir(id: String) = File(File(dir, "profiles"), id)
@@ -500,43 +499,24 @@ class HostStore(
     // ---------------------------------------------------------------- one id per game
 
     /**
-     * Resolve proven aliases while keeping title-only fallback identities separate. Older clients
-     * may still send a title beside a serial: it is deliberately ignored, not persisted as evidence.
+     * One id for each game across devices. Each list is every id a device may know a game by (its
+     * serial, its title), most trusted first. A game already known by any of them keeps that id;
+     * otherwise the one with saves or records already wins, else the first. Saves and records kept
+     * under the others move to it, so a device that knew the game by another name finds them.
+     * Returns the id for each list, in order ("" for an empty one).
      */
     fun resolveGames(lists: List<List<String>>): List<String> = synchronized(lock) {
-        var changed = repairIdentityAliases()
+        var changed = false
         val out = lists.map { raw ->
-            val platform = raw.firstNotNullOfOrNull { GameKey.parse(it)?.platform }
-            val valid = raw.filter { GameKey.parse(it)?.platform == platform && platform != null }.distinct().take(MAX_ALIASES)
-            val strong = valid.filter(::strongIdentity)
-            var ids = strong.ifEmpty { valid.filter { GameKey.parse(it)?.identity?.startsWith("t.") == true } }
+            val ids = raw.filter { GameKey.parse(it) != null }.distinct().take(MAX_ALIASES)
             if (ids.isEmpty()) return@map ""
-            // A contradictory claim cannot teach the host that two serials are one title.
-            val serials = ids.filter(::serialIdentity).toSet()
-            if (serials.size > 1) ids = listOf(ids.first(::serialIdentity))
-            fun compatible(canonical: String): Boolean {
-                val ownSerials = ids.filter(::serialIdentity).toSet()
-                val bound = (aliases.filterValues { it == canonical }.keys + canonical)
-                    .filter(::serialIdentity).toSet()
-                return ownSerials.isEmpty() || bound.isEmpty() || ownSerials.any { it in bound }
-            }
-            val canon = ids.firstNotNullOfOrNull { aliases[it]?.takeIf(::compatible) }
-                ?: ids.firstOrNull { hasData(it) && compatible(it) } ?: ids.first()
+            val canon = ids.firstNotNullOfOrNull { aliases[it] } ?: ids.firstOrNull { hasData(it) } ?: ids.first()
             if (aliases[canon] != canon) { aliases[canon] = canon; changed = true }
             for (id in ids) {
                 if (id == canon || aliases[id] == canon) continue
-                val previous = aliases[id]
-                if (previous == null) {
+                if (aliases[id] == null) {
                     aliases[id] = canon
                     adopt(id, canon)
-                    changed = true
-                } else if (compatible(previous)) {
-                    // Newly learned strong evidence can join two previously independent histories.
-                    val group = (aliases.filterValues { it == previous }.keys + previous)
-                    val canonicalGroup = (aliases.filterValues { it == canon }.keys + canon)
-                    if ((group + canonicalGroup).filter(::serialIdentity).distinct().size > 1) continue
-                    for (member in group) aliases[member] = canon
-                    adopt(previous, canon)
                     changed = true
                 }
             }
@@ -546,46 +526,18 @@ class HostStore(
         out
     }
 
-    private fun serialIdentity(id: String) = GameKey.parse(id)?.identity?.startsWith("s.") == true
-
-    private fun strongIdentity(id: String): Boolean = GameKey.parse(id)?.identity?.let {
-        it.startsWith("s.") || it.startsWith("h.") || it.startsWith("r.") || it.startsWith("p.")
-    } == true
-
-    /**
-     * Remove the weak bridges retained by previous releases. A group with contradictory serials
-     * has unknown historical ownership: retain its original records/revisions, and split strong
-     * keys for future writes without copying those saves into either game. Unambiguous groups
-     * keep their known strong identity and move existing history with it.
-     */
-    private fun repairIdentityAliases(): Boolean {
-        var changed = false
-        for ((canonical, members) in aliases.toMap().entries.groupBy({ it.value }, { it.key })) {
-            val keys = (members + canonical).distinct()
-            val strong = keys.filter(::strongIdentity)
-            if (strong.isEmpty()) continue
-            val conflicting = strong.count(::serialIdentity) > 1
-            val target = if (strongIdentity(canonical)) canonical else strong.firstOrNull(::serialIdentity) ?: strong.sorted().first()
-            for (key in keys) {
-                val next = if (strongIdentity(key)) { if (conflicting) key else target } else key
-                if (aliases[key] != next) { aliases[key] = next; changed = true }
-            }
-            if (!conflicting && canonical != target) adopt(canonical, target)
-        }
-        return changed
-    }
-
     private fun hasData(game: String): Boolean =
         revisions.values.any { list -> list.any { it.game == game } } || metas.values.any { game in it.games }
 
-    /** Join proven identities without dropping either game's revision history or collection state. */
+    /** Moves what was kept under [from] to [to]: saves (for slots [to] has none of yet) and records. */
     private fun adopt(from: String, to: String) {
-        if (GameKey.parse(to) == null) return
+        val key = GameKey.parse(to) ?: return
         for ((profile, list) in revisions) {
+            val have = list.filter { it.game == to }.map { it.kind }.toSet()
             var moved = false
             for (i in list.indices) {
                 val r = list[i]
-                if (r.game == from) {
+                if (r.game == from && r.kind !in have) {
                     list[i] = r.copy(game = to)
                     moved = true
                 }
@@ -593,8 +545,10 @@ class HostStore(
             if (moved) rewriteRevisions(profile)
         }
         for ((profile, meta) in metas.toMap()) {
-            val next = meta.byIds(mapOf(from to to))
-            if (next == meta) continue
+            val old = meta.games[from] ?: continue
+            val moved = old.copy(key = key)
+            val games = meta.games - from + (to to (meta.games[to]?.merge(moved) ?: moved))
+            val next = meta.copy(games = games)
             metas[profile] = next
             writeAtomically(File(profileDir(profile), "meta.json"), json.encodeToString(ProfileMeta.serializer(), next).toByteArray())
         }
@@ -776,7 +730,7 @@ class HostStore(
                     VersionReport(
                         r.id, r.device, r.deviceName, r.at.millis, r.playSeconds, r.reason, r.id == head, r.size,
                         r.manifest.files.map { f -> FileReport(f.path, f.size, stored(f.hash)) },
-                        kept = r.kept, provenance = r.provenance,
+                        kept = r.kept,
                     )
                 },
             )

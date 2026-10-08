@@ -91,8 +91,6 @@ data class SaveRevision(
     val title: String = "",
     /** Kept for good by the person ("Keep this save"): never cleaned up, whatever its [reason]. */
     val pinned: Boolean = false,
-    /** Additive provenance keeps imported saves compatible with older hosts' reason enum. */
-    val provenance: String = "",
 ) {
     val size: Long get() = manifest.size
 

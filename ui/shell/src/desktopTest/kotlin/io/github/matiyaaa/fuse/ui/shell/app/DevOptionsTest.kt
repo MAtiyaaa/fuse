@@ -19,12 +19,12 @@ class DevOptionsTest {
     }
 
     @Test
-    fun aRehearsalIsAnExplicitEphemeralSession() {
+    fun aRehearsalIsOnlyWhileItsPreferencesAreKept() {
         val dev = DevOptions()
-        assertFalse(dev.rehearsalOpen)
-        dev.rehearsalOpen = true
-        assertTrue(dev.rehearsalOpen)
-        dev.rehearsalOpen = false
-        assertFalse(dev.rehearsalOpen)
+        assertFalse(dev.rehearsing)
+        dev.rehearsalPrefs = io.github.matiyaaa.fuse.ui.shell.store.UiPrefs()
+        assertTrue(dev.rehearsing)
+        dev.rehearsalPrefs = null
+        assertFalse(dev.rehearsing)
     }
 }

@@ -16,7 +16,6 @@ import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.PlatformFolderScan
 import io.github.matiyaaa.fuse.model.ScanReport
 import io.github.matiyaaa.fuse.model.ScannedGame
-import io.github.matiyaaa.fuse.model.scannerRulesKey
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 
@@ -184,15 +183,7 @@ class LibraryIndexer(
         if (scan.complete) {
             val partOfAnother = scan.partOfAnother()
             for (state in known.values) {
-                if (state.id in seen || state.path in foundElsewhere) continue
-                // Proven scanner ownership wins even for rows already marked missing by an older
-                // release. Preserve original child state, merge only portable user intent, and
-                // retire once. No title resemblance or guessed provider identity is used here.
-                if (!state.removed && retireAbsorbed(state, scan, now)) {
-                    updated++
-                    continue
-                }
-                if (state.missing) continue
+                if (state.id in seen || state.missing || state.path in foundElsewhere) continue
                 // A folder that is still there but isn't a game (a game's own data folder, which
                 // older versions listed as games): forgotten, unless the user did something with it.
                 if (!state.removed && scan.isNotAGame(state.path) && gq.deleteUntouchedFolder(state.id).value > 0) {
@@ -211,30 +202,8 @@ class LibraryIndexer(
             }
             // Only a complete scan may let the next quick scan skip this folder.
             db.folderStateQueries.put(scan.folderPath, scan.folderModifiedAt)
-            // A killed process between scan and reconciliation must retry the semantic upgrade.
-            scan.rulesVersion?.let { db.folderStateQueries.put(scannerRulesKey(scan.folderPath), it) }
         }
         return IndexDelta(added = addedIds.size, updated = updated, missing = missing, restored = restored, addedIds = addedIds)
-    }
-
-    private fun retireAbsorbed(child: IndexState, scan: PlatformFolderScan, now: Long): Boolean {
-        val ownerPath = scan.absorbedBy.entries.firstOrNull { normal(it.key) == normal(child.path) }?.value
-            ?: scan.games.singleOrNull { game -> game.content.any { normal(it.path) == normal(child.path) } }?.path
-            ?: return false
-        val owner = scan.games.singleOrNull { normal(it.path) == normal(ownerPath) } ?: return false
-        // A user platform override is kept with the archived record; never merge into another system.
-        val original = db.gameQueries.selectById(child.id).executeAsOneOrNull() ?: return false
-        if ((original.platform_scanned ?: original.platform_id) != owner.platformId.value) return false
-        val ownerId = db.gameQueries.selectIdByPath(owner.path).executeAsOneOrNull() ?: return false
-        if (ownerId == child.id) return false
-        if (db.gameAbsorptionQueries.selectOwner(child.id).executeAsOneOrNull() != null) return false
-        val reason = owner.content.firstOrNull { normal(it.path) == normal(child.path) }?.kind?.name ?: "DUPLICATE"
-        db.gameAbsorptionQueries.put(child.id, ownerId, reason, now)
-        db.gameQueries.mergeAbsorbedIntent(childId = child.id, now = now, ownerId = ownerId)
-        db.collectionQueries.copyAbsorbedMemberships(ownerId = ownerId, childId = child.id)
-        db.playSessionQueries.reassignAbsorbed(ownerId = ownerId, childId = child.id)
-        db.gameQueries.archiveAbsorbed(now, child.id)
-        return true
     }
 
     private fun writeChildren(gameId: Long, game: ScannedGame) {

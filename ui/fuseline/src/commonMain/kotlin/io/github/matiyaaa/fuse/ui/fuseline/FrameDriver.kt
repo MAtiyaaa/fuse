@@ -404,7 +404,6 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
                 // A newer loop has taken over (this one was stopped as its last move went): the
                 // moves are that loop's now, and this ending leaves them alone.
                 if (loop === job) {
-                    FramePacing.moving(clock, false)
                     running = false
                     loop = null
                     if (drivers[clock] === this@FrameDriver) drivers.remove(clock)
@@ -449,7 +448,7 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
 
     private fun stepMoves(frameNanos: Long) {
         FramePacing.frameAt(frameNanos, clock)
-        FramePacing.moving(clock, live > 0)
+        FramePacing.movesUnderWay = live > 0
         frameThread = currentThreadId()
         previousFrame = lastFrame
         lastFrame = frameNanos
@@ -537,7 +536,7 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
         val wake = if (calmUntil == Long.MAX_VALUE) end else minOf(frameAt(m, calmUntil), end)
         // Due within a few frames: kept on the every-frame list, passed over until then (a look at it
         // costs less than the heap).
-        if (wake <= frameNanos + FramePacing.intervalFor(clock) * 4) listOnward(m, wake) else schedule(m, wake)
+        if (wake <= frameNanos + FramePacing.intervalNanos * 4) listOnward(m, wake) else schedule(m, wake)
     }
 
     private fun listOnward(m: Move, wake: Long) {
@@ -679,84 +678,77 @@ object FramePacing {
     private const val LATE_TO_THIN = 6
     private const val ON_TIME_TO_RESTORE = 30
 
-    private class History {
-        val intervals = LongArray(HISTORY)
-        var shortest = Long.MAX_VALUE
-        var count = 0
-        var head = 0
-        var late = 0
-        var onTime = 0
-        var intervalNanos = 16_666_667L
-        var underLoad = false
-        var decorationTick = 0L
-        var decorationAt = Long.MIN_VALUE
-        var lastFrame = Long.MIN_VALUE
-        var moving = false
+    private val intervals = LongArray(HISTORY)
+    private var shortest = Long.MAX_VALUE
+    private var count = 0
+    private var head = 0
+    private var late = 0
+    private var onTime = 0
 
-        fun frame(nanos: Long) {
-            if (nanos <= 0L || nanos > 1_000_000_000L) return
-            val evicted = if (count == HISTORY) intervals[head] else Long.MAX_VALUE
-            intervals[head] = nanos
-            head = (head + 1) % HISTORY
-            if (count < HISTORY) count++
-            if (nanos <= shortest || count == 1) shortest = nanos
-            else if (evicted == shortest) {
-                var best = Long.MAX_VALUE
-                for (i in 0 until count) if (intervals[i] < best) best = intervals[i]
-                shortest = best
-            }
-            intervalNanos = shortest
-            if (nanos > intervalNanos * LATE_RATIO) {
-                late++
-                onTime = 0
-                if (late >= LATE_TO_THIN) underLoad = true
-            } else {
-                onTime++
-                if (onTime >= ON_TIME_TO_RESTORE) { underLoad = false; late = 0 }
-            }
-        }
-    }
+    /** The display's own frame interval as measured (the shortest interval seen lately), in nanoseconds. */
+    var intervalNanos: Long = 16_666_667L
+        private set
 
-    private val defaultHistory = History()
-    private var lastObserved = defaultHistory
-    private val sources = arrayOfNulls<Any>(8)
-    private val histories = arrayOfNulls<History>(8)
-
-    private fun history(source: Any?): History {
-        if (source == null) return defaultHistory
-        var vacant = -1
-        for (i in sources.indices) {
-            if (sources[i] === source) return histories[i]!!
-            if (sources[i] == null && vacant < 0) vacant = i
-        }
-        // A process normally has one or two clocks. A ninth replaces a retired slot, never mixes
-        // its intervals with the old display. Storage remains bounded for window recreation.
-        val slot = if (vacant >= 0) vacant else 0
-        return History().also { sources[slot] = source; histories[slot] = it }
-    }
-
-    /** Latest clock's diagnostic estimate. Scheduling uses [intervalFor], never this shared view. */
-    val intervalNanos: Long get() = lastObserved.intervalNanos
+    /** Frames per second, as measured. */
     val refreshRate: Float get() = (1e9 / intervalNanos).toFloat()
-    val underLoad: Boolean get() = lastObserved.underLoad
 
-    /** This clock's independent estimate, including its own pressure and recovery history. */
-    fun intervalFor(source: Any?): Long = history(source).intervalNanos
-    fun underLoadFor(source: Any?): Boolean = history(source).underLoad
-    internal fun moving(source: Any?, moving: Boolean) { history(source).moving = moving }
+    /** True while frames run late: decoration is thinned (see [shouldDrawDecoration]). */
+    var underLoad: Boolean = false
+        private set
 
-    /** Counts each time once on its own clock; another display never changes its estimator. */
+    private var decorationTick = 0L
+
+    // The last frame seen from each frame clock (a device with a second screen has two, ticking on
+    // their own displays' timing): an interval is only ever measured between two frames of the same
+    // clock, never from one screen's frame to the other's.
+    private val sources = arrayOfNulls<Any>(4)
+    private val lastSeenBy = LongArray(4) { Long.MIN_VALUE }
+
+    /**
+     * A frame at [frameNanos] from the frame clock [source] (the shared driver's, or a loop on its
+     * own), from whoever sees it first: each frame time counts once however many moves and loops
+     * share it.
+     */
     fun frameAt(frameNanos: Long, source: Any? = null) {
-        val h = history(source)
-        lastObserved = h
-        val before = h.lastFrame
+        var slot = 0
+        while (slot < sources.size && sources[slot] != null && sources[slot] !== source) slot++
+        if (slot == sources.size) slot = 0
+        if (sources[slot] == null) sources[slot] = source
+        val before = lastSeenBy[slot]
         if (frameNanos == before) return
-        h.lastFrame = frameNanos
-        if (before != Long.MIN_VALUE && frameNanos > before) h.frame(frameNanos - before)
+        lastSeenBy[slot] = frameNanos
+        if (before != Long.MIN_VALUE && frameNanos > before) frame(frameNanos - before)
     }
 
-    /** Records a direct/default-clock interval (tests and callers without a frame clock). */
-    fun frame(nanos: Long) { lastObserved = defaultHistory; defaultHistory.frame(nanos) }
+    /** Records one frame [nanos] after the one before. */
+    fun frame(nanos: Long) {
+        if (nanos <= 0L || nanos > 1_000_000_000L) return
+        val evicted = if (count == HISTORY) intervals[head] else Long.MAX_VALUE
+        intervals[head] = nanos
+        head = (head + 1) % HISTORY
+        if (count < HISTORY) count++
+        // The display's interval is the quickest steady frame lately: late frames only ever add time.
+        // Kept as it goes; looked for again only when the quickest one just left the history.
+        if (nanos <= shortest || count == 1) {
+            shortest = nanos
+        } else if (evicted == shortest) {
+            var best = Long.MAX_VALUE
+            for (i in 0 until count) if (intervals[i] < best) best = intervals[i]
+            shortest = best
+        }
+        intervalNanos = shortest
+        if (nanos > intervalNanos * LATE_RATIO) {
+            late++
+            onTime = 0
+            if (late >= LATE_TO_THIN) underLoad = true
+        } else {
+            onTime++
+            if (onTime >= ON_TIME_TO_RESTORE) {
+                underLoad = false
+                late = 0
+            }
+        }
+    }
 
     /**
      * What the device says about itself, where it can tell (Android's thermal status, battery saver):
@@ -784,27 +776,16 @@ object FramePacing {
      * (every other frame) or the device is under pressure ([pressureEvery]). Its value is still worked
      * out from the real time when it shows, so it never catches up: it is simply where it should be.
      */
-    fun shouldDrawDecoration(source: Any? = null): Boolean {
-        val h = if (source == null) lastObserved else history(source)
-        decorationTick(h, if (source == null) null else h.lastFrame)
-        val every = maxOf(if (h.underLoad) 2 else 1, pressureEvery)
-        return every == 1 || h.decorationTick % every == 0L
+    fun shouldDrawDecoration(): Boolean {
+        decorationTick++
+        val every = maxOf(if (underLoad) 2 else 1, pressureEvery)
+        return every == 1 || decorationTick % every == 0L
     }
 
     /** [shouldDrawDecoration] for frames running late only (a paced loop counts the device's pressure in its own rate). */
-    internal fun shouldDrawDecorationUnderLoad(source: Any? = null, atNanos: Long? = null): Boolean {
-        val h = if (source == null) lastObserved else history(source)
-        decorationTick(h, atNanos)
-        return !h.underLoad || h.decorationTick % 2L == 0L
-    }
-
-    // Every loop on the same clock receives the same decision for the same frame. Counting calls
-    // instead of frames can permanently starve one of two loops that always draw in the same order.
-    private fun decorationTick(h: History, at: Long?) {
-        if (at == null || h.decorationAt != at) {
-            h.decorationTick++
-            if (at != null) h.decorationAt = at
-        }
+    internal fun shouldDrawDecorationUnderLoad(): Boolean {
+        decorationTick++
+        return !underLoad || decorationTick % 2L == 0L
     }
 
     /** How many frames decorative loops ([decorationFrames]) have woken for, for measuring. */
@@ -817,24 +798,25 @@ object FramePacing {
     private var lastInput = Long.MIN_VALUE
 
     /**
-     * Input just arrived. Under measured or thermal pressure, decoration briefly holds while
-     * interaction uses the available budget. Input on a healthy display does not freeze ambience.
+     * Fuseline 3.1: input just arrived (a button, a key, a touch, a scroll). Decoration then holds
+     * still while the person is doing something ([decorationHeld]), so every frame goes to what they
+     * are doing.
      */
     fun input(nowNanos: Long = monotonicNanos()) {
         lastInput = nowNanos
     }
 
     /**
-     * Whether decoration holds briefly after input while actual frame or thermal pressure exists.
-     * Navigation and focus always continue; a healthy display preserves ambient motion.
+     * Whether decoration (an ambient room, a slow drift, a shimmer) should hold its frame now: just
+     * after input, and for as long as what that input set moving is still moving. A room drifting a
+     * pixel a second that pauses for a moment while a page slides is never seen to stop; at rest
+     * everything moves exactly as it would. Motion that runs on its own, with nobody touching
+     * anything, never holds decoration.
      */
-    fun decorationHeld(nowNanos: Long = monotonicNanos(), source: Any? = null): Boolean {
-        val h = if (source == null) lastObserved else history(source)
-        // Input alone is not evidence of frame pressure. Event horizons already let unread work
-        // sleep; optional ambient motion only holds when measured/thermal pressure warrants it.
-        if ((!h.underLoad && devicePressure < DevicePressure.HOT) || lastInput == Long.MIN_VALUE) return false
+    fun decorationHeld(nowNanos: Long = monotonicNanos()): Boolean {
+        if (lastInput == Long.MIN_VALUE) return false
         val since = nowNanos - lastInput
-        return since in 0 until INPUT_HOLD_NANOS || (since in 0 until INPUT_HOLD_MAX_NANOS && (h.moving || (source == null && movesUnderWay)))
+        return since in 0 until INPUT_HOLD_NANOS || (since in 0 until INPUT_HOLD_MAX_NANOS && movesUnderWay)
     }
 
     /** How long decoration holds after the last input, and the longest it holds while things still move. */
@@ -845,16 +827,18 @@ object FramePacing {
     fun reset() {
         lastInput = Long.MIN_VALUE
         movesUnderWay = false
-        defaultHistory.intervals.fill(0)
-        defaultHistory.count = 0; defaultHistory.head = 0; defaultHistory.late = 0; defaultHistory.onTime = 0
-        defaultHistory.underLoad = false; defaultHistory.intervalNanos = 16_666_667L
-        defaultHistory.shortest = Long.MAX_VALUE; defaultHistory.decorationTick = 0
-        defaultHistory.lastFrame = Long.MIN_VALUE; defaultHistory.decorationAt = Long.MIN_VALUE; defaultHistory.moving = false
-        lastObserved = defaultHistory
+        count = 0
+        head = 0
+        late = 0
+        onTime = 0
+        underLoad = false
         devicePressure = DevicePressure.NONE
         powerSaving = false
+        intervalNanos = 16_666_667L
+        shortest = Long.MAX_VALUE
+        decorationTick = 0L
         sources.fill(null)
-        histories.fill(null)
+        lastSeenBy.fill(Long.MIN_VALUE)
     }
 }
 

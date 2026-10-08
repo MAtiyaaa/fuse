@@ -12,7 +12,6 @@ import javax.imageio.ImageIO
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -105,16 +104,4 @@ class UpdateAndSteamTest {
         assertFalse(DesktopSteam.isFuse("/usr/bin/fusermount", "fusermount", null))
         assertFalse(DesktopSteam.isFuse("/home/deck/Games/Fusebox.AppImage", "Fusebox", null))
     }
-    @Test
-    fun shortcutReplacementIsAtomicAndKeepsTheOriginalOnFailure() {
-        val shortcut = File(root, "shortcuts.vdf").apply { writeText("before") }
-        DesktopSteam.replaceAtomically(shortcut, "after".toByteArray())
-        assertEquals("after", shortcut.readText())
-        val directory = File(root, "occupied").apply { mkdirs() }
-        val original = File(directory, "original").apply { writeText("untouched") }
-        assertFailsWith<Exception> { DesktopSteam.replaceAtomically(directory, "replacement".toByteArray()) }
-        assertEquals("untouched", original.readText())
-        assertFalse(root.listFiles().orEmpty().any { it.name.startsWith(".fuse-steam-") })
-    }
-
 }

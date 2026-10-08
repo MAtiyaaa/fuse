@@ -9,11 +9,6 @@ import io.github.matiyaaa.fuse.library.steam.SteamShortcut
 import io.github.matiyaaa.fuse.library.steam.SteamShortcuts
 import io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration
 import java.io.File
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -33,46 +28,11 @@ internal class DesktopSteam(private val folders: KnownFolders) : SteamIntegratio
         userLists().any { f -> SteamShortcuts.contains(runCatching { f.readBytes() }.getOrNull(), quote(exe)) }
     }
 
-    private val mutation = Mutex()
-
-    override suspend fun addFuse(): Result<String> = mutate(repair = false)
-    override suspend fun rebuild(): Result<String> = lifecycle(repair = true)
-    override suspend fun addForSetup(): Result<String> = lifecycle(repair = false)
-
-    private suspend fun lifecycle(repair: Boolean): Result<String> = mutation.withLock {
-        withContext(Dispatchers.IO) {
-            if (gameMode) return@withContext Result.failure(IllegalStateException("Open Fuse directly in Desktop Mode to update Steam safely."))
-            val executable = program()
-            if (executable == null || (!File(executable).canExecute() && !(DesktopOs.isMac && File(executable).isDirectory)))
-                return@withContext Result.failure(IllegalStateException("Run Fuse from its AppImage or installed copy, then retry."))
-            if (userConfigDirs(create = false).isEmpty())
-                return@withContext Result.failure(IllegalStateException("Sign in to Steam once before adding Fuse."))
-            val steam = Processes.which("steam")
-            val wasRunning = steamRunning()
-            if (wasRunning) {
-                if (steam == null || Processes.run(listOf(steam, "-shutdown"), timeoutMs = 5_000) == null)
-                    return@withContext Result.failure(IllegalStateException("Steam could not be asked to close. Close it and retry."))
-                var tries = 0
-                while (steamRunning() && tries++ < 120) delay(250)
-                if (steamRunning()) return@withContext Result.failure(IllegalStateException("Steam has not closed yet. Finish its prompts, then retry."))
-            }
-            try {
-                mutateUnlocked(repair)
-            } finally {
-                if (steam != null) runCatching { Processes.builder(listOf(steam)).start() }
-            }
-        }
-    }
-
-    private suspend fun mutate(repair: Boolean): Result<String> = mutation.withLock {
-        withContext(Dispatchers.IO) { mutateUnlocked(repair) }
-    }
-
-    private fun mutateUnlocked(repair: Boolean): Result<String> {
-        val exe = program()?.takeIf { File(it).canExecute() || (DesktopOs.isMac && File(it).isDirectory) } ?: return Result.failure(IllegalStateException("Fuse isn't running from its AppImage or an installed copy, so Steam would have nothing to start."))
-        if (steamRunning()) return Result.failure(IllegalStateException("Close Steam first: it rewrites its library when it quits. Then add Fuse again."))
+    override suspend fun addFuse(): Result<String> = withContext(Dispatchers.IO) {
+        val exe = program() ?: return@withContext Result.failure(IllegalStateException("Fuse isn't running from its AppImage or an installed copy, so Steam would have nothing to start."))
+        if (steamRunning()) return@withContext Result.failure(IllegalStateException("Close Steam first: it rewrites its library when it quits. Then add Fuse again."))
         val users = userConfigDirs()
-        if (users.isEmpty()) return Result.failure(IllegalStateException("No Steam user here yet. Sign in to Steam once, close it, then try again."))
+        if (users.isEmpty()) return@withContext Result.failure(IllegalStateException("No Steam user here yet. Sign in to Steam once, close it, then try again."))
         val base = SteamShortcut(
             name = "Fuse",
             exe = quote(exe),
@@ -85,25 +45,27 @@ internal class DesktopSteam(private val folders: KnownFolders) : SteamIntegratio
             val file = File(dir, "shortcuts.vdf")
             try {
                 // Steam's art for the entry, then the entry pointing at its icon.
-                val oldId = SteamShortcuts.idsOf(File(dir, "shortcuts.vdf").takeIf { it.isFile }?.readBytes()) { path, name -> isFuse(path, name, exe) }.firstOrNull()
-                val artId = oldId ?: SteamShortcuts.appId(base.exe, base.name).toLong().and(0xFFFFFFFFL)
-                val icon = runCatching { placeArt(File(dir, "grid"), artId) }.onFailure { Log.warn("could not give Steam Fuse's art in $dir", it) }.getOrNull()
+                val icon = runCatching { placeArt(File(dir, "grid"), base) }.onFailure { Log.warn("could not give Steam Fuse's art in $dir", it) }.getOrNull()
                 val shortcut = base.copy(icon = icon ?: "")
                 val before = if (file.isFile) file.readBytes() else null
-                val after = (if (repair) SteamShortcuts.rebuild(before, shortcut) { path, name -> isFuse(path, name, exe) } else SteamShortcuts.add(before, shortcut)) ?: continue
+                val after = SteamShortcuts.add(before, shortcut) ?: continue
                 if (before != null) {
                     val backup = File(dir, "shortcuts.vdf.before-fuse")
                     if (!backup.exists()) backup.writeBytes(before)
                 }
-                if (repair && before != null) Files.copy(file.toPath(), File(dir, "shortcuts.vdf.before-fuse-repair").toPath(), StandardCopyOption.REPLACE_EXISTING)
-                replaceAtomically(file, after)
+                val tmp = File(dir, "shortcuts.vdf.fuse-tmp")
+                tmp.writeBytes(after)
+                if (!tmp.renameTo(file)) {
+                    file.delete()
+                    tmp.renameTo(file)
+                }
                 done++
             } catch (e: Exception) {
                 Log.warn("could not add Fuse to Steam in $dir", e)
             }
         }
-        if (done == 0) return Result.failure(IllegalStateException("Steam's library couldn't be written."))
-        else return Result.success(if (done == 1) "Fuse is in Steam's library. Start Steam and find it under Non-Steam." else "Fuse is in Steam's library for $done users. Start Steam and find it under Non-Steam.")
+        if (done == 0) Result.failure(IllegalStateException("Steam's library couldn't be written."))
+        else Result.success(if (done == 1) "Fuse is in Steam's library. Start Steam and find it under Non-Steam." else "Fuse is in Steam's library for $done users. Start Steam and find it under Non-Steam.")
     }
 
     /**
@@ -142,18 +104,14 @@ internal class DesktopSteam(private val folders: KnownFolders) : SteamIntegratio
     companion object {
         private val FUSE_PROGRAM = Regex("(?i)^fuse([-_. ][^/\\\\]*)?\\.(appimage|exe)$|^fuse$")
 
-        /** Same-directory atomic replacement never deletes the valid original on failure. */
-        internal fun replaceAtomically(file: File, bytes: ByteArray) {
-            val temp = Files.createTempFile(file.parentFile.toPath(), ".fuse-steam-", ".tmp")
-            try {
-                java.io.FileOutputStream(temp.toFile()).use { out -> out.write(bytes); out.fd.sync() }
-                Files.move(temp, file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-            } finally { Files.deleteIfExists(temp) }
-        }
-
+        /**
+         * Whether a Steam entry running [path] (named [name]) is Fuse: the program Fuse runs as now
+         * ([running]), or a Fuse AppImage or program by its file name (`Fuse.AppImage`,
+         * `Fuse-0.3.6.4-x86_64.AppImage`, `Fuse.exe`).
+         */
         internal fun isFuse(path: String, name: String, running: String?): Boolean {
             if (running != null && File(path).absolutePath == File(running).absolutePath) return true
-            return FUSE_PROGRAM.matches(File(path).name)
+            return FUSE_PROGRAM.matches(File(path).name) || (name.equals("Fuse", ignoreCase = true) && path.contains("fuse", ignoreCase = true))
         }
     }
 

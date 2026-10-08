@@ -11,8 +11,6 @@ import coil3.SingletonImageLoader
 import coil3.compose.LocalPlatformContext
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
-import coil3.request.SuccessResult
-import io.github.matiyaaa.fuse.model.ArtworkSizing
 import coil3.size.Precision
 import coil3.size.Scale
 import io.github.matiyaaa.fuse.model.LibraryLayout
@@ -66,9 +64,9 @@ internal fun ArtWarmup(app: AppState) {
     val heroPx = Fuse.quality.heroDecodePx
     val sizes = with(density) {
         WarmSizes(
-            icon = ArtworkSizing.bucket((metrics.icon * 1.4f).roundToPx()),
-            cover = ArtworkSizing.bucket((metrics.coverWidth * 1.45f / 0.72f).roundToPx()),
-            capsule = ArtworkSizing.bucket((metrics.capsuleWidth * 1.3f).roundToPx()),
+            icon = (metrics.icon * 1.4f).roundToPx(),
+            cover = (metrics.coverWidth * 1.45f / 0.72f).roundToPx(),
+            capsule = (metrics.capsuleWidth * 1.3f).roundToPx(),
             logo = 360.dp.roundToPx(),
             panel = 480.dp.roundToPx(),
             hero = heroPx,
@@ -81,7 +79,7 @@ internal fun ArtWarmup(app: AppState) {
         val loader = SingletonImageLoader.get(context)
         val budget = ((loader.memoryCache?.maxSize ?: 0L) * if (lowPower) LOW_POWER_SHARE else MEMORY_SHARE).toLong()
         var used = 0L
-        val inMemory = HashSet<Pair<Any, Int>>()
+        val inMemory = HashSet<Any>()
         val onDisk = HashSet<Any>()
         val gate = Semaphore(if (lowPower) 1 else PARALLEL)
         // A fill's progress means new art: plan again once it pauses.
@@ -91,24 +89,19 @@ internal fun ArtWarmup(app: AppState) {
                 val plan = plan(app, systems, home, sizes, lowPower, posters)
                 coroutineScope {
                     for (w in plan) {
-                        val memoryKey = w.model to w.px
-                        val memory = w.memory && memoryKey !in inMemory && used + w.bytes <= budget
+                        val memory = w.memory && w.model !in inMemory && used + w.bytes <= budget
                         when {
                             memory -> {
-                                inMemory += memoryKey
+                                inMemory += w.model
                                 used += w.bytes
                             }
                             // Only art from the network gains from being fetched ahead; files are on the device already.
-                            memoryKey in inMemory || !isRemote(w.model) || !onDisk.add(w.model) -> continue
+                            w.model in inMemory || !isRemote(w.model) || !onDisk.add(w.model) -> continue
                         }
                         gate.acquire()
                         launch {
                             try {
-                                val result = loader.execute(if (memory && w.hero) heroRequest(context, w.model, w.px) else request(context, w, memory, sizes.small))
-                                if (result !is SuccessResult) {
-                                    if (memory && inMemory.remove(memoryKey)) used -= w.bytes
-                                    onDisk.remove(w.model)
-                                }
+                                loader.execute(if (memory && w.hero) heroRequest(context, w.model, w.px) else request(context, w, memory, sizes.small))
                             } catch (e: CancellationException) {
                                 throw e
                             } catch (e: Throwable) {

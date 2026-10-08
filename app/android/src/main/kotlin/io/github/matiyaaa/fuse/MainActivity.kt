@@ -49,6 +49,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import io.github.matiyaaa.fuse.input.GamepadInput
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.PadButton
+import io.github.matiyaaa.fuse.model.PerformanceProfile
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputRouter
 import io.github.matiyaaa.fuse.ui.designsystem.input.handleKeyEvent
 import io.github.matiyaaa.fuse.ui.shell.app.FuseApp
@@ -60,8 +61,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Fuse's only window on the main screen. It owns the [InputRouter] (raw controller and keyboard
- * input arrives here), keeps the interface immersive at each display's native refresh rate
- * or explicit user cap, bridges pickers and system dialogs for the platform layer, and hands Back to the
+ * input arrives here), keeps the interface immersive at the refresh rate the performance profile
+ * asks for, bridges pickers and system dialogs for the platform layer, and hands Back to the
  * interface instead of closing: as the Home app there is nothing to go back to.
  */
 class MainActivity : ComponentActivity(), ActivityRequests {
@@ -117,7 +118,7 @@ class MainActivity : ComponentActivity(), ActivityRequests {
         followRotation(io.github.matiyaaa.fuse.model.ScreenRotation.AUTO)
         app.beginInterface(askedSafe = intent?.getStringExtra(EXTRA_SAFE_MODE) == "true" || intent?.getBooleanExtra(EXTRA_SAFE_MODE, false) == true)
         enterImmersive()
-        window.decorView.display?.let { window.preferRefreshRate(it) }
+        preferRefreshRate(RefreshPreference.of(PerformanceProfile.AUTOMATIC, app.platformUi.device.tier, lowPower = false))
         app.platformUi.quick.applyTo(window)
 
         // Back always goes to the interface, as the Escape button, so button mapping and the
@@ -197,7 +198,10 @@ class MainActivity : ComponentActivity(), ActivityRequests {
                 }
             }
             launch {
-                followWindowRefresh(window, app, store)
+                val tier = app.platformUi.device.tier
+                store.prefs.map { RefreshPreference.of(it.performance, tier, it.lowPower) }
+                    .distinctUntilChanged()
+                    .collect { preferRefreshRate(it) }
             }
             launch {
                 store.prefs.map { it.display.rotation }.distinctUntilChanged().collect { followRotation(it) }

@@ -27,7 +27,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.Dp
 import io.github.matiyaaa.fuse.model.FocusStyle
 import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberPressProgress
@@ -161,8 +160,6 @@ fun Tile(
 
     Box(
         modifier
-            // Shadows and focus overflow must paint above later siblings, not underneath them.
-            .zIndex(if (selected) 2f else if (hoverOn) 1f else 0f)
             .graphicsLayer {
                 val p = press
                 val raised = maxOf(lift, hover * HOVER_SHARE)

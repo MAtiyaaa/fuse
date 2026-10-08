@@ -14,10 +14,6 @@ import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.github.matiyaaa.fuse.model.ScrapeQuery
 import kotlin.time.Clock
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.currentCoroutineContext
-import kotlin.coroutines.AbstractCoroutineContextElement
-import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -35,7 +31,6 @@ data class ScrapeRequest(
     /** Keep asking lower-priority providers after every kind has an option (for artwork pickers). */
     val collectAllArtwork: Boolean = false,
     val maxCandidates: Int = 10,
-    val demand: ScrapeDemand = ScrapeDemand.VISIBLE,
 )
 
 /** A provider that failed during a job. */
@@ -114,13 +109,7 @@ class ScrapeCoordinator(
     private val matcher: TitleMatcher = TitleMatcher(),
     private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() },
 ) {
-    private val sources: Map<ScrapeProviderId, ScrapeSource> = sources.associate { source ->
-        source.id to ReusingSource(source) { currentCoroutineContext()[Demand]?.value ?: ScrapeDemand.VISIBLE }
-    }
-
-    private class Demand(val value: ScrapeDemand) : AbstractCoroutineContextElement(Key) {
-        companion object Key : CoroutineContext.Key<Demand>
-    }
+    private val sources: Map<ScrapeProviderId, ScrapeSource> = sources.associateBy { it.id }
 
     /** A provider taking a break until [until] (epoch ms), and why. */
     private data class Rest(val until: Long, val reason: String)
@@ -140,9 +129,7 @@ class ScrapeCoordinator(
      * still gets art: from the match [Guess] picks (marked [ScrapeOutcome.Accepted.guessed], with no
      * details) instead of a list to review.
      */
-    suspend fun scrape(request: ScrapeRequest, guess: Guess = Guess.NONE): ScrapeOutcome = withContext(Demand(request.demand)) { scrapeUnscheduled(request, guess) }
-
-    private suspend fun scrapeUnscheduled(request: ScrapeRequest, guess: Guess): ScrapeOutcome {
+    suspend fun scrape(request: ScrapeRequest, guess: Guess = Guess.NONE): ScrapeOutcome {
         val active = activeSources(request)
         if (active.isEmpty()) return ScrapeOutcome.NotFound(emptyList())
         val ordered = if (request.wantMetadata) {
@@ -222,9 +209,7 @@ class ScrapeCoordinator(
      * (best first, each game once), [ScrapeOutcome.NotFound] when none had anything, or
      * [ScrapeOutcome.ProviderErrors] when every provider failed.
      */
-    suspend fun candidates(request: ScrapeRequest): ScrapeOutcome = withContext(Demand(request.demand)) { candidatesUnscheduled(request) }
-
-    private suspend fun candidatesUnscheduled(request: ScrapeRequest): ScrapeOutcome {
+    suspend fun candidates(request: ScrapeRequest): ScrapeOutcome {
         val active = activeSources(request)
         if (active.isEmpty()) return ScrapeOutcome.NotFound(emptyList())
         val errors = ArrayList<ProviderError>()
@@ -268,9 +253,7 @@ class ScrapeCoordinator(
      * Completes a job with the candidate the user picked from [ScrapeOutcome.NeedsReview]: searches
      * that provider again and returns its metadata and artwork (plus other providers' artwork).
      */
-    suspend fun accept(request: ScrapeRequest, candidate: ScrapeCandidate): ScrapeOutcome = withContext(Demand(request.demand)) { acceptUnscheduled(request, candidate) }
-
-    private suspend fun acceptUnscheduled(request: ScrapeRequest, candidate: ScrapeCandidate): ScrapeOutcome {
+    suspend fun accept(request: ScrapeRequest, candidate: ScrapeCandidate): ScrapeOutcome {
         val source = sources[candidate.provider] ?: return ScrapeOutcome.NotFound(emptyList())
         val errors = ArrayList<ProviderError>()
         val games = when (val r = call(source.id) { source.search(request.query.copy(title = candidate.title)) }) {
@@ -287,9 +270,7 @@ class ScrapeCoordinator(
      * no search and no matching, so it never asks which game this is again. Other providers that
      * can add art are asked for the same game by its title. Null when no id could be looked up.
      */
-    suspend fun known(request: ScrapeRequest, ids: Map<ScrapeProviderId, String>): ScrapeOutcome.Accepted? = withContext(Demand(request.demand)) { knownUnscheduled(request, ids) }
-
-    private suspend fun knownUnscheduled(request: ScrapeRequest, ids: Map<ScrapeProviderId, String>): ScrapeOutcome.Accepted? {
+    suspend fun known(request: ScrapeRequest, ids: Map<ScrapeProviderId, String>): ScrapeOutcome.Accepted? {
         if (ids.isEmpty()) return null
         val active = activeSources(request)
         val errors = ArrayList<ProviderError>()

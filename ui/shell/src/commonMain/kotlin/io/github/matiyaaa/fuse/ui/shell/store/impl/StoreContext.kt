@@ -68,9 +68,6 @@ internal class StoreContext(
     /** The game being played on this device right now, if any (transfers ease off or pause meanwhile). */
     val playing = MutableStateFlow<GameId?>(null)
 
-    /** Strong household identity evidence, supplied by Reach before an external scraper search. */
-    var householdProviderClaims: suspend (io.github.matiyaaa.fuse.model.Game) -> List<io.github.matiyaaa.fuse.model.ProviderClaim> = { emptyList() }
-
     /** The last launch problems, newest last, for the diagnostics report. Kept in memory only. */
     val recentProblems = MutableStateFlow<List<Pair<Long, io.github.matiyaaa.fuse.ui.shell.store.Problem>>>(emptyList())
 

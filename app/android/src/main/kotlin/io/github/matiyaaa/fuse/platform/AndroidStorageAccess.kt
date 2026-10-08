@@ -83,41 +83,6 @@ class AndroidStorageAccess(
         return withContext(Dispatchers.IO) { copyImage(uri) }
     }
 
-    /** Copies the selected source into private staging without ever changing the original. */
-    override suspend fun pickSave(title: String): String? {
-        val requests = activities.requests ?: return null
-        val uri = withContext(Dispatchers.Main) { requests.openDocument(arrayOf("*/*")) } ?: return null
-        return withContext(Dispatchers.IO) {
-            val dir = File(appContext.cacheDir, "save-import/${UUID.randomUUID()}")
-            if (!dir.mkdirs()) return@withContext null
-            val name = displayName(uri).orEmpty().substringAfterLast('/').substringAfterLast('\\')
-                .replace(Regex("[^\\p{L}\\p{N} ._()\\[\\]~-]"), "_")
-                .take(180).trim().takeUnless { it.isBlank() || it == "." || it == ".." } ?: "save"
-            val out = File(dir, name)
-            try {
-                val input = appContext.contentResolver.openInputStream(uri) ?: throw IOException("Cannot read save")
-                input.use { source -> out.outputStream().use { destination ->
-                    val buffer = ByteArray(64 * 1024)
-                    var total = 0L
-                    while (true) {
-                        val count = source.read(buffer)
-                        if (count < 0) break
-                        total += count
-                        if (total > 1024L * 1024 * 1024) throw IOException("Save source exceeds 1 GiB")
-                        destination.write(buffer, 0, count)
-                    }
-                } }
-                out.absolutePath
-            } catch (failure: IOException) {
-                dir.deleteRecursively()
-                null
-            } catch (failure: SecurityException) {
-                dir.deleteRecursively()
-                null
-            }
-        }
-    }
-
     override suspend fun pickAudio(title: String): PickedFile? {
         val requests = activities.requests ?: return null
         val uri = withContext(Dispatchers.Main) { requests.pickAudio() } ?: return null

@@ -234,7 +234,7 @@ WHERE id = :id;
 
 playtimeTotals:
 SELECT COALESCE(SUM(tracked_seconds), 0) AS tracked, COALESCE(SUM(imported_seconds), 0) AS imported
-FROM game WHERE id NOT IN (SELECT child_id FROM game_absorption);
+FROM game;
 
 -- Lists (visible = present, not removed, not hidden) ----------------------------------------------
 -- :sort 0 = title, 1 = recently played, 2 = recently added, 3 = most played, 4 = release year.
@@ -394,24 +394,3 @@ LIMIT :limit;
 -- Every game with what tells it apart, for joining it to its RomM entry (Fuse RomM).
 matchRows:
 SELECT id, platform_id, title_original, path, tags_json, romm_rom_id, missing FROM game WHERE removed_at IS NULL;
-
--- A semantic scan proved an old row is content owned by a surviving title. Preserve the original
--- row as a reversible archive. Child metadata/art/title/hidden choice must not rename or hide the base.
-mergeAbsorbedIntent:
-UPDATE game SET
-    favorite = MAX(favorite, (SELECT favorite FROM game WHERE id = :childId)),
-    pinned = MAX(pinned, (SELECT pinned FROM game WHERE id = :childId)),
-    tracked_seconds = tracked_seconds + (SELECT tracked_seconds FROM game WHERE id = :childId),
-    session_count = session_count + (SELECT session_count FROM game WHERE id = :childId),
-    -- Imported counters often describe the same account total on duplicate entries. Never sum them.
-    imported_seconds = MAX(imported_seconds, (SELECT imported_seconds FROM game WHERE id = :childId)),
-    last_played_at = CASE
-        WHEN (SELECT last_played_at FROM game WHERE id = :childId) IS NULL THEN last_played_at
-        WHEN last_played_at IS NULL THEN (SELECT last_played_at FROM game WHERE id = :childId)
-        ELSE MAX(last_played_at, (SELECT last_played_at FROM game WHERE id = :childId)) END,
-    updated_at = :now
-WHERE id = :ownerId;
-
-archiveAbsorbed:
-UPDATE game SET removed_at = :now, missing = 0, missing_since = NULL, updated_at = :now
-WHERE id = :id AND removed_at IS NULL;

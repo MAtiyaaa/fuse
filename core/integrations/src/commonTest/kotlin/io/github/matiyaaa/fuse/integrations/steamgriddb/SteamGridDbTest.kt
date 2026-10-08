@@ -16,34 +16,8 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.async
 
 class SteamGridDbTest {
-
-    @Test
-    fun repeatedAndConcurrentRequestsUseOneProviderCall() = runTest {
-        val http = TestHttp { kotlinx.coroutines.delay(20); json("""{"success":true,"data":[{"id":42,"name":"Doom"}]}""") }
-        val client = SteamGridDbClient(http.client, "key", RateLimiter.unlimited(), now = { testScheduler.currentTime })
-        kotlinx.coroutines.coroutineScope {
-            val calls = List(5) { async { client.searchAutocomplete("Doom") } }
-            calls.forEach { assertIs<ApiResult.Success<List<SgdbGame>>>(it.await()) }
-        }
-        client.searchAutocomplete("Doom")
-        assertEquals(1, http.requests.size)
-    }
-
-    @Test
-    fun quotaCooldownAppliesAcrossDifferentDirectRequests() = runTest {
-        var now = 0L
-        val http = TestHttp { json("{}", HttpStatusCode.TooManyRequests, HttpHeaders.RetryAfter to "120") }
-        val client = SteamGridDbClient(http.client, "key", RateLimiter.unlimited(), now = { now })
-        assertIs<ApiResult.RateLimited>(client.searchAutocomplete("Doom"))
-        assertIs<ApiResult.RateLimited>(client.gameById(42))
-        assertEquals(1, http.requests.size)
-        now = 120_001
-        assertIs<ApiResult.RateLimited>(client.gameById(42))
-        assertEquals(2, http.requests.size)
-    }
 
     private val gridsJson = """
         {"success":true,"page":0,"total":3,"limit":50,"data":[

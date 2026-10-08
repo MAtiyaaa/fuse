@@ -60,12 +60,12 @@ object RommMatch {
             val platform = platformOf(r.platformSlug) ?: continue
             byLink[r.id]?.let { candidates += RommMatchResult(r.id, it.id, MatchReason.LINKED) }
             val hashes = listOfNotNull(r.md5) + r.files.mapNotNull { it.md5 }
-            hashes.firstNotNullOfOrNull { h -> byMd5[h.lowercase()]?.singleOrNull { it.platform == platform } }?.let { candidates += RommMatchResult(r.id, it.id, MatchReason.HASH) }
+            hashes.firstNotNullOfOrNull { h -> byMd5[h]?.singleOrNull { it.platform == platform } }?.let { candidates += RommMatchResult(r.id, it.id, MatchReason.HASH) }
             r.titleId?.let { t -> bySerial[platform to idKey(t)]?.singleOrNull() }?.let { candidates += RommMatchResult(r.id, it.id, MatchReason.TITLE_ID) }
-            byFile[platform to r.fsName.lowercase()]?.singleOrNull()?.takeIf { weakCompatible(r, it) }?.let { candidates += RommMatchResult(r.id, it.id, MatchReason.FILE_NAME) }
+            byFile[platform to r.fsName.lowercase()]?.singleOrNull()?.let { candidates += RommMatchResult(r.id, it.id, MatchReason.FILE_NAME) }
             if (platform in FOLDER_SYSTEMS) {
                 val unpacked = r.fsName.replace(ARCHIVE, "").lowercase()
-                if (unpacked != r.fsName.lowercase()) byFile[platform to unpacked]?.singleOrNull()?.takeIf { weakCompatible(r, it) }?.let { candidates += RommMatchResult(r.id, it.id, MatchReason.FILE_NAME) }
+                if (unpacked != r.fsName.lowercase()) byFile[platform to unpacked]?.singleOrNull()?.let { candidates += RommMatchResult(r.id, it.id, MatchReason.FILE_NAME) }
                 (listOfNotNull(r.titleId, r.fsName, r.name).firstNotNullOfOrNull(::playStationId))
                     ?.let { byPsId[platform to it]?.singleOrNull() }
                     ?.let { candidates += RommMatchResult(r.id, it.id, MatchReason.TITLE_ID) }
@@ -73,7 +73,7 @@ object RommMatch {
             val key = platform to nameKey(r.fsName.ifBlank { r.name })
             val locals = byName[key]
             if (locals != null && locals.size == 1 && romsByName[key]?.size == 1 && key.second.isNotEmpty()) {
-                if (weakCompatible(r, locals.single())) candidates += RommMatchResult(r.id, locals.single().id, MatchReason.NAME_AND_TAGS)
+                candidates += RommMatchResult(r.id, locals.single().id, MatchReason.NAME_AND_TAGS)
             }
         }
         val claimedRoms = HashSet<Long>()
@@ -84,21 +84,6 @@ object RommMatch {
             out += c
         }
         return out
-    }
-
-    /** Names never overrule incompatible explicit identities, even when both sides are unique. */
-    private fun weakCompatible(rom: RommRom, game: LocalGame): Boolean {
-        if (game.rommRomId != null && game.rommRomId != rom.id) return false
-        val remoteId = rom.titleId?.takeIf { it.isNotBlank() } ?: if (game.platform in FOLDER_SYSTEMS) {
-            listOf(rom.fsName, rom.name).firstNotNullOfOrNull(::playStationId)
-        } else null
-        val localId = game.serial?.takeIf { it.isNotBlank() } ?: if (game.platform in FOLDER_SYSTEMS) {
-            listOf(game.fileName, game.title).firstNotNullOfOrNull(::playStationId)
-        } else null
-        if (remoteId != null && localId != null && idKey(remoteId) != idKey(localId)) return false
-        val hashes = (listOfNotNull(rom.md5) + rom.files.mapNotNull { it.md5 }).filter { it.isNotBlank() }
-        if (!game.md5.isNullOrBlank() && hashes.isNotEmpty() && hashes.none { it.equals(game.md5, ignoreCase = true) }) return false
-        return true
     }
 
     /** Systems whose games RomM keeps as archives but that are played from the folder they unpack to. */

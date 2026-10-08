@@ -304,13 +304,7 @@ class GameRepository(
      */
     suspend fun removeFromFuse(id: GameId) = write { q.setRemoved(removedAt = clock(), hidden = 1, now = clock(), id = id.value) }
 
-    suspend fun restoreToFuse(id: GameId) = write {
-        // A migrated package is physically part of a surviving title, not an independent game.
-        // Its original data remains readable, but Restore must not recreate a phantom title.
-        if (db.gameAbsorptionQueries.selectOwner(id.value).executeAsOneOrNull() == null) {
-            q.setRemoved(removedAt = null, hidden = 0, now = clock(), id = id.value)
-        }
-    }
+    suspend fun restoreToFuse(id: GameId) = write { q.setRemoved(removedAt = null, hidden = 0, now = clock(), id = id.value) }
 
     /**
      * Deletes the record of a game whose file is missing, with its media, sessions and collection

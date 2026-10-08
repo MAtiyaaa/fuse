@@ -51,7 +51,7 @@ internal fun StandbyWatch(app: AppState, router: io.github.matiyaaa.fuse.ui.desi
         while (true) {
             delay(CHECK_MS)
             val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
-            when (StandbyClock.check(now, lastCheck, maxOf(router.lastActivityAt, app.store.displaySession.lastWakeAt), Away.lastReturnAt, limit)) {
+            when (StandbyClock.check(now, lastCheck, router.lastActivityAt, Away.lastReturnAt, limit)) {
                 StandbyClock.Verdict.SLEPT -> router.touched()
                 StandbyClock.Verdict.DUE -> if (!app.standby && !busy()) app.standby = true
                 StandbyClock.Verdict.WAIT -> Unit
@@ -76,8 +76,7 @@ internal fun StandbyScreen(clock24h: Boolean, onWake: () -> Unit) {
         router.touched()
         onWake()
     }
-    InputLayer(priority = LayerPriority.SYSTEM, modal = true) { event ->
-        router.consumeUntilRelease(event.action)
+    InputLayer(priority = LayerPriority.SYSTEM, modal = true) { _ ->
         wake()
         NavResult.CONSUMED
     }
