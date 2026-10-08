@@ -106,6 +106,14 @@ data class RenderQuality(
  * other desktop platforms retain their existing quality selection.
  */
 object NativePresentation {
+    /**
+     * Desktop artwork cache pressure follows available memory, not how many CPU cores a handheld
+     * exposes. A four-core Linux handheld with 8 GB should not decode every image in low-RAM mode.
+     */
+    fun lowMemoryArtwork(host: Host, device: CapabilityProfile): Boolean =
+        if (host == Host.LINUX) device.isLowRamDevice || device.totalRamMb < 3_000
+        else device.tier == DeviceTier.LOW
+
     fun performance(
         host: Host,
         selected: PerformanceProfile,
