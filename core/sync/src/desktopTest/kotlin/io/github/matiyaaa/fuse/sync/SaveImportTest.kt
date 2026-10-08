@@ -24,7 +24,7 @@ class SaveImportTest {
 
     @Test fun unsafeAndDuplicateArchivesNeverReachDestinations() = temp { root ->
         val importer = JvmSaveImporter(File(root, "staging"))
-        val env = FileSaveEnvironment("LINUX", root.path)
+        val env = FileSaveEnvironment("LINUX", root.path) { null }
         for (names in listOf(listOf("../escape.sav"), listOf("/absolute.sav"), listOf("C:\\save.sav"), listOf("a/../../save.sav"), listOf("SAVE.sav", "save.sav"), listOf("a/save.sav", "a"))) {
             assertFailsWith<IllegalArgumentException> { importer.scan(zip(root, *names.map { it to "save" }.toTypedArray()), emptyList(), env) }
         }
@@ -34,7 +34,7 @@ class SaveImportTest {
 
     @Test fun actualInflatedBytesAreBounded(): Unit = temp { root ->
         val importer = JvmSaveImporter(File(root, "stage"), JvmSaveImporter.Limits(bytes = 20, fileBytes = 20))
-        assertFailsWith<IllegalArgumentException> { importer.scan(zip(root, "save.sav" to "0".repeat(21)), emptyList(), FileSaveEnvironment("LINUX", root.path)) }
+        assertFailsWith<IllegalArgumentException> { importer.scan(zip(root, "save.sav" to "0".repeat(21)), emptyList(), FileSaveEnvironment("LINUX", root.path) { null }) }
         Unit
     }
 
@@ -43,7 +43,7 @@ class SaveImportTest {
         val source = zip(root, "memstick/PSP/SAVEDATA/ULUS10041000/PARAM.SFO" to "save", "memstick/PSP/SAVEDATA/ULUS10042000/DATA.BIN" to "other", "memstick/PSP/PPSSPP_STATE/game.ppst" to "state")
         val importer = JvmSaveImporter(File(root, "stage"))
         val q = query("psp", "First", "ppsspp", "ULUS10041")
-        val p = importer.scan(source, listOf(q), FileSaveEnvironment("LINUX", root.path))
+        val p = importer.scan(source, listOf(q), FileSaveEnvironment("LINUX", root.path) { null })
         val e = p.entries.single()
         assertEquals("psp.savedata", e.sourceFormat)
         val binding = importer.binding(p, SaveImportChoice(e.id, assertNotNull(e.selectedTarget)))
@@ -60,7 +60,7 @@ class SaveImportTest {
         val q = query("gba", "Mario", "mgba")
         val source = File(root, "unknown.sav").apply { writeText("0".repeat(512)) }
         val importer = JvmSaveImporter(File(root, "stage"))
-        val p = importer.scan(source, listOf(q), FileSaveEnvironment("LINUX", root.path))
+        val p = importer.scan(source, listOf(q), FileSaveEnvironment("LINUX", root.path) { null })
         assertEquals(null, p.entries.single().selectedTarget)
         assertEquals(SaveImportConfidence.MANUAL, p.entries.single().targets.single().confidence)
         assertTrue(saves.isDirectory)
