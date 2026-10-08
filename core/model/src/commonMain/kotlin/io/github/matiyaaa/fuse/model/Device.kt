@@ -49,6 +49,8 @@ data class RenderQuality(
     val heroMaxPx: Int,
     /** How often non-essential values (clock seconds, stats) refresh. */
     val statusRefreshMs: Long,
+    /** Linux can request native-sized hero art without changing Android's established decode budget. */
+    val heroDecodeShare: Float = 0.85f,
 ) {
     companion object {
         /** The profile in effect: the person's choice, or under Automatic the one the device's tier recommends. */
@@ -95,6 +97,53 @@ data class RenderQuality(
 
         /** Art sizes for a big screen on Balanced. */
         private const val BIG_SCREEN_ART_PX = 2560
+    }
+}
+
+/**
+ * Linux display quality is independent of its rendering fallback. A software fallback must reduce
+ * expensive effects, never quietly replace native-sized artwork with a thumbnail. Android and the
+ * other desktop platforms retain their existing quality selection.
+ */
+object NativePresentation {
+    fun performance(
+        host: Host,
+        selected: PerformanceProfile,
+        device: CapabilityProfile?,
+        lowPower: Boolean,
+    ): PerformanceProfile {
+        if (host != Host.LINUX || selected != PerformanceProfile.AUTOMATIC || lowPower || device == null) return selected
+        // A four-core handheld with ample RAM should not be classified like a low-memory phone.
+        // Raise only the automatic visual floor to Balanced; don't claim the CPU has more cores.
+        return if (device.tier == DeviceTier.LOW && !device.isLowRamDevice &&
+            device.totalRamMb >= 6_000 && device.cpuCores >= 4
+        ) PerformanceProfile.BALANCED else selected
+    }
+
+    fun quality(
+        host: Host,
+        selected: PerformanceProfile,
+        device: CapabilityProfile?,
+        lowPower: Boolean,
+        softwareRenderer: Boolean,
+        windowPx: Int,
+    ): RenderQuality {
+        val preference = performance(host, selected, device, lowPower)
+        if (host != Host.LINUX) {
+            return RenderQuality.of(selected, device, lowPower || softwareRenderer, windowPx)
+        }
+        val sharp = RenderQuality.of(preference, device, lowPower, windowPx)
+            .copy(heroDecodeShare = 1f)
+        if (!softwareRenderer || lowPower) return sharp
+        // Software painting still needs a modest effects budget, but not blurry hero pictures.
+        return sharp.copy(
+            backgroundVideo = false,
+            blur = false,
+            animatedBackground = false,
+            particles = false,
+            crtShader = false,
+            prefetchDepth = minOf(sharp.prefetchDepth, 2),
+        )
     }
 }
 
