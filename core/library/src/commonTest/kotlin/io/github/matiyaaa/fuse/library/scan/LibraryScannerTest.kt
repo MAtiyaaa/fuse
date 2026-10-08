@@ -39,7 +39,15 @@ class LibraryScannerTest {
         platform: PlatformId? = null,
         mediaRoots: List<String> = emptyList(),
         sourcePlatforms: Map<LibrarySourceId, PlatformId> = emptyMap(),
-    ): ScanReport = scanner.scan(ScanRequest(sources.toList(), scope, platform, mediaRoots = mediaRoots, sourcePlatforms = sourcePlatforms))
+    ): ScanReport {
+        val report = scanner.scan(ScanRequest(sources.toList(), scope, platform, mediaRoots = mediaRoots, sourcePlatforms = sourcePlatforms))
+        // Simulate the data layer accepting each complete report. The scanner must not durably
+        // acknowledge a semantic upgrade before the indexer's transaction has committed it.
+        for (folder in report.scanned.filter { it.complete }) {
+            folder.rulesVersion?.let { state.rememberRulesVersion(folder.folderPath, it) }
+        }
+        return report
+    }
 
     private fun ScanReport.of(platform: String): PlatformFolderScan = scanned.single { it.platformId.value == platform }
 
@@ -174,6 +182,33 @@ class LibraryScannerTest {
         assertEquals(LocationKind.FOLDER, games[0].kind)
         assertEquals("504230", games[0].tags.serial)
         assertTrue(report.scanned.single().complete)
+    }
+
+    @Test
+    fun semanticUpgradeIsNotAcknowledgedBeforeReconciliation() = runTest {
+        fs.file("/ROMs/switch/Harbor.nsp", size = 4000)
+        val request = ScanRequest(listOf(source("/ROMs", LibrarySourceKind.ROMS_ROOT)))
+        val first = scanner.scan(request)
+        assertEquals(1, first.scanned.size)
+        // Scanner remembered dates, but the process dies before its report reaches the indexer.
+        val restarted = LibraryScanner(fs, state).scan(request)
+        assertEquals(1, restarted.scanned.size, "an interrupted semantic upgrade must rescan")
+    }
+
+    @Test
+    fun oldFolderDatesDoNotSkipSemanticUpgradeAndUpgradeRunsOnlyOnce() = runTest {
+        fs.file("/ROMs/switch/Harbor [0100ABCD12345000][v0].nsp", size = 4000)
+        fs.file("/ROMs/switch/Harbor [0100ABCD12345800][v65536].nsp", size = 300)
+        // Pre-upgrade installations have filesystem dates but no semantic rules revision.
+        state.remember("/ROMs/switch", fs.mtime("/ROMs/switch"))
+        val roms = source("/ROMs", LibrarySourceKind.ROMS_ROOT)
+        val upgraded = scan(roms, scope = ScanScope.QUICK)
+        assertTrue(upgraded.unchanged.isEmpty())
+        val title = upgraded.of("switch").games.single()
+        assertEquals(1, title.content.size)
+        val repeated = scan(roms, scope = ScanScope.QUICK)
+        assertTrue(repeated.scanned.isEmpty(), "a semantic upgrade is one-time, not every startup")
+        assertEquals(listOf("switch"), repeated.unchanged.map { it.platformId?.value })
     }
 
     @Test

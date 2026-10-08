@@ -950,6 +950,7 @@ private fun sourceName(s: MediaSource) = when (s) {
     MediaSource.THEGAMESDB -> "TheGamesDB"
     MediaSource.SCREENSCRAPER -> "ScreenScraper"
     MediaSource.LIBRETRO -> "Libretro thumbnails"
+    MediaSource.GAMETDB -> "GameTDB (gametdb.com)"
     MediaSource.ART_PACK -> "Art Book Next"
     MediaSource.GENERATED -> "Generated"
     MediaSource.GAME_ART -> "From its games"

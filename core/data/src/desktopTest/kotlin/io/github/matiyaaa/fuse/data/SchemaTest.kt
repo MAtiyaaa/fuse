@@ -19,18 +19,18 @@ import kotlinx.coroutines.runBlocking
 
 class SchemaTest {
     @Test
-    fun schemaIsVersionFour() {
-        assertEquals(4L, FuseDatabase.Schema.version)
+    fun schemaIsVersionFive() {
+        assertEquals(5L, FuseDatabase.Schema.version)
     }
 
     @Test
     fun freshDatabaseHasEveryTableAndForeignKeys() = TestDb().use { t ->
-        assertEquals(4L, DesktopDatabase.userVersion(t.driver))
+        assertEquals(5L, DesktopDatabase.userVersion(t.driver))
         val tables = t.driver.strings("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')").toSet()
         val expected = setOf(
             "library_source", "game", "game_summary", "game_content", "game_disc", "game_genre", "folder_state",
             "media", "play_session", "game_collection", "collection_game", "setting", "app_override", "kv_cache",
-            "title_cleanup_history", "romm_platform", "romm_rom", "romm_firmware", "romm_collection", "offline_media",
+            "title_cleanup_history", "romm_platform", "romm_rom", "romm_firmware", "romm_collection", "offline_media", "game_absorption",
         )
         assertTrue(tables.containsAll(expected), "missing: ${expected - tables}")
         assertEquals(listOf("1"), t.driver.strings("PRAGMA foreign_keys"))
@@ -56,7 +56,7 @@ class SchemaTest {
             assertEquals(listOf("wal"), driver.strings("PRAGMA journal_mode"))
         }
         DesktopDatabase.openDriver(path).use { driver ->
-            assertEquals(4L, DesktopDatabase.userVersion(driver))
+            assertEquals(5L, DesktopDatabase.userVersion(driver))
             assertEquals(listOf("/roms"), FuseData(FuseDatabase(driver)).sources.all().map { it.path })
             assertEquals(listOf("1"), driver.strings("PRAGMA foreign_keys"))
         }
@@ -83,7 +83,7 @@ class SchemaTest {
             old.execute(null, "INSERT INTO app_override(app_id, pinned) VALUES ('com.example/.Main', 1)", 0)
         }
         DesktopDatabase.openDriver(path).use { driver ->
-            assertEquals(4L, DesktopDatabase.userVersion(driver))
+            assertEquals(5L, DesktopDatabase.userVersion(driver))
             assertEquals(listOf("snes"), driver.strings("SELECT platform_scanned FROM game"))
             assertEquals(listOf(""), driver.strings("SELECT platform_override FROM game"))
             assertEquals(listOf(""), driver.strings("SELECT kind FROM app_override"))
@@ -118,7 +118,7 @@ class SchemaTest {
             )
         }
         DesktopDatabase.openDriver(path).use { driver ->
-            assertEquals(4L, DesktopDatabase.userVersion(driver))
+            assertEquals(5L, DesktopDatabase.userVersion(driver))
             // A copy of the 0.1.6 library is kept from before the migration.
             val backup = File(DesktopDatabase.backupPath(path))
             assertTrue(backup.isFile && backup.length() > 0)

@@ -1,5 +1,8 @@
 package io.github.matiyaaa.fuse
 
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+
 import android.annotation.SuppressLint
 import android.app.Presentation
 import android.content.Context
@@ -65,6 +68,7 @@ internal class CompanionPresentation(
 ) : Presentation(owner, display) {
 
     private val host = PresentationHost()
+    private val refreshScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main + kotlinx.coroutines.SupervisorJob())
 
     init {
         setCancelable(false)
@@ -112,6 +116,10 @@ internal class CompanionPresentation(
         val root = ShownFrame(context, onShown).apply { addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)) }
         setContentView(root, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         window.hideSystemBars()
+        refreshScope.launch {
+            val store = app.awaitStore() ?: return@launch
+            followWindowRefresh(window, app, store, display)
+        }
     }
 
     override fun onStart() {
@@ -121,6 +129,7 @@ internal class CompanionPresentation(
 
     override fun onStop() {
         window?.let { app.platformUi.quick.detachSecond(it) }
+        refreshScope.cancel()
         host.destroy()
         super.onStop()
     }

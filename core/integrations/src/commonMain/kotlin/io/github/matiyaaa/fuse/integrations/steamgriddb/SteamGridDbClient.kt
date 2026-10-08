@@ -17,6 +17,12 @@ import io.github.matiyaaa.fuse.model.ArtworkOption
 import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.ktor.client.HttpClient
+import io.ktor.client.request.HttpRequestBuilder
+import io.github.matiyaaa.fuse.integrations.RawResponse
+import io.github.matiyaaa.fuse.integrations.scrape.RequestReuse
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlin.time.Clock
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.parameter
 import io.ktor.client.request.url
@@ -176,13 +182,34 @@ class SteamGridDbClient(
     apiKey: String,
     limiter: RateLimiter = RateLimiter(minIntervalMillis = 100, maxConcurrency = 4),
     private val baseUrl: String = BASE_URL,
+    private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() },
 ) {
     private val key = Secret(sanitizeKey(apiKey))
+    private val reuse = RequestReuse(now)
+    private val cooldownLock = Mutex()
+    private var cooldownUntil = 0L
+
+    /** Applies to direct API consumers too, not only jobs routed through ScrapeCoordinator. */
+    private suspend fun execute(block: HttpRequestBuilder.() -> Unit): ApiResult<RawResponse> {
+        val until = cooldownLock.withLock { cooldownUntil }
+        if (until > now()) return ApiResult.RateLimited((until - now() + 999) / 1000, "SteamGridDB is resting after its request limit")
+        val result = api.execute(block)
+        if (result is ApiResult.Success) {
+            val failure = api.failureFor(result.value)
+            if (failure is ApiResult.RateLimited) {
+                val seconds = failure.retryAfterSeconds?.coerceAtLeast(1) ?: 1800
+                cooldownLock.withLock { cooldownUntil = maxOf(cooldownUntil, now() + seconds.coerceAtMost((Long.MAX_VALUE - now()).coerceAtLeast(0) / 1000) * 1000) }
+            }
+        }
+        return result
+    }
     private val api = ProviderHttp(http, "SteamGridDB", limiter, { listOf(key) })
 
-    /** Checks the key with a real search call. */
+    /** Checks the key with a fresh search call; a cached answer cannot verify current credentials. */
     suspend fun verifyKey(): KeyCheck =
-        if (key.isBlank) KeyCheck.Rejected("Enter a SteamGridDB API key") else KeyCheck.from(searchAutocomplete("fuse"))
+        if (key.isBlank) KeyCheck.Rejected("Enter a SteamGridDB API key") else KeyCheck.from(
+            getFresh("search/autocomplete/fuse", ListSerializer(SgdbGame.serializer())),
+        )
 
     /** `/search/autocomplete/{term}`. */
     suspend fun searchAutocomplete(term: String): ApiResult<List<SgdbGame>> =
@@ -210,16 +237,19 @@ class SteamGridDbClient(
 
     /** `/{grids|heroes|logos|icons}/game/{gameId}` with [filters]. */
     suspend fun assets(type: SgdbAssetType, gameId: Long, filters: SgdbFilters = SgdbFilters()): ApiResult<SgdbAssetPage> =
-        api.execute {
+        reuse.run("assets:${type.name}:$gameId:${filters.toParameters(type)}", { it.data.isEmpty() }) { execute {
             url("$baseUrl/${type.path}/game/$gameId")
             bearerAuth(key.reveal())
             filters.toParameters(type).forEach { (k, v) -> parameter(k, v) }
         }.flatMap { raw ->
             if (raw.status == 404) return@flatMap ApiResult.Success(SgdbAssetPage())
             api.failureFor(raw) ?: api.decode(raw, SgdbAssetPage.serializer())
-        }
+        } }
 
-    private suspend fun <T> get(path: String, serializer: KSerializer<T>): ApiResult<T?> = api.execute {
+    private suspend fun <T> get(path: String, serializer: KSerializer<T>): ApiResult<T?> =
+        reuse.run("get:$path", { it == null || it is Collection<*> && it.isEmpty() }) { getFresh(path, serializer) }
+
+    private suspend fun <T> getFresh(path: String, serializer: KSerializer<T>): ApiResult<T?> = execute {
         url("$baseUrl/$path")
         bearerAuth(key.reveal())
     }.flatMap { raw ->

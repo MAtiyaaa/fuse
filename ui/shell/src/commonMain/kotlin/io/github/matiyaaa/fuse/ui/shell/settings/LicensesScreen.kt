@@ -89,6 +89,14 @@ private val docs = listOf(
             "and logos are trademarks of their owners and are shown only to identify each system.",
     ),
     LicenceDoc(
+        "gametdb", "GameTDB covers", "GameCube and Wii cover scans, downloaded when used",
+        inline = "Artwork supplied by GameTDB: https://www.gametdb.com/\n\n" +
+            "GameTDB permits use in software with attribution. Cover scans retain their original " +
+            "owners' copyright; Fuse does not claim an open artwork licence or bundle these images. " +
+            "Contribute game information and covers at https://www.gametdb.com/. " +
+            "Software-use guidance: https://www.gametdb.com/Main/FAQ",
+    ),
+    LicenceDoc(
         "systematic", "System pictures", "RetroArch's Systematic icons, CC BY 4.0. Downloaded when used, not part of Fuse",
         inline = io.github.matiyaaa.fuse.integrations.systemart.SystemIcons.ATTRIBUTION + "\n\n" +
             "Source: ${io.github.matiyaaa.fuse.integrations.systemart.SystemIcons.REPO_URL}\n" +

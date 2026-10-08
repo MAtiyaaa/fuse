@@ -70,3 +70,8 @@ SELECT game_id FROM collection_game WHERE collection_id = ?;
 
 byKind:
 SELECT id, name FROM game_collection WHERE kind = ?;
+
+-- Preserve the child's original membership for recovery and add its proven owner, without duplicates.
+copyAbsorbedMemberships:
+INSERT OR IGNORE INTO collection_game(collection_id, game_id, sort_order)
+SELECT collection_id, :ownerId, sort_order FROM collection_game WHERE game_id = :childId;

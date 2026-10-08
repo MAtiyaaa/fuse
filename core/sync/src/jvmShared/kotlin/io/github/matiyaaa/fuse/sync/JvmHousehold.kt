@@ -196,7 +196,8 @@ class JvmHousehold(
         val entries = games.map { g -> withHashes(g) }
         _mine.value = entries
         val endpoint = if (cfg.shareLibrary && server.port > 0) PeerEndpoint(bindAddresses(), server.port) else null
-        val body = DeviceLibrary(device = selfId(), entries = entries, endpoint = endpoint, accepts = cfg.acceptSends)
+        val identities = if (cfg.shareLibrary) runCatching { l.steamIdentities() }.getOrDefault(emptyList()) else emptyList()
+        val body = DeviceLibrary(device = selfId(), entries = entries, endpoint = endpoint, accepts = cfg.acceptSends, steamIdentities = identities)
         val version = SyncCrypto.sha256(json.encodeToString(DeviceLibrary.serializer(), body).toByteArray()).take(24)
         if (version == published) return
         c.publishLibrary(body.copy(version = version))

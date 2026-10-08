@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.0 is the <b>Speed Release</b>: Fuseline 4, an animation engine that no longer runs motion just because time passes. Every motion is worked out from its formula when something looks at it, left alone until it could next change by enough to be seen, and rests while nobody looks, so Fuse moves exactly as before with far less work. It follows 0.3.8.2, the Reach Update (every game in your household reachable from every device, and Switch libraries read the way people keep them), and 0.3.7, the Motion Update (Fuseline 3, where motion never breaks). <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.4.1 is the <b>Connected Update</b>, built directly on shipped Fuseline 4: durable profile revisions, stronger household identity, safe save importing, independent display refresh and desktop rendering work. This branch is still undergoing integration and physical acceptance. <a href="docs/audits/0.4.1-convergence.md">Engineering acceptance record.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -579,7 +579,7 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.4.0 "The Speed Release" is still early, and brings Fuseline 4.** Fuse's animation engine
+> **Fuse 0.4.1 "The Connected Update" is under integration and physical acceptance.** It builds on shipped Fuseline 4. Fuse's animation engine
 > no longer runs motion just because time passes: a value is worked out from its motion's formula
 > when something looks at it, left alone until it could next change by enough to be seen, and rests
 > while nobody looks, coming back exactly where it would have been. Values on the same spring share
@@ -588,7 +588,7 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 >
 > 0.3.8, "The Reach Update", brings every game in your household within
 > reach. With Fuse Sync, each device sees what your other devices have, in the RomM tab ("Not on
-> RomM, from another device", and each system in sections) or in a Remote Library in the Sync tab,
+> RomM, from another device", and each system in sections) or in a Fuse Library in the Sync tab,
 > and every game's page says where it is: this device, your other devices and RomM, online or away,
 > verified or not. Bring a game here, send it to any device (one that is away gets it when it is
 > back) or have the device that has it upload it to RomM. Fuse picks the best source by itself (a
@@ -634,10 +634,11 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 
 | Version | Name | What it brought |
 |---|---|---|
+| [0.4.1](docs/releases/0.4.1.md) | The Connected Update | Fuse Library, causal profile settings, strong household identity, save import and display/desktop foundations; physical acceptance in progress |
 | [0.4.0](docs/releases/0.4.0.md) | The Speed Release | Fuseline 4: values worked out from their motion's formula when read, left alone until they could visibly change, resting while nobody looks; springs solved once for every value on them; a Motion Inspector in Developer options; heat and battery saver ease decoration on Android; fading colours that redraw instead of recomposing |
-| [0.3.8.2](docs/releases/0.3.8.2.md) | The Reach Update | Games folders read by their files whatever they are called; a background Fuse Sync host started again on the newest Fuse (the Remote Library on the host); one or a few systems at the left of the Systems page; a Library list in the developer options |
+| [0.3.8.2](docs/releases/0.3.8.2.md) | The Reach Update | Games folders read by their files whatever they are called; a background Fuse Sync host started again on the newest Fuse (the Fuse Library on the host); one or a few systems at the left of the Systems page; a Library list in the developer options |
 | [0.3.8.1](docs/releases/0.3.8.1.md) | The Reach Update | Switch libraries read the way people keep them: updates and DLC told apart with or without title ids, joined to their game wherever they sit (own folder, one big folder, updates and dlc folders, or folders chosen in settings), copies counted once, .nsz and .xcz, RomM uploads that bring updates and DLC along |
-| [0.3.8](docs/releases/0.3.8.md) | The Reach Update | Every game in the household within reach: other devices' games in the RomM tab and a Remote Library in the Sync tab, Available On for every game, Send to Another Device (queued while it is away), uploads to RomM asked from any device, the best source chosen by itself, every device's downloads, all remembered offline; Library touch scrolling that stays where you leave it |
+| [0.3.8](docs/releases/0.3.8.md) | The Reach Update | Every game in the household within reach: other devices' games in the RomM tab and a Fuse Library in the Sync tab, Available On for every game, Send to Another Device (queued while it is away), uploads to RomM asked from any device, the best source chosen by itself, every device's downloads, all remembered offline; Library touch scrolling that stays where you leave it |
 | [0.3.7.5](docs/releases/0.3.7.5.md) | The Motion Update | Fuseline 3.1 (values without coroutines, no invisible frames, decoration that waits for you, paced decoration), measured against Fuseline 3, 2, 1 and Compose; an optimised Android build compiled ahead of time; 0.3.7.4's slowdown on Android undone; selection moves that redraw two items |
 | [0.3.7.4](docs/releases/0.3.7.4.md) | The Motion Update | Each device keeps its own Systems page; systems made too large through Fuse Sync are put back; arranging on a short screen; far less drawn every frame; the slowest frame shown on the device |
 | [0.3.7.3](docs/releases/0.3.7.3.md) | The Motion Update | Systems as small as a game's box art, with a picture of each console you can change; a System size setting; arranging that moves systems along in order; a Systems look for each screen of a two-screen device; RomM uploads that finish; the second screen following Downloads |

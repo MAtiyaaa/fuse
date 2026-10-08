@@ -46,6 +46,8 @@ import kotlinx.coroutines.flow.StateFlow
  * on background dispatchers.
  */
 interface FuseStore {
+    /** Standby belongs to this running installation, rather than to one window. */
+    val displaySession: DisplaySession
     val prefs: StateFlow<UiPrefs>
     fun updatePrefs(transform: (UiPrefs) -> UiPrefs)
 
@@ -106,7 +108,7 @@ interface FuseStore {
     /** Fuse RomM, the Fuse RomM native integration. */
     val romm: RommOps get() = RommOps.None
 
-    /** The Remote Library: the household's games on its other devices, through Fuse Sync. */
+    /** The Fuse Library: the household's games on its other devices, through Fuse Sync. */
     val reach: ReachOps get() = ReachOps.None
 
     /** Streaming games from a computer at home with Moonlight. */
@@ -530,6 +532,9 @@ interface SourceOps {
      */
     suspend fun findSteamGames(extra: String? = null): List<io.github.matiyaaa.fuse.library.steam.SteamGame> = emptyList()
 
+    /** Remembered local identities. Presence never claims an authenticated session or game licence. */
+    suspend fun steamAccounts(): List<io.github.matiyaaa.fuse.library.steam.SteamAccount> = emptyList()
+
     /**
      * Puts [games] in the library under Steam: Fuse keeps a small shortcut for each in its own
      * folder (Steam's files are never touched) and plays them through Steam. Returns how many it added.
@@ -601,7 +606,7 @@ interface MediaOps {
     fun fillEverything(platform: PlatformId? = null) = fillEverything(platform, remote = false)
 
     /**
-     * Fill everything over the library, and with [remote] the Remote Library too: RomM's games and
+     * Fill everything over the library, and with [remote] the Fuse Library too: RomM's games and
      * the household's other devices' games Fuse shows without having, remembered the same way.
      */
     fun fillEverything(platform: PlatformId?, remote: Boolean)

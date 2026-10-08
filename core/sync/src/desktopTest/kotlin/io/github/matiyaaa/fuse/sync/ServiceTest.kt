@@ -184,7 +184,7 @@ class ServiceTest {
     }
 
     @Test
-    fun aGameKnownBySerialOnOneDeviceAndTitleOnAnotherIsOneGame(): Unit = runBlocking {
+    fun aTitleOnlyCopyCannotAcquireASerialIdentifiedGamesSaveWithoutEvidence(): Unit = runBlocking {
         // The Thor's copy has no serial (only its title); the PC's scan read the serial.
         val byTitle = GameKey.of("gba", null, null, "Pokemon Ruby (USA)")
         val thorLib = Library().apply { known = listOf(listOf(byTitle)) }
@@ -201,18 +201,16 @@ class ServiceTest {
         File(thorRoms, "Pokemon Ruby (USA).sav").writeText("thor: 5 badges")
         val tq = SaveQuery(byTitle, "gba", File(thorRoms, "Pokemon Ruby (USA).gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby")
         thor.afterExit(tq, 0, 60_000)
-        // Closed on the Thor, opened on the PC: the PC asks by serial and gets the Thor's save.
+        // A similar cleaned title alone does not prove these copies share compatible saves.
         val pcRoms = File(root, "pc-roms").apply { mkdirs() }
         val pq = SaveQuery(ct, "gba", File(pcRoms, "ruby.gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby")
         assertIs<LaunchGate.Go>(pc.beforeLaunch(pq))
-        assertEquals("thor: 5 badges", File(pcRoms, "ruby.sav").readText())
-        // Both libraries now call it by the same id.
-        assertEquals(thorLib.aliases[byTitle.id], pcLib.aliases[ct.id])
-        // And back: played on the PC, the Thor gets it.
+        assertTrue(!File(pcRoms, "ruby.sav").exists())
+        assertTrue(thorLib.aliases[byTitle.id] != pcLib.aliases[ct.id])
         File(pcRoms, "ruby.sav").writeText("pc: 6 badges")
         pc.afterExit(pq, 0, 60_000)
         assertIs<LaunchGate.Go>(thor.beforeLaunch(tq))
-        assertEquals("pc: 6 badges", File(thorRoms, "Pokemon Ruby (USA).sav").readText())
+        assertEquals("thor: 5 badges", File(thorRoms, "Pokemon Ruby (USA).sav").readText())
         pc.stop()
     }
 

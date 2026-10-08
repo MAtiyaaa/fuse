@@ -7,6 +7,8 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.client.statement.request
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
+import io.ktor.http.fromHttpToGmtDate
+import kotlin.time.Clock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -91,6 +93,11 @@ internal class ProviderHttp(
         execute(block).flatMap { raw -> failureFor(raw) ?: decode(raw, deserializer) }
 }
 
-/** Retry-After in seconds when the header carries a number (HTTP-date values are ignored). */
-internal fun retryAfterSeconds(headers: Headers): Long? =
-    headers[HttpHeaders.RetryAfter]?.trim()?.toLongOrNull()?.coerceAtLeast(0)
+/** Both Retry-After forms (delay seconds and HTTP-date) preserve the provider's cooldown. */
+internal fun retryAfterSeconds(headers: Headers, nowMillis: Long = Clock.System.now().toEpochMilliseconds()): Long? {
+    val value = headers[HttpHeaders.RetryAfter]?.trim() ?: return null
+    value.toLongOrNull()?.let { return it.coerceAtLeast(0) }
+    val date = runCatching { value.fromHttpToGmtDate().timestamp }.getOrNull() ?: return null
+    val remaining = (date - nowMillis).coerceAtLeast(0)
+    return remaining / 1000 + if (remaining % 1000 == 0L) 0 else 1
+}

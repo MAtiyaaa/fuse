@@ -63,7 +63,10 @@ object ProfileDiff {
                 }
             }
         }
-        val settings = local.settings.filter { (k, v) -> base.settings[k]?.value != v.value }.mapValues { (_, v) -> Lww(v.value, clock.now()) }
+        val settings = local.settings.filter { (k, v) ->
+            val prior = base.settings[k]
+            prior?.value != v.value && (v.at == Hlc.ZERO || prior == null || v.at > prior.at)
+        }.mapValues { (_, v) -> if (v.at == Hlc.ZERO) Lww(v.value, clock.now()) else v }
         return ProfileMeta(games, collections, settings)
     }
 

@@ -350,7 +350,7 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
                 }
             }))
         }
-        // The Remote Library: to another of the household's devices (now, or once it is back).
+        // The Fuse Library: to another of the household's devices (now, or once it is back).
         if (!card.isApp && card.unavailable == null && !card.missing && store.reach.state.value.supported) {
             add(MenuAction("reach.send", "Send to Another Device", FuseIcons.Share, detail = "Fetched by that device, from wherever is best", trailing = Trailing.Chevron, onSelect = {
                 sendPicker(card.id, card.title)

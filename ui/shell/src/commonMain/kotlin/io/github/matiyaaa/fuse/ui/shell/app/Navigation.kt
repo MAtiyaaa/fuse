@@ -73,7 +73,7 @@ sealed interface Route {
     /** A system's games on the RomM server, or a collection's. */
     data class RommGames(val slug: String?, val name: String, val collection: String? = null) : Route
 
-    /** The Remote Library through Fuse Sync: other devices' games, recently added and by system. */
+    /** The Fuse Library through Fuse Sync: other devices' games, recently added and by system. */
     data object HouseholdLibrary : Route
 
     /** One system's games on the household's other devices (every system's when [platform] is null). */

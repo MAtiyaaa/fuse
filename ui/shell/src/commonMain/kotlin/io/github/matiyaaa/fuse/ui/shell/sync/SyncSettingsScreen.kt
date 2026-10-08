@@ -286,6 +286,7 @@ private fun syncRows(
         trailing = Trailing.Chevron, section = what,
         onSelect = { app.go(Route.SaveFolders) },
     ))
+    add(MenuAction("import", "Import Saves", FuseIcons.FileUp, detail = "Copy a file, folder or save archive, with a preview and safety history", section = what, onSelect = { openSaveImporter(app) }))
     add(toggleRow("states", "Save States", FuseIcons.Layers, c.states, "Snapshots from the emulator's own menu, for the same emulator elsewhere") { v -> configure { it.copy(states = v) } }.copy(section = what))
     add(toggleRow("records", "Play Time and Library", FuseIcons.Clock, c.records, "Play time, Last Played, favourites, hidden and pinned games, names and collections") { v -> configure { it.copy(records = v) } }.copy(section = what))
     add(toggleRow("settings", "Settings", FuseIcons.Palette, c.settings, "Your theme, Home, tabs, quick menu, sounds and music. Controllers, screens and drives stay this device's own") { v -> configure { it.copy(settings = v) } }.copy(section = what))

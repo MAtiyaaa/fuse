@@ -97,6 +97,11 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
         return data.sources.get(id)
     }
 
+    override suspend fun steamAccounts(): List<io.github.matiyaaa.fuse.library.steam.SteamAccount> {
+        val places = ctx.services.locations.steamRoots()
+        return io.github.matiyaaa.fuse.library.steam.SteamAccounts(ctx.services.fs).read(places.roots)
+    }
+
     override suspend fun findSteamGames(extra: String?): List<io.github.matiyaaa.fuse.library.steam.SteamGame> {
         val reader = io.github.matiyaaa.fuse.library.steam.SteamLibraryReader(ctx.services.fs)
         val places = runCatching { ctx.services.locations.steamRoots() }.getOrDefault(io.github.matiyaaa.fuse.ui.shell.store.SteamPlaces())

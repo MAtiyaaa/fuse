@@ -107,7 +107,7 @@ data class SyncSettings(
     val settings: Boolean = true,
     /** Games themselves, off: they are large, and Cartridge or the person's own copies usually have them. */
     val gameFiles: Boolean = false,
-    /** This device's games are listed for the household (Remote Library), so others can see and fetch them. */
+    /** This device's games are listed for the household (Fuse Library), so others can see and fetch them. */
     val shareLibrary: Boolean = true,
     /** Other devices may send games here (they land where RomM's downloads do, or [receiveFolder]). */
     val acceptSends: Boolean = true,
@@ -396,6 +396,7 @@ data class ScrapingSettings(
             ScrapeProviderId.SCREENSCRAPER,
             ScrapeProviderId.THEGAMESDB,
             ScrapeProviderId.LIBRETRO,
+            ScrapeProviderId.GAMETDB,
         )
     }
 }
