@@ -36,6 +36,8 @@ data class ScrapeRequest(
     val collectAllArtwork: Boolean = false,
     val maxCandidates: Int = 10,
     val demand: ScrapeDemand = ScrapeDemand.VISIBLE,
+    /** An explicit user retry refreshes missing answers, while keeping successful answers. */
+    val retryMissing: Boolean = false,
 )
 
 /** A provider that failed during a job. */
@@ -115,10 +117,10 @@ class ScrapeCoordinator(
     private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() },
 ) {
     private val sources: Map<ScrapeProviderId, ScrapeSource> = sources.associate { source ->
-        source.id to ReusingSource(source) { currentCoroutineContext()[Demand]?.value ?: ScrapeDemand.VISIBLE }
+        source.id to ReusingSource(source, retryMissing = { currentCoroutineContext()[Demand]?.retryMissing == true }) { currentCoroutineContext()[Demand]?.value ?: ScrapeDemand.VISIBLE }
     }
 
-    private class Demand(val value: ScrapeDemand) : AbstractCoroutineContextElement(Key) {
+    private class Demand(val value: ScrapeDemand, val retryMissing: Boolean) : AbstractCoroutineContextElement(Key) {
         companion object Key : CoroutineContext.Key<Demand>
     }
 
@@ -140,7 +142,7 @@ class ScrapeCoordinator(
      * still gets art: from the match [Guess] picks (marked [ScrapeOutcome.Accepted.guessed], with no
      * details) instead of a list to review.
      */
-    suspend fun scrape(request: ScrapeRequest, guess: Guess = Guess.NONE): ScrapeOutcome = withContext(Demand(request.demand)) { scrapeUnscheduled(request, guess) }
+    suspend fun scrape(request: ScrapeRequest, guess: Guess = Guess.NONE): ScrapeOutcome = withContext(Demand(request.demand, request.retryMissing)) { scrapeUnscheduled(request, guess) }
 
     private suspend fun scrapeUnscheduled(request: ScrapeRequest, guess: Guess): ScrapeOutcome {
         val active = activeSources(request)
@@ -222,7 +224,7 @@ class ScrapeCoordinator(
      * (best first, each game once), [ScrapeOutcome.NotFound] when none had anything, or
      * [ScrapeOutcome.ProviderErrors] when every provider failed.
      */
-    suspend fun candidates(request: ScrapeRequest): ScrapeOutcome = withContext(Demand(request.demand)) { candidatesUnscheduled(request) }
+    suspend fun candidates(request: ScrapeRequest): ScrapeOutcome = withContext(Demand(request.demand, request.retryMissing)) { candidatesUnscheduled(request) }
 
     private suspend fun candidatesUnscheduled(request: ScrapeRequest): ScrapeOutcome {
         val active = activeSources(request)
@@ -268,7 +270,7 @@ class ScrapeCoordinator(
      * Completes a job with the candidate the user picked from [ScrapeOutcome.NeedsReview]: searches
      * that provider again and returns its metadata and artwork (plus other providers' artwork).
      */
-    suspend fun accept(request: ScrapeRequest, candidate: ScrapeCandidate): ScrapeOutcome = withContext(Demand(request.demand)) { acceptUnscheduled(request, candidate) }
+    suspend fun accept(request: ScrapeRequest, candidate: ScrapeCandidate): ScrapeOutcome = withContext(Demand(request.demand, request.retryMissing)) { acceptUnscheduled(request, candidate) }
 
     private suspend fun acceptUnscheduled(request: ScrapeRequest, candidate: ScrapeCandidate): ScrapeOutcome {
         val source = sources[candidate.provider] ?: return ScrapeOutcome.NotFound(emptyList())
@@ -287,7 +289,7 @@ class ScrapeCoordinator(
      * no search and no matching, so it never asks which game this is again. Other providers that
      * can add art are asked for the same game by its title. Null when no id could be looked up.
      */
-    suspend fun known(request: ScrapeRequest, ids: Map<ScrapeProviderId, String>): ScrapeOutcome.Accepted? = withContext(Demand(request.demand)) { knownUnscheduled(request, ids) }
+    suspend fun known(request: ScrapeRequest, ids: Map<ScrapeProviderId, String>): ScrapeOutcome.Accepted? = withContext(Demand(request.demand, request.retryMissing)) { knownUnscheduled(request, ids) }
 
     private suspend fun knownUnscheduled(request: ScrapeRequest, ids: Map<ScrapeProviderId, String>): ScrapeOutcome.Accepted? {
         if (ids.isEmpty()) return null

@@ -642,7 +642,8 @@ internal class DefaultMediaOps(
         val needed = if (job.mode == MediaFillMode.FILL_MISSING) plan.fetch intersect MediaKind.needed(kinds) else plan.fetch
         val wantDetails = detailSources && job.wantsDetails && game.metadata.lacksDetails()
         if (needed.isEmpty() && !wantDetails) return GameFill()
-        val (request, coordinator) = request(game, plan.fetch, metadata = true, collectAll = false, demand = if (job.game != null) io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand.NEW_GAME else io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand.BACKGROUND)
+        val (baseRequest, coordinator) = request(game, plan.fetch, metadata = true, collectAll = false, demand = if (job.game != null) io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand.NEW_GAME else io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand.BACKGROUND)
+        val request = baseRequest.copy(retryMissing = job.game != null && !job.auto)
         val remember = job.remembers
         val key = game.id.value.toString()
         if (job.game != null) ctx.data.cache.remove(FILL_TRIED, key)

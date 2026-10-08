@@ -80,6 +80,20 @@ class ProviderWorkTest {
         assertEquals(4, calls)
     }
 
+    @Test fun explicitRetryRefreshesOnlyMissingAnswers() = runTest {
+        val reuse = RequestReuse { 0L }
+        var calls = 0
+        suspend fun ask(retry: Boolean = false) = reuse.run("missing", { it.isEmpty() }, retryMissing = retry) {
+            calls++
+            ApiResult.Success(if (calls == 1) emptyList<String>() else listOf("found"))
+        }
+        ask(); ask()
+        assertEquals(1, calls)
+        assertEquals(listOf("found"), assertIs<ApiResult.Success<List<String>>>(ask(true)).value)
+        ask(true)
+        assertEquals(2, calls)
+    }
+
     @Test fun visibleWorkPassesQueuedBulkAndCancelledWaiterDoesNotStrandQueue() = runTest {
         val queue = ProviderWork(1)
         val holding = CompletableDeferred<Unit>()

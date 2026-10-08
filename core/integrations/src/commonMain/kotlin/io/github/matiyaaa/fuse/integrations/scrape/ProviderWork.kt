@@ -62,7 +62,7 @@ class ProviderWork(private val concurrency: Int = 2) {
  * one result type, enforced by the callers' operation prefixes. Storage remains outside this class.
  */
 internal class RequestReuse(private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() }) {
-    private data class Kept(val value: ApiResult<Any?>, val expires: Long)
+    private data class Kept(val value: ApiResult<Any?>, val expires: Long, val empty: Boolean)
     private data class Pending(
         val ready: CompletableDeferred<ApiResult<Any?>>,
         val priority: ProviderWork.Priority,
@@ -76,11 +76,12 @@ internal class RequestReuse(private val now: () -> Long = { Clock.System.now().t
         key: String,
         empty: (T) -> Boolean = { false },
         demand: ScrapeDemand = ScrapeDemand.VISIBLE,
+        retryMissing: Boolean = false,
         block: suspend (ProviderWork.Priority) -> ApiResult<T>,
     ): ApiResult<T> {
         var owner = false
         val job = lock.withLock {
-            kept[key]?.takeIf { it.expires > now() }?.let { return it.value as ApiResult<T> }
+            kept[key]?.takeIf { it.expires > now() && !(retryMissing && it.empty) }?.let { return it.value as ApiResult<T> }
             pending.getOrPut(key) {
                 owner = true
                 Pending(CompletableDeferred(), ProviderWork.Priority(demand))
@@ -97,7 +98,7 @@ internal class RequestReuse(private val now: () -> Long = { Clock.System.now().t
                 // Leaving one screen cancels its owned call, not another screen still waiting
                 // for the same artwork. A live follower can own a replacement request.
                 currentCoroutineContext().ensureActive()
-                return run(key, empty, demand, block)
+                return run(key, empty, demand, retryMissing, block)
             }
         }
         try {
@@ -105,7 +106,7 @@ internal class RequestReuse(private val now: () -> Long = { Clock.System.now().t
             lock.withLock {
                 if (value is ApiResult.Success) {
                     kept.remove(key)
-                    kept[key] = Kept(value as ApiResult<Any?>, now() + if (empty(value.value)) EMPTY_TTL else FOUND_TTL)
+                    kept[key] = Kept(value as ApiResult<Any?>, now() + if (empty(value.value)) EMPTY_TTL else FOUND_TTL, empty(value.value))
                     while (kept.size > 512) kept.remove(kept.keys.first())
                 }
                 pending.remove(key)
@@ -127,18 +128,18 @@ internal class RequestReuse(private val now: () -> Long = { Clock.System.now().t
 }
 
 /** All screens sharing a coordinator share each provider's scheduling and successful answers. */
-internal class ReusingSource(private val source: ScrapeSource, private val demand: suspend () -> ScrapeDemand) : ScrapeSource by source {
+internal class ReusingSource(private val source: ScrapeSource, private val retryMissing: suspend () -> Boolean = { false }, private val demand: suspend () -> ScrapeDemand) : ScrapeSource by source {
     private val queue = ProviderWork()
     private val reuse = RequestReuse()
 
     override suspend fun search(query: ScrapeQuery): ApiResult<List<ProviderGame>> =
-        reuse.run("search:$query", { it.isEmpty() }, demand()) { priority -> queue.run(priority) { source.search(query) } }
+        reuse.run("search:$query", { it.isEmpty() }, demand(), retryMissing()) { priority -> queue.run(priority) { source.search(query) } }
 
     override suspend fun byId(id: String, query: ScrapeQuery): ApiResult<ProviderGame?> =
-        reuse.run("id:$id:$query", { it == null }, demand()) { priority -> queue.run(priority) { source.byId(id, query) } }
+        reuse.run("id:$id:$query", { it == null }, demand(), retryMissing()) { priority -> queue.run(priority) { source.byId(id, query) } }
 
     override suspend fun artwork(game: ProviderGame, query: ScrapeQuery, kinds: Set<MediaKind>): ApiResult<List<ArtworkOption>> =
-        reuse.run("art:${game.providerGameId}:$query:${kinds.map { it.name }.sorted()}", { it.isEmpty() }, demand()) { priority ->
+        reuse.run("art:${game.providerGameId}:$query:${kinds.map { it.name }.sorted()}", { it.isEmpty() }, demand(), retryMissing()) { priority ->
             queue.run(priority) { source.artwork(game, query, kinds) }
         }
 }
