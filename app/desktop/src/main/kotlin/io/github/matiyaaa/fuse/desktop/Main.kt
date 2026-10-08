@@ -39,7 +39,7 @@ import coil3.svg.SvgDecoder
 import io.github.matiyaaa.fuse.desktop.system.DesktopOs
 import io.github.matiyaaa.fuse.desktop.ui.FuseMarkPainter
 import io.github.matiyaaa.fuse.desktop.ui.Splash
-import io.github.matiyaaa.fuse.model.DeviceTier
+import io.github.matiyaaa.fuse.model.NativePresentation
 import io.github.matiyaaa.fuse.ui.designsystem.input.handleKeyEvent
 import io.github.matiyaaa.fuse.ui.shell.app.FuseApp
 import io.github.matiyaaa.fuse.ui.shell.platform.fuseImageLoader
@@ -161,7 +161,7 @@ private fun ApplicationScope.FuseWindow(session: DesktopSession) {
                     StartState.Loading -> Splash()
                     is StartState.Failed -> Splash(error = s.message, detail = s.detail)
                     is StartState.Ready -> {
-                        val lowMemory = session.platform.device.tier == DeviceTier.LOW
+                        val lowMemory = NativePresentation.lowMemoryArtwork(session.platform.host, session.platform.device)
                         setSingletonImageLoaderFactory { context ->
                             fuseImageLoader(context, s.services.cacheDir, s.services.http, lowMemory) {
                                 if (DesktopOs.isWindows) add(WindowsImagePaths)
