@@ -214,7 +214,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val rommFlow = remember(game.id) { if (remote != null) app.store.romm.forRom(remote) else app.store.romm.forGame(game.id) }
     val romm by rommFlow.collectAsState(initial = null)
     val rommButtons = remember(romm, remote) { rommButtonsOf(romm, remote != null) }
-    // The Remote Library: every copy of this game (here, on the household's other devices, on RomM).
+    // The Fuse Library: every copy of this game (here, on the household's other devices, on RomM).
     val household = game.id.householdOnly != null
     val notHere = remote != null || household
     val reachState by app.store.reach.state.collectAsState()

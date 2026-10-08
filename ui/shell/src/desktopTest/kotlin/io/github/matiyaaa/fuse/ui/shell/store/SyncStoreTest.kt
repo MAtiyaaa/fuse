@@ -86,6 +86,40 @@ class SyncStoreTest {
     }
 
     @Test
+    fun localThemeSurvivesRepeatedSyncAndRapidProfileChanges(): Unit = runBlocking {
+        val pc = device("PC", listOf("Golden Sun.gba"))
+        val thor = device("Thor", listOf("Golden Sun.gba"))
+        pc.sync.hostHere("PC", installService = false).getOrThrow()
+        thor.sync.connect("127.0.0.1:$port", assertNotNull(pc.sync.newPairingCode())).getOrThrow()
+        val a = pc.sync.createProfile("A", "cat", null).getOrThrow()
+        val b = pc.sync.createProfile("B", "rocket", null).getOrThrow()
+        thor.sync.switchTo(a.id).getOrThrow()
+        pc.sync.switchTo(a.id).getOrThrow()
+        val fusi = ThemePresets.all.first { it.id == "fusi" }
+        thor.store.updatePrefs { it.withTheme(fusi) }
+        // No persistence debounce wait: syncing races the just-chosen preference.
+        thor.sync.syncNow().getOrThrow()
+        pc.sync.syncNow().getOrThrow()
+        eventually("A's Fusi theme arrived") { pc.store.prefs.value.themeId == "fusi" }
+        thor.sync.switchTo(b.id).getOrThrow()
+        thor.store.updatePrefs { it.withTheme(ThemePresets.Fuse) }
+        thor.sync.syncNow().getOrThrow()
+        repeat(3) {
+            thor.sync.switchTo(a.id).getOrThrow()
+            thor.sync.syncNow().getOrThrow()
+            assertEquals("fusi", thor.store.prefs.value.themeId)
+            thor.sync.switchTo(b.id).getOrThrow()
+            thor.sync.syncNow().getOrThrow()
+            assertEquals("fuse", thor.store.prefs.value.themeId)
+        }
+        thor.sync.switchTo(a.id).getOrThrow()
+        repeat(3) { pc.sync.syncNow().getOrThrow(); thor.sync.syncNow().getOrThrow() }
+        assertEquals("fusi", thor.store.prefs.value.themeId)
+        pc.sync.stop()
+        thor.sync.stop()
+    }
+
+    @Test
     fun aPersonsLibraryFollowsThemAndSwitchingIsLive(): Unit = runBlocking {
         val pc = device("Gaming PC", listOf("Advance Wars (USA).gba", "Golden Sun (USA).gba"))
         val deck = device("Steam Deck", listOf("advance wars (Europe).gba", "Golden Sun (USA, Europe).gba"))

@@ -198,7 +198,7 @@ fun Hud(
             val nameFits = with(LocalDensity.current) { room.toDp() } >= ACTIVE_NAME_ROOM
             Row(Modifier.weight(1f).onSizeChanged { room = it.width }, verticalAlignment = Alignment.CenterVertically) {
                 if (shoulders) {
-                    Box(Modifier.alpha(glyphs)) { ButtonGlyph(HintButton.PREV, size = ButtonGlyphDefaults.SmallSize, color = Fuse.colors.textFaint) }
+                    Box(Modifier.graphicsLayer { alpha = glyphs }) { ButtonGlyph(HintButton.PREV, size = ButtonGlyphDefaults.SmallSize, color = Fuse.colors.textFaint) }
                     Spacer(Modifier.width(Space.xs))
                 }
                 // When the tabs don't all fit they scroll like a carousel: the active one is always
@@ -275,7 +275,7 @@ fun Hud(
                 }
                 if (shoulders) {
                     Spacer(Modifier.width(Space.xs))
-                    Box(Modifier.alpha(glyphs)) { ButtonGlyph(HintButton.NEXT, size = ButtonGlyphDefaults.SmallSize, color = Fuse.colors.textFaint) }
+                    Box(Modifier.graphicsLayer { alpha = glyphs }) { ButtonGlyph(HintButton.NEXT, size = ButtonGlyphDefaults.SmallSize, color = Fuse.colors.textFaint) }
                 }
             }
             Spacer(Modifier.width(Space.m))
@@ -814,23 +814,26 @@ fun formatDate(): String {
 /** Fades the left and/or right edge out while there is more to scroll that way. */
 private fun Modifier.fadeSides(fadeLeft: () -> Boolean, fadeRight: () -> Boolean): Modifier = this
     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-    .drawWithContent {
-        drawContent()
+    .drawWithCache {
         val w = size.width
-        if (w <= 0f) return@drawWithContent
-        val f = (28.dp.toPx() / w).coerceIn(0f, 0.3f)
-        val left = fadeLeft()
-        val right = fadeRight()
-        if (!left && !right) return@drawWithContent
-        drawRect(
-            Brush.horizontalGradient(
-                0f to (if (left) Color.Transparent else Color.Black),
-                f to Color.Black,
-                1f - f to Color.Black,
-                1f to (if (right) Color.Transparent else Color.Black),
-            ),
-            blendMode = BlendMode.DstIn,
+        val f = if (w > 0f) (28.dp.toPx() / w).coerceIn(0f, 0.3f) else 0f
+        fun mask(left: Boolean, right: Boolean) = Brush.horizontalGradient(
+            0f to if (left) Color.Transparent else Color.Black,
+            f to Color.Black,
+            1f - f to Color.Black,
+            1f to if (right) Color.Transparent else Color.Black,
         )
+        val both = mask(true, true)
+        val leftOnly = mask(true, false)
+        val rightOnly = mask(false, true)
+        onDrawWithContent {
+            drawContent()
+            if (w <= 0f) return@onDrawWithContent
+            val left = fadeLeft()
+            val right = fadeRight()
+            if (!left && !right) return@onDrawWithContent
+            drawRect(if (left && right) both else if (left) leftOnly else rightOnly, blendMode = BlendMode.DstIn)
+        }
     }
 
 /** The least room the tabs need to show the open tab's name beside the others' icons. */

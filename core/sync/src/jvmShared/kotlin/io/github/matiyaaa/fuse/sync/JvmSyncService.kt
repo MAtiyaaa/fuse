@@ -83,6 +83,7 @@ class JvmSyncService(
     private var loop: Job? = null
     private var nudge: Job? = null
     private val work = Mutex()
+    private val listsLock = Mutex()
     private val hlc by lazy { HlcClock(deviceId(), clock) }
     @Volatile private var cached: SyncSettings = SyncSettings()
 
@@ -157,6 +158,7 @@ class JvmSyncService(
         }
         if (_profiles.value.isEmpty()) {
             _profiles.value = knownProfiles()
+            _devices.value = knownDevices()
             _active.value = _profiles.value.firstOrNull { it.id == c.activeProfile }
         }
         client = SyncClient(l.copy(localAddress = c.localAddress.ifBlank { l.localAddress }, remoteAddress = c.remoteAddress.ifBlank { l.remoteAddress }))
@@ -467,13 +469,23 @@ class JvmSyncService(
     }
 
     private suspend fun refreshLists() {
-        val c = client ?: return
-        _profiles.value = people.ordered(c.profiles())
-        _devices.value = runCatching { c.devices() }.getOrDefault(_devices.value)
-        _active.value = _profiles.value.firstOrNull { it.id == cached.activeProfile }
-        // Kept, so who is playing shows (and Who's playing? has faces) while the host is away.
-        runCatching { writeAtomically(File(dir, PROFILES_FILE), json.encodeToString(ListSerializer(ProfileInfo.serializer()), _profiles.value).toByteArray()) }
+        listsLock.withLock {
+            val c = client ?: return@withLock
+            _profiles.value = people.ordered(c.profiles())
+            runCatching { c.devices() }.onSuccess { list ->
+                _devices.value = list
+                writeAtomically(File(dir, DEVICES_FILE), json.encodeToString(ListSerializer(DeviceInfo.serializer()), list).toByteArray())
+            }
+            _active.value = _profiles.value.firstOrNull { it.id == cached.activeProfile }
+            // Kept, so who is playing shows (and Who's playing? has faces) while the host is away.
+            runCatching { writeAtomically(File(dir, PROFILES_FILE), json.encodeToString(ListSerializer(ProfileInfo.serializer()), _profiles.value).toByteArray()) }
+        }
     }
+
+    /** Remembered membership remains available to send pickers while the host is offline. */
+    private fun knownDevices(): List<DeviceInfo> = runCatching {
+        json.decodeFromString(ListSerializer(DeviceInfo.serializer()), File(dir, DEVICES_FILE).readText())
+    }.getOrDefault(emptyList())
 
     /** The profiles as last heard from the host. */
     private fun knownProfiles(): List<ProfileInfo> = runCatching {
@@ -538,6 +550,7 @@ class JvmSyncService(
         // Compared by the household's one id for each game: records kept here under another id
         // (from before the host settled it) are the same game, never a new one.
         val base = canonical(d.meta(profile))
+        hlc.seen(base.latestRevision())
         // Only what this device syncs: with records off it reads none, which must never read as
         // every collection deleted (or settings, with settings off).
         val changes = ProfileDiff.changes(base, local, d.deviceId, hlc).let { all ->
@@ -994,7 +1007,7 @@ class JvmSyncService(
 
     /** Every id a game here is known by, to the id the host keeps its saves and records under. */
     @Volatile private var gameAliases: Map<String, String> =
-        runCatching { json.decodeFromString(aliasSerializer, aliasFile.readText()) }.getOrDefault(emptyMap()).also { data.useAliases(it) }
+        safeCachedGameAliases(runCatching { json.decodeFromString(aliasSerializer, aliasFile.readText()) }.getOrDefault(emptyMap())).also { data.useAliases(it) }
 
     /**
      * [meta] by each game's one id across devices: records kept under an id the household has since
@@ -1002,7 +1015,7 @@ class JvmSyncService(
      * collections name their games the same way. Merging is safe: counters take the larger, sessions
      * join by id, settings take the later.
      */
-    private fun canonical(meta: ProfileMeta): ProfileMeta = meta.byIds(gameAliases)
+    private fun canonical(meta: ProfileMeta): ProfileMeta = data.normalize(meta).byIds(gameAliases)
 
     /** [q] for the game's one id across devices (as it is when the host hasn't been asked yet). */
     private fun canonical(q: SaveQuery): SaveQuery =
@@ -1010,17 +1023,28 @@ class JvmSyncService(
 
     /**
      * Asks the host for the one id of each game here it hasn't settled yet, from every id this
-     * device knows it by: a serial on one device and only a title on another still meet.
+     * device knows it by. A title-only copy waits for stronger evidence before sharing saves.
      */
     private suspend fun resolveGames(c: SyncClient) {
-        val lists = runCatching { data.candidates() }.getOrDefault(emptyList()).map { l -> l.map { it.id }.distinct() }.filter { it.isNotEmpty() }
+        val lists = runCatching { data.candidates() }.getOrDefault(emptyList()).map { candidates ->
+            val strong = candidates.filter { key ->
+                key.identity.startsWith("s.") || key.identity.startsWith("h.") ||
+                    key.identity.startsWith("r.") || key.identity.startsWith("p.")
+            }
+            strong.ifEmpty { candidates }.map { it.id }.distinct()
+        }.filter { it.isNotEmpty() }
         val known = gameAliases
         val todo = lists.filter { l -> l.any { it !in known } }
         if (todo.isEmpty()) return
         val next = HashMap(known)
         for (chunk in todo.chunked(RESOLVE_CHUNK)) {
             val ids = c.resolveGames(chunk)
-            chunk.zip(ids).forEach { (l, canon) -> if (canon.isNotEmpty()) l.forEach { next[it] = canon } }
+            chunk.zip(ids).forEach { (l, canon) ->
+                if (canon.isNotEmpty()) l.forEach { id ->
+                    // A weaker title alias may already belong to a different strongly identified game.
+                    if (!GameKey.parse(id)!!.identity.startsWith("t.") || next[id] == null || next[id] == canon) next[id] = canon
+                }
+            }
         }
         gameAliases = next
         runCatching { writeAtomically(aliasFile, json.encodeToString(aliasSerializer, next).toByteArray()) }
@@ -1441,7 +1465,8 @@ class JvmSyncService(
                     // A profile made here is new by definition: it takes what this device has as it is.
                     val fresh = own != null || (reached && d.meta(id) == ProfileMeta())
                     val local = data.read(d.deviceId, hlc)
-                    val adopt = ProfileDiff.changes(ProfileMeta(), local, d.deviceId, if (fresh) hlc else HlcClock(d.deviceId) { ADOPTED_AT })
+                    val seed = if (fresh) local else local.copy(settings = local.settings.mapValues { Lww(it.value.value, Hlc.ZERO) })
+                    val adopt = ProfileDiff.changes(ProfileMeta(), seed, d.deviceId, if (fresh) hlc else HlcClock(d.deviceId) { ADOPTED_AT })
                     d.changeMeta(id) { pending, _ -> pending.merge(adopt) }
                     saveConfig { it.copy(activeProfile = id) }
                     markAdopted()
@@ -1502,6 +1527,62 @@ class JvmSyncService(
     override suspend fun saveFolders(samples: List<SaveQuery>): List<EmulatorSaves> = withContext(Dispatchers.IO) {
         config()
         SaveAdapters.survey(samples, saveEnv)
+    }
+
+    private val saveImporter by lazy { JvmSaveImporter(File(dir, "save-imports")) }
+
+    override suspend fun previewSaveImport(source: String, games: List<SaveQuery>): Result<SaveImportPlan> = withContext(Dispatchers.IO) {
+        work.withLock {
+            runCatching {
+                config()
+                saveImporter.scan(File(source), games, saveEnv)
+            }
+        }
+    }
+
+    override suspend fun discardSaveImport(plan: SaveImportPlan) = withContext(Dispatchers.IO) {
+        work.withLock { saveImporter.discard(plan) }
+    }
+
+    override suspend fun importSaves(plan: SaveImportPlan, choices: List<SaveImportChoice>, profile: String): Result<SaveImportResult> = withContext(Dispatchers.IO) {
+        work.withLock {
+            runCatching {
+                config()
+                require(_nowPlaying.value == null) { "Close the running game before importing saves" }
+                require(profile.isNotBlank() && profiles.value.any { it.id == profile }) { "Choose whose saves these are before importing" }
+                require(choices.isNotEmpty() && choices.map { it.entry }.distinct().size == choices.size) { "Choose each save destination once" }
+                val bindings = choices.map { saveImporter.binding(plan, it) }
+                require(bindings.map { it.query.game.id + "|" + it.spot.kind }.distinct().size == bindings.size) { "Choose only one source save for each game at a time" }
+                // Re-resolve every destination before writing, including changed emulator settings.
+                val resolved = bindings.map { binding ->
+                    val query = canonical(binding.query)
+                    val fresh = SaveAdapters.forEmulator(query.emulatorId)?.locate(query, saveEnv)
+                        ?.firstOrNull { it.kind == binding.spot.kind && it.format == binding.spot.format && it.root == binding.spot.root && it.files == binding.spot.files }
+                        ?: error("A save destination changed. Inspect a new import preview")
+                    require(fresh.available) { "The save destination is no longer available" }
+                    val key = if (fresh.kind == SaveKind.MEMORY_CARD) GameKey(query.platform, "card." + fresh.format) else query.game
+                    Triple(binding, query, Slots.of(key, fresh))
+                }
+                val d = device ?: SyncDevice(File(dir, "device"), ensureDeviceId(), cached.deviceName.ifBlank { defaultDeviceName }).also { device = it }
+                require(resolved.map { (_, _, slot) -> slot.key }.distinct().size == resolved.size) { "Choose one import for each shared memory card" }
+                val failures = ArrayList<SaveImportFailure>()
+                val revisions = resolved.mapIndexedNotNull { index, (binding, query, slot) ->
+                    val entry = plan.entries.first { e -> e.id == choices[index].entry }
+                    try {
+                        d.importSave(ownerOf(query, slot, profile), slot, entry.sourceFormat, binding.files, query.title).id
+                    } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                    catch (e: Exception) {
+                        failures += SaveImportFailure(entry.id, entry.name, e.message ?: "The save could not be imported")
+                        null
+                    }
+                }
+                // Never pull before capture: the explicit import must enter history before reconnect.
+                // Normal flush owns parent/conflict handling and leaves offline saves queued.
+                val sent = if (cached.enabled && profile !in cached.noSyncProfiles) client?.let { c -> runCatching { d.flush(c) }.isSuccess } == true else false
+                if (failures.isEmpty()) saveImporter.discard(plan)
+                SaveImportResult(revisions.size, revisions, queued = revisions.isNotEmpty() && cached.enabled && !sent, failures = failures)
+            }
+        }
     }
 
     override suspend fun setShared(game: GameKey, shared: Boolean, fromMine: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
@@ -1839,7 +1920,7 @@ class JvmSyncService(
         val owner = slot?.let { ownerOf(query, it, profile) } ?: profile
         val list = runCatching { c.revisions(owner, key.id, kind) }.getOrDefault(emptyList())
         val head = list.firstOrNull { it.canBeNewest }?.id
-        list.map { SaveVersion(it.id, it.deviceName, it.at.millis, it.playSeconds, it.size, it.reason, it.id == head, kept = it.kept) }
+        list.map { SaveVersion(it.id, it.deviceName, it.at.millis, it.playSeconds, it.size, it.reason, it.id == head, kept = it.kept, provenance = it.provenance) }
     }
 
     override suspend fun restore(asked: SaveQuery, kind: SaveKind, version: String): Result<Unit> = withContext(Dispatchers.IO) {
@@ -1885,6 +1966,7 @@ class JvmSyncService(
             val stay = if (keepProfiles) runCatching { stayLocal() }.getOrDefault(emptyList()) else emptyList()
             secrets.remove(LINK_KEY)
             File(dir, PROFILES_FILE).delete()
+            File(dir, DEVICES_FILE).delete()
             val active = cached.activeProfile.takeIf { it in stay }.orEmpty()
             saveConfig { it.copy(role = if (it.role == "HOST") "HOST" else "", activeProfile = active, hostName = if (it.role == "HOST") it.hostName else "", localAddress = "", remoteAddress = "", sharedGames = emptyList()) }
             _sharedGames.value = emptySet()
@@ -1946,6 +2028,7 @@ class JvmSyncService(
         /** How often a device waiting to be let in asks whether it has been. */
         const val JOIN_POLL_MS = 1_500L
         private const val PROFILES_FILE = "profiles.json"
+        private const val DEVICES_FILE = "devices.json"
 
         /** This device's own people: its profiles without a host, their order, PINs typed here. */
         const val PEOPLE_FILE = "people.json"

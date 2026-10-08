@@ -111,7 +111,7 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
     var inRest by remember { mutableStateOf(false) }
     // The column beside the games on wide screens, reached with Right.
     var inSide by remember { mutableStateOf(false) }
-    // The Remote Library's card, between the actions and the games.
+    // The Fuse Library's card, between the actions and the games.
     var inLib by remember { mutableStateOf(false) }
     val reach by app.store.reach.state.collectAsState()
     val hasLib = reach.supported || reach.devices.isNotEmpty()
@@ -164,7 +164,7 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
     PageEffect(focused, inList, inSide, inRest, inLib, index) {
         if (focused) app.hints = when {
             inSide || inRest -> listOf(Hint(HintButton.DPAD, "Scroll"), Hint(HintButton.BACK, "Back"))
-            inLib -> listOf(Hint(HintButton.CONFIRM, "Open the Remote Library"), Hint(HintButton.BACK, "Back"))
+            inLib -> listOf(Hint(HintButton.CONFIRM, "Open the Fuse Library"), Hint(HintButton.BACK, "Back"))
             inList -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.BACK, "Back"))
             else -> listOf(Hint(HintButton.CONFIRM, actions.getOrNull(index)?.label ?: "Choose"), Hint(HintButton.BACK, "Back"))
         }

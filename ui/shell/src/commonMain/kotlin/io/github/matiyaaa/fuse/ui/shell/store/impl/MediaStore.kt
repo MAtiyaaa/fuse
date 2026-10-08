@@ -10,6 +10,7 @@ import io.github.matiyaaa.fuse.integrations.libretro.LibretroThumbnails
 import io.github.matiyaaa.fuse.integrations.scrape.FillPlanner
 import io.github.matiyaaa.fuse.integrations.scrape.Guess
 import io.github.matiyaaa.fuse.integrations.scrape.IgdbSource
+import io.github.matiyaaa.fuse.integrations.gametdb.GameTdbSource
 import io.github.matiyaaa.fuse.integrations.scrape.LibretroSource
 import io.github.matiyaaa.fuse.integrations.scrape.ScrapeCoordinator
 import io.github.matiyaaa.fuse.integrations.scrape.ScrapeOutcome
@@ -71,6 +72,8 @@ internal class DefaultMediaOps(
     private val credentials: DefaultCredentialOps,
 ) : MediaOps {
     private val media = ctx.data.media
+    private val providerClaims = io.github.matiyaaa.fuse.data.repo.ProviderClaimRepository(ctx.data.cache)
+    private val coordinatorLock = Mutex()
     private var fillJob: Job? = null
     private var cached: Pair<Set<ScrapeProviderId>, ScrapeCoordinator>? = null
 
@@ -121,6 +124,7 @@ internal class DefaultMediaOps(
                 ScrapeProviderId.LOCAL -> "Art saved next to your games (ES-DE, RetroBat and Cartridge layouts)"
                 ScrapeProviderId.ROMM -> "Art Cartridge saved from your RomM server, read from your library folders"
                 ScrapeProviderId.LIBRETRO -> "Box art and screenshots by exact No-Intro name; no account needed"
+                ScrapeProviderId.GAMETDB -> "GameCube and Wii covers by disc ID; gametdb.com, no account needed"
                 ScrapeProviderId.SCREENSCRAPER -> "Needs Fuse's own ScreenScraper developer registration, which is still pending"
                 ScrapeProviderId.STEAMGRIDDB -> if (configured) null else "Add your SteamGridDB API key"
                 ScrapeProviderId.IGDB -> if (configured) null else "Add your Twitch client ID and secret"
@@ -173,13 +177,15 @@ internal class DefaultMediaOps(
         }
     }
 
-    private suspend fun coordinator(): Pair<Set<ScrapeProviderId>, ScrapeCoordinator> {
-        cached?.let { return it }
+    private suspend fun coordinator(): Pair<Set<ScrapeProviderId>, ScrapeCoordinator> = coordinatorLock.withLock {
+        cached?.let { return@withLock it }
         val http = ctx.services.http
         val sources = ArrayList<ScrapeSource>()
         val configured = LinkedHashSet<ScrapeProviderId>()
         sources += LibretroSource(LibretroThumbnails(http))
         configured += ScrapeProviderId.LIBRETRO
+        sources += GameTdbSource(http)
+        configured += ScrapeProviderId.GAMETDB
         credentials.get(SecretKeys.SGDB_API_KEY)?.let { key ->
             sources += SteamGridDbSource(SteamGridDbClient(http, key))
             configured += ScrapeProviderId.STEAMGRIDDB
@@ -194,7 +200,7 @@ internal class DefaultMediaOps(
             sources += TheGamesDbSource(TheGamesDbClient(http, key))
             configured += ScrapeProviderId.THEGAMESDB
         }
-        return (configured to ScrapeCoordinator(sources)).also { cached = it }
+        (configured to ScrapeCoordinator(sources)).also { cached = it }
     }
 
     private suspend fun query(game: Game): ScrapeQuery {
@@ -212,6 +218,7 @@ internal class DefaultMediaOps(
             preferredLanguage = settings.preferredLanguage,
             preferredRegion = settings.preferredRegion,
             alsoKnownAs = if (searchAs == null) otherNames(game) else emptyList(),
+            serial = if (searchAs == null) game.tags.serial else null,
         )
     }
 
@@ -247,7 +254,7 @@ internal class DefaultMediaOps(
         return SearchTitle(current = searchAs(g) ?: defaultSearchTitle(g), custom = searchAs(g) != null, default = defaultSearchTitle(g))
     }
 
-    private suspend fun request(game: Game, kinds: Set<MediaKind>, metadata: Boolean, collectAll: Boolean): Pair<ScrapeRequest, ScrapeCoordinator> {
+    private suspend fun request(game: Game, kinds: Set<MediaKind>, metadata: Boolean, collectAll: Boolean, demand: io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand = io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand.VISIBLE): Pair<ScrapeRequest, ScrapeCoordinator> {
         val (configured, coordinator) = coordinator()
         val strictness = ctx.data.scopedSettings.resolve(ScopedSettings.Matching, game.platformId, game.id).value
         val request = ScrapeRequest(
@@ -258,6 +265,7 @@ internal class DefaultMediaOps(
             artworkKinds = kinds,
             wantMetadata = metadata,
             collectAllArtwork = collectAll,
+            demand = demand,
         )
         return request to coordinator
     }
@@ -344,9 +352,18 @@ internal class DefaultMediaOps(
     }
 
     /** The game's id in each provider it was identified in before. */
-    private fun knownIds(game: Game): Map<ScrapeProviderId, String> = buildMap {
-        game.links.steamGridDbGameId?.let { put(ScrapeProviderId.STEAMGRIDDB, it.toString()) }
-        game.links.igdbId?.let { put(ScrapeProviderId.IGDB, it.toString()) }
+    private suspend fun knownIds(game: Game): Map<ScrapeProviderId, String> {
+        val shared = ctx.householdProviderClaims(game)
+        if (shared.isNotEmpty()) providerClaims.merge(game.id, shared, ctx.now())
+        val claims = providerClaims.get(game.id) + game.links.providerClaims + listOfNotNull(
+            game.links.steamGridDbGameId?.let { io.github.matiyaaa.fuse.model.ProviderClaim("STEAMGRIDDB", it.toString()) },
+            game.links.igdbId?.let { io.github.matiyaaa.fuse.model.ProviderClaim("IGDB", it.toString()) },
+        )
+        return buildMap {
+            io.github.matiyaaa.fuse.model.trustedProviderIds(claims).forEach { (provider, id) ->
+                ScrapeProviderId.entries.firstOrNull { it.name == provider }?.let { put(it, id) }
+            }
+        }
     }
 
     /**
@@ -355,6 +372,13 @@ internal class DefaultMediaOps(
      */
     private suspend fun remember(game: Game, outcome: ScrapeOutcome.Accepted) {
         val links = outcome.links + (outcome.candidate.provider to outcome.candidate.providerGameId)
+        if (!outcome.guessed) providerClaims.merge(game.id, links.map { (provider, id) ->
+            io.github.matiyaaa.fuse.model.ProviderClaim(
+                provider.name, id,
+                confidence = outcome.candidate.confidence,
+                verifiedAtMillis = ctx.now(),
+            )
+        }, ctx.now())
         val sgdb = links[ScrapeProviderId.STEAMGRIDDB]?.toLongOrNull()
         val igdb = links[ScrapeProviderId.IGDB]?.toLongOrNull()?.takeIf { !outcome.guessed }
         if ((sgdb == null || sgdb == game.links.steamGridDbGameId) && (igdb == null || igdb == game.links.igdbId)) return
@@ -618,7 +642,7 @@ internal class DefaultMediaOps(
         val needed = if (job.mode == MediaFillMode.FILL_MISSING) plan.fetch intersect MediaKind.needed(kinds) else plan.fetch
         val wantDetails = detailSources && job.wantsDetails && game.metadata.lacksDetails()
         if (needed.isEmpty() && !wantDetails) return GameFill()
-        val (request, coordinator) = request(game, plan.fetch, metadata = true, collectAll = false)
+        val (request, coordinator) = request(game, plan.fetch, metadata = true, collectAll = false, demand = if (job.game != null) io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand.NEW_GAME else io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand.BACKGROUND)
         val remember = job.remembers
         val key = game.id.value.toString()
         if (job.game != null) ctx.data.cache.remove(FILL_TRIED, key)
@@ -743,6 +767,11 @@ internal class DefaultMediaOps(
         val (request, coordinator) = request(g, plan.fetch, metadata = true, collectAll = false)
         val outcome = coordinator.accept(request, candidate) as? ScrapeOutcome.Accepted ?: return false
         ctx.data.cache.remove(FILL_TRIED, game.value.toString())
+        providerClaims.confirm(game, io.github.matiyaaa.fuse.model.ProviderClaim(
+            candidate.provider.name, candidate.providerGameId,
+            origin = io.github.matiyaaa.fuse.model.ProviderClaimOrigin.USER_CONFIRMED,
+            verifiedAtMillis = ctx.now(),
+        ), ctx.now())
         store(g, outcome, MediaFillMode.REPLACE_ALL, plan.fetch)
         applyMetadata(
             game,
@@ -756,7 +785,7 @@ internal class DefaultMediaOps(
 
 /** Art that came from a source rather than from the user or the game's folder. */
 private val SCRAPED_SOURCES = listOf(
-    MediaSource.ROMM, MediaSource.STEAMGRIDDB, MediaSource.IGDB, MediaSource.THEGAMESDB, MediaSource.SCREENSCRAPER, MediaSource.LIBRETRO,
+    MediaSource.ROMM, MediaSource.STEAMGRIDDB, MediaSource.IGDB, MediaSource.THEGAMESDB, MediaSource.SCREENSCRAPER, MediaSource.LIBRETRO, MediaSource.GAMETDB,
 )
 
 private val namedSearch = setOf(ScrapeProviderId.STEAMGRIDDB, ScrapeProviderId.IGDB, ScrapeProviderId.THEGAMESDB)
@@ -846,6 +875,7 @@ private fun ScrapeProviderId.mediaSource(): MediaSource = when (this) {
     ScrapeProviderId.THEGAMESDB -> MediaSource.THEGAMESDB
     ScrapeProviderId.SCREENSCRAPER -> MediaSource.SCREENSCRAPER
     ScrapeProviderId.LIBRETRO -> MediaSource.LIBRETRO
+    ScrapeProviderId.GAMETDB -> MediaSource.GAMETDB
 }
 
 private fun ScrapeProviderId.metadataSource(): MetadataSource? = when (this) {
@@ -855,5 +885,5 @@ private fun ScrapeProviderId.metadataSource(): MetadataSource? = when (this) {
     ScrapeProviderId.IGDB -> MetadataSource.IGDB
     ScrapeProviderId.THEGAMESDB -> MetadataSource.THEGAMESDB
     ScrapeProviderId.SCREENSCRAPER -> MetadataSource.SCREENSCRAPER
-    ScrapeProviderId.LIBRETRO -> null
+    ScrapeProviderId.LIBRETRO, ScrapeProviderId.GAMETDB -> null
 }

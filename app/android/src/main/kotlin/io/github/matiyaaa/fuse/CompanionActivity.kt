@@ -70,6 +70,10 @@ open class CompanionActivity : ComponentActivity() {
             }
         }
 
+        lifecycleScope.launch {
+            val store = app.awaitStore() ?: return@launch
+            followWindowRefresh(window, app, store)
+        }
         setContent { CompanionContent(app) }
     }
 

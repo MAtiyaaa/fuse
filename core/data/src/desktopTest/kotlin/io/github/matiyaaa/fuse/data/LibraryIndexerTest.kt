@@ -92,9 +92,101 @@ class LibraryIndexerTest {
                 cleaner = testCleaner,
             )
             assertNull(d.games.idByPath(copy.path), "a copy is forgotten")
-            assertNull(d.games.idByPath(update.path), "an update now with its game is forgotten")
+            val updateId = d.games.idByPath(update.path)!!
+            assertTrue(d.database.gameQueries.selectById(updateId.value).executeAsOne().removed_at != null, "proven owned content is archived, not discarded")
             assertTrue(d.games.get(d.games.idByPath(dlc.path)!!)!!.favorite, "a favourite is kept, as missing")
             assertEquals(1, delta.missing)
+        }
+    }
+
+    @Test
+    fun legacyOwnedSwitchContentMigratesIntentOnceAndPreservesOriginalRecord() = runBlocking {
+        TestDb().use { t ->
+            val d = t.data
+            val base = scanned("/roms/switch/Harbor [0100ABCD12345000][v0].nsp", platform = "switch")
+            val patch = scanned("/roms/switch/Harbor [0100ABCD12345800][v65536].nsp", platform = "switch")
+            d.indexer.apply(report(folder("/roms/switch", listOf(base, patch), platform = "switch")), 1_000, testCleaner)
+            val baseId = d.games.idByPath(base.path)!!
+            val patchId = d.games.idByPath(patch.path)!!
+            d.games.rename(patchId, "My update package")
+            d.games.setFavorite(patchId, true)
+            d.games.setPinned(patchId, true)
+            d.games.setHidden(patchId, true)
+            d.games.setLinks(patchId, ExternalLinks(steamGridDbGameId = 42))
+            val collection = d.collections.create("Night games")
+            d.collections.addGames(collection, listOf(patchId))
+            val session = d.playSessions.start(patchId, null, 1_000)
+            d.playSessions.end(session, 61_000)
+            d.playSessions.importPlaytime(baseId, 100, "Steam")
+            d.playSessions.importPlaytime(patchId, 100, "Steam")
+            // Older cleanup already marked some valuable entries missing. They still migrate.
+            d.database.gameQueries.markMissing(62_000, patchId.value)
+            val joined = base.copy(content = listOf(ChildContent(ContentKind.UPDATE, "patch", patch.path, false, 300)))
+            val next = report(folder("/roms/switch", listOf(joined), platform = "switch"))
+            d.indexer.apply(next, 63_000, testCleaner)
+            val game = d.games.get(baseId)!!
+            val old = d.games.get(patchId)!!
+            assertTrue(game.favorite)
+            assertTrue(d.games.summary(baseId)!!.pinned)
+            assertFalse(game.hidden, "hiding a package must not hide its base game")
+            assertNull(game.titles.custom, "custom package name must not rename the title")
+            assertNull(game.links.steamGridDbGameId, "provider identity for content must not contaminate the base")
+            assertEquals("My update package", old.titles.custom)
+            assertEquals(42L, old.links.steamGridDbGameId)
+            assertTrue(d.database.gameQueries.selectById(patchId.value).executeAsOne().removed_at != null)
+            assertFalse(d.database.gameQueries.selectById(patchId.value).executeAsOne().missing != 0L)
+            assertEquals(listOf(baseId), d.games.observeAll().first().map { it.id })
+            assertEquals(1, d.playSessions.sessions(baseId).first().size)
+            assertEquals(0, d.playSessions.sessions(patchId).first().size)
+            assertEquals(setOf(collection), d.collections.observeCollectionsOf(baseId).first())
+            assertEquals(60L, d.playSessions.totalSeconds().first().trackedSeconds)
+            assertEquals(100L, d.playSessions.totalSeconds().first().importedSeconds)
+            d.indexer.apply(next, 64_000, testCleaner)
+            assertEquals(60L, d.playSessions.totalSeconds().first().trackedSeconds, "migration is idempotent")
+            d.games.restoreToFuse(patchId)
+            assertEquals(listOf(baseId), d.games.observeAll().first().map { it.id }, "restoring an archive cannot create a phantom title")
+        }
+    }
+
+    @Test
+    fun inactiveProfileSnapshotReconcilesRetiredContentAfterRestart() = runBlocking {
+        val dir = createTempDirectory("fuse-content-upgrade").toFile()
+        val path = File(dir, "library.db").absolutePath
+        val base = scanned("/roms/switch/Harbor.nsp", platform = "switch")
+        val patch = scanned("/roms/switch/Harbor [update].nsp", platform = "switch")
+        lateinit var before: io.github.matiyaaa.fuse.data.repo.UserState
+        var baseId = io.github.matiyaaa.fuse.model.GameId(0)
+        var patchId = io.github.matiyaaa.fuse.model.GameId(0)
+        try {
+            TestDb(DesktopDatabase.openDriver(path)).use { t ->
+                val d = t.data
+                d.indexer.apply(report(folder("/roms/switch", listOf(base, patch), platform = "switch")), 1_000, testCleaner)
+                baseId = d.games.idByPath(base.path)!!
+                patchId = d.games.idByPath(patch.path)!!
+                d.games.setFavorite(patchId, true)
+                d.games.rename(patchId, "Only the patch")
+                val session = d.playSessions.start(patchId, null, 1_000)
+                d.playSessions.end(session, 11_000)
+                before = d.profileState.read()
+                val joined = base.copy(content = listOf(ChildContent(ContentKind.UPDATE, "patch", patch.path, false, 100)))
+                d.indexer.apply(report(folder("/roms/switch", listOf(joined), platform = "switch")), 12_000, testCleaner)
+            }
+            TestDb(DesktopDatabase.openDriver(path)).use { t ->
+                val d = t.data
+                d.profileState.write(before)
+                val state = d.profileState.read()
+                assertEquals(listOf(baseId.value), state.games.map { it.id })
+                assertTrue(state.games.single().favorite)
+                assertNull(state.games.single().customTitle)
+                assertEquals(10L, state.games.single().trackedSeconds)
+                assertEquals(listOf(baseId.value), state.sessions.map { it.gameId })
+                val aliases = d.profileState.absorbedIdentities()
+                assertEquals(baseId.value, aliases.entries.single { it.key.id == patchId.value }.value)
+                d.profileState.write(before)
+                assertEquals(10L, d.playSessions.totalSeconds().first().trackedSeconds)
+            }
+        } finally {
+            dir.deleteRecursively()
         }
     }
 

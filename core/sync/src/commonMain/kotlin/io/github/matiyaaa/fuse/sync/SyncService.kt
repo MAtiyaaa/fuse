@@ -151,6 +151,7 @@ data class SaveVersion(
     val current: Boolean,
     /** Kept for good by the person. */
     val kept: Boolean = false,
+    val provenance: String = "",
 )
 
 /**
@@ -166,6 +167,9 @@ interface ProfileDataPort {
 
     /** Puts [meta] in place: play time, Last Played, favourites, hidden, pinned, collections, settings. */
     suspend fun write(meta: ProfileMeta)
+
+    /** Projects scanner-proven legacy content ownership without copying child-only personal choices. */
+    fun normalize(meta: ProfileMeta): ProfileMeta = meta
 
     /** The game a launch is for, as Fuse Sync knows games. */
     suspend fun keyOf(gameId: Long): GameKey?
@@ -380,6 +384,15 @@ interface SyncService {
      * chose (Settings, Save folders). The same for Fuse Sync and Syncthing, and works while off.
      */
     suspend fun saveFolders(samples: List<SaveQuery>): List<EmulatorSaves> = emptyList()
+
+    /** Analyze a source without changing emulator saves; every destination is shown before importing. */
+    suspend fun previewSaveImport(source: String, games: List<SaveQuery>): Result<SaveImportPlan> = Result.failure(UnsupportedOperationException("Save importing isn't available here"))
+
+    /** Copies the selected saves for an explicitly chosen profile and queues normal history revisions. */
+    suspend fun importSaves(plan: SaveImportPlan, choices: List<SaveImportChoice>, profile: String): Result<SaveImportResult> = Result.failure(UnsupportedOperationException("Save importing isn't available here"))
+
+    /** Removes only the temporary preview data. */
+    suspend fun discardSaveImport(plan: SaveImportPlan) {}
 
     suspend fun versions(query: SaveQuery, kind: SaveKind): List<SaveVersion>
     suspend fun restore(query: SaveQuery, kind: SaveKind, version: String): Result<Unit>

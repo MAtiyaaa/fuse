@@ -30,6 +30,15 @@ class DisplayMonitor(context: Context) {
     /** Ids of displays that look like screen recording, casting or developer overlays. */
     @Volatile private var virtualIds: Set<Int> = emptySet()
     private var lastSummary: String? = null
+    private val requested = mutableMapOf<Int, Float>()
+    private val cadence = mutableMapOf<Int, Float>()
+
+    /** Window diagnostics are separate from the actual mode Android reports. */
+    fun recordWindowRate(displayId: Int, request: Float?, measured: Float? = null) {
+        request?.let { requested[displayId] = it }
+        measured?.let { cadence[displayId] = it }
+        refresh()
+    }
 
     private val _displays = MutableStateFlow(read())
     val displays: StateFlow<List<DisplayInfo>> = _displays.asStateFlow()
@@ -91,6 +100,11 @@ class DisplayMonitor(context: Context) {
                 isPresentation = d.displayId in presentationIds || (d.flags and Display.FLAG_PRESENTATION) != 0,
                 isOn = d.state != Display.STATE_OFF,
                 canLaunchActivities = canLaunchOn(d.displayId),
+                supportedRefreshRates = d.supportedModes.filter {
+                    it.physicalWidth == mode.physicalWidth && it.physicalHeight == mode.physicalHeight
+                }.map { it.refreshRate }.distinct().sorted(),
+                requestedRefreshRate = requested[d.displayId],
+                measuredRefreshRate = cadence[d.displayId],
             )
         }
     }

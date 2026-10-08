@@ -45,3 +45,7 @@ secondsByPlatform:
 SELECT platform_id, SUM(tracked_seconds + imported_seconds) AS seconds FROM game
 WHERE removed_at IS NULL AND tracked_seconds + imported_seconds > 0
 GROUP BY platform_id ORDER BY seconds DESC;
+
+-- Sessions describe actual observed play and now refer to the proven title rather than its package.
+reassignAbsorbed:
+UPDATE play_session SET game_id = :ownerId WHERE game_id = :childId;

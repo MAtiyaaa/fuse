@@ -14,6 +14,18 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
 class MediaRepositoryTest {
+    @Test fun downloadedHouseholdArtworkOnlyFillsMissingKindsAndPreservesCustomArt() = runBlocking {
+        TestDb().use { t ->
+            val remote = MediaOwner.OfPlatform(PlatformId("remote"))
+            val local = MediaOwner.OfPlatform(PlatformId("local"))
+            t.data.media.putScraped(remote, listOf(sgdb(MediaKind.BOXART, "shared-box"), sgdb(MediaKind.HERO, "shared-hero")), MediaFillMode.FILL_MISSING)
+            t.data.media.setCustom(local, MediaKind.BOXART, "/user/chosen.png")
+            assertEquals(1, t.data.media.copyMissing(remote, local))
+            assertEquals("/user/chosen.png", t.data.media.get(local).boxart?.localPath)
+            assertEquals("shared-hero", t.data.media.get(local).hero?.remoteUrl)
+        }
+    }
+
     private fun sgdb(kind: MediaKind, url: String) = MediaItem(kind, MediaSource.STEAMGRIDDB, remoteUrl = url)
 
     @Test

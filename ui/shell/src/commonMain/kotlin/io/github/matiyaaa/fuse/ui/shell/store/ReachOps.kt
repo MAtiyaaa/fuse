@@ -160,7 +160,7 @@ data class RemoteTransferRow(
 }
 
 /**
- * The Remote Library: games on the household's other devices, brought here or sent to another
+ * The Fuse Library: games on the household's other devices, brought here or sent to another
  * device from wherever is best, and every device's transfers. Remembered here, so it opens at once
  * and stays browsable while the host or a device is away.
  */

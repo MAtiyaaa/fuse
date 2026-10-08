@@ -13,6 +13,8 @@ data class SteamGame(
     /** The Steam library it is in (the folder holding `steamapps`). */
     val library: String,
     val sizeBytes: Long = 0,
+    /** Installation provenance from LastOwner; never treated as proof of ownership or authentication. */
+    val lastInstalledBy: Set<String> = emptySet(),
 )
 
 /**
@@ -131,7 +133,8 @@ class SteamLibraryReader(private val fs: FuseFileSystem) {
             for (m in manifests) {
                 val text = fs.readText(m.path, MANIFEST_LIMIT) ?: continue
                 val game = manifest(text, library) ?: continue
-                if (game.appId !in games) games[game.appId] = game
+                val previous = games[game.appId]
+                games[game.appId] = previous?.copy(lastInstalledBy = previous.lastInstalledBy + game.lastInstalledBy) ?: game
             }
         }
         return games.values.sortedBy { it.name.lowercase() }
@@ -190,7 +193,8 @@ class SteamLibraryReader(private val fs: FuseFileSystem) {
             if (isTool(appId, name)) return null
             val dir = (state["installdir"] as? String).orEmpty()
             val size = (state["sizeondisk"] as? String)?.toLongOrNull() ?: 0
-            return SteamGame(appId, name, FsPath.join(library, "steamapps", "common", dir), library, size)
+            val owner = (state["lastowner"] as? String)?.takeIf { it.length == 17 && it.toULongOrNull() != null }
+            return SteamGame(appId, name, FsPath.join(library, "steamapps", "common", dir), library, size, setOfNotNull(owner))
         }
 
         /** A file name for the game's shortcut: its name with characters file systems refuse taken out. */
