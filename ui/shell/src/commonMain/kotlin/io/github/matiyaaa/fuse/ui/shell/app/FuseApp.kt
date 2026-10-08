@@ -35,9 +35,7 @@ import io.github.matiyaaa.fuse.model.BackgroundStyle
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.GlyphStyle
 import io.github.matiyaaa.fuse.model.NavAction
-import io.github.matiyaaa.fuse.model.RenderQuality
 import io.github.matiyaaa.fuse.model.NativePresentation
-import io.github.matiyaaa.fuse.model.Host
 import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.ui.designsystem.background.AmbientBackground
 import io.github.matiyaaa.fuse.ui.designsystem.background.CrtOverlay
