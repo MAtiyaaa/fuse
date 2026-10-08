@@ -98,7 +98,7 @@ fun AppState.sendPicker(id: GameId, title: String) {
     closeOverlays()
     scope.launch {
         val targets = store.reach.sendTargets(id)
-        if (targets.size <= 1) {
+        if (targets.none { it.device.isNotBlank() && it.device != store.reach.self }) {
             toasts.show("No other device is in this household yet. Add one in Settings, Addons, Fuse Sync.", ToastKind.INFO, icon = FuseIcons.Info)
             return@launch
         }

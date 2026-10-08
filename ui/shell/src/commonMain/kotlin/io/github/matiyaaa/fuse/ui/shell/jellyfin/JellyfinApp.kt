@@ -136,7 +136,7 @@ private fun AppState.startPlaying(target: MediaItem, queue: List<MediaItem>, fro
 @Composable
 internal fun MediaPlayerHost(app: AppState) {
     if (!app.playerOpen) return
-    val session = FusePlayer.session
+    val session = app.playerSession ?: return
     val prefs by app.store.prefs.collectAsState()
     LaunchedEffect(Unit) { app.hints = emptyList() }
     fun exit() {

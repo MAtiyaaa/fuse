@@ -454,7 +454,7 @@ private fun AppShelf(
         val latestSelected = androidx.compose.runtime.rememberUpdatedState(selected)
         LazyRow(
             state = list,
-            contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter * 2, top = Space.xs, bottom = Space.xs),
+            contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter * 2, top = Space.l, bottom = io.github.matiyaaa.fuse.ui.designsystem.theme.Size.sparkClearance),
             horizontalArrangement = Arrangement.spacedBy(Space.m),
         ) {
             itemsIndexed(row.apps, key = { _, a -> a.key }) { i, a ->

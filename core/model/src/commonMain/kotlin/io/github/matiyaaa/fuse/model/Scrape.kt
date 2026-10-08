@@ -12,6 +12,7 @@ enum class ScrapeProviderId(val displayName: String, val needsCredentials: Boole
     THEGAMESDB("TheGamesDB", true),
     SCREENSCRAPER("ScreenScraper", true),
     LIBRETRO("Libretro thumbnails", false),
+    GAMETDB("GameTDB", false),
 }
 
 /** What Fuse asks a provider. */
@@ -30,6 +31,8 @@ data class ScrapeQuery(
     val preferredRegion: String? = null,
     /** Other names the game goes by (its original or cleaned file name, a name a provider gave), searched when [title] finds nothing sure. */
     val alsoKnownAs: List<String> = emptyList(),
+    /** Scanner-proven serial, when available. Never a title-search guess. */
+    val serial: String? = null,
 )
 
 /** One possible match with a confidence the user can see before anything is saved. */
@@ -70,3 +73,39 @@ data class ProviderStatus(
     val configured: Boolean,
     val note: String? = null,
 )
+
+/** The evidence behind a reusable provider identity. Names are never claims by themselves. */
+@Serializable
+enum class ProviderClaimOrigin { USER_CONFIRMED, AUTOMATIC, IMPORTED }
+
+/**
+ * Provider-neutral household knowledge. Unknown provider names survive older clients; only an
+ * unambiguous trusted claim is used for direct requests. User confirmation is stronger than a
+ * later automatic result, and disagreeing automatic identities require review rather than a
+ * last-arriving overwrite.
+ */
+@Serializable
+data class ProviderClaim(
+    val provider: String,
+    val gameId: String,
+    val origin: ProviderClaimOrigin = ProviderClaimOrigin.AUTOMATIC,
+    val confidence: Float = 1f,
+    val originDeviceId: String? = null,
+    val verifiedAtMillis: Long = 0,
+) {
+    /** Known provider names have one spelling across legacy and current household clients. */
+    val canonicalProvider: String get() = ScrapeProviderId.entries
+        .firstOrNull { it.name.equals(provider, ignoreCase = true) }?.name ?: provider
+
+    val trusted: Boolean get() = provider.isNotBlank() && gameId.isNotBlank() &&
+        (origin == ProviderClaimOrigin.USER_CONFIRMED || confidence.isFinite() && confidence >= 0.9f)
+}
+
+/** Contradictory claims remain inspectable; only a unique strongest identity is reusable. */
+fun trustedProviderIds(claims: List<ProviderClaim>): Map<String, String> = buildMap {
+    for ((provider, options) in claims.filter { it.trusted }.groupBy { it.canonicalProvider }) {
+        val confirmed = options.filter { it.origin == ProviderClaimOrigin.USER_CONFIRMED }
+        val best = if (confirmed.isNotEmpty()) confirmed else options
+        best.map { it.gameId }.distinct().singleOrNull()?.let { put(provider, it) }
+    }
+}

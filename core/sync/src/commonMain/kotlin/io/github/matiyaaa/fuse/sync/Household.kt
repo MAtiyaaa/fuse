@@ -49,6 +49,9 @@ data class LibraryEntry(
     val releaseYear: Int? = null,
     val developer: String? = null,
     val genres: List<String> = emptyList(),
+    val providerClaims: List<io.github.matiyaaa.fuse.model.ProviderClaim> = emptyList(),
+    /** Steam manifest LastOwner provenance; this never proves ownership or an authenticated session. */
+    val steamInstalledBy: List<String> = emptyList(),
 ) {
     /** Every file has its hashes: the copy can be compared with others. */
     val hashed: Boolean get() = files.isNotEmpty() && files.all { it.sha1 != null }
@@ -60,6 +63,10 @@ data class LibraryEntry(
 /** Where a device answers other devices for its games, on its home network. */
 @Serializable
 data class PeerEndpoint(val addresses: List<String> = emptyList(), val port: Int = 0)
+
+/** Remembered public Steam identity on a device. No credentials, tokens or session assertions. */
+@Serializable
+data class SteamIdentity(val steamId: String, val personaName: String = "", val mostRecent: Boolean = false)
 
 /** A device's whole list, as it sends it and as others receive it. [version] changes whenever the list does. */
 @Serializable
@@ -73,6 +80,7 @@ data class DeviceLibrary(
     val updatedAt: Long = 0,
     /** This device takes games other devices send it. */
     val accepts: Boolean = true,
+    val steamIdentities: List<SteamIdentity> = emptyList(),
 )
 
 /** What a device already has of the others' lists, by device and version. */
@@ -205,6 +213,9 @@ data class TransferSnapshots(val devices: List<TransferSnapshot> = emptyList())
 interface HouseholdLocal {
     /** Every game here to share, without hashes (Fuse Sync adds them as it reads each file). */
     suspend fun games(): List<SharedGame>
+
+    /** Remembered Steam users. Only published with this device's library-sharing permission. */
+    suspend fun steamIdentities(): List<SteamIdentity> = emptyList()
 
     /** What another device asked of this one: done (or not) by the app. */
     suspend fun perform(command: DeviceCommand): CommandResult

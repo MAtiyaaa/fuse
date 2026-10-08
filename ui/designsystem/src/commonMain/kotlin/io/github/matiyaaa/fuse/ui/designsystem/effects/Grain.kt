@@ -23,20 +23,26 @@ fun Modifier.grain(strength: Float = GRAIN_STRENGTH): Modifier = drawWithContent
 
 /** [grain] drawn straight into a canvas, over whatever was drawn there. */
 fun DrawScope.drawGrain(strength: Float = GRAIN_STRENGTH) {
-    drawRect(Grain.brush, alpha = strength, blendMode = BlendMode.Overlay)
+    // Coprime periods have no common repetition within any supported display (127 * 131 px).
+    // Each texel stays one canvas pixel; UI density never enlarges a noise cell.
+    val alpha = strength * 0.70710677f
+    drawRect(Grain.first, alpha = alpha, blendMode = BlendMode.Overlay)
+    drawRect(Grain.second, alpha = alpha, blendMode = BlendMode.Overlay)
 }
 
 /** How much grain: enough to break up bands, never enough to be seen as texture. */
 const val GRAIN_STRENGTH = 0.07f
 
 private object Grain {
-    /** A tile of noise around middle grey (which an overlay leaves unchanged), repeated everywhere. */
-    val brush: ShaderBrush by lazy {
-        val size = 128
+    val first: ShaderBrush by lazy { brush(127, 0x6C1) }
+    val second: ShaderBrush by lazy { brush(131, 0x5A17) }
+
+    /** Independent centered noise fields; their common period exceeds even an 8K display. */
+    private fun brush(size: Int, seed: Int): ShaderBrush {
         val image = ImageBitmap(size, size, ImageBitmapConfig.Argb8888)
         val canvas = androidx.compose.ui.graphics.Canvas(image)
         val paint = androidx.compose.ui.graphics.Paint().apply { isAntiAlias = false }
-        val random = Random(0x6C1)
+        val random = Random(seed)
         for (y in 0 until size) {
             for (x in 0 until size) {
                 val v = (0.5f + (random.nextFloat() + random.nextFloat() - 1f) * 0.25f).coerceIn(0f, 1f)
@@ -44,6 +50,6 @@ private object Grain {
                 canvas.drawRect(x.toFloat(), y.toFloat(), x + 1f, y + 1f, paint)
             }
         }
-        ShaderBrush(ImageShader(image, TileMode.Repeated, TileMode.Repeated))
+        return ShaderBrush(ImageShader(image, TileMode.Repeated, TileMode.Repeated))
     }
 }

@@ -78,10 +78,12 @@ data class GameKey(val platform: String, val identity: String) {
 
         /** The key for a game known by [serial], [contentHash] or [title], in that order of trust. */
         fun of(platform: String, serial: String?, contentHash: String?, title: String): GameKey {
+            val normalizedSerial = serial?.lowercase()?.filter { it.isLetterOrDigit() }?.takeIf { it.isNotEmpty() }
+            val normalizedHash = contentHash?.lowercase()?.replace(SAFE, "")?.takeIf { it.isNotEmpty() }
             val identity = when {
                 // Serials are written many ways (SLUS-00067, slus_000.67, SLUS00067): letters and digits only.
-                !serial.isNullOrBlank() -> "s." + serial.lowercase().filter { it.isLetterOrDigit() }
-                !contentHash.isNullOrBlank() -> "h." + contentHash.lowercase().replace(SAFE, "")
+                normalizedSerial != null -> "s." + normalizedSerial
+                normalizedHash != null -> "h." + normalizedHash
                 // Region and version tags differ between copies of one game: "Pokemon Ruby (USA)" is "pokemon-ruby".
                 else -> "t." + title.lowercase().replace(TAGS, "").replace(SAFE, "-").trim('-')
             }
@@ -227,7 +229,9 @@ data class ProfileMeta(
      * larger, sessions join by id, settings take the later.
      */
     fun byIds(aliases: Map<String, String>): ProfileMeta {
-        if (aliases.isEmpty() || games.keys.none { id -> aliases[id]?.let { it != id } == true }) return this
+        if (aliases.isEmpty()) return this
+        fun moved(id: String) = aliases[id]?.let { it != id } == true
+        if (games.keys.none(::moved) && collections.values.none { it.members.keys.any(::moved) }) return this
         val out = HashMap<String, GameRecord>()
         for ((id, record) in games) {
             val key = aliases[id]?.takeIf { it != id }?.let(GameKey::parse)
@@ -268,4 +272,20 @@ data class ProfileMeta(
     fun continuePlaying(): List<GameRecord> = games.values
         .filter { r -> r.lastPlayed != null && r.hidden?.value != true && (r.continueDismissed?.value ?: 0) < (r.lastPlayed ?: 0) }
         .sortedByDescending { it.lastPlayed }
+}
+
+/** Highest observed register revision, used to seed clocks after restart and before new edits. */
+fun ProfileMeta.latestRevision(): Hlc {
+    var latest = Hlc.ZERO
+    fun observe(value: Hlc?) { if (value != null && value > latest) latest = value }
+    settings.values.forEach { observe(it.at) }
+    games.values.forEach { game ->
+        observe(game.favorite?.at); observe(game.hidden?.at); observe(game.pinned?.at)
+        observe(game.continueDismissed?.at); observe(game.title?.at); observe(game.emulator?.at)
+    }
+    collections.values.forEach { collection ->
+        observe(collection.name.at); observe(collection.deleted?.at); observe(collection.order?.at)
+        collection.members.values.forEach { observe(it.at) }
+    }
+    return latest
 }

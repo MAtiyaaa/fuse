@@ -54,6 +54,7 @@ internal object SwitchContent {
         sizeOf: (String) -> Long?,
         forced: Map<String, ContentKind> = emptyMap(),
         absorbed: MutableSet<String>,
+        absorbedBy: MutableMap<String, String> = mutableMapOf(),
     ): List<ScannedGame> {
         if (games.size < 2) return games
         val names = HashMap<String, SwitchNames.Name>()
@@ -86,6 +87,7 @@ internal object SwitchContent {
             } else {
                 keepers[id] = kept.copy(content = kept.content + g.content)
                 absorbed += g.path
+                absorbedBy[g.path] = kept.path
             }
         }
         bases = keepers.values.toList()
@@ -123,20 +125,33 @@ internal object SwitchContent {
             extra.getOrPut(owner.path) { mutableListOf() } +=
                 ChildContent(kind, FsPath.name(x.path), x.path, isDirectory = false, sizeBytes = x.sizeBytes)
             absorbed += x.path
+            absorbedBy[x.path] = owner.path
         }
 
         // 3. Each game's content once; copies of loose updates and DLC with no game, once.
         val merged = bases.map { g ->
             val all = g.content + extra[g.path].orEmpty()
-            if (all.isEmpty()) g else g.copy(content = distinctContent(g, all, ::nameOf, absorbed))
+            if (all.isEmpty()) g else g.copy(content = distinctContent(g, all, ::nameOf, absorbed, absorbedBy))
         }
         val single = LinkedHashMap<String, ScannedGame>()
         for (x in alone.sortedWith(keeperOrder(crowd))) {
             val key = copyKey(kindOfLoose(x), nameOf(x.launchPath), x.sizeBytes)
-            if (key in single) absorbed += x.path else single[key] = x
+            val kept = single[key]
+            if (kept != null) {
+                absorbed += x.path
+                absorbedBy[x.path] = kept.path
+            } else single[key] = x
         }
         val keptPaths = (merged.map { it.path } + single.values.map { it.path }).toSet()
         absorbed.removeAll(keptPaths)
+        // Consolidation may run at several folder levels. Resolve redirects to the final title.
+        for (path in absorbedBy.keys.toList()) {
+            var owner = absorbedBy.getValue(path)
+            val visited = hashSetOf(path)
+            while (visited.add(owner)) owner = absorbedBy[owner] ?: break
+            if (owner in keptPaths && path !in keptPaths) absorbedBy[path] = owner
+        }
+        absorbedBy.keys.removeAll(keptPaths)
         // Keep the order games were found in.
         val byPath = (merged + single.values).associateBy { it.path }
         return games.mapNotNull { byPath[it.path] }
@@ -199,6 +214,7 @@ internal object SwitchContent {
         all: List<ChildContent>,
         nameOf: (String) -> SwitchNames.Name,
         absorbed: MutableSet<String>,
+        absorbedBy: MutableMap<String, String>,
     ): List<ChildContent> {
         val inside = all.sortedByDescending { it.path.startsWith(game.path.trimEnd('/') + "/") }
         val seen = HashSet<String>()
@@ -209,7 +225,10 @@ internal object SwitchContent {
                 continue
             }
             val key = copyKey(c.kind, nameOf(c.path), c.sizeBytes)
-            if (seen.add(key)) out += c else absorbed += c.path
+            if (seen.add(key)) out += c else {
+                absorbed += c.path
+                absorbedBy[c.path] = game.path
+            }
         }
         // Keep the order they were found in.
         return all.filter { c -> out.any { it === c } }

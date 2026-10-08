@@ -61,6 +61,7 @@ fun rememberLoopClock(label: String = "LoopClock", decorative: Boolean = true): 
     val active = LocalPageActive.current
     LaunchedEffect(clock, active) {
         if (!active) return@LaunchedEffect
+        val source = kotlin.coroutines.coroutineContext[androidx.compose.runtime.MonotonicFrameClock]
         val from = clock.playNanos
         // Time held still while the person is doing something ([FramePacing.decorationHeld]): the
         // loop carries on from where it paused, never jumping ahead.
@@ -69,8 +70,8 @@ fun rememberLoopClock(label: String = "LoopClock", decorative: Boolean = true): 
         runFrames(Long.MAX_VALUE) { play ->
             val step = play - last
             last = play
-            if (clock.decorative && FramePacing.decorationHeld()) held += step
-            else if (!clock.decorative || FramePacing.shouldDrawDecoration()) clock.playNanos = from + play - held
+            if (clock.decorative && FramePacing.decorationHeld(source = source)) held += step
+            else if (!clock.decorative || FramePacing.shouldDrawDecoration(source)) clock.playNanos = from + play - held
         }
     }
     return clock
@@ -86,12 +87,13 @@ fun rememberLoopClock(label: String = "LoopClock", decorative: Boolean = true): 
  * endless animation ([withInfiniteFrameMillis]). Returns only when cancelled.
  */
 suspend fun decorationFrames(fps: Int, infinite: Boolean = true, onFrame: (playedNanos: Long) -> Unit) {
+    val source = kotlin.coroutines.coroutineContext[androidx.compose.runtime.MonotonicFrameClock]
     val base = 1_000_000_000L / fps.coerceAtLeast(1)
     var last = frame(infinite) { it }
     var played = 0L
     var shownAt = 0L
     // The display's interval, from frames that came one after the other (not after a wait).
-    var interval = FramePacing.intervalNanos
+    var interval = FramePacing.intervalFor(source)
     var waited = false
     while (true) {
         // Under the device's pressure (heat, battery saver) fewer updates, each at its true time.
@@ -101,10 +103,10 @@ suspend fun decorationFrames(fps: Int, infinite: Boolean = true, onFrame: (playe
         val step = (now - last).coerceAtLeast(0L)
         last = now
         if (!waited && step in 1 until interval) interval = step
-        if (!FramePacing.decorationHeld()) {
+        if (!FramePacing.decorationHeld(source = source)) {
             played += step
             // Due within half a frame counts as due: updates land on the display's frames, never a frame late.
-            if (played - shownAt + interval / 2 >= every && FramePacing.shouldDrawDecorationUnderLoad()) {
+            if (played - shownAt + interval / 2 >= every && FramePacing.shouldDrawDecorationUnderLoad(source, now)) {
                 shownAt = played
                 onFrame(played)
             }

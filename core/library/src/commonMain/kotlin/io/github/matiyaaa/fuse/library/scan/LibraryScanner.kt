@@ -217,6 +217,8 @@ class LibraryScanner(
                     notGames = result.listed,
                     notGameTrees = result.skipped,
                     absorbed = result.absorbed,
+                    absorbedBy = result.absorbedBy,
+                    rulesVersion = SCANNER_RULES_VERSION,
                 )
             }
             if (complete) rememberState(folder.entry, children)
@@ -377,6 +379,7 @@ class LibraryScanner(
     }
 
     private suspend fun isUnchanged(folder: FsEntry, children: List<FsEntry>): Boolean {
+        if (state.rulesVersion(folder.path) != SCANNER_RULES_VERSION) return false
         if (folder.modifiedAt <= 0L) return false
         if (state.lastModified(folder.path) != folder.modifiedAt) return false
         for (child in children) {
@@ -503,6 +506,8 @@ class LibraryScanner(
     }
 
     private companion object {
+        // Increase only for semantic changes that must reinterpret existing unchanged libraries.
+        const val SCANNER_RULES_VERSION = 1L
         const val SHORTCUT_READ_LIMIT = 16 * 1024
         val SHORTCUT_PLATFORMS = listOf(PlatformId("steam"), PlatformId("win"))
         val WINDOWS_SHORTCUTS = setOf("gog", "epic", "amazon", "pcgame", "lnk", "exe", "bat")

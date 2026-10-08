@@ -130,6 +130,18 @@ import kotlinx.coroutines.launch
  * The whole Fuse interface for one window. [router] is created by the host (Android activity or
  * desktop window) because that is where raw input arrives.
  */
+/** Neutral ownership survives removing production screens, without retaining their subscriptions. */
+class FuseAppSession(
+    val host: io.github.matiyaaa.fuse.model.Host,
+    val displaySession: io.github.matiyaaa.fuse.ui.shell.store.DisplaySession,
+    /** Playback and focus shared by production windows; absent in a standalone installation. */
+    val playerSession: io.github.matiyaaa.fuse.ui.player.PlayerSession? = if (io.github.matiyaaa.fuse.ui.player.FusePlayer.available) io.github.matiyaaa.fuse.ui.player.FusePlayer.session else null,
+    val shareWindowFocus: Boolean = true,
+) {
+    val dev = DevOptions(displaySession)
+    internal var kept: KeptPlace? = null
+}
+
 @Composable
 fun FuseApp(
     store: FuseStore,
@@ -149,11 +161,21 @@ fun FuseApp(
      * moved to the other screen, the device turned) opens on the page it was on. The apps do.
      */
     keepPlace: Boolean = false,
+    /** Only supplied by the disposable developer rehearsal. */
+    onRehearsalFinished: (() -> Unit)? = null,
+    /** Hosts and UI regression tests may retain this neutral owner explicitly. */
+    session: FuseAppSession? = null,
 ) {
+    val owner = session ?: remember(store, platform) { FuseAppSession(platform.host, store.displaySession) }
+    // Choose the environment before a preference flow, theme or interface scale is read.
+    if (owner.displaySession.rehearsalOpen) {
+        RehearsalApp(owner.host, router) { owner.displaySession.rehearsalOpen = false }
+        return
+    }
     val prefs by store.prefs.collectAsState()
     InterfaceSize(prefs.display.interfaceSize) {
         CompositionLocalProvider(LocalShowcaseElsewhere provides showcaseElsewhere) {
-            FuseAppContent(store, platform, router, phoneLink, safeMode, onSettled, startupIntro, keepPlace)
+            FuseAppContent(store, platform, router, phoneLink, safeMode, onSettled, startupIntro, keepPlace, onRehearsalFinished, owner)
         }
     }
 }
@@ -168,6 +190,8 @@ private fun FuseAppContent(
     onSettled: () -> Unit,
     startupIntro: Boolean,
     keepPlace: Boolean,
+    onRehearsalFinished: (() -> Unit)?,
+    owner: FuseAppSession,
 ) {
     val base = rememberCoroutineScope()
     val stored by store.prefs.collectAsState()
@@ -180,10 +204,14 @@ private fun FuseAppContent(
             },
         )
         val start = if (stored.onboardingDone) Route.Root(Destination.HOME) else Route.Onboarding
-        val kept = if (keepPlace) KeptPlaces.current ?: KeptPlace(start).also { KeptPlaces.current = it } else KeptPlace(start)
-        state = AppState(store, platform, scope, start, phoneLink, kept)
+        val kept = owner.kept ?: (if (keepPlace) KeptPlaces.current ?: KeptPlace(start).also { KeptPlaces.current = it } else KeptPlace(start)).also { owner.kept = it }
+        state = AppState(store, platform, scope, start, phoneLink, kept, owner.dev, owner.playerSession, owner.shareWindowFocus)
         state.safeMode = safeMode
         state
+    }
+    app.finishRehearsal = onRehearsalFinished
+    DisposableEffect(app) {
+        onDispose { app.scope.coroutineContext[Job]?.cancel() }
     }
     // Safe mode draws with Fuse's own look and no effects; what is saved never changes.
     val prefs = if (app.safeMode != null) stored.inSafeMode() else stored
@@ -213,6 +241,7 @@ private fun FuseAppContent(
         }
     }
     app.navigator.forgetsTabs = !prefs.rememberPlace
+    val sessionStandby by store.displaySession.standby.collectAsState()
     val homeFeed by store.homeFeed.collectAsState()
     StandbyWatch(app, router, prefs.standbyMinutes) {
         app.intro || app.launching != null || homeFeed.playtime.currentGame != null || app.navigator.current == Route.Onboarding
@@ -238,7 +267,7 @@ private fun FuseAppContent(
     val lastSource by router.lastSource.collectAsState()
     val padFamily by router.padFamily.collectAsState()
     // A phone used as a controller is labelled like the controller in hand.
-    LaunchedEffect(padFamily) { RemoteInput.padInUse(padFamily) }
+    if (phoneLink != null) LaunchedEffect(padFamily) { RemoteInput.padInUse(padFamily) }
     val glyphStyle = when {
         !prefs.input.autoGlyphs -> prefs.input.glyphs
         lastSource == InputSource.KEYBOARD -> GlyphStyle.KEYBOARD
@@ -276,33 +305,35 @@ private fun FuseAppContent(
         }
         onDispose { router.textInput = null }
     }
-    // Phone Link: a phone types into whichever field is open, and its text follows the field here.
-    LaunchedEffect(keyboardTarget) {
-        val target = keyboardTarget ?: return@LaunchedEffect
-        val id = RemoteInput.opened(target.title, target.field.text, target.secret, target.placeholder, target.doneLabel, target.cancel != null)
-        try {
-            snapshotFlow { target.field.text }.collect { RemoteInput.changed(id, it) }
-        } finally {
-            RemoteInput.closed(id)
+    if (phoneLink != null) {
+        // Phone Link: a phone types into whichever field is open, and its text follows the field here.
+        LaunchedEffect(keyboardTarget) {
+            val target = keyboardTarget ?: return@LaunchedEffect
+            val id = RemoteInput.opened(target.title, target.field.text, target.secret, target.placeholder, target.doneLabel, target.cancel != null)
+            try {
+                snapshotFlow { target.field.text }.collect { RemoteInput.changed(id, it) }
+            } finally {
+                RemoteInput.closed(id)
+            }
         }
-    }
-    // What phones ask for: text for the field open, and buttons pressed on a phone used as a controller.
-    LaunchedEffect(router) {
-        RemoteInput.commands.collect { c ->
-            val target = app.keyboardTarget
-            val current = RemoteInput.field.value?.id
-            when (c) {
-                is RemoteCommand.SetText -> if (target != null && c.id == current) target.field.replaceAll(c.text)
-                is RemoteCommand.Submit -> if (target != null && c.id == current) target.submit()
-                is RemoteCommand.Cancel -> if (target != null && c.id == current) target.cancel?.invoke()
-                is RemoteCommand.Pad -> if (store.prefs.value.phoneLinkController) {
-                    if (c.down) router.press(c.button, InputSource.REMOTE) else router.release(c.button, InputSource.REMOTE)
+        // What phones ask for: text for the field open, and buttons pressed on a phone used as a controller.
+        LaunchedEffect(router) {
+            RemoteInput.commands.collect { c ->
+                val target = app.keyboardTarget
+                val current = RemoteInput.field.value?.id
+                when (c) {
+                    is RemoteCommand.SetText -> if (target != null && c.id == current) target.field.replaceAll(c.text)
+                    is RemoteCommand.Submit -> if (target != null && c.id == current) target.submit()
+                    is RemoteCommand.Cancel -> if (target != null && c.id == current) target.cancel?.invoke()
+                    is RemoteCommand.Pad -> if (store.prefs.value.phoneLinkController) {
+                        if (c.down) router.press(c.button, InputSource.REMOTE) else router.release(c.button, InputSource.REMOTE)
+                    }
                 }
             }
         }
     }
     // The companion screen (second display) follows what the main screen has in focus.
-    SpotlightFollows(app)
+    if (app.shareWindowFocus) SpotlightFollows(app)
     LaunchedEffect(prefs.sound, prefs.soundVolume) {
         platform.sounds.setProfile(prefs.sound)
         platform.sounds.setVolume(prefs.soundVolume)
@@ -325,7 +356,7 @@ private fun FuseAppContent(
                     )
                     if (!event.isRepeat) platform.haptics.tick()
                     // The second screen slides the same way when what it shows changes.
-                    when (event.action) {
+                    if (app.shareWindowFocus) when (event.action) {
                         NavAction.LEFT, NavAction.UP, NavAction.PAGE_UP -> Spotlight.moved(-1)
                         NavAction.RIGHT, NavAction.DOWN, NavAction.PAGE_DOWN -> Spotlight.moved(1)
                         else -> Unit
@@ -430,7 +461,7 @@ private fun FuseAppContent(
                     ToastHost(app.toasts)
                     app.capture?.let { CaptureOverlay(it) }
                     LaunchVeilView(app)
-                    if (app.standby) {
+                    if (sessionStandby) {
                         StandbyHost(app, prefs.clock24h, prefs.startupAnimation && startupIntro)
                     }
                     // The other screen stays dark while an opening plays here.
@@ -1079,7 +1110,7 @@ private fun MenuMusic(app: AppState, player: MenuMusicPlayer?) {
     // The startup animation has its own sound; the music waits until it has opened out.
     // Fuse Player playing a film or a song (on either screen) has the sound to itself.
     val quiet = app.launching != null || home.playtime.currentGame != null || app.intro || app.standby ||
-        app.playerOpen || mediaPlaying() || remote.paused
+        app.playerOpen || app.playerSession?.item != null || remote.paused
     // The previous song keeps playing until the next one is ready, so the player can crossfade. The
     // file is looked up again whenever music comes back from a game: a bundled song's unpacked copy
     // lives in the cache, which the system may have cleared meanwhile.
@@ -1096,10 +1127,6 @@ private fun MenuMusic(app: AppState, player: MenuMusicPlayer?) {
     LaunchedEffect(state) { player.apply(state) }
 }
 
-/** Fuse Player has something playing, on either screen. */
-internal fun mediaPlaying(): Boolean =
-    io.github.matiyaaa.fuse.ui.player.FusePlayer.available && io.github.matiyaaa.fuse.ui.player.FusePlayer.session.item != null
-
 /**
  * Keeps track of where Fuse Player's picture can go: another screen is there when the menus are on
  * the second screen (the showcase is above) or a companion shows on it. Without one, the picture
@@ -1107,7 +1134,7 @@ internal fun mediaPlaying(): Boolean =
  */
 @Composable
 private fun PlayerScreens(app: AppState, prefs: io.github.matiyaaa.fuse.ui.shell.store.UiPrefs) {
-    if (!io.github.matiyaaa.fuse.ui.player.FusePlayer.available) return
+    val session = app.playerSession ?: return
     val d = prefs.display
     val companion = app.platform.features.secondScreen && !d.secondScreenHidden &&
         (d.mode == io.github.matiyaaa.fuse.model.DualScreenMode.LIBRARY_COMPANION || d.mode == io.github.matiyaaa.fuse.model.DualScreenMode.GAME_COMPANION)
@@ -1118,7 +1145,7 @@ private fun PlayerScreens(app: AppState, prefs: io.github.matiyaaa.fuse.ui.shell
         if (!other) placement.withMenus = true
     }
     LaunchedEffect(app) {
-        androidx.compose.runtime.snapshotFlow { placement.withMenus && io.github.matiyaaa.fuse.ui.player.FusePlayer.session.item != null }
+        androidx.compose.runtime.snapshotFlow { placement.withMenus && session.item != null }
             .collect { if (it) app.playerOpen = true }
     }
 }
@@ -1153,7 +1180,7 @@ private fun hudActivities(app: AppState): List<HudActivity> {
     val available by app.store.updates.available.collectAsState()
     val fill by app.store.media.fillProgress.collectAsState()
     val recordingTime = rememberRecordingTime(app.capture)
-    val playing = if (io.github.matiyaaa.fuse.ui.player.FusePlayer.available) io.github.matiyaaa.fuse.ui.player.FusePlayer.session.item else null
+    val playing = app.playerSession?.item
     return buildList {
         // A film playing on the other screen while these menus browse: a press brings its remote back.
         if (playing != null && !app.playerOpen) {
@@ -1295,4 +1322,26 @@ private fun StayAwakeWatch(app: AppState) {
     androidx.compose.runtime.DisposableEffect(Unit) {
         onDispose { app.platform.stayAwake(io.github.matiyaaa.fuse.ui.shell.platform.StayAwake.NONE) }
     }
+}
+
+/** The original app's screens and effects leave composition while a disposable app is open. */
+@Composable
+private fun RehearsalApp(host: io.github.matiyaaa.fuse.model.Host, parentRouter: InputRouter, finish: () -> Unit) {
+    val base = rememberCoroutineScope()
+    val scope = remember { CoroutineScope(base.coroutineContext + SupervisorJob(base.coroutineContext[Job])) }
+    val store = remember { io.github.matiyaaa.fuse.ui.shell.onboarding.RehearsalStore(scope, host) }
+    val platform = remember { io.github.matiyaaa.fuse.ui.shell.onboarding.FakePlatformUi(host, finish) }
+    val router = remember { InputRouter(scope) }
+    DisposableEffect(parentRouter, router) {
+        parentRouter.releaseAll()
+        parentRouter.redirectTo = router
+        onDispose {
+            parentRouter.redirectTo = null
+            router.releaseAll()
+            scope.coroutineContext[Job]?.cancel()
+            store.close()
+        }
+    }
+    val owner = remember { FuseAppSession(host, store.displaySession, playerSession = null, shareWindowFocus = false) }
+    FuseApp(store, platform, router, onRehearsalFinished = finish, session = owner)
 }

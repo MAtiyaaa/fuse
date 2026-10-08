@@ -48,8 +48,10 @@ internal class DefaultFuseStore private constructor(
     initialPrefs: UiPrefs,
     jellyfinDeviceId: String,
 ) : FuseStore {
+    override val displaySession = io.github.matiyaaa.fuse.ui.shell.store.DisplaySession()
     private val data = ctx.data
     private val prefsState = MutableStateFlow(initialPrefs)
+    @kotlin.concurrent.Volatile private var prefsProfile = ctx.settings.value.sync.activeProfile
     override val prefs: StateFlow<UiPrefs> = prefsState
     private val writes = Channel<UiPrefs>(Channel.CONFLATED)
     private val writeLock = Mutex()
@@ -105,7 +107,8 @@ internal class DefaultFuseStore private constructor(
     override val offlineMedia: DefaultOfflineMedia by lazy { DefaultOfflineMedia(ctx, engine, transferEngine, jellyfin) }
 
     /** Fuse Sync over this library: the person's records and settings, read and put in place. */
-    private val profileData = LibraryProfileData(ctx.data, settings = { settingsNow() }, applySettings = { t -> writeSettings(t) })
+    private val profileData = LibraryProfileData(ctx.data, settings = { settingsNow() }, applySettings = { t -> writeSettings(t) },
+        applyProfileSettings = { profile, values -> writeProfileSettings(profile, values) })
     override val sync = DefaultSyncOps(ctx, profileData) { t -> writeSettings(t) }
 
     override val syncthing: io.github.matiyaaa.fuse.sync.syncthing.SyncthingService? =
@@ -165,15 +168,27 @@ internal class DefaultFuseStore private constructor(
     /** The settings with anything still on its way to the database written first. */
     private suspend fun settingsNow() = writeLock.withLock {
         val current = data.settings.current()
-        val next = current.withUiPrefs(prefsState.value)
+        val next = if (prefsProfile == current.sync.activeProfile) current.withUiPrefs(prefsState.value) else current
         if (next == current) current else data.settings.update { it.withUiPrefs(prefsState.value) }.also { ctx.settings.value = it }
     }
 
     /** Changes the settings (Fuse Sync bringing in a profile's) and has the interface follow at once. */
     private suspend fun writeSettings(transform: (io.github.matiyaaa.fuse.data.settings.AppSettings) -> io.github.matiyaaa.fuse.data.settings.AppSettings) = writeLock.withLock {
         val before = data.settings.current()
-        val after = data.settings.update { transform(it.withUiPrefs(prefsState.value)) }
+        val after = data.settings.update { transform(if (prefsProfile == it.sync.activeProfile) it.withUiPrefs(prefsState.value) else it) }
         if (after != before) reloadLocked()
+    }
+
+    /** Commit pending UI edits before comparing host revisions, then reload without restamping them. */
+    private suspend fun writeProfileSettings(profile: String, values: Map<String, io.github.matiyaaa.fuse.data.settings.ProfileSettingValue>) = writeLock.withLock {
+        val before = data.settings.current()
+        // A profile switch changes the persisted owner before the old UI preferences are reloaded.
+        // Those old preferences must not become a local edit belonging to the next person.
+        if (prefsProfile == before.sync.activeProfile && prefsState.value != before.toUiPrefs(globalScoped(ctx))) {
+            data.settings.update { it.withUiPrefs(prefsState.value) }
+        }
+        val after = data.settings.mergeProfileValues(profile, values)
+        if (after != before || prefsState.value != after.toUiPrefs(globalScoped(ctx))) reloadLocked()
     }
 
     override val media get() = mediaOps
@@ -284,6 +299,7 @@ internal class DefaultFuseStore private constructor(
     private suspend fun persist(prefs: UiPrefs) = writeLock.withLock {
         // A newer value replaced this one (a later change, or a restore reloading everything): it is written instead.
         if (prefs != prefsState.value) return@withLock
+        if (prefsProfile != data.settings.current().sync.activeProfile) { reloadLocked(); return@withLock }
         ctx.settings.value = data.settings.update { it.withUiPrefs(prefs) }
         val scoped = data.scopedSettings
         val global = ScopeRef.Global
@@ -298,6 +314,7 @@ internal class DefaultFuseStore private constructor(
     private suspend fun reloadLocked() {
         val settings = data.settings.current()
         ctx.settings.value = settings
+        prefsProfile = settings.sync.activeProfile
         prefsState.value = settings.toUiPrefs(globalScoped(ctx))
         ctx.systemOrder.value = prefsState.value.systemOrder
     }
@@ -415,7 +432,9 @@ internal class DefaultFuseStore private constructor(
         // The interface follows Fuse Sync's settings as stored (the service writes some itself).
         ctx.scope.launch {
             sync.config.collect { c ->
-                if (prefsState.value.sync != c) {
+                if (prefsProfile != c.activeProfile) {
+                    writeLock.withLock { reloadLocked() }
+                } else if (prefsState.value.sync != c) {
                     prefsState.value = prefsState.value.copy(sync = c)
                     writes.trySend(prefsState.value)
                 }

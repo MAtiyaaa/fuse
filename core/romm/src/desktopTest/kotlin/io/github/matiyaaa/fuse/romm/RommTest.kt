@@ -314,6 +314,23 @@ class RommTest {
     private fun rom(id: Long, slug: String, fs: String, md5: String? = null, titleId: String? = null) =
         RommRom(id, 1, slug, fs.substringBefore(" ("), fs, md5 = md5, titleId = titleId, files = listOf(RommFile(id * 10, fs)))
 
+    @Test fun sameFileAndTitleNeverOverrideConflictingExplicitIds() {
+        val local = LocalGame(1, "psx", "Same Name", "Same Name.chd", serial = "SLUS-00001")
+        val remote = rom(1, "psx", "Same Name.chd", titleId = "SLUS00002")
+        assertTrue(RommMatch.match(listOf(remote), listOf(local), ::platformOf).isEmpty())
+        assertTrue(RommMatch.match(listOf(remote.copy(fsName = "Same Name.zip")), listOf(local), ::platformOf).isEmpty())
+        val matching = remote.copy(titleId = "slus_000.01")
+        assertEquals(MatchReason.TITLE_ID, RommMatch.match(listOf(matching), listOf(local), ::platformOf).single().reason)
+    }
+
+    @Test fun weakNamesCannotOverrideDifferentKnownHashesOrServerLinks() {
+        val remote = rom(1, "gba", "Same Name.gba", md5 = "ABC")
+        val local = LocalGame(1, "gba", "Same Name", "Same Name.gba", md5 = "def")
+        assertTrue(RommMatch.match(listOf(remote), listOf(local), ::platformOf).isEmpty())
+        assertEquals(MatchReason.HASH, RommMatch.match(listOf(remote), listOf(local.copy(md5 = "abc")), ::platformOf).single().reason)
+        assertTrue(RommMatch.match(listOf(remote), listOf(local.copy(md5 = null, rommRomId = 2)), ::platformOf).isEmpty())
+    }
+
     @Test
     fun `PS4 and PS5 zips find the folders they unpack to, by name or by the game's own id`() {
         val roms = listOf(

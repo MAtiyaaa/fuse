@@ -110,10 +110,16 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
     var suggestionsLoaded by remember { mutableStateOf(false) }
     val suggestionSel = remember { LinearSelection() }
     val next = state::next
-    // Replayed as a rehearsal (developer options), steps change nothing outside preferences, and
-    // those are put back when it ends.
-    val live = !app.dev.rehearsing
     val desktop = platform.host != io.github.matiyaaa.fuse.model.Host.ANDROID
+
+    val steamIntegration = platform.steam.takeIf { platform.host == io.github.matiyaaa.fuse.model.Host.LINUX }
+    var steamReady by remember { mutableStateOf<Boolean?>(if (steamIntegration == null) true else null) }
+    var steamAdding by remember { mutableStateOf(false) }
+    var steamSetupDone by remember { mutableStateOf(false) }
+    var steamError by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(steamIntegration) {
+        steamReady = steamIntegration?.let { runCatching { it.added() }.getOrDefault(false) } ?: true
+    }
 
     LaunchedEffect(storage) {
         if (storage == StorageState.GRANTED || storage == StorageState.NOT_NEEDED) {
@@ -147,6 +153,43 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
 
     return buildList {
         // ------------------------------------------------------------------------------- start
+        if (steamIntegration != null && (steamReady != true || steamSetupDone)) {
+            add(Step(
+                "steam.integration", "Welcome", when {
+                    steamAdding -> "Adding Fuse to Steam"
+                    steamSetupDone -> "Fuse is ready in Steam"
+                    else -> "Add Fuse to Steam?"
+                },
+                when {
+                    steamAdding -> "Steam closes cleanly while Fuse prepares its entry and artwork. Your setup stays here."
+                    steamSetupDone -> "Find Fuse in your Steam library, ready for Game Mode. Continue setting up here."
+                    steamError != null -> steamError!!
+                    else -> "Start Fuse in Game Mode with its own capsule, hero, logo and icon. Steam may close and restart; your other shortcuts and custom artwork stay."
+                },
+                optional = true, icon = FuseIcons.Gamepad, chapter = Chapters.START,
+                actions = when {
+                    steamAdding -> listOf(StepAction("Adding to Steam", enabled = false) {})
+                    steamSetupDone -> listOf(StepAction("Continue", primary = true, run = next))
+                    else -> listOf(
+                        StepAction(if (steamError == null) "Add to Steam" else "Try again", primary = true, enabled = steamReady != null && !steamIntegration.gameMode) {
+                            steamAdding = true
+                            steamError = null
+                            app.scope.launch {
+                                try {
+                                    steamIntegration.addForSetup().onSuccess {
+                                        steamSetupDone = true
+                                        steamReady = true
+                                    }.onFailure { steamError = it.message ?: "Steam could not be updated. You can retry." }
+                                } finally { steamAdding = false }
+                            }
+                        },
+                        StepAction("Not now", run = next),
+                    )
+                },
+                footnote = if (steamIntegration.gameMode) "Open Fuse directly in Desktop Mode to update Steam safely." else null,
+                content = { if (steamAdding) Spinner() else StepEmblem(FuseIcons.Gamepad) },
+            ))
+        }
         add(Step(
             "welcome", "Welcome", "Welcome to Fuse",
             "Your games, emulators and apps in one place, made for a controller. Setup takes about a minute; you can change anything later.",
@@ -180,7 +223,6 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             val syncOn = prefs.sync.enabled && prefs.sync.role.isNotEmpty()
             val syncthingOn = syncthingState != null && syncthingState !is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Off
             fun setUp(host: Boolean) {
-                if (!live) { next(); return }
                 app.scope.launch { store.sync.setEnabled(true) }
                 app.go(Route.SyncSetup(host))
             }
@@ -198,7 +240,6 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             }
             fun useSyncthing() {
                 if (syncthing == null) return
-                if (!live) { next(); return }
                 io.github.matiyaaa.fuse.ui.shell.sync.useSyncthing(app, syncthing, true)
                 app.go(Route.SyncthingSettings)
             }
@@ -254,13 +295,13 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             optional = true, icon = FuseIcons.UserRound, chapter = Chapters.START,
             actions = if (profiles.isEmpty()) {
                 listOf(
-                    StepAction("Create Your Profile", primary = true) { if (live) app.whoAreYou = io.github.matiyaaa.fuse.ui.shell.sync.WhoMode.ADD else next() },
+                    StepAction("Create Your Profile", primary = true) { app.whoAreYou = io.github.matiyaaa.fuse.ui.shell.sync.WhoMode.ADD },
                     StepAction("Skip", run = next),
                 )
             } else {
                 listOf(
                     StepAction("Continue", primary = true, run = next),
-                    StepAction("Add Another") { if (live) app.whoAreYou = io.github.matiyaaa.fuse.ui.shell.sync.WhoMode.ADD },
+                    StepAction("Add Another") { app.whoAreYou = io.github.matiyaaa.fuse.ui.shell.sync.WhoMode.ADD },
                 )
             },
             content = { ProfilesStage(profiles, playing) },
@@ -285,7 +326,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             }
         }
         val useChosen: () -> Unit = {
-            if (live) {
+            run {
                 app.scope.launch {
                     for (path in chosen.toList()) {
                         val kind = suggestions.firstOrNull { it.path == path }?.kind ?: LibrarySourceKind.ROMS_ROOT
@@ -348,7 +389,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             val drives = steamGames.map { it.library }.distinct().size
             // No is kept: Steam's games stay out, even a games folder's own Steam shortcuts.
             val noSteam: () -> Unit = {
-                if (live) store.updatePrefs { it.copy(steamGames = io.github.matiyaaa.fuse.ui.shell.store.impl.STEAM_OFF) }
+                store.updatePrefs { it.copy(steamGames = io.github.matiyaaa.fuse.ui.shell.store.impl.STEAM_OFF) }
                 next()
             }
             val pickSteam: () -> Unit = {
@@ -391,7 +432,6 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                     steamGames.isEmpty() -> listOf(StepAction("Choose a Steam folder", primary = true, run = pickSteam), StepAction("Skip", run = noSteam))
                     else -> listOf(
                         StepAction(if (picked.size == 1) "Add 1 game" else "Add ${picked.size} games", primary = true, enabled = picked.isNotEmpty(), note = "Tick at least one game to add") {
-                            if (!live) { next(); return@StepAction }
                             store.updatePrefs { it.copy(steamGames = io.github.matiyaaa.fuse.ui.shell.store.impl.STEAM_ON) }
                             app.scope.launch {
                                 steamAdded = store.sources.addSteamGames(picked)
@@ -497,7 +537,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                     listOf(StepAction("Continue", primary = true, run = next), StepAction("Choose again") { answerRomm("") })
                 } else {
                     listOf(
-                        StepAction("Connect", primary = true) { if (live) app.go(Route.RommSetup()) else next() },
+                        StepAction("Connect", primary = true) { app.go(Route.RommSetup()) },
                         StepAction("Choose again") { answerRomm("") },
                     )
                 }
@@ -514,7 +554,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                                         "Install Cartridge ${release.tag.removePrefix("v")}?",
                                         "Fuse downloads the official release from GitHub and hands it to your system's installer, where you confirm it.",
                                         "Download and install",
-                                    ) { if (live) app.scope.launch { store.cartridge.install(release) } }
+                                    ) { app.scope.launch { store.cartridge.install(release) } }
                                 }
                             }
                         },
@@ -525,7 +565,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                 else -> listOfNotNull(
                     StepAction("Fuse RomM", primary = true) {
                         answerRomm("FUSE")
-                        if (live) app.go(Route.RommSetup())
+                        app.go(Route.RommSetup())
                     }.takeIf { rommHere },
                     StepAction("Cartridge", primary = !rommHere, enabled = cartridgeHere, note = "Cartridge runs on Android and Linux") { answerRomm("CARTRIDGE") },
                     StepAction("Neither") { answerRomm("NONE"); next() },
@@ -555,7 +595,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                 listOf(StepAction("Continue", primary = true, run = next))
             } else {
                 listOf(
-                    StepAction("Connect Jellyfin", primary = true) { connectJellyfin(app, live) { if (state.index < state.total - 1) next() } },
+                    StepAction("Connect Jellyfin", primary = true) { connectJellyfin(app) { if (state.index < state.total - 1) next() } },
                     StepAction("Skip", run = next),
                 )
             },
@@ -571,7 +611,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                     app.textInput = TextInputSpec("RetroAchievements username", "") { user ->
                         app.textInput = TextInputSpec("Web API key", "", "Paste your key") { key ->
                             app.scope.launch {
-                                if (live) store.achievements.connect(user.trim(), key.trim())
+                                store.achievements.connect(user.trim(), key.trim())
                                     .onSuccess { app.toasts.show("Connected as ${user.trim()}") }
                                     .onFailure { app.toasts.show(it.message ?: "Couldn't connect") }
                             }
@@ -588,7 +628,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             actions = listOf(
                 StepAction(if ("sgdb.apikey" in secrets) "Continue" else "Add SteamGridDB key", primary = true) {
                     if ("sgdb.apikey" in secrets) next() else app.textInput = TextInputSpec("SteamGridDB API key", "", "From steamgriddb.com, Preferences, API") { key ->
-                        if (key.isNotBlank() && live) app.scope.launch { store.credentials.put("sgdb.apikey", key.trim()) }
+                        if (key.isNotBlank()) app.scope.launch { store.credentials.put("sgdb.apikey", key.trim()) }
                     }
                 },
                 StepAction("Skip", run = next),
@@ -686,13 +726,10 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             "done", "Ready", "You're all set",
             if (total > 0) "$total games across ${withGames.size} systems, ready to play. Press Start anytime for quick settings." else "Fuse keeps looking for games in the background. Press Start anytime for quick settings.",
             icon = FuseIcons.Rocket, chapter = Chapters.READY,
-            actions = listOf(StepAction(if (live) "Start playing" else "End the rehearsal", primary = true) {
-                if (live) {
-                    store.updatePrefs { it.copy(onboardingDone = true) }
-                    app.navigator.replace(Route.Root(io.github.matiyaaa.fuse.model.Destination.HOME))
-                } else {
-                    app.endRehearsal()
-                }
+            actions = listOf(StepAction(if (app.finishRehearsal == null) "Start playing" else "End the rehearsal", primary = true) {
+                store.updatePrefs { it.copy(onboardingDone = true) }
+                if (app.finishRehearsal != null) app.endRehearsal()
+                else app.navigator.replace(Route.Root(io.github.matiyaaa.fuse.model.Destination.HOME))
             }),
             content = { Ignition(lit = true) },
         ))
@@ -1237,14 +1274,5 @@ private fun ThemePreview(index: Int) {
 
 private fun Modifier.matchParentSizeSafe(): Modifier = this.then(Modifier.fillMaxWidth().heightIn(min = 1.dp).aspectRatio(16f / 10f))
 
-/**
- * Ends a replayed setup (developer options): the preferences go back to how they were before it
- * started, and Fuse returns to where the rehearsal began.
- */
-fun AppState.endRehearsal() {
-    val before = dev.rehearsalPrefs ?: return
-    dev.rehearsalPrefs = null
-    store.updatePrefs { before }
-    back()
-    toasts.show("Setup replayed. Nothing was changed")
-}
+/** Leaves the disposable setup installation and returns to the original window. */
+fun AppState.endRehearsal() { finishRehearsal?.invoke() }

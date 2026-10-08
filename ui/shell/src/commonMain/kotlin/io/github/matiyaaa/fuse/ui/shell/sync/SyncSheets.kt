@@ -121,6 +121,7 @@ internal fun PairingOverlay(app: AppState) {
 
 /** A version of a save, as its row reads: when, where, and how far in. */
 private fun versionDetail(v: SaveVersion, now: Long, offset: Long): String = listOfNotNull(
+    v.provenance.takeIf { it.isNotBlank() },
     "On ${v.device}",
     v.playSeconds.takeIf { it > 0 }?.let { "${playtimeText(it)} in" },
     sizeText(v.bytes),

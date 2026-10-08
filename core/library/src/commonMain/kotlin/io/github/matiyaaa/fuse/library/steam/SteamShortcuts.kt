@@ -8,9 +8,9 @@ package io.github.matiyaaa.fuse.library.steam
 object BinaryVdf {
     sealed interface Value
     data class Str(val value: String) : Value
-    data class Int32(val value: Int) : Value
+    data class Int32(val value: Int, val wireType: Byte = 2) : Value
     data class Float32(val value: Float) : Value
-    data class Int64(val value: Long) : Value
+    data class Int64(val value: Long, val wireType: Byte = 7) : Value
     data class Block(val entries: MutableList<Pair<String, Value>> = mutableListOf()) : Value {
         operator fun get(key: String): Value? = entries.firstOrNull { it.first.equals(key, ignoreCase = true) }?.second
         operator fun set(key: String, value: Value) {
@@ -29,13 +29,14 @@ object BinaryVdf {
     private const val END: Byte = 8
     private const val INT64: Byte = 10
 
-    /** The document, or null when it isn't binary KeyValues. An empty input is an empty document. */
+    /** The document, or null when it isn't binary KeyValues. An empty input is rejected; callers explicitly handle a new file. */
     fun parse(bytes: ByteArray): Block? {
         var i = 0
         fun cstring(): String {
             val start = i
             while (i < bytes.size && bytes[i] != 0.toByte()) i++
-            val s = bytes.copyOfRange(start, i).decodeToString()
+            require(i < bytes.size) { "unterminated string" }
+            val s = bytes.copyOfRange(start, i).decodeToString(throwOnInvalidSequence = true)
             i++
             return s
         }
@@ -46,30 +47,31 @@ object BinaryVdf {
             i += 4
             return v
         }
-        fun block(): Block {
+        fun block(depth: Int = 0): Block {
+            require(depth <= 64) { "nested too deeply" }
             val out = Block()
             while (i < bytes.size) {
                 val type = bytes[i++]
                 if (type == END) return out
                 val key = cstring()
                 when (type) {
-                    BLOCK -> out.entries += key to block()
+                    BLOCK -> out.entries += key to block(depth + 1)
                     STRING -> out.entries += key to Str(cstring())
-                    INT, POINTER, COLOR -> out.entries += key to Int32(int32())
+                    INT, POINTER, COLOR -> out.entries += key to Int32(int32(), type)
                     FLOAT -> out.entries += key to Float32(Float.fromBits(int32()))
                     UINT64, INT64 -> {
                         val low = int32().toLong() and 0xFFFFFFFFL
                         val high = int32().toLong()
-                        out.entries += key to Int64(low or (high shl 32))
+                        out.entries += key to Int64(low or (high shl 32), type)
                     }
                     else -> throw IllegalArgumentException("type $type")
                 }
             }
-            return out
+            throw IllegalArgumentException("unterminated block")
         }
         return try {
-            block()
-        } catch (e: IllegalArgumentException) {
+            block().also { require(i == bytes.size) { "trailing bytes" } }
+        } catch (e: Exception) {
             null
         }
     }
@@ -91,9 +93,9 @@ object BinaryVdf {
                 when (value) {
                     is Block -> { out += BLOCK; cstring(key); block(value); out += END }
                     is Str -> { out += STRING; cstring(key); cstring(value.value) }
-                    is Int32 -> { out += INT; cstring(key); int32(value.value) }
+                    is Int32 -> { out += value.wireType; cstring(key); int32(value.value) }
                     is Float32 -> { out += FLOAT; cstring(key); int32(value.value.toRawBits()) }
-                    is Int64 -> { out += UINT64; cstring(key); int32(value.value.toInt()); int32((value.value ushr 32).toInt()) }
+                    is Int64 -> { out += value.wireType; cstring(key); int32(value.value.toInt()); int32((value.value ushr 32).toInt()) }
                 }
             }
         }
@@ -125,15 +127,17 @@ object SteamShortcuts {
     /** [existing] (the file's bytes, or null for a new file) with [shortcut] in it; null when the file can't be read. */
     fun add(existing: ByteArray?, shortcut: SteamShortcut): ByteArray? {
         val root = if (existing == null || existing.isEmpty()) BinaryVdf.Block() else BinaryVdf.parse(existing) ?: return null
-        val list = root["shortcuts"] as? BinaryVdf.Block ?: BinaryVdf.Block().also { root["shortcuts"] = it }
+        val value = root["shortcuts"]
+        if (value != null && value !is BinaryVdf.Block) return null
+        val list = value as? BinaryVdf.Block ?: BinaryVdf.Block().also { root["shortcuts"] = it }
         val same = list.entries.map { it.second }.filterIsInstance<BinaryVdf.Block>().firstOrNull { e ->
-            (e["Exe"] as? BinaryVdf.Str)?.value == shortcut.exe || (e["AppName"] as? BinaryVdf.Str)?.value == shortcut.name
+            (e["Exe"] as? BinaryVdf.Str)?.value == shortcut.exe
         }
         val entry = same ?: BinaryVdf.Block().also { b ->
             val next = (list.entries.mapNotNull { it.first.toIntOrNull() }.maxOrNull() ?: -1) + 1
             list.entries += next.toString() to b
         }
-        entry["appid"] = BinaryVdf.Int32(appId(shortcut.exe, shortcut.name))
+        entry["appid"] = entry["appid"] ?: BinaryVdf.Int32(appId(shortcut.exe, shortcut.name))
         entry["AppName"] = BinaryVdf.Str(shortcut.name)
         entry["Exe"] = BinaryVdf.Str(shortcut.exe)
         entry["StartDir"] = BinaryVdf.Str(shortcut.startDir)
@@ -153,6 +157,30 @@ object SteamShortcuts {
         shortcut.tags.forEachIndexed { i, t -> tags.entries += i.toString() to BinaryVdf.Str(t) }
         entry["tags"] = tags
         return BinaryVdf.write(root)
+    }
+
+    /** Rebuild only entries positively owned by Fuse. A name match alone never establishes ownership. */
+    fun rebuild(existing: ByteArray?, shortcut: SteamShortcut, owned: (String, String) -> Boolean): ByteArray? {
+        val root = if (existing == null || existing.isEmpty()) BinaryVdf.Block() else BinaryVdf.parse(existing) ?: return null
+        val value = root["shortcuts"]
+        if (value != null && value !is BinaryVdf.Block) return null
+        val list = value as? BinaryVdf.Block ?: BinaryVdf.Block().also { root["shortcuts"] = it }
+        var retained: BinaryVdf.Block? = null
+        list.entries.removeAll { (_, value) ->
+            val e = value as? BinaryVdf.Block ?: return@removeAll false
+            val exe = (e["Exe"] as? BinaryVdf.Str)?.value.orEmpty().trim('"')
+            val name = (e["AppName"] as? BinaryVdf.Str)?.value.orEmpty()
+            if (!owned(exe, name)) false else {
+                if (retained == null) retained = e
+                true
+            }
+        }
+        retained?.let { e ->
+            e["Exe"] = BinaryVdf.Str(shortcut.exe)
+            val index = (list.entries.mapNotNull { it.first.toIntOrNull() }.maxOrNull() ?: -1) + 1
+            list.entries += index.toString() to e
+        }
+        return add(BinaryVdf.write(root), shortcut)
     }
 
     /**
