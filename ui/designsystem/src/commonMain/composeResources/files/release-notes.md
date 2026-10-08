@@ -32,6 +32,12 @@ together across Fuse devices.
 - Developer onboarding runs in an isolated disposable environment with fake profiles and services.
 - Ordinary profile switching uses a short interruptible presentation; first welcome remains separate.
 
+## Fixed
+
+- Durable profile revisions prevent stale settings from rolling newer choices back.
+- Household send targets use reconciled non-self device topology.
+- Structured title boundaries keep PS4/PS5 resources inside their owning game.
+
 ## Acceptance
 
 This branch remains under integration and physical acceptance testing. No SteamOS, TV, Android

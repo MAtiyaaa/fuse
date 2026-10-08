@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.1 is <b>The Convergence Update</b>, built directly on shipped Fuseline 4: durable profile revisions, stronger household identity, safe save importing, independent display refresh and desktop rendering work. This branch is still undergoing integration and physical acceptance. <a href="docs/audits/0.4.1-convergence.md">Engineering acceptance record.</a></sub><br>
+<sub>0.4.1 is the <b>The Convergence Update</b>, built directly on shipped Fuseline 4: durable profile revisions, stronger household identity, safe save importing, independent display refresh and desktop rendering work. This branch is still undergoing integration and physical acceptance. <a href="docs/audits/0.4.1-convergence.md">Engineering acceptance record.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -579,7 +579,7 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.4.0 "The Speed Release" is still early, and brings Fuseline 4.** Fuse's animation engine
+> **Fuse 0.4.1 "The Convergence Update" is under integration and physical acceptance.** It builds on shipped Fuseline 4. Fuse's animation engine
 > no longer runs motion just because time passes: a value is worked out from its motion's formula
 > when something looks at it, left alone until it could next change by enough to be seen, and rests
 > while nobody looks, coming back exactly where it would have been. Values on the same spring share
