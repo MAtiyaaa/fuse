@@ -32,8 +32,24 @@ object ArtworkSizing {
         val area = w.toLong() * h
         if (area > maxPixels) {
             val scale = sqrt(maxPixels.toDouble() / area)
-            w = (w * scale).toInt().coerceAtLeast(1)
-            h = (h * scale).toInt().coerceAtLeast(1)
+            val scaledW = (w * scale).toInt().coerceAtLeast(1)
+            val scaledH = (h * scale).toInt().coerceAtLeast(1)
+            val nativeW = widthPx.coerceAtLeast(1)
+            val nativeH = heightPx.coerceAtLeast(1)
+            // The enlarged, rounded cache bucket may exceed the budget even though the
+            // actual display fits it (notably 3840x2160 on a 4K TV). Never turn a
+            // memory optimization into unnecessary upscaling on the screen: give up
+            // the focus headroom first, before reducing either native dimension.
+            if (nativeW <= buckets.last() && nativeH <= buckets.last() &&
+                nativeW.toLong() * nativeH <= maxPixels &&
+                (scaledW < nativeW || scaledH < nativeH)
+            ) {
+                w = nativeW
+                h = nativeH
+            } else {
+                w = scaledW
+                h = scaledH
+            }
             // A very narrow layout can round one dimension up to one after scaling. Keep
             // the promised area bound even for callers with a tiny decode budget.
             if (w.toLong() * h > maxPixels) {
