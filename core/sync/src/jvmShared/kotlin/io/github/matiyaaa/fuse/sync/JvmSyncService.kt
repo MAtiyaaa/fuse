@@ -1451,7 +1451,17 @@ class JvmSyncService(
                         // later; one with a PIN waits, since only the host can check it.
                         val known = _profiles.value.firstOrNull { it.id == id }
                         if (e.code != "offline" || known == null) throw e
-                        if (known.protected) throw SyncException("${known.name}'s profile has a PIN, which only the host can check. Try again when it's back.", "offline", 0)
+                        if (known.protected) {
+                            // A successful online unlock leaves a salted PIN verifier on this device.
+                            // Use it only for this exact host profile. Never grant offline access to
+                            // profiles that have not been authenticated here while online.
+                            val verifier = people.pins[id]
+                                ?: throw SyncException(
+                                    "${known.name}'s profile needs to be unlocked online on this device once before offline use.",
+                                    "offline", 0,
+                                )
+                            checkPin(LocalProfile(id, known.name, known.avatar, known.createdAt, verifier), pin)
+                        }
                     }
                 }
                 // The first profile this device ever uses takes in what it already had (nothing is lost).
