@@ -51,7 +51,17 @@ class SettingsStore(
                     rememberPreferences(before)
                     // A profile transition is hydration, not an edit of the next person's preferences.
                     val remembered = document(next.sync.activeProfile).values
-                    next = ProfileSettings.apply(next, remembered.filterKeys { it != "home.layout" || next.sync.homeScope == "PROFILE" }.mapValues { it.value.value })
+                    // The first player claims a standalone device's existing look. A *different*
+                    // new player must not inherit the outgoing player's theme, custom themes,
+                    // sound, quick menu, or other personal choices merely because their
+                    // profile has no stored document yet. Seed those paths with real defaults;
+                    // device-scoped configuration remains untouched.
+                    val freshPlayerDefaults = if (before.sync.activeProfile.isNotEmpty() &&
+                        next.sync.activeProfile.isNotEmpty() && remembered.isEmpty()
+                    ) ProfileSettings.extract(AppSettings()) else emptyMap()
+                    val personal = (freshPlayerDefaults + remembered.mapValues { it.value.value })
+                        .filterKeys { it != "home.layout" || next.sync.homeScope == "PROFILE" }
+                    next = ProfileSettings.apply(next, personal)
                     rememberPreferences(next)
                 } else recordEdits(before, next)
                 q.put(GLOBAL, "", KEY, AppSettingsCodec.encode(next, stored), clock())
