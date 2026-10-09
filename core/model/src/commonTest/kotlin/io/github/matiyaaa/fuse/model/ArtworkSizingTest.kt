@@ -20,7 +20,13 @@ class ArtworkSizingTest {
 
     @Test fun fourKAndExtremeLayoutsObeyMemoryAndSourceLimits() {
         val wide = ArtworkSizing.decode(3840, 2160)
+        assertEquals(ArtworkPixels(3840, 2160), wide, "a 4K display must not upscale undersized artwork")
         assertTrue(wide.width.toLong() * wide.height <= 8_388_608)
+        val tall = ArtworkSizing.decode(2048, 4096)
+        assertEquals(ArtworkPixels(2048, 4096), tall, "preserve native resolution when bucket headroom exceeds budget")
+        val oversized = ArtworkSizing.decode(4096, 4096)
+        assertTrue(oversized.width.toLong() * oversized.height <= 8_388_608)
+        assertTrue(oversized.width < 4096, "oversized artwork must still respect its memory limit")
         val source = ArtworkSizing.decode(3840, 2160, sourceWidth = 640, sourceHeight = 360)
         assertEquals(ArtworkPixels(640, 360), source)
         val tinyBudget = ArtworkSizing.decode(4000, 4000, maxPixels = 262144)
