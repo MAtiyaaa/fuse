@@ -160,6 +160,30 @@ class ServiceTest {
     }
 
     @Test
+    fun aPreviouslyAuthenticatedPinProfileCanSwitchOfflineButWrongPinsStayBlocked(): Unit = runBlocking {
+        val (pc, _) = service("Gaming PC", Library())
+        val (deck, deckSettings) = service("Steam Deck", Library())
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        val sam = pc.createProfile("Sam", "owl", "2468").getOrThrow()
+        deck.syncNow().getOrThrow()
+
+        // A host-approved unlock provisions only this device with Sam's salted verifier.
+        deck.switchTo(sam.id, "2468").getOrThrow()
+        deck.switchTo(mo.id).getOrThrow()
+        pc.stop()
+
+        // Offline authentication is real, not a blanket bypass of the PIN check.
+        assertEquals("wrong-pin", (deck.switchTo(sam.id, "0000").exceptionOrNull() as? SyncException)?.code)
+        assertEquals(mo.id, deckSettings.current().sync.activeProfile)
+        deck.switchTo(sam.id, "2468").getOrThrow()
+        assertEquals(sam.id, deckSettings.current().sync.activeProfile)
+        deck.switchTo(mo.id).getOrThrow()
+        deck.stop()
+    }
+
+    @Test
     fun withTheHostAwayAProfileWithoutAPinStillSwitches(): Unit = runBlocking {
         val (pc, _) = service("Gaming PC", Library())
         val deckLib = Library(games = hashMapOf(ct.id to GameRecord(ct, playSeconds = mapOf("x" to 600), lastPlayed = 1_000)))
