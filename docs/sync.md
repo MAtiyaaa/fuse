@@ -81,9 +81,14 @@ Played, collections, theme, Home and quick menu change to that person's at once.
 
 At startup Fuse can use the last profile, ask who's playing every time, or always start as one
 person (asking for their PIN when they have one). Several devices can be on different profiles at
-the same time. With the host away, Who's playing? can always be closed (Not Now), a profile without
-a PIN switches at once and catches up later, and one with a PIN waits for the host, the only one
-that can check it.
+the same time. With the host away, Who's playing? can always be closed (Not Now). A profile without a
+PIN switches at once and catches up later. A protected profile can also switch while offline
+**if its PIN was successfully checked by the host on this device before**. Fuse then uses the
+salted local PIN verifier, with the same wrong-PIN throttling as a standalone profile; it
+never bypasses the PIN. A protected profile that hasn't been unlocked here before waits
+for the host once so Fuse can establish that verifier. Changes to a PIN or access rights on
+the host cannot be learned by a device until it reconnects; physically securing offline
+devices still matters.
 
 The first time a device joins a profile, what it already had joins that profile: a new profile
 takes it as it is; a profile already in use keeps what it has and only gains what it was missing,
