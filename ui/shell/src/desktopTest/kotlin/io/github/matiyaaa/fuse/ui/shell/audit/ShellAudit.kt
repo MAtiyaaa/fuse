@@ -117,6 +117,40 @@ internal fun AuditDriver.overlayScreens(exhaustive: Boolean) {
         shoot("Inputs, Screenshots and recordings open")
     }
 
+    scenario("settings", "guided controls") {
+        useLibrary()
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("inputs"))
+        tap(PadButton.DPAD_RIGHT)
+        settle()
+        shoot("Inputs, Controller setup first")
+        tapText("Controller setup")
+        waitFor("Guided")
+        settle()
+        shoot("Guided, before starting")
+        tap(PadButton.A)
+        waitFor("Step 1")
+        settle()
+        shoot("Guided, first question")
+        tap(PadButton.B)
+        settle()
+        tap(PadButton.A)
+        settle()
+        shoot("Guided, after two answers")
+        // Held five seconds: guided setup ends, with what was answered kept.
+        router.press(PadButton.X, InputSource.GAMEPAD)
+        // The app's timers run between looks (see settleUntil): the ring fills, then it ends.
+        settleUntil("Keep holding to stop", timeoutMs = 20_000)
+        shoot("Guided, a button held, the ring filling")
+        settleUntil("Set up your controller one button at a time")
+        router.release(PadButton.X, InputSource.GAMEPAD)
+        settle()
+        shoot("Guided, left by holding a button")
+        tap(PadButton.R1)
+        settle()
+        shoot("Edit, every action")
+    }
+
     scenario("overlays", "quick menu") {
         useLibrary()
         waitFor("Continue playing")
@@ -457,9 +491,10 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         openSettings()
         tap(PadButton.DPAD_DOWN, sectionIndex("inputs"))
         tap(PadButton.DPAD_RIGHT)
-        var steps = 0
-        while (steps < 40 && nav(NavAction.DOWN) == NavResult.MOVED) steps++
-        tap(PadButton.A)
+        tapText("Controller setup")
+        waitFor("Guided")
+        // The mapping and the controller test are Edit, the second tab.
+        tap(PadButton.R1)
         waitFor("Controller test")
         shoot("button mapping and controller test")
         router.press(PadButton.X, InputSource.GAMEPAD)
@@ -468,6 +503,8 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         } finally {
             router.release(PadButton.X, InputSource.GAMEPAD)
         }
+        // Past "Button labels", the first action.
+        focusText("Confirm")
         tap(PadButton.A)
         waitFor("Press a button for")
         shoot("waiting for a button (capture mode)", 900)

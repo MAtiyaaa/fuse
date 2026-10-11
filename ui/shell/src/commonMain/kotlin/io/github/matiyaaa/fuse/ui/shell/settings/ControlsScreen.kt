@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -295,8 +296,13 @@ fun ControlsScreen(app: AppState) {
                 active = tab,
                 focused = null,
                 onSelect = { if (!guiding) tab = it },
-                gutter = 0.dp,
-                modifier = Modifier.reveal(2),
+                gutter = gutter,
+                // The row reaches the screen's edges, so the first tab lines up with the title above.
+                modifier = Modifier.reveal(2).layout { m, c ->
+                    val extra = gutter.roundToPx()
+                    val placed = m.measure(c.copy(minWidth = 0, maxWidth = c.maxWidth + extra * 2))
+                    layout(c.maxWidth, placed.height) { placed.place(-extra, 0) }
+                },
             )
             Spacer(Modifier.height(if (short) Space.s else Space.m))
             Box(Modifier.weight(1f).padding(bottom = Size.hintHeight + Space.s)) {

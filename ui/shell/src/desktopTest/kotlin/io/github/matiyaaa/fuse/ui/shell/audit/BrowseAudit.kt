@@ -35,17 +35,12 @@ private fun LibraryLayout.words(): String = when (this) {
 
 
 /**
- * Chooses a layout the way a user does: Options, "View as", then the layout. [shootChoice] also
- * captures the "View as" choice list.
+ * Sets the library layout as Settings, Library, Default view does. [shootChoice] is kept for its
+ * callers; there is no choice list on the page to capture any more.
  */
 internal fun AuditDriver.viewAs(layout: LibraryLayout, shootChoice: Boolean = false) {
-    tap(PadButton.X)
-    // "View as" sits below the game actions, often past the bottom of the menu.
-    waitFor("Manage Media")
-    tapText("View as")
-    waitFor("Cover grid")
-    if (shootChoice) shoot("View as choice list open")
-    choose(layout.ordinal)
+    // There is no "View as" on the page any more: the layout is Settings, Library, Default view.
+    libraryStore.updatePrefs { it.copy(defaultLayout = layout) }
     settle(600)
 }
 
