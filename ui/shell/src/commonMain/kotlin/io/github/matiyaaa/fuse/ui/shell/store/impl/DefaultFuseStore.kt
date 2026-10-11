@@ -55,9 +55,10 @@ internal class DefaultFuseStore private constructor(
 
     /**
      * The preferences as storage holds them for [prefsProfile], as last read or written: what the
-     * interface shows beyond this is a choice not saved yet.
+     * interface shows beyond this is a choice not saved yet. It starts as [initialPrefs], read from
+     * storage a moment ago: a choice made before anything is written is then known as one.
      */
-    @kotlin.concurrent.Volatile private var storedPrefs: UiPrefs? = null
+    @kotlin.concurrent.Volatile private var storedPrefs: UiPrefs? = initialPrefs
     override val prefs: StateFlow<UiPrefs> = prefsState
     private val writes = Channel<UiPrefs>(Channel.CONFLATED)
     private val writeLock = Mutex()
@@ -194,7 +195,10 @@ internal class DefaultFuseStore private constructor(
         val shown = prefsState.value
         var wroteShown = false
         val after = data.settings.update { if (prefsProfile == it.sync.activeProfile) { wroteShown = true; transform(it.withUiPrefs(shown)) } else transform(it) }
-        if (after != before) reloadLocked() else if (wroteShown) storedPrefs = shown
+        // What was written is what is stored now, before the reload: a choice made since is newer
+        // than it, and is carried over rather than replaced by it.
+        if (wroteShown) storedPrefs = shown
+        if (after != before) reloadLocked()
     }
 
     /** Commit pending UI edits before comparing host revisions, then reload without restamping them. */
@@ -350,8 +354,22 @@ internal class DefaultFuseStore private constructor(
         }
         ctx.settings.value = settings
         prefsProfile = settings.sync.activeProfile
-        prefsState.value = settings.toUiPrefs(globalScoped(ctx))
-        storedPrefs = prefsState.value
+        val scoped = globalScoped(ctx)
+        val loaded = settings.toUiPrefs(scoped)
+        storedPrefs = loaded
+        // A choice can be made while this runs ([updatePrefs] doesn't wait for it): it is newer than
+        // anything read here, so it stays, laid over what came in, and is written.
+        while (true) {
+            val now = prefsState.value
+            if (now == shown) {
+                if (prefsState.compareAndSet(now, loaded)) break else continue
+            }
+            val merged = io.github.matiyaaa.fuse.data.settings.UnsavedChoices.carry(settings, settings.withUiPrefs(shown), settings.withUiPrefs(now))?.toUiPrefs(scoped) ?: loaded
+            if (prefsState.compareAndSet(now, merged)) {
+                if (merged != loaded) writes.trySend(merged)
+                break
+            }
+        }
         ctx.systemOrder.value = prefsState.value.systemOrder
     }
 
