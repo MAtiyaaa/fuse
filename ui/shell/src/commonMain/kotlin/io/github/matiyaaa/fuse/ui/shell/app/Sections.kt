@@ -88,30 +88,45 @@ internal fun rememberTabs(app: AppState, prefs: UiPrefs): List<Destination> {
         .filter { sections.showsTab(it, app.offers(it), cartridge) }
 }
 
-/**
- * Opens the top line's order to arrange, with [held] (the tab that was held) already picked up:
- * the same sheet Settings, Home, Section order opens. Home stays first.
- */
-internal fun AppState.arrangeTabs(held: Destination? = null) {
+/** The tabs the top line shows, in its order: Home first, then the person's. */
+internal fun AppState.shownTabs(): List<Destination> {
     val p = store.prefs.value
-    val sections = sections
-    // Exactly the tabs the top line shows, in its order.
     val cartridge = store.cartridge.status.value
-    val shown = (listOf(Destination.HOME) + p.destinations.filter { it != Destination.HOME }).filter { sections.showsTab(it, offers(it), cartridge) }
-    reorder = ReorderSpec(
-        title = "Section order",
-        icon = io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons.MoveHorizontal,
-        message = "The order of the top bar. Home always comes first. Move it with the D-pad and press A to put it down, or drag it by its grip",
-        lifted = held?.takeIf { it != Destination.HOME }?.name,
-        entries = shown.map { d -> io.github.matiyaaa.fuse.ui.designsystem.components.ReorderEntry(d.name, sections.label(d), sections.icon(d), locked = d == Destination.HOME) },
-        onMoved = { keys ->
-            store.updatePrefs { s ->
-                val moved = keys.mapNotNull { k -> Destination.entries.firstOrNull { it.name == k } }
-                // Sections hidden from this list (not offered here) keep their places after the rest.
-                s.copy(destinations = moved + s.destinations.filter { it !in moved })
-            }
-        },
-    )
+    return (listOf(Destination.HOME) + p.destinations.filter { it != Destination.HOME }).filter { sections.showsTab(it, offers(it), cartridge) }
+}
+
+/**
+ * Picks [tab] up on the top line, to move along it in place (the D-pad, a finger or the mouse), as
+ * Addons' tabs move. Home stays first, so it is never picked up. Null picks up the first that moves.
+ */
+internal fun AppState.liftTab(tab: Destination? = null) {
+    val shown = shownTabs()
+    val t = tab ?: shown.firstOrNull { it != Destination.HOME } ?: return
+    if (t == Destination.HOME) {
+        toasts.show("Home always comes first", icon = io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons.Home)
+        return
+    }
+    focusZone = FocusZone.TABS
+    hudButton = null
+    liftedTab = t
+}
+
+/** Moves the picked-up tab [by] places along the top line (never before Home). True when it moved. */
+internal fun AppState.moveLiftedTab(by: Int): Boolean {
+    val t = liftedTab ?: return false
+    val shown = shownTabs()
+    val at = shown.indexOf(t)
+    val to = at + by
+    if (at < 0 || to < 1 || to > shown.lastIndex) return false
+    val next = shown.toMutableList().apply { add(to, removeAt(at)) }
+    // Sections not shown here (not offered on this device) keep their places after the rest.
+    store.updatePrefs { s -> s.copy(destinations = next + s.destinations.filter { it !in next }) }
+    return true
+}
+
+/** Puts the picked-up tab down where it is. */
+internal fun AppState.dropTab() {
+    liftedTab = null
 }
 
 /** Which part of Addons is showing. */

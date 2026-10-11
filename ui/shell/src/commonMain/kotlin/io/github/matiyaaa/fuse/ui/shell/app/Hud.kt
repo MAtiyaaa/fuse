@@ -1,10 +1,9 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.foundation.background
-import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,10 +32,13 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
@@ -53,6 +55,7 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -71,6 +74,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import io.github.matiyaaa.fuse.model.CornerFamily
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.SystemStatus
@@ -82,6 +86,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyphDefaults
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
+import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
@@ -163,8 +168,14 @@ fun Hud(
     profile: HudProfile? = null,
     /** Transfers moving (or failed), for the Downloads button; null hides it. */
     downloads: HudDownloads? = null,
-    /** A tab held (a long touch or click): arranging the tabs, starting with that one. */
-    onHold: ((Destination) -> Unit)? = null,
+    /** The tab picked up to move along the line, in place (as Addons' tabs move). */
+    lifted: Destination? = null,
+    /** A tab held (a long touch or click) is picked up; dragging it moves it along. */
+    onLift: ((Destination) -> Unit)? = null,
+    /** Moves the picked-up tab by one place either way; true when it moved. */
+    onMoveLifted: ((Int) -> Boolean)? = null,
+    /** The picked-up tab let go. */
+    onDrop: (() -> Unit)? = null,
 ) {
     val time = rememberClockText(clock24h)
     val anchors = remember { HudAnchors() }
@@ -209,6 +220,24 @@ fun Hud(
                 // shown whole, and tabs slipping past either edge shrink and fade into it.
                 val scroll = rememberScrollState()
                 val requesters = remember(destinations) { destinations.associateWith { BringIntoViewRequester() } }
+                // Moving tabs: where each sits (x and width), the one a finger or the mouse drags
+                // and how far, read while drawing so a drag never recomposes the line.
+                val placed = remember { mutableStateMapOf<Destination, Pair<Float, Float>>() }
+                var dragged by remember { mutableStateOf<Destination?>(null) }
+                val dragOffset = remember { mutableFloatStateOf(0f) }
+                val moveScope = rememberCoroutineScope()
+                val motionNow = Fuse.motion
+                val latestDestinations by rememberUpdatedState(destinations)
+                val latestLift by rememberUpdatedState(onLift)
+                val latestMove by rememberUpdatedState(onMoveLifted)
+                val latestDrop by rememberUpdatedState(onDrop)
+                // The picked-up tab is always in view as it moves.
+                val liftRoom = with(LocalDensity.current) { 56.dp.toPx() }
+                LaunchedEffect(lifted, placed[lifted]) {
+                    val d = lifted ?: return@LaunchedEffect
+                    val w = placed[d]?.second ?: return@LaunchedEffect
+                    requesters[d]?.bringIntoView(Rect(-liftRoom, 0f, w + liftRoom, 1f))
+                }
                 var viewport by remember { mutableIntStateOf(0) }
                 val edge = with(LocalDensity.current) { 56.dp.toPx() }
                 val activeWidth = remember { mutableIntStateOf(0) }
@@ -249,31 +278,91 @@ fun Hud(
                     for (d in destinations) key(d) {
                         var x by remember { mutableFloatStateOf(0f) }
                         var w by remember { mutableIntStateOf(0) }
+                        val held = d == lifted || dragged == d
+                        val lift by fuselineFloat(if (held) 1f else 0f, Fuse.motion.focusSpring(), label = "tab lift")
+                        // A tab that changes place slides there from where it was, so a move reads as
+                        // the others making room, never as a jump.
+                        val slide = remember { FuselineValue(0f) }
+                        val lastX = remember { floatArrayOf(Float.NaN) }
                         Tab(
-                            sections.label(d), sections.icon(d), selected = d == active, focused = tabsFocused && focusedButton == null && d == active, showLabel = labels || (d == active && nameFits),
+                            sections.label(d), sections.icon(d), selected = d == active, focused = (tabsFocused && focusedButton == null && lifted == null && d == active) || held, showLabel = labels || (d == active && nameFits) || held,
                             modifier = Modifier
                                 .bringIntoViewRequester(requesters.getValue(d))
                                 .onPlaced {
-                                    x = it.positionInParent().x
+                                    val px = it.positionInParent().x
+                                    x = px
                                     w = it.size.width
+                                    placed[d] = px to it.size.width.toFloat()
                                     if (d == active) {
                                         activeWidth.intValue = it.size.width
-                                        activeX[0] = it.positionInParent().x
+                                        activeX[0] = px
+                                    }
+                                    val before = lastX[0]
+                                    lastX[0] = px
+                                    if (!before.isNaN() && before != px) {
+                                        if (dragged == d) {
+                                            // Its place moved under the finger: the finger stays where it is.
+                                            dragOffset.floatValue -= px - before
+                                        } else {
+                                            moveScope.launch {
+                                                slide.snapTo(slide.value + (before - px))
+                                                slide.animateTo(0f, motionNow.focusSpring())
+                                            }
+                                        }
                                     }
                                 }
                                 .anchor(anchors, d)
+                                .zIndex(if (held) 1f else 0f)
                                 .graphicsLayer {
-                                    // The active tab always shows whole and at full strength.
-                                    if (viewport <= 0 || scroll.maxValue == 0 || d == active) return@graphicsLayer
-                                    val center = x - scroll.value + w / 2f
-                                    val nearest = minOf(center, viewport - center)
-                                    val t = (nearest / edge).coerceIn(0f, 1f)
-                                    val s = 0.84f + 0.16f * t
+                                    translationX = slide.value + if (dragged == d) dragOffset.floatValue else 0f
+                                    // Picked up: it rises a little, with a shadow, over the others.
+                                    val lifted01 = lift
+                                    var s = 1f + LIFT_SCALE * lifted01
+                                    var a = 1f
+                                    // The active tab (and the one held) always shows whole and at full strength.
+                                    if (viewport > 0 && scroll.maxValue != 0 && d != active && !held) {
+                                        val center = x - scroll.value + w / 2f
+                                        val nearest = minOf(center, viewport - center)
+                                        val t = (nearest / edge).coerceIn(0f, 1f)
+                                        s *= 0.84f + 0.16f * t
+                                        a = 0.45f + 0.55f * t
+                                    }
                                     scaleX = s
                                     scaleY = s
-                                    alpha = 0.45f + 0.55f * t
-                                },
-                            onHold = onHold?.let { hold -> { hold(d) } },
+                                    alpha = a
+                                    shadowElevation = LIFT_SHADOW.toPx() * lifted01
+                                    shape = PillShape
+                                    clip = false
+                                }
+                                .then(
+                                    if (onLift == null || d == Destination.HOME) Modifier else Modifier.pointerInput(d) {
+                                        // Held, then dragged: a finger or the mouse moves the tab along, the
+                                        // others making room as its middle passes theirs.
+                                        detectDragGesturesAfterLongPress(
+                                            onDragStart = {
+                                                dragOffset.floatValue = 0f
+                                                dragged = d
+                                                latestLift?.invoke(d)
+                                            },
+                                            onDrag = { change, amount ->
+                                                change.consume()
+                                                dragOffset.floatValue += amount.x
+                                                val order = latestDestinations
+                                                val at = order.indexOf(d)
+                                                val me = placed[d] ?: return@detectDragGesturesAfterLongPress
+                                                val centre = me.first + me.second / 2 + dragOffset.floatValue
+                                                val next = order.getOrNull(at + 1)?.let { placed[it] }
+                                                val prev = order.getOrNull(at - 1)?.takeIf { it != Destination.HOME }?.let { placed[it] }
+                                                when {
+                                                    next != null && centre > next.first + next.second / 2 -> latestMove?.invoke(1)
+                                                    prev != null && centre < prev.first + prev.second / 2 -> latestMove?.invoke(-1)
+                                                }
+                                            },
+                                            onDragEnd = { settleTabDrag(moveScope, dragOffset, motionNow) { dragged = null; latestDrop?.invoke() } },
+                                            onDragCancel = { settleTabDrag(moveScope, dragOffset, motionNow) { dragged = null; latestDrop?.invoke() } },
+                                        )
+                                    },
+                                ),
                             onClick = { onSelect(d) },
                         )
                     }
@@ -716,8 +805,24 @@ private fun HudIconButton(icon: ImageVector, label: String, focused: Boolean, ac
     }
 }
 
+/** A dragged tab let go: it glides from under the finger into its place, then the move ends. */
+private fun settleTabDrag(scope: kotlinx.coroutines.CoroutineScope, offset: androidx.compose.runtime.MutableFloatState, motion: io.github.matiyaaa.fuse.ui.fuseline.FuselineMotion, done: () -> Unit) {
+    scope.launch {
+        try {
+            io.github.matiyaaa.fuse.ui.fuseline.animate(offset.floatValue, 0f, animationSpec = motion.focusSpring()) { v, _ -> offset.floatValue = v }
+        } finally {
+            offset.floatValue = 0f
+            done()
+        }
+    }
+}
+
+/** How much a picked-up tab grows, and its shadow. */
+private const val LIFT_SCALE = 0.08f
+private val LIFT_SHADOW = 10.dp
+
 @Composable
-private fun Tab(label: String, icon: ImageVector, selected: Boolean, focused: Boolean, showLabel: Boolean, modifier: Modifier = Modifier, onHold: (() -> Unit)? = null, onClick: () -> Unit) {
+private fun Tab(label: String, icon: ImageVector, selected: Boolean, focused: Boolean, showLabel: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = Fuse.colors
     val motion = Fuse.motion
     val shape = rememberHudShape(insetX = false)
@@ -727,7 +832,7 @@ private fun Tab(label: String, icon: ImageVector, selected: Boolean, focused: Bo
     Row(
         modifier
             .height(Size.touch)
-            .fuseClickable(shape = shape, role = Role.Tab, onClickLabel = label, onLongClick = onHold, onClick = onClick)
+            .fuseClickable(shape = shape, role = Role.Tab, onClickLabel = label, onClick = onClick)
             .hudFocus(shape, { focus }, fill, c.focus)
             .semantics { this.selected = selected }
             .padding(horizontal = Space.m),

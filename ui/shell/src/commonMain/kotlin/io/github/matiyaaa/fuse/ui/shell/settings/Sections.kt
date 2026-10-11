@@ -49,7 +49,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.ReorderSpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.addGame
 import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
-import io.github.matiyaaa.fuse.ui.shell.app.arrangeTabs
+import io.github.matiyaaa.fuse.ui.shell.app.liftTab
 import io.github.matiyaaa.fuse.ui.shell.app.emulatorFoldersPicker
 import io.github.matiyaaa.fuse.ui.shell.app.hasTwoScreens
 import io.github.matiyaaa.fuse.ui.shell.app.locatePicker
@@ -248,8 +248,8 @@ fun homeRows(app: AppState): List<MenuAction> {
                 }
             })
             val shownTabs = p.destinations.filter { app.offers(it) }
-            add(MenuAction("dest.order", "Section order", FuseIcons.MoveHorizontal, detail = shownTabs.joinToString("  ·  ") { sections.label(it) } + ". Or hold a tab in the top bar", trailing = Trailing.Chevron, onSelect = {
-                app.arrangeTabs()
+            add(MenuAction("dest.order", "Section order", FuseIcons.MoveHorizontal, detail = shownTabs.joinToString("  ·  ") { sections.label(it) } + ". Picks up a tab in the top bar to move, as holding one does", trailing = Trailing.Chevron, onSelect = {
+                app.liftTab()
             }))
             if (app.store.apps.supported) {
                 add(app.choiceRow(
@@ -396,7 +396,7 @@ fun libraryRows(app: AppState): List<MenuAction> {
         labelled("Browsing") {
             add(app.choiceRow(
                 "opensOn", "Library opens on", FuseIcons.LibraryBig, p.libraryOpensOn,
-                listOf("INSTALLED" to "Installed", "ALL" to "All"),
+                listOf("ALL" to "All", "INSTALLED" to "Installed"),
                 optionDetail = { if (it == "ALL") "Every game wherever it is: here, on RomM and on your other devices" else "The games on this device" },
             ) { v -> app.store.updatePrefs { it.copy(libraryOpensOn = v) } })
         }

@@ -178,6 +178,9 @@ class AppState(
     var phoneTyping by mutableStateOf(false)
     var reorder by mutableStateOf<ReorderSpec?>(null)
 
+    /** The top line's tab picked up to move, in place, as Addons' tabs move ([liftTab]). */
+    var liftedTab by mutableStateOf<Destination?>(null)
+
     /** Fuse's startup animation is playing ([StartupIntroOverlay]). */
     var intro by mutableStateOf(false)
 

@@ -1,212 +1,33 @@
 package io.github.matiyaaa.fuse.ui.shell.sync
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.data.settings.SyncSettings
-import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.sync.DeviceInfo
 import io.github.matiyaaa.fuse.sync.HostView
-import io.github.matiyaaa.fuse.sync.ProfileChange
 import io.github.matiyaaa.fuse.sync.ProfileInfo
-import io.github.matiyaaa.fuse.sync.SyncActivity
 import io.github.matiyaaa.fuse.sync.SyncService
 import io.github.matiyaaa.fuse.sync.SyncStatus
-import io.github.matiyaaa.fuse.ui.designsystem.components.FText
-import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
-import io.github.matiyaaa.fuse.ui.designsystem.components.MenuList
-import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
-import io.github.matiyaaa.fuse.ui.designsystem.components.ProfileAvatar
-import io.github.matiyaaa.fuse.ui.designsystem.components.StatusDot
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
-import io.github.matiyaaa.fuse.ui.designsystem.components.handleMenuAction
-import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberReveal
-import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
-import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
-import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
-import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
-import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
-import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
-import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
-import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import io.github.matiyaaa.fuse.ui.shell.settings.choiceRow
 import io.github.matiyaaa.fuse.ui.shell.settings.infoRow
 import io.github.matiyaaa.fuse.ui.shell.settings.toggleRow
 import io.github.matiyaaa.fuse.ui.shell.store.impl.TimeWords
 import kotlinx.coroutines.launch
 
-/** The page's own state while it is open. */
-internal class SyncSettingsState {
-    val sel = LinearSelection()
-}
-
 /**
- * Settings, Addons, Fuse Sync: one place for all of it. It leads with where things stand; off, it
- * says what it is and that nothing runs; not set up, it offers the two ways in (this computer as
- * the host, or connecting to one); set up, it holds who is playing, what syncs, the connection,
- * this device, the host's devices and service when this is the host, and leaving.
+ * Fuse One's own rows for Settings, Fuse One: whether it runs, setting it up, who is playing, what
+ * syncs, the connection, this device as the host, and leaving, each under its own heading. The
+ * section arranges them ([io.github.matiyaaa.fuse.ui.shell.settings.fuseOneRows]).
  */
-@Composable
-internal fun SyncSettingsScreen(app: AppState) {
-    val svc = app.store.sync.service
-    val prefs by app.store.prefs.collectAsState()
-    val page = rememberRouteState(app.navigator, "sync.settings") { SyncSettingsState() }
-    val reveal = rememberReveal()
-    LaunchedEffect(Unit) {
-        app.hero = null
-        app.hints = listOf(Hint(HintButton.CONFIRM, "Change"), Hint(HintButton.BACK, "Back"))
-    }
-    if (svc == null) {
-        val rows = listOf(infoRow("none", "Fuse One isn't part of this build", icon = FuseIcons.RefreshCcw))
-        InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e -> handleMenuAction(e, rows, page.sel) }
-        Column(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {
-            Spacer(Modifier.height(Size.hudHeight + Space.l))
-            Panel { MenuList(rows, page.sel, modifier = Modifier.padding(Space.s)) }
-        }
-        return
-    }
-    val status by svc.status.collectAsState()
-    val profiles by svc.profiles.collectAsState()
-    val active by svc.activeProfile.collectAsState()
-    val host by svc.host.collectAsState()
-    val devices by svc.devices.collectAsState()
-    val activity by svc.activity.collectAsState()
-    val c = prefs.sync
-    val words = syncWords(if (c.enabled) status else SyncStatus.Off)
-    val rows = syncRows(app, svc, c, status, profiles, active, host, devices)
-    page.sel.keepOn(rows.map { it.id })
-    page.sel.clamp(rows.size)
-    InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
-        if (e.action == NavAction.LEFT) NavResult.BLOCKED else handleMenuAction(e, rows, page.sel)
-    }
-
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val compact = maxHeight < Size.touch * 12
-        val wide = maxWidth >= 1040.dp
-        Column(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {
-            Spacer(Modifier.height(Size.hudHeight + if (compact) Space.s else Space.l))
-            Row(Modifier.reveal(reveal, 0), verticalAlignment = Alignment.CenterVertically) {
-                SyncMark(if (compact) Size.thumb else Size.thumbL)
-                Spacer(Modifier.width(Space.l))
-                Column(verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-                    FText(SYNC_NAME, if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        StatusDot(words.ok)
-                        Spacer(Modifier.width(Space.s))
-                        FText(words.title, Fuse.type.bodyStrong, maxLines = 1)
-                        FText("  ·  ${words.detail}", Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 1)
-                    }
-                }
-            }
-            Spacer(Modifier.height(if (compact) Space.m else Space.l))
-            Row(Modifier.weight(1f).padding(bottom = Size.hintHeight + Space.s), horizontalArrangement = Arrangement.spacedBy(Space.l)) {
-                Panel(Modifier.widthIn(max = Size.touch * 18).weight(1f, fill = !wide).fillMaxHeight().reveal(reveal, 1)) {
-                    MenuList(rows, page.sel, modifier = Modifier.padding(Space.s), showSelection = app.focusZone == FocusZone.CONTENT)
-                }
-                if (wide) SideCard(c, status, active, host, devices, activity, Modifier.width(320.dp).reveal(reveal, 2))
-            }
-        }
-    }
-}
-
-/** On wide screens: who is playing, the host and its devices, and what Fuse Sync did lately. */
-@Composable
-private fun SideCard(
-    c: SyncSettings,
-    status: SyncStatus,
-    active: ProfileInfo?,
-    host: HostView?,
-    devices: List<DeviceInfo>,
-    activity: List<SyncActivity>,
-    modifier: Modifier,
-) {
-    val colors = Fuse.colors
-    Panel(modifier) {
-        Column(Modifier.fillMaxWidth().padding(Space.l), verticalArrangement = Arrangement.spacedBy(Space.m)) {
-            if (!c.enabled || c.role.isEmpty()) {
-                FText(SYNC_BYLINE, Fuse.type.bodyStrong, maxLines = 1)
-                for ((icon, line) in listOf(
-                    FuseIcons.Save to "Saves and save states, there before you play and kept after",
-                    FuseIcons.Clock to "Play time that adds up: 30 minutes here and 20 offline elsewhere is 50",
-                    FuseIcons.Users to "A profile for each person, with their own library, Home and theme",
-                    FuseIcons.Server to "On your own computer at home. Nothing goes to anyone else",
-                )) {
-                    Row(verticalAlignment = Alignment.Top) {
-                        FuseIcon(icon, size = Size.iconS, tint = colors.accent)
-                        Spacer(Modifier.width(Space.s))
-                        FText(line, Fuse.type.caption, color = colors.textMuted, maxLines = 3)
-                    }
-                }
-                return@Column
-            }
-            if (active != null) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    ProfileAvatar(active.avatar, 52.dp)
-                    Spacer(Modifier.width(Space.m))
-                    Column {
-                        FText("Playing as", Fuse.type.caption, color = colors.textMuted, maxLines = 1)
-                        FText(active.name, Fuse.type.title, maxLines = 1)
-                    }
-                }
-            }
-            Fact("Host", c.hostName.ifBlank { host?.name ?: "Not connected" })
-            Fact("Reaching it", when (status) {
-                is SyncStatus.Online -> if (status.route == io.github.matiyaaa.fuse.sync.Route.LOCAL) "At home" else "From outside"
-                is SyncStatus.Offline -> "Not right now"
-                else -> "Not yet"
-            })
-            if (devices.isNotEmpty()) Fact("Devices", devices.filterNot { it.revoked }.joinToString(", ") { it.name })
-            if (activity.isNotEmpty()) {
-                FText("Lately", Fuse.type.caption, color = colors.textMuted, maxLines = 1)
-                val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
-                val offset = localOffsetMillis(now)
-                for (a in activity.take(4)) {
-                    Column {
-                        FText(a.text, Fuse.type.label, maxLines = 2)
-                        FText(TimeWords.relative(a.at, now, offset).replaceFirstChar { it.uppercase() }, Fuse.type.caption, color = colors.textFaint, maxLines = 1)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun Fact(label: String, value: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        FText(label, Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1)
-        FText(value, Fuse.type.label, maxLines = 2)
-    }
-}
-
-private fun syncRows(
+internal fun syncRows(
     app: AppState,
     svc: SyncService,
     c: SyncSettings,

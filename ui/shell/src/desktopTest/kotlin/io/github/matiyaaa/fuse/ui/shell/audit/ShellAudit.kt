@@ -159,17 +159,14 @@ internal fun AuditDriver.overlayScreens(exhaustive: Boolean) {
         tap(PadButton.R1, 2)
         settle()
         hold(PadButton.A)
-        waitFor("Section order")
         settle(900)
-        shoot("a tab held: the order, with it picked up")
-        tap(PadButton.DPAD_DOWN)
-        settle(600)
-        shoot("moved one place down")
+        shoot("a tab held: picked up in place, as Addons' tabs are")
+        tap(PadButton.DPAD_RIGHT)
+        settle(700)
+        shoot("moved one place along, the next tab making room")
         tap(PadButton.A)
-        settle(600)
-        tap(PadButton.B)
         settle(900)
-        shoot("the top line in its new order")
+        shoot("put down: the top line in its new order")
     }
 
     scenario("overlays", "quick menu") {
@@ -310,24 +307,26 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         tap(PadButton.DPAD_RIGHT)
         waitFor("Section order")
         tapText("Section order")
-        waitFor("Home always comes first")
-        shoot("the sheet, Home locked first")
+        settle(900)
+        shoot("Section order: the first tab after Home picked up in the top bar")
+        tap(PadButton.DPAD_RIGHT)
+        settle(700)
+        shoot("carried with the controller, one place along")
         tap(PadButton.A)
-        tap(PadButton.DPAD_DOWN)
-        shoot("carried with the controller, one place down")
-        tap(PadButton.A)
+        settle(700)
         shoot("put down, saved")
-        // By touch: the last row's grip, dragged up two rows.
-        val last = describedBounds("Move ").maxBy { it.top }
-        val from = last.center
-        val to = from - androidx.compose.ui.geometry.Offset(0f, last.height * 2.2f)
+        // By touch: Apps held, then dragged left past the tab before it.
+        val from = textCentre("Apps", topmost = true)
+        val to = from - androidx.compose.ui.geometry.Offset(260f, 0f)
         touch { down(from) }
+        // Held long enough to pick it up, by the app's own clock.
+        advanceExactly(700)
         settle(150)
         touch { moveTo(from + (to - from) * 0.5f) }
         settle(150)
         touch { moveTo(to) }
         settle(400)
-        shoot("dragged by its grip, the others make room")
+        shoot("dragged along the top bar, the others make room")
         touch { up() }
         settle(900)
         shoot("dropped by touch")

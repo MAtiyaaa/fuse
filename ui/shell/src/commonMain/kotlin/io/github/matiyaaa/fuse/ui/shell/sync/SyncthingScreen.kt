@@ -203,7 +203,7 @@ private fun syncthingRows(
     add(toggleRow("enabled", "Use Syncthing", FuseIcons.Power, s.enabled, "Keep your emulators' save folders in step through the Syncthing you run") { v -> useSyncthing(app, svc, v) })
     if (!s.enabled) {
         add(MenuAction("fusesync", "Fuse One Instead", FuseIcons.RefreshCcw, detail = "Knows each game whatever its file is called, adds up play time, and gives each person their own saves. Syncthing keeps one save per game for everyone", trailing = Trailing.Chevron, onSelect = {
-            app.go(io.github.matiyaaa.fuse.ui.shell.app.Route.SyncSettings)
+            app.go(io.github.matiyaaa.fuse.ui.shell.app.Route.Settings("fuseone"))
         }))
         return@buildList
     }

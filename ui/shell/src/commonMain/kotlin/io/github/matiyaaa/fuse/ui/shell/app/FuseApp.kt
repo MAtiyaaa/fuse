@@ -625,7 +625,10 @@ private fun BoxScope.TopLine(app: AppState, platform: PlatformUi, tabs: List<Des
         showBluetooth = prefs.showBluetooth,
         onSelect = { app.focusZone = FocusZone.CONTENT; app.selectTab(it) },
         onStatusClick = { app.quickMenuOpen = true },
-        onHold = { app.arrangeTabs(it) },
+        lifted = app.liftedTab,
+        onLift = { app.liftTab(it) },
+        onMoveLifted = { by -> app.moveLiftedTab(by) },
+        onDrop = { app.dropTab() },
         activities = hudActivities(app),
         profile = hudProfile(app),
         downloads = rememberHudDownloads(app),
@@ -640,7 +643,11 @@ private fun BoxScope.TopLine(app: AppState, platform: PlatformUi, tabs: List<Des
 private fun BoxScope.HintLine(app: AppState, hintFlash: HintFlash) {
     // An options sheet or a choice over the page answers to Confirm and Back, wherever it was opened:
     // its hints, not the page's under it.
-    val hints = if (app.contextMenu != null || app.choice != null) MENU_HINTS else app.hints
+    val hints = when {
+        app.contextMenu != null || app.choice != null -> MENU_HINTS
+        app.liftedTab != null -> LIFTED_TAB_HINTS
+        else -> app.hints
+    }
     // Content fades out under the hint line, so hints never sit on top of tiles.
     if (hints.isNotEmpty()) {
         Box(
@@ -655,6 +662,7 @@ private fun BoxScope.HintLine(app: AppState, hintFlash: HintFlash) {
 }
 
 private val MENU_HINTS = listOf(Hint(HintButton.CONFIRM, "Select"), Hint(HintButton.BACK, "Back"))
+private val LIFTED_TAB_HINTS = listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Done"))
 
 /** The background: theme renderer, then the selected item's art with video after it rests. */
 @Composable
@@ -909,7 +917,6 @@ private fun PushedPages(app: AppState, current: Route, direction: NavDirection, 
             is Route.MediaLibrary -> io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaLibraryScreen(app, route.id, route.name, route.kind)
             Route.MediaSearch -> io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaSearchScreen(app)
             Route.JellyfinSettings -> io.github.matiyaaa.fuse.ui.shell.jellyfin.JellyfinSettingsScreen(app)
-            Route.SyncSettings -> io.github.matiyaaa.fuse.ui.shell.sync.SyncSettingsScreen(app)
             Route.SyncthingSettings -> io.github.matiyaaa.fuse.ui.shell.sync.SyncthingScreen(app)
             Route.SaveFolders -> io.github.matiyaaa.fuse.ui.shell.sync.SaveFoldersScreen(app)
             is Route.SyncSetup -> io.github.matiyaaa.fuse.ui.shell.sync.SyncSetupScreen(app, route.host)
@@ -938,7 +945,7 @@ internal fun hudPage(stack: List<Route>): HudButton? {
         when (route) {
             Route.Downloads -> return HudButton.DOWNLOADS
             Route.Search -> return HudButton.SEARCH
-            is Route.Settings, is Route.PlatformSettings, Route.Controls, Route.Licenses, is Route.ReleaseNotes, Route.Themes, Route.Storage, Route.PhoneLink, Route.JellyfinSettings, Route.SyncSettings, Route.SyncthingSettings, Route.SaveFolders, is Route.SyncSetup, Route.RommSettings, is Route.RommSetup ->
+            is Route.Settings, is Route.PlatformSettings, Route.Controls, Route.Licenses, is Route.ReleaseNotes, Route.Themes, Route.Storage, Route.PhoneLink, Route.JellyfinSettings, Route.SyncthingSettings, Route.SaveFolders, is Route.SyncSetup, Route.RommSettings, is Route.RommSetup ->
                 return HudButton.SETTINGS
             else -> Unit
         }
@@ -956,7 +963,9 @@ private fun ShellInput(app: AppState) {
     val tabs = rememberTabs(app, prefs)
     val onboarding = app.navigator.current == Route.Onboarding
     val downloads = rememberHudDownloads(app) != null
-    // On the top line, holding confirm on a tab picks it up to arrange the tabs.
+    // Leaving the top line (or a page opening over it) puts down whatever tab was picked up.
+    LaunchedEffect(app.focusZone, app.overlayOpen) { if (app.focusZone != FocusZone.TABS || app.overlayOpen) app.dropTab() }
+    // On the top line, holding confirm on a tab picks it up to move it along the line.
     InputLayer(priority = LayerPriority.SHELL, longPress = app.focusZone == FocusZone.TABS && app.hudButton == null) { e ->
         if (onboarding) return@InputLayer NavResult.IGNORED
         val active = app.navigator.root?.destination
@@ -969,6 +978,13 @@ private fun ShellInput(app: AppState) {
         if (app.focusZone == FocusZone.TABS) {
             val button = app.hudButton
             fun leave(): NavResult { app.focusZone = FocusZone.CONTENT; app.hudButton = null; return NavResult.MOVED }
+            // A tab picked up moves along the line in place, as Addons' tabs do, until put down.
+            if (app.liftedTab != null) return@InputLayer when (e.action) {
+                NavAction.LEFT -> if (app.moveLiftedTab(-1)) NavResult.MOVED else NavResult.BLOCKED
+                NavAction.RIGHT -> if (app.moveLiftedTab(1)) NavResult.MOVED else NavResult.BLOCKED
+                NavAction.SELECT, NavAction.BACK, NavAction.REORDER, NavAction.DOWN -> { app.dropTab(); NavResult.ACTIVATED }
+                else -> NavResult.BLOCKED
+            }
             return@InputLayer when (e.action) {
                 // After the last tab the stick moves on to Search and Settings.
                 NavAction.LEFT -> when (button) {
@@ -1003,7 +1019,7 @@ private fun ShellInput(app: AppState) {
                     null -> if (tabs.lastOrNull() == active) { app.hudButton = if (downloads) HudButton.DOWNLOADS else HudButton.SEARCH; NavResult.MOVED } else cycle(1)
                 }
                 NavAction.SELECT -> if (button != null) { leave(); app.runHudButton(button); NavResult.ACTIVATED } else leave()
-                NavAction.REORDER -> if (button == null && active != null) { app.arrangeTabs(active); NavResult.ACTIVATED } else NavResult.BLOCKED
+                NavAction.REORDER -> if (button == null && active != null) { app.liftTab(active); NavResult.ACTIVATED } else NavResult.BLOCKED
                 NavAction.DOWN -> leave()
                 NavAction.BACK -> { leave(); NavResult.CONSUMED }
                 NavAction.UP -> NavResult.BLOCKED

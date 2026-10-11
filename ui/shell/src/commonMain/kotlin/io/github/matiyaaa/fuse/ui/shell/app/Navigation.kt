@@ -48,8 +48,7 @@ sealed interface Route {
     data class MediaLibrary(val id: String, val name: String, val kind: String? = null) : Route
     data object MediaSearch : Route
 
-    /** Fuse Sync by Fuse: its settings, setting it up ([host]: this computer as the host, else connecting), and a game's saves through time. */
-    data object SyncSettings : Route
+    /** Syncthing's settings (Fuse One's own are in Settings, Fuse One). */
     data object SyncthingSettings : Route
 
     /** Where each emulator keeps its saves here, and a folder to choose where Fuse can't find them (Fuse Sync and Syncthing). */

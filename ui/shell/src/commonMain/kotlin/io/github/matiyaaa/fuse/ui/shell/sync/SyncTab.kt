@@ -165,7 +165,7 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
                         MenuAction("sync.new", "New Profile", FuseIcons.UserPlus, detail = "Someone else who plays here", onSelect = { app.contextMenu = null; app.whoAreYou = WhoMode.ADD }),
                         // Any device already in can bring in another: a code here, or saying yes when it asks.
                         MenuAction("sync.device", "Add a Device", FuseIcons.Plus, detail = "A code for another device to join", onSelect = { app.contextMenu = null; app.pairing = true }),
-                        MenuAction("sync.settings", "Settings", FuseIcons.Settings, detail = "What syncs, devices, the host", onSelect = { app.contextMenu = null; app.go(Route.SyncSettings) }),
+                        MenuAction("sync.settings", "Fuse One Settings", FuseIcons.Settings, detail = "Profiles, what syncs, the library, devices and the host", onSelect = { app.contextMenu = null; app.go(Route.Settings("fuseone")) }),
                     ),
                 ),
             )

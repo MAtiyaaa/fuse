@@ -138,89 +138,63 @@ fun downloadsRows(app: AppState): List<MenuAction> {
     }
 }
 
-/** Fuse Save Sync's rows in Fuse One: the switch, then its own page for everything else. */
-@Composable
-private fun syncRowsFor(app: AppState, service: io.github.matiyaaa.fuse.sync.SyncService, c: io.github.matiyaaa.fuse.data.settings.SyncSettings): List<MenuAction> {
-    val status = service.status.collectAsState().value
-    val words = io.github.matiyaaa.fuse.ui.shell.sync.syncWords(if (c.enabled) status else io.github.matiyaaa.fuse.sync.SyncStatus.Off)
-    return buildList {
-        add(toggleRow("enabled", "Use Fuse Save Sync", FuseIcons.Power, c.enabled, "Your saves, play time, library and settings on every device, from a host of your own") { v ->
-            if (v) app.scope.launch { app.store.sync.setEnabled(true) } else io.github.matiyaaa.fuse.ui.shell.sync.turnOffFuseSync(app)
-        })
-        add(MenuAction(
-            "page", if (c.enabled && c.role.isEmpty()) "Set Up Fuse One" else "Profiles, Devices and What Syncs", FuseIcons.RefreshCcw,
-            detail = words.detail,
-            trailing = Trailing.Value(words.title),
-            onSelect = { app.go(Route.SyncSettings) },
-        ))
-        if (c.enabled && c.role.isNotEmpty()) {
-            add(MenuAction(
-                "newProfile", "New Profile", FuseIcons.UserPlus,
-                detail = "Someone else who plays here: their own library, saves, Home and theme",
-                trailing = Trailing.Chevron,
-                onSelect = { app.whoAreYou = io.github.matiyaaa.fuse.ui.shell.sync.WhoMode.ADD },
-            ))
-        }
-    }
-}
-
 /**
- * Settings, Fuse One: Fuse's own household, in its parts. Fuse Save Sync (saves, play time and
- * settings on every device, or kept on this device alone without a host), Fuse Library Sync (every
- * device's games in one library) and, for people who already run it, Syncthing in Fuse Save
- * Sync's place: only one service ever owns a save library. Profiles have their own section.
+ * Settings, Fuse One: everything about Fuse's household, in one place and in its parts. The
+ * household (whether Fuse One runs, setting it up, the connection), Fuse Profiles (who is playing),
+ * Fuse Save Sync (each person's saves, play time and settings), Fuse Library Sync (every device's
+ * games in one library), this computer as the host, Syncthing for people who already run it in
+ * Fuse Save Sync's place (only one service ever owns a save library), and leaving. The Sync tab
+ * shows where things stand and acts on it; its settings are all here.
  */
 @Composable
 fun fuseOneRows(app: AppState): List<MenuAction> {
     val prefs = app.store.prefs.collectAsState().value
-    val sync = app.store.sync.service?.let { syncRowsFor(app, it, prefs.sync) }
+    val svc = app.store.sync.service
     val syncthing = app.store.syncthing
     return buildList {
-        if (sync != null) {
-            val s = app.store.sync.service!!.status.collectAsState().value
-            addAll(app.group(ADDONS_SYNC, "Fuse Save Sync", FuseIcons.RefreshCcw, summary = if (prefs.sync.enabled) io.github.matiyaaa.fuse.ui.shell.sync.syncWords(s).title else "Off", detail = "Your saves, play time, library and settings on every device") {
-                sync.map { it.copy(id = "sync.${it.id}") }
-            })
+        if (svc != null) {
+            val status = svc.status.collectAsState().value
+            val profiles = svc.profiles.collectAsState().value
+            val active = svc.activeProfile.collectAsState().value
+            val host = svc.host.collectAsState().value
+            val devices = svc.devices.collectAsState().value
+            val rows = io.github.matiyaaa.fuse.ui.shell.sync.syncRows(app, svc, prefs.sync, status, profiles, active, host, devices)
+            fun part(vararg from: String?, under: String) = rows.filter { it.section in from }.map { it.copy(section = under) }
+            addAll(part(null, "Set up", "Connection", under = "Household"))
+            addAll(part("You", under = "Fuse Profiles"))
+            addAll(part("What syncs", under = "Fuse Save Sync"))
+            if (prefs.sync.enabled) addAll(remoteLibraryRows(app, prefs.sync).map { it.copy(id = "reach.${it.id}", section = "Fuse Library Sync") })
+            addAll(rows.filter { it.section != null && it.section !in setOf("Set up", "Connection", "You", "What syncs", "Leave") })
+            if (syncthing != null) addAll(syncthingRows(app, syncthing))
+            addAll(part("Leave", under = "Leave"))
+        } else if (syncthing != null) {
+            addAll(syncthingRows(app, syncthing))
+        } else {
+            add(infoRow("none", "Fuse One isn't part of this build", icon = FuseIcons.RefreshCcw))
         }
-        // The household's games on its other devices: what this device shares, what it takes, and how they move.
-        if (sync != null && prefs.sync.enabled) {
-            val reach = app.store.reach.state.collectAsState().value
-            val reachRows = remoteLibraryRows(app, prefs.sync)
-            addAll(app.group("addons.reach", "Fuse Library Sync", FuseIcons.MonitorSmartphone, summary = when {
-                !reach.supported -> "Waiting for the host"
-                reach.games == 0 -> "Nothing new"
-                reach.games == 1 -> "1 game"
-                else -> "${reach.games} games"
-            }, detail = "Every device's games in one library, sent between them when you ask") {
-                reachRows.map { it.copy(id = "reach.${it.id}") }
-            })
-        }
-        if (syncthing != null) {
-            val st = syncthing.state.collectAsState().value
-            val on = st !is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Off
-            val words = io.github.matiyaaa.fuse.ui.shell.sync.syncthingWords(st)
-            addAll(app.group(ADDONS_SYNCTHING, "Syncthing", FuseIcons.FolderSync, summary = words.second, detail = "Your emulators' save folders, through the Syncthing you already run") {
-                listOf(
-                    toggleRow("syncthing.enabled", "Use Syncthing", FuseIcons.Power, on, "For people who run it already. Fuse Save Sync is the one Fuse recommends; only one of them moves your saves") { v ->
-                        io.github.matiyaaa.fuse.ui.shell.sync.useSyncthing(app, syncthing, v)
-                    },
-                    MenuAction(
-                        "syncthing.page", if (st is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Connected) "Devices and Save Folders" else "Set Up Syncthing", FuseIcons.FolderSync,
-                        detail = words.third,
-                        trailing = Trailing.Value(words.second),
-                        onSelect = { app.go(Route.SyncthingSettings) },
-                    ),
-                )
-            })
-        }
-        if (sync == null && syncthing == null) add(infoRow("none", "Fuse One isn't part of this build", icon = FuseIcons.RefreshCcw))
     }
 }
 
+/** Syncthing, for people who run it already: in Fuse Save Sync's place, never beside it. */
+@Composable
+private fun syncthingRows(app: AppState, syncthing: io.github.matiyaaa.fuse.sync.syncthing.SyncthingService): List<MenuAction> {
+    val st = syncthing.state.collectAsState().value
+    val on = st !is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Off
+    val words = io.github.matiyaaa.fuse.ui.shell.sync.syncthingWords(st)
+    return listOf(
+        toggleRow("syncthing.enabled", "Use Syncthing", FuseIcons.Power, on, "For people who run it already. Fuse Save Sync is the one Fuse recommends; only one of them moves your saves") { v ->
+            io.github.matiyaaa.fuse.ui.shell.sync.useSyncthing(app, syncthing, v)
+        },
+        MenuAction(
+            "syncthing.page", if (st is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Connected) "Devices and Save Folders" else "Set Up Syncthing", FuseIcons.FolderSync,
+            detail = words.third,
+            trailing = Trailing.Value(words.second),
+            onSelect = { app.go(Route.SyncthingSettings) },
+        ),
+    ).map { it.copy(section = "Syncthing") }
+}
+
 /** Addons' groups, by the ids that open them (from search, or a link to the Store's or Cartridge's settings). */
-const val ADDONS_SYNC = "addons.sync"
-const val ADDONS_REACH = "addons.reach"
-const val ADDONS_SYNCTHING = "addons.syncthing"
 const val ADDONS_JELLYFIN = "addons.jellyfin"
 const val ADDONS_STORE = "addons.store"
 const val ADDONS_CARTRIDGE = "addons.cartridge"
@@ -294,7 +268,7 @@ private fun remoteLibraryRows(app: AppState, s: io.github.matiyaaa.fuse.data.set
         add(toggleRow("relay", "Pass Games Through the Host", FuseIcons.Router, s.relay, if (s.relay) "When two devices can't reach each other (one away from home), the host passes the game on, keeping none of it" else "Off: games move only between devices that reach each other directly") { v ->
             set { it.copy(relay = v) }
         })
-        if (app.store.romm.supported) add(toggleRow("romm", "Show Other Devices' Games in RomM", FuseIcons.LibraryBig, s.showInRomm, "Not on RomM, from another device, at the foot of the RomM tab and in each system") { v ->
+        if (app.store.romm.supported) add(toggleRow("romm", "Show Other Devices' Games in RomM", FuseIcons.LibraryBig, s.showInRomm, "Games your other devices have that RomM doesn't, after RomM's own in Library, All, On RomM") { v ->
             set { it.copy(showInRomm = v) }
         })
     }

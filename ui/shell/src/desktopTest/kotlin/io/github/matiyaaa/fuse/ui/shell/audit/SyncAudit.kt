@@ -37,14 +37,11 @@ internal fun AuditDriver.useSync(asHost: Boolean, playing: String? = "mo", prefs
     settle(600)
 }
 
-/** Settings, Fuse One, then its page (as a person gets there). */
+/** Settings, Fuse One (as a person gets there): every Fuse One setting is in this one section. */
 private fun AuditDriver.openSyncPage() {
     openSettings()
     tap(PadButton.DPAD_DOWN, sectionIndex("fuseone"))
     tap(PadButton.DPAD_RIGHT)
-    tapText("Fuse Save Sync")
-    focusAny("Set Up Fuse One", "Profiles, Devices and What Syncs")
-    tap(PadButton.A)
     settle(900)
 }
 
@@ -62,16 +59,11 @@ internal fun AuditDriver.syncScreens() {
         openSettings()
         tap(PadButton.DPAD_DOWN, sectionIndex("fuseone"))
         tap(PadButton.DPAD_RIGHT)
-        shoot("Settings, Fuse One: Save Sync and Syncthing, folded")
-        tapText("Fuse Save Sync")
-        waitFor("Use Fuse Save Sync")
-        shoot("Fuse One off: its switch, and nothing else")
-        tapText("Use Fuse Save Sync")
-        waitFor("Set Up Fuse One")
-        shoot("on, not set up yet")
-        tapText("Set Up Fuse One")
+        waitFor("Use Fuse One")
+        shoot("Fuse One off: its switch, and Syncthing")
+        tapText("Use Fuse One")
         waitFor("Make This the Host")
-        shoot("its page: make this the host, or connect")
+        shoot("on, not set up yet: make this the host, or connect")
     }
 
     scenario("sync", "setting up a host") {
@@ -158,13 +150,15 @@ internal fun AuditDriver.syncScreens() {
         useSync(asHost = true)
         openSyncPage()
         waitFor("Playing As")
-        shoot("set up as the host: who's playing and what syncs", 1_200)
-        tap(PadButton.DPAD_DOWN, 8)
-        shoot("the connection and this device")
-        tap(PadButton.DPAD_DOWN, 4)
+        shoot("set up as the host: the household, who's playing and what syncs", 1_200)
+        focusText("Save States")
+        shoot("Fuse Save Sync: what syncs")
+        focusText("Pass Games Through the Host")
+        shoot("Fuse Library Sync")
+        focusText("Devices")
         shoot("the host: devices and keeping it running")
-        tap(PadButton.DPAD_DOWN, 6)
-        shoot("leaving")
+        tap(PadButton.DPAD_DOWN, 12)
+        shoot("Syncthing, and leaving")
         tapText("Devices", step = PadButton.DPAD_UP)
         waitFor("Every device connected to this host")
         shoot("the host's devices")
@@ -183,10 +177,6 @@ internal fun AuditDriver.syncScreens() {
         tapText("Home on This Device")
         waitFor("All devices on this profile")
         shoot("Home: the profile's everywhere, or this device's own")
-        tap(PadButton.B)
-        tapText("At Startup", step = PadButton.DPAD_UP)
-        waitFor("Ask who's playing")
-        shoot("who Fuse starts as")
         tap(PadButton.B)
         tapText("Profiles", step = PadButton.DPAD_UP)
         waitFor("Add Profile")
