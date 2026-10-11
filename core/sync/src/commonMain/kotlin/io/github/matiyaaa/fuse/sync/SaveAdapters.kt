@@ -157,6 +157,7 @@ object SaveAdapters {
     internal fun firstDir(env: SaveEnvironment, vararg candidates: String?): String? = candidates.filterNotNull().firstOrNull { env.isDirectory(it) }
 
     internal fun appData(env: SaveEnvironment): String = env.env("APPDATA")?.replace('\\', '/') ?: "${env.home}/AppData/Roaming"
+    internal fun localAppData(env: SaveEnvironment): String = env.env("LOCALAPPDATA")?.replace('\\', '/') ?: "${env.home}/AppData/Local"
     internal fun documents(env: SaveEnvironment): String = "${env.home}/Documents"
     internal fun xdgData(env: SaveEnvironment): String = env.env("XDG_DATA_HOME") ?: "${env.home}/.local/share"
     internal fun xdgConfig(env: SaveEnvironment): String = env.env("XDG_CONFIG_HOME") ?: "${env.home}/.config"
@@ -291,13 +292,28 @@ internal object CoreNames {
 internal object DuckStation : SaveAdapter {
     override val emulators = setOf("duckstation")
 
+    // Where DuckStation keeps its data, as its Core::SetDataRoot decides: beside the program when
+    // portable.txt or settings.ini is there; on Windows Documents\DuckStation for older installs,
+    // else %LOCALAPPDATA%\DuckStation; on Linux $XDG_CONFIG_HOME/duckstation when that is set, else
+    // ~/.local/share/duckstation.
     private fun dataDir(env: SaveEnvironment, emuPath: String?): String? = when (env.host) {
-        // Portable when portable.txt sits beside the program.
-        "WINDOWS" -> SaveAdapters.firstDir(env, emuPath?.let(SaveAdapters::parent)?.takeIf { env.exists("$it/portable.txt") }, "${SaveAdapters.documents(env)}/DuckStation")
+        "WINDOWS" -> SaveAdapters.firstDir(
+            env,
+            emuPath?.let(SaveAdapters::parent)?.takeIf { env.exists("$it/portable.txt") || env.exists("$it/settings.ini") },
+            "${SaveAdapters.documents(env)}/DuckStation",
+            "${SaveAdapters.localAppData(env)}/DuckStation",
+        )
         "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/DuckStation")
         "ANDROID" -> SaveAdapters.firstDir(env, "/storage/emulated/0/duckstation", "/storage/emulated/0/DuckStation", "/storage/emulated/0/Android/data/com.github.stenzek.duckstation/files")
             ?: DataFolders.find(env, "duckstation", listOf("duckstation", "psx", "ps1")) { d -> d.takeIf { env.isDirectory("$it/memcards") && (env.exists("$it/settings.ini") || env.isDirectory("$it/savestates")) } }.firstOrNull()
-        else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgData(env)}/duckstation", "${SaveAdapters.xdgConfig(env)}/duckstation", "${env.home}/.var/app/org.duckstation.DuckStation/data/duckstation")
+        else -> SaveAdapters.firstDir(
+            env,
+            emuPath?.let(SaveAdapters::parent)?.takeIf { env.exists("$it/portable.txt") || env.exists("$it/settings.ini") },
+            env.env("XDG_CONFIG_HOME")?.takeIf { it.startsWith("/") }?.let { "$it/duckstation" },
+            "${env.home}/.local/share/duckstation",
+            "${SaveAdapters.xdgData(env)}/duckstation",
+            "${env.home}/.var/app/org.duckstation.DuckStation/data/duckstation",
+        )
     }
 
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
@@ -415,7 +431,7 @@ internal object Rpcs3 : SaveAdapter {
             "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/rpcs3")
             else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgConfig(env)}/rpcs3", "${env.home}/.var/app/net.rpcs3.RPCS3/config/rpcs3")
         } ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "ps3.savedata", "RPCS3's folder wasn't found here."))
-        val savedata = "$base/dev_hdd0/home/00000001/savedata"
+        val savedata = "${hdd0(env, base)}/home/00000001/savedata"
         val serial = q.serial?.uppercase()?.filter { it.isLetterOrDigit() } ?: run {
             val learned = SaveAdapters.learned(env, q, "ps3.savedata")
             if (learned.isNotEmpty()) return listOf(SaveSpot(SaveKind.SAVE, "ps3.savedata", root = savedata, folders = learned))
@@ -423,6 +439,25 @@ internal object Rpcs3 : SaveAdapter {
         }
         return listOf(SaveSpot(SaveKind.SAVE, "ps3.savedata", root = savedata, folders = env.list(savedata).filter { it.uppercase().startsWith(serial) }.ifEmpty { listOf(serial) }))
     }
+}
+
+/**
+ * Where RPCS3's dev_hdd0 is: its vfs.yml (`config/vfs.yml` in its folder, `vfs.yml` in older
+ * versions) may move it, as `/dev_hdd0/: $(EmulatorDir)dev_hdd0/` with `$(EmulatorDir)` its own
+ * folder unless set (RPCS3's Emu/vfs_config.h). Unset or not there: beside its config.
+ */
+internal fun Rpcs3.hdd0(env: SaveEnvironment, base: String): String {
+    val text = env.readText("$base/config/vfs.yml") ?: env.readText("$base/vfs.yml")
+    if (text != null) {
+        val values = text.lineSequence().mapNotNull { line ->
+            val i = line.indexOf(": ")
+            if (i <= 0) null else line.substring(0, i).trim().trim('"', '\'') to line.substring(i + 2).trim().trim('"', '\'')
+        }.toMap()
+        val emulatorDir = values["\$(EmulatorDir)"]?.takeIf { it.isNotEmpty() }?.replace('\\', '/')?.trimEnd('/') ?: base.trimEnd('/')
+        val hdd = values["/dev_hdd0/"]?.takeIf { it.isNotEmpty() }?.replace("\$(EmulatorDir)", "$emulatorDir/")?.replace('\\', '/')?.replace("//", "/")?.trimEnd('/')
+        if (hdd != null && env.isDirectory(hdd)) return hdd
+    }
+    return "$base/dev_hdd0"
 }
 
 /** Vita3K: each game's saves under ux0/user/00/savedata by its title id. */

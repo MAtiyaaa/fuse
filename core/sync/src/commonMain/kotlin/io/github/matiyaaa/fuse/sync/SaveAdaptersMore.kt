@@ -265,14 +265,17 @@ internal object ThreeDs : SaveAdapter {
 
 /**
  * Switch emulators of the yuzu family (Eden, Citron, Sudachi, yuzu and its forks): a game's save in
- * the emulated NAND, `nand/user/save/0000000000000000/<user>/<title id>`.
+ * the emulated NAND, `nand/user/save/0000000000000000/<user>/<title id>`. Eden can keep saves (or the
+ * whole NAND) in a folder of the person's choosing: its config's `Data Storage` group names it
+ * (`save_directory`, `nand_directory`, as Eden's frontend_common/config.cpp writes them), and on
+ * Android it is the folder chosen in Eden's Save Data Directory or NAND Directory setting. Whichever
+ * folder the person picks in Fuse (Eden's own, its NAND or its save data folder) is read the same way.
  */
 internal object SwitchNand : SaveAdapter {
-    override val emulators = setOf("eden", "eden-nightly", "citron", "sudachi", "yuzu", "suyu", "torzu", "kenji-nx")
+    override val emulators = setOf("eden", "eden-nightly", "citron", "sudachi", "yuzu", "suyu", "torzu")
 
     private fun folderName(id: String) = when (id) {
         "eden-nightly" -> "eden"
-        "kenji-nx" -> "kenji"
         else -> id
     }
 
@@ -288,10 +291,43 @@ internal object SwitchNand : SaveAdapter {
         }
     }
 
+    /**
+     * Where a game's saves are, under [base] (the emulator's folder, or one the person chose): the
+     * folder its config names first, then the layouts a chosen folder may have (Eden's folder, its
+     * NAND, its save data folder, or the save folder itself).
+     */
+    internal fun usersFolder(env: SaveEnvironment, base: String): String? {
+        val config = configured(env, base)
+        val roots = listOfNotNull(config, base)
+        return roots.flatMap { r -> listOf("$r/user/save/$ZERO_ID", "$r/nand/user/save/$ZERO_ID", "$r/save/$ZERO_ID", "$r/$ZERO_ID") }
+            .firstOrNull { env.isDirectory(it) }
+    }
+
+    /** The save (or NAND) folder the emulator's config names, when it names one of its own. */
+    internal fun configured(env: SaveEnvironment, base: String): String? {
+        val text = env.readText("$base/config/qt-config.ini") ?: return null
+        val values = HashMap<String, String>()
+        var inGroup = false
+        for (raw in text.lineSequence()) {
+            val line = raw.trim()
+            if (line.startsWith("[")) { inGroup = line == "[Data%20Storage]" || line == "[Data Storage]"; continue }
+            if (!inGroup) continue
+            val i = line.indexOf('=')
+            if (i <= 0) continue
+            val key = line.substring(0, i).trim()
+            // `key\default=false` lines say whether the value is the default, not where it is.
+            if ('\\' in key) continue
+            values[key] = line.substring(i + 1).trim().trim('"').replace("\\\\", "/").replace('\\', '/').trimEnd('/')
+        }
+        return listOf("save_directory", "nand_directory").firstNotNullOfOrNull { k -> values[k]?.takeIf { it.isNotEmpty() && env.isDirectory(it) } }
+    }
+
+    private const val ZERO_ID = "0000000000000000"
+
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
-        val base = base(env, q) ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", if (env.host == "ANDROID") SaveAdapters.androidPrivateNote("This Switch emulator", "Use its Manage save data export, then choose that folder in Fuse, Settings, Save folders.") else "The Switch emulator's folder wasn't found here."))
+        val base = base(env, q) ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", if (env.host == "ANDROID") SaveAdapters.androidPrivateNote("This Switch emulator", "In Eden, Settings, choose a Save Data Directory (or NAND Directory) in your storage, then choose the same folder in Fuse, Settings, Save folders. Other Switch emulators can export saves from Manage save data.") else "The Switch emulator's folder wasn't found here."))
         val read = SwitchIds.of(q, env)
-        val users = "$base/nand/user/save/0000000000000000"
+        val users = usersFolder(env, base) ?: "$base/nand/user/save/$ZERO_ID"
         val people = env.list(users).filter { HEX32.matches(it) }
         val user = people.firstOrNull { read != null && env.isDirectory("$users/$it/$read") } ?: people.firstOrNull()
             ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", "Play a game once in the emulator so it makes its user, then Fuse keeps saves in step."))
@@ -332,19 +368,20 @@ internal object SwitchIds {
 }
 
 /**
- * Ryujinx: saves in numbered folders (`bis/user/save/<n>/0`), each with an `ExtraData0` beside it
- * whose first eight bytes are the game's program id. A game is synced once it has played here.
+ * Ryujinx and the emulators built from it (Kenji-NX, from Ryujinx's own Android branch): saves in
+ * numbered folders (`bis/user/save/<n>/0`), each with an `ExtraData0` beside it whose first eight
+ * bytes are the game's program id. A game is synced once it has played here.
  */
 internal object Ryujinx : SaveAdapter {
-    override val emulators = setOf("ryujinx")
+    override val emulators = setOf("ryujinx", "kenji-nx")
 
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
-        val base = SaveAdapters.chosen(env, q) ?: when (env.host) {
+        val base = SaveAdapters.chosen(env, q)?.let { c -> if (env.isDirectory("$c/bis")) c else SaveAdapters.parent(SaveAdapters.parent(SaveAdapters.parent(c))).takeIf { c.trimEnd('/').endsWith("bis/user/save") } ?: c } ?: when (env.host) {
             "WINDOWS" -> SaveAdapters.firstDir(env, q.emulatorPath?.let { SaveAdapters.parent(it) + "/portable" }, "${SaveAdapters.appData(env)}/Ryujinx")
             "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/Ryujinx")
             "ANDROID" -> null
             else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgConfig(env)}/Ryujinx", "${env.home}/.var/app/org.ryujinx.Ryujinx/config/Ryujinx")
-        } ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", "Ryujinx's folder wasn't found here."))
+        } ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", if (env.host == "ANDROID") SaveAdapters.androidPrivateNote("Kenji-NX") else "Ryujinx's folder wasn't found here."))
         val id = SwitchIds.of(q, env) ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", "Fuse doesn't know this game's title id yet (a [0100…] tag in its file name tells it)."))
         val saves = "$base/bis/user/save"
         val match = env.list(saves).firstOrNull { n ->
