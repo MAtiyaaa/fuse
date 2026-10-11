@@ -151,4 +151,80 @@ class ParamSfoTest {
         assertNull(values["ATTRIBUTE"])
         assertEquals(emptyMap(), io.github.matiyaaa.fuse.library.disc.ParamSfo.strings("hello world, not sfo".encodeToByteArray()))
     }
+
+    /** A PARAM.SFO holding [values] as text, laid out as PSP and PS3 games have it. */
+    private fun sfo(values: Map<String, String>): ByteArray {
+        val keys = StringBuilder()
+        val data = ArrayList<Byte>()
+        val entries = values.map { (k, v) ->
+            val keyOff = keys.length
+            keys.append(k).append('\u0000')
+            val bytes = (v + "\u0000").encodeToByteArray()
+            val dataOff = data.size
+            bytes.forEach { data += it }
+            Triple(keyOff, bytes.size, dataOff)
+        }
+        val keyTable = 20 + 16 * entries.size
+        val dataTable = keyTable + keys.length
+        val out = ByteArray(dataTable + data.size)
+        fun le(at: Int, v: Int, n: Int) { for (i in 0 until n) out[at + i] = (v ushr (8 * i)).toByte() }
+        out[1] = 'P'.code.toByte(); out[2] = 'S'.code.toByte(); out[3] = 'F'.code.toByte()
+        le(4, 0x101, 4); le(8, keyTable, 4); le(12, dataTable, 4); le(16, entries.size, 4)
+        entries.forEachIndexed { i, (keyOff, len, dataOff) ->
+            val at = 20 + i * 16
+            le(at, keyOff, 2); le(at + 2, 0x0204, 2); le(at + 4, len, 4); le(at + 8, len, 4); le(at + 12, dataOff, 4)
+        }
+        keys.toString().encodeToByteArray().copyInto(out, keyTable)
+        data.toByteArray().copyInto(out, dataTable)
+        return out
+    }
+
+    /** A UMD image: PSP_GAME/PARAM.SFO under the root. */
+    private fun umd(param: ByteArray): ByteArray {
+        val sector = 2048
+        val image = ByteArray(sector * 24)
+        fun le32(at: Int, v: Int) { for (i in 0..3) image[at + i] = (v ushr (8 * i)).toByte() }
+        fun record(at: Int, lba: Int, size: Int, dir: Boolean, name: String): Int {
+            val n = name.encodeToByteArray()
+            val len = 33 + n.size + (if (n.size % 2 == 0) 1 else 0)
+            image[at] = len.toByte()
+            le32(at + 2, lba)
+            le32(at + 10, size)
+            image[at + 25] = if (dir) 2 else 0
+            image[at + 32] = n.size.toByte()
+            n.copyInto(image, at + 33)
+            return len
+        }
+        val pvd = 16 * sector
+        image[pvd] = 1
+        "CD001".encodeToByteArray().copyInto(image, pvd + 1)
+        record(pvd + 156, 18, sector, true, "\u0000")
+        var at = 18 * sector
+        at += record(at, 18, sector, true, "\u0000")
+        at += record(at, 18, sector, true, "\u0001")
+        record(at, 19, sector, true, "PSP_GAME")
+        at = 19 * sector
+        at += record(at, 19, sector, true, "\u0000")
+        at += record(at, 18, sector, true, "\u0001")
+        record(at, 20, param.size, false, "PARAM.SFO;1")
+        param.copyInto(image, 20 * sector)
+        return image
+    }
+
+    @Test
+    fun aPspGamesIdComesFromItsParamSfo() = runTest {
+        val param = sfo(linkedMapOf("CATEGORY" to "UG", "DISC_ID" to "ULUS10041", "TITLE" to "A Game"))
+        // An EBOOT.PBP: "\0PBP", a version, then eight offsets, PARAM.SFO first.
+        val pbp = ByteArray(40 + param.size + 4)
+        pbp[1] = 'P'.code.toByte(); pbp[2] = 'B'.code.toByte(); pbp[3] = 'P'.code.toByte()
+        for (k in 0 until 8) {
+            val v = if (k == 0) 40 else 40 + param.size
+            for (i in 0..3) pbp[8 + k * 4 + i] = (v ushr (8 * i)).toByte()
+        }
+        param.copyInto(pbp, 40)
+        val disc = PlayStationDisc(BytesFs(mapOf("/g.iso" to umd(param), "/EBOOT.PBP" to pbp, "/other.iso" to ByteArray(40 * 2048))))
+        assertEquals("ULUS10041", disc.pspGameId("/g.iso"))
+        assertEquals("ULUS10041", disc.pspGameId("/EBOOT.PBP"))
+        assertNull(disc.pspGameId("/other.iso"), "an image that isn't a UMD has no PSP game id")
+    }
 }

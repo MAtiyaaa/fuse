@@ -81,6 +81,17 @@ class MoreAdaptersTest {
     }
 
     @Test
+    fun duckStationsFlatpakKeepsItsDataInItsConfigFolder() {
+        val ff7 = q("psx", "/roms/psx/Final Fantasy VII.chd", "linux.duckstation", serial = "SCUS-94163", title = "Final Fantasy VII")
+        // Flatpak sets XDG_CONFIG_HOME inside its sandbox, so DuckStation's SetDataRoot picks config/duckstation.
+        val env = FakeEnv("LINUX", "/home/mo", files = mapOf("/home/mo/.var/app/org.duckstation.DuckStation/config/duckstation/memcards/" to ""))
+        assertEquals(
+            "/home/mo/.var/app/org.duckstation.DuckStation/config/duckstation/memcards/Final Fantasy VII_1.mcd",
+            SaveAdapters.forEmulator("linux.duckstation")!!.locate(ff7, env).first().pathFor("card1.mcd"),
+        )
+    }
+
+    @Test
     fun rpcs3FollowsDevHdd0WhereItsVfsConfigMovedIt() {
         val game = q("ps3", "/roms/ps3/Demon's Souls/PS3_GAME/USRDIR/EBOOT.BIN", "rpcs3", serial = "BLUS30443")
         val base = "/home/mo/.config/rpcs3"

@@ -71,7 +71,7 @@ class UiAudit {
         }
     }
 
-    @Test fun m01Home() = audit(AuditSize.M) { homeFlow(exhaustive = true); homeChannels(exhaustive = true); homeEmpty(); discoverScreens(); steamGamesScreens() }
+    @Test fun m01Home() = audit(AuditSize.M) { homeFlow(exhaustive = true); homeChannels(exhaustive = true); homeEmpty(); discoverScreens(); steamGamesScreens(); cheatScreens() }
 
     @Test fun m02Library() = audit(AuditSize.M) { libraryScreens(exhaustive = true) }
 

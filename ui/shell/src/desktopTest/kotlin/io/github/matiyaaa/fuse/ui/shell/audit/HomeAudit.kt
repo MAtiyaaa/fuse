@@ -424,3 +424,22 @@ internal fun AuditDriver.steamGamesScreens() {
         shoot("Settings, Library: Fuse's games in Steam", 1_200)
     }
 }
+
+internal fun AuditDriver.cheatScreens() {
+    scenario("library", "game cheats") {
+        useLibrary(AuditPlatform(size, host = io.github.matiyaaa.fuse.model.Host.LINUX))
+        search("Emberline Saga")
+        tap(PadButton.START)
+        tap(PadButton.X)
+        tapText("Cheats")
+        waitFor("RetroArch cheats")
+        shoot("a RetroArch game's cheats, from the ones RetroArch downloaded", 1_200)
+        tap(PadButton.A)
+        waitFor("turned on in Fuse")
+        shoot("one turned on in Fuse, and Apply Cheats After Game Load for this game alone", 1_200)
+        // Off again, so the files are as they were.
+        tap(PadButton.A)
+        settle(900)
+        tap(PadButton.B)
+    }
+}

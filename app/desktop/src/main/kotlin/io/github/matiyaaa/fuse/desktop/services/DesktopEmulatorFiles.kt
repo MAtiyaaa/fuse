@@ -1,8 +1,12 @@
 package io.github.matiyaaa.fuse.desktop.services
 
 import io.github.matiyaaa.fuse.desktop.system.DesktopOs
+import io.github.matiyaaa.fuse.launch.patches.DuckStationHome
 import io.github.matiyaaa.fuse.launch.patches.IniText
 import io.github.matiyaaa.fuse.launch.patches.Pcsx2Home
+import io.github.matiyaaa.fuse.launch.patches.PpssppHome
+import io.github.matiyaaa.fuse.launch.patches.RetroArchCfg
+import io.github.matiyaaa.fuse.launch.patches.RetroArchHome
 import io.github.matiyaaa.fuse.model.InstalledEmulator
 import io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles
 import io.github.matiyaaa.fuse.ui.shell.store.InstallerResult
@@ -57,6 +61,150 @@ class DesktopEmulatorFiles(
             cheats = folder("Cheats", "cheats"),
             patchesZip = zipCandidates(appRoot, flatpak).firstOrNull { it.isFile && it.canRead() }?.absolutePath?.replace('\\', '/'),
         )
+    }
+
+    /**
+     * DuckStation's folders (src/core/core.cpp, SetDataRoot; settings.cpp, EmuFolders::LoadConfig):
+     * the program's folder when portable.txt or settings.ini is beside it; otherwise Documents\DuckStation
+     * on Windows when an older install made it, else %LOCALAPPDATA%\DuckStation; $XDG_CONFIG_HOME/duckstation
+     * on Linux when that is set (always so inside its Flatpak), else ~/.local/share/duckstation; and
+     * ~/Library/Application Support/DuckStation on macOS. settings.ini's `[Folders]` can move the cheats,
+     * patches and game settings folders. The bundled cheats.zip and patches.zip are in its resources
+     * folder, beside the program (inside the bundle on macOS, unreadable inside a running AppImage).
+     */
+    override suspend fun duckstation(installed: InstalledEmulator): DuckStationHome? = withContext(Dispatchers.IO) {
+        val flatpak = installed.detectedVia == "Flatpak"
+        val program = if (flatpak) null else File(installed.appId).takeIf { it.isAbsolute }
+        // DuckStation's AppRoot is the folder of the program itself, inside the bundle on macOS.
+        val programDir = program?.let { if (it.path.endsWith(".app")) File(it, "Contents/MacOS") else it.parentFile }
+        val portable = programDir?.takeIf { File(it, "portable.txt").isFile || File(it, "settings.ini").isFile }
+        val data = portable ?: when (os) {
+            DesktopOs.WINDOWS -> listOfNotNull(env["USERPROFILE"]?.let { File(it, "Documents/DuckStation") }, env["OneDrive"]?.let { File(it, "Documents/DuckStation") })
+                .firstOrNull { it.isDirectory } ?: env["LOCALAPPDATA"]?.let { File(it, "DuckStation") }
+            DesktopOs.MACOS -> File(home, "Library/Application Support/DuckStation")
+            DesktopOs.LINUX -> if (flatpak) {
+                listOf(File(home, ".var/app/$DUCKSTATION_FLATPAK/config/duckstation"), File(home, ".var/app/$DUCKSTATION_FLATPAK/data/duckstation"))
+                    .firstOrNull { File(it, "settings.ini").isFile }
+            } else {
+                env["XDG_CONFIG_HOME"]?.takeIf { it.startsWith("/") }?.let { File(it, "duckstation") } ?: File(home, ".local/share/duckstation")
+            }
+        } ?: return@withContext null
+        val ini = File(data, "settings.ini")
+        // Until DuckStation has been set up once there is nothing of its to change.
+        if (!ini.isFile) return@withContext null
+        val settings = runCatching { IniText(ini.readText()) }.getOrNull()
+        fun folder(key: String, default: String): String {
+            val value = settings?.values("Folders", key)?.lastOrNull()?.takeIf { it.isNotBlank() } ?: default
+            val f = File(value)
+            return (if (f.isAbsolute) f else File(data, value)).absolutePath.replace('\\', '/')
+        }
+        val resources = buildList {
+            if (flatpak) {
+                for (base in listOf("/var/lib/flatpak/app", "$home/.local/share/flatpak/app")) add(File(base, "$DUCKSTATION_FLATPAK/current/active/files/bin/resources"))
+            }
+            program?.let { p -> p.path.indexOf(".app").takeIf { it > 0 }?.let { add(File(p.path.substring(0, it + 4), "Contents/Resources")) } }
+            programDir?.let { add(File(it, "resources")) }
+        }
+        fun zip(name: String) = resources.map { File(it, name) }.firstOrNull { it.isFile && it.canRead() }?.absolutePath?.replace('\\', '/')
+        roots += data.absolutePath
+        DuckStationHome(
+            dataRoot = data.absolutePath.replace('\\', '/'),
+            gameSettings = folder("GameSettings", "gamesettings"),
+            cheats = folder("Cheats", "cheats"),
+            patches = folder("Patches", "patches"),
+            cheatsZip = zip("cheats.zip"),
+            patchesZip = zip("patches.zip"),
+        )
+    }
+
+    /**
+     * PPSSPP's memory stick (UI/NativeApp.cpp, NativeInit; Windows/main.cpp, InitMemstickDirectory):
+     * on Windows the folder installed.txt beside the program names (Documents\PPSSPP when it is empty),
+     * else `memstick` beside the program, else Documents\PPSSPP; on Linux $XDG_CONFIG_HOME/ppsspp or
+     * ~/.config/ppsspp (inside ~/.var/app for the Flatpak); on macOS ~/.config/ppsspp unless another
+     * folder was chosen in PPSSPP. It counts once it holds a `PSP` folder.
+     */
+    override suspend fun ppsspp(installed: InstalledEmulator): PpssppHome? = withContext(Dispatchers.IO) {
+        val flatpak = installed.detectedVia == "Flatpak"
+        val program = if (flatpak) null else File(installed.appId).takeIf { it.isAbsolute }
+        val documents = env["USERPROFILE"]?.let { File(it, "Documents/PPSSPP") }
+        val candidates = when (os) {
+            DesktopOs.WINDOWS -> buildList {
+                val dir = program?.parentFile
+                val installedTxt = dir?.let { File(it, "installed.txt") }?.takeIf { it.isFile }
+                if (installedTxt != null) {
+                    val named = runCatching { installedTxt.readLines().firstOrNull()?.removePrefix("\uFEFF")?.trim() }.getOrNull()
+                    if (!named.isNullOrEmpty()) add(File(named))
+                } else {
+                    dir?.let { add(File(it, "memstick")) }
+                }
+                documents?.let(::add)
+                env["OneDrive"]?.let { add(File(it, "Documents/PPSSPP")) }
+            }
+            DesktopOs.MACOS -> listOf(File(home, ".config/ppsspp"))
+            DesktopOs.LINUX -> if (flatpak) {
+                listOf(File(home, ".var/app/org.ppsspp.PPSSPP/config/ppsspp"))
+            } else {
+                listOf(env["XDG_CONFIG_HOME"]?.takeIf { it.startsWith("/") }?.let { File(it, "ppsspp") } ?: File(home, ".config/ppsspp"))
+            }
+        }
+        val stick = candidates.firstOrNull { File(it, "PSP").isDirectory } ?: return@withContext null
+        roots += stick.absolutePath
+        PpssppHome(stick.absolutePath.replace('\\', '/'))
+    }
+
+    /**
+     * RetroArch's settings and cheats (frontend/drivers/platform_unix.c, platform_win32.c and
+     * platform_darwin.m): its retroarch.cfg beside the program or in %APPDATA%\RetroArch on Windows, in
+     * ~/Library/Application Support/RetroArch/config on macOS, and in $XDG_CONFIG_HOME/retroarch (or
+     * ~/.config/retroarch, inside ~/.var/app for the Flatpak, or the Snap's) on Linux. Its cheats
+     * folder (`cheat_database_path`) and config folder for overrides (`rgui_config_directory`) are
+     * read from it, with RetroArch's defaults: `cheats` and `config` beside the config on Linux and
+     * beside the program on Windows, `cht` and `config` in Application Support on macOS.
+     */
+    override suspend fun retroArch(installed: InstalledEmulator): RetroArchHome? = withContext(Dispatchers.IO) {
+        val flatpak = installed.detectedVia == "Flatpak"
+        val program = if (flatpak) null else File(installed.appId).takeIf { it.isAbsolute }
+        val programDir = program?.takeIf { !it.path.endsWith(".app") }?.parentFile
+        val xdg = env["XDG_CONFIG_HOME"]?.takeIf { it.startsWith("/") } ?: "$home/.config"
+        val macData = File(home, "Library/Application Support/RetroArch")
+        val candidates = when (os) {
+            DesktopOs.WINDOWS -> listOfNotNull(programDir?.let { File(it, "retroarch.cfg") }, env["APPDATA"]?.let { File(it, "RetroArch/retroarch.cfg") })
+            DesktopOs.MACOS -> listOf(File(macData, "config/retroarch.cfg"))
+            DesktopOs.LINUX -> if (flatpak) {
+                listOf(File(home, ".var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg"))
+            } else {
+                listOf(File(xdg, "retroarch/retroarch.cfg"), File(home, "snap/retroarch/current/.config/retroarch/retroarch.cfg"))
+            }
+        }
+        // Until RetroArch has been started once there is nothing of its to change.
+        val config = candidates.firstOrNull { it.isFile } ?: return@withContext null
+        val cfg = runCatching { RetroArchCfg.parse(config.readText()) }.getOrDefault(emptyMap())
+        val base = (if (os == DesktopOs.WINDOWS) programDir ?: config.parentFile else config.parentFile).absolutePath.replace('\\', '/')
+        val (cheatsDefault, configDefault) = when (os) {
+            DesktopOs.MACOS -> macData.absolutePath.let { "$it/cht" to "$it/config" }
+            else -> "$base/cheats" to "$base/config"
+        }
+        val programPath = programDir?.absolutePath?.replace('\\', '/')
+        val cheats = RetroArchCfg.folder(cfg["cheat_database_path"], cheatsDefault, home, programPath)
+        val configDir = RetroArchCfg.folder(cfg["rgui_config_directory"], configDefault, home, programPath)
+        roots += File(cheats).absolutePath
+        roots += File(configDir).absolutePath
+        RetroArchHome(config.absolutePath.replace('\\', '/'), cheats, configDir)
+    }
+
+    override suspend fun remove(path: String): Boolean = withContext(Dispatchers.IO) {
+        val target = File(path).absoluteFile
+        val inside = roots.any { root -> target.normalize().path.startsWith(File(root).normalize().path + File.separator) }
+        if (!inside || !target.isFile) return@withContext false
+        try {
+            Files.delete(target.toPath())
+            true
+        } catch (e: IOException) {
+            false
+        } catch (e: SecurityException) {
+            false
+        }
     }
 
     /** The folder PCSX2 calls AppRoot: the program's folder, or the folder holding a macOS app bundle. */
@@ -334,6 +482,7 @@ class DesktopEmulatorFiles(
         const val MAX_TEXT = 1024 * 1024
         const val MAX_TAIL = 16 * 1024
         const val STOP_GRACE_MS = 800L
+        const val DUCKSTATION_FLATPAK = "org.duckstation.DuckStation"
         val VFS_HDD0 = Regex("^\\s*/dev_hdd0/\\s*:\\s*(.+?)\\s*$", RegexOption.MULTILINE)
         val PREF_PATH = Regex("^pref-path:\\s*(.+)$", RegexOption.MULTILINE)
     }

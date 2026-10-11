@@ -273,6 +273,9 @@ internal object RetroArch : SaveAdapter {
     }
 }
 
+/** The library name of the libretro [core] (`mgba` to `mGBA`), which RetroArch names its per-core folders after; null when unknown. */
+fun retroArchLibraryName(core: String): String? = CoreNames.libraryName(core)
+
 /** libretro cores' library names, which RetroArch uses for its per-core folders. */
 internal object CoreNames {
     private val names = mapOf(
@@ -304,7 +307,8 @@ internal object DuckStation : SaveAdapter {
     // Where DuckStation keeps its data, as its Core::SetDataRoot decides: beside the program when
     // portable.txt or settings.ini is there; on Windows Documents\DuckStation for older installs,
     // else %LOCALAPPDATA%\DuckStation; on Linux $XDG_CONFIG_HOME/duckstation when that is set, else
-    // ~/.local/share/duckstation.
+    // ~/.local/share/duckstation. Flatpak always sets XDG_CONFIG_HOME inside its sandbox, so its
+    // Flatpak keeps everything in ~/.var/app/org.duckstation.DuckStation/config/duckstation.
     private fun dataDir(env: SaveEnvironment, emuPath: String?): String? = when (env.host) {
         "WINDOWS" -> SaveAdapters.firstDir(
             env,
@@ -321,6 +325,7 @@ internal object DuckStation : SaveAdapter {
             env.env("XDG_CONFIG_HOME")?.takeIf { it.startsWith("/") }?.let { "$it/duckstation" },
             "${env.home}/.local/share/duckstation",
             "${SaveAdapters.xdgData(env)}/duckstation",
+            "${env.home}/.var/app/org.duckstation.DuckStation/config/duckstation",
             "${env.home}/.var/app/org.duckstation.DuckStation/data/duckstation",
         )
     }

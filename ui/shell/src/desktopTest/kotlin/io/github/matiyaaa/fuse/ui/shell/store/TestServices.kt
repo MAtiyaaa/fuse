@@ -187,16 +187,26 @@ internal class FakeServices(
         return file.absolutePath
     }
 
-    /** Where the fake PCSX2 keeps its data; null when it isn't set up. */
+    /** Where the fake PCSX2, DuckStation and PPSSPP keep their data; null when they aren't set up. */
     @Volatile var pcsx2Home: io.github.matiyaaa.fuse.launch.patches.Pcsx2Home? = null
+    @Volatile var duckstationHome: io.github.matiyaaa.fuse.launch.patches.DuckStationHome? = null
+    @Volatile var ppssppHome: io.github.matiyaaa.fuse.launch.patches.PpssppHome? = null
+    @Volatile var retroArchHome: io.github.matiyaaa.fuse.launch.patches.RetroArchHome? = null
 
     override val emulatorFiles = object : EmulatorFiles {
         override suspend fun pcsx2(installed: InstalledEmulator) = pcsx2Home
+        override suspend fun duckstation(installed: InstalledEmulator) = duckstationHome
+        override suspend fun ppsspp(installed: InstalledEmulator) = ppssppHome
+        override suspend fun retroArch(installed: InstalledEmulator) = retroArchHome
+        override suspend fun remove(path: String): Boolean = inside(path) && File(path).delete()
         override suspend fun zipText(zip: String, entry: String): String? =
             java.util.zip.ZipFile(zip).use { z -> z.getEntry(entry)?.let { e -> z.getInputStream(e).use { it.readBytes().decodeToString() } } }
+        private fun inside(path: String): Boolean =
+            listOfNotNull(pcsx2Home?.dataRoot, duckstationHome?.dataRoot, ppssppHome?.memstick, retroArchHome?.cheats, retroArchHome?.configDir)
+                .any { path.startsWith("$it/") }
+
         override suspend fun write(path: String, text: String): Boolean {
-            val root = pcsx2Home?.dataRoot ?: return false
-            if (!path.startsWith("$root/")) return false
+            if (!inside(path)) return false
             File(path).also { it.parentFile.mkdirs() }.writeText(text)
             return true
         }

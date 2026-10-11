@@ -1,7 +1,13 @@
 package io.github.matiyaaa.fuse.launch.patches
 
-/** A named patch in a `.pnach` file, as PCSX2 lists it in a game's Patches tab. */
-data class PnachPatch(val name: String, val description: String? = null, val author: String? = null)
+/**
+ * A named patch in a `.pnach` file, as PCSX2 lists it in a game's Patches tab; other emulators' patches
+ * and cheats are listed the same way. [name] is what the emulator knows it by, [label] what to show
+ * when that differs (a cheat known by its number, a code inside a group).
+ */
+data class PnachPatch(val name: String, val description: String? = null, val author: String? = null, val label: String? = null) {
+    val shown: String get() = label ?: name
+}
 
 /**
  * `.pnach` files as PCSX2 reads them (pcsx2/Patch.cpp, LoadPatchesFromString and its UI listing):
@@ -160,7 +166,7 @@ class IniText(text: String) {
     }
 }
 
-/** How one patch stands for a game, and who decided it. */
+/** How one patch or cheat stands for a game, and who decided it. */
 enum class PatchState {
     /** Off. Fuse can turn it on. */
     OFF,
@@ -168,18 +174,18 @@ enum class PatchState {
     /** On because Fuse turned it on; Fuse can turn it off again. */
     ON_BY_FUSE,
 
-    /** On because it was turned on in PCSX2 (or by hand). Fuse leaves it alone. */
-    ON_IN_PCSX2,
+    /** On because it was turned on in the emulator (or by hand). Fuse leaves it alone. */
+    ON_IN_EMULATOR,
 
-    /** On for every game by PCSX2's widescreen or no-interlacing setting. Fuse leaves it alone. */
+    /** On for every game by an emulator setting (PCSX2's or DuckStation's widescreen). Fuse leaves it alone. */
     ON_FOR_ALL_GAMES,
 
-    /** Turned off for this game in PCSX2. Fuse leaves it alone. */
-    OFF_IN_PCSX2,
+    /** Turned off for this game in the emulator. Fuse leaves it alone. */
+    OFF_IN_EMULATOR,
 }
 
 data class PatchStatus(val patch: PnachPatch, val state: PatchState) {
-    val on: Boolean get() = state == PatchState.ON_BY_FUSE || state == PatchState.ON_IN_PCSX2 || state == PatchState.ON_FOR_ALL_GAMES
+    val on: Boolean get() = state == PatchState.ON_BY_FUSE || state == PatchState.ON_IN_EMULATOR || state == PatchState.ON_FOR_ALL_GAMES
     val fuseCanChange: Boolean get() = state == PatchState.OFF || state == PatchState.ON_BY_FUSE
 }
 
@@ -238,9 +244,9 @@ object Pcsx2PatchRules {
         val noInterlacing = setting("EnableNoInterlacingPatches")
         return patches.map { p ->
             val state = when {
-                p.name in disabled -> PatchState.OFF_IN_PCSX2
+                p.name in disabled -> PatchState.OFF_IN_EMULATOR
                 p.name in enabled && p.name in owned -> PatchState.ON_BY_FUSE
-                p.name in enabled -> PatchState.ON_IN_PCSX2
+                p.name in enabled -> PatchState.ON_IN_EMULATOR
                 section == SECTION && ((p.name == WIDESCREEN && widescreen) || (p.name == NO_INTERLACING && noInterlacing)) -> PatchState.ON_FOR_ALL_GAMES
                 else -> PatchState.OFF
             }

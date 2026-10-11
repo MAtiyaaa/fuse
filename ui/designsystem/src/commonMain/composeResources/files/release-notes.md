@@ -50,6 +50,15 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   patches are checked against the game they were made for, and one for another version is refused
   with both checksums rather than making a broken copy. A copier header is left off when the patch
   expects it.
+- **Patches and cheats in the emulator.** A game's options turn on its emulator's own patches and
+  cheats, read the way the emulator reads them: PCSX2's cheats beside its patches for PS2 games,
+  DuckStation's patches (widescreen and other fixes, its bundled ones and your own) and cheats for
+  PlayStation games, PPSSPP's cheats for PSP games, and RetroArch's for any game that starts there
+  (the game's own cheat file, or the cheats RetroArch downloaded for it). Turning one on turns on
+  the emulator's cheats for that game alone when they are off (in its game settings, or RetroArch's
+  game override), and Fuse only ever turns off what it turned on: anything set in the emulator stays
+  as it is, and Fuse says when a setting there (hardcore mode, cheats off for every game) keeps them
+  from applying.
 - **Steam achievement rarity.** The share of players who have each Steam achievement, and when it
   was unlocked, under the chosen badge on a game's page.
 - **Add a game folder.** A folder holding a game with its updates, DLC or discs, read the way the
@@ -131,8 +140,9 @@ and the library, and a first step toward Fuse knowing emulators for itself.
 ## Fixed
 
 - Saves are found where emulators really keep them, checked against each one's own source:
-  DuckStation's newer Windows folder (%LOCALAPPDATA%) and portable settings.ini, Eden's own Save Data
-  and NAND directories (on Android too, with the setting to use named), Kenji-NX read as the Ryujinx
+  DuckStation's newer Windows folder (%LOCALAPPDATA%), portable settings.ini and its Flatpak's
+  config folder, Eden's own Save Data and NAND directories (on Android too, with the setting to use
+  named), Kenji-NX read as the Ryujinx
   it is built from, and RPCS3's dev_hdd0 where its vfs.yml moved it. Every other emulator was
   checked the same way: RetroArch's Mac default (Documents) and its by-content folders, Flycast's
   per-game VMUs (named by the disc's product number, never mixed with a shared VMU), Play!'s card

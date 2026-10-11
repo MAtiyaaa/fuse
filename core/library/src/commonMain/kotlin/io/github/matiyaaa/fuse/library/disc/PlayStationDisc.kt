@@ -44,6 +44,34 @@ class PlayStationDisc(private val fs: FuseFileSystem) {
         return DiscIdentity(serial, crc, config.ps2, config.version, config.videoMode)
     }
 
+    /**
+     * A PSP game's id as PPSSPP files its cheats and settings under (`ULUS10041`): DISC_ID in the
+     * PARAM.SFO of a UMD image (`PSP_GAME/PARAM.SFO`) or of an EBOOT.PBP (whose header says where it
+     * is). Compressed images (CSO, CHD) aren't read.
+     */
+    suspend fun pspGameId(path: String): String? {
+        val sfo = if (path.endsWith(".pbp", ignoreCase = true)) pbpParamSfo(path) else umdParamSfo(path)
+        return sfo?.let { ParamSfo.strings(it)["DISC_ID"] }?.trim()?.uppercase()?.filter { it.isLetterOrDigit() }?.takeIf { PSP_ID.matches(it) }
+    }
+
+    private suspend fun umdParamSfo(path: String): ByteArray? {
+        val image = open(path) ?: return null
+        val root = image.rootDirectory() ?: return null
+        val game = image.find(root, "PSP_GAME")?.takeIf { it.directory } ?: return null
+        val sfo = image.find(game, "PARAM.SFO")?.takeIf { !it.directory && it.size in 1..MAX_CNF } ?: return null
+        return image.readFile(sfo)
+    }
+
+    /** The PARAM.SFO inside an EBOOT.PBP: its header is "\0PBP", a version, then eight offsets, the first two bounding PARAM.SFO. */
+    private suspend fun pbpParamSfo(path: String): ByteArray? {
+        val head = fs.readBytes(path, 0, 16)?.takeIf { it.size == 16 } ?: return null
+        if (head[0] != 0.toByte() || head.decodeToString(1, 4) != "PBP") return null
+        val start = le32(head, 8)
+        val end = le32(head, 12)
+        if (start < 40 || end <= start || end - start > MAX_CNF) return null
+        return fs.readBytes(path, start, (end - start).toInt())
+    }
+
     private suspend fun bootProgramCrc(image: Image, root: Entry, boot: String): Long? {
         val name = bootFileName(boot) ?: return null
         var dir = root
@@ -152,6 +180,7 @@ class PlayStationDisc(private val fs: FuseFileSystem) {
         private const val MAX_CNF = 64 * 1024L
         private const val MAX_ELF = 64L * 1024 * 1024
         private const val MAX_DIR_SECTORS = 256
+        private val PSP_ID = Regex("[A-Z]{4}[0-9]{5}")
 
         private fun le32(b: ByteArray, at: Int): Long =
             (b[at].toLong() and 0xFF) or ((b[at + 1].toLong() and 0xFF) shl 8) or

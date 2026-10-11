@@ -306,8 +306,15 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         // An Android game always starts as its app.
         if (!card.isApp) add(MenuAction("emulator", "Emulator", FuseIcons.Chip, trailing = Trailing.Chevron, onSelect = { emulatorPicker(card) }))
         if (!card.isApp) add(MenuAction("parts", "Updates and DLC", FuseIcons.Puzzle, detail = "If this is an update or DLC of another game, or to give back one you added", trailing = Trailing.Chevron, onSelect = { partsPicker(card) }))
-        if (!card.isApp && card.platformId.value == "ps2") {
-            add(MenuAction("patches", "Patches and Cheats", FuseIcons.Bandage, detail = "PCSX2's widescreen, 60 FPS and other fixes for this game, and cheats in its cheats folder", trailing = Trailing.Chevron, onSelect = { pcsx2PatchPicker(card) }))
+        // Patches and cheats in the emulator's own files, which Fuse changes on a computer.
+        if (!card.isApp && platform.host != io.github.matiyaaa.fuse.model.Host.ANDROID) {
+            val retroArch = store.emulators.installed.value.any { it.id.value.substringAfter('.').startsWith("retroarch") }
+            when (card.platformId.value) {
+                "ps2" -> add(MenuAction("patches", "Patches and Cheats", FuseIcons.Bandage, detail = "Widescreen, 60 FPS and other fixes for this game, and cheats, in its emulator's own settings", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
+                "psx" -> add(MenuAction("patches", "Patches and Cheats", FuseIcons.Bandage, detail = "Widescreen and other fixes for this game, and cheats, in its emulator's own settings", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
+                "psp" -> add(MenuAction("patches", "Cheats", FuseIcons.Wand, detail = "This game's cheats, in its emulator's own settings", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
+                else -> if (retroArch) add(MenuAction("patches", "Cheats", FuseIcons.Wand, detail = "This game's cheats in RetroArch, for its next start", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
+            }
         }
         if (!card.isApp && card.platformId.value == "ps3") {
             add(MenuAction("compat", "How It Runs in RPCS3", FuseIcons.Gauge, detail = "From RPCS3's compatibility list. Asks rpcs3.net with the game's title id", trailing = Trailing.Chevron, onSelect = { showCompatibility(card) }))
@@ -592,22 +599,22 @@ fun AppState.showEmulator(id: io.github.matiyaaa.fuse.model.EmulatorId) {
 private val PACKAGE_SYSTEMS = setOf("ps3", "psvita", "3ds", "new-nintendo-3ds")
 
 /**
- * The game's PCSX2 patches with a check for each that is on. Fuse turns on any that are off and
- * turns off only those it turned on; ones set in PCSX2 say so and stay as they are.
+ * The game's patches and cheats in its emulator's own settings (RetroArch, PCSX2, DuckStation, PPSSPP), with a
+ * check for each that is on. Fuse turns on any that are off and turns off only those it turned on;
+ * ones set in the emulator say so and stay as they are.
  */
-fun AppState.pcsx2PatchPicker(card: GameCard) {
+fun AppState.gamePatchPicker(card: GameCard) {
     contextMenu = null
     scope.launch {
-        when (val list = store.library.pcsx2Patches(card.id)) {
-            is io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList.Unavailable -> showProblem(Problem(
+        when (val list = store.library.gamePatches(card.id)) {
+            is io.github.matiyaaa.fuse.ui.shell.store.GamePatchList.Unavailable -> showProblem(Problem(
                 list.title, list.reason, ProblemKind.EMULATOR, Severity.INFO, reassurance = null,
             ))
-            is io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList.Ready -> {
+            is io.github.matiyaaa.fuse.ui.shell.store.GamePatchList.Ready -> {
+                val emulator = list.emulator
                 if (list.patches.isEmpty() && list.cheats.isEmpty()) {
                     showProblem(Problem(
-                        "No patches or cheats for ${card.title}",
-                        "PCSX2 has none filed under ${list.serial} (CRC ${list.crc})" + (if (list.bundledRead) "." else ", in its patches folder. Its bundled patches couldn't be read on this system; check the game's Patches tab in PCSX2.") +
-                            " Cheats come from .pnach files named ${list.serial}_${list.crc}.pnach in PCSX2's cheats folder.",
+                        "No patches or cheats for ${card.title}", list.whereFrom,
                         ProblemKind.EMULATOR, Severity.INFO, reassurance = null,
                     ))
                     return@launch
@@ -615,37 +622,42 @@ fun AppState.pcsx2PatchPicker(card: GameCard) {
                 fun row(s: io.github.matiyaaa.fuse.launch.patches.PatchStatus, cheat: Boolean) = run {
                     val about = listOfNotNull(s.patch.description, s.patch.author?.let { "by $it" }).joinToString("  ·  ").ifEmpty { null }
                     MenuAction(
-                        "${if (cheat) "cheat" else "patch"}.${s.patch.name}", s.patch.name, if (cheat) FuseIcons.Wand else FuseIcons.Bandage,
+                        "${if (cheat) "cheat" else "patch"}.${s.patch.name}", s.patch.shown, if (cheat) FuseIcons.Wand else FuseIcons.Bandage,
                         detail = when (s.state) {
                             PatchState.ON_BY_FUSE -> listOfNotNull("On, turned on in Fuse", about).joinToString("  ·  ")
                             else -> about
                         },
                         trailing = Trailing.Check(s.on),
                         unavailableReason = when (s.state) {
-                            PatchState.ON_IN_PCSX2 -> "On, turned on in PCSX2. Change it there"
-                            PatchState.ON_FOR_ALL_GAMES -> "On for every game in PCSX2's settings"
-                            PatchState.OFF_IN_PCSX2 -> "Turned off for this game in PCSX2"
+                            PatchState.ON_IN_EMULATOR -> "On, turned on in $emulator. Change it there"
+                            PatchState.ON_FOR_ALL_GAMES -> "On for every game in $emulator's settings"
+                            PatchState.OFF_IN_EMULATOR -> "Turned off for this game in $emulator"
                             else -> null
                         },
                         section = if (cheat) "Cheats" else "Patches",
                         onSelect = {
                             scope.launch {
-                                val ok = store.library.setPcsx2Patch(card.id, s.patch.name, !s.on, cheat = cheat)
-                                if (!ok) toasts.show("Couldn't change PCSX2's settings for this game", ToastKind.WARNING)
-                                pcsx2PatchPicker(card)
+                                val ok = store.library.setGamePatch(card.id, s.patch.name, !s.on, cheat = cheat)
+                                if (!ok) toasts.show("Couldn't change $emulator's settings for this game", ToastKind.WARNING)
+                                gamePatchPicker(card)
                             }
                         },
                     )
                 }
                 val note = when {
                     list.cheats.isEmpty() -> ""
-                    list.cheatsOn -> " Cheats are on for this game in PCSX2."
-                    else -> " Turning a cheat on turns on PCSX2's cheats for this game, and off again with the last one."
+                    list.cheatsOn -> " Cheats are on for this game in $emulator."
+                    list.cheatsNote.isEmpty() -> ""
+                    else -> " " + list.cheatsNote
                 }
+                val id = if (list.crc.isEmpty()) list.serial else "${list.serial}, CRC ${list.crc}"
                 choice = ChoiceSpec(
-                    icon = FuseIcons.Bandage,
-                    title = if (list.cheats.isEmpty()) "PCSX2 patches" else if (list.patches.isEmpty()) "PCSX2 cheats" else "PCSX2 patches and cheats",
-                    message = "${list.serial}, CRC ${list.crc}. Changes apply the next time the game starts in PCSX2. Fuse only turns off what it turned on.$note",
+                    icon = if (list.patches.isEmpty()) FuseIcons.Wand else FuseIcons.Bandage,
+                    title = if (list.cheats.isEmpty()) "$emulator patches" else if (list.patches.isEmpty()) "$emulator cheats" else "$emulator patches and cheats",
+                    message = listOfNotNull(
+                        "$id. Changes apply the next time the game starts in $emulator. Fuse only turns off what it turned on.$note",
+                        list.warning,
+                    ).joinToString(" "),
                     options = list.patches.map { row(it, cheat = false) } + list.cheats.map { row(it, cheat = true) },
                 )
             }

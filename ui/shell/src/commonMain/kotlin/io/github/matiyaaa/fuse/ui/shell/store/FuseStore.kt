@@ -473,16 +473,17 @@ interface LibraryOps {
     suspend fun rpcs3Compatibility(id: GameId): CompatibilityAnswer = CompatibilityAnswer.Unreachable
 
     /**
-     * The PCSX2 patches for the PS2 game [id] (its patch files and PCSX2's bundled ones), each with
-     * who turned it on. Reads only.
+     * The patches and cheats for the game [id] in its emulator's own settings (PCSX2, DuckStation,
+     * PPSSPP), each with who turned it on. Reads only.
      */
-    suspend fun pcsx2Patches(id: GameId): Pcsx2PatchList = Pcsx2PatchList.Unavailable("Not here", "PCSX2's patches can only be changed from Fuse on a computer.")
+    suspend fun gamePatches(id: GameId): GamePatchList = GamePatchList.Unavailable("Not here", "Patches and cheats can only be changed from Fuse on a computer.")
 
     /**
-     * Turns the patch [name] on or off in PCSX2's settings for [id]. Fuse turns off only patches it
-     * turned on itself; anything set in PCSX2 stays as it is. False when nothing changed.
+     * Turns the patch or cheat [name] on or off in the emulator's settings for [id]. Fuse turns off
+     * only what it turned on itself; anything set in the emulator stays as it is. False when nothing
+     * changed.
      */
-    suspend fun setPcsx2Patch(id: GameId, name: String, on: Boolean, cheat: Boolean = false): Boolean = false
+    suspend fun setGamePatch(id: GameId, name: String, on: Boolean, cheat: Boolean = false): Boolean = false
 
     /** Play time today, this week, this month and in all, per day, per game and per system. */
     fun playTime(): Flow<PlayTimeReport> = kotlinx.coroutines.flow.flowOf(PlayTimeReport(loaded = true))

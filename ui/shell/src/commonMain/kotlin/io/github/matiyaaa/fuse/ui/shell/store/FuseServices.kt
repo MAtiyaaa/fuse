@@ -378,6 +378,18 @@ interface EmulatorFiles {
     /** Where the PCSX2 install [installed] keeps its data; null when it hasn't been set up or can't be found. */
     suspend fun pcsx2(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): io.github.matiyaaa.fuse.launch.patches.Pcsx2Home?
 
+    /** Where the DuckStation install [installed] keeps its data; null when it hasn't been set up or can't be found. */
+    suspend fun duckstation(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): io.github.matiyaaa.fuse.launch.patches.DuckStationHome? = null
+
+    /** The memory stick of the PPSSPP install [installed] (the folder holding `PSP`); null when it can't be found. */
+    suspend fun ppsspp(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): io.github.matiyaaa.fuse.launch.patches.PpssppHome? = null
+
+    /** Where the RetroArch install [installed] keeps its settings and cheats; null until it has a retroarch.cfg. */
+    suspend fun retroArch(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): io.github.matiyaaa.fuse.launch.patches.RetroArchHome? = null
+
+    /** Removes the file at [path] inside a known emulator data folder; for a file Fuse made and emptied again. */
+    suspend fun remove(path: String): Boolean = false
+
     /** The text of [entry] inside the zip at [zip], or null. */
     suspend fun zipText(zip: String, entry: String): String?
 

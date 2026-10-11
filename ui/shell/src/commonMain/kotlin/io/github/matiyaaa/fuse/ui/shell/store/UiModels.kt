@@ -366,21 +366,33 @@ data class EmulatorOption(
     val unavailable: String? = null,
 )
 
-/** A PS2 game's PCSX2 patches and who turned each on, or why Fuse can't show them. */
-sealed interface Pcsx2PatchList {
+/**
+ * A game's patches and cheats in its emulator's own settings (PCSX2 for PS2, DuckStation for
+ * PlayStation, PPSSPP for PSP) and who turned each on, or why Fuse can't show them.
+ */
+sealed interface GamePatchList {
     data class Ready(
         val serial: String,
+        /** PCSX2's CRC of the boot program; empty for emulators that file codes by serial alone. */
         val crc: String,
         val patches: List<io.github.matiyaaa.fuse.launch.patches.PatchStatus>,
-        /** False when PCSX2's bundled patches couldn't be read here (only patch files in its patches folder are listed). */
+        /** False when the emulator's bundled codes couldn't be read here (only its own folders are listed). */
         val bundledRead: Boolean,
-        /** The cheats in PCSX2's cheats folder for this game, and who turned each on. */
+        /** The game's cheats, and who turned each on. */
         val cheats: List<io.github.matiyaaa.fuse.launch.patches.PatchStatus> = emptyList(),
-        /** PCSX2 applies cheats to this game (its own setting, or PCSX2's for every game). */
+        /** The emulator applies cheats to this game (its own setting, or the emulator's for every game). */
         val cheatsOn: Boolean = false,
-    ) : Pcsx2PatchList
+        /** The emulator's name, as the sheet says it. */
+        val emulator: String = "PCSX2",
+        /** Where its codes come from, said when there are none. */
+        val whereFrom: String = "",
+        /** Something in the emulator's settings that keeps them from applying, said above the list. */
+        val warning: String? = null,
+        /** How turning on a cheat reaches the emulator's own cheats switch. */
+        val cheatsNote: String = "Turning a cheat on turns on PCSX2's cheats for this game, and off again with the last one.",
+    ) : GamePatchList
 
-    data class Unavailable(val title: String, val reason: String) : Pcsx2PatchList
+    data class Unavailable(val title: String, val reason: String) : GamePatchList
 }
 
 /** What RPCS3's compatibility list says about a PS3 game, asked for by the user. */

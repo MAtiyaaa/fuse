@@ -194,6 +194,10 @@ internal class AuditServices(
         override suspend fun volumes() = controls.drives
     }
 
+    /** RetroArch on the made-up computer, with the cheats it downloaded for every sample game. */
+    override val emulatorFiles: io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles? =
+        if (host == Host.ANDROID) null else AuditEmulatorFiles(File(base.cacheDir, "retroarch"))
+
     override val locations = object : DeviceLocations {
         override suspend fun libraryCandidates(): List<LocationHint> = controls.libraryCandidates
         override suspend fun biosRoots(): List<String> = emptyList()
@@ -519,4 +523,42 @@ internal class AuditDecky : io.github.matiyaaa.fuse.ui.shell.platform.DeckyInteg
         return Result.success("The Fuse plugin is out of Decky.")
     }
     override suspend fun stage(): String? = null
+}
+
+/**
+ * RetroArch's folders on the audit computer: its downloaded cheats (Online Updater, Update Cheats)
+ * for every sample game, by libretro system, and room for the game files Fuse writes.
+ */
+internal class AuditEmulatorFiles(private val root: File) : io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles {
+    init {
+        val cheats = File(root, "cheats")
+        val names = AuditSamples.games.map { it.folder to it.title } + io.github.matiyaaa.fuse.ui.shell.screenshots.SampleLibrary.games.map { it.folder to it.file }
+        for ((folder, name) in names) {
+            for (system in io.github.matiyaaa.fuse.integrations.libretro.LibretroThumbnails.systemsFor(PlatformId(folder))) {
+                File(cheats, "$system/$name.cht").apply { parentFile.mkdirs() }.writeText(CHEATS)
+            }
+        }
+        File(root, "retroarch.cfg").writeText("apply_cheats_after_load = \"false\"\n")
+    }
+
+    override suspend fun pcsx2(installed: InstalledEmulator): io.github.matiyaaa.fuse.launch.patches.Pcsx2Home? = null
+
+    override suspend fun retroArch(installed: InstalledEmulator) =
+        io.github.matiyaaa.fuse.launch.patches.RetroArchHome(File(root, "retroarch.cfg").absolutePath, File(root, "cheats").absolutePath, File(root, "config").absolutePath)
+
+    override suspend fun zipText(zip: String, entry: String): String? = null
+
+    override suspend fun write(path: String, text: String): Boolean {
+        if (!path.startsWith(root.absolutePath + "/")) return false
+        File(path).apply { parentFile.mkdirs() }.writeText(text)
+        return true
+    }
+
+    override suspend fun remove(path: String): Boolean = path.startsWith(root.absolutePath + "/") && File(path).delete()
+
+    private companion object {
+        val CHEATS = listOf("Infinite Lives", "Start With 99 Coins", "Invincibility", "Moon Jump", "Unlock All Levels")
+            .mapIndexed { i, d -> "cheat${i}_desc = \"$d\"\ncheat${i}_code = \"7E0DBE:0$i\"\ncheat${i}_enable = false\n" }
+            .joinToString("\n", prefix = "cheats = 5\n\n")
+    }
 }

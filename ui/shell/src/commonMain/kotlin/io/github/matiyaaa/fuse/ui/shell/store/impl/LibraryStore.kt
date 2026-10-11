@@ -858,122 +858,59 @@ internal class DefaultLibraryOps(
         return io.github.matiyaaa.fuse.ui.shell.store.CompatibilityAnswer.Listed(entry)
     }
 
-    /** Everything needed to read or change one game's PCSX2 patches. */
-    private class PatchContext(
-        val files: io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles,
-        val settingsPath: String,
-        val game: io.github.matiyaaa.fuse.launch.patches.IniText,
-        val owned: Set<String>,
-        val statuses: List<io.github.matiyaaa.fuse.launch.patches.PatchStatus>,
-        val view: io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList.Ready,
-        val ownedCheats: Set<String> = emptySet(),
-        val cheats: List<io.github.matiyaaa.fuse.launch.patches.PatchStatus> = emptyList(),
-        /** Fuse turned on PCSX2's cheats for this game, so it turns them off with its last cheat. */
-        val ownsCheatsSwitch: Boolean = false,
-        val cheatsOn: Boolean = false,
-    )
+    /** Patches and cheats in PCSX2's, DuckStation's and PPSSPP's own files. */
+    private val nativePatches by lazy { NativePatches(ctx, { emulators.detectNow() }, ::discIdentity, ::pspGameId, ::retroArchRun) }
 
-    private suspend fun patchContext(id: GameId): Pair<PatchContext?, io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList.Unavailable?> {
-        fun no(title: String, reason: String) = null to io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList.Unavailable(title, reason)
-        val files = ctx.services.emulatorFiles ?: return no("Not on this device", "PCSX2's patches can be changed from Fuse on a computer. On this device, change them in the emulator.")
+    /** The RetroArch run [game] would start with on this computer (its core and content), as [launch] resolves it; null when it starts elsewhere. */
+    private suspend fun retroArchRun(game: io.github.matiyaaa.fuse.model.Game): NativePatches.RetroArchRun? {
+        if (!ctx.host.isDesktop) return null
         if (ctx.installed.value.isEmpty()) emulators.detectNow()
-        val pcsx2 = ctx.installed.value.firstOrNull { it.id.value.substringAfter('.') == "pcsx2" }
-            ?: return no("PCSX2 isn't installed", "Install PCSX2, start it once so it sets up its folders, and its patches show here.")
-        val home = files.pcsx2(pcsx2) ?: return no("PCSX2 isn't set up yet", "Start PCSX2 once and finish its first-run setup, then come back.")
-        val disc = discIdentity(id) ?: return no(
-            "Fuse can't read this disc",
-            "Patches are filed under the game's serial and CRC, which Fuse reads from ISO and BIN images. Compressed images (CHD, CSO) aren't read; change their patches in PCSX2.",
-        )
-        val crc = disc.crc ?: return no("Not a PS2 disc", "This image doesn't start a PS2 program, so PCSX2 has no patches for it.")
-        val rules = io.github.matiyaaa.fuse.launch.patches.Pcsx2PatchRules
-        val parse = io.github.matiyaaa.fuse.launch.patches.Pnach
-        val fs = ctx.services.fs
-        // Patch files on disk come first, as in PCSX2; a name already listed isn't listed again.
-        val patches = LinkedHashMap<String, io.github.matiyaaa.fuse.launch.patches.PnachPatch>()
-        var unlabelled = false
-        val onDisk = try { fs.list(home.patches) } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
-        for (f in onDisk.filter { !it.isDirectory && rules.matchesPnach(it.name, disc.serial, crc) }.sortedBy { it.name }) {
-            val text = fs.readText(f.path, 1024 * 1024) ?: continue
-            if (parse.hasUnlabelled(text)) unlabelled = true
-            parse.parse(text).forEach { patches.putIfAbsent(it.name, it) }
+        val settings = data.scopedSettings
+        val platformEmulator = settings.resolve(ScopedSettings.Emulator, game.platformId, null).value.takeIf { it.isNotBlank() }?.let(::EmulatorId)
+        val core = settings.resolve(ScopedSettings.RetroArchCore, game.platformId, game.id).value.takeIf { it.isNotBlank() }
+        val resolved = ctx.resolver.resolve(game, platformEmulator, ctx.installed.value, ctx.host, ScopedLaunchChoice(core = core, homeDir = ctx.services.emulators.homeDir))
+        val installed = resolved.installed ?: return null
+        if (!installed.id.value.substringAfter('.').startsWith("retroarch")) return null
+        val coreName = core ?: RetroArchCores.defaultCore(ctx.host, game.platformId) ?: return null
+        val content = when (val t = resolved.target) {
+            is LaunchTarget.File -> t.path
+            is LaunchTarget.Playlist -> t.path
+            else -> game.location.launchPath
         }
-        var bundledRead = home.patchesZip != null
-        if (!unlabelled && home.patchesZip != null) {
-            for (entry in rules.zipEntries(disc.serial, crc)) {
-                val text = files.zipText(home.patchesZip!!, entry) ?: continue
-                parse.parse(text).forEach { patches.putIfAbsent(it.name, it) }
-                break
-            }
-        }
-        if (unlabelled) bundledRead = true
-        val settingsPath = "${home.gameSettings}/${rules.gameSettingsName(disc.serial, crc)}"
-        val game = io.github.matiyaaa.fuse.launch.patches.IniText(fs.readText(settingsPath, 1024 * 1024) ?: "")
-        val global = fs.readText(home.settingsFile, 1024 * 1024)?.let { io.github.matiyaaa.fuse.launch.patches.IniText(it) }
-        // A patch taken out in PCSX2 since Fuse turned it on is no longer Fuse's.
-        val enabled = game.values(rules.SECTION, rules.ENABLE).toSet()
-        val recorded = data.owned.get(PATCH_OWNERSHIP, settingsPath)
-        val owned = recorded.filter { it in enabled }.toSet()
-        // Forgotten for good, so turning it on again in PCSX2 later makes it the user's.
-        if (owned != recorded) data.owned.set(PATCH_OWNERSHIP, settingsPath, owned)
-        val statuses = rules.states(patches.values.toList(), game, global, owned)
-        // Cheats: the same kind of file in PCSX2's cheats folder, listed under [Cheats].
-        val cheatList = LinkedHashMap<String, io.github.matiyaaa.fuse.launch.patches.PnachPatch>()
-        if (home.cheats.isNotEmpty()) {
-            val cheatFiles = try { fs.list(home.cheats) } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
-            for (f in cheatFiles.filter { !it.isDirectory && rules.matchesPnach(it.name, disc.serial, crc) }.sortedBy { it.name }) {
-                val text = fs.readText(f.path, 1024 * 1024) ?: continue
-                parse.parse(text).forEach { cheatList.putIfAbsent(it.name, it) }
-            }
-        }
-        val cheatsEnabled = game.values(rules.CHEATS, rules.ENABLE).toSet()
-        val recordedCheats = data.owned.get(PATCH_OWNERSHIP, "$settingsPath#cheats")
-        val ownedCheats = recordedCheats.filter { it in cheatsEnabled }.toSet()
-        if (ownedCheats != recordedCheats) data.owned.set(PATCH_OWNERSHIP, "$settingsPath#cheats", ownedCheats)
-        val cheats = rules.states(cheatList.values.toList(), game, global, ownedCheats, rules.CHEATS)
-        // The switch Fuse turned on stays Fuse's only while the game's file still says so.
-        val ownsSwitch = data.owned.get(PATCH_OWNERSHIP, "$settingsPath#switch").contains(rules.CHEATS_SWITCH) && game.bool("EmuCore", rules.CHEATS_SWITCH) == true
-        val cheatsOn = rules.cheatsOn(game, global)
-        val view = io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList.Ready(disc.serial, disc.crcText ?: "", statuses, bundledRead, cheats, cheatsOn)
-        return PatchContext(files, settingsPath, game, owned, statuses, view, ownedCheats, cheats, ownsSwitch, cheatsOn) to null
+        return NativePatches.RetroArchRun(installed, coreName, content)
     }
 
-    override suspend fun pcsx2Patches(id: GameId): io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList {
-        val (context, unavailable) = patchContext(id)
-        return context?.view ?: unavailable!!
-    }
+    override suspend fun gamePatches(id: GameId): io.github.matiyaaa.fuse.ui.shell.store.GamePatchList = nativePatches.list(id)
 
-    override suspend fun setPcsx2Patch(id: GameId, name: String, on: Boolean, cheat: Boolean): Boolean {
-        val context = patchContext(id).first ?: return false
-        if (cheat) return setPcsx2Cheat(context, name, on)
-        val status = context.statuses.firstOrNull { it.patch.name == name } ?: return false
-        val owned = io.github.matiyaaa.fuse.launch.patches.Pcsx2PatchRules.change(status, on, context.game, context.owned) ?: return false
-        if (!context.files.write(context.settingsPath, context.game.toString())) return false
-        data.owned.set(PATCH_OWNERSHIP, context.settingsPath, owned)
-        return true
-    }
+    override suspend fun setGamePatch(id: GameId, name: String, on: Boolean, cheat: Boolean): Boolean = nativePatches.set(id, name, on, cheat)
 
     /**
-     * A cheat on or off, as [setPcsx2Patch] does patches. Turning one on also turns on PCSX2's cheats
-     * for this game when they are off (and Fuse remembers it did); turning off the last one Fuse
-     * turned on turns them off again, only if Fuse was the one that turned them on.
+     * A PSP game's id as PPSSPP files it (`ULUS10041`): from its name or tags, else read from its ISO
+     * or EBOOT.PBP (a game folder's EBOOT.PBP too), kept by path, size and change time.
      */
-    private suspend fun setPcsx2Cheat(context: PatchContext, name: String, on: Boolean): Boolean {
-        val rules = io.github.matiyaaa.fuse.launch.patches.Pcsx2PatchRules
-        val status = context.cheats.firstOrNull { it.patch.name == name } ?: return false
-        val owned = rules.change(status, on, context.game, context.ownedCheats, rules.CHEATS) ?: return false
-        var ownsSwitch = context.ownsCheatsSwitch
-        if (on && !context.cheatsOn) {
-            context.game.set("EmuCore", rules.CHEATS_SWITCH, "true")
-            ownsSwitch = true
+    private suspend fun pspGameId(game: io.github.matiyaaa.fuse.model.Game): String? {
+        io.github.matiyaaa.fuse.launch.patches.PpssppHome.gameId(game.tags.serial)?.let { return it }
+        val fs = ctx.services.fs
+        val launch = game.location.launchPath
+        val path = when {
+            game.location.kind == LocationKind.FOLDER -> FsPath.join(game.location.path, "EBOOT.PBP")
+            else -> launch
         }
-        if (!on && owned.isEmpty() && ownsSwitch) {
-            context.game.removeKey("EmuCore", rules.CHEATS_SWITCH)
-            ownsSwitch = false
-        }
-        if (!context.files.write(context.settingsPath, context.game.toString())) return false
-        data.owned.set(PATCH_OWNERSHIP, "${context.settingsPath}#cheats", owned)
-        data.owned.set(PATCH_OWNERSHIP, "${context.settingsPath}#switch", if (ownsSwitch) setOf(rules.CHEATS_SWITCH) else emptySet())
-        return true
+        val ext = Paths.extension(path).lowercase()
+        if (ext != "iso" && ext != "pbp") return null
+        val stat = fs.stat(path) ?: return null
+        val key = "psp|$path|${stat.sizeBytes}|${stat.modifiedAt}"
+        val serializer = kotlinx.serialization.serializer<String>()
+        data.cache.get(DISC_CACHE, key, serializer, ctx.now())?.let { return it }
+        val found = try {
+            withContext(Dispatchers.Default) { discs.pspGameId(path) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        } ?: return null
+        data.cache.put(DISC_CACHE, key, found, serializer, ctx.now(), ttlMs = null)
+        return found
     }
 
     /** A PS3 game's title id: from its name, else from the PARAM.SFO of a game folder. */
@@ -1264,9 +1201,6 @@ private const val DISC_CACHE = "disc.identity"
 
 /** Cache namespace for RPCS3 compatibility entries, by title id. */
 private const val COMPAT_CACHE = "rpcs3.compat"
-
-/** Where Fuse records the PCSX2 patches it turned on itself, by game settings file. */
-private const val PATCH_OWNERSHIP = "pcsx2.patches"
 
 /** Archives a patch never applies to: it is for the game inside. */
 private val ARCHIVES = setOf("zip", "7z", "rar", "gz", "chd", "rvz", "cso", "zso")
