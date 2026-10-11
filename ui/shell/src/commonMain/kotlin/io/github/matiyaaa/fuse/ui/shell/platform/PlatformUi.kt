@@ -221,6 +221,15 @@ interface Haptics {
     /** A moved item put down. */
     fun drop() = tick()
 
+    /** Something to know arrived (a notice). */
+    fun notice() = tick()
+
+    /** Something finished well: a download, a profile ready, Fuse up and running. */
+    fun success() = confirm()
+
+    /** How strong, 0 to 1 (Settings, Input, Vibration); 0 is off. */
+    fun setStrength(level: Float) = Unit
+
     object None : Haptics {
         override fun tick() = Unit
         override fun confirm() = Unit

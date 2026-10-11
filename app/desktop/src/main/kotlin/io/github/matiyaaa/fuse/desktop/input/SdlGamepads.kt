@@ -130,6 +130,17 @@ class SdlGamepads(private val sink: GamepadSink) : AutoCloseable {
     @Volatile var failure: String? = null
         private set
 
+    /** The newest rumble asked for, run by the polling thread (SDL is used from that thread only). */
+    private val pendingRumble = java.util.concurrent.atomic.AtomicReference<Triple<Float, Float, Int>?>(null)
+
+    /** The pad a button was last pressed on: the one being held. */
+    @Volatile private var activePad = 0
+
+    /** Rumbles the controller in use: [low] and [high] motor strength (0 to 1) for [millis]. */
+    fun rumble(low: Float, high: Float, millis: Int) {
+        if (started) pendingRumble.set(Triple(low.coerceIn(0f, 1f), high.coerceIn(0f, 1f), millis.coerceIn(1, 1000)))
+    }
+
     fun start() {
         if (!running.compareAndSet(false, true)) return
         thread = Thread(::run, "fuse-sdl-gamepads").apply {
@@ -160,10 +171,17 @@ class SdlGamepads(private val sink: GamepadSink) : AutoCloseable {
                     if (state.isConnected) names[i] = padName(state.controllerType, i)
                     val name = names[i]
                     // The pad with a newly pressed button is the one in use.
-                    if ((snap.buttons - previous[i].buttons).isNotEmpty()) sink.identified(state.controllerType)
+                    if ((snap.buttons - previous[i].buttons).isNotEmpty()) {
+                        sink.identified(state.controllerType)
+                        activePad = i
+                    }
                     PadSnapshot.diff(previous[i], snap).forEach { send(it, name) }
                     previous[i] = snap
                     if (!state.isConnected) names[i] = null
+                }
+                pendingRumble.getAndSet(null)?.let { (low, high, ms) ->
+                    // Best effort: a pad without motors, or one just unplugged, simply doesn't rumble.
+                    runCatching { manager.doVibration(activePad, low, high, ms) }
                 }
                 val now = names.filterNotNull()
                 if (now != announced) {

@@ -120,7 +120,7 @@ class DesktopPlatformUi(
     override val performance: StateFlow<List<PerformanceMetric>> = _performance.asStateFlow()
 
     override val sounds: UiSounds get() = desktopSounds
-    override val haptics: Haptics = Haptics.None
+    override val haptics = io.github.matiyaaa.fuse.desktop.input.ControllerHaptics()
     override val homeRole: HomeRole? = null
     private val files = DesktopStorage(dirs, window)
     override val storage: StorageAccess = files

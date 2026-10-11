@@ -126,7 +126,17 @@ class AppState(
     var finishRehearsal: (() -> Unit)? = null
 
     val navigator = kept.navigator
-    val toasts = ToastState()
+    val toasts = ToastState().apply {
+        // A light vibration with each notice: firmer when something finished well, a double knock when it didn't.
+        onShown = { kind ->
+            when (kind) {
+                io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.SUCCESS -> platform.haptics.success()
+                io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.WARNING,
+                io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.ERROR -> platform.haptics.reject()
+                io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.INFO -> platform.haptics.notice()
+            }
+        }
+    }
 
     /** Screenshots and recordings of Fuse's screen; null where the platform can't capture it. */
     val capture: io.github.matiyaaa.fuse.ui.shell.capture.CaptureController? = platform.capture?.let { c ->

@@ -76,7 +76,11 @@ class ToastState {
     internal val items = mutableStateListOf<Toast>()
     private var next = 1L
 
+    /** Told of each toast as it is shown (for a light vibration with it). */
+    var onShown: ((ToastKind) -> Unit)? = null
+
     fun show(message: String, kind: ToastKind = ToastKind.INFO, icon: ImageVector? = null, durationMs: Long = 3200) {
+        onShown?.invoke(kind)
         items.removeAll { it.message == message }
         items.add(Toast(next++, message, kind, icon, durationMs))
         if (items.size > 3) items.removeAt(0)

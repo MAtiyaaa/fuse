@@ -137,6 +137,8 @@ class DesktopSession(
     /** Builds the services and the store off the UI thread; the splash shows until then. */
     fun start() {
         gamepads.start()
+        // Fuse's haptics rumble the controller in use, where its motors can be driven.
+        platform.haptics.rumble = gamepads::rumble
         scope.launch {
             try {
                 val safe = withContext(Dispatchers.IO) { safeMode() }

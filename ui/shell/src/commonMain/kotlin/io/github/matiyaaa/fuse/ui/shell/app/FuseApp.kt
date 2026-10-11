@@ -279,6 +279,17 @@ private fun FuseAppContent(
 
     // Input settings, sounds and haptics follow preferences.
     LaunchedEffect(prefs.input) { router.profile = prefs.input }
+    LaunchedEffect(prefs.input.vibration) { platform.haptics.setStrength(prefs.input.vibration) }
+    // A download or transfer of this device's finishing: one firm pulse (never for ones already done at start).
+    LaunchedEffect(store) {
+        var done: Set<String>? = null
+        store.transfers.rows.collect { rows ->
+            val now = rows.filter { it.device == null && it.item.status == io.github.matiyaaa.fuse.transfer.TransferStatus.DONE }.map { it.item.id }.toSet()
+            val before = done
+            done = now
+            if (before != null && (now - before).isNotEmpty()) platform.haptics.success()
+        }
+    }
     // L3 + R3: a screenshot, or held, a recording (where Fuse can capture its screen).
     val capture = app.capture
     DisposableEffect(router, capture, prefs.captureCombo) {
@@ -486,7 +497,12 @@ private fun FuseAppContent(
                         if (opening) OpeningVeil.showing.value = true
                         onDispose { if (opening) OpeningVeil.showing.value = false }
                     }
-                    if (app.intro) StartupIntroOverlay(onDone = { app.intro = false; StartupIntro.lastPlayedAt = kotlin.time.Clock.System.now().toEpochMilliseconds() })
+                    if (app.intro) StartupIntroOverlay(onDone = {
+                        app.intro = false
+                        StartupIntro.lastPlayedAt = kotlin.time.Clock.System.now().toEpochMilliseconds()
+                        // Fuse is up: one pulse as the intro gives way.
+                        platform.haptics.success()
+                    })
                     if (app.setupOpening) SetupOpening(onDone = { app.setupOpening = false })
                 }
                 }

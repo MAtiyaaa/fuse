@@ -62,6 +62,8 @@ internal fun arrive(app: AppState, p: io.github.matiyaaa.fuse.sync.ProfileInfo, 
         app.scope.launch { sync.configure { s -> s.copy(welcomedProfiles = (s.welcomedProfiles + p.id).distinct()) } }
     }
     app.profileArrival = p
+    // They're in: a short, firm pulse with the arrival.
+    app.platform.haptics.success()
 }
 
 /**
