@@ -308,8 +308,9 @@ internal class DesktopStoreInstaller(
     // Safety
 
     private fun inside(f: File): Boolean = runCatching {
+        // Both sides resolved the same way: a short (8.3) or linked name for the same folder still matches.
         val base = root.canonicalFile.toPath()
-        val p = f.absoluteFile.toPath().normalize()
+        val p = f.canonicalFile.toPath()
         p.startsWith(base) && p != base
     }.getOrDefault(false)
 
