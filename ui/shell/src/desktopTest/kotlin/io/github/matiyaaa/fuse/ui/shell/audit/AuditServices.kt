@@ -285,6 +285,10 @@ internal class AuditPlatform(
     override val capture: io.github.matiyaaa.fuse.ui.shell.platform.ScreenCapture? = null,
     /** How the device draws (null: not reported, so Fuse draws with every effect). */
     drawing: io.github.matiyaaa.fuse.ui.shell.platform.DrawingInfo? = null,
+    /** Steam and Decky as a Linux computer has them, for setup's Steam journey. */
+    override val steam: io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration? = null,
+    override val decky: io.github.matiyaaa.fuse.ui.shell.platform.DeckyIntegration? = null,
+    override val host: io.github.matiyaaa.fuse.model.Host = ScreenshotPlatform.host,
 ) : PlatformUi by ScreenshotPlatform {
     override val drawing: StateFlow<io.github.matiyaaa.fuse.ui.shell.platform.DrawingInfo?> = MutableStateFlow(drawing)
     override val device: CapabilityProfile = ScreenshotPlatform.device.copy(
@@ -438,4 +442,34 @@ internal class AuditDesktopInstaller(override val host: Host, private val dir: F
     override suspend fun exists(path: String): Boolean = false
 
     override fun launch(path: String): Boolean = true
+}
+
+/** Steam on a Linux computer, closed, with Fuse not yet in its library. */
+internal class AuditSteam : io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration {
+    @Volatile private var inLibrary = false
+    override val gameMode: Boolean = false
+    override suspend fun added(): Boolean = inLibrary
+    override suspend fun addFuse(): Result<String> {
+        inLibrary = true
+        return Result.success("Fuse is in Steam's library, with its art.")
+    }
+    override suspend fun removeFuse(): Result<String> {
+        inLibrary = false
+        return Result.success("Fuse is out of Steam's library.")
+    }
+}
+
+/** Decky Loader installed, the Fuse plugin not yet. Installing succeeds, as the password prompt would. */
+internal class AuditDecky : io.github.matiyaaa.fuse.ui.shell.platform.DeckyIntegration {
+    @Volatile private var plugin = false
+    override suspend fun state() = io.github.matiyaaa.fuse.ui.shell.platform.DeckyState(loader = true, plugin = plugin, pluginVersion = if (plugin) "0.4.2" else null, bundledVersion = "0.4.2", canInstall = true)
+    override suspend fun install(): Result<String> {
+        plugin = true
+        return Result.success("The Fuse plugin is in Decky.")
+    }
+    override suspend fun remove(): Result<String> {
+        plugin = false
+        return Result.success("The Fuse plugin is out of Decky.")
+    }
+    override suspend fun stage(): String? = null
 }

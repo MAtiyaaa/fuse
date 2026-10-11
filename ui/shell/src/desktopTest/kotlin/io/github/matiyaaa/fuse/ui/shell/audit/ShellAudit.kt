@@ -538,6 +538,28 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
 // --------------------------------------------------------------------------------- onboarding
 
 internal fun AuditDriver.onboardingScreens(exhaustive: Boolean) {
+    scenario("onboarding", "steam") {
+        val platform = AuditPlatform(size, steam = AuditSteam(), decky = AuditDecky(), host = io.github.matiyaaa.fuse.model.Host.LINUX)
+        show(firstRunStore, platform)
+        waitFor("Welcome to Fuse")
+        tap(PadButton.A)
+        waitFor("Integrate Fuse with Steam?")
+        settle(1_200)
+        shoot("the one Steam question first")
+        tap(PadButton.A)
+        waitFor("Decky")
+        settle(1_200)
+        shoot("the Decky plugin, Decky Loader found")
+        tap(PadButton.A)
+        settleUntil("Add Fuse to your Steam library?", timeoutMs = 30_000)
+        settle(1_200)
+        shoot("Fuse in Steam's library, with its art")
+        tap(PadButton.A)
+        settleUntil("Fuse and Steam, together", timeoutMs = 30_000)
+        settle(2_500)
+        shoot("Fuse, Steam and Decky as one, checked")
+    }
+
     scenario("onboarding", "steps") {
         val platform = AuditPlatform(
             size,

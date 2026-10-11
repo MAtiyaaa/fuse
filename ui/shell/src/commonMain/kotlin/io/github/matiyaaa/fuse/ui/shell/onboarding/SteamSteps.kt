@@ -125,7 +125,12 @@ private fun SteamFlow.deckyStep(
         deckyError = null
         app.scope.launch {
             d.install()
-                .onSuccess { set { it.copy(decky = true) }; deckyState = d.state() }
+                .onSuccess {
+                    set { it.copy(decky = true) }
+                    deckyState = d.state()
+                    // Installed and checked: on to the next part, rather than a page saying so.
+                    if (deckyState?.plugin == true) next()
+                }
                 .onFailure { deckyError = it.message ?: "The plugin couldn't be installed. Nothing was changed." }
             busy = null
         }
@@ -174,7 +179,7 @@ private fun SteamFlow.deckyStep(
         )
     }
     return Step(
-        "steam.decky", "Steam", title, body,
+        "steam.decky", "Decky", title, body,
         optional = true, icon = FuseIcons.Puzzle, chapter = Chapters.START,
         footnote = deckyError ?: zip?.let { "In Decky: Settings, Developer, Install Plugin from ZIP, then choose $it" },
         actions = actions,
@@ -185,7 +190,12 @@ private fun SteamFlow.deckyStep(
 private fun SteamFlow.addStep(steam: io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration, next: () -> Unit): Step {
     val app = app
     fun done(r: Result<String>) {
-        r.onSuccess { added = true; app.store.updatePrefs { p -> p.copy(steam = p.steam.copy(fuseInSteam = true)) } }
+        r.onSuccess {
+            added = true
+            app.store.updatePrefs { p -> p.copy(steam = p.steam.copy(fuseInSteam = true)) }
+            // Done and checked: straight on to the parts joining, which says what is in place.
+            next()
+        }
             .onFailure { error = it.message ?: "Steam's library couldn't be updated. Nothing was lost." }
     }
     fun add() {
@@ -230,7 +240,7 @@ private fun SteamFlow.addStep(steam: io.github.matiyaaa.fuse.ui.shell.platform.S
     }
     val inIt = inSteam == true || added
     return Step(
-        "steam.add", "Steam",
+        "steam.add", "Fuse in Steam",
         when {
             busy == "steam" -> "Adding Fuse to Steam"
             inIt -> "Fuse is in your Steam library"
@@ -281,7 +291,7 @@ private fun SteamFlow.readyStep(next: () -> Unit): Step {
         if (decky != null && prefs.steam.decky) add(Triple(true, "Bridge", "Fuse answers the plugin on this device only"))
     }
     return Step(
-        "steam.ready", "Steam", "Fuse and Steam, together",
+        "steam.ready", "Together", "Fuse and Steam, together",
         "Checked just now, not assumed. Change any of it later in Settings, Library, Steam.",
         icon = FuseIcons.Link, chapter = Chapters.START,
         actions = listOf(StepAction("Continue", primary = true, run = next), StepAction("Check again") { app.scope.launch { look() } }),
