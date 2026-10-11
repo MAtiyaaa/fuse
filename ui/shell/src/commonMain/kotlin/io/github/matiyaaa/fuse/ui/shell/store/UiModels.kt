@@ -374,6 +374,10 @@ sealed interface Pcsx2PatchList {
         val patches: List<io.github.matiyaaa.fuse.launch.patches.PatchStatus>,
         /** False when PCSX2's bundled patches couldn't be read here (only patch files in its patches folder are listed). */
         val bundledRead: Boolean,
+        /** The cheats in PCSX2's cheats folder for this game, and who turned each on. */
+        val cheats: List<io.github.matiyaaa.fuse.launch.patches.PatchStatus> = emptyList(),
+        /** PCSX2 applies cheats to this game (its own setting, or PCSX2's for every game). */
+        val cheatsOn: Boolean = false,
     ) : Pcsx2PatchList
 
     data class Unavailable(val title: String, val reason: String) : Pcsx2PatchList

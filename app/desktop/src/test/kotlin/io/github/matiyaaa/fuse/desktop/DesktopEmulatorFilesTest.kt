@@ -101,6 +101,20 @@ class DesktopEmulatorFilesTest {
     }
 
     @Test
+    fun vita3kOnWindowsKeepsUx0InAppDataUnlessPortable() = runBlocking {
+        val appData = File(home, "AppData/Roaming").apply { mkdirs() }
+        val program = File(home, "Emu/Vita3K/Vita3K.exe").apply { parentFile.mkdirs(); writeText("") }
+        val files = DesktopEmulatorFiles(DesktopOs.WINDOWS, env = mapOf("APPDATA" to appData.absolutePath), home = home.absolutePath, backups = backups)
+        val vita = InstalledEmulator(EmulatorId("windows.vita3k"), "Vita3K", Host.WINDOWS, program.absolutePath, platforms = setOf(PlatformId("psvita")), detectedVia = "Folder")
+        val storage = files.vita3kStorage(vita)
+        assertTrue(p(File(appData, "Vita3K/Vita3K")) in storage)
+        assertTrue(p(File(program.parentFile, "portable/fs")) in storage)
+        // Its config.yml sits beside the program, and can move ux0 anywhere.
+        File(program.parentFile, "config.yml").writeText("pref-path: D:/Vita\n")
+        assertEquals("D:/Vita", files.vita3kStorage(vita).first())
+    }
+
+    @Test
     fun anInstallerIsWaitedForAndStoppedWhenItSaysItIsDone() = runBlocking {
         if (System.getProperty("os.name").lowercase().contains("win")) return@runBlocking
         val files = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)

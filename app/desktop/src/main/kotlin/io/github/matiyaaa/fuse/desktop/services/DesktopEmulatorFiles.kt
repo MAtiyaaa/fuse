@@ -54,6 +54,7 @@ class DesktopEmulatorFiles(
             dataRoot = data.absolutePath.replace('\\', '/'),
             gameSettings = folder("GameSettings", "gamesettings"),
             patches = folder("Patches", "patches"),
+            cheats = folder("Cheats", "cheats"),
             patchesZip = zipCandidates(appRoot, flatpak).firstOrNull { it.isFile && it.canRead() }?.absolutePath?.replace('\\', '/'),
         )
     }
@@ -179,7 +180,8 @@ class DesktopEmulatorFiles(
 
     /**
      * Vita3K's pref path (vita3k/app/src/app_init.cpp init_paths): `pref-path` in its config.yml, else
-     * the program's folder on Windows, ~/Library/Application Support/Vita3K/Vita3K on macOS, and
+     * `portable/fs` beside the program when that is there, %APPDATA%\\Vita3K\\Vita3K on Windows,
+     * ~/Library/Application Support/Vita3K/Vita3K (or its `fs` folder) on macOS, and
      * $XDG_DATA_HOME/Vita3K/Vita3K (or ~/.local/share/Vita3K/Vita3K) on Linux, or a `portable`
      * folder next to its AppImage.
      */
@@ -187,8 +189,19 @@ class DesktopEmulatorFiles(
         val program = File(installed.appId).takeIf { it.isAbsolute }
         val dataRoots = buildList {
             when (os) {
-                DesktopOs.WINDOWS -> program?.parentFile?.let(::add)
-                DesktopOs.MACOS -> add(File(home, "Library/Application Support/Vita3K/Vita3K"))
+                // A `portable` folder beside the program holds everything; otherwise ux0 is in SDL's
+                // preference folder, %APPDATA%\Vita3K\Vita3K (the program's folder keeps only its config).
+                DesktopOs.WINDOWS -> {
+                    program?.parentFile?.let { add(File(it, "portable/fs")) }
+                    env["APPDATA"]?.let { add(File(it, "Vita3K/Vita3K")) }
+                    program?.parentFile?.let(::add)
+                }
+                DesktopOs.MACOS -> {
+                    program?.let { appRoot(it) }?.let { add(File(it, "portable/fs")) }
+                    add(File(home, "Library/Application Support/Vita3K/Vita3K"))
+                    // Newer installs keep ux0 in an `fs` folder there.
+                    add(File(home, "Library/Application Support/Vita3K/Vita3K/fs"))
+                }
                 DesktopOs.LINUX -> {
                     program?.parentFile?.let { add(File(it, "portable/fs")); add(File(it, "Vita3K/portable/fs")) }
                     env["XDG_DATA_HOME"]?.takeIf { it.startsWith("/") }?.let { add(File(it, "Vita3K/Vita3K")) }
@@ -199,6 +212,8 @@ class DesktopEmulatorFiles(
         }
         val configs = buildList {
             dataRoots.forEach { add(File(it, "config.yml")) }
+            // Windows keeps config.yml beside the program; a portable install inside `portable`.
+            if (os == DesktopOs.WINDOWS) program?.parentFile?.let { add(File(it, "config.yml")); add(File(it, "portable/config.yml")) }
             if (os == DesktopOs.LINUX) add(File(env["XDG_CONFIG_HOME"]?.takeIf { it.startsWith("/") } ?: "$home/.config", "Vita3K/config.yml"))
         }
         val fromConfig = configs.mapNotNull { c ->

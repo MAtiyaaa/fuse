@@ -866,6 +866,11 @@ internal class DefaultLibraryOps(
         val owned: Set<String>,
         val statuses: List<io.github.matiyaaa.fuse.launch.patches.PatchStatus>,
         val view: io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList.Ready,
+        val ownedCheats: Set<String> = emptySet(),
+        val cheats: List<io.github.matiyaaa.fuse.launch.patches.PatchStatus> = emptyList(),
+        /** Fuse turned on PCSX2's cheats for this game, so it turns them off with its last cheat. */
+        val ownsCheatsSwitch: Boolean = false,
+        val cheatsOn: Boolean = false,
     )
 
     private suspend fun patchContext(id: GameId): Pair<PatchContext?, io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList.Unavailable?> {
@@ -911,8 +916,25 @@ internal class DefaultLibraryOps(
         // Forgotten for good, so turning it on again in PCSX2 later makes it the user's.
         if (owned != recorded) data.owned.set(PATCH_OWNERSHIP, settingsPath, owned)
         val statuses = rules.states(patches.values.toList(), game, global, owned)
-        val view = io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList.Ready(disc.serial, disc.crcText ?: "", statuses, bundledRead)
-        return PatchContext(files, settingsPath, game, owned, statuses, view) to null
+        // Cheats: the same kind of file in PCSX2's cheats folder, listed under [Cheats].
+        val cheatList = LinkedHashMap<String, io.github.matiyaaa.fuse.launch.patches.PnachPatch>()
+        if (home.cheats.isNotEmpty()) {
+            val cheatFiles = try { fs.list(home.cheats) } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+            for (f in cheatFiles.filter { !it.isDirectory && rules.matchesPnach(it.name, disc.serial, crc) }.sortedBy { it.name }) {
+                val text = fs.readText(f.path, 1024 * 1024) ?: continue
+                parse.parse(text).forEach { cheatList.putIfAbsent(it.name, it) }
+            }
+        }
+        val cheatsEnabled = game.values(rules.CHEATS, rules.ENABLE).toSet()
+        val recordedCheats = data.owned.get(PATCH_OWNERSHIP, "$settingsPath#cheats")
+        val ownedCheats = recordedCheats.filter { it in cheatsEnabled }.toSet()
+        if (ownedCheats != recordedCheats) data.owned.set(PATCH_OWNERSHIP, "$settingsPath#cheats", ownedCheats)
+        val cheats = rules.states(cheatList.values.toList(), game, global, ownedCheats, rules.CHEATS)
+        // The switch Fuse turned on stays Fuse's only while the game's file still says so.
+        val ownsSwitch = data.owned.get(PATCH_OWNERSHIP, "$settingsPath#switch").contains(rules.CHEATS_SWITCH) && game.bool("EmuCore", rules.CHEATS_SWITCH) == true
+        val cheatsOn = rules.cheatsOn(game, global)
+        val view = io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList.Ready(disc.serial, disc.crcText ?: "", statuses, bundledRead, cheats, cheatsOn)
+        return PatchContext(files, settingsPath, game, owned, statuses, view, ownedCheats, cheats, ownsSwitch, cheatsOn) to null
     }
 
     override suspend fun pcsx2Patches(id: GameId): io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList {
@@ -920,12 +942,37 @@ internal class DefaultLibraryOps(
         return context?.view ?: unavailable!!
     }
 
-    override suspend fun setPcsx2Patch(id: GameId, name: String, on: Boolean): Boolean {
+    override suspend fun setPcsx2Patch(id: GameId, name: String, on: Boolean, cheat: Boolean): Boolean {
         val context = patchContext(id).first ?: return false
+        if (cheat) return setPcsx2Cheat(context, name, on)
         val status = context.statuses.firstOrNull { it.patch.name == name } ?: return false
         val owned = io.github.matiyaaa.fuse.launch.patches.Pcsx2PatchRules.change(status, on, context.game, context.owned) ?: return false
         if (!context.files.write(context.settingsPath, context.game.toString())) return false
         data.owned.set(PATCH_OWNERSHIP, context.settingsPath, owned)
+        return true
+    }
+
+    /**
+     * A cheat on or off, as [setPcsx2Patch] does patches. Turning one on also turns on PCSX2's cheats
+     * for this game when they are off (and Fuse remembers it did); turning off the last one Fuse
+     * turned on turns them off again, only if Fuse was the one that turned them on.
+     */
+    private suspend fun setPcsx2Cheat(context: PatchContext, name: String, on: Boolean): Boolean {
+        val rules = io.github.matiyaaa.fuse.launch.patches.Pcsx2PatchRules
+        val status = context.cheats.firstOrNull { it.patch.name == name } ?: return false
+        val owned = rules.change(status, on, context.game, context.ownedCheats, rules.CHEATS) ?: return false
+        var ownsSwitch = context.ownsCheatsSwitch
+        if (on && !context.cheatsOn) {
+            context.game.set("EmuCore", rules.CHEATS_SWITCH, "true")
+            ownsSwitch = true
+        }
+        if (!on && owned.isEmpty() && ownsSwitch) {
+            context.game.removeKey("EmuCore", rules.CHEATS_SWITCH)
+            ownsSwitch = false
+        }
+        if (!context.files.write(context.settingsPath, context.game.toString())) return false
+        data.owned.set(PATCH_OWNERSHIP, "${context.settingsPath}#cheats", owned)
+        data.owned.set(PATCH_OWNERSHIP, "${context.settingsPath}#switch", if (ownsSwitch) setOf(rules.CHEATS_SWITCH) else emptySet())
         return true
     }
 

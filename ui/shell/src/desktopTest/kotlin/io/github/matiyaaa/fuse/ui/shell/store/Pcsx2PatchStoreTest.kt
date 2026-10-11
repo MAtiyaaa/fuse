@@ -120,6 +120,38 @@ class Pcsx2PatchStoreTest {
     }
 
     @Test
+    fun cheatsTurnOnWithPcsx2sCheatsSwitchAndOffAgainOnlyAsFuseLeftThem(): Unit = runBlocking {
+        val services = FakeServices(
+            FuseData(DesktopDatabase.open(File(cache, "fuse3.db").absolutePath)), cache,
+            installedEmulators = listOf(InstalledEmulator(EmulatorId("linux.pcsx2"), "PCSX2", Host.LINUX, "/usr/bin/pcsx2-qt", platforms = setOf(PlatformId("ps2")), detectedVia = "PATH")),
+        )
+        val home = pcsx2.absolutePath
+        File(pcsx2, "cheats").mkdirs()
+        File(pcsx2, "cheats/SLUS-20946_0C040404.pnach").writeText("[Infinite Health]\npatch=1,EE,00400000,word,000003E7\n[Max Money]\npatch=1,EE,00400004,word,0098967F\n")
+        services.pcsx2Home = Pcsx2Home(home, "$home/gamesettings", "$home/patches", "$home/patches.zip", cheats = "$home/cheats")
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = withTimeout(20_000) { store.library.games(GameQuery()).first { it.size == 1 } }.single()
+        val settings = File(pcsx2, "gamesettings/SLUS-20946_0C040404.ini")
+
+        val list = assertIs<Pcsx2PatchList.Ready>(store.library.pcsx2Patches(game.id))
+        assertEquals(listOf("Infinite Health", "Max Money"), list.cheats.map { it.patch.name })
+        assertFalse(list.cheatsOn)
+
+        // On: the cheat is listed, and PCSX2's cheats are turned on for this game.
+        assertTrue(store.library.setPcsx2Patch(game.id, "Infinite Health", on = true, cheat = true))
+        assertEquals("[Patches]\nEnable = Widescreen 16:9\n\n[Cheats]\nEnable = Infinite Health\n\n[EmuCore]\nEnableCheats = true\n", settings.readText())
+        assertTrue(assertIs<Pcsx2PatchList.Ready>(store.library.pcsx2Patches(game.id)).cheatsOn)
+        assertTrue(store.library.setPcsx2Patch(game.id, "Max Money", on = true, cheat = true))
+        // Off again: with the last one, the switch Fuse turned on goes too.
+        assertTrue(store.library.setPcsx2Patch(game.id, "Infinite Health", on = false, cheat = true))
+        assertTrue("EnableCheats = true" in settings.readText())
+        assertTrue(store.library.setPcsx2Patch(game.id, "Max Money", on = false, cheat = true))
+        assertFalse("EnableCheats" in settings.readText())
+        assertFalse("Enable = Max Money" in settings.readText())
+    }
+
+    @Test
     fun aPatchTheUserAlsoTurnedOnInPcsx2IsntFusesToTakeBack(): Unit = runBlocking {
         val services = FakeServices(
             FuseData(DesktopDatabase.open(File(cache, "fuse2.db").absolutePath)), cache,

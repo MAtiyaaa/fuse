@@ -103,6 +103,27 @@ class IniText(text: String) {
         return drop.isNotEmpty()
     }
 
+    /** Every `key = …` line in [section] taken out; true when one was there. */
+    fun removeKey(section: String, key: String): Boolean {
+        val range = sectionRange(section) ?: return false
+        val drop = range.filter { i -> entry(lines[i])?.first?.equals(key, ignoreCase = true) == true }
+        drop.asReversed().forEach { lines.removeAt(it) }
+        return drop.isNotEmpty()
+    }
+
+    /** [key] set to [value] in [section]: its lines replaced by one, where the first one was (or at the end). */
+    fun set(section: String, key: String, value: String) {
+        val range = sectionRange(section)
+        val at = range?.firstOrNull { i -> entry(lines[i])?.first?.equals(key, ignoreCase = true) == true }
+        if (at == null) {
+            add(section, key, value)
+            return
+        }
+        lines[at] = "$key = $value"
+        val rest = range.filter { i -> i != at && entry(lines[i])?.first?.equals(key, ignoreCase = true) == true }
+        rest.asReversed().forEach { lines.removeAt(it) }
+    }
+
     fun bool(section: String, key: String): Boolean? = values(section, key).lastOrNull()?.lowercase()?.let {
         when (it) {
             "true", "1", "yes", "on" -> true
@@ -174,6 +195,10 @@ data class PatchStatus(val patch: PnachPatch, val state: PatchState) {
  */
 object Pcsx2PatchRules {
     const val SECTION = "Patches"
+
+    /** Cheats: listed the same way under `[Cheats]`, and applied only while `[EmuCore] EnableCheats` is on. */
+    const val CHEATS = "Cheats"
+    const val CHEATS_SWITCH = "EnableCheats"
     const val ENABLE = "Enable"
     const val DISABLE = "Disable"
     const val WIDESCREEN = "Widescreen 16:9"
@@ -204,9 +229,10 @@ object Pcsx2PatchRules {
         game: IniText,
         global: IniText?,
         owned: Set<String>,
+        section: String = SECTION,
     ): List<PatchStatus> {
-        val enabled = game.values(SECTION, ENABLE).toSet()
-        val disabled = game.values(SECTION, DISABLE).toSet()
+        val enabled = game.values(section, ENABLE).toSet()
+        val disabled = game.values(section, DISABLE).toSet()
         fun setting(key: String) = game.bool("EmuCore", key) ?: global?.bool("EmuCore", key) ?: false
         val widescreen = setting("EnableWideScreenPatches")
         val noInterlacing = setting("EnableNoInterlacingPatches")
@@ -215,7 +241,7 @@ object Pcsx2PatchRules {
                 p.name in disabled -> PatchState.OFF_IN_PCSX2
                 p.name in enabled && p.name in owned -> PatchState.ON_BY_FUSE
                 p.name in enabled -> PatchState.ON_IN_PCSX2
-                (p.name == WIDESCREEN && widescreen) || (p.name == NO_INTERLACING && noInterlacing) -> PatchState.ON_FOR_ALL_GAMES
+                section == SECTION && ((p.name == WIDESCREEN && widescreen) || (p.name == NO_INTERLACING && noInterlacing)) -> PatchState.ON_FOR_ALL_GAMES
                 else -> PatchState.OFF
             }
             PatchStatus(p, state)
@@ -226,20 +252,23 @@ object Pcsx2PatchRules {
      * Turns [name] on or off in [game] when Fuse may: on only from [PatchState.OFF], off only from
      * [PatchState.ON_BY_FUSE]. Returns the new owned set, or null when nothing may change.
      */
-    fun change(status: PatchStatus, on: Boolean, game: IniText, owned: Set<String>): Set<String>? {
+    fun change(status: PatchStatus, on: Boolean, game: IniText, owned: Set<String>, section: String = SECTION): Set<String>? {
         val name = status.patch.name
         return when {
             on && status.state == PatchState.OFF -> {
-                game.add(SECTION, ENABLE, name)
+                game.add(section, ENABLE, name)
                 owned + name
             }
             !on && status.state == PatchState.ON_BY_FUSE -> {
-                game.remove(SECTION, ENABLE, name)
+                game.remove(section, ENABLE, name)
                 owned - name
             }
             else -> null
         }
     }
+
+    /** Whether PCSX2 applies cheats to this game: its own setting, else PCSX2's for every game. */
+    fun cheatsOn(game: IniText, global: IniText?): Boolean = game.bool("EmuCore", CHEATS_SWITCH) ?: global?.bool("EmuCore", CHEATS_SWITCH) ?: false
 
     /** What PCSX2's Path::SanitizeFileName leaves of a serial: no path or reserved characters. */
     private fun sanitize(s: String): String = s.map { if (it in "<>:\"/\\|?*" || it.code < 32) '_' else it }.joinToString("")
@@ -255,6 +284,8 @@ data class Pcsx2Home(
     val gameSettings: String,
     val patches: String,
     val patchesZip: String?,
+    /** The cheats folder (`[Folders] Cheats`, `cheats` in the data folder unless moved). */
+    val cheats: String = "",
 ) {
     val settingsFile: String get() = "$dataRoot/inis/PCSX2.ini"
 }
