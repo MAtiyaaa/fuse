@@ -460,6 +460,28 @@ interface EmulatorFiles {
 
     /** Removes what [fetch] downloaded. */
     suspend fun clearFetched() = Unit
+
+    /**
+     * Where the game [query] describes keeps its mods in the emulator it starts in (Dolphin, Cemu,
+     * the Switch emulators), found as the save adapters find that emulator's folder, with that
+     * folder then open to [install]. A failure says why, in a sentence.
+     */
+    suspend fun modHome(query: io.github.matiyaaa.fuse.sync.SaveQuery): Result<io.github.matiyaaa.fuse.sync.ModHome> =
+        Result.failure(IllegalStateException("Mods are added from Fuse on a computer."))
+
+    /**
+     * The `USRDIR` folder of the RPCS3 game at [launchPath] (a game folder's `PS3_GAME/USRDIR`, or
+     * `dev_hdd0/game/<serial>/USRDIR` for one installed in RPCS3), then open to [install]; null when
+     * there is none.
+     */
+    suspend fun rpcs3GameFiles(installed: io.github.matiyaaa.fuse.model.InstalledEmulator, launchPath: String, serial: String?): String? = null
+
+    /**
+     * The shadPS4 mods folder for the game at [launchPath] (`<game folder>-mods`, beside it) and the
+     * names at the top of the game's own folder, with the mods folder then open to [install]; null
+     * when the game isn't a folder with an eboot.bin.
+     */
+    suspend fun shadPs4Mods(launchPath: String): Pair<String, Set<String>>? = null
 }
 
 /**

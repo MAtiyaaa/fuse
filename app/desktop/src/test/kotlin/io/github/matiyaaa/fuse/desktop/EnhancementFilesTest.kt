@@ -152,4 +152,41 @@ class EnhancementFilesTest {
         assertNull(files.fetch("file:///etc/passwd", "x.zip", null, null, 1_000))
         assertFalse(File(home, "fuse/fetched-mods").listFiles().orEmpty().any { it.listFiles().orEmpty().isNotEmpty() })
     }
+
+    @Test
+    fun aShadPs4ModGoesBesideTheGameAndComesOutAfterARestart(): Unit = runBlocking {
+        val game = File(home, "games/ps4/CUSA00001").apply { File(this, "sce_sys").mkdirs() }
+        File(game, "eboot.bin").writeText("game")
+        val files = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        val (mods, top) = files.shadPs4Mods(p(File(game, "eboot.bin")))!!
+        assertEquals(p(File(home, "games/ps4/CUSA00001-mods")), mods)
+        assertEquals(setOf("eboot.bin", "sce_sys"), top)
+        val mod = zip("mod.zip", mapOf("sce_sys/icon0.png" to "icon"))
+        assertTrue(files.install(mod.absolutePath, listOf(PlannedFile("sce_sys/icon0.png", "$mods/sce_sys/icon0.png")), emptyMap(), "rp-shad"))
+        assertEquals("icon", File(mods, "sce_sys/icon0.png").readText())
+        assertEquals("game", File(game, "eboot.bin").readText(), "the game's own files stay as they are")
+        // Fuse restarted: it hasn't looked for the game's folder again, and taking the mod out still works.
+        val later = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        assertTrue(later.undo("rp-shad"))
+        assertFalse(File(mods, "sce_sys/icon0.png").exists())
+        assertFalse(File(mods).exists(), "the folders Fuse made go once empty")
+        // A folder that isn't a game is no place for mods.
+        assertNull(files.shadPs4Mods(p(File(home, "games/ps4"))))
+    }
+
+    @Test
+    fun rpcs3ModsReplaceTheGamesOwnFilesKeepingThemToPutBack(): Unit = runBlocking {
+        val usr = File(home, "games/ps3/Demon/PS3_GAME/USRDIR").apply { mkdirs() }
+        File(usr, "EBOOT.BIN").writeText("boot")
+        File(usr, "data.pak").writeText("original")
+        val files = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        val rpcs3 = InstalledEmulator(EmulatorId("linux.rpcs3"), "RPCS3", Host.LINUX, "/usr/bin/rpcs3", platforms = setOf(PlatformId("ps3")), detectedVia = "PATH")
+        val target = files.rpcs3GameFiles(rpcs3, p(File(usr, "EBOOT.BIN")), "BLUS30443")!!
+        assertEquals(p(usr), target)
+        val mod = zip("ps3mod.zip", mapOf("PS3_GAME/USRDIR/data.pak" to "modded"))
+        assertTrue(files.install(mod.absolutePath, listOf(PlannedFile("PS3_GAME/USRDIR/data.pak", "$target/data.pak")), emptyMap(), "rp-ps3"))
+        assertEquals("modded", File(usr, "data.pak").readText())
+        assertTrue(files.undo("rp-ps3"))
+        assertEquals("original", File(usr, "data.pak").readText())
+    }
 }

@@ -4,6 +4,7 @@ import io.github.matiyaaa.fuse.launch.patches.DuckStationPatchRules
 import io.github.matiyaaa.fuse.launch.patches.EnhancementKind
 import io.github.matiyaaa.fuse.launch.patches.EnhancementRules
 import io.github.matiyaaa.fuse.launch.patches.IniText
+import io.github.matiyaaa.fuse.launch.patches.ModRules
 import io.github.matiyaaa.fuse.launch.patches.Pcsx2PatchRules
 import io.github.matiyaaa.fuse.launch.patches.PlannedFile
 import io.github.matiyaaa.fuse.launch.patches.PpssppHome
@@ -20,6 +21,8 @@ import io.github.matiyaaa.fuse.ui.shell.store.EnhancementView
 import io.github.matiyaaa.fuse.ui.shell.store.Enhancements
 import io.github.matiyaaa.fuse.ui.shell.store.SourceForm
 import io.github.matiyaaa.fuse.ui.shell.store.SourceListing
+import io.github.matiyaaa.fuse.sync.SaveAdapters
+import io.github.matiyaaa.fuse.sync.SaveQuery
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -37,6 +40,8 @@ internal class NativeEnhancements(
     private val pspGameId: suspend (Game) -> String?,
     private val retroArchRun: suspend (Game) -> NativePatches.RetroArchRun? = { null },
     private val now: () -> Long = { ctx.now() },
+    /** The game as the emulator it starts in here would look for it (that emulator, its file, its id); null when none would start it. */
+    private val launchQuery: suspend (Game) -> SaveQuery? = { null },
 ) {
     private val data = ctx.data
     private val fs get() = ctx.services.fs
@@ -112,6 +117,8 @@ internal class NativeEnhancements(
         return when (game.platformId.value) {
             "ps2", "psx" -> listOf(EnhancementKind.CHEATS, EnhancementKind.PATCHES, EnhancementKind.TEXTURES)
             "psp" -> listOf(EnhancementKind.CHEATS, EnhancementKind.TEXTURES)
+            "ngc", "wii" -> listOf(EnhancementKind.TEXTURES, EnhancementKind.MODS)
+            in MOD_PLATFORMS -> listOf(EnhancementKind.MODS)
             else -> emptyList()
         }
     }
@@ -163,7 +170,8 @@ internal class NativeEnhancements(
             "ps2" -> pcsx2(id, kind, files, source, listing)
             "psx" -> duckstation(id, kind, files, source, listing)
             "psp" -> ppsspp(id, game, kind, files, source, listing)
-            else -> no("Not for this game", "Fuse adds cheats, patches and textures for games that start in PCSX2, DuckStation, PPSSPP and RetroArch.")
+            "ngc", "wii", in MOD_PLATFORMS -> mods(id, game, kind, files, source, listing)
+            else -> no("Not for this game", "Fuse adds cheats, patches, textures and mods for games that start in PCSX2, DuckStation, PPSSPP, RetroArch, Dolphin, Cemu, RPCS3, shadPS4 and the Switch emulators.")
         }
     }
 
@@ -443,6 +451,180 @@ internal class NativeEnhancements(
         return preview(plan, replaces, rejected + (good - chosen).map { "${it.first.substringAfterLast('/')} (another game's)" }, notes, emptyList(), n, chosen.second.length.toLong())
     }
 
+    // Mods: Dolphin, Cemu, Switch emulators, RPCS3, shadPS4 --------------------------------------
+
+    /**
+     * A mod (or, for Dolphin, a texture pack) for a game that starts in one of the emulators
+     * [ModRules] knows, put where that emulator reads it. Which emulator is the one the game starts
+     * in now ([launchQuery]).
+     */
+    private suspend fun mods(id: GameId, game: Game, kind: EnhancementKind, files: EmulatorFiles, source: String, listing: SourceListing): EnhancementPreview {
+        val query = launchQuery(game) ?: return no("No emulator for this game", "Fuse puts mods where the game's emulator reads them. Install one for ${platformName(game)} first.")
+        val emulator = SaveAdapters.baseId(query.emulatorId)
+        return when {
+            emulator == "rpcs3" -> rpcs3Mod(id, game, kind, files, source, listing)
+            emulator == "shadps4" -> shadPs4Mod(id, game, kind, files, source, listing)
+            else -> {
+                val home = files.modHome(query).getOrElse { return no("Fuse can't add this here", it.message ?: "Fuse doesn't put mods in place for this emulator.") }
+                when (home.emulator) {
+                    "dolphin" -> dolphinMod(id, kind, home, source, listing)
+                    "cemu" -> cemuMod(id, kind, home, files, source, listing)
+                    "ryujinx" -> switchMod(id, kind, home, "Ryujinx", source, listing)
+                    else -> switchMod(id, kind, home, emulatorTitle(home.emulator), source, listing)
+                }
+            }
+        }
+    }
+
+    private fun platformName(game: Game) = ctx.platforms.byId(game.platformId)?.name ?: "this system"
+
+    private fun emulatorTitle(id: String) = when (id) {
+        "eden" -> "Eden"
+        "citron" -> "Citron"
+        "sudachi" -> "Sudachi"
+        "yuzu" -> "yuzu"
+        "suyu" -> "suyu"
+        "torzu" -> "torzu"
+        else -> id.replaceFirstChar { it.uppercase() }
+    }
+
+    /** [name], or `name 2`, `name 3`... when a folder of that name is already in [parent] and isn't one of this game's mods. */
+    private suspend fun freeFolder(parent: String, name: String): String {
+        val taken = list(parent).map { it.name.lowercase() }.toSet()
+        if (name.lowercase() !in taken) return name
+        var n = 2
+        while ("$name $n".lowercase() in taken) n++
+        return "$name $n"
+    }
+
+    private suspend fun modPlan(
+        id: GameId,
+        kind: EnhancementKind,
+        emulator: String,
+        listing: SourceListing,
+        source: String,
+        target: String,
+        planned: List<PlannedFile>,
+        rejected: List<String>,
+        settingsFile: String? = null,
+        settings: List<Triple<String, String, String>> = emptyList(),
+        said: List<String> = emptyList(),
+        notes: List<String>,
+    ): EnhancementPreview {
+        if (planned.isEmpty()) return no("Nothing to add", "Nothing in ${listing.name} goes where $emulator reads mods.")
+        val record = Record(token(), kind, emulator, listing.name, now(), planned.size, target, settingsFile = settingsFile)
+        val replaces = planned.map { it.to }.filter { fs.stat(it) != null }
+        val plan = Plan(id, record, source, planned, emptyMap(), settings, emptyList())
+        return preview(plan, replaces, rejected, notes, said, 0, listing.bytes)
+    }
+
+    private suspend fun switchMod(id: GameId, kind: EnhancementKind, home: io.github.matiyaaa.fuse.sync.ModHome, emulator: String, source: String, listing: SourceListing): EnhancementPreview {
+        if (kind != EnhancementKind.MODS) return no("Add it as a mod", "$emulator reads a game's changes as mods.")
+        val ryujinx = home.emulator == "ryujinx"
+        val layout = ModRules.switchMod(listing.entries, listing.name, if (ryujinx) setOf("romfs", "exefs") else ModRules.SWITCH_PARTS)
+            ?: return no("Not a Switch mod", "A Switch mod is a folder with ${if (ryujinx) "a romfs or exefs folder" else "an exefs, romfs or cheats folder"} in it. ${listing.name} has none.")
+        madeForTitle(listing.entries, home.gameId)?.let {
+            return no("Made for another game", "This mod is in a folder for title $it, and this game is ${home.gameId}. $emulator reads mods from the folder named for their game.")
+        }
+        val folder = freeFolder(home.folder, layout.folder ?: ModRules.folderName(listing.name))
+        val target = "${home.folder}/$folder"
+        val planned = layout.files.map { (from, rel) -> PlannedFile(from, "$target/$rel") }
+        val notes = buildList {
+            if (ryujinx) add("It shows in Ryujinx's Manage Mods for this game. Make sure it is ticked there.")
+            else add("$emulator uses it the next time the game starts. It shows in the game's Add-ons, where it can be turned off.")
+            if (layout.files.any { it.second.lowercase().startsWith("exefs/") }) add("It changes the game's code (exefs), so it is made for one version of the game. Check it matches the update you have.")
+        }
+        return modPlan(id, kind, emulator, listing, source, target, planned, layout.rejected, notes = notes)
+    }
+
+    private suspend fun cemuMod(id: GameId, kind: EnhancementKind, home: io.github.matiyaaa.fuse.sync.ModHome, files: EmulatorFiles, source: String, listing: SourceListing): EnhancementPreview {
+        if (kind != EnhancementKind.MODS) return no("Add it as a mod", "Cemu reads a game's changes as graphic packs, which Fuse adds as mods.")
+        val layout = ModRules.cemuPack(listing.entries, listing.name)
+            ?: return no("Not a Cemu graphic pack", "A Cemu graphic pack is a folder with a rules.txt in it. ${listing.name} has none.")
+        // A pack names the games it is for in its rules.txt; one for none of this game's ids is another game's.
+        val rulesEntry = layout.files.firstOrNull { it.second.equals("rules.txt", ignoreCase = true) }?.first
+        val ids = rulesEntry?.let { files.sourceText(source, it) }?.let(ModRules::cemuTitleIds).orEmpty()
+        if (ids.isNotEmpty() && home.gameId.isNotEmpty() && home.gameId.lowercase() !in ids) {
+            return no("Made for another game", "This pack's rules.txt lists the games it is for, and this game (${home.gameId}) isn't one of them.")
+        }
+        val folder = freeFolder(home.folder, layout.folder ?: ModRules.folderName(listing.name))
+        val target = "${home.folder}/$folder"
+        val planned = layout.files.map { (from, rel) -> PlannedFile(from, "$target/$rel") }
+        val notes = listOf("Turn it on in Cemu, Options, Graphic packs (it is listed under this game), then start the game.")
+        return modPlan(id, kind, "Cemu", listing, source, target, planned, layout.rejected, notes = notes)
+    }
+
+    private suspend fun dolphinMod(id: GameId, kind: EnhancementKind, home: io.github.matiyaaa.fuse.sync.ModHome, source: String, listing: SourceListing): EnhancementPreview {
+        val ini = IniText(home.settingsFile?.let { fs.readText(it, MAX_TEXT) } ?: "")
+        if (kind == EnhancementKind.TEXTURES) {
+            val (layout, madeFor) = ModRules.dolphinTextures(listing.entries)
+                ?: return no("Not a Dolphin texture pack", "Dolphin reads .png and .dds pictures named tex1_... Nothing in ${listing.name} is one.")
+            if (madeFor != null && madeFor != home.gameId && madeFor != home.gameId.take(3)) {
+                return no("Made for another game", "This pack is in a folder for $madeFor, and this game is ${home.gameId}. Dolphin matches textures to the game they were made for.")
+            }
+            val target = "${home.folder}/${home.gameId}"
+            val planned = layout.files.map { (from, rel) -> PlannedFile(from, "$target/$rel") }
+            val on = ini.bool(DOLPHIN_VIDEO, "HiresTextures") == true
+            return modPlan(
+                id, kind, "Dolphin", listing, source, target, planned, layout.rejected,
+                settingsFile = home.settingsFile.takeIf { !on },
+                settings = if (on) emptyList() else listOf(Triple(DOLPHIN_VIDEO, "HiresTextures", "True")),
+                said = if (on) emptyList() else listOf("Turns on Load Custom Textures for this game in Dolphin"),
+                notes = listOf("Dolphin loads these as the game starts; restart the game if it is running."),
+            )
+        }
+        if (kind != EnhancementKind.MODS) return no("Not for Dolphin", "Dolphin keeps its cheats in its own game properties. Add texture packs or graphics mods here.")
+        val layout = ModRules.dolphinGraphicsMod(listing.entries, listing.name)
+            ?: return no("Not a Dolphin graphics mod", "A Dolphin graphics mod is a folder with a metadata.json in it. ${listing.name} has none. For a texture pack, add it as textures.")
+        val parent = "${home.graphicsMods}/${home.gameId}"
+        val folder = freeFolder(parent, layout.folder ?: ModRules.folderName(listing.name))
+        val target = "$parent/$folder"
+        val planned = layout.files.map { (from, rel) -> PlannedFile(from, "$target/$rel") }
+        val on = ini.bool(DOLPHIN_VIDEO, "EnableMods") == true
+        return modPlan(
+            id, kind, "Dolphin", listing, source, target, planned, layout.rejected,
+            settingsFile = home.settingsFile.takeIf { !on },
+            settings = if (on) emptyList() else listOf(Triple(DOLPHIN_VIDEO, "EnableMods", "True")),
+            said = if (on) emptyList() else listOf("Turns on graphics mods for this game in Dolphin"),
+            notes = listOf("Dolphin keeps each graphics mod off until it is ticked: right-click the game, Properties, Graphics Mods."),
+        )
+    }
+
+    private suspend fun rpcs3Mod(id: GameId, game: Game, kind: EnhancementKind, files: EmulatorFiles, source: String, listing: SourceListing): EnhancementPreview {
+        if (kind != EnhancementKind.MODS) return no("Add it as a mod", "RPCS3 has no folder for cheats or texture packs; its patches are added in its own Patch Manager.")
+        val rpcs3 = installed("rpcs3") ?: return no("RPCS3 isn't installed", "Install RPCS3 and start it once, then add this.")
+        val usrdir = files.rpcs3GameFiles(rpcs3, game.location.launchPath, game.tags.serial)
+            ?: return no("Fuse can't find the game's files", "RPCS3 has no folder for mods: a mod's files stand in for the game's own in its USRDIR. Fuse finds that folder for games installed in RPCS3 and for game folders (PS3_GAME/USRDIR).")
+        val layout = ModRules.rpcs3Files(listing.entries)
+            ?: return no("Fuse can't tell where its files go", "A PS3 mod shows where its files go with a USRDIR folder. ${listing.name} has none, so follow its own instructions.")
+        val planned = layout.files.map { (from, rel) -> PlannedFile(from, "$usrdir/$rel") }
+        val notes = listOf(
+            "RPCS3 has no folder for mods, so these files take the place of the game's own. Every file they replace is kept, and put back when you take this out.",
+            "Installing a game update in RPCS3 after this can replace these files again.",
+        )
+        return modPlan(id, kind, "RPCS3", listing, source, usrdir, planned, layout.rejected, notes = notes)
+    }
+
+    private suspend fun shadPs4Mod(id: GameId, game: Game, kind: EnhancementKind, files: EmulatorFiles, source: String, listing: SourceListing): EnhancementPreview {
+        if (kind != EnhancementKind.MODS) return no("Add it as a mod", "shadPS4 reads a game's changes as mods.")
+        val (mods, top) = files.shadPs4Mods(game.location.launchPath)
+            ?: return no("Fuse can't find the game's folder", "shadPS4 reads mods from a folder beside the game's own (its folder name with -mods). Fuse finds it for games kept as folders with an eboot.bin.")
+        val layout = ModRules.shadPs4Files(listing.entries, top)
+            ?: return no("Fuse can't tell where its files go", "A shadPS4 mod is laid out like the game's folder, and nothing in ${listing.name} matches the game's own folders (${top.take(4).joinToString(", ")}). Follow its own instructions.")
+        val planned = layout.files.map { (from, rel) -> PlannedFile(from, "$mods/$rel") }
+        val notes = listOf("shadPS4 reads these over the game's own files, which stay as they are.")
+        return modPlan(id, kind, "shadPS4", listing, source, mods, planned, layout.rejected, notes = notes)
+    }
+
+    /** A Switch title id named in [entries]' folders that isn't [titleId]: the game the mod was made for instead. */
+    private fun madeForTitle(entries: List<String>, titleId: String): String? {
+        for (e in entries.take(2000)) for (part in e.replace('\\', '/').split('/').dropLast(1)) {
+            // A game's update and add-ons share its id's first twelve digits.
+            if (ModRules.isTitleId(part) && part.startsWith("01") && !part.take(12).equals(titleId.take(12), ignoreCase = true)) return part.uppercase()
+        }
+        return null
+    }
+
     // Shared --------------------------------------------------------------------------------------
 
     private suspend fun texturePlan(
@@ -569,6 +751,10 @@ internal class NativeEnhancements(
         const val GS = "EmuCore/GS"
         const val LOAD_TEXTURES = "LoadTextureReplacements"
         const val TR = "TextureReplacements"
+        const val DOLPHIN_VIDEO = "Video_Settings"
+
+        /** Systems whose games Fuse adds mods to, by the emulator they start in (Dolphin's have textures too). */
+        val MOD_PLATFORMS = setOf("wiiu", "switch", "ps3", "ps4")
         const val ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
         val SERIAL = Regex("(?<![A-Z])[A-Z]{4}[-_. ]?[0-9]{3}[.]?[0-9]{2}(?![0-9])")
     }

@@ -50,6 +50,12 @@ internal fun AppState.ownEnhancementRows(card: GameCard, own: Enhancements, emul
                 section = "Add Your Own",
                 onSelect = { addEnhancement(card, kind, emulator) },
             )
+            EnhancementKind.MODS -> MenuAction(
+                "add.mods", "Add a Mod", FuseIcons.Puzzle,
+                detail = "A mod's folder or .zip, put where the game's emulator reads it. You see exactly what goes where first",
+                section = "Add Your Own",
+                onSelect = { addEnhancement(card, kind, emulator) },
+            )
         }
     }
     // Mods made for the game, from GameBanana, where its emulator takes any.
@@ -61,6 +67,7 @@ private fun kindIcon(kind: EnhancementKind) = when (kind) {
     EnhancementKind.CHEATS -> FuseIcons.Wand
     EnhancementKind.PATCHES -> FuseIcons.Bandage
     EnhancementKind.TEXTURES -> FuseIcons.Images
+    EnhancementKind.MODS -> FuseIcons.Puzzle
 }
 
 private fun count(n: Int, one: String, many: String = "${one}s") = if (n == 1) "1 $one" else "$n $many"
@@ -69,6 +76,7 @@ private fun describe(e: EnhancementView): String = (e.origin?.let { o -> "From $
     EnhancementKind.TEXTURES -> "Texture pack  ·  ${count(e.files, "picture")}"
     EnhancementKind.CHEATS -> "Cheats  ·  in ${e.where.substringAfterLast('/')}"
     EnhancementKind.PATCHES -> "Patches  ·  in ${e.where.substringAfterLast('/')}"
+    EnhancementKind.MODS -> "Mod  ·  ${count(e.files, "file")}"
 } + if (e.settingsChanged) "  ·  settings turned on for it" else ""
 
 /** The file types each emulator's cheats and patches come in, and archives holding them. */
@@ -81,11 +89,16 @@ private fun extensions(emulator: String): List<String> = when (emulator) {
 
 /** Chooses what to add, then shows exactly what adding it would do before anything changes. */
 private fun AppState.addEnhancement(card: GameCard, kind: EnhancementKind, emulator: String) {
-    if (kind == EnhancementKind.TEXTURES) {
+    if (kind == EnhancementKind.TEXTURES || kind == EnhancementKind.MODS) {
+        val mod = kind == EnhancementKind.MODS
         choice = ChoiceSpec(
-            icon = FuseIcons.Images,
-            title = "Add a texture pack",
-            message = "Choose the pack's own folder, or the .zip it came in. Nothing is copied until you have seen what goes where.",
+            icon = if (mod) FuseIcons.Puzzle else FuseIcons.Images,
+            title = if (mod) "Add a mod" else "Add a texture pack",
+            message = if (mod) {
+                "Choose the mod's own folder, or the .zip it came in. Nothing is copied until you have seen what goes where."
+            } else {
+                "Choose the pack's own folder, or the .zip it came in. Nothing is copied until you have seen what goes where."
+            },
             options = listOf(
                 MenuAction("folder", "Choose a Folder", FuseIcons.FolderOpen, onSelect = { pickAndPlan(card, kind, emulator, folder = true) }),
                 MenuAction("zip", "Choose a .zip Archive", FuseIcons.FileArchive, onSelect = { pickAndPlan(card, kind, emulator, folder = false) }),
@@ -103,10 +116,11 @@ private fun AppState.pickAndPlan(card: GameCard, kind: EnhancementKind, emulator
             EnhancementKind.CHEATS -> "cheats"
             EnhancementKind.PATCHES -> "patches"
             EnhancementKind.TEXTURES -> "texture pack"
+            EnhancementKind.MODS -> "mod"
         }
         val source = when {
             folder -> platform.storage.pickFolder("Choose the $word folder for ${card.title}")
-            kind == EnhancementKind.TEXTURES -> platform.storage.pickFile("Choose the $word for ${card.title}", "Zip archives", listOf("zip"))
+            kind == EnhancementKind.TEXTURES || kind == EnhancementKind.MODS -> platform.storage.pickFile("Choose the $word for ${card.title}", "Zip archives", listOf("zip"))
             else -> platform.storage.pickFile("Choose $word for ${card.title}", "$emulator $word", extensions(emulator))
         } ?: return@launch
         when (val preview = store.library.planEnhancement(card.id, kind, source)) {
@@ -127,6 +141,7 @@ internal fun AppState.confirmEnhancement(card: GameCard, p: EnhancementPreview.R
     val goesIn = when {
         p.appendsTo != null -> "${count(p.codes, "code")} from ${p.name} are added to the end of ${p.appendsTo}."
         p.kind == EnhancementKind.TEXTURES -> "${count(p.adds.size + p.replaces.size, "picture")} (${bytesText(p.bytes)}) go in ${p.target}."
+        p.kind == EnhancementKind.MODS -> "${count(p.adds.size + p.replaces.size, "file")} (${bytesText(p.bytes)}) go in ${p.target}."
         else -> "${count(p.codes, "code")} from ${p.name} go in ${list(p.adds + p.replaces)}."
     }
     val paragraphs = listOfNotNull(
@@ -185,6 +200,7 @@ private fun AppState.takeOutEnhancement(card: GameCard, e: EnhancementView) {
     choice = null
     val what = when (e.kind) {
         EnhancementKind.TEXTURES -> "The pack's ${count(e.files, "picture")} leave ${e.where}, and any it replaced come back."
+        EnhancementKind.MODS -> "The mod's ${count(e.files, "file")} leave ${e.where}, and any it replaced come back."
         else -> "Its codes come out of ${e.where.substringAfterLast('/')}; everything else in it stays."
     }
     confirm = ConfirmSpec(

@@ -406,7 +406,7 @@ internal object Ppsspp : SaveAdapter {
 internal object Dolphin : SaveAdapter {
     override val emulators = setOf("dolphin", "dolphin-mmjr", "dolphin-mmjr2")
 
-    private fun userDir(env: SaveEnvironment, emuPath: String?): String? = when (env.host) {
+    internal fun userDir(env: SaveEnvironment, emuPath: String?): String? = when (env.host) {
         "WINDOWS" -> SaveAdapters.firstDir(env, emuPath?.let { SaveAdapters.join(SaveAdapters.parent(it), "User") }, "${SaveAdapters.documents(env)}/Dolphin Emulator", "${SaveAdapters.appData(env)}/Dolphin Emulator")
         "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/Dolphin")
         "ANDROID" -> SaveAdapters.firstDir(env, "/storage/emulated/0/dolphin-emu")

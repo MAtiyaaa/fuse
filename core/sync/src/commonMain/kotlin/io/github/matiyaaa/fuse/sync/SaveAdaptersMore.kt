@@ -330,8 +330,19 @@ internal object SwitchNand : SaveAdapter {
         else -> id
     }
 
-    private fun base(env: SaveEnvironment, q: SaveQuery): String? {
-        SaveAdapters.chosen(env, q)?.let { return it }
+    private fun base(env: SaveEnvironment, q: SaveQuery): String? = SaveAdapters.chosen(env, q) ?: defaultBase(env, q)
+
+    /**
+     * The emulator's own folder, for its mods: the one the person chose when it is the emulator's
+     * (it has a `load` or `config` folder), else where the emulator keeps it.
+     */
+    internal fun home(env: SaveEnvironment, q: SaveQuery): String? {
+        SaveAdapters.chosen(env, q)?.takeIf { env.isDirectory("$it/load") || env.isDirectory("$it/config") }?.let { return it }
+        return defaultBase(env, q)
+    }
+
+    /** Where the emulator keeps its folder when none was chosen. */
+    private fun defaultBase(env: SaveEnvironment, q: SaveQuery): String? {
         val name = folderName(SaveAdapters.baseId(q.emulatorId))
         val cap = name.replaceFirstChar { it.uppercase() }
         return when (env.host) {
@@ -341,6 +352,10 @@ internal object SwitchNand : SaveAdapter {
             else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgData(env)}/$name", "${env.home}/.var/app/org.${name}_emu.$name/data/$name", "${env.home}/.var/app/dev.${name}_emu.$name/data/$name")
         }
     }
+
+    /** Its mods' folder: the one its config names (`load_directory`, as frontend_common/config.cpp writes it), else `load` in [base]. */
+    internal fun loadFolder(env: SaveEnvironment, base: String): String =
+        dataStorage(env, base)["load_directory"]?.takeIf { it.isNotEmpty() && env.isDirectory(it) } ?: "$base/load"
 
     /**
      * Where a game's saves are, under [base] (the emulator's folder, or one the person chose): the
@@ -356,7 +371,13 @@ internal object SwitchNand : SaveAdapter {
 
     /** The save (or NAND) folder the emulator's config names, when it names one of its own. */
     internal fun configured(env: SaveEnvironment, base: String): String? {
-        val text = env.readText("$base/config/qt-config.ini") ?: return null
+        val values = dataStorage(env, base)
+        return listOf("save_directory", "nand_directory").firstNotNullOfOrNull { k -> values[k]?.takeIf { it.isNotEmpty() && env.isDirectory(it) } }
+    }
+
+    /** The `Data Storage` group of the emulator's config (`qt-config.ini`), its folders with `/` separators. */
+    private fun dataStorage(env: SaveEnvironment, base: String): Map<String, String> {
+        val text = env.readText("$base/config/qt-config.ini") ?: return emptyMap()
         val values = HashMap<String, String>()
         var inGroup = false
         for (raw in text.lineSequence()) {
@@ -370,7 +391,7 @@ internal object SwitchNand : SaveAdapter {
             if ('\\' in key) continue
             values[key] = line.substring(i + 1).trim().trim('"').replace("\\\\", "/").replace('\\', '/').trimEnd('/')
         }
-        return listOf("save_directory", "nand_directory").firstNotNullOfOrNull { k -> values[k]?.takeIf { it.isNotEmpty() && env.isDirectory(it) } }
+        return values
     }
 
     private const val ZERO_ID = "0000000000000000"
@@ -427,12 +448,7 @@ internal object Ryujinx : SaveAdapter {
     override val emulators = setOf("ryujinx", "kenji-nx")
 
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
-        val base = SaveAdapters.chosen(env, q)?.let { c -> if (env.isDirectory("$c/bis")) c else SaveAdapters.parent(SaveAdapters.parent(SaveAdapters.parent(c))).takeIf { c.trimEnd('/').endsWith("bis/user/save") } ?: c } ?: when (env.host) {
-            "WINDOWS" -> SaveAdapters.firstDir(env, q.emulatorPath?.let { SaveAdapters.parent(it) + "/portable" }, "${SaveAdapters.appData(env)}/Ryujinx")
-            "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/Ryujinx")
-            "ANDROID" -> null
-            else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgConfig(env)}/Ryujinx", "${env.home}/.var/app/org.ryujinx.Ryujinx/config/Ryujinx")
-        } ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", if (env.host == "ANDROID") SaveAdapters.androidPrivateNote("Kenji-NX") else "Ryujinx's folder wasn't found here."))
+        val base = SaveAdapters.chosen(env, q)?.let { c -> if (env.isDirectory("$c/bis")) c else SaveAdapters.parent(SaveAdapters.parent(SaveAdapters.parent(c))).takeIf { c.trimEnd('/').endsWith("bis/user/save") } ?: c } ?: defaultHome(env, q) ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", if (env.host == "ANDROID") SaveAdapters.androidPrivateNote("Kenji-NX") else "Ryujinx's folder wasn't found here."))
         val id = SwitchIds.of(q, env) ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", "Fuse doesn't know this game's title id yet (a [0100…] tag in its file name tells it)."))
         val saves = "$base/bis/user/save"
         // A game can have several saves (its account save, a device save, BCAT and cache data): its
@@ -446,6 +462,18 @@ internal object Ryujinx : SaveAdapter {
         }.filter { it.second < 3 }.minByOrNull { it.second }?.first ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", "Play it once in Ryujinx so it makes its save; from then on Fuse keeps it in step."))
         return listOf(SaveSpot(SaveKind.SAVE, "switch.savedata", root = "$saves/$match/0"))
     }
+
+    /** Ryujinx's own folder (a `portable` one beside the program first), where its `bis` and `mods` are. */
+    private fun defaultHome(env: SaveEnvironment, q: SaveQuery): String? = when (env.host) {
+        "WINDOWS" -> SaveAdapters.firstDir(env, q.emulatorPath?.let { SaveAdapters.parent(it) + "/portable" }, "${SaveAdapters.appData(env)}/Ryujinx")
+        "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/Ryujinx")
+        "ANDROID" -> null
+        else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgConfig(env)}/Ryujinx", "${env.home}/.var/app/org.ryujinx.Ryujinx/config/Ryujinx")
+    }
+
+    /** Ryujinx's own folder, for its mods: the one the person chose when it is Ryujinx's, else where Ryujinx keeps it. */
+    internal fun home(env: SaveEnvironment, q: SaveQuery): String? =
+        SaveAdapters.chosen(env, q)?.takeIf { env.isDirectory("$it/bis") || env.isDirectory("$it/mods") } ?: defaultHome(env, q)
 
     private const val ACCOUNT = 1
     private const val DEVICE = 3
@@ -471,7 +499,7 @@ internal object Cemu : SaveAdapter {
      * when an older settings.xml is there, else Cemu in Application Data; on Linux Cemu in the XDG
      * data folder (settings in the XDG config folder); on a Mac Cemu in Application Support.
      */
-    private fun folders(env: SaveEnvironment, emuPath: String?): Pair<String, String>? {
+    internal fun folders(env: SaveEnvironment, emuPath: String?): Pair<String, String>? {
         val program = emuPath?.let { p -> p.substringBefore(".app/", "").takeIf { it.isNotEmpty() }?.let(SaveAdapters::parent) ?: SaveAdapters.parent(p) }
         program?.let { "$it/portable" }?.takeIf(env::isDirectory)?.let { return it to it }
         return when (env.host) {

@@ -255,7 +255,14 @@ internal class FakeServices(
         override suspend fun sourceText(source: String, entry: String): String? = bytes(source, entry)?.decodeToString()
 
         private fun allowedHere(path: String): Boolean = inside(path) ||
-            listOfNotNull(pcsx2Home?.textures, duckstationHome?.textures).filter { it.isNotEmpty() }.any { path.startsWith("$it/") }
+            (listOfNotNull(pcsx2Home?.textures, duckstationHome?.textures) + modRoots).filter { it.isNotEmpty() }.any { path.startsWith("$it/") }
+
+        override suspend fun modHome(query: io.github.matiyaaa.fuse.sync.SaveQuery): Result<io.github.matiyaaa.fuse.sync.ModHome> {
+            modQueries += query
+            val h = modHomeFor(query) ?: return Result.failure(IllegalStateException("No mod folder in this test."))
+            modRoots += listOfNotNull(h.folder, h.graphicsMods, h.settingsFile?.substringBeforeLast('/'))
+            return Result.success(h)
+        }
 
         override suspend fun install(source: String?, files: List<io.github.matiyaaa.fuse.launch.patches.PlannedFile>, texts: Map<String, String>, restorePoint: String): Boolean {
             val dests = files.map { it.to } + texts.keys
@@ -293,6 +300,11 @@ internal class FakeServices(
             return true
         }
     }
+
+    /** Where the fake's emulators keep a game's mods, and the games asked about. */
+    @Volatile var modHomeFor: (io.github.matiyaaa.fuse.sync.SaveQuery) -> io.github.matiyaaa.fuse.sync.ModHome? = { null }
+    val modQueries: MutableList<io.github.matiyaaa.fuse.sync.SaveQuery> = java.util.Collections.synchronizedList(mutableListOf())
+    private val modRoots: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
 
     /** Files the fake fetches for each address, and the addresses asked for. */
     val downloads = java.util.concurrent.ConcurrentHashMap<String, File>()

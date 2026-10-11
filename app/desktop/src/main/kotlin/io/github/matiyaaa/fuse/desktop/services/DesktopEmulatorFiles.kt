@@ -338,6 +338,43 @@ class DesktopEmulatorFiles(
         }.distinct()
     }
 
+    override suspend fun modHome(query: io.github.matiyaaa.fuse.sync.SaveQuery): Result<io.github.matiyaaa.fuse.sync.ModHome> = withContext(Dispatchers.IO) {
+        val host = when (os) { DesktopOs.WINDOWS -> "WINDOWS"; DesktopOs.MACOS -> "MACOS"; DesktopOs.LINUX -> "LINUX" }
+        val found = io.github.matiyaaa.fuse.sync.ModFolders.locate(query, io.github.matiyaaa.fuse.sync.FileSaveEnvironment(host, home) { env[it] })
+        found.onSuccess { h ->
+            roots += File(h.folder).absolutePath
+            h.graphicsMods?.let { roots += File(it).absolutePath }
+            h.settingsFile?.let { roots += File(it).absoluteFile.parentFile.absolutePath }
+        }
+    }
+
+    override suspend fun rpcs3GameFiles(installed: InstalledEmulator, launchPath: String, serial: String?): String? = withContext(Dispatchers.IO) {
+        val launch = File(launchPath)
+        // A game folder: PS3_GAME/USRDIR/EBOOT.BIN, or the folder itself.
+        val inFolder = generateSequence(if (launch.isDirectory) launch else launch.parentFile) { it.parentFile }.take(4)
+            .firstNotNullOfOrNull { d ->
+                when {
+                    d.name.equals("USRDIR", ignoreCase = true) && d.isDirectory -> d
+                    else -> listOf("PS3_GAME/USRDIR", "USRDIR").map { File(d, it) }.firstOrNull { it.isDirectory }
+                }
+            }
+        val usrdir = inFolder ?: serial?.uppercase()?.takeIf { PS3_SERIAL.matches(it) }?.let { id ->
+            rpcs3Storage(installed).map { File(it, "game/$id/USRDIR") }.firstOrNull { it.isDirectory }
+        } ?: return@withContext null
+        roots += usrdir.absolutePath
+        usrdir.absolutePath.replace('\\', '/')
+    }
+
+    override suspend fun shadPs4Mods(launchPath: String): Pair<String, Set<String>>? = withContext(Dispatchers.IO) {
+        val launch = File(launchPath)
+        val game = (if (launch.isDirectory) launch else launch.parentFile)?.takeIf { d -> d.list()?.any { it.equals("eboot.bin", ignoreCase = true) } == true }
+            ?: return@withContext null
+        val top = game.list()?.toSet().orEmpty()
+        val mods = File(game.parentFile, game.name + "-mods")
+        roots += mods.absolutePath
+        mods.absolutePath.replace('\\', '/') to top
+    }
+
     /**
      * Vita3K's pref path (vita3k/app/src/app_init.cpp init_paths): `pref-path` in its config.yml, else
      * `portable/fs` beside the program when that is there, %APPDATA%\\Vita3K\\Vita3K on Windows,
@@ -579,11 +616,14 @@ class DesktopEmulatorFiles(
     }
 
     /** True when [target] is inside one of the emulator folders Fuse has found, compared as the system resolves them. */
-    private fun allowed(target: File): Boolean {
-        val path = runCatching { target.canonicalFile.path }.getOrNull() ?: return false
-        return roots.toList().any { root ->
-            val r = runCatching { File(root).canonicalFile.path }.getOrNull() ?: return@any false
-            path.startsWith(r + File.separator)
+    private fun allowed(target: File, also: Collection<String> = emptyList()): Boolean = rootOf(target, also) != null
+
+    /** The folder Fuse found that [target] is inside (of those found this run, and [also]), resolved as the system does; null when none. */
+    private fun rootOf(target: File, also: Collection<String> = emptyList()): String? {
+        val path = runCatching { target.canonicalFile.path }.getOrNull() ?: return null
+        return (roots.toList() + also).firstNotNullOfOrNull { root ->
+            val r = runCatching { File(root).canonicalFile.path }.getOrNull() ?: return@firstNotNullOfOrNull null
+            r.takeIf { path.startsWith(r + File.separator) }
         }
     }
 
@@ -617,6 +657,8 @@ class DesktopEmulatorFiles(
                     manifest.append("N\t").append(dest.path).append('\n')
                 }
             }
+            // The folders that let these in, so they can be put back after Fuse restarts, before it has looked for them again.
+            destinations.mapNotNull { rootOf(it) }.distinct().forEach { manifest.append("A\t").append(it).append('\n') }
             File(point, MANIFEST).writeText(manifest.toString())
             val from = source?.let(::File)
             for (planned in files) {
@@ -663,9 +705,11 @@ class DesktopEmulatorFiles(
         }
         var ok = true
         val lines = manifest.readLines().map { it.split('\t') }
+        val recorded = lines.filter { it[0] == "A" }.mapNotNull { it.getOrNull(1) }
         for (p in lines) {
+            if (p[0] == "A") continue
             val dest = File(p.getOrNull(1) ?: continue)
-            if (dest.path in keep || !allowed(dest)) continue
+            if (dest.path in keep || !allowed(dest, recorded)) continue
             when (p[0]) {
                 "N" -> if (dest.isFile && !dest.delete()) ok = false
                 "R" -> {
@@ -684,7 +728,9 @@ class DesktopEmulatorFiles(
         // Folders Fuse made, deepest first, once nothing is left in them.
         for (p in lines.filter { it[0] == "D" }.reversed()) {
             val dir = File(p.getOrNull(1) ?: continue)
-            if (dir.isDirectory && allowed(dir) && dir.list().isNullOrEmpty()) dir.delete()
+            // A folder Fuse made can be the very one it was let into (a shadPS4 game's -mods folder).
+            val made = allowed(dir, recorded) || recorded.any { runCatching { File(it).canonicalPath == dir.canonicalPath }.getOrDefault(false) }
+            if (dir.isDirectory && made && dir.list().isNullOrEmpty()) dir.delete()
         }
         if (ok) point.deleteRecursively()
         return ok
@@ -761,6 +807,7 @@ class DesktopEmulatorFiles(
     private companion object {
         const val MAX_TEXT = 1024 * 1024
         const val MANIFEST = "manifest.tsv"
+        private val PS3_SERIAL = Regex("^[A-Z]{4}[0-9]{5}$")
         const val MAX_TAIL = 16 * 1024
         const val STOP_GRACE_MS = 800L
         const val DUCKSTATION_FLATPAK = "org.duckstation.DuckStation"

@@ -42,6 +42,7 @@ internal fun AppState.modSiteMods(card: GameCard, page: Int = 1) {
                         "mod.${mod.id}", mod.name,
                         when (m.kind) {
                             EnhancementKind.TEXTURES -> FuseIcons.Images
+                            EnhancementKind.MODS -> FuseIcons.Puzzle
                             EnhancementKind.CHEATS -> FuseIcons.Wand
                             EnhancementKind.PATCHES -> FuseIcons.Bandage
                             null -> FuseIcons.Package

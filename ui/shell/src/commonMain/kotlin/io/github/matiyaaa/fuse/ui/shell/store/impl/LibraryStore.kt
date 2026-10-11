@@ -911,7 +911,11 @@ internal class DefaultLibraryOps(
     override suspend fun setGamePatch(id: GameId, name: String, on: Boolean, cheat: Boolean): Boolean = nativePatches.set(id, name, on, cheat)
 
     /** A person's own cheats, patches and texture packs, put where the game's emulator reads them. */
-    private val nativeEnhancements by lazy { NativeEnhancements(ctx, { emulators.detectNow() }, ::discIdentity, ::pspGameId, ::retroArchRun) }
+    private val nativeEnhancements by lazy {
+        NativeEnhancements(ctx, { emulators.detectNow() }, ::discIdentity, ::pspGameId, ::retroArchRun) { game ->
+            startsWith(game).first.installed?.let { plainSaveQuery(game, it, null) }
+        }
+    }
 
     override suspend fun enhancements(id: GameId) = nativeEnhancements.list(id)
 

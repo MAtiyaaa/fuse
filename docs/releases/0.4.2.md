@@ -98,6 +98,17 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   own files apply, and the mod's page stays a choice away for a newer version. PCSX2 cheat files
   named for another CRC (the way mod makers keep a variant off) are left out, and files that change
   the same memory are pointed out.
+- **Mods for Dolphin, Cemu, RPCS3, shadPS4 and the Switch emulators.** Add a Mod puts a mod's
+  folder or .zip where the game's emulator reads it, checked against each emulator's source: a
+  folder of its own under the game's title id for Eden and its family (`load`, or the folder its
+  config names) and Ryujinx (`mods/contents`); Cemu graphic packs in `graphicPacks` (one made for
+  other games, by its rules.txt, is turned away); Dolphin texture packs in `Load/Textures` and
+  graphics mods in `Load/GraphicMods`, with Load Custom Textures or graphics mods turned on for
+  that game; shadPS4 mods in the `-mods` folder beside the game, which it reads over the game's
+  own files; and for RPCS3, which has no mods folder, the mod's files in the game's USRDIR, every
+  file they replace kept to put back. GameBanana mods for these games go in the same way. The same
+  preview and restoration point apply, and taking a mod out works after Fuse restarts too. Mods
+  made for another game (by the title id their folder names) are turned away.
 - **Emulator settings in Fuse.** A PS2, PlayStation or PSP game's options, and PCSX2's, DuckStation's
   and PPSSPP's pages in Settings, change the emulator's own settings: renderer, internal resolution,
   texture filtering, aspect ratio and the like, only those each emulator really reads, and for one

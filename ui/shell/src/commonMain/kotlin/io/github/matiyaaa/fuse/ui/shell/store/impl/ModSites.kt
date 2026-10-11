@@ -76,14 +76,15 @@ internal class ModSites(
 
     /** The kind Fuse would add [mod] as for a game that takes [kinds]: from the category its makers filed it in. */
     private fun kindOf(mod: GbMod, kinds: List<EnhancementKind>): EnhancementKind? {
-        val c = mod.category?.lowercase() ?: return null
+        val c = mod.category?.lowercase() ?: return EnhancementKind.MODS.takeIf { it in kinds }
         val kind = when {
             "texture" in c || "retexture" in c || "hd pack" in c -> EnhancementKind.TEXTURES
             "cheat" in c -> EnhancementKind.CHEATS
             "patch" in c || "widescreen" in c || "fps" in c -> if (EnhancementKind.PATCHES in kinds) EnhancementKind.PATCHES else EnhancementKind.CHEATS
             else -> null
         }
-        return kind?.takeIf { it in kinds }
+        // For an emulator that reads mods, anything it has no place of its own for goes in as a mod.
+        return kind?.takeIf { it in kinds } ?: EnhancementKind.MODS.takeIf { it in kinds }
     }
 
     suspend fun mods(id: GameId, page: Int): ModSiteMods {

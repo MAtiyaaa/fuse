@@ -410,4 +410,68 @@ class EnhancementsStoreTest {
         assertEquals(listOf("https://gamebanana.com/dl/500"), services2.fetchedUrls)
         assertFalse(File(emu, "duckstation/textures").exists(), "nothing reaches the emulator's folders")
     }
+
+    private val edenInstalled = InstalledEmulator(EmulatorId("linux.eden"), "Eden", Host.LINUX, "/usr/bin/eden", platforms = setOf(PlatformId("switch")), detectedVia = "PATH")
+
+    @Test
+    fun aSwitchModGoesInItsOwnFolderForTheGameAndComesOutCompletely(): Unit = runBlocking {
+        val services = services("mods.db", edenInstalled)
+        val load = File(emu, "eden/load").apply { mkdirs() }
+        services.modHomeFor = { q -> io.github.matiyaaa.fuse.sync.ModHome("eden", "0100F2C0115B6000", "${load.absolutePath}/0100F2C0115B6000") }
+        File(root, "switch").mkdirs()
+        File(root, "switch/Hyrule [0100F2C0115B6000].nsp").writeBytes(ByteArray(64))
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = gameIn(store)
+        assertEquals(listOf(EnhancementKind.MODS), store.library.enhancements(game.id).kinds)
+
+        val mod = zip(
+            "grass.zip",
+            mapOf("Better Grass/romfs/Terrain/grass.bin" to "g", "Better Grass/exefs/main.npdm" to "m", "readme.txt" to "r", "../../escape.bin" to "e"),
+        )
+        val preview = assertIs<EnhancementPreview.Ready>(store.library.planEnhancement(game.id, EnhancementKind.MODS, mod.absolutePath))
+        // The game's emulator was asked where its mods go, for this game.
+        assertEquals("linux.eden", services.modQueries.last().emulatorId)
+        assertTrue(preview.target.endsWith("load/0100F2C0115B6000/Better Grass"))
+        assertEquals(2, preview.adds.size)
+        assertTrue(preview.rejected.any { it.startsWith("../../escape.bin") })
+        assertTrue(preview.notes.any { "exefs" in it })
+        val folder = File(load, "0100F2C0115B6000/Better Grass")
+        assertFalse(folder.exists(), "nothing changes for a preview")
+
+        assertNull(store.library.addEnhancement(preview.token))
+        assertEquals("g", File(folder, "romfs/Terrain/grass.bin").readText())
+        assertEquals("m", File(folder, "exefs/main.npdm").readText())
+        val added = store.library.enhancements(game.id).added.single()
+        assertEquals(EnhancementKind.MODS, added.kind)
+
+        // A second mod of the same name gets a folder of its own.
+        val again = assertIs<EnhancementPreview.Ready>(store.library.planEnhancement(game.id, EnhancementKind.MODS, mod.absolutePath))
+        assertTrue(again.target.endsWith("Better Grass 2"))
+
+        assertEquals(EnhancementRemoval.Removed, store.library.removeEnhancement(game.id, added.id))
+        assertFalse(File(folder, "romfs/Terrain/grass.bin").exists())
+        assertFalse(File(folder, "exefs/main.npdm").exists())
+    }
+
+    @Test
+    fun aModForAnotherGameOrNotAModIsTurnedAway(): Unit = runBlocking {
+        val services = services("mods2.db", edenInstalled)
+        val load = File(emu, "eden/load").apply { mkdirs() }
+        services.modHomeFor = { io.github.matiyaaa.fuse.sync.ModHome("eden", "0100F2C0115B6000", "${load.absolutePath}/0100F2C0115B6000") }
+        File(root, "switch").mkdirs()
+        File(root, "switch/Hyrule [0100F2C0115B6000].nsp").writeBytes(ByteArray(64))
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = gameIn(store)
+        val other = zip("other.zip", mapOf("01006A800016E000/Speed/romfs/a.bin" to "a"))
+        val no = assertIs<EnhancementPreview.Unavailable>(store.library.planEnhancement(game.id, EnhancementKind.MODS, other.absolutePath))
+        assertEquals("Made for another game", no.title)
+        // The game's own update id is the same game.
+        val update = zip("update.zip", mapOf("0100F2C0115B6800/Speed/romfs/a.bin" to "a"))
+        assertIs<EnhancementPreview.Ready>(store.library.planEnhancement(game.id, EnhancementKind.MODS, update.absolutePath))
+        val pictures = zip("pics.zip", mapOf("a.png" to "a"))
+        assertEquals("Not a Switch mod", assertIs<EnhancementPreview.Unavailable>(store.library.planEnhancement(game.id, EnhancementKind.MODS, pictures.absolutePath)).title)
+        assertTrue(File(load, "0100F2C0115B6000").listFiles().isNullOrEmpty())
+    }
 }

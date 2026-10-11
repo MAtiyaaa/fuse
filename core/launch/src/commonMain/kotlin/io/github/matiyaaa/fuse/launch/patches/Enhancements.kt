@@ -1,7 +1,7 @@
 package io.github.matiyaaa.fuse.launch.patches
 
 /** What a person adds to a game from a file, folder or archive of their own. */
-enum class EnhancementKind { CHEATS, PATCHES, TEXTURES }
+enum class EnhancementKind { CHEATS, PATCHES, TEXTURES, MODS }
 
 /**
  * One file to put in place: [from] is where it is in what was chosen (a path below the folder, an
