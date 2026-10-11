@@ -77,6 +77,9 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   a graphics card or before Android 12 it is the tinted pane it was.
 - **A mark for Fuse One.** Fuse's own frame and fuse, the fuse rising into a 1 with the spark at
   its top, wherever Fuse One appears (docs/assets/brand/fuse-one-mark.svg).
+- **Pictures of what a choice does.** Choosing the Library's view, what it opens on, what
+  selecting a game does, game art, Home's style, text size, screen edges or motion shows a small
+  moving sketch of the option under focus beside the list (above it on a narrow screen).
 - **Arrange the top line in place.** Hold a tab (touch, mouse or confirm) and it lifts; move it
   along with the D-pad or a drag, as Addons' tabs move, and put it down. Home stays first.
 

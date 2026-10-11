@@ -1115,6 +1115,46 @@ internal fun AuditDriver.companionScreens() {
 
 /** The theme page: the gallery and its filters, the studio and a save, and a bright theme; at every size. */
 internal fun AuditDriver.themeScreens() {
+    scenario("settings", "visual aids") {
+        useLibrary()
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("library"))
+        tap(PadButton.DPAD_RIGHT)
+        tapText("Default view")
+        waitFor("Cover grid")
+        shoot("default view: grid", 1_500)
+        tap(PadButton.DPAD_DOWN)
+        shoot("default view: capsules", 1_500)
+        tap(PadButton.DPAD_DOWN)
+        shoot("default view: cover grid", 1_500)
+        tap(PadButton.DPAD_DOWN)
+        shoot("default view: list", 1_500)
+        tap(PadButton.B)
+        waitGone("Cover grid")
+        tapText("Library opens on", step = PadButton.DPAD_UP)
+        waitFor("The games on this device")
+        shoot("library opens on: all", 1_500)
+        tap(PadButton.DPAD_DOWN)
+        shoot("library opens on: installed", 1_500)
+        tap(PadButton.B)
+        waitGone("The games on this device")
+        tapText("Selecting a game")
+        waitFor("Opens its page")
+        tap(PadButton.DPAD_DOWN)
+        shoot("selecting a game: opens its page, mid-way", 1_200)
+        tap(PadButton.B)
+        waitGone("Opens its page")
+        tap(PadButton.B)
+        tap(PadButton.DPAD_UP, sectionIndex("library"))
+        tap(PadButton.DPAD_DOWN, sectionIndex("appearance"))
+        tap(PadButton.DPAD_RIGHT)
+        tapText("Game art")
+        waitFor("Posters")
+        tap(PadButton.DPAD_DOWN)
+        shoot("game art: posters", 1_500)
+        tap(PadButton.B)
+    }
+
     scenario("settings", "themes gallery") {
         useLibrary()
         // A theme someone shared, added as if from its link.

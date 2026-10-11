@@ -69,6 +69,8 @@ data class ChoiceSpec(
     val message: String? = null,
     val options: List<MenuAction>,
     val icon: ImageVector? = null,
+    /** A picture of what each option does, in the options' order, shown beside the list for the one under focus. */
+    val aids: List<io.github.matiyaaa.fuse.ui.shell.settings.ChoiceAid>? = null,
 )
 
 /**

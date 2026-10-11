@@ -107,6 +107,7 @@ fun appearanceRows(app: AppState): List<MenuAction> {
             "art", "Game art", FuseIcons.GalleryThumbnails, p.gameArt,
             listOf(GameArtStyle.BOX_ART to "Box art", GameArtStyle.POSTER to "Posters"),
             detail = "How game tiles look on Home, in the Library and in Cartridge",
+            aid = { ChoiceAid.GameArt(it) },
             optionDetail = {
                 when (it) {
                     GameArtStyle.BOX_ART -> "Square art, as Fuse has always shown"
@@ -173,11 +174,13 @@ fun accessibilityRows(app: AppState): List<MenuAction> {
                 "textsize", "Text size", FuseIcons.TextSize, p.textScale,
                 listOf(1f to "Default", 1.15f to "Large", 1.3f to "Extra large"),
                 detail = "Larger text for reading from the sofa. Titles grow a little less",
+                aid = { ChoiceAid.TextSize(it) },
             ) { v -> set { it.copy(textScale = v) } })
             add(app.choiceRow(
                 "margin", "Screen edges", FuseIcons.Maximize, p.screenMargin,
                 listOf(0 to "Use all of it", 2 to "2% in", 4 to "4% in", 6 to "6% in"),
                 detail = "Keeps everything clear of edges a TV cuts off. The background still fills the screen",
+                aid = { ChoiceAid.ScreenEdges(it) },
             ) { v -> set { it.copy(screenMargin = v) } })
         }
         labelled("Motion and focus") {
@@ -199,6 +202,7 @@ fun accessibilityRows(app: AppState): List<MenuAction> {
                         MotionProfile.ENHANCED -> "Richer springs and flourishes, for devices with room to spare"
                     }
                 },
+                aid = { ChoiceAid.Motion(it ?: automatic) },
             ) { v -> set { it.copy(motion = v) } })
             add(toggleRow("contrast", "High contrast focus", FuseIcons.ScanEye, p.highContrastFocus, "Adds an outline to everything that's selected") { v -> set { it.copy(highContrastFocus = v) } })
         }
@@ -221,9 +225,11 @@ fun homeRows(app: AppState): List<MenuAction> {
                     onSelect = { if (isHome) homeRole.openHomeSettings() else homeRole.request() },
                 ))
             }
-            add(app.choiceRow("mode", "Home style", FuseIcons.Dashboard, p.home.mode, listOf(HomeMode.CHANNELS to "Fused (recommended)", HomeMode.FLOW to "Network"), optionDetail = {
-                if (it == HomeMode.FLOW) "A continuous dashboard of shelves" else "A board of tiles you arrange yourself"
-            }) { v -> set { it.copy(home = it.home.copy(mode = v)) } })
+            add(app.choiceRow(
+                "mode", "Home style", FuseIcons.Dashboard, p.home.mode, listOf(HomeMode.CHANNELS to "Fused (recommended)", HomeMode.FLOW to "Network"),
+                optionDetail = { if (it == HomeMode.FLOW) "A continuous dashboard of shelves" else "A board of tiles you arrange yourself" },
+                aid = { ChoiceAid.HomeStyle(it) },
+            ) { v -> set { it.copy(home = it.home.copy(mode = v)) } })
             add(toggleRow(
                 "rememberplace", "Remember where you were", FuseIcons.Bookmark, p.rememberPlace,
                 if (p.rememberPlace) "Each tab opens on the game or row you left it on" else "Each tab opens at its start",
@@ -399,6 +405,7 @@ fun libraryRows(app: AppState): List<MenuAction> {
                 "opensOn", "Library opens on", FuseIcons.LibraryBig, p.libraryOpensOn,
                 listOf("ALL" to "All", "INSTALLED" to "Installed"),
                 optionDetail = { if (it == "ALL") "Every game wherever it is: here, on RomM and on your other devices" else "The games on this device" },
+                aid = { ChoiceAid.OpensOn(installed = it == "INSTALLED") },
             ) { v -> app.store.updatePrefs { it.copy(libraryOpensOn = v) } })
         }
         app.platform.steam?.let { steam ->
@@ -437,11 +444,16 @@ fun libraryRows(app: AppState): List<MenuAction> {
             add(MenuAction("bios", "Check BIOS again", FuseIcons.Key, detail = "After adding firmware to a BIOS folder", onSelect = { app.store.sources.refreshBios(); app.toasts.show("Checking BIOS files") }))
         }
         labelled("Browsing") {
-            add(app.choiceRow("layout", "Default view", FuseIcons.Grid, p.defaultLayout, LibraryLayout.entries.map { it to layoutName(it) }, detail = "How the Library first shows your games") { v -> app.store.updatePrefs { it.copy(defaultLayout = v) } })
+            add(app.choiceRow(
+                "layout", "Default view", FuseIcons.Grid, p.defaultLayout, LibraryLayout.entries.map { it to layoutName(it) },
+                detail = "How the Library first shows your games",
+                aid = { ChoiceAid.LibraryView(it) },
+            ) { v -> app.store.updatePrefs { it.copy(defaultLayout = v) } })
             add(app.choiceRow(
                 "select", "Selecting a game", FuseIcons.Play, p.openGamePage,
                 listOf(false to "Plays it", true to "Opens its page"),
                 detail = "What confirm (or a tap on a selected game) does. Play is always on the game's page",
+                aid = { ChoiceAid.SelectGame(opensPage = it) },
             ) { v -> app.store.updatePrefs { it.copy(openGamePage = v) } })
         }
         labelled("Collections") {

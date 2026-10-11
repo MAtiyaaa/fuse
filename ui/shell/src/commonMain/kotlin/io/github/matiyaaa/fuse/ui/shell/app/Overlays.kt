@@ -59,6 +59,11 @@ import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
 import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.Swap
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
+import io.github.matiyaaa.fuse.ui.fuseline.togetherWith
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
@@ -155,15 +160,61 @@ private fun ChoiceOverlay(app: AppState) {
     }
     Overlay(visible = spec != null, onDismiss = { app.choice = null }, edge = OverlayEdge.CENTER) {
         val s = shown ?: return@Overlay
-        DialogPanel { compact ->
+        val aids = s.aids?.takeIf { it.size == s.options.size }
+        DialogPanel(maxWidth = if (aids != null) AID_DIALOG_MAX_WIDTH else DIALOG_MAX_WIDTH) { compact ->
             Column(Modifier.padding(if (compact) Space.l else Space.xl)) {
                 MenuHeader(s.title, subtitle = s.message, icon = s.icon, subtitleMaxLines = 6)
-                // As tall as its rows, scrolling within whatever height the dialog has left.
-                MenuList(s.options, sel, modifier = Modifier.weight(1f, fill = false), fill = false)
+                if (aids == null) {
+                    // As tall as its rows, scrolling within whatever height the dialog has left.
+                    MenuList(s.options, sel, modifier = Modifier.weight(1f, fill = false), fill = false)
+                } else {
+                    BoxWithConstraints(Modifier.weight(1f, fill = false)) {
+                        // The picture of the option under focus: beside the list where there is
+                        // room, above it on a narrow screen.
+                        val beside = maxWidth >= AID_BESIDE_WIDTH
+                        val motion = Fuse.motion
+                        val aid: @Composable (Modifier) -> Unit = { m ->
+                            val i = sel.index.coerceIn(0, aids.lastIndex)
+                            Swap(
+                                targetState = i,
+                                transitionSpec = { fadeIn(motion.fade(Durations.BASE)) togetherWith fadeOut(motion.fade(Durations.FAST)) },
+                                modifier = m,
+                                label = "choice aid",
+                            ) { at ->
+                                io.github.matiyaaa.fuse.ui.shell.settings.ChoiceAidView(
+                                    aids[at], description = "What ${s.options[at].label} looks like", modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                        }
+                        if (beside) {
+                            Row(verticalAlignment = Alignment.Top) {
+                                MenuList(s.options, sel, modifier = Modifier.weight(1f), fill = false)
+                                Spacer(Modifier.width(Space.l))
+                                aid(Modifier.width(AID_WIDTH).height(AID_HEIGHT))
+                            }
+                        } else {
+                            Column {
+                                aid(Modifier.fillMaxWidth().height(AID_HEIGHT_ABOVE))
+                                Spacer(Modifier.height(Space.m))
+                                MenuList(s.options, sel, modifier = Modifier.weight(1f, fill = false), fill = false)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 }
+
+/** A choice dialog with pictures is wider, to hold them beside the list. */
+private val AID_DIALOG_MAX_WIDTH = 860.dp
+
+/** The room the dialog needs to hold the picture beside the list rather than above it. */
+private val AID_BESIDE_WIDTH = 640.dp
+
+private val AID_WIDTH = 300.dp
+private val AID_HEIGHT = 200.dp
+private val AID_HEIGHT_ABOVE = 130.dp
 
 @Composable
 private fun ReorderOverlay(app: AppState) {
@@ -227,13 +278,14 @@ private fun ReorderOverlay(app: AppState) {
  * screen is short ([compact]) so it can tighten its padding.
  */
 @Composable
-private fun DialogPanel(content: @Composable ColumnScope.(compact: Boolean) -> Unit) {
+private fun DialogPanel(maxWidth: androidx.compose.ui.unit.Dp = DIALOG_MAX_WIDTH, content: @Composable ColumnScope.(compact: Boolean) -> Unit) {
+    val widest = maxWidth
     BoxWithConstraints(contentAlignment = Alignment.Center) {
-        val room = maxWidth - Space.l * 2
+        val room = this.maxWidth - Space.l * 2
         val compact = maxHeight < COMPACT_HEIGHT
         Panel(
             Modifier
-                .widthIn(min = minOf(DIALOG_MIN_WIDTH, room), max = minOf(DIALOG_MAX_WIDTH, room))
+                .widthIn(min = minOf(DIALOG_MIN_WIDTH, room), max = minOf(widest, room))
                 .heightIn(max = minOf(DIALOG_MAX_HEIGHT, maxHeight - Space.l * 2)),
         ) {
             Column { content(compact) }
