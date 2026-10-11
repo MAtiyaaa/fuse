@@ -82,6 +82,9 @@ class DesktopFuseServices private constructor(
     private val desktopLauncher = DesktopLauncher(desktopFiles, launcherHooks)
 
     override val emulators: EmulatorDetector = DesktopEmulatorDetector(env, folders, dirs.config, os)
+
+    override fun intelligence() = io.github.matiyaaa.fuse.launch.intelligence.FileLook() to
+        io.github.matiyaaa.fuse.launch.intelligence.FileKnowledgeStore(File(dirs.data, "intelligence.json"))
     override val launcher: GameLauncher = desktopLauncher
     override val cartridge: CartridgeBridge = if (os == DesktopOs.LINUX) DesktopCartridgeBridge(dirs) else NoCartridgeBridge
     override val installer: ReleaseInstaller =

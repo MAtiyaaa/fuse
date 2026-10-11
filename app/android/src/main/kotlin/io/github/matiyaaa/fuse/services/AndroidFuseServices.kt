@@ -135,6 +135,11 @@ class AndroidFuseServices(
     }
 
     override val emulators: EmulatorDetector = AndroidEmulatorDetector(appContext, storageVolumes)
+
+    // Android keeps other apps private: Intelligence only remembers each emulator's install here,
+    // so a launch is verified for the version it ran in.
+    override fun intelligence() = io.github.matiyaaa.fuse.launch.intelligence.FileLook() to
+        io.github.matiyaaa.fuse.launch.intelligence.FileKnowledgeStore(java.io.File(appContext.filesDir, "intelligence.json"))
     override val launcher: GameLauncher = AndroidGameLauncher(
         appContext,
         activities,

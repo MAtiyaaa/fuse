@@ -134,6 +134,21 @@ internal class AuditServices(
         }
     }
 
+    /** Fuse Intelligence looking at a made-up computer where every program can run and has its folders. */
+    override fun intelligence() = object : io.github.matiyaaa.fuse.launch.intelligence.ReadOnlyLook {
+        override val home = "/home/mo"
+        override fun env(name: String): String? = null
+        override fun exists(path: String) = true
+        override fun isDirectory(path: String) = !path.substringAfterLast('/').contains('.') || path.endsWith(".app")
+        override fun canExecute(path: String) = true
+        override fun modified(path: String): Long? = 1_700_000_000_000L
+        override fun names(path: String): List<String> = emptyList()
+    } to object : io.github.matiyaaa.fuse.launch.intelligence.KnowledgeStore {
+        private var text: String? = null
+        override fun read() = text
+        override fun write(text: String) { this.text = text }
+    }
+
     override val emulators = object : EmulatorDetector {
         private val located = java.util.concurrent.ConcurrentHashMap<EmulatorId, String>()
 

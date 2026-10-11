@@ -608,6 +608,9 @@ interface EmulatorOps {
     /** Forgets where [emulator] was located and looks again. */
     suspend fun forget(emulator: EmulatorId) = Unit
 
+    /** The settings folder Fuse Intelligence found for [emulator] is wrong: forgotten, and never found again. */
+    suspend fun rejectSettingsFolder(emulator: EmulatorId) = Unit
+
     /** Extra folders searched for emulators. */
     val searchFolders: StateFlow<List<String>> get() = MutableStateFlow(emptyList())
 

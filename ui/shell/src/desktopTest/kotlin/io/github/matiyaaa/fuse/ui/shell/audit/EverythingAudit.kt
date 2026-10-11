@@ -190,15 +190,18 @@ internal fun AuditDriver.everythingScreens() {
 
     scenario("emulators", "an emulator's page and choosing one for a game") {
         useLibrary()
+        // Settings, Systems: the emulators found here, then one's sheet with what Fuse has checked.
         openSettings()
         tap(PadButton.DPAD_DOWN, sectionIndex("systems"))
         tap(PadButton.DPAD_RIGHT)
         val first = runBlocking { libraryStore.emulators.installed.value.minByOrNull { it.name.lowercase() } } ?: throw NotCovered("No emulators in the audit library")
-        waitFor(first.name)
         tapText(first.name, substring = true)
         waitFor("How Fuse starts it")
         settle(900)
         shoot("an emulator's page", 900)
+        focusText("Launch verified")
+        settle(400)
+        shoot("what Fuse has checked on this device, step by step", 600)
         tap(PadButton.B)
         openGame("Emberline Saga")
         tap(PadButton.X)

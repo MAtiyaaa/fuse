@@ -91,6 +91,12 @@ interface FuseServices {
     val jellyfinDiscovery: io.github.matiyaaa.fuse.jellyfin.ServerDiscovery? get() = null
 
     val emulators: EmulatorDetector
+
+    /**
+     * Fuse Intelligence's place on this device: what it may look at (never change) and Fuse's own
+     * file for what it learns. Null where it has nothing to look at.
+     */
+    fun intelligence(): Pair<io.github.matiyaaa.fuse.launch.intelligence.ReadOnlyLook, io.github.matiyaaa.fuse.launch.intelligence.KnowledgeStore>? = null
     val launcher: GameLauncher
     val cartridge: CartridgeBridge
     val installer: ReleaseInstaller

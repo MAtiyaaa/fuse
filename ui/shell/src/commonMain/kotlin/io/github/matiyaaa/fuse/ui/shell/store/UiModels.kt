@@ -404,4 +404,6 @@ data class EmulatorDetails(
     val homepage: String?,
     /** True when it only opens its own app (the game is picked there). */
     val opensAppOnly: Boolean,
+    /** How far Fuse has seen it go here, step by step with evidence; null when not installed or built in. */
+    val verification: io.github.matiyaaa.fuse.launch.intelligence.Verification? = null,
 )

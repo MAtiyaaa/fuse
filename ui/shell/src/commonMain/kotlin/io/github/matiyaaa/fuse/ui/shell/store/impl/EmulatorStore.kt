@@ -25,11 +25,24 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import io.github.matiyaaa.fuse.launch.intelligence.FuseIntelligence
+import io.github.matiyaaa.fuse.launch.intelligence.Verification
+
+/** How long a game must run in an emulator, through Fuse, to count as the emulator really starting games. */
+private const val LAUNCH_VERIFIED_MS = 20_000L
 
 internal class DefaultEmulatorOps(private val ctx: StoreContext) : EmulatorOps {
     override val installed: StateFlow<List<InstalledEmulator>> = ctx.installed
     private var detectJob: Job? = null
     private var lastDetect = 0L
+
+    /** Fuse Intelligence: learns where emulators keep their settings by looking, never touching. */
+    private val brain = runCatching { ctx.services.intelligence() }.getOrNull()?.let { (look, store) -> FuseIntelligence(store, look, ctx::now) }
+    private val brainTurn = Mutex()
+    private var learnJob: Job? = null
 
     override fun refresh() {
         if (detectJob?.isActive == true) return
@@ -53,6 +66,37 @@ internal class DefaultEmulatorOps(private val ctx: StoreContext) : EmulatorOps {
         // Keep one entry per adapter id; the first detection wins (catalog order).
         ctx.installed.value = found.distinctBy { it.id }
         ctx.emulatorsDetected.value = true
+        learnSoon()
+    }
+
+    /**
+     * Brings Intelligence up to date with what was found: only what changed is looked into, and
+     * never while a game is being played (it waits until the game closes).
+     */
+    private fun learnSoon() {
+        val b = brain ?: return
+        if (learnJob?.isActive == true) return
+        learnJob = ctx.scope.launch(Dispatchers.Default) {
+            ctx.playing.first { it == null }
+            brainTurn.withLock { runCatching { b.learn(installed.value) } }
+        }
+    }
+
+    /** How far [emulator] has gone here, from what Intelligence knows and the games seen running in it. */
+    private suspend fun verification(emulator: InstalledEmulator): Verification? {
+        val b = brain ?: return null
+        if (emulator.detectedVia == "Built in") return null
+        val played = runCatching { ctx.data.playSessions.playedByEmulator(LAUNCH_VERIFIED_MS) }.getOrDefault(emptyMap())
+        return brainTurn.withLock {
+            // Asked before the first round: learn this one now (only it, and only what is missing).
+            if (emulator.id.value !in b.known.emulators) runCatching { b.learn(listOf(emulator)) }
+            runCatching { b.verify(emulator, played[emulator.id.value]) }.getOrNull()
+        }
+    }
+
+    override suspend fun rejectSettingsFolder(emulator: EmulatorId) {
+        val b = brain ?: return
+        brainTurn.withLock { b.reject(emulator) }
     }
 
     override fun optionsFor(platform: PlatformId): List<EmulatorOption> {
@@ -127,6 +171,7 @@ internal class DefaultEmulatorOps(private val ctx: StoreContext) : EmulatorOps {
             limitations = adapter.limitations,
             homepage = adapter.homepage,
             opensAppOnly = adapter.opensAppOnly,
+            verification = here?.let { verification(it) },
         )
     }
 

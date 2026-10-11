@@ -508,6 +508,40 @@ fun AppState.showEmulator(id: io.github.matiyaaa.fuse.model.EmulatorId) {
             d.limitations.forEachIndexed { i, l ->
                 add(MenuAction("limit.$i", l, FuseIcons.Info, section = "Good to know"))
             }
+            // What Fuse has seen for itself, step by step: never more than it observed.
+            d.verification?.let { v ->
+                val checked = "Checked on this device"
+                for (c in v.checks) {
+                    val icon = when (c.state) {
+                        io.github.matiyaaa.fuse.launch.intelligence.CheckState.DONE -> FuseIcons.CircleCheck
+                        io.github.matiyaaa.fuse.launch.intelligence.CheckState.NOT_YET -> FuseIcons.CircleDot
+                        io.github.matiyaaa.fuse.launch.intelligence.CheckState.CANT_CHECK -> FuseIcons.EyeOff
+                    }
+                    val word = when (c.state) {
+                        io.github.matiyaaa.fuse.launch.intelligence.CheckState.DONE -> "Yes"
+                        io.github.matiyaaa.fuse.launch.intelligence.CheckState.NOT_YET -> "Not yet"
+                        io.github.matiyaaa.fuse.launch.intelligence.CheckState.CANT_CHECK -> "Can't check"
+                    }
+                    add(MenuAction(
+                        "check.${c.check.name}", c.check.title, icon, detail = c.evidence,
+                        trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Value(word), section = checked,
+                    ))
+                }
+                val settings = v[io.github.matiyaaa.fuse.launch.intelligence.Check.CONFIGURED]
+                if (settings?.state == io.github.matiyaaa.fuse.launch.intelligence.CheckState.DONE) {
+                    add(MenuAction(
+                        "reject", "That Isn't Its Settings Folder", FuseIcons.CircleSlash,
+                        detail = "Fuse forgets it and never picks it again. Nothing in it is touched", section = checked,
+                        onSelect = {
+                            contextMenu = null
+                            scope.launch {
+                                store.emulators.rejectSettingsFolder(id)
+                                toasts.show("Fuse won't use that folder for ${d.name} again", icon = FuseIcons.CircleSlash)
+                            }
+                        },
+                    ))
+                }
+            }
             if (d.installed) {
                 add(MenuAction(
                     "found", d.foundVia?.let { "Found via $it" } ?: "Installed", FuseIcons.Search,
@@ -530,7 +564,15 @@ fun AppState.showEmulator(id: io.github.matiyaaa.fuse.model.EmulatorId) {
         }
         openContextMenu(ContextMenuSpec(
             title = d.name + (d.version?.let { "  $it" } ?: ""),
-            subtitle = if (d.installed) "Installed" else "Not installed on this device",
+            subtitle = when {
+                !d.installed -> "Not installed on this device"
+                else -> when (d.verification?.furthest) {
+                    io.github.matiyaaa.fuse.launch.intelligence.Check.LAUNCH_VERIFIED -> "Launch verified on this device"
+                    io.github.matiyaaa.fuse.launch.intelligence.Check.CONFIGURED -> "Set up. No game started through Fuse yet"
+                    io.github.matiyaaa.fuse.launch.intelligence.Check.EXECUTABLE -> "Can run. Not set up yet"
+                    else -> "Installed"
+                }
+            },
             icon = FuseIcons.Joystick,
             actions = actions,
         ))
