@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.store.impl
 
 import io.github.matiyaaa.fuse.launch.Confidence
+import io.github.matiyaaa.fuse.ui.shell.store.EmulatorSupportRow
 import io.github.matiyaaa.fuse.launch.LaunchOptions
 import io.github.matiyaaa.fuse.launch.LaunchRequest
 import io.github.matiyaaa.fuse.launch.LaunchResolver
@@ -207,6 +208,53 @@ internal class DefaultEmulatorOps(private val ctx: StoreContext) : EmulatorOps {
     override fun homepage(emulator: EmulatorId): String? = ctx.registry[emulator]?.homepage
 
     override val canLocate: Boolean get() = ctx.services.emulators.canLocate
+
+    override suspend fun support(): List<EmulatorSupportRow> = ctx.registry.forHost(ctx.host).filterNot { it.builtIn }.map { a ->
+        val here = installed.value.firstOrNull { it.id == a.id }
+        val family = a.id.value.substringAfter('.')
+        EmulatorSupportRow(
+            id = a.id,
+            name = here?.name ?: a.name,
+            installed = here != null,
+            version = here?.version,
+            foundVia = here?.detectedVia,
+            path = here?.appId,
+            evidence = when (a.confidence) {
+                Confidence.VERIFIED_ESDE, Confidence.VERIFIED_SOURCE -> "Its own documentation"
+                Confidence.COMMUNITY -> "Community documentation"
+                Confidence.UNVERIFIED -> "Not confirmed yet"
+            },
+            checked = here?.let { verification(it)?.furthest?.title },
+            systems = (here?.platforms ?: a.platforms).size,
+            features = buildList {
+                add(if (a.opensAppOnly) "opens its app" else "starts games")
+                if (io.github.matiyaaa.fuse.sync.SaveAdapters.forEmulator(a.id.value) != null) add("saves")
+                if (family in setOf("pcsx2", "duckstation")) add("patches")
+                if (family in setOf("pcsx2", "duckstation", "ppsspp") || family.startsWith("retroarch")) add("cheats")
+                if (family in io.github.matiyaaa.fuse.launch.settings.NativeSettings.families) add("settings")
+            },
+        )
+    }.sortedWith(compareByDescending<EmulatorSupportRow> { it.installed }.thenBy { it.name.lowercase() })
+
+    override suspend fun supportReport(): String {
+        val rows = support()
+        fun line(r: EmulatorSupportRow) = buildString {
+            append(r.name).append(" [").append(r.id.value).append("]: ")
+            append(if (r.installed) "installed" + (r.version?.let { ", version $it" } ?: "") + (r.foundVia?.let { ", via $it" } ?: "") else "not installed")
+            r.checked?.let { append(", checked: ").append(it) }
+            append("; ").append(r.systems).append(if (r.systems == 1) " system" else " systems")
+            append("; ").append(r.features.joinToString(", "))
+            append("; launch from ").append(r.evidence.lowercase())
+            r.path?.let { append("\n    ").append(it) }
+        }
+        return DiagnosticsReport.render(
+            listOf(
+                DiagnosticsReport.Section("Installed", rows.filter { it.installed }.map(::line)),
+                DiagnosticsReport.Section("Known, not installed", rows.filterNot { it.installed }.map(::line)),
+            ),
+            ctx.services.emulators.homeDir,
+        ).replaceFirst("Fuse diagnostics report", "Fuse emulator support report")
+    }
 
     override fun known(): List<EmulatorOption> {
         val found = installed.value.associateBy { it.id }

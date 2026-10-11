@@ -357,6 +357,24 @@ sealed interface ProblemAction {
     data class ResetAppearance(override val label: String = "Reset appearance") : ProblemAction
 }
 
+/** One emulator as Fuse supports it on this system, for the Emulator support dashboard. */
+data class EmulatorSupportRow(
+    val id: EmulatorId,
+    val name: String,
+    val installed: Boolean,
+    val version: String?,
+    /** How it was found ("Flatpak", "PATH", "Located"), and where. */
+    val foundVia: String?,
+    val path: String?,
+    /** How Fuse knows how to start it: its makers' documentation, the community, or not confirmed. */
+    val evidence: String,
+    /** The furthest step Fuse has seen for itself here ("Launch verified"), when installed. */
+    val checked: String?,
+    val systems: Int,
+    /** What Fuse does with it here: starts games, finds saves, patches, cheats, settings. */
+    val features: List<String>,
+)
+
 /** Emulator choice option for pickers. */
 @Immutable
 data class EmulatorOption(

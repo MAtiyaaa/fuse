@@ -152,6 +152,10 @@ and the library, and a first step toward Fuse knowing emulators for itself.
 - The game page names the game's folder and file, small, at its end. Option sheets show Select
   and Back. Hidden or removed games never ask for an art choice.
 - Developer, Start Onboarding can rehearse setup as Linux, Windows, macOS or Android.
+- Developer, Emulator support lists every emulator Fuse knows for the system, installed ones first:
+  its version, how Fuse knows to start it, what Fuse has checked for itself and what it does with it
+  (games, saves, patches, cheats, settings), with a report to copy or save without folder or user
+  names.
 
 ## Fixed
 

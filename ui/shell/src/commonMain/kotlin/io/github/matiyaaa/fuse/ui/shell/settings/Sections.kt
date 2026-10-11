@@ -1940,6 +1940,12 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
                 trailing = Trailing.Chevron,
                 onSelect = { app.showLibraryList() },
             ))
+            add(MenuAction(
+                "dev.emulators", "Emulator support", FuseIcons.Chip,
+                detail = "Every emulator Fuse knows here: installed, its version, what Fuse checked and does with it, and a report to share",
+                trailing = Trailing.Chevron,
+                onSelect = { app.showEmulatorSupport() },
+            ))
             add(toggleRow("dev.skip", "Skip required setup steps", FuseIcons.ChevronsRight, app.dev.skipRequired) { app.dev.skipRequired = it })
             add(toggleRow("dev.frames", "Frame-time overlay", FuseIcons.Activity, app.dev.frameGraph) { app.dev.frameGraph = it })
             add(toggleRow("dev.motion", "Motion inspector", FuseIcons.Gauge, app.dev.motionInspector) {

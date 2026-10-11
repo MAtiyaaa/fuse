@@ -626,6 +626,12 @@ interface EmulatorOps {
     /** Every emulator Fuse can start on this device, found or not, by name. */
     fun known(): List<EmulatorOption> = emptyList()
 
+    /** Every emulator Fuse knows for this system, with what it supports and what Fuse has checked. */
+    suspend fun support(): List<EmulatorSupportRow> = emptyList()
+
+    /** [support] as plain text to share, with the home folder and user names taken out. */
+    suspend fun supportReport(): String = ""
+
     /** Where the user located each emulator, by id. */
     val located: StateFlow<Map<EmulatorId, String>> get() = MutableStateFlow(emptyMap())
 
