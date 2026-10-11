@@ -607,6 +607,7 @@ private fun BoxScope.TopLine(app: AppState, platform: PlatformUi, tabs: List<Des
         showBluetooth = prefs.showBluetooth,
         onSelect = { app.focusZone = FocusZone.CONTENT; app.selectTab(it) },
         onStatusClick = { app.quickMenuOpen = true },
+        onHold = { app.arrangeTabs(it) },
         activities = hudActivities(app),
         profile = hudProfile(app),
         downloads = rememberHudDownloads(app),
@@ -937,7 +938,8 @@ private fun ShellInput(app: AppState) {
     val tabs = rememberTabs(app, prefs)
     val onboarding = app.navigator.current == Route.Onboarding
     val downloads = rememberHudDownloads(app) != null
-    InputLayer(priority = LayerPriority.SHELL) { e ->
+    // On the top line, holding confirm on a tab picks it up to arrange the tabs.
+    InputLayer(priority = LayerPriority.SHELL, longPress = app.focusZone == FocusZone.TABS && app.hudButton == null) { e ->
         if (onboarding) return@InputLayer NavResult.IGNORED
         val active = app.navigator.root?.destination
         fun cycle(delta: Int): NavResult {
@@ -983,6 +985,7 @@ private fun ShellInput(app: AppState) {
                     null -> if (tabs.lastOrNull() == active) { app.hudButton = if (downloads) HudButton.DOWNLOADS else HudButton.SEARCH; NavResult.MOVED } else cycle(1)
                 }
                 NavAction.SELECT -> if (button != null) { leave(); app.runHudButton(button); NavResult.ACTIVATED } else leave()
+                NavAction.REORDER -> if (button == null && active != null) { app.arrangeTabs(active); NavResult.ACTIVATED } else NavResult.BLOCKED
                 NavAction.DOWN -> leave()
                 NavAction.BACK -> { leave(); NavResult.CONSUMED }
                 NavAction.UP -> NavResult.BLOCKED

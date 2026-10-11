@@ -163,6 +163,8 @@ fun Hud(
     profile: HudProfile? = null,
     /** Transfers moving (or failed), for the Downloads button; null hides it. */
     downloads: HudDownloads? = null,
+    /** A tab held (a long touch or click): arranging the tabs, starting with that one. */
+    onHold: ((Destination) -> Unit)? = null,
 ) {
     val time = rememberClockText(clock24h)
     val anchors = remember { HudAnchors() }
@@ -271,6 +273,7 @@ fun Hud(
                                     scaleY = s
                                     alpha = 0.45f + 0.55f * t
                                 },
+                            onHold = onHold?.let { hold -> { hold(d) } },
                             onClick = { onSelect(d) },
                         )
                     }
@@ -714,7 +717,7 @@ private fun HudIconButton(icon: ImageVector, label: String, focused: Boolean, ac
 }
 
 @Composable
-private fun Tab(label: String, icon: ImageVector, selected: Boolean, focused: Boolean, showLabel: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun Tab(label: String, icon: ImageVector, selected: Boolean, focused: Boolean, showLabel: Boolean, modifier: Modifier = Modifier, onHold: (() -> Unit)? = null, onClick: () -> Unit) {
     val c = Fuse.colors
     val motion = Fuse.motion
     val shape = rememberHudShape(insetX = false)
@@ -724,7 +727,7 @@ private fun Tab(label: String, icon: ImageVector, selected: Boolean, focused: Bo
     Row(
         modifier
             .height(Size.touch)
-            .fuseClickable(shape = shape, role = Role.Tab, onClickLabel = label, onClick = onClick)
+            .fuseClickable(shape = shape, role = Role.Tab, onClickLabel = label, onLongClick = onHold, onClick = onClick)
             .hudFocus(shape, { focus }, fill, c.focus)
             .semantics { this.selected = selected }
             .padding(horizontal = Space.m),

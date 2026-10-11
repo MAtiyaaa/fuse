@@ -151,6 +151,27 @@ internal fun AuditDriver.overlayScreens(exhaustive: Boolean) {
         shoot("Edit, every action")
     }
 
+    scenario("overlays", "arranging the tabs") {
+        useLibrary()
+        waitFor("Continue playing")
+        // Up to the top line, along to Library, and confirm held: Library is picked up to move.
+        tap(PadButton.DPAD_UP, 3)
+        tap(PadButton.R1, 2)
+        settle()
+        hold(PadButton.A)
+        waitFor("Section order")
+        settle(900)
+        shoot("a tab held: the order, with it picked up")
+        tap(PadButton.DPAD_DOWN)
+        settle(600)
+        shoot("moved one place down")
+        tap(PadButton.A)
+        settle(600)
+        tap(PadButton.B)
+        settle(900)
+        shoot("the top line in its new order")
+    }
+
     scenario("overlays", "quick menu") {
         useLibrary()
         waitFor("Continue playing")

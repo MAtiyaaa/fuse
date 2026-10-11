@@ -79,6 +79,32 @@ internal fun rememberTabs(app: AppState, prefs: UiPrefs): List<Destination> {
         .filter { sections.showsTab(it, app.offers(it), cartridge) }
 }
 
+/**
+ * Opens the top line's order to arrange, with [held] (the tab that was held) already picked up:
+ * the same sheet Settings, Home, Section order opens. Home stays first.
+ */
+internal fun AppState.arrangeTabs(held: Destination? = null) {
+    val p = store.prefs.value
+    val sections = sections
+    // Exactly the tabs the top line shows, in its order.
+    val cartridge = store.cartridge.status.value
+    val shown = (listOf(Destination.HOME) + p.destinations.filter { it != Destination.HOME }).filter { sections.showsTab(it, offers(it), cartridge) }
+    reorder = ReorderSpec(
+        title = "Section order",
+        icon = io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons.MoveHorizontal,
+        message = "The order of the top bar. Home always comes first. Move it with the D-pad and press A to put it down, or drag it by its grip",
+        lifted = held?.takeIf { it != Destination.HOME }?.name,
+        entries = shown.map { d -> io.github.matiyaaa.fuse.ui.designsystem.components.ReorderEntry(d.name, sections.label(d), sections.icon(d), locked = d == Destination.HOME) },
+        onMoved = { keys ->
+            store.updatePrefs { s ->
+                val moved = keys.mapNotNull { k -> Destination.entries.firstOrNull { it.name == k } }
+                // Sections hidden from this list (not offered here) keep their places after the rest.
+                s.copy(destinations = moved + s.destinations.filter { it !in moved })
+            }
+        },
+    )
+}
+
 /** Which part of Addons is showing. */
 enum class AddonsPart { CARTRIDGE, STORE, JELLYFIN, SYNC, SYNCTHING, STREAMING }
 

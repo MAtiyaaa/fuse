@@ -4,9 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Measurable
@@ -22,13 +20,9 @@ import androidx.compose.ui.unit.Constraints
 import io.github.matiyaaa.fuse.ui.designsystem.theme.LocalRenderQuality
 import io.github.matiyaaa.fuse.ui.fuseline.Curves
 import io.github.matiyaaa.fuse.ui.fuseline.Durations
-import io.github.matiyaaa.fuse.ui.fuseline.Enter
 import io.github.matiyaaa.fuse.ui.fuseline.LocalFuselineMotion
-import io.github.matiyaaa.fuse.ui.fuseline.animate
-import io.github.matiyaaa.fuse.ui.fuseline.tween
-import kotlin.time.TimeMark
-import kotlin.time.TimeSource
-import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.fuseline.Cue
+import io.github.matiyaaa.fuse.ui.fuseline.rememberCue
 
 /**
  * One entry into a screen (or a tab of one). Content revealed through it rises a few dp and fades
@@ -40,9 +34,7 @@ import kotlinx.coroutines.launch
  * tab) and pass it to [Modifier.reveal], or provide it to a subtree with [RevealScope].
  */
 @Stable
-class Reveal internal constructor() {
-    /** When the first item of this entry appeared. */
-    internal var start: TimeMark? = null
+class Reveal internal constructor(internal val cue: Cue) {
 
     internal companion object {
         /**
@@ -55,7 +47,11 @@ class Reveal internal constructor() {
 
 /** A fresh [Reveal] for each new value of [keys]. */
 @Composable
-fun rememberReveal(vararg keys: Any?): Reveal = remember(*keys) { Reveal() }
+fun rememberReveal(vararg keys: Any?): Reveal {
+    // Fuseline 4.1: every element of the entry plays from one cue, not a move of its own each.
+    val cue = rememberCue(*keys)
+    return remember(cue) { Reveal(cue) }
+}
 
 /** The entry [Modifier.reveal] without an explicit [Reveal] belongs to; none outside a [RevealScope]. */
 val LocalReveal = staticCompositionLocalOf<Reveal?> { null }
@@ -107,45 +103,49 @@ private class RevealElement(val reveal: Reveal?, val index: Int) : ModifierNodeE
 private class RevealNode(var reveal: Reveal?, var index: Int) :
     Modifier.Node(), LayoutModifierNode, CompositionLocalConsumerModifierNode {
 
-    /** 0 hidden and lowered, 1 in place. */
-    private var progress by mutableFloatStateOf(1f)
+    /** The entry this element plays from, while it has some of its reveal left to play. */
+    private var cue: Cue? = null
+    private var delayMs = 0
+    private var durationMs = 0
     private var risePx = 0f
     private var fadeOnly = false
 
     override val shouldAutoInvalidate: Boolean get() = false
 
     override fun onAttach() {
+        cue = null
         val entry = reveal ?: currentValueOf(LocalReveal)
         val motion = currentValueOf(LocalFuselineMotion)
         val quality = currentValueOf(LocalRenderQuality)
-        progress = 1f
         if (entry == null || !quality.animatedBackground) return
         // Decided now, before the first frame: an element that appears after the entry is simply
         // there, without even one hidden frame.
-        val start = entry.start ?: TimeSource.Monotonic.markNow().also { entry.start = it }
-        val elapsed = start.elapsedNow().inWholeMilliseconds
-        if (elapsed > Reveal.WINDOW_MS) return
+        if (entry.cue.elapsedMillis > Reveal.WINDOW_MS) return
         fadeOnly = motion.reduced
         risePx = with(currentValueOf(LocalDensity)) { motion.revealRise.toPx() }
-        progress = 0f
-        coroutineScope.launch {
-            try {
-                val delay = (motion.stagger(index) - start.elapsedNow().inWholeMilliseconds).toInt().coerceAtLeast(0)
-                val duration = if (fadeOnly) motion.ms(Durations.FAST) else motion.ms(Durations.SLOW + 60)
-                animate(0f, 1f, animationSpec = tween(duration, delay, Curves.Enter)) { v, _ -> progress = v }
-            } finally {
-                // Cancelled (the element left mid-reveal) or done: never leave it hidden.
-                progress = 1f
-            }
-        }
+        delayMs = motion.stagger(index)
+        durationMs = if (fadeOnly) motion.ms(Durations.FAST) else motion.ms(Durations.SLOW + 60)
+        cue = entry.cue
+        entry.cue.join((delayMs + durationMs).toLong())
+    }
+
+    override fun onDetach() {
+        cue = null
     }
 
     override fun MeasureScope.measure(measurable: Measurable, constraints: Constraints): MeasureResult {
         val placeable = measurable.measure(constraints)
         return layout(placeable.width, placeable.height) {
             placeable.placeWithLayer(0, 0) {
-                val p = progress
-                if (p < 1f) {
+                // Read in the layer, from the entry's one clock: a frame of the entrance redraws
+                // layers only. Once played, it stops reading (and stops being redrawn by others).
+                val c = cue ?: return@placeWithLayer
+                val p = c.progress(delayMs, durationMs, Curves.Enter)
+                if (p >= 1f) {
+                    cue = null
+                    alpha = 1f
+                    translationY = 0f
+                } else {
                     // The fade finishes ahead of the rise, so text is readable while it settles.
                     alpha = (p * 1.6f).coerceAtMost(1f)
                     translationY = if (fadeOnly) 0f else (1f - p) * risePx

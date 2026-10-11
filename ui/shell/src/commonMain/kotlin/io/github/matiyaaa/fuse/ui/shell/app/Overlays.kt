@@ -172,9 +172,16 @@ private fun ReorderOverlay(app: AppState) {
     if (spec != null) shown = spec
     val keys = (spec ?: shown)?.entries?.map { it.key }.orEmpty()
     // A fresh list each time one opens, starting on its first row that can move.
-    val list = remember(spec?.title) { ReorderListState(keys).also { s -> s.selection.index = (spec?.entries?.indexOfFirst { !it.locked } ?: 0).coerceAtLeast(0) } }
-    list.sync(keys)
     val locked: (String) -> Boolean = { k -> spec?.entries?.firstOrNull { it.key == k }?.locked == true }
+    val list = remember(spec?.title, spec?.lifted) {
+        ReorderListState(keys).also { s ->
+            // Opened by holding one (a tab on the top line): it starts on that one, already picked up.
+            val held = spec?.lifted?.let { k -> spec.entries.indexOfFirst { it.key == k && !it.locked } }?.takeIf { it >= 0 }
+            s.selection.index = held ?: (spec?.entries?.indexOfFirst { !it.locked } ?: 0).coerceAtLeast(0)
+            if (held != null) s.pickUp(locked)
+        }
+    }
+    list.sync(keys)
     val haptics = app.platform.haptics
     fun close() {
         list.cancel()

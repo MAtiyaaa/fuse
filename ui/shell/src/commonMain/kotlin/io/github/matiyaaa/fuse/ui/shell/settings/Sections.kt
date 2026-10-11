@@ -49,6 +49,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.ReorderSpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.addGame
 import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
+import io.github.matiyaaa.fuse.ui.shell.app.arrangeTabs
 import io.github.matiyaaa.fuse.ui.shell.app.emulatorFoldersPicker
 import io.github.matiyaaa.fuse.ui.shell.app.hasTwoScreens
 import io.github.matiyaaa.fuse.ui.shell.app.locatePicker
@@ -247,20 +248,8 @@ fun homeRows(app: AppState): List<MenuAction> {
                 }
             })
             val shownTabs = p.destinations.filter { app.offers(it) }
-            add(MenuAction("dest.order", "Section order", FuseIcons.MoveHorizontal, detail = shownTabs.joinToString("  ·  ") { sections.label(it) }, trailing = Trailing.Chevron, onSelect = {
-                app.reorder = ReorderSpec(
-                    title = "Section order",
-                    icon = FuseIcons.MoveHorizontal,
-                    message = "The order of the top bar. Home always comes first. Drag a row by its grip, or press A to pick it up and move it with the D-pad",
-                    entries = shownTabs.map { d -> ReorderEntry(d.name, sections.label(d), sections.icon(d), locked = d == Destination.HOME) },
-                    onMoved = { keys ->
-                        set { s ->
-                            val moved = keys.mapNotNull { k -> Destination.entries.firstOrNull { it.name == k } }
-                            // Sections hidden from this list (not offered here) keep their places after the rest.
-                            s.copy(destinations = moved + s.destinations.filter { it !in moved })
-                        }
-                    },
-                )
+            add(MenuAction("dest.order", "Section order", FuseIcons.MoveHorizontal, detail = shownTabs.joinToString("  ·  ") { sections.label(it) } + ". Or hold a tab in the top bar", trailing = Trailing.Chevron, onSelect = {
+                app.arrangeTabs()
             }))
             if (app.store.apps.supported) {
                 add(app.choiceRow(

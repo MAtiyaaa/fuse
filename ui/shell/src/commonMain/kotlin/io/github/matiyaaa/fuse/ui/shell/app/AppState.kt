@@ -81,6 +81,8 @@ data class ReorderSpec(
     val entries: List<ReorderEntry>,
     val message: String? = null,
     val icon: ImageVector? = null,
+    /** The entry held to open it: it starts picked up, ready to move. */
+    val lifted: String? = null,
     val onMoved: (List<String>) -> Unit,
 )
 
