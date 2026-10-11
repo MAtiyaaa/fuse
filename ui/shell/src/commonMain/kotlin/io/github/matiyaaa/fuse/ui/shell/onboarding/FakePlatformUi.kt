@@ -42,7 +42,7 @@ class FakePlatformUi(override val host: Host, private val leave: () -> Unit = {}
         override fun openControllerSettings() = Unit
     }
     override val video: VideoPreview? = null
-    override val appVersion = "0.4.1 rehearsal"
+    override val appVersion = "0.4.2 rehearsal"
     // Pretend Steam on every computer, and pretend Decky on Linux only (as the real ones are):
     // nothing they "do" leaves the rehearsal.
     override val steam = if (host != Host.ANDROID) object : SteamIntegration {

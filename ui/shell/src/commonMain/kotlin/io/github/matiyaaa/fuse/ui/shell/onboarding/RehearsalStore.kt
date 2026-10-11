@@ -47,7 +47,7 @@ class RehearsalStore(scope: CoroutineScope, host: Host = Host.LINUX) : FuseStore
         respond(body, headers = headersOf(HttpHeaders.ContentType, "application/json"))
     })
     override val jellyfin = JellyfinService(
-        JellyfinClient(http, io.github.matiyaaa.fuse.jellyfin.DeviceInfo("Fuse rehearsal", "rehearsal", "0.4.1")),
+        JellyfinClient(http, io.github.matiyaaa.fuse.jellyfin.DeviceInfo("Fuse rehearsal", "rehearsal", "0.4.2")),
         object : SecretStore {
             override suspend fun get(key: String) = secretValues[key]
             override suspend fun put(key: String, value: String) { secretValues[key] = value }
@@ -199,7 +199,7 @@ class RehearsalStore(scope: CoroutineScope, host: Host = Host.LINUX) : FuseStore
         override fun download(release: ReleaseInfo) = Unit
         override fun cancelDownload() = Unit
         override suspend fun apply() = Result.success(false)
-        override val currentVersion = "0.4.1 rehearsal"
+        override val currentVersion = "0.4.2 rehearsal"
     }
     override val storage = object : StorageOps {
         override val usage = MutableStateFlow<StorageUsage?>(null)

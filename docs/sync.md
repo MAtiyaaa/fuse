@@ -1,7 +1,8 @@
-# Fuse Sync by Fuse
+# Fuse One
 
-Fuse Sync keeps your saves, save states, play time, library and settings the same on every device
-you play on. It runs on a computer of your own at home (the **host**), and every other device
+Fuse One is Fuse's household system: **Fuse Profiles** (a profile for each person), **Fuse Save Sync**
+(saves, save states and play time) and the **Fuse Library** (every game in the household). It keeps
+your saves, save states, play time, library, settings and keys the same on every device you play on. It runs on a computer of your own at home (the **host**), and every other device
 (a handheld, a phone, another PC) connects to it. Nothing goes to anyone else's server.
 
 It sits beside Fuse's other first-party parts: **Fuse Player by Fuse** (films, shows and music) and
@@ -15,23 +16,23 @@ It sits beside Fuse's other first-party parts: **Fuse Player by Fuse** (films, s
 - One household, one newest save: a save made on any device reaches every other device that has
   the game by itself, and each game says "Synced everywhere" or "5 of 6 devices current".
 
-Your games themselves are never kept on the host. Each device keeps its own games, and Fuse Sync
+Your games themselves are never kept on the host. Each device keeps its own games, and Fuse One
 carries what you made playing them. From 0.3.8 a device can also bring a game from another of your
 devices when you ask it to: the game goes device to device, or passes through the host without
 being written there (see [Games across the household](#games-across-the-household)).
 
-Off, Fuse Sync does nothing at all: no Sync tab, no network, nothing in the background. Profiles
-don't need it: a device keeps its own (see [Profiles](#profiles)), and Fuse Sync takes them along
-when it joins a host.
+Off, Fuse One's household does nothing at all: no network, nothing in the background. Profiles
+don't need a household: a device keeps its own (see [Profiles](#profiles)), with each person's saves
+kept apart and shown on the Sync page, and Fuse One takes them along when it joins a host.
 
 ## Setting it up
 
-**On the computer that will be the host** (Linux, Windows or macOS): Settings, Addons, Fuse Sync,
+**On the computer that will be the host** (Linux, Windows or macOS): Settings, Fuse One,
 turn it on, then **Make This the Host**. Give it a name, choose whether it keeps running when Fuse
-is closed (see below), and it shows **Fuse Sync is ready** with an eight-character code.
+is closed (see below), and it shows **Fuse One is ready** with an eight-character code.
 
-**On every other device**: Settings, Addons, Fuse Sync, turn it on, then **Connect to a Host**.
-Fuse looks on the network (**Fuse Sync found**) and you choose the host. Then either:
+**On every other device**: Settings, Fuse One, turn it on, then **Connect to a Host**.
+Fuse looks on the network (**Fuse One found**) and you choose the host. Then either:
 
 - **Ask to Let This Device In.** A card pops up on the host and on every device already connected,
   naming the device and showing a six-digit number; the new device shows the same number. Anyone
@@ -64,17 +65,17 @@ is the "Allow access" prompt the first time Fuse hosts, or Windows Security, Fir
 ## Profiles
 
 Every person has a profile, with one of Fuse's own avatars and, if they want, a PIN. Profiles work
-without Fuse Sync: on a device with no host they are that device's own, each with their own saves,
+without Fuse One: on a device with no host they are that device's own, each with their own saves,
 play time, favourites, collections, Home and theme, and a PIN kept only as a salted hash. Each
 person's save in an emulator's folder is put away when someone else plays that game and put back
 when they do. With a host, profiles are the host's and follow each person to every device.
 
-Setup asks who's playing near the start, right after Fuse Sync, so a device that just joined a host
+Setup asks who's playing near the start, right after Fuse One, so a device that just joined a host
 shows the household's profiles to choose from (**Continue**, or **Add Another**); with no host, or
 a host with no profiles yet, it starts with none (**Create Your Profile**; it can be skipped). **Settings, Profiles** lists everyone, adds someone, edits a
 profile (name, picture and PIN, asking for the PIN first when it has one), puts them in order
 (**Profile Order**, the same order on every device with a host) and deletes one. Deleting a
-profile without a host keeps their saves as plain files in Fuse Sync's `kept` folder.
+profile without a host keeps their saves as plain files in Fuse One's `kept` folder.
 **Who's playing?** opens from the avatar at the top right, from the Sync tab and from Settings.
 Switching happens in place, without a restart: the library's favourites, names, play time, Last
 Played, collections, theme, Home and quick menu change to that person's at once.
@@ -82,8 +83,16 @@ Played, collections, theme, Home and quick menu change to that person's at once.
 At startup Fuse can use the last profile, ask who's playing every time, or always start as one
 person (asking for their PIN when they have one). Several devices can be on different profiles at
 the same time. With the host away, Who's playing? can always be closed (Not Now), a profile without
-a PIN switches at once and catches up later, and one with a PIN waits for the host, the only one
-that can check it.
+a PIN switches at once and catches up later, and one with a PIN opens with the PIN typed on this
+device before (checked against a salted hash kept here, with the same lockout after wrong tries);
+a PIN never typed on this device waits for the host.
+
+**Without a host**, the Sync page shows the person playing: their games with play time, and the
+saves kept for them on this device (the newest, and the one set aside while someone else plays).
+It offers Switch Profile, New Profile and Other Devices (making this computer the host, or
+connecting to one), and says what a host adds: at home it works as soon as it is set up; away from
+home the host also needs an address the internet can reach (a VPN such as Tailscale, or an https
+tunnel; see [Reaching the host from outside](#reaching-the-host-from-outside)).
 
 The first time a device joins a profile, what it already had joins that profile: a new profile
 takes it as it is; a profile already in use keeps what it has and only gains what it was missing,
@@ -124,7 +133,7 @@ fresh. Every device then puts the same save in place for whoever plays, and it s
 everyone". Play time stays each person's own, and each person's earlier saves stay in their
 history, so turning it off later goes back to them.
 
-**Whose saves move on this device.** Settings, Fuse Sync has two choices of its own on each
+**Whose saves move on this device.** Settings, Fuse One has two choices of its own on each
 device. **Don't Take Saves From** keeps the chosen people's saves made elsewhere off this device
 (a child's handheld that never takes a grown-up's saves); this device still sends theirs. **Don't
 Sync Saves For** keeps the chosen people's saves on this device to itself: nothing comes in and
@@ -135,7 +144,7 @@ time and the library sync either way.
 
 A device signed in to RomM or Jellyfin shares them with the household: the addresses, the RomM
 sign-in, and each person's Jellyfin sign-in. A device without them gets them, so joining a host
-brings RomM and Jellyfin along, signed in (setup asks for Fuse Sync before RomM and Jellyfin for
+brings RomM and Jellyfin along, signed in (setup asks for Fuse One before RomM and Jellyfin for
 this reason). What a device already has is never replaced: its own server and sign-in stay, and a
 person who signed out on a device isn't signed back in by itself. A device whose person chose
 Cartridge in setup gets RomM's addresses but keeps Cartridge on.
@@ -149,7 +158,7 @@ by themselves. The first one with RomM or Jellyfin set up asks once whether to s
 from there. Yes shares them; Not From This Device notes the answer on the host and leaves the
 question to the next device that updates. Once any device has shared, the others come along
 without asking. Devices that join from 0.3.6.3 on share by themselves. **Share Sign-ins** in
-Settings, Fuse Sync turns it off (or on) for a device, both ways.
+Settings, Fuse One turns it off (or on) for a device, both ways.
 
 How sign-ins travel and are kept:
 
@@ -162,6 +171,16 @@ How sign-ins travel and are kept:
 - To each device, sealed again with that device's own secret. A person's Jellyfin sign-in only goes
   to devices allowed to open their profile (a PIN keeps it to the devices that know it).
 - A host older than 0.3.6.3 doesn't offer any of this, and devices carry on as before.
+
+### Keys
+
+From 0.4.2 Fuse's keys travel the same way: SteamGridDB, TheGamesDB, IGDB (client id and secret),
+ScreenScraper (username and password) and RetroAchievements (username and web API key). A key added
+on one device reaches every device that shares sign-ins, sealed exactly like the sign-ins above. A
+key changed on one device replaces the others' while they still have the value both last had (one
+changed on two devices keeps the last change); a key removed on a device stays off that device only,
+and the household and other devices keep theirs. A host from before 0.4.2 keeps no keys, and
+devices don't send them to it again and again.
 
 ## Games across the household
 
@@ -239,7 +258,7 @@ Settings are sorted into four kinds:
 | Kind | Examples | Where it lives |
 | --- | --- | --- |
 | A person's | Theme and appearance, Home layout and pages, tabs and their order, quick menu, library sort and art, sounds and music, the clock, Fuse Player's languages and subtitles | Follows the profile to every device |
-| A device's | Controllers and mappings, screens and the second screen, performance, drives and library folders, file paths, add-on accounts (RetroAchievements; RomM and Jellyfin go to the household as above), Fuse Sync's own connection, whose saves move here | Stays on the device |
+| A device's | Controllers and mappings, screens and the second screen, performance, drives and library folders, file paths, add-on accounts (RomM, Jellyfin and Fuse's keys go to the household as above, while Share Sign-ins is on), Fuse One's own connection, whose saves move here | Stays on the device |
 | The host's | Profiles, devices, every save version, the journal | Only on the host |
 | Shared records | Each game's favourite, hidden, pinned, custom name, chosen emulator, play time, sessions and Last Played; collections | Merged across devices, per profile |
 
@@ -250,13 +269,13 @@ crosses over by accident. Each kind can be turned off under **What syncs**.
 
 While arranging Home, a switch beside **Add widget** and **Done** chooses whose Home it is:
 **This Device** (laid out for this screen, kept apart) or **All Devices on Profile**. The same
-choice is in Settings, Addons, Fuse Sync, and only appears while settings follow a profile.
+choice is in Settings, Fuse One, and only appears while settings follow a profile.
 Switching keeps both: the profile's Home is untouched while a device has its own, and a device's
 own Home comes back when it is chosen again.
 
 ## Games, not paths
 
-Fuse Sync knows a game by what it is (its system and serial, else its title without region or
+Fuse One knows a game by what it is (its system and serial, else its title without region or
 version tags), never by where its file is. "Pokemon Ruby (USA).gba" on the PC and
 "pokemon ruby (Europe).gba" on a card in the handheld are the same game, and its save lands where
 each device's emulator reads it.
@@ -266,7 +285,7 @@ title), and the host answers with one id for the game that every device then use
 computer knows by its serial and the handheld knows only by its title is still one game, and saves
 kept under the other name are moved over by themselves.
 
-Saves are found by per-emulator adapters. Fuse Sync and Syncthing use the same ones.
+Saves are found by per-emulator adapters. Fuse One and Syncthing use the same ones.
 
 | Emulators | Where their saves are | Save states |
 | --- | --- | --- |
@@ -344,10 +363,10 @@ same format is read (a state from one core never lands in another), except where
 DraStic's `.dsv` and a plain DS save, and Mupen64Plus's separate N64 save files and RetroArch's one
 `.srm`.
 
-**Save Folders** (Settings, Addons, Fuse Sync or Syncthing) lists each emulator in the library and
+**Save Folders** (Settings, Fuse One or Syncthing) lists each emulator in the library and
 where its saves are on this device. Emulators that save where you tell them (Azahar, PPSSPP's
 memory stick, DraStic, M64Plus FZ, Vita3K and others) can be pointed at that folder; the choice
-is this device's own and is used by Fuse Sync and Syncthing alike. Android 11 and later keep each
+is this device's own and is used by Fuse One and Syncthing alike. Android 11 and later keep each
 app's `Android/data` folder private, so an emulator that only saves there says so, with how to move
 its data out. Still out of reach: xemu (its saves are inside a hard disk image), Windows games in
 Winlator and similar (each keeps its own), and PC games (Steam has its own cloud).
@@ -375,13 +394,13 @@ arrived.
 
 **When both sides played** since they last agreed, Fuse asks which save to use, showing where and
 when each was saved and how long the game had been played by then: **Use This Device** or
-**Use Fuse Sync**. The one not chosen is kept in the game's history as the other side of a
+**Use Fuse One**. The one not chosen is kept in the game's history as the other side of a
 conflict. Timestamps alone never decide: every version records the one it was made from, so a
 conflict is told by history, not clocks.
 
 ## Every device, by itself
 
-Fuse Sync is a household system: every device that has a game converges on its newest save, in the
+Fuse One is a household system: every device that has a game converges on its newest save, in the
 background, without anyone launching it there. When a device sends a new save, the host tells the
 others (its journal), and each one that has the game puts the save in place. A device that was off
 or away catches up on every game when it comes back; a new device catches up when it joins; a
@@ -409,6 +428,16 @@ Tests run six devices against one host: a save fanning out, an offline device ca
 device joining late, a device without the game, a conflict left for the person, and per-person
 folders on a shared device.
 
+## The Sync page
+
+How things stand is always in view: up to date, syncing, changes waiting, offline (saves keep
+working and wait here), or needing you, with the last few saves as they went (done, both kept, or
+not sent). **History** lasts across restarts on each device (the last 200 entries, in
+`history.json`), names the device each entry happened on, and marks what it touched: saves,
+conflicts, restores, failures, profiles, devices, the host and other changes. The top line has
+**Sync Now**, **Library** (the Fuse Library), **Switch Profile** and **More** (New Profile, Add a
+Device, Settings).
+
 ## Save history
 
 Every game has a **Save History** (in its options), with versions from every device. Any version can
@@ -435,7 +464,7 @@ journal). On a slow connection what matters most goes first: records, then the s
 
 At home, devices find the host by themselves. Away, the host needs an **outside address** that
 reaches it over the internet: a VPN such as Tailscale or WireGuard, or an https reverse proxy or
-tunnel in front of port 47311. Set it once on the host (Settings, Addons, Fuse Sync, Address From
+tunnel in front of port 47311. Set it once on the host (Settings, Fuse One, Address From
 Outside), or simply connect a device through the tunnel: the host notices the name it was reached
 by and keeps it. Every device learns it from the host, so none has to be told. A device can still
 use its own (its Outside Address setting). Fuse uses the home address when it answers and the
@@ -449,8 +478,15 @@ A Cloudflare tunnel works well: point it at `http://localhost:47311` on the host
 address (`https://sync.example.com`) as the outside address. Leave Cloudflare Access off for that
 hostname (or let Fuse's requests through), since Fuse signs its own requests and can't answer a
 login page. An address typed without `https://` is reached securely when it is a name on the
-internet and plainly when it is at home. On Android, Fuse Sync uses Android's own secure
+internet and plainly when it is at home. On Android, Fuse One uses Android's own secure
 connection, as the rest of Fuse does.
+
+## The Fuse One Host
+
+The host doesn't need the Fuse app: the **Fuse One Host** is the same host on its own, for a home
+server or a mini PC, run with Docker (a one-line installer, a Compose file and an image published
+for amd64 and arm64). It keeps everything in one data folder, pairs devices with a code, and is a
+host like any other. See [tools/host/README.md](../tools/host/README.md).
 
 ## Keeping the host running
 
@@ -477,7 +513,7 @@ with Sync Now, Switch Profile and Add a Device.
 
 ## The host account
 
-**Host Account** (on the host: Settings, Addons, Fuse Sync) is one username and password for the
+**Host Account** (on the host: Settings, Fuse One) is one username and password for the
 times nobody is at a screen:
 
 - **Joining from away.** A device asking to join can choose **Use the Host's Account**. It
@@ -536,11 +572,11 @@ Fuse's own Backup (Settings, Backup) also keeps the person's records and setting
 
 **Unlink This Device** stops syncing and keeps everything on the device exactly as it is.
 
-**Turning Fuse Sync off** forgets the host: its link and anything still waiting to be sent. Fuse
+**Turning Fuse One off** forgets the host: its link and anything still waiting to be sent. Fuse
 asks first: with **Keep Profiles Here** (the default) every profile on the host (Admin aside)
 stays as this device's own, with its newest records brought down first (a profile with a PIN when
 this device has opened it), the saves here and the PIN last typed here; everyone else's saves parked here are kept
-as plain files in a `kept` folder in Fuse Sync's data folder. **Forget Them Too** lets the
+as plain files in a `kept` folder in Fuse One's data folder. **Forget Them Too** lets the
 profiles go as well, saves that never reached the host kept first the same way. Unlinking asks the
 same. The device keeps its games, the saves in its emulators' folders, its library, settings and
 Home as they are now. Turning it on again and joining a host brings the profiles kept here along.
@@ -553,7 +589,7 @@ ever deletes or moves the host's own files: a host set up in a folder that alrea
 things keeps its files in a `Fuse Sync Host` folder of its own there.
 
 **Erase Fuse** (the bottom of Settings, About) starts Fuse over as new: its library, settings,
-profiles, art and caches go, and Fuse Sync is let go of first (a host is deleted, a device forgets
+profiles, art and caches go, and Fuse One is let go of first (a host is deleted, a device forgets
 its host). Game files, emulators and the saves in the emulators' folders stay.
 
 The first profile on a device takes over the look, Home and settings the device already had. Anyone
@@ -597,8 +633,8 @@ so the new save goes out.
 **What it can't do.** Syncthing moves files as they are named, so a save only matches where the
 game's file has the same name on every device, and there is no play time, no profiles and no
 library or settings sync. It also keeps one save per game for everyone who plays on these devices,
-where Fuse Sync gives each person their own. That is why Fuse Sync is the one Fuse recommends.
-Its folders come from the same adapters and Save Folders as Fuse Sync.
+where Fuse One gives each person their own. That is why Fuse One is the one Fuse recommends.
+Its folders come from the same adapters and Save Folders as Fuse One.
 
 **Leaving.** Turning Syncthing off in Fuse, or Disconnect Syncthing, stops Fuse using it (and
 Disconnect forgets the key). Syncthing keeps running and keeps syncing whatever it shares, and
