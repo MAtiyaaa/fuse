@@ -63,6 +63,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
@@ -160,7 +161,7 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
         add(SyncAction("More", FuseIcons.More) {
             app.openContextMenu(
                 io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec(
-                    title = "Fuse One", subtitle = profile?.name?.let { "Playing as $it" }, icon = FuseIcons.RefreshCcw,
+                    title = "Fuse One", subtitle = profile?.name?.let { "Playing as $it" }, icon = FuseMarks.FuseOne,
                     actions = listOf(
                         MenuAction("sync.new", "New Profile", FuseIcons.UserPlus, detail = "Someone else who plays here", onSelect = { app.contextMenu = null; app.whoAreYou = WhoMode.ADD }),
                         // Any device already in can bring in another: a code here, or saying yes when it asks.

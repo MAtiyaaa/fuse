@@ -38,11 +38,27 @@ private fun AuditDriver.settleUntil(text: String, shown: Boolean = true, timeout
     throw NotCovered("Waited ${timeoutMs / 1000} s for \"$text\" to ${if (shown) "show" else "go away"}")
 }
 
-/** Quick menu (Start), then its Settings row. */
+/** The quick menu (Start) on its section [label]: LB back to the first, then RB until it is open. */
+internal fun AuditDriver.openQuickMenu(label: String = "Quick settings") {
+    tap(PadButton.START)
+    waitFor("Quick settings")
+    settle()
+    tap(PadButton.L1, 3)
+    repeat(4) {
+        if (isSelectedDescribed(label)) {
+            settle()
+            return
+        }
+        tap(PadButton.R1)
+        settle(400)
+    }
+    throw NotCovered("The quick menu's $label section never opened")
+}
+
+/** Quick menu (Start), its Fuse section, then Settings. */
 internal fun AuditDriver.openSettings() {
     home()
-    tap(PadButton.START)
-    waitFor("Arrange Home")
+    openQuickMenu("Fuse")
     tapText("Settings")
     waitFor("Search settings")
     settle()
@@ -78,8 +94,7 @@ internal fun AuditDriver.overlayScreens(exhaustive: Boolean) {
     scenario("overlays", "capture") {
         useLibrary(capturePlatform)
         waitFor("Continue playing")
-        tap(PadButton.START)
-        waitFor("Arrange Home")
+        openQuickMenu()
         focusText("Screenshot") { if (nav(NavAction.RIGHT) != NavResult.MOVED) { nav(NavAction.DOWN); nav(NavAction.LEFT); nav(NavAction.LEFT) } }
         shoot("quick menu, Screenshot tile focused")
         tap(PadButton.A)
@@ -169,11 +184,27 @@ internal fun AuditDriver.overlayScreens(exhaustive: Boolean) {
         shoot("put down: the top line in its new order")
     }
 
+    scenario("overlays", "liquid glass") {
+        // Switched as Settings switches it, so the theme's glass comes along.
+        useLibrary { it.withTheme(ThemePresets.Glass) }
+        waitFor("Continue playing")
+        openQuickMenu()
+        settle(1_200)
+        shoot("the quick menu as liquid glass over Home", 1_500)
+        tap(PadButton.B)
+        // Drawn without a graphics card here, the Glass room takes its time to let a menu go.
+        waitGone("Quick settings")
+        tap(PadButton.DPAD_LEFT)
+        tap(PadButton.X)
+        waitFor("Game Info")
+        shoot("a game's options as liquid glass", 3_000)
+        tap(PadButton.B)
+    }
+
     scenario("overlays", "quick menu") {
         useLibrary()
         waitFor("Continue playing")
-        tap(PadButton.START)
-        waitFor("Arrange Home")
+        openQuickMenu()
         shoot("open, first tile focused")
         // Low Power shows whether it is on while focused, before and after pressing it.
         val nextTile = {
@@ -191,13 +222,29 @@ internal fun AuditDriver.overlayScreens(exhaustive: Boolean) {
         tap(PadButton.A)
         focusText("Find games", step = nextTile)
         shoot("Find games focused")
+        // The sections, along the top: RB to each.
+        tap(PadButton.R1)
+        settle(700)
+        shoot("Downloads, nothing moving")
+        tap(PadButton.R1)
+        settle(700)
+        shoot("Performance: the quality, Low Power and the overlay")
+        tap(PadButton.DPAD_DOWN, 3)
+        tap(PadButton.A)
+        settle(600)
+        shoot("High quality chosen, what it does under it")
+        tap(PadButton.DPAD_UP, 3)
+        tap(PadButton.A)
+        tap(PadButton.R1)
+        settle(700)
+        shoot("Fuse: its own actions")
         tap(PadButton.B)
         if (!exhaustive) return@scenario
-        tap(PadButton.START)
-        waitFor("Arrange Home")
+        openQuickMenu()
         tap(PadButton.DPAD_DOWN, 4)
         shoot("brightness slider focused")
-        tap(PadButton.DPAD_DOWN, 6)
+        tap(PadButton.R1, 3)
+        tap(PadButton.DPAD_DOWN, 8)
         shoot("last row (Exit Fuse) focused")
         tap(PadButton.A)
         waitFor("Exit Fuse?")
@@ -561,8 +608,7 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
     scenario("settings", "home arrangement") {
         useLibrary()
         home()
-        tap(PadButton.START)
-        waitFor("Arrange Home")
+        openQuickMenu("Fuse")
         tapText("Arrange Home")
         waitFor("Style, rows or widgets")
         shoot("Arrange Home from the quick menu")
@@ -1105,9 +1151,24 @@ internal fun AuditDriver.themeScreens() {
         focusText("Make your own") { if (nav(NavAction.LEFT) != NavResult.MOVED) { nav(NavAction.UP); repeat(6) { nav(NavAction.RIGHT) } } }
         tap(PadButton.A)
         waitFor("Light or dark")
-        shoot("the studio, step one: the room", 2_500)
+        shoot("the studio in Simple, step one: light or dark", 2_500)
+        // Simple's shape step: corners and the quick menu's look, shown on the stage.
+        tap(PadButton.R1, 2)
+        waitFor("Quick menu")
+        focusText("Quick menu")
+        tap(PadButton.DPAD_RIGHT)
+        shoot("the quick menu drawn Solid, on the stage", 2_500)
+        tap(PadButton.DPAD_RIGHT, 2)
+        shoot("the quick menu drawn as Glass, on the stage", 2_500)
+        tap(PadButton.DPAD_RIGHT)
+        // Back to the first step, and Advanced: every colour.
+        tap(PadButton.L1, 2)
+        focusText("Simple or Advanced", step = { tap(PadButton.DPAD_UP) })
+        tap(PadButton.DPAD_RIGHT)
+        waitFor("Raised panels")
+        shoot("the studio in Advanced, step one: the room", 2_500)
         // The room's colour, opened: its hue, saturation and lightness.
-        tap(PadButton.DPAD_DOWN)
+        tap(PadButton.DPAD_DOWN, 2)
         tap(PadButton.A)
         waitFor("Hue")
         tap(PadButton.DPAD_RIGHT, 4)
@@ -1166,6 +1227,7 @@ internal fun AuditDriver.themeScreens() {
         waitFor("Light or dark")
         shoot("the studio in a bright theme", 3_000)
         // Turned dark: the room and text are made again around the accent.
+        focusText("Light or dark")
         tap(PadButton.DPAD_LEFT)
         shoot("the bright theme turned dark", 3_000)
         tap(PadButton.B)

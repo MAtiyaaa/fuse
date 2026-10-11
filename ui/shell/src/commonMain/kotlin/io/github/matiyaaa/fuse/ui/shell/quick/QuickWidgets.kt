@@ -81,6 +81,7 @@ import io.github.matiyaaa.fuse.ui.fuseline.togetherWith
 import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.components.controlTileShape
 import io.github.matiyaaa.fuse.ui.shell.components.controlWellShape
+import io.github.matiyaaa.fuse.ui.shell.components.quickSurface
 import kotlin.math.roundToInt
 
 /**
@@ -101,19 +102,8 @@ internal fun QuickCard(
     val c = Fuse.colors
     val motion = Fuse.motion
     val shape = controlTileShape()
-    val bg by fuselineColor(
-        when {
-            lit -> c.accent.copy(alpha = if (c.isDark) 0.13f else 0.1f)
-            selected -> c.text.copy(alpha = if (c.isDark) 0.11f else 0.08f)
-            else -> c.text.copy(alpha = if (c.isDark) 0.06f else 0.045f)
-        },
-        motion.tween(Durations.BASE),
-        label = "card",
-    )
     val lift by fuselineFloat(if (selected) 1f else 0f, motion.focusSpring(), label = "card lift")
     val ring by fuselineColor(if (accent) c.accent else c.focus, motion.tween(Durations.FAST), label = "card ring")
-    val edgeRest = Elevation.tile.edgeAlpha(c.isDark)
-    val edgeLit = Elevation.tileFocused.edgeAlpha(c.isDark)
     val gap = Size.focusGap
     val ringWidth = Size.focusStroke
     Box(
@@ -138,8 +128,7 @@ internal fun QuickCard(
                 this.shape = shape
                 clip = true
             }
-            .background({ bg })
-            .lightEdge(shape, { edgeRest + (edgeLit - edgeRest) * lift.coerceIn(0f, 1f) })
+            .quickSurface(shape, lit = lit, selected = selected) { lift }
             .semantics { this.selected = selected },
         content = content,
     )
@@ -538,5 +527,29 @@ internal fun EditBadge(icon: ImageVector, label: String, danger: Boolean = false
         contentAlignment = Alignment.Center,
     ) {
         FuseIcon(icon, size = 13.dp, tint = if (danger) Color.White else c.ink)
+    }
+}
+
+/** Now playing as the theme studio's miniature shows it: a song in its card, standing still. */
+@Composable
+internal fun MiniNowPlaying(modifier: Modifier = Modifier) {
+    val c = Fuse.colors
+    QuickCard(selected = false, modifier = modifier) {
+        androidx.compose.foundation.layout.Row(
+            Modifier.matchParentSize().padding(horizontal = Space.m),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier.size(40.dp).clip(controlWellShape()).background(c.accent.copy(alpha = 0.22f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                FuseIcon(FuseIcons.Music, size = Size.iconS, tint = c.text)
+            }
+            androidx.compose.foundation.layout.Spacer(Modifier.width(Space.m))
+            Column {
+                FText("Menu music", Fuse.type.bodyStrong, maxLines = 1)
+                FText("Now playing", Fuse.type.caption, color = c.textMuted, maxLines = 1)
+            }
+        }
     }
 }

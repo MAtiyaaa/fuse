@@ -271,6 +271,10 @@ internal class AuditDriver(
         throw NotCovered("Waited ${timeoutMs / 1000} s for $what. On screen: ${texts.joinToString(", ")}")
     }
 
+    /** Whether the item described as [description] is the selected one (a section's tab). */
+    fun isSelectedDescribed(description: String): Boolean =
+        ui.onAllNodes(androidx.compose.ui.test.hasContentDescription(description) and androidx.compose.ui.test.isSelected(), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+
     fun hasText(text: String, ignoreCase: Boolean = true): Boolean =
         ui.onAllNodesWithText(text, substring = true, ignoreCase = ignoreCase, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
 

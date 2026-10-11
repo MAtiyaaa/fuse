@@ -53,6 +53,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
@@ -202,7 +203,7 @@ private fun syncthingRows(
     }
     add(toggleRow("enabled", "Use Syncthing", FuseIcons.Power, s.enabled, "Keep your emulators' save folders in step through the Syncthing you run") { v -> useSyncthing(app, svc, v) })
     if (!s.enabled) {
-        add(MenuAction("fusesync", "Fuse One Instead", FuseIcons.RefreshCcw, detail = "Knows each game whatever its file is called, adds up play time, and gives each person their own saves. Syncthing keeps one save per game for everyone", trailing = Trailing.Chevron, onSelect = {
+        add(MenuAction("fusesync", "Fuse One Instead", FuseMarks.FuseOne, detail = "Knows each game whatever its file is called, adds up play time, and gives each person their own saves. Syncthing keeps one save per game for everyone", trailing = Trailing.Chevron, onSelect = {
             app.go(io.github.matiyaaa.fuse.ui.shell.app.Route.Settings("fuseone"))
         }))
         return@buildList

@@ -63,6 +63,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks
 import io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
@@ -188,7 +189,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                 if (sync == null) return
                 if (!sync.canHost) { setUp(host = false); return }
                 app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
-                    title = "Fuse One", icon = FuseIcons.RefreshCcw,
+                    title = "Fuse One", icon = FuseMarks.FuseOne,
                     message = "One computer at home keeps everything; every other device connects to it.",
                     options = listOf(
                         MenuAction("host", "Make This the Host", FuseIcons.Server, detail = "This device keeps everyone's saves and settings", onSelect = { app.choice = null; setUp(host = true) }),

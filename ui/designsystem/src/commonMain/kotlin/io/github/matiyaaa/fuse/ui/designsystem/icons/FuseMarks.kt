@@ -3,15 +3,54 @@ package io.github.matiyaaa.fuse.ui.designsystem.icons
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.unit.dp
 
 /**
- * Marks of other apps Fuse works with, kept as their makers draw them (unlike [FuseIcons], which is
- * generated from Lucide and never edited by hand). Each is one flat colour, tinted like any icon.
+ * Marks kept as their makers draw them: Fuse One's, and those of other apps Fuse works with (unlike
+ * [FuseIcons], which is generated from Lucide and never edited by hand). Each is one flat colour,
+ * tinted like any icon.
  */
 object FuseMarks {
+    /**
+     * Fuse One's mark: Fuse's own frame and fuse, the fuse rising into a 1 with the spark lit at its
+     * top (docs/assets/brand/fuse-one-mark.svg). Drawn at icon weight, so it sits with the line icons.
+     */
+    val FuseOne: ImageVector by lazy {
+        ImageVector.Builder(name = "FuseOne", defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 100f, viewportHeight = 100f)
+            .addPath(
+                pathData = addPathNodes(
+                    // Fuse's squircle frame, as the brand file draws it.
+                    "M49.8 5h.4c15.68 0 23.52 0 29.51 3.05a28 28 0 0 1 12.24 12.24C95 26.28 95 34.12 95 49.8v.4" +
+                        "c0 15.68 0 23.52-3.05 29.51a28 28 0 0 1-12.24 12.24C73.72 95 65.88 95 50.2 95h-.4" +
+                        "c-15.68 0-23.52 0-29.51-3.05A28 28 0 0 1 8.05 79.71C5 73.72 5 65.88 5 50.2v-.4" +
+                        "c0-15.68 0-23.52 3.05-29.51A28 28 0 0 1 20.29 8.05C26.28 5 34.12 5 49.8 5Z",
+                ),
+                fill = null,
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = MARK_STROKE,
+            )
+            .addPath(
+                pathData = addPathNodes("M36 46c9 0 12-12 22-12 3.2 0 5.2-1.5 6-4V72"),
+                fill = null,
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = MARK_STROKE,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+            )
+            .addPath(
+                pathData = addPathNodes("M56 30a8 8 0 1 0 16 0a8 8 0 1 0-16 0Z"),
+                fill = SolidColor(Color.Black),
+            )
+            .build()
+    }
+
+    /** The marks' line, as heavy as the line icons' at 24 dp. */
+    private const val MARK_STROKE = 8.5f
+
     /**
      * Cartridge's own mark: a cartridge with its label window and its contact strip, as Cartridge
      * draws it (`src/components/Logo.vue` in github.com/MAtiyaaa/cartridge, MIT). Readable from 16 px.

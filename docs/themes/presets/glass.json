@@ -29,6 +29,7 @@
   "focus": "ring",
   "motion": "standard",
   "sound": "soft",
+  "quickMenu": "glass",
   "glass": {
     "enabled": true,
     "blur": 28.0,

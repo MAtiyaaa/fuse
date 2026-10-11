@@ -29,6 +29,7 @@
   "focus": "bar",
   "motion": "standard",
   "sound": "chime",
+  "quickMenu": "outlined",
   "glass": {
     "enabled": false,
     "blur": 24.0,

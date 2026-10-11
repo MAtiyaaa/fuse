@@ -170,7 +170,7 @@ fun fuseOneRows(app: AppState): List<MenuAction> {
         } else if (syncthing != null) {
             addAll(syncthingRows(app, syncthing))
         } else {
-            add(infoRow("none", "Fuse One isn't part of this build", icon = FuseIcons.RefreshCcw))
+            add(infoRow("none", "Fuse One isn't part of this build", icon = FuseMarks.FuseOne))
         }
     }
 }

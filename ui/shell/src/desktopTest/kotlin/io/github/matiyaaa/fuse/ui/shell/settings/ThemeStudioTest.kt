@@ -96,4 +96,36 @@ class ThemeStudioTest {
         s.go(StudioStep.SAVE)
         assertEquals(listOf<StudioLine>(StudioLine.Main(StudioRow.SAVE)), s.lines())
     }
+
+    @Test
+    fun simpleKeepsTheMainChoicesAndAdvancedHasEveryOne() {
+        val s = StudioState.of(ThemePresets.byId("fuse"), custom = false, file = null, advanced = false)
+        assertTrue(s.simple)
+        assertEquals(listOf(StudioStep.ROOM, StudioStep.ACCENT, StudioStep.SHAPE, StudioStep.SCENE, StudioStep.EFFECTS, StudioStep.SAVE), s.steps())
+        fun rows() = s.lines().mapNotNull { (it as? StudioLine.Main)?.row }
+        assertEquals(listOf(StudioRow.DEPTH, StudioRow.MODE, StudioRow.NEXT), rows(), "no room colours to fine-tune in Simple")
+        s.go(StudioStep.EFFECTS)
+        s.step(StudioRow.GLASS, 1)
+        assertTrue(StudioRow.BLUR !in rows(), "Simple turns glass on without its amounts")
+        // From Advanced's Text step, Simple lands on the nearest step it has, before it.
+        s.showAdvanced(true)
+        assertEquals(StudioStep.entries, s.steps())
+        s.go(StudioStep.TEXT)
+        s.showAdvanced(false)
+        assertEquals(StudioStep.ROOM, s.step)
+        assertEquals(StudioRow.ACCENT.step, s.stepAlong(1))
+        // What was chosen in either mode is kept.
+        assertTrue(s.glass)
+    }
+
+    @Test
+    fun theQuickMenuLookIsPartOfTheTheme() {
+        val s = studio()
+        assertTrue(s.step(StudioRow.QUICK_LOOK, 1))
+        val draft = s.draft()
+        assertEquals(io.github.matiyaaa.fuse.model.QuickMenuLook.SOLID, draft.quickMenu)
+        val r = ThemeCodec.parse(ThemeCodec.encode(draft.copy(id = ThemeCodec.CUSTOM_PREFIX + "q"), extends = "fuse"), ThemePresets::find, ThemePresets.Fuse)
+        assertEquals(io.github.matiyaaa.fuse.model.QuickMenuLook.SOLID, (r as ThemeCodec.Imported).spec.quickMenu)
+        assertEquals(emptyList(), r.notes)
+    }
 }

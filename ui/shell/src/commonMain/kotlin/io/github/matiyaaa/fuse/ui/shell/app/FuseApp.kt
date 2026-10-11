@@ -24,6 +24,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import io.github.matiyaaa.fuse.ui.designsystem.effects.glassBackdropSource
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -419,11 +420,19 @@ private fun FuseAppContent(
         animateChanges = true,
         textScale = prefs.textScale,
     ) {
-        CompositionLocalProvider(LocalInputRouter provides router, io.github.matiyaaa.fuse.ui.designsystem.input.LocalPointerRouter provides router, LocalUiSounds provides platform.sounds) {
+        // What glass menus, sheets and notices show through: this window's screen, without them.
+        val backdrop = io.github.matiyaaa.fuse.ui.designsystem.effects.rememberGlassBackdrop()
+        CompositionLocalProvider(
+            LocalInputRouter provides router,
+            io.github.matiyaaa.fuse.ui.designsystem.input.LocalPointerRouter provides router,
+            LocalUiSounds provides platform.sounds,
+            io.github.matiyaaa.fuse.ui.designsystem.effects.LocalGlassBackdrop provides backdrop,
+        ) {
             BoxWithConstraints(
                 Modifier
                     .fillMaxSize()
                     .background(Fuse.colors.ink)
+                    .glassBackdropSource(backdrop)
                     // A touch or the pointer counts as being here, for standby.
                     .pointerInput(Unit) {
                         awaitPointerEventScope {

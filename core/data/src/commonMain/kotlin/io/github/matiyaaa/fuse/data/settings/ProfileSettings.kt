@@ -16,7 +16,7 @@ object ProfileSettings {
         // How it looks.
         "appearance.themeId", "appearance.customThemes", "appearance.glass", "appearance.crt", "appearance.motion",
         "appearance.heroDim", "appearance.highContrastFocus", "appearance.textScale", "appearance.startupAnimation",
-        "appearance.recentColors", "appearance.rememberPlace", "appearance.standbyMinutes",
+        "appearance.recentColors", "appearance.studioAdvanced", "appearance.rememberPlace", "appearance.standbyMinutes",
         // Home, the tabs and the quick menu.
         // The Systems page's arrangement is each device's own: a TV, a monitor and a handheld (each
         // of a two-screen handheld's screens) size systems for themselves. The order follows the

@@ -27,7 +27,17 @@ data class ThemeSpec(
     val ambient: AmbientSpec = AmbientSpec(),
     /** A picture of the user's own behind everything, in place of the drawn background. */
     val wallpaper: Wallpaper? = null,
+    /** How the quick menu's tiles and widgets are drawn. */
+    val quickMenu: QuickMenuLook = QuickMenuLook.SOFT,
 )
+
+/**
+ * How the quick menu's tiles and widgets are drawn: [SOFT] tints them faintly over the panel (Fuse's
+ * own), [SOLID] gives each the raised panel colour, [OUTLINED] draws only their edge, and [GLASS]
+ * catches a light across their top, as a pane of glass does.
+ */
+@Serializable
+enum class QuickMenuLook { SOFT, SOLID, OUTLINED, GLASS }
 
 /**
  * A picture behind the interface: the image file Fuse keeps ([path]), how much it is darkened (or,

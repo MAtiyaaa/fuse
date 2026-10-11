@@ -48,6 +48,7 @@ import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
@@ -59,6 +60,7 @@ import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.DualScreenMode
 import io.github.matiyaaa.fuse.model.HomeMode
 import io.github.matiyaaa.fuse.model.NavAction
+import io.github.matiyaaa.fuse.model.PerformanceProfile
 import io.github.matiyaaa.fuse.model.ScanPhase
 import io.github.matiyaaa.fuse.model.ScanScope
 import io.github.matiyaaa.fuse.model.SystemStatus
@@ -80,6 +82,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberReveal
 import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyph
+import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyphDefaults
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.LayerPriority
@@ -119,7 +123,11 @@ import io.github.matiyaaa.fuse.ui.shell.music.MenuMusicRemote
 import io.github.matiyaaa.fuse.ui.shell.platform.WindowStyle
 import io.github.matiyaaa.fuse.ui.shell.settings.next
 import io.github.matiyaaa.fuse.ui.shell.settings.performanceLabel
+import io.github.matiyaaa.fuse.ui.shell.settings.performanceSummary
+import io.github.matiyaaa.fuse.ui.shell.store.TransferRow
 import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
+import io.github.matiyaaa.fuse.ui.shell.store.transferOrder
+import io.github.matiyaaa.fuse.transfer.TransferStatus
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -140,6 +148,20 @@ private data class QuickTile(
 
 /** Where the controller is: a place in the grid, a row of the list under it, or a row of Add. */
 private enum class QuickZone { GRID, LIST, ADD }
+
+/**
+ * The quick menu's sections, along its top as Steam's are: LB and RB move between them, or a tap.
+ * Fuse's own is drawn with Fuse's mark rather than an icon.
+ */
+internal enum class QuickPage(val label: String, val icon: ImageVector?) {
+    QUICK("Quick settings", FuseIcons.Sliders),
+    DOWNLOADS("Downloads", FuseIcons.Download),
+    PERFORMANCE("Performance", FuseIcons.Gauge),
+    FUSE("Fuse", null),
+}
+
+/** The most of what is moving the Downloads section lists; the Downloads page has the rest. */
+private const val QUICK_TRANSFERS = 5
 
 /** Where the scrolling column is, for placing the list's highlight in its coordinates. */
 private class ListBase {
@@ -221,6 +243,9 @@ fun QuickMenu(app: AppState) {
     }
 
     // Where focus is, and what editing is doing.
+    // The section stays where it was left between openings, as Steam's does.
+    var page by remember { mutableStateOf(QuickPage.QUICK) }
+    var pageDirection by remember { mutableIntStateOf(1) }
     var zone by remember { mutableStateOf(QuickZone.GRID) }
     var cell by remember { mutableIntStateOf(0) }
     var listRow by remember { mutableIntStateOf(0) }
@@ -351,7 +376,7 @@ fun QuickMenu(app: AppState) {
             val next = prefs.performance.next()
             app.store.updatePrefs { it.copy(performance = next) }
             // Say what changed, since most of it is felt rather than seen.
-            app.toasts.show(io.github.matiyaaa.fuse.ui.shell.settings.performanceSummary(next, prefs.lowPower, platform.device, platform.host))
+            app.toasts.show(performanceSummary(next, prefs.lowPower, platform.device, platform.host))
         }
         QuickId.LOW_POWER -> QuickTile("Low Power", FuseIcons.Leaf, active = prefs.lowPower, toggle = true) {
             val on = !prefs.lowPower
@@ -418,9 +443,10 @@ fun QuickMenu(app: AppState) {
         QuickId.BRIGHTNESS, QuickId.VOLUME -> QuickTile(id.title, iconFor(id), detail = "${(sliderValue(id) * 100).roundToInt()}%") { adjusting = !adjusting }
     }
 
-    // ---------------------------------------------------------------- the list under the grid
+    // ---------------------------------------------------------------- each section's rows
 
-    val actions = buildList {
+    // Fuse: its update, a full rescan, arranging things, Settings, and restarting or leaving.
+    val fuseActions = buildList {
         val release = updateAvailable
         if (release != null && !app.store.updates.inPlace) {
             add(MenuAction("update", "Get ${release.name}", FuseIcons.External, detail = "Opens its release page", onSelect = { close(); app.go(Route.Settings("about")) }))
@@ -449,7 +475,7 @@ fun QuickMenu(app: AppState) {
                 },
             ),
         )
-        add(MenuAction("edit", "Edit quick menu", FuseIcons.Pencil, detail = "Move, resize, add and take out", onSelect = { editing = true; zone = QuickZone.GRID; cell = 0 }))
+        add(MenuAction("edit", "Edit quick menu", FuseIcons.Pencil, detail = "Move, resize, add and take out", onSelect = { pageDirection = -1; page = QuickPage.QUICK; editing = true; zone = QuickZone.GRID; cell = 0 }))
         add(MenuAction("home", "Arrange Home", FuseIcons.Dashboard, onSelect = { close(); app.go(Route.Settings("home")) }))
         add(MenuAction("settings", "Settings", FuseIcons.Settings, trailing = Trailing.Chevron, onSelect = { close(); app.go(Route.Settings()) }))
         add(MenuAction("restart", "Restart Fuse", FuseIcons.Refresh, onSelect = { platform.restart() }))
@@ -461,6 +487,112 @@ fun QuickMenu(app: AppState) {
                 }),
             )
         }
+    }
+
+    // Downloads: what this device has moving, with its progress, and what finished lately.
+    val transferRows by app.store.transfers.rows.collectAsState()
+    val moving = remember(transferRows) { transferOrder(transferRows.filter { it.device == null && !it.item.status.finished }) }
+    val finished = remember(transferRows) {
+        transferRows.filter { it.device == null && it.item.status == TransferStatus.DONE }.sortedByDescending { it.item.finishedAt ?: 0 }.take(3)
+    }
+    // The transfer each row shows, for its live progress as it draws.
+    val transferOf = HashMap<String, TransferRow>()
+    val downloadActions = buildList {
+        fun openDownloads() { close(); app.go(Route.Downloads) }
+        moving.take(QUICK_TRANSFERS).forEach { r ->
+            val id = "dl.${r.item.id}"
+            transferOf[id] = r
+            add(MenuAction(id, r.item.title, if (r.item.upload) FuseIcons.ArrowUp else FuseIcons.ArrowDown, section = "Moving", onSelect = ::openDownloads))
+        }
+        val running = moving.any { it.item.status != TransferStatus.PAUSED && it.item.status != TransferStatus.FAILED }
+        val paused = moving.any { it.item.status == TransferStatus.PAUSED }
+        when {
+            running -> add(MenuAction("dl.pause", "Pause everything", FuseIcons.Pause, section = "Moving", onSelect = { app.store.transfers.pauseAll(); app.toasts.show("Everything is paused") }))
+            paused -> add(MenuAction("dl.resume", "Resume everything", FuseIcons.Play, section = "Moving", onSelect = { app.store.transfers.resumeAll(); app.toasts.show("Everything carries on") }))
+        }
+        finished.forEach { r ->
+            add(
+                MenuAction(
+                    "done.${r.item.id}", r.item.title, FuseIcons.CircleCheck,
+                    detail = listOf(r.item.detail, r.item.target).filter { it.isNotBlank() }.joinToString("  ·  ").ifEmpty { "Done" },
+                    section = "Finished lately",
+                    onSelect = { close(); r.game?.let { app.go(Route.GameInfo(it)) } ?: app.go(Route.Downloads) },
+                ),
+            )
+        }
+        val more = moving.size - QUICK_TRANSFERS
+        add(
+            MenuAction(
+                "dl.open", "Open Downloads", FuseIcons.Download,
+                detail = if (more > 0) "$more more waiting there" else "Every transfer, with its own controls",
+                trailing = Trailing.Chevron, section = "", onSelect = ::openDownloads,
+            ),
+        )
+    }
+
+    // Performance: how hard Fuse works, Low Power, and the overlay, as in Settings.
+    val performanceActions = buildList {
+        PerformanceProfile.entries.forEach { profile ->
+            val on = prefs.performance == profile
+            add(
+                MenuAction(
+                    "perf.${profile.name}", performanceLabel(profile),
+                    when (profile) {
+                        PerformanceProfile.AUTOMATIC -> FuseIcons.Wand
+                        PerformanceProfile.LOW_POWER -> FuseIcons.BatteryLow
+                        PerformanceProfile.BALANCED -> FuseIcons.Blend
+                        PerformanceProfile.HIGH_QUALITY -> FuseIcons.Sparkles
+                    },
+                    // What the chosen one does, under it; the others stay one line.
+                    detail = when {
+                        on -> performanceSummary(profile, prefs.lowPower, platform.device, platform.host)
+                        profile == PerformanceProfile.AUTOMATIC -> "Picks for this device"
+                        else -> null
+                    },
+                    trailing = Trailing.Check(on),
+                    section = "Quality",
+                    // What it does shows under it, so no notice repeats it.
+                    onSelect = { if (!on) app.store.updatePrefs { it.copy(performance = profile) } },
+                ),
+            )
+        }
+        add(
+            MenuAction(
+                "perf.low", "Low Power Mode", FuseIcons.Leaf, detail = "60 Hz, lighter art, no blur or video previews",
+                trailing = Trailing.Switch(prefs.lowPower), section = "Power and overlay",
+                onSelect = { app.store.updatePrefs { it.copy(lowPower = !it.lowPower) } },
+            ),
+        )
+        add(
+            MenuAction(
+                "perf.overlay", "Performance overlay", FuseIcons.ChartLine, detail = "Frame rate, memory and temperatures, as the system reports them",
+                trailing = Trailing.Switch(prefs.performanceOverlay), section = "Power and overlay",
+                onSelect = { app.store.updatePrefs { it.copy(performanceOverlay = !it.performanceOverlay) } },
+            ),
+        )
+        add(MenuAction("perf.more", "More in Settings", FuseIcons.Settings, detail = "This device, its displays and drawing", trailing = Trailing.Chevron, section = "", onSelect = { close(); app.go(Route.Settings("performance")) }))
+    }
+
+    // Each section's rows. Quick settings has the grid instead, and with nothing in the grid, one
+    // row that starts filling it.
+    fun rowsFor(p: QuickPage): List<MenuAction> = when (p) {
+        QuickPage.QUICK -> if (visible.isEmpty()) {
+            listOf(MenuAction("fill", "Put things in the quick menu", FuseIcons.Plus, detail = "Switches, sliders and Now playing", onSelect = { editing = true; zone = QuickZone.ADD; addRow = 0 }))
+        } else {
+            emptyList()
+        }
+        QuickPage.DOWNLOADS -> downloadActions
+        QuickPage.PERFORMANCE -> performanceActions
+        QuickPage.FUSE -> fuseActions
+    }
+    val actions = rowsFor(page)
+    fun showPage(next: QuickPage) {
+        if (next == page) return
+        pageDirection = if (next.ordinal > page.ordinal) 1 else -1
+        page = next
+        adjusting = false
+        listRow = 0
+        zone = if (next == QuickPage.QUICK && visible.isNotEmpty()) QuickZone.GRID else QuickZone.LIST
     }
 
     // What Add offers: everything this device has that isn't in the menu, then putting it all back.
@@ -497,7 +629,7 @@ fun QuickMenu(app: AppState) {
     LaunchedEffect(open) {
         if (open) {
             // Each opening starts at the top, on the first item.
-            zone = if (visible.isEmpty()) QuickZone.LIST else QuickZone.GRID
+            zone = if (page != QuickPage.QUICK || visible.isEmpty()) QuickZone.LIST else QuickZone.GRID
             cell = 0; listRow = 0; anchor = null
             platform.sounds.play(SoundCue.OPEN)
         } else {
@@ -590,11 +722,24 @@ fun QuickMenu(app: AppState) {
                 }
                 else -> when (e.action) {
                     NavAction.BACK, NavAction.QUICK_MENU -> { close(); platform.sounds.play(SoundCue.CLOSE); NavResult.CONSUMED }
-                    NavAction.CONTEXT -> { editing = true; held = false; if (zone != QuickZone.GRID) { zone = QuickZone.GRID; cell = 0 }; NavResult.ACTIVATED }
+                    // LB and RB: the section before or after, stopping at the ends as the tabs do.
+                    NavAction.PREVIOUS_SECTION, NavAction.NEXT_SECTION -> {
+                        val next = page.ordinal + if (e.action == NavAction.NEXT_SECTION) 1 else -1
+                        if (next !in QuickPage.entries.indices) return@InputLayer NavResult.BLOCKED
+                        showPage(QuickPage.entries[next])
+                        NavResult.MOVED
+                    }
+                    // Editing is the grid's, so only Quick settings offers it.
+                    NavAction.CONTEXT -> {
+                        if (page != QuickPage.QUICK) return@InputLayer NavResult.BLOCKED
+                        editing = true; held = false
+                        if (zone != QuickZone.GRID) { zone = QuickZone.GRID; cell = 0 }
+                        NavResult.ACTIVATED
+                    }
                     NavAction.UP -> when (zone) {
                         QuickZone.LIST -> when {
                             listRow > 0 -> { listRow--; NavResult.MOVED }
-                            cells > 0 -> {
+                            page == QuickPage.QUICK && cells > 0 -> {
                                 // Back up into the grid, on its last row, under where focus left it.
                                 zone = QuickZone.GRID
                                 val last = placed.maxOf { it.row }
@@ -653,7 +798,9 @@ fun QuickMenu(app: AppState) {
     val margin = with(LocalDensity.current) { Space.l.toPx() }
     val cellKeys = visible.map<QuickSlot, Any> { it.id } + if (editing) listOf<Any>(ADD_KEY) else emptyList()
     // The selection scrolls into view, so the stick and the list never drift apart.
-    LaunchedEffect(zone, cell, listRow, addRow, open, editing) {
+    // A section opens at its top.
+    LaunchedEffect(page) { scroll.scrollTo(0) }
+    LaunchedEffect(zone, cell, listRow, addRow, open, editing, page) {
         if (!open) return@LaunchedEffect
         when (zone) {
             QuickZone.GRID -> if (placed.getOrNull(cell)?.row == 0) scroll.fuselineScrollTo(0) else cellKeys.getOrNull(cell)?.let { k ->
@@ -693,8 +840,22 @@ fun QuickMenu(app: AppState) {
                         if (edit) {
                             EditHeader(adding = zone == QuickZone.ADD, onDone = { if (zone == QuickZone.ADD) zone = QuickZone.GRID else leaveEditing() })
                         } else {
-                            QuickHeader(time, status, onEdit = { editing = true; zone = QuickZone.GRID; cell = 0 })
+                            QuickHeader(time, status, onEdit = { if (page != QuickPage.QUICK) { pageDirection = -1; page = QuickPage.QUICK }; editing = true; zone = QuickZone.GRID; cell = 0 })
                         }
+                    }
+                    // The sections, put away while editing: editing is about the grid alone.
+                    Appear(
+                        visible = !editing,
+                        enter = fadeIn(motion.fade(Durations.BASE)) + expandVertically(motion.tween(Durations.BASE)),
+                        exit = fadeOut(motion.fade(Durations.FAST)) + shrinkVertically(motion.tween(Durations.BASE)),
+                        label = "quick sections",
+                    ) {
+                        QuickSections(
+                            page,
+                            badges = mapOf(QuickPage.DOWNLOADS to moving.count { it.item.status == TransferStatus.ACTIVE || it.item.status == TransferStatus.QUEUED }),
+                            modifier = Modifier.padding(start = Space.l, end = Space.l, top = Space.m).reveal(reveal, 0),
+                            onPick = ::showPage,
+                        )
                     }
                     Spacer(Modifier.height(Space.m))
                     Box(Modifier.fillMaxWidth().padding(horizontal = Space.l).height(Size.divider).background(c.hairline))
@@ -713,100 +874,129 @@ fun QuickMenu(app: AppState) {
                         if (zone == QuickZone.ADD) {
                             AddList(addable, addRow, addRequesters, onAdd = ::addItem, onReset = ::resetLayout)
                         } else {
-                            QuickGrid(
-                                slots = visible,
-                                editing = editing,
-                                placed = placed,
-                                cellKeys = cellKeys,
-                                cell = if (zone == QuickZone.GRID && open) cell else -1,
-                                held = held,
-                                dragging = dragging,
-                                requesters = cellRequesters,
-                                heights = cellHeights,
-                                reveal = { m, row -> m.reveal(reveal, row + 1) },
-                                onDrag = { key, start ->
-                                    dragging = key
-                                    if (start) { held = false; cell = cellKeys.indexOf(key).coerceAtLeast(0); zone = QuickZone.GRID }
+                            // Sections slide the way LB and RB go; the one leaving keeps its rows.
+                            Swap(
+                                targetState = page,
+                                transitionSpec = {
+                                    val d = pageDirection
+                                    (fadeIn(motion.fade(Durations.BASE)) + io.github.matiyaaa.fuse.ui.fuseline.slideInHorizontally(motion.tween(Durations.BASE)) { it / 6 * d }) togetherWith
+                                        (fadeOut(motion.fade(Durations.FAST)) + io.github.matiyaaa.fuse.ui.fuseline.slideOutHorizontally(motion.tween(Durations.BASE)) { -it / 6 * d })
                                 },
-                                onDragEnd = { dragging = null },
-                                onDragOver = { key, to -> (key as? QuickId)?.let { moveItem(it, to); cell = to } },
-                                onSelect = { i -> cell = i; zone = QuickZone.GRID },
-                                onResize = { i ->
-                                    val s = visible.getOrNull(i)
-                                    if (s != null) save(all.map { if (it.id == s.id) it.copy(span = s.id.nextSpan(s.span)) else it })
-                                },
-                                onRemove = { i ->
-                                    val s = visible.getOrNull(i)
-                                    if (s != null) {
-                                        save(all.filter { it.id != s.id })
-                                        app.toasts.show("${s.id.title} is out. Add puts it back")
-                                    }
-                                },
-                                onAdd = { zone = QuickZone.ADD; addRow = 0 },
-                            ) { i, slot, selected, modifier ->
-                                val pick = { cell = i; zone = QuickZone.GRID }
-                                when {
-                                    slot.id.kind == QuickKind.MUSIC -> MusicWidget(
-                                        now, slot.span, selected, modifier,
-                                        onPrevious = { pick(); skipSong(-1) },
-                                        onToggle = { pick(); toggleSong() },
-                                        onNext = { pick(); skipSong(1) },
-                                    )
-                                    slot.id.kind == QuickKind.CHOICE && slot.span == QuickLayout.COLUMNS -> ChoiceWidget(
-                                        "Second screen", FuseIcons.DualScreen, SecondScreenChoice.entries.map { it.label }, choice.ordinal, choice.detail,
-                                        selected, modifier,
-                                    ) { k -> pick(); chooseSecond(SecondScreenChoice.entries[k]) }
-                                    slot.id.kind == QuickKind.SLIDER && slot.span == QuickLayout.COLUMNS -> QuickCard(selected, modifier, accent = false) {
-                                        io.github.matiyaaa.fuse.ui.designsystem.components.FillSlider(
-                                            sliderValue(slot.id),
-                                            onChange = { v -> pick(); setSlider(slot.id, v) },
-                                            icon = sliderIcon(slot.id, sliderValue(slot.id)),
-                                            label = slot.id.title,
-                                            valueText = "${(sliderValue(slot.id) * 100).roundToInt()}%",
-                                            modifier = Modifier.fillMaxSize(),
-                                        )
-                                    }
-                                    slot.id.kind == QuickKind.SLIDER -> TallSlider(
-                                        sliderValue(slot.id), sliderIcon(slot.id, sliderValue(slot.id)), slot.id.title, selected, adjusting && selected, modifier,
-                                        onPress = { pick(); adjusting = !adjusting },
-                                    ) { v -> pick(); setSlider(slot.id, v) }
-                                    else -> {
-                                        val t = tileFor(slot.id)
-                                        ControlTile(
-                                            t.label, t.icon, selected = selected, modifier = modifier,
-                                            active = t.active, detail = t.detail, toggle = t.toggle,
-                                            onLongClick = t.hold?.let { hold -> { pick(); hold() } },
-                                        ) { pick(); t.run() }
-                                    }
-                                }
-                            }
-                            // Fuse's own actions; put away while editing, so editing is about the grid alone.
-                            Appear(
-                                visible = !editing,
-                                enter = fadeIn(motion.fade(Durations.BASE)) + expandVertically(motion.tween(Durations.BASE)),
-                                exit = fadeOut(motion.fade(Durations.FAST)) + shrinkVertically(motion.tween(Durations.BASE)),
-                                label = "quick list",
-                            ) {
+                                label = "quick section",
+                            ) { shown ->
                                 Column {
-                                    Spacer(Modifier.height(Space.l))
-                                    SectionLabel("Fuse", Modifier.padding(start = ROW_CONTENT_START).reveal(reveal, placed.maxOfOrNull { it.row + 2 } ?: 1))
-                                    Spacer(Modifier.height(Space.s))
-                                    actions.forEachIndexed { i, action ->
-                                        if (i > 0) Spacer(Modifier.height(Space.xxs))
-                                        MenuRow(
-                                            action,
-                                            selected = zone == QuickZone.LIST && i == listRow,
-                                            modifier = Modifier
-                                                .onPlaced { coords ->
-                                                    // Relative to the scrolling column, where the highlight draws.
-                                                    val y = listBase.coords?.takeIf { it.isAttached }?.localPositionOf(coords, Offset.Zero)?.y ?: coords.positionInParent().y
-                                                    highlight.place(i, y, y + coords.size.height)
-                                                }
-                                                .bringIntoViewRequester(listRequesters[i])
-                                                .reveal(reveal, (placed.maxOfOrNull { it.row + 2 } ?: 1) + i),
-                                            highlight = false,
-                                            onClick = { listRow = i; zone = QuickZone.LIST; action.onSelect() },
-                                        )
+                                    if (shown == QuickPage.QUICK && (visible.isNotEmpty() || editing)) {
+                                    QuickGrid(
+                                        slots = visible,
+                                        editing = editing,
+                                        placed = placed,
+                                        cellKeys = cellKeys,
+                                        cell = if (zone == QuickZone.GRID && open) cell else -1,
+                                        held = held,
+                                        dragging = dragging,
+                                        requesters = cellRequesters,
+                                        heights = cellHeights,
+                                        reveal = { m, row -> m.reveal(reveal, row + 1) },
+                                        onDrag = { key, start ->
+                                            dragging = key
+                                            if (start) { held = false; cell = cellKeys.indexOf(key).coerceAtLeast(0); zone = QuickZone.GRID }
+                                        },
+                                        onDragEnd = { dragging = null },
+                                        onDragOver = { key, to -> (key as? QuickId)?.let { moveItem(it, to); cell = to } },
+                                        onSelect = { i -> cell = i; zone = QuickZone.GRID },
+                                        onResize = { i ->
+                                            val s = visible.getOrNull(i)
+                                            if (s != null) save(all.map { if (it.id == s.id) it.copy(span = s.id.nextSpan(s.span)) else it })
+                                        },
+                                        onRemove = { i ->
+                                            val s = visible.getOrNull(i)
+                                            if (s != null) {
+                                                save(all.filter { it.id != s.id })
+                                                app.toasts.show("${s.id.title} is out. Add puts it back")
+                                            }
+                                        },
+                                        onAdd = { zone = QuickZone.ADD; addRow = 0 },
+                                    ) { i, slot, selected, modifier ->
+                                        val pick = { cell = i; zone = QuickZone.GRID }
+                                        when {
+                                            slot.id.kind == QuickKind.MUSIC -> MusicWidget(
+                                                now, slot.span, selected, modifier,
+                                                onPrevious = { pick(); skipSong(-1) },
+                                                onToggle = { pick(); toggleSong() },
+                                                onNext = { pick(); skipSong(1) },
+                                            )
+                                            slot.id.kind == QuickKind.CHOICE && slot.span == QuickLayout.COLUMNS -> ChoiceWidget(
+                                                "Second screen", FuseIcons.DualScreen, SecondScreenChoice.entries.map { it.label }, choice.ordinal, choice.detail,
+                                                selected, modifier,
+                                            ) { k -> pick(); chooseSecond(SecondScreenChoice.entries[k]) }
+                                            slot.id.kind == QuickKind.SLIDER && slot.span == QuickLayout.COLUMNS -> QuickCard(selected, modifier, accent = false) {
+                                                io.github.matiyaaa.fuse.ui.designsystem.components.FillSlider(
+                                                    sliderValue(slot.id),
+                                                    onChange = { v -> pick(); setSlider(slot.id, v) },
+                                                    icon = sliderIcon(slot.id, sliderValue(slot.id)),
+                                                    label = slot.id.title,
+                                                    valueText = "${(sliderValue(slot.id) * 100).roundToInt()}%",
+                                                    modifier = Modifier.fillMaxSize(),
+                                                )
+                                            }
+                                            slot.id.kind == QuickKind.SLIDER -> TallSlider(
+                                                sliderValue(slot.id), sliderIcon(slot.id, sliderValue(slot.id)), slot.id.title, selected, adjusting && selected, modifier,
+                                                onPress = { pick(); adjusting = !adjusting },
+                                            ) { v -> pick(); setSlider(slot.id, v) }
+                                            else -> {
+                                                val t = tileFor(slot.id)
+                                                ControlTile(
+                                                    t.label, t.icon, selected = selected, modifier = modifier,
+                                                    active = t.active, detail = t.detail, toggle = t.toggle,
+                                                    onLongClick = t.hold?.let { hold -> { pick(); hold() } },
+                                                ) { pick(); t.run() }
+                                            }
+                                        }
+                                    }
+                                    }
+                                    // Only the section on screen places the highlight and scrolls rows into view.
+                                    val current = shown == page
+                                    val rows = if (current) actions else rowsFor(shown)
+                                    val first = if (shown == QuickPage.QUICK) placed.maxOfOrNull { it.row + 2 } ?: 1 else 1
+                                    if (shown == QuickPage.DOWNLOADS && moving.isEmpty()) {
+                                        QuietNote(FuseIcons.CloudDownload, "Nothing is moving", "Games, apps and films you get show here with their progress", Modifier.reveal(reveal, first))
+                                        Spacer(Modifier.height(Space.l))
+                                    }
+                                    rows.forEachIndexed { i, action ->
+                                        val section = action.section
+                                        if (section != null && section != rows.getOrNull(i - 1)?.section) {
+                                            if (i > 0) Spacer(Modifier.height(Space.l))
+                                            if (section.isNotBlank()) {
+                                                SectionLabel(section, Modifier.padding(start = ROW_CONTENT_START).reveal(reveal, first + i))
+                                                Spacer(Modifier.height(Space.s))
+                                            }
+                                        } else if (i > 0) {
+                                            Spacer(Modifier.height(Space.xxs))
+                                        }
+                                        val rowModifier = Modifier
+                                            .then(
+                                                if (current) {
+                                                    Modifier
+                                                        .onPlaced { coords ->
+                                                            // Relative to the scrolling column, where the highlight draws.
+                                                            val y = listBase.coords?.takeIf { it.isAttached }?.localPositionOf(coords, Offset.Zero)?.y ?: coords.positionInParent().y
+                                                            highlight.place(i, y, y + coords.size.height)
+                                                        }
+                                                        .then(listRequesters.getOrNull(i)?.let { Modifier.bringIntoViewRequester(it) } ?: Modifier)
+                                                } else {
+                                                    Modifier
+                                                },
+                                            )
+                                            .reveal(reveal, first + i)
+                                        val pick = { listRow = i; zone = QuickZone.LIST; action.onSelect() }
+                                        val transfer = transferOf[action.id]
+                                        if (transfer != null) {
+                                            key(transfer.item.id) {
+                                                TransferMenuRow(app, transfer, moving, action, selected = current && zone == QuickZone.LIST && i == listRow, modifier = rowModifier, onClick = pick)
+                                            }
+                                        } else {
+                                            MenuRow(action, selected = current && zone == QuickZone.LIST && i == listRow, modifier = rowModifier, highlight = false, onClick = pick)
+                                        }
                                     }
                                 }
                             }
@@ -818,7 +1008,8 @@ fun QuickMenu(app: AppState) {
                         zone == QuickZone.ADD -> listOf(Hint(HintButton.CONFIRM, "Add"), Hint(HintButton.BACK, "Back"))
                         editing && held -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Put down"))
                         editing -> listOf(Hint(HintButton.CONFIRM, "Move"), Hint(HintButton.OPTIONS, "Size"), Hint(HintButton.SEARCH, "Remove"))
-                        else -> listOf(Hint(HintButton.OPTIONS, "Edit"), Hint(HintButton.BACK, "Close"))
+                        page == QuickPage.QUICK -> listOf(Hint(HintButton.OPTIONS, "Edit"), Hint(HintButton.BACK, "Close"))
+                        else -> listOf(Hint(HintButton.CONFIRM, "Select"), Hint(HintButton.BACK, "Close"))
                     }
                     HintBar(hints, Modifier.align(Alignment.End).padding(horizontal = Space.l, vertical = Space.m))
                 }
@@ -1036,6 +1227,127 @@ private fun EditHeader(adding: Boolean, onDone: () -> Unit) {
         }
     }
 }
+
+/**
+ * The sections along the top: each its icon, and the open one its name beside it in a soft pill that
+ * glides and widens to the next, the others giving it room. LB and RB sit at the ends, as on the
+ * top line's tabs. A count rides a section with something under way (downloads moving).
+ */
+@Composable
+private fun QuickSections(page: QuickPage, badges: Map<QuickPage, Int>, modifier: Modifier = Modifier, onPick: (QuickPage) -> Unit) {
+    val c = Fuse.colors
+    val motion = Fuse.motion
+    val pages = QuickPage.entries
+    Row(modifier.fillMaxWidth().height(SECTION_HEIGHT), verticalAlignment = Alignment.CenterVertically) {
+        ButtonGlyph(HintButton.PREV, size = ButtonGlyphDefaults.SmallSize, color = c.textFaint)
+        Spacer(Modifier.width(Space.s))
+        BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
+            val density = LocalDensity.current
+            val gap = Space.xxs
+            val closed = SECTION_HEIGHT
+            // The open section takes what the closed ones leave.
+            val open = (maxWidth - closed * (pages.size - 1) - gap * (pages.size - 1)).coerceAtLeast(closed)
+            val shares = pages.map { p -> fuselineFloat(if (p == page) 1f else 0f, motion.focusSpring(), label = "quick section ${p.name}") }
+            val tray = c.text.copy(alpha = if (c.isDark) 0.05f else 0.04f)
+            Box(Modifier.fillMaxSize().clip(PillShape).background(tray))
+            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.CenterVertically) {
+                pages.forEachIndexed { i, p ->
+                    val t = shares[i].value.coerceIn(0f, 1f)
+                    val on = p == page
+                    val width = with(density) { (closed.toPx() + (open - closed).toPx() * t).toDp() }
+                    val fill = c.text.copy(alpha = (if (c.isDark) 0.13f else 0.09f) * t)
+                    val tint = androidx.compose.ui.graphics.lerp(c.textMuted, c.text, t)
+                    Box(
+                        Modifier
+                            .width(width)
+                            .fillMaxHeight()
+                            .clip(PillShape)
+                            .background(fill)
+                            .fuseClickable(shape = PillShape, role = Role.Tab, onClick = { onPick(p) })
+                            .semantics { contentDescription = p.label; selected = on },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(contentAlignment = Alignment.Center) {
+                                val icon = p.icon
+                                if (icon != null) {
+                                    FuseIcon(icon, size = Size.iconS, tint = tint)
+                                } else {
+                                    io.github.matiyaaa.fuse.ui.shell.app.FuseMark(Modifier.size(Size.iconS), color = tint, spark = c.accent.copy(alpha = 0.5f + 0.5f * t))
+                                }
+                                val count = badges[p] ?: 0
+                                if (count > 0 && !on) {
+                                    Box(
+                                        Modifier.align(Alignment.TopEnd).offset(x = 5.dp, y = (-4).dp).size(8.dp).clip(CircleShape).background(c.accent),
+                                    )
+                                }
+                            }
+                            // The name widens in with its section and narrows away with it.
+                            FText(
+                                p.label,
+                                Fuse.type.label,
+                                color = tint,
+                                maxLines = 1,
+                                modifier = Modifier
+                                    .layout { m, cons ->
+                                        val placeable = m.measure(Constraints())
+                                        val room = (placeable.width + Space.s.roundToPx())
+                                        val w = (room * t).roundToInt().coerceAtMost(cons.maxWidth)
+                                        layout(w, placeable.height) { placeable.place(Space.s.roundToPx(), 0) }
+                                    }
+                                    .graphicsLayer { alpha = t; clip = true },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.width(Space.s))
+        ButtonGlyph(HintButton.NEXT, size = ButtonGlyphDefaults.SmallSize, color = c.textFaint)
+    }
+}
+
+/** A row of the Downloads section: its transfer's own words and progress, as they move. */
+@Composable
+private fun TransferMenuRow(app: AppState, row: TransferRow, moving: List<TransferRow>, action: MenuAction, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val t = row.item
+    val flow = remember(t.id) { app.store.transfers.live(t.id) }
+    val live by flow.collectAsState()
+    val inLine = if (t.status == TransferStatus.QUEUED) moving.filter { it.item.status == TransferStatus.QUEUED }.indexOfFirst { it.item.id == t.id } + 1 else null
+    val progress = live.progress ?: t.progress
+    MenuRow(
+        action.copy(
+            detail = io.github.matiyaaa.fuse.ui.shell.downloads.statusWords(t, live, inLine?.takeIf { it > 0 }),
+            trailing = when (t.status) {
+                TransferStatus.FAILED -> Trailing.Badge("Failed")
+                TransferStatus.PAUSED -> Trailing.Progress(progress, "Paused")
+                else -> Trailing.Progress(progress, progress?.let { "${(it * 100).toInt()}%" } ?: "")
+            },
+        ),
+        selected = selected,
+        modifier = modifier,
+        highlight = false,
+        onClick = onClick,
+    )
+}
+
+/** A quiet note where a section has nothing to list: an icon in a soft circle, a line, and why. */
+@Composable
+private fun QuietNote(icon: ImageVector, title: String, message: String, modifier: Modifier = Modifier) {
+    val c = Fuse.colors
+    Column(modifier.fillMaxWidth().padding(vertical = Space.l), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(48.dp).clip(CircleShape).background(c.text.copy(alpha = if (c.isDark) 0.07f else 0.05f)), contentAlignment = Alignment.Center) {
+            FuseIcon(icon, size = Size.iconM, tint = c.textMuted)
+        }
+        Spacer(Modifier.height(Space.m))
+        FText(title, Fuse.type.bodyStrong, maxLines = 1)
+        Spacer(Modifier.height(Space.xxs))
+        FText(message, Fuse.type.caption, color = c.textMuted, align = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(horizontal = Space.xl))
+    }
+}
+
+/** The sections' strip: a touch target tall. */
+private val SECTION_HEIGHT = 40.dp
 
 /** The sheet's width, the same as the context menu's side sheet; narrower screens give it all but a margin. */
 private val QUICK_MENU_WIDTH = 420.dp

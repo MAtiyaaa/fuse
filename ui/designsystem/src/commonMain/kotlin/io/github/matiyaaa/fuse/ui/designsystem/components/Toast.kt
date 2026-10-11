@@ -37,6 +37,9 @@ import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.CornerFamily
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import io.github.matiyaaa.fuse.ui.designsystem.effects.LocalGlassBackdrop
+import io.github.matiyaaa.fuse.ui.designsystem.effects.LocalGlassFloating
+import io.github.matiyaaa.fuse.ui.designsystem.effects.glassFloating
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Radius
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
@@ -112,7 +115,9 @@ fun ToastHost(state: ToastState, modifier: Modifier = Modifier) {
         }
         for (t in shown) if (queue.none { it.id == t.id }) visibility[t.id]?.targetState = false
     }
-    Box(modifier.fillMaxSize().padding(bottom = Space.x4), contentAlignment = Alignment.BottomCenter) {
+    // Notices float over the screen: left out of what glass shows, and liquid glass themselves.
+    Box(modifier.fillMaxSize().glassFloating(LocalGlassBackdrop.current).padding(bottom = Space.x4), contentAlignment = Alignment.BottomCenter) {
+        androidx.compose.runtime.CompositionLocalProvider(LocalGlassFloating provides true) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             val staying = shown.filter { visibility[it.id]?.targetState != false }
             for (toast in shown) {
@@ -133,6 +138,7 @@ fun ToastHost(state: ToastState, modifier: Modifier = Modifier) {
                     }
                 }
             }
+        }
         }
     }
 }

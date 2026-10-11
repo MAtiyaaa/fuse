@@ -356,6 +356,8 @@ data class AppearanceSettings(
     val startupAnimation: Boolean = true,
     /** Colours picked last in the theme studio, newest first (ARGB), to pick again in one move. */
     val recentColors: List<Long> = emptyList(),
+    /** The theme studio offers every colour and effect, not only its main choices. */
+    val studioAdvanced: Boolean = false,
     /** Each tab keeps the game or row you were on when you come back to it. */
     val rememberPlace: Boolean = true,
     /**

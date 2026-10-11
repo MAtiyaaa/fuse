@@ -231,7 +231,7 @@ class ReadmeScreenshots {
 
         // Quick menu (Start).
         router.tap(PadButton.START)
-        pumpUntil { hasText("Arrange Home") }
+        pumpUntil { hasText("Quick settings") }
         settle()
         shoot("quick-menu")
 

@@ -283,7 +283,7 @@ internal fun widgetIcon(kind: WidgetKind): ImageVector = when (kind) {
     WidgetKind.JELLYFIN_FAVORITES -> FuseIcons.Heart
     WidgetKind.JELLYFIN_MOVIES -> FuseIcons.Clapperboard
     WidgetKind.JELLYFIN_MUSIC -> FuseIcons.Disc
-    WidgetKind.SYNC_STATUS -> FuseIcons.RefreshCcw
+    WidgetKind.SYNC_STATUS -> FuseMarks.FuseOne
     WidgetKind.SYNC_DEVICES -> FuseIcons.MonitorSmartphone
 }
 

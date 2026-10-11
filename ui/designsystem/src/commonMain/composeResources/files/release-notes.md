@@ -59,6 +59,24 @@ and the library, and a first step toward Fuse knowing emulators for itself.
 - **Fuseline 4.1.** Cues: one clock that many parts of an entrance play from, so a page of tiles
   coming in is one frame callback. Fuseline is publishable on its own as an SDK
   (io.github.matiyaaa.fuseline:fuseline:4.1.0); see docs/fuseline-sdk.md.
+- **Quick menu sections.** Along the top of the quick menu, as on Steam's: Quick settings (your
+  grid), Downloads (what is moving with its progress, Pause everything, and what finished lately),
+  Performance (the quality choice, Low Power Mode and the performance overlay) and Fuse (its own
+  actions). LB and RB move between them, or a tap; the menu opens where it was left.
+- **Simple and Advanced theme making.** The theme studio opens in Simple: light or dark, a colour,
+  corners, the background, glass and the quick menu's look, in six steps. Advanced is the full
+  studio, every colour, amount, motion and sound. Switching keeps what was chosen, and the studio
+  remembers which you like.
+- **The quick menu in your theme.** A theme says how the quick menu's tiles and widgets are drawn:
+  Soft, Solid, Outlined or Glass (the `quickMenu` key in a theme file). Built-in themes each have
+  the one that suits them, and the studio shows a quick menu on its preview while you choose.
+- **Liquid glass.** With Glass on, every menu, sheet, dialog and notice that floats over the
+  interface is a pane of glass over what is behind it: the screen frosted and its colours richer,
+  bent along the pane's rim and lit around its edge, with a lighter tint. It is made small and drawn
+  large, and refreshed about ten times a second at most, so it stays light; with Low Power, without
+  a graphics card or before Android 12 it is the tinted pane it was.
+- **A mark for Fuse One.** Fuse's own frame and fuse, the fuse rising into a 1 with the spark at
+  its top, wherever Fuse One appears (docs/assets/brand/fuse-one-mark.svg).
 - **Arrange the top line in place.** Hold a tab (touch, mouse or confirm) and it lifts; move it
   along with the D-pad or a drag, as Addons' tabs move, and put it down. Home stays first.
 

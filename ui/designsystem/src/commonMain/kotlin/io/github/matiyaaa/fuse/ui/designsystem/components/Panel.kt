@@ -14,6 +14,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import io.github.matiyaaa.fuse.ui.designsystem.effects.LocalGlassBackdrop
+import io.github.matiyaaa.fuse.ui.designsystem.effects.liquidGlass
+import io.github.matiyaaa.fuse.ui.designsystem.effects.liquidGlassOn
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Elevation
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 
@@ -24,8 +27,10 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
  * fill and a deeper shadow), so dialogs and menus float above the screen they cover.
  *
  * With Glass on, the fill turns translucent so the (blurred) room shows through, the top edge and a
- * faint sheen get brighter, and the shadow goes (under frosted glass it reads as a stain). [shadow]
- * false keeps a panel flat, for panels that sit inside scrolling lists.
+ * faint sheen get brighter, and the shadow goes (under frosted glass it reads as a stain). A panel
+ * floating over the interface (a menu, a sheet, a dialog, a notice) is liquid glass: the screen
+ * behind it frosted, bent along its rim and lit around its edge (see [liquidGlass]), under a lighter
+ * tint. [shadow] false keeps a panel flat, for panels that sit inside scrolling lists.
  */
 @Composable
 fun Panel(
@@ -45,7 +50,12 @@ fun Panel(
         overlay -> c.overlaySurface()
         else -> c.surface
     }
-    val fill = if (glass.enabled) base.copy(alpha = glass.surfaceOpacity) else base
+    val liquid = liquidGlassOn(glass)
+    val fill = when {
+        liquid -> base.copy(alpha = (glass.surfaceOpacity - LIQUID_CLEARER).coerceIn(LIQUID_MIN, 1f))
+        glass.enabled -> base.copy(alpha = glass.surfaceOpacity)
+        else -> base
+    }
     // One elevation family: the shadow and the strength of the lit edge come from the level the
     // panel is at (Elevation.panel, raised or overlay), the same as every other lifted surface.
     val level = when {
@@ -74,6 +84,7 @@ fun Panel(
                     ambientShadowColor = shadowColor.copy(alpha = shadowColor.alpha * 0.5f)
                 }
             }
+            .then(if (liquid) Modifier.liquidGlass(shape, glass) else Modifier)
             .background(fill)
             .drawWithCache {
                 // A faint sheen over the top of the surface, gone within the first 160 dp.
@@ -84,7 +95,8 @@ fun Panel(
             .litEdge(shape, top = Color.White.copy(alpha = edge), rest = hairline),
     ) {
         val scope = this
-        CompositionLocalProvider(LocalOverlaySurface provides false, LocalPanelFill provides fill) { scope.content() }
+        // What is inside sits on this pane, not on the screen behind it.
+        CompositionLocalProvider(LocalOverlaySurface provides false, LocalPanelFill provides fill, LocalGlassBackdrop provides null) { scope.content() }
     }
 }
 
@@ -94,6 +106,12 @@ fun Panel(
  * erases the content would.
  */
 val LocalPanelFill = staticCompositionLocalOf<Color?> { null }
+
+/** How much clearer liquid glass's tint is than flat glass's: the frosted screen does the rest. */
+private const val LIQUID_CLEARER = 0.2f
+
+/** The least tint liquid glass keeps, so words on it always read. */
+private const val LIQUID_MIN = 0.36f
 
 /** The lit edge of a glass panel in a dark theme. */
 private const val GLASS_EDGE = 0.22f

@@ -144,6 +144,8 @@ data class UiPrefs(
     val startupAnimation: Boolean = true,
     /** Colours picked last in the theme studio, newest first. */
     val recentColors: List<Long> = emptyList(),
+    /** The theme studio in Advanced: every colour and effect; Simple shows its main choices. */
+    val themeStudioAdvanced: Boolean = false,
     /** Tabs keep where you were in them; off, each tab opens at its start. */
     val rememberPlace: Boolean = true,
     /** Minutes idle before the standby screen; 0 never. */
