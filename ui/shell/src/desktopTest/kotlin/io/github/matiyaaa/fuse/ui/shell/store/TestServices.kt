@@ -99,6 +99,9 @@ internal class FakeServices(
         )
     }
 
+    /** What the fake launcher answers instead of starting the game, when a test sets it. */
+    @Volatile var runResult: RunResult? = null
+
     /** The device's second screen, when the test gives it one, and the display each launch asked for. */
     var secondDisplay: Int? = null
     val launchedOn = mutableListOf<Int?>()
@@ -109,6 +112,7 @@ internal class FakeServices(
         override suspend fun run(launch: ResolvedLaunch, displayId: Int?): RunResult {
             launched += launch
             launchedOn += displayId
+            runResult?.let { return it }
             val waiter = exit
             return RunResult.Started(awaitExit = waiter?.let { w -> { w.await() } })
         }

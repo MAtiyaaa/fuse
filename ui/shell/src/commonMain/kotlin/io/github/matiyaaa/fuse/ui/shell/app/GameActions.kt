@@ -679,15 +679,19 @@ fun AppState.gamePatchPicker(card: GameCard) {
  * emulator groups them. Each says whether it is the game's own or follows every game's; choosing one
  * changes it in the emulator's own files, and what Fuse changed can be put back.
  */
-fun AppState.emulatorSettingsSheet(card: GameCard?, emulator: io.github.matiyaaa.fuse.model.EmulatorId? = null) {
+fun AppState.emulatorSettingsSheet(card: GameCard?, emulator: io.github.matiyaaa.fuse.model.EmulatorId? = null) =
+    emulatorSettingsSheet(card?.id, card?.title, emulator)
+
+/** [emulatorSettingsSheet] for the game [game] (called [gameTitle]), or every game in [emulator]. */
+fun AppState.emulatorSettingsSheet(game: GameId?, gameTitle: String?, emulator: io.github.matiyaaa.fuse.model.EmulatorId? = null) {
     contextMenu = null
     scope.launch {
-        when (val view = store.library.emulatorSettings(card?.id, emulator)) {
+        when (val view = store.library.emulatorSettings(game, emulator)) {
             is io.github.matiyaaa.fuse.ui.shell.store.EmulatorSettingsView.Unavailable -> showProblem(Problem(
                 view.title, view.reason, ProblemKind.EMULATOR, Severity.INFO, reassurance = null,
             ))
             is io.github.matiyaaa.fuse.ui.shell.store.EmulatorSettingsView.Ready -> {
-                val forGame = card != null
+                val forGame = game != null
                 val rows = view.values.map { v ->
                     val s = v.setting
                     MenuAction(
@@ -699,7 +703,7 @@ fun AppState.emulatorSettingsSheet(card: GameCard?, emulator: io.github.matiyaaa
                         },
                         trailing = Trailing.Value(v.label),
                         section = s.category,
-                        onSelect = { settingPicker(card, emulator, view.emulator, v) },
+                        onSelect = { settingPicker(game, gameTitle, emulator, view.emulator, v) },
                     )
                 }
                 val restore = if (!view.canRestore) emptyList() else listOf(
@@ -709,16 +713,16 @@ fun AppState.emulatorSettingsSheet(card: GameCard?, emulator: io.github.matiyaaa
                         section = "Changed in Fuse",
                         onSelect = {
                             scope.launch {
-                                val ok = store.library.restoreEmulatorSettings(card?.id, emulator)
+                                val ok = store.library.restoreEmulatorSettings(game, emulator)
                                 if (ok) toasts.show("Put back as it was", ToastKind.SUCCESS) else toasts.show("Couldn't change ${view.emulator}'s settings", ToastKind.WARNING)
-                                emulatorSettingsSheet(card, emulator)
+                                emulatorSettingsSheet(game, gameTitle, emulator)
                             }
                         },
                     ),
                 )
                 choice = ChoiceSpec(
                     icon = FuseIcons.Sliders,
-                    title = if (forGame) "${view.emulator} settings for ${card?.title ?: view.game}" else "${view.emulator} settings for every game",
+                    title = if (forGame) "${view.emulator} settings for ${gameTitle ?: view.game}" else "${view.emulator} settings for every game",
                     message = if (forGame) {
                         "A setting of this game's own replaces every game's. Changes apply the next time it starts in ${view.emulator}."
                     } else {
@@ -733,19 +737,20 @@ fun AppState.emulatorSettingsSheet(card: GameCard?, emulator: io.github.matiyaaa
 
 /** The values one setting can take, with the one in use checked; for a game, following every game's comes first. */
 private fun AppState.settingPicker(
-    card: GameCard?,
+    game: GameId?,
+    gameTitle: String?,
     emulator: io.github.matiyaaa.fuse.model.EmulatorId?,
     name: String,
     v: io.github.matiyaaa.fuse.launch.settings.SettingValue,
 ) {
     val s = v.setting
-    val forGame = card != null
+    val forGame = game != null
     val own = !forGame || v.source == io.github.matiyaaa.fuse.launch.settings.SettingSource.GAME
     fun apply(value: String?) {
         scope.launch {
-            val ok = store.library.setEmulatorSetting(card?.id, emulator, s.id, value)
+            val ok = store.library.setEmulatorSetting(game, emulator, s.id, value)
             if (!ok) toasts.show("Couldn't change $name's settings", ToastKind.WARNING)
-            emulatorSettingsSheet(card, emulator)
+            emulatorSettingsSheet(game, gameTitle, emulator)
         }
     }
     val follow = if (!forGame) emptyList() else listOf(

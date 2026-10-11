@@ -70,6 +70,12 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   fails to install puts it straight back; after one that works, the Store offers Go Back to it, and
   so does the problem Fuse shows when an emulator updated in the last month won't start. The
   emulator's own settings and saves are never touched.
+- **Why an emulator didn't start.** When an emulator stops as it starts, Fuse reads what it wrote
+  and says the likely reason in plain words (a missing core, missing firmware, graphics that
+  couldn't start, a missing library, a file it couldn't open, a crash), with the fix that goes with
+  it first: changing the renderer in its settings, checking the system's firmware, or choosing
+  another core. The details hold the command, the exit code and its output, with the home folder
+  taken out. When nothing it wrote says why, Fuse says only that.
 - **Steam achievement rarity.** The share of players who have each Steam achievement, and when it
   was unlocked, under the chosen badge on a game's page.
 - **Add a game folder.** A folder holding a game with its updates, DLC or discs, read the way the

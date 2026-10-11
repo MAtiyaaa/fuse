@@ -554,7 +554,7 @@ internal class DefaultLibraryOps(
                 is RunResult.Started -> LaunchOutcome.OpenedAppOnly(installedEmulator.name, plan.reason)
                 is RunResult.OpenedAppInstead -> LaunchOutcome.OpenedAppOnly(installedEmulator.name, r.reason)
                 RunResult.NotInstalled -> notInstalled(installedEmulator, id)
-                is RunResult.Failed -> LaunchOutcome.Problem(LaunchProblems.refused(installedEmulator, id, r.message, android, goBackOffer(installedEmulator)))
+                is RunResult.Failed -> LaunchOutcome.Problem(LaunchProblems.refused(installedEmulator, id, r.message, android, goBackOffer(installedEmulator), r.diagnostic, game.platformId, ctx.services.emulators.homeDir))
             }
             is LaunchPlan.AndroidIntent, is LaunchPlan.Command -> {
                 // Fuse Sync puts the newest save in place first, or asks when both sides played.
@@ -589,7 +589,7 @@ internal class DefaultLibraryOps(
                     // Only the app opened; which game gets played there is unknown, so no session is recorded.
                     is RunResult.OpenedAppInstead -> LaunchOutcome.OpenedAppOnly(installedEmulator.name, r.reason)
                     RunResult.NotInstalled -> notInstalled(installedEmulator, id)
-                    is RunResult.Failed -> LaunchOutcome.Problem(LaunchProblems.refused(installedEmulator, id, r.message, android, goBackOffer(installedEmulator)))
+                    is RunResult.Failed -> LaunchOutcome.Problem(LaunchProblems.refused(installedEmulator, id, r.message, android, goBackOffer(installedEmulator), r.diagnostic, game.platformId, ctx.services.emulators.homeDir))
                 }
             }
         }

@@ -240,7 +240,8 @@ sealed interface RunResult {
     /** The app is not installed (any more). */
     data object NotInstalled : RunResult
 
-    data class Failed(val message: String) : RunResult
+    /** It couldn't start; [diagnostic] holds what an emulator that stopped at once left behind, when there is that. */
+    data class Failed(val message: String, val diagnostic: io.github.matiyaaa.fuse.launch.LaunchDiagnostic? = null) : RunResult
 }
 
 /** Runs launch plans. Implementations never change emulator configuration. */

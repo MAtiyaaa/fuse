@@ -122,6 +122,7 @@ fun AppState.runProblemAction(action: ProblemAction, spec: ProblemSpec?) {
         }
         is ProblemAction.OpenEmulator -> scope.launch { store.emulators.openEmulator(action.emulator) }
         is ProblemAction.GoBack -> store.appStore.rollBack(action.storeKey)
+        is ProblemAction.EmulatorSettings -> emulatorSettingsSheet(action.game, null)
         is ProblemAction.OpenLink -> platform.openUrl(action.url)
         is ProblemAction.CheckDrives -> {
             store.sources.refreshDrives()
@@ -297,6 +298,7 @@ private fun ProblemAction.icon(): ImageVector = when (this) {
     is ProblemAction.PickEmulator -> FuseIcons.Chip
     is ProblemAction.OpenEmulator -> FuseIcons.External
     is ProblemAction.GoBack -> FuseIcons.Undo
+    is ProblemAction.EmulatorSettings -> FuseIcons.Sliders
     is ProblemAction.OpenLink -> FuseIcons.Download
     is ProblemAction.CheckDrives -> FuseIcons.Refresh
     is ProblemAction.OpenStorage -> FuseIcons.HardDrive

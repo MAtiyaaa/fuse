@@ -3,6 +3,7 @@ package io.github.matiyaaa.fuse.desktop.services
 import io.github.matiyaaa.fuse.desktop.Log
 import io.github.matiyaaa.fuse.desktop.system.DesktopOs
 import io.github.matiyaaa.fuse.desktop.system.Processes
+import io.github.matiyaaa.fuse.launch.LaunchDiagnostic
 import io.github.matiyaaa.fuse.launch.ResolvedLaunch
 import io.github.matiyaaa.fuse.launch.linux.DesktopExec
 import io.github.matiyaaa.fuse.launch.pc.ShortcutParser
@@ -110,7 +111,10 @@ internal class DesktopLauncher(
                 return@withContext if (detail != null && "not installed" in detail) {
                     RunResult.NotInstalled
                 } else {
-                    RunResult.Failed("$name stopped right away (exit code ${process.exitValue()})" + (detail?.let { ": ${it.take(160)}" } ?: "."))
+                    RunResult.Failed(
+                        "$name stopped right away (exit code ${process.exitValue()})" + (detail?.let { ": ${it.take(160)}" } ?: "."),
+                        LaunchDiagnostic(argv, process.exitValue(), stderr.text(0)),
+                    )
                 }
             }
             // Hand-off commands return at once while the game runs elsewhere (Steam, gio, xdg-open);
@@ -147,10 +151,12 @@ internal class DesktopLauncher(
             }, "fuse-child-stderr").apply { isDaemon = true }.start()
         }
 
-        fun firstLine(waitMs: Long): String? {
+        fun firstLine(waitMs: Long): String? = text(waitMs).lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }
+
+        /** What it wrote, up to the first few KB. */
+        fun text(waitMs: Long): String {
             done.await(waitMs, TimeUnit.MILLISECONDS)
-            val text = synchronized(buffer) { String(buffer.toByteArray(), StandardCharsets.UTF_8) }
-            return text.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }
+            return synchronized(buffer) { String(buffer.toByteArray(), StandardCharsets.UTF_8) }
         }
     }
 
