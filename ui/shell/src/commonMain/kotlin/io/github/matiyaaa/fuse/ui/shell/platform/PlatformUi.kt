@@ -321,6 +321,8 @@ interface StorageAccess {
     suspend fun pickAudio(title: String): PickedFile? = null
     /** A save file or archive, copied into temporary app storage where document access needs it. */
     suspend fun pickSave(title: String): String? = null
+    /** An IPS, UPS or BPS patch, readable by Fuse (copied into temporary app storage where document access needs it). */
+    suspend fun pickPatch(title: String): String? = null
     fun refresh()
 }
 

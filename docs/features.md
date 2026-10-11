@@ -28,6 +28,8 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
 - **BIOS checks** report Unknown, never Missing, when a location cannot be read.
 - **Transfers that follow your rules**: how many at once, a bandwidth limit, slower or paused while
   you play, only on Wi-Fi, only while charging, a battery level to wait below, and quiet hours.
+- **Patches** (IPS, UPS and BPS) applied from a game's options as a copy beside it, checked against
+  the game they were made for where the patch says; the game itself is never changed.
 - **Storage** shows every drive by name, connected or not, every game by the space it takes, and
   Fuse's own files: the saves Fuse One keeps here, a host's household saves, kept saves of removed
   profiles, and art and caches.

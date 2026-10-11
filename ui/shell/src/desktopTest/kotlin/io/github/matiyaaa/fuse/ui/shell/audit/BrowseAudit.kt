@@ -742,7 +742,7 @@ internal fun AuditDriver.gameScreens(exhaustive: Boolean) {
         useLibrary()
         openGame("Aurora Outpost")
         tap(PadButton.X)
-        waitFor("Folder Behaviour")
+        waitFor("Manage Media")
         shoot("options menu from the game page")
         focusText("Remove from Fuse")
         shoot("options menu, last row (Remove from Fuse)")

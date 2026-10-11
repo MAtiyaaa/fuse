@@ -45,6 +45,11 @@ and the library, and a first step toward Fuse knowing emulators for itself.
 - **When transfers move.** Downloads has "Only while charging", "On battery, wait below" and
   "Quiet hours" beside Wi-Fi only, the bandwidth limit and the rules for while you play. A held
   transfer says what it waits for and carries on by itself. Saves always go: they are small.
+- **Patches.** A game's options apply an IPS, UPS or BPS patch (a translation, a hack, a fix) as a
+  new copy beside the game, which joins the library; the game itself is never changed. UPS and BPS
+  patches are checked against the game they were made for, and one for another version is refused
+  with both checksums rather than making a broken copy. A copier header is left off when the patch
+  expects it.
 - **Steam achievement rarity.** The share of players who have each Steam achievement, and when it
   was unlocked, under the chosen badge on a game's page.
 - **Add a game folder.** A folder holding a game with its updates, DLC or discs, read the way the
@@ -54,16 +59,17 @@ and the library, and a first step toward Fuse knowing emulators for itself.
 - **Fuseline 4.1.** Cues: one clock that many parts of an entrance play from, so a page of tiles
   coming in is one frame callback. Fuseline is publishable on its own as an SDK
   (io.github.matiyaaa.fuseline:fuseline:4.1.0); see docs/fuseline-sdk.md.
-- **Arrange the top line by holding a tab.** Touch, mouse, or holding confirm on a tab opens
-  Section order with that tab picked up.
+- **Arrange the top line in place.** Hold a tab (touch, mouse or confirm) and it lifts; move it
+  along with the D-pad or a drag, as Addons' tabs move, and put it down. Home stays first.
 
 ## Changed
 
 - **Fuse One** is the name of Fuse's household system throughout (profiles, Fuse Save Sync and the
-  Fuse Library); its settings are in Settings. RomM is called RomM, and its games are in the
+  Fuse Library); every one of its settings is in Settings, Fuse One, in those parts. RomM is called RomM, and its games are in the
   Library's All view with every other game.
-- **Library.** Installed and All views; All gathers this device, RomM and other devices as shelves,
-  with Installed as one of a tile's own marks. Library opens on either. View As is gone.
+- **Library.** All, then Installed; All gathers this device, RomM and other devices as shelves,
+  with Installed as one of a tile's own marks. Library opens on All, or on Installed when chosen in
+  Settings. View As is gone.
 - **Sync page.** How things stand is always in view, with the last saves as they went; history
   lasts across restarts and names the device; the top line is Sync Now, Library, Switch Profile
   and More.
@@ -81,6 +87,11 @@ and the library, and a first step toward Fuse knowing emulators for itself.
 - Developer, Start Onboarding can rehearse setup as Linux, Windows, macOS or Android.
 
 ## Fixed
+
+- Saves are found where emulators really keep them, checked against each one's own source:
+  DuckStation's newer Windows folder (%LOCALAPPDATA%) and portable settings.ini, Eden's own Save Data
+  and NAND directories (on Android too, with the setting to use named), Kenji-NX read as the Ryujinx
+  it is built from, and RPCS3's dev_hdd0 where its vfs.yml moved it.
 
 - A choice made just as a profile switch or a sync round was being applied (a theme picked the
   moment after switching) is no longer thrown away; it stays the person's newest choice.

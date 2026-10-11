@@ -508,6 +508,13 @@ interface LibraryOps {
     /** Undoes [attachAsContent]: [child] is a game again. The game it was part of, or null. */
     suspend fun detachContent(child: GameId): GameId? = null
 
+    /**
+     * Applies the IPS, UPS or BPS patch at [patchPath] to [id]'s game file, as a new copy beside it
+     * that joins the library: the game itself is never changed. UPS and BPS are checked against the
+     * game they were made for, and a patch for another version is refused.
+     */
+    suspend fun applyPatch(id: GameId, patchPath: String): PatchApplied = PatchApplied.Failed("Patching isn't available here.")
+
     /** The parts the person attached to [owner]: id, title and kind. */
     suspend fun userParts(owner: GameId): List<Triple<GameId, String, io.github.matiyaaa.fuse.model.ContentKind>> = emptyList()
 
@@ -904,4 +911,23 @@ data class PhoneLinkState(
 /** What a "Restore Fuse Default Art" replaced, for Undo; [count] systems had art of their own. */
 interface ArtUndo {
     val count: Int
+}
+
+/** What applying a patch to a game came to. */
+sealed interface PatchApplied {
+    /**
+     * The patched copy, [name], made beside the game and added to the library as [game]. [checked]
+     * when the patch said which game it fits and this was it; [headerRemoved] when the game's copier
+     * header was left off for it.
+     */
+    data class Made(val game: GameId?, val name: String, val format: String, val checked: Boolean, val headerRemoved: Boolean) : PatchApplied
+
+    /** The patch is for another version of the game (its CRC32s, as 8 hex digits). */
+    data class WrongGame(val format: String, val expected: String, val actual: String) : PatchApplied
+
+    /** The game already is what the patch makes. */
+    data object AlreadyPatched : PatchApplied
+
+    /** It couldn't be done; [reason] says why, in words for the person. */
+    data class Failed(val reason: String) : PatchApplied
 }

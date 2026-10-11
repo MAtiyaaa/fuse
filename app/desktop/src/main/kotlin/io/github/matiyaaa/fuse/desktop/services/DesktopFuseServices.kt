@@ -169,6 +169,27 @@ class DesktopFuseServices private constructor(
         writeBelow(dirs.data, relativePath) { bytes }
     }
 
+    override suspend fun writeBeside(beside: String, name: String, bytes: ByteArray): String? = withContext(Dispatchers.IO) {
+        if (name.isBlank() || '/' in name || '\\' in name || name == "." || name == "..") return@withContext null
+        try {
+            val dir = File(beside).absoluteFile.parentFile ?: return@withContext null
+            val file = File(dir, name)
+            if (file.exists()) return@withContext null
+            val temp = File(dir, ".$name.fuse-part")
+            temp.writeBytes(bytes)
+            // Never over a file that appeared meanwhile.
+            if (file.exists() || !temp.renameTo(file)) {
+                temp.delete()
+                return@withContext null
+            }
+            file.absolutePath
+        } catch (e: IOException) {
+            null
+        } catch (e: SecurityException) {
+            null
+        }
+    }
+
     override fun utcOffsetMillis(): Long = TimeZone.getDefault().getOffset(System.currentTimeMillis()).toLong()
 
     override fun close() {

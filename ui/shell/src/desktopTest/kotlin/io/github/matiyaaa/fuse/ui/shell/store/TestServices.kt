@@ -172,6 +172,13 @@ internal class FakeServices(
     override suspend fun readFile(path: String, maxBytes: Int): ByteArray? =
         File(path).takeIf { it.isFile && it.length() <= maxBytes }?.readBytes()
 
+    override suspend fun writeBeside(beside: String, name: String, bytes: ByteArray): String? {
+        val file = File(File(beside).parentFile, name)
+        if (file.exists()) return null
+        file.writeBytes(bytes)
+        return file.absolutePath
+    }
+
     override suspend fun keepFile(relativePath: String, bytes: ByteArray): String? {
         require(!relativePath.contains("..")) { "Kept files never leave the data folder" }
         val file = File(cache, "kept/$relativePath")

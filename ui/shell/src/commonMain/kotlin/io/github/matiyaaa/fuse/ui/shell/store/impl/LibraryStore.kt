@@ -1064,6 +1064,35 @@ internal class DefaultLibraryOps(
 
     override suspend fun userParts(owner: GameId) = data.games.userParts(owner)
 
+    override suspend fun applyPatch(id: GameId, patchPath: String): io.github.matiyaaa.fuse.ui.shell.store.PatchApplied {
+        val failed = io.github.matiyaaa.fuse.ui.shell.store.PatchApplied::Failed
+        val game = data.games.get(id) ?: return failed("This game isn't in the library any more.")
+        if (game.appId != null || game.location.kind != LocationKind.FILE) return failed("Patches apply to a game that is one file. This one is a folder or an app.")
+        val path = game.location.path
+        val ext = path.substringAfterLast('.', "").lowercase()
+        if (ext in ARCHIVES) return failed("This game is in a .$ext archive. Patches apply to the game itself: unpack it first, then patch that.")
+        val limit = io.github.matiyaaa.fuse.library.patch.RomPatches.MAX_SIZE.toInt()
+        val patch = ctx.services.readFile(patchPath, 64 * 1024 * 1024) ?: return failed("Fuse couldn't read the patch.")
+        val rom = ctx.services.readFile(path, limit) ?: return failed("Fuse couldn't read the game (or it is larger than the games patches are for).")
+        val outcome = withContext(Dispatchers.Default) { io.github.matiyaaa.fuse.library.patch.RomPatches.apply(rom, patch) }
+        fun crc(v: Long) = v.toString(16).uppercase().padStart(8, '0')
+        return when (outcome) {
+            is io.github.matiyaaa.fuse.library.patch.PatchOutcome.Unreadable -> failed(outcome.reason)
+            is io.github.matiyaaa.fuse.library.patch.PatchOutcome.AlreadyPatched -> io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.AlreadyPatched
+            is io.github.matiyaaa.fuse.library.patch.PatchOutcome.WrongGame -> io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.WrongGame(outcome.format.label, crc(outcome.expected), crc(outcome.actual))
+            is io.github.matiyaaa.fuse.library.patch.PatchOutcome.Patched -> {
+                // Named after the game and the patch, so both are plain to see, beside the game.
+                val stem = FsPath.name(path).let { n -> n.substringBeforeLast('.', n) }
+                val patchStem = patchPath.replace('\\', '/').substringAfterLast('/').let { n -> n.substringBeforeLast('.', n) }.replace(Regex("[\\\\/:*?\"<>|]"), "_").take(80).trim()
+                val name = "$stem - $patchStem${if (ext.isEmpty()) "" else ".$ext"}"
+                val written = ctx.services.writeBeside(path, name, outcome.bytes)
+                    ?: return failed("Fuse couldn't write the patched copy beside the game (the folder may not allow it, or \"$name\" is there already).")
+                val added = addGameFile(written, game.platformId)
+                io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.Made(added, name, outcome.format.label, outcome.checked, outcome.headerRemoved)
+            }
+        }
+    }
+
     override suspend fun browse(path: String?): BrowseListing {
         val roots = runCatching { ctx.services.locations.storageRoots() }.getOrDefault(emptyList())
         if (path == null) {
@@ -1122,3 +1151,6 @@ private const val COMPAT_CACHE = "rpcs3.compat"
 
 /** Where Fuse records the PCSX2 patches it turned on itself, by game settings file. */
 private const val PATCH_OWNERSHIP = "pcsx2.patches"
+
+/** Archives a patch never applies to: it is for the game inside. */
+private val ARCHIVES = setOf("zip", "7z", "rar", "gz", "chd", "rvz", "cso", "zso")

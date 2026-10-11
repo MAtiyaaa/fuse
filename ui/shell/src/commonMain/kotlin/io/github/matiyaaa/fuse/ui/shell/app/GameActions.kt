@@ -359,6 +359,8 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
             }))
         }
         if (!card.isApp) add(MenuAction("folder", "Folder Behaviour", FuseIcons.FolderOpen, trailing = Trailing.Chevron, onSelect = { folderPolicyPicker(card) }))
+        // A translation, a hack or a fix, as its own copy beside the game: the game stays as it is.
+        if (!card.isApp && card.platformId.value !in NO_ROM_PATCHES) add(MenuAction("patch", "Apply a Patch", FuseIcons.Bandage, detail = "An IPS, UPS or BPS file. Makes a patched copy; this game stays as it is", onSelect = { applyPatch(card) }))
         // RomM, when it is the RomM integration in use: games not on RomM go up from here.
         if (store.prefs.value.romm.enabled && store.romm.supported && !card.isApp && card.rommRomId == null) {
             add(MenuAction("romm.upload", "Upload to RomM", FuseIcons.Upload, detail = "With its other discs, DLC and updates, through Downloads", onSelect = {
@@ -817,3 +819,44 @@ private fun AppState.partOwnerPicker(card: GameCard, kind: io.github.matiyaaa.fu
         )
     }
 }
+
+/**
+ * Picks a patch and applies it to [card] as a copy beside the game, saying what came of it: the
+ * copy (and whether the patch was checked against this game), a patch for another version of the
+ * game, a game already patched, or why it couldn't be done.
+ */
+internal fun AppState.applyPatch(card: GameCard) {
+    closeOverlays()
+    scope.launch {
+        val patch = platform.storage.pickPatch("Choose a patch for ${card.title}") ?: return@launch
+        toasts.show("Patching ${card.title}...", icon = FuseIcons.Bandage)
+        when (val r = store.library.applyPatch(card.id, patch)) {
+            is io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.Made -> {
+                val notes = listOfNotNull(
+                    if (r.checked) "The ${r.format} patch confirmed this is the game it is for." else "${r.format} patches don't say which game they are for: if the copy doesn't start, the patch is for another version.",
+                    if (r.headerRemoved) "Its copier header was left off, as the patch expects." else null,
+                )
+                choice = ChoiceSpec(
+                    title = "Patched copy made",
+                    icon = FuseIcons.Bandage,
+                    message = "\"${r.name}\" is beside ${card.title}, and in your library. ${notes.joinToString(" ")} ${card.title} itself is unchanged.",
+                    options = listOfNotNull(
+                        r.game?.let { made -> MenuAction("open", "Open the Patched Copy", FuseIcons.Play, onSelect = { choice = null; go(Route.GameInfo(made)) }) },
+                        MenuAction("done", "Done", FuseIcons.Check, onSelect = { choice = null }),
+                    ),
+                )
+            }
+            is io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.WrongGame -> choice = ChoiceSpec(
+                title = "This patch is for another version",
+                icon = FuseIcons.Bandage,
+                message = "The ${r.format} patch is for a game whose checksum is ${r.expected}; this copy of ${card.title} is ${r.actual}. Patching it would make a broken game, so nothing was made. The patch's notes usually say which dump it needs (a region or revision).",
+                options = listOf(MenuAction("ok", "OK", FuseIcons.Check, onSelect = { choice = null })),
+            )
+            io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.AlreadyPatched -> toasts.show("${card.title} already has this patch", icon = FuseIcons.Bandage)
+            is io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.Failed -> toasts.show(r.reason, ToastKind.WARNING)
+        }
+    }
+}
+
+/** Systems whose games are installed packages or programs, where ROM patches (IPS, UPS, BPS) don't apply. */
+private val NO_ROM_PATCHES = setOf("switch", "ps3", "ps4", "ps5", "psvita", "wiiu", "xbox", "xbox360", "win", "win3x", "win9x", "steam", "android", "dos", "mac", "scummvm", "pico8", "flash", "j2me")

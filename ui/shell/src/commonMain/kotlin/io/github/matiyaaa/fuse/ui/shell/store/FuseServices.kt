@@ -139,6 +139,14 @@ interface FuseServices {
      */
     suspend fun keepFile(relativePath: String, bytes: ByteArray): String? = null
 
+    /**
+     * Writes [bytes] as a new file named [name] in the folder [beside] is in (a patched copy of a
+     * game, beside the game): written under a temporary name and moved into place, so a half-written
+     * file never appears, and never over a file that is there. Returns its path, or null when it
+     * could not be written (the folder can't be written to, or the name is taken).
+     */
+    suspend fun writeBeside(beside: String, name: String, bytes: ByteArray): String? = null
+
     /** Where the Store puts programs on a computer; null on Android (which has [packages]) and in tests. */
     val desktopApps: io.github.matiyaaa.fuse.ui.shell.store.DesktopInstaller? get() = null
 

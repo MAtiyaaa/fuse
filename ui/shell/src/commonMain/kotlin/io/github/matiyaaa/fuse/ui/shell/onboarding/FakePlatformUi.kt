@@ -27,6 +27,7 @@ class FakePlatformUi(override val host: Host, private val leave: () -> Unit = {}
         override suspend fun pickImage(title: String) = "/rehearsal/picked-image.png"
         override suspend fun pickAudio(title: String) = PickedFile("/rehearsal/picked-song.ogg", "Rehearsal song")
         override suspend fun pickSave(title: String) = "/rehearsal/picked-save.zip"
+        override suspend fun pickPatch(title: String): String? = null
         override fun refresh() = Unit
     }
     override val quick = object : QuickControls {
