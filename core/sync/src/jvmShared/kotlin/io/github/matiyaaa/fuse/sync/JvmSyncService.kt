@@ -52,7 +52,10 @@ class JvmSyncService(
     private val _status = MutableStateFlow<SyncStatus>(SyncStatus.Off)
     private val _profiles = MutableStateFlow<List<ProfileInfo>>(emptyList())
     private val _active = MutableStateFlow<ProfileInfo?>(null)
-    private val _activity = MutableStateFlow<List<SyncActivity>>(emptyList())
+    /** What happened, newest first, kept across restarts (see [log]). */
+    private val _activity = MutableStateFlow(
+        runCatching { json.decodeFromString(ListSerializer(SyncActivity.serializer()), File(dir, HISTORY_FILE).readText()) }.getOrDefault(emptyList()),
+    )
     private val _host = MutableStateFlow<HostView?>(null)
     private val _devices = MutableStateFlow<List<DeviceInfo>>(emptyList())
     override val status: StateFlow<SyncStatus> = _status.asStateFlow()
@@ -122,9 +125,26 @@ class JvmSyncService(
 
     private fun deviceId(): String = cached.deviceId.ifEmpty { "pending" }
 
+    /**
+     * Notes what happened in the history: when, on which device, and what it touched ([kind]). The
+     * history is written to disk as it grows, so it is still there after Fuse restarts; it is this
+     * device's own and never holds a save's contents, only what happened to it.
+     */
     private fun log(text: String, game: String? = null, kind: String = "") {
-        _activity.update { (listOf(SyncActivity(clock(), text, game, kind)) + it).take(60) }
+        val entry = SyncActivity(clock(), text, game, kind, device = cached.deviceName.ifBlank { defaultDeviceName })
+        _activity.update { (listOf(entry) + it).take(HISTORY_KEEP) }
+        scope.launch(Dispatchers.IO) {
+            historyWrite.withLock {
+                runCatching {
+                    dir.mkdirs()
+                    // The newest whole history, whichever write comes last.
+                    writeAtomically(File(dir, HISTORY_FILE), json.encodeToString(ListSerializer(SyncActivity.serializer()), _activity.value).toByteArray())
+                }
+            }
+        }
     }
+
+    private val historyWrite = Mutex()
 
     private suspend fun ensureDeviceId(): String {
         val c = config()
@@ -264,7 +284,7 @@ class JvmSyncService(
             }
             // Something else holds the port (or the service went away just now): serve here if the port is free again.
             if (!HostAdmin.portFree(c.hostPort)) {
-                log("The host can't start: another program on this computer is using port ${c.hostPort}, which the host needs")
+                log("The host can't start: another program on this computer is using port ${c.hostPort}, which the host needs", kind = SyncActivity.HOST)
                 refreshHostView()
                 return
             }
@@ -461,7 +481,7 @@ class JvmSyncService(
             scope.launch(Dispatchers.IO) {
                 if (cached.activeProfile != active) return@launch
                 runCatching { switchTo(null) }
-                log("The profile in use here was deleted on another device. Choose who's playing.")
+                log("The profile in use here was deleted on another device. Choose who's playing.", kind = SyncActivity.PROFILE)
             }
             return
         }
@@ -520,7 +540,7 @@ class JvmSyncService(
             d.pullMeta(c, active)
             data.write(canonical(d.meta(active)))
         }
-        if (sent > 0) log(if (sent == 1) "Sent 1 change to $name" else "Sent $sent changes to $name")
+        if (sent > 0) log(if (sent == 1) "Sent 1 change to $name" else "Sent $sent changes to $name", kind = SyncActivity.CHANGES)
         _status.value = SyncStatus.Online(name, c.route ?: Route.LOCAL, working = false, pending = d.pendingCount)
         _rounds.update { it + 1 }
     }
@@ -536,7 +556,7 @@ class JvmSyncService(
         val name = cached.hostName.ifBlank { c.link.hostName }
         _status.value = SyncStatus.Online(name, c.route ?: Route.LOCAL, working = true, pending = d.pendingCount)
         val sent = d.flush(c)
-        if (sent > 0) log(if (sent == 1) "Sent 1 change to $name" else "Sent $sent changes to $name")
+        if (sent > 0) log(if (sent == 1) "Sent 1 change to $name" else "Sent $sent changes to $name", kind = SyncActivity.CHANGES)
         _status.value = SyncStatus.Online(name, c.route ?: Route.LOCAL, working = false, pending = d.pendingCount)
     }
 
@@ -547,7 +567,7 @@ class JvmSyncService(
         captureChanges(active)
         d.pullMeta(c, active)
         data.write(canonical(d.meta(active)))
-        log("Brought in changes from your other devices")
+        log("Brought in changes from your other devices", kind = SyncActivity.CHANGES)
     }
 
     /** What changed here since the profile was put in place becomes changes waiting to go. */
@@ -655,7 +675,7 @@ class JvmSyncService(
         _joins.value = emptyList()
         _sharedGames.value = emptySet()
         _host.value = null
-        log("Fuse One forgot its host")
+        log("Fuse One forgot its host", kind = SyncActivity.HOST)
         if (unsent > 0) log(if (unsent == 1) "A save that hadn't reached the host is kept on this device" else "$unsent saves that hadn't reached the host are kept on this device", kind = "save")
     }
 
@@ -699,8 +719,8 @@ class JvmSyncService(
         val noPin = stay.filter { it.protected && pins[it.id] == null }
         savePeople(LocalPeople(stay.map { LocalProfile(it.id, it.name, it.avatar, it.createdAt, pins[it.id]) }, order = stay.map { it.id }))
         markAdopted()
-        if (noPin.isNotEmpty()) log("${noPin.joinToString(", ") { it.name }} kept without a PIN here, as it was never typed on this device. Set one in Profiles.")
-        log(if (stay.size == 1) "${stay[0].name} stays on this device as its own profile" else "${stay.size} profiles stay on this device as its own")
+        if (noPin.isNotEmpty()) log("${noPin.joinToString(", ") { it.name }} kept without a PIN here, as it was never typed on this device. Set one in Profiles.", kind = SyncActivity.PROFILE)
+        log(if (stay.size == 1) "${stay[0].name} stays on this device as its own profile" else "${stay.size} profiles stay on this device as its own", kind = SyncActivity.PROFILE)
         return stay.map { it.id }
     }
 
@@ -770,7 +790,7 @@ class JvmSyncService(
                 }
             }
             refreshHostView()
-            log("The host's saves moved to ${target.path}")
+            log("The host's saves moved to ${target.path}", kind = SyncActivity.HOST)
             target.path
         }
     }
@@ -786,7 +806,7 @@ class JvmSyncService(
             saveConfig { it.copy(role = "", hostName = "") }
             _host.value = null
             _status.value = SyncStatus.NotSetUp
-            log("This device stopped being the host")
+            log("This device stopped being the host", kind = SyncActivity.HOST)
         }
     }
 
@@ -912,7 +932,7 @@ class JvmSyncService(
             val c = pendingClient ?: pendingLink?.let(::SyncClient)
             // The host forgets this device too, so its list of devices stays true.
             if (c != null) runCatching { withTimeoutOrNull(FORGET_WAIT_MS) { c.unlinkSelf() } }
-            if (pendingLink != null) log("Didn't join ${pendingLink?.hostName}. This device keeps its own profiles")
+            if (pendingLink != null) log("Didn't join ${pendingLink?.hostName}. This device keeps its own profiles", kind = SyncActivity.PROFILE)
             finishMerge()
             _status.value = if (cached.enabled) SyncStatus.NotSetUp else SyncStatus.Off
         }
@@ -967,7 +987,7 @@ class JvmSyncService(
                         ids[p.id] = made.id
                         if (p.pinHash != null) {
                             pins = pins + (made.id to p.pinHash)
-                            if (!made.protected) log("${p.name}'s PIN couldn't go to ${linked.hostName}, which runs an older Fuse. Set it again in Profiles.")
+                            if (!made.protected) log("${p.name}'s PIN couldn't go to ${linked.hostName}, which runs an older Fuse. Set it again in Profiles.", kind = SyncActivity.PROFILE)
                         }
                     }
                     MergeChoice.LeaveOut -> left += p
@@ -981,12 +1001,12 @@ class JvmSyncService(
             savePeople(LocalPeople(pins = pins.filterKeys { it in ids.values }))
             markAdopted()
             saveConfig { it.copy(activeProfile = next) }
-            if (left.isNotEmpty()) log(if (left.size == 1) "${left[0].name} was left out; their saves are in Fuse One's kept folder" else "${left.size} profiles were left out; their saves are in Fuse One's kept folder")
+            if (left.isNotEmpty()) log(if (left.size == 1) "${left[0].name} was left out; their saves are in Fuse One's kept folder" else "${left.size} profiles were left out; their saves are in Fuse One's kept folder", kind = SyncActivity.PROFILE)
         }
         finishMerge()
         linkFor(linked)
         _active.value = _profiles.value.firstOrNull { it.id == cached.activeProfile }
-        log(if (ids.size == 1) "Your profile is on ${linked.hostName} now" else "Your ${ids.size} profiles are on ${linked.hostName} now")
+        log(if (ids.size == 1) "Your profile is on ${linked.hostName} now" else "Your ${ids.size} profiles are on ${linked.hostName} now", kind = SyncActivity.PROFILE)
         return ids.size
     }
 
@@ -1003,7 +1023,7 @@ class JvmSyncService(
             stop()
             start()
             refreshLists()
-            log("Connected to ${linked.hostName}")
+            log("Connected to ${linked.hostName}", kind = SyncActivity.DEVICE)
         }
         return linked.hostName
     }
@@ -1137,7 +1157,7 @@ class JvmSyncService(
             }
             adminAccount = username.trim()
             refreshHostView()
-            log("The host's account is set")
+            log("The host's account is set", kind = SyncActivity.HOST)
         }
     }
 
@@ -1185,7 +1205,7 @@ class JvmSyncService(
         if (SyncClient.normalise(cfg.remoteAddress.ifBlank { "x" }) == SyncClient.normalise(outside)) return
         saveConfig { it.copy(remoteAddress = outside, remoteFromHost = true) }
         client = SyncClient(c.link.copy(remoteAddress = SyncClient.normalise(outside)))
-        log("Learned the host's address from outside")
+        log("Learned the host's address from outside", kind = SyncActivity.HOST)
     }
 
     override suspend fun answerJoin(id: String, allow: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
@@ -1194,7 +1214,7 @@ class JvmSyncService(
             c.answerJoin(id, allow)
             _joins.value = _joins.value.filterNot { it.id == id }
             refreshJoins()
-            log(if (allow) "Let a new device in" else "Turned a device away")
+            log(if (allow) "Let a new device in" else "Turned a device away", kind = SyncActivity.DEVICE)
         }
     }
 
@@ -1230,7 +1250,7 @@ class JvmSyncService(
             if (installService && lifetime.supported) handOver()
             newPairingCode()
             refreshHostView()
-            log("$name is a Fuse Sync Host")
+            log("$name is a Fuse One Host", kind = SyncActivity.HOST)
             _host.value!!
         }
     }
@@ -1262,7 +1282,7 @@ class JvmSyncService(
      * Null when it didn't (the old one may still be running, and is used as it is).
      */
     private suspend fun restartedService(c: SyncSettings, was: String): Pair<HostAdmin, HostStatus>? = withContext(Dispatchers.IO) {
-        log("The host was running Fuse ${was.ifBlank { "from before 0.2" }}: starting it again on $fuseVersion")
+        log("The host was running Fuse ${was.ifBlank { "from before 0.2" }}: starting it again on $fuseVersion", kind = SyncActivity.HOST)
         if (lifetime.install().isFailure) return@withContext null
         withTimeoutOrNull(SERVICE_WAIT_MS * 2) {
             var found: Pair<HostAdmin, HostStatus>? = null
@@ -1295,7 +1315,7 @@ class JvmSyncService(
             if (admin != null) {
                 hostAdmin = admin
                 adminStatus = runCatching { admin.status() }.getOrNull()
-                log("The host now runs on its own, with Fuse closed too")
+                log("The host now runs on its own, with Fuse closed too", kind = SyncActivity.HOST)
                 return installed
             }
         }
@@ -1360,7 +1380,7 @@ class JvmSyncService(
         val order = people.order.ifEmpty { people.profiles.map { it.id } }
         savePeople(people.copy(profiles = people.profiles + made, order = order + made.id))
         showLocal()
-        log("Made a profile for $clean")
+        log("Made a profile for $clean", kind = SyncActivity.PROFILE)
         return made.info
     }
 
@@ -1401,7 +1421,7 @@ class JvmSyncService(
                 val written = device?.forget(id, File(keptFolder(), safeName(p.name))) ?: 0
                 savePeople(people.copy(profiles = people.profiles - p, order = people.order - id, pins = people.pins - id))
                 showLocal()
-                log(if (written > 0) "${p.name} was deleted; their saves are in Fuse One's kept folder" else "${p.name} was deleted")
+                log(if (written > 0) "${p.name} was deleted; their saves are in Fuse One's kept folder" else "${p.name} was deleted", kind = SyncActivity.PROFILE)
             }
         }
         return withClient { c ->
@@ -1506,7 +1526,7 @@ class JvmSyncService(
                 data.write(canonical(d.meta(id)))
                 d.useProfile(id)
                 _active.value = _profiles.value.firstOrNull { it.id == id }
-                log("Switched to ${_active.value?.name ?: "a profile"}")
+                log("Switched to ${_active.value?.name ?: "a profile"}", kind = SyncActivity.PROFILE)
             }
             // Saves waiting to go (the last person's, anyone's) go up now, behind the switch. Only
             // the saves: the records were just brought in, so nothing here rewrites the library
@@ -1645,7 +1665,7 @@ class JvmSyncService(
             // first (whoever played last keeps theirs); this needs no host, so it happens offline too.
             val owner = ownerOf(query, slot, profile)
             runCatching { d.handover(owner, slot, { who -> if (who == SHARED_SAVES) 0L else canonical(d.meta(who)).game(query.game).totalSeconds }, File(File(dir, KEPT_DIR), REMOVED_DIR)) }
-                .onFailure { log("${query.title}: couldn't swap in this person's save (${it.message})", query.game.id, "save") }
+                .onFailure { log("${query.title}: couldn't swap in this person's save (${it.message})", query.game.id, SyncActivity.FAILED) }
             // This person's saves aren't taken here: the game starts with the save this device has.
             if (!takesFrom(owner, query.game.id)) continue
             if (c == null) {
@@ -1722,7 +1742,7 @@ class JvmSyncService(
                 // (only with a host: without one, nothing is sent anywhere).
                 if (!keepsOwn && here.any { sendsFor(ownerOf(query, it, profile), query.game.id) } && captured.none { it.kind != SaveKind.STATE }) whyNotKept(query, here)?.let { why ->
                     if (explained.add("${query.game.id}|$why")) {
-                        log("${query.title}: save not sent. $why", query.game.id, "save")
+                        log("${query.title}: save not sent. $why", query.game.id, SyncActivity.FAILED)
                         _notices.tryEmit(SyncNotice.NotSynced(query.title, SaveKind.SAVE, why))
                     }
                 }
@@ -2057,6 +2077,10 @@ class JvmSyncService(
 
         /** This device's own people: its profiles without a host, their order, PINs typed here. */
         const val PEOPLE_FILE = "people.json"
+
+        /** This device's sync history, newest first, and how much of it is kept. */
+        const val HISTORY_FILE = "history.json"
+        const val HISTORY_KEEP = 200
         const val ADOPTED_FILE = "adopted"
 
         /** A host joined while this device had profiles, until who is who is settled. */

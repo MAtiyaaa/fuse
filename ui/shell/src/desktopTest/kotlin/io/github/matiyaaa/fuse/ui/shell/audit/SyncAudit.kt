@@ -37,13 +37,12 @@ internal fun AuditDriver.useSync(asHost: Boolean, playing: String? = "mo", prefs
     settle(600)
 }
 
-/** Settings, Addons, Fuse Sync's page (through Addons, as a person gets there). */
+/** Settings, Fuse One, then its page (as a person gets there). */
 private fun AuditDriver.openSyncPage() {
     openSettings()
-    focusText("Addons")
+    tap(PadButton.DPAD_DOWN, sectionIndex("fuseone"))
     tap(PadButton.DPAD_RIGHT)
-    waitFor("Your saves, play time, library and settings on every device")
-    tapText("Fuse One")
+    tapText("Fuse Save Sync")
     focusAny("Set Up Fuse One", "Profiles, Devices and What Syncs")
     tap(PadButton.A)
     settle(900)
@@ -61,14 +60,13 @@ internal fun AuditDriver.syncScreens() {
         syncOff()
         useLibrary()
         openSettings()
-        focusText("Addons")
+        tap(PadButton.DPAD_DOWN, sectionIndex("fuseone"))
         tap(PadButton.DPAD_RIGHT)
-        waitFor("Your saves, play time, library and settings on every device")
-        shoot("Addons, with Fuse One among them")
-        tapText("Fuse One")
-        waitFor("Use Fuse One")
+        shoot("Settings, Fuse One: Save Sync and Syncthing, folded")
+        tapText("Fuse Save Sync")
+        waitFor("Use Fuse Save Sync")
         shoot("Fuse One off: its switch, and nothing else")
-        tapText("Use Fuse One")
+        tapText("Use Fuse Save Sync")
         waitFor("Set Up Fuse One")
         shoot("on, not set up yet")
         tapText("Set Up Fuse One")

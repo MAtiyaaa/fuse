@@ -148,10 +148,20 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
         // The household's games on its other devices: their own small library.
         if (hasLib) add(SyncAction("Library", FuseIcons.MonitorSmartphone) { app.go(Route.HouseholdLibrary) })
         add(SyncAction("Switch Profile", FuseIcons.Users) { app.whoAreYou = WhoMode.SWITCH })
-        add(SyncAction("New Profile", FuseIcons.UserPlus) { app.whoAreYou = WhoMode.ADD })
-        // Any device already in can bring in another: a code here, or saying yes when it asks.
-        add(SyncAction("Add a Device", FuseIcons.Plus) { app.pairing = true })
-        add(SyncAction("Settings", FuseIcons.Settings) { app.go(Route.SyncSettings) })
+        // The rest, less often needed, under More: the line stays calm and never runs out of room.
+        add(SyncAction("More", FuseIcons.More) {
+            app.openContextMenu(
+                io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec(
+                    title = "Fuse One", subtitle = profile?.name?.let { "Playing as $it" }, icon = FuseIcons.RefreshCcw,
+                    actions = listOf(
+                        MenuAction("sync.new", "New Profile", FuseIcons.UserPlus, detail = "Someone else who plays here", onSelect = { app.contextMenu = null; app.whoAreYou = WhoMode.ADD }),
+                        // Any device already in can bring in another: a code here, or saying yes when it asks.
+                        MenuAction("sync.device", "Add a Device", FuseIcons.Plus, detail = "A code for another device to join", onSelect = { app.contextMenu = null; app.pairing = true }),
+                        MenuAction("sync.settings", "Settings", FuseIcons.Settings, detail = "What syncs, devices, the host", onSelect = { app.contextMenu = null; app.go(Route.SyncSettings) }),
+                    ),
+                ),
+            )
+        })
     }
     // Each game's cover from this library, where it has the game (by its id across devices, or its name).
     val covers = rememberSyncCovers(app)
@@ -292,7 +302,8 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
                     }
                 }
                 if (!side) {
-                    item("devices") { DeviceCard(devices, prefs.sync.deviceId, profiles, Modifier.padding(top = Space.l)) }
+                    item("state") { StateCard(status, activity, prefs.sync.hostName.ifBlank { "your host" }, syncing, Modifier.padding(top = Space.l)) }
+                    item("devices") { DeviceCard(devices, prefs.sync.deviceId, profiles, Modifier.padding(top = Space.s)) }
                     item("play") { if (report != null && report.devicePlay.size > 1) Card("Play time by device", FuseIcons.ChartPie, Modifier.padding(top = Space.s)) { PlayBars(report.devicePlay, names) } }
                     item("lately") { ActivityCard(activity, Modifier.padding(top = Space.s)) }
                 }
@@ -300,6 +311,7 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
             if (side) {
                 Box(Modifier.width(340.dp).fillMaxHeight().padding(top = topPadding + subTabsRoom() + Space.s, bottom = Size.hintHeight + Space.m)) {
                     Column(Modifier.fillMaxSize().verticalScroll(sideScroll), verticalArrangement = Arrangement.spacedBy(Space.m)) {
+                        StateCard(status, activity, prefs.sync.hostName.ifBlank { "your host" }, syncing)
                         DeviceCard(devices, prefs.sync.deviceId, profiles)
                         if (report != null && report.devicePlay.size > 1) Card("Play time by device", FuseIcons.ChartPie) { PlayBars(report.devicePlay, names) }
                         ActivityCard(activity)
@@ -698,23 +710,95 @@ private fun ActivityCard(activity: List<SyncActivity>, modifier: Modifier = Modi
     val c = Fuse.colors
     val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
     val offset = localOffsetMillis(now)
-    Card("Lately", FuseIcons.History, modifier) {
+    // What changed, where and when: kept across restarts, newest first.
+    Card("History", FuseIcons.History, modifier) {
         if (activity.isEmpty()) FText("Nothing yet. Play something and its save shows up here.", Fuse.type.body, color = c.textMuted, maxLines = 2)
-        for (a in activity.take(6)) {
+        for (a in activity.take(8)) {
             Row(verticalAlignment = Alignment.Top) {
-                FuseIcon(
-                    when (a.kind) {
-                        "save" -> FuseIcons.Save
-                        "conflict" -> FuseIcons.GitCompare
-                        else -> FuseIcons.RefreshCcw
-                    },
-                    size = Size.iconS, tint = if (a.kind == "conflict") c.warning else c.accent, modifier = Modifier.padding(top = 2.dp),
-                )
+                val (icon, tint) = historyLook(a.kind)
+                FuseIcon(icon, size = Size.iconS, tint = tint, modifier = Modifier.padding(top = 2.dp))
                 Spacer(Modifier.width(Space.m))
                 Column(Modifier.weight(1f)) {
                     FText(a.text, Fuse.type.label, maxLines = 2)
-                    FText(TimeWords.relative(a.at, now, offset).replaceFirstChar { it.uppercase() }, Fuse.type.caption, color = c.textFaint, maxLines = 1)
+                    FText(
+                        listOfNotNull(a.device.takeIf { it.isNotBlank() }, TimeWords.relative(a.at, now, offset).replaceFirstChar { it.uppercase() }).joinToString("  ·  "),
+                        Fuse.type.caption, color = c.textFaint, maxLines = 1,
+                    )
                 }
+            }
+        }
+    }
+}
+
+/** Each kind of history entry by its own icon; what went wrong in the warning colour. */
+@Composable
+private fun historyLook(kind: String): Pair<ImageVector, androidx.compose.ui.graphics.Color> {
+    val c = Fuse.colors
+    return when (kind) {
+        SyncActivity.SAVE -> FuseIcons.Save to c.accent
+        SyncActivity.RESTORE -> FuseIcons.RotateCcw to c.accent
+        SyncActivity.CONFLICT -> FuseIcons.GitCompare to c.warning
+        SyncActivity.FAILED -> FuseIcons.Warning to c.danger
+        SyncActivity.PROFILE -> FuseIcons.Users to c.accent
+        SyncActivity.DEVICE -> FuseIcons.MonitorSmartphone to c.accent
+        SyncActivity.HOST -> FuseIcons.Server to c.accent
+        else -> FuseIcons.RefreshCcw to c.accent
+    }
+}
+
+/**
+ * How things stand, always in view: up to date, syncing, waiting to send, offline (saves keep
+ * working and wait here), or needing the person. Under it, the last few saves as they went: sent,
+ * a conflict kept both ways, or not sent and why. Nothing here is assumed; it is what the service
+ * last reported.
+ */
+@Composable
+private fun StateCard(status: SyncStatus, activity: List<SyncActivity>, hostName: String, syncing: Boolean, modifier: Modifier = Modifier) {
+    val c = Fuse.colors
+    val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+    val offset = localOffsetMillis(now)
+    val last = activity.firstOrNull { it.kind == SyncActivity.CHANGES || it.kind == SyncActivity.SAVE }
+    data class Look(val title: String, val detail: String, val icon: ImageVector, val tint: androidx.compose.ui.graphics.Color, val busy: Boolean = false)
+    val look = when (status) {
+        is SyncStatus.Online -> when {
+            status.working || syncing -> Look("Syncing", "With $hostName", FuseIcons.RefreshCcw, c.accent, busy = true)
+            status.pending > 0 -> Look(if (status.pending == 1) "1 change waiting" else "${status.pending} changes waiting", "Sent with the next sync", FuseIcons.Clock, c.warning)
+            else -> Look("Up to date", last?.let { "Last change " + TimeWords.relative(it.at, now, offset) } ?: "With $hostName", FuseIcons.CloudCheck, c.success)
+        }
+        is SyncStatus.Offline -> Look(
+            "Offline",
+            (if (status.pending > 0) "${status.pending} kept here until $hostName is back. " else "") + "Saves and profiles keep working on this device",
+            FuseIcons.CloudOff, c.warning,
+        )
+        is SyncStatus.Connecting -> Look("Connecting", "To ${status.hostName}", FuseIcons.RefreshCcw, c.accent, busy = true)
+        is SyncStatus.NeedsAttention -> Look("Needs you", status.reason, FuseIcons.Warning, c.danger)
+        SyncStatus.NotSetUp, SyncStatus.Off -> Look("This device only", "Profiles and saves work here. Connect a host to share them", FuseIcons.HardDrive, c.textMuted)
+    }
+    Card("Status", FuseIcons.Activity, modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(36.dp).clip(CircleShape).background(look.tint.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+                if (look.busy) Spinner(size = 18.dp, color = look.tint) else FuseIcon(look.icon, size = Size.iconS, tint = look.tint)
+            }
+            Spacer(Modifier.width(Space.m))
+            Column(Modifier.weight(1f)) {
+                FText(look.title, Fuse.type.bodyStrong, maxLines = 1)
+                FText(look.detail, Fuse.type.caption, color = c.textMuted, maxLines = 2)
+            }
+        }
+        // The last saves as they went, each with how it ended.
+        val saves = activity.filter { it.kind == SyncActivity.SAVE || it.kind == SyncActivity.CONFLICT || it.kind == SyncActivity.FAILED }.take(3)
+        for (a in saves) {
+            val (word, tint) = when (a.kind) {
+                SyncActivity.CONFLICT -> "Both kept" to c.warning
+                SyncActivity.FAILED -> "Not sent" to c.danger
+                else -> "Done" to c.success
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(8.dp).clip(CircleShape).background(tint))
+                Spacer(Modifier.width(Space.s))
+                FText(a.text, Fuse.type.caption, color = c.text, maxLines = 1, modifier = Modifier.weight(1f))
+                Spacer(Modifier.width(Space.s))
+                FText(word, Fuse.type.caption, color = tint, maxLines = 1)
             }
         }
     }

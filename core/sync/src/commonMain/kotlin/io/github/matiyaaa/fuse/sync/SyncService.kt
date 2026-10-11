@@ -30,7 +30,28 @@ data class JoinWaiting(val hostName: String, val match: String, val account: Boo
 data class NearbyHost(val name: String, val hostId: String, val address: String)
 
 /** One thing Fuse Sync did, for the Sync tab's recent activity. */
-data class SyncActivity(val at: Long, val text: String, val game: String? = null, val kind: String = "")
+@kotlinx.serialization.Serializable
+data class SyncActivity(
+    val at: Long,
+    val text: String,
+    val game: String? = null,
+    /** What it touched, for the history's icons: see [SyncActivity.Companion]'s kinds. */
+    val kind: String = "",
+    /** The device it happened on (this one's name when it happened here). */
+    val device: String = "",
+) {
+    companion object {
+        const val SAVE = "save"
+        const val CONFLICT = "conflict"
+        const val RESTORE = "restore"
+        const val FAILED = "failed"
+        /** Records and settings: favourites, play time, collections, themes. */
+        const val CHANGES = "changes"
+        const val PROFILE = "profile"
+        const val DEVICE = "device"
+        const val HOST = "host"
+    }
+}
 
 /** This device as a host: whether it serves, who is connected, and a pairing code while one is shown. */
 data class HostView(
