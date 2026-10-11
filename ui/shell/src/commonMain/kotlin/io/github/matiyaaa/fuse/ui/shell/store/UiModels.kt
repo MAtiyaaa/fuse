@@ -331,6 +331,8 @@ sealed interface ProblemAction {
     data class Retry(override val label: String = "Try again") : ProblemAction
     data class PickEmulator(val game: GameId? = null, val platform: io.github.matiyaaa.fuse.model.PlatformId? = null, override val label: String = "Choose another emulator") : ProblemAction
     data class OpenEmulator(val emulator: EmulatorId, val name: String, override val label: String = "Open $name") : ProblemAction
+    /** Back to the version of a Store program its last update replaced (kept by Fuse). */
+    data class GoBack(val storeKey: String, override val label: String) : ProblemAction
     data class OpenLink(val url: String, override val label: String) : ProblemAction
     data class CheckDrives(override val label: String = "Check drives again") : ProblemAction
     data class OpenStorage(override val label: String = "Storage") : ProblemAction

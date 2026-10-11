@@ -89,7 +89,7 @@ internal object LaunchProblems {
      * they are the explanation; a refused file on Android usually means the emulator lacks access to
      * the folder, which is said outright.
      */
-    fun refused(emulator: InstalledEmulator, game: GameId, message: String, android: Boolean): Problem {
+    fun refused(emulator: InstalledEmulator, game: GameId, message: String, android: Boolean, goBack: ProblemAction.GoBack? = null): Problem {
         val access = android && (message.contains("didn't let", ignoreCase = true) || message.contains("permission", ignoreCase = true))
         return Problem(
             title = "Couldn't start ${emulator.name}",
@@ -99,12 +99,14 @@ internal object LaunchProblems {
                 message
             },
             kind = if (access) ProblemKind.ACCESS else ProblemKind.EMULATOR,
-            actions = listOf(
+            actions = listOfNotNull(
                 ProblemAction.Retry(),
+                goBack,
                 ProblemAction.OpenEmulator(emulator.id, emulator.name),
                 ProblemAction.PickEmulator(game = game, label = "Try another emulator"),
             ),
-            details = "${emulator.name} (${emulator.appId}): $message",
+            details = "${emulator.name} (${emulator.appId}): $message" +
+                (goBack?.let { "\nFuse updated ${emulator.name} lately and kept the version before; ${it.label.lowercase()} puts it back." } ?: ""),
         )
     }
 

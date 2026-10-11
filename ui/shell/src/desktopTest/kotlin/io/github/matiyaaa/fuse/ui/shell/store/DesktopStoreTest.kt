@@ -68,7 +68,27 @@ class DesktopStoreTest {
 
         override fun freeBytes(): Long = 1L shl 34
 
+        /** The next install fails, as one whose download turns out broken would. */
+        @Volatile var failNext = false
+        private val kept = File(dir, "kept").apply { mkdirs() }
+
+        override suspend fun keepPrevious(name: String, previous: String): String? {
+            val to = File(kept, File(previous).name)
+            return if (File(previous).renameTo(to)) to.absolutePath else null
+        }
+
+        override suspend fun restorePrevious(kept: String, current: String?): String {
+            current?.let { File(it).delete() }
+            val back = File(apps, File(kept).name)
+            check(File(kept).renameTo(back))
+            return back.absolutePath
+        }
+
         override suspend fun install(name: String, file: String, fileName: String, kind: DesktopAssetKind, previous: String?): String {
+            if (failNext) {
+                failNext = false
+                throw java.io.IOException("The download was broken.")
+            }
             assertEquals(DesktopAssetKind.APPIMAGE, kind)
             val target = File(apps, fileName)
             File(file).copyTo(target, overwrite = true)
@@ -210,5 +230,34 @@ class DesktopStoreTest {
         // Gone from the list, and its Uninstalling job cleared just after.
         eventually("removed") { ops.state.value.takeIf { "duckstation" !in it.installed && "duckstation" !in it.jobs } }
         assertEquals(1, installer.removedOthers.size)
+    }
+
+    @Test
+    fun anUpdateKeepsTheVersionItReplacesToGoBackToAndAFailedOnePutsItBack(): Unit = runBlocking {
+        val (services, installer) = services()
+        val store = createFuseStore(services, scope)
+        val ops = store.appStore
+        ops.open()
+        eventually("catalogue") { ops.state.value.catalogue }
+        ops.install("duckstation")
+        eventually("installed") { ops.state.value.installed["duckstation"]?.takeIf { it.record != null } }
+        val placed = File(installer.apps, "DuckStation-x64.AppImage")
+        placed.writeText("the version that worked")
+
+        // A failed update: the version that worked is back in place, and says so.
+        installer.failNext = true
+        ops.install("duckstation")
+        val failed = eventually("failed") { ops.state.value.jobs["duckstation"] as? StoreJob.Failed }
+        assertTrue("back in place" in failed.message, failed.message)
+        assertEquals("the version that worked", placed.readText())
+
+        // An update that works: the earlier version is kept, and can be gone back to.
+        ops.install("duckstation")
+        val updated = eventually("kept") { ops.state.value.installed["duckstation"]?.record?.takeIf { it.previousVersion != null } }
+        assertEquals("v2.0", updated.previousVersion)
+        assertEquals("binary of DuckStation-x64.AppImage", placed.readText())
+        ops.rollBack("duckstation")
+        val back = eventually("back") { true.takeIf { ops.state.value.installed["duckstation"]?.record?.previousVersion == null && placed.readText() == "the version that worked" } }
+        assertTrue(back)
     }
 }

@@ -65,6 +65,11 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   game only those it takes per game. Each says whether it is the game's own or follows every game's.
   Fuse keeps what a setting held before it first changed it, and Put Back What Fuse Changed restores
   exactly that, leaving anything changed in the emulator since.
+- **Going back after an emulator update.** When the Store updates an emulator on a computer, Fuse
+  keeps the version it replaces in its own folder, out of the way of the new one. An update that
+  fails to install puts it straight back; after one that works, the Store offers Go Back to it, and
+  so does the problem Fuse shows when an emulator updated in the last month won't start. The
+  emulator's own settings and saves are never touched.
 - **Steam achievement rarity.** The share of players who have each Steam achievement, and when it
   was unlocked, under the chosen badge on a game's page.
 - **Add a game folder.** A folder holding a game with its updates, DLC or discs, read the way the

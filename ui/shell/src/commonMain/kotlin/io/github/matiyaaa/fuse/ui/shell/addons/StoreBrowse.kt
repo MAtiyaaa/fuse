@@ -240,6 +240,10 @@ private fun StoreShelves(app: AppState, state: StoreState, active: Boolean, topP
                 actions = listOfNotNull(
                     MenuAction("main", action.label, action.icon, onSelect = { app.closeOverlays(); action.run() }).takeIf { !action.busy },
                     MenuAction("page", "Details", FuseIcons.Info, onSelect = { app.closeOverlays(); openApp(a) }),
+                    state.installed[a.key]?.record?.previousVersion?.let { back ->
+                        MenuAction("back", "Go Back to $back", FuseIcons.Undo, detail = "The version its last update replaced, kept by Fuse", onSelect = { app.closeOverlays(); ops.rollBack(a.key) })
+                            .takeIf { state.jobs[a.key]?.active != true }
+                    },
                     MenuAction("uninstall", "Uninstall", FuseIcons.Trash, destructive = true, onSelect = { app.closeOverlays(); ops.uninstall(a.key) })
                         .takeIf { a.key in state.installed && state.jobs[a.key]?.active != true },
                     MenuAction("source", "View source", FuseIcons.External, detail = a.sourceHost, onSelect = { app.closeOverlays(); app.platform.openUrl(a.sourceUrl) }),

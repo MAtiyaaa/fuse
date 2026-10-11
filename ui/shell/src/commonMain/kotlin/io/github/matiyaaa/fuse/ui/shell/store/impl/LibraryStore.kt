@@ -554,7 +554,7 @@ internal class DefaultLibraryOps(
                 is RunResult.Started -> LaunchOutcome.OpenedAppOnly(installedEmulator.name, plan.reason)
                 is RunResult.OpenedAppInstead -> LaunchOutcome.OpenedAppOnly(installedEmulator.name, r.reason)
                 RunResult.NotInstalled -> notInstalled(installedEmulator, id)
-                is RunResult.Failed -> LaunchOutcome.Problem(LaunchProblems.refused(installedEmulator, id, r.message, android))
+                is RunResult.Failed -> LaunchOutcome.Problem(LaunchProblems.refused(installedEmulator, id, r.message, android, goBackOffer(installedEmulator)))
             }
             is LaunchPlan.AndroidIntent, is LaunchPlan.Command -> {
                 // Fuse Sync puts the newest save in place first, or asks when both sides played.
@@ -589,7 +589,7 @@ internal class DefaultLibraryOps(
                     // Only the app opened; which game gets played there is unknown, so no session is recorded.
                     is RunResult.OpenedAppInstead -> LaunchOutcome.OpenedAppOnly(installedEmulator.name, r.reason)
                     RunResult.NotInstalled -> notInstalled(installedEmulator, id)
-                    is RunResult.Failed -> LaunchOutcome.Problem(LaunchProblems.refused(installedEmulator, id, r.message, android))
+                    is RunResult.Failed -> LaunchOutcome.Problem(LaunchProblems.refused(installedEmulator, id, r.message, android, goBackOffer(installedEmulator)))
                 }
             }
         }
@@ -879,6 +879,16 @@ internal class DefaultLibraryOps(
         val platformEmulator = settings.resolve(ScopedSettings.Emulator, game.platformId, null).value.takeIf { it.isNotBlank() }?.let(::EmulatorId)
         val core = settings.resolve(ScopedSettings.RetroArchCore, game.platformId, game.id).value.takeIf { it.isNotBlank() }
         return ctx.resolver.resolve(game, platformEmulator, ctx.installed.value, ctx.host, ScopedLaunchChoice(core = core, homeDir = ctx.services.emulators.homeDir)) to core
+    }
+
+    /**
+     * Going back to the version of [emulator] the Store's last update replaced, offered when that
+     * update was in the last few weeks and Fuse still keeps the version before it.
+     */
+    private fun goBackOffer(emulator: InstalledEmulator): io.github.matiyaaa.fuse.ui.shell.store.ProblemAction.GoBack? {
+        val (key, rec) = ctx.settings.value.store.installs.entries.firstOrNull { it.value.packageName == emulator.appId }?.toPair() ?: return null
+        if (rec.previous == null || ctx.now() - rec.installedAt > GO_BACK_OFFER_MS) return null
+        return io.github.matiyaaa.fuse.ui.shell.store.ProblemAction.GoBack(key, rec.previousVersion?.let { "Go back to $it" } ?: "Go back to the version before")
     }
 
     /** The RetroArch run [game] would start with on this computer (its core and content), as [launch] resolves it; null when it starts elsewhere. */
@@ -1214,6 +1224,9 @@ private val DISC_PLATFORMS = setOf("ps2", "psx")
 
 /** Cache namespace for [io.github.matiyaaa.fuse.library.disc.DiscIdentity], keyed by path, size and change time. */
 private const val DISC_CACHE = "disc.identity"
+
+/** How long after an update Fuse offers to go back to the version before when the emulator won't start. */
+private const val GO_BACK_OFFER_MS = 30L * 24 * 60 * 60 * 1000
 
 /** Cache namespace for RPCS3 compatibility entries, by title id. */
 private const val COMPAT_CACHE = "rpcs3.compat"

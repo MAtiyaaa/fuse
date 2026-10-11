@@ -30,6 +30,8 @@ internal class DesktopStoreInstaller(
     private val os: DesktopOs,
     private val home: File,
     private val downloads: File,
+    /** Fuse's own folder of earlier versions, kept for going back after an update. */
+    private val kept: File = File(downloads.parentFile, "previous-versions"),
 ) : DesktopInstaller {
     override val host: Host = os.host
     override val arch: String = System.getProperty("os.arch").orEmpty().lowercase().let { if ("aarch64" in it || "arm" in it) "arm64" else "x86_64" }
@@ -68,6 +70,48 @@ internal class DesktopStoreInstaller(
         }
         placed.fusePath
     }
+
+    /**
+     * Moves what an earlier install put in place ([previous], below [folder]) into Fuse's own
+     * folder of earlier versions, out of the way of the new one and of emulator detection, and
+     * returns where its program now is; null when there was nothing to keep or it couldn't be moved
+     * (the update then goes ahead as before, replacing it). Only one earlier version is kept per
+     * program: keeping another replaces it.
+     */
+    override suspend fun keepPrevious(name: String, previous: String): String? = withContext(Dispatchers.IO) {
+        val program = File(previous)
+        if (!inside(program) || !program.exists()) return@withContext null
+        val top = topOf(program)
+        val shelf = File(kept, safeName(name)).apply { deleteRecursively(); mkdirs() }
+        val to = File(shelf, top.name)
+        try {
+            Files.move(top.toPath(), to.toPath(), StandardCopyOption.ATOMIC_MOVE)
+        } catch (e: IOException) {
+            // Another drive: the earlier version stays where it is, and the update replaces it.
+            shelf.deleteRecursively()
+            return@withContext null
+        }
+        File(to, top.toPath().relativize(program.toPath()).toString()).takeIf { top != program }?.absolutePath ?: to.absolutePath
+    }
+
+    /**
+     * Puts the kept earlier version ([kept], from [keepPrevious]) back where programs go, removing
+     * [current] (what replaced it) first; returns the restored program's path.
+     */
+    override suspend fun restorePrevious(kept: String, current: String?): String = withContext(Dispatchers.IO) {
+        val program = File(kept)
+        val shelf = generateSequence(program) { it.parentFile }.firstOrNull { it.parentFile == this@DesktopStoreInstaller.kept }
+            ?: throw IOException("Fuse no longer has the earlier version.")
+        val top = shelf.listFiles()?.singleOrNull() ?: throw IOException("Fuse no longer has the earlier version.")
+        current?.let { File(it) }?.takeIf { inside(it) }?.let { topOf(it).deleteRecursively() }
+        val back = File(root, top.name)
+        if (back.exists()) back.deleteRecursively()
+        Files.move(top.toPath(), back.toPath(), StandardCopyOption.ATOMIC_MOVE)
+        shelf.deleteRecursively()
+        File(back, top.toPath().relativize(program.toPath()).toString()).takeIf { top != program }?.absolutePath ?: back.absolutePath
+    }
+
+    private fun safeName(name: String) = name.replace(Regex("[^A-Za-z0-9 ._-]"), "").trim().ifEmpty { "Program" }
 
     override suspend fun remove(path: String): Boolean = withContext(Dispatchers.IO) {
         val f = File(path)

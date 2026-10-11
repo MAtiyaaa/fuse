@@ -113,6 +113,16 @@ interface DesktopInstaller {
      */
     suspend fun install(name: String, file: String, fileName: String, kind: io.github.matiyaaa.fuse.integrations.obtainium.DesktopAssetKind, previous: String?): String
 
+    /**
+     * Moves the program an earlier install put at [previous] aside, into Fuse's own folder of
+     * earlier versions, before an update replaces it; returns where it now is, or null when it
+     * couldn't be kept (the update then replaces it as before).
+     */
+    suspend fun keepPrevious(name: String, previous: String): String? = null
+
+    /** Puts the kept earlier version [kept] back in place of [current]; returns the program's path. */
+    suspend fun restorePrevious(kept: String, current: String?): String = throw UnsupportedOperationException("Fuse can't go back to an earlier version here.")
+
     /** Removes a program Fuse put in place (its file, its folder or its app). */
     suspend fun remove(path: String): Boolean
 

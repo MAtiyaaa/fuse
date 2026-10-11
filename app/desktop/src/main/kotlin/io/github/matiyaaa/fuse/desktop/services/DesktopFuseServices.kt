@@ -92,7 +92,7 @@ class DesktopFuseServices private constructor(
 
     /** The Store's programs: fetched from their releases and put where Fuse finds emulators. */
     override val desktopApps: io.github.matiyaaa.fuse.ui.shell.store.DesktopInstaller =
-        DesktopStoreInstaller(os, File(dirs.home.toString()), File(dirs.cache, "store-downloads"))
+        DesktopStoreInstaller(os, File(dirs.home.toString()), File(dirs.cache, "store-downloads"), File(dirs.data, "previous-versions"))
 
     /** No Apps section on a desktop: Fuse manages games there, not programs. */
     override val apps: AppsProvider? = null

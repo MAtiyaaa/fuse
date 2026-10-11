@@ -252,6 +252,9 @@ data class StoreInstall(
     val file: String? = null,
     val versionCode: Long = 0,
     val installedAt: Long = 0,
+    /** The earlier version an update replaced, kept to go back to (its program's path), and its version. */
+    val previous: String? = null,
+    val previousVersion: String? = null,
 )
 
 /** Screenshots and recordings of Fuse's own screen. */

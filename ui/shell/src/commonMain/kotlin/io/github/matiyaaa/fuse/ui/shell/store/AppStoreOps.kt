@@ -43,6 +43,9 @@ interface AppStoreOps {
     /** Every update, one after another; Android asks about each one. */
     fun updateAll()
 
+    /** Goes back to the version [key]'s last update replaced (kept by Fuse on a computer). */
+    fun rollBack(key: String) = Unit
+
     /** Stops [key]'s download, or forgets its failure. */
     fun cancel(key: String)
 
@@ -266,7 +269,13 @@ data class InstalledApp(
 
 /** What Fuse installed: the upstream [version] and [file] it was, and the version code Android gave it. */
 @Immutable
-data class InstallRecord(val version: String?, val file: String?, val versionCode: Long)
+data class InstallRecord(
+    val version: String?,
+    val file: String?,
+    val versionCode: Long,
+    /** The version before the last update, which Fuse kept and can go back to; null when none is kept. */
+    val previousVersion: String? = null,
+)
 
 /** What is known about an app's newest release. */
 sealed interface ReleaseCheck {
