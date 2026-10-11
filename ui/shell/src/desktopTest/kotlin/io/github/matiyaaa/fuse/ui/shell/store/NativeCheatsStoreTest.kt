@@ -320,4 +320,60 @@ class NativeCheatsStoreTest {
         assertEquals(downloaded.replace("cheat1_enable = false", "cheat1_enable = true"), own.readText())
         assertEquals("video_scale_integer = \"true\"\n", override.readText())
     }
+
+    @Test
+    fun aGamesOwnEmulatorSettingFollowsEveryGameUntilSetAndGoesBackAsItWas(): Unit = runBlocking {
+        val services = services("set.db", ppssppInstalled)
+        services.ppssppHome = ppsspp()
+        val global = File(emu, "ppsspp/PSP/SYSTEM/ppsspp.ini").apply { writeText("[General]\nEnableCheats = False\n\n[Graphics]\nInternalResolution = 2\n") }
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = withTimeout(20_000) { store.library.games(GameQuery()).first { it.size == 1 } }.single()
+        val own = File(emu, "ppsspp/PSP/SYSTEM/ULUS10041_ppsspp.ini")
+
+        val view = assertIs<EmulatorSettingsView.Ready>(store.library.emulatorSettings(game.id))
+        assertEquals("PPSSPP", view.emulator)
+        val resolution = view.values.first { it.setting.id == "ppsspp.resolution" }
+        assertEquals(io.github.matiyaaa.fuse.launch.settings.SettingSource.EVERY_GAME, resolution.source)
+        assertEquals("2x (544p)", resolution.label)
+        assertFalse(view.canRestore)
+
+        // This game's own: a file of its own, holding only that.
+        assertTrue(store.library.setEmulatorSetting(game.id, null, "ppsspp.resolution", "4"))
+        assertEquals("[Graphics]\nInternalResolution = 4\n", own.readText())
+        val after = assertIs<EmulatorSettingsView.Ready>(store.library.emulatorSettings(game.id))
+        assertEquals(io.github.matiyaaa.fuse.launch.settings.SettingSource.GAME, after.values.first { it.setting.id == "ppsspp.resolution" }.source)
+        assertTrue(after.canRestore)
+        assertFalse(store.library.setEmulatorSetting(game.id, null, "ppsspp.resolution", "7"), "not a value PPSSPP offers")
+
+        // Put back: the file Fuse made goes, and every game's settings never changed.
+        assertTrue(store.library.restoreEmulatorSettings(game.id, null))
+        assertFalse(own.exists())
+        assertEquals("[General]\nEnableCheats = False\n\n[Graphics]\nInternalResolution = 2\n", global.readText())
+
+        // For every game: PPSSPP's own file, put back exactly.
+        assertTrue(store.library.setEmulatorSetting(null, ppssppInstalled.id, "ppsspp.anisotropy", "2"))
+        assertEquals("[General]\nEnableCheats = False\n\n[Graphics]\nInternalResolution = 2\nAnisotropyLevel = 2\n", global.readText())
+        assertTrue(store.library.restoreEmulatorSettings(null, ppssppInstalled.id))
+        assertEquals("[General]\nEnableCheats = False\n\n[Graphics]\nInternalResolution = 2\n", global.readText())
+    }
+
+    @Test
+    fun duckStationGameSettingsAreFiledUnderTheDiscsSerial(): Unit = runBlocking {
+        val services = services("set2.db", duckstationInstalled)
+        services.duckstationHome = duckStation()
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = withTimeout(20_000) { store.library.games(GameQuery()).first { it.size == 1 } }.single()
+        val settings = File(emu, "duckstation/gamesettings/SLUS-00594.ini").apply { parentFile.mkdirs(); writeText("[GPU]\nResolutionScale = 3\n") }
+
+        val view = assertIs<EmulatorSettingsView.Ready>(store.library.emulatorSettings(game.id))
+        assertEquals("3x (720p)", view.values.first { it.setting.id == "duckstation.scale" }.label)
+        assertTrue(store.library.setEmulatorSetting(game.id, null, "duckstation.scale", null))
+        assertEquals("[GPU]\n", settings.readText())
+        // Changed in DuckStation since: put back leaves it as the person left it.
+        settings.writeText("[GPU]\nResolutionScale = 5\n")
+        assertTrue(store.library.restoreEmulatorSettings(game.id, null))
+        assertEquals("[GPU]\nResolutionScale = 5\n", settings.readText())
+    }
 }

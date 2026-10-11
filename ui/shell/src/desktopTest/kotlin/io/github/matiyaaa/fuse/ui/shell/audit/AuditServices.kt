@@ -539,6 +539,13 @@ internal class AuditEmulatorFiles(private val root: File) : io.github.matiyaaa.f
             }
         }
         File(root, "retroarch.cfg").writeText("apply_cheats_after_load = \"false\"\n")
+        File(root, "duckstation").mkdirs()
+        File(root, "duckstation/settings.ini").writeText("[GPU]\nRenderer = Vulkan\nResolutionScale = 3\n\n[Display]\nAspectRatio = Auto (Game Native)\n")
+    }
+
+    override suspend fun duckstation(installed: InstalledEmulator): io.github.matiyaaa.fuse.launch.patches.DuckStationHome {
+        val d = File(root, "duckstation").absolutePath
+        return io.github.matiyaaa.fuse.launch.patches.DuckStationHome(d, "$d/gamesettings", "$d/cheats", "$d/patches", null, null)
     }
 
     override suspend fun pcsx2(installed: InstalledEmulator): io.github.matiyaaa.fuse.launch.patches.Pcsx2Home? = null

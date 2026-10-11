@@ -86,7 +86,7 @@ class DesktopEmulatorFiles(
                 listOf(File(home, ".var/app/$DUCKSTATION_FLATPAK/config/duckstation"), File(home, ".var/app/$DUCKSTATION_FLATPAK/data/duckstation"))
                     .firstOrNull { File(it, "settings.ini").isFile }
             } else {
-                env["XDG_CONFIG_HOME"]?.takeIf { it.startsWith("/") }?.let { File(it, "duckstation") } ?: File(home, ".local/share/duckstation")
+                env["XDG_CONFIG_HOME"]?.takeIf { File(it).isAbsolute }?.let { File(it, "duckstation") } ?: File(home, ".local/share/duckstation")
             }
         } ?: return@withContext null
         val ini = File(data, "settings.ini")
@@ -145,7 +145,7 @@ class DesktopEmulatorFiles(
             DesktopOs.LINUX -> if (flatpak) {
                 listOf(File(home, ".var/app/org.ppsspp.PPSSPP/config/ppsspp"))
             } else {
-                listOf(env["XDG_CONFIG_HOME"]?.takeIf { it.startsWith("/") }?.let { File(it, "ppsspp") } ?: File(home, ".config/ppsspp"))
+                listOf(env["XDG_CONFIG_HOME"]?.takeIf { File(it).isAbsolute }?.let { File(it, "ppsspp") } ?: File(home, ".config/ppsspp"))
             }
         }
         val stick = candidates.firstOrNull { File(it, "PSP").isDirectory } ?: return@withContext null
@@ -166,7 +166,7 @@ class DesktopEmulatorFiles(
         val flatpak = installed.detectedVia == "Flatpak"
         val program = if (flatpak) null else File(installed.appId).takeIf { it.isAbsolute }
         val programDir = program?.takeIf { !it.path.endsWith(".app") }?.parentFile
-        val xdg = env["XDG_CONFIG_HOME"]?.takeIf { it.startsWith("/") } ?: "$home/.config"
+        val xdg = env["XDG_CONFIG_HOME"]?.takeIf { File(it).isAbsolute } ?: "$home/.config"
         val macData = File(home, "Library/Application Support/RetroArch")
         val candidates = when (os) {
             DesktopOs.WINDOWS -> listOfNotNull(programDir?.let { File(it, "retroarch.cfg") }, env["APPDATA"]?.let { File(it, "RetroArch/retroarch.cfg") })
@@ -186,8 +186,9 @@ class DesktopEmulatorFiles(
             else -> "$base/cheats" to "$base/config"
         }
         val programPath = programDir?.absolutePath?.replace('\\', '/')
-        val cheats = RetroArchCfg.folder(cfg["cheat_database_path"], cheatsDefault, home, programPath)
-        val configDir = RetroArchCfg.folder(cfg["rgui_config_directory"], configDefault, home, programPath)
+        val homePath = home.replace('\\', '/')
+        val cheats = RetroArchCfg.folder(cfg["cheat_database_path"], cheatsDefault.replace('\\', '/'), homePath, programPath)
+        val configDir = RetroArchCfg.folder(cfg["rgui_config_directory"], configDefault.replace('\\', '/'), homePath, programPath)
         roots += File(cheats).absolutePath
         roots += File(configDir).absolutePath
         RetroArchHome(config.absolutePath.replace('\\', '/'), cheats, configDir)

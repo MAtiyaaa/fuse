@@ -59,6 +59,12 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   game override), and Fuse only ever turns off what it turned on: anything set in the emulator stays
   as it is, and Fuse says when a setting there (hardcore mode, cheats off for every game) keeps them
   from applying.
+- **Emulator settings in Fuse.** A PS2, PlayStation or PSP game's options, and PCSX2's, DuckStation's
+  and PPSSPP's pages in Settings, change the emulator's own settings: renderer, internal resolution,
+  texture filtering, aspect ratio and the like, only those each emulator really reads, and for one
+  game only those it takes per game. Each says whether it is the game's own or follows every game's.
+  Fuse keeps what a setting held before it first changed it, and Put Back What Fuse Changed restores
+  exactly that, leaving anything changed in the emulator since.
 - **Steam achievement rarity.** The share of players who have each Steam achievement, and when it
   was unlocked, under the chosen badge on a game's page.
 - **Add a game folder.** A folder holding a game with its updates, DLC or discs, read the way the

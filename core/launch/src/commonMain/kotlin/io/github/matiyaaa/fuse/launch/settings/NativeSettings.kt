@@ -1,0 +1,237 @@
+package io.github.matiyaaa.fuse.launch.settings
+
+import io.github.matiyaaa.fuse.launch.patches.IniText
+import io.github.matiyaaa.fuse.model.Host
+
+/** One value a setting can take: what the emulator's file holds, and what to call it. */
+data class SettingChoice(val value: String, val label: String)
+
+/**
+ * One of an emulator's own settings that Fuse can change, exactly as the emulator stores it: its
+ * section and key in the emulator's settings file (and in a game's own file, when [perGame]), the
+ * values the emulator accepts, and the one it uses when nothing is set ([default]).
+ */
+data class NativeSetting(
+    val id: String,
+    val category: String,
+    val label: String,
+    val section: String,
+    val key: String,
+    val choices: List<SettingChoice>,
+    val default: String,
+    /** The emulator honours it in a game's own settings file. */
+    val perGame: Boolean = true,
+    val about: String? = null,
+) {
+    /** What [value] is called; a value Fuse doesn't offer is shown as it is written. */
+    fun labelFor(value: String): String = choices.firstOrNull { same(it.value, value) }?.label ?: value
+
+    /** Two values the emulator reads the same: `2`, `2.0` and `2.000000`; `true` and `True`. */
+    fun same(a: String, b: String): Boolean {
+        if (a.equals(b, ignoreCase = true)) return true
+        val x = a.trim().toDoubleOrNull() ?: return false
+        val y = b.trim().toDoubleOrNull() ?: return false
+        return x == y
+    }
+}
+
+/**
+ * The settings Fuse offers for each emulator it can change them in, each checked against the
+ * emulator's own settings code: PCSX2 (pcsx2/Pcsx2Config.cpp, GSOptions::LoadSave), DuckStation
+ * (src/core/settings.cpp, Settings::Load) and PPSSPP (Core/Config.cpp, only those flagged PER_GAME
+ * can be set for one game).
+ */
+object NativeSettings {
+    private val onOff = listOf(SettingChoice("false", "Off"), SettingChoice("true", "On"))
+    private val ppssppOnOff = listOf(SettingChoice("False", "Off"), SettingChoice("True", "On"))
+
+    fun forEmulator(family: String, host: Host): List<NativeSetting> = when (family) {
+        "pcsx2" -> pcsx2(host)
+        "duckstation" -> duckstation(host)
+        "ppsspp" -> ppsspp()
+        else -> emptyList()
+    }
+
+    /** The emulators Fuse changes settings in, by their family (`pcsx2`, from `linux.pcsx2`). */
+    val families = setOf("pcsx2", "duckstation", "ppsspp")
+
+    private fun pcsx2(host: Host): List<NativeSetting> {
+        val gs = "EmuCore/GS"
+        // GSRendererType (pcsx2/Config.h): Auto -1, DX11 3, OGL 12, SW 13, VK 14, DX12 15, Metal 17.
+        val renderers = buildList {
+            add(SettingChoice("-1", "Automatic"))
+            add(SettingChoice("14", "Vulkan"))
+            if (host == Host.WINDOWS) { add(SettingChoice("3", "Direct3D 11")); add(SettingChoice("15", "Direct3D 12")) }
+            if (host == Host.MACOS) add(SettingChoice("17", "Metal")) else add(SettingChoice("12", "OpenGL"))
+            add(SettingChoice("13", "Software"))
+        }
+        return listOf(
+            NativeSetting(
+                "pcsx2.renderer", "Graphics", "Renderer", gs, "Renderer", renderers, "-1",
+                about = "The graphics interface PCSX2 draws with.",
+            ),
+            NativeSetting(
+                "pcsx2.upscale", "Graphics", "Internal resolution", gs, "upscale_multiplier",
+                listOf(
+                    SettingChoice("1", "Native (PS2)"), SettingChoice("2", "2x (about 720p)"), SettingChoice("3", "3x (about 1080p)"),
+                    SettingChoice("4", "4x (about 1440p)"), SettingChoice("5", "5x (about 1800p)"), SettingChoice("6", "6x (about 4K)"),
+                    SettingChoice("8", "8x (about 5K)"),
+                ),
+                "1",
+                about = "How many times the PS2's resolution games are drawn at. Higher is sharper and needs a faster graphics card.",
+            ),
+            NativeSetting(
+                "pcsx2.aspect", "Display", "Aspect ratio", gs, "AspectRatio",
+                listOf(
+                    SettingChoice("Auto 4:3/3:2", "Automatic (4:3 or 3:2)"), SettingChoice("4:3", "4:3"), SettingChoice("16:9", "16:9"),
+                    SettingChoice("10:7", "10:7"), SettingChoice("Stretch", "Stretch to the screen"),
+                ),
+                "Auto 4:3/3:2",
+            ),
+            NativeSetting("pcsx2.vsync", "Display", "Vertical sync", gs, "VsyncEnable", onOff, "false", about = "Waits for the screen between frames: no tearing, a little more delay."),
+        )
+    }
+
+    private fun duckstation(host: Host): List<NativeSetting> {
+        // s_gpu_renderer_names (src/core/settings.cpp), by what this system's build has.
+        val renderers = buildList {
+            add(SettingChoice("Automatic", "Automatic"))
+            if (host == Host.WINDOWS) { add(SettingChoice("D3D11", "Direct3D 11")); add(SettingChoice("D3D12", "Direct3D 12")) }
+            if (host == Host.MACOS) add(SettingChoice("Metal", "Metal"))
+            add(SettingChoice("Vulkan", "Vulkan"))
+            if (host != Host.MACOS) add(SettingChoice("OpenGL", "OpenGL"))
+            add(SettingChoice("Software", "Software"))
+        }
+        return listOf(
+            NativeSetting("duckstation.renderer", "Graphics", "Renderer", "GPU", "Renderer", renderers, "Automatic"),
+            NativeSetting(
+                "duckstation.scale", "Graphics", "Internal resolution", "GPU", "ResolutionScale",
+                listOf(
+                    SettingChoice("0", "Automatic (by window size)"), SettingChoice("1", "Native (240p)"), SettingChoice("2", "2x (480p)"),
+                    SettingChoice("3", "3x (720p)"), SettingChoice("4", "4x (960p)"), SettingChoice("5", "5x (1200p)"),
+                    SettingChoice("6", "6x (1440p)"), SettingChoice("8", "8x (1920p)"), SettingChoice("9", "9x (4K)"),
+                ),
+                "1",
+            ),
+            NativeSetting(
+                "duckstation.filter", "Graphics", "Texture filtering", "GPU", "TextureFilter",
+                listOf(
+                    SettingChoice("Nearest", "Nearest-Neighbor"), SettingChoice("Bilinear", "Bilinear"),
+                    SettingChoice("BilinearBinAlpha", "Bilinear (No Edge Blending)"), SettingChoice("JINC2", "JINC2 (Slow)"),
+                ),
+                "Nearest",
+            ),
+            NativeSetting(
+                "duckstation.pgxp", "Graphics", "PGXP geometry correction", "GPU", "PGXPEnable", onOff, "false",
+                about = "Steadier 3D: fewer wobbling polygons and warping textures. A few games misbehave with it.",
+            ),
+            NativeSetting(
+                "duckstation.widescreen", "Display", "Widescreen rendering", "GPU", "WidescreenHack", onOff, "false",
+                about = "Draws 3D scenes wider to fill a wide aspect ratio; with one, DuckStation also turns on the game's widescreen patch.",
+            ),
+            NativeSetting(
+                "duckstation.aspect", "Display", "Aspect ratio", "Display", "AspectRatio",
+                listOf(
+                    SettingChoice("Auto (Game Native)", "Automatic (as the game)"), SettingChoice("4:3", "4:3"), SettingChoice("16:9", "16:9"),
+                    SettingChoice("20:9", "20:9"), SettingChoice("PAR 1:1", "Square pixels"), SettingChoice("Stretch To Fill", "Stretch to the screen"),
+                ),
+                "Auto (Game Native)",
+            ),
+            NativeSetting("duckstation.vsync", "Display", "Vertical sync", "Display", "VSync", onOff, "false"),
+        )
+    }
+
+    private fun ppsspp(): List<NativeSetting> = listOf(
+        NativeSetting(
+            "ppsspp.resolution", "Graphics", "Internal resolution", "Graphics", "InternalResolution",
+            listOf(
+                SettingChoice("0", "Automatic (by window size)"), SettingChoice("1", "1x PSP (272p)"), SettingChoice("2", "2x (544p)"),
+                SettingChoice("3", "3x (816p)"), SettingChoice("4", "4x (1088p)"), SettingChoice("5", "5x (1360p)"),
+                SettingChoice("6", "6x (1632p)"), SettingChoice("8", "8x (2176p)"), SettingChoice("10", "10x (2720p)"),
+            ),
+            "0",
+        ),
+        NativeSetting(
+            "ppsspp.filtering", "Graphics", "Texture filtering", "Graphics", "TextureFiltering",
+            listOf(SettingChoice("1", "Automatic"), SettingChoice("2", "Nearest"), SettingChoice("3", "Linear"), SettingChoice("4", "Automatic, best quality")),
+            "1",
+        ),
+        NativeSetting(
+            "ppsspp.anisotropy", "Graphics", "Anisotropic filtering", "Graphics", "AnisotropyLevel",
+            listOf(SettingChoice("0", "Off"), SettingChoice("1", "2x"), SettingChoice("2", "4x"), SettingChoice("3", "8x"), SettingChoice("4", "16x")),
+            "4",
+        ),
+        NativeSetting(
+            "ppsspp.texscale", "Graphics", "Texture upscaling", "Graphics", "TexScalingLevel",
+            listOf(SettingChoice("1", "Off"), SettingChoice("2", "2x"), SettingChoice("3", "3x"), SettingChoice("4", "4x"), SettingChoice("5", "5x")),
+            "1",
+        ),
+        NativeSetting("ppsspp.hwtransform", "Graphics", "Hardware transform", "Graphics", "HardwareTransform", ppssppOnOff, "True"),
+    )
+}
+
+/** Where a value comes from for one game: its own file, the emulator's for every game, or the emulator's default. */
+enum class SettingSource { GAME, EVERY_GAME, DEFAULT }
+
+/** A setting's value for one game (or for every game), and where it comes from. */
+data class SettingValue(val setting: NativeSetting, val value: String, val source: SettingSource, val everyGame: String) {
+    val label: String get() = setting.labelFor(value)
+}
+
+/**
+ * Changing emulator settings so they can be put back: for each key Fuse changes it keeps one record
+ * of the value the key had before Fuse first changed it and the value Fuse last gave it. Putting
+ * back restores the first only where the key still holds the second, so a change made in the
+ * emulator since then stays.
+ */
+object SettingsEdit {
+    /** A setting's value for a game: the game's own file, else the emulator's file, else its default. */
+    fun valueFor(setting: NativeSetting, game: IniText?, global: IniText?): SettingValue {
+        val every = global?.values(setting.section, setting.key)?.lastOrNull()
+        val own = if (setting.perGame) game?.values(setting.section, setting.key)?.lastOrNull() else null
+        val everyGame = every ?: setting.default
+        return when {
+            own != null -> SettingValue(setting, own, SettingSource.GAME, everyGame)
+            every != null -> SettingValue(setting, every, SettingSource.EVERY_GAME, everyGame)
+            else -> SettingValue(setting, setting.default, SettingSource.DEFAULT, everyGame)
+        }
+    }
+
+    private data class Record(val section: String, val key: String, val was: String?, val now: String?) {
+        fun text() = "$section\t$key\t${was?.let { "=$it" } ?: ""}\t${now?.let { "=$it" } ?: ""}"
+    }
+
+    private fun parse(text: String): Record? {
+        val p = text.split('\t')
+        if (p.size != 4) return null
+        fun v(s: String) = if (s.startsWith("=")) s.drop(1) else null
+        return Record(p[0], p[1], v(p[2]), v(p[3]))
+    }
+
+    /**
+     * Sets (or, with a null [value], takes out) [section] [key] in [file] and returns [records] with
+     * this key's record made or brought up to date.
+     */
+    fun change(file: IniText, records: Set<String>, section: String, key: String, value: String?): Set<String> {
+        val all = records.mapNotNull(::parse)
+        val earlier = all.firstOrNull { it.section.equals(section, ignoreCase = true) && it.key.equals(key, ignoreCase = true) }
+        val was = earlier?.was ?: if (earlier == null) file.values(section, key).lastOrNull() else null
+        if (value == null) file.removeKey(section, key) else file.set(section, key, value)
+        val next = Record(earlier?.section ?: section, earlier?.key ?: key, was, value)
+        return (all - setOfNotNull(earlier) + next).map { it.text() }.toSet()
+    }
+
+    /** Puts back what [records] say each key held before Fuse; a key changed since in the emulator stays. Returns how many stayed. */
+    fun restore(file: IniText, records: Set<String>): Int {
+        var kept = 0
+        for (r in records.mapNotNull(::parse)) {
+            val current = file.values(r.section, r.key).lastOrNull()
+            if (current != r.now) {
+                kept++
+                continue
+            }
+            if (r.was != null) file.set(r.section, r.key, r.was) else file.removeKey(r.section, r.key)
+        }
+        return kept
+    }
+}

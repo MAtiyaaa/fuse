@@ -130,6 +130,9 @@ class IniText(text: String) {
         rest.asReversed().forEach { lines.removeAt(it) }
     }
 
+    /** Whether any `key = value` line is left (only headers, comments and blank lines otherwise). */
+    fun hasEntries(): Boolean = lines.any { entry(it) != null }
+
     fun bool(section: String, key: String): Boolean? = values(section, key).lastOrNull()?.lowercase()?.let {
         when (it) {
             "true", "1", "yes", "on" -> true
@@ -193,8 +196,8 @@ data class PatchStatus(val patch: PnachPatch, val state: PatchState) {
  * Turning PCSX2 patches on and off for one game, the way PCSX2 stores it (pcsx2/Patch.cpp,
  * ReloadEnabledLists): its game settings file (`gamesettings/SERIAL_CRC.ini`) lists the patches it
  * applies as `[Patches] Enable = name` and ones turned off as `Disable = name`; the widescreen and
- * no-interlacing settings (`[EmuCore] EnableWideScreenPatches`, `EnableNoInterlacingPatches`, in the
- * game's file or PCSX2.ini) turn on the patches named "Widescreen 16:9" and "No-Interlacing".
+ * no-interlacing settings (`[EmuCore] EnableWideScreenPatches`, `EnableNoInterlacingPatches`, in
+ * PCSX2.ini) turn on the patches named "Widescreen 16:9" and "No-Interlacing".
  *
  * Fuse only ever turns off a patch it turned on itself ([owned]); anything the user set in PCSX2
  * stays exactly as it is.
@@ -239,7 +242,9 @@ object Pcsx2PatchRules {
     ): List<PatchStatus> {
         val enabled = game.values(section, ENABLE).toSet()
         val disabled = game.values(section, DISABLE).toSet()
-        fun setting(key: String) = game.bool("EmuCore", key) ?: global?.bool("EmuCore", key) ?: false
+        // Only PCSX2's settings for every game count: it deletes these from a game's own file
+        // (Pcsx2Config::ClearInvalidPerGameConfiguration, in favour of the patches themselves).
+        fun setting(key: String) = global?.bool("EmuCore", key) ?: false
         val widescreen = setting("EnableWideScreenPatches")
         val noInterlacing = setting("EnableNoInterlacingPatches")
         return patches.map { p ->

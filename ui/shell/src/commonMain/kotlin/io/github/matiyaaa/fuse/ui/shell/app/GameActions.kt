@@ -315,6 +315,10 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
                 "psp" -> add(MenuAction("patches", "Cheats", FuseIcons.Wand, detail = "This game's cheats, in its emulator's own settings", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
                 else -> if (retroArch) add(MenuAction("patches", "Cheats", FuseIcons.Wand, detail = "This game's cheats in RetroArch, for its next start", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
             }
+            // The emulator's own settings for this game, where Fuse can change them.
+            if (card.platformId.value in setOf("ps2", "psx", "psp")) {
+                add(MenuAction("emusettings", "Emulator Settings", FuseIcons.Sliders, detail = "Resolution, renderer and display for this game, in its emulator's own settings", trailing = Trailing.Chevron, onSelect = { emulatorSettingsSheet(card) }))
+            }
         }
         if (!card.isApp && card.platformId.value == "ps3") {
             add(MenuAction("compat", "How It Runs in RPCS3", FuseIcons.Gauge, detail = "From RPCS3's compatibility list. Asks rpcs3.net with the game's title id", trailing = Trailing.Chevron, onSelect = { showCompatibility(card) }))
@@ -498,6 +502,11 @@ fun AppState.showEmulator(id: io.github.matiyaaa.fuse.model.EmulatorId) {
                     contextMenu = null
                     scope.launch { store.emulators.openEmulator(id) }
                 }))
+                if (id.value.substringAfter('.') in io.github.matiyaaa.fuse.launch.settings.NativeSettings.families && platform.host != io.github.matiyaaa.fuse.model.Host.ANDROID) {
+                    add(MenuAction("settings", "Settings for Every Game", FuseIcons.Sliders, detail = "Resolution, renderer and display, in its own settings", trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Chevron, onSelect = {
+                        emulatorSettingsSheet(null, id)
+                    }))
+                }
                 add(MenuAction(
                     "test", if (test != null) "Try it with ${test.title}" else "Try it with a game", FuseIcons.Play,
                     detail = when {
@@ -663,6 +672,106 @@ fun AppState.gamePatchPicker(card: GameCard) {
             }
         }
     }
+}
+
+/**
+ * An emulator's own settings, for one game ([card]) or for every game ([emulator]), grouped as the
+ * emulator groups them. Each says whether it is the game's own or follows every game's; choosing one
+ * changes it in the emulator's own files, and what Fuse changed can be put back.
+ */
+fun AppState.emulatorSettingsSheet(card: GameCard?, emulator: io.github.matiyaaa.fuse.model.EmulatorId? = null) {
+    contextMenu = null
+    scope.launch {
+        when (val view = store.library.emulatorSettings(card?.id, emulator)) {
+            is io.github.matiyaaa.fuse.ui.shell.store.EmulatorSettingsView.Unavailable -> showProblem(Problem(
+                view.title, view.reason, ProblemKind.EMULATOR, Severity.INFO, reassurance = null,
+            ))
+            is io.github.matiyaaa.fuse.ui.shell.store.EmulatorSettingsView.Ready -> {
+                val forGame = card != null
+                val rows = view.values.map { v ->
+                    val s = v.setting
+                    MenuAction(
+                        "setting.${s.id}", s.label, settingIcon(s.category),
+                        detail = when (v.source) {
+                            io.github.matiyaaa.fuse.launch.settings.SettingSource.GAME -> "This game's own. Every game: ${s.labelFor(v.everyGame)}"
+                            io.github.matiyaaa.fuse.launch.settings.SettingSource.EVERY_GAME -> if (forGame) "Same as every game" else null
+                            io.github.matiyaaa.fuse.launch.settings.SettingSource.DEFAULT -> if (forGame) "Same as every game" else "${view.emulator}'s default"
+                        },
+                        trailing = Trailing.Value(v.label),
+                        section = s.category,
+                        onSelect = { settingPicker(card, emulator, view.emulator, v) },
+                    )
+                }
+                val restore = if (!view.canRestore) emptyList() else listOf(
+                    MenuAction(
+                        "restore", "Put Back What Fuse Changed", FuseIcons.Undo,
+                        detail = "Only what Fuse changed here. Anything changed in ${view.emulator} since stays",
+                        section = "Changed in Fuse",
+                        onSelect = {
+                            scope.launch {
+                                val ok = store.library.restoreEmulatorSettings(card?.id, emulator)
+                                if (ok) toasts.show("Put back as it was", ToastKind.SUCCESS) else toasts.show("Couldn't change ${view.emulator}'s settings", ToastKind.WARNING)
+                                emulatorSettingsSheet(card, emulator)
+                            }
+                        },
+                    ),
+                )
+                choice = ChoiceSpec(
+                    icon = FuseIcons.Sliders,
+                    title = if (forGame) "${view.emulator} settings for ${card?.title ?: view.game}" else "${view.emulator} settings for every game",
+                    message = if (forGame) {
+                        "A setting of this game's own replaces every game's. Changes apply the next time it starts in ${view.emulator}."
+                    } else {
+                        "Every game uses these unless it has its own. Close ${view.emulator} first; changes apply the next time it starts."
+                    },
+                    options = rows + restore,
+                )
+            }
+        }
+    }
+}
+
+/** The values one setting can take, with the one in use checked; for a game, following every game's comes first. */
+private fun AppState.settingPicker(
+    card: GameCard?,
+    emulator: io.github.matiyaaa.fuse.model.EmulatorId?,
+    name: String,
+    v: io.github.matiyaaa.fuse.launch.settings.SettingValue,
+) {
+    val s = v.setting
+    val forGame = card != null
+    val own = !forGame || v.source == io.github.matiyaaa.fuse.launch.settings.SettingSource.GAME
+    fun apply(value: String?) {
+        scope.launch {
+            val ok = store.library.setEmulatorSetting(card?.id, emulator, s.id, value)
+            if (!ok) toasts.show("Couldn't change $name's settings", ToastKind.WARNING)
+            emulatorSettingsSheet(card, emulator)
+        }
+    }
+    val follow = if (!forGame) emptyList() else listOf(
+        MenuAction(
+            "follow", "Same as Every Game", FuseIcons.Layers, detail = s.labelFor(v.everyGame),
+            trailing = Trailing.Check(!own), onSelect = { apply(null) },
+        ),
+    )
+    choice = ChoiceSpec(
+        icon = settingIcon(s.category),
+        title = s.label,
+        message = s.about ?: if (forGame) "For this game in $name." else "For every game in $name.",
+        options = follow + s.choices.map { c ->
+            MenuAction(
+                "value.${c.value}", c.label, settingIcon(s.category),
+                detail = if (s.same(c.value, s.default)) "$name's default" else null,
+                trailing = Trailing.Check(own && s.same(c.value, v.value)),
+                onSelect = { apply(c.value) },
+            )
+        },
+    )
+}
+
+private fun settingIcon(category: String) = when (category) {
+    "Display" -> FuseIcons.Scaling
+    else -> FuseIcons.Monitor
 }
 
 /** What RPCS3's compatibility list says about [card], as a sheet with a link to its report. */

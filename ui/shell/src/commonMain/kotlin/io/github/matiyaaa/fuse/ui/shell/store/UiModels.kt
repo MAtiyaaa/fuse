@@ -395,6 +395,20 @@ sealed interface GamePatchList {
     data class Unavailable(val title: String, val reason: String) : GamePatchList
 }
 
+/** An emulator's own settings, for one game or for every game, or why Fuse can't change them. */
+sealed interface EmulatorSettingsView {
+    data class Ready(
+        val emulator: String,
+        /** The game these are for; null when they are for every game. */
+        val game: String?,
+        val values: List<io.github.matiyaaa.fuse.launch.settings.SettingValue>,
+        /** Fuse changed something in this file that it can put back. */
+        val canRestore: Boolean,
+    ) : EmulatorSettingsView
+
+    data class Unavailable(val title: String, val reason: String) : EmulatorSettingsView
+}
+
 /** What RPCS3's compatibility list says about a PS3 game, asked for by the user. */
 sealed interface CompatibilityAnswer {
     data class Listed(val entry: io.github.matiyaaa.fuse.integrations.rpcs3.Rpcs3Compat) : CompatibilityAnswer

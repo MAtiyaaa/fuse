@@ -485,6 +485,19 @@ interface LibraryOps {
      */
     suspend fun setGamePatch(id: GameId, name: String, on: Boolean, cheat: Boolean = false): Boolean = false
 
+    /**
+     * The emulator's own settings (PCSX2, DuckStation, PPSSPP) for the game [id], or for every game
+     * in [emulator] when [id] is null, each with where its value comes from.
+     */
+    suspend fun emulatorSettings(id: GameId?, emulator: EmulatorId? = null): EmulatorSettingsView =
+        EmulatorSettingsView.Unavailable("Not here", "Emulator settings can only be changed from Fuse on a computer.")
+
+    /** Gives [setting] the [value] for the game [id] (or every game); null makes a game follow every game's again. */
+    suspend fun setEmulatorSetting(id: GameId?, emulator: EmulatorId?, setting: String, value: String?): Boolean = false
+
+    /** Puts back what Fuse changed in these settings; anything changed in the emulator since stays. */
+    suspend fun restoreEmulatorSettings(id: GameId?, emulator: EmulatorId?): Boolean = false
+
     /** Play time today, this week, this month and in all, per day, per game and per system. */
     fun playTime(): Flow<PlayTimeReport> = kotlinx.coroutines.flow.flowOf(PlayTimeReport(loaded = true))
 

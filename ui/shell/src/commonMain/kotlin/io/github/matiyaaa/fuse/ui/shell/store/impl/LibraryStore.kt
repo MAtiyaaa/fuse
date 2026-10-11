@@ -861,14 +861,28 @@ internal class DefaultLibraryOps(
     /** Patches and cheats in PCSX2's, DuckStation's and PPSSPP's own files. */
     private val nativePatches by lazy { NativePatches(ctx, { emulators.detectNow() }, ::discIdentity, ::pspGameId, ::retroArchRun) }
 
-    /** The RetroArch run [game] would start with on this computer (its core and content), as [launch] resolves it; null when it starts elsewhere. */
-    private suspend fun retroArchRun(game: io.github.matiyaaa.fuse.model.Game): NativePatches.RetroArchRun? {
-        if (!ctx.host.isDesktop) return null
+    /** The emulator settings Fuse changes, for a game or for every game. */
+    private val nativeSettings by lazy { NativeSettingsStore(ctx, { emulators.detectNow() }, ::discIdentity, ::pspGameId, { startsWith(it).first.installed }) }
+
+    override suspend fun emulatorSettings(id: GameId?, emulator: EmulatorId?) = nativeSettings.view(id, emulator)
+
+    override suspend fun setEmulatorSetting(id: GameId?, emulator: EmulatorId?, setting: String, value: String?) = nativeSettings.set(id, emulator, setting, value)
+
+    override suspend fun restoreEmulatorSettings(id: GameId?, emulator: EmulatorId?) = nativeSettings.restore(id, emulator)
+
+    /** How [game] would start here, as [launch] resolves it, with the RetroArch core it would use (if any). */
+    private suspend fun startsWith(game: io.github.matiyaaa.fuse.model.Game): Pair<ResolvedLaunch, String?> {
         if (ctx.installed.value.isEmpty()) emulators.detectNow()
         val settings = data.scopedSettings
         val platformEmulator = settings.resolve(ScopedSettings.Emulator, game.platformId, null).value.takeIf { it.isNotBlank() }?.let(::EmulatorId)
         val core = settings.resolve(ScopedSettings.RetroArchCore, game.platformId, game.id).value.takeIf { it.isNotBlank() }
-        val resolved = ctx.resolver.resolve(game, platformEmulator, ctx.installed.value, ctx.host, ScopedLaunchChoice(core = core, homeDir = ctx.services.emulators.homeDir))
+        return ctx.resolver.resolve(game, platformEmulator, ctx.installed.value, ctx.host, ScopedLaunchChoice(core = core, homeDir = ctx.services.emulators.homeDir)) to core
+    }
+
+    /** The RetroArch run [game] would start with on this computer (its core and content), as [launch] resolves it; null when it starts elsewhere. */
+    private suspend fun retroArchRun(game: io.github.matiyaaa.fuse.model.Game): NativePatches.RetroArchRun? {
+        if (!ctx.host.isDesktop) return null
+        val (resolved, core) = startsWith(game)
         val installed = resolved.installed ?: return null
         if (!installed.id.value.substringAfter('.').startsWith("retroarch")) return null
         val coreName = core ?: RetroArchCores.defaultCore(ctx.host, game.platformId) ?: return null
