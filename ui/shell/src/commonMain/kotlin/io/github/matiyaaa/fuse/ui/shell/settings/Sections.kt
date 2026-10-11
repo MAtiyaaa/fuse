@@ -1755,10 +1755,27 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
         labelled("Developer") {
             add(MenuAction(
                 "dev.setup", "Start Onboarding", FuseIcons.RotateCcw,
-                detail = "A separate rehearsal with pretend folders, accounts and profiles",
+                detail = "A separate rehearsal with pretend folders, accounts and profiles, as any system",
                 trailing = Trailing.Chevron,
                 onSelect = {
-                    app.dev.rehearsalOpen = true
+                    // Setup differs by system (Steam on computers, Decky on Linux only): any can be rehearsed here.
+                    fun rehearse(host: io.github.matiyaaa.fuse.model.Host?) {
+                        app.choice = null
+                        app.store.displaySession.rehearsalHost = host
+                        app.dev.rehearsalOpen = true
+                    }
+                    app.choice = ChoiceSpec(
+                        title = "Start Onboarding",
+                        message = "Nothing in it is saved, and nothing of yours shows in it.",
+                        icon = FuseIcons.RotateCcw,
+                        options = listOf(
+                            MenuAction("dev.setup.here", "As this device", FuseIcons.Smartphone, onSelect = { rehearse(null) }),
+                            MenuAction("dev.setup.linux", "As Linux", FuseIcons.Monitor, detail = "Steam, then the Decky plugin, then Fuse in Steam", onSelect = { rehearse(io.github.matiyaaa.fuse.model.Host.LINUX) }),
+                            MenuAction("dev.setup.windows", "As Windows", FuseIcons.Monitor, detail = "Steam without Decky", onSelect = { rehearse(io.github.matiyaaa.fuse.model.Host.WINDOWS) }),
+                            MenuAction("dev.setup.macos", "As macOS", FuseIcons.Monitor, detail = "Steam without Decky", onSelect = { rehearse(io.github.matiyaaa.fuse.model.Host.MACOS) }),
+                            MenuAction("dev.setup.android", "As Android", FuseIcons.Smartphone, detail = "Home screen, storage access, no Steam", onSelect = { rehearse(io.github.matiyaaa.fuse.model.Host.ANDROID) }),
+                        ),
+                    )
                 },
             ))
             add(MenuAction(

@@ -11,6 +11,9 @@ class DisplaySession {
     /** All windows leave production content together while the developer sandbox is open. */
     var rehearsalOpen by mutableStateOf(false)
 
+    /** The system the rehearsal plays setup as (Linux, Windows, macOS or Android); null: this device's. */
+    var rehearsalHost by mutableStateOf<io.github.matiyaaa.fuse.model.Host?>(null)
+
     private val state = MutableStateFlow(false)
     val standby = state.asStateFlow()
     var lastWakeAt: Long = 0L

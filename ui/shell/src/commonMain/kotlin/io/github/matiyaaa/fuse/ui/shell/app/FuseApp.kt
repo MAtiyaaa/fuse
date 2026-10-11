@@ -171,7 +171,7 @@ fun FuseApp(
     val owner = session ?: remember(store, platform) { FuseAppSession(platform.host, store.displaySession) }
     // Choose the environment before a preference flow, theme or interface scale is read.
     if (owner.displaySession.rehearsalOpen) {
-        RehearsalApp(owner.host, router) { owner.displaySession.rehearsalOpen = false }
+        RehearsalApp(owner.displaySession.rehearsalHost ?: owner.host, router) { owner.displaySession.rehearsalOpen = false }
         return
     }
     val prefs by store.prefs.collectAsState()
