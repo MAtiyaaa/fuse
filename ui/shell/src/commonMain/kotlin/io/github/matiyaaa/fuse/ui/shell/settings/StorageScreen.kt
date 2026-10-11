@@ -117,6 +117,13 @@ fun StorageScreen(app: AppState) {
         store.storage.refresh()
         app.hero = null
     }
+    // What Fuse keeps of its own: Fuse One's saves, and the art and caches it keeps.
+    // Null while measuring; then what was found (nothing kept yet reads as nothing).
+    val footprint by androidx.compose.runtime.produceState<io.github.matiyaaa.fuse.sync.SyncFootprint?>(null) {
+        value = runCatching { store.sync.service?.footprint() }.getOrNull() ?: io.github.matiyaaa.fuse.sync.SyncFootprint(0, 0)
+    }
+    val cacheBytes by androidx.compose.runtime.produceState<Long?>(null) { value = runCatching { store.storage.cacheBytes() }.getOrNull() }
+    val usesFuseOne = store.sync.inUse || store.sync.service?.profiles?.value?.isNotEmpty() == true
 
     val all = usage
     // Picking a drive narrows everything after it (its systems, its games) to what it holds.
@@ -150,14 +157,14 @@ fun StorageScreen(app: AppState) {
         system = if (id == null || id == system) null else id
         sel.index = 0
     }
-    val rows = remember(u, system, picked, canDelete, platforms, wideLayout, bare, drive, volumes) {
-        storageRows(
+    val rows = remember(u, system, picked, canDelete, platforms, wideLayout, bare, drive, volumes, footprint, cacheBytes) {
+        ownRows(usesFuseOne, footprint, cacheBytes) + storageRows(
             app, u, system, picked, canDelete, wide = wideLayout, drives = volumes, drive = drive, bare = bare,
             onPick = { id -> picked = if (id in picked) picked - id else picked + id },
             onPickAll = { ids -> picked = if (ids.isNotEmpty() && picked.containsAll(ids)) picked - ids else picked + ids },
             onFilter = { system = it; sel.index = 0 },
             onDrive = { drive = it; system = null; sel.index = 0 },
-        )
+        ).map { if (it.section == null) it.copy(section = "Games") else it }
     }
     val systemRows = remember(systems, u, system, volumes, drive) {
         val total = u?.games.orEmpty().sumOf { it.bytes }
@@ -530,6 +537,33 @@ private fun storageRows(
             ))
         }
     }
+}
+
+/**
+ * What Fuse keeps of its own, beside the games: Fuse One's saves on this device (each file once,
+ * however many versions share it), the household's on a host, saves of profiles removed from this
+ * device, and the art and caches Fuse keeps (the system may clear those). Fuse never deletes the last
+ * copy of a save to make room.
+ */
+private fun ownRows(fuseOne: Boolean, f: io.github.matiyaaa.fuse.sync.SyncFootprint?, cache: Long?): List<MenuAction> = buildList {
+    val section = "Fuse's own files"
+    fun size(bytes: Long?) = bytes?.let { io.github.matiyaaa.fuse.ui.shell.home.bytesText(it) } ?: "Measuring"
+    if (fuseOne) {
+        add(infoRow("own.saves", "Saves kept here", size(f?.deviceBytes),
+            detail = when {
+                f == null -> "Fuse One, every person's saves and their versions"
+                f.deviceFiles == 0 -> "Fuse One keeps each person's saves here once they play"
+                else -> "Fuse One, every person's saves and their versions: ${f.deviceFiles} ${if (f.deviceFiles == 1) "file" else "files"}, each kept once"
+            },
+            icon = FuseIcons.Save).copy(section = section))
+        f?.hostBytes?.let { host ->
+            add(infoRow("own.host", "The household's saves", size(host), detail = "This computer is the host: every device's saves and history, each file once", icon = FuseIcons.Server).copy(section = section))
+        }
+        f?.keptBytes?.takeIf { it > 0 }?.let { kept ->
+            add(infoRow("own.kept", "Saves of removed profiles", size(kept), detail = "Kept as plain files in Fuse One's kept folder, never deleted by Fuse", icon = FuseIcons.Archive).copy(section = section))
+        }
+    }
+    add(infoRow("own.cache", "Art and caches", size(cache), detail = "Pictures and lists Fuse fetched; the system may clear them, and Fuse fetches them again", icon = FuseIcons.Image).copy(section = section))
 }
 
 private fun summaryLine(u: StorageUsage?): String {

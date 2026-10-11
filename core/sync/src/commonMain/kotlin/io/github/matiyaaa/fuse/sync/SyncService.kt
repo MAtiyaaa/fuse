@@ -232,6 +232,9 @@ interface SyncService {
      */
     suspend fun householdServices(): HouseholdShared? = null
 
+    /** The room Fuse One's files take here: this device's saves, the host's (on a host) and kept ones. Null when it has none. */
+    suspend fun footprint(): SyncFootprint? = null
+
     /** Shares this device's RomM and Jellyfin with the household, or says no ([declined]); false when it can't. */
     suspend fun shareServices(romm: ServiceAddress?, jellyfin: ServiceAddress?, signIns: Map<String, String>, declined: Boolean = false): Boolean = false
 
@@ -479,5 +482,18 @@ private val NO_SHARED_GAMES: StateFlow<Set<String>> = kotlinx.coroutines.flow.Mu
 
 /** The household's services as a device sees them: what the host keeps, with this device's sign-ins opened. */
 data class HouseholdShared(val services: HouseholdServices, val signIns: Map<String, String>)
+
+/**
+ * What Fuse One keeps on this device, in bytes: each person's saves kept here (each file once, by
+ * its contents, however many versions share it), the household's on a host, and saves of profiles
+ * removed from this device, kept as plain files.
+ */
+data class SyncFootprint(
+    val deviceBytes: Long,
+    val deviceFiles: Int,
+    val hostBytes: Long? = null,
+    val hostFiles: Int? = null,
+    val keptBytes: Long = 0,
+)
 
 private val NoRounds: StateFlow<Int> = kotlinx.coroutines.flow.MutableStateFlow(0)

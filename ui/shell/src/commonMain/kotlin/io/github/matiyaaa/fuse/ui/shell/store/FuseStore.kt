@@ -275,6 +275,9 @@ interface StorageOps {
     /** Connected drives games can be moved to, each with its games folder when it has one. */
     suspend fun moveTargets(): List<MoveTarget> = emptyList()
 
+    /** What Fuse's own art and caches take (the system may clear them), or null when it can't tell. */
+    suspend fun cacheBytes(): Long? = null
+
     /** The drive [game]'s files are on (a [MoveTarget.volumeId]), or null when Fuse can't tell. */
     suspend fun driveOf(game: GameId): String? = null
 

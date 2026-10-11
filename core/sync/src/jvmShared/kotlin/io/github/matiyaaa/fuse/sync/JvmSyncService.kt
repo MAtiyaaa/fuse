@@ -456,6 +456,20 @@ class JvmSyncService(
         runCatching { c.noteApplied(notes) }
     }
 
+    override suspend fun footprint(): SyncFootprint? = withContext(Dispatchers.IO) {
+        val d = device
+        val host = hostServer?.store?.content
+        val kept = File(dir, KEPT_DIR).takeIf { it.isDirectory }?.walkTopDown()?.filter { it.isFile }?.sumOf { it.length() } ?: 0L
+        if (d == null && host == null && kept == 0L) return@withContext null
+        SyncFootprint(
+            deviceBytes = d?.store?.totalBytes() ?: 0L,
+            deviceFiles = d?.store?.count() ?: 0,
+            hostBytes = host?.totalBytes(),
+            hostFiles = host?.count(),
+            keptBytes = kept,
+        )
+    }
+
     override suspend fun householdServices(): HouseholdShared? = withContext(Dispatchers.IO) {
         val c = client ?: return@withContext null
         runCatching { c.services() }.getOrNull()?.let { (s, open) -> HouseholdShared(s, open) }
