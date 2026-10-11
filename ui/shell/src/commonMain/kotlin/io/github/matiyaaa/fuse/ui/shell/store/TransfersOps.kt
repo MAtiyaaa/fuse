@@ -61,6 +61,9 @@ interface TransfersOps {
     fun resumeAll()
     fun clearFinished()
 
+    /** This device's battery ([batteryPercent] null without one) and whether it is plugged in. */
+    fun power(batteryPercent: Int?, charging: Boolean) {}
+
     object None : TransfersOps {
         override val rows: StateFlow<List<TransferRow>> = MutableStateFlow(emptyList())
         override val summary: StateFlow<TransferSummary> = MutableStateFlow(TransferSummary())

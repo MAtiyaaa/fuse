@@ -280,6 +280,8 @@ private fun FuseAppContent(
     // Input settings, sounds and haptics follow preferences.
     LaunchedEffect(prefs.input) { router.profile = prefs.input }
     LaunchedEffect(prefs.input.vibration) { platform.haptics.setStrength(prefs.input.vibration) }
+    // Transfers kept to a charger or above a battery level follow the battery.
+    LaunchedEffect(store) { platform.status.collect { s -> store.transfers.power(s.batteryPercent, s.charging || s.batteryFull) } }
     // A download or transfer of this device's finishing: one firm pulse (never for ones already done at start).
     LaunchedEffect(store) {
         var done: Set<String>? = null

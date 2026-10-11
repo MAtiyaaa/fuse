@@ -318,9 +318,31 @@ internal fun transferRows(app: AppState, dl: DownloadSettings, setDl: ((Download
             optionDetail = { when (it) { "REDUCED" -> "Kept slow so games online stay smooth"; "PAUSE" -> "Held until the game closes"; else -> "As fast as the connection goes" } }) { v -> setDl { it.copy(downloadsWhilePlaying = v) } },
         app.choiceRow("ul.play", "Uploads while playing", FuseIcons.Gamepad, dl.uploadsWhilePlaying, modes) { v -> setDl { it.copy(uploadsWhilePlaying = v) } },
         toggleRow("dl.wifi", "Only on Wi-Fi", FuseIcons.Wifi, dl.wifiOnly, "Waits for Wi-Fi or a cable rather than using mobile data") { v -> setDl { it.copy(wifiOnly = v) } },
+        toggleRow("dl.charging", "Only while charging", FuseIcons.Zap, dl.chargingOnly, "On battery, transfers wait for a charger. Saves always go: they are small") { v -> setDl { it.copy(chargingOnly = v) } },
+        app.choiceRow("dl.battery", "On battery, wait below", FuseIcons.BatteryLow, dl.minBattery, listOf(0 to "Never wait", 20 to "20%", 30 to "30%", 50 to "50%"),
+            detail = "Transfers carry on once plugged in") { v -> setDl { it.copy(minBattery = v) } },
+        app.choiceRow("dl.quiet", "Quiet hours", FuseIcons.Moon, dl.quietFrom to dl.quietTo, quietHours(app.store.prefs.value.clock24h).let { q -> if (q.any { it.first == dl.quietFrom to dl.quietTo }) q else q + ((dl.quietFrom to dl.quietTo) to quietLabel(dl.quietFrom, dl.quietTo, app.store.prefs.value.clock24h)) },
+            detail = "Transfers wait in these hours and carry on after") { (from, to) -> setDl { it.copy(quietFrom = from, quietTo = to) } },
         toggleRow("dl.resume", "Carry on unfinished transfers", FuseIcons.Play, dl.resumeOnStart, "When Fuse starts, from where they stopped") { v -> setDl { it.copy(resumeOnStart = v) } },
         app.choiceRow("dl.keep", "Keep finished ones listed", FuseIcons.History, dl.keepFinishedDays, listOf(0 to "Until Fuse restarts", 1 to "A day", 7 to "A week", 30 to "A month")) { v -> setDl { it.copy(keepFinishedDays = v) } },
     ).map { if (section != null) it.copy(section = section) else it }
+}
+
+/** Quiet hours offered, as minutes since midnight from and to; "None" first. */
+private fun quietHours(clock24h: Boolean): List<Pair<Pair<Int, Int>, String>> =
+    listOf(0 to 0, 22 * 60 to 7 * 60, 23 * 60 to 7 * 60, 0 to 8 * 60, 1 * 60 to 6 * 60, 9 * 60 to 17 * 60)
+        .map { (from, to) -> (from to to) to quietLabel(from, to, clock24h) }
+
+private fun quietLabel(from: Int, to: Int, clock24h: Boolean): String =
+    if (from == to) "None" else "${clockText(from, clock24h)} to ${clockText(to, clock24h)}"
+
+private fun clockText(minute: Int, clock24h: Boolean): String {
+    val h = minute / 60 % 24
+    val m = minute % 60
+    if (clock24h) return "${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}"
+    if (h == 0 && m == 0) return "Midnight"
+    val h12 = if (h % 12 == 0) 12 else h % 12
+    return if (m == 0) "$h12 ${if (h < 12) "AM" else "PM"}" else "$h12:${m.toString().padStart(2, '0')} ${if (h < 12) "AM" else "PM"}"
 }
 
 private fun shortFolder(path: String): String = path.replace('\\', '/').trimEnd('/').split('/').takeLast(2).joinToString("/").ifBlank { path }

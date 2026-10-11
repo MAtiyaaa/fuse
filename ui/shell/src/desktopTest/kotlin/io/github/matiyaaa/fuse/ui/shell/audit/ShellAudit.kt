@@ -380,6 +380,20 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         settle(2_500)
         shoot("drives, systems and games")
     }
+    scenario("settings", "transfer rules") {
+        useLibrary()
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("downloads"))
+        tap(PadButton.DPAD_RIGHT)
+        waitFor("Only while charging")
+        tap(PadButton.DPAD_DOWN, 8)
+        settle(1_200)
+        shoot("charger, battery and quiet hours")
+        tapText("Quiet hours")
+        waitFor("10 PM to 7 AM")
+        settle(800)
+        shoot("quiet hours offered")
+    }
     if (!exhaustive) return
 
     scenario("settings", "add a game") {

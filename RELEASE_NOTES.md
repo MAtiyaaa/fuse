@@ -42,6 +42,9 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   device (each file once, however many versions share it), the household's on a host, saves of
   profiles removed from this device, and the art and caches Fuse fetched. Nothing is deleted to
   make room: Fuse never removes the last copy of a save.
+- **When transfers move.** Downloads has "Only while charging", "On battery, wait below" and
+  "Quiet hours" beside Wi-Fi only, the bandwidth limit and the rules for while you play. A held
+  transfer says what it waits for and carries on by itself. Saves always go: they are small.
 - **Steam achievement rarity.** The share of players who have each Steam achievement, and when it
   was unlocked, under the chosen badge on a game's page.
 - **Add a game folder.** A folder holding a game with its updates, DLC or discs, read the way the

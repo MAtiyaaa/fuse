@@ -40,7 +40,7 @@ object TransferScheduler {
         TransferStatus.QUEUED -> true
         // A drive or the network are tried again once their time comes (or at once, when the
         // drive is seen again: the manager clears retryAt then).
-        TransferStatus.WAITING -> item.waiting != WaitReason.PLAYING && item.waiting != WaitReason.WIFI && (item.retryAt ?: 0) <= now
+        TransferStatus.WAITING -> item.waiting !in TransferConditions.CONDITIONS && (item.retryAt ?: 0) <= now
         else -> false
     }
 

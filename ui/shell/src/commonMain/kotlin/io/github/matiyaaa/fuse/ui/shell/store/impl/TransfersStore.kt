@@ -29,6 +29,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.UpdateOps
 import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
 import io.github.matiyaaa.fuse.ui.shell.store.transferOrder
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -107,14 +108,15 @@ internal class DefaultTransfersOps(
                     else ctx.services.keepAliveForTransfers(true, now.first, now.second)
                 }
         }
-        // Wi-Fi comes and goes without telling: transfers kept to Wi-Fi look every little while.
+        // Wi-Fi comes and goes without telling, and quiet hours begin and end: looked at every little while.
         ctx.scope.launch {
             while (true) {
                 kotlinx.coroutines.delay(15_000)
-                val unmetered = ctx.services.unmetered()
-                if (unmetered != lastUnmetered) conditions(lastPlaying)
+                if (ctx.services.unmetered() != lastUnmetered || minuteNow() != lastMinute) conditions(lastPlaying)
             }
         }
+        // Quiet hours just set take effect at once.
+        ctx.scope.launch { ctx.settings.map { it.downloads.quietFrom to it.downloads.quietTo }.distinctUntilChanged().collect { conditions(lastPlaying) } }
         // Drives come and go: transfers waiting for one look again at once.
         ctx.scope.launch { ctx.offline.collect { engine.drivesChanged() } }
     }
@@ -122,11 +124,30 @@ internal class DefaultTransfersOps(
     /** A game started or stopped, or the connection changed: transfers follow the person's rules. */
     @kotlin.concurrent.Volatile private var lastPlaying = false
     @kotlin.concurrent.Volatile private var lastUnmetered = true
+    @kotlin.concurrent.Volatile private var lastMinute: Int? = null
+    @kotlin.concurrent.Volatile private var battery: Int? = null
+    @kotlin.concurrent.Volatile private var charging = false
 
     fun conditions(playing: Boolean) {
         lastPlaying = playing
         lastUnmetered = ctx.services.unmetered()
-        engine.conditions(TransferConditions(playing = playing, unmetered = lastUnmetered))
+        lastMinute = minuteNow()
+        engine.conditions(TransferConditions(playing = playing, unmetered = lastUnmetered, battery = battery, charging = charging, minute = lastMinute))
+    }
+
+    override fun power(batteryPercent: Int?, charging: Boolean) {
+        if (batteryPercent == battery && charging == this.charging) return
+        battery = batteryPercent
+        this.charging = charging
+        conditions(lastPlaying)
+    }
+
+    /** Minutes since local midnight, only while quiet hours are set (so the queue isn't stirred each minute for nothing). */
+    private fun minuteNow(): Int? {
+        val dl = ctx.settings.value.downloads
+        if (dl.quietFrom == dl.quietTo) return null
+        val t = kotlin.time.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault())
+        return t.hour * 60 + t.minute
     }
 
     override fun live(id: String): StateFlow<TransferLive> = synchronized(mirroredLive) { mirroredLive[id] } ?: engine.live(id)
@@ -316,6 +337,10 @@ internal fun DownloadSettings.toTransferSettings(cores: Int = defaultCores(), lo
         downloadsWhilePlaying = mode(downloadsWhilePlaying),
         uploadsWhilePlaying = mode(uploadsWhilePlaying),
         wifiOnly = wifiOnly,
+        chargingOnly = chargingOnly,
+        minBattery = minBattery.coerceIn(0, 100),
+        quietFrom = quietFrom,
+        quietTo = quietTo,
         resumeOnStart = resumeOnStart,
         keepFinishedDays = keepFinishedDays.coerceIn(0, 90),
     )

@@ -141,7 +141,7 @@ val settingsSections: List<SettingsSection> = listOf(
     SettingsSection("accounts", "Accounts", FuseIcons.CircleUser, "RetroAchievements and Phone Link", ::accountsRows, group = CONNECTIONS),
     SettingsSection("fuseone", "Fuse One", FuseIcons.RefreshCcw, "Save Sync, Library Sync and your household", ::fuseOneRows, group = CONNECTIONS, available = { it.store.sync.service != null || it.store.syncthing != null }),
     SettingsSection("addons", "Addons", FuseIcons.Blocks, "RomM, Jellyfin, streaming and the Store", ::addonsRows, group = CONNECTIONS, status = ::addonsStatus),
-    SettingsSection("downloads", "Downloads", FuseIcons.Download, "How many at once, speed, while playing", ::downloadsRows, group = CONNECTIONS),
+    SettingsSection("downloads", "Downloads", FuseIcons.Download, "How many, how fast, and when they move", ::downloadsRows, group = CONNECTIONS),
     SettingsSection("health", "System health", FuseIcons.HeartPulse, "What needs attention, and a bug report", ::healthRows, group = GENERAL, status = ::healthStatus),
     SettingsSection("storage", "Storage and backups", FuseIcons.HardDrive, "File access, drives, backup and restore", ::storageAndBackupRows, group = GENERAL),
     SettingsSection("about", "About", FuseIcons.Info, "Updates, privacy, licences, setup", ::aboutRows, group = GENERAL, status = ::aboutStatus),

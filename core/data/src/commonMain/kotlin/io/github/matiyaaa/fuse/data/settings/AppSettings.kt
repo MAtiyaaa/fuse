@@ -602,6 +602,13 @@ data class DownloadSettings(
     val downloadsWhilePlaying: String = "REDUCED",
     val uploadsWhilePlaying: String = "REDUCED",
     val wifiOnly: Boolean = false,
+    /** Transfers move only while plugged in. */
+    val chargingOnly: Boolean = false,
+    /** On battery, transfers wait below this percent; 0 for never. */
+    val minBattery: Int = 0,
+    /** Quiet hours as minutes since midnight, from and to; equal for none. */
+    val quietFrom: Int = 0,
+    val quietTo: Int = 0,
     val resumeOnStart: Boolean = true,
     /** Days finished transfers stay listed. */
     val keepFinishedDays: Int = 7,
