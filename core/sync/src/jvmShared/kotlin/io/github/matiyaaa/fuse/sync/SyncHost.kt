@@ -361,6 +361,7 @@ class SyncHost(
             // Asking to join without a code: someone already in (or the host) lets the device in.
             post("/join") {
                 if (limited(weight = 20)) return@post
+                if (!compatible()) return@post
                 val req = body(JoinRequest.serializer()) ?: return@post
                 if (req.deviceId.length !in 8..64 || req.deviceName.isBlank() || req.publicKey.length > 400) return@post call.fail(HttpStatusCode.BadRequest, "Bad device", "bad-device")
                 joinRequests()
@@ -404,6 +405,7 @@ class SyncHost(
             }
             post("/pair") {
                 if (limited(weight = 20)) return@post
+                if (!compatible()) return@post
                 val req = body(PairRequest.serializer()) ?: return@post
                 val p = pairing
                 if (p == null || p.until < clock()) return@post call.fail(HttpStatusCode.Forbidden, "No device is being added on the host right now. Add a device there to get a code.", "no-pairing")
@@ -959,6 +961,7 @@ class SyncHost(
             call.fail(HttpStatusCode.Unauthorized, "This device isn't paired with this host.", "unsigned")
             return null
         }
+        if (!compatible()) return null
         val d = store.device(id)
         if (d == null || d.revoked) {
             call.fail(HttpStatusCode.Unauthorized, "This device was unlinked from the host. Connect it again.", "revoked")
@@ -1001,8 +1004,24 @@ class SyncHost(
             return null
         }
         store.touchDevice(d.id, route())
+        h[SyncApi.PROTOCOL_HEADER]?.toIntOrNull()?.let { store.noteVersion(d.id, h[SyncApi.APP_HEADER].orEmpty(), it) }
         learnOutside()
         return d
+    }
+
+    /**
+     * Whether the calling device and this host speak a protocol in common (answering why not when
+     * they don't): a device too old is told to update, and one newer than this host never has its
+     * changes taken in a form this host would misread. Devices before 0.4.2 send no version and
+     * speak version 1.
+     */
+    private suspend fun RoutingContext.compatible(): Boolean {
+        val h = call.request.headers
+        val protocol = h[SyncApi.PROTOCOL_HEADER]?.toIntOrNull() ?: 1
+        val min = h[SyncApi.MIN_PROTOCOL_HEADER]?.toIntOrNull() ?: 1
+        val problem = SyncApi.incompatible(protocol, min) ?: return true
+        call.fail(HttpStatusCode.UpgradeRequired, problem.error, problem.code)
+        return false
     }
 
     /** What a backup or a fenced host still answers: its copy of the household, and the files it keeps, for the hosts. */

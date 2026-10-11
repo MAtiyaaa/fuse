@@ -47,6 +47,9 @@ internal data class DeviceRecord(
     val owner: Boolean = false,
     /** Profiles this device has opened, with the PIN epoch they were opened at. */
     val opened: Map<String, Int> = emptyMap(),
+    /** The Fuse it last called from, and that Fuse's protocol (0 before 0.4.2). */
+    val fuseVersion: String = "",
+    val protocol: Int = 0,
 )
 
 @Serializable
@@ -354,7 +357,7 @@ class HostStore(
     fun hello(port: Int, fuseVersion: String): HostHello {
         val l = leadership.current
         return HostHello(
-            identity.hostId, identity.name, SyncApi.VERSION, port, fuseVersion, outside = outside.address, account = account != null,
+            identity.hostId, identity.name, SyncApi.VERSION, port, fuseVersion, minVersion = SyncApi.MIN_VERSION, outside = outside.address, account = account != null,
             features = listOf(SyncApi.FEATURE_HOUSEHOLD, SyncApi.FEATURE_BACKUPS),
             node = leadership.nodeId, generation = l.generation, role = leadership.role, hosts = l.hosts,
         )
@@ -498,7 +501,16 @@ class HostStore(
         true
     }
 
-    private fun deviceInfoOf(d: DeviceRecord) = DeviceInfo(d.id, d.name, d.platform, d.profile, d.lastSeen, d.lastSync, d.connection, d.revoked)
+    private fun deviceInfoOf(d: DeviceRecord) = DeviceInfo(d.id, d.name, d.platform, d.profile, d.lastSeen, d.lastSync, d.connection, d.revoked, d.fuseVersion, d.protocol)
+
+    /** Notes the Fuse [id] calls from, kept only when it changed (an update, or the first call from 0.4.2). */
+    internal fun noteVersion(id: String, fuseVersion: String, protocol: Int) = synchronized(lock) {
+        val d = devices[id] ?: return@synchronized
+        val v = fuseVersion.take(32)
+        if (d.fuseVersion == v && d.protocol == protocol) return@synchronized
+        devices[id] = d.copy(fuseVersion = v, protocol = protocol)
+        saveDevices()
+    }
 
     // ---------------------------------------------------------------- profiles
 

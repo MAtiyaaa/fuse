@@ -36,6 +36,10 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   Back Up Now makes one beside them, and putting the household back as one kept it keeps the
   household as it is first, so it can be undone; the household's hosts stay as they are, and devices
   catch up by themselves.
+- **Devices on different releases.** Every device tells the host which Fuse it runs, shown in
+  Settings, Fuse One, Devices, with a word when one is older than the host. Devices from before
+  0.4.2 sync as they did. A device and a host that share no protocol are refused with what to
+  update, before anything changes, so neither is made to read what it doesn't understand.
 - **Sync without a household.** A device keeping its own profiles has its Sync page: each person's
   games, play time and the saves kept for them here, with what a host would add and the two ways
   to set one up.

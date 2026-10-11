@@ -4,6 +4,7 @@ import io.github.matiyaaa.fuse.data.settings.SyncSettings
 import io.github.matiyaaa.fuse.sync.DeviceInfo
 import io.github.matiyaaa.fuse.sync.HostView
 import io.github.matiyaaa.fuse.sync.ProfileInfo
+import io.github.matiyaaa.fuse.sync.SyncApi
 import io.github.matiyaaa.fuse.sync.SyncService
 import io.github.matiyaaa.fuse.sync.SyncStatus
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
@@ -212,7 +213,7 @@ internal fun syncRows(
             "devices", "Devices", FuseIcons.MonitorSmartphone,
             detail = linked.joinToString(", ") { it.name }.ifBlank { "Only this one so far" },
             trailing = Trailing.Value(count(linked.size, "device")), section = hostSection,
-            onSelect = { manageDevices(app, svc, linked, c.deviceId) },
+            onSelect = { manageDevices(app, svc, linked, c.deviceId, host?.status?.hello?.fuseVersion.orEmpty()) },
         ))
         val outside = host?.outside.orEmpty()
         add(MenuAction(
@@ -435,8 +436,19 @@ private fun moveHostData(app: AppState, svc: SyncService) {
     }
 }
 
-/** The host's devices: when each was last seen, and renaming or unlinking one. */
-private fun manageDevices(app: AppState, svc: SyncService, devices: List<DeviceInfo>, self: String) {
+/** Which Fuse [d] runs, and whether it is older than the host's; null before it has called. */
+private fun deviceVersion(d: DeviceInfo, hostVersion: String): String? = when {
+    d.fuseVersion.isNotEmpty() && hostVersion.isNotEmpty() && SyncApi.older(d.fuseVersion, hostVersion) -> "Fuse ${d.fuseVersion}, older than the host's. Update it to use everything new"
+    d.fuseVersion.isNotEmpty() -> "Fuse ${d.fuseVersion}"
+    d.lastSeen > 0 -> "Fuse 0.4.1 or older. Update it to use everything new"
+    else -> null
+}
+
+/**
+ * The host's devices: when each was last seen and which Fuse it runs (one older than the host's
+ * is said to be, since it can't use what is newer), and renaming or unlinking one.
+ */
+private fun manageDevices(app: AppState, svc: SyncService, devices: List<DeviceInfo>, self: String, hostVersion: String) {
     val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
     val offset = localOffsetMillis(now)
     app.choice = ChoiceSpec(
@@ -450,7 +462,10 @@ private fun manageDevices(app: AppState, svc: SyncService, devices: List<DeviceI
             }
             MenuAction(
                 "d.${d.id}", d.name + if (d.id == self) " (this one)" else "", icon,
-                detail = if (d.lastSeen > 0) "Seen ${TimeWords.relative(d.lastSeen, now, offset)}" else "Not seen yet",
+                detail = listOfNotNull(
+                    if (d.lastSeen > 0) "Seen ${TimeWords.relative(d.lastSeen, now, offset)}" else "Not seen yet",
+                    deviceVersion(d, hostVersion),
+                ).joinToString("  ·  "),
                 trailing = Trailing.Chevron,
                 onSelect = {
                     app.choice = ChoiceSpec(

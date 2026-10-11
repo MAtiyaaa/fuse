@@ -111,6 +111,7 @@ class JvmSyncService(
     private val saveEnv: SaveEnvironment = WithSaveFolders(files, { game, format -> device?.learned(game, format).orEmpty() }) { cached.saveFolders }
 
     init {
+        if (fuseVersion.isNotEmpty()) fuseAppVersion = fuseVersion
         scope.launch(Dispatchers.IO) { runCatching { start() } }
         // What syncs (saves, states, records, settings, the folders chosen) follows Settings as it changes.
         scope.launch(Dispatchers.IO) { runCatching { settings.settings.collect { cached = it.sync } } }
@@ -1553,16 +1554,9 @@ class JvmSyncService(
     private fun olderThanThis(version: String): Boolean {
         if (fuseVersion.isBlank()) return false
         if (version.isBlank()) return true
-        fun parts(v: String) = v.split(Regex("[^0-9]+")).filter { it.isNotEmpty() }.map { it.toIntOrNull() ?: 0 }
-        val a = parts(version)
-        val b = parts(fuseVersion)
-        for (i in 0 until maxOf(a.size, b.size)) {
-            val x = a.getOrElse(i) { 0 }
-            val y = b.getOrElse(i) { 0 }
-            if (x != y) return x < y
-        }
-        return false
+        return SyncApi.older(version, fuseVersion)
     }
+
 
     /**
      * Sets the host's service up again with this Fuse and waits for it to answer as this version.

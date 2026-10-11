@@ -24,6 +24,7 @@ object HeadlessHost {
         backupsDir: File? = File(hostDir, "household-backups"),
     ): AutoCloseable? {
         if (!HostAdmin.portFree(port)) return null
+        if (fuseAppVersion.isEmpty()) fuseAppVersion = version
         val link = readLink(hostDir)
         val store = HostStore(hostDir, clock, hostName = name)
         // A host set up as another's backup waits for its copy; it never makes itself the host.

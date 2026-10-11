@@ -79,6 +79,16 @@ class SyncException(message: String, val code: String, val status: Int) : IOExce
 internal class NotTheHost(status: Int) : IOException("Something other than the host answered ($status).")
 
 /** A failed answer as Fuse Sync takes it: the host's own error, or [NotTheHost] when it wasn't the host's. */
+/** The Fuse this process is ([SyncApi.APP_HEADER]); set once at start by whoever knows it. */
+@Volatile var fuseAppVersion: String = ""
+
+/** Says which protocol this device speaks, the oldest it still does, and its Fuse version. */
+internal fun HttpRequestBuilder.versionHeaders() {
+    header(SyncApi.PROTOCOL_HEADER, SyncApi.VERSION.toString())
+    header(SyncApi.MIN_PROTOCOL_HEADER, SyncApi.MIN_VERSION.toString())
+    if (fuseAppVersion.isNotEmpty()) header(SyncApi.APP_HEADER, fuseAppVersion)
+}
+
 internal fun hostError(status: Int, text: String, json: Json): IOException {
     val err = runCatching { json.decodeFromString(ApiError.serializer(), text) }.getOrNull() ?: return NotTheHost(status)
     return SyncException(err.error, err.code, status)
@@ -238,6 +248,7 @@ class SyncClient(
                     header(RequestSigning.SIGNATURE, sig)
                     header("X-Fuse-Route", r.name)
                     header(HostLeadership.GENERATION, link.generation.toString())
+                    versionHeaders()
                     header(io.ktor.http.HttpHeaders.AcceptEncoding, "gzip")
                     for ((k, v) in headers) header(k, v)
                     when {
@@ -531,6 +542,7 @@ class SyncClient(
             val resp = http.request {
                 method = HttpMethod.Post
                 url(base + SyncApi.BASE + "/pair")
+                versionHeaders()
                 contentType(ContentType.Application.Json)
                 setBody(json.encodeToString(PairRequest.serializer(), PairRequest(code.trim().uppercase(), deviceId, deviceName, platform)))
             }
@@ -554,6 +566,7 @@ class SyncClient(
             val resp = http.request {
                 method = HttpMethod.Post
                 url(base + SyncApi.BASE + "/join")
+                versionHeaders()
                 contentType(ContentType.Application.Json)
                 setBody(json.encodeToString(JoinRequest.serializer(), JoinRequest(deviceId, deviceName, platform, mine)))
             }

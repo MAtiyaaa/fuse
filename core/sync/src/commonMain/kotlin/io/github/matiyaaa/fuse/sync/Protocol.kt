@@ -14,6 +14,39 @@ object SyncApi {
     const val VERSION = 1
     const val BASE = "/sync/v1"
 
+    /**
+     * The oldest protocol this Fuse still speaks. A host refuses a device older than its own, and a
+     * device whose own is newer than the host's [VERSION] is told to wait for the host's update,
+     * so neither is ever made to read what it can't understand. Devices from before 0.4.2 send no
+     * version and are taken as speaking version 1.
+     */
+    const val MIN_VERSION = 1
+
+    /** Headers every device call carries: its protocol, the oldest it speaks, and its Fuse version. */
+    const val PROTOCOL_HEADER = "X-Fuse-Protocol"
+    const val MIN_PROTOCOL_HEADER = "X-Fuse-Protocol-Min"
+    const val APP_HEADER = "X-Fuse-App"
+
+    /** True when Fuse version [a] ("0.4.1") is older than [b], comparing their numbers in turn. */
+    fun older(a: String, b: String): Boolean {
+        fun parts(v: String) = v.split(Regex("[^0-9]+")).filter { it.isNotEmpty() }.map { it.toIntOrNull() ?: 0 }
+        val x = parts(a)
+        val y = parts(b)
+        for (i in 0 until maxOf(x.size, y.size)) {
+            val p = x.getOrElse(i) { 0 }
+            val q = y.getOrElse(i) { 0 }
+            if (p != q) return p < q
+        }
+        return false
+    }
+
+    /** Why a device speaking [protocol] (oldest [min]) and this host can't work together; null when they can. */
+    fun incompatible(protocol: Int, min: Int): ApiError? = when {
+        protocol < MIN_VERSION -> ApiError("This device's Fuse is too old for the household's host. Update Fuse on this device to keep syncing; nothing was changed.", "device-too-old")
+        min > VERSION -> ApiError("The household's host runs an older Fuse than this device. Update Fuse on the host to keep syncing; nothing was changed.", "host-too-old")
+        else -> null
+    }
+
     /** The UDP port hosts answer discovery on, and the port they serve on by default. */
     const val DISCOVERY_PORT = 47310
     const val DEFAULT_PORT = 47311
@@ -59,6 +92,8 @@ data class HostHello(
     val role: String = Leadership.PRIMARY,
     /** Every computer that keeps the household, the host first. */
     val hosts: List<HostNode> = emptyList(),
+    /** The oldest protocol this host serves ([SyncApi.MIN_VERSION]); 1 from hosts before 0.4.2. */
+    val minVersion: Int = 1,
 )
 
 /**
@@ -200,6 +235,9 @@ data class DeviceInfo(
     /** LOCAL, REMOTE or empty. */
     val connection: String = "",
     val revoked: Boolean = false,
+    /** The Fuse it runs ("0.4.2") and the protocol it speaks; empty and 0 until it calls from 0.4.2 or later. */
+    val fuseVersion: String = "",
+    val protocol: Int = 0,
 )
 
 @Serializable
