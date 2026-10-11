@@ -173,10 +173,10 @@ sealed interface LibraryScope {
  * games open a menu to restore or forget them instead of playing.
  */
 enum class LibrarySegment(val label: String, val set: GameSet) {
-    /** The games on this device. */
-    INSTALLED("Installed", GameSet.LIBRARY),
     /** Every game wherever it is: this device, RomM and the household's other devices, as shelves. */
     EVERYWHERE("All", GameSet.LIBRARY),
+    /** The games on this device. */
+    INSTALLED("Installed", GameSet.LIBRARY),
     FAVORITES("Favourites", GameSet.LIBRARY),
     RECENT("Recently played", GameSet.LIBRARY),
     MISSING("Missing", GameSet.MISSING),
@@ -197,7 +197,7 @@ class LibraryViewState {
     /** Where All's shelves were: the shelf, and the place in each. */
     val shelves = io.github.matiyaaa.fuse.ui.designsystem.focus.ShelfSelection()
     var selectedId by mutableStateOf<GameId?>(null)
-    var segment by mutableStateOf(LibrarySegment.INSTALLED)
+    var segment by mutableStateOf(LibrarySegment.EVERYWHERE)
     /** The view's list as last loaded, kept on screen until the next one has arrived (no blank frames between views). */
     var loaded by mutableStateOf<Pair<Any, List<GameCard>>?>(null)
     /** The system the whole library is narrowed to, or null for every system. */
@@ -233,7 +233,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     // A system or collection opens on its first game; Back from a game returns to where you were.
     val state = if (scope == LibraryScope.All) {
         // The Library opens on the view the person chose (Settings, Library): Installed or All.
-        rememberRouteState(app.navigator, key) { LibraryViewState().apply { segment = if (prefs.libraryOpensOn == "ALL") LibrarySegment.EVERYWHERE else LibrarySegment.INSTALLED } }
+        rememberRouteState(app.navigator, key) { LibraryViewState().apply { segment = if (prefs.libraryOpensOn == "INSTALLED") LibrarySegment.INSTALLED else LibrarySegment.EVERYWHERE } }
     } else {
         rememberPageState(app.navigator, key) { LibraryViewState() }
     }

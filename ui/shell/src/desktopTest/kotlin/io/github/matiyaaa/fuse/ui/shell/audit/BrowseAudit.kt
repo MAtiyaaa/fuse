@@ -79,7 +79,7 @@ internal fun AuditDriver.openGame(title: String) {
 
 internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
     scenario("library", "all") {
-        useLibrary()
+        useLibrary(prefs = { it.copy(libraryOpensOn = "INSTALLED") })
         libraryTab()
         waitFor("Recently played")
         tap(PadButton.DPAD_LEFT)
@@ -100,8 +100,7 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
         useLibrary()
         libraryTab()
         waitFor("Recently played")
-        // All: every game wherever it is, in shelves.
-        libraryFilter(1)
+        // All, where the Library opens: every game wherever it is, in shelves.
         settle(1_200)
         tap(PadButton.DPAD_DOWN)
         settle()
@@ -136,7 +135,7 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
     if (!exhaustive) return
 
     scenario("library", "favourites") {
-        useLibrary()
+        useLibrary(prefs = { it.copy(libraryOpensOn = "INSTALLED") })
         libraryTab()
         waitFor("Recently played")
         libraryFilter(1)
@@ -147,7 +146,7 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
     }
 
     scenario("library", "recently played") {
-        useLibrary()
+        useLibrary(prefs = { it.copy(libraryOpensOn = "INSTALLED") })
         libraryTab()
         waitFor("Recently played")
         libraryFilter(2)
@@ -155,7 +154,7 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
     }
 
     scenario("library", "badges") {
-        useLibrary()
+        useLibrary(prefs = { it.copy(libraryOpensOn = "INSTALLED") })
         libraryTab()
         waitFor("Recently played")
         libraryFilter(3 + platformIndex("psx"))
@@ -173,7 +172,7 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
     }
 
     scenario("library", "filter chips focused") {
-        useLibrary()
+        useLibrary(prefs = { it.copy(libraryOpensOn = "INSTALLED") })
         libraryTab()
         waitFor("Recently played")
         if (nav(NavAction.UP) != NavResult.MOVED) throw NotCovered("Up did not reach the filter chips")

@@ -490,7 +490,7 @@ data class LibraryPreferences(
      */
     val purgedGames: List<Long> = emptyList(),
     /** Which view the Library opens on: "INSTALLED" (games on this device) or "ALL" (everywhere they are). */
-    val opensOn: String = "INSTALLED",
+    val opensOn: String = "ALL",
 )
 
 /**

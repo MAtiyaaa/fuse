@@ -175,7 +175,8 @@ class UiFlowTest {
         val services = newServices()
         val store: FuseStore = runBlocking {
             createFuseStore(services, scope).also { s ->
-                s.updatePrefs { it.copy(onboardingDone = true) }
+                // The grid of this device's games (the Library opens on All by default).
+                s.updatePrefs { it.copy(onboardingDone = true, libraryOpensOn = "INSTALLED") }
                 s.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
                 withTimeout(30_000) { s.library.home.first { feed -> feed.recentlyAdded.isNotEmpty() } }
             }
