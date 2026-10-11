@@ -310,9 +310,9 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         if (!card.isApp && platform.host != io.github.matiyaaa.fuse.model.Host.ANDROID) {
             val retroArch = store.emulators.installed.value.any { it.id.value.substringAfter('.').startsWith("retroarch") }
             when (card.platformId.value) {
-                "ps2" -> add(MenuAction("patches", "Patches and Cheats", FuseIcons.Bandage, detail = "Widescreen, 60 FPS and other fixes for this game, and cheats, in its emulator's own settings", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
-                "psx" -> add(MenuAction("patches", "Patches and Cheats", FuseIcons.Bandage, detail = "Widescreen and other fixes for this game, and cheats, in its emulator's own settings", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
-                "psp" -> add(MenuAction("patches", "Cheats", FuseIcons.Wand, detail = "This game's cheats, in its emulator's own settings", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
+                "ps2" -> add(MenuAction("patches", "Patches, Cheats and Textures", FuseIcons.Bandage, detail = "Widescreen, 60 FPS and other fixes, cheats, and texture packs of your own, in its emulator's own folders", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
+                "psx" -> add(MenuAction("patches", "Patches, Cheats and Textures", FuseIcons.Bandage, detail = "Widescreen and other fixes, cheats, and texture packs of your own, in its emulator's own folders", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
+                "psp" -> add(MenuAction("patches", "Cheats and Textures", FuseIcons.Wand, detail = "This game's cheats, and texture packs of your own, in its emulator's own folders", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
                 else -> if (retroArch) add(MenuAction("patches", "Cheats", FuseIcons.Wand, detail = "This game's cheats in RetroArch, for its next start", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
             }
             // The emulator's own settings for this game, where Fuse can change them.
@@ -621,7 +621,9 @@ fun AppState.gamePatchPicker(card: GameCard) {
             ))
             is io.github.matiyaaa.fuse.ui.shell.store.GamePatchList.Ready -> {
                 val emulator = list.emulator
-                if (list.patches.isEmpty() && list.cheats.isEmpty()) {
+                val own = store.library.enhancements(card.id)
+                val empty = list.patches.isEmpty() && list.cheats.isEmpty()
+                if (empty && own.added.isEmpty() && own.kinds.isEmpty()) {
                     showProblem(Problem(
                         "No patches or cheats for ${card.title}", list.whereFrom,
                         ProblemKind.EMULATOR, Severity.INFO, reassurance = null,
@@ -662,12 +664,13 @@ fun AppState.gamePatchPicker(card: GameCard) {
                 val id = if (list.crc.isEmpty()) list.serial else "${list.serial}, CRC ${list.crc}"
                 choice = ChoiceSpec(
                     icon = if (list.patches.isEmpty()) FuseIcons.Wand else FuseIcons.Bandage,
-                    title = if (list.cheats.isEmpty()) "$emulator patches" else if (list.patches.isEmpty()) "$emulator cheats" else "$emulator patches and cheats",
+                    title = if (empty) "$emulator for ${card.title}" else if (list.cheats.isEmpty()) "$emulator patches" else if (list.patches.isEmpty()) "$emulator cheats" else "$emulator patches and cheats",
                     message = listOfNotNull(
-                        "$id. Changes apply the next time the game starts in $emulator. Fuse only turns off what it turned on.$note",
+                        if (empty) list.whereFrom else "$id. Changes apply the next time the game starts in $emulator. Fuse only turns off what it turned on.$note",
                         list.warning,
                     ).joinToString(" "),
-                    options = list.patches.map { row(it, cheat = false) } + list.cheats.map { row(it, cheat = true) },
+                    options = list.patches.map { row(it, cheat = false) } + list.cheats.map { row(it, cheat = true) } +
+                        ownEnhancementRows(card, own, emulator),
                 )
             }
         }

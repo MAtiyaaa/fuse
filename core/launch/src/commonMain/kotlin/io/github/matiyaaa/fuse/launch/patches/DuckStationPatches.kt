@@ -192,6 +192,8 @@ data class DuckStationHome(
     val patches: String,
     val cheatsZip: String?,
     val patchesZip: String?,
+    /** The textures folder (`[Folders] Textures`, `textures` in the data folder unless moved). */
+    val textures: String = "",
 ) {
     val settingsFile: String get() = "$dataRoot/settings.ini"
 }

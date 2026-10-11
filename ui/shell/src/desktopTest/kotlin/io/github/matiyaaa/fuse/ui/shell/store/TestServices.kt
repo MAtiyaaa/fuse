@@ -229,7 +229,59 @@ internal class FakeServices(
         override suspend fun clearStaged() {
             File(cache, "staged").deleteRecursively()
         }
+
+        override suspend fun inspect(source: String): SourceListing? {
+            val f = File(source)
+            return when {
+                f.isDirectory -> f.walkTopDown().filter { it.isFile }.map { it.relativeTo(f).invariantSeparatorsPath }.sorted().toList()
+                    .let { SourceListing(f.name, SourceForm.FOLDER, it, f.walkTopDown().filter { x -> x.isFile }.sumOf { x -> x.length() }) }
+                f.isFile && f.name.endsWith(".zip") -> java.util.zip.ZipFile(f).use { z ->
+                    SourceListing(f.name, SourceForm.ARCHIVE, z.entries().toList().filterNot { it.isDirectory }.map { it.name }, f.length())
+                }
+                f.isFile -> SourceListing(f.name, SourceForm.FILE, listOf(f.name), f.length())
+                else -> null
+            }
+        }
+
+        private fun bytes(source: String, entry: String): ByteArray? {
+            val f = File(source)
+            return when {
+                entry.isEmpty() || (f.isFile && !f.name.endsWith(".zip") && entry == f.name) -> f.readBytes()
+                f.isDirectory -> File(f, entry).takeIf { it.isFile }?.readBytes()
+                else -> java.util.zip.ZipFile(f).use { z -> z.getEntry(entry)?.let { e -> z.getInputStream(e).use { it.readBytes() } } }
+            }
+        }
+
+        override suspend fun sourceText(source: String, entry: String): String? = bytes(source, entry)?.decodeToString()
+
+        private fun allowedHere(path: String): Boolean = inside(path) ||
+            listOfNotNull(pcsx2Home?.textures, duckstationHome?.textures).filter { it.isNotEmpty() }.any { path.startsWith("$it/") }
+
+        override suspend fun install(source: String?, files: List<io.github.matiyaaa.fuse.launch.patches.PlannedFile>, texts: Map<String, String>, restorePoint: String): Boolean {
+            val dests = files.map { it.to } + texts.keys
+            if (dests.any { !allowedHere(it) } || restorePoints.containsKey(restorePoint)) return false
+            // Each destination with what was there before it (null for a new file).
+            restorePoints[restorePoint] = dests.associateWith { File(it).takeIf { f -> f.isFile }?.readBytes() }
+            for (p in files) {
+                val b = bytes(source!!, p.from) ?: run { undo(restorePoint); return false }
+                File(p.to).also { it.parentFile.mkdirs() }.writeBytes(b)
+            }
+            for ((path, text) in texts) File(path).also { it.parentFile.mkdirs() }.writeText(text)
+            return true
+        }
+
+        override suspend fun undo(restorePoint: String, keep: Set<String>): Boolean {
+            val point = restorePoints.remove(restorePoint) ?: return false
+            for ((path, was) in point) {
+                if (path in keep) continue
+                if (was == null) File(path).delete() else File(path).writeBytes(was)
+            }
+            return true
+        }
     }
+
+    /** What each restoration point of the fake keeps: every destination with its bytes before (null when it was new). */
+    val restorePoints = java.util.concurrent.ConcurrentHashMap<String, Map<String, ByteArray?>>()
 
     /** RPCS3's dev_hdd0 and Vita3K's pref path for the fake, and what its installer does with each run. */
     @Volatile var rpcs3Hdd: String? = null

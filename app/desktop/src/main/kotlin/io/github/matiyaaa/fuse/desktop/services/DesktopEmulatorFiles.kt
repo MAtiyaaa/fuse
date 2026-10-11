@@ -2,8 +2,10 @@ package io.github.matiyaaa.fuse.desktop.services
 
 import io.github.matiyaaa.fuse.desktop.system.DesktopOs
 import io.github.matiyaaa.fuse.launch.patches.DuckStationHome
+import io.github.matiyaaa.fuse.launch.patches.EnhancementRules
 import io.github.matiyaaa.fuse.launch.patches.IniText
 import io.github.matiyaaa.fuse.launch.patches.Pcsx2Home
+import io.github.matiyaaa.fuse.launch.patches.PlannedFile
 import io.github.matiyaaa.fuse.launch.patches.PpssppHome
 import io.github.matiyaaa.fuse.launch.patches.RetroArchCfg
 import io.github.matiyaaa.fuse.launch.patches.RetroArchHome
@@ -11,6 +13,8 @@ import io.github.matiyaaa.fuse.model.InstalledEmulator
 import io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles
 import io.github.matiyaaa.fuse.ui.shell.store.InstallerResult
 import io.github.matiyaaa.fuse.ui.shell.store.InstallerRun
+import io.github.matiyaaa.fuse.ui.shell.store.SourceForm
+import io.github.matiyaaa.fuse.ui.shell.store.SourceListing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
@@ -36,6 +40,8 @@ class DesktopEmulatorFiles(
     private val backups: File,
     /** Where licences are copied under the name an emulator wants (see [stage]). */
     private val staging: File = File(backups.parentFile, "staged-licences"),
+    /** Where each restoration point keeps the files a person's own additions replaced (see [install]). */
+    private val restorePoints: File = File(backups.parentFile, "restore-points"),
 ) : EmulatorFiles {
     private val roots: MutableSet<String> = Collections.synchronizedSet(mutableSetOf())
 
@@ -60,6 +66,7 @@ class DesktopEmulatorFiles(
             patches = folder("Patches", "patches"),
             cheats = folder("Cheats", "cheats"),
             patchesZip = zipCandidates(appRoot, flatpak).firstOrNull { it.isFile && it.canRead() }?.absolutePath?.replace('\\', '/'),
+            textures = folder("Textures", "textures").also { roots += File(it).absolutePath },
         )
     }
 
@@ -114,6 +121,7 @@ class DesktopEmulatorFiles(
             patches = folder("Patches", "patches"),
             cheatsZip = zip("cheats.zip"),
             patchesZip = zip("patches.zip"),
+            textures = folder("Textures", "textures").also { roots += File(it).absolutePath },
         )
     }
 
@@ -479,8 +487,217 @@ class DesktopEmulatorFiles(
         Unit
     }
 
+
+    override suspend fun inspect(source: String): SourceListing? = withContext(Dispatchers.IO) {
+        val f = File(source)
+        try {
+            when {
+                f.isDirectory -> {
+                    val root = f.toPath()
+                    val entries = ArrayList<String>()
+                    var bytes = 0L
+                    var truncated = false
+                    Files.walk(root).use { stream ->
+                        for (p in stream) {
+                            if (p == root) continue
+                            // A link could reach anywhere: only the folder's own files are taken.
+                            if (Files.isSymbolicLink(p) || !Files.isRegularFile(p, java.nio.file.LinkOption.NOFOLLOW_LINKS)) continue
+                            if (entries.size >= EnhancementRules.MAX_ENTRIES) { truncated = true; break }
+                            entries += root.relativize(p).toString().replace('\\', '/')
+                            bytes += Files.size(p)
+                        }
+                    }
+                    SourceListing(f.name, SourceForm.FOLDER, entries.sorted(), bytes, truncated)
+                }
+                f.isFile && f.name.endsWith(".zip", ignoreCase = true) -> ZipFile(f).use { z ->
+                    val entries = ArrayList<String>()
+                    var bytes = 0L
+                    var truncated = false
+                    for (e in z.entries()) {
+                        if (e.isDirectory) continue
+                        if (entries.size >= EnhancementRules.MAX_ENTRIES) { truncated = true; break }
+                        entries += e.name
+                        bytes += e.size.coerceAtLeast(0)
+                    }
+                    SourceListing(f.name, SourceForm.ARCHIVE, entries, bytes, truncated)
+                }
+                f.isFile -> SourceListing(f.name, SourceForm.FILE, listOf(f.name), f.length())
+                else -> null
+            }
+        } catch (e: IOException) {
+            null
+        } catch (e: SecurityException) {
+            null
+        } catch (e: java.io.UncheckedIOException) {
+            null
+        }
+    }
+
+    override suspend fun sourceText(source: String, entry: String): String? = withContext(Dispatchers.IO) {
+        try {
+            open(File(source), entry)?.use { it.readNBytes(MAX_TEXT + 1) }?.takeIf { it.size <= MAX_TEXT }?.let { bytes ->
+                // Text, not a picture or a program: no NUL bytes in it.
+                if (bytes.any { it == 0.toByte() }) null else bytes.decodeToString()
+            }
+        } catch (e: IOException) {
+            null
+        } catch (e: SecurityException) {
+            null
+        }
+    }
+
+    /** A stream of [entry] in [source]: a file below a folder (not through a link), an archive's entry, or the file itself. */
+    private fun open(source: File, entry: String): java.io.InputStream? {
+        if (EnhancementRules.unsafe(entry)) return null
+        return when {
+            source.isDirectory -> {
+                val file = File(source, entry)
+                val inside = file.canonicalFile.path.startsWith(source.canonicalFile.path + File.separator)
+                if (!inside || Files.isSymbolicLink(file.toPath()) || !file.isFile) null else file.inputStream()
+            }
+            source.isFile && source.name.endsWith(".zip", ignoreCase = true) -> {
+                val zip = ZipFile(source)
+                val e = zip.getEntry(entry)
+                if (e == null || e.isDirectory) {
+                    zip.close()
+                    null
+                } else {
+                    // The archive closes with its entry's stream.
+                    object : java.io.FilterInputStream(zip.getInputStream(e)) {
+                        override fun close() {
+                            try { super.close() } finally { zip.close() }
+                        }
+                    }
+                }
+            }
+            source.isFile && entry == source.name -> source.inputStream()
+            else -> null
+        }
+    }
+
+    /** True when [target] is inside one of the emulator folders Fuse has found, compared as the system resolves them. */
+    private fun allowed(target: File): Boolean {
+        val path = runCatching { target.canonicalFile.path }.getOrNull() ?: return false
+        return roots.toList().any { root ->
+            val r = runCatching { File(root).canonicalFile.path }.getOrNull() ?: return@any false
+            path.startsWith(r + File.separator)
+        }
+    }
+
+    override suspend fun install(source: String?, files: List<PlannedFile>, texts: Map<String, String>, restorePoint: String): Boolean = withContext(Dispatchers.IO) {
+        val id = restorePoint.filter { it.isLetterOrDigit() || it == '-' }
+        if (id.isEmpty() || id != restorePoint) return@withContext false
+        val destinations = files.map { File(it.to).absoluteFile } + texts.keys.map { File(it).absoluteFile }
+        if (destinations.isEmpty() || destinations.distinctBy { it.path }.size != destinations.size) return@withContext false
+        if (!destinations.all { allowed(it) }) return@withContext false
+        if (files.isNotEmpty() && source == null) return@withContext false
+        val point = File(restorePoints, id)
+        if (point.exists()) return@withContext false
+        try {
+            point.mkdirs()
+            val manifest = StringBuilder()
+            // What is there now: copied aside, or noted as new, with the folders that will be made.
+            val made = LinkedHashSet<String>()
+            for ((i, dest) in destinations.withIndex()) {
+                var parent = dest.parentFile
+                val missing = ArrayList<File>()
+                while (parent != null && !parent.exists()) {
+                    missing += parent
+                    parent = parent.parentFile
+                }
+                missing.reversed().forEach { if (made.add(it.path)) manifest.append("D\t").append(it.path).append('\n') }
+                if (dest.exists()) {
+                    if (!dest.isFile) throw IOException("${dest.path} is a folder")
+                    Files.copy(dest.toPath(), File(point, "$i").toPath(), StandardCopyOption.COPY_ATTRIBUTES)
+                    manifest.append("R\t").append(dest.path).append('\t').append(i).append('\n')
+                } else {
+                    manifest.append("N\t").append(dest.path).append('\n')
+                }
+            }
+            File(point, MANIFEST).writeText(manifest.toString())
+            val from = source?.let(::File)
+            for (planned in files) {
+                val dest = File(planned.to).absoluteFile
+                dest.parentFile.mkdirs()
+                val tmp = File(dest.parentFile, ".${dest.name}.fuse.tmp")
+                val stream = if (planned.from.isEmpty()) from!!.inputStream() else open(from!!, planned.from)
+                (stream ?: throw IOException("${planned.from} is not in ${from.name}")).use { input ->
+                    Files.copy(input, tmp.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                }
+                move(tmp, dest)
+            }
+            for ((path, text) in texts) {
+                val dest = File(path).absoluteFile
+                dest.parentFile.mkdirs()
+                val tmp = File(dest.parentFile, ".${dest.name}.fuse.tmp")
+                tmp.writeText(text)
+                move(tmp, dest)
+            }
+            true
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            putBack(point, emptySet())
+            throw e
+        } catch (e: Exception) {
+            putBack(point, emptySet())
+            false
+        }
+    }
+
+    override suspend fun undo(restorePoint: String, keep: Set<String>): Boolean = withContext(Dispatchers.IO) {
+        val id = restorePoint.filter { it.isLetterOrDigit() || it == '-' }
+        if (id.isEmpty() || id != restorePoint) return@withContext false
+        val point = File(restorePoints, id)
+        if (!File(point, MANIFEST).isFile) return@withContext false
+        putBack(point, keep.map { File(it).absoluteFile.path }.toSet())
+    }
+
+    /** Puts back everything [point]'s manifest lists, except [keep], then removes it. */
+    private fun putBack(point: File, keep: Set<String>): Boolean {
+        val manifest = File(point, MANIFEST)
+        if (!manifest.isFile) {
+            point.deleteRecursively()
+            return true
+        }
+        var ok = true
+        val lines = manifest.readLines().map { it.split('\t') }
+        for (p in lines) {
+            val dest = File(p.getOrNull(1) ?: continue)
+            if (dest.path in keep || !allowed(dest)) continue
+            when (p[0]) {
+                "N" -> if (dest.isFile && !dest.delete()) ok = false
+                "R" -> {
+                    val copy = File(point, p.getOrNull(2) ?: continue)
+                    if (!copy.isFile) { ok = false; continue }
+                    try {
+                        val tmp = File(dest.parentFile, ".${dest.name}.fuse.tmp")
+                        Files.copy(copy.toPath(), tmp.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                        move(tmp, dest)
+                    } catch (e: IOException) {
+                        ok = false
+                    }
+                }
+            }
+        }
+        // Folders Fuse made, deepest first, once nothing is left in them.
+        for (p in lines.filter { it[0] == "D" }.reversed()) {
+            val dir = File(p.getOrNull(1) ?: continue)
+            if (dir.isDirectory && allowed(dir) && dir.list().isNullOrEmpty()) dir.delete()
+        }
+        if (ok) point.deleteRecursively()
+        return ok
+    }
+
+    private fun move(tmp: File, dest: File) {
+        try {
+            Files.move(tmp.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        } catch (e: IOException) {
+            Files.move(tmp.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+
     private companion object {
         const val MAX_TEXT = 1024 * 1024
+        const val MANIFEST = "manifest.tsv"
         const val MAX_TAIL = 16 * 1024
         const val STOP_GRACE_MS = 800L
         const val DUCKSTATION_FLATPAK = "org.duckstation.DuckStation"

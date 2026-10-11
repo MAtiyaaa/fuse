@@ -84,6 +84,12 @@ class IniText(text: String) {
         return range.mapNotNull { i -> entry(lines[i])?.takeIf { it.first.equals(key, ignoreCase = true) }?.second }
     }
 
+    /** The keys in [section], in order (a repeated one once). */
+    fun keys(section: String): List<String> {
+        val range = sectionRange(section) ?: return emptyList()
+        return range.mapNotNull { i -> entry(lines[i])?.first }.distinct()
+    }
+
     /** Adds `key = value` at the end of [section] (made at the end when missing), unless it is there already. */
     fun add(section: String, key: String, value: String): Boolean {
         if (values(section, key).any { it == value }) return false
@@ -297,6 +303,8 @@ data class Pcsx2Home(
     val patchesZip: String?,
     /** The cheats folder (`[Folders] Cheats`, `cheats` in the data folder unless moved). */
     val cheats: String = "",
+    /** The textures folder (`[Folders] Textures`, `textures` in the data folder unless moved). */
+    val textures: String = "",
 ) {
     val settingsFile: String get() = "$dataRoot/inis/PCSX2.ini"
 }

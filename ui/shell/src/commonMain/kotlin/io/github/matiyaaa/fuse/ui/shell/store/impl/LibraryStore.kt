@@ -910,6 +910,17 @@ internal class DefaultLibraryOps(
 
     override suspend fun setGamePatch(id: GameId, name: String, on: Boolean, cheat: Boolean): Boolean = nativePatches.set(id, name, on, cheat)
 
+    /** A person's own cheats, patches and texture packs, put where the game's emulator reads them. */
+    private val nativeEnhancements by lazy { NativeEnhancements(ctx, { emulators.detectNow() }, ::discIdentity, ::pspGameId, ::retroArchRun) }
+
+    override suspend fun enhancements(id: GameId) = nativeEnhancements.list(id)
+
+    override suspend fun planEnhancement(id: GameId, kind: io.github.matiyaaa.fuse.launch.patches.EnhancementKind, source: String) = nativeEnhancements.plan(id, kind, source)
+
+    override suspend fun addEnhancement(token: String) = nativeEnhancements.add(token)
+
+    override suspend fun removeEnhancement(id: GameId, enhancement: String, force: Boolean) = nativeEnhancements.remove(id, enhancement, force)
+
     /**
      * A PSP game's id as PPSSPP files it (`ULUS10041`): from its name or tags, else read from its ISO
      * or EBOOT.PBP (a game folder's EBOOT.PBP too), kept by path, size and change time.

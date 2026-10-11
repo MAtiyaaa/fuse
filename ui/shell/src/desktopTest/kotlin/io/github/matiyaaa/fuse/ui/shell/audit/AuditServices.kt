@@ -317,6 +317,19 @@ internal class AuditPlatform(
     )
     override val performance: StateFlow<List<PerformanceMetric>> = MutableStateFlow(metrics)
 
+    /** A cheat file of a person's own, as the file picker hands it to the Patches and Cheats sheet. */
+    private val ownCheats: File by lazy {
+        val dir = java.nio.file.Files.createTempDirectory("fuse-audit-own").toFile().apply { deleteOnExit() }
+        File(dir, "Emberline Saga extras.cht").apply {
+            writeText("cheats = 2\n\ncheat0_desc = \"Max Gold\"\ncheat0_code = \"7E0DC0:FF\"\ncheat0_enable = false\n\ncheat1_desc = \"Walk Through Walls\"\ncheat1_code = \"7E0DC4:01\"\ncheat1_enable = false\n")
+            deleteOnExit()
+        }
+    }
+
+    override val storage: io.github.matiyaaa.fuse.ui.shell.platform.StorageAccess = object : io.github.matiyaaa.fuse.ui.shell.platform.StorageAccess by ScreenshotPlatform.storage {
+        override suspend fun pickFile(title: String, label: String, extensions: List<String>): String? = ownCheats.absolutePath
+    }
+
     /** What the file picker hands back next (a backup to restore); null is a cancelled picker. */
     @Volatile var pickedFile: io.github.matiyaaa.fuse.ui.shell.platform.OpenedFile? = null
 
@@ -562,6 +575,12 @@ internal class AuditEmulatorFiles(private val root: File) : io.github.matiyaaa.f
     }
 
     override suspend fun remove(path: String): Boolean = path.startsWith(root.absolutePath + "/") && File(path).delete()
+
+    override suspend fun inspect(source: String): io.github.matiyaaa.fuse.ui.shell.store.SourceListing? = File(source).takeIf { it.isFile }?.let {
+        io.github.matiyaaa.fuse.ui.shell.store.SourceListing(it.name, io.github.matiyaaa.fuse.ui.shell.store.SourceForm.FILE, listOf(it.name), it.length())
+    }
+
+    override suspend fun sourceText(source: String, entry: String): String? = File(source).takeIf { it.isFile && it.name == entry }?.readText()
 
     private companion object {
         val CHEATS = listOf("Infinite Lives", "Start With 99 Coins", "Invincibility", "Moon Jump", "Unlock All Levels")

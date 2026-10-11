@@ -423,7 +423,49 @@ interface EmulatorFiles {
 
     /** Removes what [stage] copied. */
     suspend fun clearStaged() = Unit
+
+
+    /**
+     * What is in the file, folder or archive at [source], before anything is copied: its entries
+     * (paths below a folder, the entries of a `.zip`, or just its name for any other file). Links
+     * inside a folder are left out. Null when it can't be read.
+     */
+    suspend fun inspect(source: String): SourceListing? = null
+
+    /** The text of [entry] in [source] (as [inspect] listed it), up to 1 MB; null when it isn't there or isn't text. */
+    suspend fun sourceText(source: String, entry: String): String? = null
+
+    /**
+     * Puts [files] from [source] and [texts] (destination to its whole text) in place inside known
+     * emulator folders, all or nothing. First a restoration point named [restorePoint] is made: each
+     * file already at a destination is copied aside, and what is new is noted, so [undo] can put
+     * everything back as it was. False when any destination is outside the emulator's folders or a
+     * copy fails, with whatever was done already put back.
+     */
+    suspend fun install(source: String?, files: List<io.github.matiyaaa.fuse.launch.patches.PlannedFile>, texts: Map<String, String>, restorePoint: String): Boolean = false
+
+    /**
+     * Puts back what [install] changed under [restorePoint]: new files are removed (and the folders made
+     * for them, once empty), files that were replaced get their earlier copy back. Destinations in
+     * [keep] are left as they are. The restoration point goes too. False when it is not there.
+     */
+    suspend fun undo(restorePoint: String, keep: Set<String> = emptySet()): Boolean = false
 }
+
+/**
+ * A file, folder or archive someone chose to add, as Fuse read it: [entries] are paths below a folder
+ * or in an archive (or the file's own name), [bytes] their size together, and [truncated] when there
+ * were more than Fuse lists.
+ */
+data class SourceListing(
+    val name: String,
+    val form: SourceForm,
+    val entries: List<String>,
+    val bytes: Long,
+    val truncated: Boolean = false,
+)
+
+enum class SourceForm { FILE, FOLDER, ARCHIVE }
 
 /**
  * One run of an emulator's installer: [argv] (program first), started in [workingDir] with [env]

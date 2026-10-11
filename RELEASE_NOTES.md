@@ -59,6 +59,16 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   game override), and Fuse only ever turns off what it turned on: anything set in the emulator stays
   as it is, and Fuse says when a setting there (hardcore mode, cheats off for every game) keeps them
   from applying.
+- **Your own cheats, patches and texture packs.** The same options add a cheat or patch file of
+  your own, or a texture pack's folder or .zip, where the game's emulator reads it: a .pnach of its
+  own name beside PCSX2's, codes added to the end of DuckStation's or PPSSPP's file for the game,
+  the game's cheat file in RetroArch, and texture packs in PCSX2's, DuckStation's or PPSSPP's folder
+  for the game. Before anything changes Fuse shows exactly which files go in, which they replace,
+  which settings they turn on (Load Textures in PCSX2; texture replacement, and the texture cache it
+  needs, in DuckStation) and what was left out: paths that would land outside the folder, files the
+  emulator doesn't read, and packs or codes made for another game or version. A restoration point
+  is made first, and taking one out puts back every file and setting as it was; codes changed in the
+  emulator since are only put back when you say so.
 - **Emulator settings in Fuse.** A PS2, PlayStation or PSP game's options, and PCSX2's, DuckStation's
   and PPSSPP's pages in Settings, change the emulator's own settings: renderer, internal resolution,
   texture filtering, aspect ratio and the like, only those each emulator really reads, and for one

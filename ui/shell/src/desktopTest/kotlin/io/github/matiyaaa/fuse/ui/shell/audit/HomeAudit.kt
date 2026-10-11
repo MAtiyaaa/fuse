@@ -440,6 +440,11 @@ internal fun AuditDriver.cheatScreens() {
         // Off again, so the files are as they were.
         tap(PadButton.A)
         settle(900)
+        tapText("Add Cheats From a File")
+        waitFor("restoration point")
+        shoot("a cheat file of the player's own: exactly where it goes, before anything changes", 1_200)
+        tap(PadButton.B)
+        settle(600)
         tap(PadButton.B)
     }
 }

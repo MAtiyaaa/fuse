@@ -485,6 +485,23 @@ interface LibraryOps {
      */
     suspend fun setGamePatch(id: GameId, name: String, on: Boolean, cheat: Boolean = false): Boolean = false
 
+    /** The cheats, patches and texture packs a person added to [id] from files of their own, and what can be added here. */
+    suspend fun enhancements(id: GameId): Enhancements = Enhancements(emptyList(), emptyList())
+
+    /**
+     * What adding [source] (a file, folder or `.zip`) to [id] as [kind] would do: which files go in,
+     * which they replace, which settings change, and what is left out. Nothing changes yet.
+     */
+    suspend fun planEnhancement(id: GameId, kind: io.github.matiyaaa.fuse.launch.patches.EnhancementKind, source: String): EnhancementPreview =
+        EnhancementPreview.Unavailable("Not here", "Your own cheats, patches and textures can be added from Fuse on a computer.")
+
+    /** Adds what the preview with [token] showed, after making a restoration point. Null when it worked, else why not. */
+    suspend fun addEnhancement(token: String): String? = "Not here."
+
+    /** Takes out [enhancement] from [id], putting back what was there before; [force] even when it was changed since. */
+    suspend fun removeEnhancement(id: GameId, enhancement: String, force: Boolean = false): EnhancementRemoval =
+        EnhancementRemoval.Failed("Not here.")
+
     /**
      * The emulator's own settings (PCSX2, DuckStation, PPSSPP) for the game [id], or for every game
      * in [emulator] when [id] is null, each with where its value comes from.

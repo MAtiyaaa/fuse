@@ -417,6 +417,67 @@ sealed interface GamePatchList {
     data class Unavailable(val title: String, val reason: String) : GamePatchList
 }
 
+/** A person's own cheats, patches and texture packs added to a game, and what can be added to it here. */
+data class Enhancements(
+    val added: List<EnhancementView>,
+    /** What this game's emulator takes from a person's own files, here; empty when nothing. */
+    val kinds: List<io.github.matiyaaa.fuse.launch.patches.EnhancementKind>,
+)
+
+/** One thing a person added to a game. */
+data class EnhancementView(
+    val id: String,
+    val kind: io.github.matiyaaa.fuse.launch.patches.EnhancementKind,
+    /** The name of the file, folder or archive it came from. */
+    val name: String,
+    val emulator: String,
+    val files: Int,
+    val addedAt: Long,
+    /** Where it went: the folder, or the file its codes were added to (home as `~`). */
+    val where: String,
+    /** It turned on something in the emulator's settings for the game, put back when it is taken out. */
+    val settingsChanged: Boolean,
+)
+
+/** Exactly what adding a file, folder or archive would do, worked out before anything changes; or why it can't be added. */
+sealed interface EnhancementPreview {
+    data class Ready(
+        /** Hands the plan back to [FuseStore.LibraryOps.addEnhancement]. */
+        val token: String,
+        val kind: io.github.matiyaaa.fuse.launch.patches.EnhancementKind,
+        val emulator: String,
+        val name: String,
+        /** The folder it goes in (home as `~`). */
+        val target: String,
+        /** New files it puts in place. */
+        val adds: List<String>,
+        /** Files there now that it takes the place of; each is kept and put back when it is taken out. */
+        val replaces: List<String>,
+        /** The file its codes are added to the end of, when they are. */
+        val appendsTo: String?,
+        /** Settings it turns on for the game, said plainly. */
+        val settings: List<String>,
+        /** What in it was left out, and why. */
+        val rejected: List<String>,
+        val notes: List<String>,
+        /** Cheats or patches in it, as the emulator reads them; 0 for textures. */
+        val codes: Int,
+        val bytes: Long,
+    ) : EnhancementPreview
+
+    data class Unavailable(val title: String, val reason: String) : EnhancementPreview
+}
+
+/** How taking out something a person added went. */
+sealed interface EnhancementRemoval {
+    data object Removed : EnhancementRemoval
+
+    /** What Fuse added was changed in the emulator since; [message] asks whether to put the earlier file back anyway. */
+    data class ChangedSince(val message: String) : EnhancementRemoval
+
+    data class Failed(val message: String) : EnhancementRemoval
+}
+
 /** An emulator's own settings, for one game or for every game, or why Fuse can't change them. */
 sealed interface EmulatorSettingsView {
     data class Ready(
