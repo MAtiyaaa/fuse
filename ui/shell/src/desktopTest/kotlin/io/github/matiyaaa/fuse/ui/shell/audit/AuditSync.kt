@@ -37,6 +37,7 @@ internal class AuditSync(private val settings: SettingsStore) : SyncService {
     override val activity = MutableStateFlow<List<SyncActivity>>(emptyList())
     override val host = MutableStateFlow<HostView?>(null)
     override val hosts = MutableStateFlow<io.github.matiyaaa.fuse.sync.HostsView?>(null)
+    override val householdBackups = MutableStateFlow<io.github.matiyaaa.fuse.sync.HouseholdBackupsState?>(null)
     override val devices = MutableStateFlow<List<DeviceInfo>>(emptyList())
     override val canHost = true
     override val defaultName = "Gaming PC"
@@ -147,6 +148,13 @@ internal class AuditSync(private val settings: SettingsStore) : SyncService {
                 backupOn = true, copiedAt = t - 3 * MINUTE,
             )
         }
+        fun snap(daysAgo: Int, vararg kinds: String) = io.github.matiyaaa.fuse.sync.HouseholdSnapshot(
+            "snap-$daysAgo", t - daysAgo * DAY, kinds.toList(), 9_000L - daysAgo, 0, 3, 3, 212 - daysAgo, emptyList(), 1_240_000_000L - daysAgo * 3_000_000L,
+        )
+        householdBackups.value = if (!asHost) null else io.github.matiyaaa.fuse.sync.HouseholdBackupsState(
+            "/run/media/mo/Backup Drive/Fuse One",
+            listOf(snap(0, "daily"), snap(1, "daily"), snap(2, "manual"), snap(6, "daily", "weekly"), snap(13, "daily", "weekly"), snap(41, "daily", "weekly", "monthly")),
+        )
         status.value = SyncStatus.Online("Gaming PC", Route.LOCAL)
         runBlocking {
             settings.update {

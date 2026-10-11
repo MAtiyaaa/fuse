@@ -20,6 +20,8 @@ import kotlin.system.exitProcess
  * - `backup-of <address> <code>`: makes this host a backup of the household at that address (with a
  *   pairing code from it); started next, it offers itself and keeps a copy once accepted.
  * - `take-over`: on a backup whose host is gone for good, makes this host the household's host.
+ * - `household-backups`, `backup-now`, `restore <name>`: the whole household's copies (made by
+ *   themselves every day, week and month), one now, and putting the household back as one kept it.
  * - `version`.
  *
  * The data folder, port and name come from [HostConfig] (environment variables, so a container sets
@@ -38,6 +40,9 @@ fun main(args: Array<String>) {
         "remove-backup" -> removeBackup(config, args.getOrNull(1))
         "backup-of" -> backupOf(config, args.getOrNull(1), args.getOrNull(2))
         "take-over" -> takeOver(config)
+        "household-backups" -> householdBackups(config)
+        "backup-now" -> backupNow(config)
+        "restore" -> restore(config, args.getOrNull(1))
         "version", "--version" -> { println(HostConfig.version()); 0 }
         "help", "--help", "-h" -> { println(HostConfig.USAGE); 0 }
         else -> { System.err.println(HostConfig.USAGE); 64 }
@@ -52,7 +57,7 @@ private fun serve(config: HostConfig): Int {
         System.err.println("Fuse One Host can't write to ${dir.path}. Give the host's user that folder, then start it again.")
         return 73
     }
-    val host = HeadlessHost.serve(dir, config.port, config.name, HostConfig.version())
+    val host = HeadlessHost.serve(dir, config.port, config.name, HostConfig.version(), backupsDir = config.backupsDir)
     if (host == null) {
         System.err.println("Port ${config.port} is already in use. Stop whatever uses it (another Fuse One Host, or Fuse hosting on this computer), or choose another port with FUSE_ONE_PORT.")
         return 75
@@ -183,8 +188,42 @@ private fun takeOver(config: HostConfig): Int {
     )
 }
 
+private fun householdBackups(config: HostConfig): Int {
+    val admin = admin(config) ?: return 69
+    return runCatching { runBlocking { admin.householdBackups() } }.fold(
+        onSuccess = { b ->
+            println("Household backups in ${b.folder}:")
+            if (b.snapshots.isEmpty()) println("  None yet. The first is made as the host starts, then one a day.")
+            for (s in b.snapshots) println("  ${s.name}  ${s.kinds.joinToString(",")}  ${s.profiles} profiles, ${s.revisions} save versions, ${HostConfig.bytes(s.bytes)}")
+            b.problem?.let { System.err.println(it) }
+            0
+        },
+        onFailure = { System.err.println(it.message ?: "The host didn't answer."); 70 },
+    )
+}
+
+private fun backupNow(config: HostConfig): Int {
+    val admin = admin(config) ?: return 69
+    return runCatching { runBlocking { admin.backUpNow() } }.fold(
+        onSuccess = { println("Backed up as ${it.name}."); 0 },
+        onFailure = { System.err.println(it.message ?: "The host couldn't back up."); 70 },
+    )
+}
+
+private fun restore(config: HostConfig, name: String?): Int {
+    if (name.isNullOrBlank()) {
+        System.err.println("Usage: fuse-one-host restore <name>  (see fuse-one-host household-backups)")
+        return 64
+    }
+    val admin = admin(config) ?: return 69
+    return runCatching { runBlocking { admin.restoreHousehold(name) } }.fold(
+        onSuccess = { println("The household is back as ${it.name} kept it. The household as it was is kept as a backup too (before-restore)."); 0 },
+        onFailure = { System.err.println(it.message ?: "The host couldn't put it back."); 70 },
+    )
+}
+
 /** Where the host keeps the household, which port it serves and what it calls itself. */
-data class HostConfig(val dataDir: File, val port: Int, val name: String) {
+data class HostConfig(val dataDir: File, val port: Int, val name: String, val backupsDir: File = File(dataDir, "household-backups")) {
     companion object {
         const val DEFAULT_PORT = 47311
         const val MIN_PASSWORD = 8
@@ -201,7 +240,11 @@ data class HostConfig(val dataDir: File, val port: Int, val name: String) {
             |  remove-backup  take a backup host out
             |  backup-of      make this host a backup of the household at an address (with its pairing code)
             |  take-over      on a backup whose host is gone for good, make this the household's host
-            |Environment: FUSE_ONE_DATA (default /data), FUSE_ONE_PORT (default $DEFAULT_PORT), FUSE_ONE_NAME (default the computer's name)
+            |  household-backups  the household's whole copies (one a day, kept a week; weekly, a month; monthly, half a year)
+            |  backup-now     a copy of the whole household now
+            |  restore        put the household back as a backup kept it (the household as it is is kept first)
+            |Environment: FUSE_ONE_DATA (default /data), FUSE_ONE_PORT (default $DEFAULT_PORT), FUSE_ONE_NAME (default the computer's name),
+            |  FUSE_ONE_BACKUPS (default <data>/household-backups; best another drive)
         """.trimMargin()
 
         fun from(env: Map<String, String>): HostConfig {
@@ -210,7 +253,8 @@ data class HostConfig(val dataDir: File, val port: Int, val name: String) {
             val name = env["FUSE_ONE_NAME"]?.trim()?.takeIf { it.isNotEmpty() }?.take(40)
                 ?: runCatching { java.net.InetAddress.getLocalHost().hostName }.getOrNull()?.takeIf { it.isNotBlank() }
                 ?: "Fuse One Host"
-            return HostConfig(File(dir), port, name)
+            val backups = env["FUSE_ONE_BACKUPS"]?.takeIf { it.isNotBlank() }?.let(::File) ?: File(File(dir), "household-backups")
+            return HostConfig(File(dir), port, name, backups)
         }
 
         fun version(): String = System.getProperty("fuse.version")?.takeIf { it.isNotBlank() } ?: "dev"

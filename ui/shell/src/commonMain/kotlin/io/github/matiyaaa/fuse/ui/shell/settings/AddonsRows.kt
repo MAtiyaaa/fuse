@@ -159,7 +159,8 @@ fun fuseOneRows(app: AppState): List<MenuAction> {
             val host = svc.host.collectAsState().value
             val devices = svc.devices.collectAsState().value
             val hostsView = svc.hosts.collectAsState().value
-            val rows = io.github.matiyaaa.fuse.ui.shell.sync.syncRows(app, svc, prefs.sync, status, profiles, active, host, devices, hostsView)
+            val backups = svc.householdBackups.collectAsState().value
+            val rows = io.github.matiyaaa.fuse.ui.shell.sync.syncRows(app, svc, prefs.sync, status, profiles, active, host, devices, hostsView, backups)
             fun part(vararg from: String?, under: String) = rows.filter { it.section in from }.map { it.copy(section = under) }
             addAll(part(null, "Set up", "Connection", under = "Household"))
             addAll(part("You", under = "Fuse Profiles"))

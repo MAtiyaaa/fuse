@@ -37,6 +37,7 @@ internal fun syncRows(
     host: HostView?,
     devices: List<DeviceInfo>,
     hosts: io.github.matiyaaa.fuse.sync.HostsView? = null,
+    backups: io.github.matiyaaa.fuse.sync.HouseholdBackupsState? = null,
 ): List<MenuAction> = buildList {
     fun configure(change: (SyncSettings) -> SyncSettings) = app.scope.launch { app.store.sync.configure(change) }
     add(toggleRow("enabled", "Use $SYNC_NAME", FuseIcons.Power, c.enabled, "Your saves, play time, library and settings on every device, from a host of your own") { v ->
@@ -265,6 +266,12 @@ internal fun syncRows(
         host?.addresses?.takeIf { it.isNotEmpty() }?.let { a ->
             add(infoRow("addresses", "Its Addresses", value = a.first(), detail = "Other devices on this network find it by themselves" + if (a.size > 1) ". Also ${a.drop(1).joinToString(", ")}" else "", icon = FuseIcons.Network).copy(section = hostSection))
         }
+        add(MenuAction(
+            "householdbackups", "Household Backups", FuseIcons.ArchiveRestore,
+            detail = backupsDetail(backups),
+            trailing = Trailing.Chevron, section = hostSection,
+            onSelect = { householdBackupsSheet(app, svc) },
+        ))
         add(MenuAction(
             "hostdata", "Where Saves Are Kept", FuseIcons.HardDrive,
             detail = c.hostDataDir.ifBlank { "Fuse's own folder" } + ". Choose another folder to move them there",
@@ -618,4 +625,72 @@ private fun backupHostsSheet(app: AppState, svc: SyncService, hosts: io.github.m
         },
         options = rows,
     )
+}
+
+/** What the household's backups say at a glance: the newest, or that none was made yet. */
+private fun backupsDetail(view: io.github.matiyaaa.fuse.sync.HouseholdBackupsState?): String {
+    if (view == null) return "Copies of the whole household, every day, week and month"
+    view.problem?.let { return it }
+    val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+    val newest = view.snapshots.firstOrNull() ?: return "None yet. The first is made within the hour"
+    return "Newest ${TimeWords.relative(newest.at, now, localOffsetMillis(now))}, ${view.snapshots.size} kept"
+}
+
+/**
+ * The household's backups: made by themselves every day (kept a week), week (kept a month) and month
+ * (kept half a year), one made now, where they go, and putting the household back as one of them.
+ */
+private fun householdBackupsSheet(app: AppState, svc: SyncService) {
+    app.scope.launch {
+        svc.refreshHouseholdBackups()
+        val view = svc.householdBackups.value
+        val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+        val offset = localOffsetMillis(now)
+        fun kinds(k: List<String>) = k.joinToString(", ") { when (it) {
+            "daily" -> "daily"; "weekly" -> "weekly"; "monthly" -> "monthly"; "manual" -> "made by you"; "before-restore" -> "before a restore"; else -> it
+        } }.replaceFirstChar { it.uppercase() }
+        val snaps = view?.snapshots.orEmpty().map { s ->
+            MenuAction(
+                "snap.${s.name}", TimeWords.relative(s.at, now, offset).replaceFirstChar { it.uppercase() }, FuseIcons.ArchiveRestore,
+                detail = "${kinds(s.kinds)}  ·  ${s.profiles} profiles, ${s.revisions} save versions  ·  ${sizeText(s.bytes)}",
+                trailing = Trailing.Chevron, section = "Kept",
+                onSelect = {
+                    app.choice = null
+                    app.confirm = ConfirmSpec(
+                        "Put the household back as it was ${TimeWords.relative(s.at, now, offset)}?",
+                        "Profiles, every save and its versions, records and device links go back to this backup. The household as it is now is kept as a backup first, so this can be undone. Devices that joined after it have to connect again, and saves made since stay on the devices that made them and come back with their next sync.",
+                        "Put It Back", destructive = true,
+                    ) {
+                        app.scope.launch {
+                            svc.restoreHousehold(s.name).onSuccess { app.toasts.show("The household is back as it was", ToastKind.SUCCESS) }
+                                .onFailure { app.toasts.show(it.message ?: "Couldn't put it back", ToastKind.ERROR) }
+                        }
+                    }
+                },
+            )
+        }
+        val actions = listOf(
+            MenuAction("now", "Back Up Now", FuseIcons.DatabaseBackup, detail = "A copy of the whole household, kept beside the scheduled ones", section = "", onSelect = {
+                app.choice = null
+                app.scope.launch {
+                    svc.backUpHouseholdNow().onSuccess { app.toasts.show("The household is backed up", ToastKind.SUCCESS) }
+                        .onFailure { app.toasts.show(it.message ?: "Couldn't back it up", ToastKind.ERROR) }
+                }
+            }),
+            MenuAction("where", "Where Backups Go", FuseIcons.FolderOpen, detail = view?.folder ?: "Fuse's own folder", trailing = Trailing.Chevron, section = "", onSelect = {
+                app.choice = null
+                app.scope.launch {
+                    val folder = app.platform.storage.pickFolder("Where should the household's backups go?") ?: return@launch
+                    svc.setHouseholdBackupFolder(folder).onSuccess { app.toasts.show("Backups go to $folder now") }
+                        .onFailure { app.toasts.show(it.message ?: "Couldn't use that folder", ToastKind.ERROR) }
+                }
+            }),
+        )
+        app.choice = ChoiceSpec(
+            title = "Household Backups",
+            icon = FuseIcons.ArchiveRestore,
+            message = "The whole household, kept by itself every day for a week, every week for a month and every month for half a year. Each save file is kept once, however many backups use it. Best on another drive than the host's.",
+            options = actions + snaps,
+        )
+    }
 }

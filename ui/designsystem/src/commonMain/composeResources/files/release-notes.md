@@ -29,6 +29,13 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   Host). Devices follow the host there is and never go back to an older one. A host that returns
   after another took over is fenced: it takes no more changes, the new host takes back every save it
   kept meanwhile (as versions, never over newer saves), and it becomes a backup.
+- **Household backups.** The host keeps the whole household by itself: a copy every day kept for a
+  week, every week kept for a month and every month kept for half a year, in a folder you choose
+  (best another drive; Settings, Fuse One, Household Backups, or `FUSE_ONE_BACKUPS` for a Fuse One
+  Host). Each save file is kept once however many copies use it, and only files no copy uses go.
+  Back Up Now makes one beside them, and putting the household back as one kept it keeps the
+  household as it is first, so it can be undone; the household's hosts stay as they are, and devices
+  catch up by themselves.
 - **Sync without a household.** A device keeping its own profiles has its Sync page: each person's
   games, play time and the saves kept for them here, with what a host would add and the two ways
   to set one up.

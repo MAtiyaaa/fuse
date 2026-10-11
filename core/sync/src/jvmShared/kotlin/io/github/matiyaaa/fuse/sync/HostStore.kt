@@ -228,6 +228,34 @@ class HostStore(
         load()
     }
 
+    /**
+     * Puts the household back as [files] (a household backup) kept it, on the host itself: the
+     * household's hosts and their secret stay as they are now (a backup from an older generation
+     * would otherwise make this host give way), and the journal goes on from where it is, so every
+     * device looks again and catches up.
+     */
+    fun restoreFrom(files: Map<String, ByteArray>) = synchronized(lock) {
+        check(leadership.isLeader) { "Only the household's host is restored" }
+        require(files.keys.all(::replicated)) { "Not a household file" }
+        val before = seq
+        val keepAsIs = setOf(HostLeadership.HOSTS_FILE, HostLeadership.SECRET_FILE)
+        val incoming = files.filterKeys { it !in keepAsIs }
+        dir.walkTopDown().filter { it.isFile }.forEach { f ->
+            val rel = f.relativeTo(dir).path.replace('\\', '/')
+            if (replicated(rel) && rel !in incoming && rel !in keepAsIs) f.delete()
+        }
+        for ((path, bytes) in incoming) {
+            val f = File(dir, path)
+            f.parentFile?.mkdirs()
+            writeAtomically(f, bytes)
+        }
+        if (identityFile.isFile) identity = json.decodeFromString(HostIdentity.serializer(), identityFile.readText())
+        load()
+        if (seq < before) seq = before
+        event(JournalEvent.PROFILE)
+        event(JournalEvent.DEVICE)
+    }
+
     /** What [reconcile] took from an older host. */
     data class Reconciled(val devices: Int, val profiles: Int, val revisions: Int, val conflicts: Int)
 

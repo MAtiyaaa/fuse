@@ -302,6 +302,7 @@ class JvmSyncService(
         val server = runCatching { SyncHost(store, c.hostPort, fuseVersion, clock).start() }.getOrNull()
         if (server != null) {
             hostServer = server
+            server.backups = HouseholdBackups(backupsDir(c), clock)
             store.leadership.noteOwnAddress(lanAddresses().firstOrNull()?.let { "$it:${c.hostPort}" }, store.outsideAddress().ifBlank { null })
             responder = Discovery.answer({ store.hello(c.hostPort, fuseVersion) })
             // Off the interface's thread: the host's status reads its own files.
@@ -857,6 +858,64 @@ class JvmSyncService(
         c.onLinkChange = { next -> scope.launch(Dispatchers.IO) { runCatching { secrets.put(LINK_KEY, json.encodeToString(HostLink.serializer(), next)) } } }
     }
 
+    // ---------------------------------------------------------------- household backups
+
+    private fun backupsDir(c: SyncSettings): File = c.householdBackupDir.ifBlank { null }?.let(::File) ?: File(dir, HOUSEHOLD_BACKUPS_DIR)
+
+    private val _householdBackups = MutableStateFlow<HouseholdBackupsState?>(null)
+    override val householdBackups: StateFlow<HouseholdBackupsState?> = _householdBackups.asStateFlow()
+
+    override suspend fun refreshHouseholdBackups() {
+        _householdBackups.value = withContext(Dispatchers.IO) {
+            hostServer?.householdBackups() ?: hostAdmin?.let { a -> runCatching { a.householdBackups() }.getOrNull() }
+        }
+    }
+
+    override suspend fun backUpHouseholdNow(): Result<HouseholdSnapshot> = withContext(Dispatchers.IO) {
+        runCatching {
+            val server = hostServer
+            val snap = if (server != null) {
+                checkNotNull(server.backUp(listOf(HouseholdBackups.MANUAL))) { server.householdBackups()?.problem ?: "This device isn't the host." }
+            } else {
+                checkNotNull(hostAdmin) { "This device isn't the host." }.backUpNow()
+            }
+            log("The household was backed up", kind = SyncActivity.HOST)
+            refreshHouseholdBackups()
+            snap
+        }
+    }
+
+    override suspend fun setHouseholdBackupFolder(path: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val c = config()
+            require(c.role == "HOST") { "This device isn't the host." }
+            val target = File(path.trim()).absoluteFile
+            require(path.isNotBlank()) { "Choose a folder." }
+            target.mkdirs()
+            require(target.isDirectory && target.canWrite()) { "Fuse can't write to that folder." }
+            require(!target.canonicalPath.startsWith(hostDir(c).canonicalPath + File.separator) && target.canonicalFile != hostDir(c).canonicalFile) {
+                "Choose a folder outside the host's own."
+            }
+            saveConfig { it.copy(householdBackupDir = target.path.replace('\\', '/')) }
+            hostServer?.backups = HouseholdBackups(target, clock)
+            // The background host reads the folder as it starts: started again to take it.
+            if (hostServer == null && hostAdmin != null && lifetime.supported) restartedService(config(), fuseVersion)?.let { (a, st) -> hostAdmin = a; adminStatus = st }
+            log("The household's backups go to ${target.path}", kind = SyncActivity.HOST)
+            refreshHouseholdBackups()
+        }
+    }
+
+    override suspend fun restoreHousehold(name: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val server = hostServer
+            if (server != null) server.restoreHousehold(name) else checkNotNull(hostAdmin) { "This device isn't the host." }.restoreHousehold(name)
+            log("The household was put back as a backup kept it", kind = SyncActivity.HOST)
+            refreshHouseholdBackups()
+            runCatching { refreshLists() }
+            refreshHostView()
+        }
+    }
+
     private val _hosts = MutableStateFlow<HostsView?>(null)
     override val hosts: StateFlow<HostsView?> = _hosts.asStateFlow()
 
@@ -892,6 +951,9 @@ class JvmSyncService(
     internal suspend fun keepOnce() = keeping.withLock {
         val c = cached
         val cl = client
+        // The household's whole copy, when one is due (the host only).
+        hostServer?.let { h -> if (h.backUpIfDue() != null) log("The household was backed up", kind = SyncActivity.HOST) }
+        refreshHouseholdBackups()
         if (c.backupHost && canHost && c.role != "HOST" && backupStore == null) openBackup(c)
         val store = keptStore()
         if (store == null || cl == null) {
@@ -939,6 +1001,7 @@ class JvmSyncService(
         val server = backupServer ?: SyncHost(store, c.hostPort, fuseVersion, clock).start()
         saveConfig { it.copy(role = "HOST", backupHost = false, hostDataDir = store.dir.path.replace('\\', '/'), hostName = store.name) }
         hostServer = server
+        server.backups = HouseholdBackups(backupsDir(config()), clock)
         backupServer = null
         backupStore = null
         keeper = null
@@ -2286,6 +2349,9 @@ class JvmSyncService(
         }
 
         const val LINK_KEY = "sync.link"
+
+        /** Where the host keeps the household's whole copies unless the person chose a folder. */
+        const val HOUSEHOLD_BACKUPS_DIR = "household-backups"
 
         /** Where a backup keeps its copy of the household. */
         const val BACKUP_DIR = "backup-host"

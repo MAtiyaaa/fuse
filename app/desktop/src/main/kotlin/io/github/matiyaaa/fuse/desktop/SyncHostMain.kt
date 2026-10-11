@@ -34,7 +34,8 @@ object SyncHostMain {
         }
         val name = sync.hostName.ifBlank { runCatching { java.net.InetAddress.getLocalHost().hostName }.getOrDefault("Fuse") }
         val folder = sync.hostDataDir.ifBlank { null }?.let(::File) ?: File(dirs.data, "sync/host")
-        val host = HeadlessHost.serve(folder, sync.hostPort, name, BuildInfo.VERSION)
+        val backups = sync.householdBackupDir.ifBlank { null }?.let(::File) ?: File(dirs.data, "sync/household-backups")
+        val host = HeadlessHost.serve(folder, sync.hostPort, name, BuildInfo.VERSION, backupsDir = backups)
         if (host == null) {
             Log.info("Fuse One host: port ${sync.hostPort} is in use (Fuse is hosting); trying again later")
             return 4

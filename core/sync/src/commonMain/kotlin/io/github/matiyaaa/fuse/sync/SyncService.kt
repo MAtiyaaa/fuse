@@ -347,6 +347,21 @@ interface SyncService {
     /** Devices asking to join right now, for this device to let in (on the host, and every device already connected). */
     val joinRequests: StateFlow<List<JoinAsk>> get() = NO_JOIN_REQUESTS
 
+    /** On the host: the household's backups (whole copies, every day, week and month); null elsewhere. */
+    val householdBackups: StateFlow<HouseholdBackupsState?> get() = NO_BACKUPS
+
+    /** Reads the household's backups again (after one was made, or the folder changed). */
+    suspend fun refreshHouseholdBackups() = Unit
+
+    /** On the host: a backup of the whole household now, beside the scheduled ones. */
+    suspend fun backUpHouseholdNow(): Result<HouseholdSnapshot> = Result.failure(UnsupportedOperationException("This device isn't the host."))
+
+    /** On the host: where the household's backups go from now on (best another drive). */
+    suspend fun setHouseholdBackupFolder(path: String): Result<Unit> = Result.failure(UnsupportedOperationException("This device isn't the host."))
+
+    /** On the host: puts the household back as the backup [name] kept it, keeping the household as it is first. */
+    suspend fun restoreHousehold(name: String): Result<Unit> = Result.failure(UnsupportedOperationException("This device isn't the host."))
+
     /** The household's hosts and this computer's place among them; null before Fuse One is set up. */
     val hosts: StateFlow<HostsView?> get() = NO_HOSTS
 
@@ -519,6 +534,7 @@ private val NO_NOTICES: kotlinx.coroutines.flow.SharedFlow<SyncNotice> = kotlinx
 
 private val NO_JOIN_REQUESTS: StateFlow<List<JoinAsk>> = kotlinx.coroutines.flow.MutableStateFlow(emptyList())
 private val NO_HOSTS: StateFlow<HostsView?> = kotlinx.coroutines.flow.MutableStateFlow(null)
+private val NO_BACKUPS: StateFlow<HouseholdBackupsState?> = kotlinx.coroutines.flow.MutableStateFlow(null)
 
 private val NO_MERGE: StateFlow<ProfileMerge?> = kotlinx.coroutines.flow.MutableStateFlow(null)
 

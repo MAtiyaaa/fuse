@@ -222,6 +222,28 @@ data class HostStatus(
     val backupOffers: List<HostNode> = emptyList(),
 )
 
+/** One kept copy of the whole household: when, which kinds of keeping it counts for, and how much it holds. */
+@Serializable
+data class HouseholdSnapshot(
+    /** Its folder's name (`2026-10-11-2215`). */
+    val name: String,
+    val at: Long,
+    /** "daily", "weekly", "monthly" (kept for each kind it counts for), "manual", "before-restore". */
+    val kinds: List<String>,
+    val seq: Long,
+    val generation: Long,
+    val profiles: Int,
+    val devices: Int,
+    val revisions: Int,
+    /** The saves' files it needs, by hash (kept once for every snapshot, in the backups' `objects`). */
+    val objects: List<String>,
+    val bytes: Long = 0,
+)
+
+/** The household's backups as the host keeps them: where, which, and what went wrong last. */
+@Serializable
+data class HouseholdBackupsState(val folder: String, val snapshots: List<HouseholdSnapshot>, val problem: String? = null)
+
 /** Where a device stands as a backup: the household's hosts, and whether its offer waits on the host. */
 @Serializable
 data class BackupState(val leadership: Leadership, val offered: Boolean, val backup: Boolean)

@@ -36,7 +36,11 @@ Prefer Compose directly? [compose.yaml](compose.yaml) is the same setup: `docker
 | Accept a computer as a backup host | `docker exec fuse-one-host fuse-one-host accept <name>` (or Accept on the Hub) |
 | Make this host a backup of another | stop it, then `docker run --rm -v fuse-one-data:/data --network host ghcr.io/matiyaaa/fuse-one-host backup-of <address> <pairing code>`, then start it |
 | Make a backup the host (the old one is gone for good) | `docker exec fuse-one-host fuse-one-host take-over` |
-| Back up | `docker stop fuse-one-host && docker run --rm -v fuse-one-data:/data:ro -v "$PWD":/backup --entrypoint tar ghcr.io/matiyaaa/fuse-one-host -czf /backup/fuse-one-backup.tgz -C /data . && docker start fuse-one-host` |
+| Household backups (made by themselves: daily for a week, weekly for a month, monthly for half a year) | `docker exec fuse-one-host fuse-one-host household-backups` |
+| A household backup now | `docker exec fuse-one-host fuse-one-host backup-now` |
+| Put the household back as a backup kept it | `docker exec fuse-one-host fuse-one-host restore <name>` (the household as it is is kept first) |
+| Keep household backups on another drive | mount it in the container and set `FUSE_ONE_BACKUPS` to that path in `~/fuse-one-host/.env` |
+| Back up the whole volume | `docker stop fuse-one-host && docker run --rm -v fuse-one-data:/data:ro -v "$PWD":/backup --entrypoint tar ghcr.io/matiyaaa/fuse-one-host -czf /backup/fuse-one-backup.tgz -C /data . && docker start fuse-one-host` |
 | Restore | `docker stop fuse-one-host && docker run --rm --user 0 -v fuse-one-data:/data -v "$PWD":/backup --entrypoint tar ghcr.io/matiyaaa/fuse-one-host -xzf /backup/fuse-one-backup.tgz -C /data && docker start fuse-one-host` |
 | Uninstall | `cd ~/fuse-one-host && docker compose down` (the data stays in the `fuse-one-data` volume until you remove it with `docker volume rm fuse-one-data`) |
 

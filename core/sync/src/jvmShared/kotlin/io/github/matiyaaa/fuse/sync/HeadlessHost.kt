@@ -13,7 +13,16 @@ object HeadlessHost {
      * Serves the host kept in [hostDir] on [port] and answers discovery, until closed. Null when
      * something already serves that port (Fuse itself, still hosting): the service tries again later.
      */
-    fun serve(hostDir: File, port: Int, name: String, version: String, clock: () -> Long = System::currentTimeMillis, keepEveryMs: Long = KEEP_EVERY_MS): AutoCloseable? {
+    fun serve(
+        hostDir: File,
+        port: Int,
+        name: String,
+        version: String,
+        clock: () -> Long = System::currentTimeMillis,
+        keepEveryMs: Long = KEEP_EVERY_MS,
+        /** Where whole copies of the household go, every day, week and month; null for none. */
+        backupsDir: File? = File(hostDir, "household-backups"),
+    ): AutoCloseable? {
         if (!HostAdmin.portFree(port)) return null
         val link = readLink(hostDir)
         val store = HostStore(hostDir, clock, hostName = name)
@@ -26,7 +35,17 @@ object HeadlessHost {
         store.leadership.noteOwnAddress(own, store.outsideAddress().ifBlank { null })
         val responder = runCatching { Discovery.answer({ store.hello(port, version) }) }.getOrNull()
         val keeper = link?.let { keep(hostDir, store, server, it, name, own, clock, keepEveryMs) }
+        server.backups = backupsDir?.let { HouseholdBackups(it, clock) }
+        val schedule = backupsDir?.let {
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
+                while (true) {
+                    runCatching { server.backUpIfDue() }
+                    kotlinx.coroutines.delay(BACKUP_CHECK_MS)
+                }
+            }
+        }
         return AutoCloseable {
+            schedule?.cancel()
             keeper?.cancel()
             responder?.stop()
             server.stop()
@@ -94,4 +113,7 @@ object HeadlessHost {
     }
 
     const val KEEP_EVERY_MS = 60_000L
+
+    /** How often a host looks whether the household's backup is due. */
+    const val BACKUP_CHECK_MS = 60 * 60_000L
 }

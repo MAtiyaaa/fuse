@@ -91,6 +91,41 @@ class SyncHost(
     /** What the Hub's forms carry, so a page on another site can't post them through this computer's browser. */
     private val hubFormToken = SyncCrypto.token(18)
 
+    /** Where the household's whole copies are kept (set by whoever runs this host; null for none). */
+    @Volatile var backups: HouseholdBackups? = null
+
+    @Volatile private var backupProblem: String? = null
+
+    /** The household's backups, and what went wrong the last time one was made. */
+    fun householdBackups(): HouseholdBackupsState? = backups?.let { HouseholdBackupsState(it.dir.path.replace('\\', '/'), it.list(), backupProblem) }
+
+    /**
+     * Makes the scheduled backup when one is due (only the household's host keeps them). Null when
+     * none was due, or when it couldn't be made (said in [householdBackups]).
+     */
+    fun backUpIfDue(): HouseholdSnapshot? {
+        val b = backups ?: return null
+        if (!store.leadership.isLeader || !b.due()) return null
+        return backUp(emptyList())
+    }
+
+    /** A backup now, of [kinds] ("manual" by a person). */
+    fun backUp(kinds: List<String>): HouseholdSnapshot? {
+        val b = backups ?: return null
+        return try {
+            b.snapshot(store, kinds).also { backupProblem = null }
+        } catch (e: Exception) {
+            backupProblem = "The last backup couldn't be made: ${e.message ?: e::class.simpleName}"
+            null
+        }
+    }
+
+    /** Puts the household back as the backup [name] kept it. */
+    fun restoreHousehold(name: String): HouseholdSnapshot {
+        val b = checkNotNull(backups) { "This host keeps no backups." }
+        return b.restore(name, store).also { bump() }
+    }
+
     /** Makes this backup the household's host when a person says so (set where a backup runs; null elsewhere). */
     @Volatile var onTakeOver: (suspend () -> Leadership)? = null
 
@@ -605,6 +640,24 @@ class SyncHost(
                     call.json(ProfileInfo.serializer(), admin)
                 }
                 get("/status") { if (!admin()) return@get; call.json(HostStatus.serializer(), status()) }
+                get("/household-backups") {
+                    if (!admin()) return@get
+                    val state = householdBackups() ?: return@get call.fail(HttpStatusCode.NotFound, "This host keeps no backups.", "no-backups")
+                    call.json(HouseholdBackupsState.serializer(), state)
+                }
+                post("/household-backups") {
+                    if (!admin()) return@post
+                    val snap = withContext(Dispatchers.IO) { backUp(listOf(HouseholdBackups.MANUAL)) }
+                        ?: return@post call.fail(HttpStatusCode.InternalServerError, householdBackups()?.problem ?: "This host keeps no backups.", "no-backup")
+                    call.json(HouseholdSnapshot.serializer(), snap)
+                }
+                post("/household-backups/restore/{name}") {
+                    if (!admin()) return@post
+                    val snap = runCatching { withContext(Dispatchers.IO) { restoreHousehold(call.parameters["name"].orEmpty()) } }.getOrElse {
+                        return@post call.fail(HttpStatusCode.Conflict, it.message ?: "Couldn't put the household back.", "no-restore")
+                    }
+                    call.json(HouseholdSnapshot.serializer(), snap)
+                }
                 post("/takeover") {
                     if (!admin()) return@post
                     val take = onTakeOver ?: return@post call.fail(HttpStatusCode.Conflict, "This host isn't a backup of another.", "not-a-backup")
