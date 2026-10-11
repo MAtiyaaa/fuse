@@ -1951,8 +1951,11 @@ class JvmSyncService(
         "It was saved by another emulator on ${r.deviceName}, so it stays on the host. Play it there, or use the same emulator here."
 
     override suspend fun report(): ProfileReport? = withContext(Dispatchers.IO) {
-        val c = client ?: return@withContext null
         val profile = cached.activeProfile.ifEmpty { return@withContext null }
+        // Without a host, what this device keeps for the person on its own.
+        val c = client ?: return@withContext device?.takeIf { keepsOwn }?.let { d ->
+            _profiles.value.firstOrNull { it.id == profile }?.let { runCatching { d.localReport(it) }.getOrNull() }
+        }
         runCatching { c.report(profile) }.onFailure { if (it is SyncException) handle(it) }.getOrNull()
     }
 

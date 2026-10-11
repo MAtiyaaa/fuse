@@ -267,6 +267,16 @@ internal class AuditSync(private val settings: SettingsStore) : SyncService {
             )),
             io.github.matiyaaa.fuse.sync.GameReport("snes:t.chrono-trigger", "Chrono Trigger", "snes", 4 * HOUR_S + 30 * 60, mapOf("deck" to 4 * HOUR_S + 30 * 60), 6, t - 9 * DAY, false, emptyList()),
         )
+        // Without a household: what this device keeps for the person, its own versions only.
+        if (status.value is SyncStatus.Off || status.value is SyncStatus.NotSetUp) {
+            val here = games.take(3).map { g ->
+                g.copy(devicePlay = mapOf("pc" to g.playSeconds), slots = g.slots.map { sl ->
+                    val vs = sl.versions.take(2).map { it.copy(deviceId = "pc", device = "Gaming PC", files = it.files.map { f -> f.copy(stored = "") }) }
+                    sl.copy(versions = vs, bytes = vs.sumOf { it.bytes })
+                })
+            }
+            return io.github.matiyaaa.fuse.sync.ProfileReport(p, here.sumOf { it.playSeconds }, mapOf("pc" to here.sumOf { it.playSeconds }), emptyList(), here, here.sumOf { g -> g.slots.sumOf { it.bytes } }, "/home/mo/.local/share/fuse/sync/device/objects", local = true)
+        }
         return io.github.matiyaaa.fuse.sync.ProfileReport(
             p, games.sumOf { it.playSeconds },
             mapOf("deck" to 40 * HOUR_S + 30 * 60, "phone" to 18 * HOUR_S, "pc" to 22 * HOUR_S + 12 * 60),

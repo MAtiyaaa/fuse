@@ -64,16 +64,25 @@ internal val AppState.sections: Sections get() {
     val p = store.prefs.value
     return Sections(
         addons = (store.appStore.supported && p.storeEnabled) || (store.jellyfin != null && p.jellyfin.enabled) ||
-            (store.sync.service != null && p.sync.enabled) || syncthingOn ||
+            (store.sync.service != null && (p.sync.enabled || keepsOwnPeople)) || syncthingOn ||
             (store.streaming.supported && p.streaming.enabled && p.streaming.hosts.isNotEmpty()),
         cartridgeOn = platform.features.cartridge && p.cartridgeEnabled,
     )
 }
 
+/**
+ * People kept on this device without a household (profiles made here, Fuse One's household not
+ * set up): their saves are still kept apart, so the Sync page has something to show.
+ */
+internal val AppState.keepsOwnPeople: Boolean
+    get() = store.sync.service?.profiles?.value?.isNotEmpty() == true
+
 /** The tabs shown in the top line: Home first, then the user's order, each offered and present here. */
 @Composable
 internal fun rememberTabs(app: AppState, prefs: UiPrefs): List<Destination> {
     val cartridge by app.store.cartridge.status.collectAsState()
+    // Profiles coming or going can bring the Sync page (and with it Addons) or take it away.
+    app.store.sync.service?.profiles?.collectAsState()?.value
     val sections = app.sections
     return (listOf(Destination.HOME) + prefs.destinations.filter { it != Destination.HOME })
         .filter { sections.showsTab(it, app.offers(it), cartridge) }

@@ -65,6 +65,8 @@ fun AddonsScreen(app: AppState) {
     val cartridge by app.store.cartridge.status.collectAsState()
     val store by app.store.appStore.state.collectAsState()
     val syncthingState = app.store.syncthing?.state?.collectAsState()?.value
+    // Profiles kept on this device alone still have a Sync page: each person's saves, kept apart here.
+    val people = app.store.sync.service?.profiles?.collectAsState()?.value.orEmpty()
     // Cartridge only where it runs (Android and Linux) and is turned on; Jellyfin only once turned on.
     // In the order the user dragged them into; parts they never moved keep their usual place after.
     val parts = buildList {
@@ -74,8 +76,9 @@ fun AddonsScreen(app: AppState) {
         if (app.store.appStore.supported && prefs.storeEnabled) add(AddonsPart.STORE)
         if (prefs.jellyfin.enabled && app.store.jellyfin != null) add(AddonsPart.JELLYFIN)
         // Fuse Sync or Syncthing, whichever is in use: they never run together, so never both.
-        if (prefs.sync.enabled && app.store.sync.service != null) add(AddonsPart.SYNC)
-        else if (syncthingState != null && syncthingState !is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Off) add(AddonsPart.SYNCTHING)
+        val syncthingOn = syncthingState != null && syncthingState !is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Off
+        if (app.store.sync.service != null && (prefs.sync.enabled || (people.isNotEmpty() && !syncthingOn))) add(AddonsPart.SYNC)
+        else if (syncthingOn) add(AddonsPart.SYNCTHING)
         if (app.store.streaming.supported && prefs.streaming.enabled && prefs.streaming.hosts.isNotEmpty()) add(AddonsPart.STREAMING)
         if (isEmpty()) add(AddonsPart.CARTRIDGE)
     }.sortedBy { p -> prefs.addonsOrder.indexOf(p.name).let { if (it < 0) ORDER_REST + p.ordinal else it } }

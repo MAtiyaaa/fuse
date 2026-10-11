@@ -296,6 +296,8 @@ data class ProfileReport(
     val savesBytes: Long,
     /** Where the host keeps its files, on the host computer. */
     val storePath: String = "",
+    /** Made by this device alone, without a host: what it keeps for the person by itself. */
+    val local: Boolean = false,
 )
 
 @Serializable

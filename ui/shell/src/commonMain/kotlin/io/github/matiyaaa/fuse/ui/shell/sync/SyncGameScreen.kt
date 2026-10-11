@@ -107,7 +107,7 @@ internal fun SyncGameScreen(app: AppState, game: String, name: String) {
     sel.clamp(versions.size)
     fun open(i: Int) {
         val v = versions.getOrNull(i) ?: return
-        if (g != null && report != null) versionFiles(app, g, v.version, report.storePath)
+        if (g != null && report != null) versionFiles(app, g, v.version, report.storePath, report.local)
     }
     // Where every device stands with this game's save, asked of the host now and after each change.
     var convergence by remember(game) { mutableStateOf<io.github.matiyaaa.fuse.sync.Convergence?>(null) }
@@ -141,7 +141,7 @@ internal fun SyncGameScreen(app: AppState, game: String, name: String) {
         val offset = localOffsetMillis(now)
         Column(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {
             Spacer(Modifier.height(Size.hudHeight + if (compact) Space.s else Space.l))
-            GameHeader(g, name, card, compact, now, offset)
+            GameHeader(g, name, card, compact, now, offset, local = report?.local == true)
             Spacer(Modifier.height(if (compact) Space.m else Space.l))
             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(Space.l)) {
                 LazyColumn(
@@ -150,7 +150,7 @@ internal fun SyncGameScreen(app: AppState, game: String, name: String) {
                     contentPadding = PaddingValues(bottom = Size.hintHeight + Space.m),
                 ) {
                     when {
-                        g == null -> item("gone") { Quiet(FuseIcons.CloudOff, "This game isn't on the host any more.") }
+                        g == null -> item("gone") { Quiet(FuseIcons.CloudOff, if (report?.local == true) "Nothing is kept for this game on this device any more." else "This game isn't on the host any more.") }
                         versions.isEmpty() -> item("none") { Quiet(FuseIcons.Save, "No saves kept for it yet. Play it with Fuse One on and its save is kept here after it closes.") }
                         else -> {
                             var n = 0
@@ -179,8 +179,8 @@ internal fun SyncGameScreen(app: AppState, game: String, name: String) {
                     }
                     if (!wide && g != null) {
                         convergence?.takeIf { it.slots.isNotEmpty() }?.let { cv -> item("devices") { DevicesCard(cv, Modifier.padding(top = Space.l)) } }
-                        if (g.devicePlay.size > 1) item("play") { Card("Play time by device", FuseIcons.ChartPie, Modifier.padding(top = Space.l)) { PlayBars(g.devicePlay, names) } }
-                        if (report != null) item("kept") { KeptCard(g, report.storePath, Modifier.padding(top = Space.s)) }
+                        if (g.devicePlay.size > 1 && report?.local != true) item("play") { Card("Play time by device", FuseIcons.ChartPie, Modifier.padding(top = Space.l)) { PlayBars(g.devicePlay, names) } }
+                        if (report != null) item("kept") { KeptCard(g, report.storePath, report.local, Modifier.padding(top = Space.s)) }
                     }
                 }
                 if (wide && g != null) {
@@ -189,8 +189,8 @@ internal fun SyncGameScreen(app: AppState, game: String, name: String) {
                         verticalArrangement = Arrangement.spacedBy(Space.m),
                     ) {
                         convergence?.takeIf { it.slots.isNotEmpty() }?.let { DevicesCard(it) }
-                        if (g.devicePlay.isNotEmpty()) Card("Play time by device", FuseIcons.ChartPie) { PlayBars(g.devicePlay, names) }
-                        if (report != null) KeptCard(g, report.storePath)
+                        if (g.devicePlay.isNotEmpty() && report?.local != true) Card("Play time by device", FuseIcons.ChartPie) { PlayBars(g.devicePlay, names) }
+                        if (report != null) KeptCard(g, report.storePath, report.local)
                     }
                 }
             }
@@ -209,7 +209,8 @@ private sealed interface TimelineEntry {
  * screens, so the timeline keeps its room).
  */
 @Composable
-private fun GameHeader(g: GameReport?, name: String, card: io.github.matiyaaa.fuse.ui.shell.store.GameCard?, compact: Boolean, now: Long, offset: Long) {
+private fun GameHeader(g: GameReport?, name: String, card: io.github.matiyaaa.fuse.ui.shell.store.GameCard?, compact: Boolean, now: Long, offset: Long, local: Boolean = false) {
+    val where = if (local) "on this device" else "on the host"
     val c = Fuse.colors
     val title = card?.title ?: g?.name ?: name
     val system = (card?.platformShort ?: g?.platform?.uppercase())?.takeIf { it.isNotEmpty() }
@@ -220,7 +221,7 @@ private fun GameHeader(g: GameReport?, name: String, card: io.github.matiyaaa.fu
         g?.playSeconds?.takeIf { it > 0 }?.let { HeroFact(FuseIcons.Clock, playtimeText(it), "played") },
         g?.sessions?.takeIf { it > 0 }?.let { HeroFact(FuseIcons.Gamepad, "$it", if (it == 1) "session" else "sessions") },
         g?.lastPlayed?.let { HeroFact(FuseIcons.CalendarClock, TimeWords.relative(it, now, offset).replaceFirstChar { ch -> ch.uppercase() }, "last played") },
-        bytes.takeIf { it > 0 }?.let { HeroFact(FuseIcons.HardDrive, sizeText(it), "on the host") },
+        bytes.takeIf { it > 0 }?.let { HeroFact(FuseIcons.HardDrive, sizeText(it), where) },
     )
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box {
@@ -246,7 +247,7 @@ private fun GameHeader(g: GameReport?, name: String, card: io.github.matiyaaa.fu
                         g?.lastPlayed?.let { "last played ${TimeWords.relative(it, now, offset)}" },
                         bytes.takeIf { it > 0 }?.let { sizeText(it) },
                     ),
-                ).joinToString("  ·  ").ifEmpty { "On the host" },
+                ).joinToString("  ·  ").ifEmpty { where.replaceFirstChar { it.uppercase() } },
                 Fuse.type.body, color = c.textMuted, maxLines = 1,
             )
             if (!compact && facts.isNotEmpty()) {
@@ -340,8 +341,8 @@ private fun VersionRow(v: VersionReport, last: Boolean, now: Long, offset: Long,
 
 /** What the host keeps of the game: each kind's versions and size, and where its files live. */
 @Composable
-private fun KeptCard(g: GameReport, storePath: String, modifier: Modifier = Modifier) {
-    Card("Kept on the host", FuseIcons.HardDrive, modifier) {
+private fun KeptCard(g: GameReport, storePath: String, local: Boolean, modifier: Modifier = Modifier) {
+    Card(if (local) "Kept on this device" else "Kept on the host", FuseIcons.HardDrive, modifier) {
         for (s in g.slots) {
             Row {
                 FText("${s.kind.label}s", Fuse.type.label, maxLines = 1, modifier = Modifier.weight(1f))
@@ -360,16 +361,17 @@ private fun reasonText(v: VersionReport): String? = v.provenance.takeIf { it.isN
 }
 
 /** A version's files: each one's name in the save, its size, and where the host keeps it. */
-private fun versionFiles(app: AppState, g: GameReport, v: VersionReport, storePath: String) {
+private fun versionFiles(app: AppState, g: GameReport, v: VersionReport, storePath: String, local: Boolean) {
     val svc = app.store.sync.service ?: return
     val kept = v.kept || v.reason == RevisionReason.MILESTONE
     app.choice = ChoiceSpec(
         title = "${g.name}, saved on ${v.device}",
         icon = FuseIcons.FileText,
-        message = "Kept on the host in $storePath, each file once by its contents",
+        message = if (local) "Kept on this device in $storePath, each file once by its contents. With a host, it goes to your other devices too"
+        else "Kept on the host in $storePath, each file once by its contents",
         options = v.files.map { f ->
-            MenuAction("f.${f.path}", f.path, FuseIcons.File, detail = "Kept as ${f.stored}", trailing = Trailing.Value(sizeText(f.bytes)), onSelect = {})
-        } + MenuAction(
+            MenuAction("f.${f.path}", f.path, FuseIcons.File, detail = f.stored.takeIf { it.isNotEmpty() }?.let { "Kept as $it" }, trailing = Trailing.Value(sizeText(f.bytes)), onSelect = {})
+        } + if (local) emptyList() else listOf(MenuAction(
             "keep", if (kept) "Stop Keeping for Good" else "Keep for Good", FuseIcons.Bookmark,
             detail = if (kept) "It goes back to being tidied away in time" else "Never tidied away, however many come after",
             section = "",
@@ -381,7 +383,7 @@ private fun versionFiles(app: AppState, g: GameReport, v: VersionReport, storePa
                         .onFailure { app.toasts.show(it.message ?: "Couldn't change that", ToastKind.ERROR) }
                 }
             },
-        ),
+        )),
     )
 }
 

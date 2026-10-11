@@ -223,6 +223,29 @@ internal fun AuditDriver.syncScreens() {
         shoot("further down the games: the header folded away", 600)
     }
 
+    scenario("sync", "this device alone") {
+        syncOff()
+        sync.ownProfiles()
+        useLibrary()
+        settle(600)
+        tab(Destination.CARTRIDGE)
+        tap(PadButton.DPAD_UP)
+        focusText("Sync") { tap(PadButton.DPAD_RIGHT) }
+        tap(PadButton.DPAD_DOWN)
+        waitFor("Your games on this device")
+        shoot("Sync without a household: each person's saves kept here, and what a host adds", 1_500)
+        tap(PadButton.DPAD_RIGHT, 2)
+        tap(PadButton.A)
+        waitFor("Connect to a Host")
+        shoot("Other Devices: the two ways into a household")
+        tap(PadButton.B)
+        tap(PadButton.DPAD_DOWN)
+        tap(PadButton.A)
+        waitFor("Kept on this device")
+        shoot("one game's saves, kept on this device", 1_000)
+        tap(PadButton.B)
+    }
+
     scenario("sync", "top line") {
         useSync(asHost = false)
         waitFor("Continue playing")

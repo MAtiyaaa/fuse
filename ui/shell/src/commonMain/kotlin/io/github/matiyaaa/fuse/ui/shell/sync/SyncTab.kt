@@ -48,6 +48,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.components.FuseButton
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
+import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuList
 import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
 import io.github.matiyaaa.fuse.ui.designsystem.components.ProfileAvatar
@@ -75,6 +76,7 @@ import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
 import io.github.matiyaaa.fuse.ui.fuseline.tween
 import androidx.compose.foundation.clickable
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
@@ -104,6 +106,8 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
     val devices by svc.devices.collectAsState()
     val activity by svc.activity.collectAsState()
     val host = prefs.sync.role == "HOST"
+    // No household yet: each person's saves are still kept apart here, and nothing waits on a host.
+    val alone = status is SyncStatus.NotSetUp || status is SyncStatus.Off
     val words = syncWords(status)
     var index by remember { mutableIntStateOf(0) }
     var inList by remember { mutableStateOf(false) }
@@ -114,7 +118,7 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
     // The Fuse Library's card, between the actions and the games.
     var inLib by remember { mutableStateOf(false) }
     val reach by app.store.reach.state.collectAsState()
-    val hasLib = reach.supported || reach.devices.isNotEmpty()
+    val hasLib = !alone && (reach.supported || reach.devices.isNotEmpty())
     val sideScroll = rememberScrollState()
     val list = androidx.compose.foundation.lazy.rememberLazyListState()
     io.github.matiyaaa.fuse.ui.shell.components.ReportScroll(list)
@@ -133,7 +137,11 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
     val report = app.syncReport?.takeIf { it.profile.id == profile?.id }
     val names = devices.associate { it.id to it.name }
 
-    val actions = buildList {
+    val actions = if (alone) buildList {
+        add(SyncAction("Switch Profile", FuseIcons.Users) { app.whoAreYou = WhoMode.SWITCH })
+        add(SyncAction("New Profile", FuseIcons.UserPlus) { app.whoAreYou = WhoMode.ADD })
+        add(SyncAction("Other Devices", FuseIcons.MonitorSmartphone) { householdChoice(app, svc.canHost) })
+    } else buildList {
         add(SyncAction("Sync Now", FuseIcons.RefreshCcw) {
             if (!syncing) {
                 syncing = true
@@ -268,7 +276,7 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
                 item("head") {
                     SyncHeader(
                         hostName = prefs.sync.hostName.ifBlank { "your host" },
-                        host = host, words = words, profile = profile, report = report,
+                        host = host, alone = alone, words = words, profile = profile, report = report,
                         actions = actions, selected = if (focused && !inList && !inRest && !inSide && !inLib) index else -1,
                         busy = syncing || (status as? SyncStatus.Online)?.working == true,
                         labels = labels, compact = compact,
@@ -283,14 +291,15 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
                 }
                 item("games") {
                     SectionTitle(
-                        "Your games on the host", FuseIcons.Gamepad,
+                        if (alone) "Your games on this device" else "Your games on the host", FuseIcons.Gamepad,
                         trailing = report?.let { r -> "${count(r.games.size, "game")}  ·  ${sizeText(r.savesBytes)}" },
                         modifier = Modifier.padding(start = Space.xs, end = Space.xs, top = Space.m, bottom = Space.xs),
                     )
                 }
                 when {
                     report == null && loading -> item("wait") { Box(Modifier.fillMaxWidth().padding(Space.xxl), contentAlignment = Alignment.Center) { Spinner(size = 24.dp, color = Fuse.colors.textMuted) } }
-                    report == null -> item("away") { Quiet(FuseIcons.CloudOff, "The host isn't answering. Your games show here once it does.") }
+                    report == null && !alone -> item("away") { Quiet(FuseIcons.CloudOff, "The host isn't answering. Your games show here once it does.") }
+                    games.isEmpty() && alone -> item("none") { Quiet(FuseIcons.Gamepad, "Nothing yet. Play something, and each person's save is kept apart here, ready when they switch in.") }
                     games.isEmpty() -> item("none") { Quiet(FuseIcons.Gamepad, "Nothing yet. Play something, and its saves and play time show up here.") }
                     else -> items(games.size, key = { games[it].game }) { i ->
                         val g = games[i]
@@ -301,7 +310,10 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
                         )
                     }
                 }
-                if (!side) {
+                if (!side && alone) {
+                    item("household") { HouseholdInvite(app, svc.canHost, Modifier.padding(top = Space.l)) }
+                    item("lately") { ActivityCard(activity, Modifier.padding(top = Space.s)) }
+                } else if (!side) {
                     item("state") { StateCard(status, activity, prefs.sync.hostName.ifBlank { "your host" }, syncing, Modifier.padding(top = Space.l)) }
                     item("devices") { DeviceCard(devices, prefs.sync.deviceId, profiles, Modifier.padding(top = Space.s)) }
                     item("play") { if (report != null && report.devicePlay.size > 1) Card("Play time by device", FuseIcons.ChartPie, Modifier.padding(top = Space.s)) { PlayBars(report.devicePlay, names) } }
@@ -311,9 +323,13 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
             if (side) {
                 Box(Modifier.width(340.dp).fillMaxHeight().padding(top = topPadding + subTabsRoom() + Space.s, bottom = Size.hintHeight + Space.m)) {
                     Column(Modifier.fillMaxSize().verticalScroll(sideScroll), verticalArrangement = Arrangement.spacedBy(Space.m)) {
-                        StateCard(status, activity, prefs.sync.hostName.ifBlank { "your host" }, syncing)
-                        DeviceCard(devices, prefs.sync.deviceId, profiles)
-                        if (report != null && report.devicePlay.size > 1) Card("Play time by device", FuseIcons.ChartPie) { PlayBars(report.devicePlay, names) }
+                        if (alone) {
+                            HouseholdInvite(app, svc.canHost)
+                        } else {
+                            StateCard(status, activity, prefs.sync.hostName.ifBlank { "your host" }, syncing)
+                            DeviceCard(devices, prefs.sync.deviceId, profiles)
+                            if (report != null && report.devicePlay.size > 1) Card("Play time by device", FuseIcons.ChartPie) { PlayBars(report.devicePlay, names) }
+                        }
                         ActivityCard(activity)
                     }
                     // Reached with the controller: ringed like anything else in focus.
@@ -338,6 +354,7 @@ private class SyncAction(val label: String, val icon: ImageVector, val run: () -
 private fun SyncHeader(
     hostName: String,
     host: Boolean,
+    alone: Boolean,
     words: SyncWords,
     profile: ProfileInfo?,
     report: ProfileReport?,
@@ -363,7 +380,14 @@ private fun SyncHeader(
                     ).joinToString("  ·  ")
                 }
                 FText(
-                    listOfNotNull(if (host) "On $hostName, this computer" else "On $hostName", totals?.takeIf { !compact && it.isNotEmpty() }).joinToString("  ·  "),
+                    listOfNotNull(
+                        when {
+                            alone -> "On this device"
+                            host -> "On $hostName, this computer"
+                            else -> "On $hostName"
+                        },
+                        totals?.takeIf { !compact && it.isNotEmpty() },
+                    ).joinToString("  ·  "),
                     Fuse.type.caption, color = c.textMuted, maxLines = 1,
                 )
             }
@@ -375,7 +399,8 @@ private fun SyncHeader(
             }
         }
         // Only when something needs saying: the host away, a device unlinked, a PIN to type again.
-        if (words.ok != true) {
+        // Without a household nothing is wrong: the invitation below says what a host would add.
+        if (words.ok != true && !alone) {
             val shape = RoundedCornerShape(Fuse.geometry.control)
             Row(
                 Modifier.fillMaxWidth().clip(shape).background(c.warning.copy(alpha = 0.12f)).border(1.dp, c.warning.copy(alpha = 0.35f), shape)
@@ -806,3 +831,55 @@ private fun StateCard(status: SyncStatus, activity: List<SyncActivity>, hostName
 
 /** A device heard from within this long counts as online. */
 private const val ONLINE_MS = 2 * 60_000L
+
+/**
+ * What a household adds, for a device keeping its people's saves on its own: calm, one card, and
+ * the two ways to begin. Locally it needs nothing more; from outside the home, a host needs an
+ * address the other devices can reach.
+ */
+@Composable
+private fun HouseholdInvite(app: AppState, canHost: Boolean, modifier: Modifier = Modifier) {
+    val c = Fuse.colors
+    Card("Your other devices", FuseIcons.MonitorSmartphone, modifier) {
+        FText(
+            "Each person's saves are kept apart on this device, and switching profiles puts the right ones in place. No host is needed for that.",
+            Fuse.type.body, maxLines = 4,
+        )
+        FText(
+            "A host brings the same saves, play time, library and settings to your other devices. At home, that is all it takes. Away from home, the host also needs an address you can reach (a VPN such as Tailscale, or an https tunnel).",
+            Fuse.type.caption, color = c.textMuted, maxLines = 6,
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
+            if (canHost) InviteButton("Make This the Host", FuseIcons.Server, primary = true) { app.go(Route.SyncSetup(host = true)) }
+            InviteButton("Connect to a Host", FuseIcons.Link, primary = !canHost) { app.go(Route.SyncSetup(host = false)) }
+        }
+    }
+}
+
+@Composable
+private fun InviteButton(label: String, icon: ImageVector, primary: Boolean, onClick: () -> Unit) {
+    val c = Fuse.colors
+    Row(
+        Modifier.fillMaxWidth().height(40.dp).clip(CircleShape).background(if (primary) c.accent.copy(alpha = 0.18f) else c.text.copy(alpha = 0.07f))
+            .fuseClickable(shape = CircleShape, onClick = onClick).padding(horizontal = Space.m),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        FuseIcon(icon, size = Size.iconS, tint = if (primary) c.accent else c.text)
+        Spacer(Modifier.width(Space.s))
+        FText(label, Fuse.type.label, color = if (primary) c.accent else c.text, maxLines = 1)
+    }
+}
+
+/** The two ways into a household, as a choice: from the top line's Other Devices. */
+private fun householdChoice(app: AppState, canHost: Boolean) {
+    app.choice = ChoiceSpec(
+        title = "Your other devices",
+        icon = FuseIcons.MonitorSmartphone,
+        message = "A host keeps everyone's saves, play time and settings for every device in your home. Profiles and saves already here come along.",
+        options = listOfNotNull(
+            if (canHost) MenuAction("host", "Make This the Host", FuseIcons.Server, detail = "Best on a computer that is often on", onSelect = { app.choice = null; app.go(Route.SyncSetup(host = true)) }) else null,
+            MenuAction("connect", "Connect to a Host", FuseIcons.Link, detail = "The host you set up on another device, or a Fuse One Host server", onSelect = { app.choice = null; app.go(Route.SyncSetup(host = false)) }),
+        ),
+    )
+}
