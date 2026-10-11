@@ -62,8 +62,15 @@ internal class DefaultFuseStore private constructor(
     override val collections = DefaultCollectionOps(ctx)
     override val apps = DefaultAppOps(ctx)
     private val mediaOps: DefaultMediaOps
-    override val credentials = DefaultCredentialOps(ctx) { key ->
+    override val credentials = DefaultCredentialOps(ctx) { key, removed ->
         if (key != SecretKeys.RA_USERNAME && key != SecretKeys.RA_API_KEY) mediaOps.invalidate()
+        // A key removed here stays off this device; adding it again lets the household's follow.
+        if (key in SecretKeys.all) ctx.scope.launch {
+            sync.configure { c ->
+                val off = if (removed) (c.keysKeptOff + key).distinct() else c.keysKeptOff - key
+                if (off == c.keysKeptOff) c else c.copy(keysKeptOff = off)
+            }
+        }
     }
     override val achievements = DefaultAchievementOps(ctx, credentials)
     override val cartridge = DefaultCartridgeOps(ctx, engine)
@@ -419,6 +426,22 @@ internal class DefaultFuseStore private constructor(
                         return true
                     }
                 },
+                keys = object : HouseholdSignIns.Keys {
+                    override suspend fun mine() = SecretKeys.all.mapNotNull { k -> credentials.get(k)?.let { k to it } }.toMap()
+                    override suspend fun take(name: String, value: String) {
+                        if (name !in SecretKeys.all || name in sync.config.value.keysKeptOff) return
+                        credentials.put(name, value)
+                        if (name == SecretKeys.RA_USERNAME || name == SecretKeys.RA_API_KEY) {
+                            achievements.load()
+                            if (achievements.configured.value) achievements.refresh(force = true)
+                        }
+                    }
+                    override fun keptOff() = sync.config.value.keysKeptOff.toSet()
+                    override suspend fun agreed() = SecretKeys.all.mapNotNull { k -> credentials.get(AGREED + k)?.let { k to it } }.toMap()
+                    override suspend fun agree(values: Map<String, String>) {
+                        for ((k, v) in values) if (k in SecretKeys.all) runCatching { ctx.services.secrets.put(AGREED + k, v) }
+                    }
+                },
                 ask = sync.ask,
             )
             sync.signIns = household
@@ -427,7 +450,8 @@ internal class DefaultFuseStore private constructor(
                     ctx.settings.map { Triple(it.romm.localAddress + "|" + it.romm.remoteAddress, it.romm.enabled, it.romm.account) },
                     prefsState.map { Triple(it.jellyfin.localAddress + "|" + it.jellyfin.remoteAddress, it.jellyfin.enabled, it.jellyfin.mode) },
                     jellyfin.state.map { it.account?.userId },
-                ) { a, b, c -> Triple(a, b, c) }.distinctUntilChanged(),
+                    credentials.revision,
+                ) { a, b, c, d -> listOf(a, b, c, d) }.distinctUntilChanged(),
             )
         }
         // The interface follows Fuse Sync's settings as stored (the service writes some itself).
@@ -584,3 +608,6 @@ internal class DefaultFuseStore private constructor(
         }
     }
 }
+
+/** Where the secret store keeps each key's value as this device and the household last had it alike. */
+private const val AGREED = "household.agreed."

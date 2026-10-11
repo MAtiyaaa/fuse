@@ -292,7 +292,7 @@ private fun syncRows(
     add(toggleRow("settings", "Settings", FuseIcons.Palette, c.settings, "Your theme, Home, tabs, quick menu, sounds and music. Controllers, screens and drives stay this device's own") { v -> configure { it.copy(settings = v) } }.copy(section = what))
     add(toggleRow(
         "signins", "Share Sign-ins", FuseIcons.Key, c.shareSignIns,
-        "RomM and Jellyfin, with each person's own Jellyfin account, go to your other devices and come to this one. Sealed, never in plain text",
+        "RomM, Jellyfin with each person's own account, and your keys (SteamGridDB, TheGamesDB, IGDB, ScreenScraper, RetroAchievements) go to your other devices and come to this one. Sealed, never in plain text. A key removed here stays off this device only",
     ) { v -> app.scope.launch { app.store.sync.setShareSignIns(v) } }.copy(section = what))
     // Home's scope only means something while settings follow a profile.
     if (c.settings && active != null) {

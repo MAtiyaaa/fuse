@@ -547,18 +547,18 @@ private fun FuseAppContent(
             app.choice = null
             app.scope.launch {
                 store.sync.answerSignIns(share)
-                if (share) app.toasts.show("Sharing RomM and Jellyfin with your household", ToastKind.SUCCESS, icon = FuseIcons.Key)
+                if (share) app.toasts.show("Sharing your sign-ins and keys with your household", ToastKind.SUCCESS, icon = FuseIcons.Key)
                 else app.toasts.show("Not shared from this device. You can turn it on in Settings, Fuse One", icon = FuseIcons.Key)
             }
         }
         app.choice = ChoiceSpec(
             "Share your sign-ins?",
-            "Fuse One can now bring RomM and Jellyfin to every device in your household, with each person's own Jellyfin account. " +
+            "Fuse One can now bring RomM, Jellyfin (with each person's own account) and your keys for art, details and RetroAchievements to every device in your household. " +
                 "Share them from this device and your others sign in by themselves. They are sealed for each device and never kept in plain text.",
             listOf(
                 MenuAction(
                     "yes", "Share From This Device", FuseIcons.Key,
-                    detail = "RomM's addresses and sign-in, Jellyfin's addresses and each person's account",
+                    detail = "RomM and Jellyfin, each person's Jellyfin account, and keys like SteamGridDB's",
                     onSelect = { answer(true) },
                 ),
                 MenuAction(

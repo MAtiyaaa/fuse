@@ -691,8 +691,11 @@ fun mediaRows(app: AppState): List<MenuAction> {
     val stored by app.store.credentials.stored.collectAsState()
     val fill by app.store.media.fillProgress.collectAsState()
     val set = app.store::updatePrefs
+    // Keys go to the household's other devices while Fuse One shares sign-ins.
+    val sharing = app.store.sync.inUse && app.store.sync.config.value.shareSignIns
     fun secretRow(key: String, label: String, detail: String) = app.textRow(
-        "key.$key", label, FuseIcons.Key, if (key in stored) "Saved" else null, detail = detail, placeholder = "Paste or type",
+        "key.$key", label, FuseIcons.Key, if (key in stored) "Saved" else null,
+        detail = if (sharing) "$detail. Your other devices get it through Fuse One" else detail, placeholder = "Paste or type",
     ) { v -> app.scope.launch { if (v.isBlank()) app.store.credentials.remove(key) else app.store.credentials.put(key, v) } }
     // What a provider's last key test says, as its row's value, icon and note.
     fun providerRow(s: io.github.matiyaaa.fuse.model.ProviderStatus): MenuAction {

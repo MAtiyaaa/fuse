@@ -158,6 +158,12 @@ data class SyncSettings(
      * up, asked once), "AUTO" (joined on this version, or the household already shares), "YES" or "NO".
      */
     val signInsChoice: String = "",
+    /**
+     * Keys (SteamGridDB, TheGamesDB, RetroAchievements and the rest, by their secret store names)
+     * the person removed on this device: the household's copy never comes back here by itself.
+     * Adding one here again takes it off this list.
+     */
+    val keysKeptOff: List<String> = emptyList(),
     /** Profiles that have had their welcome on this device: the first time someone plays here, they get the grand one. */
     val welcomedProfiles: List<String> = emptyList(),
     /** [welcomedProfiles] was started (with everyone already playing here on a device that updated). */

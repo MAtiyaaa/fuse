@@ -24,6 +24,12 @@ internal data class ProfileRecord(
 /** A map of sign-ins, by key ("romm", "jellyfin:<profile>"). */
 internal val SignInsSerializer = kotlinx.serialization.builtins.MapSerializer(String.serializer(), String.serializer())
 
+/**
+ * A key the whole household uses (a scraper's API key, RetroAchievements' username and key):
+ * "key:" and the name Fuse keeps it under on each device. Any trusted device may share one.
+ */
+internal val HOUSEHOLD_KEY = Regex("^key:[A-Za-z0-9._-]{1,64}$")
+
 /** A device as the host keeps it, with the secret its calls are signed with. */
 @Serializable
 internal data class DeviceRecord(
@@ -617,7 +623,7 @@ class HostStore(
     private data class KeptServices(
         val romm: ServiceAddress? = null,
         val jellyfin: ServiceAddress? = null,
-        /** "romm" and "jellyfin:<profile>" to each sign-in, sealed with [servicesKey]. */
+        /** "romm", "jellyfin:<profile>" and "key:<name>" to each sign-in or key, sealed with [servicesKey]. */
         val signIns: Map<String, String> = emptyMap(),
         val salt: String = "",
         val shared: Boolean = false,
@@ -666,7 +672,7 @@ class HostStore(
             val plain = SyncCrypto.open(sealedText, d.secret, share.salt) ?: return@synchronized false
             runCatching { json.decodeFromString(SignInsSerializer, plain.decodeToString()) }.getOrNull() ?: return@synchronized false
         }.orEmpty().filterKeys { key ->
-            key == "romm" || key.substringAfter("jellyfin:", "").let { it.isNotEmpty() && mayUse(device, it) }
+            key == "romm" || HOUSEHOLD_KEY.matches(key) || key.substringAfter("jellyfin:", "").let { it.isNotEmpty() && mayUse(device, it) }
         }
         // Every sign-in is sealed again under one fresh salt with the host's key.
         val current = kept.signIns.mapNotNull { (k, v) -> SyncCrypto.open(v, servicesKey, kept.salt)?.let { k to it.decodeToString() } }.toMap()

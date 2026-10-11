@@ -137,4 +137,44 @@ class SignInsStoreTest {
         assertTrue(kept.none { "hunter2" in it || "rmm_secret_token" in it }, "sign-ins are sealed on the host")
         pc.sync.stop()
     }
+
+    @Test
+    fun keysAddedOnOneDeviceReachTheOthersAndOneRemovedStaysOffThatDevice(): Unit = runBlocking {
+        val pc = device("Gaming PC", updated = false)
+        val deck = device("Steam Deck", updated = false)
+        pc.sync.hostHere("Gaming PC", installService = false).getOrThrow()
+        deck.sync.connect("127.0.0.1:$port", assertNotNull(pc.sync.newPairingCode())).getOrThrow()
+        eventually("both share by themselves") { pc.store.sync.config.value.shareSignIns && deck.store.sync.config.value.signInsChoice == "AUTO" }
+
+        // A SteamGridDB key added on the PC is on the Deck too.
+        pc.store.credentials.put("sgdb.apikey", "sgdbkey111")
+        eventually("the household has it") { pc.sync.householdServices()?.signIns?.get("key:sgdb.apikey") == "sgdbkey111" }
+        deck.sync.syncNow()
+        eventually("the Deck has it") { deck.services.secrets.get("sgdb.apikey") == "sgdbkey111" }
+        eventually("and shows it as saved") { "sgdb.apikey" in deck.store.credentials.stored.value }
+
+        // Changed on the Deck: the PC, which still had the key both had, takes the new one.
+        deck.store.credentials.put("sgdb.apikey", "sgdbkey222")
+        eventually("the household has the Deck's") { pc.sync.householdServices()?.signIns?.get("key:sgdb.apikey") == "sgdbkey222" }
+        pc.sync.syncNow()
+        eventually("the PC follows") { pc.services.secrets.get("sgdb.apikey") == "sgdbkey222" }
+
+        // Removed on the Deck: it stays off the Deck, and the PC keeps its own.
+        deck.store.credentials.remove("sgdb.apikey")
+        eventually("noted as removed here") { "sgdb.apikey" in deck.store.sync.config.value.keysKeptOff }
+        deck.sync.syncNow()
+        pc.sync.syncNow()
+        delay(1_500)
+        assertEquals(null, deck.services.secrets.get("sgdb.apikey"))
+        assertEquals("sgdbkey222", pc.services.secrets.get("sgdb.apikey"))
+
+        // Added again on the Deck: it is the Deck's choice again, and shared as before.
+        deck.store.credentials.put("sgdb.apikey", "sgdbkey333")
+        eventually("no longer kept off") { "sgdb.apikey" !in deck.store.sync.config.value.keysKeptOff }
+        eventually("shared again") { pc.sync.householdServices()?.signIns?.get("key:sgdb.apikey") == "sgdbkey333" }
+
+        val kept = root.walkTopDown().filter { it.isFile && it.path.contains("${File.separator}sync${File.separator}") }.map { it.readBytes().decodeToString() }
+        assertTrue(kept.none { "sgdbkey" in it }, "keys are sealed on the host")
+        pc.sync.stop()
+    }
 }

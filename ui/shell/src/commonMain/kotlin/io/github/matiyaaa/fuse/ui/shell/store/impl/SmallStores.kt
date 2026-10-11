@@ -94,11 +94,16 @@ internal class DefaultCollectionOps(private val ctx: StoreContext) : CollectionO
  */
 internal class DefaultCredentialOps(
     private val ctx: StoreContext,
-    private val onChanged: (String) -> Unit,
+    /** A key was added or changed ([removed] false) or removed, here. */
+    private val onChanged: (key: String, removed: Boolean) -> Unit,
 ) : CredentialOps {
     private val secrets = ctx.services.secrets
     private val keys = MutableStateFlow<Set<String>>(emptySet())
     override val stored: StateFlow<Set<String>> = keys
+    private val changes = MutableStateFlow(0)
+
+    /** Goes up with every key added, changed or removed (values themselves never show). */
+    val revision: StateFlow<Int> = changes
 
     suspend fun load() {
         keys.value = SecretKeys.all.filter { runCatching { secrets.has(it) }.getOrDefault(false) }.toSet()
@@ -114,13 +119,15 @@ internal class DefaultCredentialOps(
         if (trimmed.isEmpty()) return remove(key)
         secrets.put(key, trimmed)
         keys.value = keys.value + key
-        onChanged(key)
+        changes.value++
+        onChanged(key, false)
     }
 
     override suspend fun remove(key: String) {
         secrets.remove(key)
         keys.value = keys.value - key
-        onChanged(key)
+        changes.value++
+        onChanged(key, true)
     }
 }
 
