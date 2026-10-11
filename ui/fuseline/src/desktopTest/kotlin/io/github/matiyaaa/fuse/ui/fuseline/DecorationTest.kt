@@ -76,4 +76,19 @@ class DecorationTest {
         }
         assertEquals(updates.sorted(), updates)
     }
+
+    @Test
+    fun theAppCanThinDecorationOrPauseItAndItCarriesOnWhereItWas() {
+        FramePacing.decorationRate = DecorationRate.REDUCED
+        val reduced = run(2.0, fps = 30)
+        assertTrue(reduced.size in 18..22, "a third of 60 updates, got ${reduced.size}")
+
+        FramePacing.reset()
+        // Paused for the middle second: nothing is drawn then, and played time doesn't count it.
+        val updates = run(3.0, fps = 30) { t ->
+            FramePacing.decorationRate = if (t in 2_000_000_000L until 3_000_000_000L) DecorationRate.PAUSED else DecorationRate.FULL
+        }
+        assertTrue(updates.size in 54..66, "two seconds of updates, got ${updates.size}")
+        for (i in 1 until updates.size) assertTrue(updates[i] - updates[i - 1] in 1..80_000_000L, "no jump at $i")
+    }
 }

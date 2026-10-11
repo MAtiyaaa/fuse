@@ -134,6 +134,11 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   Steam (offered when Steam remembers more than one), else the one Steam remembers as most recent.
 - **Controls.** "Detect my buttons", "Button layout" and "Swap confirm and back" are one
   "Controller setup".
+- **Fuse Engine's Performance Governor.** Fuse knows whether it is in use, idle on screen, behind
+  another window, running a game or just woken from sleep, and each has its rules: moving
+  backgrounds slow down when idle and stop behind another window or while a game runs, and finding
+  art and details by itself and looking for emulators wait while a game runs and for a few seconds
+  after waking. Saves are never held back. The diagnostics report names the state.
 - **Sound.** A master switch and volume over music and interface sounds.
 - **Mouse.** Joystick-style pointers and tablets are no longer taken for controllers, hovering never
   scrolls a list, any pointer that isn't touch clicks once, and hints follow the mouse.

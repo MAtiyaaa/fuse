@@ -412,6 +412,11 @@ internal class DefaultFuseStore private constructor(
         offlineMedia.start()
         streaming.start()
         ctx.scope.launch { ctx.playing.collect { transfers.conditions(playing = it != null) } }
+        // Fuse Engine's Performance Governor: decorative motion follows what Fuse is doing.
+        ctx.governor.start()
+        ctx.scope.launch {
+            ctx.governor.state.collect { io.github.matiyaaa.fuse.ui.fuseline.FramePacing.decorationRate = io.github.matiyaaa.fuse.ui.shell.store.EnginePolicy.of(it).motion }
+        }
         // One RomM integration at a time: turning Cartridge on in Fuse turns RomM off, and the
         // other way round. Turning one off keeps everything it was set up with.
         ctx.scope.launch {

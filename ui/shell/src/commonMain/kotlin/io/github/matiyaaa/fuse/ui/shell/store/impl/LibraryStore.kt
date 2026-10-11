@@ -722,6 +722,7 @@ internal class DefaultLibraryOps(
     }
 
     override fun onResume() {
+        ctx.governor.onForeground(true)
         // Back after a while away with no game in between (the screen was off, the device asleep):
         // the interface welcomes the user back with the startup animation.
         val pausedAt = awayFrom
@@ -747,6 +748,7 @@ internal class DefaultLibraryOps(
 
     override fun onPause() {
         awayFrom = ctx.now()
+        ctx.governor.onForeground(false)
     }
 
     /** On start: closes a session left open when Fuse was stopped while a game ran. */

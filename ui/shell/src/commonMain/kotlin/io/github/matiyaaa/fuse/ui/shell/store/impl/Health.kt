@@ -460,6 +460,16 @@ internal class DefaultHealthOps(
                 ),
             ),
             DiagnosticsReport.Section(
+                "Fuse Engine",
+                ctx.governor.current().let { state ->
+                    val p = io.github.matiyaaa.fuse.ui.shell.store.EnginePolicy.of(state)
+                    listOf(
+                        "Performance Governor: ${state.name.lowercase()}",
+                        "Decorative motion ${p.motion.name.lowercase()}, art and details by itself ${if (p.artwork) "allowed" else "held"}, looking for emulators ${if (p.detection) "allowed" else "held"}",
+                    )
+                },
+            ),
+            DiagnosticsReport.Section(
                 "Recent launch problems",
                 ctx.recentProblems.value.map { (at, p) -> "${TimeWords.relative(at, ctx.now(), ctx.services.utcOffsetMillis())}: ${p.title}" + (p.details?.let { "\n    $it" } ?: "") },
             ),

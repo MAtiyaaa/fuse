@@ -74,6 +74,12 @@ internal class StoreContext(
     /** The last launch problems, newest last, for the diagnostics report. Kept in memory only. */
     val recentProblems = MutableStateFlow<List<Pair<Long, io.github.matiyaaa.fuse.ui.shell.store.Problem>>>(emptyList())
 
+    /** Fuse Engine's Performance Governor: what Fuse is doing now, and what optional work that allows. */
+    val governor = PerformanceGovernor(scope, playing, ::now) {
+        io.github.matiyaaa.fuse.ui.fuseline.FramePacing.lastInputNanos.takeIf { it != Long.MIN_VALUE }
+            ?.let { io.github.matiyaaa.fuse.ui.fuseline.monotonicNanos() - it }
+    }
+
     fun recordProblem(problem: io.github.matiyaaa.fuse.ui.shell.store.Problem) {
         recentProblems.update { (it + (now() to problem)).takeLast(10) }
     }

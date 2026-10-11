@@ -769,12 +769,19 @@ object FramePacing {
     var powerSaving: Boolean = false
 
     /**
+     * How much decoration the app wants for what it is doing (set by the app, not measured): every
+     * update, a third of them (idle on screen), or none (behind another window, a game running,
+     * the device asleep). Paused decoration stays where it was and carries on from there.
+     */
+    var decorationRate: DecorationRate = DecorationRate.FULL
+
+    /**
      * Of decoration's updates, one in this many is kept for the device's sake: 1 normally, 2 while
      * it runs hot or battery saver is on, 3 while it is throttling.
      */
     val pressureEvery: Int
         get() = when {
-            devicePressure >= DevicePressure.THROTTLED -> 3
+            devicePressure >= DevicePressure.THROTTLED || decorationRate == DecorationRate.REDUCED -> 3
             powerSaving || devicePressure >= DevicePressure.HOT -> 2
             else -> 1
         }
@@ -822,7 +829,12 @@ object FramePacing {
      */
     fun input(nowNanos: Long = monotonicNanos()) {
         lastInput = nowNanos
+        lastInputNanos = nowNanos
     }
+
+    /** When input last arrived ([monotonicNanos]), or [Long.MIN_VALUE] before any: for the app to tell when it sits idle. */
+    var lastInputNanos: Long = Long.MIN_VALUE
+        private set
 
     /**
      * Whether decoration holds briefly after input while actual frame or thermal pressure exists.
@@ -853,6 +865,8 @@ object FramePacing {
         lastObserved = defaultHistory
         devicePressure = DevicePressure.NONE
         powerSaving = false
+        decorationRate = DecorationRate.FULL
+        lastInputNanos = Long.MIN_VALUE
         sources.fill(null)
         histories.fill(null)
     }
@@ -860,3 +874,6 @@ object FramePacing {
 
 /** How much the device itself says it is struggling (its thermal state), from none to throttling. */
 enum class DevicePressure { NONE, WARM, HOT, THROTTLED }
+
+/** How much decorative motion the app wants right now ([FramePacing.decorationRate]). */
+enum class DecorationRate { FULL, REDUCED, PAUSED }

@@ -650,6 +650,8 @@ internal class DefaultMediaOps(
      * remembered when a source failed or was resting, since it may have had the rest.
      */
     private suspend fun fillOne(game: Game, job: FillJob, kinds: Set<MediaKind>, detailSources: Boolean, configured: Set<ScrapeProviderId>): GameFill {
+        // Looking by itself waits while a game runs or the device has just woken; asked-for fills don't.
+        if (job.auto) ctx.governor.await { it.artwork }
         val owner = MediaOwner.OfGame(game.id)
         val plan = FillPlanner.plan(media.get(owner), job.mode, kinds)
         // Screenshots come along when the game is searched anyway, but never cause a search.

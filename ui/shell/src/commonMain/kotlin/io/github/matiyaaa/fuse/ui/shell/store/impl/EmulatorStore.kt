@@ -51,6 +51,7 @@ internal class DefaultEmulatorOps(private val ctx: StoreContext) : EmulatorOps {
 
     /** Re-detects at most once every [minIntervalMs] (used on every return to Fuse). */
     fun refreshIfStale(minIntervalMs: Long = 30_000) {
+        if (!ctx.governor.policy.detection) return
         if (ctx.now() - lastDetect >= minIntervalMs) refresh()
     }
 
@@ -71,13 +72,14 @@ internal class DefaultEmulatorOps(private val ctx: StoreContext) : EmulatorOps {
 
     /**
      * Brings Intelligence up to date with what was found: only what changed is looked into, and
-     * never while a game is being played (it waits until the game closes).
+     * never while a game is being played or the device has just woken (the Performance Governor
+     * holds it until then).
      */
     private fun learnSoon() {
         val b = brain ?: return
         if (learnJob?.isActive == true) return
         learnJob = ctx.scope.launch(Dispatchers.Default) {
-            ctx.playing.first { it == null }
+            ctx.governor.await { it.detection }
             brainTurn.withLock { runCatching { b.learn(installed.value) } }
         }
     }

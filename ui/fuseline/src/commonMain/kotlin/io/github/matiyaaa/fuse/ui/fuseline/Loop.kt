@@ -96,6 +96,12 @@ suspend fun decorationFrames(fps: Int, infinite: Boolean = true, onFrame: (playe
     var interval = FramePacing.intervalFor(source)
     var waited = false
     while (true) {
+        // Paused by the app: no frames are taken, and the time away doesn't count as played.
+        if (FramePacing.decorationRate == DecorationRate.PAUSED) {
+            while (FramePacing.decorationRate == DecorationRate.PAUSED) kotlinx.coroutines.delay(PAUSED_CHECK_MS)
+            last = frame(infinite) { it }
+            continue
+        }
         // Under the device's pressure (heat, battery saver) fewer updates, each at its true time.
         val every = base * FramePacing.pressureEvery
         val now = frame(infinite) { it }
@@ -120,3 +126,6 @@ suspend fun decorationFrames(fps: Int, infinite: Boolean = true, onFrame: (playe
 
 /** Waits shorter than this aren't worth a timer: the next frame comes sooner. */
 private const val MIN_WAIT_NANOS = 4_000_000L
+
+/** How often paused decoration looks whether it may move again. */
+private const val PAUSED_CHECK_MS = 250L
