@@ -47,6 +47,9 @@ interface PlatformUi {
     /** Decky Loader and the Fuse Decky plugin, where they can run (Linux); null elsewhere. */
     val decky: DeckyIntegration? get() = null
 
+    /** Reads game manuals (PDF and CBZ) on this device; null where it can't. */
+    val manuals: ManualReader? get() = null
+
     /**
      * Recent second-screen events (companion started or closed and why, refused displays, display
      * changes), oldest first, for a status row in Settings. Empty where there is no companion screen.

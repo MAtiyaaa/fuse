@@ -84,6 +84,11 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   interface's size, where the screen's edges are (corner marks move in until they sit inside a TV
   that cuts off its picture) and the text size, each seen as it changes. Kept for that screen
   alone, known again by its name and size; other screens keep the settings they share.
+- **Game manuals.** A manual kept with a game (a PDF or a CBZ of page pictures) opens from the
+  game's Updates and extras, read in Fuse page by page: LB and RB (or a swipe, or a tap at either
+  side) turn the page, X zooms in steps (or a pinch, or a double tap) and the D-pad or a drag moves
+  about, Y marks a page and A lists the marked ones. It opens where it was left, straight from the
+  file, so it reads offline. PDFs are drawn by PDFBox on computers and by Android itself on Android.
 - **Arrange the top line in place.** Hold a tab (touch, mouse or confirm) and it lifts; move it
   along with the D-pad or a drag, as Addons' tabs move, and put it down. Home stays first.
 

@@ -84,6 +84,9 @@ sealed interface Route {
     data object Onboarding : Route
     data class FolderBrowser(val game: GameId) : Route
 
+    /** A game's manual ([path], a PDF or CBZ), read page by page. */
+    data class Manual(val path: String, val title: String) : Route
+
     /** A PS3 or Vita game's packages, updates, DLC and licences, and installing them into its emulator. */
     data class GameContent(val game: GameId) : Route
 

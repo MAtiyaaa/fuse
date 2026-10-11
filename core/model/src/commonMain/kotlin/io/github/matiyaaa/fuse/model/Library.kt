@@ -44,6 +44,13 @@ enum class LibraryLayout { ICON, CAPSULE, COVER_GRID, COMPACT_LIST }
 @Serializable
 enum class GameArtStyle { BOX_ART, POSTER }
 
+/**
+ * Where someone is in a game's manual: the page it opens on again ([page], from 0), the pages
+ * marked to come back to ([bookmarks]) and when it was last read ([readAt], epoch ms).
+ */
+@Serializable
+data class ManualPlace(val page: Int = 0, val bookmarks: List<Int> = emptyList(), val readAt: Long = 0)
+
 @Serializable
 enum class SortOrder { TITLE, RECENTLY_PLAYED, RECENTLY_ADDED, MOST_PLAYED, RELEASE_YEAR }
 

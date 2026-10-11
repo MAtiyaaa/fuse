@@ -255,6 +255,8 @@ class DesktopPlatformUi(
     override fun clearCrashReport() = crashLog.clear()
 
     private val desktopSteam = DesktopSteam(io.github.matiyaaa.fuse.desktop.services.KnownFolders(dirs.home, os))
+    override val manuals: io.github.matiyaaa.fuse.ui.shell.platform.ManualReader = DesktopManuals()
+
     override val steam: io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration = desktopSteam
 
     /** Decky runs on Linux only (SteamOS, Bazzite and other Steam Gaming Mode systems). */

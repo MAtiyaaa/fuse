@@ -123,6 +123,8 @@ data class UiPrefs(
     val drivesAsked: List<String> = emptyList(),
     /** Steam's games in the library: "ON", "OFF", or "" (never asked). */
     val steamGames: String = "",
+    /** Manuals read on this device, by their file: where each was left and its bookmarks. */
+    val manuals: Map<String, io.github.matiyaaa.fuse.model.ManualPlace> = emptyMap(),
     val scraperOrder: List<ScrapeProviderId> = io.github.matiyaaa.fuse.data.settings.ScrapingSettings.DefaultProviderOrder,
     val scraperLanguage: String = "en",
     val scraperRegion: String = "any",

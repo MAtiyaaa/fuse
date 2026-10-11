@@ -450,6 +450,8 @@ data class LibraryPreferences(
      * Library, Steam), or "" when never asked: then on a computer only when Steam games were added.
      */
     val steamGames: String = "",
+    /** Manuals read on this device, by their file: the page each opens on and its bookmarks. */
+    val manuals: Map<String, io.github.matiyaaa.fuse.model.ManualPlace> = emptyMap(),
     /** Fetch system logos and art from the system art pack when a system has none. */
     val systemArtAuto: Boolean = true,
     /** How the Library is sorted. */

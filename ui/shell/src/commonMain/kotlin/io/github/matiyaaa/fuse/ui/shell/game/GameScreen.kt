@@ -360,7 +360,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
             InfoCard.STARTS -> app.emulatorPicker(card)
             InfoCard.FILE -> app.go(Route.FolderBrowser(game.id))
             InfoCard.PLAY -> app.go(Route.PlayTime)
-            else -> Unit
+            InfoCard.EXTRAS -> app.readManual(game.displayTitle, game.content)
         }
     }
     /** The detail card at the selection, when the selection is on a line of them. */
@@ -1191,7 +1191,8 @@ private fun PlayCard(d: GameDetail, selected: Boolean, onClick: () -> Unit, modi
 @Composable
 private fun ExtrasCard(d: GameDetail, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
     val c = Fuse.colors
-    InfoPanel("Updates and extras", FuseIcons.Package, selected, onClick, modifier) {
+    val manuals = d.game.content.count { it.kind == ContentKind.MANUAL }
+    InfoPanel("Updates and extras", FuseIcons.Package, selected, onClick, modifier, actionable = manuals > 0) {
         for ((kind, items) in d.game.content.groupBy { it.kind }) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                 FuseIcon(kindIcon(kind), size = Size.iconS, tint = c.text)
@@ -1200,7 +1201,33 @@ private fun ExtrasCard(d: GameDetail, selected: Boolean, onClick: () -> Unit, mo
             d.contentNotes.firstOrNull { it.kind == kind }?.let {
                 FText(it.message, Fuse.type.caption, color = c.textMuted, maxLines = 3, modifier = Modifier.padding(start = Size.iconS + Space.s, bottom = Space.xs))
             }
+            if (kind == ContentKind.MANUAL) {
+                FText(if (manuals == 1) "Press to read it here" else "Press to choose one to read", Fuse.type.caption, color = c.textMuted, maxLines = 1, modifier = Modifier.padding(start = Size.iconS + Space.s, bottom = Space.xs))
+            }
         }
+    }
+}
+
+/**
+ * Opens [title]'s manual among its [content]: straight away when it has one, from a list when it has
+ * several (each by its file's name).
+ */
+internal fun AppState.readManual(title: String, content: List<io.github.matiyaaa.fuse.model.ChildContent>) {
+    val manuals = content.filter { it.kind == ContentKind.MANUAL && !it.isDirectory }
+    when (manuals.size) {
+        0 -> Unit
+        1 -> go(Route.Manual(manuals[0].path, "$title manual"))
+        else -> choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+            title = "$title manuals",
+            icon = FuseIcons.BookOpen,
+            options = manuals.map { m ->
+                io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction(
+                    "manual.${m.path}", m.name.substringBeforeLast('.'), FuseIcons.BookOpen,
+                    detail = m.name.substringAfterLast('.').uppercase(),
+                    onSelect = { choice = null; go(Route.Manual(m.path, m.name.substringBeforeLast('.'))) },
+                )
+            },
+        )
     }
 }
 

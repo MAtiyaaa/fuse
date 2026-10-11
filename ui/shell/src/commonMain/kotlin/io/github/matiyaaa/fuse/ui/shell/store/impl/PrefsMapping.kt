@@ -100,6 +100,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         biosConfirmed = library.biosConfirmed,
         drivesAsked = library.drivesAsked,
         steamGames = library.steamGames,
+        manuals = library.manuals,
         scraperOrder = scraping.providerOrder,
         scraperLanguage = scraping.preferredLanguage,
         scraperRegion = scraping.preferredRegion ?: ANY_REGION,
@@ -180,6 +181,8 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             biosConfirmed = prefs.biosConfirmed,
             drivesAsked = prefs.drivesAsked,
             steamGames = prefs.steamGames,
+            // The most recently read, so the list never grows without end.
+            manuals = prefs.manuals.entries.sortedByDescending { it.value.readAt }.take(MANUALS_KEPT).associate { it.key to it.value },
             appsFilter = prefs.appsFilter,
             gameArt = prefs.gameArt,
             systemTiles = prefs.systemTiles,
@@ -222,3 +225,6 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
 
 /** How many recent colours the theme studio keeps. */
 internal const val RECENT_COLORS = 10
+
+/** How many manuals keep their page and bookmarks. */
+private const val MANUALS_KEPT = 200

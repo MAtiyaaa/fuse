@@ -59,6 +59,7 @@ class AndroidPlatformUi(
     override val video: VideoPreview = AndroidVideoPreview()
     override val music: AndroidMenuMusic = AndroidMenuMusic()
     override val capture: AndroidScreenCapture = AndroidScreenCapture(appContext, activities, scope)
+    override val manuals: AndroidManuals = AndroidManuals(appContext)
     override val secondScreenLog: StateFlow<List<String>> = SecondScreenLog.entries
 
     private val hasBluetooth = appContext.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)
