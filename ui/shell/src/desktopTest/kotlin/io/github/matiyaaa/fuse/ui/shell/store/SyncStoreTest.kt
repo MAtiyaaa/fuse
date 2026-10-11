@@ -195,8 +195,10 @@ class SyncStoreTest {
         pc.sync.syncNow().getOrThrow()
         assertTrue(pc.store.prefs.value.home.mode != deckMode, "Home stayed on the handheld")
         deck.store.sync.setOwnHome(false)
-        eventually("the profile's Home is back") { deck.store.prefs.value.home.mode == pc.store.prefs.value.home.mode }
-        assertEquals("PROFILE", deck.store.sync.config.value.homeScope)
+        // The profile's Home comes in first, then the scope settles back to the profile's (two writes).
+        eventually("the profile's Home is back") {
+            deck.store.prefs.value.home.mode == pc.store.prefs.value.home.mode && deck.store.sync.config.value.homeScope == "PROFILE"
+        }
 
         // Off: nothing changes here, and nothing shows.
         val before = games(deck).map { it.id to it.favorite }
