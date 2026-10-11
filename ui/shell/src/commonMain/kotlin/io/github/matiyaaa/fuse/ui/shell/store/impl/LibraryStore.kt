@@ -921,6 +921,19 @@ internal class DefaultLibraryOps(
 
     override suspend fun removeEnhancement(id: GameId, enhancement: String, force: Boolean) = nativeEnhancements.remove(id, enhancement, force)
 
+    /** Mods from GameBanana, added through [nativeEnhancements]. */
+    private val modSites by lazy { ModSites(ctx, nativeEnhancements) }
+
+    override suspend fun modSiteGames(id: GameId, query: String?) = modSites.games(id, query)
+
+    override suspend fun linkModSiteGame(id: GameId, game: io.github.matiyaaa.fuse.integrations.gamebanana.GbGame?) = modSites.link(id, game)
+
+    override suspend fun modSiteMods(id: GameId, page: Int) = modSites.mods(id, page)
+
+    override suspend fun modSitePage(id: GameId, modId: Long) = modSites.page(id, modId)
+
+    override suspend fun fetchModSiteFile(id: GameId, modId: Long, fileId: Long, onProgress: (Float) -> Unit) = modSites.fetch(id, modId, fileId, onProgress)
+
     /**
      * A PSP game's id as PPSSPP files it (`ULUS10041`): from its name or tags, else read from its ISO
      * or EBOOT.PBP (a game folder's EBOOT.PBP too), kept by path, size and change time.

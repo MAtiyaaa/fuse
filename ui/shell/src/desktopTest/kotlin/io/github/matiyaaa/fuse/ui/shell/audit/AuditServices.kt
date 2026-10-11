@@ -34,6 +34,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import io.ktor.client.engine.mock.respond
 import java.io.File
 
 /**
@@ -123,6 +124,7 @@ internal class AuditServices(
     override val http: io.ktor.client.HttpClient =
         io.ktor.client.HttpClient(io.ktor.client.engine.mock.MockEngine { request ->
             AuditJellyfin.answer(this, request)
+                ?: AuditGameBanana.answer(this, request)
                 ?: (if (host == Host.ANDROID || desktop) AuditStore.answer(this, request) else null)
                 ?: respondError(io.ktor.http.HttpStatusCode.NotFound)
         }) { install(io.ktor.client.plugins.HttpTimeout) }
@@ -586,5 +588,37 @@ internal class AuditEmulatorFiles(private val root: File) : io.github.matiyaaa.f
         val CHEATS = listOf("Infinite Lives", "Start With 99 Coins", "Invincibility", "Moon Jump", "Unlock All Levels")
             .mapIndexed { i, d -> "cheat${i}_desc = \"$d\"\ncheat${i}_code = \"7E0DBE:0$i\"\ncheat${i}_enable = false\n" }
             .joinToString("\n", prefix = "cheats = 5\n\n")
+    }
+}
+
+/** GameBanana as the audit has it: one game, a few mods of different kinds, and a cheat file. */
+internal object AuditGameBanana {
+    private const val GAMES = """{"_aMetadata": {"_nRecordCount": 2, "_bIsComplete": true}, "_aRecords": [
+        {"_idRow": 4401, "_sModelName": "Game", "_sName": "Emberline Saga II"},
+        {"_idRow": 4400, "_sModelName": "Game", "_sName": "Emberline Saga"}]}"""
+    private const val MODS = """{"_aMetadata": {"_nRecordCount": 4, "_bIsComplete": true}, "_aRecords": [
+        {"_idRow": 9101, "_sModelName": "Mod", "_sName": "Treasure Hunter Cheats", "_aRootCategory": {"_sName": "Cheats"}, "_sVersion": "1.3", "_aSubmitter": {"_sName": "Kestrel"}, "_nLikeCount": 212},
+        {"_idRow": 9102, "_sModelName": "Mod", "_sName": "Speedrun Practice Codes", "_aRootCategory": {"_sName": "Cheats"}, "_sVersion": "2.0", "_aSubmitter": {"_sName": "Mira"}, "_nLikeCount": 87},
+        {"_idRow": 9103, "_sModelName": "Mod", "_sName": "Restored Script", "_aRootCategory": {"_sName": "Game files"}, "_sVersion": "1.0", "_aSubmitter": {"_sName": "Oren"}, "_nLikeCount": 164},
+        {"_idRow": 9104, "_sModelName": "Mod", "_sName": "Widescreen Hack", "_aRootCategory": {"_sName": "Other/Misc"}, "_aSubmitter": {"_sName": "Pell"}, "_nLikeCount": 31}]}"""
+    private const val MOD = """{"_idRow": 9101, "_sName": "Treasure Hunter Cheats", "_sProfileUrl": "https://gamebanana.com/mods/9101", "_aCategory": {"_sName": "Cheats"}, "_sVersion": "1.3",
+        "_sText": "Max gold, every chest marked on the map, and a walk-through-walls toggle for finding the last few.<br>Made for the US release.",
+        "_sLicense": "Free to share with credit",
+        "_aFiles": [
+          {"_idRow": 70001, "_sFile": "treasure_hunter_1.3.zip", "_nFilesize": 4812, "_sDownloadUrl": "https://gamebanana.com/dl/70001", "_sMd5Checksum": "0123456789abcdef0123456789abcdef", "_sAnalysisResult": "ok", "_sAvResult": "clean", "_sVersion": "1.3"},
+          {"_idRow": 70000, "_sFile": "treasure_hunter_1.2.7z", "_nFilesize": 4100, "_sDownloadUrl": "https://gamebanana.com/dl/70000", "_sAnalysisResult": "ok", "_sAvResult": "clean", "_sVersion": "1.2"}]}"""
+
+    fun answer(scope: io.ktor.client.engine.mock.MockRequestHandleScope, request: io.ktor.client.request.HttpRequestData): io.ktor.client.request.HttpResponseData? {
+        if (request.url.host != "gamebanana.com") return null
+        val path = request.url.encodedPath
+        val body = when {
+            path.endsWith("/Util/Search/Results") -> GAMES
+            path.endsWith("/Mod/Index") -> MODS
+            path.endsWith("/Mod/9101/ProfilePage") -> MOD
+            else -> return null
+        }
+        return with(scope) {
+            respond(body, io.ktor.http.HttpStatusCode.OK, io.ktor.http.headersOf(io.ktor.http.HttpHeaders.ContentType, "application/json"))
+        }
     }
 }

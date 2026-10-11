@@ -498,6 +498,26 @@ interface LibraryOps {
     /** Adds what the preview with [token] showed, after making a restoration point. Null when it worked, else why not. */
     suspend fun addEnhancement(token: String): String? = "Not here."
 
+    /** Which game on GameBanana [id] is, and the games a search for [query] (else its name) finds there. */
+    suspend fun modSiteGames(id: GameId, query: String? = null): ModSiteGames = ModSiteGames(null, emptyList(), query.orEmpty(), "Mods can be found from Fuse on a computer.")
+
+    /** Remembers [game] as [id]'s game on GameBanana (null forgets it). */
+    suspend fun linkModSiteGame(id: GameId, game: io.github.matiyaaa.fuse.integrations.gamebanana.GbGame?) = Unit
+
+    /** A page (from 1) of the mods on GameBanana for [id]'s game there, most liked first. */
+    suspend fun modSiteMods(id: GameId, page: Int = 1): ModSiteMods = ModSiteMods.Unavailable("Not here", "Mods can be found from Fuse on a computer.")
+
+    /** A mod's page on GameBanana, with what Fuse can do with each of its files for [id]. */
+    suspend fun modSitePage(id: GameId, modId: Long): ModSitePage = ModSitePage.Unavailable("Not here", "Mods can be found from Fuse on a computer.")
+
+    /**
+     * Fetches the file [fileId] of mod [modId] into Fuse's own folder (checked against GameBanana's
+     * size and checksum) and works out what adding it to [id] would do, as [planEnhancement] does.
+     * Nothing in the emulator's folders changes yet.
+     */
+    suspend fun fetchModSiteFile(id: GameId, modId: Long, fileId: Long, onProgress: (Float) -> Unit = {}): EnhancementPreview =
+        EnhancementPreview.Unavailable("Not here", "Mods can be added from Fuse on a computer.")
+
     /** Takes out [enhancement] from [id], putting back what was there before; [force] even when it was changed since. */
     suspend fun removeEnhancement(id: GameId, enhancement: String, force: Boolean = false): EnhancementRemoval =
         EnhancementRemoval.Failed("Not here.")

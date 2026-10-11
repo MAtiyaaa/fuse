@@ -447,4 +447,22 @@ internal fun AuditDriver.cheatScreens() {
         settle(600)
         tap(PadButton.B)
     }
+    scenario("library", "game mods") {
+        useLibrary(AuditPlatform(size, host = io.github.matiyaaa.fuse.model.Host.LINUX))
+        search("Emberline Saga")
+        tap(PadButton.START)
+        tap(PadButton.X)
+        tapText("Cheats")
+        waitFor("RetroArch cheats")
+        tapText("Find Mods on GameBanana")
+        waitFor("Which is Emberline Saga")
+        shoot("which game on GameBanana it is: chosen, never guessed", 1_200)
+        tapText("Emberline Saga")
+        waitFor("Treasure Hunter Cheats")
+        shoot("its mods, those Fuse can add first", 1_200)
+        tapText("Treasure Hunter Cheats")
+        waitFor("treasure_hunter_1.3.zip")
+        shoot("a mod's files, with what GameBanana's checks said and what Fuse won't open", 1_200)
+        tap(PadButton.B)
+    }
 }

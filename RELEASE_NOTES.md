@@ -69,6 +69,15 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   emulator doesn't read, and packs or codes made for another game or version. A restoration point
   is made first, and taking one out puts back every file and setting as it was; codes changed in the
   emulator since are only put back when you say so.
+- **Mods from GameBanana.** The same options find a game's mods on GameBanana, through its public
+  API with no account needed. Which game there it is, you choose once from a search (Fuse never
+  guesses from a similar name). Mods Fuse can add for the game's emulator (textures, cheats,
+  patches) come first; for the rest, their page and own instructions. Fuse fetches only .zip files
+  that passed GameBanana's virus scan and file check, into its own folder, and keeps nothing that
+  doesn't match GameBanana's size and checksum. Then the same preview and restoration point as your
+  own files apply, and the mod's page stays a choice away for a newer version. PCSX2 cheat files
+  named for another CRC (the way mod makers keep a variant off) are left out, and files that change
+  the same memory are pointed out.
 - **Emulator settings in Fuse.** A PS2, PlayStation or PSP game's options, and PCSX2's, DuckStation's
   and PPSSPP's pages in Settings, change the emulator's own settings: renderer, internal resolution,
   texture filtering, aspect ratio and the like, only those each emulator really reads, and for one

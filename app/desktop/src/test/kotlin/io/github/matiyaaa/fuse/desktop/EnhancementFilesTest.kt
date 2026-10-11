@@ -144,4 +144,12 @@ class EnhancementFilesTest {
         assertFalse(dest.exists())
         assertTrue(cheat.isFile, "the person's own file is never touched")
     }
+
+    @Test
+    fun onlySecureAddressesAreFetched() = runBlocking {
+        val files = files()
+        assertNull(files.fetch("http://example.com/x.zip", "x.zip", null, null, 1_000))
+        assertNull(files.fetch("file:///etc/passwd", "x.zip", null, null, 1_000))
+        assertFalse(File(home, "fuse/fetched-mods").listFiles().orEmpty().any { it.listFiles().orEmpty().isNotEmpty() })
+    }
 }

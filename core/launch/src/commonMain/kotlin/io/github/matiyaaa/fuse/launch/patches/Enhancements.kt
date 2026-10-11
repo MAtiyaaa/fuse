@@ -128,6 +128,33 @@ object EnhancementRules {
         return "${base}_$label.pnach"
     }
 
+    /**
+     * The CRC a `.pnach` file's name says it is for, as PCSX2 matches names: the leading hex of
+     * `CRC*.pnach`, or of `SERIAL_CRC*.pnach`. Null when the name doesn't start with one (a name of
+     * its own). A name like `094A82AAA_x.pnach` (nine digits) says a CRC PCSX2 won't match: its
+     * makers' way of keeping a variant off.
+     */
+    fun pnachCrc(fileName: String): String? {
+        val parts = fileName.substringAfterLast('/').substringBeforeLast('.').uppercase().split('_', ' ', '-', '.')
+        fun hex(s: String) = s.length >= 8 && s.all { it in '0'..'9' || it in 'A'..'F' }
+        return when {
+            parts.isNotEmpty() && hex(parts[0]) -> parts[0]
+            parts.size >= 2 && SERIAL_START.matches(parts[0]) && hex(parts[1]) -> parts[1]
+            parts.size >= 3 && SERIAL_START.matches(parts[0]) && parts[1].all { it.isDigit() } && hex(parts[2]) -> parts[2]
+            else -> null
+        }
+    }
+
+    /** The memory a `.pnach` file's `patch=` lines change, as `CPU:ADDRESS` (upper case, leading zeros dropped). */
+    fun pnachAddresses(text: String): Set<String> = text.lineSequence().mapNotNull { raw ->
+        val line = raw.substringBefore("//").trim()
+        if (!line.startsWith("patch", ignoreCase = true) && !line.startsWith("dpatch", ignoreCase = true)) return@mapNotNull null
+        val parts = line.substringAfter('=').split(',').map { it.trim() }
+        if (parts.size < 5) return@mapNotNull null
+        val address = parts[2].uppercase().trimStart('0').ifEmpty { "0" }
+        "${parts[1].uppercase()}:$address"
+    }.toSet()
+
     /** Whether [text] holds codes [emulator] reads as cheats or patches: at least one, parsed as the emulator parses them. */
     fun codesIn(emulator: String, text: String, gameId: String = ""): Int = when (emulator) {
         "pcsx2" -> Pnach.parse(text).size + (if (Pnach.hasUnlabelled(text)) 1 else 0)
@@ -193,4 +220,5 @@ object EnhancementRules {
     private val NAMES = mapOf("pcsx2" to "PCSX2", "duckstation" to "DuckStation", "ppsspp" to "PPSSPP")
     private val DRIVE = Regex("^[A-Za-z]:")
     private val SWITCH = Regex("^_C[0-9] ")
+    private val SERIAL_START = Regex("[A-Z]{4}")
 }

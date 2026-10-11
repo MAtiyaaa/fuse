@@ -270,6 +270,20 @@ internal class FakeServices(
             return true
         }
 
+        override suspend fun fetch(url: String, name: String, size: Long?, md5: String?, maxBytes: Long, onProgress: (Float) -> Unit): String? {
+            fetchedUrls += url
+            val from = downloads[url] ?: return null
+            val sum = java.security.MessageDigest.getInstance("MD5").digest(from.readBytes()).joinToString("") { "%02x".format(it) }
+            if (md5 != null && sum != md5) return null
+            onProgress(1f)
+            val dir = File(cache, "fetched").also { it.mkdirs() }
+            return from.copyTo(File(dir, name), overwrite = true).absolutePath
+        }
+
+        override suspend fun clearFetched() {
+            File(cache, "fetched").deleteRecursively()
+        }
+
         override suspend fun undo(restorePoint: String, keep: Set<String>): Boolean {
             val point = restorePoints.remove(restorePoint) ?: return false
             for ((path, was) in point) {
@@ -279,6 +293,10 @@ internal class FakeServices(
             return true
         }
     }
+
+    /** Files the fake fetches for each address, and the addresses asked for. */
+    val downloads = java.util.concurrent.ConcurrentHashMap<String, File>()
+    val fetchedUrls: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
 
     /** What each restoration point of the fake keeps: every destination with its bytes before (null when it was new). */
     val restorePoints = java.util.concurrent.ConcurrentHashMap<String, Map<String, ByteArray?>>()

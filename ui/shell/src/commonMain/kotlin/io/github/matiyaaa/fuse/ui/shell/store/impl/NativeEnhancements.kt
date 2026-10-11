@@ -59,10 +59,14 @@ internal class NativeEnhancements(
         /** The emulator's settings file for the game that Fuse changed for it, and what it changed ([SettingsEdit] records). */
         val settingsFile: String? = null,
         val settings: Set<String> = emptySet(),
+        /** Where Fuse fetched it from ("GameBanana"), its page there and its version. */
+        val origin: String? = null,
+        val originUrl: String? = null,
+        val version: String? = null,
     )
 
     /** An accepted plan waits here, by its token, until it is added or left. */
-    private class Plan(
+    private data class Plan(
         val game: GameId,
         val record: Record,
         val source: String?,
@@ -92,6 +96,9 @@ internal class NativeEnhancements(
                     addedAt = r.addedAt,
                     where = shown(r.appendedTo ?: r.target),
                     settingsChanged = r.settings.isNotEmpty(),
+                    origin = r.origin,
+                    originUrl = r.originUrl,
+                    version = r.version,
                 )
             },
             kinds = supported,
@@ -111,6 +118,9 @@ internal class NativeEnhancements(
 
     private fun no(title: String, reason: String) = EnhancementPreview.Unavailable(title, reason)
 
+    private suspend fun list(folder: String): List<io.github.matiyaaa.fuse.library.FsEntry> =
+        try { fs.list(folder) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { emptyList() }
+
     private fun installed(name: String): InstalledEmulator? = ctx.installed.value.firstOrNull { it.id.value.substringAfter('.') == name }
 
     /** [path] with the home folder shown as `~`. */
@@ -124,7 +134,21 @@ internal class NativeEnhancements(
      * Works out what adding [source] (a file, folder or `.zip`) to game [id] as [kind] would do, and
      * holds it for [add]. Nothing changes here.
      */
-    suspend fun plan(id: GameId, kind: EnhancementKind, source: String): EnhancementPreview {
+    suspend fun plan(id: GameId, kind: EnhancementKind, source: String): EnhancementPreview = planOnly(id, kind, source)
+
+    /**
+     * [plan] for a file Fuse fetched: named [name] (the mod's own name) and remembered as from
+     * [origin] ([url], [version]), so its page can be found again and a newer version noticed.
+     */
+    suspend fun plan(id: GameId, kind: EnhancementKind, source: String, name: String, origin: String, url: String, version: String?): EnhancementPreview {
+        val preview = planOnly(id, kind, source)
+        if (preview !is EnhancementPreview.Ready) return preview
+        val plan = plans[preview.token] ?: return preview
+        plans[preview.token] = plan.copy(record = plan.record.copy(name = name, origin = origin, originUrl = url, version = version))
+        return preview.copy(name = name)
+    }
+
+    private suspend fun planOnly(id: GameId, kind: EnhancementKind, source: String): EnhancementPreview {
         val game = data.games.get(id) ?: return no("Game not found", "This game is no longer in the library.")
         val files = ctx.services.emulatorFiles ?: return no("Not on this device", "Your own cheats, patches and textures can be added from Fuse on a computer.")
         if (ctx.installed.value.isEmpty()) detectNow()
@@ -226,10 +250,11 @@ internal class NativeEnhancements(
         var codes = 0
         for ((entry, text) in found) {
             val name = entry.substringAfterLast('/')
-            // A file named for another CRC was made for another version of the game.
-            val other = CRC.find(name.uppercase())?.value
+            // A name that says another CRC was made for another version of the game, or is its
+            // makers' way of keeping a variant off (PCSX2 wouldn't read it for this game).
+            val other = EnhancementRules.pnachCrc(name)
             if (other != null && other != crcText) {
-                rejected += "$name (made for CRC $other; this game is $crcText)"
+                rejected += "$name (named for CRC $other, which isn't this game's $crcText, so PCSX2 wouldn't read it)"
                 continue
             }
             val n = EnhancementRules.codesIn("pcsx2", text)
@@ -250,7 +275,20 @@ internal class NativeEnhancements(
         val record = Record(token(), kind, "PCSX2", listing.name, now(), texts.size, folder)
         val word = if (kind == EnhancementKind.CHEATS) "cheats" else "patches"
         val plan = Plan(id, record, null, planned, texts, emptyList(), emptyList())
-        return preview(plan, replaces, rejected, listOf("They show in this game's ${word.replaceFirstChar { it.uppercase() }} list, off until you turn them on."), emptyList(), codes, texts.values.sumOf { it.length.toLong() })
+        // Files that change the same memory as each other, or as one PCSX2 already has for the game.
+        val mine = texts.map { (path, text) -> path.substringAfterLast('/') to EnhancementRules.pnachAddresses(text) }
+        val theirs = list(folder).filter { !it.isDirectory && Pcsx2PatchRules.matchesPnach(it.name, disc.serial, crc) && "$folder/${it.name}" !in texts }
+            .mapNotNull { f -> fs.readText(f.path, MAX_TEXT)?.let { f.name to EnhancementRules.pnachAddresses(it) } }
+        val overlaps = buildList {
+            for ((i, a) in mine.withIndex()) {
+                for (b in mine.drop(i + 1) + theirs) if ((a.second intersect b.second).isNotEmpty()) add("${a.first} and ${b.first}")
+            }
+        }
+        val notes = listOfNotNull(
+            "They show in this game's ${word.replaceFirstChar { it.uppercase() }} list, off until you turn them on.",
+            overlaps.takeIf { it.isNotEmpty() }?.let { "${it.joinToString("; ")} change the same memory. PCSX2 applies every one turned on, so turn on only one of each." },
+        )
+        return preview(plan, replaces, rejected, notes, emptyList(), codes, texts.values.sumOf { it.length.toLong() })
     }
 
     // DuckStation ---------------------------------------------------------------------------------
@@ -532,7 +570,6 @@ internal class NativeEnhancements(
         const val LOAD_TEXTURES = "LoadTextureReplacements"
         const val TR = "TextureReplacements"
         const val ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
-        val CRC = Regex("(?<![0-9A-F])[0-9A-F]{8}(?![0-9A-F])")
         val SERIAL = Regex("(?<![A-Z])[A-Z]{4}[-_. ]?[0-9]{3}[.]?[0-9]{2}(?![0-9])")
     }
 }

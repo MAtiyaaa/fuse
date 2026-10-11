@@ -11,6 +11,7 @@ import io.github.matiyaaa.fuse.model.Host
 import io.github.matiyaaa.fuse.model.InstalledEmulator
 import io.github.matiyaaa.fuse.model.LibrarySourceKind
 import io.github.matiyaaa.fuse.model.PlatformId
+import io.ktor.client.engine.mock.respond
 import java.io.File
 import java.nio.file.Files
 import java.util.zip.ZipEntry
@@ -315,5 +316,98 @@ class EnhancementsStoreTest {
         assertTrue(ok.settings.isEmpty(), "Replace textures is on unless turned off")
         assertNull(store.library.addEnhancement(ok.token))
         assertEquals("a", File(emu, "ppsspp/PSP/TEXTURES/ULUS10041/a.png").readText())
+    }
+
+    // GameBanana ---------------------------------------------------------------------------------
+
+    private fun md5(f: File) = java.security.MessageDigest.getInstance("MD5").digest(f.readBytes()).joinToString("") { "%02x".format(it) }
+
+    private fun gameBanana(services: FakeServices, pack: File, md5: String = md5(pack), av: String = "clean") {
+        val games = """{"_aMetadata": {"_nRecordCount": 2, "_bIsComplete": true}, "_aRecords": [
+            {"_idRow": 9001, "_sModelName": "Game", "_sName": "Racer Turbo"},
+            {"_idRow": 9000, "_sModelName": "Game", "_sName": "Racer"}]}"""
+        val mods = """{"_aMetadata": {"_nRecordCount": 2, "_bIsComplete": true}, "_aRecords": [
+            {"_idRow": 77, "_sModelName": "Mod", "_sName": "HD Cars", "_sProfileUrl": "https://gamebanana.com/mods/77", "_aRootCategory": {"_sName": "Textures"}, "_sVersion": "1.2", "_nLikeCount": 9},
+            {"_idRow": 78, "_sModelName": "Mod", "_sName": "Translation", "_sProfileUrl": "https://gamebanana.com/mods/78", "_aRootCategory": {"_sName": "Game files"}}]}"""
+        val mod = """{"_idRow": 77, "_sName": "HD Cars", "_sProfileUrl": "https://gamebanana.com/mods/77", "_aCategory": {"_sName": "Textures"}, "_sVersion": "1.2",
+            "_sText": "Sharper cars", "_aFiles": [{"_idRow": 500, "_sFile": "hd_cars.zip", "_nFilesize": ${pack.length()}, "_sDownloadUrl": "https://gamebanana.com/dl/500",
+            "_sMd5Checksum": "$md5", "_sAnalysisResult": "ok", "_sAvResult": "$av", "_sVersion": "1.2"}]}"""
+        val gameFiles = """{"_idRow": 78, "_sName": "Translation", "_sProfileUrl": "https://gamebanana.com/mods/78", "_aCategory": {"_sName": "Game files"},
+            "_aFiles": [{"_idRow": 501, "_sFile": "t.zip", "_nFilesize": 10, "_sDownloadUrl": "https://gamebanana.com/dl/501", "_sAnalysisResult": "ok", "_sAvResult": "clean"}]}"""
+        services.web = { request ->
+            val path = request.url.encodedPath
+            val body = when {
+                request.url.host != "gamebanana.com" -> null
+                path.endsWith("/Util/Search/Results") -> games
+                path.endsWith("/Mod/Index") && request.url.parameters["_aFilters[Generic_Game]"] == "9000" -> mods
+                path.endsWith("/Mod/77/ProfilePage") -> mod
+                path.endsWith("/Mod/78/ProfilePage") -> gameFiles
+                else -> null
+            }
+            body?.let { respond(it, io.ktor.http.HttpStatusCode.OK, io.ktor.http.headersOf(io.ktor.http.HttpHeaders.ContentType, "application/json")) }
+        }
+        services.downloads["https://gamebanana.com/dl/500"] = pack
+    }
+
+    @Test
+    fun aModFromGameBananaIsFetchedCheckedAndAddedLikeYourOwn(): Unit = runBlocking {
+        val services = services("gb.db", duckstationInstalled)
+        services.duckstationHome = duckStation()
+        val pack = zip("hd_cars.zip", mapOf("SLUS-00594/replacements/vram-write-9.png" to "car"))
+        gameBanana(services, pack)
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = gameIn(store)
+
+        // Nothing is guessed: the game there is chosen, the same name listed first.
+        assertTrue(assertIs<ModSiteMods.Unavailable>(store.library.modSiteMods(game.id)).needsGame)
+        val found = store.library.modSiteGames(game.id)
+        assertEquals("Racer", found.query)
+        assertEquals(listOf("Racer", "Racer Turbo"), found.found.map { it.name })
+        store.library.linkModSiteGame(game.id, found.found.first())
+        assertEquals(9000L, store.library.modSiteGames(game.id).linked?.id)
+
+        val mods = assertIs<ModSiteMods.Ready>(store.library.modSiteMods(game.id))
+        assertEquals(listOf(EnhancementKind.TEXTURES, null), mods.mods.map { it.kind })
+        assertIs<EnhancementPreview.Unavailable>(store.library.fetchModSiteFile(game.id, 78, 501))
+        assertTrue(services.fetchedUrls.isEmpty(), "a kind Fuse doesn't add is never fetched")
+
+        val preview = assertIs<EnhancementPreview.Ready>(store.library.fetchModSiteFile(game.id, 77, 500))
+        assertEquals("HD Cars", preview.name)
+        assertEquals(1, preview.adds.size)
+        assertNull(store.library.addEnhancement(preview.token))
+        assertEquals("car", File(emu, "duckstation/textures/SLUS-00594/replacements/vram-write-9.png").readText())
+        val added = store.library.enhancements(game.id).added.single()
+        assertEquals("GameBanana", added.origin)
+        assertEquals("https://gamebanana.com/mods/77", added.originUrl)
+        assertEquals("1.2", added.version)
+        assertEquals(EnhancementRemoval.Removed, store.library.removeEnhancement(game.id, added.id))
+        assertFalse(File(emu, "duckstation/textures/SLUS-00594/replacements/vram-write-9.png").exists())
+    }
+
+    @Test
+    fun aFileThatFailedItsChecksOrArrivedChangedIsNeverOpened(): Unit = runBlocking {
+        val services = services("gb2.db", duckstationInstalled)
+        services.duckstationHome = duckStation()
+        val pack = zip("hd_cars.zip", mapOf("SLUS-00594/replacements/vram-write-9.png" to "car"))
+        gameBanana(services, pack, av = "pending")
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = gameIn(store)
+        store.library.linkModSiteGame(game.id, store.library.modSiteGames(game.id).found.first())
+        val refused = assertIs<EnhancementPreview.Unavailable>(store.library.fetchModSiteFile(game.id, 77, 500))
+        assertTrue("virus scan" in refused.reason)
+        assertTrue(services.fetchedUrls.isEmpty())
+
+        val services2 = services("gb3.db", duckstationInstalled)
+        services2.duckstationHome = duckStation()
+        gameBanana(services2, pack, md5 = "0".repeat(32))
+        val store2 = createFuseStore(services2, scope)
+        store2.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game2 = gameIn(store2)
+        store2.library.linkModSiteGame(game2.id, store2.library.modSiteGames(game2.id).found.first())
+        assertIs<EnhancementPreview.Unavailable>(store2.library.fetchModSiteFile(game2.id, 77, 500))
+        assertEquals(listOf("https://gamebanana.com/dl/500"), services2.fetchedUrls)
+        assertFalse(File(emu, "duckstation/textures").exists(), "nothing reaches the emulator's folders")
     }
 }

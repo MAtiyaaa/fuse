@@ -27,7 +27,7 @@ internal fun AppState.ownEnhancementRows(card: GameCard, own: Enhancements, emul
             detail = describe(e),
             trailing = Trailing.Chevron,
             section = "Your Own",
-            onSelect = { takeOutEnhancement(card, e) },
+            onSelect = { enhancementSheet(card, e) },
         )
     }
     val add = own.kinds.map { kind ->
@@ -52,7 +52,9 @@ internal fun AppState.ownEnhancementRows(card: GameCard, own: Enhancements, emul
             )
         }
     }
-    return added + add
+    // Mods made for the game, from GameBanana, where its emulator takes any.
+    val site = if (own.kinds.isEmpty()) emptyList() else listOf(modSiteRow(card))
+    return added + add + site
 }
 
 private fun kindIcon(kind: EnhancementKind) = when (kind) {
@@ -63,7 +65,7 @@ private fun kindIcon(kind: EnhancementKind) = when (kind) {
 
 private fun count(n: Int, one: String, many: String = "${one}s") = if (n == 1) "1 $one" else "$n $many"
 
-private fun describe(e: EnhancementView): String = when (e.kind) {
+private fun describe(e: EnhancementView): String = (e.origin?.let { o -> "From $o" + (e.version?.let { v -> "  ·  ${if (v.startsWith("v", ignoreCase = true)) v else "v$v"}" } ?: "") + "  ·  " } ?: "") + when (e.kind) {
     EnhancementKind.TEXTURES -> "Texture pack  ·  ${count(e.files, "picture")}"
     EnhancementKind.CHEATS -> "Cheats  ·  in ${e.where.substringAfterLast('/')}"
     EnhancementKind.PATCHES -> "Patches  ·  in ${e.where.substringAfterLast('/')}"
@@ -121,7 +123,7 @@ private fun list(paths: List<String>): String =
     paths.take(PREVIEW_PATHS).joinToString(", ") + if (paths.size > PREVIEW_PATHS) " and ${paths.size - PREVIEW_PATHS} more" else ""
 
 /** The preview: the files that go in, those they replace, settings they turn on and what was left out, then Add. */
-private fun AppState.confirmEnhancement(card: GameCard, p: EnhancementPreview.Ready) {
+internal fun AppState.confirmEnhancement(card: GameCard, p: EnhancementPreview.Ready) {
     val goesIn = when {
         p.appendsTo != null -> "${count(p.codes, "code")} from ${p.name} are added to the end of ${p.appendsTo}."
         p.kind == EnhancementKind.TEXTURES -> "${count(p.adds.size + p.replaces.size, "picture")} (${bytesText(p.bytes)}) go in ${p.target}."
@@ -152,8 +154,35 @@ private fun AppState.confirmEnhancement(card: GameCard, p: EnhancementPreview.Re
     }
 }
 
+/** One thing a person added: taking it out, and for a mod from GameBanana, its files there (a newer version among them). */
+private fun AppState.enhancementSheet(card: GameCard, e: EnhancementView) {
+    val modId = e.originUrl?.takeIf { e.origin == "GameBanana" }?.substringAfterLast('/')?.toLongOrNull()
+    choice = ChoiceSpec(
+        icon = kindIcon(e.kind),
+        title = e.name,
+        message = describe(e) + ". Added for ${e.emulator}.",
+        options = listOfNotNull(
+            modId?.let {
+                MenuAction(
+                    "files", "Its Files on GameBanana", FuseIcons.Globe,
+                    detail = "A newer version is added beside this one; then take this one out",
+                    trailing = Trailing.Chevron,
+                    onSelect = { modSitePage(card, it) },
+                )
+            },
+            MenuAction(
+                "out", "Take Out", FuseIcons.Undo,
+                detail = "Puts back every file and setting as it was before",
+                destructive = true,
+                onSelect = { takeOutEnhancement(card, e) },
+            ),
+        ),
+    )
+}
+
 /** Taking out something a person added: what it puts back, and, when it was changed since, whether to anyway. */
 private fun AppState.takeOutEnhancement(card: GameCard, e: EnhancementView) {
+    choice = null
     val what = when (e.kind) {
         EnhancementKind.TEXTURES -> "The pack's ${count(e.files, "picture")} leave ${e.where}, and any it replaced come back."
         else -> "Its codes come out of ${e.where.substringAfterLast('/')}; everything else in it stays."

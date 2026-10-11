@@ -99,4 +99,22 @@ class EnhancementRulesTest {
         assertEquals("_S ULUS-10041\n", EnhancementRules.removeAppended(file, block, ppsspp = true))
         assertNull(EnhancementRules.removeAppended(file, block, ppsspp = false))
     }
+
+    @Test
+    fun aPnachNameSaysTheCrcPcsx2MatchesItTo() {
+        assertEquals("94A82AAA", EnhancementRules.pnachCrc("94A82AAA_Run_R2.pnach"))
+        // Nine digits: a variant its makers keep off, as PCSX2 won't match it.
+        assertEquals("094A82AAA", EnhancementRules.pnachCrc("cheats/094A82AAA_Run_Circle.pnach"))
+        assertEquals("ABCD1234", EnhancementRules.pnachCrc("SLUS-20062_ABCD1234.pnach"))
+        assertEquals("ABCD1234", EnhancementRules.pnachCrc("SLUS_20062_ABCD1234_60fps.pnach"))
+        assertNull(EnhancementRules.pnachCrc("Infinite Health.pnach"))
+        assertNull(EnhancementRules.pnachCrc("SLUS-20062.pnach"))
+    }
+
+    @Test
+    fun pnachAddressesAreReadFromItsPatchLines() {
+        val a = EnhancementRules.pnachAddresses("[A]\npatch=1,EE,00201234,word,00000001 // speed\n// patch=1,EE,1,word,1\npatch=0,ee,2B000,byte,1\n")
+        assertEquals(setOf("EE:201234", "EE:2B000"), a)
+        assertTrue(EnhancementRules.pnachAddresses("gametitle=x").isEmpty())
+    }
 }

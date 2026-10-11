@@ -16,6 +16,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.InstallerRun
 import io.github.matiyaaa.fuse.ui.shell.store.SourceForm
 import io.github.matiyaaa.fuse.ui.shell.store.SourceListing
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -42,6 +43,8 @@ class DesktopEmulatorFiles(
     private val staging: File = File(backups.parentFile, "staged-licences"),
     /** Where each restoration point keeps the files a person's own additions replaced (see [install]). */
     private val restorePoints: File = File(backups.parentFile, "restore-points"),
+    /** Where files fetched from a mod site wait to be looked through (see [fetch]). */
+    private val fetched: File = File(backups.parentFile, "fetched-mods"),
 ) : EmulatorFiles {
     private val roots: MutableSet<String> = Collections.synchronizedSet(mutableSetOf())
 
@@ -693,6 +696,66 @@ class DesktopEmulatorFiles(
         } catch (e: IOException) {
             Files.move(tmp.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING)
         }
+    }
+
+
+    override suspend fun fetch(url: String, name: String, size: Long?, md5: String?, maxBytes: Long, onProgress: (Float) -> Unit): String? = withContext(Dispatchers.IO) {
+        if (!url.startsWith("https://")) return@withContext null
+        val safe = name.replace(Regex("[^A-Za-z0-9._ -]"), "_").trim().ifEmpty { "download" }.take(120)
+        val dir = File(fetched, System.nanoTime().toString(36)).apply { mkdirs() }
+        val target = File(dir, safe)
+        try {
+            val client = java.net.http.HttpClient.newBuilder()
+                .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
+                .connectTimeout(java.time.Duration.ofSeconds(20))
+                .build()
+            val request = java.net.http.HttpRequest.newBuilder(java.net.URI(url))
+                .header("User-Agent", "Fuse")
+                .timeout(java.time.Duration.ofMinutes(30))
+                .GET().build()
+            val response = runInterruptible { client.send(request, java.net.http.HttpResponse.BodyHandlers.ofInputStream()) }
+            // Redirects may only go on to secure addresses.
+            if (response.statusCode() !in 200..299 || response.uri().scheme != "https") {
+                response.body().close()
+                dir.deleteRecursively()
+                return@withContext null
+            }
+            val total = size?.takeIf { it > 0 } ?: response.headers().firstValueAsLong("content-length").orElse(-1)
+            val digest = java.security.MessageDigest.getInstance("MD5")
+            var read = 0L
+            response.body().use { input ->
+                target.outputStream().use { out ->
+                    val buf = ByteArray(64 * 1024)
+                    while (true) {
+                        ensureActive()
+                        val n = input.read(buf)
+                        if (n < 0) break
+                        read += n
+                        if (read > maxBytes) throw IOException("larger than allowed")
+                        digest.update(buf, 0, n)
+                        out.write(buf, 0, n)
+                        if (total > 0) onProgress((read.toFloat() / total).coerceIn(0f, 1f))
+                    }
+                }
+            }
+            val sum = digest.digest().joinToString("") { "%02x".format(it) }
+            if ((md5 != null && !sum.equals(md5, ignoreCase = true)) || (size != null && size > 0 && read != size)) {
+                dir.deleteRecursively()
+                return@withContext null
+            }
+            target.absolutePath.replace('\\', '/')
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            dir.deleteRecursively()
+            throw e
+        } catch (e: Exception) {
+            dir.deleteRecursively()
+            null
+        }
+    }
+
+    override suspend fun clearFetched() = withContext(Dispatchers.IO) {
+        fetched.deleteRecursively()
+        Unit
     }
 
     private companion object {

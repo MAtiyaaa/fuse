@@ -437,6 +437,10 @@ data class EnhancementView(
     val where: String,
     /** It turned on something in the emulator's settings for the game, put back when it is taken out. */
     val settingsChanged: Boolean,
+    /** Where it came from when Fuse fetched it ("GameBanana"), with its page and version. */
+    val origin: String? = null,
+    val originUrl: String? = null,
+    val version: String? = null,
 )
 
 /** Exactly what adding a file, folder or archive would do, worked out before anything changes; or why it can't be added. */
@@ -466,6 +470,46 @@ sealed interface EnhancementPreview {
     ) : EnhancementPreview
 
     data class Unavailable(val title: String, val reason: String) : EnhancementPreview
+}
+
+/** Which game on GameBanana a library game is: the one chosen, and the ones a search found. */
+data class ModSiteGames(
+    val linked: io.github.matiyaaa.fuse.integrations.gamebanana.GbGame?,
+    val found: List<io.github.matiyaaa.fuse.integrations.gamebanana.GbGame>,
+    /** What was searched for. */
+    val query: String,
+    /** Why the search couldn't be made, when it couldn't. */
+    val problem: String? = null,
+)
+
+/** A mod on GameBanana, with the kind Fuse can add it as for this game (null: a kind Fuse doesn't add). */
+data class ModSiteMod(
+    val mod: io.github.matiyaaa.fuse.integrations.gamebanana.GbMod,
+    val kind: io.github.matiyaaa.fuse.launch.patches.EnhancementKind?,
+)
+
+/** A page of a game's mods on GameBanana, or why there is none. */
+sealed interface ModSiteMods {
+    data class Ready(
+        val game: io.github.matiyaaa.fuse.integrations.gamebanana.GbGame,
+        val mods: List<ModSiteMod>,
+        val page: Int,
+        val total: Long,
+        val more: Boolean,
+    ) : ModSiteMods
+
+    /** [needsGame]: which game on GameBanana this is hasn't been chosen yet. */
+    data class Unavailable(val title: String, val reason: String, val needsGame: Boolean = false) : ModSiteMods
+}
+
+/** A mod's page on GameBanana: its files and what Fuse can do with each, or why it can't be read. */
+sealed interface ModSitePage {
+    data class Ready(
+        val page: io.github.matiyaaa.fuse.integrations.gamebanana.GbModPage,
+        val kind: io.github.matiyaaa.fuse.launch.patches.EnhancementKind?,
+    ) : ModSitePage
+
+    data class Unavailable(val title: String, val reason: String) : ModSitePage
 }
 
 /** How taking out something a person added went. */
