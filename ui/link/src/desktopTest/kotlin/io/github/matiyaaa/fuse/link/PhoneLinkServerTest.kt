@@ -211,4 +211,23 @@ class PhoneLinkServerTest {
         store.updatePrefs { it.copy(phoneLinkEnabled = false) }
         withTimeout(10_000) { link.state.first { !it.running } }
     }
+
+    @Test
+    fun aPortAnotherProgramHoldsIsPassedOver(): Unit = runBlocking {
+        // Another program listening where Phone Link would start: it carries on at the next port.
+        java.net.ServerSocket(0).use { other ->
+            val services = FakeServices(FuseData(DesktopDatabase.open(File(cache, "fuse.db").absolutePath)), cache)
+            val store = createFuseStore(services, scope)
+            val link = PhoneLinkServer(store, services.secrets, scope, "Test Device", "0.4.2", basePort = other.localPort)
+            link.start()
+            store.updatePrefs { it.copy(phoneLinkEnabled = true) }
+            val state = withTimeout(20_000) { link.state.first { it.running || it.error != null } }
+            assertTrue(state.running, "${state.error}")
+            val port = link.boundPort()!!
+            assertTrue(port in other.localPort + 1 until other.localPort + 10, "started at $port")
+            assertEquals(401, http(port, "GET", "/api/input").status, "the server Phone Link says it runs answers")
+            store.updatePrefs { it.copy(phoneLinkEnabled = false) }
+            withTimeout(10_000) { link.state.first { !it.running } }
+        }
+    }
 }

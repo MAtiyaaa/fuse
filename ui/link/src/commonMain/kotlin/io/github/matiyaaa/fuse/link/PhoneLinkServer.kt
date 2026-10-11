@@ -44,6 +44,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -73,6 +74,8 @@ class PhoneLinkServer(
     /** The device's screenshots and recordings; null where Fuse takes none (the desktop for now). */
     captures: LinkCaptures? = null,
     private val clock: () -> Long = { kotlin.time.Clock.System.now().toEpochMilliseconds() },
+    /** The port tried first; the next nine follow when it is taken. */
+    private val basePort: Int = PORT,
 ) : PhoneLinkControl {
     internal val auth = LinkAuth(secrets, clock)
     internal val api = LinkApi(store, auth, deviceName, version, readUri, capturesAvailable = captures != null)
@@ -148,12 +151,25 @@ class PhoneLinkServer(
         if (server != null) return@withLock
         var lastError: Throwable? = null
         // The usual port, or the next free one (Cartridge's own remote uses 47280 and 47281).
-        for (candidate in PORT until PORT + 10) {
+        for (candidate in basePort until basePort + 10) {
+            // The server binds its port only after starting, and a port another program holds fails
+            // there, out of reach (Phone Link would wait forever): so a port is used only once it is
+            // known to be free, and the server only once it says it is listening on it.
+            if (!withContext(ioDispatcher) { portFree(candidate) }) {
+                lastError = IllegalStateException("port $candidate is in use")
+                continue
+            }
             try {
                 // Starting blocks its thread until the server is bound, and stopping can block for a
                 // second: both on the threads made for blocking, never the shared computation ones
                 // the server's own start-up (and everything else in Fuse) runs on.
                 val s = withContext(ioDispatcher) { launchServer(candidate) }
+                val bound = runCatching { withTimeoutOrNull(BIND_WAIT_MS) { s.engine.resolvedConnectors().firstOrNull()?.port } }.getOrNull()
+                if (bound != candidate) {
+                    withContext(ioDispatcher) { runCatching { s.stop(0, 200) } }
+                    lastError = IllegalStateException("port $candidate couldn't be listened on")
+                    continue
+                }
                 server = s
                 port = candidate
                 refreshState(error = null)
@@ -164,7 +180,7 @@ class PhoneLinkServer(
                 lastError = e
             }
         }
-        refreshState(error = "Phone Link couldn't start: no free port near $PORT (${lastError?.message ?: "unknown"})")
+        refreshState(error = "Phone Link couldn't start: no free port near $basePort (${lastError?.message ?: "unknown"})")
     }
 
     /**
@@ -513,6 +529,9 @@ class PhoneLinkServer(
 
     companion object {
         const val PORT = 47300
+
+        /** How long a started server has to say it is listening. */
+        const val BIND_WAIT_MS = 5_000L
         private const val COOKIE = "fuse_session"
         private const val MAX_BODY = 64 * 1024L
         private const val COPY_BUFFER = 256 * 1024
