@@ -307,7 +307,9 @@ internal enum class MarkTint { PLAIN, WARNING }
  * spans several discs, it is a favourite. Tiles, list rows and the stage use the same icons, so a
  * mark means the same thing everywhere.
  */
-internal fun GameCard.marks(favourite: Boolean = true): List<GameMark> = buildList {
+internal fun GameCard.marks(favourite: Boolean = true, installed: Boolean = false): List<GameMark> = buildList {
+    // Library, All: what is on this device, among games that are elsewhere. First, so it always fits.
+    if (installed && !missing && unavailable == null) add(GameMark(FuseIcons.Check, "Installed", MarkTint.PLAIN, onStage = false))
     val away = unavailable
     // A drive that is out is calmer than a file that is gone: the game comes back by itself.
     if (away != null) add(GameMark(if (away.state == io.github.matiyaaa.fuse.model.SourceState.NO_ACCESS) FuseIcons.LockKeyhole else FuseIcons.HardDrive, away.label, MarkTint.PLAIN))
@@ -326,6 +328,12 @@ internal fun GameCard.marks(favourite: Boolean = true): List<GameMark> = buildLi
 val LocalTileShowsFavourite = staticCompositionLocalOf { true }
 
 /**
+ * True only in Library, All, where games from RomM and other devices sit beside this device's: there
+ * a game here carries an Installed check among its marks. Everywhere else the Library is this device.
+ */
+val LocalTileShowsInstalled = staticCompositionLocalOf { false }
+
+/**
  * A game's state marks in a tile's top corner, one consistent family: small dark-glass discs lit
  * along their top edge, each holding one icon (a pill with its number for several discs). The most
  * important mark sits in the corner and the rest line up beside it; marks that would not fit the
@@ -334,7 +342,7 @@ val LocalTileShowsFavourite = staticCompositionLocalOf { true }
  */
 @Composable
 internal fun GameMarks(card: GameCard, modifier: Modifier = Modifier, inset: Dp = Space.s, reserve: Dp = 0.dp) {
-    val marks = card.marks(favourite = LocalTileShowsFavourite.current)
+    val marks = card.marks(favourite = LocalTileShowsFavourite.current, installed = LocalTileShowsInstalled.current)
     if (marks.isEmpty()) return
     val gap = Space.xs
     Layout(

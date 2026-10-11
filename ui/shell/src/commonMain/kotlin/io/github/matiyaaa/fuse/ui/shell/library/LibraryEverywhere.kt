@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -340,9 +341,8 @@ private fun EverywhereShelf(
         ) {
             itemsIndexed(games, key = { _, g -> g::class.simpleName + g.card.id.value }) { i, g ->
                 when (g) {
-                    is EverywhereGame.Here -> Box {
+                    is EverywhereGame.Here -> androidx.compose.runtime.CompositionLocalProvider(io.github.matiyaaa.fuse.ui.shell.components.LocalTileShowsInstalled provides true) {
                         GameIconTile(g.card, selected == i, size = tile, onClick = { onOpen(i) }, onLongClick = { onOptions(i) })
-                        InstalledMark(Modifier.align(Alignment.TopStart))
                     }
                     is EverywhereGame.OnRomm -> RommTile(g.game, selected == i, tile, onClick = { onOpen(i) }, onLongClick = { onOptions(i) })
                     is EverywhereGame.Elsewhere -> HouseholdTile(g.game, selected == i, tile, onClick = { onOpen(i) }, onLongClick = { onOptions(i) })
@@ -351,7 +351,8 @@ private fun EverywhereShelf(
             item("seeall") { SeeAllTile(selected == games.size, tile, onSeeAll) }
         }
         val chosen = games.getOrNull(selected)
-        Column(Modifier.padding(horizontal = Space.gutter).height(Space.xxl)) {
+        // Room for both lines, so the next shelf's title never cuts the second.
+        Column(Modifier.padding(horizontal = Space.gutter).padding(bottom = Space.m).heightIn(min = Space.xxl + Space.l)) {
             if (chosen != null) {
                 FText(chosen.card.title, Fuse.type.bodyStrong, maxLines = 1)
                 FText(listOfNotNull(chosen.card.platformShort, chosen.card.year?.toString(), chosen.where).joinToString("  ·  "), Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1)
@@ -394,21 +395,3 @@ private fun SeeAllTile(selected: Boolean, size: Dp, onClick: () -> Unit) {
     }
 }
 
-/** On All, a game on this device carries a small check: installed here. */
-@Composable
-private fun InstalledMark(modifier: Modifier = Modifier) {
-    val c = Fuse.colors
-    Row(
-        modifier
-            .padding(Space.s)
-            .clip(CircleShape)
-            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f))
-            .padding(horizontal = Space.xs + Space.xxs, vertical = Space.xxs)
-            .semantics { contentDescription = "Installed" },
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        FuseIcon(FuseIcons.Check, size = Size.badgeIcon - Space.xxs, tint = c.onArt)
-        Spacer(Modifier.width(Space.xxs))
-        FText("Installed", Fuse.type.overline, color = c.onArt, maxLines = 1)
-    }
-}

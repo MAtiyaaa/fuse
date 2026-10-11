@@ -96,6 +96,20 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
         tap(PadButton.DPAD_DOWN, 4)
         shoot("Compact List layout, fifth game focused")
     }
+    scenario("library", "everywhere") {
+        useLibrary()
+        libraryTab()
+        waitFor("Recently played")
+        // All: every game wherever it is, in shelves.
+        libraryFilter(1)
+        settle(1_200)
+        tap(PadButton.DPAD_DOWN)
+        settle()
+        shoot("All, Recently Added focused")
+        tap(PadButton.DPAD_DOWN)
+        settle()
+        shoot("All, Systems shelf")
+    }
     if (!exhaustive) return
 
     scenario("library", "favourites") {
