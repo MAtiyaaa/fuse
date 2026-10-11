@@ -122,6 +122,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
 import io.github.matiyaaa.fuse.ui.shell.app.showProblem
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
 import io.github.matiyaaa.fuse.ui.shell.components.agoText
+import kotlin.math.roundToInt
 import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.home.bytesText
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
@@ -679,6 +680,17 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                         badges.getOrNull(col.takeIf { row == "achievements" } ?: -1)?.let { b ->
                             Spacer(Modifier.height(Space.s))
                             FText("${b.title}: ${b.description}" + (if (b.points > 0) " (${b.points} points)" else ""), Fuse.type.body, color = c.textMuted, maxLines = 2, modifier = Modifier.widthIn(max = layout.reading))
+                            // When it was earned, and how rare it is where its platform says.
+                            val earnedAt = (b.earnedHardcoreAt ?: b.earnedAt)?.takeIf { it > 0 }
+                            val facts = listOfNotNull(
+                                when {
+                                    earnedAt != null -> "Unlocked ${agoText(earnedAt)}"
+                                    b.earned -> "Unlocked"
+                                    else -> null
+                                },
+                                b.rarity?.let { r -> "${if (r < 10f) ((r * 10).roundToInt() / 10f).toString() else r.roundToInt().toString()}% of players have it" },
+                            )
+                            if (facts.isNotEmpty()) FText(facts.joinToString("  ·  "), Fuse.type.caption, color = c.textFaint, maxLines = 1)
                         }
                     }
                 }

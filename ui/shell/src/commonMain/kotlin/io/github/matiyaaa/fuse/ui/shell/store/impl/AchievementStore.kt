@@ -1,5 +1,9 @@
 package io.github.matiyaaa.fuse.ui.shell.store.impl
 
+import io.ktor.client.request.get
+import kotlinx.serialization.builtins.serializer
+import io.ktor.client.statement.bodyAsText
+
 import io.github.matiyaaa.fuse.data.settings.SecretKeys
 import io.github.matiyaaa.fuse.integrations.ApiResult
 import io.github.matiyaaa.fuse.integrations.match.TitleNormalizer
@@ -125,9 +129,11 @@ internal class DefaultAchievementOps(
             }
             else -> steamAppId(game)?.let { appId ->
                 val roots = runCatching { ctx.services.locations.steamRoots().roots }.getOrDefault(emptyList())
-                localReader.steam(roots, appId)
+                localReader.steam(roots, appId, steamAccount(roots))
             }
         } ?: return null
+        // How rare each is, where Steam publishes it (public, nothing about the person sent).
+        val rarity = if (set.source == io.github.matiyaaa.fuse.library.achievements.LocalAchievementSource.STEAM) steamAppId(game)?.let { steamRarity(it) }.orEmpty() else emptyMap()
         val items = set.items
         val earned = items.count { it.unlockedAt != null }
         val points = items.sumOf { it.points }
@@ -161,11 +167,38 @@ internal class DefaultAchievementOps(
                     earnedHardcoreAt = null,
                     type = a.grade,
                     displayOrder = i,
+                    rarity = rarity[a.id],
                 )
             },
             fetchedAt = ctx.now(),
             source = source,
         )
+    }
+
+    /**
+     * The Steam account whose achievements this device shows: the one chosen in Settings, else the
+     * one Steam remembers as most recent. Null when Steam remembers none here (then the newest stats
+     * Steam keeps are read).
+     */
+    private suspend fun steamAccount(roots: List<String>): String? {
+        ctx.settings.value.steam.achievementsAccount.takeIf { it.isNotBlank() }?.let { return it }
+        val accounts = runCatching { io.github.matiyaaa.fuse.library.steam.SteamAccounts(ctx.services.fs).read(roots) }.getOrDefault(emptyList())
+        return (accounts.firstOrNull { it.mostRecent } ?: accounts.singleOrNull())?.steamId
+    }
+
+    /** Each achievement's share of players for Steam app [appId], kept for a day; empty when Steam can't be reached. */
+    private suspend fun steamRarity(appId: Long): Map<String, Float> {
+        val key = "$KEY_RARITY$appId"
+        val serializer = kotlinx.serialization.builtins.MapSerializer(String.serializer(), Float.serializer())
+        runCatching { cache.getOrNull(NS, key, ctx.now()) }.getOrNull()?.let { cached ->
+            runCatching { kotlinx.serialization.json.Json.decodeFromString(serializer, cached) }.getOrNull()?.let { return it }
+        }
+        val fresh = runCatching {
+            val resp = ctx.services.http.get(io.github.matiyaaa.fuse.integrations.steam.SteamGlobalAchievements.url(appId))
+            if (resp.status.value in 200..299) io.github.matiyaaa.fuse.integrations.steam.SteamGlobalAchievements.parse(resp.bodyAsText()) else null
+        }.getOrNull() ?: return emptyMap()
+        runCatching { cache.put(NS, key, kotlinx.serialization.json.Json.encodeToString(serializer, fresh), ctx.now(), RARITY_TTL_MS) }
+        return fresh
     }
 
     /** The Steam app [game] is: its link, else the app id in its .steam shortcut (Fuse's own, or ES-DE's). */
@@ -322,6 +355,8 @@ internal class DefaultAchievementOps(
         const val KEY_NAMED = "named:"
         /** A game nothing was found for, so it isn't hashed again on every visit. */
         const val KEY_MISS = "miss:"
+        const val KEY_RARITY = "steam-rarity:"
+        const val RARITY_TTL_MS = 24 * 60 * 60 * 1000L
         const val MISS_TTL_MS = 24L * 60 * 60 * 1000
         const val RECENT_WINDOW_MINUTES = 60 * 24 * 14
         val RecentList = ListSerializer(RecentAchievement.serializer())

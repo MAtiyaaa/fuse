@@ -36,15 +36,19 @@ class LocalAchievements(private val fs: FuseFileSystem) {
     /**
      * The achievements of Steam game [appId] as Steam's client last cached them: their names and
      * pictures from its schema (appcache/stats/UserGameStatsSchema_<app>.bin) and what is unlocked,
-     * with when, from the newest user's stats (UserGameStats_<user>_<app>.bin). Null when the game
-     * has no achievements or Steam has no record of them here.
+     * with when, from the user's stats (UserGameStats_<account>_<app>.bin). With [steamId] (a 64-bit
+     * SteamID) only that account's are read, so people sharing a computer never see each other's;
+     * without, the newest stats there are. Null when the game has no achievements or Steam has no
+     * record of them here.
      */
-    suspend fun steam(steamRoots: List<String>, appId: Long): LocalAchievementSet? {
+    suspend fun steam(steamRoots: List<String>, appId: Long, steamId: String? = null): LocalAchievementSet? {
+        val account = steamId?.toULongOrNull()?.let { (it - STEAM_ID_BASE).toLong() }
         for (root in steamRoots) {
             val stats = FsPath.join(root, "appcache", "stats")
             val schema = read(FsPath.join(stats, "UserGameStatsSchema_$appId.bin"), MAX_SCHEMA)?.let(BinaryVdf::parse) ?: continue
             val user = runCatching { fs.list(stats) }.getOrDefault(emptyList())
                 .filter { it.name.startsWith("UserGameStats_") && it.name.endsWith("_$appId.bin") && !it.name.startsWith("UserGameStatsSchema") }
+                .filter { account == null || it.name == "UserGameStats_${account}_$appId.bin" }
                 .maxByOrNull { it.modifiedAt }
                 ?.let { read(it.path, MAX_STATS) }?.let(BinaryVdf::parse)
             return steamFrom(schema, user, appId)
@@ -217,6 +221,8 @@ class LocalAchievements(private val fs: FuseFileSystem) {
     }
 
     private companion object {
+        /** A 64-bit SteamID minus this is the account id Steam names its stats files by. */
+        const val STEAM_ID_BASE: ULong = 76561197960265728uL
         const val MAX_SCHEMA = 8 * 1024 * 1024
         const val MAX_STATS = 2 * 1024 * 1024
         const val MAX_CONF = 2 * 1024 * 1024

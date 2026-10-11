@@ -700,4 +700,9 @@ data class SteamIntegrationSettings(
     val integrate: String = "",
     val decky: Boolean = false,
     val fuseInSteam: Boolean = false,
+    /**
+     * The Steam account (its 64-bit SteamID) whose achievements Fuse shows on this device; empty
+     * follows the account Steam remembers as most recent. Never switched by switching Fuse profiles.
+     */
+    val achievementsAccount: String = "",
 )

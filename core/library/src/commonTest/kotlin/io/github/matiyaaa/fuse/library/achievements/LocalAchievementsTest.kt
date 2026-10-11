@@ -62,6 +62,25 @@ class LocalAchievementsTest {
         assertNull(LocalAchievements(fs).steam(listOf("/steam"), 999), "a game without a schema has none")
     }
 
+    @Test
+    fun twoAccountsOnOneComputerNeverSeeEachOthersAchievements() = runTest {
+        // Account 123's stats unlock two; account 456's (the newer file) unlock none.
+        val none = BinaryVdf.write(block("cache" to block("crc" to Int32(1), "1" to block("data" to Int32(0)))))
+        val fs = InMemoryFileSystem()
+            .bytes("/steam/appcache/stats/UserGameStatsSchema_620.bin", schema())
+            .bytes("/steam/appcache/stats/UserGameStats_123_620.bin", stats())
+            .bytes("/steam/appcache/stats/UserGameStats_456_620.bin", none)
+        val reader = LocalAchievements(fs)
+        // SteamIDs are the account ids plus 76561197960265728.
+        val mine = assertNotNull(reader.steam(listOf("/steam"), 620, steamId = "76561197960265851"))
+        assertEquals(2, mine.items.count { it.unlockedAt != null })
+        val theirs = assertNotNull(reader.steam(listOf("/steam"), 620, steamId = "76561197960266184"))
+        assertEquals(0, theirs.items.count { it.unlockedAt != null })
+        // An account with no stats here sees the set, with nothing unlocked: never someone else's.
+        val stranger = assertNotNull(reader.steam(listOf("/steam"), 620, steamId = "76561197960265729"))
+        assertEquals(0, stranger.items.count { it.unlockedAt != null })
+    }
+
     private val conf = """<?xml version="1.0" encoding="UTF-8"?>
 <trophyconf version="1.0" policy="large">
 <npcommid>NPWR00508_00</npcommid>

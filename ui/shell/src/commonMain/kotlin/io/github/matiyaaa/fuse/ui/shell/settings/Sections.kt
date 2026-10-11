@@ -408,7 +408,21 @@ fun libraryRows(app: AppState): List<MenuAction> {
                 else -> sources.any { it.kind == io.github.matiyaaa.fuse.model.LibrarySourceKind.STEAM_LIBRARY || (it.kind == io.github.matiyaaa.fuse.model.LibrarySourceKind.SHORTCUTS && it.label == "Steam") }
             }
             val live = rememberSteamLive(app)
-            labelled("Steam") { addAll(steamRows(app, steam, steamOn, live)) }
+            // Steam's remembered accounts here, for whose achievements show (only asked with more than one).
+            val accounts by androidx.compose.runtime.produceState(emptyList<io.github.matiyaaa.fuse.library.steam.SteamAccount>()) {
+                value = runCatching { app.store.sources.steamAccounts() }.getOrDefault(emptyList()).distinctBy { it.steamId }
+            }
+            labelled("Steam") {
+                addAll(steamRows(app, steam, steamOn, live))
+                if (accounts.size > 1) {
+                    val chosen = p.steam.achievementsAccount.takeIf { id -> accounts.any { it.steamId == id } } ?: ""
+                    add(app.choiceRow(
+                        "steam.account", "Steam achievements of", FuseIcons.Trophy, chosen,
+                        listOf("" to "Steam's most recent account") + accounts.map { it.steamId to it.personaName },
+                        optionDetail = { id -> if (id.isEmpty()) "Whoever last signed in to Steam here" else "Only this account's achievements, whoever plays in Fuse" },
+                    ) { v -> app.store.updatePrefs { it.copy(steam = it.steam.copy(achievementsAccount = v)) } })
+                }
+            }
             // Decky is Linux's (SteamOS and its kind): the platform offers it nowhere else.
             app.platform.decky?.let { decky -> labelled("Decky") { addAll(deckyRows(app, decky, live)) } }
         }
