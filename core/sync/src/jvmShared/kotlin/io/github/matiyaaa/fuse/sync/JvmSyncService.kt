@@ -177,9 +177,9 @@ class JvmSyncService(
             return
         }
         if (_profiles.value.isEmpty()) {
-            _profiles.value = knownProfiles()
+            val known = knownProfiles()
             _devices.value = knownDevices()
-            _active.value = _profiles.value.firstOrNull { it.id == c.activeProfile }
+            showPeople(known, c.activeProfile)
         }
         client = SyncClient(l.copy(localAddress = c.localAddress.ifBlank { l.localAddress }, remoteAddress = c.remoteAddress.ifBlank { l.remoteAddress }))
         _status.value = SyncStatus.Connecting(c.hostName.ifBlank { l.hostName })
@@ -201,8 +201,16 @@ class JvmSyncService(
             return
         }
         if (device == null) device = SyncDevice(File(dir, "device"), ensureDeviceId(), cached.deviceName.ifBlank { defaultDeviceName })
-        _profiles.value = people.ordered(people.profiles.map { it.info })
-        _active.value = _profiles.value.firstOrNull { it.id == cached.activeProfile }
+        showPeople(people.ordered(people.profiles.map { it.info }), cached.activeProfile)
+    }
+
+    /**
+     * Shows [list] and who of them is playing, the one playing first: whoever sees the people
+     * already sees who is chosen, never a moment with nobody.
+     */
+    private fun showPeople(list: List<ProfileInfo>, active: String) {
+        _active.value = list.firstOrNull { it.id == active }
+        _profiles.value = list
     }
 
     /** True while this device keeps its own profiles (no host yet, or none any more). */
@@ -513,12 +521,12 @@ class JvmSyncService(
     private suspend fun refreshLists() {
         listsLock.withLock {
             val c = client ?: return@withLock
-            _profiles.value = people.ordered(c.profiles())
-            runCatching { c.devices() }.onSuccess { list ->
-                _devices.value = list
-                writeAtomically(File(dir, DEVICES_FILE), json.encodeToString(ListSerializer(DeviceInfo.serializer()), list).toByteArray())
+            val list = people.ordered(c.profiles())
+            runCatching { c.devices() }.onSuccess { devices ->
+                _devices.value = devices
+                writeAtomically(File(dir, DEVICES_FILE), json.encodeToString(ListSerializer(DeviceInfo.serializer()), devices).toByteArray())
             }
-            _active.value = _profiles.value.firstOrNull { it.id == cached.activeProfile }
+            showPeople(list, cached.activeProfile)
             // Kept, so who is playing shows (and Who's playing? has faces) while the host is away.
             runCatching { writeAtomically(File(dir, PROFILES_FILE), json.encodeToString(ListSerializer(ProfileInfo.serializer()), _profiles.value).toByteArray()) }
         }
@@ -669,7 +677,8 @@ class JvmSyncService(
         runCatching { secrets.remove(LINK_KEY) }
         val keep = hostDir(cached).canonicalFile
         val keepNames = if (stay.isEmpty()) setOf(KEPT_DIR) else setOf(KEPT_DIR, "device", PEOPLE_FILE, ADOPTED_FILE, aliasFile.name)
-        dir.listFiles()?.filter { it.canonicalFile != keep && it.name !in keepNames }?.forEach { it.deleteRecursively() }
+        // A file another write renames away meanwhile is simply gone (walking it as a tree would fail).
+        dir.listFiles()?.filter { it.canonicalFile != keep && it.name !in keepNames }?.forEach { if (it.isDirectory) it.deleteRecursively() else it.delete() }
         if (stay.isEmpty()) {
             gameAliases = emptyMap()
             data.useAliases(emptyMap())
