@@ -3,7 +3,11 @@ package io.github.matiyaaa.fuse.ui.shell.store.impl
 import io.github.matiyaaa.fuse.launch.patches.DuckStationPatchRules
 import io.github.matiyaaa.fuse.launch.patches.IniText
 import io.github.matiyaaa.fuse.launch.patches.Pcsx2PatchRules
+import io.github.matiyaaa.fuse.data.settings.AppSettings
+import io.github.matiyaaa.fuse.data.settings.OwnSettingProfile
 import io.github.matiyaaa.fuse.launch.settings.NativeSettings
+import io.github.matiyaaa.fuse.launch.settings.SettingProfile
+import io.github.matiyaaa.fuse.launch.settings.SettingProfiles
 import io.github.matiyaaa.fuse.launch.settings.SettingsEdit
 import io.github.matiyaaa.fuse.library.disc.DiscIdentity
 import io.github.matiyaaa.fuse.model.EmulatorId
@@ -12,6 +16,7 @@ import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.InstalledEmulator
 import io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles
 import io.github.matiyaaa.fuse.ui.shell.store.EmulatorSettingsView
+import io.github.matiyaaa.fuse.ui.shell.store.SettingProfileView
 
 /**
  * An emulator's own settings, for every game or for one game, read and changed in the emulator's own
@@ -26,6 +31,8 @@ internal class NativeSettingsStore(
     private val pspGameId: suspend (Game) -> String?,
     /** The emulator [Game] starts in here, as a launch would choose it. */
     private val startsIn: suspend (Game) -> InstalledEmulator?,
+    /** Changes the stored settings, for the person's own profiles. */
+    private val changeSettings: suspend ((AppSettings) -> AppSettings) -> Unit = {},
 ) {
     private val data = ctx.data
     private val fs get() = ctx.services.fs
@@ -99,12 +106,70 @@ internal class NativeSettingsStore(
         val global = read(t.globalPath)
         val game = read(t.gamePath)
         val settings = NativeSettings.forEmulator(t.family, ctx.host).filter { t.gamePath == null || it.perGame }
+        val values = settings.map { SettingsEdit.valueFor(it, if (t.gamePath != null) game else null, global) }
+        val current = values.associate { it.setting.id to it.value }
         return EmulatorSettingsView.Ready(
             emulator = t.emulator,
             game = t.gameTitle,
-            values = settings.map { SettingsEdit.valueFor(it, if (t.gamePath != null) game else null, global) },
+            values = values,
             canRestore = data.owned.get(KIND, t.path).isNotEmpty(),
+            profiles = if (t.gamePath == null) emptyList() else profiles(t.family).map { p ->
+                SettingProfileView(p.id, p.name, p.about, p.own, SettingProfiles.matches(p, current, settings))
+            },
         )
+    }
+
+    /** Fuse's profiles for [family], then the person's own for it. */
+    private suspend fun profiles(family: String): List<SettingProfile> {
+        val offered = NativeSettings.forEmulator(family, ctx.host).filter { it.perGame }
+        val own = data.settings.current().library.settingProfiles.filter { it.family == family }.map { o ->
+            // Only what this emulator still has and accepts, should a value have gone since.
+            val kept = o.values.filter { (k, v) -> offered.any { s -> s.id == k && s.choices.any { it.value == v } } }
+            SettingProfile(o.id, o.name, describe(kept, offered), kept, own = true)
+        }.filter { it.values.isNotEmpty() }
+        return SettingProfiles.builtIn(family, ctx.host) + own
+    }
+
+    private fun describe(values: Map<String, String>, settings: List<io.github.matiyaaa.fuse.launch.settings.NativeSetting>): String =
+        values.mapNotNull { (k, v) -> settings.firstOrNull { it.id == k }?.let { "${it.label}: ${it.labelFor(v)}" } }.joinToString(", ")
+
+    /**
+     * Gives the game every value of [profile] in one change of its own settings file, each recorded
+     * like a single change (see [set]), so Put Back undoes it the same way.
+     */
+    suspend fun applyProfile(id: GameId?, emulator: EmulatorId?, profile: String): Boolean {
+        val t = target(id, emulator).first ?: return false
+        if (t.gamePath == null) return false
+        val p = profiles(t.family).firstOrNull { it.id == profile } ?: return false
+        val settings = NativeSettings.forEmulator(t.family, ctx.host)
+        val before = fs.readText(t.path, MAX_TEXT)
+        val file = IniText(before ?: "")
+        var records = data.owned.get(KIND, t.path)
+        for ((key, value) in p.values) {
+            val s = settings.firstOrNull { it.id == key && it.perGame } ?: continue
+            records = SettingsEdit.change(file, records, s.section, s.key, value)
+        }
+        if (!t.files.write(t.path, file.toString())) return false
+        data.owned.set(KIND, t.path, records)
+        if (before == null) data.owned.set(KIND, "${t.path}#made", setOf("file"))
+        return true
+    }
+
+    /** Keeps the game's values now (its own, else every game's) as a profile of the person's own. */
+    suspend fun saveProfile(id: GameId?, emulator: EmulatorId?, name: String): Boolean {
+        val view = view(id, emulator) as? EmulatorSettingsView.Ready ?: return false
+        val t = target(id, emulator).first ?: return false
+        val clean = name.trim().take(40).ifEmpty { return false }
+        val values = view.values.associate { it.setting.id to it.value }
+        val own = OwnSettingProfile("own-" + ctx.now().toString(36), t.family, clean, values)
+        changeSettings { s -> s.copy(library = s.library.copy(settingProfiles = s.library.settingProfiles.filterNot { it.family == t.family && it.name.equals(clean, ignoreCase = true) } + own)) }
+        return true
+    }
+
+    suspend fun deleteProfile(profile: String): Boolean {
+        if (data.settings.current().library.settingProfiles.none { it.id == profile }) return false
+        changeSettings { s -> s.copy(library = s.library.copy(settingProfiles = s.library.settingProfiles.filterNot { it.id == profile })) }
+        return true
     }
 
     /**

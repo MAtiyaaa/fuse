@@ -115,6 +115,12 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   game only those it takes per game. Each says whether it is the game's own or follows every game's.
   Fuse keeps what a setting held before it first changed it, and Put Back What Fuse Changed restores
   exactly that, leaving anything changed in the emulator since.
+- **Setting profiles for a game.** A game's emulator settings start with its profile: Vanilla (as on
+  the console), Performance, Visual Quality and Battery Saver, each made only of settings that
+  emulator has and values it takes, or one of your own: Save These as a Profile keeps a game's
+  settings to give your other games, and it follows you to your other devices through Fuse One.
+  Profiles are starting points, not promises; the emulators' own fixes for a game still apply, and
+  Put Back undoes a profile like any change.
 - **Going back after an emulator update.** When the Store updates an emulator on a computer, Fuse
   keeps the version it replaces in its own folder, out of the way of the new one. An update that
   fails to install puts it straight back; after one that works, the Store offers Go Back to it, and

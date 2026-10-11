@@ -504,7 +504,16 @@ data class LibraryPreferences(
     val purgedGames: List<Long> = emptyList(),
     /** Which view the Library opens on: "INSTALLED" (games on this device) or "ALL" (everywhere they are). */
     val opensOn: String = "ALL",
+    /** Emulator settings a person saved to give their games at once; theirs on every device. */
+    val settingProfiles: List<OwnSettingProfile> = emptyList(),
 )
+
+/**
+ * A person's own set of an emulator's settings ([family]: `pcsx2`, `duckstation`, `ppsspp`), by
+ * Fuse's id for each setting to the value the emulator stores.
+ */
+@Serializable
+data class OwnSettingProfile(val id: String, val family: String, val name: String, val values: Map<String, String>)
 
 /**
  * Interface sounds. [InputProfile.soundsEnabled] and [InputProfile.navigationSoundVolume] cover

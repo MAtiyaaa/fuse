@@ -376,4 +376,48 @@ class NativeCheatsStoreTest {
         assertTrue(store.library.restoreEmulatorSettings(game.id, null))
         assertEquals("[GPU]\nResolutionScale = 5\n", settings.readText())
     }
+
+    @Test
+    fun aGameIsGivenAProfileAtOnceAndAPersonsOwnFollowsThem(): Unit = runBlocking {
+        val services = services("prof.db", ppssppInstalled)
+        services.ppssppHome = ppsspp()
+        val global = File(emu, "ppsspp/PSP/SYSTEM/ppsspp.ini").apply { writeText("[Graphics]\nInternalResolution = 2\n") }
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = withTimeout(20_000) { store.library.games(GameQuery()).first { it.size == 1 } }.single()
+        val own = File(emu, "ppsspp/PSP/SYSTEM/ULUS10041_ppsspp.ini")
+
+        val view = assertIs<EmulatorSettingsView.Ready>(store.library.emulatorSettings(game.id))
+        assertEquals(listOf("vanilla", "performance", "quality", "battery"), view.profiles.map { it.id })
+        // What it has already (2x, no texture upscaling, hardware transform on) is Performance's.
+        assertEquals("performance", view.profiles.single { it.active }.id)
+
+        // Visual Quality: every value of it in one change of the game's own file.
+        assertTrue(store.library.applySettingProfile(game.id, null, "quality"))
+        val text = own.readText()
+        assertTrue("InternalResolution = 4" in text && "AnisotropyLevel = 4" in text && "TextureFiltering = 4" in text && "HardwareTransform = True" in text)
+        val after = assertIs<EmulatorSettingsView.Ready>(store.library.emulatorSettings(game.id))
+        assertEquals("quality", after.profiles.single { it.active }.id)
+        assertFalse(store.library.applySettingProfile(game.id, null, "nonsense"))
+
+        // Kept as their own: in their settings (which go with them through Fuse One), and given at once.
+        assertTrue(store.library.saveSettingProfile(game.id, null, "Sharp"))
+        val saved = services.data.settings.current().library.settingProfiles.single()
+        assertEquals("ppsspp", saved.family)
+        assertEquals("4", saved.values["ppsspp.resolution"])
+        assertTrue("library.settingProfiles" in io.github.matiyaaa.fuse.data.settings.ProfileSettings.paths)
+        assertTrue(store.library.applySettingProfile(game.id, null, "vanilla"))
+        val mine = assertIs<EmulatorSettingsView.Ready>(store.library.emulatorSettings(game.id)).profiles.single { it.own }
+        assertEquals("Sharp", mine.name)
+        assertFalse(mine.active)
+        assertTrue(store.library.applySettingProfile(game.id, null, mine.id))
+        assertTrue(assertIs<EmulatorSettingsView.Ready>(store.library.emulatorSettings(game.id)).profiles.single { it.own }.active)
+
+        // Put Back undoes profiles like any change; every game's settings never changed.
+        assertTrue(store.library.restoreEmulatorSettings(game.id, null))
+        assertFalse(own.exists())
+        assertEquals("[Graphics]\nInternalResolution = 2\n", global.readText())
+        assertTrue(store.library.deleteSettingProfile(mine.id))
+        assertTrue(services.data.settings.current().library.settingProfiles.isEmpty())
+    }
 }

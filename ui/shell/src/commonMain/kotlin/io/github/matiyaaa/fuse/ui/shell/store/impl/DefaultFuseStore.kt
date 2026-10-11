@@ -134,7 +134,7 @@ internal class DefaultFuseStore private constructor(
         // Apps that became games and games added by hand are identified and filled straight away.
         val findArt: (List<io.github.matiyaaa.fuse.model.GameId>) -> Unit = { ids -> mediaOps.fillNew(ids) }
         apps.onGamesAdded = findArt
-        library = DefaultLibraryOps(ctx, engine, emulators, collections, apps, achievements, cartridge) { enabled ->
+        library = DefaultLibraryOps(ctx, engine, emulators, collections, apps, achievements, cartridge, changeSettings = { t -> writeSettings(t) }) { enabled ->
             updatePrefs { it.copy(cleanDisplayNames = enabled) }
         }
         library.onGamesAdded = findArt

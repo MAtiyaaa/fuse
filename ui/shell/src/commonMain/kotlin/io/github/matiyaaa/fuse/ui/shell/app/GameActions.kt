@@ -695,6 +695,16 @@ fun AppState.emulatorSettingsSheet(game: GameId?, gameTitle: String?, emulator: 
             ))
             is io.github.matiyaaa.fuse.ui.shell.store.EmulatorSettingsView.Ready -> {
                 val forGame = game != null
+                val active = view.profiles.firstOrNull { it.active }
+                val profileRow = if (!forGame || view.profiles.isEmpty()) emptyList() else listOf(
+                    MenuAction(
+                        "profile", "Profile", FuseIcons.Layers,
+                        detail = active?.about ?: "Vanilla, Performance, Visual Quality, Battery Saver or your own",
+                        trailing = Trailing.Value(active?.name ?: "Your Own Mix"),
+                        section = "Profile",
+                        onSelect = { settingProfilesSheet(game, gameTitle, emulator, view) },
+                    ),
+                )
                 val rows = view.values.map { v ->
                     val s = v.setting
                     MenuAction(
@@ -731,11 +741,106 @@ fun AppState.emulatorSettingsSheet(game: GameId?, gameTitle: String?, emulator: 
                     } else {
                         "Every game uses these unless it has its own. Close ${view.emulator} first; changes apply the next time it starts."
                     },
-                    options = rows + restore,
+                    options = profileRow + rows + restore,
                 )
             }
         }
     }
+}
+
+/**
+ * The profiles a game can be given in its emulator: Fuse's own (Vanilla, Performance, Visual
+ * Quality, Battery Saver), made only of settings that emulator has, then the person's own, with the
+ * one the game has now checked. Saving the game's settings as one of their own, and deleting one,
+ * come last.
+ */
+private fun AppState.settingProfilesSheet(
+    game: GameId?,
+    gameTitle: String?,
+    emulator: io.github.matiyaaa.fuse.model.EmulatorId?,
+    view: io.github.matiyaaa.fuse.ui.shell.store.EmulatorSettingsView.Ready,
+) {
+    val title = gameTitle ?: view.game ?: "this game"
+    fun apply(p: io.github.matiyaaa.fuse.ui.shell.store.SettingProfileView) {
+        choice = null
+        scope.launch {
+            if (store.library.applySettingProfile(game, emulator, p.id)) toasts.show("$title has ${p.name} now", ToastKind.SUCCESS)
+            else toasts.show("Couldn't change ${view.emulator}'s settings", ToastKind.WARNING)
+            emulatorSettingsSheet(game, gameTitle, emulator)
+        }
+    }
+    val own = view.profiles.filter { it.own }
+    val rows = view.profiles.map { p ->
+        MenuAction(
+            "profile.${p.id}", p.name, if (p.own) FuseIcons.Bookmark else profileIcon(p.id),
+            detail = p.about,
+            trailing = Trailing.Check(p.active),
+            section = if (p.own) "Your Own" else "From Fuse",
+            onSelect = { apply(p) },
+        )
+    }
+    val save = MenuAction(
+        "profile.save", "Save These as a Profile", FuseIcons.Plus,
+        detail = "$title's ${view.emulator} settings now, to give your other games. It follows you to your other devices",
+        section = "Your Own",
+        onSelect = {
+            choice = null
+            textInput = TextInputSpec(
+                title = "Name this profile",
+                initial = "",
+                placeholder = "Sharp and Smooth",
+                doneLabel = "Save",
+                message = "It keeps $title's ${view.emulator} settings as they are now.",
+            ) { name ->
+                textInput = null
+                if (name.isBlank()) return@TextInputSpec
+                scope.launch {
+                    if (store.library.saveSettingProfile(game, emulator, name.trim())) toasts.show("Saved as ${name.trim()}", ToastKind.SUCCESS)
+                    else toasts.show("Couldn't save it", ToastKind.WARNING)
+                    emulatorSettingsSheet(game, gameTitle, emulator)
+                }
+            }
+        },
+    )
+    val delete = if (own.isEmpty()) emptyList() else listOf(
+        MenuAction(
+            "profile.delete", "Delete One of Yours", FuseIcons.Trash,
+            detail = "Games given it keep their settings",
+            trailing = Trailing.Chevron,
+            section = "Your Own",
+            onSelect = {
+                choice = ChoiceSpec(
+                    icon = FuseIcons.Trash,
+                    title = "Delete which profile?",
+                    message = "Games given it keep their settings as they are.",
+                    options = own.map { p ->
+                        MenuAction("delete.${p.id}", p.name, FuseIcons.Bookmark, detail = p.about, destructive = true, onSelect = {
+                            choice = null
+                            scope.launch {
+                                store.library.deleteSettingProfile(p.id)
+                                toasts.show("${p.name} deleted")
+                                emulatorSettingsSheet(game, gameTitle, emulator)
+                            }
+                        })
+                    },
+                )
+            },
+        ),
+    )
+    choice = ChoiceSpec(
+        icon = FuseIcons.Layers,
+        title = "Profiles for $title",
+        message = "Starting points, not promises: how a game runs depends on this computer. ${view.emulator}'s own fixes for the game apply whichever profile it has, and Put Back undoes a profile like any change.",
+        options = rows + save + delete,
+    )
+}
+
+private fun profileIcon(id: String) = when (id) {
+    io.github.matiyaaa.fuse.launch.settings.SettingProfiles.VANILLA -> FuseIcons.Gamepad
+    io.github.matiyaaa.fuse.launch.settings.SettingProfiles.PERFORMANCE -> FuseIcons.Gauge
+    io.github.matiyaaa.fuse.launch.settings.SettingProfiles.QUALITY -> FuseIcons.Sparkles
+    io.github.matiyaaa.fuse.launch.settings.SettingProfiles.BATTERY -> FuseIcons.BatteryMedium
+    else -> FuseIcons.Layers
 }
 
 /** The values one setting can take, with the one in use checked; for a game, following every game's comes first. */

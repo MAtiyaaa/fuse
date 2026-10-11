@@ -535,6 +535,15 @@ interface LibraryOps {
     /** Puts back what Fuse changed in these settings; anything changed in the emulator since stays. */
     suspend fun restoreEmulatorSettings(id: GameId?, emulator: EmulatorId?): Boolean = false
 
+    /** Gives the game [id] (in [emulator]'s settings) every value of [profile], one of [EmulatorSettingsView.Ready.profiles]. */
+    suspend fun applySettingProfile(id: GameId?, emulator: EmulatorId?, profile: String): Boolean = false
+
+    /** Keeps the game [id]'s settings now as a profile of the person's own called [name], for their other games. */
+    suspend fun saveSettingProfile(id: GameId?, emulator: EmulatorId?, name: String): Boolean = false
+
+    /** Deletes one of the person's own setting profiles; games given it keep their settings. */
+    suspend fun deleteSettingProfile(profile: String): Boolean = false
+
     /** Play time today, this week, this month and in all, per day, per game and per system. */
     fun playTime(): Flow<PlayTimeReport> = kotlinx.coroutines.flow.flowOf(PlayTimeReport(loaded = true))
 

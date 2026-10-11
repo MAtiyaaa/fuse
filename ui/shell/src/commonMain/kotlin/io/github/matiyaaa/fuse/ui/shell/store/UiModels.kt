@@ -531,10 +531,15 @@ sealed interface EmulatorSettingsView {
         val values: List<io.github.matiyaaa.fuse.launch.settings.SettingValue>,
         /** Fuse changed something in this file that it can put back. */
         val canRestore: Boolean,
+        /** For a game: the sets of these settings it can be given at once, Fuse's first, then the person's own. */
+        val profiles: List<SettingProfileView> = emptyList(),
     ) : EmulatorSettingsView
 
     data class Unavailable(val title: String, val reason: String) : EmulatorSettingsView
 }
+
+/** One setting profile a game can be given: [active] when every value in it is the game's now. */
+data class SettingProfileView(val id: String, val name: String, val about: String, val own: Boolean, val active: Boolean)
 
 /** What RPCS3's compatibility list says about a PS3 game, asked for by the user. */
 sealed interface CompatibilityAnswer {

@@ -106,6 +106,8 @@ internal class DefaultLibraryOps(
     private val apps: DefaultAppOps,
     private val achievements: DefaultAchievementOps,
     private val cartridge: DefaultCartridgeOps,
+    /** Changes the stored settings (the person's own setting profiles), as the store writes them. */
+    private val changeSettings: suspend ((io.github.matiyaaa.fuse.data.settings.AppSettings) -> io.github.matiyaaa.fuse.data.settings.AppSettings) -> Unit = {},
     private val setCleanNames: suspend (Boolean) -> Unit,
 ) : LibraryOps {
     private val data = ctx.data
@@ -864,9 +866,15 @@ internal class DefaultLibraryOps(
     private val nativePatches by lazy { NativePatches(ctx, { emulators.detectNow() }, ::discIdentity, ::pspGameId, ::retroArchRun) }
 
     /** The emulator settings Fuse changes, for a game or for every game. */
-    private val nativeSettings by lazy { NativeSettingsStore(ctx, { emulators.detectNow() }, ::discIdentity, ::pspGameId, { startsWith(it).first.installed }) }
+    private val nativeSettings by lazy { NativeSettingsStore(ctx, { emulators.detectNow() }, ::discIdentity, ::pspGameId, { startsWith(it).first.installed }, changeSettings) }
 
     override suspend fun emulatorSettings(id: GameId?, emulator: EmulatorId?) = nativeSettings.view(id, emulator)
+
+    override suspend fun applySettingProfile(id: GameId?, emulator: EmulatorId?, profile: String) = nativeSettings.applyProfile(id, emulator, profile)
+
+    override suspend fun saveSettingProfile(id: GameId?, emulator: EmulatorId?, name: String) = nativeSettings.saveProfile(id, emulator, name)
+
+    override suspend fun deleteSettingProfile(profile: String) = nativeSettings.deleteProfile(profile)
 
     override suspend fun setEmulatorSetting(id: GameId?, emulator: EmulatorId?, setting: String, value: String?) = nativeSettings.set(id, emulator, setting, value)
 
