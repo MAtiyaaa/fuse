@@ -110,6 +110,29 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
         settle()
         shoot("All, Systems shelf")
     }
+
+    scenario("library", "streamed apps") {
+        // Two computers at home, one game on both: one tile, and a choice of computer.
+        val hosts = listOf(
+            io.github.matiyaaa.fuse.data.settings.StreamHostSettings("pc-1", "Gaming PC", "192.168.1.20", apps = listOf("Desktop", "Steam Big Picture", "Aurora Outpost", "Hollow Pines")),
+            io.github.matiyaaa.fuse.data.settings.StreamHostSettings("pc-2", "Living Room", "192.168.1.30", apps = listOf("Steam Big Picture", "Hollow Pines")),
+        )
+        useLibrary(prefs = { it.copy(streaming = it.streaming.copy(enabled = true, hosts = hosts)) })
+        libraryTab()
+        waitFor("Recently played")
+        libraryFilter(1)
+        settle(1_200)
+        tap(PadButton.DPAD_DOWN, 6)
+        settle(900)
+        waitFor("Stream From Your Computers")
+        shoot("All, Stream From Your Computers: each app once", 900)
+        tap(PadButton.DPAD_RIGHT)
+        settle(400)
+        tap(PadButton.X)
+        waitFor("Stream Steam Big Picture from")
+        shoot("choosing which computer streams it")
+        tap(PadButton.B)
+    }
     if (!exhaustive) return
 
     scenario("library", "favourites") {

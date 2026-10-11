@@ -53,6 +53,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.activateGame
 import io.github.matiyaaa.fuse.ui.shell.app.gameConfirmLabel
 import io.github.matiyaaa.fuse.ui.shell.app.gameMenu
+import io.github.matiyaaa.fuse.ui.shell.app.openStreaming
 import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
 import io.github.matiyaaa.fuse.ui.shell.app.room
 import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
@@ -96,6 +97,12 @@ internal sealed class EverywhereGame {
         override val addedAt: Long get() = game.addedAt
     }
 
+    /** An app a computer at home streams through Moonlight: once, however many computers offer it. */
+    data class Streamed(val app: StreamedApp) : EverywhereGame() {
+        override val card: GameCard get() = app.card
+        override val addedAt: Long get() = 0
+    }
+
     /** Where it is, in a few words, for the line under its shelf. */
     val where: String get() = when (this) {
         is Here -> "Installed"
@@ -107,6 +114,47 @@ internal sealed class EverywhereGame {
             RommPresence.PARTLY_INSTALLED -> "Partly installed"
         }
         is Elsewhere -> if (game.downloading) "Coming here" else holdersText(game)
+        is Streamed -> app.where
+    }
+}
+
+/**
+ * An app the household's computers stream (Sunshine, Apollo), with every computer that offers it,
+ * as one tile. Its art is the library's when the library has a game of the same name.
+ */
+@Immutable
+internal data class StreamedApp(val name: String, val hosts: List<io.github.matiyaaa.fuse.ui.shell.store.StreamHostView>, val card: GameCard) {
+    /** Where it streams from, in a few words. */
+    val where: String get() = when {
+        hosts.size == 1 -> "Streams from ${hosts.single().host.name}"
+        else -> "Streams from ${hosts.size} computers"
+    }
+}
+
+/**
+ * The apps the household's computers offer, each once (by name, whatever its case), its computers
+ * in the order they were added. [art] gives the library's art for a name it has a game for.
+ */
+internal fun streamedApps(hosts: List<io.github.matiyaaa.fuse.ui.shell.store.StreamHostView>, art: (String) -> io.github.matiyaaa.fuse.ui.shell.store.Art?): List<StreamedApp> {
+    val byName = LinkedHashMap<String, Pair<String, MutableList<io.github.matiyaaa.fuse.ui.shell.store.StreamHostView>>>()
+    for (h in hosts) for (a in h.host.apps) {
+        val name = a.trim().ifEmpty { continue }
+        val key = name.lowercase()
+        val entry = byName.getOrPut(key) { name to ArrayList() }
+        if (entry.second.none { it.host.id == h.host.id }) entry.second += h
+    }
+    return byName.entries.mapIndexed { i, (key, value) ->
+        val (name, on) = value
+        StreamedApp(
+            name, on,
+            GameCard(
+                // Never a library game's id: choosing it streams, it never starts a copy here.
+                id = io.github.matiyaaa.fuse.model.GameId(-1_000_000L - i),
+                platformId = io.github.matiyaaa.fuse.model.PlatformId("stream"),
+                title = name, platformShort = "Moonlight", accent = 0xFF5B8DEF,
+                art = art(key) ?: io.github.matiyaaa.fuse.ui.shell.store.Art.None,
+            ),
+        )
     }
 }
 
@@ -157,6 +205,18 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
     val rommSystems by romm.systems.collectAsState()
     val householdRecent by store.reach.recent.collectAsState()
     val library = rememberSystems(app)
+    // What the computers at home stream, when streaming is on: once each, with the library's art where it has the game.
+    val prefs by store.prefs.collectAsState()
+    val streamHosts by store.streaming.hosts.collectAsState()
+    val streamingOn = store.streaming.supported && prefs.streaming.enabled
+    val allGames = remember(streamingOn) { if (streamingOn) store.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()) else kotlinx.coroutines.flow.flowOf(emptyList()) }
+    val everyGame by allGames.collectAsState(initial = emptyList())
+    val streamed = remember(streamHosts, everyGame, streamingOn) {
+        if (!streamingOn) emptyList() else {
+            val byTitle = everyGame.associateBy { it.title.lowercase() }
+            streamedApps(streamHosts) { key -> byTitle[key]?.art }.map { EverywhereGame.Streamed(it) }
+        }
+    }
 
     val rommOn = romm.supported && rommState.link != RommLink.NOT_SET_UP
     val rommGames = remember(rommNew, rommRecent) { (rommNew + rommRecent).distinctBy { it.romId } }
@@ -176,6 +236,7 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
         if (systems.isNotEmpty()) add(ROW_SYSTEMS)
         if (rommOn && onRomm.isNotEmpty()) add(ROW_ROMM)
         if (elsewhere.isNotEmpty()) add(ROW_ELSEWHERE)
+        if (streamed.isNotEmpty()) add(ROW_STREAM)
     }
     // Each shelf ends in See All (systems excepted: the Systems tab holds them all already).
     fun sizeOf(key: String) = when (key) {
@@ -183,6 +244,7 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
         ROW_SYSTEMS -> systems.size
         ROW_ROMM -> onRomm.size + 1
         ROW_ELSEWHERE -> elsewhere.size + 1
+        ROW_STREAM -> streamed.size + 1
         else -> 0
     }
     val sel = view.shelves
@@ -193,6 +255,7 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
         ROW_RECENT -> recent
         ROW_ROMM -> onRomm
         ROW_ELSEWHERE -> elsewhere
+        ROW_STREAM -> streamed
         else -> emptyList()
     }
     val chosen = gamesOf(row).getOrNull(col)
@@ -202,11 +265,13 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
         is EverywhereGame.Here -> app.activateGame(e.card)
         is EverywhereGame.OnRomm -> app.go(Route.GameInfo(e.game.game ?: e.card.id))
         is EverywhereGame.Elsewhere -> app.go(Route.GameInfo(e.game.id))
+        is EverywhereGame.Streamed -> streamFrom(app, e.app)
     }
     fun options(e: EverywhereGame) = when (e) {
         is EverywhereGame.Here -> app.openContextMenu(app.gameMenu(e.card))
         is EverywhereGame.OnRomm -> app.openContextMenu(io.github.matiyaaa.fuse.ui.shell.romm.gameMenu(app, e.game))
         is EverywhereGame.Elsewhere -> app.openContextMenu(householdMenu(app, e.game, romm = rommState.canUpload))
+        is EverywhereGame.Streamed -> streamFrom(app, e.app, always = true)
     }
     fun openSystem(s: EverywhereSystem) = when {
         s.local -> app.go(Route.PlatformGames(s.card.platform.id))
@@ -223,6 +288,7 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
         }
         ROW_ROMM -> app.go(Route.RommGames(null, "On RomM"))
         ROW_ELSEWHERE -> app.go(Route.HouseholdGames(null, "On other devices"))
+        ROW_STREAM -> app.openStreaming()
         else -> Unit
     }
 
@@ -240,6 +306,7 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
             row == ROW_SYSTEMS -> listOf(Hint(HintButton.CONFIRM, "Open"))
             chosen == null && row != null -> listOf(Hint(HintButton.CONFIRM, "See all"))
             chosen is EverywhereGame.Here -> listOf(Hint(HintButton.CONFIRM, app.gameConfirmLabel), Hint(HintButton.OPTIONS, "Options"))
+            chosen is EverywhereGame.Streamed -> listOf(Hint(HintButton.CONFIRM, "Stream"), Hint(HintButton.OPTIONS, "Choose computer"))
             chosen != null -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.OPTIONS, "Options"))
             else -> emptyList()
         }
@@ -297,6 +364,7 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
                         val (title, icon) = when (key) {
                             ROW_RECENT -> "Recently Added" to FuseIcons.Sparkles
                             ROW_ROMM -> "On RomM" to FuseIcons.Cloud
+                            ROW_STREAM -> "Stream From Your Computers" to FuseIcons.Cast
                             else -> "On Other Devices" to FuseIcons.MonitorSmartphone
                         }
                         val games = gamesOf(key)
@@ -305,6 +373,7 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
                             onOpen = { i -> sel.row = r; sel.setColumn(key, i); open(games[i]) },
                             onOptions = { i -> sel.row = r; sel.setColumn(key, i); options(games[i]) },
                             onSeeAll = { sel.row = r; sel.setColumn(key, games.size); seeAll(key) },
+                            noun = if (key == ROW_STREAM) "app" else "game",
                         )
                     }
                 }
@@ -317,6 +386,40 @@ private const val ROW_RECENT = "recent"
 private const val ROW_SYSTEMS = "systems"
 private const val ROW_ROMM = "romm"
 private const val ROW_ELSEWHERE = "elsewhere"
+private const val ROW_STREAM = "stream"
+
+/**
+ * Streams [a] through Moonlight. With one computer offering it (and not [always] asking), straight
+ * away; with several, the person chooses, seeing which are on, asleep (and woken) or not answering.
+ * One tile for the app however many computers have it: switching computers never adds a game.
+ */
+private fun streamFrom(app: AppState, a: StreamedApp, always: Boolean = false) {
+    val ops = app.store.streaming
+    if (a.hosts.size == 1 && !always) {
+        ops.stream(a.hosts.single().host.id, a.name)
+        return
+    }
+    app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+        title = "Stream ${a.name} from",
+        icon = FuseIcons.Cast,
+        message = "Moonlight streams it from the computer you choose. One that sleeps is woken first.",
+        options = a.hosts.map { h ->
+            io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction(
+                "host.${h.host.id}", h.host.name, FuseIcons.Monitor,
+                detail = when {
+                    h.online == true -> h.info?.takeIf { it.busy }?.let { "On, streaming something now" } ?: "On and ready"
+                    h.canWake -> "Asleep or away: Fuse wakes it first"
+                    h.online == false -> "Not answering"
+                    else -> "Checking"
+                },
+                onSelect = {
+                    app.choice = null
+                    ops.stream(h.host.id, a.name)
+                },
+            )
+        },
+    )
+}
 
 /** A shelf of games from any source, its chosen one named underneath, ending in See All. */
 @Composable
@@ -329,11 +432,13 @@ private fun EverywhereShelf(
     onOpen: (Int) -> Unit,
     onOptions: (Int) -> Unit,
     onSeeAll: () -> Unit,
+    /** What the shelf holds, for its count ("game", or "app" for what computers stream). */
+    noun: String = "game",
 ) {
     val state = rememberLazyListState()
     LaunchedEffect(selected) { if (selected >= 0) state.animateScrollToItem(maxOf(0, selected - 1)) }
     Column {
-        ShelfTitle(title, icon, if (games.size == 1) "1 game" else "${games.size} games")
+        ShelfTitle(title, icon, if (games.size == 1) "1 $noun" else "${games.size} ${noun}s")
         LazyRow(
             state = state,
             contentPadding = PaddingValues(horizontal = Space.gutter, vertical = liftRoom(tile)),
@@ -346,6 +451,7 @@ private fun EverywhereShelf(
                     }
                     is EverywhereGame.OnRomm -> RommTile(g.game, selected == i, tile, onClick = { onOpen(i) }, onLongClick = { onOptions(i) })
                     is EverywhereGame.Elsewhere -> HouseholdTile(g.game, selected == i, tile, onClick = { onOpen(i) }, onLongClick = { onOptions(i) })
+                    is EverywhereGame.Streamed -> GameIconTile(g.card, selected == i, size = tile, onClick = { onOpen(i) }, onLongClick = { onOptions(i) })
                 }
             }
             item("seeall") { SeeAllTile(selected == games.size, tile, onSeeAll) }
