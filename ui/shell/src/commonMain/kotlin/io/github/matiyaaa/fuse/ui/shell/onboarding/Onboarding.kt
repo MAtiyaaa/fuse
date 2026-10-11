@@ -173,7 +173,19 @@ fun OnboardingScreen(app: AppState) {
     val state = app.onboarding
     val steps = rememberSteps(app, state)
     state.total = steps.size
+    // Setup interrupted by a restart (Steam's, Decky's or Fuse's) resumes on the step it was on.
+    // Only the first time setup shows in this run of Fuse: setup opened again later starts at its beginning.
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (app.setupResumeChecked) return@LaunchedEffect
+        app.setupResumeChecked = true
+        val prefs = app.store.prefs.value
+        val saved = prefs.onboardingStep
+        if (!prefs.onboardingDone && state.index == 0 && saved.isNotEmpty()) steps.indexOfFirst { it.id == saved }.takeIf { it > 0 }?.let { state.index = it }
+    }
     val step = steps[state.index.coerceIn(0, steps.lastIndex)]
+    androidx.compose.runtime.LaunchedEffect(step.id) {
+        if (app.store.prefs.value.onboardingStep != step.id) app.store.updatePrefs { it.copy(onboardingStep = step.id) }
+    }
     val motion = Fuse.motion
 
     fun go(delta: Int) {

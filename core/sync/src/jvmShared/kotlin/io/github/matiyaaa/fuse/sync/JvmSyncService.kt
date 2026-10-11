@@ -469,7 +469,7 @@ class JvmSyncService(
             "offline" -> SyncStatus.Offline(name, device?.pendingCount ?: 0, (status.value as? SyncStatus.Offline)?.since ?: clock())
             // Asked to slow down: nothing is wrong, the next round simply waits a little longer.
             "rate" -> return
-            "revoked" -> SyncStatus.NeedsAttention(name, "This device was unlinked from $name. Connect it again from Settings, Addons, Fuse Sync.", e.code)
+            "revoked" -> SyncStatus.NeedsAttention(name, "This device was unlinked from $name. Connect it again from Settings, Fuse One.", e.code)
             "clock" -> SyncStatus.NeedsAttention(name, "This device's clock is far from the host's. Set the date and time, and syncing carries on.", e.code)
             "locked" -> SyncStatus.NeedsAttention(name, "This profile's PIN changed on another device. Open it again with the new PIN to keep syncing.", e.code)
             else -> SyncStatus.NeedsAttention(name, e.message ?: "The host said no.", e.code)
@@ -655,7 +655,7 @@ class JvmSyncService(
         _joins.value = emptyList()
         _sharedGames.value = emptySet()
         _host.value = null
-        log("Fuse Sync forgot its host")
+        log("Fuse One forgot its host")
         if (unsent > 0) log(if (unsent == 1) "A save that hadn't reached the host is kept on this device" else "$unsent saves that hadn't reached the host are kept on this device", kind = "save")
     }
 
@@ -981,7 +981,7 @@ class JvmSyncService(
             savePeople(LocalPeople(pins = pins.filterKeys { it in ids.values }))
             markAdopted()
             saveConfig { it.copy(activeProfile = next) }
-            if (left.isNotEmpty()) log(if (left.size == 1) "${left[0].name} was left out; their saves are in Fuse Sync's kept folder" else "${left.size} profiles were left out; their saves are in Fuse Sync's kept folder")
+            if (left.isNotEmpty()) log(if (left.size == 1) "${left[0].name} was left out; their saves are in Fuse One's kept folder" else "${left.size} profiles were left out; their saves are in Fuse One's kept folder")
         }
         finishMerge()
         linkFor(linked)
@@ -1332,7 +1332,7 @@ class JvmSyncService(
     // ---------------------------------------------------------------- profiles
 
     private suspend fun <T> withClient(block: suspend (SyncClient) -> T): Result<T> = withContext(Dispatchers.IO) {
-        val c = client ?: return@withContext Result.failure(SyncException("Fuse Sync isn't connected.", "not-connected", 0))
+        val c = client ?: return@withContext Result.failure(SyncException("Fuse One isn't connected.", "not-connected", 0))
         runCatching { block(c) }.onFailure { if (it is SyncException) handle(it) }
     }
 
@@ -1401,7 +1401,7 @@ class JvmSyncService(
                 val written = device?.forget(id, File(keptFolder(), safeName(p.name))) ?: 0
                 savePeople(people.copy(profiles = people.profiles - p, order = people.order - id, pins = people.pins - id))
                 showLocal()
-                log(if (written > 0) "${p.name} was deleted; their saves are in Fuse Sync's kept folder" else "${p.name} was deleted")
+                log(if (written > 0) "${p.name} was deleted; their saves are in Fuse One's kept folder" else "${p.name} was deleted")
             }
         }
         return withClient { c ->
@@ -1451,7 +1451,7 @@ class JvmSyncService(
 
     override suspend fun switchTo(id: String?, pin: String?): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val d = device ?: error("Fuse Sync isn't set up.")
+            val d = device ?: error("Fuse One isn't set up.")
             val c = client
             work.withLock {
                 val before = cached.activeProfile
@@ -1612,7 +1612,7 @@ class JvmSyncService(
 
     override suspend fun setShared(game: GameKey, shared: Boolean, fromMine: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val c = client ?: error("Fuse Sync isn't connected. Sharing a game needs the host.")
+            val c = client ?: error("Fuse One isn't connected. Sharing a game needs the host.")
             val from = cached.activeProfile.takeIf { fromMine && shared && it.isNotEmpty() }
             val result = c.setShared(game.id, shared, from)
             saveConfig { it.copy(sharedGames = result.games) }
@@ -1650,7 +1650,7 @@ class JvmSyncService(
             if (!takesFrom(owner, query.game.id)) continue
             if (c == null) {
                 // Without a host there is nothing to be offline from.
-                if (!keepsOwn) note = note ?: "Fuse Sync is offline: playing with this device's save"
+                if (!keepsOwn) note = note ?: "Fuse One is offline: playing with this device's save"
                 continue
             }
             // A launch never waits long on a host that isn't there.
@@ -1672,7 +1672,7 @@ class JvmSyncService(
                     log("${query.title}: the newest ${result.revision.kind.label.lowercase()} is for another emulator, so it stays on the host", query.game.id, "save")
                     _notices.tryEmit(SyncNotice.CantUse(query.title, result.revision.kind, result.revision.deviceName, incompatibleWhy(result.revision)))
                 }
-                PrepareResult.Offline -> note = note ?: "Fuse Sync is offline: playing with this device's save"
+                PrepareResult.Offline -> note = note ?: "Fuse One is offline: playing with this device's save"
                 else -> Unit
             }
         }
@@ -1683,8 +1683,8 @@ class JvmSyncService(
 
     override suspend fun settle(conflict: SaveConflict, keepHere: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val c = client ?: error("Fuse Sync isn't connected.")
-            val d = device ?: error("Fuse Sync isn't set up.")
+            val c = client ?: error("Fuse One isn't connected.")
+            val d = device ?: error("Fuse One isn't set up.")
             val slot = slots(conflict.query).firstOrNull { it.kind == conflict.kind } ?: error("That save isn't here any more.")
             val owner = ownerOf(conflict.query, slot, cached.activeProfile)
             if (keepHere) {
@@ -1951,8 +1951,8 @@ class JvmSyncService(
     override suspend fun restore(asked: SaveQuery, kind: SaveKind, version: String): Result<Unit> = withContext(Dispatchers.IO) {
         val query = canonical(asked)
         runCatching {
-            val c = client ?: error("Fuse Sync isn't connected.")
-            val d = device ?: error("Fuse Sync isn't set up.")
+            val c = client ?: error("Fuse One isn't connected.")
+            val d = device ?: error("Fuse One isn't set up.")
             val slot = slots(query).firstOrNull { it.kind == kind } ?: error("That save isn't here.")
             val owner = ownerOf(query, slot, cached.activeProfile)
             val rev = c.revisions(owner, slot.game.id, kind).firstOrNull { it.id == version } ?: error("That version is gone.")

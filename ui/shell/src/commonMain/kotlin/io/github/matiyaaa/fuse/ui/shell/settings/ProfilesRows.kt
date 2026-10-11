@@ -40,7 +40,7 @@ internal fun profilesRows(app: AppState): List<MenuAction> {
         if (profiles.isEmpty()) {
             add(infoRow(
                 "about", "Everyone gets their own",
-                detail = "A profile keeps a person's saves, play time, favourites, Home and theme apart from everyone else's on this device. No host needed. With Fuse Sync they follow each person to every device",
+                detail = "A profile keeps a person's saves, play time, favourites, Home and theme apart from everyone else's on this device. No host needed. With Fuse One they follow each person to every device",
                 icon = FuseIcons.Users,
             ))
         }
@@ -150,7 +150,7 @@ private fun profileMenu(app: AppState, svc: SyncService, p: ProfileInfo, active:
                     app.confirm = ConfirmSpec(
                         "Delete ${p.name}?",
                         (if (hosted) "Their saves, versions and records leave the host. What each device has right now stays on it."
-                        else "Their play time and settings leave this device. Their saves are kept as plain files in Fuse Sync's kept folder.") +
+                        else "Their play time and settings leave this device. Their saves are kept as plain files in Fuse One's kept folder.") +
                             if (p.id == active?.id) " No one is playing here until you choose someone." else "",
                         "Delete", destructive = true,
                     ) {

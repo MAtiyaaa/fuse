@@ -24,8 +24,11 @@ fun Modifier.grain(strength: Float = GRAIN_STRENGTH): Modifier = drawWithContent
 /** [grain] drawn straight into a canvas, over whatever was drawn there. */
 fun DrawScope.drawGrain(strength: Float = GRAIN_STRENGTH) {
     // Coprime periods have no common repetition within any supported display (127 * 131 px).
-    // Each texel stays one canvas pixel; UI density never enlarges a noise cell.
-    val alpha = strength * 0.70710677f
+    // Each texel stays one canvas pixel; UI density never enlarges a noise cell. A picture the
+    // system enlarges (gamescope on a TV) enlarges the cells too, into visible squares: there the
+    // grain fades by as much, so it still smooths the steps without being seen.
+    val enlarged = Drawing.upscale.coerceAtLeast(1f)
+    val alpha = strength * 0.70710677f / enlarged
     drawRect(Grain.first, alpha = alpha, blendMode = BlendMode.Overlay)
     drawRect(Grain.second, alpha = alpha, blendMode = BlendMode.Overlay)
 }

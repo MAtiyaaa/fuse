@@ -29,6 +29,8 @@ class GamepadInput(private val router: InputRouter) {
         val source = sourceOf(event, button)
         when (event.action) {
             KeyEvent.ACTION_DOWN -> if (event.repeatCount == 0) {
+                // Only the chosen controller moves around Fuse, when one was chosen and is connected.
+                if (isFromController(event) && !router.fromController(event.device?.name)) return true
                 // Which controller this is (a DualSense, a Pro Controller...), so labels can follow it.
                 if (isFromController(event)) event.device?.let { router.padIdentified(PadFamily.of(it.name, it.vendorId)) }
                 router.press(button, source)
@@ -43,6 +45,7 @@ class GamepadInput(private val router: InputRouter) {
         val fromPad = event.isFromSource(InputDevice.SOURCE_JOYSTICK) || event.isFromSource(InputDevice.SOURCE_GAMEPAD)
         if (!fromPad || event.actionMasked != MotionEvent.ACTION_MOVE) return false
         val device = event.device
+        if (!router.allows(device?.name)) return true
         router.stick(centered(event, device, MotionEvent.AXIS_X), centered(event, device, MotionEvent.AXIS_Y), InputSource.GAMEPAD)
         // The right stick: Z and RZ on Android's standard gamepad layout, RX and RY on some pads.
         if (device?.getMotionRange(MotionEvent.AXIS_Z, event.source) != null) {
@@ -59,6 +62,26 @@ class GamepadInput(private val router: InputRouter) {
         trigger(event, device, PadButton.L2, MotionEvent.AXIS_LTRIGGER, MotionEvent.AXIS_BRAKE)
         trigger(event, device, PadButton.R2, MotionEvent.AXIS_RTRIGGER, MotionEvent.AXIS_GAS)
         return true
+    }
+
+    /** Tells the router which controllers are connected: real gamepads and joysticks, by name. */
+    fun refreshControllers() {
+        val names = InputDevice.getDeviceIds().toList().mapNotNull { InputDevice.getDevice(it) }
+            .filter { d ->
+                !d.isVirtual && (
+                    d.sources and InputDevice.SOURCE_GAMEPAD == InputDevice.SOURCE_GAMEPAD ||
+                        d.sources and InputDevice.SOURCE_JOYSTICK == InputDevice.SOURCE_JOYSTICK
+                    )
+            }
+            .map { it.name }.distinct()
+        router.controllersChanged(names)
+    }
+
+    /** Keeps [refreshControllers] current as controllers come and go. */
+    val deviceListener = object : android.hardware.input.InputManager.InputDeviceListener {
+        override fun onInputDeviceAdded(deviceId: Int) = refreshControllers()
+        override fun onInputDeviceRemoved(deviceId: Int) = refreshControllers()
+        override fun onInputDeviceChanged(deviceId: Int) = refreshControllers()
     }
 
     /** Focus lost or Fuse paused: nothing may stay held. */

@@ -84,7 +84,7 @@ internal fun SyncSettingsScreen(app: AppState) {
         app.hints = listOf(Hint(HintButton.CONFIRM, "Change"), Hint(HintButton.BACK, "Back"))
     }
     if (svc == null) {
-        val rows = listOf(infoRow("none", "Fuse Sync isn't part of this build", icon = FuseIcons.RefreshCcw))
+        val rows = listOf(infoRow("none", "Fuse One isn't part of this build", icon = FuseIcons.RefreshCcw))
         InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e -> handleMenuAction(e, rows, page.sel) }
         Column(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {
             Spacer(Modifier.height(Size.hudHeight + Space.l))
@@ -460,7 +460,7 @@ private fun syncRows(
             section = leave,
             onSelect = {
                 app.confirm = ConfirmSpec(
-                    "Stop hosting Fuse Sync?",
+                    "Stop hosting Fuse One?",
                     "Other devices keep everything they have and stop syncing until there is a host again. Every save, version and profile stays on this computer, so hosting again here carries on where it was.",
                     "Stop Hosting", destructive = true,
                 ) {

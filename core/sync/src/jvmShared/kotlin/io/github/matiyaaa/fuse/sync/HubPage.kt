@@ -50,7 +50,7 @@ ${if (error != null) """<p class="error">${esc(error)}</p>""" else ""}
             val synced = if (d.lastSync > 0) " · last synced ${at(d.lastSync)}" else ""
             """<li class="row"><span class="dot${if (online) " on" else ""}"></span><div><b>${esc(d.name)}</b>""" +
                 """<small>${platform(d.platform)} · $seen$who$synced</small></div></li>"""
-        }.ifEmpty { """<li class="empty">No devices yet. In Fuse on this computer: Settings, Addons, Fuse Sync, Add a Device.</li>""" }
+        }.ifEmpty { """<li class="empty">No devices yet. In Fuse on this computer: Settings, Fuse One, Add a Device.</li>""" }
         val profiles = reports.joinToString("") { profile(it, ::deviceName, now) }
             .ifEmpty { """<section class="card"><p class="empty">No profiles yet. Make one in Fuse: Who's playing?, Add Profile.</p></section>""" }
         val up = (now - status.startedAt).coerceAtLeast(0) / 60_000

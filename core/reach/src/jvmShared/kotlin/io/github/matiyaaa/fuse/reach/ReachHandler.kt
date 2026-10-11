@@ -174,7 +174,7 @@ class ReachHandler(private val host: ReachTransferHost, private val clock: () ->
     }
 
     private suspend fun fromPeer(c: Candidate, f: ReachFile, part: File, io: TransferIo, before: Long, total: Long, tickets: Map<String, OpenTicket?>) {
-        val peers = host.peers ?: throw TransferInterrupted("Fuse Sync isn't reachable.")
+        val peers = host.peers ?: throw TransferInterrupted("Fuse One isn't reachable.")
         val open = tickets[c.source.id] ?: throw TransferInterrupted("${c.source.name} didn't give leave.")
         val direct = c.reach == Reach.PEER_LOCAL
         val piece = if (direct) DIRECT_PIECE else SyncApi.RELAY_PIECE

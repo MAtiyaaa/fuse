@@ -17,6 +17,10 @@ class SettingTopic(
     val cartridge: Boolean = false,
     /** Only on a device with a second screen. */
     val secondScreen: Boolean = false,
+    /** Only where Steam can be (computers). */
+    val steam: Boolean = false,
+    /** Only where Decky can be (Linux). */
+    val decky: Boolean = false,
 )
 
 /** A setting found by search, with where it is ("Settings, Appearance"). */
@@ -59,6 +63,11 @@ object SettingsIndex {
         SettingTopic("library", "Clean display names", "titles tags names usa", group = "library.names"),
         SettingTopic("library", "Collections", "playlists groups"),
         SettingTopic("library", "Automatic series", "franchise series"),
+        SettingTopic("library", "Library opens on", "start installed all default tab"),
+        SettingTopic("library", "Add Fuse to Steam", "steam game mode shortcut non-steam steamos", steam = true),
+        SettingTopic("library", "Remove Fuse from Steam", "steam shortcut uninstall", steam = true),
+        SettingTopic("library", "Fuse plugin for Decky", "decky loader plugin steam gaming mode steamos", decky = true),
+        SettingTopic("library", "Decky bridge", "decky plugin connection", decky = true),
         SettingTopic("addons", null, "addons jellyfin media server films movies shows tv music store cartridge"),
         SettingTopic("addons", "Jellyfin", "media server films movies shows tv series music player stream"),
         SettingTopic("addons", "Server and playback", "jellyfin sign in address quality subtitles audio language", group = ADDONS_JELLYFIN),
@@ -92,10 +101,8 @@ object SettingsIndex {
         SettingTopic("media", "IGDB Client ID", "igdb twitch metadata key", group = "media.sources"),
         SettingTopic("media", "ScreenScraper username", "screenscraper account", group = "media.sources"),
         SettingTopic("media", "Source order", "scraper providers order", group = "media.sources"),
-        SettingTopic("inputs", "Detect my buttons", "controller gamepad buttons mapping"),
-        SettingTopic("inputs", "Button layout", "xbox nintendo playstation abxy"),
-        SettingTopic("inputs", "Swap confirm and back", "a b swap accept cancel"),
-        SettingTopic("inputs", "Button mapping and test", "test controller remap"),
+        SettingTopic("inputs", "Controller setup", "controller gamepad buttons mapping remap test guided detect layout xbox nintendo playstation abxy swap confirm back"),
+        SettingTopic("inputs", "Controller that moves around Fuse", "multiple controllers second player choose pad"),
         SettingTopic("inputs", "Stick deadzone", "analog drift joystick", group = "inputs.feel"),
         SettingTopic("inputs", "Repeat delay", "scroll speed held direction", group = "inputs.feel"),
         SettingTopic("inputs", "Vibration", "rumble haptics", group = "inputs.feel"),
@@ -132,11 +139,11 @@ object SettingsIndex {
         SettingTopic("about", "Made with", "credits thanks", group = "about.credits"),
     )
 
-    fun search(query: String, sections: List<SettingsSection>, limit: Int = 8, cartridge: Boolean = true, secondScreen: Boolean = true): List<SettingHit> {
+    fun search(query: String, sections: List<SettingsSection>, limit: Int = 8, cartridge: Boolean = true, secondScreen: Boolean = true, steam: Boolean = true, decky: Boolean = true): List<SettingHit> {
         val needle = TitleText.normalize(query)
         if (needle.length < 2) return emptyList()
         val byId = sections.associateBy { it.id }
-        val topics = sections.map { SettingTopic(it.id, null, it.summary) } + rows.filter { (cartridge || !it.cartridge) && (secondScreen || !it.secondScreen) }
+        val topics = sections.map { SettingTopic(it.id, null, it.summary) } + rows.filter { (cartridge || !it.cartridge) && (secondScreen || !it.secondScreen) && (steam || !it.steam) && (decky || !it.decky) }
         return topics.mapNotNull { t ->
             val section = byId[t.section] ?: return@mapNotNull null
             val title = t.row ?: section.label

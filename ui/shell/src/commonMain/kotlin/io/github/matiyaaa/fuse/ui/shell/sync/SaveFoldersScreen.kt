@@ -223,7 +223,7 @@ private fun SaveFoldersSide(modifier: Modifier) {
                 FuseIcons.FolderSearch to "By where each emulator keeps them, and by each game's own id for 3DS, Switch, Wii U, PS3 and PSP",
                 FuseIcons.FolderPlus to "Where an emulator saves to a folder you picked in it, pick the same folder here",
                 FuseIcons.ShieldAlert to "Android keeps some apps' own folders private. Moving the emulator's data to your storage fixes that",
-                FuseIcons.Users to "Fuse Sync keeps each person's saves apart. Syncthing keeps one save per game for everyone",
+                FuseIcons.Users to "Fuse One keeps each person's saves apart. Syncthing keeps one save per game for everyone",
             )) {
                 Row(verticalAlignment = Alignment.Top) {
                     FuseIcon(icon, size = Size.iconS, tint = c.accent)
@@ -233,7 +233,7 @@ private fun SaveFoldersSide(modifier: Modifier) {
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(c.hairline))
             FText(
-                "Folders chosen here are used by Fuse Sync and Syncthing alike, and only on this device.",
+                "Folders chosen here are used by Fuse One and Syncthing alike, and only on this device.",
                 Fuse.type.caption, color = c.textFaint, maxLines = 3,
             )
         }

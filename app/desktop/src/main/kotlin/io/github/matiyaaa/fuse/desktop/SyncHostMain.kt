@@ -25,21 +25,21 @@ object SyncHostMain {
                 driver.close()
             }
         }.getOrElse {
-            Log.info("Fuse Sync host: couldn't read the settings")
+            Log.info("Fuse One host: couldn't read the settings")
             return 2
         }
         if (sync.role != "HOST") {
-            Log.info("Fuse Sync host: this computer isn't set up as the host")
+            Log.info("Fuse One host: this computer isn't set up as the host")
             return 3
         }
         val name = sync.hostName.ifBlank { runCatching { java.net.InetAddress.getLocalHost().hostName }.getOrDefault("Fuse") }
         val folder = sync.hostDataDir.ifBlank { null }?.let(::File) ?: File(dirs.data, "sync/host")
         val host = HeadlessHost.serve(folder, sync.hostPort, name, BuildInfo.VERSION)
         if (host == null) {
-            Log.info("Fuse Sync host: port ${sync.hostPort} is in use (Fuse is hosting); trying again later")
+            Log.info("Fuse One host: port ${sync.hostPort} is in use (Fuse is hosting); trying again later")
             return 4
         }
-        Log.info("Fuse Sync host serving on port ${sync.hostPort}")
+        Log.info("Fuse One host serving on port ${sync.hostPort}")
         Runtime.getRuntime().addShutdownHook(Thread { host.close() })
         Thread.currentThread().join()
         return 0

@@ -191,6 +191,9 @@ class AppState(
         set(value) { if (value) store.displaySession.enterStandby() else store.displaySession.wake() }
 
     /** A Library view asked for from elsewhere (the Favourites widget), opened once and cleared. */
+    /** Setup has looked once for a step to resume (after a restart in the middle of it). */
+    var setupResumeChecked = false
+
     var librarySegment by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.library.LibrarySegment?>(null)
 
     /** Set while Fuse runs in safe mode ([SafeMode]); cleared when the user leaves it. */
@@ -290,7 +293,7 @@ class AppState(
     /**
      * Where setup is: kept here rather than in its page, so a detour from it (setting up Fuse Sync
      * or Syncthing, which are pages of their own) comes back to the very step it left, with that
-     * step's news ("Fuse Sync is on"). Setup opened afresh starts from the beginning.
+     * step's news ("Fuse One is on"). Setup opened afresh starts from the beginning.
      */
     var onboarding by mutableStateOf(io.github.matiyaaa.fuse.ui.shell.onboarding.OnboardingState())
         private set

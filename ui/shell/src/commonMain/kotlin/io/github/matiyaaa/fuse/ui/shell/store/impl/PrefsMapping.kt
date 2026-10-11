@@ -40,6 +40,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         sync = sync,
         onboardingDone = onboarding.completed,
         rommAnswer = onboarding.romm,
+        onboardingStep = onboarding.stepId,
         themeId = theme.id,
         customThemes = custom,
         motion = appearance.motion,
@@ -135,7 +136,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
     val destinations = visible.map { DestinationSetting(it, visible = true) } +
         Destination.entries.filterNot { it in visible }.map { DestinationSetting(it, visible = false) }
     return copy(
-        onboarding = onboarding.copy(completed = prefs.onboardingDone, romm = prefs.rommAnswer),
+        onboarding = onboarding.copy(completed = prefs.onboardingDone, romm = prefs.rommAnswer, stepId = prefs.onboardingStep),
         home = home.copy(layout = prefs.home, systemsBoard = prefs.systemsBoard, systemsBoardFlipped = prefs.systemsBoardFlipped, systemTileStep = prefs.systemTileStep, systemTileStepFlipped = prefs.systemTileStepFlipped, systemsCardsSeen = prefs.systemsCardsSeen, destinations = destinations, continueDismissed = prefs.continueDismissed, addonsOrder = prefs.addonsOrder, quickMenu = prefs.quickMenu),
         appearance = appearance.copy(
             themeId = theme.id,

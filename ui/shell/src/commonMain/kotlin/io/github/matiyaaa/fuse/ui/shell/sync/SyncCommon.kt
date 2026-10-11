@@ -20,8 +20,8 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import kotlinx.coroutines.launch
 
 /** Fuse Sync's name wherever it is presented as one of Fuse's own. */
-internal const val SYNC_NAME = "Fuse Sync"
-internal const val SYNC_BYLINE = "Fuse Sync by Fuse"
+internal const val SYNC_NAME = "Fuse One"
+internal const val SYNC_BYLINE = "Fuse One"
 
 /** Where Fuse Sync stands, in a few words and a sentence, with whether it is well (null: neither). */
 data class SyncWords(val ok: Boolean?, val title: String, val detail: String)

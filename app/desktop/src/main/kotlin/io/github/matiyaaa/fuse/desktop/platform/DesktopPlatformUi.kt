@@ -337,6 +337,9 @@ class DesktopPlatformUi(
             val primary = ge.defaultScreenDevice
             ge.screenDevices.mapIndexed { i, d ->
                 val mode = d.displayMode
+                // In Game Mode the screen Java sees is the picture gamescope enlarges: say by how much.
+                val enlarged = if (d == primary) io.github.matiyaaa.fuse.desktop.system.RenderScale.read(mode.width, mode.height)?.takeIf { it.enlarged } else null
+                io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.upscale = if (d == primary) enlarged?.factor ?: 1f else io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.upscale
                 DisplayInfo(
                     id = i,
                     name = "Screen ${i + 1}",
@@ -346,6 +349,8 @@ class DesktopPlatformUi(
                     isPrimary = d == primary,
                     isPresentation = false,
                     isOn = true,
+                    outputWidthPx = enlarged?.output?.width,
+                    outputHeightPx = enlarged?.output?.height,
                 )
             }
         } catch (e: Exception) {

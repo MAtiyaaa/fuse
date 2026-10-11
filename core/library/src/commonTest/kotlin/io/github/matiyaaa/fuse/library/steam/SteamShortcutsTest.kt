@@ -30,8 +30,46 @@ class SteamShortcutsTest {
         val list = BinaryVdf.parse(twice)!!["shortcuts"] as BinaryVdf.Block
         assertEquals(listOf("0", "1"), list.entries.map { it.first })
         assertEquals("Emulator", ((list["0"] as BinaryVdf.Block)["AppName"] as BinaryVdf.Str).value)
-        assertEquals("--windowed", ((list["1"] as BinaryVdf.Block)["LaunchOptions"] as BinaryVdf.Str).value)
+        // Adding again never replaces the launch options already on the entry (the person's to change).
+        assertEquals("--fullscreen", ((list["1"] as BinaryVdf.Block)["LaunchOptions"] as BinaryVdf.Str).value)
         assertFalse(SteamShortcuts.contains(other, fuse.exe))
+    }
+
+    @Test
+    fun addingAgainNeverMakesASecondEntryAndKeepsWhatThePersonChanged() {
+        val first = assertNotNull(SteamShortcuts.add(null, fuse))
+        // The person renames it, gives it their own options and puts it in a collection, in Steam.
+        val root = BinaryVdf.parse(first)!!
+        val entry = (root["shortcuts"] as BinaryVdf.Block)["0"] as BinaryVdf.Block
+        entry["AppName"] = BinaryVdf.Str("Fuse (Living Room)")
+        entry["LaunchOptions"] = BinaryVdf.Str("--fullscreen --safe-mode")
+        entry["tags"] = BinaryVdf.Block(mutableListOf<Pair<String, BinaryVdf.Value>>("0" to BinaryVdf.Str("Emulation")))
+        val edited = BinaryVdf.write(root)
+        // A newer AppImage in another place: the same entry is brought up to date, not a second one.
+        val moved = fuse.copy(exe = "\"/home/deck/Apps/Fuse-0.4.2.AppImage\"")
+        val owned = { exe: String, _: String -> exe.substringAfterLast('/').startsWith("Fuse") }
+        val again = assertNotNull(SteamShortcuts.add(edited, moved, owned))
+        val list = BinaryVdf.parse(again)!!["shortcuts"] as BinaryVdf.Block
+        assertEquals(1, list.entries.size)
+        val e = list["0"] as BinaryVdf.Block
+        assertEquals(moved.exe, (e["Exe"] as BinaryVdf.Str).value)
+        assertEquals("Fuse (Living Room)", (e["AppName"] as BinaryVdf.Str).value)
+        assertEquals("--fullscreen --safe-mode", (e["LaunchOptions"] as BinaryVdf.Str).value)
+        assertEquals(listOf("Emulation", "Fuse"), (e["tags"] as BinaryVdf.Block).entries.map { (it.second as BinaryVdf.Str).value })
+        // The same again changes nothing at all.
+        assertContentEquals(again, SteamShortcuts.add(again, moved, owned))
+    }
+
+    @Test
+    fun removingTakesOutOnlyFusesEntry() {
+        val other = assertNotNull(SteamShortcuts.add(null, SteamShortcut("Emulator", "\"/usr/bin/emu\"", "\"/usr/bin/\"")))
+        val both = assertNotNull(SteamShortcuts.add(other, fuse))
+        val removed = assertNotNull(SteamShortcuts.remove(both) { exe, _ -> exe.endsWith("Fuse.AppImage") })
+        val list = BinaryVdf.parse(removed)!!["shortcuts"] as BinaryVdf.Block
+        assertEquals(listOf("0"), list.entries.map { it.first })
+        assertEquals("Emulator", ((list["0"] as BinaryVdf.Block)["AppName"] as BinaryVdf.Str).value)
+        // Nothing of Fuse's: the very same bytes.
+        assertContentEquals(other, SteamShortcuts.remove(other) { exe, _ -> exe.endsWith("Fuse.AppImage") })
     }
 
     @Test

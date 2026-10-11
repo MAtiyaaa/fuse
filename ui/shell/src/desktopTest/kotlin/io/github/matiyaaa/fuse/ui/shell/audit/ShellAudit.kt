@@ -520,7 +520,7 @@ internal fun AuditDriver.onboardingScreens(exhaustive: Boolean) {
         tap(PadButton.DPAD_RIGHT)
         tap(PadButton.A)
         waitFor("Play on, anywhere")
-        shoot("every device: Fuse Sync, Syncthing or skip (optional)", 1_500)
+        shoot("every device: Fuse One, Syncthing or skip (optional)", 1_500)
         tap(PadButton.DPAD_RIGHT, 2)
         tap(PadButton.A)
         waitFor("Make your profile")

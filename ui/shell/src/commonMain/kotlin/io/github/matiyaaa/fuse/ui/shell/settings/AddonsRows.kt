@@ -252,9 +252,9 @@ private fun remoteLibraryRows(app: AppState, s: io.github.matiyaaa.fuse.data.set
             val hostHere = app.store.sync.service?.host?.collectAsState()?.value != null
             add(
                 if (hostHere) {
-                    infoRow("host", "The host here is starting again", detail = "Fuse Sync's host on this computer is being moved to this version of Fuse. If this stays, close Fuse and open it again", icon = FuseIcons.Info)
+                    infoRow("host", "The host here is starting again", detail = "Fuse One's host on this computer is being moved to this version of Fuse. If this stays, close Fuse and open it again", icon = FuseIcons.Info)
                 } else {
-                    infoRow("host", "Update Fuse on the host computer", detail = "The Fuse Library needs Fuse 0.3.8 or later on the computer that hosts Fuse Sync", icon = FuseIcons.Info)
+                    infoRow("host", "Update Fuse on the host computer", detail = "The Fuse Library needs Fuse 0.3.8 or later on the computer that hosts Fuse One", icon = FuseIcons.Info)
                 },
             )
         }

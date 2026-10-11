@@ -1,0 +1,3 @@
+# The Fuse One Host image (tools/host/Dockerfile) needs only the host's own build.
+*
+!app/host/build/install/

@@ -11,17 +11,21 @@ import kotlin.math.abs
 
 /** Receives controller input. Called on reader threads; implementations hand it to the UI thread. */
 interface GamepadSink {
-    fun press(button: PadButton)
-    fun release(button: PadButton)
+    /** [device]: the name of the controller it came from, when the reader knows it. */
+    fun press(button: PadButton, device: String? = null)
+    fun release(button: PadButton, device: String? = null)
 
     /** Left stick, each axis -1..1, y down. */
-    fun stick(x: Float, y: Float)
+    fun stick(x: Float, y: Float, device: String? = null)
 
     /** Analog trigger ([PadButton.L2] or [PadButton.R2]), 0..1. */
-    fun trigger(button: PadButton, value: Float)
+    fun trigger(button: PadButton, value: Float, device: String? = null)
 
     /** The controller being pressed calls itself [name] (its device name, or SDL's type for it). */
     fun identified(name: String?) {}
+
+    /** The controllers connected now, by name, after one arrived or went away. */
+    fun connected(devices: List<String>) {}
 }
 
 /**
@@ -88,8 +92,11 @@ class LinuxGamepads(private val sink: GamepadSink) : AutoCloseable {
             open[node.name] = device
             Log.info("controller connected: ${device.label}")
             device.start()
+            announce()
         }
     }
+
+    private fun announce() = sink.connected(open.values.sortedBy { it.node }.map { it.label }.distinct())
 
     private fun readName(js: String): String? = try {
         File("/sys/class/input/$js/device/name").takeIf { it.isFile }?.readText()?.trim()?.ifEmpty { null }
@@ -164,7 +171,10 @@ class LinuxGamepads(private val sink: GamepadSink) : AutoCloseable {
                 releaseAll()
                 stop()
                 open.remove(node, this)
-                if (running.get()) Log.info("controller disconnected: $label")
+                if (running.get()) {
+                    Log.info("controller disconnected: $label")
+                    announce()
+                }
             }
         }
 
@@ -173,10 +183,10 @@ class LinuxGamepads(private val sink: GamepadSink) : AutoCloseable {
             if (down) {
                 if (held.add(button)) {
                     sink.identified(label)
-                    sink.press(button)
+                    sink.press(button, label)
                 }
             } else if (held.remove(button)) {
-                sink.release(button)
+                sink.release(button, label)
             }
         }
 
@@ -184,11 +194,11 @@ class LinuxGamepads(private val sink: GamepadSink) : AutoCloseable {
             when (mapping.axis(number)) {
                 AxisRole.LEFT_X -> if (!initial) {
                     stickX = normalize(value)
-                    sink.stick(stickX, stickY)
+                    sink.stick(stickX, stickY, label)
                 }
                 AxisRole.LEFT_Y -> if (!initial) {
                     stickY = normalize(value)
-                    sink.stick(stickX, stickY)
+                    sink.stick(stickX, stickY, label)
                 }
                 AxisRole.RIGHT_X -> if (!initial) {
                     rightX = normalize(value)
@@ -222,7 +232,7 @@ class LinuxGamepads(private val sink: GamepadSink) : AutoCloseable {
             val rest = triggerRest[number] ?: -AXIS_MAX
             val fraction = ((value - rest).toFloat() / (AXIS_MAX - rest)).coerceIn(0f, 1f)
             triggerDown[button] = fraction
-            sink.trigger(button, fraction)
+            sink.trigger(button, fraction, label)
         }
 
         /** The right stick, pushed well over, as a press of that side; let go back near the centre. */
@@ -238,8 +248,8 @@ class LinuxGamepads(private val sink: GamepadSink) : AutoCloseable {
 
         private fun hat(previous: PadButton?, next: PadButton?): PadButton? {
             if (previous == next) return previous
-            previous?.let { sink.release(it) }
-            next?.let { sink.press(it) }
+            previous?.let { sink.release(it, label) }
+            next?.let { sink.press(it, label) }
             return next
         }
 
@@ -250,18 +260,18 @@ class LinuxGamepads(private val sink: GamepadSink) : AutoCloseable {
 
         /** Lets go of everything this device held, so nothing stays pressed after an unplug. */
         private fun releaseAll() {
-            held.forEach { sink.release(it) }
+            held.forEach { sink.release(it, label) }
             held.clear()
-            hatX?.let { sink.release(it) }
-            hatY?.let { sink.release(it) }
-            rightHeld?.let { sink.release(it) }
+            hatX?.let { sink.release(it, label) }
+            hatY?.let { sink.release(it, label) }
+            rightHeld?.let { sink.release(it, label) }
             hatX = null
             hatY = null
             rightHeld = null
-            if (stickX != 0f || stickY != 0f) sink.stick(0f, 0f)
+            if (stickX != 0f || stickY != 0f) sink.stick(0f, 0f, label)
             stickX = 0f
             stickY = 0f
-            triggerDown.forEach { (b, v) -> if (v > 0f) sink.trigger(b, 0f) }
+            triggerDown.forEach { (b, v) -> if (v > 0f) sink.trigger(b, 0f, label) }
             triggerDown.clear()
         }
     }

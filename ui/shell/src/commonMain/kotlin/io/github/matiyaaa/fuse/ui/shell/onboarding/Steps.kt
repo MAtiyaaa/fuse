@@ -112,14 +112,8 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
     val next = state::next
     val desktop = platform.host != io.github.matiyaaa.fuse.model.Host.ANDROID
 
-    val steamIntegration = platform.steam.takeIf { platform.host == io.github.matiyaaa.fuse.model.Host.LINUX }
-    var steamReady by remember { mutableStateOf<Boolean?>(if (steamIntegration == null) true else null) }
-    var steamAdding by remember { mutableStateOf(false) }
-    var steamSetupDone by remember { mutableStateOf(false) }
-    var steamError by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(steamIntegration) {
-        steamReady = steamIntegration?.let { runCatching { it.added() }.getOrDefault(false) } ?: true
-    }
+    // Steam (and Decky, on Linux): one journey, each part optional (see SteamSteps).
+    val steamFlow = rememberSteamFlow(app)
 
     LaunchedEffect(storage) {
         if (storage == StorageState.GRANTED || storage == StorageState.NOT_NEEDED) {
@@ -153,43 +147,6 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
 
     return buildList {
         // ------------------------------------------------------------------------------- start
-        if (steamIntegration != null && (steamReady != true || steamSetupDone)) {
-            add(Step(
-                "steam.integration", "Welcome", when {
-                    steamAdding -> "Adding Fuse to Steam"
-                    steamSetupDone -> "Fuse is ready in Steam"
-                    else -> "Add Fuse to Steam?"
-                },
-                when {
-                    steamAdding -> "Steam closes cleanly while Fuse prepares its entry and artwork. Your setup stays here."
-                    steamSetupDone -> "Find Fuse in your Steam library, ready for Game Mode. Continue setting up here."
-                    steamError != null -> steamError!!
-                    else -> "Start Fuse in Game Mode with its own capsule, hero, logo and icon. Steam may close and restart; your other shortcuts and custom artwork stay."
-                },
-                optional = true, icon = FuseIcons.Gamepad, chapter = Chapters.START,
-                actions = when {
-                    steamAdding -> listOf(StepAction("Adding to Steam", enabled = false) {})
-                    steamSetupDone -> listOf(StepAction("Continue", primary = true, run = next))
-                    else -> listOf(
-                        StepAction(if (steamError == null) "Add to Steam" else "Try again", primary = true, enabled = steamReady != null && !steamIntegration.gameMode) {
-                            steamAdding = true
-                            steamError = null
-                            app.scope.launch {
-                                try {
-                                    steamIntegration.addForSetup().onSuccess {
-                                        steamSetupDone = true
-                                        steamReady = true
-                                    }.onFailure { steamError = it.message ?: "Steam could not be updated. You can retry." }
-                                } finally { steamAdding = false }
-                            }
-                        },
-                        StepAction("Not now", run = next),
-                    )
-                },
-                footnote = if (steamIntegration.gameMode) "Open Fuse directly in Desktop Mode to update Steam safely." else null,
-                content = { if (steamAdding) Spinner() else StepEmblem(FuseIcons.Gamepad) },
-            ))
-        }
         add(Step(
             "welcome", "Welcome", "Welcome to Fuse",
             "Your games, emulators and apps in one place, made for a controller. Setup takes about a minute; you can change anything later.",
@@ -197,6 +154,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             actions = listOf(StepAction("Begin", primary = true, run = next)),
             content = { Ignition() },
         ))
+        addAll(steamFlow.steps(next))
         add(Step(
             "device", "This device", "Tuned for this device",
             "Fuse looked at this device to pick how rich the effects and motion can be without slowing anything down. You can change it at the end.",
@@ -230,7 +188,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                 if (sync == null) return
                 if (!sync.canHost) { setUp(host = false); return }
                 app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
-                    title = "Fuse Sync", icon = FuseIcons.RefreshCcw,
+                    title = "Fuse One", icon = FuseIcons.RefreshCcw,
                     message = "One computer at home keeps everything; every other device connects to it.",
                     options = listOf(
                         MenuAction("host", "Make This the Host", FuseIcons.Server, detail = "This device keeps everyone's saves and settings", onSelect = { app.choice = null; setUp(host = true) }),
@@ -246,15 +204,15 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             add(Step(
                 "sync", "Every device",
                 when {
-                    syncOn -> "Fuse Sync is on"
+                    syncOn -> "Fuse One is on"
                     syncthingOn -> "Syncthing is on"
                     else -> "Play on, anywhere"
                 },
                 when {
                     syncOn -> "Your saves, play time, favourites and settings stay the same on every device, kept by ${prefs.sync.hostName.ifBlank { "your host" }}. RomM and Jellyfin come along when your household shares them."
                     syncthingOn -> "Fuse shares your emulators' save folders through Syncthing, brings in the newest save before a game, and asks when two devices both played."
-                    syncthing == null -> "Fuse Sync by Fuse keeps your saves, play time, favourites and settings the same on every device you play on, from a computer of your own at home. Stop on the PC, carry on on the handheld, and joining brings your household's RomM and Jellyfin too. One device? Skip this; it waits in Settings, Addons."
-                    else -> "Stop on the PC, carry on on the handheld. Fuse Sync is Fuse's own, and the one we recommend: it knows each game, adds up play time, gives each person their own saves, and brings your household's RomM and Jellyfin along. Already run Syncthing? Fuse can use it for your save folders instead, with one save per game for everyone. One device? Skip; both wait in Settings, Addons."
+                    syncthing == null -> "Fuse One keeps your saves, play time, favourites and settings the same on every device you play on, from a computer of your own at home. Stop on the PC, carry on on the handheld, and joining brings your household's RomM and Jellyfin too. One device? Skip this; it waits in Settings, Fuse One."
+                    else -> "Stop on the PC, carry on on the handheld. Fuse One is Fuse's own, and the one we recommend: it knows each game, adds up play time, gives each person their own saves, and brings your household's RomM and Jellyfin along. Already run Syncthing? Fuse can use it for your save folders instead, with one save per game for everyone. One device? Skip; both wait in Settings, Fuse One."
                 },
                 optional = true, icon = FuseIcons.RefreshCcw, chapter = Chapters.START,
                 actions = if (syncOn || syncthingOn) {
@@ -267,7 +225,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                     )
                 } else {
                     listOfNotNull(
-                        StepAction("Use Fuse Sync", primary = true) { useFuseSync() }.takeIf { sync != null },
+                        StepAction("Use Fuse One", primary = true) { useFuseSync() }.takeIf { sync != null },
                         StepAction("Use Syncthing", primary = sync == null) { useSyncthing() },
                         StepAction("Skip", run = next),
                     )
@@ -765,7 +723,7 @@ private fun DeviceCard(cap: io.github.matiyaaa.fuse.model.CapabilityProfile) {
 
 /** Systems with a light for each: ready (green), missing (red) or unknown (grey), and a word. */
 @Composable
-private fun StatusList(rows: List<Triple<Boolean?, String, String>>) {
+internal fun StatusList(rows: List<Triple<Boolean?, String, String>>) {
     Panel(Modifier.widthIn(max = 520.dp).fillMaxWidth()) {
         Column(Modifier.padding(horizontal = Space.xl, vertical = Space.l), verticalArrangement = Arrangement.spacedBy(Space.s)) {
             for ((ok, name, word) in rows) {
@@ -893,8 +851,9 @@ internal fun ControllerTest(nintendoKeys: Boolean = false) {
     }
     val c = Fuse.colors
     val style = Fuse.glyphs.style
+    val sticks by router.sticks.collectAsState()
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        PadArt(pressed.toSet(), style, nintendoKeys, Modifier.width(380.dp))
+        PadArt(pressed.toSet(), style, nintendoKeys, Modifier.width(380.dp), sticks = sticks)
         Spacer(Modifier.height(Space.m))
         FText(last?.let { "Last: ${it.name.replace('_', ' ').lowercase()}" } ?: "Press any button", Fuse.type.label, color = c.textMuted)
         FText(if (nintendoKeys) "Laid out as a Nintendo pad" else "Laid out as an Xbox pad", Fuse.type.caption, color = c.textFaint)

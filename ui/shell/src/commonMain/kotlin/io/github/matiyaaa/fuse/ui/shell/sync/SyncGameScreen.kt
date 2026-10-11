@@ -151,7 +151,7 @@ internal fun SyncGameScreen(app: AppState, game: String, name: String) {
                 ) {
                     when {
                         g == null -> item("gone") { Quiet(FuseIcons.CloudOff, "This game isn't on the host any more.") }
-                        versions.isEmpty() -> item("none") { Quiet(FuseIcons.Save, "No saves kept for it yet. Play it with Fuse Sync on and its save is kept here after it closes.") }
+                        versions.isEmpty() -> item("none") { Quiet(FuseIcons.Save, "No saves kept for it yet. Play it with Fuse One on and its save is kept here after it closes.") }
                         else -> {
                             var n = 0
                             entries.forEachIndexed { i, entry ->

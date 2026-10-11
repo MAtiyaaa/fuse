@@ -116,8 +116,8 @@ private fun StepInput(app: AppState, keys: ActiveKeys, actions: List<SetupAction
 
 /**
  * Setting Fuse Sync up, one clear step at a time. As the host: what it means, a name, whether it
- * keeps running when Fuse is closed, then "Fuse Sync is ready" with the code other devices type.
- * Connecting: the hosts found on this network ("Fuse Sync found"), or an address typed in, then the
+ * keeps running when Fuse is closed, then "Fuse One is ready" with the code other devices type.
+ * Connecting: the hosts found on this network ("Fuse One found"), or an address typed in, then the
  * host's code, then who's playing.
  */
 @Composable
@@ -371,7 +371,7 @@ private fun HostReady(app: AppState, compact: Boolean, keys: ActiveKeys) {
     actions += SetupAction("profile") { app.back(); app.whoAreYou = WhoMode.ADD }
     SuccessMark(if (compact) 64.dp else 88.dp)
     Spacer(Modifier.height(Space.l))
-    FText("Fuse Sync is ready", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1, modifier = Modifier.semantics { heading() })
+    FText("Fuse One is ready", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1, modifier = Modifier.semantics { heading() })
     Spacer(Modifier.height(Space.xs))
     val admin = profiles.firstOrNull { it.hostOnly }
     FText(
@@ -434,7 +434,7 @@ internal fun PairingCard(app: AppState, code: String?, addresses: List<String>, 
         verticalArrangement = Arrangement.spacedBy(Space.m),
     ) {
         FText("To add a device", Fuse.type.bodyStrong, maxLines = 1)
-        FText("On it: Settings, Addons, Fuse Sync, Connect to a Host, choose your host, then Type a Code:", Fuse.type.caption, color = c.textMuted, maxLines = 3)
+        FText("On it: Settings, Fuse One, Connect to a Host, choose your host, then Type a Code:", Fuse.type.caption, color = c.textMuted, maxLines = 3)
         val letters = current?.toList() ?: List(8) { ' ' }
         Row(horizontalArrangement = Arrangement.spacedBy(if (compact) Space.xs else Space.s), verticalAlignment = Alignment.CenterVertically) {
             letters.forEachIndexed { i, ch ->
@@ -461,7 +461,7 @@ internal fun PairingCard(app: AppState, code: String?, addresses: List<String>, 
     }
 }
 
-/** "Fuse Sync found": the hosts that answered on this network, or typing an address. */
+/** "Fuse One found": the hosts that answered on this network, or typing an address. */
 @Composable
 private fun Find(app: AppState, compact: Boolean, keys: ActiveKeys, onPick: (NearbyHost) -> Unit) {
     val actions = mutableListOf<SetupAction>()
@@ -487,10 +487,10 @@ private fun Find(app: AppState, compact: Boolean, keys: ActiveKeys, onPick: (Nea
     if (!looking) actions += SetupAction("again") { round++ }
 
     Heading(
-        if (found.isNotEmpty()) "Fuse Sync found" else "Find your host",
+        if (found.isNotEmpty()) "Fuse One found" else "Find your host",
         when {
-            looking -> "Looking for a Fuse Sync host on this network."
-            found.isEmpty() -> "Nothing answered on this network. Check the host is on and Fuse Sync is set up there, or type its address."
+            looking -> "Looking for a Fuse One host on this network."
+            found.isEmpty() -> "Nothing answered on this network. Check the host is on and Fuse One is set up there, or type its address."
             found.size == 1 -> "Your host is on this network. Choose it to connect."
             else -> "These hosts are on this network. Choose yours."
         },
@@ -707,7 +707,7 @@ private fun CodeEntry(app: AppState, host: NearbyHost, compact: Boolean, keys: A
 
     Heading(
         "Enter the code from ${host.name}",
-        "On the host: Settings, Addons, Fuse Sync, Add a Device. It shows a code that works once.",
+        "On the host: Settings, Fuse One, Add a Device. It shows a code that works once.",
         compact, FuseIcons.Key,
     )
     Spacer(Modifier.height(Space.l))

@@ -78,7 +78,20 @@ internal class DefaultMediaOps(
     private var cached: Pair<Set<ScrapeProviderId>, ScrapeCoordinator>? = null
 
     private val progress = MutableStateFlow<FillProgress?>(null)
-    override val fillProgress: StateFlow<FillProgress?> = progress
+
+    /**
+     * The fill as it stands, with games since hidden or removed from Fuse left out of those that
+     * need a choice: a game taken out of the library never asks for anything again.
+     */
+    override val fillProgress: StateFlow<FillProgress?> = combine(
+        progress,
+        ctx.data.games.observeHidden(),
+        ctx.data.games.observeRemoved(),
+    ) { p, hidden, removed ->
+        if (p == null || p.needsYou.isEmpty()) return@combine p
+        val gone = HashSet<Long>(hidden.size + removed.size).apply { hidden.forEach { add(it.id.value) }; removed.forEach { add(it.id.value) } }
+        if (p.needsYou.none { it.game.value in gone }) p else p.copy(needsYou = p.needsYou.filter { it.game.value !in gone })
+    }.stateIn(ctx.scope, SharingStarted.Eagerly, null)
 
     private val systemArt = SystemArtStore(ctx)
     override val systemArtProgress: StateFlow<FillProgress?> = systemArt.progress
@@ -555,7 +568,7 @@ internal class DefaultMediaOps(
                     when (val tried = coveredBy(g, job, kinds, details, configured)) {
                         null -> true
                         else -> {
-                            if (tried.choice) waiting += FillChoice(g.id, g.displayTitle)
+                            if (tried.choice && !g.hidden) waiting += FillChoice(g.id, g.displayTitle)
                             false
                         }
                     }

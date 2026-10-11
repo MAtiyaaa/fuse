@@ -84,7 +84,7 @@ fun WidgetKind.title(): String = when (this) {
     WidgetKind.JELLYFIN_FAVORITES -> "Jellyfin favourites"
     WidgetKind.JELLYFIN_MOVIES -> "New films"
     WidgetKind.JELLYFIN_MUSIC -> "New music"
-    WidgetKind.SYNC_STATUS -> "Fuse Sync"
+    WidgetKind.SYNC_STATUS -> "Fuse One"
     WidgetKind.SYNC_DEVICES -> "Your devices"
 }
 

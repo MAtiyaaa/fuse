@@ -147,22 +147,29 @@ class SdlGamepads(private val sink: GamepadSink) : AutoCloseable {
             return
         }
         started = true
-        var previous = PadSnapshot.EMPTY
+        // Each pad on its own, so a press says which controller it came from.
+        val previous = Array(MAX_PADS) { PadSnapshot.EMPTY }
+        val names = arrayOfNulls<String>(MAX_PADS)
+        var announced: List<String> = emptyList()
         try {
             while (running.get()) {
                 manager.update()
-                var now = PadSnapshot.EMPTY
-                var pressing: String? = null
                 for (i in 0 until MAX_PADS) {
                     val state = manager.getState(i)
                     val snap = PadSnapshot.of(state)
+                    if (state.isConnected) names[i] = padName(state.controllerType, i)
+                    val name = names[i]
                     // The pad with a newly pressed button is the one in use.
-                    if (pressing == null && (snap.buttons - previous.buttons).isNotEmpty()) pressing = state.controllerType
-                    now = now.merge(snap)
+                    if ((snap.buttons - previous[i].buttons).isNotEmpty()) sink.identified(state.controllerType)
+                    PadSnapshot.diff(previous[i], snap).forEach { send(it, name) }
+                    previous[i] = snap
+                    if (!state.isConnected) names[i] = null
                 }
-                if (pressing != null) sink.identified(pressing)
-                PadSnapshot.diff(previous, now).forEach(::send)
-                previous = now
+                val now = names.filterNotNull()
+                if (now != announced) {
+                    announced = now
+                    sink.connected(now)
+                }
                 try {
                     Thread.sleep(POLL_MS)
                 } catch (e: InterruptedException) {
@@ -173,7 +180,7 @@ class SdlGamepads(private val sink: GamepadSink) : AutoCloseable {
             Log.warn("controller polling stopped", e)
         } finally {
             // Nothing stays held once Fuse stops listening.
-            PadSnapshot.diff(previous, PadSnapshot.EMPTY).forEach(::send)
+            for (i in 0 until MAX_PADS) PadSnapshot.diff(previous[i], PadSnapshot.EMPTY).forEach { send(it, names[i]) }
             try {
                 manager.quitSDLGamepad()
             } catch (e: Throwable) {
@@ -182,11 +189,11 @@ class SdlGamepads(private val sink: GamepadSink) : AutoCloseable {
         }
     }
 
-    private fun send(event: PadSnapshot.Event) = when (event) {
-        is PadSnapshot.Event.Press -> sink.press(event.button)
-        is PadSnapshot.Event.Release -> sink.release(event.button)
-        is PadSnapshot.Event.Stick -> sink.stick(event.x, event.y)
-        is PadSnapshot.Event.Trigger -> sink.trigger(event.button, event.value)
+    private fun send(event: PadSnapshot.Event, device: String?) = when (event) {
+        is PadSnapshot.Event.Press -> sink.press(event.button, device)
+        is PadSnapshot.Event.Release -> sink.release(event.button, device)
+        is PadSnapshot.Event.Stick -> sink.stick(event.x, event.y, device)
+        is PadSnapshot.Event.Trigger -> sink.trigger(event.button, event.value, device)
     }
 
     override fun close() {
@@ -195,6 +202,12 @@ class SdlGamepads(private val sink: GamepadSink) : AutoCloseable {
     }
 
     private companion object {
+        /** SDL's name for the pad's type with its slot, so two of the same kind stay apart. */
+        fun padName(type: Any?, slot: Int): String {
+            val kind = type?.toString()?.takeIf { it.isNotBlank() && it != "null" }?.replace('_', ' ') ?: "Controller"
+            return "$kind ${slot + 1}"
+        }
+
         const val MAX_PADS = 4
         const val POLL_MS = 8L
     }

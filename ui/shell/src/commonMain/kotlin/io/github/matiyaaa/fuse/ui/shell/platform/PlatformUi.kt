@@ -126,6 +126,24 @@ interface SteamIntegration {
 
     /** Repairs only positively identified Fuse entries; existing custom artwork is retained. */
     suspend fun rebuild(): Result<String> = addFuse()
+
+    /** Steam is open right now (its library can't be written safely until it closes). */
+    suspend fun steamRunning(): Boolean = false
+
+    /** Steam is running a game right now: nothing may close Steam. */
+    suspend fun gameRunning(): Boolean = false
+
+    /**
+     * Adds Fuse the next time Steam closes, for people who don't want Fuse to close it: Fuse looks
+     * while it runs and writes the entry once Steam is gone, without starting Steam again.
+     */
+    suspend fun addWhenSteamCloses(): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
+
+    /** A queued [addWhenSteamCloses] still waiting for Steam to close. */
+    val waitingForSteam: Boolean get() = false
+
+    /** Takes Fuse's own entry (and only Fuse's) out of Steam's library; its art stays for the person to delete. */
+    suspend fun removeFuse(): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
 }
 
 /** What Decky Loader and the Fuse Decky plugin look like on this device. */

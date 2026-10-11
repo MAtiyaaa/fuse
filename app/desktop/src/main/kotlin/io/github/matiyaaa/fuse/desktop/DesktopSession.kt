@@ -288,20 +288,26 @@ class DesktopSession(
         private val latestStick = AtomicReference(0f to 0f)
         private val stickPosted = AtomicBoolean(false)
 
-        override fun press(button: PadButton) = EventQueue.invokeLater {
+        override fun press(button: PadButton, device: String?) = EventQueue.invokeLater {
             if (!focused) return@invokeLater
+            // Only the chosen controller moves around Fuse, when one was chosen and is here.
+            if (!router.fromController(device)) return@invokeLater
             pointerHidden = true
             router.press(button, InputSource.GAMEPAD)
         }
 
-        override fun release(button: PadButton) = EventQueue.invokeLater { router.release(button, InputSource.GAMEPAD) }
+        override fun release(button: PadButton, device: String?) = EventQueue.invokeLater { router.release(button, InputSource.GAMEPAD) }
 
         override fun identified(name: String?) {
             val family = io.github.matiyaaa.fuse.model.PadFamily.of(name)
             EventQueue.invokeLater { router.padIdentified(family) }
         }
 
-        override fun stick(x: Float, y: Float) {
+        override fun connected(devices: List<String>) = EventQueue.invokeLater { router.controllersChanged(devices) }
+
+        override fun stick(x: Float, y: Float, device: String?) {
+            // A controller that doesn't navigate has its stick ignored; letting go is always passed on.
+            if (!router.allows(device) && (x != 0f || y != 0f)) return
             latestStick.set(x to y)
             // Coalesce: many axis events per frame become one router update.
             if (!stickPosted.compareAndSet(false, true)) return
@@ -312,7 +318,8 @@ class DesktopSession(
             }
         }
 
-        override fun trigger(button: PadButton, value: Float) = EventQueue.invokeLater {
+        override fun trigger(button: PadButton, value: Float, device: String?) = EventQueue.invokeLater {
+            if (!router.allows(device) && value > 0f) return@invokeLater
             if (focused || value <= 0f) router.trigger(button, value, InputSource.GAMEPAD)
         }
     }

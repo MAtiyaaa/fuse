@@ -807,7 +807,7 @@ internal fun widgetStage(kind: WidgetKind, key: Any, feed: HomeFeed, cartridge: 
         in MediaKinds -> mediaItems(kind, feed).firstOrNull()?.let {
             info(mediaTitle(it), kind.title(), mediaCaption(it), "Jellyfin")
         } ?: info(kind.title(), "Jellyfin", "Nothing here yet")
-        WidgetKind.SYNC_STATUS, WidgetKind.SYNC_DEVICES -> info(kind.title(), "Fuse Sync", "Your saves, play time and settings on every device")
+        WidgetKind.SYNC_STATUS, WidgetKind.SYNC_DEVICES -> info(kind.title(), "Fuse One", "Your saves, play time and settings on every device")
         else -> feed.achievements?.recent?.firstOrNull()?.let {
             info(it.achievement.title, kind.title(), it.gameTitle, "${it.achievement.points} points")
         } ?: info(kind.title(), "Achievements", "Connect RetroAchievements in Settings")

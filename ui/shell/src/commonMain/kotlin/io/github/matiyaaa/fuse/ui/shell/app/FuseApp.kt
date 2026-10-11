@@ -39,6 +39,7 @@ import io.github.matiyaaa.fuse.model.RenderQuality
 import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.ui.designsystem.background.AmbientBackground
 import io.github.matiyaaa.fuse.ui.designsystem.background.CrtOverlay
+import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.HintBar
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastHost
@@ -547,12 +548,12 @@ private fun FuseAppContent(
             app.scope.launch {
                 store.sync.answerSignIns(share)
                 if (share) app.toasts.show("Sharing RomM and Jellyfin with your household", ToastKind.SUCCESS, icon = FuseIcons.Key)
-                else app.toasts.show("Not shared from this device. You can turn it on in Settings, Fuse Sync", icon = FuseIcons.Key)
+                else app.toasts.show("Not shared from this device. You can turn it on in Settings, Fuse One", icon = FuseIcons.Key)
             }
         }
         app.choice = ChoiceSpec(
             "Share your sign-ins?",
-            "Fuse Sync can now bring RomM and Jellyfin to every device in your household, with each person's own Jellyfin account. " +
+            "Fuse One can now bring RomM and Jellyfin to every device in your household, with each person's own Jellyfin account. " +
                 "Share them from this device and your others sign in by themselves. They are sealed for each device and never kept in plain text.",
             listOf(
                 MenuAction(
@@ -618,8 +619,11 @@ private fun BoxScope.TopLine(app: AppState, platform: PlatformUi, tabs: List<Des
  */
 @Composable
 private fun BoxScope.HintLine(app: AppState, hintFlash: HintFlash) {
+    // An options sheet or a choice over the page answers to Confirm and Back, wherever it was opened:
+    // its hints, not the page's under it.
+    val hints = if (app.contextMenu != null || app.choice != null) MENU_HINTS else app.hints
     // Content fades out under the hint line, so hints never sit on top of tiles.
-    if (app.hints.isNotEmpty()) {
+    if (hints.isNotEmpty()) {
         Box(
             Modifier
                 .align(Alignment.BottomCenter)
@@ -628,8 +632,10 @@ private fun BoxScope.HintLine(app: AppState, hintFlash: HintFlash) {
                 .background(Brush.verticalGradient(0f to Color.Transparent, 0.55f to Fuse.colors.ink.copy(alpha = 0.78f), 1f to Fuse.colors.ink.copy(alpha = 0.94f))),
         )
     }
-    HintBar(app.hints, Modifier.align(Alignment.BottomEnd).padding(horizontal = Space.gutter, vertical = Space.s), flash = hintFlash)
+    HintBar(hints, Modifier.align(Alignment.BottomEnd).padding(horizontal = Space.gutter, vertical = Space.s), flash = hintFlash)
 }
+
+private val MENU_HINTS = listOf(Hint(HintButton.CONFIRM, "Select"), Hint(HintButton.BACK, "Back"))
 
 /** The background: theme renderer, then the selected item's art with video after it rests. */
 @Composable

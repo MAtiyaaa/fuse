@@ -596,7 +596,7 @@ internal class DefaultReachOps(
     override suspend fun sendTo(id: GameId, device: String): String? = withContext(Dispatchers.Default) {
         if (device == household.self) return@withContext downloadFor(id, null)
         val keys = keysOf(id)
-        val key = keys.firstOrNull() ?: id.rommOnly?.let { "romm:$it" } ?: return@withContext "Fuse can't tell which game this is for the household yet. Try again once Fuse Sync has caught up."
+        val key = keys.firstOrNull() ?: id.rommOnly?.let { "romm:$it" } ?: return@withContext "Fuse can't tell which game this is for the household yet. Try again once Fuse One has caught up."
         val title = ctx.remoteGames?.takeIf { it.owns(id) }?.get(id)?.displayTitle ?: ctx.data.games.get(id)?.displayTitle ?: ""
         val platform = (ctx.remoteGames?.takeIf { it.owns(id) }?.get(id) ?: ctx.data.games.get(id))?.platformId?.value
         household.ask(DeviceCommand(target = device, type = DeviceCommand.FETCH, game = key, title = title, platform = platform))

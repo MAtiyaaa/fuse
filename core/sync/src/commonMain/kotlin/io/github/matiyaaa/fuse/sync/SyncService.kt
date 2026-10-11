@@ -274,16 +274,16 @@ interface SyncService {
      * The answer is the number this device shows; someone lets it in on the host, or on any
      * device already connected, after checking theirs shows the same.
      */
-    suspend fun askToJoin(address: String, remoteAddress: String? = null): Result<JoinWaiting> = Result.failure(UnsupportedOperationException("Fuse Sync isn't part of this build."))
+    suspend fun askToJoin(address: String, remoteAddress: String? = null): Result<JoinWaiting> = Result.failure(UnsupportedOperationException("Fuse One isn't part of this build."))
 
     /** Waits for the request [askToJoin] made: the host's name once let in, a failure when turned away or out of time. */
-    suspend fun awaitJoin(): Result<String> = Result.failure(UnsupportedOperationException("Fuse Sync isn't part of this build."))
+    suspend fun awaitJoin(): Result<String> = Result.failure(UnsupportedOperationException("Fuse One isn't part of this build."))
 
     /** Gives up on a request to join. */
     fun cancelJoin() {}
 
     /** Joins the host asked with [askToJoin] using its account, when nobody is at a screen. The host's name. */
-    suspend fun joinWithAccount(username: String, password: String): Result<String> = Result.failure(UnsupportedOperationException("Fuse Sync isn't part of this build."))
+    suspend fun joinWithAccount(username: String, password: String): Result<String> = Result.failure(UnsupportedOperationException("Fuse One isn't part of this build."))
 
     /** On the host: its account for joining and the Hub from away ([password] null keeps the one it has). */
     suspend fun setHostAccount(username: String, password: String?): Result<Unit> = Result.failure(UnsupportedOperationException("This device isn't a host."))
@@ -296,7 +296,7 @@ interface SyncService {
     /** Devices asking to join right now, for this device to let in (on the host, and every device already connected). */
     val joinRequests: StateFlow<List<JoinAsk>> get() = NO_JOIN_REQUESTS
 
-    suspend fun answerJoin(id: String, allow: Boolean): Result<Unit> = Result.failure(UnsupportedOperationException("Fuse Sync isn't set up."))
+    suspend fun answerJoin(id: String, allow: Boolean): Result<Unit> = Result.failure(UnsupportedOperationException("Fuse One isn't set up."))
 
     /**
      * Profiles work without a host: made here, they are this device's own (PINs kept as a salted
@@ -377,7 +377,7 @@ interface SyncService {
      * [fromMine], the person playing's newest save of it becomes the shared one; otherwise everyone
      * starts it together. Each person's own saves stay in their history either way.
      */
-    suspend fun setShared(game: GameKey, shared: Boolean, fromMine: Boolean): Result<Unit> = Result.failure(UnsupportedOperationException("Fuse Sync isn't set up."))
+    suspend fun setShared(game: GameKey, shared: Boolean, fromMine: Boolean): Result<Unit> = Result.failure(UnsupportedOperationException("Fuse One isn't set up."))
 
     /**
      * Where each emulator in [samples] keeps its saves on this device, with the folders the person

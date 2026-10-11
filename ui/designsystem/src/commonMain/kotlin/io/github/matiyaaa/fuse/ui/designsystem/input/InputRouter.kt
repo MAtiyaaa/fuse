@@ -149,6 +149,42 @@ class InputRouter(
         _lastSource.value = InputSource.KEYBOARD
     }
 
+    private val _controllers = MutableStateFlow<List<String>>(emptyList())
+
+    /** The controllers connected now, by the names they give themselves, in the order they arrived. */
+    val controllers: StateFlow<List<String>> = _controllers.asStateFlow()
+
+    private val _lastController = MutableStateFlow<String?>(null)
+
+    /** The controller a button was last pressed on (null: none yet, or the platform doesn't say). */
+    val lastController: StateFlow<String?> = _lastController.asStateFlow()
+
+    /** The platform's controllers changed: one was connected, or one went away. */
+    fun controllersChanged(names: List<String>) {
+        redirectTo?.let { it.controllersChanged(names); return }
+        if (_controllers.value != names) _controllers.value = names
+    }
+
+    /**
+     * Whether a press on [device] may move around Fuse: always when no controller was chosen (or the
+     * chosen one is away), otherwise only on the chosen one. Notes [device] as the last one pressed.
+     */
+    fun fromController(device: String?): Boolean {
+        redirectTo?.let { return it.fromController(device) }
+        if (device != null && _lastController.value != device) _lastController.value = device
+        // Guided setup listens to every controller, so the one to use can be picked by pressing it.
+        if (exclusive != null) return true
+        return allows(device)
+    }
+
+    /** [fromController] without noting the press: for sticks and triggers, which drift. */
+    fun allows(device: String?): Boolean {
+        redirectTo?.let { return it.allows(device) }
+        if (device == null) return true
+        val chosen = profile.controller
+        return chosen.isEmpty() || chosen !in _controllers.value || chosen == device
+    }
+
     /** The controller now in use calls itself [family] (null: it doesn't say). */
     fun padIdentified(family: io.github.matiyaaa.fuse.model.GlyphStyle?) {
         redirectTo?.let { it.padIdentified(family); return }
@@ -316,7 +352,7 @@ class InputRouter(
         redirectTo?.let { it.press(button, source); return }
         io.github.matiyaaa.fuse.ui.fuseline.FramePacing.input()
         touched()
-        rawListener?.invoke(button, true)
+        if (!fromStick) rawListener?.invoke(button, true)
         exclusive?.let {
             _lastSource.value = source
             it(button, true)
@@ -378,7 +414,7 @@ class InputRouter(
     fun release(button: PadButton, source: InputSource) {
         redirectTo?.let { it.release(button, source); return }
         actionFor(button)?.let { consumedUntilRelease.remove(it) }
-        rawListener?.invoke(button, false)
+        if (!fromStick) rawListener?.invoke(button, false)
         exclusive?.let {
             it(button, false)
             // A button held since before the test started is let go without acting.
@@ -498,6 +534,23 @@ class InputRouter(
 
     private var stickDirection: PadButton? = null
 
+    private val _sticks = MutableStateFlow(StickPositions())
+
+    /** Where both sticks are now, for pictures of the pad: a stick is shown as a stick, never as the D-pad. */
+    val sticks: StateFlow<StickPositions> = _sticks.asStateFlow()
+
+    /** Presses the sticks make are navigation, not buttons: [rawListener] doesn't hear them. */
+    private var fromStick = false
+
+    private inline fun asStick(block: () -> Unit) {
+        fromStick = true
+        try {
+            block()
+        } finally {
+            fromStick = false
+        }
+    }
+
     /**
      * Left stick position, each axis -1..1 (y down). Converted to D-pad presses with a deadzone and
      * the user's navigation threshold; the dominant axis wins so diagonals never double-move.
@@ -515,10 +568,13 @@ class InputRouter(
             stickDirection != null && (abs(x) >= releaseAt || abs(y) >= releaseAt) -> stickDirection
             else -> null
         }
+        _sticks.value.let { if (it.leftX != x || it.leftY != y) _sticks.value = it.copy(leftX = x, leftY = y) }
         if (dir == stickDirection) return
-        stickDirection?.let { release(it, source) }
-        stickDirection = dir
-        dir?.let { press(it, source) }
+        asStick {
+            stickDirection?.let { release(it, source) }
+            stickDirection = dir
+            dir?.let { press(it, source) }
+        }
     }
 
     private var rightDirection: PadButton? = null
@@ -537,6 +593,7 @@ class InputRouter(
             rightDirection != null && (abs(x) >= threshold * 0.6f || abs(y) >= threshold * 0.6f) -> rightDirection
             else -> null
         }
+        _sticks.value.let { if (it.rightX != x || it.rightY != y) _sticks.value = it.copy(rightX = x, rightY = y) }
         if (dir == rightDirection) return
         rightDirection?.let { release(it, source) }
         rightDirection = dir
@@ -653,3 +710,6 @@ private const val HOVER_FRESH_MS = 120L
 
 /** How far the mouse goes, in pixels across both axes, before it counts as moved. */
 private const val MOUSE_MOVE_PX = 3f
+
+/** Both sticks' positions, each axis -1..1 with y down. */
+data class StickPositions(val leftX: Float = 0f, val leftY: Float = 0f, val rightX: Float = 0f, val rightY: Float = 0f)

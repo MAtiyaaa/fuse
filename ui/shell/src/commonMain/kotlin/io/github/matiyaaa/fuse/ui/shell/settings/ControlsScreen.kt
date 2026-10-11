@@ -200,14 +200,29 @@ fun ControlsScreen(app: AppState) {
             testHeld = null
         }
     }
+    // Guided first: the way most people set a controller up. Edit lists every action.
+    var tab by remember { mutableStateOf(0) }
+    var guiding by remember { mutableStateOf(false) }
+    var startRequests by remember { mutableStateOf(0) }
     LaunchedEffect(Unit) { app.hero = null }
-    LaunchedEffect(capturing, testing) {
-        app.hints = if (capturing != null || testing) emptyList() else listOf(Hint(HintButton.CONFIRM, "Change"), Hint(HintButton.BACK, "Back"))
+    LaunchedEffect(capturing, testing, guiding, tab) {
+        app.hints = when {
+            capturing != null || testing || guiding -> emptyList()
+            tab == 0 -> listOf(Hint(HintButton.CONFIRM, "Start"), Hint(HintButton.BACK, "Back"))
+            else -> listOf(Hint(HintButton.CONFIRM, "Change"), Hint(HintButton.BACK, "Back"))
+        }
     }
 
     val nintendo = prefs.input.glyphs == GlyphStyle.NINTENDO
     // The actions first, as the line above them says; the tools for checking the pad after.
     val actions = buildList {
+        labelled("Your pad") {
+            add(app.choiceRow(
+                "labels", "Button labels", FuseIcons.Gamepad, prefs.input.glyphs,
+                listOf(GlyphStyle.XBOX to "Xbox (A at the bottom)", GlyphStyle.NINTENDO to "Nintendo (A on the right)", GlyphStyle.PLAYSTATION to "PlayStation (shapes)"),
+                detail = "The letters printed on your buttons. Hints use them",
+            ) { v -> setProfile { it.copy(glyphs = v) } })
+        }
         labelled("Actions") {
             for ((action, label, icon) in mappable) {
                 val buttons = buttonsFor(router, action)
@@ -224,7 +239,6 @@ fun ControlsScreen(app: AppState) {
         }
         labelled("Check your pad") {
             add(MenuAction("test", "Test buttons", FuseIcons.Joystick, detail = "Every button lights up here and does nothing else. Hold any button to stop", trailing = Trailing.Chevron, onSelect = { testing = true }))
-            add(MenuAction("detect", "Detect my buttons", FuseIcons.ScanSearch, detail = "Sets the layout and confirm button from two presses", onSelect = { app.buttonDetect = true }))
         }
         labelled("") {
             add(
@@ -240,7 +254,20 @@ fun ControlsScreen(app: AppState) {
         }
     }
     sel.clamp(actions.size)
-    InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen && capturing == null && !testing) { e -> handleMenuAction(e, actions, sel) }
+    InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen && capturing == null && !testing && !guiding) { e ->
+        when {
+            e.action == NavAction.PREVIOUS_SECTION || e.action == NavAction.NEXT_SECTION -> {
+                tab = if (e.action == NavAction.NEXT_SECTION) 1 else 0
+                io.github.matiyaaa.fuse.ui.designsystem.input.NavResult.MOVED
+            }
+            tab == 0 && e.action == NavAction.SELECT -> {
+                startRequests++
+                io.github.matiyaaa.fuse.ui.designsystem.input.NavResult.ACTIVATED
+            }
+            tab == 0 -> io.github.matiyaaa.fuse.ui.designsystem.input.NavResult.IGNORED
+            else -> handleMenuAction(e, actions, sel)
+        }
+    }
 
     // The action on the selected row, and the buttons it is on, for the picture of the pad.
     val selectedAction = mappable.firstOrNull { it.first.name == actions.getOrNull(sel.index)?.id }
@@ -255,28 +282,49 @@ fun ControlsScreen(app: AppState) {
             FText("Controls", if (short) Fuse.type.title else Fuse.type.display, maxLines = 1, modifier = Modifier.reveal(0))
             Spacer(Modifier.height(Space.xxs))
             FText(
-                "Choose an action, then press the button you want for it. The D-pad always moves.",
+                if (tab == 0) "Fuse asks for each button and you press it." else "Choose an action, then press the button you want for it. The D-pad always moves.",
                 if (short) Fuse.type.caption else Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 2,
                 modifier = Modifier.reveal(1),
             )
-            Spacer(Modifier.height(if (short) Space.m else Space.l))
-            Row(Modifier.weight(1f).padding(bottom = Size.hintHeight + Space.s), horizontalArrangement = Arrangement.spacedBy(Space.xl)) {
-                Panel(Modifier.weight(if (narrow) 1f else 0.56f).fillMaxHeight().reveal(2)) {
-                    MenuList(
-                        actions, sel,
-                        showSelection = app.focusZone == FocusZone.CONTENT,
-                        modifier = Modifier.padding(Space.s),
-                            fadeEdges = true,
+            Spacer(Modifier.height(Space.s))
+            io.github.matiyaaa.fuse.ui.shell.components.ViewTabs(
+                items = listOf(
+                    io.github.matiyaaa.fuse.ui.shell.components.ViewTab("Guided", icon = FuseIcons.Sparkles),
+                    io.github.matiyaaa.fuse.ui.shell.components.ViewTab("Edit", icon = FuseIcons.SlidersVertical, badge = prefs.input.remap.size.takeIf { it > 0 }?.toString()),
+                ),
+                active = tab,
+                focused = null,
+                onSelect = { if (!guiding) tab = it },
+                gutter = 0.dp,
+                modifier = Modifier.reveal(2),
+            )
+            Spacer(Modifier.height(if (short) Space.s else Space.m))
+            Box(Modifier.weight(1f).padding(bottom = Size.hintHeight + Space.s)) {
+                if (tab == 0) {
+                    GuidedControls(
+                        app, padButtons, { b, n -> b.label(n) }, startRequests, showPad = !narrow,
+                        onRunning = { guiding = it },
                     )
-                }
-                if (!narrow) {
-                    Panel(Modifier.weight(0.44f).fillMaxHeight().reveal(3)) {
-                        Column(Modifier.fillMaxSize().padding(Space.l), horizontalAlignment = Alignment.CenterHorizontally) {
-                            SectionLabel("Controller test", Modifier.align(Alignment.Start), icon = FuseIcons.Gamepad, rule = true)
-                            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                PadDiagram(pressed.toSet(), marked, nintendo, Modifier.fillMaxWidth())
+                } else {
+                    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(Space.xl)) {
+                        Panel(Modifier.weight(if (narrow) 1f else 0.56f).fillMaxHeight().reveal(3)) {
+                            MenuList(
+                                actions, sel,
+                                showSelection = app.focusZone == FocusZone.CONTENT,
+                                modifier = Modifier.padding(Space.s),
+                                fadeEdges = true,
+                            )
+                        }
+                        if (!narrow) {
+                            Panel(Modifier.weight(0.44f).fillMaxHeight().reveal(4)) {
+                                Column(Modifier.fillMaxSize().padding(Space.l), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    SectionLabel("Controller test", Modifier.align(Alignment.Start), icon = FuseIcons.Gamepad, rule = true)
+                                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                        PadDiagram(pressed.toSet(), marked, nintendo, Modifier.fillMaxWidth())
+                                    }
+                                    PadCaption(selectedAction?.second, marked, last, nintendo)
+                                }
                             }
-                            PadCaption(selectedAction?.second, marked, last, nintendo)
                         }
                     }
                 }
@@ -362,10 +410,16 @@ private fun GlyphLine(caption: String, buttons: List<PadButton>, align: Alignmen
  * [pressed] buttons fill with the accent; [marked] ones take its outline.
  */
 @Composable
-internal fun PadDiagram(pressed: Set<PadButton>, marked: Set<PadButton>, nintendoKeys: Boolean, modifier: Modifier = Modifier) {
+internal fun PadDiagram(
+    pressed: Set<PadButton>,
+    marked: Set<PadButton>,
+    nintendoKeys: Boolean,
+    modifier: Modifier = Modifier,
+    sticks: io.github.matiyaaa.fuse.ui.designsystem.input.StickPositions = LocalInputRouter.current.sticks.collectAsState().value,
+) {
     Box(modifier, contentAlignment = Alignment.Center) {
         io.github.matiyaaa.fuse.ui.shell.onboarding.PadArt(
-            pressed, Fuse.glyphs.style, nintendoKeys, Modifier.widthIn(max = PAD_MAX_WIDTH).fillMaxWidth(), marked = marked,
+            pressed, Fuse.glyphs.style, nintendoKeys, Modifier.widthIn(max = PAD_MAX_WIDTH).fillMaxWidth(), marked = marked, sticks = sticks,
         )
     }
 }

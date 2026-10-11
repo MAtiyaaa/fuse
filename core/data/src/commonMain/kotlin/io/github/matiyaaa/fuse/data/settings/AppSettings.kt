@@ -264,6 +264,11 @@ data class OnboardingState(
     val step: Int = 0,
     /** What the person answered to "Do you use RomM?": "FUSE", "CARTRIDGE", "NONE", or "" when not asked. */
     val romm: String = "",
+    /**
+     * The step setup was on, by its id, so a restart in the middle (Steam's, Decky's or Fuse's own)
+     * comes back to the same step instead of the beginning.
+     */
+    val stepId: String = "",
 )
 
 /** One root destination and whether it is shown. */

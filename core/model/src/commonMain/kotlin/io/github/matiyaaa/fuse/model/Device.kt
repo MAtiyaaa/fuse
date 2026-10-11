@@ -117,6 +117,12 @@ data class DisplayInfo(
     val requestedRefreshRate: Float? = null,
     /** Recent cadence of frames drawn by this window, absent until observed. */
     val measuredRefreshRate: Float? = null,
+    /**
+     * The screen's own size when Fuse is drawn smaller and enlarged to it (SteamOS's Game Mode on a
+     * TV); null when Fuse draws at the screen's size or it can't be read.
+     */
+    val outputWidthPx: Int? = null,
+    val outputHeightPx: Int? = null,
 )
 
 @Serializable

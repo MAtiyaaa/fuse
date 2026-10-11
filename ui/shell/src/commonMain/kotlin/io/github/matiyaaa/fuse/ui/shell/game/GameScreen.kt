@@ -737,6 +737,15 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                     }
                 }
             }
+            // Where it is, quietly, at the very end: the folder it is in and the name it has there.
+            game.location.path.takeIf { it.isNotBlank() && !it.startsWith("http") }?.let { path ->
+                val (folder, name) = splitPath(path)
+                FText(
+                    listOf(shortFolder(folder), name).filter { it.isNotEmpty() }.joinToString("  /  "),
+                    Fuse.type.caption, color = c.textFaint, maxLines = 1,
+                    modifier = Modifier.padding(top = Space.l),
+                )
+            }
             Spacer(Modifier.height(Size.hintHeight + Space.x4))
         }
         // The viewer covers the whole app, top bar included, so the app hosts it.

@@ -258,7 +258,7 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
             capitalize = false,
             doneLabel = "Search",
         ) { query ->
-            val hits = SettingsIndex.search(query, sections, limit = SEARCH_LIMIT, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen)
+            val hits = SettingsIndex.search(query, sections, limit = SEARCH_LIMIT, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen, steam = app.platform.steam != null, decky = app.platform.decky != null)
             when {
                 query.isBlank() -> Unit
                 hits.isEmpty() -> app.toasts.show("Nothing in Settings matches \"${query.trim()}\"", icon = FuseIcons.Search)

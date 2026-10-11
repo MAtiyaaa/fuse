@@ -248,13 +248,13 @@ internal fun SaveHistoryScreen(app: AppState, game: GameId, title: String) {
                     EmptyState(
                         FuseIcons.History,
                         if (page.kind == SaveKind.SAVE) "No saves yet" else "No save states yet",
-                        message = "Play it with Fuse Sync on, and each time it closes its save is kept here, from every device.",
+                        message = "Play it with Fuse One on, and each time it closes its save is kept here, from every device.",
                     )
                 }
                 rows.isEmpty() -> EmptyState(
                     FuseIcons.History,
                     if (page.kind == SaveKind.SAVE) "No saves yet" else "No save states yet",
-                    message = "Play it with Fuse Sync on, and each time it closes its save is kept here, from every device.",
+                    message = "Play it with Fuse One on, and each time it closes its save is kept here, from every device.",
                 )
                 else -> MenuList(rows, page.sel, modifier = Modifier.padding(Space.s), showSelection = app.focusZone == FocusZone.CONTENT)
             }

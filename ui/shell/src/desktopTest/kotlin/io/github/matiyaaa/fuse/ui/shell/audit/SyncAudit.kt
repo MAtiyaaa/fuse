@@ -14,7 +14,7 @@ import kotlinx.coroutines.runBlocking
 private val AuditDriver.sync: AuditSync
     get() {
         libraryStore
-        return controls.sync ?: throw NotCovered("This store has no Fuse Sync")
+        return controls.sync ?: throw NotCovered("This store has no Fuse One")
     }
 
 /** Fuse Sync back to off and never set up, before a scenario sets its own state. */
@@ -43,15 +43,15 @@ private fun AuditDriver.openSyncPage() {
     focusText("Addons")
     tap(PadButton.DPAD_RIGHT)
     waitFor("Your saves, play time, library and settings on every device")
-    tapText("Fuse Sync")
-    focusAny("Set Up Fuse Sync", "Profiles, Devices and What Syncs")
+    tapText("Fuse One")
+    focusAny("Set Up Fuse One", "Profiles, Devices and What Syncs")
     tap(PadButton.A)
     settle(900)
 }
 
 /**
  * Fuse Sync by Fuse, every screen: off (and nothing of it anywhere), turned on, the two ways in,
- * setting up a host to "Fuse Sync is ready", connecting from "Fuse Sync found" to the code and
+ * setting up a host to "Fuse One is ready", connecting from "Fuse One found" to the code and
  * "Connected", Who's playing (people, a PIN, a new profile), the settings once set up as a host and
  * as a device, the Sync tab, the top line's profile, a save conflict, a game's save history, the
  * Home scope while arranging, and Add a Device.
@@ -64,14 +64,14 @@ internal fun AuditDriver.syncScreens() {
         focusText("Addons")
         tap(PadButton.DPAD_RIGHT)
         waitFor("Your saves, play time, library and settings on every device")
-        shoot("Addons, with Fuse Sync among them")
-        tapText("Fuse Sync")
-        waitFor("Use Fuse Sync")
-        shoot("Fuse Sync off: its switch, and nothing else")
-        tapText("Use Fuse Sync")
-        waitFor("Set Up Fuse Sync")
+        shoot("Addons, with Fuse One among them")
+        tapText("Fuse One")
+        waitFor("Use Fuse One")
+        shoot("Fuse One off: its switch, and nothing else")
+        tapText("Use Fuse One")
+        waitFor("Set Up Fuse One")
         shoot("on, not set up yet")
-        tapText("Set Up Fuse Sync")
+        tapText("Set Up Fuse One")
         waitFor("Make This the Host")
         shoot("its page: make this the host, or connect")
     }
@@ -88,8 +88,8 @@ internal fun AuditDriver.syncScreens() {
         tap(PadButton.DPAD_DOWN, 3)
         shoot("Make This the Host chosen")
         tap(PadButton.A)
-        waitFor("Fuse Sync is ready")
-        shoot("Fuse Sync is ready, with the code for other devices", 1_600)
+        waitFor("Fuse One is ready")
+        shoot("Fuse One is ready, with the code for other devices", 1_600)
     }
 
     scenario("sync", "connecting") {
@@ -98,8 +98,8 @@ internal fun AuditDriver.syncScreens() {
         useLibrary()
         openSyncPage()
         tapText("Connect to a Host")
-        waitFor("Fuse Sync found")
-        shoot("Fuse Sync found on this network", 1_000)
+        waitFor("Fuse One found")
+        shoot("Fuse One found on this network", 1_000)
         tap(PadButton.A)
         waitFor("Join Gaming PC")
         tap(PadButton.DPAD_DOWN)
@@ -252,7 +252,7 @@ internal fun AuditDriver.syncScreens() {
         waitFor("Which save should")
         shoot("both played since they last synced: which save to use", 1_400)
         tap(PadButton.DPAD_RIGHT)
-        shoot("Use Fuse Sync chosen")
+        shoot("Use Fuse One chosen")
         tap(PadButton.B)
     }
 
@@ -324,7 +324,7 @@ internal fun AuditDriver.joinScreens() {
         useLibrary()
         openSyncPage()
         tapText("Connect to a Host")
-        waitFor("Fuse Sync found")
+        waitFor("Fuse One found")
         tap(PadButton.A)
         waitFor("Join Gaming PC")
         shoot("join the host: ask, a code, or an outside address", 1_000)
@@ -368,14 +368,14 @@ internal fun AuditDriver.syncthingScreens() {
         focusText("Addons")
         tap(PadButton.DPAD_RIGHT)
         waitFor("Your emulators' save folders, through the Syncthing you already run")
-        shoot("Addons, with Syncthing beside Fuse Sync")
+        shoot("Addons, with Syncthing beside Fuse One")
         tapText("Syncthing")
         waitFor("Set Up Syncthing")
         shoot("Syncthing's group, off")
         focusText("Set Up Syncthing")
         tap(PadButton.A)
-        waitFor("Fuse Sync Instead")
-        shoot("its page, off: what it is, and Fuse Sync instead", 1_000)
+        waitFor("Fuse One Instead")
+        shoot("its page, off: what it is, and Fuse One instead", 1_000)
     }
 
     scenario("syncthing", "not found") {

@@ -418,7 +418,10 @@ fun libraryRows(app: AppState): List<MenuAction> {
                 io.github.matiyaaa.fuse.ui.shell.store.impl.STEAM_OFF -> false
                 else -> sources.any { it.kind == io.github.matiyaaa.fuse.model.LibrarySourceKind.STEAM_LIBRARY || (it.kind == io.github.matiyaaa.fuse.model.LibrarySourceKind.SHORTCUTS && it.label == "Steam") }
             }
-            labelled("Steam") { addAll(steamRows(app, steam, steamOn)) }
+            val live = rememberSteamLive(app)
+            labelled("Steam") { addAll(steamRows(app, steam, steamOn, live)) }
+            // Decky is Linux's (SteamOS and its kind): the platform offers it nowhere else.
+            app.platform.decky?.let { decky -> labelled("Decky") { addAll(deckyRows(app, decky, live)) } }
         }
         labelled("Scanning") {
             add(MenuAction("scan", "Scan for changes", FuseIcons.Refresh, detail = "Only folders that changed. Also runs whenever you return to Fuse", trailing = Trailing.Value(scan.phase.name.lowercase().replaceFirstChar { it.uppercase() }), onSelect = {
@@ -986,7 +989,7 @@ fun cartridgeRows(app: AppState): List<MenuAction> {
  * Steam on a computer: its installed games in the library (found on every drive, or in a folder the
  * user picks), and Fuse in Steam's library for Game Mode.
  */
-private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration, on: Boolean): List<MenuAction> {
+private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration, on: Boolean, live: SteamLive): List<MenuAction> {
     fun addFound(games: List<io.github.matiyaaa.fuse.library.steam.SteamGame>) {
         if (games.isEmpty()) {
             app.toasts.show("No Steam games found there")
@@ -1030,18 +1033,140 @@ private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.pla
             },
         ),
         MenuAction(
-            "steam.add", if (steam.gameMode) "Fuse in Game Mode" else "Add Fuse to Steam", FuseIcons.Gamepad,
-            detail = if (steam.gameMode) "Fuse is running in Game Mode now. Cartridge opens inside it, over Fuse" else "So SteamOS's Game Mode can start Fuse, full screen. Close Steam first",
-            enabled = !steam.gameMode,
+            "steam.add",
+            when {
+                steam.gameMode -> "Fuse in Game Mode"
+                live.inSteam == true -> "Fuse in Steam"
+                else -> "Add Fuse to Steam"
+            },
+            FuseIcons.Gamepad,
+            detail = when {
+                steam.gameMode -> "Fuse is running in Game Mode now. Cartridge opens inside it, over Fuse"
+                steam.waitingForSteam -> "Waiting for Steam to close. Steam isn't closed for it"
+                live.inSteam == true -> "In Steam's library with its art. Select to put back anything missing; what you changed in Steam stays"
+                else -> "So Steam and SteamOS's Game Mode can start Fuse, full screen, with its own art"
+            },
+            trailing = if (live.inSteam == true && !steam.gameMode) Trailing.Value("Added") else Trailing.None,
+            enabled = !steam.gameMode && !live.busy,
             onSelect = {
                 app.scope.launch {
-                    steam.addFuse()
+                    live.busy = true
+                    // Never closes Steam: when it is open, Fuse waits for it to close by itself.
+                    (if (steam.steamRunning()) steam.addWhenSteamCloses() else steam.addFuse())
                         .onSuccess { app.toasts.show(it) }
-                        .onFailure { app.toasts.show(it.message ?: "Couldn't add Fuse to Steam", io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.ERROR) }
+                        .onFailure { app.toasts.show(it.message ?: "Couldn't add Fuse to Steam", ToastKind.ERROR) }
+                    live.refresh(app)
+                    live.busy = false
                 }
             },
         ),
+    ) + listOfNotNull(
+        app.confirmRow(
+            "steam.remove", "Remove Fuse from Steam", FuseIcons.Trash,
+            "Remove Fuse from Steam?", "Only Fuse's own entry leaves Steam's library. Your other shortcuts, your games and everything in Fuse stay as they are. Close Steam first.", "Remove",
+            detail = "Only Fuse's entry. Your other shortcuts stay",
+        ) {
+            app.scope.launch {
+                live.busy = true
+                steam.removeFuse()
+                    .onSuccess { app.toasts.show(it); app.store.updatePrefs { p -> p.copy(steam = p.steam.copy(fuseInSteam = false)) } }
+                    .onFailure { app.toasts.show(it.message ?: "Couldn't remove Fuse from Steam", ToastKind.ERROR) }
+                live.refresh(app)
+                live.busy = false
+            }
+        }.takeIf { live.inSteam == true && !steam.gameMode },
     )
+}
+
+/** What Steam and Decky say right now, read when Settings opens and again after each change. */
+internal class SteamLive {
+    var inSteam by mutableStateOf<Boolean?>(null)
+    var decky by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.platform.DeckyState?>(null)
+    var busy by mutableStateOf(false)
+
+    suspend fun refresh(app: AppState) {
+        inSteam = app.platform.steam?.let { runCatching { it.added() }.getOrNull() }
+        decky = app.platform.decky?.let { runCatching { it.state() }.getOrNull() }
+    }
+}
+
+@Composable
+private fun rememberSteamLive(app: AppState): SteamLive {
+    val live = remember { SteamLive() }
+    androidx.compose.runtime.LaunchedEffect(live) { live.refresh(app) }
+    return live
+}
+
+/**
+ * The Fuse Decky plugin: installed, updated or taken out only when the person selects it (the
+ * system asks for their password), and the bridge it talks to, which answers on this device only.
+ */
+private fun deckyRows(app: AppState, decky: io.github.matiyaaa.fuse.ui.shell.platform.DeckyIntegration, live: SteamLive): List<MenuAction> {
+    val st = live.decky
+    val p = app.store.prefs.value
+    fun install() {
+        app.scope.launch {
+            live.busy = true
+            if (st?.canInstall == true) {
+                decky.install()
+                    .onSuccess { app.toasts.show(it); app.store.updatePrefs { q -> q.copy(steam = q.steam.copy(decky = true)) } }
+                    .onFailure { app.toasts.show(it.message ?: "The plugin couldn't be installed. Nothing was changed.", ToastKind.ERROR) }
+            } else {
+                val zip = decky.stage()
+                if (zip == null) app.toasts.show("This copy of Fuse doesn't carry the plugin", ToastKind.ERROR)
+                else app.toasts.show("In Decky: Settings, Developer, Install Plugin from ZIP, then choose $zip")
+            }
+            live.refresh(app)
+            live.busy = false
+        }
+    }
+    return buildList {
+        add(MenuAction(
+            "decky.plugin", "Fuse plugin for Decky", FuseIcons.Puzzle,
+            detail = when {
+                live.busy -> "Working. Answer the system's password prompt if one shows"
+                st == null -> "Looking for Decky Loader"
+                !st.loader -> "Decky Loader isn't here. Install it from ${decky.loaderInstructions} in Desktop Mode, then come back"
+                !st.plugin -> "Fuse's library, Fuse One and downloads, inside Steam's Gaming Mode"
+                st.upToDate -> "Installed and up to date, version ${st.bundledVersion}"
+                else -> "Version ${st.pluginVersion ?: "unknown"} is installed. This Fuse carries ${st.bundledVersion}"
+            },
+            trailing = when {
+                st == null || !st.loader -> Trailing.None
+                !st.plugin -> Trailing.Value("Install")
+                st.upToDate -> Trailing.Value("Installed")
+                else -> Trailing.Value("Update")
+            },
+            enabled = !live.busy && st != null,
+            onSelect = {
+                when {
+                    st == null -> Unit
+                    !st.loader -> app.scope.launch { live.refresh(app) }
+                    st.upToDate -> app.toasts.show("The Fuse plugin is up to date")
+                    else -> install()
+                }
+            },
+        ))
+        add(toggleRow(
+            "decky.bridge", "Decky bridge", FuseIcons.Link, p.steam.decky,
+            if (p.steam.decky) "The plugin can ask Fuse what it shows, on this device only. It can't touch saves or secrets" else "Off: the plugin shows that Fuse isn't answering",
+            enabled = !live.busy,
+        ) { v -> app.store.updatePrefs { q -> q.copy(steam = q.steam.copy(decky = v)) } })
+        if (st?.plugin == true) add(app.confirmRow(
+            "decky.remove", "Remove the Fuse plugin", FuseIcons.Trash,
+            "Remove the Fuse plugin?", "It leaves Decky, which reloads by itself. Steam, your games and everything in Fuse stay as they are. The system asks for your password.", "Remove",
+            detail = "Steam and Fuse stay as they are",
+        ) {
+            app.scope.launch {
+                live.busy = true
+                decky.remove()
+                    .onSuccess { app.toasts.show(it); app.store.updatePrefs { q -> q.copy(steam = q.steam.copy(decky = false)) } }
+                    .onFailure { app.toasts.show(it.message ?: "The plugin couldn't be removed", ToastKind.ERROR) }
+                live.refresh(app)
+                live.busy = false
+            }
+        })
+    }
 }
 
 /** Menu music and interface sounds, each with its own volume. */
@@ -1145,21 +1270,30 @@ private fun songRow(app: AppState, music: MusicPrefs, setMusic: ((MusicPrefs) ->
 fun inputRows(app: AppState): List<MenuAction> {
     val p by app.store.prefs.collectAsState()
     val i = p.input
+    val controllers by io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter.current.controllers.collectAsState()
     fun setInput(t: (io.github.matiyaaa.fuse.model.InputProfile) -> io.github.matiyaaa.fuse.model.InputProfile) = app.store.updatePrefs { it.copy(input = t(it.input)) }
     return buildList {
-        labelled("Buttons") {
-            add(MenuAction("detect", "Detect my buttons", FuseIcons.ScanSearch, detail = "Press two buttons and Fuse sets the layout and confirm button for you", onSelect = { app.buttonDetect = true }))
-            add(app.choiceRow(
-                "layout", "Button layout", FuseIcons.Gamepad, i.glyphs,
-                listOf(GlyphStyle.XBOX to "Xbox (A at the bottom)", GlyphStyle.NINTENDO to "Nintendo (A on the right)", GlyphStyle.PLAYSTATION to "PlayStation (shapes)"),
-                detail = "The letters printed on your buttons. Hints use them",
-            ) { v -> setInput { it.copy(glyphs = v) } })
-            add(toggleRow("swap", "Swap confirm and back", FuseIcons.Swap, i.swapConfirmBack, if (i.confirmOnRight) "Now: confirm is the right button" else "Now: confirm is the bottom button") { v -> setInput { it.copy(swapConfirmBack = v) } })
+        // One place to set a controller up: guided first, every action to edit after. The layout,
+        // the confirm button and each mapping are all answered there, so nothing here repeats them.
+        labelled("Controller") {
+            add(MenuAction(
+                "mapping", "Controller setup", FuseIcons.Joystick,
+                detail = buildString {
+                    append(when (i.glyphs) { GlyphStyle.NINTENDO -> "Nintendo labels"; GlyphStyle.PLAYSTATION -> "PlayStation labels"; else -> "Xbox labels" })
+                    append(if (i.confirmOnRight) ", confirm on the right" else ", confirm at the bottom")
+                    if (i.remap.isNotEmpty()) append(", ${i.remap.size} custom ${if (i.remap.size == 1) "mapping" else "mappings"}")
+                },
+                trailing = Trailing.Chevron, onSelect = { app.go(Route.Controls) },
+            ))
+            if (controllers.size > 1 || i.controller.isNotEmpty()) {
+                add(app.choiceRow(
+                    "controller", "Controller that moves around Fuse", FuseIcons.Gamepad, i.controller,
+                    listOf("" to "Any controller") + (controllers + listOfNotNull(i.controller.takeIf { it.isNotEmpty() && it !in controllers })).map { it to it },
+                    optionDetail = { if (it.isEmpty()) "Every connected controller moves around Fuse" else if (it in controllers) "Connected now. The others are left for games" else "Not connected now. Until it is, any controller does" },
+                ) { v -> setInput { it.copy(controller = v) } })
+            }
             add(toggleRow("shoulders", "Swap bumpers and triggers", FuseIcons.Swap, i.swapShoulders, if (i.swapShoulders) "Now: L2 and R2 switch tabs, L1 and R1 turn widgets" else "Now: L1 and R1 switch tabs, L2 and R2 turn widgets") { v -> setInput { it.copy(swapShoulders = v) } })
             add(toggleRow("keyhints", "Keyboard hints when typing", FuseIcons.Keyboard, i.autoGlyphs, "Show keyboard keys in hints after a keyboard key is used") { v -> setInput { it.copy(autoGlyphs = v) } })
-        }
-        labelled("Mapping") {
-            add(MenuAction("mapping", "Button mapping and test", FuseIcons.Joystick, detail = if (i.remap.isEmpty()) "Standard layout. See what Fuse receives from each button" else "${i.remap.size} custom mappings", trailing = Trailing.Chevron, onSelect = { app.go(Route.Controls) }))
         }
         labelled("Feel") {
             val d = io.github.matiyaaa.fuse.model.InputProfile()
@@ -1233,6 +1367,15 @@ fun displayRows(app: AppState): List<MenuAction> {
     val automaticSize = io.github.matiyaaa.fuse.ui.shell.app.LocalAutomaticInterfaceSize.current
     return buildList {
         labelled("This screen") {
+            // Game Mode on a TV: Fuse drawn at the handheld's size and enlarged. Said plainly, with the fix.
+            connectedDisplays.firstOrNull { it.isPrimary && it.outputWidthPx != null }?.let { s ->
+                add(infoRow(
+                    "drawn", "Drawn at ${s.widthPx} by ${s.heightPx}",
+                    detail = "Game Mode enlarges Fuse to this screen's ${s.outputWidthPx} by ${s.outputHeightPx}, which softens text and art. " +
+                        "For a sharp picture, in Steam open Fuse's Properties, set Game Resolution to Native, and start Fuse again",
+                    icon = FuseIcons.Scaling,
+                ))
+            }
             if (rates.isNotEmpty()) {
                 val choices = (rates + listOfNotNull(d.maxRefreshRate.takeIf { it > 0 })).distinct().sorted()
                 add(app.choiceRow(
@@ -1592,7 +1735,7 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
         addAll(app.group("about.credits", "Credits and links", FuseIcons.Heart, detail = "Who Fuse is built on, and where it lives") {
             listOf(
                 // Fuse's own systems first: they are what Fuse is made of.
-                infoRow("credits.sync", "Fuse Sync by Fuse", detail = "Fuse's own sync: saves, play time, library and settings on every device, from a host of your own", icon = FuseIcons.RefreshCcw),
+                infoRow("credits.sync", "Fuse One", detail = "Fuse's own sync: saves, play time, library and settings on every device, from a host of your own", icon = FuseIcons.RefreshCcw),
                 infoRow("credits.player", "Fuse Player by Fuse", detail = "Fuse's own video and music player: Media3 on Android, FFmpeg on computers, every subtitle drawn by Fuse", icon = FuseIcons.Clapperboard),
                 infoRow("credits.fuseline", "Fuseline by Fuse", detail = "Fuse's own animation engine: every movement in Fuse, at about a tenth of Compose's cost", icon = FuseIcons.Waves),
                 infoRow("credits", "Made with", detail = "Kotlin, Compose Multiplatform, SQLDelight, Ktor, Coil. Video: Media3 (Apache 2.0) and FFmpeg (GPL). Icons: Lucide (ISC). Fonts: Sora and Manrope (SIL OFL). Systems and emulator launch data: ES-DE (MIT), RomM and Cartridge (MIT). Hashing rules: rcheevos (MIT). Music: boipurple", icon = FuseIcons.Blocks),
@@ -1707,7 +1850,7 @@ private fun eraseRow(app: AppState): MenuAction = MenuAction(
         app.confirm = ConfirmSpec(
             "Erase Fuse?",
             "Fuse's library, settings, themes, Home, profiles, play time, art and caches are erased" +
-                (if (host) ", and the Fuse Sync host on this computer with everyone's saves and profiles." else if (app.store.sync.inUse) ", and this device leaves Fuse Sync." else ".") +
+                (if (host) ", and the Fuse One host on this computer with everyone's saves and profiles." else if (app.store.sync.inUse) ", and this device leaves Fuse One." else ".") +
                 " Game files, emulators and the saves in the emulators' folders stay exactly where they are.",
             "Continue", destructive = true,
         ) {

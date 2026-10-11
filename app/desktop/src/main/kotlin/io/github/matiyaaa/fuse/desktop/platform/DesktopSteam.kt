@@ -12,6 +12,7 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +37,43 @@ internal class DesktopSteam(private val folders: KnownFolders) : SteamIntegratio
     private val mutation = Mutex()
 
     override suspend fun addFuse(): Result<String> = mutate(repair = false)
+
+    override suspend fun steamRunning(): Boolean = withContext(Dispatchers.IO) { steamRunningNow() }
+
+    override suspend fun gameRunning(): Boolean = withContext(Dispatchers.IO) { gameRunningNow() }
+
+    @Volatile private var waiting: kotlinx.coroutines.Job? = null
+    override val waitingForSteam: Boolean get() = waiting?.isActive == true
+
+    override suspend fun addWhenSteamCloses(): Result<String> {
+        if (!steamRunning()) return addFuse()
+        if (waitingForSteam) return Result.success("Fuse goes into Steam's library when Steam next closes.")
+        waiting = watcher.launch {
+            // Steam is never closed or started by this: Fuse only waits for it to be gone.
+            while (steamRunningNow()) delay(STEAM_POLL_MS)
+            mutate(repair = false).onSuccess { Log.info("Steam: Fuse added after Steam closed") }.onFailure { Log.warn("Steam: adding Fuse after Steam closed failed", it) }
+        }
+        return Result.success("Fuse goes into Steam's library when Steam next closes. Steam isn't closed for it.")
+    }
+
+    override suspend fun removeFuse(): Result<String> = mutation.withLock {
+        withContext(Dispatchers.IO) {
+            if (steamRunningNow()) return@withContext Result.failure(IllegalStateException("Close Steam first: it rewrites its library when it quits."))
+            val exe = program()
+            var done = 0
+            for (dir in userConfigDirs(create = false)) {
+                val file = File(dir, "shortcuts.vdf").takeIf { it.isFile } ?: continue
+                val before = runCatching { file.readBytes() }.getOrNull() ?: continue
+                val after = SteamShortcuts.remove(before) { path, name -> isFuse(path, name, exe) } ?: continue
+                if (after.contentEquals(before)) continue
+                val backup = File(dir, "shortcuts.vdf.before-fuse-removal")
+                runCatching { backup.writeBytes(before) }
+                replaceAtomically(file, after)
+                done++
+            }
+            if (done == 0) Result.success("Fuse wasn't in Steam's library.") else Result.success("Fuse is out of Steam's library. Your other shortcuts are as they were.")
+        }
+    }
     override suspend fun rebuild(): Result<String> = lifecycle(repair = true)
     override suspend fun addForSetup(): Result<String> = lifecycle(repair = false)
 
@@ -48,13 +86,13 @@ internal class DesktopSteam(private val folders: KnownFolders) : SteamIntegratio
             if (userConfigDirs(create = false).isEmpty())
                 return@withContext Result.failure(IllegalStateException("Sign in to Steam once before adding Fuse."))
             val steam = Processes.which("steam")
-            val wasRunning = steamRunning()
+            val wasRunning = steamRunningNow()
             if (wasRunning) {
                 if (steam == null || Processes.run(listOf(steam, "-shutdown"), timeoutMs = 5_000) == null)
                     return@withContext Result.failure(IllegalStateException("Steam could not be asked to close. Close it and retry."))
                 var tries = 0
-                while (steamRunning() && tries++ < 120) delay(250)
-                if (steamRunning()) return@withContext Result.failure(IllegalStateException("Steam has not closed yet. Finish its prompts, then retry."))
+                while (steamRunningNow() && tries++ < 120) delay(250)
+                if (steamRunningNow()) return@withContext Result.failure(IllegalStateException("Steam has not closed yet. Finish its prompts, then retry."))
             }
             try {
                 mutateUnlocked(repair)
@@ -70,7 +108,7 @@ internal class DesktopSteam(private val folders: KnownFolders) : SteamIntegratio
 
     private fun mutateUnlocked(repair: Boolean): Result<String> {
         val exe = program()?.takeIf { File(it).canExecute() || (DesktopOs.isMac && File(it).isDirectory) } ?: return Result.failure(IllegalStateException("Fuse isn't running from its AppImage or an installed copy, so Steam would have nothing to start."))
-        if (steamRunning()) return Result.failure(IllegalStateException("Close Steam first: it rewrites its library when it quits. Then add Fuse again."))
+        if (steamRunningNow()) return Result.failure(IllegalStateException("Close Steam first: it rewrites its library when it quits. Then add Fuse again."))
         val users = userConfigDirs()
         if (users.isEmpty()) return Result.failure(IllegalStateException("No Steam user here yet. Sign in to Steam once, close it, then try again."))
         val base = SteamShortcut(
@@ -90,7 +128,7 @@ internal class DesktopSteam(private val folders: KnownFolders) : SteamIntegratio
                 val icon = runCatching { placeArt(File(dir, "grid"), artId) }.onFailure { Log.warn("could not give Steam Fuse's art in $dir", it) }.getOrNull()
                 val shortcut = base.copy(icon = icon ?: "")
                 val before = if (file.isFile) file.readBytes() else null
-                val after = (if (repair) SteamShortcuts.rebuild(before, shortcut) { path, name -> isFuse(path, name, exe) } else SteamShortcuts.add(before, shortcut)) ?: continue
+                val after = (if (repair) SteamShortcuts.rebuild(before, shortcut) { path, name -> isFuse(path, name, exe) } else SteamShortcuts.add(before, shortcut) { path, name -> isFuse(path, name, exe) }) ?: continue
                 if (before != null) {
                     val backup = File(dir, "shortcuts.vdf.before-fuse")
                     if (!backup.exists()) backup.writeBytes(before)
@@ -140,6 +178,7 @@ internal class DesktopSteam(private val folders: KnownFolders) : SteamIntegratio
     private fun quote(path: String): String = "\"$path\""
 
     companion object {
+        private const val STEAM_POLL_MS = 5_000L
         private val FUSE_PROGRAM = Regex("(?i)^fuse([-_. ][^/\\\\]*)?\\.(appimage|exe)$|^fuse$")
 
         /** Same-directory atomic replacement never deletes the valid original on failure. */
@@ -193,7 +232,15 @@ internal class DesktopSteam(private val folders: KnownFolders) : SteamIntegratio
 
     private fun userLists(): List<File> = userConfigDirs().map { File(it, "shortcuts.vdf") }.filter { it.isFile }
 
-    private fun steamRunning(): Boolean = when (DesktopOs.current) {
+    private val watcher = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+
+    /** A game started by Steam is running: Steam's launch wrapper ("reaper") is alive on Linux. */
+    private fun gameRunningNow(): Boolean = when (DesktopOs.current) {
+        DesktopOs.LINUX -> Processes.run(listOf("pgrep", "-f", "SteamLaunch AppId="), timeoutMs = 3_000)?.exitCode == 0
+        else -> false
+    }
+
+    private fun steamRunningNow(): Boolean = when (DesktopOs.current) {
         DesktopOs.WINDOWS -> Processes.run(listOf("tasklist", "/FI", "IMAGENAME eq steam.exe", "/NH"), timeoutMs = 3_000)?.stdout?.contains("steam.exe", ignoreCase = true) == true
         DesktopOs.MACOS -> Processes.run(listOf("pgrep", "-x", "steam_osx"), timeoutMs = 3_000)?.exitCode == 0
         DesktopOs.LINUX -> Processes.run(listOf("pgrep", "-x", "steam"), timeoutMs = 3_000)?.exitCode == 0

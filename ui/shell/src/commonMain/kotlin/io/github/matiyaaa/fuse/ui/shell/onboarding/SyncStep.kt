@@ -98,7 +98,7 @@ internal fun SyncStage(on: Boolean) {
             Box(Modifier.offset(44.dp, 40.dp)) { ProfileAvatar("cat", 34.dp, ring = c.surfaceOverlay) }
         }
         Spacer(Modifier.height(Space.m))
-        FText(if (on) "Fuse Sync is on" else "Your games, in step on every device", Fuse.type.bodyStrong, maxLines = 1)
+        FText(if (on) "Fuse One is on" else "Your games, in step on every device", Fuse.type.bodyStrong, maxLines = 1)
     }
 }
 
@@ -151,7 +151,7 @@ internal fun SyncChoiceStage(fuseSync: Boolean, syncthing: Boolean, hasFuseSync:
             }
             if (hasFuseSync) {
                 ChoiceCard(
-                    name = "Fuse Sync", tag = if (fuseSync) "On" else "Recommended", tint = c.accent, mark = FuseIcons.RefreshCcw,
+                    name = "Fuse One", tag = if (fuseSync) "On" else "Recommended", tint = c.accent, mark = FuseIcons.RefreshCcw,
                     lines = listOf(FuseIcons.Save to "Saves, by game", FuseIcons.Clock to "Play time", FuseIcons.Users to "Saves per person"),
                     on = fuseSync, filled = true,
                     modifier = Modifier.offset((-76).dp, 0.dp).zIndex(lead).graphicsLayer {
@@ -183,7 +183,7 @@ internal fun SyncChoiceStage(fuseSync: Boolean, syncthing: Boolean, hasFuseSync:
         Spacer(Modifier.height(Space.m))
         FText(
             when {
-                fuseSync -> "Fuse Sync is on"
+                fuseSync -> "Fuse One is on"
                 syncthing -> "Syncthing is on"
                 else -> "Two ways to stay in step"
             },

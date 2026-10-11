@@ -99,13 +99,13 @@ fun AppState.sendPicker(id: GameId, title: String) {
     scope.launch {
         val targets = store.reach.sendTargets(id)
         if (targets.none { it.device.isNotBlank() && it.device != store.reach.self }) {
-            toasts.show("No other device is in this household yet. Add one in Settings, Addons, Fuse Sync.", ToastKind.INFO, icon = FuseIcons.Info)
+            toasts.show("No other device is in this household yet. Add one in Settings, Fuse One.", ToastKind.INFO, icon = FuseIcons.Info)
             return@launch
         }
         val now = nowMs()
         choice = ChoiceSpec(
             title = "Send $title",
-            message = "Fuse brings it from wherever is best: another device at home, RomM, or another device through Fuse Sync.",
+            message = "Fuse brings it from wherever is best: another device at home, RomM, or another device through Fuse One.",
             icon = FuseIcons.Share,
             options = targets.map { t -> sendOption(id, title, t, now) },
         )

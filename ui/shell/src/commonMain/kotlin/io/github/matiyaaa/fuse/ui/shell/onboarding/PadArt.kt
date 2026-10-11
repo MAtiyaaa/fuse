@@ -51,20 +51,35 @@ internal fun PadArt(
     nintendoKeys: Boolean,
     modifier: Modifier = Modifier,
     marked: Set<PadButton> = emptySet(),
+    sticks: io.github.matiyaaa.fuse.ui.designsystem.input.StickPositions = io.github.matiyaaa.fuse.ui.designsystem.input.StickPositions(),
 ) {
     val c = Fuse.colors
     val motion = Fuse.motion
     val measurer = rememberTextMeasurer()
+    // Each stick's cap leans the way it is pushed. A reader that only reports the right stick as a
+    // flick (pushed well over) leans it all the way that side.
+    fun flick(b: PadButton, v: Float) = if (b in pressed) v else 0f
+    val rx = sticks.rightX.takeIf { it != 0f } ?: (flick(PadButton.RSTICK_RIGHT, 1f) - flick(PadButton.RSTICK_LEFT, 1f))
+    val ry = sticks.rightY.takeIf { it != 0f } ?: (flick(PadButton.RSTICK_DOWN, 1f) - flick(PadButton.RSTICK_UP, 1f))
+    val lean = StickLean(
+        Offset(sticks.leftX.coerceIn(-1f, 1f), sticks.leftY.coerceIn(-1f, 1f)) * STICK_TRAVEL,
+        Offset(rx.coerceIn(-1f, 1f), ry.coerceIn(-1f, 1f)) * STICK_TRAVEL,
+    )
     // Each part's light, eased in and out so a quick tap still shows.
     val lit = PadParts.associateWith { b -> fuselineFloat(if (b in pressed) 1f else 0f, motion.tween(Durations.FAST), label = "pad").value }
     val geometry = remember { PadGeometry() }
     Canvas(modifier.aspectRatio(PAD_W / PAD_H)) {
         val s = size.width / PAD_W
         withTransform({ scale(s, s, pivot = Offset.Zero) }) {
-            drawPad(geometry, c, lit, marked, style, nintendoKeys, measurer, s)
+            drawPad(geometry, c, lit, marked, style, nintendoKeys, measurer, s, lean)
         }
     }
 }
+
+/** How far a stick's cap moves at full tilt, in the drawing's units. */
+private const val STICK_TRAVEL = 8f
+
+private class StickLean(val left: Offset, val right: Offset)
 
 private const val PAD_W = 400f
 private const val PAD_H = 262f
@@ -178,6 +193,7 @@ private fun DrawScope.drawPad(
     nintendoKeys: Boolean,
     measurer: TextMeasurer,
     scale: Float,
+    lean: StickLean,
 ) {
     val k = PadInk(c)
     val labels = PadLabels.of(style)
@@ -224,8 +240,8 @@ private fun DrawScope.drawPad(
     pill(Menu, PadButton.START, lit, marked, k) { at, ink ->
         for (i in -1..1) drawLine(ink, Offset(at.x - 3.6f, at.y + i * 2.1f), Offset(at.x + 3.6f, at.y + i * 2.1f), 1.1f, StrokeCap.Round)
     }
-    stick(LeftStick, PadButton.L3, lit, marked, k)
-    stick(RightStick, PadButton.R3, lit, marked, k)
+    stick(LeftStick, PadButton.L3, lit, marked, k, lean.left)
+    stick(RightStick, PadButton.R3, lit, marked, k, lean.right)
     guide(Guide, lit[PadButton.MODE] ?: 0f, PadButton.MODE in marked, k)
 }
 
@@ -317,13 +333,16 @@ private fun DrawScope.pill(at: Offset, b: PadButton, lit: Map<PadButton, Float>,
 }
 
 /** A stick: its well, then the cap's ring; pressed in (L3, R3), the cap fills with the accent. */
-private fun DrawScope.stick(at: Offset, b: PadButton, lit: Map<PadButton, Float>, marked: Set<PadButton>, k: PadInk) {
+private fun DrawScope.stick(at: Offset, b: PadButton, lit: Map<PadButton, Float>, marked: Set<PadButton>, k: PadInk, lean: Offset) {
     val l = lit[b] ?: 0f
     drawCircle(k.well, radius = 25f, center = at)
     drawCircle(k.faint, radius = 25f, center = at, style = Stroke(1.2f))
-    glow(at, 34f, l, k)
-    drawCircle(mix(k.shellLow, k.accent, l), radius = 17.5f, center = at)
-    drawCircle(outline(l, b in marked, k), radius = 17.5f, center = at, style = Stroke(1.8f))
+    val cap = at + lean
+    // Pushed, the cap takes some of the accent too, so a tilt reads even from across a room.
+    val tilt = (lean.getDistance() / STICK_TRAVEL).coerceIn(0f, 1f)
+    glow(cap, 34f, maxOf(l, tilt * 0.6f), k)
+    drawCircle(mix(k.shellLow, k.accent, maxOf(l, tilt * 0.35f)), radius = 17.5f, center = cap)
+    drawCircle(outline(maxOf(l, tilt), b in marked, k), radius = 17.5f, center = cap, style = Stroke(1.8f))
 }
 
 /** The guide button: Fuse's own mark in an outlined circle, its spark lit in the accent. */
