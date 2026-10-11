@@ -78,6 +78,36 @@ class GameRepository(
 
     fun observeByGenre(genre: String): Flow<List<GameSummary>> = q.byGenre(genre).summaries()
 
+    /** The visible games with [ids], in the order given, kept current. */
+    fun observeSummariesInOrder(ids: List<GameId>): Flow<List<GameSummary>> {
+        if (ids.isEmpty()) return kotlinx.coroutines.flow.flowOf(emptyList())
+        val flows = ids.map { it.value }.distinct().chunked(SQL_CHUNK).map { q.summariesByIds(it).asFlow().mapToList(dispatcher) }
+        val order = ids.withIndex().associate { (i, id) -> id to i }
+        return kotlinx.coroutines.flow.combine(flows) { parts -> parts.flatMap { it }.map { it.toSummary() }.sortedBy { order[it.id] ?: Int.MAX_VALUE } }.flowOn(dispatcher)
+    }
+
+    /** Every game suggestions may choose from, with its details and play, kept current. */
+    fun observeRecommendationInputs(): Flow<List<RecommendationRow>> = q.recommendationInputs().asFlow().mapToList(dispatcher).map { rows ->
+        rows.map { r ->
+            val meta = decodeOrNull(GameMetadata.serializer(), r.metadata_json)
+            RecommendationRow(
+                id = GameId(r.id),
+                platformId = PlatformId(r.platform_id),
+                title = GameTitles(r.title_original, r.title_cleaned, r.title_custom, r.title_metadata, r.use_cleaned != 0L).display,
+                favorite = r.favorite != 0L,
+                lastPlayedAt = r.last_played_at,
+                playSeconds = r.tracked_seconds + r.imported_seconds,
+                sessions = r.session_count.toInt(),
+                addedAt = r.added_at,
+                year = r.release_year?.toInt() ?: meta?.releaseYear,
+                genres = meta?.genres.orEmpty(),
+                developer = meta?.developer?.trim()?.ifEmpty { null },
+                franchise = meta?.franchise?.trim()?.ifEmpty { null },
+                rating = meta?.rating,
+            )
+        }
+    }.flowOn(dispatcher)
+
     /** Games whose files are gone, for the Missing Games screen. */
     fun observeMissing(): Flow<List<GameSummary>> = q.missingGames().summaries()
 

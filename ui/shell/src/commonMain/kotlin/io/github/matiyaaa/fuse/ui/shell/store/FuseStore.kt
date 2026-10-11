@@ -400,6 +400,9 @@ enum class GameSet { LIBRARY, MISSING, HIDDEN, REMOVED }
 
 interface LibraryOps {
     val home: StateFlow<HomeFeed>
+
+    /** Today's game in [platform]'s spotlight, and why; null while the system has no games. */
+    fun spotlight(platform: PlatformId): Flow<Suggestion?> = kotlinx.coroutines.flow.flowOf(null)
     val platforms: StateFlow<List<PlatformCard>>
     fun games(query: GameQuery): Flow<List<GameCard>>
     fun game(id: GameId): Flow<GameDetail?>

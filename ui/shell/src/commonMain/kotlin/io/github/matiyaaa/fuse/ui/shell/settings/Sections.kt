@@ -403,6 +403,8 @@ private fun widgetIcon(k: WidgetKind) = when (k) {
     WidgetKind.PLAYTIME_WEEK -> FuseIcons.CalendarClock
     WidgetKind.MOST_PLAYED -> FuseIcons.TrendingUp
     WidgetKind.CURRENT_GAME -> FuseIcons.Gamepad
+    WidgetKind.FOR_YOU -> FuseIcons.Compass
+    WidgetKind.SPOTLIGHT -> FuseIcons.Star
     WidgetKind.CARTRIDGE_DOWNLOADS -> io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks.Cartridge
     WidgetKind.STORAGE -> FuseIcons.HardDrive
     WidgetKind.CLOCK -> FuseIcons.Clock
@@ -500,6 +502,10 @@ fun libraryRows(app: AppState): List<MenuAction> {
                 detail = "What confirm (or a tap on a selected game) does. Play is always on the game's page",
                 aid = { ChoiceAid.SelectGame(opensPage = it) },
             ) { v -> app.store.updatePrefs { it.copy(openGamePage = v) } })
+            add(toggleRow(
+                "spotlight", "Spotlight on systems", FuseIcons.Star, p.systemSpotlight,
+                "A system's page names a game of it to try today, with why. From your library alone, on this device",
+            ) { v -> app.store.updatePrefs { it.copy(systemSpotlight = v) } })
         }
         labelled("Collections") {
             add(toggleRow("collections", "Collections", FuseIcons.LibraryBig, p.collectionsEnabled, "Your own collections and the series Fuse finds. Off hides them everywhere; nothing is deleted") { v ->

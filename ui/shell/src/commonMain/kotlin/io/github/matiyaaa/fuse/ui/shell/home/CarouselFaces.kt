@@ -91,7 +91,7 @@ internal fun GameCarousel(kind: WidgetKind, games: List<GameCard>, feed: HomeFee
         cardShape = cardShape(),
         header = { dots -> CarouselHeader(widgetIcon(kind), widgetLabel(kind), dots, compact = compact) },
     ) { i, depth ->
-        GameSlide(shown[i], gameLine(kind, shown[i]), feed.systems.firstOrNull { it.platform.id == shown[i].platformId }, face, depth)
+        GameSlide(shown[i], gameLine(kind, shown[i], feed), feed.systems.firstOrNull { it.platform.id == shown[i].platformId }, face, depth)
     }
 }
 
@@ -159,7 +159,8 @@ private fun GameSlide(game: GameCard, line: String, system: PlatformCard?, face:
     }
 }
 
-private fun gameLine(kind: WidgetKind, g: GameCard): String = when (kind) {
+private fun gameLine(kind: WidgetKind, g: GameCard, feed: HomeFeed): String = when (kind) {
+    WidgetKind.FOR_YOU -> feed.reasons[g.id] ?: g.platformShort
     WidgetKind.RECENTLY_ADDED -> "Added ${agoText(g.addedAt)}"
     WidgetKind.RECENTLY_PLAYED -> g.lastPlayedAt?.let { "Played ${agoText(it)}" } ?: g.platformShort
     WidgetKind.FAVORITES, WidgetKind.PINNED_GAMES -> listOfNotNull(
@@ -174,6 +175,7 @@ private fun emptyGamesText(kind: WidgetKind): String = when (kind) {
     WidgetKind.FAVORITES -> "Add favourites from a game's options"
     WidgetKind.PINNED_GAMES -> "Pin games from their options"
     WidgetKind.RECENTLY_ADDED -> "New games show here after a scan"
+    WidgetKind.FOR_YOU -> emptySuggestionNote(kind)
     else -> "Nothing here yet"
 }
 

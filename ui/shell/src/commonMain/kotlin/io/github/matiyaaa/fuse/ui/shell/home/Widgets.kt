@@ -263,6 +263,8 @@ internal fun widgetIcon(kind: WidgetKind): ImageVector = when (kind) {
     WidgetKind.PLAYTIME_TOTAL -> FuseIcons.Hourglass
     WidgetKind.MOST_PLAYED -> FuseIcons.TrendingUp
     WidgetKind.CURRENT_GAME -> FuseIcons.Gamepad
+    WidgetKind.FOR_YOU -> FuseIcons.Compass
+    WidgetKind.SPOTLIGHT -> FuseIcons.Star
     WidgetKind.RECENT_ACHIEVEMENT, WidgetKind.RECENT_ACHIEVEMENTS -> FuseIcons.Trophy
     WidgetKind.ACHIEVEMENT_PROGRESS -> FuseIcons.Target
     WidgetKind.RECENTLY_MASTERED -> FuseIcons.Crown
@@ -808,6 +810,9 @@ internal fun widgetStage(kind: WidgetKind, key: Any, feed: HomeFeed, cartridge: 
             info(mediaTitle(it), kind.title(), mediaCaption(it), "Jellyfin")
         } ?: info(kind.title(), "Jellyfin", "Nothing here yet")
         WidgetKind.SYNC_STATUS, WidgetKind.SYNC_DEVICES -> info(kind.title(), "Fuse One", "Your saves, play time and settings on every device")
+        WidgetKind.FOR_YOU, WidgetKind.SPOTLIGHT -> boardGames(kind, feed).firstOrNull()?.let {
+            info(it.title, kind.title(), feed.reasons[it.id], it.platformShort)
+        } ?: info(kind.title(), "Home", emptySuggestionNote(kind))
         else -> feed.achievements?.recent?.firstOrNull()?.let {
             info(it.achievement.title, kind.title(), it.gameTitle, "${it.achievement.points} points")
         } ?: info(kind.title(), "Achievements", "Connect RetroAchievements in Settings")
@@ -838,7 +843,7 @@ internal fun AppState.openWidget(kind: WidgetKind, feed: HomeFeed, at: Int = 0) 
     val media = mediaItems(kind, feed).let { it.getOrNull(at) ?: it.firstOrNull() }
     when (kind) {
         WidgetKind.CONTINUE_PLAYING, WidgetKind.RECENTLY_PLAYED, WidgetKind.PINNED_GAMES, WidgetKind.CURRENT_GAME,
-        WidgetKind.MOST_PLAYED, WidgetKind.RECENTLY_ADDED,
+        WidgetKind.MOST_PLAYED, WidgetKind.RECENTLY_ADDED, WidgetKind.FOR_YOU, WidgetKind.SPOTLIGHT,
         -> game?.let { activateGame(it) } ?: selectTab(Destination.LIBRARY)
         // Favourites opens the game in front; with none, the Library on them.
         WidgetKind.FAVORITES -> game?.let { activateGame(it) } ?: run {

@@ -115,6 +115,8 @@ data class UiPrefs(
     val collectionsEnabled: Boolean = true,
     /** Automatic series collections. */
     val autoSeries: Boolean = true,
+    /** A system's page names a game from it to try today. */
+    val systemSpotlight: Boolean = true,
     /** Series Fuse no longer makes (hidden, or kept as the user's own), lower case. */
     val hiddenSeries: List<String> = emptyList(),
     /** Systems whose firmware the user marked as set up, by platform id. */

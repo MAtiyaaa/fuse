@@ -89,6 +89,11 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   side) turn the page, X zooms in steps (or a pinch, or a double tap) and the D-pad or a drag moves
   about, Y marks a page and A lists the marked ones. It opens where it was left, straight from the
   file, so it reads offline. PDFs are drawn by PDFBox on computers and by Android itself on Android.
+- **For you, and a spotlight.** Two Home widgets: For you suggests games from your own library, each
+  with why (a favourite left alone, the next game of a series you play, more from the maker or of the
+  kind you play most, a game you left, a well rated one not started yet), and Spotlight shows one game
+  a day with its reason. A system's page names its game of the day too (Settings, Library). Worked out
+  on the device from the library alone; nothing about what anyone plays leaves it.
 - **Arrange the top line in place.** Hold a tab (touch, mouse or confirm) and it lifts; move it
   along with the D-pad or a drag, as Addons' tabs move, and put it down. Home stays first.
 

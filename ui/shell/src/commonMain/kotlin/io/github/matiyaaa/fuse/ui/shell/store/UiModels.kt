@@ -163,6 +163,10 @@ data class EmulatorChoice(
 @Immutable
 data class ContentNote(val kind: ContentKind, val count: Int, val message: String)
 
+/** A game suggested to someone, and why. */
+@Immutable
+data class Suggestion(val card: GameCard, val reason: String)
+
 /** One card on Home. */
 @Immutable
 data class HomeFeed(
@@ -180,6 +184,12 @@ data class HomeFeed(
     val storage: StorageSummary? = null,
     /** Jellyfin's Home widgets, empty while Jellyfin is off or no widget of it is on Home. */
     val media: io.github.matiyaaa.fuse.jellyfin.MediaFeed = io.github.matiyaaa.fuse.jellyfin.MediaFeed(),
+    /** Games suggested for this person, best first; why each is suggested is in [reasons]. */
+    val forYou: List<GameCard> = emptyList(),
+    /** The game in today's spotlight. */
+    val spotlight: GameCard? = null,
+    /** Why each suggested or spotlit game is there ("Next in the Metroid series, after Metroid Fusion"). */
+    val reasons: Map<io.github.matiyaaa.fuse.model.GameId, String> = emptyMap(),
 )
 
 @Immutable

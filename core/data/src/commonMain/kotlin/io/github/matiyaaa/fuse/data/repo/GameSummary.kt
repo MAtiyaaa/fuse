@@ -49,3 +49,20 @@ data class GameRecord(
     /** Epoch millis of "Remove from Fuse", or null. */
     val removedAt: Long?,
 )
+
+/** A game as suggestions read it: its details and what was done with it here. */
+data class RecommendationRow(
+    val id: GameId,
+    val platformId: PlatformId,
+    val title: String,
+    val favorite: Boolean,
+    val lastPlayedAt: Long?,
+    val playSeconds: Long,
+    val sessions: Int,
+    val addedAt: Long,
+    val year: Int?,
+    val genres: List<String>,
+    val developer: String?,
+    val franchise: String?,
+    val rating: Int?,
+)

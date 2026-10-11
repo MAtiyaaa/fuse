@@ -476,6 +476,8 @@ data class LibraryPreferences(
     val collectionsEnabled: Boolean = true,
     /** Fuse makes a collection for each series it finds and keeps it up to date. */
     val autoSeries: Boolean = true,
+    /** A system's page names a game from it to try today (its spotlight). */
+    val systemSpotlight: Boolean = true,
     /** Series the user hid or kept as their own collection, lower case, so Fuse doesn't make them again. */
     val hiddenSeries: List<String> = emptyList(),
     /** Brand colours from the system art pack (opaque ARGB), by platform id. */

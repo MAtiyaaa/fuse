@@ -94,6 +94,8 @@ internal fun LibraryHeader(
     foldTools: Boolean = false,
     /** Games in each view, shown on its tab (the active view shows [count]). */
     counts: Map<LibrarySegment, Int> = emptyMap(),
+    /** The title of the system's game in the spotlight today, for its button. */
+    spotlight: String? = null,
 ) {
     fun focused(i: Int) = state.inHeader && app.focusZone == FocusZone.CONTENT && i == state.headerIndex
     BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -125,6 +127,8 @@ internal fun LibraryHeader(
                     if (previous != null && previous.goes != button.goes) ToolbarRule()
                     previous = button
                     val (label, icon) = when (button) {
+                        // A long title is cut so the toolbar keeps its size.
+                        LibraryButton.SPOTLIGHT -> (spotlight?.let { if (it.length > SPOTLIGHT_CHARS) it.take(SPOTLIGHT_CHARS - 1).trimEnd() + "\u2026" else it } ?: "Spotlight") to FuseIcons.Star
                         LibraryButton.COLLECTIONS -> "Collections" to FuseIcons.LibraryBig
                         LibraryButton.ADD_GAMES -> "Add or remove games" to FuseIcons.ListPlus
                         LibraryButton.EMULATOR -> "No emulator installed" to FuseIcons.Warning
@@ -133,12 +137,14 @@ internal fun LibraryHeader(
                     }
                     val tone = when {
                         button == LibraryButton.EMULATOR -> ToolTone.WARNING
+                        button == LibraryButton.SPOTLIGHT -> ToolTone.ON
                         button == LibraryButton.SYSTEM && system != null -> ToolTone.ON
                         else -> ToolTone.PLAIN
                     }
                     ToolButton(
                         label, icon, focused = focused(i), tone = tone,
-                        showLabel = roomy || focused(i) || tone != ToolTone.PLAIN,
+                        // The spotlight names its game where there is room, like the plain buttons.
+                        showLabel = roomy || focused(i) || (tone != ToolTone.PLAIN && button != LibraryButton.SPOTLIGHT),
                     ) { onButton(i, button) }
                 }
             }
@@ -171,7 +177,7 @@ internal fun LibraryHeader(
 
 /** Whether a button leads somewhere else (Collections, a collection's games, a system's settings). */
 private val LibraryButton.goes: Boolean
-    get() = this == LibraryButton.COLLECTIONS || this == LibraryButton.ADD_GAMES || this == LibraryButton.EMULATOR
+    get() = this == LibraryButton.SPOTLIGHT || this == LibraryButton.COLLECTIONS || this == LibraryButton.ADD_GAMES || this == LibraryButton.EMULATOR
 
 /** A collection's name and how many games it holds. */
 @Composable
@@ -320,6 +326,9 @@ private fun ToolButton(label: String, icon: ImageVector, focused: Boolean, tone:
         }
     }
 }
+
+/** The most of a spotlit game's title its button shows. */
+private const val SPOTLIGHT_CHARS = 28
 
 /** Below this width only the focused (or tinted) toolbar button names its value. */
 private val ROOMY_WIDTH = 1000.dp

@@ -105,6 +105,14 @@ seriesInputs:
 SELECT id, title_original, title_cleaned, title_custom, title_metadata, use_cleaned, metadata_json FROM game
 WHERE missing = 0 AND removed_at IS NULL;
 
+-- What suggestions read: each game in the collection with its details and what was done with it.
+-- Hidden, missing and removed games, and apps played as games, are never suggested.
+recommendationInputs:
+SELECT id, platform_id, title_original, title_cleaned, title_custom, title_metadata, use_cleaned, favorite,
+    last_played_at, tracked_seconds, imported_seconds, session_count, added_at, release_year, metadata_json
+FROM game
+WHERE missing = 0 AND removed_at IS NULL AND hidden = 0 AND folder_path <> 'app:';
+
 selectMetadata:
 SELECT metadata_json, title_metadata, title_custom, title_cleaned, title_original, use_cleaned FROM game WHERE id = ?;
 

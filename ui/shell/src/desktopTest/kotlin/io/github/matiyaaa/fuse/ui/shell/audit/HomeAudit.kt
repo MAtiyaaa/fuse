@@ -349,3 +349,40 @@ internal fun AuditDriver.homePages() {
         shoot("back on the first page")
     }
 }
+
+/**
+ * Suggestions: For You and the Spotlight as Home rows, each game's reason under it and on the
+ * stage, and a system's page naming its game of the day.
+ */
+internal fun AuditDriver.discoverScreens() {
+    scenario("home", "for you and spotlight") {
+        val rows = listOf(WidgetKind.SPOTLIGHT, WidgetKind.FOR_YOU, WidgetKind.CONTINUE_PLAYING)
+            .mapIndexed { i, k -> HomeWidget(id = k.name.lowercase(), kind = k, order = i) }
+        useLibrary { it.copy(home = HomeLayoutConfig(widgets = rows)) }
+        waitFor("Spotlight", timeoutMs = 20_000)
+        tap(PadButton.DPAD_LEFT)
+        shoot("the spotlight first, with why", 2_000)
+        if (nav(NavAction.DOWN) != NavResult.MOVED) throw NotCovered("Could not move down to For you")
+        shoot("for you, each game with its reason", 1_500)
+        tap(PadButton.DPAD_RIGHT)
+        shoot("the next suggestion", 1_200)
+    }
+    scenario("home", "for you on the board") {
+        val board = listOf(
+            HomeWidget("spotlight", WidgetKind.SPOTLIGHT, 0, width = 2, height = 2),
+            HomeWidget("for_you", WidgetKind.FOR_YOU, 1, width = 2, height = 2),
+        )
+        useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS, board = board)) }
+        waitFor("Spotlight", timeoutMs = 20_000)
+        tap(PadButton.DPAD_LEFT)
+        shoot("the spotlight and for you, side by side", 2_000)
+    }
+    scenario("library", "system spotlight") {
+        useLibrary()
+        tab(Destination.SYSTEMS)
+        tap(PadButton.A)
+        settle(1_500)
+        if (nav(NavAction.UP) != NavResult.MOVED) throw NotCovered("Up did not reach the system's toolbar")
+        shoot("a system's game of the day in its toolbar", 1_500)
+    }
+}

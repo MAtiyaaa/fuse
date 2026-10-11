@@ -9,6 +9,8 @@ import io.github.matiyaaa.fuse.launch.RetroArchCores
 import io.github.matiyaaa.fuse.launch.ScopedLaunchChoice
 import io.github.matiyaaa.fuse.library.FsPath
 import io.github.matiyaaa.fuse.library.parse.DisplayNameCleaner
+import io.github.matiyaaa.fuse.library.recommend.RecGame
+import io.github.matiyaaa.fuse.library.recommend.Recommender
 import io.github.matiyaaa.fuse.library.parse.FilenameParser
 import io.github.matiyaaa.fuse.library.scan.ScanRules
 import io.github.matiyaaa.fuse.model.AddedGames
@@ -64,6 +66,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.filter
@@ -75,6 +78,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -235,6 +239,47 @@ internal class DefaultLibraryOps(
         cards.filter { c -> dismissed[c.id.value.toString()]?.let { at -> (c.lastPlayedAt ?: 0) > at } ?: true }.take(20)
     }
 
+    /**
+     * Suggestions and the day's spotlight, from this device's library alone (see [Recommender]):
+     * worked out again when games change (a scan, new details, a play) and every hour, since what
+     * counts as "a while ago" moves.
+     */
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
+    private val recGames: Flow<List<RecGame<GameId>>> = data.games.observeRecommendationInputs()
+        .debounce(RECOMMEND_SETTLE_MS)
+        .map { rows -> rows.map { it.toRecGame() } }
+        .flowOn(Dispatchers.Default)
+        .shareIn(ctx.scope, SharingStarted.WhileSubscribed(RECOMMEND_KEEP_MS), replay = 1)
+
+    private val hourly: Flow<Unit> = flow { while (true) { emit(Unit); kotlinx.coroutines.delay(HOUR_MS) } }
+
+    private val picks: Flow<HomePicks> = combine(recGames, hourly) { games, _ ->
+        val now = ctx.now()
+        Recommender.recommend(games, now) to Recommender.spotlight(games, now, offsetMs = ctx.services.utcOffsetMillis())
+    }.distinctUntilChanged().flatMapLatest { (forYou, spot) ->
+        val ids = forYou.map { it.key } + listOfNotNull(spot?.key)
+        ctx.cards(data.games.observeSummariesInOrder(ids)).map { cards ->
+            val byId = cards.associateBy { it.id }
+            HomePicks(
+                forYou = forYou.mapNotNull { byId[it.key] },
+                spotlight = spot?.let { byId[it.key] },
+                reasons = (forYou + listOfNotNull(spot)).associate { it.key to it.reason },
+            )
+        }
+    }.flowOn(Dispatchers.Default)
+
+    override fun spotlight(platform: PlatformId): Flow<io.github.matiyaaa.fuse.ui.shell.store.Suggestion?> = combine(recGames, hourly) { games, _ ->
+        Recommender.spotlight(games, ctx.now(), platform = platform.value, offsetMs = ctx.services.utcOffsetMillis())
+    }.distinctUntilChanged().flatMapLatest { pick ->
+        if (pick == null) {
+            flowOf(null)
+        } else {
+            ctx.cards(data.games.observeSummariesInOrder(listOf(pick.key))).map { cards ->
+                cards.firstOrNull()?.let { io.github.matiyaaa.fuse.ui.shell.store.Suggestion(it, pick.reason) }
+            }
+        }
+    }.flowOn(Dispatchers.Default)
+
     override val home: StateFlow<HomeFeed> = combine(
         listOf(
             continuePlaying,
@@ -249,8 +294,10 @@ internal class DefaultLibraryOps(
             playtime.onStart { emit(PlaytimeSummary()) },
             achievements.feed,
             storage.onStart { emit(null) },
+            picks.onStart { emit(HomePicks()) },
         ),
     ) { v ->
+        val p = v[12] as HomePicks
         @Suppress("UNCHECKED_CAST")
         HomeFeed(
             continuePlaying = v[0] as List<GameCard>,
@@ -265,6 +312,9 @@ internal class DefaultLibraryOps(
             playtime = v[9] as PlaytimeSummary,
             achievements = v[10] as io.github.matiyaaa.fuse.ui.shell.store.AchievementsFeed?,
             storage = v[11] as StorageSummary?,
+            forYou = p.forYou,
+            spotlight = p.spotlight,
+            reasons = p.reasons,
         )
     }.flowOn(Dispatchers.Default).resilient().stateIn(ctx.scope, SharingStarted.Eagerly, HomeFeed())
 
@@ -1139,6 +1189,25 @@ private fun SortOrder.comparator(): Comparator<io.github.matiyaaa.fuse.data.repo
 }
 
 private const val HOUR_MS = 3_600_000L
+
+/** How long the library stays still before suggestions are worked out again (a scan changes many games). */
+private const val RECOMMEND_SETTLE_MS = 2_000L
+
+/** How long suggestions' inputs are kept after the last screen using them goes (moving between pages). */
+private const val RECOMMEND_KEEP_MS = 30_000L
+
+/** Home's suggestions, the day's spotlight, and why each is there. */
+private data class HomePicks(
+    val forYou: List<GameCard> = emptyList(),
+    val spotlight: GameCard? = null,
+    val reasons: Map<GameId, String> = emptyMap(),
+)
+
+private fun io.github.matiyaaa.fuse.data.repo.RecommendationRow.toRecGame() = RecGame(
+    key = id, platform = platformId.value, title = title, favorite = favorite, lastPlayedAt = lastPlayedAt,
+    playSeconds = playSeconds, sessions = sessions, addedAt = addedAt, year = year, genres = genres,
+    developer = developer, franchise = franchise, rating = rating,
+)
 
 /** Systems whose disc images say their serial in SYSTEM.CNF. */
 private val DISC_PLATFORMS = setOf("ps2", "psx")

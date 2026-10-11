@@ -188,7 +188,7 @@ enum class LibrarySegment(val label: String, val set: GameSet) {
  * The buttons at the end of the Library header. [EMULATOR] only shows on a system that has no
  * emulator, and leads to its settings.
  */
-enum class LibraryButton { COLLECTIONS, ADD_GAMES, EMULATOR, SYSTEM, SORT }
+enum class LibraryButton { SPOTLIGHT, COLLECTIONS, ADD_GAMES, EMULATOR, SYSTEM, SORT }
 
 /** Remembered per library view: which game was selected (by id, so re-sorting keeps it), and where focus was. */
 @Stable
@@ -277,7 +277,12 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     val collection = (scope as? LibraryScope.OfCollection)?.let { s -> allCollections.firstOrNull { it.id == s.collection } }
     // A collection of the user's own (not a series Fuse keeps up to date) can be edited here.
     val ownCollection = collection?.takeIf { it.kind != CollectionKind.SERIES }
+    // A system's game to try today, when the person wants one shown.
+    val spotlight by remember(platformId, prefs.systemSpotlight) {
+        if (platformId != null && prefs.systemSpotlight) store.library.spotlight(platformId) else flowOf(null)
+    }.collectAsState(initial = null)
     val buttons = buildList {
+        if (spotlight != null) add(LibraryButton.SPOTLIGHT)
         if (scope == LibraryScope.All && collectionsOn) add(LibraryButton.COLLECTIONS)
         if (ownCollection != null) add(LibraryButton.ADD_GAMES)
         if (systemCard != null && !systemCard.emulatorInstalled) add(LibraryButton.EMULATOR)
@@ -378,7 +383,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         else -> null
     }
 
-    PageEffect(selectedCard?.id, selectedCard?.art, special, systemCard?.art, gameSystem?.art, emptyAction?.label, segment) {
+    val onSpotlight = spotlight != null && state.inHeader && app.focusZone == FocusZone.CONTENT && header.getOrNull(state.headerIndex) == HeaderItem.Button(LibraryButton.SPOTLIGHT)
+    PageEffect(selectedCard?.id, selectedCard?.art, special, systemCard?.art, gameSystem?.art, emptyAction?.label, segment, onSpotlight) {
         // All sets its own room and hints from its shelves.
         if (scope == LibraryScope.All && segment == LibrarySegment.EVERYWHERE) return@PageEffect
         app.hero = when {
@@ -387,6 +393,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             else -> null
         }
         app.hints = when {
+            // The spotlight's button opens its game's page.
+            onSpotlight -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.BACK, "Back"))
             selectedCard == null -> listOfNotNull(emptyAction?.let { Hint(HintButton.CONFIRM, it.label) })
             special -> listOf(Hint(HintButton.CONFIRM, "Choose"), Hint(HintButton.BACK, "Back"))
             // A system's or collection's page was opened on top of a tab: Back is named, as on every other page.
@@ -414,6 +422,10 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
 
     fun press(button: LibraryButton) {
         when (button) {
+            LibraryButton.SPOTLIGHT -> spotlight?.let { s ->
+                app.toasts.show(s.reason, icon = FuseIcons.Star)
+                app.go(Route.GameInfo(s.card.id))
+            }
             LibraryButton.COLLECTIONS -> app.go(Route.Collections)
             LibraryButton.ADD_GAMES -> ownCollection?.let { app.addGamesPicker(it.id, it.name) }
             LibraryButton.EMULATOR -> platformId?.let { app.go(Route.PlatformSettings(it)) }
@@ -543,7 +555,15 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         val compactHeader = maxH < SHORT_SCREEN
         // Inside a system, saying which system each game is for says nothing.
         val inSystem = systemCard != null
-        fun stageOf(card: GameCard?) = card?.stage()?.let { if (inSystem) it.copy(eyebrow = null) else it }
+        // With the spotlight's button focused, the stage tells of that game and why it is suggested.
+        val spotlit = spotlight?.takeIf {
+            state.inHeader && app.focusZone == FocusZone.CONTENT && header.getOrNull(state.headerIndex) == HeaderItem.Button(LibraryButton.SPOTLIGHT)
+        }
+        val stageCard = spotlit?.card ?: selectedCard
+        fun stageOf(card: GameCard?) = card?.stage()?.let { s ->
+            val shown = if (inSystem) s.copy(eyebrow = null) else s
+            if (spotlit != null && card.id == spotlit.card.id) shown.copy(eyebrow = "Spotlight", meta = listOf(spotlit.reason) + shown.meta) else shown
+        }
         // Read through derived state, so scrolling recomposes the screen only when this flips, not on
         // every frame of the scroll.
         val listScrolled by remember(listState) { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 24 } }
@@ -608,6 +628,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                     // The box art view's stage keeps room on its right for the toolbar once folded.
                     foldTools = foldTools,
                     counts = viewCounts,
+                    spotlight = spotlight?.card?.title,
                 )
             }
             when {
@@ -655,7 +676,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                             contentAlignment = Alignment.BottomStart,
                         ) {
                             Stage(
-                                stageOf(selectedCard), showLogo = prefs.showLogo, logoHeight = logo,
+                                stageOf(stageCard), showLogo = prefs.showLogo, logoHeight = logo,
                                 titleStyle = if (inSystem) androidx.compose.ui.text.lerp(Fuse.type.display, Fuse.type.title, collapse) else androidx.compose.ui.text.lerp(stageTitle, Fuse.type.title, collapse),
                                 fold = collapse,
                                 // A short screen keeps the stage to two lines, clear of the tabs.
@@ -672,7 +693,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                             // to its one-line form rather than running up under the toolbar.
                             val tight = maxHeight < CAPSULE_STAGE_ROOM
                             Stage(
-                                stageOf(selectedCard), showLogo = prefs.showLogo && !tight, logoHeight = if (compactHeader) CAPSULE_LOGO / 2 else CAPSULE_LOGO,
+                                stageOf(stageCard), showLogo = prefs.showLogo && !tight, logoHeight = if (compactHeader) CAPSULE_LOGO / 2 else CAPSULE_LOGO,
                                 titleStyle = if (tight) Fuse.type.title else stageTitle, fold = if (tight) 1f else 0f, inlineEyebrow = compactHeader,
                             )
                         }

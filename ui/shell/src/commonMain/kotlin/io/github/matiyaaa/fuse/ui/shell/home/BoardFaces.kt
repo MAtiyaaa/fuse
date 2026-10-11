@@ -96,8 +96,10 @@ internal fun BoardFace(kind: WidgetKind, size: BoardSize, feed: HomeFeed, cartri
     val face = FaceSize.of(size)
     when (kind) {
         WidgetKind.CONTINUE_PLAYING -> ContinueFace(feed, face)
-        WidgetKind.FAVORITES, WidgetKind.RECENTLY_PLAYED, WidgetKind.RECENTLY_ADDED, WidgetKind.PINNED_GAMES,
+        WidgetKind.FAVORITES, WidgetKind.RECENTLY_PLAYED, WidgetKind.RECENTLY_ADDED, WidgetKind.PINNED_GAMES, WidgetKind.FOR_YOU,
         -> GameCarousel(kind, boardGames(kind, feed), feed, face)
+        // One game, large, with why it is in the spotlight today.
+        WidgetKind.SPOTLIGHT -> GamesFace(kind, boardGames(kind, feed), face) { g -> feed.reasons[g.id] ?: g.platformShort }
         WidgetKind.CURRENT_GAME -> GamesFace(kind, listOfNotNull(feed.playtime.currentGame), face) { g ->
             feed.playtime.currentSince?.let { "Started ${agoText(it)}" } ?: g.platformShort
         }
@@ -134,6 +136,8 @@ internal fun boardGames(kind: WidgetKind, feed: HomeFeed): List<GameCard> = when
     WidgetKind.PINNED_GAMES -> feed.pinnedGames
     WidgetKind.MOST_PLAYED -> feed.mostPlayed
     WidgetKind.CURRENT_GAME -> listOfNotNull(feed.playtime.currentGame)
+    WidgetKind.FOR_YOU -> feed.forYou
+    WidgetKind.SPOTLIGHT -> listOfNotNull(feed.spotlight)
     else -> emptyList()
 }
 
@@ -248,8 +252,13 @@ private fun emptyGamesNote(kind: WidgetKind): String = when (kind) {
     WidgetKind.PINNED_GAMES -> "Pin games from their options"
     WidgetKind.RECENTLY_ADDED -> "New games show here after a scan"
     WidgetKind.CURRENT_GAME -> "Nothing is running"
+    WidgetKind.FOR_YOU, WidgetKind.SPOTLIGHT -> emptySuggestionNote(kind)
     else -> "Nothing here yet"
 }
+
+/** What a suggestion widget says before the library has anything to suggest. */
+internal fun emptySuggestionNote(kind: WidgetKind): String =
+    if (kind == WidgetKind.SPOTLIGHT) "A game from your collection shows here once Fuse finds games" else "Games picked from your library, with why, show here once Fuse finds games"
 
 // ------------------------------------------------------------------- systems, apps, collections
 

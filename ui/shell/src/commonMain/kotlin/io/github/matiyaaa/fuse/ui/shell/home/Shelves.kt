@@ -75,6 +75,8 @@ fun WidgetKind.title(): String = when (this) {
     WidgetKind.PLAYTIME_WEEK -> "This week"
     WidgetKind.MOST_PLAYED -> "Most played"
     WidgetKind.CURRENT_GAME -> "Now playing"
+    WidgetKind.FOR_YOU -> "For you"
+    WidgetKind.SPOTLIGHT -> "Spotlight"
     WidgetKind.CARTRIDGE_DOWNLOADS -> "Cartridge"
     WidgetKind.STORAGE -> "Storage"
     WidgetKind.CLOCK -> "Clock"
@@ -103,6 +105,9 @@ fun buildShelves(widgets: List<HomeWidget>, feed: HomeFeed, achievementsOn: Bool
             WidgetKind.RECENTLY_ADDED -> gameShelf(w, feed.recentlyAdded, ShelfStyle.ICON)
             WidgetKind.PINNED_GAMES -> gameShelf(w, feed.pinnedGames, ShelfStyle.ICON)
             WidgetKind.MOST_PLAYED -> gameShelf(w, feed.mostPlayed, ShelfStyle.ICON) { io.github.matiyaaa.fuse.ui.shell.components.playtimeText(it.playSeconds) }
+            // Suggestions carry why each is there under its tile.
+            WidgetKind.FOR_YOU -> gameShelf(w, feed.forYou, ShelfStyle.WIDE) { feed.reasons[it.id] }
+            WidgetKind.SPOTLIGHT -> gameShelf(w, listOfNotNull(feed.spotlight), ShelfStyle.WIDE) { feed.reasons[it.id] }
             WidgetKind.SYSTEMS -> feed.systems.takeIf { it.isNotEmpty() }?.let { list ->
                 Shelf(w.id, w.kind.title(), ShelfStyle.SYSTEM, list.map { ShelfItem.System(it) }, listOf(w))
             }
