@@ -1021,6 +1021,49 @@ internal class DefaultLibraryOps(
         return id
     }
 
+    override suspend fun addGameFolder(path: String, platform: PlatformId): List<GameId> {
+        val fs = ctx.services.fs
+        val entry = try {
+            fs.stat(path)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        } ?: return emptyList()
+        if (!entry.isDirectory) return emptyList()
+        val system = io.github.matiyaaa.fuse.library.PlatformCatalog.byId(platform) ?: return emptyList()
+        // Read as the library scan reads a folder in a system's folder: the game with its updates,
+        // DLC and other parts attached, a disc set as one game, a known folder structure as itself.
+        val result = io.github.matiyaaa.fuse.library.scan.FolderInterpreter(fs).interpretFolder(system, entry, AddedGames.SOURCE)
+        if (result.games.isEmpty()) return emptyList()
+        // Games already here only change system (and come back if Fuse removed them).
+        val known = result.games.mapNotNull { g -> data.games.idByPath(g.path)?.let { g.path to it } }.toMap()
+        for (id in known.values) {
+            data.games.restoreToFuse(id)
+            setPlatform(id, platform)
+        }
+        val fresh = result.games.filter { it.path !in known }
+        if (fresh.isNotEmpty()) {
+            val scan = PlatformFolderScan(
+                AddedGames.SOURCE, platform, AddedGames.FOLDER, 0, fresh, complete = false,
+                absorbed = result.absorbed, absorbedBy = result.absorbedBy,
+            )
+            data.indexer.applyFolder(scan, ctx.now(), DisplayNameCleaner::clean, useCleanedForNew = ctx.settings.value.library.cleanDisplayNames)
+        }
+        val ids = result.games.mapNotNull { data.games.idByPath(it.path) }
+        val added = ids.filter { it !in known.values }
+        if (added.isNotEmpty()) afterGamesAdded(added)
+        return ids
+    }
+
+    override suspend fun attachAsContent(child: GameId, owner: GameId, kind: io.github.matiyaaa.fuse.model.ContentKind): Boolean =
+        data.games.attachAsContent(child, owner, kind).also { if (it) ctx.userChanged() }
+
+    override suspend fun detachContent(child: GameId): GameId? =
+        data.games.detachContent(child).also { if (it != null) ctx.userChanged() }
+
+    override suspend fun userParts(owner: GameId) = data.games.userParts(owner)
+
     override suspend fun browse(path: String?): BrowseListing {
         val roots = runCatching { ctx.services.locations.storageRoots() }.getOrDefault(emptyList())
         if (path == null) {

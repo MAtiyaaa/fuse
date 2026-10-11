@@ -25,6 +25,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.Problem
 import io.github.matiyaaa.fuse.ui.shell.store.ProblemKind
 import io.github.matiyaaa.fuse.ui.shell.store.Severity
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** How long the launch veil stays when the game opened on the other screen, beside Fuse. */
@@ -296,6 +297,7 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         add(MenuAction("system", "System", FuseIcons.Layers, detail = if (card.isApp) "Android, or back to being an app" else "If it landed in the wrong one", trailing = Trailing.Value(card.platformShort), onSelect = { systemPicker(card) }))
         // An Android game always starts as its app.
         if (!card.isApp) add(MenuAction("emulator", "Emulator", FuseIcons.Chip, trailing = Trailing.Chevron, onSelect = { emulatorPicker(card) }))
+        if (!card.isApp) add(MenuAction("parts", "Updates and DLC", FuseIcons.Puzzle, detail = "If this is an update or DLC of another game, or to give back one you added", trailing = Trailing.Chevron, onSelect = { partsPicker(card) }))
         if (!card.isApp && card.platformId.value == "ps2") {
             add(MenuAction("patches", "PCSX2 Patches", FuseIcons.Bandage, detail = "Widescreen, 60 FPS and other fixes PCSX2 has for this game", trailing = Trailing.Chevron, onSelect = { pcsx2PatchPicker(card) }))
         }
@@ -678,5 +680,98 @@ fun AppState.applyUpdate() {
         store.updates.apply()
             .onSuccess { restart -> if (restart) platform.restart() }
             .onFailure { toasts.show(it.message ?: "The update couldn't be installed") }
+    }
+}
+
+/** The kinds a person can say a game really is, with their names in a sentence. */
+private val PART_KINDS = listOf(
+    io.github.matiyaaa.fuse.model.ContentKind.UPDATE to "An update",
+    io.github.matiyaaa.fuse.model.ContentKind.DLC to "DLC",
+    io.github.matiyaaa.fuse.model.ContentKind.PATCH to "A patch",
+    io.github.matiyaaa.fuse.model.ContentKind.MOD to "A mod",
+)
+
+/**
+ * Updates and DLC, from a game's options: say this game is really part of another (it then lists
+ * with that game's content, keeps its play time there, and stays so through every rescan), or give
+ * back as a game of its own any part the person attached here before.
+ */
+fun AppState.partsPicker(card: GameCard) {
+    contextMenu = null
+    scope.launch {
+        val mine = store.library.userParts(card.id)
+        choice = ChoiceSpec(
+            icon = FuseIcons.Puzzle,
+            title = "Updates and DLC",
+            message = "Fuse attaches updates and DLC to their game by itself. When it took one for a game of its own, say which game it belongs to.",
+            options = buildList {
+                add(MenuAction("part.of", "Part of another game", FuseIcons.Link, detail = "${card.title} is an update, DLC, patch or mod of another ${card.platformShort} game", trailing = Trailing.Chevron, onSelect = { partKindPicker(card) }))
+                for ((id, title, kind) in mine) {
+                    add(MenuAction(
+                        "part.back.${id.value}", "Make \"$title\" a game again", FuseIcons.Undo,
+                        detail = "Added here as ${kind.slug}. Its play time stays with ${card.title}",
+                        section = "Added by you",
+                        onSelect = {
+                            choice = null
+                            scope.launch {
+                                if (store.library.detachContent(id) != null) toasts.show("$title is a game of its own again", ToastKind.SUCCESS)
+                                else toasts.show("$title couldn't be separated", ToastKind.ERROR)
+                            }
+                        },
+                    ))
+                }
+            },
+        )
+    }
+}
+
+private fun AppState.partKindPicker(card: GameCard) {
+    choice = ChoiceSpec(
+        icon = FuseIcons.Puzzle,
+        title = "What is ${card.title}?",
+        options = PART_KINDS.map { (kind, words) ->
+            MenuAction("kind.${kind.name}", words, null, onSelect = { partOwnerPicker(card, kind, words) })
+        },
+    )
+}
+
+/** The game it belongs to: the same system's games, the likeliest (by name) first. */
+private fun AppState.partOwnerPicker(card: GameCard, kind: io.github.matiyaaa.fuse.model.ContentKind, words: String) {
+    scope.launch {
+        val games = store.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery(platform = card.platformId)).first()
+            .filter { it.id != card.id && !it.isApp }
+        val base = io.github.matiyaaa.fuse.library.parse.FilenameParser.parse(card.title).baseTitle.lowercase()
+        fun likeness(t: String): Int {
+            val other = io.github.matiyaaa.fuse.library.parse.FilenameParser.parse(t).baseTitle.lowercase()
+            return when {
+                other == base -> 0
+                base.startsWith(other) || other.startsWith(base) -> 1
+                base.split(' ').firstOrNull() == other.split(' ').firstOrNull() -> 2
+                else -> 3
+            }
+        }
+        val sorted = games.sortedWith(compareBy({ likeness(it.title) }, { it.title.lowercase() }))
+        choice = ChoiceSpec(
+            icon = FuseIcons.Link,
+            title = "Which game is it for?",
+            message = "$words of a ${card.platformShort} game. It moves into that game's updates and DLC, with its play time, and stays there.",
+            options = sorted.map { g ->
+                MenuAction(
+                    "owner.${g.id.value}", g.title, null,
+                    section = if (likeness(g.title) < 3) "Likely" else "Every ${card.platformShort} game",
+                    onSelect = {
+                        choice = null
+                        scope.launch {
+                            if (store.library.attachAsContent(card.id, g.id, kind)) {
+                                if (navigator.current == Route.GameInfo(card.id)) navigator.pop()
+                                toasts.show("${card.title} is with ${g.title} now. Its options there can make it a game again", ToastKind.SUCCESS)
+                            } else {
+                                toasts.show("${card.title} can't join ${g.title}", ToastKind.ERROR)
+                            }
+                        }
+                    },
+                )
+            },
+        )
     }
 }

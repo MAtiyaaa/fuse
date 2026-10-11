@@ -312,6 +312,67 @@ class GameRepository(
         }
     }
 
+    /**
+     * The person says [child] is part of [owner] (an update, DLC or other content Fuse took for a
+     * game of its own). The child stops being a title and is listed with [owner]'s content, through
+     * every rescan; its play time, sessions, favourite and collections go to [owner]. Both must be
+     * games of the same system. False when they can't be joined (one is gone, or already part of
+     * another).
+     */
+    suspend fun attachAsContent(child: GameId, owner: GameId, kind: io.github.matiyaaa.fuse.model.ContentKind): Boolean = withContext(dispatcher) {
+        if (child == owner) return@withContext false
+        var done = false
+        db.transaction {
+            val c = db.gameQueries.selectById(child.value).executeAsOneOrNull() ?: return@transaction
+            val o = db.gameQueries.selectById(owner.value).executeAsOneOrNull() ?: return@transaction
+            if (c.platform_id != o.platform_id || c.removed_at != null || o.removed_at != null) return@transaction
+            if (db.gameAbsorptionQueries.selectOwner(child.value).executeAsOneOrNull() != null) return@transaction
+            if (db.gameAbsorptionQueries.selectOwner(owner.value).executeAsOneOrNull() != null) return@transaction
+            val now = clock()
+            db.gameAbsorptionQueries.put(child.value, owner.value, USER_REASON + kind.name, now)
+            db.gameQueries.mergeAbsorbedIntent(childId = child.value, now = now, ownerId = owner.value)
+            db.collectionQueries.copyAbsorbedMemberships(ownerId = owner.value, childId = child.value)
+            db.playSessionQueries.reassignAbsorbed(ownerId = owner.value, childId = child.value)
+            db.gameQueries.archiveAbsorbed(now, child.value)
+            val next = db.gameContentQueries.contentFor(listOf(owner.value)).executeAsList().size.toLong()
+            db.gameContentQueries.insertContent(owner.value, next, kind.name, c.title_original, c.path, if (c.kind == "FOLDER") 1 else 0, c.size_bytes)
+            db.gameContentQueries.recountContent(owner.value)
+            done = true
+        }
+        done
+    }
+
+    /**
+     * Undoes [attachAsContent]: [child] is a game of its own again. Play time it brought stays with
+     * the game it was part of. Returns that game, or null when [child] wasn't attached by the person.
+     */
+    suspend fun detachContent(child: GameId): GameId? = withContext(dispatcher) {
+        var owner: GameId? = null
+        db.transaction {
+            val row = db.gameAbsorptionQueries.userOwnerOf(child.value).executeAsOneOrNull() ?: return@transaction
+            val c = db.gameQueries.selectById(child.value).executeAsOneOrNull() ?: return@transaction
+            db.gameAbsorptionQueries.deleteUser(child.value)
+            db.gameContentQueries.deleteContentPath(row.owner_id, c.path)
+            db.gameContentQueries.recountContent(row.owner_id)
+            q.setRemoved(removedAt = null, hidden = 0, now = clock(), id = child.value)
+            owner = GameId(row.owner_id)
+        }
+        owner
+    }
+
+    /** What the person attached to [owner]: each part's own game id, title and kind. */
+    suspend fun userParts(owner: GameId): List<Triple<GameId, String, io.github.matiyaaa.fuse.model.ContentKind>> = withContext(dispatcher) {
+        db.gameAbsorptionQueries.userChildren(owner.value).executeAsList().mapNotNull { u ->
+            val kind = runCatching { io.github.matiyaaa.fuse.model.ContentKind.valueOf(u.reason.removePrefix(USER_REASON)) }.getOrNull() ?: return@mapNotNull null
+            Triple(GameId(u.child_id), u.title_original, kind)
+        }
+    }
+
+    /** The game [child] was attached to by the person, if it was. */
+    suspend fun attachedTo(child: GameId): GameId? = withContext(dispatcher) {
+        db.gameAbsorptionQueries.userOwnerOf(child.value).executeAsOneOrNull()?.let { GameId(it.owner_id) }
+    }
+
     /** Deletes the art Fuse kept for [id] (a game removed for good). Its record stays, so scans skip it. */
     suspend fun dropMedia(id: GameId) = write { db.mediaQueries.deleteOwner(MediaOwner.OfGame(id).type(), id.value.toString()) }
 
@@ -452,3 +513,6 @@ data class GameMatchRow(
     val rommRomId: Long?,
     val missing: Boolean,
 )
+
+/** How a content attachment the person made is marked in game_absorption.reason (then the kind). */
+internal const val USER_REASON = "USER:"

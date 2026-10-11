@@ -80,3 +80,13 @@ relinkDiscs:
 UPDATE game_disc SET path = CASE WHEN path = :old THEN :new ELSE :new || substr(path, length(:old) + 1) END
 WHERE substr(path, 1, length(:old) + 1) = :old || '/'
     AND game_id IN (SELECT id FROM game WHERE source_id = :sourceId);
+
+deleteContentPath:
+DELETE FROM game_content WHERE game_id = ? AND path = ?;
+
+-- The list screens' counts, from the content rows (the scan's and the person's own attachments).
+recountContent:
+UPDATE game SET
+    dlc_count = (SELECT COUNT(*) FROM game_content WHERE game_id = :id AND kind = 'DLC'),
+    update_count = (SELECT COUNT(*) FROM game_content WHERE game_id = :id AND kind = 'UPDATE')
+WHERE id = :id;

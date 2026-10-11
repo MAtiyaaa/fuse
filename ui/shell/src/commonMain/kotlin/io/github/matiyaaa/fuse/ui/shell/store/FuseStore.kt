@@ -490,6 +490,24 @@ interface LibraryOps {
     /** Adds the game file at [path], wherever it is on the device, to [platform]. Null when it can't be read. */
     suspend fun addGameFile(path: String, platform: PlatformId): GameId? = null
 
+    /**
+     * Adds the game folder at [path] (a game with its updates, DLC and other parts, laid out the way
+     * the library scan reads folders) to [platform]. Every game found in it; empty when there is none.
+     */
+    suspend fun addGameFolder(path: String, platform: PlatformId): List<GameId> = emptyList()
+
+    /**
+     * [child] is part of [owner] (an update, DLC or other content Fuse took for a game of its own):
+     * it joins [owner]'s content for good, with its play time. False when they can't be joined.
+     */
+    suspend fun attachAsContent(child: GameId, owner: GameId, kind: io.github.matiyaaa.fuse.model.ContentKind): Boolean = false
+
+    /** Undoes [attachAsContent]: [child] is a game again. The game it was part of, or null. */
+    suspend fun detachContent(child: GameId): GameId? = null
+
+    /** The parts the person attached to [owner]: id, title and kind. */
+    suspend fun userParts(owner: GameId): List<Triple<GameId, String, io.github.matiyaaa.fuse.model.ContentKind>> = emptyList()
+
     /** What is in the folder at [path] for Fuse's file picker; the device's storage when null. */
     suspend fun browse(path: String?): BrowseListing = BrowseListing(null, null, emptyList())
 }

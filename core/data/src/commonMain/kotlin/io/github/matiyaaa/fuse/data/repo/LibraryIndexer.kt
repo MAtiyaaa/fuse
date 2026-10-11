@@ -242,6 +242,14 @@ class LibraryIndexer(
         game.content.forEachIndexed { i, c ->
             cq.insertContent(gameId, i.toLong(), c.kind.name, c.name, c.path, c.isDirectory.toDb(), c.sizeBytes)
         }
+        // What the person said belongs to this game (a file Fuse took for a game of its own) stays
+        // with it through every rescan, after what the scan found.
+        val user = db.gameAbsorptionQueries.userChildren(gameId).executeAsList()
+            .filter { u -> game.content.none { normal(it.path) == normal(u.path) } }
+        user.forEachIndexed { j, u ->
+            cq.insertContent(gameId, (game.content.size + j).toLong(), u.reason.removePrefix(USER_REASON), u.title_original, u.path, 0, u.size_bytes)
+        }
+        if (user.isNotEmpty()) cq.recountContent(gameId)
         game.discs.forEachIndexed { i, d ->
             cq.insertDisc(gameId, i.toLong(), d.number.toLong(), d.label, d.path)
         }

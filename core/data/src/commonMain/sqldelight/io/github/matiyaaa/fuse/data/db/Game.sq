@@ -322,8 +322,11 @@ SELECT * FROM game_summary WHERE missing = 1 AND folder_path <> 'app:' ORDER BY 
 hiddenGames:
 SELECT * FROM game_summary WHERE hidden = 1 AND removed_at IS NULL AND missing = 0 ORDER BY sort_title, id;
 
+-- What the person removed, never what is now part of another game (an update or DLC with its game).
 removedGames:
-SELECT * FROM game_summary WHERE removed_at > 0 AND folder_path <> 'app:' ORDER BY sort_title, id;
+SELECT * FROM game_summary WHERE removed_at > 0 AND folder_path <> 'app:'
+    AND id NOT IN (SELECT child_id FROM game_absorption)
+ORDER BY sort_title, id;
 
 -- :contains = '%q%', :prefix = 'q%', :wordPrefix = '% q%'. Prefix matches rank first.
 search:
