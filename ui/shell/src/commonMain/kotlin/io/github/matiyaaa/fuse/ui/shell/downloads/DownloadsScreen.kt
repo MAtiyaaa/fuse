@@ -342,7 +342,7 @@ private fun Empty(filter: TransferFilter, nothingAtAll: Boolean) {
         )
         if (nothingAtAll) {
             Spacer(Modifier.height(Space.xs))
-            FText("Games from Fuse RomM, films for offline, apps and BIOS show here while they move.", Fuse.type.caption, color = c.textFaint, maxLines = 2)
+            FText("Games from RomM, films for offline, apps and BIOS show here while they move.", Fuse.type.caption, color = c.textFaint, maxLines = 2)
         }
     }
 }

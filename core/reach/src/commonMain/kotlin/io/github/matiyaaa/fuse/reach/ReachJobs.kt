@@ -117,7 +117,7 @@ interface ReachTransferHost {
     /** For fetching from RomM. */
     val http: io.ktor.client.HttpClient
 
-    /** RomM's client for [server], signed in; null when Fuse RomM is off or signed out. */
+    /** RomM's client for [server], signed in; null when RomM is off or signed out. */
     fun romm(server: String): io.github.matiyaaa.fuse.romm.RommClient?
 
     /** Whether [device] has been seen lately. */

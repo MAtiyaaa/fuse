@@ -80,6 +80,22 @@ class ProviderWorkTest {
         assertEquals(4, calls)
     }
 
+    @Test fun aFreshRequestAsksAgainAfterNothingWasFoundButReusesWhatWasFound() = runTest {
+        val reuse = RequestReuse { testScheduler.currentTime }
+        var calls = 0
+        suspend fun ask(fresh: Boolean, answer: List<String>) = reuse.run<List<String>>("search:x", { it.isEmpty() }, fresh = fresh) { calls++; ApiResult.Success(answer) }
+        ask(fresh = false, answer = emptyList())
+        // Bulk work a moment later is answered from memory: the source had nothing.
+        ask(fresh = false, answer = emptyList())
+        assertEquals(1, calls)
+        // The person asks for this one game: the source is asked again.
+        ask(fresh = true, answer = listOf("found"))
+        assertEquals(2, calls)
+        // A found answer is reused even by a fresh request.
+        assertEquals(listOf("found"), (ask(fresh = true, answer = emptyList()) as ApiResult.Success).value)
+        assertEquals(2, calls)
+    }
+
     @Test fun visibleWorkPassesQueuedBulkAndCancelledWaiterDoesNotStrandQueue() = runTest {
         val queue = ProviderWork(1)
         val holding = CompletableDeferred<Unit>()

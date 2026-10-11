@@ -160,17 +160,18 @@ class SyncStoreTest {
         deck.sync.syncNow().getOrThrow()
 
         // A second person on the handheld: their library is their own, switched in place, and they
-        // start with this device's look (its theme and quick menu), which becomes theirs.
+        // start from Fuse's own look, never from Mo's theme or quick menu.
         val sam = pc.sync.createProfile("Sam", "rocket", null).getOrThrow()
         deck.sync.switchTo(sam.id).getOrThrow()
-        eventually("Sam's library starts fresh, with this device's look") {
+        eventually("Sam's library and look start fresh") {
             deck.services.data.games.summary(deckWars.id)?.favorite == false &&
                 deck.store.collections.collections.value.none { it.name == "Strategy" } &&
-                deck.store.prefs.value.quickMenu == listOf("WIFI:2", "CLOCK:1") &&
-                deck.store.prefs.value.themeId == deckTheme
+                deck.store.prefs.value.quickMenu != listOf("WIFI:2", "CLOCK:1") &&
+                deck.store.prefs.value.themeId == "fuse"
         }
         // Sam makes it their own.
-        deck.store.updatePrefs { it.withTheme(ThemePresets.all.first { t -> t.id == "fuse" }) }
+        val samTheme = ThemePresets.all.first { t -> t.id != "fuse" && t.id != deckTheme }.id
+        deck.store.updatePrefs { it.withTheme(ThemePresets.all.first { t -> t.id == samTheme }) }
         deck.sync.syncNow().getOrThrow()
         // Back to Mo: all of it returns.
         deck.sync.switchTo(mo.id).getOrThrow()
@@ -182,7 +183,7 @@ class SyncStoreTest {
         }
         // And Sam's look stayed Sam's: never put back to anyone else's, nor to Fuse's defaults.
         deck.sync.switchTo(sam.id).getOrThrow()
-        eventually("Sam's theme is kept") { deck.store.prefs.value.themeId == "fuse" }
+        eventually("Sam's theme is kept") { deck.store.prefs.value.themeId == samTheme }
         deck.sync.switchTo(mo.id).getOrThrow()
         eventually("Mo's theme again") { deck.store.prefs.value.themeId == deckTheme }
 

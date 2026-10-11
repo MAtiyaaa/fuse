@@ -34,7 +34,7 @@ import io.github.matiyaaa.fuse.ui.shell.home.CARTRIDGE_TINT
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 
 /**
- * The stage for "Do you use RomM?": three cards fanned out. Fuse RomM in the middle, lit in the
+ * The stage for "Do you use RomM?": three cards fanned out. RomM in the middle, lit in the
  * accent; Cartridge to one side in its own orange; "Neither" to the other, quiet. Before an answer
  * the middle card leads; after one, the chosen card comes forward with a check and the others step
  * back. Each card says in three short lines what that choice means, so the buttons below need no
@@ -49,7 +49,7 @@ internal fun RommChoiceStage(chosen: String, connected: Boolean, cartridgeReady:
     val breathe by clock.animateFloat(0f, 1f, infiniteRepeatable(tween(2800), RepeatMode.Reverse), "breathe")
     val cartridgeTint = CARTRIDGE_TINT.toColor()
     val quiet = c.textMuted
-    // Which card leads: 0 Cartridge, 1 Fuse RomM, 2 Neither. Animated so the glow and cards glide.
+    // Which card leads: 0 Cartridge, 1 RomM, 2 Neither. Animated so the glow and cards glide.
     val leadTarget = when (chosen) {
         "CARTRIDGE" -> 0f
         "NONE" -> 2f
@@ -96,7 +96,7 @@ internal fun RommChoiceStage(chosen: String, connected: Boolean, cartridgeReady:
                         on = chosen == "CARTRIDGE" && cartridgeReady, filled = false, modifier = m, width = 160.dp,
                     )
                     1 -> ChoiceCard(
-                        name = "Fuse RomM", tag = when { connected -> "Connected"; chosen == "FUSE" -> "Chosen"; else -> "Recommended" },
+                        name = "RomM", tag = when { connected -> "Connected"; chosen == "FUSE" -> "Chosen"; else -> "Recommended" },
                         tint = c.accent, mark = FuseIcons.LibraryBig,
                         lines = listOf(FuseIcons.Server to "Straight to RomM", FuseIcons.Download to "Downloads in Fuse", FuseIcons.Upload to "Uploads too"),
                         on = connected, filled = true, modifier = m, width = 160.dp,
@@ -113,7 +113,7 @@ internal fun RommChoiceStage(chosen: String, connected: Boolean, cartridgeReady:
         Spacer(Modifier.height(Space.m))
         FText(
             when (chosen) {
-                "FUSE" -> if (connected) "Fuse RomM is connected" else "Fuse RomM, built in"
+                "FUSE" -> if (connected) "RomM is connected" else "RomM, built in"
                 "CARTRIDGE" -> if (cartridgeReady) "Cartridge is ready" else "Cartridge, alongside Fuse"
                 "NONE" -> "Just this device"
                 else -> "Three ways to bring in your games"

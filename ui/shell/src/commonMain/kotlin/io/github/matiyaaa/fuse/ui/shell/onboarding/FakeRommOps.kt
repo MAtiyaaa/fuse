@@ -43,9 +43,9 @@ class FakeRommOps : RommOps {
     override fun detail(romId: Long): Flow<GameDetail?> = flowOf(null)
     override fun forGame(game: GameId): Flow<RommGameView?> = flowOf(null)
     override fun forRom(romId: Long): Flow<RommGameView?> = flowOf(null)
-    override suspend fun download(romId: Long, what: RommDownloadWhat): String? = "Fuse RomM isn't available here."
+    override suspend fun download(romId: Long, what: RommDownloadWhat): String? = "RomM isn't available here."
     override suspend fun uploadPlan(game: GameId): RommUploadPlan? = null
-    override suspend fun upload(game: GameId, plan: RommUploadPlan): String? = "Fuse RomM isn't available here."
+    override suspend fun upload(game: GameId, plan: RommUploadPlan): String? = "RomM isn't available here."
     override suspend fun biosPlan(all: Boolean): List<BiosPick> = emptyList()
     override suspend fun downloadBios(picks: List<BiosPick>): Int = 0
 }

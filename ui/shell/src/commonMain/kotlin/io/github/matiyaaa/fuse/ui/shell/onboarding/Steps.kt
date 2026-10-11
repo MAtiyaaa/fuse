@@ -493,7 +493,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
         val cartridgeHere = platform.features.cartridge
         val rommHere = store.romm.supported
         val rommConnected = prefs.romm.enabled && prefs.romm.configured
-        // What the person answered; Fuse RomM counts as chosen once it is on, however it got there.
+        // What the person answered; RomM counts as chosen once it is on, however it got there.
         val answer = when {
             rommConnected -> "FUSE"
             else -> prefs.rommAnswer
@@ -510,7 +510,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
         }
         if (rommHere || cartridgeHere) add(Step(
             "romm", "RomM", when (answer) {
-                "FUSE" -> if (rommConnected) "Fuse RomM is connected" else "Connect Fuse RomM"
+                "FUSE" -> if (rommConnected) "RomM is connected" else "Connect RomM"
                 "CARTRIDGE" -> when {
                     cartridge.installed && cartridge.bridge -> "Cartridge is linked"
                     cartridge.installed -> "Cartridge found"
@@ -520,9 +520,9 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             },
             when (answer) {
                 "FUSE" -> if (rommConnected) {
-                    "Your RomM library is in Addons, Fuse RomM, next to everything else. Games you download land in the right folders and play like any other."
+                    "Your RomM games are in the Library under All, next to everything else. Games you download land in the right folders and play like any other."
                 } else {
-                    "Fuse connects straight to your RomM server: your games and systems appear in Addons, and downloads land in your library's folders. It takes a minute."
+                    "Fuse connects straight to your RomM server: your games and systems appear in the Library under All, and downloads land in your library's folders. It takes a minute."
                 }
                 "CARTRIDGE" -> when {
                     cartridge.installed && cartridge.bridge -> "Downloads from Cartridge appear in Fuse on their own. Open it anytime from the Cartridge tab."
@@ -563,7 +563,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                     )
                 }
                 else -> listOfNotNull(
-                    StepAction("Fuse RomM", primary = true) {
+                    StepAction("RomM", primary = true) {
                         answerRomm("FUSE")
                         app.go(Route.RommSetup())
                     }.takeIf { rommHere },

@@ -130,7 +130,6 @@ internal fun LibraryHeader(
                         LibraryButton.EMULATOR -> "No emulator installed" to FuseIcons.Warning
                         LibraryButton.SYSTEM -> (system?.platform?.shortName ?: "All systems") to FuseIcons.Filter
                         LibraryButton.SORT -> sortLabel(sort) to FuseIcons.Sort
-                        LibraryButton.VIEW -> layoutLabel(layout) to layoutIcon(layout)
                     }
                     val tone = when {
                         button == LibraryButton.EMULATOR -> ToolTone.WARNING

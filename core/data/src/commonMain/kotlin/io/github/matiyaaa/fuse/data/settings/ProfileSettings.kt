@@ -25,10 +25,10 @@ object ProfileSettings {
         // The library as they like it.
         "library.cleanDisplayNames", "library.systemOrder", "library.sort", "library.systemArtStyle",
         "library.selectOpensGamePage", "library.collectionsEnabled", "library.autoSeries", "library.hiddenSeries",
-        "library.systemColors", "library.systemTiles", "library.appsFilter", "library.gameArt",
+        "library.systemColors", "library.systemTiles", "library.appsFilter", "library.gameArt", "library.opensOn",
         "videoPreview.enabled", "videoPreview.delaySeconds",
         // Sound and music (not a song's path, which is this device's file).
-        "sound.enabled", "sound.volume", "sound.profile",
+        "sound.enabled", "sound.volume", "sound.profile", "sound.muted", "sound.master",
         "music.enabled", "music.volume", "music.track", "music.shuffle",
         // The status line.
         "statusArea.showClock", "statusArea.use24HourClock", "statusArea.showBattery", "statusArea.showWifi", "statusArea.showBluetooth",

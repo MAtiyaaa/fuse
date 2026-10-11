@@ -26,7 +26,7 @@ data class UiPrefs(
     val jellyfin: io.github.matiyaaa.fuse.data.settings.JellyfinSettings = io.github.matiyaaa.fuse.data.settings.JellyfinSettings(),
     /** Syncthing, an addon. Whether it is on follows [FuseStore.syncthing]'s state; only how it behaves changes here. */
     val syncthing: io.github.matiyaaa.fuse.data.settings.SyncthingSettings = io.github.matiyaaa.fuse.data.settings.SyncthingSettings(),
-    /** Fuse RomM, the Fuse RomM native integration. Its sign-in is in the secret store. */
+    /** RomM, the RomM native integration. Its sign-in is in the secret store. */
     val romm: io.github.matiyaaa.fuse.data.settings.FuseRommSettings = io.github.matiyaaa.fuse.data.settings.FuseRommSettings(),
     /** Streaming from a computer at home with Moonlight. */
     val streaming: io.github.matiyaaa.fuse.data.settings.StreamingSettings = io.github.matiyaaa.fuse.data.settings.StreamingSettings(),
@@ -76,6 +76,14 @@ data class UiPrefs(
     val performanceOverlay: Boolean = false,
     val sound: SoundProfile = SoundProfile.SOFT,
     val soundVolume: Float = 0.6f,
+    /** Fuse and Steam on this device (see [io.github.matiyaaa.fuse.data.settings.SteamIntegrationSettings]). */
+    val steam: io.github.matiyaaa.fuse.data.settings.SteamIntegrationSettings = io.github.matiyaaa.fuse.data.settings.SteamIntegrationSettings(),
+    /** Which view the Library opens on: "INSTALLED" (this device's games) or "ALL" (everywhere). */
+    val libraryOpensOn: String = "INSTALLED",
+    /** All of Fuse's sound off: music, interface sounds and the startup sound, whatever their own switches say. */
+    val muted: Boolean = false,
+    /** 0..1, over every sound's own volume. */
+    val masterVolume: Float = 1f,
     val music: MusicPrefs = MusicPrefs(),
     val clock24h: Boolean = false,
     val showWifi: Boolean = true,

@@ -135,6 +135,7 @@ internal class DefaultFuseStore private constructor(
             }
         }
         library.installedBoot = { id -> content.bootFile(id) }
+        library.writeSettings = { t -> writeSettings(t) }
         library.notInstalled = { id ->
             content.view(id)?.takeIf { it.plan.storageReadable && !it.plan.gameInstalled && it.mode == io.github.matiyaaa.fuse.ui.shell.store.InstallMode.FUSE }?.let { v ->
                 io.github.matiyaaa.fuse.ui.shell.store.Problem(
@@ -351,14 +352,14 @@ internal class DefaultFuseStore private constructor(
 
     private fun start() {
         io.github.matiyaaa.fuse.ui.shell.platform.JellyfinImages.service = jellyfin
-        // Downloads, and Fuse RomM feeding the library through them.
+        // Downloads, and RomM feeding the library through them.
         transfers.start()
         romm.start()
         reach.start()
         offlineMedia.start()
         streaming.start()
         ctx.scope.launch { ctx.playing.collect { transfers.conditions(playing = it != null) } }
-        // One RomM integration at a time: turning Cartridge on in Fuse turns Fuse RomM off, and the
+        // One RomM integration at a time: turning Cartridge on in Fuse turns RomM off, and the
         // other way round. Turning one off keeps everything it was set up with.
         ctx.scope.launch {
             var before = prefsState.value.cartridgeEnabled to prefsState.value.romm.enabled

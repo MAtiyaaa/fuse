@@ -278,7 +278,12 @@ internal class DefaultLibraryOps(
                 io.github.matiyaaa.fuse.ui.shell.store.GameSet.HIDDEN -> games.observeHidden()
                 else -> games.observeRemoved()
             }
-            return ctx.cards(set.map { list -> list.filter { query.platform == null || it.platformId == query.platform }.sortedWith(query.sort.comparator()) })
+            // Removed for good: still remembered (a scan can't bring them back), no longer listed.
+            val purged = ctx.settings.map { it.library.purgedGames.toSet() }.distinctUntilChanged()
+            val listed = kotlinx.coroutines.flow.combine(set, purged) { list, gone ->
+                if (query.set == io.github.matiyaaa.fuse.ui.shell.store.GameSet.REMOVED) list.filter { it.id.value !in gone } else list
+            }
+            return ctx.cards(listed.map { list -> list.filter { query.platform == null || it.platformId == query.platform }.sortedWith(query.sort.comparator()) })
         }
         val summaries = when {
             query.collection != null -> data.collections.observeGames(CollectionKey.Manual(query.collection))
@@ -708,7 +713,7 @@ internal class DefaultLibraryOps(
     override suspend fun setPinned(id: GameId, pinned: Boolean) = data.games.setPinned(id, pinned).also { ctx.userChanged() }
 
     override suspend fun rename(id: GameId, title: String?) {
-        // A RomM game Fuse doesn't have keeps its name with Fuse RomM.
+        // A RomM game Fuse doesn't have keeps its name with RomM.
         ctx.remoteGames?.takeIf { it.owns(id) }?.let { it.rename(id, title); return }
         data.games.rename(id, title?.trim()?.takeIf { it.isNotEmpty() })
         ctx.userChanged()
@@ -746,6 +751,24 @@ internal class DefaultLibraryOps(
     override suspend fun restore(id: GameId) {
         data.games.restoreToFuse(id)
         data.games.setHidden(id, false)
+    }
+
+    override suspend fun steamGame(appId: Long): GameId? {
+        val found = runCatching { engine.findSteamGames(null) }.getOrDefault(emptyList()).firstOrNull { it.appId == appId } ?: return null
+        return data.games.idByPath(io.github.matiyaaa.fuse.library.FsPath.normalize(found.folder))
+    }
+
+    /** How the library changes settings it owns (the store's ordered settings writer). */
+    var writeSettings: (suspend ((io.github.matiyaaa.fuse.data.settings.AppSettings) -> io.github.matiyaaa.fuse.data.settings.AppSettings) -> Unit)? = null
+
+    override suspend fun purgeRemoved(ids: List<GameId>) {
+        if (ids.isEmpty()) return
+        // Only games that really are removed; a game in the library is never purged by mistake.
+        val removed = data.games.observeRemoved().first().map { it.id }.toSet()
+        val gone = ids.filter { it in removed }
+        if (gone.isEmpty()) return
+        for (id in gone) data.games.dropMedia(id)
+        writeSettings?.invoke { s -> s.copy(library = s.library.copy(purgedGames = (s.library.purgedGames + gone.map { it.value }).distinct())) }
     }
 
     override suspend fun forgetMissing(id: GameId) {

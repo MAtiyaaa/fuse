@@ -127,7 +127,13 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
         for (lib in libraries) if (lib !in existing) data.sources.add(lib, steamLabel(lib), LibrarySourceKind.STEAM_LIBRARY)
         val picked = games.map { FsPath.normalize(it.folder) }.toSet()
         val everything = runCatching { io.github.matiyaaa.fuse.library.steam.SteamLibraryReader(ctx.services.fs).games(libraries) }.getOrDefault(games)
-        synchronized(hideAfterScan) { hideAfterScan += everything.map { FsPath.normalize(it.folder) }.filter { it !in picked } }
+        // Only games new to the library are left out: adding one game (from Steam's own menu, or a
+        // second pick) never hides games of that Steam library already here.
+        val known = runCatching { data.games.paths() }.getOrDefault(emptyList())
+        val already = known.map { FsPath.normalize(it.second) }.toSet()
+        synchronized(hideAfterScan) { hideAfterScan += everything.map { FsPath.normalize(it.folder) }.filter { it !in picked && it !in already } }
+        // A picked game hidden earlier (left out the first time) comes back.
+        for ((id, path) in known) if (FsPath.normalize(path) in picked) data.games.setHidden(id, false)
         rescan(ScanScope.QUICK)
         return games.size
     }

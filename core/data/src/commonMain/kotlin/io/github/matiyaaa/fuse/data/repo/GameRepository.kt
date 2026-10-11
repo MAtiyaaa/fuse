@@ -139,7 +139,7 @@ class GameRepository(
         q.selectInPlatform(platform.value).executeAsList().map { Triple(GameId(it.id), LibrarySourceId(it.source_id), it.hidden != 0L) }
     }
 
-    /** Every game with what tells it apart (its file, serial and RomM link), for Fuse RomM's matching. */
+    /** Every game with what tells it apart (its file, serial and RomM link), for RomM's matching. */
     suspend fun matchRows(): List<GameMatchRow> = withContext(dispatcher) {
         q.matchRows().executeAsList().map { r ->
             GameMatchRow(
@@ -312,6 +312,9 @@ class GameRepository(
         }
     }
 
+    /** Deletes the art Fuse kept for [id] (a game removed for good). Its record stays, so scans skip it. */
+    suspend fun dropMedia(id: GameId) = write { db.mediaQueries.deleteOwner(MediaOwner.OfGame(id).type(), id.value.toString()) }
+
     /**
      * Deletes the record of a game whose file is missing, with its media, sessions and collection
      * entries. Only for an explicit user action on the Missing Games screen; returns false (and
@@ -439,7 +442,7 @@ fun GameMetadata.overwriteWith(other: GameMetadata) = GameMetadata(
     source = other.source ?: source,
 )
 
-/** A game as Fuse RomM's matching sees it. */
+/** A game as RomM's matching sees it. */
 data class GameMatchRow(
     val id: GameId,
     val platform: String,

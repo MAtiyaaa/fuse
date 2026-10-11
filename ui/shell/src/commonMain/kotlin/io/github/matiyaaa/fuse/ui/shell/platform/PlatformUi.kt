@@ -44,6 +44,9 @@ interface PlatformUi {
     /** Steam on a computer: Fuse in Steam's library, for Game Mode. Null where there is no Steam (Android). */
     val steam: SteamIntegration? get() = null
 
+    /** Decky Loader and the Fuse Decky plugin, where they can run (Linux); null elsewhere. */
+    val decky: DeckyIntegration? get() = null
+
     /**
      * Recent second-screen events (companion started or closed and why, refused displays, display
      * changes), oldest first, for a status row in Settings. Empty where there is no companion screen.
@@ -123,6 +126,43 @@ interface SteamIntegration {
 
     /** Repairs only positively identified Fuse entries; existing custom artwork is retained. */
     suspend fun rebuild(): Result<String> = addFuse()
+}
+
+/** What Decky Loader and the Fuse Decky plugin look like on this device. */
+data class DeckyState(
+    /** Decky Loader is installed. */
+    val loader: Boolean,
+    /** The Fuse Decky plugin is installed, at [pluginVersion] when it says. */
+    val plugin: Boolean,
+    val pluginVersion: String? = null,
+    /** The plugin this Fuse carries. */
+    val bundledVersion: String,
+    /** The system can ask for the person's password to put the plugin in place (pkexec). */
+    val canInstall: Boolean,
+) {
+    val upToDate: Boolean get() = plugin && pluginVersion == bundledVersion
+}
+
+/**
+ * The Fuse Decky plugin's installation. Decky keeps its plugins in a folder only the system
+ * account can write, so installing always goes through a password prompt the person answers
+ * themselves; Fuse never runs a privileged command silently. Where that isn't possible (no prompt
+ * can show, no password set), [stage] gives the plugin as a ZIP for Decky's own Install from ZIP.
+ */
+interface DeckyIntegration {
+    suspend fun state(): DeckyState
+
+    /** Installs or updates the plugin and reloads Decky so it loads; what happened, in words. */
+    suspend fun install(): Result<String>
+
+    /** Takes the plugin out of Decky. Nothing of Fuse's (its library, play time, saves) changes. */
+    suspend fun remove(): Result<String>
+
+    /** The plugin as a ZIP in Fuse's own folder, for Decky's Install from ZIP; null when it can't be made. */
+    suspend fun stage(): String?
+
+    /** Where Decky Loader's own installer and instructions are, for a device without it. */
+    val loaderInstructions: String get() = "https://decky.xyz"
 }
 
 /** A file the user picked to open: its name and its bytes. */

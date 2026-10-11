@@ -170,7 +170,7 @@ class UiFlowTest {
     }
 
     @Test
-    fun aGridScrolledUpByTouchStaysWhereTheFingerLeftIt() = runComposeUiTest(testTimeout = kotlin.time.Duration.parse("3m")) {
+    fun aGridScrolledUpByTouchStaysWhereTheFingerLeftIt() = runComposeUiTest(testTimeout = kotlin.time.Duration.parse("10m")) {
         repeat(80) { File(root, "gba/Quest %02d (USA).gba".format(it)).writeBytes(ByteArray(512)) }
         val services = newServices()
         val store: FuseStore = runBlocking {

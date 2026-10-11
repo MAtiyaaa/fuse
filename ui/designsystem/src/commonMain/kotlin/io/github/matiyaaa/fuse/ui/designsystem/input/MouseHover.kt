@@ -29,7 +29,9 @@ fun Modifier.mouseHover(enabled: Boolean = true, onHover: () -> Unit): Modifier 
                 when (e.type) {
                     PointerEventType.Exit -> inside = false
                     PointerEventType.Enter, PointerEventType.Move -> {
-                        val mouse = e.changes.any { it.type == PointerType.Mouse }
+                        // Anything that can point without touching (a mouse, a trackpad, a pointer some compositors report
+                        // as Unknown) hovers; only a finger never does.
+                        val mouse = e.changes.any { it.type != PointerType.Touch }
                         // Once per visit, and only when the person moved the mouse to get here.
                         if (mouse && !inside && (router == null || router.mouseJustMoved())) {
                             inside = true

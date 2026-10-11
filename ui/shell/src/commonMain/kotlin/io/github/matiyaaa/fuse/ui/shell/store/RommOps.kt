@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 
-/** Where Fuse RomM stands with its server. */
+/** Where RomM stands with its server. */
 enum class RommLink {
     /** Turned off (its setup is kept). */
     OFF,
@@ -33,7 +33,7 @@ enum class RommLink {
     SIGNED_OUT,
 }
 
-/** Fuse RomM as the interface shows it. Never a token, a password or an address with one. */
+/** RomM as the interface shows it. Never a token, a password or an address with one. */
 @Immutable
 data class RommState(
     val link: RommLink = RommLink.OFF,
@@ -108,7 +108,7 @@ data class RommPartView(
     val downloading: Boolean = false,
 )
 
-/** What Fuse RomM adds to a game's page: the game on RomM, its parts, and what can be done. */
+/** What RomM adds to a game's page: the game on RomM, its parts, and what can be done. */
 @Immutable
 data class RommGameView(
     val romId: Long,
@@ -155,7 +155,7 @@ data class RommUploadLine(val name: String, val folder: String, val sizeBytes: L
 data class RommTest(val localOk: Boolean?, val remoteOk: Boolean?, val version: String?, val problem: String?)
 
 /**
- * Fuse RomM, the Fuse RomM native integration: a RomM server's library as one more source feeding
+ * RomM, the RomM native integration: a RomM server's library as one more source feeding
  * Fuse. Its games are Fuse games (the same tiles, art rules and game page), its downloads go through
  * Downloads into the library Fuse already has, and Fuse's games go back to RomM from the same place.
  */
@@ -182,7 +182,7 @@ interface RommOps {
     suspend fun usePassword(username: String, password: String): Result<String>
     suspend fun useToken(token: String): Result<String>
 
-    /** Turns Fuse RomM on or off. On turns Cartridge off in Fuse, so only one RomM integration runs; its setup stays. */
+    /** Turns RomM on or off. On turns Cartridge off in Fuse, so only one RomM integration runs; its setup stays. */
     suspend fun setEnabled(enabled: Boolean)
 
     /** Forgets the sign-in (the addresses and preferences stay). */
@@ -214,7 +214,7 @@ interface RommOps {
     /** A RomM game Fuse doesn't have yet, as the game page shows it. */
     fun detail(romId: Long): Flow<GameDetail?>
 
-    /** What RomM has of a Fuse game (null when it isn't on RomM, or Fuse RomM is off). */
+    /** What RomM has of a Fuse game (null when it isn't on RomM, or RomM is off). */
     fun forGame(game: GameId): Flow<RommGameView?>
     fun forRom(romId: Long): Flow<RommGameView?>
 
@@ -239,7 +239,7 @@ interface RommOps {
     object None : RommOps {
         override val supported = false
         override val state: StateFlow<RommState> = MutableStateFlow(RommState())
-        override suspend fun test(local: String, remote: String, mode: RouteMode) = RommTest(null, null, null, "Fuse RomM isn't available here.")
+        override suspend fun test(local: String, remote: String, mode: RouteMode) = RommTest(null, null, null, "RomM isn't available here.")
         override suspend fun setAddresses(local: String, remote: String, mode: RouteMode) = Unit
         override suspend fun startPairing(upload: Boolean): Result<RommDeviceCode> = Result.failure(UnsupportedOperationException())
         override suspend fun awaitPairing(code: RommDeviceCode): Result<String> = Result.failure(UnsupportedOperationException())
@@ -260,9 +260,9 @@ interface RommOps {
         override fun detail(romId: Long): Flow<GameDetail?> = flowOf(null)
         override fun forGame(game: GameId): Flow<RommGameView?> = flowOf(null)
         override fun forRom(romId: Long): Flow<RommGameView?> = flowOf(null)
-        override suspend fun download(romId: Long, what: RommDownloadWhat): String? = "Fuse RomM isn't available here."
+        override suspend fun download(romId: Long, what: RommDownloadWhat): String? = "RomM isn't available here."
         override suspend fun uploadPlan(game: GameId): RommUploadPlan? = null
-        override suspend fun upload(game: GameId, plan: RommUploadPlan): String? = "Fuse RomM isn't available here."
+        override suspend fun upload(game: GameId, plan: RommUploadPlan): String? = "RomM isn't available here."
         override suspend fun biosPlan(all: Boolean): List<BiosPick> = emptyList()
         override suspend fun downloadBios(picks: List<BiosPick>): Int = 0
     }

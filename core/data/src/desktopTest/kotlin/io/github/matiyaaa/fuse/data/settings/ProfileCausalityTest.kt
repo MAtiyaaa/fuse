@@ -102,4 +102,52 @@ class ProfileCausalityTest {
             assertTrue(s.profileValues().getValue("sound.enabled").revision > remote.revision)
         }
     }
+
+    @Test fun aThemeChosenInTheSameWriteAsASwitchStaysWithTheOutgoingPerson() = runBlocking {
+        TestDb().use { t ->
+            val s = t.data.settings
+            s.update { it.copy(sync = it.sync.copy(activeProfile = "a")) }
+            s.update { it.copy(sync = it.sync.copy(activeProfile = "b")) }
+            s.update { it.copy(appearance = it.appearance.copy(themeId = "bo")) }
+            s.update { it.copy(sync = it.sync.copy(activeProfile = "a")) }
+            // The pending choice and the switch arrive together, as the store writes them.
+            s.update { it.copy(appearance = it.appearance.copy(themeId = "fusi"), sync = it.sync.copy(activeProfile = "b")) }
+            assertEquals("bo", s.current().appearance.themeId)
+            s.update { it.copy(sync = it.sync.copy(activeProfile = "a")) }
+            assertEquals("fusi", s.current().appearance.themeId)
+        }
+    }
+
+    @Test fun aStaleDocumentNeverOutranksWhatTheOutgoingPersonSees() = runBlocking {
+        TestDb().use { t ->
+            val s = t.data.settings
+            s.update { it.copy(sync = it.sync.copy(activeProfile = "a")) }
+            s.update { it.copy(appearance = it.appearance.copy(themeId = "fusi")) }
+            s.update { it.copy(sync = it.sync.copy(activeProfile = "b")) }
+            s.update { it.copy(sync = it.sync.copy(activeProfile = "a")) }
+            assertEquals("fusi", s.current().appearance.themeId)
+            s.update { it.copy(sync = it.sync.copy(activeProfile = "b")) }
+            s.update { it.copy(sync = it.sync.copy(activeProfile = "a")) }
+            assertEquals("fusi", s.current().appearance.themeId)
+        }
+    }
+
+    @Test fun someoneNewStartsFromDefaultsButKeepsTheDevicesThemes() = runBlocking {
+        TestDb().use { t ->
+            val s = t.data.settings
+            val added = StoredTheme("mine", "{}", null, 1)
+            s.update { it.copy(appearance = it.appearance.copy(themeId = "fusi", customThemes = listOf(added)), sound = it.sound.copy(enabled = false)) }
+            // The first person on a device adopts what the device had.
+            s.update { it.copy(sync = it.sync.copy(activeProfile = "a")) }
+            assertEquals("fusi", s.current().appearance.themeId)
+            // Anyone after them starts fresh.
+            s.update { it.copy(sync = it.sync.copy(activeProfile = "b")) }
+            assertEquals(AppSettings().appearance.themeId, s.current().appearance.themeId)
+            assertEquals(AppSettings().sound.enabled, s.current().sound.enabled)
+            assertEquals(listOf(added), s.current().appearance.customThemes)
+            s.update { it.copy(sync = it.sync.copy(activeProfile = "a")) }
+            assertEquals("fusi", s.current().appearance.themeId)
+            assertEquals(false, s.current().sound.enabled)
+        }
+    }
 }

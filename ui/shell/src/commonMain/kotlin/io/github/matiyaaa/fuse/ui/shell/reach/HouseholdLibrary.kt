@@ -130,6 +130,7 @@ fun HouseholdCard(app: AppState, selected: Boolean, modifier: Modifier = Modifie
  */
 @Composable
 fun HouseholdLibraryScreen(app: AppState) {
+    io.github.matiyaaa.fuse.ui.shell.app.CompanionShowsCopies(true)
     val ops = app.store.reach
     val state by ops.state.collectAsState()
     val recent by ops.recent.collectAsState()
@@ -270,6 +271,7 @@ internal fun DeviceChip(name: String, icon: androidx.compose.ui.graphics.vector.
 /** One system's games on the household's other devices (or every system's), in Fuse's grid. */
 @Composable
 fun HouseholdGamesScreen(app: AppState, platform: PlatformId?, name: String) {
+    io.github.matiyaaa.fuse.ui.shell.app.CompanionShowsCopies(true)
     val ops = app.store.reach
     val flow = remember(platform) { ops.games(platform) }
     val games by flow.collectAsState(initial = null)

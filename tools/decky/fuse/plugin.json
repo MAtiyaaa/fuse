@@ -1,0 +1,11 @@
+{
+  "name": "Fuse",
+  "author": "MAtiyaaa",
+  "flags": [],
+  "api_version": 1,
+  "publish": {
+    "tags": ["emulation", "library", "launcher"],
+    "description": "Fuse in Steam: add Steam games to Fuse from their menu, see Fuse One saves, devices and transfers, and update your emulators from the Quick Access menu.",
+    "image": "https://raw.githubusercontent.com/MAtiyaaa/fuse/main/docs/assets/brand/social-preview.png"
+  }
+}

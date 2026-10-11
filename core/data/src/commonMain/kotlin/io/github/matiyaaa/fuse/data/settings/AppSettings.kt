@@ -38,6 +38,8 @@ data class AppSettings(
     val display: DisplayProfile = DisplayProfile(),
     val scraping: ScrapingSettings = ScrapingSettings(),
     val videoPreview: VideoPreviewSettings = VideoPreviewSettings(),
+    /** Fuse and Steam together: the integration's answers and parts (this device's own). */
+    val steam: SteamIntegrationSettings = SteamIntegrationSettings(),
     val library: LibraryPreferences = LibraryPreferences(),
     val sound: SoundSettings = SoundSettings(),
     val music: MusicSettings = MusicSettings(),
@@ -127,6 +129,11 @@ data class SyncSettings(
     val activeProfile: String = "",
     /** Games the household plays as one save, as the host last said (kept here so it holds offline). */
     val sharedGames: List<String> = emptyList(),
+    /**
+     * Games whose saves stay on this device, by the household's id for them: each person's saves
+     * are still kept apart and swapped here, but never sent to or brought from other devices.
+     */
+    val localOnlyGames: List<String> = emptyList(),
     /**
      * Save folders the person chose, by emulator id ("drastic" to its folder), for emulators that
      * save where you tell them or that Fuse can't find alone. Used by Fuse Sync and Syncthing alike.
@@ -466,6 +473,13 @@ data class LibraryPreferences(
     val appsFilter: io.github.matiyaaa.fuse.model.AppFilter = io.github.matiyaaa.fuse.model.AppFilter.ALL,
     /** Square box art or tall posters on game tiles. */
     val gameArt: io.github.matiyaaa.fuse.model.GameArtStyle = io.github.matiyaaa.fuse.model.GameArtStyle.BOX_ART,
+    /**
+     * Removed games the person removed for good, by game id: gone from the Removed view, their art
+     * deleted, and still remembered as removed so a scan never brings them back. Files are never touched.
+     */
+    val purgedGames: List<Long> = emptyList(),
+    /** Which view the Library opens on: "INSTALLED" (games on this device) or "ALL" (everywhere they are). */
+    val opensOn: String = "INSTALLED",
 )
 
 /**
@@ -479,6 +493,10 @@ data class SoundSettings(
     val volume: Float = 0.7f,
     /** Null follows the theme's sound profile. */
     val profile: SoundProfile? = null,
+    /** Every sound Fuse makes is off (music, interface sounds, startup), whatever each one's own switch says. */
+    val muted: Boolean = false,
+    /** 0..1: scales every sound Fuse makes, under each one's own volume. */
+    val master: Float = 1f,
 )
 
 /**
@@ -515,7 +533,7 @@ data class StatusAreaSettings(
 )
 
 /**
- * Fuse RomM, the Fuse RomM native integration (Settings, Addons, Fuse RomM): off until set up. How
+ * RomM, the RomM native integration (Settings, Addons, RomM): off until set up. How
  * Fuse reaches the RomM server, where its games land and how transfers to it behave. The sign-in
  * itself is in the secret store, never here. Turning it off keeps all of this, so turning it on again
  * reconnects without setting it up again.
@@ -541,7 +559,7 @@ data class FuseRommSettings(
     val systemFolders: Map<String, String> = emptyMap(),
     /** Look at a downloaded game's folder at once, so it is playable without a full scan. */
     val scanAfterDownload: Boolean = true,
-    /** What new games on the server do: "BADGE" (marked new in Fuse RomM), "NOTIFY" (and a message), "QUIET". */
+    /** What new games on the server do: "BADGE" (marked new in RomM), "NOTIFY" (and a message), "QUIET". */
     val newGames: String = "BADGE",
     /** Keep the library mirrored for browsing while the server is away. */
     val offlineMirror: Boolean = true,
@@ -659,3 +677,16 @@ data class StreamHostSettings(
     val apps: List<String> = listOf("Desktop", "Steam Big Picture"),
 )
 
+
+/**
+ * How Fuse works with Steam on this device. [integrate] is the answer to setup's first Steam
+ * question ("YES", "NO", or "" when never asked); [decky] runs the Fuse Decky Bridge the Fuse
+ * Decky plugin talks to (Linux); [fuseInSteam] remembers that Fuse was added to Steam's library.
+ * None of these are a person's: they belong to the device and its Steam install.
+ */
+@Serializable
+data class SteamIntegrationSettings(
+    val integrate: String = "",
+    val decky: Boolean = false,
+    val fuseInSteam: Boolean = false,
+)

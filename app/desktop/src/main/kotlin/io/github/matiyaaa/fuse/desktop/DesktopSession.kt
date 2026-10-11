@@ -27,6 +27,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.plus
 import kotlinx.coroutines.withContext
 
@@ -148,11 +150,29 @@ class DesktopSession(
                 val store = createFuseStore(services, scope, safeMode = safe != null)
                 // Phone Link waits for a normal start: safe mode runs nothing that listens on the network.
                 startState = StartState.Ready(store, services, if (safe == null) startPhoneLink(store, services) else null, safe)
+                // The Fuse Decky Bridge follows its switch (Steam integration, Linux), and never runs in safe mode.
+                if (safe == null && io.github.matiyaaa.fuse.desktop.system.DesktopOs.current == io.github.matiyaaa.fuse.desktop.system.DesktopOs.LINUX) followDecky(store)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
                 Log.warn("startup failed", e)
                 startState = StartState.Failed(StartupFailure.explain(e, dirs.data), e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName)
+            }
+        }
+    }
+
+    /** The Fuse Decky Bridge while it is switched on; closed with the session. */
+    @Volatile private var decky: io.github.matiyaaa.fuse.link.DeckyBridge? = null
+
+    private fun followDecky(store: FuseStore) {
+        scope.launch(Dispatchers.IO) {
+            store.prefs.map { it.steam.decky }.distinctUntilChanged().collect { on ->
+                decky?.close()
+                decky = null
+                if (on) {
+                    val bridge = io.github.matiyaaa.fuse.link.DeckyBridge(store, BuildInfo.VERSION, io.github.matiyaaa.fuse.link.DeckyBridge.discoveryFile())
+                    if (bridge.start() > 0) decky = bridge else Log.warn("the Fuse Decky Bridge could not start")
+                }
             }
         }
     }
@@ -259,6 +279,7 @@ class DesktopSession(
         gamepads.close()
         platform.close()
         (startState as? StartState.Ready)?.phoneLink?.close()
+        decky?.close()
         (startState as? StartState.Ready)?.services?.close()
     }
 

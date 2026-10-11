@@ -739,7 +739,7 @@ internal class DefaultReachOps(
                 val game = localByKey.value[command.game.orEmpty()]?.let(::GameId)
                 when {
                     game == null -> CommandResult(DeviceCommand.FAILED, "${ctx.services.deviceName} doesn't have this game any more.")
-                    !romm.enabled -> CommandResult(DeviceCommand.FAILED, "Fuse RomM isn't on on ${ctx.services.deviceName}.")
+                    !romm.enabled -> CommandResult(DeviceCommand.FAILED, "RomM isn't on on ${ctx.services.deviceName}.")
                     else -> {
                         val plan = romm.uploadPlan(game)
                         val why = plan?.problem ?: if (plan == null) "That game isn't in the library any more." else romm.upload(game, plan)

@@ -35,6 +35,7 @@ interface GamepadSink {
 class LinuxGamepads(private val sink: GamepadSink) : AutoCloseable {
     private val open = ConcurrentHashMap<String, Device>()
     private val warnedUnreadable = ConcurrentHashMap.newKeySet<String>()
+    private val skipped = ConcurrentHashMap.newKeySet<String>()
     private val running = AtomicBoolean(false)
     private var scanner: Thread? = null
 
@@ -66,6 +67,13 @@ class LinuxGamepads(private val sink: GamepadSink) : AutoCloseable {
         val nodes = File("/dev/input").listFiles { f -> f.name.matches(JS_NAME) }?.toList() ?: emptyList()
         for (node in nodes) {
             if (open.containsKey(node.name)) continue
+            // A mouse, tablet, touchpad or motion sensor that joydev also exposes is not a controller.
+            val notController = JoydevFilter.rejection(node.name)
+            if (notController != null) {
+                if (skipped.add(node.name)) Log.info("${node.path} is $notController, not a controller; ignored")
+                continue
+            }
+            skipped.remove(node.name)
             val stream = try {
                 FileInputStream(node)
             } catch (e: IOException) {

@@ -97,6 +97,7 @@ import io.github.matiyaaa.fuse.ui.shell.home.HomeScreen
 import io.github.matiyaaa.fuse.ui.shell.library.LibraryScope
 import io.github.matiyaaa.fuse.ui.shell.library.LibraryScreen
 import io.github.matiyaaa.fuse.ui.shell.media.MediaScreen
+import io.github.matiyaaa.fuse.ui.shell.music.AudioMix
 import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
 import io.github.matiyaaa.fuse.ui.shell.music.MenuMusicPlan
 import io.github.matiyaaa.fuse.ui.shell.onboarding.OnboardingScreen
@@ -270,7 +271,8 @@ private fun FuseAppContent(
     if (phoneLink != null) LaunchedEffect(padFamily) { RemoteInput.padInUse(padFamily) }
     val glyphStyle = when {
         !prefs.input.autoGlyphs -> prefs.input.glyphs
-        lastSource == InputSource.KEYBOARD -> GlyphStyle.KEYBOARD
+        // A mouse in hand goes with the keyboard: its hints name keys, never a controller that isn't there.
+        lastSource == InputSource.KEYBOARD || lastSource == InputSource.POINTER -> GlyphStyle.KEYBOARD
         else -> padGlyphs(prefs.input.glyphs, padFamily)
     }
 
@@ -316,6 +318,17 @@ private fun FuseAppContent(
                 RemoteInput.closed(id)
             }
         }
+        // What other programs here ask to show (the Fuse Decky plugin opening a game from Steam).
+        LaunchedEffect(app) {
+            ExternalRequests.requests.collect { r ->
+                when (r) {
+                    is ExternalRequest.OpenGame -> {
+                        app.closeOverlays()
+                        app.go(Route.GameInfo(r.game))
+                    }
+                }
+            }
+        }
         // What phones ask for: text for the field open, and buttons pressed on a phone used as a controller.
         LaunchedEffect(router) {
             RemoteInput.commands.collect { c ->
@@ -334,9 +347,11 @@ private fun FuseAppContent(
     }
     // The companion screen (second display) follows what the main screen has in focus.
     if (app.shareWindowFocus) SpotlightFollows(app)
-    LaunchedEffect(prefs.sound, prefs.soundVolume) {
-        platform.sounds.setProfile(prefs.sound)
-        platform.sounds.setVolume(prefs.soundVolume)
+    LaunchedEffect(prefs.sound, prefs.soundVolume, prefs.muted, prefs.masterVolume) {
+        // One audio state: the master switch and volume sit over the interface sounds' own.
+        val audio = AudioMix.of(prefs)
+        platform.sounds.setProfile(audio.interfaceProfile)
+        platform.sounds.setVolume(audio.interfaceVolume)
     }
     // The hint line answers the hand: a pressed button's glyph flashes when it did something.
     val hintFlash = rememberHintFlash()
@@ -404,7 +419,7 @@ private fun FuseAppContent(
                                 // Whether it is a mouse, and whether it really moved, for hovering and clicking.
                                 e.changes.firstOrNull()?.let { ch ->
                                     router.pointer(
-                                        mouse = ch.type == androidx.compose.ui.input.pointer.PointerType.Mouse,
+                                        mouse = ch.type != androidx.compose.ui.input.pointer.PointerType.Touch,
                                         x = ch.position.x, y = ch.position.y,
                                         pressed = e.type == androidx.compose.ui.input.pointer.PointerEventType.Press,
                                     )
@@ -1070,7 +1085,8 @@ private fun MenuMusic(app: AppState, player: MenuMusicPlayer?) {
     player ?: return
     val prefs by app.store.prefs.collectAsState()
     val home by app.store.homeFeed.collectAsState()
-    val music = prefs.music
+    // The music as the master switch and volume let it be heard.
+    val music = AudioMix.of(prefs).music
     // Shuffle: the song it picked and the ones it played lately, so none comes back too soon. A song
     // that ends picks the next; the player reports it from its own thread.
     var shuffled by remember { mutableStateOf<String?>(null) }
@@ -1207,7 +1223,7 @@ private fun hudActivities(app: AppState): List<HudActivity> {
                 progress = f.fraction.takeIf { f.total > 0 },
             ) { app.go(Route.Settings("media")) })
         }
-        // Transfers (Cartridge's downloads and uploads, Store installs, Fuse's own update, Fuse RomM,
+        // Transfers (Cartridge's downloads and uploads, Store installs, Fuse's own update, RomM,
         // Jellyfin) all live behind the Downloads button now; only what isn't one stays here.
         when (val u = update) {
             is UpdateState.Downloading -> Unit

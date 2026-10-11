@@ -357,7 +357,7 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
             }))
         }
         if (!card.isApp) add(MenuAction("folder", "Folder Behaviour", FuseIcons.FolderOpen, trailing = Trailing.Chevron, onSelect = { folderPolicyPicker(card) }))
-        // Fuse RomM, when it is the RomM integration in use: games not on RomM go up from here.
+        // RomM, when it is the RomM integration in use: games not on RomM go up from here.
         if (store.prefs.value.romm.enabled && store.romm.supported && !card.isApp && card.rommRomId == null) {
             add(MenuAction("romm.upload", "Upload to RomM", FuseIcons.Upload, detail = "With its other discs, DLC and updates, through Downloads", onSelect = {
                 rommUpload(card)

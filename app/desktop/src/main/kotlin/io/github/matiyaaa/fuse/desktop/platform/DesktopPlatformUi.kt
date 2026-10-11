@@ -257,6 +257,10 @@ class DesktopPlatformUi(
     private val desktopSteam = DesktopSteam(io.github.matiyaaa.fuse.desktop.services.KnownFolders(dirs.home, os))
     override val steam: io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration = desktopSteam
 
+    /** Decky runs on Linux only (SteamOS, Bazzite and other Steam Gaming Mode systems). */
+    override val decky: io.github.matiyaaa.fuse.ui.shell.platform.DeckyIntegration? =
+        if (os == DesktopOs.LINUX) DesktopDecky(staging = java.io.File(dirs.data, "decky-plugin").apply { mkdirs() }) else null
+
     init {
         // Fuse's art for any Steam entry that starts it, even one Steam made, every time Fuse starts.
         scope.launch(Dispatchers.IO) { runCatching { desktopSteam.dressEntries() }.onSuccess { if (it > 0) Log.info("Steam: art for $it entries") } }

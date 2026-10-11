@@ -90,6 +90,17 @@ kotlin {
     sourceSets.named("main") { kotlin.srcDir(generateBuildInfo) }
 }
 
+// The Fuse Decky plugin, as Decky installs it (a Fuse folder), carried so setup can install it.
+// Its JavaScript is built from tools/decky/fuse and kept in the repository (see its README).
+val deckyPlugin = tasks.register<Sync>("deckyPlugin") {
+    from(rootProject.layout.projectDirectory.dir("tools/decky/fuse")) {
+        include("plugin.json", "package.json", "main.py", "README.md", "dist/index.js")
+    }
+    into(layout.buildDirectory.dir("generated/decky/decky/Fuse"))
+}
+
+sourceSets.named("main") { resources.srcDir(deckyPlugin.map { it.destinationDir.parentFile.parentFile }) }
+
 compose.desktop {
     application {
         mainClass = "io.github.matiyaaa.fuse.desktop.MainKt"

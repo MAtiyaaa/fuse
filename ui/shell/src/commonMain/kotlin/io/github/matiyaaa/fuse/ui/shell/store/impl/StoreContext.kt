@@ -118,7 +118,7 @@ internal class StoreContext(
 
     /**
      * Gives a game just added to the library the art already found for it elsewhere (the RomM game
-     * it was downloaded from), so it isn't looked for again. True when it took some. Set by Fuse RomM.
+     * it was downloaded from), so it isn't looked for again. True when it took some. Set by RomM.
      */
     @kotlin.concurrent.Volatile var adoptArt: suspend (io.github.matiyaaa.fuse.model.GameId) -> Boolean = { false }
 

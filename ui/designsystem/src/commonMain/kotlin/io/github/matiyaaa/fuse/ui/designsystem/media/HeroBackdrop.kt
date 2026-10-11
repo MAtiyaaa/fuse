@@ -423,8 +423,8 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
 
 /**
  * [painter] (once [loaded]) filling the box like [ContentScale.Crop], blurred by [BOX_ART_BLUR]. The
- * blur is worked out once per picture, on a copy an eighth of the box's size, and the result is
- * drawn scaled up: a blurred picture has no detail for the scaling to lose, and the room then costs
+ * blur is worked out once per picture, on a copy a quarter of the box's size, and the result is
+ * drawn scaled up with a cubic filter: a blurred picture has no detail for the scaling to lose, and the room then costs
  * one picture a frame instead of a blur over the whole screen every frame (which held every
  * animation in front of it to the blur's pace).
  */
@@ -454,14 +454,20 @@ private fun FrozenBlur(painter: Painter, loaded: Boolean, alignment: Alignment, 
             .onSizeChanged { box = it }
             .drawBehind {
                 val image = frozen ?: return@drawBehind
-                drawImage(image, dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()), filterQuality = FilterQuality.Low)
+                // Cubic, not bilinear: stretching a small picture bilinearly shows its grid as faint
+                // squares on a large screen (each cell's gradient changes slope at its edges). The
+                // graphics card does this for free; drawn without one, the cheaper filter stays.
+                drawImage(
+                    image, dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+                    filterQuality = if (io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.cpu) FilterQuality.Medium else FilterQuality.High,
+                )
             },
     )
 }
 
 /** How strongly box art behind the interface is blurred, and how much smaller the blur is worked out. */
 private val BOX_ART_BLUR = 48.dp
-private const val FROZEN_SCALE = 8
+private const val FROZEN_SCALE = 4
 
 /** One background decode, the same everywhere, so art warmed ahead of time is found in memory. */
 fun heroRequest(context: PlatformContext, model: Any?, px: Int): ImageRequest =

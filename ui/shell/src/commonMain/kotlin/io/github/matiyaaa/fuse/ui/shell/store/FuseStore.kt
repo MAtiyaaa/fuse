@@ -105,7 +105,7 @@ interface FuseStore {
     /** Downloads: every transfer Fuse makes for the person, in one place. */
     val transfers: TransfersOps get() = TransfersOps.None
 
-    /** Fuse RomM, the Fuse RomM native integration. */
+    /** RomM, the RomM native integration. */
     val romm: RommOps get() = RommOps.None
 
     /** The Fuse Library: the household's games on its other devices, through Fuse Sync. */
@@ -435,6 +435,15 @@ interface LibraryOps {
     suspend fun restore(id: GameId)
     /** Forgets a game whose file is gone, with its art and play history. Files are never touched. */
     suspend fun forgetMissing(id: GameId)
+
+    /**
+     * Removes removed games for good: their art goes and they leave the Removed view, while Fuse
+     * still remembers them so a scan never brings them back. Files are never touched.
+     */
+    suspend fun purgeRemoved(ids: List<GameId>) {}
+
+    /** The library's game for Steam's app [appId], when Steam's game is in the library here. */
+    suspend fun steamGame(appId: Long): GameId? = null
 
     /** Clean Display Names: preview, apply and undo. Files are never renamed. */
     suspend fun previewCleanNames(): List<Pair<String, String>>

@@ -166,7 +166,7 @@ private enum class InfoCard { STARTS, PLAY, EXTRAS, FILE }
  */
 @Composable
 fun GameScreen(app: AppState, id: GameId) {
-    // A RomM game Fuse doesn't have yet opens on the same page, from Fuse RomM's mirror; once it is
+    // A RomM game Fuse doesn't have yet opens on the same page, from RomM's mirror; once it is
     // downloaded (or found here) the page is the library game's, with Play instead of Download.
     val romOnly = id.rommOnly
     // The same for another device's game: once it comes here, the page is the library game's.
@@ -209,7 +209,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
         value = if (!card.isApp && game.platformId.value in CONTENT_SYSTEMS) app.store.content.view(game.id) else null
     }
     val contentStates = content?.states.orEmpty()
-    // Fuse RomM: a game only on RomM (downloaded from this page), or what RomM has of a game here.
+    // RomM: a game only on RomM (downloaded from this page), or what RomM has of a game here.
     val remote = game.id.rommOnly
     val rommFlow = remember(game.id) { if (remote != null) app.store.romm.forRom(remote) else app.store.romm.forGame(game.id) }
     val romm by rommFlow.collectAsState(initial = null)

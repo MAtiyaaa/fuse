@@ -295,6 +295,8 @@ internal data class GameMark(
     val tint: MarkTint,
     val count: Int? = null,
     val onStage: Boolean = true,
+    /** A quiet confirmation (a favourite) drawn smaller than marks that ask for attention. */
+    val quiet: Boolean = false,
 )
 
 /** How a mark is coloured: as text on art, or as a warning. */
@@ -314,7 +316,7 @@ internal fun GameCard.marks(favourite: Boolean = true): List<GameMark> = buildLi
     if (dlc > 0) add(GameMark(FuseIcons.Puzzle, "$dlc DLC", MarkTint.PLAIN))
     if (discs > 1) add(GameMark(FuseIcons.Disc, "$discs discs", MarkTint.PLAIN, count = discs))
     // A favourite's heart is on its tile, and named on the stage while the game is selected.
-    if (favorite && favourite) add(GameMark(FuseIcons.HeartFilled, "Favourite", MarkTint.PLAIN))
+    if (favorite && favourite) add(GameMark(FuseIcons.HeartFilled, "Favourite", MarkTint.PLAIN, quiet = true))
 }
 
 /**
@@ -370,7 +372,7 @@ private fun TileMark(mark: GameMark) {
     val c = Fuse.colors
     val tint = if (mark.tint == MarkTint.WARNING) c.warning else c.onArt
     if (mark.count == null) {
-        IconBadge(mark.icon, tint = tint, background = MARK_GLASS, size = Size.badge)
+        IconBadge(mark.icon, tint = tint, background = MARK_GLASS, size = if (mark.quiet) Size.badgeSmall else Size.badge)
     } else {
         Row(
             Modifier

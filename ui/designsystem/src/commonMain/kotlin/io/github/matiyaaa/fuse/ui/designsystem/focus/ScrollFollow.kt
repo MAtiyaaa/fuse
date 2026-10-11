@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
@@ -122,9 +123,10 @@ fun FollowSelection(state: LazyListState, selected: () -> Int, anchor: Float = 0
     val current by rememberUpdatedState(selected)
     val on by rememberUpdatedState(enabled)
     val spec by rememberUpdatedState(Fuse.motion.followScroll())
+    val pointing = rememberPointing()
     LaunchedEffect(state) {
         // Paused while [enabled] is false (an item held by touch), then catches up.
-        followEach(snapshotFlow { if (on()) current() else null }) { state.follow(it, anchor, animate, spec) }
+        followEach(snapshotFlow { if (on()) current() else null }, pointing) { state.follow(it, anchor, animate, spec) }
     }
 }
 
@@ -138,8 +140,9 @@ fun KeepSelectionInView(state: LazyListState, selected: () -> Int, marginPx: Int
     val current by rememberUpdatedState(selected)
     val on by rememberUpdatedState(enabled)
     val spec by rememberUpdatedState(Fuse.motion.followScroll())
+    val pointing = rememberPointing()
     LaunchedEffect(state) {
-        followEach(snapshotFlow { if (on()) current() else null }) { state.keepInView(it, marginPx, spec = spec) }
+        followEach(snapshotFlow { if (on()) current() else null }, pointing) { state.keepInView(it, marginPx, spec = spec) }
     }
 }
 
@@ -158,9 +161,10 @@ fun FollowSelection(
     val current by rememberUpdatedState(selected)
     val on by rememberUpdatedState(enabled)
     val spec by rememberUpdatedState(Fuse.motion.followScroll())
+    val pointing = rememberPointing()
     val inset by rememberUpdatedState(insetPx)
     LaunchedEffect(state) {
-        followEach(snapshotFlow { if (on()) current() else null }) { state.follow(it, anchor, animate, spec, inset) }
+        followEach(snapshotFlow { if (on()) current() else null }, pointing) { state.follow(it, anchor, animate, spec, inset) }
     }
     LaunchedEffect(state, relayout) {
         // A finger moving the grid (or its fling) owns the scroll: following the selection again as
@@ -177,11 +181,14 @@ fun FollowSelection(
  * that frame's measure pass has run. The previous follow keeps going until then and is only
  * replaced when the new one starts, so following never pauses between steps.
  */
-private suspend fun followEach(selections: Flow<Int?>, follow: suspend (Int) -> Unit) = coroutineScope {
+private suspend fun followEach(selections: Flow<Int?>, pointing: () -> Boolean, follow: suspend (Int) -> Unit) = coroutineScope {
     var running: Job? = null
     selections.collect { index ->
         val previous = running
-        running = if (index == null) {
+        // The mouse moved the highlight onto something it is pointing at, which is on screen: the
+        // list stays where it is. Scrolling would slide another item under the pointer, which would
+        // take the highlight, which would scroll again.
+        running = if (index == null || pointing()) {
             previous?.cancel()
             null
         } else {
@@ -193,4 +200,11 @@ private suspend fun followEach(selections: Flow<Int?>, follow: suspend (Int) -> 
             }
         }
     }
+}
+
+/** Whether the mouse, moved just now, is what changed the selection (see [InputRouter.mouseJustMoved]). */
+@Composable
+private fun rememberPointing(): () -> Boolean {
+    val router = io.github.matiyaaa.fuse.ui.designsystem.input.LocalPointerRouter.current
+    return remember(router) { { router?.mouseJustMoved() == true } }
 }

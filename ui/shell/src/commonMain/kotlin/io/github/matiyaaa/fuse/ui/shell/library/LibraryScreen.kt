@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
@@ -172,7 +173,10 @@ sealed interface LibraryScope {
  * games open a menu to restore or forget them instead of playing.
  */
 enum class LibrarySegment(val label: String, val set: GameSet) {
-    ALL("All", GameSet.LIBRARY),
+    /** The games on this device. */
+    INSTALLED("Installed", GameSet.LIBRARY),
+    /** Every game wherever it is: this device, RomM and the household's other devices, as shelves. */
+    EVERYWHERE("All", GameSet.LIBRARY),
     FAVORITES("Favourites", GameSet.LIBRARY),
     RECENT("Recently played", GameSet.LIBRARY),
     MISSING("Missing", GameSet.MISSING),
@@ -184,14 +188,18 @@ enum class LibrarySegment(val label: String, val set: GameSet) {
  * The buttons at the end of the Library header. [EMULATOR] only shows on a system that has no
  * emulator, and leads to its settings.
  */
-enum class LibraryButton { COLLECTIONS, ADD_GAMES, EMULATOR, SYSTEM, SORT, VIEW }
+enum class LibraryButton { COLLECTIONS, ADD_GAMES, EMULATOR, SYSTEM, SORT }
 
 /** Remembered per library view: which game was selected (by id, so re-sorting keeps it), and where focus was. */
 @Stable
 class LibraryViewState {
     val grid = GridSelection()
+    /** Where All's shelves were: the shelf, and the place in each. */
+    val shelves = io.github.matiyaaa.fuse.ui.designsystem.focus.ShelfSelection()
     var selectedId by mutableStateOf<GameId?>(null)
-    var segment by mutableStateOf(LibrarySegment.ALL)
+    var segment by mutableStateOf(LibrarySegment.INSTALLED)
+    /** The view's list as last loaded, kept on screen until the next one has arrived (no blank frames between views). */
+    var loaded by mutableStateOf<Pair<Any, List<GameCard>>?>(null)
     /** The system the whole library is narrowed to, or null for every system. */
     var system by mutableStateOf<PlatformId?>(null)
     var inHeader by mutableStateOf(false)
@@ -224,7 +232,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     }
     // A system or collection opens on its first game; Back from a game returns to where you were.
     val state = if (scope == LibraryScope.All) {
-        rememberRouteState(app.navigator, key) { LibraryViewState() }
+        // The Library opens on the view the person chose (Settings, Library): Installed or All.
+        rememberRouteState(app.navigator, key) { LibraryViewState().apply { segment = if (prefs.libraryOpensOn == "ALL") LibrarySegment.EVERYWHERE else LibrarySegment.INSTALLED } }
     } else {
         rememberPageState(app.navigator, key) { LibraryViewState() }
     }
@@ -253,7 +262,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             val all = if (state.showHidden) store.library.games(GameQuery(platform = state.system, includeHidden = true)) else base
             combine(base, all) { b, a ->
                 mapOf(
-                    LibrarySegment.ALL to a.size,
+                    LibrarySegment.INSTALLED to a.size,
                     LibrarySegment.FAVORITES to b.count { it.favorite },
                     LibrarySegment.RECENT to b.count { it.lastPlayedAt != null },
                 )
@@ -272,16 +281,18 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         if (scope == LibraryScope.All && collectionsOn) add(LibraryButton.COLLECTIONS)
         if (ownCollection != null) add(LibraryButton.ADD_GAMES)
         if (systemCard != null && !systemCard.emulatorInstalled) add(LibraryButton.EMULATOR)
-        if (scope == LibraryScope.All) add(LibraryButton.SYSTEM)
-        add(LibraryButton.SORT)
-        add(LibraryButton.VIEW)
+        // All is shelves, each in its own order; Recently played is always newest first.
+        val browsing = scope == LibraryScope.All && (state.segment == LibrarySegment.EVERYWHERE || state.segment == LibrarySegment.RECENT)
+        if (scope == LibraryScope.All && state.segment != LibrarySegment.EVERYWHERE) add(LibraryButton.SYSTEM)
+        if (!browsing) add(LibraryButton.SORT)
+        // How games are drawn is a setting (Settings, Library, and each system's settings), not a toolbar button.
     }
     val header: List<HeaderItem> = segments.map { HeaderItem.View(it) } + buttons.map { HeaderItem.Button(it) }
 
     val segment = state.segment
     val query = when (scope) {
         LibraryScope.All -> when (segment) {
-            LibrarySegment.ALL -> GameQuery(platform = state.system, sort = sort, includeHidden = state.showHidden)
+            LibrarySegment.INSTALLED -> GameQuery(platform = state.system, sort = sort, includeHidden = state.showHidden)
             LibrarySegment.FAVORITES -> GameQuery(platform = state.system, favoritesOnly = true, sort = sort)
             LibrarySegment.RECENT -> GameQuery(platform = state.system, sort = SortOrder.RECENTLY_PLAYED)
             else -> GameQuery(platform = state.system, sort = sort, set = segment.set)
@@ -290,7 +301,10 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         is LibraryScope.OfCollection -> GameQuery(collection = scope.collection, sort = sort)
     }
     val gamesFlow = remember(query) { store.library.games(query) }
-    val games by gamesFlow.collectAsState(initial = null)
+    // The previous view's games stay until this one's arrive, so switching views never shows an
+    // empty page or "nothing here" for a frame; the new view then reveals in place.
+    LaunchedEffect(gamesFlow) { gamesFlow.collect { state.loaded = query to it } }
+    val games = state.loaded?.second
 
     val layoutFlow = remember(platformId) { store.settings.observe(ScopedSettings.Layout, platformId, null) }
     val resolvedLayout by layoutFlow.collectAsState(initial = null)
@@ -352,8 +366,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             state.grid.index = 0
             state.selectedId = null
         }
-        scope == LibraryScope.All && segment != LibrarySegment.ALL -> EmptyAction("Show all games", FuseIcons.Library) {
-            choose(LibrarySegment.ALL)
+        scope == LibraryScope.All && segment != LibrarySegment.INSTALLED -> EmptyAction("Show all games", FuseIcons.Library) {
+            choose(LibrarySegment.INSTALLED)
         }
         scope == LibraryScope.All -> EmptyAction("Add a game folder", FuseIcons.FolderPlus) { app.go(Route.Settings("library")) }
         ownCollection != null -> EmptyAction("Add games", FuseIcons.ListPlus) { app.addGamesPicker(ownCollection.id, ownCollection.name) }
@@ -364,7 +378,9 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         else -> null
     }
 
-    PageEffect(selectedCard?.id, selectedCard?.art, special, systemCard?.art, gameSystem?.art, emptyAction?.label) {
+    PageEffect(selectedCard?.id, selectedCard?.art, special, systemCard?.art, gameSystem?.art, emptyAction?.label, segment) {
+        // All sets its own room and hints from its shelves.
+        if (scope == LibraryScope.All && segment == LibrarySegment.EVERYWHERE) return@PageEffect
         app.hero = when {
             selectedCard != null -> selectedCard.room(gameSystem)
             systemCard != null -> HeroSource(systemCard.platform.id, systemCard.art.hero, systemCard.platform.accent.toColor())
@@ -373,6 +389,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         app.hints = when {
             selectedCard == null -> listOfNotNull(emptyAction?.let { Hint(HintButton.CONFIRM, it.label) })
             special -> listOf(Hint(HintButton.CONFIRM, "Choose"), Hint(HintButton.BACK, "Back"))
+            // A system's or collection's page was opened on top of a tab: Back is named, as on every other page.
+            app.navigator.stack.size > 1 -> listOf(Hint(HintButton.CONFIRM, app.gameConfirmLabel), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"), Hint(HintButton.BACK, "Back"))
             else -> listOf(Hint(HintButton.CONFIRM, app.gameConfirmLabel), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"))
         }
     }
@@ -381,7 +399,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
 
     fun options(card: GameCard) {
         if (special) {
-            app.openContextMenu(setMenu(app, card, segment))
+            app.openContextMenu(setMenu(app, card, segment, list.orEmpty()))
             return
         }
         val remove = ownCollection?.let { c ->
@@ -401,7 +419,6 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             LibraryButton.EMULATOR -> platformId?.let { app.go(Route.PlatformSettings(it)) }
             LibraryButton.SYSTEM -> app.choice = systemPicker(app, state, platforms)
             LibraryButton.SORT -> app.choice = sortPicker(app, sort)
-            LibraryButton.VIEW -> app.choice = layoutPicker(app, state, platformId, layout)
         }
     }
 
@@ -489,7 +506,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
 
     // Entering the screen reveals its header once; the content reveals again for each new view.
     val entry = rememberReveal(key)
-    val reveal = rememberReveal(key, segment, state.system, layout)
+    // A new view reveals once its games are here (the loaded query), not when its tab is chosen.
+    val reveal = rememberReveal(key, state.loaded?.first, layout)
     // A view that takes a moment to load shows its skeleton; one that is quick never flashes it.
     val showSkeleton by produceState(false, list == null) {
         value = false
@@ -593,6 +611,9 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                 )
             }
             when {
+                scope == LibraryScope.All && segment == LibrarySegment.EVERYWHERE -> LibraryEverywhere(
+                    app, state, focused = gridFocused && !app.overlayOpen, modifier = Modifier.weight(1f).reveal(reveal, 1),
+                )
                 list == null -> if (showSkeleton) LibrarySkeleton(layout, metrics, maxW, maxH, stageHeight)
                 list.isEmpty() -> LibraryEmpty(
                     scope, segment, collection,
@@ -761,23 +782,8 @@ private fun sortPicker(app: AppState, current: SortOrder) = ChoiceSpec(
     },
 )
 
-private fun layoutPicker(app: AppState, state: LibraryViewState, platform: PlatformId?, current: LibraryLayout) = ChoiceSpec(
-    title = "View as",
-    message = if (platform != null) "Saved for this system" else "Saved as your default",
-    options = LibraryLayout.entries.map { l ->
-        MenuAction(l.name, layoutLabel(l), layoutIcon(l), trailing = Trailing.Check(l == current), onSelect = {
-            state.layoutOverride = l
-            app.scope.launch {
-                if (platform != null) app.store.settings.setLayout(platform, l)
-                else app.store.updatePrefs { it.copy(defaultLayout = l) }
-            }
-            app.choice = null
-        })
-    },
-)
-
 /** What can be done with a missing, hidden or removed game. Files are never touched. */
-private fun setMenu(app: AppState, card: GameCard, segment: LibrarySegment): ContextMenuSpec {
+private fun setMenu(app: AppState, card: GameCard, segment: LibrarySegment, all: List<GameCard> = emptyList()): ContextMenuSpec {
     val lib = app.store.library
     fun run(message: String, block: suspend () -> Unit) {
         app.closeOverlays()
@@ -800,8 +806,22 @@ private fun setMenu(app: AppState, card: GameCard, segment: LibrarySegment): Con
         LibrarySegment.HIDDEN -> listOf(
             MenuAction("show", "Show in the library again", FuseIcons.Eye, onSelect = { run("${card.title} is back in your library") { lib.restore(card.id) } }),
         )
-        else -> listOf(
+        else -> listOfNotNull(
             MenuAction("restore", "Restore to Fuse", FuseIcons.Undo, onSelect = { run("${card.title} is back in your library") { lib.restore(card.id) } }),
+            MenuAction("purge", "Remove for good", FuseIcons.Trash, destructive = true, detail = "Its art goes and it leaves this list. Fuse still skips it when scanning. Your files are not touched", onSelect = {
+                app.closeOverlays()
+                app.confirm = ConfirmSpec("Remove ${card.title} for good?", "It leaves Removed and its art is deleted. Scans keep skipping it. Your files are not touched.", "Remove", destructive = true) {
+                    app.scope.launch { lib.purgeRemoved(listOf(card.id)); app.toasts.show("${card.title} removed for good") }
+                }
+            }),
+            all.takeIf { it.size > 1 }?.let { everything ->
+                MenuAction("purge.all", "Remove all ${everything.size} for good", FuseIcons.Trash, destructive = true, detail = "Every game in Removed", onSelect = {
+                    app.closeOverlays()
+                    app.confirm = ConfirmSpec("Remove all ${everything.size} for good?", "They leave Removed and their art is deleted. Scans keep skipping them. Your files are not touched.", "Remove all", destructive = true) {
+                        app.scope.launch { lib.purgeRemoved(everything.map { it.id }); app.toasts.show("${everything.size} games removed for good") }
+                    }
+                })
+            },
         )
     }
     return ContextMenuSpec(title = card.title, subtitle = "${card.platformShort}  ·  ${segment.label}", art = card.art.tile, actions = actions)
@@ -1285,7 +1305,7 @@ private fun LibraryEmpty(
             LibrarySegment.MISSING -> Triple(FuseIcons.CheckCheck, "Nothing is missing", "Games whose files disappear are listed here, so you can find them again or let Fuse forget them.")
             LibrarySegment.HIDDEN -> Triple(FuseIcons.EyeOff, "No hidden games", "Games you hide from their options wait here.")
             LibrarySegment.REMOVED -> Triple(FuseIcons.Undo, "Nothing removed", "Games you remove from Fuse wait here, in case you want them back.")
-            LibrarySegment.ALL -> Triple(FuseIcons.LibraryBig, "Nothing here yet", "Add a folder of games and Fuse finds them, with their art.")
+            LibrarySegment.INSTALLED, LibrarySegment.EVERYWHERE -> Triple(FuseIcons.LibraryBig, "Nothing here yet", "Add a folder of games and Fuse finds them, with their art.")
         }
     }
     // A system filter can be what empties a view, so the message says so.
@@ -1308,10 +1328,6 @@ private fun LibraryEmpty(
 /** View options appended to the game menu inside a library: layout, sort, hidden games, rescan. */
 private fun viewActions(app: AppState, state: LibraryViewState, platform: PlatformId?, current: LibraryLayout, sort: SortOrder): List<MenuAction> {
     return listOf(
-        MenuAction("layout", "View as", FuseIcons.Grid, trailing = Trailing.Value(layoutLabel(current)), onSelect = {
-            app.contextMenu = null
-            app.choice = layoutPicker(app, state, platform, current)
-        }),
         MenuAction("sort", "Sort by", FuseIcons.Sort, trailing = Trailing.Value(sortLabel(sort)), onSelect = {
             app.contextMenu = null
             app.choice = sortPicker(app, sort)

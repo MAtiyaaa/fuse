@@ -190,9 +190,9 @@ internal class LibraryProfileData(
             }
             data.profileState.write(UserState(rows, sessions.distinct(), collections))
         }
-        // Only what the profile has set comes in. What it never set stays as this device has it: a
-        // new profile starts with this device's look, Home and settings, which then become its own
-        // (sent up on the next round) and are never put back to Fuse's defaults.
+        // Only what the profile has set comes in, and only when it is newer than what is kept here.
+        // A new person starts from Fuse's defaults (SettingsStore), never from the previous person's
+        // look; whatever they choose then becomes their own and goes up on the next round.
         val profile = now.sync.activeProfile
         val incoming = if (sync.settings) meta.settings.filterKeys { it in kept(now) }.mapValues { (_, value) ->
             ProfileSettingValue(value.value, ProfileSettingRevision(value.at.millis, value.at.counter, value.at.device))

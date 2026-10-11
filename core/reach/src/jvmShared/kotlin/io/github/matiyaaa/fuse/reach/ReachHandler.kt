@@ -205,7 +205,7 @@ class ReachHandler(private val host: ReachTransferHost, private val clock: () ->
     }
 
     private suspend fun fromRomm(c: Candidate, f: ReachFile, part: File, io: TransferIo, before: Long, total: Long) {
-        val client = host.romm(c.source.id) ?: throw TransferInterrupted("Fuse RomM is signed out.")
+        val client = host.romm(c.source.id) ?: throw TransferInterrupted("RomM is signed out.")
         val file = f.romm ?: throw TransferInterrupted("RomM doesn't have this file.")
         RangedDownload.fetch(host.http, { client.fileUrl(client.base(), c.source.romId, file) }, part, f.size.takeIf { it > 0 }, io, doneBefore = before, totalOverall = total) {
             client.authorize(this)

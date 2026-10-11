@@ -110,12 +110,21 @@ class InputRouter(
         redirectTo?.let { it.pointer(mouse, x, y, pressed); return }
         this.mouse = mouse
         if (!mouse) return
-        if (x != lastMouseX || y != lastMouseY) {
-            if (!lastMouseX.isNaN()) mouseMovedAt = kotlin.time.Clock.System.now().toEpochMilliseconds()
+        if (lastMouseX.isNaN()) {
             lastMouseX = x
             lastMouseY = y
+        } else if (kotlin.math.abs(x - lastMouseX) + kotlin.math.abs(y - lastMouseY) >= MOUSE_MOVE_PX) {
+            // A real move (not a desk's tremble): the mouse is the input in use now, so hints stop
+            // naming controller buttons that may not even be connected.
+            mouseMovedAt = kotlin.time.Clock.System.now().toEpochMilliseconds()
+            lastMouseX = x
+            lastMouseY = y
+            _lastSource.value = InputSource.POINTER
         }
-        if (pressed) mouseMovedAt = kotlin.time.Clock.System.now().toEpochMilliseconds()
+        if (pressed) {
+            mouseMovedAt = kotlin.time.Clock.System.now().toEpochMilliseconds()
+            _lastSource.value = InputSource.POINTER
+        }
     }
 
     /** The mouse moved just now: hovering something may make it the highlighted one. */
@@ -641,3 +650,6 @@ interface TextInput {
 
 /** How recently the mouse must have moved for a hover to count as the person pointing. */
 private const val HOVER_FRESH_MS = 120L
+
+/** How far the mouse goes, in pixels across both axes, before it counts as moved. */
+private const val MOUSE_MOVE_PX = 3f

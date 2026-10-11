@@ -64,7 +64,7 @@ internal val AppState.sections: Sections get() {
     val p = store.prefs.value
     return Sections(
         addons = (store.appStore.supported && p.storeEnabled) || (store.jellyfin != null && p.jellyfin.enabled) ||
-            (store.sync.service != null && p.sync.enabled) || syncthingOn || (store.romm.supported && p.romm.enabled) ||
+            (store.sync.service != null && p.sync.enabled) || syncthingOn ||
             (store.streaming.supported && p.streaming.enabled && p.streaming.hosts.isNotEmpty()),
         cartridgeOn = platform.features.cartridge && p.cartridgeEnabled,
     )
@@ -80,7 +80,7 @@ internal fun rememberTabs(app: AppState, prefs: UiPrefs): List<Destination> {
 }
 
 /** Which part of Addons is showing. */
-enum class AddonsPart { CARTRIDGE, ROMM, STORE, JELLYFIN, SYNC, SYNCTHING, STREAMING }
+enum class AddonsPart { CARTRIDGE, STORE, JELLYFIN, SYNC, SYNCTHING, STREAMING }
 
 /** Opens Streaming in Addons. */
 internal fun AppState.openStreaming() {
@@ -109,10 +109,10 @@ internal fun AppState.openCartridge() {
     selectTab(Destination.CARTRIDGE)
 }
 
-/** Opens Fuse RomM in Addons. */
+/** Opens RomM's games: the Library's All view, where they sit with every other game. */
 internal fun AppState.openRomm() {
-    addonsPart = AddonsPart.ROMM
-    selectTab(Destination.CARTRIDGE)
+    librarySegment = io.github.matiyaaa.fuse.ui.shell.library.LibrarySegment.EVERYWHERE
+    selectTab(Destination.LIBRARY)
 }
 
 /** Opens the Store in Addons, on the page of the app with [key] when given. */

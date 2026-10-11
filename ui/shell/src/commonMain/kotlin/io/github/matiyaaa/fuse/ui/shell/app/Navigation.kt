@@ -66,7 +66,7 @@ sealed interface Route {
     /** Jellyfin films and episodes kept on this device: play, delete, move to another drive. */
     data object OfflineMedia : Route
 
-    /** Fuse RomM's settings (Settings, Addons, Fuse RomM) and its setup ([pairing]: straight to signing in). */
+    /** RomM's settings (Settings, Addons, RomM) and its setup ([pairing]: straight to signing in). */
     data object RommSettings : Route
     data class RommSetup(val pairing: Boolean = false) : Route
 

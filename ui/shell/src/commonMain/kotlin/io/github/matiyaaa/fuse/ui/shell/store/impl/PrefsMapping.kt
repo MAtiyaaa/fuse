@@ -58,6 +58,8 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         destinations = home.visibleDestinations(),
         defaultLayout = scoped.layout,
         gameArt = library.gameArt,
+        libraryOpensOn = library.opensOn,
+        steam = steam,
         showHero = scoped.showHero,
         showLogo = scoped.showLogo,
         videoPreview = videoPreview.enabled,
@@ -69,6 +71,8 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         performanceOverlay = performance.overlay,
         sound = if (!sound.enabled) SoundProfile.OFF else sound.profile ?: theme.sound,
         soundVolume = sound.volume,
+        muted = sound.muted,
+        masterVolume = sound.master,
         music = MusicPrefs(
             music.enabled, music.volume, music.songPath, music.songName,
             track = music.track ?: if (music.songPath != null) BundledMusic.OWN_SONG else BundledMusic.MENU_DEFAULT,
@@ -176,11 +180,14 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             appsFilter = prefs.appsFilter,
             gameArt = prefs.gameArt,
             systemTiles = prefs.systemTiles,
+            opensOn = prefs.libraryOpensOn,
         ),
         sound = sound.copy(
             enabled = prefs.sound != SoundProfile.OFF,
             volume = prefs.soundVolume.coerceIn(0f, 1f),
             profile = prefs.sound.takeIf { it != SoundProfile.OFF && it != theme.sound },
+            muted = prefs.muted,
+            master = prefs.masterVolume.coerceIn(0f, 1f),
         ),
         music = music.copy(
             enabled = prefs.music.enabled,
@@ -198,6 +205,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
         cartridge = cartridge.copy(autoRefreshOnReturn = prefs.autoRefreshFromCartridge, enabled = prefs.cartridgeEnabled, rommDetails = prefs.cartridgeRommDetails),
         updates = updates.copy(checkForUpdates = prefs.checkForUpdates),
         capture = capture.copy(combo = prefs.captureCombo, sound = prefs.captureSound),
+        steam = prefs.steam,
         // What Fuse installed is kept as it is: only the Store writes it.
         store = store.copy(enabled = prefs.storeEnabled, variant = prefs.storeVariant, autoCheck = prefs.storeAutoCheck),
         jellyfin = prefs.jellyfin,

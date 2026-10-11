@@ -117,7 +117,7 @@ internal fun rommStatus(s: RommState, p: FuseRommSettings): Triple<Boolean?, Str
 }
 
 /**
- * Settings, Addons, Fuse RomM: the Fuse RomM native integration. Connection (Auto recommended, home
+ * Settings, Addons, RomM: the RomM native integration. Connection (Auto recommended, home
  * and outside addresses, the account), the library and where games land, how transfers behave, BIOS
  * from the server, and uploads. Turning it off keeps all of it.
  */
@@ -149,7 +149,7 @@ fun RommSettingsScreen(app: AppState) {
                 RommMark(if (compact) Size.thumb else Size.thumbL)
                 Spacer(Modifier.width(Space.l))
                 Column(verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-                    FText("Fuse RomM", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1)
+                    FText("RomM", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         StatusDot(ok)
                         Spacer(Modifier.width(Space.s))
@@ -184,7 +184,7 @@ private fun rommRows(
 ): List<MenuAction> = buildList {
     val ops = app.store.romm
     add(toggleRow(
-        "enabled", "Fuse RomM", FuseIcons.LibraryBig, p.enabled,
+        "enabled", "RomM", FuseIcons.LibraryBig, p.enabled,
         if (cartridgeOn && !p.enabled) "Turning it on turns Cartridge off in Fuse (Cartridge keeps its own setup)" else "Your RomM server's games, downloads and uploads, inside Fuse",
     ) { v -> app.scope.launch { ops.setEnabled(v) } })
     if (!p.enabled) {
@@ -248,7 +248,7 @@ private fun rommRows(
         onSelect = { app.go(Route.RommSetup(pairing = true)) },
     ))
     if (p.account.isNotBlank()) add(MenuAction("signout", "Forget sign-in", FuseIcons.LogOut, detail = "Removes Fuse's token from this device. Addresses and preferences stay", destructive = true, section = account, onSelect = {
-        app.confirm = ConfirmSpec("Forget Fuse RomM's sign-in?", "Fuse removes its RomM token from this device. Your server and this device's games stay as they are; the library Fuse kept stays to browse.", "Forget", true) {
+        app.confirm = ConfirmSpec("Forget RomM's sign-in?", "Fuse removes its RomM token from this device. Your server and this device's games stay as they are; the library Fuse kept stays to browse.", "Forget", true) {
             app.scope.launch { ops.signOut() }
         }
     }))
@@ -302,7 +302,7 @@ private fun rommRows(
     add(toggleRow("upload.scan", "Ask RomM to add uploads", FuseIcons.ScanSearch, p.scanAfterUpload, if (state.canScan) "RomM scans the system after an upload" else "Needs scan permission when pairing") { v -> set { it.copy(scanAfterUpload = v) } }.copy(section = upload))
 }
 
-/** Downloads' own settings, shared by Settings, Downloads and Fuse RomM's page. */
+/** Downloads' own settings, shared by Settings, Downloads and RomM's page. */
 internal fun transferRows(app: AppState, dl: DownloadSettings, setDl: ((DownloadSettings) -> DownloadSettings) -> Unit, section: String?): List<MenuAction> {
     val counts = (1..5).map { it to "$it at once" }
     val modes = listOf("FULL" to "Full speed", "REDUCED" to "Slower", "PAUSE" to "Pause")
@@ -369,7 +369,7 @@ private fun biosFlow(app: AppState, page: RommSettingsState, all: Boolean) {
 }
 
 /**
- * Setting up Fuse RomM: the server's addresses (one is enough; Automatic needs no thought), then
+ * Setting up RomM: the server's addresses (one is enough; Automatic needs no thought), then
  * pairing. Pairing shows a short code and a QR to approve in RomM, so a handheld never types a long
  * token; a pairing code made in RomM, a token or a password work too. Reading is asked for by
  * default; uploads only when the person wants them.
@@ -404,7 +404,7 @@ fun RommSetupScreen(app: AppState, pairing: Boolean) {
         }
     }
     fun signedIn(name: String) {
-        app.toasts.show("Fuse RomM is connected as $name", ToastKind.SUCCESS, icon = FuseIcons.CircleCheck)
+        app.toasts.show("RomM is connected as $name", ToastKind.SUCCESS, icon = FuseIcons.CircleCheck)
         app.back()
     }
     fun pair() {
@@ -481,7 +481,7 @@ fun RommSetupScreen(app: AppState, pairing: Boolean) {
                 RommMark(if (compact) Size.thumb else Size.thumbL)
                 Spacer(Modifier.width(Space.l))
                 Column {
-                    FText("Set Up Fuse RomM", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1)
+                    FText("Set Up RomM", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1)
                     FText(problem ?: "Connect Fuse to your RomM server. Automatic finds it at home and from outside.", Fuse.type.body, color = if (problem != null) Fuse.colors.warning else Fuse.colors.textMuted, maxLines = 2)
                 }
             }

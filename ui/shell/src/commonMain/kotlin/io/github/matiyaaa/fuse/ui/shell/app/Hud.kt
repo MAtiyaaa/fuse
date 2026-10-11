@@ -1,6 +1,8 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.horizontalScroll
@@ -186,7 +188,7 @@ fun Hud(
             Modifier.fillMaxSize().padding(horizontal = gutter),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FuseMark(Modifier.size(Size.iconL))
+            LitFuseMark(Modifier.size(Size.iconL))
             Spacer(Modifier.width(Space.s))
             // The tabs take what is left after the buttons and status, which never shrink. The LB/RB
             // glyphs keep their place while hidden, so nothing moves when the stick reaches the tabs;
@@ -347,6 +349,9 @@ fun Hud(
     }
 }
 
+/** The active bar's length under a round button, as a share of [Size.sparkWidth]: inside its circle. */
+private const val BUTTON_SPARK = 0.58f
+
 /** How long tabs scrolled by touch stay put before gliding back to the place you are on. */
 private const val TABS_SETTLE_MS = 10_000L
 
@@ -435,7 +440,11 @@ private fun BoxScope.ActiveMarker(anchors: HudAnchors, key: Any) {
             val atLead = start0 + (target - start0) * l
             val atTrail = start0 + (target - start0) * t
             drawn[0] = (atLead + atTrail) / 2
-            val half = Size.sparkWidth.toPx() / 2
+            // Under a round button (Search, Settings) the bar is shorter, so it sits inside the
+            // button's circle instead of poking past its edge; it widens again on its way to a tab.
+            fun halfOf(k: Any?) = (if (k is HudButton) Size.sparkWidth * BUTTON_SPARK else Size.sparkWidth).toPx() / 2
+            val halfFrom = halfOf(from[0] ?: shown[0])
+            val half = halfFrom + (halfOf(key) - halfFrom) * l
             var start: Float
             var end: Float
             if (target >= start0) {
@@ -778,6 +787,76 @@ fun FuseMark(modifier: Modifier = Modifier, color: Color = Fuse.colors.text, spa
     Canvas(modifier) {
         drawBrandMark(Offset.Zero, size.width, color, spark)
     }
+}
+
+/**
+ * Fuse's mark in the top line, with a small secret: tapped (or clicked), the fuse is lit. The mark
+ * hops and turns once, its spark flares, and a ring of embers bursts from the spark and fades, all
+ * in its own spot and in under a second. Nothing else on the line moves, and it never takes focus.
+ * Reduced motion keeps only the flare.
+ */
+@Composable
+private fun LitFuseMark(modifier: Modifier = Modifier) {
+    val c = Fuse.colors
+    val motion = Fuse.motion
+    val lit = remember { FuselineValue(1f) }
+    var lights by remember { mutableIntStateOf(0) }
+    LaunchedEffect(lights) {
+        if (lights == 0) return@LaunchedEffect
+        lit.snapTo(0f)
+        lit.animateTo(1f, io.github.matiyaaa.fuse.ui.fuseline.Tween(if (motion.reduced) 360 else 900, curve = Curves.Linear))
+    }
+    val ink = c.text
+    val accent = c.accent
+    val reduced = motion.reduced
+    Canvas(
+        modifier
+            .pointerInput(Unit) { detectTapGestures { lights++ } }
+            .semantics { contentDescription = "Fuse" },
+    ) {
+        val p = lit.value
+        val active = p < 1f
+        val w = size.width
+        val spark = Offset(w * BrandArt.SPARK.x / BrandArt.MARK, w * BrandArt.SPARK.y / BrandArt.MARK)
+        if (!active) {
+            drawBrandMark(Offset.Zero, w, ink, accent)
+            return@Canvas
+        }
+        // A hop that lands softly, and one turn that settles with a little overshoot.
+        val hop = if (reduced) 0f else -kotlin.math.sin(p * kotlin.math.PI.toFloat()).let { it * it } * w * 0.28f
+        val turn = if (reduced) 0f else 360f * easeOutBack(p.coerceIn(0f, 1f))
+        val squash = if (reduced) 1f else 1f + 0.12f * kotlin.math.sin(p * 2f * kotlin.math.PI.toFloat())
+        withTransform({
+            translate(0f, hop)
+            rotate(turn, Offset(w / 2, w / 2))
+            scale(squash, 2f - squash, Offset(w / 2, w))
+        }) { drawBrandMark(Offset.Zero, w, ink, accent) }
+        // The spark flares and fades back.
+        val flare = kotlin.math.sin(p * kotlin.math.PI.toFloat())
+        drawCircle(
+            Brush.radialGradient(listOf(accent.copy(alpha = 0.55f * flare), accent.copy(alpha = 0f)), center = spark + Offset(0f, hop), radius = w * (0.3f + 0.5f * flare)),
+            radius = w * (0.3f + 0.5f * flare), center = spark + Offset(0f, hop),
+        )
+        if (!reduced) {
+            // Embers: a ring of small sparks thrown out from the spark, slowing and fading.
+            val out = 1f - (1f - p) * (1f - p)
+            for (i in 0 until EMBERS) {
+                val a = (i * 2f * kotlin.math.PI.toFloat() / EMBERS) + 0.35f
+                val d = w * (0.15f + 0.95f * out) * (if (i % 2 == 0) 1f else 0.72f)
+                val at = spark + Offset(kotlin.math.cos(a) * d, kotlin.math.sin(a) * d + hop * (1f - p))
+                drawCircle(if (i % 3 == 0) ink else accent, radius = w * 0.045f * (1f - p * 0.7f), center = at, alpha = (1f - p).coerceIn(0f, 1f))
+            }
+        }
+    }
+}
+
+private const val EMBERS = 9
+
+private fun easeOutBack(t: Float): Float {
+    val c1 = 1.4f
+    val c3 = c1 + 1f
+    val x = t - 1f
+    return 1f + c3 * x * x * x + c1 * x * x
 }
 
 /** Current local time, updated on the minute (not every second) to keep the idle home screen idle. */

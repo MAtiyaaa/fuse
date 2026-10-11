@@ -320,49 +320,9 @@ fun homeRows(app: AppState): List<MenuAction> {
                 }
             }
         } else {
-            // The board's widgets: their sizes here for the controller; on Home, hold one to move or resize it.
-            labelled("Widgets") {
-                val board = p.home.boardWidgets().filter { app.offers(it.kind) }
-                fun saveBoard(change: (List<io.github.matiyaaa.fuse.model.HomeWidget>) -> List<io.github.matiyaaa.fuse.model.HomeWidget>) =
-                    set { s -> s.copy(home = s.home.copy(board = change(s.home.boardWidgets()).mapIndexed { i, w -> w.copy(order = i) })) }
-                for (w in board) {
-                    val size = w.boardSize
-                    add(MenuAction(
-                        "b.${w.id}", w.kind.title(), widgetIcon(w.kind),
-                        trailing = Trailing.Value("${size.width} by ${size.height}"),
-                        onSelect = {
-                            app.choice = ChoiceSpec(
-                                title = w.kind.title(),
-                                icon = widgetIcon(w.kind),
-                                message = "Its size on Home, in cells across by down. On Home you can also drag its corner",
-                                options = BoardSizes.map { (bw, bh) ->
-                                    MenuAction("size.$bw.$bh", "$bw by $bh", null, trailing = Trailing.Check(size.width == bw && size.height == bh), onSelect = {
-                                        saveBoard { list -> list.map { if (it.id == w.id) it.copy(width = bw, height = bh) else it } }
-                                        app.choice = null
-                                    })
-                                } + MenuAction("remove", "Remove from Home", FuseIcons.Minus, destructive = true, onSelect = {
-                                    saveBoard { list -> list.filterNot { it.id == w.id } }
-                                    app.choice = null
-                                }),
-                            )
-                        },
-                    ))
-                }
-                val missing = WidgetKind.entries.filter { k -> app.offersToAdd(k) && board.none { it.kind == k } }
-                if (missing.isNotEmpty()) {
-                    add(MenuAction("b.add", "Add a widget", FuseIcons.CirclePlus, detail = "It goes at the end of the board", trailing = Trailing.Chevron, onSelect = {
-                        app.choice = ChoiceSpec(
-                            title = "Add a widget",
-                            icon = FuseIcons.CirclePlus,
-                            options = missing.map { k ->
-                                MenuAction("add.$k", k.title(), widgetIcon(k), onSelect = {
-                                    saveBoard { list -> list + io.github.matiyaaa.fuse.model.HomeWidget(k.name.lowercase(), k, list.size) }
-                                    app.choice = null
-                                })
-                            },
-                        )
-                    }))
-                }
+            // Widgets are arranged on Home itself (hold one to move, resize or remove it, or open
+            // the board's edit mode to add one). Settings keeps only what can't be done there.
+            labelled("Board") {
                 add(MenuAction("b.reset", "Reset the board", FuseIcons.RotateCcw, detail = "Back to the widgets and sizes Home comes with, on this device", onSelect = {
                     app.confirm = ConfirmSpec(
                         title = "Reset the board?",
@@ -385,9 +345,6 @@ fun homeRows(app: AppState): List<MenuAction> {
         }
     }
 }
-
-/** The sizes a widget can take on the board, small to large. */
-private val BoardSizes = listOf(1 to 1, 2 to 1, 3 to 1, 4 to 1, 1 to 2, 2 to 2, 3 to 2, 4 to 2, 1 to 3, 2 to 3, 3 to 3, 4 to 3)
 
 private fun widgetIcon(k: WidgetKind) = when (k) {
     WidgetKind.CONTINUE_PLAYING -> FuseIcons.CirclePlay
@@ -446,6 +403,13 @@ fun libraryRows(app: AppState): List<MenuAction> {
                 trailing = Trailing.Chevron,
                 onSelect = { app.addGame() },
             ))
+        }
+        labelled("Browsing") {
+            add(app.choiceRow(
+                "opensOn", "Library opens on", FuseIcons.LibraryBig, p.libraryOpensOn,
+                listOf("INSTALLED" to "Installed", "ALL" to "All"),
+                optionDetail = { if (it == "ALL") "Every game wherever it is: here, on RomM and on your other devices" else "The games on this device" },
+            ) { v -> app.store.updatePrefs { it.copy(libraryOpensOn = v) } })
         }
         app.platform.steam?.let { steam ->
             // Never asked: on only when Steam games were added (as the library does).
@@ -1087,6 +1051,14 @@ fun soundRows(app: AppState): List<MenuAction> {
     val music = p.music
     fun setMusic(change: (MusicPrefs) -> MusicPrefs) = app.store.updatePrefs { it.copy(music = change(it.music)) }
     return buildList {
+        // The master over everything below: off means silence, whatever each one's own switch says.
+        labelled("Sound") {
+            add(toggleRow(
+                "audio", "Sound", if (p.muted) FuseIcons.VolumeOff else FuseIcons.Volume, !p.muted,
+                if (p.muted) "Everything is silent: music, interface sounds and the startup sound" else "Music and interface sounds, each with its own setting below",
+            ) { v -> app.store.updatePrefs { it.copy(muted = !v) } })
+            if (!p.muted) add(app.percentRow("master", "Master volume", FuseIcons.Volume, p.masterVolume, "Scales every sound Fuse makes") { v -> app.store.updatePrefs { it.copy(masterVolume = v) } })
+        }
         labelled("Menu music") {
             if (app.platform.music == null) {
                 add(infoRow("music", "Menu music", "Not available", icon = FuseIcons.Music, detail = "This device can't play music in Fuse"))

@@ -85,6 +85,9 @@ object Size {
     val badge: Dp = 24.dp
     val badgeIcon: Dp = 14.dp
 
+    /** A quiet mark that only confirms a state (a favourite's heart): smaller than [badge], never louder than the art. */
+    val badgeSmall: Dp = 18.dp
+
     /** Status and attention dots. */
     val dot: Dp = 8.dp
 

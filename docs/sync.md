@@ -556,8 +556,10 @@ things keeps its files in a `Fuse Sync Host` folder of its own there.
 profiles, art and caches go, and Fuse Sync is let go of first (a host is deleted, a device forgets
 its host). Game files, emulators and the saves in the emulators' folders stay.
 
-A new profile starts with the device's current look, Home and settings, which then become the
-profile's own. Resetting Home (Settings, Home) changes this device only, and **Undo Home Reset**
+The first profile on a device takes over the look, Home and settings the device already had. Anyone
+added after them starts from Fuse's defaults, so a new person never inherits someone else's theme;
+the themes added on the device stay available to everyone. Switching person records the outgoing
+person's latest choices first, so a theme picked just before switching is never undone. Resetting Home (Settings, Home) changes this device only, and **Undo Home Reset**
 brings back the Home from before.
 
 ## Syncthing instead
