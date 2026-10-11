@@ -88,6 +88,8 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   starts from Fuse's defaults, never the previous person's look.
 - A PIN-protected profile opens offline against the PIN entered on this device before.
 - Games that are another game's parts never show among removed games.
+- Phone Link starts on the next port when its own is taken (by another program, or by connections
+  that just closed), instead of never starting and never saying why.
 - Restarting Fuse on a device that keeps its own profiles no longer shows the profiles for a moment
   with nobody chosen.
 - The Controls page no longer crashes on its tabs.
