@@ -121,7 +121,13 @@ and the library, and a first step toward Fuse knowing emulators for itself.
 - Saves are found where emulators really keep them, checked against each one's own source:
   DuckStation's newer Windows folder (%LOCALAPPDATA%) and portable settings.ini, Eden's own Save Data
   and NAND directories (on Android too, with the setting to use named), Kenji-NX read as the Ryujinx
-  it is built from, and RPCS3's dev_hdd0 where its vfs.yml moved it.
+  it is built from, and RPCS3's dev_hdd0 where its vfs.yml moved it. Every other emulator was
+  checked the same way: RetroArch's Mac default (Documents) and its by-content folders, Flycast's
+  per-game VMUs (named by the disc's product number, never mixed with a shared VMU), Play!'s card
+  (`vfs/mc0`), shadPS4's newer per-user save folder, Vita3K's portable folder and pref-path, Cemu's
+  portable folder and mlc path, Xenia's home folder on Linux, Ryujinx's account save before its
+  cache, Mupen64Plus's shortened save names, and the save folders named in MAME's and ScummVM's
+  own settings.
 
 - A choice made just as a profile switch or a sync round was being applied (a theme picked the
   moment after switching) is no longer thrown away; it stays the person's newest choice.

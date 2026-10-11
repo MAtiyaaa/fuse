@@ -292,7 +292,8 @@ Saves are found by per-emulator adapters. Fuse One and Syncthing use the same on
 | RetroArch | Per core, where its config says (beside the content, or its saves folder) | Per core |
 | Lemuroid | Its saves folder, when moved out of Android's private storage | |
 | DuckStation, ePSXe, FPse | Memory cards | DuckStation |
-| PCSX2, NetherSX2, AetherSX2, ARMSX2, Play! | Memory cards (shared by every game on them, synced as cards) | |
+| PCSX2, NetherSX2, AetherSX2, ARMSX2 | Memory cards (shared by every game on them, synced as cards) | |
+| Play! | Its first memory card, the folder `vfs/mc0` in Play Data Files (or where its `config.xml` moved it) | |
 | PPSSPP | SAVEDATA folders by game id, on the memory stick you chose | |
 | Dolphin (and MMJR) | GameCube memory cards, Wii saves | |
 | melonDS (computer) | The save folder in its settings (`SaveFilePath` in `melonDS.toml`), else beside the game; portable, Flatpak and system config folders | |
@@ -304,18 +305,19 @@ Saves are found by per-emulator adapters. Fuse One and Syncthing use the same on
 | mGBA, SkyEmu (Android), Pizza Boy, Linkboy, other handheld emulators | Beside the game (a guess where the emulator publishes no layout) | |
 | DraStic | `backup/<game>.dsv`, converted to and from a plain DS save | |
 | Mupen64Plus, M64Plus FZ | The game's EEPROM, SRAM, FlashRAM and paks, converted to and from RetroArch's one file | |
-| Flycast, Redream | VMUs | |
+| Flycast | Each game's own VMU, `<product number>_vmu_save_A1.bin` (read from a GDI's boot header), or the one shared VMU when Per-game VMU is off; `Dreamcast.VMUPath` when set | |
+| Redream | Its shared VMU, `vmu0.bin`, beside its program | |
 | Yaba Sanshiro, Saturn emulators | Backup RAM | |
-| MAME | NVRAM by set | |
-| ScummVM | Its saves by game | |
+| MAME | NVRAM by set, in `nvram_directory` from `mame.ini` | |
+| ScummVM | Its saves folder, `savepath` from `scummvm.ini` when set | |
 | RPCS3 (and on Android) | dev_hdd0 savedata by serial | |
-| Vita3K | ux0 savedata by title id | |
-| shadPS4 | User savedata by serial | |
+| Vita3K | ux0 savedata by title id: its `portable/fs`, the `pref-path` in its `config.yml`, or its own folder | |
+| shadPS4 | Savedata by serial, `home/1000/savedata` in newer versions and `savedata/1` in older ones | |
 | Azahar, Citra, Lime3DS, Mandarine | The emulated SD card, by the cartridge's title id | `states/<title id>.<slot>.cst` |
 | Eden, Citron, Sudachi, yuzu and forks | The emulated NAND, by title id | |
-| Ryujinx | Its numbered save folders, matched by title id | |
-| Cemu | `mlc01/usr/save`, by the title id in the game's `meta.xml` | |
-| Xenia | `content`, by the title id in the game's name | |
+| Ryujinx | Its numbered save folders, matched by title id, the game's account save before its cache | |
+| Cemu | `mlc01/usr/save` (or the `mlc_path` its settings name), by the title id in the game's `meta.xml` | |
+| Xenia | `content/<profile>`, by the title id in the game's name | |
 
 Title ids come from the game itself where they can: a 3DS cartridge's header (a `.3ds`, a `.cxi`
 or the TMD inside a `.cia`), a Switch game's `[0100…]` tag or the ticket inside its NSP, a Wii U
