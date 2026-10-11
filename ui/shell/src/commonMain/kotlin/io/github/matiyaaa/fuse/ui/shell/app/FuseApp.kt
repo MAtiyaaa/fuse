@@ -226,7 +226,8 @@ private fun FuseAppContent(
     LaunchedEffect(Unit) {
         // The startup animation, once per start of Fuse (a window made again doesn't replay it).
         // The very first start opens setup with its own, longer opening instead.
-        if (startupIntro && !StartupIntro.played && app.safeMode == null && stored.startupAnimation) {
+        // Started from a game's entry in Steam: straight to the game, without the animation.
+        if (startupIntro && !StartupIntro.played && app.safeMode == null && stored.startupAnimation && !(platform.startupPlay != null && stored.onboardingDone)) {
             if (stored.onboardingDone) app.intro = true else app.setupOpening = true
         }
         StartupIntro.played = true
@@ -234,6 +235,11 @@ private fun FuseAppContent(
         delay(StartupGuard.SETTLE_MS)
         onSettled()
     }
+    // A game's entry in Steam started Fuse to play it, and which games are in Steam already.
+    LaunchedEffect(Unit) {
+        platform.startupPlay?.let { id -> if (app.safeMode == null) app.playOnStart(id) }
+    }
+    LaunchedEffect(Unit) { app.refreshSteamGames() }
     // Back after a long while away (the device slept, the screen was off): the animation again, as
     // though Fuse had just been switched on. Only where this start would have played it.
     LaunchedEffect(Unit) {

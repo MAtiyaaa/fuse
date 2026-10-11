@@ -45,6 +45,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.checkSteamGames
+import io.github.matiyaaa.fuse.ui.shell.app.refreshSteamGames
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ReorderSpec
@@ -1131,6 +1133,50 @@ private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.pla
             },
         ),
     ) + listOfNotNull(
+        // Games Fuse put in Steam, each starting through Fuse: look them over, take them out, undo.
+        MenuAction(
+            "steam.games.fuse", "Your games in Steam", FuseIcons.LibraryBig,
+            detail = when {
+                steam.waitingForSteamGames -> "Waiting for Steam to close to add them. Steam isn't closed for it"
+                app.steamGameIds.isEmpty() -> "Add a game from its options, or a whole system from its page's options"
+                else -> "${app.steamGameIds.size} ${if (app.steamGameIds.size == 1) "game starts" else "games start"} through Fuse from Steam. Look them over, take them out or undo"
+            },
+            trailing = if (app.steamGameIds.isEmpty()) Trailing.None else Trailing.Value(app.steamGameIds.size.toString()),
+            enabled = !live.busy,
+            onSelect = {
+                app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+                    title = "Your games in Steam",
+                    icon = FuseIcons.LibraryBig,
+                    message = "Each starts through Fuse, so it plays with its emulator, saves and time as in Fuse. Steam must be closed while its library changes.",
+                    options = listOfNotNull(
+                        MenuAction("steam.games.check", "Look them over", FuseIcons.ScanSearch, detail = "Games no longer in Fuse, entries for an older Fuse, and doubles", onSelect = {
+                            app.choice = null
+                            app.checkSteamGames()
+                        }),
+                        MenuAction("steam.games.remove", "Take them all out", FuseIcons.Trash, detail = "Only the entries Fuse made. Your other shortcuts stay", onSelect = {
+                            app.choice = null
+                            app.confirm = io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec(
+                                "Take Fuse's games out of Steam?",
+                                "Only the entries Fuse made for its games leave Steam's library, with their collections. The games stay in Fuse; Fuse's own entry and your other shortcuts stay as they are.",
+                                "Take out", destructive = true,
+                            ) {
+                                app.scope.launch {
+                                    steam.removeGames(null).onSuccess { app.toasts.show(it) }.onFailure { app.toasts.show(it.message ?: "Couldn't change Steam's library", ToastKind.ERROR) }
+                                    app.refreshSteamGames()
+                                }
+                            }
+                        }).takeIf { app.steamGameIds.isNotEmpty() },
+                        MenuAction("steam.games.undo", "Undo Fuse's last change", FuseIcons.Undo, detail = "Steam's library as it was before it", onSelect = {
+                            app.choice = null
+                            app.scope.launch {
+                                steam.undoGames().onSuccess { app.toasts.show(it, icon = FuseIcons.Undo) }.onFailure { app.toasts.show(it.message ?: "Couldn't change Steam's library", ToastKind.ERROR) }
+                                app.refreshSteamGames()
+                            }
+                        }).takeIf { steam.canUndoGames },
+                    ),
+                )
+            },
+        ).takeIf { !steam.gameMode },
         app.confirmRow(
             "steam.remove", "Remove Fuse from Steam", FuseIcons.Trash,
             "Remove Fuse from Steam?", "Only Fuse's own entry leaves Steam's library. Your other shortcuts, your games and everything in Fuse stay as they are. Close Steam first.", "Remove",

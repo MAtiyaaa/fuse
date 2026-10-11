@@ -288,6 +288,14 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
             add(MenuAction("collection", "Add to Collection", FuseIcons.ListPlus, trailing = Trailing.Chevron, onSelect = { collectionPicker(card.id, card.title) }))
         }
         add(MenuAction("pin", "Pin to Home", FuseIcons.Pin, onSelect = { run { lib.setPinned(card.id, true); toasts.show("Pinned to Home") } }))
+        // Steam's library (computers): the game starts through Fuse, with its art.
+        if (platform.steam != null && !card.isApp) {
+            if (card.id.value in steamGameIds) {
+                add(MenuAction("steam", "Remove from Steam", FuseIcons.Gamepad, detail = "Only the entry Fuse made", onSelect = { closeOverlays(); removeFromSteam(listOf(card), card.title) }))
+            } else {
+                add(MenuAction("steam", "Add to Steam", FuseIcons.Gamepad, detail = "Starts through Fuse, with its art", onSelect = { closeOverlays(); addToSteam(listOf(card), card.title) }))
+            }
+        }
         // Fuse Sync: this game's saves through time, from every device (a host keeps them).
         if (!card.isApp && syncProfile != null && store.prefs.value.sync.role.isNotEmpty()) {
             add(MenuAction("saves", "Save History", FuseIcons.History, detail = "Every version of its saves, from every device", trailing = Trailing.Chevron, onSelect = {

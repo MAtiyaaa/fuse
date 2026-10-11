@@ -94,6 +94,13 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   kind you play most, a game you left, a well rated one not started yet), and Spotlight shows one game
   a day with its reason. A system's page names its game of the day too (Settings, Library). Worked out
   on the device from the library alone; nothing about what anyone plays leaves it.
+- **Your games in Steam.** A game's options, or a system's or collection's page, put games in Steam's
+  library on a computer, each starting through Fuse (so with its emulator, saves and play time as in
+  Fuse, and Fuse closes when it ends), with the art Fuse keeps for it and a Steam collection for its
+  system. Fuse says first which are new, which are brought up to date and which another tool (Steam
+  ROM Manager, EmuDeck) already put there, and leaves those alone. Settings, Library, Steam looks them
+  over (games no longer in Fuse, entries for an older Fuse, doubles), takes them out, or undoes Fuse's
+  last change. Steam is never closed for it: while it is open, the games go in when it next closes.
 - **Arrange the top line in place.** Hold a tab (touch, mouse or confirm) and it lifts; move it
   along with the D-pad or a drag, as Addons' tabs move, and put it down. Home stays first.
 

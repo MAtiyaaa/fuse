@@ -116,6 +116,7 @@ import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.addToSteam
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
@@ -417,7 +418,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             }))
         }.orEmpty()
         val base = app.gameMenu(card, extra = remove)
-        app.openContextMenu(base.copy(actions = base.actions + viewActions(app, state, platformId, layout, sort)))
+        val pageName = systemCard?.platform?.name?.let { "your $it games" } ?: collection?.name?.let { "the games of $it" }
+        app.openContextMenu(base.copy(actions = base.actions + viewActions(app, state, platformId, layout, sort, list.orEmpty().takeIf { pageName != null }, pageName)))
     }
 
     fun press(button: LibraryButton) {
@@ -1347,8 +1349,25 @@ private fun LibraryEmpty(
 }
 
 /** View options appended to the game menu inside a library: layout, sort, hidden games, rescan. */
-private fun viewActions(app: AppState, state: LibraryViewState, platform: PlatformId?, current: LibraryLayout, sort: SortOrder): List<MenuAction> {
-    return listOf(
+private fun viewActions(
+    app: AppState,
+    state: LibraryViewState,
+    platform: PlatformId?,
+    current: LibraryLayout,
+    sort: SortOrder,
+    /** A system's or collection's games, which can go into Steam's library together. */
+    page: List<GameCard>? = null,
+    pageName: String? = null,
+): List<MenuAction> {
+    val steam = listOfNotNull(
+        app.platform.steam?.takeIf { page != null && pageName != null && page.isNotEmpty() }?.let {
+            MenuAction("steam.page", "Add all to Steam", FuseIcons.Gamepad, detail = "Each starts through Fuse, with its art. The system becomes a Steam collection", onSelect = {
+                app.closeOverlays()
+                app.addToSteam(page!!, pageName!!)
+            })
+        },
+    )
+    return steam + listOf(
         MenuAction("sort", "Sort by", FuseIcons.Sort, trailing = Trailing.Value(sortLabel(sort)), onSelect = {
             app.contextMenu = null
             app.choice = sortPicker(app, sort)

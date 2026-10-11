@@ -222,6 +222,9 @@ class AppState(
     /** Who is playing here (Fuse Sync's profile in use); null while Fuse Sync is off or no one is chosen. */
     var syncProfile by mutableStateOf<io.github.matiyaaa.fuse.sync.ProfileInfo?>(null)
 
+    /** The games Fuse put in Steam's library here (by id), as last read; empty where Steam isn't. */
+    var steamGameIds by mutableStateOf<Set<Long>>(emptySet())
+
     /** How many profiles the Fuse Sync host has (0 while it is off): the top line shows who is playing only with two or more. */
     var syncProfileCount by mutableStateOf(0)
 

@@ -386,3 +386,41 @@ internal fun AuditDriver.discoverScreens() {
         shoot("a system's game of the day in its toolbar", 1_500)
     }
 }
+
+/**
+ * Fuse's games in Steam: a system's options add them all, the question says which are new and which
+ * another tool already put there, the game's own options then offer to take it out, and Settings,
+ * Library has them to look over, take out or undo.
+ */
+internal fun AuditDriver.steamGamesScreens() {
+    scenario("library", "steam games") {
+        val platform = AuditPlatform(size, steam = AuditSteam(), host = io.github.matiyaaa.fuse.model.Host.LINUX)
+        useLibrary(platform)
+        tab(Destination.SYSTEMS)
+        tap(PadButton.A)
+        waitFor("Title")
+        settle(1_500)
+        tap(PadButton.X)
+        waitFor("Add to Steam")
+        shoot("a game's options: add it to Steam", 1_200)
+        // Further down, the system's own: all of its games at once.
+        tapText("Add all to Steam")
+        waitFor("to Steam?")
+        shoot("what will happen, before anything is written", 1_200)
+        tap(PadButton.A)
+        waitFor("added")
+        shoot("added, said in a notice", 1_200)
+        settle(2_000)
+        tap(PadButton.X)
+        waitFor("Remove from Steam")
+        shoot("a game in Steam: its options offer to take it out", 1_200)
+        tap(PadButton.B)
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("library"))
+        tap(PadButton.DPAD_RIGHT)
+        settle(600)
+        tapText("Your games in Steam")
+        waitFor("Look them over")
+        shoot("Settings, Library: Fuse's games in Steam", 1_200)
+    }
+}

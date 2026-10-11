@@ -472,6 +472,38 @@ internal class AuditSteam : io.github.matiyaaa.fuse.ui.shell.platform.SteamInteg
         inLibrary = false
         return Result.success("Fuse is out of Steam's library.")
     }
+
+    // Games: Steam ROM Manager already put the Metroid games there; the rest are Fuse's to add.
+    private val games = java.util.concurrent.ConcurrentHashMap.newKeySet<Long>()
+    @Volatile private var undo: Set<Long>? = null
+    override suspend fun gamesInSteam(): Set<Long> = games.toSet()
+    override suspend fun planGames(games: List<io.github.matiyaaa.fuse.library.steam.SteamGameEntry>) = games.map { g ->
+        io.github.matiyaaa.fuse.library.steam.SteamGamePlanItem(
+            g,
+            when {
+                g.gameId in this.games -> io.github.matiyaaa.fuse.library.steam.SteamGameAction.UNCHANGED
+                "Metroid" in g.name -> io.github.matiyaaa.fuse.library.steam.SteamGameAction.ELSEWHERE
+                else -> io.github.matiyaaa.fuse.library.steam.SteamGameAction.CREATE
+            },
+        )
+    }
+    override suspend fun addGames(games: List<io.github.matiyaaa.fuse.library.steam.SteamGameEntry>, art: Map<Long, io.github.matiyaaa.fuse.library.steam.SteamArt>, collections: Boolean): Result<String> {
+        undo = this.games.toSet()
+        val new = games.filter { "Metroid" !in it.name }.map { it.gameId }
+        this.games += new
+        return Result.success(if (new.size == 1) "1 game added. Start Steam to see it." else "${new.size} games added. Start Steam to see them.")
+    }
+    override suspend fun removeGames(gameIds: Set<Long>?): Result<String> {
+        undo = games.toSet()
+        if (gameIds == null) games.clear() else games -= gameIds
+        return Result.success("Out of Steam's library.")
+    }
+    override val canUndoGames: Boolean get() = undo != null
+    override suspend fun undoGames(): Result<String> {
+        val back = undo ?: return Result.failure(IllegalStateException("There's no change of Fuse's to undo."))
+        games.clear(); games += back; undo = null
+        return Result.success("Steam's library is back as it was before Fuse's last change.")
+    }
 }
 
 /** Decky Loader installed, the Fuse plugin not yet. Installing succeeds, as the password prompt would. */

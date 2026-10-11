@@ -225,6 +225,8 @@ class DesktopPlatformUi(
 
     override fun exit() = window.exitApplication()
 
+    override val startupPlay: Long? = args.indexOf("--play").takeIf { it >= 0 }?.let { args.getOrNull(it + 1)?.toLongOrNull() }
+
     private val crashLog = io.github.matiyaaa.fuse.desktop.CrashLog(File(dirs.data, "crash"))
 
     override suspend fun readClipboardText(): String? = kotlinx.coroutines.withContext(Dispatchers.IO) {

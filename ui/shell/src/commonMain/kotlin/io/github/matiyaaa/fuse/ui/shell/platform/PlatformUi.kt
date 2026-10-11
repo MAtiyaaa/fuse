@@ -83,6 +83,12 @@ interface PlatformUi {
     /** Leaves Fuse. Not offered while Fuse is the Home app (Home has nowhere to exit to). */
     fun exit()
 
+    /**
+     * The game Fuse was started to play (`--play <id>`, from a game's entry in Steam), or null. Fuse
+     * starts it as soon as it is ready and closes again once it ends.
+     */
+    val startupPlay: Long? get() = null
+
     /** Text on the system clipboard, or null when it is empty, not text or can't be read. */
     suspend fun readClipboardText(): String? = null
 
@@ -147,6 +153,50 @@ interface SteamIntegration {
 
     /** Takes Fuse's own entry (and only Fuse's) out of Steam's library; its art stays for the person to delete. */
     suspend fun removeFuse(): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
+    /** The games Fuse put in Steam's library here, by Fuse's game id, for any Steam user. */
+    suspend fun gamesInSteam(): Set<Long> = emptySet()
+
+    /**
+     * What putting [games] in Steam's library would do, game by game, over this computer's Steam
+     * users, before anything is written. Null where Steam's library can't be read.
+     */
+    suspend fun planGames(games: List<io.github.matiyaaa.fuse.library.steam.SteamGameEntry>): List<io.github.matiyaaa.fuse.library.steam.SteamGamePlanItem>? = null
+
+    /**
+     * Puts [games] in Steam's library for every Steam user here, each starting through Fuse, with its
+     * pictures from [art] and, with [collections], in a Steam collection for its system. Steam is
+     * never closed for it: while it is open, the games go in when it next closes.
+     */
+    suspend fun addGames(
+        games: List<io.github.matiyaaa.fuse.library.steam.SteamGameEntry>,
+        art: Map<Long, io.github.matiyaaa.fuse.library.steam.SteamArt>,
+        collections: Boolean,
+    ): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
+
+    /** Games waiting for Steam to close before they go into its library. */
+    val waitingForSteamGames: Boolean get() = false
+
+    /** Takes Fuse's entries for [gameIds] (null: all of Fuse's games) out of Steam's library; nobody else's. */
+    suspend fun removeGames(gameIds: Set<Long>?): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
+
+    /** What is wrong with Fuse's game entries: games no longer in [library], an older Fuse, doubles. */
+    suspend fun gamesHealth(library: Set<Long>): List<io.github.matiyaaa.fuse.library.steam.SteamHealthIssue> = emptyList()
+
+    /**
+     * Puts Fuse's game entries right: those for games no longer in [library] and doubles go, and
+     * [moved] (entries that start an older Fuse) are pointed at this one, keeping what the person changed.
+     */
+    suspend fun repairGames(
+        library: Set<Long>,
+        moved: List<io.github.matiyaaa.fuse.library.steam.SteamGameEntry>,
+        art: Map<Long, io.github.matiyaaa.fuse.library.steam.SteamArt>,
+    ): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
+
+    /** Fuse's last change to Steam's games can be undone. */
+    val canUndoGames: Boolean get() = false
+
+    /** Puts Steam's library back as it was before Fuse's last change to its games. */
+    suspend fun undoGames(): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
 }
 
 /** What Decky Loader and the Fuse Decky plugin look like on this device. */
