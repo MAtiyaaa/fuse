@@ -1115,6 +1115,29 @@ internal fun AuditDriver.companionScreens() {
 
 /** The theme page: the gallery and its filters, the studio and a save, and a bright theme; at every size. */
 internal fun AuditDriver.themeScreens() {
+    scenario("settings", "calibrate this screen") {
+        useLibrary()
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("accessibility"))
+        tap(PadButton.DPAD_RIGHT)
+        tapText("Calibrate this screen")
+        waitFor("How large everything is")
+        shoot("step one: the interface's size", 1_500)
+        tap(PadButton.A)
+        waitFor("Where your screen ends")
+        tap(PadButton.DPAD_RIGHT, 5)
+        shoot("step two: the edges moved in 5%", 1_500)
+        tap(PadButton.A)
+        waitFor("Text you can read")
+        tap(PadButton.DPAD_RIGHT)
+        shoot("step three: large text", 1_500)
+        tap(PadButton.A)
+        waitFor("Calibrated")
+        shoot("saved: this screen keeps its own", 1_500)
+        tap(PadButton.B)
+        libraryStore.updatePrefs { it.copy(display = it.display.copy(calibrations = emptyMap())) }
+    }
+
     scenario("settings", "visual aids") {
         useLibrary()
         openSettings()

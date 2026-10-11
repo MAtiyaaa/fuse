@@ -165,7 +165,26 @@ data class DisplayProfile(
     val interfaceSize: Int = 0,
     /** Zero means this display's maximum. Quality and Low Power change effects, never this cap. */
     val maxRefreshRate: Int = 0,
+    /**
+     * Screens calibrated on this device, by [DisplayInfo.calibrationKey]: each its own size, edges
+     * and text, used in place of the settings every screen shares while Fuse is on it.
+     */
+    val calibrations: Map<String, ScreenCalibration> = emptyMap(),
 )
+
+/**
+ * One screen's own fit, found by calibrating it (a TV that cuts off its edges, one seen from across
+ * the room): room kept clear at its edges in percent of the screen ([margin], 0 to 10), how large text
+ * is ([textScale]), and how large the whole interface is ([interfaceSize] in percent, 0 automatic).
+ */
+@Serializable
+data class ScreenCalibration(val margin: Int = 0, val textScale: Float = 1f, val interfaceSize: Int = 0)
+
+/** What a screen's calibration is kept under: its name and its own size, so the same TV is known again. */
+fun DisplayInfo.calibrationKey(): String = "${name.trim().ifEmpty { "Screen" }} ${outputWidthPx ?: widthPx}x${outputHeightPx ?: heightPx}"
+
+/** The screen Fuse's main window is on: the primary one, else the first that is on. */
+fun List<DisplayInfo>.mainScreen(): DisplayInfo? = firstOrNull { it.isPrimary } ?: firstOrNull { it.isOn } ?: firstOrNull()
 
 /**
  * How Fuse follows the device's rotation. [AUTO] keeps a handheld (or any device whose screen is

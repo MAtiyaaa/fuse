@@ -80,6 +80,10 @@ and the library, and a first step toward Fuse knowing emulators for itself.
 - **Pictures of what a choice does.** Choosing the Library's view, what it opens on, what
   selecting a game does, game art, Home's style, text size, screen edges or motion shows a small
   moving sketch of the option under focus beside the list (above it on a narrow screen).
+- **Calibrate a screen.** Settings, Accessibility (or Displays), Calibrate this screen: the
+  interface's size, where the screen's edges are (corner marks move in until they sit inside a TV
+  that cuts off its picture) and the text size, each seen as it changes. Kept for that screen
+  alone, known again by its name and size; other screens keep the settings they share.
 - **Arrange the top line in place.** Hold a tab (touch, mouse or confirm) and it lifts; move it
   along with the D-pad or a drag, as Addons' tabs move, and put it down. Home stays first.
 

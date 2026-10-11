@@ -176,7 +176,10 @@ fun FuseApp(
         return
     }
     val prefs by store.prefs.collectAsState()
-    InterfaceSize(prefs.display.interfaceSize) {
+    // A screen calibrated on this device has its own size, edges and text.
+    val screens by platform.displays.collectAsState()
+    val calibration = prefs.calibration(screens)
+    InterfaceSize(calibration?.interfaceSize ?: prefs.display.interfaceSize) {
         CompositionLocalProvider(LocalShowcaseElsewhere provides showcaseElsewhere) {
             FuseAppContent(store, platform, router, phoneLink, safeMode, onSettled, startupIntro, keepPlace, onRehearsalFinished, owner)
         }
@@ -254,6 +257,9 @@ private fun FuseAppContent(
         app.intro || app.standby || app.launching != null || homeFeed.playtime.currentGame != null || app.navigator.current == Route.Onboarding
     }
     val spec = prefs.theme
+    // This screen's own text size and edges, when it is calibrated.
+    val screensHere by platform.displays.collectAsState()
+    val calibration = prefs.calibration(screensHere)
     // Drawn without the graphics card, every moving frame is costly: lighter effects and calmer
     // motion (short fades, no sliding pages) keep it smooth instead of stuttering.
     val drawing by platform.drawing.collectAsState()
@@ -418,7 +424,7 @@ private fun FuseAppContent(
         glass = prefs.glass,
         highContrastFocus = prefs.highContrastFocus,
         animateChanges = true,
-        textScale = prefs.textScale,
+        textScale = calibration?.textScale ?: prefs.textScale,
     ) {
         // What glass menus, sheets and notices show through: this window's screen, without them.
         val backdrop = io.github.matiyaaa.fuse.ui.designsystem.effects.rememberGlassBackdrop()
@@ -459,7 +465,7 @@ private fun FuseAppContent(
             ) {
                 // The room fills the whole screen; everything on it keeps clear of edges a TV cuts off.
                 Room(app, prefs.showHero, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds, spec.ambient, spec.wallpaper)
-                val margin = prefs.screenMargin.coerceIn(0, 10) / 100f
+                val margin = (calibration?.margin ?: prefs.screenMargin).coerceIn(0, 10) / 100f
                 // On an ultrawide screen (wider than about 21:9) the interface keeps a 21:9-like frame
                 // in the middle, so the top line, the pages and the hints stay together; the room
                 // still fills the whole screen around it.
@@ -496,6 +502,7 @@ private fun FuseAppContent(
                     HintLine(app, hintFlash)
                     QuickMenu(app)
                     OverlayHost(app)
+                    CalibrationOverlay(app)
                     ToastHost(app.toasts)
                     app.capture?.let { CaptureOverlay(it) }
                     LaunchVeilView(app)

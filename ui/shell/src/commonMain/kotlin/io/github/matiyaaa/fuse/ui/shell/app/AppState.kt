@@ -252,6 +252,9 @@ class AppState(
     /** "Who's playing?", Fuse Sync's profile picker, and why it is open. */
     var whoAreYou by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.sync.WhoMode?>(null)
 
+    /** The screen being calibrated (its size, edges and text), while it is. */
+    var calibrating by mutableStateOf<CalibrationSession?>(null)
+
     /** A profile being edited (name, picture, PIN), with its PIN as typed to open it when it has one. */
     var profileEdit by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.sync.ProfileEditSpec?>(null)
 

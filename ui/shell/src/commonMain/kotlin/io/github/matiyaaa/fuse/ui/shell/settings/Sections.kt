@@ -37,6 +37,7 @@ import io.github.matiyaaa.fuse.model.SoundProfile
 import io.github.matiyaaa.fuse.model.Support
 import io.github.matiyaaa.fuse.model.WidgetKind
 import io.github.matiyaaa.fuse.model.isRow
+import io.github.matiyaaa.fuse.model.mainScreen
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.ReorderEntry
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
@@ -47,6 +48,9 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ReorderSpec
+import io.github.matiyaaa.fuse.ui.shell.app.calibrateScreen
+import io.github.matiyaaa.fuse.ui.shell.app.calibration
+import io.github.matiyaaa.fuse.ui.shell.app.forgetScreenCalibration
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.addGame
 import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
@@ -168,18 +172,23 @@ fun appearanceRows(app: AppState): List<MenuAction> {
 fun accessibilityRows(app: AppState): List<MenuAction> {
     val p by app.store.prefs.collectAsState()
     val set = app.store::updatePrefs
+    val screens by app.platform.displays.collectAsState()
+    val calibrated = p.calibration(screens)
+    // While this screen has its own fit, the shared rows say so: they set every other screen.
+    val shared = if (calibrated != null) "This screen is calibrated and keeps its own. This sets the others" else null
     return buildList {
         labelled("Reading") {
+            add(calibrateRow(app, calibrated))
             add(app.choiceRow(
                 "textsize", "Text size", FuseIcons.TextSize, p.textScale,
                 listOf(1f to "Default", 1.15f to "Large", 1.3f to "Extra large"),
-                detail = "Larger text for reading from the sofa. Titles grow a little less",
+                detail = shared ?: "Larger text for reading from the sofa. Titles grow a little less",
                 aid = { ChoiceAid.TextSize(it) },
             ) { v -> set { it.copy(textScale = v) } })
             add(app.choiceRow(
                 "margin", "Screen edges", FuseIcons.Maximize, p.screenMargin,
                 listOf(0 to "Use all of it", 2 to "2% in", 4 to "4% in", 6 to "6% in"),
-                detail = "Keeps everything clear of edges a TV cuts off. The background still fills the screen",
+                detail = shared ?: "Keeps everything clear of edges a TV cuts off. The background still fills the screen",
                 aid = { ChoiceAid.ScreenEdges(it) },
             ) { v -> set { it.copy(screenMargin = v) } })
         }
@@ -207,6 +216,42 @@ fun accessibilityRows(app: AppState): List<MenuAction> {
             add(toggleRow("contrast", "High contrast focus", FuseIcons.ScanEye, p.highContrastFocus, "Adds an outline to everything that's selected") { v -> set { it.copy(highContrastFocus = v) } })
         }
     }
+}
+
+/**
+ * Calibrating the screen Fuse is on: its own size, edges and text, kept for it alone. Once it is
+ * calibrated the row says how, and opening it offers to calibrate again or to forget it.
+ */
+internal fun calibrateRow(app: AppState, calibrated: io.github.matiyaaa.fuse.model.ScreenCalibration?): MenuAction {
+    val screen = app.platform.displays.value.let { it.mainScreen() }?.name?.trim()?.takeIf { it.isNotEmpty() } ?: "this screen"
+    return MenuAction(
+        "calibrate", "Calibrate this screen", FuseIcons.Tv,
+        detail = if (calibrated == null) {
+            "Size, edges and text for $screen, kept for it alone. For a TV that cuts off its edges, or one seen from the sofa"
+        } else {
+            listOf(
+                if (calibrated.interfaceSize == 0) "Automatic size" else "${calibrated.interfaceSize}% size",
+                if (calibrated.margin == 0) "all of the screen" else "${calibrated.margin}% edges",
+                when (calibrated.textScale) { 1.3f -> "extra large text"; 1.15f -> "large text"; else -> "default text" },
+            ).joinToString(", ").replaceFirstChar { it.uppercase() } + ". Only on $screen"
+        },
+        trailing = if (calibrated == null) Trailing.Chevron else Trailing.Badge("Calibrated"),
+        onSelect = {
+            if (calibrated == null) {
+                app.calibrateScreen()
+            } else {
+                app.choice = ChoiceSpec(
+                    title = "Calibrate this screen",
+                    icon = FuseIcons.Tv,
+                    message = "$screen has its own size, edges and text.",
+                    options = listOf(
+                        MenuAction("again", "Calibrate Again", FuseIcons.Tv, detail = "Starts from what it has now", onSelect = { app.choice = null; app.calibrateScreen() }),
+                        MenuAction("forget", "Forget Its Calibration", FuseIcons.RotateCcw, detail = "It goes back to the settings every screen shares", onSelect = { app.choice = null; app.forgetScreenCalibration() }),
+                    ),
+                )
+            }
+        },
+    )
 }
 
 @Composable
@@ -1403,12 +1448,14 @@ fun displayRows(app: AppState): List<MenuAction> {
                     detail = "Each screen uses its highest native rate within this cap. Low Power changes visual effects, not your refresh choice",
                 ) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(maxRefreshRate = v)) } })
             }
+            val calibratedHere = p.calibration(app.platform.displays.collectAsState().value)
+            add(calibrateRow(app, calibratedHere))
             add(app.choiceRow(
                 "uisize", "Interface size", FuseIcons.Scaling, d.interfaceSize,
                 io.github.matiyaaa.fuse.ui.shell.app.InterfaceSizes.map { v ->
                     v to if (v == 0) "Automatic (${(automaticSize * 100).toInt()}%)" else "$v%"
                 },
-                detail = "Automatic draws Fuse larger on a big screen with many pixels, like a 4K TV, so it looks as it does on a 1080p one",
+                detail = if (calibratedHere != null) "This screen is calibrated and keeps its own. This sets the others" else "Automatic draws Fuse larger on a big screen with many pixels, like a 4K TV, so it looks as it does on a 1080p one",
                 optionDetail = { v -> if (v == 0) "Sized for this screen, and again when it changes" else null },
             ) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(interfaceSize = v)) } })
             if (app.platform.features.rotation) {

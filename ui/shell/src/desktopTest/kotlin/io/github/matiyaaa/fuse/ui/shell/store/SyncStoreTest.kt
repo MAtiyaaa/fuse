@@ -69,7 +69,8 @@ class SyncStoreTest {
         })
         val store = createFuseStore(services, scope)
         store.sources.add(File(dir, "roms").absolutePath, LibrarySourceKind.ROMS_ROOT)
-        withTimeout(20_000) {
+        // Two devices scan at once here; a loaded runner has taken over 20 s for it.
+        withTimeout(SCAN_BUDGET_MS) {
             store.library.platforms.first { systems -> systems.sumOf { it.gameCount } == files.size }
             store.sources.scan.first { it.phase == ScanPhase.DONE }
         }
@@ -79,7 +80,7 @@ class SyncStoreTest {
     private suspend fun games(d: Device) = d.store.library.games(GameQuery(platform = PlatformId("gba"))).first()
 
     private suspend fun eventually(what: String, check: suspend () -> Boolean) {
-        withTimeout(15_000) {
+        withTimeout(EVENTUALLY_MS) {
             while (!check()) delay(50)
         }
         assertTrue(check(), what)
@@ -209,3 +210,9 @@ class SyncStoreTest {
         pc.sync.stop()
     }
 }
+
+/** How long a test device's first scan may take: generous, as only a stuck scan should reach it. */
+private const val SCAN_BUDGET_MS = 90_000L
+
+/** How long a change may take to travel between the test's devices. */
+private const val EVENTUALLY_MS = 45_000L
