@@ -15,6 +15,11 @@ import kotlin.system.exitProcess
  * - `status`: what the running host keeps and who is connected.
  * - `account <username>`: sets the host's account (the password is read from `FUSE_ONE_PASSWORD`
  *   or standard input), for joining by account and for the Hub from another computer.
+ * - `backups`: the household's hosts, and computers offering to be backups.
+ * - `accept <name>` / `remove-backup <name>`: makes an offering computer a backup, or takes one out.
+ * - `backup-of <address> <code>`: makes this host a backup of the household at that address (with a
+ *   pairing code from it); started next, it offers itself and keeps a copy once accepted.
+ * - `take-over`: on a backup whose host is gone for good, makes this host the household's host.
  * - `version`.
  *
  * The data folder, port and name come from [HostConfig] (environment variables, so a container sets
@@ -28,6 +33,11 @@ fun main(args: Array<String>) {
         "pair" -> pair(config)
         "status" -> status(config)
         "account" -> account(config, args.getOrNull(1))
+        "backups" -> backups(config)
+        "accept" -> accept(config, args.getOrNull(1))
+        "remove-backup" -> removeBackup(config, args.getOrNull(1))
+        "backup-of" -> backupOf(config, args.getOrNull(1), args.getOrNull(2))
+        "take-over" -> takeOver(config)
         "version", "--version" -> { println(HostConfig.version()); 0 }
         "help", "--help", "-h" -> { println(HostConfig.USAGE); 0 }
         else -> { System.err.println(HostConfig.USAGE); 64 }
@@ -100,6 +110,79 @@ private fun account(config: HostConfig, username: String?): Int {
     )
 }
 
+private fun backups(config: HostConfig): Int {
+    val admin = admin(config) ?: return 69
+    return runCatching { runBlocking { admin.status() } }.fold(
+        onSuccess = { s -> println(HostConfig.describeHosts(s)); 0 },
+        onFailure = { System.err.println(it.message ?: "The host didn't answer."); 70 },
+    )
+}
+
+private fun accept(config: HostConfig, name: String?): Int {
+    if (name.isNullOrBlank()) {
+        System.err.println("Usage: fuse-one-host accept <name>  (see fuse-one-host backups)")
+        return 64
+    }
+    val admin = admin(config) ?: return 69
+    return runCatching {
+        runBlocking {
+            val offer = admin.status().backupOffers.firstOrNull { it.name.equals(name, ignoreCase = true) || it.deviceId == name }
+                ?: error("No computer called $name is offering to be a backup. See fuse-one-host backups.")
+            admin.acceptBackup(offer.deviceId.orEmpty())
+            offer.name
+        }
+    }.fold(
+        onSuccess = { println("$it is a backup host now. It keeps a copy of the household and can take over if this host is gone."); 0 },
+        onFailure = { System.err.println(it.message ?: "The host didn't accept it."); 70 },
+    )
+}
+
+private fun removeBackup(config: HostConfig, name: String?): Int {
+    if (name.isNullOrBlank()) {
+        System.err.println("Usage: fuse-one-host remove-backup <name>")
+        return 64
+    }
+    val admin = admin(config) ?: return 69
+    return runCatching {
+        runBlocking {
+            val l = admin.status().leadership ?: error("This host has no backups.")
+            val node = l.backups.firstOrNull { it.name.equals(name, ignoreCase = true) || it.nodeId == name } ?: error("No backup called $name.")
+            admin.removeBackup(node.nodeId)
+            node.name
+        }
+    }.fold(
+        onSuccess = { println("$it is no longer a backup host."); 0 },
+        onFailure = { System.err.println(it.message ?: "The host didn't take it out."); 70 },
+    )
+}
+
+private fun backupOf(config: HostConfig, address: String?, code: String?): Int {
+    if (address.isNullOrBlank() || code.isNullOrBlank()) {
+        System.err.println("Usage: fuse-one-host backup-of <address> <pairing code>  (the code from the household's host: fuse-one-host pair, or Settings, Fuse One, Add a Device)")
+        return 64
+    }
+    if (HostAdmin.of(config.dataDir, config.port) != null) {
+        System.err.println("Stop this host first (docker stop fuse-one-host), then run backup-of, then start it again.")
+        return 75
+    }
+    return runCatching { runBlocking { io.github.matiyaaa.fuse.sync.HeadlessHost.becomeBackupOf(config.dataDir, address, code, config.name) } }.fold(
+        onSuccess = { link ->
+            println("Paired with ${link.hostName}. Start this host again: it offers itself as a backup.")
+            println("Then accept it on ${link.hostName}: in Fuse, Settings, Fuse One, Backup Hosts (or fuse-one-host accept ${config.name} there).")
+            0
+        },
+        onFailure = { System.err.println(it.message ?: "Couldn't pair with that host."); 70 },
+    )
+}
+
+private fun takeOver(config: HostConfig): Int {
+    val admin = admin(config) ?: return 69
+    return runCatching { runBlocking { admin.takeOver() } }.fold(
+        onSuccess = { println("This host keeps the household now (generation ${it.generation}). If the old host comes back, it hands over what it kept and becomes a backup."); 0 },
+        onFailure = { System.err.println(it.message ?: "This host couldn't take over."); 70 },
+    )
+}
+
 /** Where the host keeps the household, which port it serves and what it calls itself. */
 data class HostConfig(val dataDir: File, val port: Int, val name: String) {
     companion object {
@@ -108,11 +191,16 @@ data class HostConfig(val dataDir: File, val port: Int, val name: String) {
 
         val USAGE = """
             |Fuse One Host ${version()}
-            |Usage: fuse-one-host [serve|pair|status|account <username>|version]
-            |  serve    serve the household (the default)
-            |  pair     show a pairing code for a device joining from Fuse
-            |  status   what the host keeps and which devices are connected
-            |  account  set the host's account (password from FUSE_ONE_PASSWORD or standard input)
+            |Usage: fuse-one-host [serve|pair|status|account <username>|backups|accept <name>|remove-backup <name>|backup-of <address> <code>|take-over|version]
+            |  serve          serve the household (the default)
+            |  pair           show a pairing code for a device joining from Fuse
+            |  status         what the host keeps and which devices are connected
+            |  account        set the host's account (password from FUSE_ONE_PASSWORD or standard input)
+            |  backups        the household's hosts, and computers offering to be backups
+            |  accept         make a computer that offers itself a backup host
+            |  remove-backup  take a backup host out
+            |  backup-of      make this host a backup of the household at an address (with its pairing code)
+            |  take-over      on a backup whose host is gone for good, make this the household's host
             |Environment: FUSE_ONE_DATA (default /data), FUSE_ONE_PORT (default $DEFAULT_PORT), FUSE_ONE_NAME (default the computer's name)
         """.trimMargin()
 
@@ -145,6 +233,21 @@ data class HostConfig(val dataDir: File, val port: Int, val name: String) {
             appendLine("Devices: ${s.devices.size}${if (s.devices.isNotEmpty()) " (" + s.devices.joinToString(", ") { it.name } + ")" else ""}")
             appendLine("Kept: ${bytes(s.storageBytes)} in ${s.objectCount} files, ${s.revisionCount} save versions")
             if (s.freeBytes >= 0) append("Free space: ${bytes(s.freeBytes)}")
+        }.trimEnd()
+
+        /** The household's hosts and the offers waiting, as `backups` prints them. */
+        fun describeHosts(s: io.github.matiyaaa.fuse.sync.HostStatus): String = buildString {
+            val l = s.leadership
+            if (l == null || l.hosts.size <= 1) appendLine("No backup hosts.")
+            else {
+                appendLine("Hosts (generation ${l.generation}):")
+                for (h in l.hosts) appendLine("  ${h.name}${if (h.nodeId == l.leader) " (the host)" else " (backup)"}${h.local?.let { " at $it" } ?: ""}")
+            }
+            if (s.backupOffers.isEmpty()) append("No computer is offering to be a backup.")
+            else {
+                appendLine("Offering to be a backup (accept with: fuse-one-host accept <name>):")
+                append(s.backupOffers.joinToString("\n") { "  ${it.name}${it.local?.let { a -> " at $a" } ?: ""}" })
+            }
         }.trimEnd()
 
         internal fun bytes(n: Long): String = when {

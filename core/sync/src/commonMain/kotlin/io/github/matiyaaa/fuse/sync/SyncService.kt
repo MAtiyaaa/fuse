@@ -69,6 +69,33 @@ data class HostView(
     val accountName: String? = null,
 )
 
+/**
+ * The household's hosts as this device knows them: the host and its backups, with what this
+ * computer is among them, and on a backup how its copy and the host stand.
+ */
+data class HostsView(
+    val generation: Long,
+    val hosts: List<HostNode>,
+    /** The [HostNode.nodeId] of the host. */
+    val leader: String,
+    /** What this computer is among the hosts ([Leadership.PRIMARY], [Leadership.BACKUP], [Leadership.FENCED]); null when it keeps no copy. */
+    val thisRole: String?,
+    val thisNode: String?,
+    /** On the host: computers offering to be backups, to accept. */
+    val offers: List<HostNode> = emptyList(),
+    /** This computer chose to be a backup. */
+    val backupOn: Boolean = false,
+    /** Its offer waits for the host to accept it. */
+    val waiting: Boolean = false,
+    /** When its copy was last brought up to date, and since when the host hasn't answered (0: it answers). */
+    val copiedAt: Long = 0,
+    val hostAwaySince: Long = 0,
+    /** A person may make this backup the host now (the host hasn't answered a while). */
+    val canTakeOver: Boolean = false,
+    /** What went wrong the last time, said plainly. */
+    val problem: String? = null,
+)
+
 /** How a host keeps running when Fuse is closed, and after a restart. */
 data class ServiceState(
     val installed: Boolean,
@@ -320,6 +347,24 @@ interface SyncService {
     /** Devices asking to join right now, for this device to let in (on the host, and every device already connected). */
     val joinRequests: StateFlow<List<JoinAsk>> get() = NO_JOIN_REQUESTS
 
+    /** The household's hosts and this computer's place among them; null before Fuse One is set up. */
+    val hosts: StateFlow<HostsView?> get() = NO_HOSTS
+
+    /** Makes this computer one of the household's backups (it offers itself; the host accepts), or stops it being one. */
+    suspend fun setBackupHost(on: Boolean): Result<Unit> = Result.failure(UnsupportedOperationException("Backup hosts are on computers."))
+
+    /** On the host: accepts the computer offering from [deviceId] as a backup. */
+    suspend fun acceptBackup(deviceId: String): Result<Unit> = Result.failure(UnsupportedOperationException("This device isn't the host."))
+
+    /** On the host: takes a backup ([nodeId]) out of the household's hosts. */
+    suspend fun removeBackup(nodeId: String): Result<Unit> = Result.failure(UnsupportedOperationException("This device isn't the host."))
+
+    /**
+     * On a backup, by a person, when the host has been away a while: makes this computer the host.
+     * The old host, if it comes back, takes no more changes and hands over what it took.
+     */
+    suspend fun takeOverAsHost(): Result<Unit> = Result.failure(UnsupportedOperationException("This computer isn't a backup."))
+
     suspend fun answerJoin(id: String, allow: Boolean): Result<Unit> = Result.failure(UnsupportedOperationException("Fuse One isn't set up."))
 
     /**
@@ -473,6 +518,7 @@ private val NO_PLAYING: StateFlow<String?> = kotlinx.coroutines.flow.MutableStat
 private val NO_NOTICES: kotlinx.coroutines.flow.SharedFlow<SyncNotice> = kotlinx.coroutines.flow.MutableSharedFlow()
 
 private val NO_JOIN_REQUESTS: StateFlow<List<JoinAsk>> = kotlinx.coroutines.flow.MutableStateFlow(emptyList())
+private val NO_HOSTS: StateFlow<HostsView?> = kotlinx.coroutines.flow.MutableStateFlow(null)
 
 private val NO_MERGE: StateFlow<ProfileMerge?> = kotlinx.coroutines.flow.MutableStateFlow(null)
 

@@ -25,6 +25,9 @@ object SyncApi {
     /** The household's games (0.3.8): lists, requests between devices, passing games through. */
     const val FEATURE_HOUSEHOLD = "household"
 
+    /** Backup hosts (0.4.2): copies of the household that take over when the host is gone. */
+    const val FEATURE_BACKUPS = "backups"
+
     /** The most a piece of a game passed through the host carries (a tunnel refuses big uploads). */
     const val RELAY_PIECE = 32L * 1024 * 1024
 }
@@ -48,7 +51,94 @@ data class HostHello(
     val account: Boolean = false,
     /** What this host offers beyond saves and records ([SyncApi.FEATURE_HOUSEHOLD]); a device asks only for what is listed. */
     val features: List<String> = emptyList(),
+    /** This computer among the household's hosts ([HostNode.nodeId]); empty from a host before backups. */
+    val node: String = "",
+    /** The household's generation of hosts this computer knows ([Leadership.generation]). */
+    val generation: Long = 0,
+    /** What this computer is for the household now: [Leadership.PRIMARY], [Leadership.BACKUP] or [Leadership.FENCED]. */
+    val role: String = Leadership.PRIMARY,
+    /** Every computer that keeps the household, the host first. */
+    val hosts: List<HostNode> = emptyList(),
 )
+
+/**
+ * A computer that keeps the household: the host, or a backup ready to take over. [deviceId] is the
+ * backup's own device in the household (it signs in as that device to copy the household); null
+ * for a computer that only ever was the host.
+ */
+@Serializable
+data class HostNode(
+    val nodeId: String,
+    val name: String,
+    val deviceId: String? = null,
+    /** Its address at home and from outside, as devices reach it. */
+    val local: String? = null,
+    val remote: String? = null,
+)
+
+/**
+ * Which computer keeps the household, and since which generation. Every computer that keeps it has
+ * one: a generation only ever grows, and a new one is made only by a majority of the household's
+ * hosts (or by a person, when there are too few to make a majority), so two computers can never be
+ * the host of the same generation. A computer that learns of a newer generation than its own stops
+ * taking changes ([FENCED]) until it has handed what it took meanwhile to the new host.
+ */
+@Serializable
+data class Leadership(
+    val generation: Long = 0,
+    /** The [HostNode.nodeId] of the host of this generation. */
+    val leader: String = "",
+    val hosts: List<HostNode> = emptyList(),
+    /** When this generation began. */
+    val since: Long = 0,
+    /** The journal position the new host had when it took over: what an older host took after it was its own. */
+    val forkSeq: Long = 0,
+) {
+    val leaderNode: HostNode? get() = hosts.firstOrNull { it.nodeId == leader }
+
+    /** The backups, in the order they take over. */
+    val backups: List<HostNode> get() = hosts.filter { it.nodeId != leader }
+
+    /** How many of the hosts make a majority. */
+    val majority: Int get() = hosts.size / 2 + 1
+
+    companion object {
+        const val PRIMARY = "PRIMARY"
+        const val BACKUP = "BACKUP"
+        const val FENCED = "FENCED"
+    }
+}
+
+/**
+ * A host telling another of the household's hosts which host it knows of, and the answer in kind.
+ * [reconciled] names the computer whose changes the new host has just taken back: it becomes a backup.
+ */
+@Serializable
+data class Announcement(val leadership: Leadership, val reconciled: String? = null, val role: String = "", val seq: Long = 0)
+
+/** A backup asking another host for its vote to become the host of [generation]. */
+@Serializable
+data class VoteRequest(val generation: Long, val candidate: String, val candidateSeq: Long)
+
+@Serializable
+data class VoteAnswer(
+    val granted: Boolean,
+    val leadership: Leadership,
+    val reason: String = "",
+    /** The newest generation the voter has voted in: a candidate that lost asks again past it. */
+    val votedIn: Long = 0,
+)
+
+/**
+ * Everything a host keeps but its files, for a backup: each file of its folder by its path, and the
+ * files (by hash) its saves use, which the backup fetches as any device does.
+ */
+@Serializable
+data class ReplicaBundle(val seq: Long, val generation: Long, val files: Map<String, String>, val objects: List<String>)
+
+/** [ReplicaBundle] sealed with the backup's own secret: what crosses the network, even at home. */
+@Serializable
+data class SealedReplica(val salt: String, val sealed: String, val seq: Long, val unchanged: Boolean = false)
 
 /** A device asking to join: the code shown on the host, and who the device is. */
 @Serializable
@@ -127,7 +217,14 @@ data class HostStatus(
     val journalSeq: Long,
     val startedAt: Long,
     val freeBytes: Long = -1,
+    /** The household's hosts, and the computers offering to be backups (shown on the host to accept). */
+    val leadership: Leadership? = null,
+    val backupOffers: List<HostNode> = emptyList(),
 )
+
+/** Where a device stands as a backup: the household's hosts, and whether its offer waits on the host. */
+@Serializable
+data class BackupState(val leadership: Leadership, val offered: Boolean, val backup: Boolean)
 
 /** A device's change to a profile's records, merged on the host, which answers with the whole. */
 @Serializable

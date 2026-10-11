@@ -36,6 +36,7 @@ internal class AuditSync(private val settings: SettingsStore) : SyncService {
     override val activeProfile = MutableStateFlow<ProfileInfo?>(null)
     override val activity = MutableStateFlow<List<SyncActivity>>(emptyList())
     override val host = MutableStateFlow<HostView?>(null)
+    override val hosts = MutableStateFlow<io.github.matiyaaa.fuse.sync.HostsView?>(null)
     override val devices = MutableStateFlow<List<DeviceInfo>>(emptyList())
     override val canHost = true
     override val defaultName = "Gaming PC"
@@ -132,13 +133,27 @@ internal class AuditSync(private val settings: SettingsStore) : SyncService {
                 service = ServiceState(installed = true, running = true, description = "Starts with this computer, before anyone signs in"),
             )
         }
+        // The household's hosts: this PC with a backup in the study, and the living room's offering to be one.
+        val pcNode = io.github.matiyaaa.fuse.sync.HostNode("n-pc", "Gaming PC", "pc", local = "192.168.1.20:47311")
+        val desk = io.github.matiyaaa.fuse.sync.HostNode("n-desk", "Study PC", "deck", local = "192.168.1.24:47311")
+        hosts.value = if (asHost) {
+            io.github.matiyaaa.fuse.sync.HostsView(
+                0, listOf(pcNode, desk), "n-pc", io.github.matiyaaa.fuse.sync.Leadership.PRIMARY, "n-pc",
+                offers = listOf(io.github.matiyaaa.fuse.sync.HostNode("n-living", "Living Room PC", "living", local = "192.168.1.31:47311")),
+            )
+        } else {
+            io.github.matiyaaa.fuse.sync.HostsView(
+                0, listOf(pcNode, desk), "n-pc", io.github.matiyaaa.fuse.sync.Leadership.BACKUP, "n-desk",
+                backupOn = true, copiedAt = t - 3 * MINUTE,
+            )
+        }
         status.value = SyncStatus.Online("Gaming PC", Route.LOCAL)
         runBlocking {
             settings.update {
                 it.copy(sync = it.sync.copy(
                     enabled = true, role = if (asHost) "HOST" else "CLIENT", deviceId = if (asHost) "pc" else "deck",
                     deviceName = if (asHost) "Gaming PC" else "Steam Deck", hostName = "Gaming PC", hostId = "h1",
-                    localAddress = "192.168.1.20:47311", activeProfile = playing.orEmpty(),
+                    localAddress = "192.168.1.20:47311", activeProfile = playing.orEmpty(), backupHost = !asHost,
                 ))
             }
         }

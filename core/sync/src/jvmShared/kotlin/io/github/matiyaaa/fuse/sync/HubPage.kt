@@ -34,7 +34,7 @@ ${if (error != null) """<p class="error">${esc(error)}</p>""" else ""}
 </form></main></body></html>
 """
 
-    fun render(status: HostStatus, reports: List<ProfileReport>, now: Long, away: Boolean = false): String {
+    fun render(status: HostStatus, reports: List<ProfileReport>, now: Long, away: Boolean = false, formToken: String = ""): String {
         val h = status.hello
         val names = status.devices.associate { it.id to it.name }
         fun deviceName(id: String) = names[id] ?: id
@@ -60,6 +60,7 @@ ${if (error != null) """<p class="error">${esc(error)}</p>""" else ""}
             else -> "${up / 1440} days"
         }
         val store = reports.firstOrNull()?.storePath.orEmpty()
+        val backups = backupsCard(status, formToken)
         return """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(h.name)} · Fuse Sync</title>
@@ -74,12 +75,33 @@ ${if (error != null) """<p class="error">${esc(error)}</p>""" else ""}
 <div class="fact"><small>Free on this drive</small><b>${if (status.freeBytes >= 0) size(status.freeBytes) else "Unknown"}</b></div>
 </section>
 <section class="card"><h2>Devices</h2><ul>$devices</ul></section>
+$backups
 $profiles
 <script>$SCRIPT</script>
 <footer>Every file is kept once, by its SHA-256, under <code>${esc(store)}</code>; each version lists the files it is made of.
 This page only shows; changes are made in Fuse (Settings, Addons, Fuse Sync). ${if (away) "From away it opens after signing in with the host's account." else "It opens on this computer, and from away after signing in."}${if (h.fuseVersion.isNotEmpty()) " Fuse ${esc(h.fuseVersion)}." else ""}</footer>
 </main></body></html>
 """
+    }
+
+    /**
+     * The household's hosts, and computers offering to be backups, each with Accept: the one thing
+     * the Hub changes, so a host with no screen (a Docker host) can take a backup. Shown only when
+     * there is something to show.
+     */
+    private fun backupsCard(status: HostStatus, formToken: String): String {
+        val l = status.leadership
+        val backups = l?.backups.orEmpty()
+        val offers = status.backupOffers
+        if (backups.isEmpty() && offers.isEmpty()) return ""
+        val rows = backups.joinToString("") { b ->
+            """<li class="row"><span class="dot on"></span><div><b>${esc(b.name)}</b><small>Backup host${b.local?.let { " · ${esc(it)}" } ?: ""} · keeps a copy and can take over</small></div></li>"""
+        } + offers.joinToString("") { o ->
+            """<li class="row"><span class="dot"></span><div><b>${esc(o.name)}</b><small>Offers to be a backup host${o.local?.let { " · ${esc(it)}" } ?: ""}</small></div>""" +
+                """<form method="post" action="/hub/backups/accept"><input type="hidden" name="device" value="${esc(o.deviceId.orEmpty())}"><input type="hidden" name="token" value="${esc(formToken)}"><button class="refresh" type="submit">Accept</button></form></li>"""
+        }
+        return """<section class="card"><h2>Backup Hosts</h2><ul>$rows</ul>""" +
+            """<p class="empty">A backup keeps a copy of everything here, sealed with its own key, and takes over if this host is gone: by a majority of the hosts with two or more backups, or by a person with one. Accept only computers of your own household.</p></section>"""
     }
 
     private fun profile(r: ProfileReport, deviceName: (String) -> String, now: Long): String {

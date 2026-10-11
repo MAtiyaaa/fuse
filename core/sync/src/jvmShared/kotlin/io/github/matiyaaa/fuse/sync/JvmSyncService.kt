@@ -181,9 +181,10 @@ class JvmSyncService(
             _devices.value = knownDevices()
             showPeople(known, c.activeProfile)
         }
-        client = SyncClient(l.copy(localAddress = c.localAddress.ifBlank { l.localAddress }, remoteAddress = c.remoteAddress.ifBlank { l.remoteAddress }))
+        client = linked(l.copy(localAddress = c.localAddress.ifBlank { l.localAddress }, remoteAddress = c.remoteAddress.ifBlank { l.remoteAddress }))
         _status.value = SyncStatus.Connecting(c.hostName.ifBlank { l.hostName })
         startLoop()
+        startKeeper()
         // A host set up before Admin existed gets it too (this computer keeps the profile it uses).
         if (c.role == "HOST") scope.launch(Dispatchers.IO) { if (adoptHost() != null) runCatching { refreshLists() } }
     }
@@ -301,6 +302,7 @@ class JvmSyncService(
         val server = runCatching { SyncHost(store, c.hostPort, fuseVersion, clock).start() }.getOrNull()
         if (server != null) {
             hostServer = server
+            store.leadership.noteOwnAddress(lanAddresses().firstOrNull()?.let { "$it:${c.hostPort}" }, store.outsideAddress().ifBlank { null })
             responder = Discovery.answer({ store.hello(c.hostPort, fuseVersion) })
             // Off the interface's thread: the host's status reads its own files.
             scope.launch(Dispatchers.IO) { server.changes.collect { refreshHostView() } }
@@ -836,11 +838,210 @@ class JvmSyncService(
     override fun stop() {
         loop?.cancel()
         nudge?.cancel()
+        keeperJob?.cancel()
         householdHere.off()
         hostServer?.stop()
         responder?.stop()
+        backupServer?.stop()
         hostServer = null
         responder = null
+        backupServer = null
+        backupStore = null
+        keeper = null
+    }
+
+    // ---------------------------------------------------------------- backup hosts
+
+    /** A client for [l] that keeps the link saved whenever it learns of a newer host or the household's hosts. */
+    private fun linked(l: HostLink): SyncClient = SyncClient(l).also { c ->
+        c.onLinkChange = { next -> scope.launch(Dispatchers.IO) { runCatching { secrets.put(LINK_KEY, json.encodeToString(HostLink.serializer(), next)) } } }
+    }
+
+    private val _hosts = MutableStateFlow<HostsView?>(null)
+    override val hosts: StateFlow<HostsView?> = _hosts.asStateFlow()
+
+    /** This computer's copy of the household while it is a backup (a folder of its own), and the server the other hosts reach it on. */
+    @Volatile private var backupStore: HostStore? = null
+    @Volatile private var backupServer: SyncHost? = null
+    @Volatile private var keeper: BackupNode? = null
+    private var keeperJob: Job? = null
+    @Volatile private var backupWaiting = false
+    @Volatile private var keeperProblem: String? = null
+    @Volatile private var copiedAt = 0L
+    private val keeping = Mutex()
+
+    private fun backupDir(): File = File(dir, BACKUP_DIR)
+
+    /** The household this computer keeps: the host's own, or its copy as a backup. */
+    private fun keptStore(): HostStore? = hostServer?.store ?: backupStore
+
+    private fun startKeeper() {
+        keeperJob?.cancel()
+        keeperJob = scope.launch(Dispatchers.IO) {
+            while (true) {
+                runCatching { keepOnce() }
+                delay(KEEP_EVERY_MS)
+            }
+        }
+    }
+
+    /**
+     * One round of keeping the household: a backup's offer sent and its copy brought up to date, an
+     * election when the host is gone and a majority agrees, and the host bringing back an older host.
+     */
+    internal suspend fun keepOnce() = keeping.withLock {
+        val c = cached
+        val cl = client
+        if (c.backupHost && canHost && c.role != "HOST" && backupStore == null) openBackup(c)
+        val store = keptStore()
+        if (store == null || cl == null) {
+            refreshHosts()
+            return@withLock
+        }
+        val node = keeper?.takeIf { it.store === store } ?: BackupNode(store, cl, clock = clock).also { keeper = it }
+        if (store === backupStore && !store.leadership.isLeader) {
+            // Accepted by the host yet? Until then the offer waits there.
+            val state = runCatching { cl.backupState() }.getOrNull()
+            if (state != null && !state.backup) {
+                val offered = if (state.offered) state else runCatching { cl.offerBackup(ownNode(store, c)) }.getOrNull()
+                backupWaiting = offered?.backup != true
+                keeperProblem = null
+                refreshHosts()
+                return@withLock
+            }
+            backupWaiting = false
+        }
+        val before = store.seq()
+        val round = node.watch()
+        if (round == BackupNode.Round.COPIED || round == BackupNode.Round.UP_TO_DATE) copiedAt = clock()
+        if (round == BackupNode.Round.COPIED && store.seq() != before) keeperProblem = null
+        if (store === backupStore && store.leadership.isLeader) becomeHost(c)
+        refreshHosts()
+    }
+
+    /** This computer as one of the household's hosts: its id, name, this device and where the others reach it. */
+    private fun ownNode(store: HostStore, c: SyncSettings): HostNode =
+        HostNode(store.leadership.nodeId, c.deviceName.ifBlank { defaultDeviceName }, c.deviceId, local = lanAddresses().firstOrNull()?.let { "$it:${c.hostPort}" })
+
+    /** Opens this computer's copy of the household and the server the other hosts reach it on. */
+    private fun openBackup(c: SyncSettings) {
+        if (backupStore != null) return
+        val store = HostStore(backupDir(), clock, hostName = c.hostName.ifBlank { "Fuse One" })
+        store.leadership.standBy()
+        backupStore = store
+        backupServer = runCatching { SyncHost(store, c.hostPort, fuseVersion, clock).start() }.getOrNull()
+        keeperProblem = if (backupServer == null) "Another program on this computer uses port ${c.hostPort}, which a backup needs to hear the other hosts." else null
+    }
+
+    /** This backup was made the household's host: it serves as the host from now on, from its copy. */
+    private suspend fun becomeHost(c: SyncSettings) {
+        val store = backupStore ?: return
+        val server = backupServer ?: SyncHost(store, c.hostPort, fuseVersion, clock).start()
+        saveConfig { it.copy(role = "HOST", backupHost = false, hostDataDir = store.dir.path.replace('\\', '/'), hostName = store.name) }
+        hostServer = server
+        backupServer = null
+        backupStore = null
+        keeper = null
+        responder?.stop()
+        responder = Discovery.answer({ store.hello(c.hostPort, fuseVersion) })
+        store.leadership.noteOwnAddress(lanAddresses().firstOrNull()?.let { "$it:${c.hostPort}" }, null)
+        scope.launch(Dispatchers.IO) { server.changes.collect { refreshHostView() } }
+        log("This computer keeps the household now", kind = SyncActivity.HOST)
+        runCatching { client?.failover() }
+        refreshHostView()
+    }
+
+    private fun refreshHosts() {
+        val store = keptStore()
+        val cl = client
+        val l = store?.leadership?.current ?: cl?.link?.let { Leadership(it.generation, "", it.hosts) } ?: run {
+            _hosts.value = null
+            return
+        }
+        val node = keeper
+        val now = clock()
+        val away = node?.hostSeenAt?.takeIf { store?.leadership?.isLeader == false && now - it > HOST_AWAY_SHOWN_MS } ?: 0L
+        val role = store?.leadership?.role
+        _hosts.value = HostsView(
+            generation = l.generation,
+            hosts = l.hosts,
+            leader = l.leader,
+            thisRole = role,
+            thisNode = store?.leadership?.nodeId,
+            offers = hostServer?.backupOffers() ?: adminStatus?.backupOffers.orEmpty(),
+            backupOn = cached.backupHost,
+            waiting = backupWaiting,
+            copiedAt = copiedAt,
+            hostAwaySince = away,
+            canTakeOver = store != null && store === backupStore && role == Leadership.BACKUP && away > 0 && now - away >= TAKE_OVER_AFTER_MS,
+            problem = keeperProblem,
+        )
+    }
+
+    override suspend fun setBackupHost(on: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            require(canHost) { "Backup hosts are on computers." }
+            val c = config()
+            require(c.role != "HOST") { "This computer is the household's host." }
+            requireNotNull(client) { "Connect to your host first." }
+            saveConfig { it.copy(backupHost = on) }
+            if (on) {
+                keepOnce()
+                log("This computer offered to be a backup host", kind = SyncActivity.HOST)
+            } else {
+                keeping.withLock {
+                    runCatching { client?.leaveBackups() }
+                    backupServer?.stop()
+                    backupServer = null
+                    backupStore = null
+                    keeper = null
+                    backupWaiting = false
+                    // The copy holds the household's secrets: it goes with the choice.
+                    if (backupDir().isDirectory) HostFiles.delete(backupDir())
+                }
+                log("This computer stopped being a backup host", kind = SyncActivity.HOST)
+                refreshHosts()
+            }
+        }
+    }
+
+    override suspend fun acceptBackup(deviceId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val server = hostServer
+            if (server != null) {
+                checkNotNull(server.acceptBackup(deviceId)) { "That offer isn't waiting any more." }
+            } else {
+                checkNotNull(hostAdmin) { "This device isn't the host." }.acceptBackup(deviceId)
+                adminStatus = runCatching { hostAdmin?.status() }.getOrNull() ?: adminStatus
+            }
+            log("A backup host was added", kind = SyncActivity.HOST)
+            refreshHosts()
+            refreshHostView()
+        }
+    }
+
+    override suspend fun removeBackup(nodeId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val server = hostServer
+            if (server != null) server.store.removeBackup(nodeId) else checkNotNull(hostAdmin) { "This device isn't the host." }.removeBackup(nodeId)
+            adminStatus = runCatching { hostAdmin?.status() }.getOrNull() ?: adminStatus
+            log("A backup host was taken out", kind = SyncActivity.HOST)
+            refreshHosts()
+            refreshHostView()
+        }
+    }
+
+    override suspend fun takeOverAsHost(): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            keeping.withLock {
+                val store = checkNotNull(backupStore) { "This computer isn't a backup." }
+                check(store.leadership.role == Leadership.BACKUP) { "This computer isn't a backup." }
+                val node = keeper?.takeIf { it.store === store } ?: BackupNode(store, checkNotNull(client), clock = clock)
+                node.takeOver()
+                becomeHost(config())
+            }
+            refreshHosts()
+        }
     }
 
     // ---------------------------------------------------------------- setting up
@@ -1227,7 +1428,7 @@ class JvmSyncService(
         if (cfg.remoteAddress.isNotBlank() && !cfg.remoteFromHost) return
         if (SyncClient.normalise(cfg.remoteAddress.ifBlank { "x" }) == SyncClient.normalise(outside)) return
         saveConfig { it.copy(remoteAddress = outside, remoteFromHost = true) }
-        client = SyncClient(c.link.copy(remoteAddress = SyncClient.normalise(outside)))
+        client = linked(c.link.copy(remoteAddress = SyncClient.normalise(outside)))
         log("Learned the host's address from outside", kind = SyncActivity.HOST)
     }
 
@@ -2085,6 +2286,18 @@ class JvmSyncService(
         }
 
         const val LINK_KEY = "sync.link"
+
+        /** Where a backup keeps its copy of the household. */
+        const val BACKUP_DIR = "backup-host"
+
+        /** How often a backup copies the household and looks for the host (and the host for an older one). */
+        const val KEEP_EVERY_MS = 60_000L
+
+        /** How long the host must be silent before a backup says so. */
+        const val HOST_AWAY_SHOWN_MS = 2 * 60_000L
+
+        /** How long the host must be silent before a person may make a backup the host. */
+        const val TAKE_OVER_AFTER_MS = 5 * 60_000L
 
         /** The host's own folder inside a chosen folder that holds other things. */
         const val HOST_FOLDER = "Fuse Sync Host"

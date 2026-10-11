@@ -20,6 +20,15 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   Fuse (chosen per profile in Settings, Input); any controller does while the chosen one is away.
 - **Fuse One Host.** The household host on its own, without the app: a Docker image, a Compose
   file and a one-line installer (tools/host), built in CI and published to ghcr.io on release.
+- **Backup hosts.** Another computer of the household keeps a copy of everything the host keeps
+  (Settings, Fuse One, Be a Backup Host, then Accept on the host, on its Hub page, or with
+  `fuse-one-host accept`); a Fuse One Host can be one too (`fuse-one-host backup-of`). Copies are
+  sealed with each backup's own key. When the host is gone, a majority of the hosts makes one backup
+  the host (each votes once per generation, only for a copy at least as new as its own and only
+  while it can't reach the host); with a single backup a person decides (Make This Computer the
+  Host). Devices follow the host there is and never go back to an older one. A host that returns
+  after another took over is fenced: it takes no more changes, the new host takes back every save it
+  kept meanwhile (as versions, never over newer saves), and it becomes a backup.
 - **Sync without a household.** A device keeping its own profiles has its Sync page: each person's
   games, play time and the saves kept for them here, with what a host would add and the two ways
   to set one up.

@@ -147,6 +147,8 @@ data class SyncSettings(
     val hostPort: Int = 47311,
     /** Where the host keeps everyone's saves and profiles; empty is Fuse's own data folder. */
     val hostDataDir: String = "",
+    /** This computer keeps a copy of the household and takes over when the host is gone for good (a joined computer). */
+    val backupHost: Boolean = false,
     /** Profiles whose saves this device never brings in (it still sends theirs). This device's own choice. */
     val noPullProfiles: List<String> = emptyList(),
     /** Profiles whose saves never move on this device, either way. This device's own choice. */

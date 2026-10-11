@@ -36,6 +36,7 @@ internal fun syncRows(
     active: ProfileInfo?,
     host: HostView?,
     devices: List<DeviceInfo>,
+    hosts: io.github.matiyaaa.fuse.sync.HostsView? = null,
 ): List<MenuAction> = buildList {
     fun configure(change: (SyncSettings) -> SyncSettings) = app.scope.launch { app.store.sync.configure(change) }
     add(toggleRow("enabled", "Use $SYNC_NAME", FuseIcons.Power, c.enabled, "Your saves, play time, library and settings on every device, from a host of your own") { v ->
@@ -272,6 +273,9 @@ internal fun syncRows(
         ))
     }
 
+    // Backup hosts -------------------------------------------------------------------------------
+    addAll(backupHostRows(app, svc, c, hosts))
+
     // Leaving --------------------------------------------------------------------------------------
     val leave = "Leave"
     if (c.role == "HOST") {
@@ -466,5 +470,152 @@ private fun manageDevices(app: AppState, svc: SyncService, devices: List<DeviceI
                 },
             )
         },
+    )
+}
+
+/**
+ * Backup hosts: on the host, the computers that keep a copy and those offering to; on a joined
+ * computer, keeping a copy itself, how the host and the copy stand, and taking over when the host is
+ * gone for good.
+ */
+private fun backupHostRows(app: AppState, svc: SyncService, c: SyncSettings, hosts: io.github.matiyaaa.fuse.sync.HostsView?): List<MenuAction> = buildList {
+    val section = "Backup Hosts"
+    val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+    val offset = localOffsetMillis(now)
+    val leader = hosts?.hosts?.firstOrNull { it.nodeId == hosts.leader }
+    when {
+        c.role == "HOST" && hosts?.thisRole == io.github.matiyaaa.fuse.sync.Leadership.FENCED -> add(infoRow(
+            "fenced", "Another Computer Keeps the Household",
+            detail = "A backup became the host while this computer was away. This one takes no changes until the new host has taken back what it kept meanwhile",
+            icon = FuseIcons.ShieldAlert,
+        ).copy(section = section))
+        c.role == "HOST" && hosts?.thisRole == io.github.matiyaaa.fuse.sync.Leadership.BACKUP -> add(infoRow(
+            "isbackup", "This Computer Is a Backup Now",
+            detail = "${leader?.name ?: "Another computer"} keeps the household. This one keeps a copy and can take over again",
+            icon = FuseIcons.DatabaseBackup,
+        ).copy(section = section))
+        c.role == "HOST" -> {
+            val backups = hosts?.hosts.orEmpty().filter { it.nodeId != hosts?.leader }
+            val offers = hosts?.offers.orEmpty()
+            add(MenuAction(
+                "backups", "Backup Hosts", FuseIcons.DatabaseBackup,
+                detail = if (offers.isNotEmpty()) "${offers.size} waiting to be accepted" else "Computers that keep a copy of the household and take over if this one is gone",
+                trailing = if (offers.isNotEmpty()) Trailing.Badge("${offers.size}") else Trailing.Value(if (backups.isEmpty()) "None" else "${backups.size}"),
+                section = section,
+                onSelect = { backupHostsSheet(app, svc, hosts) },
+            ))
+        }
+        svc.canHost -> {
+            val on = c.backupHost
+            val role = hosts?.thisRole
+            val detail = when {
+                !on -> "Keep a copy of the household on this computer, so it can take over if the host is gone"
+                hosts?.problem != null -> hosts.problem
+                hosts?.waiting == true -> "Waiting for the host to accept it, in its Fuse One settings"
+                hosts?.hostAwaySince != null && hosts.hostAwaySince > 0 -> "The host hasn't answered since ${TimeWords.relative(hosts.hostAwaySince, now, offset)}. The copy here is as of then"
+                (hosts?.copiedAt ?: 0) > 0 -> "A copy of the household here, brought up to date ${TimeWords.relative(hosts!!.copiedAt, now, offset)}"
+                role == io.github.matiyaaa.fuse.sync.Leadership.BACKUP -> "A copy of the household here, kept up to date"
+                else -> "Getting a copy of the household"
+            }
+            add(toggleRow("backup", "Be a Backup Host", FuseIcons.DatabaseBackup, on, detail) { v ->
+                if (v) {
+                    app.confirm = ConfirmSpec(
+                        "Keep a copy of the household here?",
+                        "This computer keeps a copy of everything the host keeps: every profile, save and device link, sealed on the way. The host accepts it first. If the host is ever gone for good, this computer can become the host with nothing lost. It needs to be on now and then to stay up to date.",
+                        "Offer This Computer",
+                    ) {
+                        app.scope.launch {
+                            svc.setBackupHost(true).onSuccess { app.toasts.show("Offered. Accept it on the host", icon = FuseIcons.DatabaseBackup) }
+                                .onFailure { app.toasts.show(it.message ?: "Couldn't offer this computer", ToastKind.ERROR) }
+                        }
+                    }
+                } else {
+                    app.confirm = ConfirmSpec(
+                        "Stop being a backup host?",
+                        "The copy of the household on this computer is deleted, and the host stops counting on it. Nothing else here changes.",
+                        "Stop", destructive = true,
+                    ) {
+                        app.scope.launch {
+                            svc.setBackupHost(false).onSuccess { app.toasts.show("This computer keeps no copy now") }
+                                .onFailure { app.toasts.show(it.message ?: "Couldn't change that", ToastKind.ERROR) }
+                        }
+                    }
+                }
+            }.copy(section = section))
+            if (on && hosts?.canTakeOver == true) {
+                add(MenuAction(
+                    "takeover", "Make This Computer the Host", FuseIcons.Crown,
+                    detail = "The host has been away a while. Only if it is gone for good: when it comes back, it hands over what it kept meanwhile",
+                    section = section,
+                    onSelect = {
+                        app.confirm = ConfirmSpec(
+                            "Make this computer the host?",
+                            "Devices move to this computer and carry on from its copy. If the old host comes back, it takes no more changes, hands this computer every save it kept while away (kept as versions, never put over newer ones) and becomes a backup. Do this only if the host is gone for good, or for a long while.",
+                            "Make This the Host", destructive = true,
+                        ) {
+                            app.scope.launch {
+                                svc.takeOverAsHost().onSuccess { app.toasts.show("This computer keeps the household now", ToastKind.SUCCESS) }
+                                    .onFailure { app.toasts.show(it.message ?: "Couldn't take over", ToastKind.ERROR) }
+                            }
+                        }
+                    },
+                ))
+            }
+        }
+    }
+}
+
+/** The host's backups, with those offering to be one, each to accept or take out. */
+private fun backupHostsSheet(app: AppState, svc: SyncService, hosts: io.github.matiyaaa.fuse.sync.HostsView?) {
+    val backups = hosts?.hosts.orEmpty().filter { it.nodeId != hosts?.leader }
+    val offers = hosts?.offers.orEmpty()
+    val rows = offers.map { o ->
+        MenuAction(
+            "offer.${o.deviceId}", o.name, FuseIcons.UserPlus,
+            detail = "Offers to keep a copy" + (o.local?.let { " at $it" } ?: ""),
+            trailing = Trailing.Value("Accept"), section = "Waiting",
+            onSelect = {
+                app.choice = null
+                app.confirm = ConfirmSpec(
+                    "Make ${o.name} a backup host?",
+                    "It gets a copy of everything this host keeps, every profile, save and device link and the household's sign-ins, sealed with its own key, and keeps it up to date. If this computer is ever gone, it can take over. Only accept a computer of your own household.",
+                    "Accept",
+                ) {
+                    app.scope.launch {
+                        svc.acceptBackup(o.deviceId.orEmpty()).onSuccess { app.toasts.show("${o.name} is a backup host now", ToastKind.SUCCESS) }
+                            .onFailure { app.toasts.show(it.message ?: "Couldn't accept it", ToastKind.ERROR) }
+                    }
+                }
+            },
+        )
+    } + backups.map { b ->
+        MenuAction(
+            "backup.${b.nodeId}", b.name, FuseIcons.DatabaseBackup,
+            detail = "Keeps a copy" + (b.local?.let { " at $it" } ?: ""),
+            trailing = Trailing.Chevron, section = "Backups",
+            onSelect = {
+                app.choice = null
+                app.confirm = ConfirmSpec(
+                    "Take ${b.name} out?",
+                    "It stops being a backup host and gets no more copies. Turn Be a Backup Host off on it to delete the copy it has.",
+                    "Take Out", destructive = true,
+                ) {
+                    app.scope.launch {
+                        svc.removeBackup(b.nodeId).onSuccess { app.toasts.show("${b.name} is no longer a backup host") }
+                            .onFailure { app.toasts.show(it.message ?: "Couldn't take it out", ToastKind.ERROR) }
+                    }
+                }
+            },
+        )
+    }
+    app.choice = ChoiceSpec(
+        title = "Backup Hosts",
+        icon = FuseIcons.DatabaseBackup,
+        message = if (rows.isEmpty()) {
+            "None yet. On another computer of the household, turn on Be a Backup Host in its Fuse One settings, then accept it here. With two backups, they choose a new host by themselves if this one is gone; with one, a person decides."
+        } else {
+            "Backups keep a copy of the household. With two or more, a majority of the hosts chooses a new one if this computer is gone; with one, a person on it decides."
+        },
+        options = rows,
     )
 }

@@ -32,6 +32,10 @@ Prefer Compose directly? [compose.yaml](compose.yaml) is the same setup: `docker
 | Update | `cd ~/fuse-one-host && docker compose pull && docker compose up -d` |
 | Pin a version | set `FUSE_ONE_IMAGE=ghcr.io/matiyaaa/fuse-one-host:0.4.2` in `~/fuse-one-host/.env` |
 | Host account (for joining by name and the Hub from away) | `docker exec -it fuse-one-host fuse-one-host account <name>` |
+| Backup hosts, and computers offering to be one | `docker exec fuse-one-host fuse-one-host backups` |
+| Accept a computer as a backup host | `docker exec fuse-one-host fuse-one-host accept <name>` (or Accept on the Hub) |
+| Make this host a backup of another | stop it, then `docker run --rm -v fuse-one-data:/data --network host ghcr.io/matiyaaa/fuse-one-host backup-of <address> <pairing code>`, then start it |
+| Make a backup the host (the old one is gone for good) | `docker exec fuse-one-host fuse-one-host take-over` |
 | Back up | `docker stop fuse-one-host && docker run --rm -v fuse-one-data:/data:ro -v "$PWD":/backup --entrypoint tar ghcr.io/matiyaaa/fuse-one-host -czf /backup/fuse-one-backup.tgz -C /data . && docker start fuse-one-host` |
 | Restore | `docker stop fuse-one-host && docker run --rm --user 0 -v fuse-one-data:/data -v "$PWD":/backup --entrypoint tar ghcr.io/matiyaaa/fuse-one-host -xzf /backup/fuse-one-backup.tgz -C /data && docker start fuse-one-host` |
 | Uninstall | `cd ~/fuse-one-host && docker compose down` (the data stays in the `fuse-one-data` volume until you remove it with `docker volume rm fuse-one-data`) |
@@ -50,6 +54,11 @@ Updating or removing the container never deletes the household's data: it lives 
   forward its port to the internet.
 - The Hub (`http://<host>:47311/hub`) shows what the host keeps. From another computer it asks for
   the host account.
+- Backup hosts: another computer running Fuse (Settings, Fuse One, Be a Backup Host) or another
+  Fuse One Host (`backup-of`) can keep a copy of the household, sealed with its own key. With two or
+  more backups, a majority of the hosts chooses a new host when this one is gone; with one, a person
+  does (`take-over`). A host that comes back after another took over takes no more changes, hands
+  over what it kept meanwhile (kept as versions, never put over newer saves) and becomes a backup.
 
 ## Building it yourself
 

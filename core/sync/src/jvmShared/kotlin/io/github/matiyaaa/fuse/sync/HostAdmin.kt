@@ -47,6 +47,9 @@ class HostAdmin(private val port: Int, private val token: String, private val ht
     suspend fun clearAccount() { call(HttpMethod.Delete, "/account") }
     suspend fun setOutside(address: String) { call(HttpMethod.Post, "/outside", json.encodeToString(OutsideChange.serializer(), OutsideChange(address))) }
     suspend fun adoptOwner(id: String): ProfileInfo = json.decodeFromString(ProfileInfo.serializer(), call(HttpMethod.Post, "/owner/$id"))
+    suspend fun takeOver(): Leadership = json.decodeFromString(Leadership.serializer(), call(HttpMethod.Post, "/takeover"))
+    suspend fun acceptBackup(device: String): Leadership = json.decodeFromString(Leadership.serializer(), call(HttpMethod.Post, "/backups/accept/$device"))
+    suspend fun removeBackup(node: String): Leadership = json.decodeFromString(Leadership.serializer(), call(HttpMethod.Delete, "/backups/$node"))
 
     companion object {
         /** The admin for a host already serving [port] from [hostDir], or null when nothing does. */

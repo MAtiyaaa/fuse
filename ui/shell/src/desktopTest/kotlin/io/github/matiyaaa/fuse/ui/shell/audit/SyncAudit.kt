@@ -169,6 +169,21 @@ internal fun AuditDriver.syncScreens() {
         tap(PadButton.B)
     }
 
+    scenario("sync", "backup hosts") {
+        useSync(asHost = true)
+        openSyncPage()
+        focusText("Backup Hosts")
+        shoot("the host: its backup hosts, one computer offering to be one", 1_000)
+        tap(PadButton.A)
+        waitFor("Living Room PC")
+        shoot("backup hosts: the one waiting to be accepted, and the one keeping a copy", 1_000)
+        tap(PadButton.B)
+        useSync(asHost = false)
+        openSyncPage()
+        focusText("Be a Backup Host")
+        shoot("a computer keeping a copy of the household, and how up to date it is", 1_000)
+    }
+
     scenario("sync", "settings on a device") {
         useSync(asHost = false)
         openSyncPage()
