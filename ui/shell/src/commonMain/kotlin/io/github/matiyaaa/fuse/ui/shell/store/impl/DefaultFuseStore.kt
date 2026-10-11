@@ -52,6 +52,12 @@ internal class DefaultFuseStore private constructor(
     private val data = ctx.data
     private val prefsState = MutableStateFlow(initialPrefs)
     @kotlin.concurrent.Volatile private var prefsProfile = ctx.settings.value.sync.activeProfile
+
+    /**
+     * The preferences as storage holds them for [prefsProfile], as last read or written: what the
+     * interface shows beyond this is a choice not saved yet.
+     */
+    @kotlin.concurrent.Volatile private var storedPrefs: UiPrefs? = null
     override val prefs: StateFlow<UiPrefs> = prefsState
     private val writes = Channel<UiPrefs>(Channel.CONFLATED)
     private val writeLock = Mutex()
@@ -98,7 +104,8 @@ internal class DefaultFuseStore private constructor(
     }
     override val content = DefaultContentOps(ctx, emulators) { engine.drives.volumes.value }
     override val backup = DefaultBackupOps(ctx) { restore ->
-        writeLock.withLock { restore().also { reloadLocked() } }
+        // A restored backup replaces everything: nothing shown before it is carried over.
+        writeLock.withLock { restore().also { storedPrefs = null; reloadLocked() } }
     }
     override val library: DefaultLibraryOps
     override val health: DefaultHealthOps
@@ -176,15 +183,18 @@ internal class DefaultFuseStore private constructor(
     /** The settings with anything still on its way to the database written first. */
     private suspend fun settingsNow() = writeLock.withLock {
         val current = data.settings.current()
-        val next = if (prefsProfile == current.sync.activeProfile) current.withUiPrefs(prefsState.value) else current
-        if (next == current) current else data.settings.update { it.withUiPrefs(prefsState.value) }.also { ctx.settings.value = it }
+        val shown = prefsState.value
+        val next = if (prefsProfile == current.sync.activeProfile) current.withUiPrefs(shown) else current
+        if (next == current) current else data.settings.update { it.withUiPrefs(shown) }.also { ctx.settings.value = it; storedPrefs = shown }
     }
 
     /** Changes the settings (Fuse Sync bringing in a profile's) and has the interface follow at once. */
     private suspend fun writeSettings(transform: (io.github.matiyaaa.fuse.data.settings.AppSettings) -> io.github.matiyaaa.fuse.data.settings.AppSettings) = writeLock.withLock {
         val before = data.settings.current()
-        val after = data.settings.update { transform(if (prefsProfile == it.sync.activeProfile) it.withUiPrefs(prefsState.value) else it) }
-        if (after != before) reloadLocked()
+        val shown = prefsState.value
+        var wroteShown = false
+        val after = data.settings.update { if (prefsProfile == it.sync.activeProfile) { wroteShown = true; transform(it.withUiPrefs(shown)) } else transform(it) }
+        if (after != before) reloadLocked() else if (wroteShown) storedPrefs = shown
     }
 
     /** Commit pending UI edits before comparing host revisions, then reload without restamping them. */
@@ -193,7 +203,9 @@ internal class DefaultFuseStore private constructor(
         // A profile switch changes the persisted owner before the old UI preferences are reloaded.
         // Those old preferences must not become a local edit belonging to the next person.
         if (prefsProfile == before.sync.activeProfile && prefsState.value != before.toUiPrefs(globalScoped(ctx))) {
-            data.settings.update { it.withUiPrefs(prefsState.value) }
+            val shown = prefsState.value
+            data.settings.update { it.withUiPrefs(shown) }
+            storedPrefs = shown
         }
         val after = data.settings.mergeProfileValues(profile, values)
         if (after != before || prefsState.value != after.toUiPrefs(globalScoped(ctx))) reloadLocked()
@@ -309,6 +321,7 @@ internal class DefaultFuseStore private constructor(
         if (prefs != prefsState.value) return@withLock
         if (prefsProfile != data.settings.current().sync.activeProfile) { reloadLocked(); return@withLock }
         ctx.settings.value = data.settings.update { it.withUiPrefs(prefs) }
+        storedPrefs = prefs
         val scoped = data.scopedSettings
         val global = ScopeRef.Global
         if (scoped.resolve(ScopedSettings.Layout, null, null).value != prefs.defaultLayout) scoped.set(ScopedSettings.Layout, global, prefs.defaultLayout)
@@ -319,11 +332,26 @@ internal class DefaultFuseStore private constructor(
     /** Re-reads preferences after a global scoped setting changed outside [updatePrefs]. */
     private suspend fun reloadPrefs() = writeLock.withLock { reloadLocked() }
 
+    /**
+     * Shows the settings as stored, keeping any choice the interface shows that isn't saved yet: it
+     * is the newest thing the person did, so it is written over what came in (a sync round bringing
+     * the profile's values, a setting changed elsewhere) instead of being thrown away. That holds
+     * across a profile switch the interface is catching up with too: whatever the outgoing person
+     * had chosen was saved as theirs when the switch began (it reads the settings through
+     * [settingsNow]), so a choice not saved yet was made after, by the new person, and stays theirs.
+     */
     private suspend fun reloadLocked() {
-        val settings = data.settings.current()
+        val shown = prefsState.value
+        val base = storedPrefs
+        var settings = data.settings.current()
+        if (base != null && shown != base && io.github.matiyaaa.fuse.data.settings.UnsavedChoices.carry(settings, settings.withUiPrefs(base), settings.withUiPrefs(shown)) != null) {
+            settings = data.settings.update { now -> io.github.matiyaaa.fuse.data.settings.UnsavedChoices.carry(now, now.withUiPrefs(base), now.withUiPrefs(shown)) ?: now }
+            ctx.userChanged()
+        }
         ctx.settings.value = settings
         prefsProfile = settings.sync.activeProfile
         prefsState.value = settings.toUiPrefs(globalScoped(ctx))
+        storedPrefs = prefsState.value
         ctx.systemOrder.value = prefsState.value.systemOrder
     }
 
