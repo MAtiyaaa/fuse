@@ -12,6 +12,7 @@ import io.github.matiyaaa.fuse.model.Platform
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class BiosCheckerTest {
@@ -34,6 +35,7 @@ class BiosCheckerTest {
         assertEquals(listOf("/BIOS/SCPH5501.BIN"), status.found)
         assertTrue(status.missing.isEmpty())
         assertEquals(listOf("/BIOS"), status.searched)
+        assertTrue(status.allVerified)
     }
 
     @Test
@@ -42,6 +44,8 @@ class BiosCheckerTest {
         val status = checker.check(platform("psx"), listOf("/BIOS"))
         assertEquals(BiosState.MISSING, status.state)
         assertTrue(status.note!!.contains("unexpected checksum"))
+        // There, but not a known dump: told apart from nothing at all.
+        assertEquals(listOf("/BIOS/scph5501.bin"), status.unrecognized)
     }
 
     @Test
@@ -51,6 +55,9 @@ class BiosCheckerTest {
         val status = checker.check(platform("psx"), listOf("/BIOS"))
         assertEquals(BiosState.READY, status.state)
         assertTrue(status.note!!.contains("could not be verified"))
+        // Found by name only: present, not verified.
+        assertTrue(status.verified.isEmpty())
+        assertFalse(status.allVerified)
     }
 
     @Test

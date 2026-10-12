@@ -95,19 +95,17 @@ class DesktopPlatformUi(
     private val _drawing = kotlinx.coroutines.flow.MutableStateFlow<io.github.matiyaaa.fuse.ui.shell.platform.DrawingInfo?>(null)
     override val drawing: kotlinx.coroutines.flow.StateFlow<io.github.matiyaaa.fuse.ui.shell.platform.DrawingInfo?> = _drawing
 
-    /** The window says how it is drawn once it is up (Skia on OpenGL, Metal or Direct3D, or on the processor). */
-    fun noteRenderer(api: String) {
-        val cpu = api.startsWith("SOFTWARE", ignoreCase = true)
-        val name = when {
-            cpu -> "The processor (no graphics card)"
-            api.equals("OPENGL", ignoreCase = true) -> "The graphics card (OpenGL)"
-            api.equals("METAL", ignoreCase = true) -> "The graphics card (Metal)"
-            api.equals("DIRECT3D", ignoreCase = true) -> "The graphics card (Direct3D)"
-            api.equals("VULKAN", ignoreCase = true) -> "The graphics card (Vulkan)"
-            else -> api
-        }
-        if (_drawing.value?.name != name) Log.info("Drawing with $api")
-        _drawing.value = io.github.matiyaaa.fuse.ui.shell.platform.DrawingInfo(name, gpu = !cpu)
+    /**
+     * The window says how it is drawn once it is up: Skia on OpenGL, Metal, Direct3D or Vulkan, or
+     * on the processor. [info] is Skiko's render info (GL vendor and renderer), which tells OpenGL on
+     * a software driver (llvmpipe) from the graphics card; [note] is anything else worth showing
+     * in Developer options (a window gamescope is scaling up).
+     */
+    fun noteRenderer(api: String, info: String? = null, note: String? = null) {
+        val verdict = io.github.matiyaaa.fuse.desktop.system.Renderer.classify(api, info)
+        val name = listOfNotNull(verdict.name, verdict.why, note).joinToString(". ")
+        if (_drawing.value?.name != name) Log.info("Drawing with $api${info?.let { " (" + it.replace('\n', ' ') + ")" }.orEmpty()}: $name")
+        _drawing.value = io.github.matiyaaa.fuse.ui.shell.platform.DrawingInfo(name, gpu = verdict.gpu)
     }
 
     private val _status = MutableStateFlow(SystemStatus())

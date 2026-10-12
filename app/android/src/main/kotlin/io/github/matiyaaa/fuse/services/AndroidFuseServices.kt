@@ -113,6 +113,8 @@ class AndroidFuseServices(
             fuseVersion = appVersion,
             lifetime = io.github.matiyaaa.fuse.sync.NoHostLifetime("Android stops background work to save battery, so it connects to a host instead of being one."),
             scope = scope,
+            // Folders the person granted through the picker (Eden's own data folder): read and written through Android.
+            trees = { uri -> io.github.matiyaaa.fuse.platform.AndroidDocumentTree.forUri(appContext, uri) },
             discoveryLock = {
                 val wifi = appContext.getSystemService(android.content.Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
                 wifi?.createMulticastLock("fuse-sync")?.apply {

@@ -44,6 +44,104 @@ class MoreAdaptersTest {
         SaveQuery(GameKey.of(platform, null, null, title.ifEmpty { "Game" }), platform, rom, emulator, serial = serial, title = title)
 
     @Test
+    fun dsSavesOnTheThorAreFoundWhereTheEmulatorsPutThem() {
+        val mama = q("nds", "/storage/emulated/0/Emulation/roms/nds/Cooking Mama.nds", "melonds")
+        // melonDS with its save folder set in the person's storage.
+        val melon = FakeEnv("ANDROID", "/storage/emulated/0", files = mapOf("/storage/emulated/0/melonDS/saves/Cooking Mama.sav" to "x"))
+        assertEquals("/storage/emulated/0/melonDS/saves/Cooking Mama.sav", SaveAdapters.forEmulator("melonds")!!.locate(mama, melon).single().files.single().path)
+        // Nothing found: the note names melonDS's own settings, not only Fuse's.
+        val nothing = SaveAdapters.forEmulator("melonds")!!.locate(mama, FakeEnv("ANDROID", "/storage/emulated/0")).single()
+        assertTrue("ROM search folders" in nothing.note!! && "save folder" in nothing.note!!, nothing.note)
+        // DraStic's folder on an SD card.
+        val card = "/storage/1234-ABCD"
+        val drastic = FakeEnv("ANDROID", "/storage/emulated/0", files = mapOf("$card/DraStic/backup/" to ""), roots = listOf(card))
+        assertEquals("$card/DraStic/backup/Cooking Mama.dsv", SaveAdapters.forEmulator("drastic")!!.locate(mama.copy(emulatorId = "drastic"), drastic).single().files.single().path)
+    }
+
+    @Test
+    fun edenUserIdsReadTheSameInBothLayouts() {
+        // Legacy: user_id[1] then user_id[0] as {:016X}; newer: the 16 bytes in order, lower case.
+        val legacy = "0123456789ABCDEFFEDCBA9876543210"
+        val raw = EdenUser.fromLegacy(legacy)
+        assertEquals("1032547698badcfeefcdab8967452301", raw)
+        assertEquals(legacy, EdenUser.toLegacy(raw))
+        assertEquals("0100A3D008C5C000", EdenUser.masked("0100A3D008C5C0FF"))
+    }
+
+    @Test
+    fun edenFindsTheNewerAccountLayoutTheThorMissed() {
+        // The Thor: Eden's Save Data Directory chosen in Fuse; Eden keeps Red Dead Redemption in the newer layout.
+        val chosen = "/storage/emulated/0/Emulation/saves/switch"
+        val legacyUser = "37111DFF1B5BCC59550000000000000A"
+        val raw = EdenUser.fromLegacy(legacyUser)
+        val rdr = q("switch", "/roms/switch/[ROMsNS] Red Dead Redemption v0 (01007820196A6000) (BASE).nsp", "eden", serial = "01007820196A6000")
+        val phone = FakeEnv("ANDROID", "/storage/emulated/0", files = mapOf(
+            "$chosen/user/save/0000000000000000/$legacyUser/" to "",
+            "$chosen/user/save/account/$raw/01007820196A6000/0/slot1.dat" to "x",
+        ), chosen = mapOf("eden" to chosen))
+        val spot = SaveAdapters.forEmulator("eden")!!.locate(rdr, phone).single()
+        assertEquals("$chosen/user/save/account/$raw/01007820196A6000/0", spot.root)
+        // Both layouts there: Eden prefers the newer one, and so does Fuse.
+        val both = FakeEnv("ANDROID", "/storage/emulated/0", files = mapOf(
+            "$chosen/user/save/0000000000000000/$legacyUser/01007820196A6000/old.dat" to "x",
+            "$chosen/user/save/account/$raw/01007820196A6000/0/slot1.dat" to "x",
+        ), chosen = mapOf("eden" to chosen))
+        assertEquals("$chosen/user/save/account/$raw/01007820196A6000/0", SaveAdapters.forEmulator("eden")!!.locate(rdr, both).single().root)
+        // The low byte of the title id is cleared in the newer layout.
+        val masked = FakeEnv("ANDROID", "/storage/emulated/0", files = mapOf(
+            "$chosen/user/save/account/$raw/0100A3D008C5C000/0/a" to "x",
+        ), chosen = mapOf("eden" to chosen))
+        assertEquals("$chosen/user/save/account/$raw/0100A3D008C5C000/0",
+            SaveAdapters.forEmulator("eden")!!.locate(q("switch", "/r/g.nsp", "eden", serial = "0100A3D008C5C0FF"), masked).single().root)
+    }
+
+    @Test
+    fun edenDeviceSavesAndOtherUsers() {
+        val space = "/home/mo/.local/share/eden/nand/user/save"
+        val game = q("switch", "/roms/switch/Game [0100000000010000].nsp", "eden")
+        // A device save (not tied to a user), newer and legacy.
+        val newer = FakeEnv("LINUX", "/home/mo", files = mapOf("$space/device/0100000000010000/0/d" to "x"))
+        assertEquals("$space/device/0100000000010000/0", SaveAdapters.forEmulator("eden")!!.locate(game, newer).single().mounts[SwitchNand.DEVICE])
+        val legacy = FakeEnv("LINUX", "/home/mo", files = mapOf("$space/0000000000000000/00000000000000000000000000000000/0100000000010000/d" to "x"))
+        assertEquals("$space/0000000000000000/00000000000000000000000000000000/0100000000010000", SaveAdapters.forEmulator("eden")!!.locate(game, legacy).single().mounts[SwitchNand.DEVICE])
+        // An account save and a device save of one game: both, as one save, never one left behind.
+        val u = "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"
+        val both = FakeEnv("LINUX", "/home/mo", files = mapOf(
+            "$space/0000000000000000/$u/0100000000010000/a" to "x",
+            "$space/device/0100000000010000/0/d" to "x",
+        ))
+        val bothSpot = SaveAdapters.forEmulator("eden")!!.locate(game, both).single()
+        assertEquals("$space/0000000000000000/$u/0100000000010000", bothSpot.root)
+        assertEquals("$space/device/0100000000010000/0", bothSpot.mounts[SwitchNand.DEVICE])
+        assertEquals("$space/device/0100000000010000/0/sub/d.bin", bothSpot.pathFor("@device/sub/d.bin"))
+        // Two users, the game saved by only one: that one, never the first in the list.
+        val a = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        val b = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+        val two = FakeEnv("LINUX", "/home/mo", files = mapOf(
+            "$space/0000000000000000/$a/" to "",
+            "$space/0000000000000000/$b/0100000000010000/s" to "x",
+        ))
+        assertEquals("$space/0000000000000000/$b/0100000000010000", SaveAdapters.forEmulator("eden")!!.locate(game, two).single().root)
+        // Two users, neither has it, no profile selected: Fuse doesn't guess.
+        val neither = FakeEnv("LINUX", "/home/mo", files = mapOf("$space/0000000000000000/$a/" to "", "$space/0000000000000000/$b/" to ""))
+        val none = SaveAdapters.forEmulator("eden")!!.locate(game, neither).single()
+        assertFalse(none.available)
+        assertTrue("more than one user" in none.note!!, none.note)
+        // The config's current user picks, through Eden's profile list (its second entry here).
+        val profiles = ByteArray(0x10 + 2 * 0xC8).also { bytes ->
+            EdenUser.fromLegacy(b).chunked(2).forEachIndexed { i, h -> bytes[0x10 + 0xC8 + i] = h.toInt(16).toByte() }
+        }
+        val selected = FakeEnv("LINUX", "/home/mo", files = mapOf(
+            "/home/mo/.config/eden/qt-config.ini" to "[System]\ncurrent_user=1\n",
+            "$space/0000000000000000/$a/0100000000010000/s" to "x",
+            "$space/0000000000000000/$b/" to "",
+        ), bin = mapOf("/home/mo/.local/share/eden/nand/system/save/8000000000000010/su/avators/profiles.dat" to profiles))
+        val spot = SaveAdapters.forEmulator("eden")!!.locate(game, selected).single()
+        assertEquals("$space/0000000000000000/$b/0100000000010000", spot.root, "the selected user's place, not user A's save")
+        assertTrue("may not have saved yet" in spot.note!!, spot.note)
+    }
+
+    @Test
     fun edenSavesWhereItsConfigOrThePersonPutThem() {
         val user = "0123456789ABCDEF0123456789ABCDEF"
         val zelda = q("switch", "/roms/switch/Zelda [01007EF00011E000].nsp", "eden")
@@ -144,7 +242,7 @@ class MoreAdaptersTest {
     fun kenjiNxIsRyujinxUnderneath() {
         assertEquals(SaveAdapters.forEmulator("ryujinx"), SaveAdapters.forEmulator("kenji-nx"))
         val chosen = "/storage/emulated/0/Kenji"
-        val extra = byteArrayOf(0x00, 0xE0.toByte(), 0x11, 0x00, 0xF0.toByte(), 0x7E, 0x00, 0x01)
+        val extra = attribute("01007EF00011E000", "0000000000000001", "0000000000000000", 1)
         val env = FakeEnv("ANDROID", "/storage/emulated/0", files = mapOf("$chosen/bis/user/save/0000000000000001/0/" to ""), bin = mapOf("$chosen/bis/user/save/0000000000000001/ExtraData0" to extra), chosen = mapOf("kenji-nx" to chosen))
         val spot = SaveAdapters.forEmulator("kenji-nx")!!.locate(q("switch", "/roms/switch/Zelda [01007EF00011E000].nsp", "kenji-nx"), env).single()
         assertEquals("$chosen/bis/user/save/0000000000000001/0", spot.root)
@@ -231,10 +329,40 @@ class MoreAdaptersTest {
         assertEquals("$eden/$user/01007EF00011E000", spot.root)
 
         val saves = "/home/mo/.config/Ryujinx/bis/user/save"
-        val extra = byteArrayOf(0x00, 0xE0.toByte(), 0x11, 0x00, 0xF0.toByte(), 0x7E, 0x00, 0x01)
-        val ryu = FakeEnv("LINUX", "/home/mo", files = mapOf("$saves/0000000000000001/0/" to "", "$saves/0000000000000002/0/" to ""), bin = mapOf("$saves/0000000000000002/ExtraData0" to extra))
+        val ryu = FakeEnv("LINUX", "/home/mo", files = mapOf("$saves/0000000000000001/0/" to "", "$saves/0000000000000002/0/" to ""),
+            bin = mapOf("$saves/0000000000000002/ExtraData0" to attribute("01007EF00011E000", "0000000000000001", "0000000000000000", 1)))
         val r = SaveAdapters.forEmulator("ryujinx")!!.locate(q("switch", "/roms/switch/Zelda [01007EF00011E000].nsp", "ryujinx"), ryu).single()
         assertEquals("$saves/0000000000000002/0", r.root)
+    }
+
+    /** A save's attribute as Ryujinx writes ExtraData0: program id, user (high, low), then the save's type. */
+    private fun attribute(program: String, high: String, low: String, type: Int): ByteArray {
+        fun le(hex: String) = hex.chunked(2).reversed().map { it.toInt(16).toByte() }
+        return (le(program) + le(high) + le(low) + List(8) { 0.toByte() } + listOf(type.toByte())).toByteArray()
+    }
+
+    @Test
+    fun ryujinxTakesItsOwnUsersSaveAndTheDeviceSaveTogether() {
+        val base = "/home/mo/.config/Ryujinx"
+        val saves = "$base/bis/user/save"
+        val zelda = q("switch", "/roms/switch/Zelda [01007EF00011E000].nsp", "ryujinx")
+        val files = mapOf("$saves/0000000000000001/0/a" to "x", "$saves/0000000000000002/0/b" to "x", "$saves/0000000000000003/0/d" to "x")
+        val bin = mapOf(
+            "$saves/0000000000000001/ExtraData0" to attribute("01007EF00011E000", "0000000000000001", "0000000000000000", 1),
+            "$saves/0000000000000002/ExtraData0" to attribute("01007EF00011E000", "0000000000000002", "0000000000000000", 1),
+            "$saves/0000000000000003/ExtraData0" to attribute("01007EF00011E000", "0000000000000000", "0000000000000000", 3),
+        )
+        // Two users with saves, the second selected: that one, with the device save as its other part.
+        val chosen = FakeEnv("LINUX", "/home/mo", files = files + ("$base/system/Profiles.json" to "{\"profiles\":[],\"last_opened\":\"00000000000000020000000000000000\"}"), bin = bin)
+        val spot = SaveAdapters.forEmulator("ryujinx")!!.locate(zelda, chosen).single()
+        assertEquals("$saves/0000000000000002/0", spot.root)
+        assertEquals("$saves/0000000000000003/0", spot.mounts[SwitchNand.DEVICE])
+        // Two users and no selection: Fuse doesn't guess between them.
+        val unsure = SaveAdapters.forEmulator("ryujinx")!!.locate(zelda, FakeEnv("LINUX", "/home/mo", files = files, bin = bin)).single()
+        assertFalse(unsure.available)
+        // The selected user has no save of it yet: never someone else's.
+        val other = FakeEnv("LINUX", "/home/mo", files = files + ("$base/system/Profiles.json" to "{\"last_opened\":\"00000000000000090000000000000000\"}"), bin = bin)
+        assertFalse(SaveAdapters.forEmulator("ryujinx")!!.locate(zelda, other).single().available)
     }
 
     @Test
@@ -413,7 +541,9 @@ class MoreAdaptersTest {
         assertEquals("/storage/emulated/0/Games/ppsspp/PSP/SAVEDATA", psp.root)
         assertEquals(listOf("ULUS10041DATA00"), psp.folders)
         val gc = SaveAdapters.forEmulator("dolphin")!!.locate(q("ngc", "/roms/gc/game.iso", "dolphin", serial = "GALE01"), env).first()
-        assertTrue(gc.files.single().path.startsWith("/storage/emulated/0/Games/Dolphin/GC/"), gc.files.toString())
+        // Dolphin's own default: slot A is a GCI folder, this game's files in it.
+        assertEquals("/storage/emulated/0/Games/Dolphin/GC/USA/Card A", gc.root)
+        assertEquals("01-GALE-", gc.only)
         val psx = SaveAdapters.forEmulator("duckstation")!!.locate(q("psx", "/roms/psx/game.cue", "duckstation", title = "Game"), env).first()
         assertTrue(psx.files.single().path.startsWith("/storage/emulated/0/Games/DuckStation/memcards/"))
         val ps2 = SaveAdapters.forEmulator("armsx2")!!.locate(q("ps2", "/roms/ps2/game.iso", "armsx2"), env).first()

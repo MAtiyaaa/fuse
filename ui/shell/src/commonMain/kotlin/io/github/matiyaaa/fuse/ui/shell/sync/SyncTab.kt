@@ -139,7 +139,13 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
     val report = app.syncReport?.takeIf { it.profile.id == profile?.id }
     val names = devices.associate { it.id to it.name }
 
+    val unclaimed by svc.unclaimed.collectAsState()
+    // Saves found here that no one owned are kept aside: first on the line while any wait for an owner.
+    val claim = unclaimed.takeIf { it.isNotEmpty() }?.let { saves ->
+        SyncAction(if (saves.size == 1) "1 Save to Claim" else "${saves.size} Saves to Claim", FuseIcons.Archive) { claimSaves(app, svc, saves, profiles) }
+    }
     val actions = if (alone) buildList {
+        claim?.let(::add)
         add(SyncAction("Switch Profile", FuseIcons.Users) { app.whoAreYou = WhoMode.SWITCH })
         add(SyncAction("New Profile", FuseIcons.UserPlus) { app.whoAreYou = WhoMode.ADD })
         add(SyncAction("Other Devices", FuseIcons.MonitorSmartphone) { householdChoice(app, svc.canHost) })
@@ -155,6 +161,7 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
                 }
             }
         })
+        claim?.let(::add)
         // The household's games on its other devices: their own small library.
         if (hasLib) add(SyncAction("Library", FuseIcons.MonitorSmartphone) { app.go(Route.HouseholdLibrary) })
         add(SyncAction("Switch Profile", FuseIcons.Users) { app.whoAreYou = WhoMode.SWITCH })
@@ -348,6 +355,39 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
 private class SyncAction(val label: String, val icon: ImageVector, val run: () -> Unit)
 
 /**
+ * Saves kept aside because no one owned them: choose one, then whose it is. It becomes that
+ * person's save and goes into place when they next play the game; nothing is ever deleted.
+ */
+private fun claimSaves(app: AppState, svc: io.github.matiyaaa.fuse.sync.SyncService, saves: List<io.github.matiyaaa.fuse.sync.UnclaimedSave>, profiles: List<io.github.matiyaaa.fuse.sync.ProfileInfo>) {
+    fun whose(save: io.github.matiyaaa.fuse.sync.UnclaimedSave) {
+        app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+            title = "Whose save is it?",
+            icon = FuseIcons.Users,
+            message = "${save.title}'s ${save.kind.label.lowercase()} was here before anyone played it with Fuse. It becomes this person's, and is put in place when they next play.",
+            options = profiles.map { p ->
+                MenuAction("claim.${p.id}", p.name, FuseIcons.User, onSelect = {
+                    app.choice = null
+                    app.scope.launch {
+                        svc.claim(save, p.id)
+                            .onSuccess { app.toasts.show("${save.title}: the save is ${p.name}'s now", ToastKind.SUCCESS, icon = FuseIcons.CloudCheck) }
+                            .onFailure { app.toasts.show(it.message ?: "The save couldn't be claimed", ToastKind.WARNING) }
+                    }
+                })
+            },
+        )
+    }
+    if (saves.size == 1) return whose(saves.single())
+    app.openContextMenu(
+        io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec(
+            title = "Saves to claim", subtitle = "Kept aside: no one owned them", icon = FuseIcons.Archive,
+            actions = saves.map { s ->
+                MenuAction("claim.${s.game.id}.${s.kind}", s.title, FuseIcons.Gamepad, detail = "${s.kind.label}, ${sizeText(s.bytes)}", onSelect = { app.contextMenu = null; whose(s) })
+            },
+        ),
+    )
+}
+
+/**
  * The top of the Sync tab, in one slim line: who is playing and on which host (with their totals
  * when there is room), and the things to do. How things stand appears only when something is
  * wrong (the host away, a PIN to type again); all being well needs no saying.
@@ -461,7 +501,7 @@ private fun GameRow(g: GameReport, card: io.github.matiyaaa.fuse.ui.shell.store.
     val saves = g.slots.filter { it.kind != io.github.matiyaaa.fuse.sync.SaveKind.STATE }.sumOf { it.versions.size }
     val states = g.slots.filter { it.kind == io.github.matiyaaa.fuse.sync.SaveKind.STATE }.sumOf { it.versions.size }
     val bytes = g.slots.sumOf { it.bytes }
-    val title = card?.title ?: g.name
+    val title = card?.title ?: io.github.matiyaaa.fuse.library.parse.DisplayNameCleaner.clean(g.name)
     val shape = RoundedCornerShape(Fuse.geometry.control)
     val bg by fuselineColor(if (selected) c.surfaceRaised else c.surface.copy(alpha = 0.55f), Fuse.motion.tween(Durations.FAST), label = "syncGame")
     Row(
@@ -502,7 +542,16 @@ private fun GameRow(g: GameReport, card: io.github.matiyaaa.fuse.ui.shell.store.
 
 /** Each game's cover from this library, where it has the game: by its id across devices, or its name. */
 internal class SyncCovers(private val map: Map<String, io.github.matiyaaa.fuse.ui.shell.store.GameCard>) {
-    fun of(game: String, name: String) = map[game] ?: map["name:" + name.lowercase()]
+    /**
+     * By the household's id, then the name as given, then the name as the library searches it: a
+     * save made on another device carries that device's file name ("[ROMsNS] Red Dead Redemption
+     * v0 (01007820196A6000) (BASE)") while this library shows the game's own.
+     */
+    fun of(game: String, name: String) = map[game] ?: map["name:" + name.lowercase()] ?: map[searchKey(name)]
+
+    companion object {
+        fun searchKey(name: String) = "search:" + io.github.matiyaaa.fuse.library.parse.SearchTitles.clean(name).lowercase()
+    }
 }
 
 @Composable
@@ -514,6 +563,7 @@ internal fun rememberSyncCovers(app: AppState): SyncCovers {
                 for (card in cards) {
                     put(io.github.matiyaaa.fuse.sync.GameKey.of(card.platformId.value, null, null, card.title).id, card)
                     put("name:" + card.title.lowercase(), card)
+                    putIfAbsent(SyncCovers.searchKey(card.title), card)
                 }
             })
         }.flowOn(kotlinx.coroutines.Dispatchers.Default).collect { value = it }

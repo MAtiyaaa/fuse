@@ -59,6 +59,24 @@ object SettingProfiles {
                     "duckstation.scale" to "2", "duckstation.pgxp" to "false", "duckstation.vsync" to "true",
                 ),
             )
+            "dolphin" -> listOfNotNull(
+                profile(
+                    VANILLA, "Vanilla", "As on the console: its own resolution and picture shape.",
+                    "dolphin.resolution" to "1", "dolphin.aspect" to "0", "dolphin.widescreen" to "False",
+                ),
+                profile(
+                    PERFORMANCE, "Performance", "The console's own resolution on two cores, without waiting for the screen.",
+                    "dolphin.resolution" to "1", "dolphin.dualcore" to "True", "dolphin.vsync" to "False",
+                ),
+                profile(
+                    QUALITY, "Visual Quality", "Three times the resolution (1080p), with shaders compiled without stutter. Needs a capable graphics card.",
+                    "dolphin.resolution" to "3", "dolphin.shaders" to "2",
+                ),
+                profile(
+                    BATTERY, "Battery Saver", "Twice the resolution, frames paced to the screen.",
+                    "dolphin.resolution" to "2", "dolphin.vsync" to "True",
+                ),
+            )
             "ppsspp" -> listOfNotNull(
                 profile(
                     VANILLA, "Vanilla", "As on a PSP: its own resolution, no upscaled or filtered textures.",

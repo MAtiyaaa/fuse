@@ -826,8 +826,14 @@ fun QuickMenu(app: AppState) {
         val motion = Fuse.motion
         val time = rememberClockText(prefs.clock24h)
         BoxWithConstraints {
+            // On a short screen (a handheld's) the whole sheet scales down with it, tabs, text and
+            // tiles alike, the way the rest of Fuse scales: never a desktop-sized sheet on a phone.
+            val outer = androidx.compose.ui.platform.LocalDensity.current
+            val k = (maxHeight / QUICK_MENU_FULL_AT).coerceIn(QUICK_MENU_MIN_SCALE, 1f)
+            val roomWidth = (maxWidth - Space.l) / k
+            androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(outer.density * k, outer.fontScale)) {
             // A side sheet the height of the screen; a narrow screen gives it all but a margin.
-            val width = minOf(QUICK_MENU_WIDTH, maxWidth - Space.l)
+            val width = minOf(QUICK_MENU_WIDTH, roomWidth)
             Panel(Modifier.width(width).fillMaxHeight().padding(vertical = Space.l).padding(end = Space.l)) {
                 Column(Modifier.fillMaxSize()) {
                     // The clock and battery stay put (or, while editing, what editing is); the rest scrolls under.
@@ -1013,6 +1019,7 @@ fun QuickMenu(app: AppState) {
                     }
                     HintBar(hints, Modifier.align(Alignment.End).padding(horizontal = Space.l, vertical = Space.m))
                 }
+            }
             }
         }
     }
@@ -1351,6 +1358,10 @@ private val SECTION_HEIGHT = 40.dp
 
 /** The sheet's width, the same as the context menu's side sheet; narrower screens give it all but a margin. */
 private val QUICK_MENU_WIDTH = 420.dp
+
+/** From this screen height the sheet is drawn at full size; below it, it scales down, to at most [QUICK_MENU_MIN_SCALE]. */
+private val QUICK_MENU_FULL_AT = 720.dp
+private const val QUICK_MENU_MIN_SCALE = 0.72f
 
 /** Between items, wide enough that a focused item's ring never meets its neighbours. */
 private val TILE_GAP = Space.m

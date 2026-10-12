@@ -184,14 +184,14 @@ private fun chooseFolder(app: AppState, e: EmulatorSaves, name: String, page: Sa
     fun pick() {
         app.choice = null
         app.scope.launch {
-            val path = app.platform.storage.pickFolder("Where $name keeps its saves") ?: return@launch
+            val path = app.platform.storage.pickSaveFolder("Where $name keeps its saves") ?: return@launch
             app.store.sync.setSaveFolder(e.emulator, path)
             app.toasts.show("$name's saves are kept in step from there", ToastKind.SUCCESS, icon = FuseIcons.FolderSync)
             page.round++
         }
     }
     val message = when {
-        e.chosen != null -> "Fuse keeps $name's saves in step from ${e.chosen}."
+        e.chosen != null -> "Fuse keeps $name's saves in step from ${folderName(e.chosen!!)}."
         e.state == EmulatorSaves.State.FOUND -> "Fuse found its saves in ${e.where}. Choose another folder if $name keeps them somewhere else."
         else -> e.note ?: "Choose the folder $name keeps its saves in."
     }
@@ -251,4 +251,13 @@ private fun SaveFoldersMark(size: Dp, modifier: Modifier = Modifier) {
     ) {
         FuseIcon(FuseIcons.FolderOpen, size = size * 0.48f, tint = accent)
     }
+}
+
+/** A chosen save folder as a person reads it: a path, or for one shared through the picker, whose it is. */
+internal fun folderName(chosen: String): String {
+    if (!chosen.startsWith("tree:")) return chosen
+    val authority = chosen.removePrefix("tree:content://").substringBefore('/')
+    val inside = java.net.URLDecoder.decode(chosen.substringAfter("/tree/").substringBefore('/'), "UTF-8").substringAfter(':')
+    val app = authority.removeSuffix(".user").removeSuffix(".documents").substringAfterLast('.').substringBefore('_').replaceFirstChar { it.uppercase() }
+    return if (inside.isBlank()) "the folder $app shares" else "$inside, shared by $app"
 }

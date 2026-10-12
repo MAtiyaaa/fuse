@@ -236,6 +236,8 @@ data class DeckyState(
     val bundledVersion: String,
     /** The system can ask for the person's password to put the plugin in place (pkexec). */
     val canInstall: Boolean,
+    /** The plugin adds Fuse's entries to Steam's game menu (off once the person turns them off). */
+    val menuEntries: Boolean = true,
 ) {
     val upToDate: Boolean get() = plugin && pluginVersion == bundledVersion
 }
@@ -254,6 +256,12 @@ interface DeckyIntegration {
 
     /** Takes the plugin out of Decky. Nothing of Fuse's (its library, play time, saves) changes. */
     suspend fun remove(): Result<String>
+
+    /**
+     * Lets the plugin add Fuse's entries to Steam's game menu, or keeps it from patching that menu
+     * at all, from the next time Decky loads it. False when it couldn't be changed.
+     */
+    suspend fun setMenuEntries(on: Boolean): Boolean = false
 
     /** The plugin as a ZIP in Fuse's own folder, for Decky's Install from ZIP; null when it can't be made. */
     suspend fun stage(): String?
@@ -392,6 +400,13 @@ interface StorageAccess {
     fun request()
     /** Opens the platform folder picker; returns a filesystem path Fuse can read, or null. */
     suspend fun pickFolder(title: String): String?
+
+    /**
+     * Opens the folder picker for an emulator's saves. On Android it also takes folders another app
+     * shares through the picker (Eden's own data folder, a card): those come back as a `tree:` link
+     * Fuse Sync reads and writes through the system, with the access kept. Elsewhere, [pickFolder].
+     */
+    suspend fun pickSaveFolder(title: String): String? = pickFolder(title)
 
     /** Opens the platform image picker; returns a readable path (copied into Fuse's storage if needed), or null. */
     suspend fun pickImage(title: String): String?

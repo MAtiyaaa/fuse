@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -39,6 +40,13 @@ class Cue(private val scope: CoroutineScope) {
     val playing: Boolean get() = ticking?.isActive == true
 
     /**
+     * Its clock was stopped before every part joined to it had played (its scope ended: the page
+     * left mid-entrance, or before its first frame). A state, so layers drawn from [progress] are
+     * redrawn in place the moment it happens instead of keeping a half-faded (or unseen) frame.
+     */
+    private var cutShort by mutableStateOf(false)
+
+    /**
      * Something will play from this cue until [endsAtMillis] (on the cue's time). The cue starts if
      * it isn't running, and runs at least until then.
      */
@@ -46,14 +54,22 @@ class Cue(private val scope: CoroutineScope) {
         if (endsAtMillis > until) until = endsAtMillis
         if (ticking?.isActive == true) return
         ticking = scope.launch {
-            while (true) {
-                val now = withFrameNanos { t ->
-                    if (origin < 0) origin = t
-                    (t - origin) / 1_000_000
-                }
-                if (now != nowMillis) nowMillis = now
-                if (now >= until) break
+            try {
+                tick()
+            } finally {
+                if (nowMillis < until) cutShort = true
             }
+        }.also { if (it.isCancelled) cutShort = true }
+    }
+
+    private suspend fun tick() {
+        while (true) {
+            val now = withFrameNanos { t ->
+                if (origin < 0) origin = t
+                (t - origin) / 1_000_000
+            }
+            if (now != nowMillis) nowMillis = now
+            if (now >= until) break
         }
     }
 
@@ -64,7 +80,7 @@ class Cue(private val scope: CoroutineScope) {
      */
     fun progress(delayMillis: Int, durationMillis: Int, curve: Curve = Curves.Enter): Float {
         val now = nowMillis
-        if (now >= delayMillis + durationMillis || (!playing && origin >= 0 && now < until)) return 1f
+        if (cutShort || now >= delayMillis + durationMillis || (!playing && now < until && ticking != null)) return 1f
         if (now <= delayMillis || durationMillis <= 0) return if (durationMillis <= 0 && now >= delayMillis) 1f else 0f
         return curve.transform((now - delayMillis).toFloat() / durationMillis)
     }

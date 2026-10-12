@@ -24,11 +24,25 @@ import kotlinx.coroutines.withContext
 internal class DesktopDecky(
     private val home: File = File(System.getProperty("user.home")),
     private val staging: File,
+    /** A Steam game is running: Decky isn't restarted under it (its overlay and plugins would blink out mid-game). */
+    private val gameRunning: () -> Boolean = { SystemSteamProcessOps(fuseProgram = { null }, fuseGameId = { null }).gameRunning() },
+    /** The data folder the bridge's discovery file is in (XDG_DATA_HOME, else ~/.local/share). */
+    private val dataHome: File = System.getenv("XDG_DATA_HOME")?.takeIf { it.startsWith("/") }?.let(::File) ?: File(home, ".local/share"),
 ) : DeckyIntegration {
     private val lock = Mutex()
     private val homebrew get() = File(home, "homebrew")
     private val plugins get() = File(homebrew, "plugins")
     private val target get() = File(plugins, PLUGIN)
+
+    /** Beside the bridge's discovery file, where the plugin looks (main.py, _menu_off). */
+    private val menuOff get() = File(dataHome, "fuse/decky-menu-off")
+
+    override suspend fun setMenuEntries(on: Boolean): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            if (on) menuOff.delete() || !menuOff.exists()
+            else menuOff.parentFile.mkdirs().let { menuOff.writeText("Fuse's entries in Steam's game menu are off.\n"); true }
+        }.getOrDefault(false)
+    }
 
     override suspend fun state(): DeckyState = withContext(Dispatchers.IO) {
         val loader = File(homebrew, "services/PluginLoader").exists() || File("/etc/systemd/system/plugin_loader.service").exists()
@@ -39,6 +53,7 @@ internal class DesktopDecky(
             pluginVersion = if (installed) versionOf(File(target, "package.json")) else null,
             bundledVersion = BuildInfo.VERSION,
             canInstall = loader && Processes.which("pkexec") != null,
+            menuEntries = !menuOff.exists(),
         )
     }
 
@@ -49,23 +64,16 @@ internal class DesktopDecky(
                 if (!st.loader) error("Decky Loader isn't installed. Install it first from decky.xyz, then try again.")
                 val source = stagePlugin() ?: error("This copy of Fuse doesn't carry the Decky plugin.")
                 val pkexec = Processes.which("pkexec") ?: error("This system can't ask for your password. Install it from Decky's settings: Developer, Install Plugin from ZIP.")
-                // Copy beside the old one, swap, and only then remove the old: one command, one prompt.
-                val script = """
-                    set -e
-                    mkdir -p "${'$'}1"
-                    rm -rf "${'$'}1/$PLUGIN.new"
-                    cp -r "${'$'}2" "${'$'}1/$PLUGIN.new"
-                    if [ -d "${'$'}1/$PLUGIN" ]; then rm -rf "${'$'}1/$PLUGIN.previous"; mv "${'$'}1/$PLUGIN" "${'$'}1/$PLUGIN.previous"; fi
-                    mv "${'$'}1/$PLUGIN.new" "${'$'}1/$PLUGIN"
-                    rm -rf "${'$'}1/$PLUGIN.previous"
-                    systemctl restart plugin_loader 2>/dev/null || true
-                """.trimIndent()
+                // Decky's own folder is Decky's: Fuse never creates it (as root it would be the wrong owner).
+                if (!plugins.isDirectory) error("Decky's plugins folder isn't there, so Decky may not be installed properly. Reinstall Decky from decky.xyz, then try again. Nothing was changed.")
+                val restart = !gameRunning()
+                val script = installScript(restart)
                 val out = Processes.run(listOf(pkexec, "sh", "-c", script, "fuse-decky", plugins.absolutePath, source.absolutePath), timeoutMs = 120_000, withErrors = true)
                     ?: error("The password prompt didn't open. Install it from Decky's settings: Developer, Install Plugin from ZIP.")
                 when (out.exitCode) {
-                    0 -> "The Fuse plugin is in Decky. Decky restarted to load it."
+                    0 -> if (restart) "The Fuse plugin is in Decky. Decky restarted to load it." else "The Fuse plugin is in Decky. It loads the next time Decky starts; Fuse didn't restart Decky while a game is running."
                     126, 127 -> error("Installing was cancelled. Nothing was changed.")
-                    else -> error("Decky's plugins folder couldn't be updated (${out.stdout.trim().lines().lastOrNull().orEmpty()}). Nothing was lost.")
+                    else -> error("Decky's plugins folder couldn't be updated (${out.stdout.trim().lines().lastOrNull().orEmpty()}). The plugin that was there is back in place.")
                 }
             }.onFailure { Log.warn("Decky plugin install", it) }
         }
@@ -76,7 +84,8 @@ internal class DesktopDecky(
             runCatching {
                 if (!File(target, "plugin.json").isFile) return@runCatching "The Fuse plugin isn't in Decky."
                 val pkexec = Processes.which("pkexec") ?: error("This system can't ask for your password. Remove it from Decky's settings.")
-                val script = "set -e\nrm -rf \"\$1/$PLUGIN\"\nsystemctl restart plugin_loader 2>/dev/null || true"
+                val restart = if (gameRunning()) "" else "systemctl restart plugin_loader 2>/dev/null || true"
+                val script = "set -e\nrm -rf \"\$1/$PLUGIN\"\n$restart"
                 val out = Processes.run(listOf(pkexec, "sh", "-c", script, "fuse-decky", plugins.absolutePath), timeoutMs = 120_000, withErrors = true)
                     ?: error("The password prompt didn't open.")
                 if (out.exitCode != 0) error("It wasn't removed. Nothing was changed.")
@@ -121,5 +130,24 @@ internal class DesktopDecky(
 
     companion object {
         const val PLUGIN = "Fuse"
+
+        /**
+         * The privileged install, as one script ($1 Decky's plugins folder, $2 the staged plugin):
+         * copy beside the old plugin, give it the folder's own owner (as Decky's other plugins have),
+         * swap, and put the old one back if the swap fails. Decky restarts only when [restart].
+         */
+        internal fun installScript(restart: Boolean): String = """
+            set -e
+            [ -d "${'$'}1" ] || exit 3
+            rm -rf "${'$'}1/$PLUGIN.new"
+            cp -r "${'$'}2" "${'$'}1/$PLUGIN.new"
+            chown -R --reference="${'$'}1" "${'$'}1/$PLUGIN.new" 2>/dev/null || true
+            if [ -d "${'$'}1/$PLUGIN" ]; then rm -rf "${'$'}1/$PLUGIN.previous"; mv "${'$'}1/$PLUGIN" "${'$'}1/$PLUGIN.previous"; fi
+            if ! mv "${'$'}1/$PLUGIN.new" "${'$'}1/$PLUGIN"; then
+                [ -d "${'$'}1/$PLUGIN.previous" ] && mv "${'$'}1/$PLUGIN.previous" "${'$'}1/$PLUGIN"
+                exit 4
+            fi
+            rm -rf "${'$'}1/$PLUGIN.previous"
+        """.trimIndent() + if (restart) "\nsystemctl restart plugin_loader 2>/dev/null || true" else ""
     }
 }

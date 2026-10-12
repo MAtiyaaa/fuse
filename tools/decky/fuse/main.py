@@ -92,7 +92,22 @@ def _app_id(value):
     return app_id if app_id > 0 else None
 
 
+def _menu_off():
+    """True when the person turned off Fuse's entries in Steam's menu (Fuse, Settings, Steam), or Fuse did."""
+    for path in _discovery_candidates():
+        if os.path.exists(os.path.join(os.path.dirname(path), "decky-menu-off")):
+            return True
+    return False
+
+
 class Plugin:
+    async def menu_off(self):
+        """Read once when the plugin loads: whether to leave Steam's menu exactly as Steam made it."""
+        try:
+            return _menu_off()
+        except Exception:
+            return True
+
     async def hello(self):
         return await _ask("GET", "/v1/hello")
 

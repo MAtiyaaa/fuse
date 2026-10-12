@@ -284,6 +284,12 @@ fun Hud(
                         // the others making room, never as a jump.
                         val slide = remember { FuselineValue(0f) }
                         val lastX = remember { floatArrayOf(Float.NaN) }
+                        // Only a change of order slides: a neighbour's label opening or closing moves
+                        // this tab with it, in step, or it lags behind and the pill runs over it.
+                        val order = destinations.indexOf(d)
+                        val lastOrder = remember { intArrayOf(order) }
+                        val reordered = lastOrder[0] != order
+                        lastOrder[0] = order
                         Tab(
                             sections.label(d), sections.icon(d), selected = d == active, focused = (tabsFocused && focusedButton == null && lifted == null && d == active) || held, showLabel = labels || (d == active && nameFits) || held,
                             modifier = Modifier
@@ -299,7 +305,7 @@ fun Hud(
                                     }
                                     val before = lastX[0]
                                     lastX[0] = px
-                                    if (!before.isNaN() && before != px) {
+                                    if (!before.isNaN() && before != px && (reordered || dragged == d || held)) {
                                         if (dragged == d) {
                                             // Its place moved under the finger: the finger stays where it is.
                                             dragOffset.floatValue -= px - before

@@ -9,6 +9,7 @@ import io.github.matiyaaa.fuse.launch.patches.PlannedFile
 import io.github.matiyaaa.fuse.launch.patches.PpssppHome
 import io.github.matiyaaa.fuse.launch.patches.RetroArchCfg
 import io.github.matiyaaa.fuse.launch.patches.RetroArchHome
+import io.github.matiyaaa.fuse.launch.settings.DolphinHome
 import io.github.matiyaaa.fuse.model.InstalledEmulator
 import io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles
 import io.github.matiyaaa.fuse.ui.shell.store.InstallerResult
@@ -162,6 +163,46 @@ class DesktopEmulatorFiles(
         val stick = candidates.firstOrNull { File(it, "PSP").isDirectory } ?: return@withContext null
         roots += stick.absolutePath
         PpssppHome(stick.absolutePath.replace('\\', '/'))
+    }
+
+    /**
+     * Dolphin's folders (UICommon/UICommon.cpp, SetUserDirectory): DOLPHIN_EMU_USERPATH when set; on
+     * Windows `User` beside the program when portable.txt is there, else Documents\Dolphin Emulator;
+     * on macOS ~/Library/Application Support/Dolphin; on Linux ~/.dolphin-emu when it exists, else
+     * Config in $XDG_CONFIG_HOME/dolphin-emu and the rest in $XDG_DATA_HOME/dolphin-emu (inside
+     * ~/.var/app for the Flatpak). Its settings files are in Config, each game's in GameSettings.
+     */
+    override suspend fun dolphin(installed: InstalledEmulator): DolphinHome? = withContext(Dispatchers.IO) {
+        val flatpak = installed.detectedVia == "Flatpak"
+        val program = if (flatpak) null else File(installed.appId).takeIf { it.isAbsolute }
+        val programDir = program?.takeIf { !it.path.endsWith(".app") }?.parentFile
+        // (config folder, user folder)
+        val pairs: List<Pair<File, File>> = buildList {
+            env["DOLPHIN_EMU_USERPATH"]?.takeIf { File(it).isAbsolute }?.let { add(File(it, "Config") to File(it)) }
+            when (os) {
+                DesktopOs.WINDOWS -> {
+                    programDir?.takeIf { File(it, "portable.txt").isFile }?.let { add(File(it, "User/Config") to File(it, "User")) }
+                    listOfNotNull(env["USERPROFILE"]?.let { File(it, "Documents/Dolphin Emulator") }, env["OneDrive"]?.let { File(it, "Documents/Dolphin Emulator") }, env["APPDATA"]?.let { File(it, "Dolphin Emulator") })
+                        .forEach { add(File(it, "Config") to it) }
+                }
+                DesktopOs.MACOS -> File(home, "Library/Application Support/Dolphin").let { add(File(it, "Config") to it) }
+                DesktopOs.LINUX -> if (flatpak) {
+                    val app = File(home, ".var/app/$DOLPHIN_FLATPAK")
+                    add(File(app, "config/dolphin-emu") to File(app, "data/dolphin-emu"))
+                } else {
+                    File(home, ".dolphin-emu").takeIf { it.isDirectory }?.let { add(File(it, "Config") to it) }
+                    val config = env["XDG_CONFIG_HOME"]?.takeIf { File(it).isAbsolute } ?: "$home/.config"
+                    val data = env["XDG_DATA_HOME"]?.takeIf { File(it).isAbsolute } ?: "$home/.local/share"
+                    add(File(config, "dolphin-emu") to File(data, "dolphin-emu"))
+                }
+            }
+        }
+        // Until Dolphin has been started once there is nothing of its to change.
+        val (config, user) = pairs.firstOrNull { File(it.first, "Dolphin.ini").isFile } ?: return@withContext null
+        val gameSettings = File(user, "GameSettings")
+        roots += config.absolutePath
+        roots += gameSettings.absolutePath
+        DolphinHome(config.absolutePath.replace('\\', '/'), gameSettings.absolutePath.replace('\\', '/'))
     }
 
     /**
@@ -836,6 +877,7 @@ class DesktopEmulatorFiles(
         const val MAX_TAIL = 16 * 1024
         const val STOP_GRACE_MS = 800L
         const val DUCKSTATION_FLATPAK = "org.duckstation.DuckStation"
+        const val DOLPHIN_FLATPAK = "org.DolphinEmu.dolphin-emu"
         val VFS_HDD0 = Regex("^\\s*/dev_hdd0/\\s*:\\s*(.+?)\\s*$", RegexOption.MULTILINE)
         val PREF_PATH = Regex("^pref-path:\\s*(.+)$", RegexOption.MULTILINE)
     }

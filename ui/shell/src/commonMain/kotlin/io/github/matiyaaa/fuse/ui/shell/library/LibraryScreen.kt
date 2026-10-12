@@ -697,7 +697,9 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                         }
                         Spacer(Modifier.height(if (inSystem) lerp(Space.m, Space.s, collapse) else lerp(Space.l, Space.s, collapse)))
                         columns = cols
-                        IconGrid(list, state, gridState, cols, tileBase, metrics.gap, reveal, follow = { !touchScroll }, onTap = { i -> tapAt(i, list) }, onHover = { i -> hoverAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused, drags = pointerDrags)
+                        // Each view its own grid: a game in both the old and the new view never sits there
+                        // alone, already in its new place, while the rest of the new view comes in.
+                        androidx.compose.runtime.key(state.loaded?.first) { IconGrid(list, state, gridState, cols, tileBase, metrics.gap, reveal, follow = { !touchScroll }, onTap = { i -> tapAt(i, list) }, onHover = { i -> hoverAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused, drags = pointerDrags) }
                     }
                     LibraryLayout.CAPSULE -> {
                         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).padding(horizontal = Space.gutter).reveal(reveal, 1), contentAlignment = Alignment.BottomStart) {
@@ -731,11 +733,15 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                         val coverW = metrics.coverWidth
                         val cols = ((maxW - Space.gutter * 2 + metrics.gap) / (coverW + metrics.gap)).toInt().coerceAtLeast(2)
                         columns = cols
-                        CoverGrid(list, state, gridState, cols, coverW, metrics.gap, reveal, follow = { !touchScroll }, onTap = { i -> tapAt(i, list) }, onHover = { i -> hoverAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused, drags = pointerDrags)
+                        // Each view its own grid: a game in both the old and the new view never sits there
+                        // alone, already in its new place, while the rest of the new view comes in.
+                        androidx.compose.runtime.key(state.loaded?.first) { CoverGrid(list, state, gridState, cols, coverW, metrics.gap, reveal, follow = { !touchScroll }, onTap = { i -> tapAt(i, list) }, onHover = { i -> hoverAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused, drags = pointerDrags) }
                     }
                     LibraryLayout.COMPACT_LIST -> {
                         columns = 1
-                        CompactList(list, state, listState, reveal, follow = { !touchScroll }, onTap = { i -> tapAt(i, list) }, onHover = { i -> hoverAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused, drags = pointerDrags)
+                        // Each view its own grid: a game in both the old and the new view never sits there
+                        // alone, already in its new place, while the rest of the new view comes in.
+                        androidx.compose.runtime.key(state.loaded?.first) { CompactList(list, state, listState, reveal, follow = { !touchScroll }, onTap = { i -> tapAt(i, list) }, onHover = { i -> hoverAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused, drags = pointerDrags) }
                     }
                   }
                 }

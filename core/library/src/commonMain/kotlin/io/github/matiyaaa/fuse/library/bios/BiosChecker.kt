@@ -31,7 +31,12 @@ import kotlin.coroutines.cancellation.CancellationException
  * - [BiosState.READY]: at least [BiosRequirement.requiredCount] files were found (and verified).
  * - [BiosState.PARTIAL]: some, but not enough, were found and every location was readable
  *   (or the requirement is optional).
- * - [BiosState.MISSING]: every location was readable and nothing usable was found.
+ * - [BiosState.MISSING]: every location was readable and nothing usable was found. Files with a
+ *   firmware's name that were turned down (too small, not a known good dump) are listed in
+ *   [BiosStatus.unrecognized], so "missing" and "there, but not a dump Fuse knows" read apart.
+ *
+ * [BiosStatus.verified] says which of the files found matched a known checksum, rather than being
+ * taken by name alone.
  *
  * @param searchDepth How many folder levels below each root are searched (RetroArch keeps some
  *   firmware in subfolders such as `system/dc/` or `system/pcsx2/bios/`).
@@ -62,10 +67,17 @@ class BiosChecker(private val fs: FuseFileSystem, private val searchDepth: Int =
 
         val notes = ArrayList<String>()
         val found = ArrayList<String>()
+        val verified = ArrayList<String>()
+        val unrecognized = LinkedHashSet<String>()
         val unsatisfied = ArrayList<BiosFile>()
         for (file in requirement.files) {
-            val accepted = accept(file, located[file].orEmpty(), notes)
-            if (accepted != null) found += accepted.path else unsatisfied += file
+            val accepted = accept(file, located[file].orEmpty(), notes, unrecognized)
+            if (accepted != null) {
+                found += accepted.first.path
+                if (accepted.second) verified += accepted.first.path
+            } else {
+                unsatisfied += file
+            }
         }
         val satisfied = requirement.files.size - unsatisfied.size
         val enough = satisfied >= requirement.requiredCount
@@ -77,6 +89,8 @@ class BiosChecker(private val fs: FuseFileSystem, private val searchDepth: Int =
             missing = missing,
             searched = searched + blocked.map { "$it (not readable)" },
             note = (listOfNotNull(*extra) + notes).joinToString(" ").ifBlank { null },
+            verified = verified,
+            unrecognized = unrecognized.filter { it !in found },
         )
 
         val blockedNote = if (blocked.isNotEmpty()) {
@@ -137,24 +151,31 @@ class BiosChecker(private val fs: FuseFileSystem, private val searchDepth: Int =
         }
     }
 
-    /** The first candidate that passes size and checksum checks, noting why others failed. */
-    private suspend fun accept(file: BiosFile, candidates: List<FsEntry>, notes: MutableList<String>): FsEntry? {
+    /**
+     * The first candidate that passes size and checksum checks, and whether its checksum was
+     * verified; noting why others failed and keeping the ones turned down in [unrecognized].
+     */
+    private suspend fun accept(file: BiosFile, candidates: List<FsEntry>, notes: MutableList<String>, unrecognized: MutableSet<String>): Pair<FsEntry, Boolean>? {
         var rejected: String? = null
         for (candidate in candidates) {
             val min = file.minSize
             if (min != null && candidate.sizeBytes in 1 until min) {
                 rejected = "${candidate.name} is too small to be a real dump."
+                unrecognized += candidate.path
                 continue
             }
-            if (file.md5.isEmpty()) return candidate
+            if (file.md5.isEmpty()) return candidate to false
             val md5 = fs.md5(candidate.path)?.lowercase()
             when {
                 md5 == null -> {
                     notes += "${candidate.name} was found but its checksum could not be verified."
-                    return candidate
+                    return candidate to false
                 }
-                md5 in file.md5 -> return candidate
-                else -> rejected = "${candidate.name} has an unexpected checksum (not a known good dump; some emulators may still accept it)."
+                md5 in file.md5 -> return candidate to true
+                else -> {
+                    rejected = "${candidate.name} has an unexpected checksum (not a known good dump; some emulators may still accept it)."
+                    unrecognized += candidate.path
+                }
             }
         }
         rejected?.let { notes += it }

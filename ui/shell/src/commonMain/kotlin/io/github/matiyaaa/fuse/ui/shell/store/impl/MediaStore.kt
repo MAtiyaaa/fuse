@@ -808,7 +808,13 @@ internal class DefaultMediaOps(
             titleFromMetadata = candidate.title,
             onlyFillEmpty = false,
         )
+        settled(game)
         return true
+    }
+
+    /** [game] has its details now: it no longer needs the person in Settings, Art and details. */
+    private fun settled(game: GameId) {
+        progress.update { p -> p?.takeIf { q -> q.needsYou.any { it.game == game } }?.let { q -> q.copy(needsYou = q.needsYou.filterNot { it.game == game }) } ?: p }
     }
 }
 

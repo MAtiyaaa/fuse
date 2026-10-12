@@ -579,6 +579,15 @@ internal class DefaultLibraryOps(
                     when (val gate = link.service.beforeLaunch(save, waitForOthers = !playAnyway)) {
                         is io.github.matiyaaa.fuse.sync.LaunchGate.Conflict -> return LaunchOutcome.SaveConflict(gate.conflict)
                         is io.github.matiyaaa.fuse.sync.LaunchGate.Busy -> return LaunchOutcome.SyncBusy(gate)
+                        is io.github.matiyaaa.fuse.sync.LaunchGate.Blocked -> return LaunchOutcome.Problem(
+                            io.github.matiyaaa.fuse.ui.shell.store.Problem(
+                                title = "${gate.title} wasn't started",
+                                message = gate.why,
+                                kind = io.github.matiyaaa.fuse.ui.shell.store.ProblemKind.DATA,
+                                reassurance = "Every save file is kept on this device.",
+                                actions = listOf(io.github.matiyaaa.fuse.ui.shell.store.ProblemAction.Retry()),
+                            ),
+                        )
                         is io.github.matiyaaa.fuse.sync.LaunchGate.Go -> note = gate.note
                     }
                 }
@@ -877,7 +886,7 @@ internal class DefaultLibraryOps(
     private val nativePatches by lazy { NativePatches(ctx, { emulators.detectNow() }, ::discIdentity, ::pspGameId, ::retroArchRun) }
 
     /** The emulator settings Fuse changes, for a game or for every game. */
-    private val nativeSettings by lazy { NativeSettingsStore(ctx, { emulators.detectNow() }, ::discIdentity, ::pspGameId, { startsWith(it).first.installed }, changeSettings) }
+    private val nativeSettings by lazy { NativeSettingsStore(ctx, { emulators.detectNow() }, ::discIdentity, ::pspGameId, nintendoGameId = ::nintendoGameId, startsIn = { startsWith(it).first.installed }, changeSettings = changeSettings) }
 
     override suspend fun emulatorSettings(id: GameId?, emulator: EmulatorId?) = nativeSettings.view(id, emulator)
 
@@ -992,6 +1001,25 @@ internal class DefaultLibraryOps(
         } catch (e: Exception) {
             null
         } ?: return null
+        data.cache.put(DISC_CACHE, key, found, serializer, ctx.now(), ttlMs = null)
+        return found
+    }
+
+    /**
+     * A GameCube or Wii game's id as Dolphin files it (`GALE01`): from its name or tags, else read
+     * from its disc image's header, kept by path, size and change time.
+     */
+    private suspend fun nintendoGameId(game: io.github.matiyaaa.fuse.model.Game): String? {
+        val disc = io.github.matiyaaa.fuse.library.disc.NintendoDisc
+        disc.fromTag(game.tags.serial)?.let { return it }
+        val path = game.discs.firstOrNull()?.path ?: game.location.launchPath
+        if (Paths.extension(path).lowercase() !in setOf("iso", "gcm", "rvz", "wia", "ciso")) return null
+        val stat = ctx.services.fs.stat(path) ?: return null
+        val key = "nintendo|$path|${stat.sizeBytes}|${stat.modifiedAt}"
+        val serializer = kotlinx.serialization.serializer<String>()
+        data.cache.get(DISC_CACHE, key, serializer, ctx.now())?.let { return it }
+        val head = ctx.services.fs.readBytes(path, 0, disc.HEAD) ?: return null
+        val found = disc.gameId(head) ?: return null
         data.cache.put(DISC_CACHE, key, found, serializer, ctx.now(), ttlMs = null)
         return found
     }

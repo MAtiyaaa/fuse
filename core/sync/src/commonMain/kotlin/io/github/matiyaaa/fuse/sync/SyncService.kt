@@ -121,6 +121,12 @@ sealed interface LaunchGate {
      * came from that device).
      */
     data class Busy(val device: String, val title: String, val playing: Boolean, val at: Long, val lastSave: Long?) : LaunchGate
+
+    /**
+     * This person's save couldn't be put in place (the swap failed, or an interrupted one needs a
+     * look): the game must not start, or it would play with someone else's save. [why] says what to do.
+     */
+    data class Blocked(val title: String, val why: String) : LaunchGate
 }
 
 /** Something Fuse Sync did that the person would want to know, shown as a quiet toast. */
@@ -133,6 +139,9 @@ sealed interface SyncNotice {
 
     /** After a game, nothing of its save could be kept to send: [why] says why, and what to do. */
     data class NotSynced(val title: String, val kind: SaveKind, val why: String) : SyncNotice
+
+    /** A save already in the emulator's folder that no profile owned was kept aside, for someone to claim in Sync. */
+    data class KeptAside(val title: String) : SyncNotice
 
     /** This device's profiles went to [hostName] as they were ([count] of them), joining it. */
     data class Brought(val count: Int, val hostName: String) : SyncNotice
@@ -466,6 +475,16 @@ interface SyncService {
     /** Quiet news for the interface: a save sent, one that can't be used here. */
     val notices: kotlinx.coroutines.flow.SharedFlow<SyncNotice> get() = NO_NOTICES
 
+    /**
+     * Saves found in an emulator's folder that no profile owned, on a device someone else already
+     * keeps saves on: set aside (never deleted, never given to whoever played next) until a person
+     * says whose they are with [claim].
+     */
+    val unclaimed: StateFlow<List<UnclaimedSave>> get() = NO_UNCLAIMED
+
+    /** [profile] says [save] is theirs: it becomes their save, and goes into place when they next play it. */
+    suspend fun claim(save: UnclaimedSave, profile: String): Result<Unit> = Result.failure(IllegalStateException("Fuse Sync isn't set up."))
+
     /** The person settled [conflict]: [keepHere] keeps this device's, else the host's comes down. */
     suspend fun settle(conflict: SaveConflict, keepHere: Boolean): Result<Unit>
 
@@ -581,3 +600,8 @@ data class SyncFootprint(
 )
 
 private val NoRounds: StateFlow<Int> = kotlinx.coroutines.flow.MutableStateFlow(0)
+
+/** A save kept aside because no profile owned it: its game ([game] is its id), what it is, and how big. */
+data class UnclaimedSave(val game: GameKey, val title: String, val kind: SaveKind, val files: Int, val bytes: Long)
+
+private val NO_UNCLAIMED: StateFlow<List<UnclaimedSave>> = kotlinx.coroutines.flow.MutableStateFlow(emptyList())

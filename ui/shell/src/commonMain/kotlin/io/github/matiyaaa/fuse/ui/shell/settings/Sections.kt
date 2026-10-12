@@ -1296,6 +1296,17 @@ private fun deckyRows(app: AppState, decky: io.github.matiyaaa.fuse.ui.shell.pla
             if (p.steam.decky) "The plugin can ask Fuse what it shows, on this device only. It can't touch saves or secrets" else "Off: the plugin shows that Fuse isn't answering",
             enabled = !live.busy,
         ) { v -> app.store.updatePrefs { q -> q.copy(steam = q.steam.copy(decky = v)) } })
+        if (st?.plugin == true) add(toggleRow(
+            "decky.menu", "Fuse in Steam's game menu", FuseIcons.PanelTop, st.menuEntries,
+            if (st.menuEntries) "The plugin adds Fuse's entries to a game's menu in Steam. Turn this off if Steam's menu misbehaves" else "Off: the plugin leaves Steam's menus alone. Takes effect the next time Decky loads",
+            enabled = !live.busy,
+        ) { v ->
+            app.scope.launch {
+                if (decky.setMenuEntries(v)) app.toasts.show(if (v) "Fuse's menu entries come back the next time Decky loads" else "The plugin leaves Steam's menus alone from the next time Decky loads")
+                else app.toasts.show("Fuse couldn't change that")
+                live.refresh(app)
+            }
+        })
         addAll(extensionRows(app, io.github.matiyaaa.fuse.data.settings.Extensions.DECKY, p))
         if (st?.plugin == true) add(app.confirmRow(
             "decky.remove", "Remove the Fuse plugin", FuseIcons.Trash,

@@ -1,5 +1,8 @@
 import { callable } from "@decky/api";
 
+/** Whether the person turned off Fuse's entries in Steam's menu (the kill switch). Fails closed: off. */
+export const menuOff = callable<[], boolean>("menu_off");
+
 /** An answer the backend couldn't get from Fuse, in words for the person. */
 export interface Failure {
   error?: string;

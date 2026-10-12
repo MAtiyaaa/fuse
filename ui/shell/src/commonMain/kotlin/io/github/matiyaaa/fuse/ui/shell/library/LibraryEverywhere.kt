@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -267,6 +269,22 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
     }
     val chosen = gamesOf(row).getOrNull(col)
     val chosenSystem = if (row == ROW_SYSTEMS) systems.getOrNull(col) else null
+    // Games arriving (another device answering, RomM's list coming in) can reorder a shelf: the
+    // selection stays on the game it was on, never on whatever slid into its place.
+    val following = remember { HashMap<String, String>() }
+    val lists = remember { HashMap<String, List<EverywhereGame>>() }
+    for (key in listOf(ROW_RECENT, ROW_ROMM, ROW_ELSEWHERE, ROW_STREAM)) {
+        val games = gamesOf(key)
+        val at = sel.column(key)
+        val was = following[key]
+        // Only when the shelf itself changed: a move the person made is theirs to keep.
+        val arrived = lists.put(key, games).let { it != null && it !== games }
+        if (was != null && arrived) {
+            val now = games.indexOfFirst { identity(it) == was }
+            if (now >= 0 && now != at) sel.setColumn(key, now)
+        }
+        games.getOrNull(sel.column(key))?.let { following[key] = identity(it) } ?: following.remove(key)
+    }
 
     fun open(e: EverywhereGame) = when (e) {
         is EverywhereGame.Here -> app.activateGame(e.card)
@@ -386,6 +404,9 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
     }
 }
 
+/** What a shelf's game is across arrivals: its kind and id, as the shelf keys its tiles. */
+private fun identity(g: EverywhereGame): String = g::class.simpleName + g.card.id.value
+
 private const val ROW_RECENT = "recent"
 private const val ROW_SYSTEMS = "systems"
 private const val ROW_ROMM = "romm"
@@ -462,8 +483,13 @@ private fun EverywhereShelf(
             item("seeall") { SeeAllTile(selected == games.size, tile, onSeeAll) }
         }
         val chosen = games.getOrNull(selected)
-        // Room for both lines, so the next shelf's title never cuts the second.
-        Column(Modifier.padding(horizontal = Space.gutter).padding(bottom = Space.m).heightIn(min = Space.xxl + Space.l)) {
+        // Room for both lines only under the shelf the selection is on, opening as it arrives: the
+        // other shelves sit at the same rhythm as Home's and the systems shelf, with no empty band.
+        val room by io.github.matiyaaa.fuse.ui.fuseline.fuselineDp(
+            if (selected >= 0) Space.xxl + Space.l else 0.dp,
+            Fuse.motion.tween(io.github.matiyaaa.fuse.ui.fuseline.Durations.BASE), label = "shelfName",
+        )
+        Column(Modifier.padding(horizontal = Space.gutter).height(room).clipToBounds()) {
             if (chosen != null) {
                 FText(chosen.card.title, Fuse.type.bodyStrong, maxLines = 1)
                 FText(listOfNotNull(chosen.card.platformShort, chosen.card.year?.toString(), chosen.where).joinToString("  ·  "), Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1)

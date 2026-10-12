@@ -196,17 +196,19 @@ internal class FakeServices(
     @Volatile var duckstationHome: io.github.matiyaaa.fuse.launch.patches.DuckStationHome? = null
     @Volatile var ppssppHome: io.github.matiyaaa.fuse.launch.patches.PpssppHome? = null
     @Volatile var retroArchHome: io.github.matiyaaa.fuse.launch.patches.RetroArchHome? = null
+    @Volatile var dolphinHome: io.github.matiyaaa.fuse.launch.settings.DolphinHome? = null
 
     override val emulatorFiles = object : EmulatorFiles {
         override suspend fun pcsx2(installed: InstalledEmulator) = pcsx2Home
         override suspend fun duckstation(installed: InstalledEmulator) = duckstationHome
         override suspend fun ppsspp(installed: InstalledEmulator) = ppssppHome
         override suspend fun retroArch(installed: InstalledEmulator) = retroArchHome
+        override suspend fun dolphin(installed: InstalledEmulator) = dolphinHome
         override suspend fun remove(path: String): Boolean = inside(path) && File(path).delete()
         override suspend fun zipText(zip: String, entry: String): String? =
             java.util.zip.ZipFile(zip).use { z -> z.getEntry(entry)?.let { e -> z.getInputStream(e).use { it.readBytes().decodeToString() } } }
         private fun inside(path: String): Boolean =
-            listOfNotNull(pcsx2Home?.dataRoot, duckstationHome?.dataRoot, ppssppHome?.memstick, retroArchHome?.cheats, retroArchHome?.configDir)
+            listOfNotNull(pcsx2Home?.dataRoot, duckstationHome?.dataRoot, ppssppHome?.memstick, retroArchHome?.cheats, retroArchHome?.configDir, dolphinHome?.config, dolphinHome?.gameSettings)
                 .any { path.startsWith("$it/") }
 
         override suspend fun write(path: String, text: String): Boolean {

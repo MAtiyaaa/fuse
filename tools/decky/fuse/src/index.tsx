@@ -16,6 +16,7 @@ import {
   failure,
   hello,
   Hello,
+  menuOff,
   importGames,
   installAllEmulators,
   may,
@@ -209,9 +210,21 @@ const Content: VFC = () => {
 };
 
 export default definePlugin(() => {
-  // Steam's game menu gets the Fuse entries where this Steam build allows it.
-  const menu = findLibraryContextMenu();
-  const unpatch = menu ? patchContextMenu(menu) : () => {};
+  // Steam's game menu gets the Fuse entries where this Steam build allows it, unless the person
+  // turned them off. Nothing here may throw: a failing plugin must never take Decky down with it.
+  let unpatch: () => void = () => {};
+  let unloaded = false;
+  menuOff()
+    .catch(() => true)
+    .then((off) => {
+      if (off || unloaded) return;
+      try {
+        const menu = findLibraryContextMenu();
+        if (menu) unpatch = patchContextMenu(menu);
+      } catch {
+        unpatch = () => {};
+      }
+    });
   return {
     name: "Fuse",
     titleView: (
@@ -222,7 +235,12 @@ export default definePlugin(() => {
     content: <Content />,
     icon: <FuseMark />,
     onDismount() {
-      unpatch();
+      unloaded = true;
+      try {
+        unpatch();
+      } catch {
+        // Nothing of Fuse's is left in Steam's UI.
+      }
     },
   };
 });

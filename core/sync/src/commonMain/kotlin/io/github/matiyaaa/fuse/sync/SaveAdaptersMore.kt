@@ -27,13 +27,38 @@ internal object Lemuroid : SaveAdapter {
     }
 }
 
+/**
+ * EX+Alpha's GBA.emu, GBC.emu, NES.emu and Snes9x EX+ (EmuFramework/src/EmuSystem.cc,
+ * contentSaveFilePath): with the Main autosave slot, the battery save is `<game name>.sav`
+ * (`.fds.sav` for a Disk System disk, `.srm` for Snes9x EX+), in the save folder chosen in its
+ * options, else beside the game. A save folder chosen there is in its private settings, so the
+ * person chooses the same one in Fuse. A named autosave slot keeps its own copy, which Fuse leaves.
+ */
+internal object ExAlpha : SaveAdapter {
+    override val emulators = setOf("gba-emu", "gbc-emu", "nes-emu", "snes9x-explus")
+
+    override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
+        val dir = SaveAdapters.chosen(env, q) ?: SaveAdapters.parent(q.romPath)
+        val stem = SaveAdapters.stem(q.romPath)
+        val fds = q.platform == "fds" || q.romPath.endsWith(".fds", ignoreCase = true)
+        val (ext, format) = when {
+            SaveAdapters.baseId(q.emulatorId) == "snes9x-explus" -> ".srm" to SaveAdapters.sramFormat(q.platform)
+            // FCEUX keeps a disk's changes in its own form, not as save RAM another emulator reads.
+            fds -> ".fds.sav" to "fds.fceux"
+            else -> ".sav" to SaveAdapters.sramFormat(q.platform)
+        }
+        return listOf(SaveSpot(SaveKind.SAVE, format, listOf(SpotFile("save.srm", "$dir/$stem$ext"))))
+    }
+}
+
 /** DraStic: each game's save in `backup` as a `.dsv` (a raw DS save with DeSmuME's footer). */
 internal object DraStic : SaveAdapter {
     override val emulators = setOf("drastic")
 
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
         val dir = SaveAdapters.chosen(env, q)
-            ?: SaveAdapters.firstDir(env, "/storage/emulated/0/DraStic", "/storage/emulated/0/Drastic", "/storage/emulated/0/drastic", "${env.home}/.drastic", "/mnt/vendor/deep/drastic")
+            ?: SaveAdapters.firstDir(env, *(listOf("/storage/emulated/0") + env.storageRoots()).distinct()
+                .flatMap { r -> listOf("$r/DraStic", "$r/Drastic", "$r/drastic") }.plus(listOf("${env.home}/.drastic", "/mnt/vendor/deep/drastic")).toTypedArray())
             ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "nds.dsv", SaveAdapters.androidPrivateNote("DraStic", "In DraStic, Change Options, General, System Directory, choose Scoped Storage Folder and a folder named DraStic in your storage; Fuse finds it there.")))
         return listOf(SaveSpot(SaveKind.SAVE, "nds.dsv", listOf(SpotFile("save.srm", "$dir/backup/${SaveAdapters.stem(q.romPath)}.dsv"))))
     }
@@ -359,16 +384,20 @@ internal object SwitchNand : SaveAdapter {
         dataStorage(env, q, base)["load_directory"]?.takeIf { it.isNotEmpty() && env.isDirectory(it) } ?: "$base/load"
 
     /**
-     * Where a game's saves are, under [base] (the emulator's folder, or one the person chose): the
-     * folder its config names first, then the layouts a chosen folder may have (Eden's folder, its
-     * NAND, its save data folder, or the save folder itself).
+     * The folder holding a NAND's `user/save` contents under [base] (the emulator's folder, or one
+     * the person chose): the folder its config names first, then the layouts a chosen folder may
+     * have (Eden's folder, its NAND, its save data folder, or the save folder itself). It is the one
+     * with the legacy `0000000000000000` folder or the newer `account` and `device` folders.
      */
-    internal fun usersFolder(env: SaveEnvironment, q: SaveQuery, base: String): String? {
-        val config = configured(env, q, base)
-        val roots = listOfNotNull(config, base)
-        return roots.flatMap { r -> listOf("$r/user/save/$ZERO_ID", "$r/nand/user/save/$ZERO_ID", "$r/save/$ZERO_ID", "$r/$ZERO_ID") }
-            .firstOrNull { env.isDirectory(it) }
+    internal fun saveSpace(env: SaveEnvironment, q: SaveQuery, base: String): String? {
+        val roots = listOfNotNull(configured(env, q, base), base)
+        return roots.flatMap { r -> listOf("$r/user/save", "$r/nand/user/save", "$r/save", r) }
+            .firstOrNull { s -> env.isDirectory("$s/$ZERO_ID") || env.isDirectory("$s/account") || env.isDirectory("$s/device") }
     }
+
+    /** The legacy users folder ([saveSpace]'s `0000000000000000`), kept for callers that read it. */
+    internal fun usersFolder(env: SaveEnvironment, q: SaveQuery, base: String): String? =
+        saveSpace(env, q, base)?.let { "$it/$ZERO_ID" }?.takeIf { env.isDirectory(it) }
 
     /** The save (or NAND) folder the emulator's config names, when it names one of its own. */
     internal fun configured(env: SaveEnvironment, q: SaveQuery, base: String): String? {
@@ -410,16 +439,113 @@ internal object SwitchNand : SaveAdapter {
     private const val ZERO_ID = "0000000000000000"
 
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
-        val base = base(env, q) ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", if (env.host == "ANDROID") SaveAdapters.androidPrivateNote("This Switch emulator", "In Eden, Settings, choose a Save Data Directory (or NAND Directory) in your storage, then choose the same folder in Fuse, Settings, Save folders. Other Switch emulators can export saves from Manage save data.") else "The Switch emulator's folder wasn't found here."))
+        val base = base(env, q) ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, FORMAT, if (env.host == "ANDROID") SaveAdapters.androidPrivateNote("This Switch emulator", "In Eden, Settings, choose a Save Data Directory (or NAND Directory) in your storage, then choose the same folder in Fuse, Settings, Save folders. Other Switch emulators can export saves from Manage save data.") else "The Switch emulator's folder wasn't found here."))
+        val space = saveSpace(env, q, base) ?: "$base/nand/user/save"
         val read = SwitchIds.of(q, env)
-        val users = usersFolder(env, q, base) ?: "$base/nand/user/save/$ZERO_ID"
-        val people = env.list(users).filter { HEX32.matches(it) }
-        val user = people.firstOrNull { read != null && env.isDirectory("$users/$it/$read") } ?: people.firstOrNull()
-            ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", "Play a game once in the emulator so it makes its user, then Fuse keeps saves in step."))
-        val id = read ?: SaveAdapters.learned(env, q, "switch.savedata").firstOrNull()
-            ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", SaveAdapters.PLAY_ONCE, learnIn = "$users/$user"))
-        return listOf(SaveSpot(SaveKind.SAVE, "switch.savedata", root = "$users/$user/$id"))
+        val legacy = "$space/$ZERO_ID"
+        // Everyone the emulator has a save folder for, by their account id in Eden's newer spelling.
+        val users = (env.list(legacy).filter { HEX32.matches(it) && it != ZERO_USER }.map(EdenUser::fromLegacy) +
+            env.list("$space/account").filter { HEX32.matches(it) }.map { it.lowercase() }).distinct()
+        if (read == null) {
+            val user = users.singleOrNull()
+                ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, FORMAT, if (users.isEmpty()) NO_USER else MANY_USERS))
+            val id = SaveAdapters.learned(env, q, FORMAT).firstOrNull()
+                ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, FORMAT, SaveAdapters.PLAY_ONCE, learnIn = "$legacy/${EdenUser.toLegacy(user)}"))
+            return listOf(SaveSpot(SaveKind.SAVE, FORMAT, root = "$legacy/${EdenUser.toLegacy(user)}/$id"))
+        }
+        val masked = EdenUser.masked(read)
+        fun accountPaths(user: String) = listOf("$space/account/$user/$masked/0", "$legacy/${EdenUser.toLegacy(user)}/$read")
+        val devicePaths = listOf("$space/device/$masked/0", "$legacy/$ZERO_USER/$read")
+        // The person the emulator plays as: the one its config selects, else the only one with this
+        // game's save, else the only one there is. Never someone else's save by accident.
+        val selected = EdenUser.current(env, configFiles(env, q, base), space)?.takeIf { it in users }
+        val withGame = users.filter { u -> accountPaths(u).any(env::isDirectory) }
+        val user = selected ?: withGame.singleOrNull() ?: users.singleOrNull().takeIf { withGame.isEmpty() }
+        // Where the game's device save is (a save every user shares), or where it would go: the newer
+        // place when the emulator already uses that layout. Carried with the account save as one.
+        val device = devicePaths.firstOrNull(env::isDirectory)
+            ?: if (env.isDirectory("$space/device") || env.isDirectory("$space/account")) devicePaths.first() else devicePaths.last()
+        val deviceHere = devicePaths.any(env::isDirectory)
+        if (user == null) {
+            // Only a device save and no user to tell apart: the device save alone is enough to keep.
+            if (deviceHere && withGame.isEmpty()) return listOf(SaveSpot(SaveKind.SAVE, FORMAT, root = "$space/$DEVICE_ONLY", confidence = SaveConfidence.FOUND, mounts = mapOf(DEVICE to device)))
+            return listOf(SaveAdapters.unavailable(SaveKind.SAVE, FORMAT, if (users.isEmpty()) NO_USER else MANY_USERS))
+        }
+        // Eden prefers the newer place whenever it exists (savedata_factory.cpp GetFullPath).
+        val account = accountPaths(user).firstOrNull(env::isDirectory)
+        if (account != null || deviceHere) {
+            val root = account ?: if (env.isDirectory("$space/account")) accountPaths(user).first() else accountPaths(user).last()
+            return listOf(SaveSpot(SaveKind.SAVE, FORMAT, root = root, confidence = SaveConfidence.FOUND, mounts = mapOf(DEVICE to device)))
+        }
+        // Not saved yet: where the emulator will put it, the newer place when it already uses that layout.
+        val next = if (env.isDirectory("$space/account")) accountPaths(user).first() else accountPaths(user).last()
+        return listOf(SaveSpot(SaveKind.SAVE, FORMAT, root = next, mounts = mapOf(DEVICE to device), note = "Fuse looked in ${(accountPaths(user) + devicePaths).joinToString(", ")}. The game may not have saved yet."))
     }
+
+    /** The name a game's device save carries inside its save, beside the account save's own files. */
+    internal const val DEVICE = "@device"
+
+    /** A folder that never exists, for a game with only a device save and no user: its account part stays empty. */
+    private const val DEVICE_ONLY = ".fuse-no-account"
+
+    private const val FORMAT = "switch.savedata"
+    private const val ZERO_USER = "00000000000000000000000000000000"
+    private const val NO_USER = "Play a game once in the emulator so it makes its user, then Fuse keeps saves in step."
+    private const val MANY_USERS = "The Switch emulator has more than one user, and Fuse couldn't tell which one you play as. Choose that user's save folder in Fuse, Settings, Save folders."
+}
+
+/**
+ * Eden's (and yuzu's) emulated users. A user id is 16 bytes. The legacy save folder spells it as
+ * its high then low 64-bit halves in upper case hex (`{:016X}{:016X}` of user_id[1], user_id[0]),
+ * the newer `account` folder as its bytes in order in lower case (Common::UUID::RawString), so the
+ * same person reads the same in both. The profile in use is the `current_user` index of the
+ * config's System group into the profile list (`system/save/8000000000000010/su/avators/profiles.dat`:
+ * 0x10 bytes of header, then 0xC8 bytes per user, its id first).
+ */
+internal object EdenUser {
+    /** The newer spelling of a legacy folder name. */
+    fun fromLegacy(legacy: String): String {
+        val hi = legacy.substring(0, 16)
+        val lo = legacy.substring(16, 32)
+        return (bytesLe(lo) + bytesLe(hi)).lowercase()
+    }
+
+    /** The legacy folder name of a newer spelling. */
+    fun toLegacy(raw: String): String {
+        val lo = raw.substring(0, 16)
+        val hi = raw.substring(16, 32)
+        return (bytesLe(hi) + bytesLe(lo)).uppercase()
+    }
+
+    /** A 64-bit number's hex as its bytes in little-endian order, and back: the byte pairs reversed. */
+    private fun bytesLe(hex: String): String = hex.chunked(2).reversed().joinToString("")
+
+    /** A title id with its low byte cleared, as the newer layout keeps it. */
+    fun masked(titleId: String): String = titleId.uppercase().dropLast(2) + "00"
+
+    /** The user the emulator is set to play as, when its config and profile list say so. */
+    fun current(env: SaveEnvironment, configs: List<String>, space: String): String? {
+        val index = configs.firstNotNullOfOrNull { env.readText(it) }?.let(::currentIndex) ?: return null
+        // The save space is `<nand>/user/save`; the profile list is in `<nand>/system`.
+        val nand = space.removeSuffix("/user/save").removeSuffix("/save")
+        val profiles = listOf("$nand/system/save/8000000000000010/su/avators/profiles.dat")
+        val bytes = profiles.firstNotNullOfOrNull { env.readBytes(it, HEADER + index * ENTRY.toLong(), 16) } ?: return null
+        if (bytes.size < 16 || bytes.all { it == 0.toByte() }) return null
+        return bytes.joinToString("") { ((it.toInt() and 0xFF) + 0x100).toString(16).substring(1) }
+    }
+
+    private fun currentIndex(text: String): Int? {
+        var inSystem = false
+        for (raw in text.lineSequence()) {
+            val line = raw.trim()
+            if (line.startsWith("[")) { inSystem = line == "[System]"; continue }
+            if (inSystem && line.startsWith("current_user=")) return line.substringAfter('=').trim().toIntOrNull()?.takeIf { it in 0..7 }
+        }
+        return null
+    }
+
+    private const val HEADER = 0x10L
+    private const val ENTRY = 0xC8
 }
 
 /** A Switch game's title id: from its serial (a `[0100…]` tag), else from the ticket in its NSP. */
@@ -464,16 +590,36 @@ internal object Ryujinx : SaveAdapter {
         val base = SaveAdapters.chosen(env, q)?.let { c -> if (env.isDirectory("$c/bis")) c else SaveAdapters.parent(SaveAdapters.parent(SaveAdapters.parent(c))).takeIf { c.trimEnd('/').endsWith("bis/user/save") } ?: c } ?: defaultHome(env, q) ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", if (env.host == "ANDROID") SaveAdapters.androidPrivateNote("Kenji-NX") else "Ryujinx's folder wasn't found here."))
         val id = SwitchIds.of(q, env) ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", "Fuse doesn't know this game's title id yet (a [0100…] tag in its file name tells it)."))
         val saves = "$base/bis/user/save"
-        // A game can have several saves (its account save, a device save, BCAT and cache data): its
-        // ExtraData0 starts with the save's attribute, the program id at 0 and its type at 0x20
-        // (1 account, 3 device), as switchbrew documents SaveDataAttribute.
-        val match = env.list(saves).mapNotNull { n ->
+        // A game can have several saves (its account saves, one per user, a device save, BCAT and
+        // cache data). Each numbered folder's ExtraData0 starts with the save's attribute
+        // (switchbrew SaveDataAttribute): the program id at 0, the user at 8 (high then low half),
+        // its type at 0x20 (1 account, 3 device).
+        class Record(val folder: String, val user: String, val type: Int)
+        val records = env.list(saves).mapNotNull { n ->
             val extra = env.readBytes("$saves/$n/ExtraData0", 0, 0x21) ?: return@mapNotNull null
-            if (extra.size < 8 || leHex(extra, 0, 8) != id) return@mapNotNull null
-            val rank = when (extra.getOrNull(0x20)?.toInt()) { ACCOUNT -> 0; DEVICE -> 1; null -> 2; else -> 3 }
-            n to rank
-        }.filter { it.second < 3 }.minByOrNull { it.second }?.first ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", "Play it once in Ryujinx so it makes its save; from then on Fuse keeps it in step."))
-        return listOf(SaveSpot(SaveKind.SAVE, "switch.savedata", root = "$saves/$match/0"))
+            if (extra.size < 0x21 || leHex(extra, 0, 8) != id) return@mapNotNull null
+            Record(n, (leHex(extra, 8, 8) + leHex(extra, 0x10, 8)).lowercase(), extra[0x20].toInt())
+        }
+        val accounts = records.filter { it.type == ACCOUNT }
+        val device = records.firstOrNull { it.type == DEVICE }
+        // The user Ryujinx plays as (system/Profiles.json, last_opened); else the only one with a save.
+        val selected = Regex("\"last_opened\"\\s*:\\s*\"([0-9a-fA-F]{32})\"").find(env.readText("$base/system/Profiles.json").orEmpty())?.groupValues?.get(1)?.lowercase()
+        val account = if (selected != null) accounts.firstOrNull { it.user == selected } else accounts.singleOrNull()
+        if (account == null && accounts.isNotEmpty()) {
+            // Never another user's save: say why instead.
+            return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata",
+                if (selected != null) "Ryujinx hasn't made a save of this game for the user it plays as yet. Play it once in Ryujinx, then Fuse keeps it in step."
+                else "Ryujinx has saves of this game for more than one user. Open Ryujinx with your user once, then Fuse keeps that one in step."))
+        }
+        if (account == null && device == null) {
+            return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", "Play it once in Ryujinx so it makes its save; from then on Fuse keeps it in step."))
+        }
+        // A part Ryujinx has no record for yet is held by Fuse, never dropped and never put anywhere Ryujinx would misread.
+        val devicePlace = device?.let { "$saves/${it.folder}/0" } ?: env.held(q.game.id, "switch-device")
+        val root = account?.let { "$saves/${it.folder}/0" } ?: env.held(q.game.id, "switch-account")
+            ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", "Play it once in Ryujinx so it makes its save; from then on Fuse keeps it in step."))
+        return listOf(SaveSpot(SaveKind.SAVE, "switch.savedata", root = root, confidence = SaveConfidence.FOUND,
+            mounts = devicePlace?.let { mapOf(SwitchNand.DEVICE to it) }.orEmpty()))
     }
 
     /** Ryujinx's own folder (a `portable` one beside the program first), where its `bis` and `mods` are. */
@@ -505,6 +651,8 @@ internal object Cemu : SaveAdapter {
     }
 
     private val MLC = Regex("<mlc_path>([^<]*)</mlc_path>")
+    private val ACCOUNT = Regex("<AccountId>([0-9A-Fa-f]{8})</AccountId>")
+    private val ACCOUNT_ID = Regex("^[0-9A-Fa-f]{8}$")
 
     /**
      * Cemu's user data folder and the folder its settings.xml is in, as CemuApp.cpp sets them: a
@@ -536,7 +684,13 @@ internal object Cemu : SaveAdapter {
         val games = "$mlc/usr/save/00050000"
         val id = titleId(q, env) ?: SaveAdapters.learned(env, q, "wiiu.savedata").firstOrNull()?.let { "00050000" + it.uppercase() }
             ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "wiiu.savedata", SaveAdapters.PLAY_ONCE, learnIn = games))
-        return listOf(SaveSpot(SaveKind.SAVE, "wiiu.savedata", root = "$mlc/usr/save/${id.take(8).lowercase()}/${id.drop(8).lowercase()}/user"))
+        val user = "$mlc/usr/save/${id.take(8).lowercase()}/${id.drop(8).lowercase()}/user"
+        // The account Cemu plays as (settings.xml AccountId, its persistent id) and the data its
+        // accounts share (common): never every account's saves at once.
+        val account = found?.let { env.readText("${it.second}/settings.xml") }?.let { ACCOUNT.find(it)?.groupValues?.get(1)?.lowercase() }
+            ?: env.list(user).filter { ACCOUNT_ID.matches(it) }.singleOrNull()
+        val folders = account?.let { listOf(it, "common") }.orEmpty()
+        return listOf(SaveSpot(SaveKind.SAVE, "wiiu.savedata", root = user, folders = folders))
     }
 }
 
@@ -545,6 +699,7 @@ internal object Xenia : SaveAdapter {
     override val emulators = setOf("xenia", "xenia-canary")
     private val HEX8 = Regex("^[0-9A-Fa-f]{8}$")
     private val TAG8 = Regex("\\[([0-9A-Fa-f]{8})]")
+    private val SIGNED_IN = Regex("logged_profile_slot_0_xuid\\s*=\\s*\"([0-9A-Fa-f]{16})\"")
 
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
         // Its storage root (xenia_main.cc): beside the program when portable (Windows builds are,
@@ -560,8 +715,15 @@ internal object Xenia : SaveAdapter {
         val read = q.serial?.uppercase()?.takeIf { HEX8.matches(it) } ?: TAG8.find(q.romPath)?.groupValues?.get(1)?.uppercase()
         // Profiles by their XUID; all zeros holds what every profile shares (DLC), never a save.
         val profiles = env.list(content).filter { HEX16.matches(it) && it != "0000000000000000" }
-        val profile = profiles.firstOrNull { read != null && env.isDirectory("$content/$it/$read") } ?: profiles.firstOrNull()
-            ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "x360.savedata", "Play it once in Xenia so it makes its profile and save."))
+        // The profile Xenia signs in (its config's logged_profile_slot_0_xuid), else the only one
+        // with this game's save, else the only one: never another profile's save by accident.
+        val configDir = q.emulatorPath?.let { SaveAdapters.parent(it) }
+        val signedIn = listOfNotNull(configDir?.let { "$it/xenia-canary.config.toml" }, configDir?.let { "$it/xenia.config.toml" },
+            "$userFolder/Xenia/xenia-canary.config.toml", "$userFolder/Xenia/xenia.config.toml")
+            .firstNotNullOfOrNull { env.readText(it) }?.let { SIGNED_IN.find(it)?.groupValues?.get(1)?.uppercase() }
+        val withGame = profiles.filter { read != null && env.isDirectory("$content/$it/$read") }
+        val profile = signedIn?.let { s -> profiles.firstOrNull { it.equals(s, ignoreCase = true) } } ?: withGame.singleOrNull() ?: profiles.singleOrNull()
+            ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "x360.savedata", if (profiles.isEmpty()) "Play it once in Xenia so it makes its profile and save." else "Xenia has more than one profile, and Fuse couldn't tell which one you play as. Sign in with yours in Xenia once, then Fuse keeps its saves in step."))
         val id = read ?: SaveAdapters.learned(env, q, "x360.savedata").firstOrNull()
             ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "x360.savedata", SaveAdapters.PLAY_ONCE, learnIn = "$content/$profile"))
         return listOf(SaveSpot(SaveKind.SAVE, "x360.savedata", root = "$content/$profile/$id/00000001"))

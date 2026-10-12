@@ -187,6 +187,9 @@ interface EmulatorDetector {
     /** Firmware folders of installed emulators that Fuse can read (RetroArch `system/`, Dolphin `Sys/`). */
     fun biosFolders(installed: List<InstalledEmulator>): List<String> = emptyList()
 
+    /** The data folders of the emulators that install firmware inside themselves (Switch, PS3, Vita), to check it is there. */
+    fun firmwareFolders(installed: List<InstalledEmulator>): List<io.github.matiyaaa.fuse.library.bios.EmulatorDataFolder> = emptyList()
+
     /** RPCS3's dev_hdd0 folders on this device, where its trophies are kept. */
     fun rpcs3DevHdd0(installed: List<InstalledEmulator>): List<String> = emptyList()
 
@@ -406,6 +409,9 @@ interface EmulatorFiles {
 
     /** The memory stick of the PPSSPP install [installed] (the folder holding `PSP`); null when it can't be found. */
     suspend fun ppsspp(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): io.github.matiyaaa.fuse.launch.patches.PpssppHome? = null
+
+    /** Where the Dolphin install [installed] keeps its settings; null until it has a Dolphin.ini. */
+    suspend fun dolphin(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): io.github.matiyaaa.fuse.launch.settings.DolphinHome? = null
 
     /** Where the RetroArch install [installed] keeps its settings and cheats; null until it has a retroarch.cfg. */
     suspend fun retroArch(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): io.github.matiyaaa.fuse.launch.patches.RetroArchHome? = null

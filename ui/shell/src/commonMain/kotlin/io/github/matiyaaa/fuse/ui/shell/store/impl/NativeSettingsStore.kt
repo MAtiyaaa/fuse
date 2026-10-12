@@ -20,7 +20,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.SettingProfileView
 
 /**
  * An emulator's own settings, for every game or for one game, read and changed in the emulator's own
- * files (PCSX2, DuckStation, PPSSPP): a game's file holds only what differs for it, the rest comes
+ * files (PCSX2, DuckStation, PPSSPP, Dolphin): a game's file holds only what differs for it, the rest comes
  * from the emulator's settings for every game. Every key Fuse changes is recorded with what it held
  * before, so Fuse can put back exactly that (see [SettingsEdit]).
  */
@@ -29,6 +29,8 @@ internal class NativeSettingsStore(
     private val detectNow: suspend () -> Unit,
     private val discIdentity: suspend (GameId) -> DiscIdentity?,
     private val pspGameId: suspend (Game) -> String?,
+    /** A GameCube or Wii game's six-letter id (GALE01), from its name or its disc. */
+    private val nintendoGameId: suspend (Game) -> String? = { null },
     /** The emulator [Game] starts in here, as a launch would choose it. */
     private val startsIn: suspend (Game) -> InstalledEmulator?,
     /** Changes the stored settings, for the person's own profiles. */
@@ -45,9 +47,17 @@ internal class NativeSettingsStore(
         val globalPath: String,
         val gamePath: String?,
         val gameTitle: String?,
+        /** The emulator's other settings files for every game, by [io.github.matiyaaa.fuse.launch.settings.NativeSetting.file]. */
+        val globals: Map<String, String> = emptyMap(),
     ) {
-        /** The file this view changes. */
-        val path: String get() = gamePath ?: globalPath
+        val forGame: Boolean get() = gamePath != null
+
+        /** The file [setting] is changed in by this view. */
+        fun pathOf(setting: io.github.matiyaaa.fuse.launch.settings.NativeSetting): String =
+            gamePath ?: setting.file?.let { globals[it] } ?: globalPath
+
+        /** Every file this view changes. */
+        val paths: List<String> get() = gamePath?.let(::listOf) ?: (listOf(globalPath) + globals.values).distinct()
     }
 
     private fun no(title: String, reason: String) = null to EmulatorSettingsView.Unavailable(title, reason)
@@ -60,9 +70,9 @@ internal class NativeSettingsStore(
             val starts = startsIn(game)
             when {
                 starts != null && family(starts) in NativeSettings.families -> starts
-                starts != null -> return no("Fuse can't change ${starts.name}'s settings", "This game starts in ${starts.name}, which keeps its own settings; change them there. Fuse changes settings in PCSX2, DuckStation and PPSSPP.")
+                starts != null -> return no("Fuse can't change ${starts.name}'s settings", "This game starts in ${starts.name}, which keeps its own settings; change them there. $SUPPORTED")
                 else -> PLATFORM_FAMILY[game.platformId.value]?.let { f -> ctx.installed.value.firstOrNull { family(it) == f } }
-                    ?: return no("No emulator to set up", "Fuse changes settings in PCSX2, DuckStation and PPSSPP, and none of them plays this game here.")
+                    ?: return no("No emulator to set up", "$SUPPORTED None of them plays this game here.")
             }
         } else {
             ctx.installed.value.firstOrNull { it.id == emulator } ?: return no("Not installed", "This emulator isn't installed on this device.")
@@ -94,7 +104,16 @@ internal class NativeSettingsStore(
                 val gamePath = if (game != null) home.gameSettingsFile(pspGameId(game) ?: return unreadable("game id")) else null
                 Target(family, name, files, home.settingsFile, gamePath, game?.titles?.original) to null
             }
-            else -> no("Fuse can't change ${installed.name}'s settings", "Fuse changes settings in PCSX2, DuckStation and PPSSPP. Change ${installed.name}'s in ${installed.name}.")
+            "dolphin" -> {
+                val home = files.dolphin(installed) ?: return notSetUp()
+                val gamePath = if (game != null) {
+                    val gameId = nintendoGameId(game)
+                        ?: return no("Fuse can't tell which game this is", "Dolphin keeps a game's own settings under its six-letter id, which Fuse reads from ISO, GCM, RVZ, WIA and CISO images. Change this game's settings in Dolphin, or add its id to the file name, like [GALE01].")
+                    home.gameFile(gameId)
+                } else null
+                Target(family, name, files, home.file(null), gamePath, game?.titles?.original, mapOf(NativeSettings.DOLPHIN_GFX to home.file(NativeSettings.DOLPHIN_GFX))) to null
+            }
+            else -> no("Fuse can't change ${installed.name}'s settings", "$SUPPORTED Change ${installed.name}'s in ${installed.name}.")
         }
     }
 
@@ -103,16 +122,16 @@ internal class NativeSettingsStore(
     suspend fun view(id: GameId?, emulator: EmulatorId?): EmulatorSettingsView {
         val (t, unavailable) = target(id, emulator)
         if (t == null) return unavailable!!
-        val global = read(t.globalPath)
+        val globals = (listOf<String?>(null) + t.globals.keys).associateWith { read(it?.let(t.globals::get) ?: t.globalPath) }
         val game = read(t.gamePath)
-        val settings = NativeSettings.forEmulator(t.family, ctx.host).filter { t.gamePath == null || it.perGame }
-        val values = settings.map { SettingsEdit.valueFor(it, if (t.gamePath != null) game else null, global) }
+        val settings = NativeSettings.forEmulator(t.family, ctx.host).filter { !t.forGame || it.perGame }
+        val values = settings.map { SettingsEdit.valueFor(it, if (t.forGame) game else null, globals[it.file]) }
         val current = values.associate { it.setting.id to it.value }
         return EmulatorSettingsView.Ready(
             emulator = t.emulator,
             game = t.gameTitle,
             values = values,
-            canRestore = data.owned.get(KIND, t.path).isNotEmpty(),
+            canRestore = t.paths.any { data.owned.get(KIND, it).isNotEmpty() },
             profiles = if (t.gamePath == null) emptyList() else profiles(t.family).map { p ->
                 SettingProfileView(p.id, p.name, p.about, p.own, SettingProfiles.matches(p, current, settings))
             },
@@ -139,19 +158,19 @@ internal class NativeSettingsStore(
      */
     suspend fun applyProfile(id: GameId?, emulator: EmulatorId?, profile: String): Boolean {
         val t = target(id, emulator).first ?: return false
-        if (t.gamePath == null) return false
+        val path = t.gamePath ?: return false
         val p = profiles(t.family).firstOrNull { it.id == profile } ?: return false
         val settings = NativeSettings.forEmulator(t.family, ctx.host)
-        val before = fs.readText(t.path, MAX_TEXT)
+        val before = fs.readText(path, MAX_TEXT)
         val file = IniText(before ?: "")
-        var records = data.owned.get(KIND, t.path)
+        var records = data.owned.get(KIND, path)
         for ((key, value) in p.values) {
             val s = settings.firstOrNull { it.id == key && it.perGame } ?: continue
-            records = SettingsEdit.change(file, records, s.section, s.key, value)
+            records = SettingsEdit.change(file, records, s.sectionIn(game = true), s.key, value)
         }
-        if (!t.files.write(t.path, file.toString())) return false
-        data.owned.set(KIND, t.path, records)
-        if (before == null) data.owned.set(KIND, "${t.path}#made", setOf("file"))
+        if (!t.files.write(path, file.toString())) return false
+        data.owned.set(KIND, path, records)
+        if (before == null) data.owned.set(KIND, "$path#made", setOf("file"))
         return true
     }
 
@@ -179,36 +198,41 @@ internal class NativeSettingsStore(
     suspend fun set(id: GameId?, emulator: EmulatorId?, setting: String, value: String?): Boolean {
         val t = target(id, emulator).first ?: return false
         val s = NativeSettings.forEmulator(t.family, ctx.host).firstOrNull { it.id == setting } ?: return false
-        if (t.gamePath != null && !s.perGame) return false
+        if (t.forGame && !s.perGame) return false
         if (value != null && s.choices.none { it.value == value }) return false
-        val before = fs.readText(t.path, MAX_TEXT)
+        val path = t.pathOf(s)
+        val before = fs.readText(path, MAX_TEXT)
         val file = IniText(before ?: "")
-        val records = SettingsEdit.change(file, data.owned.get(KIND, t.path), s.section, s.key, value)
-        if (!t.files.write(t.path, file.toString())) return false
-        data.owned.set(KIND, t.path, records)
+        val records = SettingsEdit.change(file, data.owned.get(KIND, path), s.sectionIn(t.forGame), s.key, value)
+        if (!t.files.write(path, file.toString())) return false
+        data.owned.set(KIND, path, records)
         // A game's own file Fuse made: taken away again once nothing Fuse set is left in it.
-        if (before == null) data.owned.set(KIND, "${t.path}#made", setOf("file"))
+        if (before == null) data.owned.set(KIND, "$path#made", setOf("file"))
         return true
     }
 
     /** Puts back what Fuse changed in this file; a key changed in the emulator since stays as it is. */
     suspend fun restore(id: GameId?, emulator: EmulatorId?): Boolean {
         val t = target(id, emulator).first ?: return false
-        val records = data.owned.get(KIND, t.path)
-        if (records.isEmpty()) return false
-        val text = fs.readText(t.path, MAX_TEXT)
-        val file = IniText(text ?: "")
-        SettingsEdit.restore(file, records)
-        val made = data.owned.get(KIND, "${t.path}#made").isNotEmpty()
-        val done = when {
-            text == null -> true
-            made && !file.hasEntries() -> t.files.remove(t.path)
-            else -> t.files.write(t.path, file.toString())
+        var any = false
+        for (path in t.paths) {
+            val records = data.owned.get(KIND, path)
+            if (records.isEmpty()) continue
+            val text = fs.readText(path, MAX_TEXT)
+            val file = IniText(text ?: "")
+            SettingsEdit.restore(file, records)
+            val made = data.owned.get(KIND, "$path#made").isNotEmpty()
+            val done = when {
+                text == null -> true
+                made && !file.hasEntries() -> t.files.remove(path)
+                else -> t.files.write(path, file.toString())
+            }
+            if (!done) return false
+            data.owned.set(KIND, path, emptySet())
+            data.owned.set(KIND, "$path#made", emptySet())
+            any = true
         }
-        if (!done) return false
-        data.owned.set(KIND, t.path, emptySet())
-        data.owned.set(KIND, "${t.path}#made", emptySet())
-        return true
+        return any
     }
 
     private companion object {
@@ -218,7 +242,9 @@ internal class NativeSettingsStore(
         const val KIND = "emulator.settings"
 
         /** The emulator a system's games are changed in when they don't start in one Fuse knows. */
-        val PLATFORM_FAMILY = mapOf("ps2" to "pcsx2", "psx" to "duckstation", "psp" to "ppsspp")
+        val PLATFORM_FAMILY = mapOf("ps2" to "pcsx2", "psx" to "duckstation", "psp" to "ppsspp", "ngc" to "dolphin", "wii" to "dolphin")
+
+        const val SUPPORTED = "Fuse changes settings in PCSX2, DuckStation, PPSSPP and Dolphin."
 
         fun family(e: InstalledEmulator): String = e.id.value.substringAfter('.')
     }

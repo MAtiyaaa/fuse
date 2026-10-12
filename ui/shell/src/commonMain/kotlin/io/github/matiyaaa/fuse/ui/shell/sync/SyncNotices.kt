@@ -35,6 +35,12 @@ internal fun SyncNotices(app: AppState) {
                     ToastKind.SUCCESS,
                     icon = FuseIcons.Users,
                 )
+                is SyncNotice.KeptAside -> app.toasts.show(
+                    "${n.title}: a save already here belonged to no one, so it was kept aside. Say whose it is in Sync.",
+                    ToastKind.INFO,
+                    icon = FuseIcons.Archive,
+                    durationMs = 8_000L,
+                )
                 is SyncNotice.CantUse -> app.toasts.show(
                     "${n.title}: the newest ${n.kind.label.lowercase()} can't be used here. ${n.why}",
                     ToastKind.WARNING,

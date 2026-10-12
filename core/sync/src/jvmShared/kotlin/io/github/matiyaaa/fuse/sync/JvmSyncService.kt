@@ -48,6 +48,8 @@ class JvmSyncService(
     private val discoveryLock: () -> AutoCloseable? = { null },
     /** How often a running game's save is looked at. */
     private val liveLookMs: Long = LIVE_LOOK_MS,
+    /** Folders granted through the system's folder picker (`tree:` save folders), by their link; none on computers. */
+    private val trees: (String) -> DocumentTree? = { null },
 ) : SyncService {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val _status = MutableStateFlow<SyncStatus>(SyncStatus.Off)
@@ -109,7 +111,14 @@ class JvmSyncService(
     override val merge: StateFlow<ProfileMerge?> = _merge.asStateFlow()
 
     /** The device's files, with the save folders the person chose on top. */
-    private val saveEnv: SaveEnvironment = WithSaveFolders(files, { game, format -> device?.learned(game, format).orEmpty() }) { cached.saveFolders }
+    private val saveEnv: SaveEnvironment = object : SaveEnvironment by WithSaveFolders(TreeSaveEnvironment(files, trees), { game, format -> device?.learned(game, format).orEmpty() }, { cached.saveFolders }) {
+        // A part of a save its emulator has no place for yet is kept here, with the rest of Fuse Sync's.
+        override fun held(game: String, part: String): String =
+            File(File(File(dir, "held"), game.replace(Regex("[^A-Za-z0-9._-]+"), "_").take(120)), part).path
+    }
+
+    /** Saves in granted folders, worked on through copies here (see [TreeMirror]). */
+    private val treeMirror by lazy { TreeMirror(File(dir, "trees"), trees) }
 
     init {
         if (fuseVersion.isNotEmpty()) fuseAppVersion = fuseVersion
@@ -170,6 +179,7 @@ class JvmSyncService(
         }
         val id = ensureDeviceId()
         if (device == null) device = SyncDevice(File(dir, "device"), id, c.deviceName.ifBlank { defaultDeviceName })
+        refreshUnclaimed()
         if (c.role == "HOST") startHostServer(c)
         val l = link()
         if (l == null) {
@@ -204,6 +214,7 @@ class JvmSyncService(
             return
         }
         if (device == null) device = SyncDevice(File(dir, "device"), ensureDeviceId(), cached.deviceName.ifBlank { defaultDeviceName })
+        refreshUnclaimed()
         showPeople(people.ordered(people.profiles.map { it.info }), cached.activeProfile)
     }
 
@@ -1897,7 +1908,7 @@ class JvmSyncService(
 
     // ---------------------------------------------------------------- saves around a game
 
-    private fun slots(query: SaveQuery): List<LocalSlot> {
+    private fun slots(query: SaveQuery, live: Boolean = false): List<LocalSlot> {
         val adapter = SaveAdapters.forEmulator(query.emulatorId) ?: return emptyList()
         val c = cached
         return adapter.locate(query, saveEnv)
@@ -1905,7 +1916,9 @@ class JvmSyncService(
             .map { spot ->
                 // Cards shared by every game on them are the profile's, keyed by the card, not the game.
                 val key = if (spot.kind == SaveKind.MEMORY_CARD) GameKey(query.platform, "card." + spot.format) else query.game
-                Slots.of(key, spot)
+                // A save in a granted folder: a fresh copy to work on, and its changes pushed back.
+                if (live || !spot.available) return@map Slots.of(key, spot)
+                treeMirror.pull(spot)?.let { (local, parts) -> Slots.of(key, local).copy(sink = { treeMirror.push(parts) }) } ?: Slots.of(key, spot)
             }
     }
 
@@ -2014,8 +2027,22 @@ class JvmSyncService(
             // On a device more than one person plays, the folder must hold this person's save
             // first (whoever played last keeps theirs); this needs no host, so it happens offline too.
             val owner = ownerOf(query, slot, profile)
-            runCatching { d.handover(owner, slot, { who -> if (who == SHARED_SAVES) 0L else canonical(d.meta(who)).game(query.game).totalSeconds }, File(File(dir, KEPT_DIR), REMOVED_DIR)) }
-                .onFailure { log("${query.title}: couldn't swap in this person's save (${it.message})", query.game.id, SyncActivity.FAILED) }
+            val swapped = runCatching {
+                d.handover(owner, slot, { who -> if (who == SHARED_SAVES) 0L else canonical(d.meta(who)).game(query.game).totalSeconds },
+                    File(File(dir, KEPT_DIR), REMOVED_DIR), othersHere = d.saveKeepers().any { it != owner && it != SHARED_SAVES })
+            }
+            if (swapped.isSuccess && d.unclaimed(slot) != null && unclaimedTitles.put(query.game.id, query.title) == null) {
+                refreshUnclaimed()
+                _notices.tryEmit(SyncNotice.KeptAside(query.title))
+            }
+            swapped.exceptionOrNull()?.let { e ->
+                // Never start with someone else's save: the person sees why, and nothing was lost (every file is kept).
+                log("${query.title}: couldn't swap in this person's save (${e.message})", query.game.id, SyncActivity.FAILED)
+                busy -= query.game.id
+                return@withContext LaunchGate.Blocked(query.title,
+                    "Fuse couldn't put your save for ${query.title} in place, so it didn't start, to keep from playing with someone else's save. " +
+                        "Every file is kept. ${e.message ?: ""}".trim())
+            }
             // This person's saves aren't taken here: the game starts with the save this device has.
             if (!takesFrom(owner, query.game.id)) continue
             if (c == null) {
@@ -2162,7 +2189,9 @@ class JvmSyncService(
         val saves = here.filter { it.kind != SaveKind.STATE && it.available }
         if (saves.isNotEmpty() && saves.all { it.files.isEmpty() }) {
             val where = saves.first().let { s -> s.targets.values.firstOrNull()?.parentFile ?: s.root }.path.replace('\\', '/')
-            return "Fuse found no save for it in $where. If you saved, choose the emulator's save folder in Fuse, Settings, Save folders."
+            // The emulator's own words on where it saves, when its adapter knows them (melonDS's ROM folders, Eden's users).
+            val advice = spots.firstNotNullOfOrNull { it.note } ?: "If you saved, choose the emulator's save folder in Fuse, Settings, Save folders."
+            return "Fuse found no save for it in $where. $advice"
         }
         return null
     }
@@ -2181,6 +2210,32 @@ class JvmSyncService(
 
     private val _nowPlaying = MutableStateFlow<String?>(null)
     override val nowPlaying: StateFlow<String?> = _nowPlaying.asStateFlow()
+
+    private val _unclaimed = MutableStateFlow<List<UnclaimedSave>>(emptyList())
+    override val unclaimed: StateFlow<List<UnclaimedSave>> = _unclaimed.asStateFlow()
+
+    /** Titles of games whose saves were kept aside, as they were launched (the device keeps only ids). */
+    private val unclaimedTitles = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /** What this device keeps aside for someone to claim, read again after anything that can change it. */
+    private fun refreshUnclaimed() {
+        val d = device ?: return run { _unclaimed.value = emptyList() }
+        _unclaimed.value = d.unclaimedSaves().map { (id, kind, m) ->
+            val key = GameKey(id.substringBefore(':'), id.substringAfter(':'))
+            val title = unclaimedTitles[id] ?: key.identity.replace('-', ' ').replace('_', ' ').split(' ')
+                .joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } }
+            UnclaimedSave(key, title, kind, m.files.size, m.size)
+        }
+    }
+
+    override suspend fun claim(save: UnclaimedSave, profile: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val d = device ?: error("Fuse Sync isn't set up.")
+            require(profile.isNotBlank()) { "Choose whose save it is." }
+            if (!d.claimUnclaimed(profile, save.game, save.kind)) error("That save isn't waiting any more.")
+            log("${save.title}: the save kept aside is now ${people.profiles.firstOrNull { it.info.id == profile }?.info?.name ?: "this person"}'s", save.game.id, "save")
+        }.also { refreshUnclaimed() }
+    }
     @Volatile private var readying: Job? = null
 
     /** About to start [title]: in step from now; if it never starts, that ends by itself. */
@@ -2227,8 +2282,16 @@ class JvmSyncService(
     }
 
     /** What a slot's files look like now, cheaply (sizes and times; the content is only read once they settle). */
-    private fun looks(query: SaveQuery): List<String> = slots(query).flatMap { slot ->
-        slot.files.map { f -> "${f.path}:${if (f.file.isFile) "${f.file.length()}@${f.file.lastModified()}" else "-"}" }
+    private fun looks(query: SaveQuery): List<String> {
+        val adapter = SaveAdapters.forEmulator(query.emulatorId) ?: return emptyList()
+        // A save in a granted folder is looked at through the folder's own times, never copied every few seconds.
+        val spots = runCatching { adapter.locate(query, saveEnv) }.getOrDefault(emptyList())
+        if (spots.any { s -> listOfNotNull(s.root) .plus(s.mounts.values).plus(s.files.map { it.path }).any(TreePaths::isTree) }) {
+            return spots.flatMap { s -> listOfNotNull(s.root).plus(s.mounts.values).plus(s.files.map { it.path }) }.map { "$it@${saveEnv.modified(it)}" }
+        }
+        return slots(query, live = true).flatMap { slot ->
+            slot.files.map { f -> "${f.path}:${if (f.file.isFile) "${f.file.length()}@${f.file.lastModified()}" else "-"}" }
+        }
     }
 
     /**

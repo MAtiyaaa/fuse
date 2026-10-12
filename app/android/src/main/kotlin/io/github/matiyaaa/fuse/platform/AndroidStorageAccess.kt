@@ -77,6 +77,30 @@ class AndroidStorageAccess(
         return withContext(Dispatchers.IO) { path.takeIf { File(it).isDirectory } }
     }
 
+    /**
+     * A folder for an emulator's saves: one in storage comes back as its path, as [pickFolder]'s do;
+     * one another app shares through the picker (Eden's data folder) comes back as a `tree:` link,
+     * with Fuse's access to it kept across restarts, for Fuse Sync to read and write through Android.
+     */
+    override suspend fun pickSaveFolder(title: String): String? {
+        val requests = activities.requests ?: return null
+        val uri = withContext(Dispatchers.Main) { requests.pickFolder() } ?: return null
+        if (uri.authority == StoragePaths.EXTERNAL_STORAGE_AUTHORITY) {
+            val docId = runCatching { DocumentsContract.getTreeDocumentId(uri) }.getOrNull() ?: return null
+            StoragePaths.pathForDocumentId(docId, volumes.mounted())?.let { path ->
+                if (withContext(Dispatchers.IO) { File(path).isDirectory }) return path
+            }
+        }
+        return withContext(Dispatchers.IO) {
+            try {
+                appContext.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                io.github.matiyaaa.fuse.sync.TreePaths.of(uri.toString())
+            } catch (e: SecurityException) {
+                null
+            }
+        }
+    }
+
     override suspend fun pickImage(title: String): String? {
         val requests = activities.requests ?: return null
         val uri = withContext(Dispatchers.Main) { requests.pickImage() } ?: return null

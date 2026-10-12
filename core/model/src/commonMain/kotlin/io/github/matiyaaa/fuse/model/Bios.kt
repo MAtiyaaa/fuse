@@ -55,7 +55,14 @@ data class BiosStatus(
      */
     val confirmed: Boolean = false,
     val checked: BiosState? = null,
+    /** Of [found], those whose checksum matched a known good dump (the rest were taken by name). */
+    val verified: List<String> = emptyList(),
+    /** Files with a firmware's name that were turned down: too small, or not a known good dump. */
+    val unrecognized: List<String> = emptyList(),
 ) {
+    /** Everything found was checked against a known good dump and matched. */
+    val allVerified: Boolean get() = found.isNotEmpty() && verified.size == found.size
+
     /** Marked as set up by the user when [yes] and the check found less than everything. */
     fun confirmedIf(yes: Boolean): BiosStatus =
         if (yes && state in OVERRIDABLE) copy(state = BiosState.READY, confirmed = true, checked = state) else this

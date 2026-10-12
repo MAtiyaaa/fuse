@@ -18,7 +18,7 @@ class SettingProfilesTest {
                 assertTrue(s.perGame && s.choices.any { it.value == v }, "$family ${p.id} $k=$v")
             }
         }
-        assertTrue(SettingProfiles.builtIn("dolphin", Host.LINUX).isEmpty())
+        assertTrue(SettingProfiles.builtIn("rpcs3", Host.LINUX).isEmpty())
     }
 
     @Test

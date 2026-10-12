@@ -210,12 +210,13 @@ fun PlatformSettingsScreen(app: AppState, platformId: PlatformId) {
                 "bios", "BIOS and firmware", if (bios.state == BiosState.MISSING || bios.state == BiosState.PARTIAL) FuseIcons.Warning else FuseIcons.Key,
                 detail = buildString {
                     if (bios.confirmed) append("You marked it as set up. Fuse's check said: ${biosWord(checkedAs).lowercase()}\n")
-                    if (bios.found.isNotEmpty()) append("Found: ${bios.found.joinToString(", ")}\n")
+                    if (bios.found.isNotEmpty()) append(if (bios.allVerified) "Found and verified: " else "Found: ").append(bios.found.joinToString(", ")).append('\n')
                     if (bios.missing.isNotEmpty()) append("Missing: ${bios.missing.joinToString(", ")}\n")
+                    if (bios.unrecognized.isNotEmpty()) append("Not a dump Fuse knows: ${bios.unrecognized.joinToString(", ")}\n")
                     if (!bios.confirmed) bios.note?.let { append(it) }
                     p.bios?.hint?.let { if (bios.state != BiosState.READY) append("\n$it") }
                 }.trim().ifBlank { null },
-                trailing = Trailing.Value(if (bios.confirmed) "Set up by you" else biosWord(bios.state)),
+                trailing = Trailing.Value(biosWord(bios)),
                 section = files,
                 onSelect = { app.biosChoice(p.id, p.name, bios) },
             ))
@@ -285,6 +286,14 @@ fun PlatformSettingsScreen(app: AppState, platformId: PlatformId) {
             }
         }
     }
+}
+
+/** A system's firmware in a word or two: verified apart from found by name, and a wrong dump apart from none. */
+internal fun biosWord(bios: io.github.matiyaaa.fuse.model.BiosStatus): String = when {
+    bios.confirmed -> "Set up by you"
+    bios.state == BiosState.READY && bios.allVerified -> "Verified"
+    bios.state == BiosState.MISSING && bios.unrecognized.isNotEmpty() -> "Not recognized"
+    else -> biosWord(bios.state)
 }
 
 /** A firmware state in a word or two. */

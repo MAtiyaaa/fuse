@@ -211,8 +211,13 @@ class TitleMatcher(
     private fun queryTitles(query: ScrapeQuery): List<String> {
         val base = query.fileName?.substringAfterLast('/')?.substringAfterLast('\\')
             ?.let { if ('.' in it) it.substringBeforeLast('.') else it }
-        return (listOfNotNull(query.title, base) + query.alsoKnownAs).filter { it.isNotBlank() }.distinct()
+        // A number people put in front to order their files ("3 - Mario Kart", "1. Mario Kart") is
+        // not the game's: left in, it reads as a sequel number and sinks the right match.
+        val unnumbered = base?.let { listNumber.replace(it, "") }?.takeIf { it != base && it.any(Char::isLetter) }
+        return (listOfNotNull(query.title, unnumbered ?: base) + query.alsoKnownAs).filter { it.isNotBlank() }.distinct()
     }
+
+    private val listNumber = Regex("^#?\\d{1,3}\\s*[-\u2013\u2014.):_]\\s*(?=\\p{L})")
 
     /** Similarity of two raw titles. */
     data class TitleScore(val score: Double, val exact: Boolean, val numbersDiffer: Boolean)

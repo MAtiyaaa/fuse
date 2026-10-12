@@ -59,6 +59,15 @@ class TitleMatcherTest {
         assertEquals(1.0, TitleMatcher.titleSimilarity("Final Fantasy VII", "Final Fantasy 7").score)
     }
 
+    @Test
+    fun aListNumberInTheFileNameIsNotASequelNumber() {
+        // The search title failed to drop it (an older cleaned name): the file name alone must not sink the match.
+        val q = query("Mario Kart 64", platform = "n64", platformName = "Nintendo 64", file = "3 - Mario Kart 64.z64")
+        val best = matcher.rank(q, listOf(input("1", "Mario Kart 64"), input("2", "Mario Kart 8"))).first()
+        assertEquals("1", best.input.providerGameId)
+        assertTrue(best.titleExact)
+    }
+
     private fun sim(a: String, b: String) = TitleMatcher.titleSimilarity(a, b)
 
     @Test

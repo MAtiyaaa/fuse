@@ -31,6 +31,11 @@ class RenderScaleTest {
             Triple("card0-DP-1", "connected", "3840x2160\n1920x1080\n"),
             Triple("card0-HDMI-A-1", "disconnected", ""),
         )
+        // Both enabled: which one shows Fuse can't be told, so no guess at the largest.
+        assertNull(RenderScale.read(1280, 800, gameMode = true, drm = root))
+        // Docked, the Deck's own panel is connected but turned off: the TV is the screen.
+        File(root, "card0-eDP-1/enabled").writeText("disabled\n")
+        File(root, "card0-DP-1/enabled").writeText("enabled\n")
         val r = RenderScale.read(1280, 800, gameMode = true, drm = root)!!
         assertEquals("DP-1", r.output.connector)
         assertEquals(3f, r.factor)
