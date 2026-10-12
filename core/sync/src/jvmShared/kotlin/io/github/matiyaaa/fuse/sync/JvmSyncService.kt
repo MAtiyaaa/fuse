@@ -178,7 +178,7 @@ class JvmSyncService(
             return
         }
         val id = ensureDeviceId()
-        if (device == null) device = SyncDevice(File(dir, "device"), id, c.deviceName.ifBlank { defaultDeviceName })
+        if (device == null) device = newDevice(id, c.deviceName.ifBlank { defaultDeviceName })
         refreshUnclaimed()
         if (c.role == "HOST") startHostServer(c)
         val l = link()
@@ -213,7 +213,7 @@ class JvmSyncService(
             }
             return
         }
-        if (device == null) device = SyncDevice(File(dir, "device"), ensureDeviceId(), cached.deviceName.ifBlank { defaultDeviceName })
+        if (device == null) device = newDevice(ensureDeviceId(), cached.deviceName.ifBlank { defaultDeviceName })
         refreshUnclaimed()
         showPeople(people.ordered(people.profiles.map { it.info }), cached.activeProfile)
     }
@@ -1331,7 +1331,7 @@ class JvmSyncService(
             if (target.protected) c.openProfile(target.id, ch.pin)
             rememberPin(target.id, ch.pin)
         }
-        val d = device ?: SyncDevice(File(dir, "device"), ensureDeviceId(), cached.deviceName.ifBlank { defaultDeviceName }).also { device = it }
+        val d = device ?: newDevice(ensureDeviceId(), cached.deviceName.ifBlank { defaultDeviceName }).also { device = it }
         val active = cached.activeProfile
         val ids = HashMap<String, String>()
         work.withLock {
@@ -1972,7 +1972,7 @@ class JvmSyncService(
                     val key = if (fresh.kind == SaveKind.MEMORY_CARD) GameKey(query.platform, "card." + fresh.format) else query.game
                     Triple(binding, query, Slots.of(key, fresh))
                 }
-                val d = device ?: SyncDevice(File(dir, "device"), ensureDeviceId(), cached.deviceName.ifBlank { defaultDeviceName }).also { device = it }
+                val d = device ?: newDevice(ensureDeviceId(), cached.deviceName.ifBlank { defaultDeviceName }).also { device = it }
                 require(resolved.map { (_, _, slot) -> slot.key }.distinct().size == resolved.size) { "Choose one import for each shared memory card" }
                 val failures = ArrayList<SaveImportFailure>()
                 val revisions = resolved.mapIndexedNotNull { index, (binding, query, slot) ->
@@ -2140,6 +2140,13 @@ class JvmSyncService(
         }
         busy -= query.game.id
         if (watch == null) _nowPlaying.value = null
+    }
+
+    /** This device's sync state, telling the person when a blank save was kept from replacing a real one. */
+    private fun newDevice(id: String, name: String): SyncDevice = SyncDevice(File(dir, "device"), id, name).also { d ->
+        d.onBlank = { slot ->
+            log("A blank ${slot.kind.label.lowercase()} was found where a real one was; Fuse kept the real one and didn't send the blank one", slot.game.id, SyncActivity.FAILED)
+        }
     }
 
     /**

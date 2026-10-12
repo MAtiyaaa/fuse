@@ -235,6 +235,9 @@ class SyncDevice(
 
     fun now(): Hlc = hlc.now()
 
+    /** Told when a blank save was found where a real one was, and kept from going anywhere (see [capture]). */
+    @Volatile var onBlank: ((LocalSlot) -> Unit)? = null
+
     // ---------------------------------------------------------------- saves
 
     private fun fingerprintOf(slot: LocalSlot): Pair<SaveManifest, List<Pair<LocalFile, String>>> {
@@ -253,6 +256,14 @@ class SyncDevice(
         val (manifest, hashed) = fingerprintOf(slot)
         if (manifest.files.isEmpty()) return@withLock null
         val slotState = state.slots[keyOf(profile, slot)] ?: SlotState()
+        // A blank save over one this device already had (save memory the emulator made again, all
+        // zeros or all 0xFF): never sent as the newest, so it can't replace a real save anywhere.
+        val hadOne = slotState.base != null || slotState.fingerprint != null ||
+            state.outbox.any { o -> o.revision?.let { it.profile == profile && it.game == slot.game.id && it.kind == slot.kind } == true }
+        if (hadOne && hashed.all { (lf, _) -> Slots.blank(lf.file) }) {
+            onBlank?.invoke(slot)
+            return@withLock null
+        }
         // Saved again while the last one still waits to go (played on, offline or mid-session): the
         // newer one takes its place, made from the same base, so the host sees one step, not a fork.
         // Copies kept for safety are history only: the line goes on from the last ordinary save waiting.
@@ -948,6 +959,25 @@ private val REFUSED_FOR_GOOD = setOf("bad-revision", "bad-body", "too-large", "t
 
 /** Turns what a save adapter found into a slot this device can read and write. */
 object Slots {
+    /**
+     * Whether [file] holds no save at all: empty, or every byte the same 0x00 or 0xFF, as save
+     * memory is before a game writes to it. Read to the first byte that says otherwise.
+     */
+    fun blank(file: File): Boolean {
+        if (!file.isFile) return false
+        file.inputStream().buffered().use { input ->
+            val first = input.read()
+            if (first == -1) return true
+            if (first != 0x00 && first != 0xFF) return false
+            val buf = ByteArray(64 * 1024)
+            while (true) {
+                val n = input.read(buf)
+                if (n == -1) return true
+                for (i in 0 until n) if ((buf[i].toInt() and 0xFF) != first) return false
+            }
+        }
+    }
+
     fun of(game: GameKey, spot: SaveSpot): LocalSlot {
         val files = ArrayList<LocalFile>()
         val empty = ArrayList<String>()
