@@ -1,7 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.sync
 
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.relocation.BringIntoViewRequester
@@ -87,6 +86,7 @@ import io.github.matiyaaa.fuse.ui.fuseline.scaleOut
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragVerticalScroll
 
 /** Why "Who's playing?" is open: switching (it can be closed), at startup, or straight to a new profile. */
 enum class WhoMode { SWITCH, STARTUP, ADD }
@@ -206,7 +206,7 @@ private fun WhoAreYou(app: AppState, mode: WhoMode) {
                 )
                 return@BoxWithConstraints
             }
-            Box(Modifier.fillMaxSize().verticalScroll(scroll)) {
+            Box(Modifier.fillMaxSize().dragVerticalScroll(scroll)) {
             Box(Modifier.fillMaxWidth().heightIn(min = room).padding(vertical = Space.m), contentAlignment = Alignment.Center) {
             when (val s = step) {
                 WhoStep.People -> People(

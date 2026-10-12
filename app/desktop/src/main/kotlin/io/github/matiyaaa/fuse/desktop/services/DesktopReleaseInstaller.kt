@@ -96,7 +96,11 @@ internal class DesktopReleaseInstaller(
         val note = File(dirs.data, UpdateTrial.NOTE)
         val text = runCatching { note.readText() }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }
         note.delete()
-        return listOfNotNull(text, takeLibraryNote()).joinToString(" ").ifEmpty { null }
+        // What a restart of Steam from inside it did, left by its helper (see SteamApplyMain).
+        val steamNote = File(dirs.data, io.github.matiyaaa.fuse.desktop.platform.SteamApplyMain.NOTE)
+        val steam = runCatching { steamNote.readText() }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }
+        steamNote.delete()
+        return listOfNotNull(text, takeLibraryNote(), steam).joinToString(" ").ifEmpty { null }
     }
 
     /** Downloads, verifies and places the new AppImage; [applyUpdate] then restarts into it. */

@@ -4,7 +4,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -114,6 +113,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragHorizontalScroll
 
 /** The buttons at the end of the tab line, reachable with the stick after the last tab. */
 enum class HudButton {
@@ -269,7 +269,7 @@ fun Hud(
                             }
                         }
                         .fadeSides(fadeLeft = { scroll.value > 0 }, fadeRight = { scroll.value < scroll.maxValue })
-                        .horizontalScroll(scroll),
+                        .dragHorizontalScroll(scroll),
                     horizontalArrangement = Arrangement.spacedBy(Space.xs),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {

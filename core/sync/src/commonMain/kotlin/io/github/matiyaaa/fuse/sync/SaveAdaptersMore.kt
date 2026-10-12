@@ -549,10 +549,13 @@ internal object Xenia : SaveAdapter {
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
         // Its storage root (xenia_main.cc): beside the program when portable (Windows builds are,
         // and any with portable.txt beside them), else Xenia in Documents on Windows and in
-        // XDG_DATA_HOME, or the home folder when that isn't set, elsewhere.
-        val userFolder = if (env.host == "WINDOWS") SaveAdapters.documents(env) else env.env("XDG_DATA_HOME") ?: env.home
+        // XDG_DATA_HOME, or ~/.local/share when that isn't set, elsewhere (filesystem_posix.cc
+        // GetUserFolder). Its comment there says the home folder, which builds may have used, so
+        // that is looked at last.
+        val userFolder = if (env.host == "WINDOWS") SaveAdapters.documents(env) else SaveAdapters.xdgData(env)
         val content = SaveAdapters.chosen(env, q) ?: SaveAdapters.firstDir(
             env, q.emulatorPath?.let { SaveAdapters.parent(it) + "/content" }, "$userFolder/Xenia/content",
+            "${env.home}/Xenia/content".takeIf { env.host != "WINDOWS" },
         ) ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "x360.savedata", "Xenia's content folder wasn't found here."))
         val read = q.serial?.uppercase()?.takeIf { HEX8.matches(it) } ?: TAG8.find(q.romPath)?.groupValues?.get(1)?.uppercase()
         // Profiles by their XUID; all zeros holds what every profile shares (DLC), never a save.

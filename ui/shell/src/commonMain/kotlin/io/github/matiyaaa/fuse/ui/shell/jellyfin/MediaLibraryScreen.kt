@@ -56,6 +56,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
 
 /** A library's grid while it is open: what is loaded, the order, the filter and where you are. */
 internal class LibraryPageState {
@@ -210,7 +211,7 @@ internal fun MediaLibraryScreen(app: AppState, id: String, name: String, kind: S
             columns = GridCells.Fixed(columns),
             state = grid,
             // Below the top line, so the grid never scrolls under it.
-            modifier = Modifier.fillMaxSize().padding(top = Size.hudHeight).fadingEdges(top = if (grid.canScrollBackward) Space.xl else 0.dp),
+            modifier = Modifier.fillMaxSize().padding(top = Size.hudHeight).fadingEdges(top = if (grid.canScrollBackward) Space.xl else 0.dp).dragScroll(grid),
             contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.l, bottom = Size.hintHeight + Space.xl),
             horizontalArrangement = Arrangement.spacedBy(Space.l),
             verticalArrangement = Arrangement.spacedBy(Space.l),

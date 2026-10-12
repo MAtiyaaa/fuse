@@ -19,6 +19,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.printToString
 import io.github.matiyaaa.fuse.data.FuseData
@@ -511,6 +512,11 @@ internal class AuditDriver(
     /** Touch input on the whole window, in window pixels. A finger stays down between calls. */
     fun touch(block: androidx.compose.ui.test.TouchInjectionScope.() -> Unit) {
         ui.onRoot().performTouchInput(block)
+    }
+
+    /** Mouse input on the whole window, in window pixels. A button stays held between calls. */
+    fun mouse(block: androidx.compose.ui.test.MouseInjectionScope.() -> Unit) {
+        ui.onRoot().performMouseInput(block)
     }
 
     /** Settles, then writes the current frame as `<dir>/<size>/<group>/<screen>--<state>.png`. */

@@ -567,7 +567,7 @@ internal class DefaultLibraryOps(
                 is RunResult.Started -> LaunchOutcome.OpenedAppOnly(installedEmulator.name, plan.reason)
                 is RunResult.OpenedAppInstead -> LaunchOutcome.OpenedAppOnly(installedEmulator.name, r.reason)
                 RunResult.NotInstalled -> notInstalled(installedEmulator, id)
-                is RunResult.Failed -> LaunchOutcome.Problem(LaunchProblems.refused(installedEmulator, id, r.message, android, goBackOffer(installedEmulator), r.diagnostic, game.platformId, ctx.services.emulators.homeDir))
+                is RunResult.Failed -> LaunchOutcome.Problem(LaunchProblems.refused(installedEmulator, id, r.message, android, goBackOffer(installedEmulator), r.diagnostic, game.platformId, ctx.services.emulators.homeDir, unmetBy(installedEmulator)))
             }
             is LaunchPlan.AndroidIntent, is LaunchPlan.Command -> {
                 // Fuse Sync puts the newest save in place first, or asks when both sides played.
@@ -602,7 +602,7 @@ internal class DefaultLibraryOps(
                     // Only the app opened; which game gets played there is unknown, so no session is recorded.
                     is RunResult.OpenedAppInstead -> LaunchOutcome.OpenedAppOnly(installedEmulator.name, r.reason)
                     RunResult.NotInstalled -> notInstalled(installedEmulator, id)
-                    is RunResult.Failed -> LaunchOutcome.Problem(LaunchProblems.refused(installedEmulator, id, r.message, android, goBackOffer(installedEmulator), r.diagnostic, game.platformId, ctx.services.emulators.homeDir))
+                    is RunResult.Failed -> LaunchOutcome.Problem(LaunchProblems.refused(installedEmulator, id, r.message, android, goBackOffer(installedEmulator), r.diagnostic, game.platformId, ctx.services.emulators.homeDir, unmetBy(installedEmulator)))
                 }
             }
         }
@@ -904,6 +904,10 @@ internal class DefaultLibraryOps(
      * Going back to the version of [emulator] the Store's last update replaced, offered when that
      * update was in the last few weeks and Fuse still keeps the version before it.
      */
+    /** What this computer lacks for [e] to run, read only, for a launch that failed. */
+    private fun unmetBy(e: io.github.matiyaaa.fuse.model.InstalledEmulator): String? =
+        runCatching { ctx.services.intelligence()?.first?.let { io.github.matiyaaa.fuse.launch.intelligence.EmulatorRequirements.forInstalled(e, it) } }.getOrNull()
+
     private fun goBackOffer(emulator: InstalledEmulator): io.github.matiyaaa.fuse.ui.shell.store.ProblemAction.GoBack? {
         val (key, rec) = ctx.settings.value.store.installs.entries.firstOrNull { it.value.packageName == emulator.appId }?.toPair() ?: return null
         if (rec.previous == null || ctx.now() - rec.installedAt > GO_BACK_OFFER_MS) return null
@@ -956,6 +960,12 @@ internal class DefaultLibraryOps(
     override suspend fun modSitePage(id: GameId, modId: Long) = modSites.page(id, modId)
 
     override suspend fun fetchModSiteFile(id: GameId, modId: Long, fileId: Long, onProgress: (Float) -> Unit) = modSites.fetch(id, modId, fileId, onProgress)
+
+    private val emuCoreX by lazy { EmuCoreXMods(ctx, nativeEnhancements, ::discIdentity) }
+
+    override suspend fun emuCoreX(id: GameId) = emuCoreX.finds(id)
+
+    override suspend fun fetchEmuCoreX(id: GameId, entryId: String, onProgress: (Float) -> Unit) = emuCoreX.fetch(id, entryId, onProgress)
 
     /**
      * A PSP game's id as PPSSPP files it (`ULUS10041`): from its name or tags, else read from its ISO

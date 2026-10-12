@@ -45,7 +45,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -73,6 +72,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragVerticalScroll
 
 /**
  * Just the picture of what is playing, with Fuse's subtitles over exactly it: for the other
@@ -338,7 +339,7 @@ fun PlayerRemote(
                 }
             } else {
                 Column(
-                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                    Modifier.fillMaxSize().dragVerticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(if (compact) Space.s else Space.m, Alignment.CenterVertically),
                 ) {
@@ -525,7 +526,8 @@ private fun TrackList(session: PlayerSession, which: RemoteList, modifier: Modif
             FText(if (which == RemoteList.AUDIO) "Sound" else "Subtitles", Fuse.type.bodyStrong, color = Color.White, maxLines = 1, modifier = Modifier.weight(1f))
             TransportButton(FuseIcons.Close, "Close", 40.dp, onClick = onDone)
         }
-        LazyColumn(Modifier.padding(bottom = Space.s)) {
+        val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
+        LazyColumn(Modifier.padding(bottom = Space.s).dragScroll(scroll), state = scroll) {
             itemsIndexed(rows) { i, (label, detail, on) ->
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = 54.dp).clickable {

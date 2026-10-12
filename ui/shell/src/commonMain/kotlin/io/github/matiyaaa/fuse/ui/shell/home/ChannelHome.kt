@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
@@ -114,6 +113,7 @@ import kotlin.math.sin
 import kotlin.time.TimeSource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragVerticalScroll
 
 /** The room Undo and Reset take above the board while it is arranged. */
 private val ARRANGE_TOOLS_ROOM = 64.dp
@@ -187,6 +187,9 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
     // a quick press for the menu doesn't flash it.
     val holding = arranging && held == NavAction.CONTEXT && op == null
     var resizeLook by remember { mutableStateOf(false) }
+    // Steps taken while Options is held, shown at once and saved together when it is let go: saving
+    // each step rebuilt everything that reads the settings, a hitch on every press.
+    var resizing by remember { mutableStateOf<PendingResize?>(null) }
     PageEffect(holding) {
         if (holding) {
             delay(RESIZE_LOOK_MS)
@@ -317,9 +320,11 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
         val cellH = space.cellHeight(cellW, gapX, gapY, narrow)
         val density = LocalDensity.current
         val packed = space.packed
-        val committed = remember(widgets, columns, packed) {
+        val saved = remember(widgets, columns, packed) {
             BoardGrid.layout(widgets.map { BoardGrid.Item(it.id, if (packed) space.allowed(it.boardSize, columns) else it.boardSize, if (packed) null else it.spots[columns]) }, columns)
         }
+        // The board as it stands: with the resize steps taken while Options is held, before they are saved.
+        val committed = resizing?.takeIf { it.columns == columns }?.layout ?: saved
         // A packed board whose rows all stop short of the edge by less than one more of its items
         // (small squares in an odd number of columns) is centred, so that sliver is shared by both
         // sides. A board with room for more (one system, or a few left after others went) starts
@@ -329,6 +334,19 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
         val spare = if (leftOver < narrowest) leftOver else 0
         val geometry = with(density) { BoardGeometry(columns, cellW.toPx(), cellH.toPx(), gapX.toPx(), gapY.toPx(), offsetX = spare * (cellW + gapX).toPx() / 2) }
         val shown = editor.preview ?: committed
+        // Options let go (or arranging left): the steps taken are saved, once. They stay shown until
+        // the saved board has them, so it never springs back to the old size for a moment.
+        PageEffect(holding) {
+            if (!holding) resizing?.let { r ->
+                save(r.layout, r.columns, resized = r.id)
+                reselect = r.id
+                delay(SAVED_WAIT_MS)
+                if (resizing == r) resizing = null
+            }
+        }
+        PageEffect(saved, holding) {
+            resizing?.let { r -> if (!holding && saved.rects == r.layout.rects) resizing = null }
+        }
         // Arranging: the first free place adds a widget (hidden while something is being changed).
         // On a centred board it stays inside the columns the board shows, so it never reaches past
         // the screen's edge.
@@ -407,16 +425,17 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                     val now = start.elapsedNow().inWholeMilliseconds
                     if (e.isRepeat && now - lastResize < RESIZE_REPEAT_MS) return@InputLayer NavResult.CONSUMED
                     lastResize = now
-                    val rect = committed[w.id] ?: return@InputLayer NavResult.BLOCKED
+                    // Each step from the last one taken while Options is held.
+                    val base = committed
+                    val rect = base[w.id] ?: return@InputLayer NavResult.BLOCKED
                     val horizontal = e.action == NavAction.LEFT || e.action == NavAction.RIGHT
                     val next = space.resizeStep(rect, e.action, columns)
-                    val change = next?.let { if (space.packed) BoardGrid.resizePacked(committed, w.id, it.size, space.maxHeight) else BoardGrid.resize(committed, w.id, it) } as? BoardChange.Done
+                    val change = next?.let { if (space.packed) BoardGrid.resizePacked(base, w.id, it.size, space.maxHeight) else BoardGrid.resize(base, w.id, it) } as? BoardChange.Done
                     if (change == null) {
                         editor.bump(w.id, horizontal)
                         NavResult.BLOCKED
                     } else {
-                        save(change.layout, columns, resized = w.id)
-                        reselect = w.id
+                        resizing = PendingResize(w.id, change.layout, columns)
                         NavResult.MOVED
                     }
                 }
@@ -565,7 +584,7 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                                 (BoardGrid.move(base, id, column, row) as? BoardChange.Done)?.let { d -> base.rects.getValue(id).let { BoardRect(column, row, it.width, it.height) } to d.layout }
                             },
                         )
-                        .verticalScroll(scroll),
+                        .dragVerticalScroll(scroll),
                 ) {
                     Box(
                         Modifier
@@ -882,6 +901,9 @@ private fun BoardItem(
 /** "1 game", "12 games". */
 internal fun gamesText(count: Int): String = "$count ${if (count == 1) "game" else "games"}"
 
+/** Resize steps taken with the controller and not saved yet: [layout] for the board [columns] wide. */
+private data class PendingResize(val id: String, val layout: BoardLayout, val columns: Int)
+
 /**
  * Places a widget at [rect] (in the board's pixels), springing to a new place or size when the
  * board reflows around a move or a resize, the way a phone's home screen does; [animate] off for the
@@ -987,6 +1009,9 @@ private const val SHAKE_MS = 360
 
 /** How long Options is held before the chosen widget shows it is being resized. */
 private const val RESIZE_LOOK_MS = 150L
+
+/** How long steps saved on letting go of Options stay shown while the saved board catches up. */
+private const val SAVED_WAIT_MS = 2_000L
 
 /** The quickest a held direction resizes, one step each. */
 private const val RESIZE_REPEAT_MS = 200L

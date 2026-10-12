@@ -22,7 +22,6 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -76,6 +75,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragVerticalScroll
 
 /** A profile being edited, with the PIN that opened it (when it has one). */
 data class ProfileEditSpec(val profile: ProfileInfo, val currentPin: String?)
@@ -295,7 +295,7 @@ private fun MergePage(app: AppState, svc: SyncService, m: ProfileMerge) {
         LaunchedEffect(row) { inView.getOrNull(row)?.bringIntoView() }
         Column(Modifier.fillMaxSize().padding(vertical = if (short) Space.s else Space.m), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Column(Modifier.widthIn(max = 760.dp).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.widthIn(max = 760.dp).dragVerticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
                     if (!short) {
                         SyncMark(if (compact) 40.dp else 52.dp)
                         Spacer(Modifier.height(if (compact) Space.m else Space.l))

@@ -29,7 +29,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -134,6 +133,9 @@ import io.github.matiyaaa.fuse.ui.shell.reach.reachUploadToRomm
 import io.github.matiyaaa.fuse.ui.shell.reach.sendPicker
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
+import androidx.compose.foundation.gestures.Orientation
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragVerticalScroll
 
 /** One of the buttons under the title. [label] null draws a round icon button named by [name]. */
 private data class DetailAction(
@@ -504,7 +506,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                 .padding(top = Size.hudHeight)
                 .onPlaced { topOfPage = it.positionInRoot().y.toInt() }
                 .fadingEdges(scroll, top = Space.xl, bottom = Size.hintHeight + Space.l)
-                .verticalScroll(scroll)
+                .dragVerticalScroll(scroll)
                 .padding(horizontal = Space.gutter),
         ) {
             Spacer(Modifier.height(layout.top - Size.hudHeight))
@@ -659,6 +661,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                         // Room above and below for a badge's lift and its spark.
                         LazyRow(
                             state = list,
+                            modifier = Modifier.dragScroll(list, Orientation.Horizontal),
                             horizontalArrangement = Arrangement.spacedBy(Space.l),
                             contentPadding = PaddingValues(top = Space.s, end = Space.gutter, bottom = Space.xs),
                         ) {
@@ -670,7 +673,20 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                                         modifier = Modifier.size(Size.thumbL),
                                         onClick = { sel.row = rows.indexOf("achievements"); sel.setColumn("achievements", i) },
                                     ) {
-                                        Artwork(if (b.earned) b.badgeUrl else b.badgeLockedUrl, Modifier.fillMaxSize())
+                                        // A locked one without a picture of its own for that (trophies, Xbox 360) is
+                                        // shaded over; a secret one shows a lock until it is earned. Both stay opaque.
+                                        Artwork(
+                                            (if (b.earned) b.badgeUrl else b.badgeLockedUrl).ifEmpty { null },
+                                            Modifier.fillMaxSize(),
+                                            fallback = {
+                                                Box(Modifier.fillMaxSize().background(c.surfaceRaised), contentAlignment = Alignment.Center) {
+                                                    FuseIcon(if (b.earned) FuseIcons.Trophy else FuseIcons.Lock, size = Size.iconXL, tint = c.textMuted)
+                                                }
+                                            },
+                                        )
+                                        if (!b.earned && b.badgeLockedUrl.isNotEmpty() && b.badgeLockedUrl == b.badgeUrl) {
+                                            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.58f)))
+                                        }
                                     }
                                     Spacer(Modifier.height(Size.sparkClearance))
                                     FText(b.title, Fuse.type.caption, color = if (selected) c.text else c.textMuted, maxLines = 2, minLines = 2)
@@ -701,6 +717,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                     FollowSelection(list, { sel.column("shots") }, anchor = 0.1f)
                     LazyRow(
                         state = list,
+                        modifier = Modifier.dragScroll(list, Orientation.Horizontal),
                         horizontalArrangement = Arrangement.spacedBy(Space.m),
                         contentPadding = PaddingValues(top = Space.s, end = Space.gutter, bottom = Size.sparkClearance),
                     ) {
@@ -1020,7 +1037,7 @@ internal fun PictureViewer(shots: List<Any?>, start: Int, onIndex: (Int) -> Unit
             .fuseClickable(scale = false, onClickLabel = "Close", onClick = onClose),
         contentAlignment = Alignment.Center,
     ) {
-        androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.fillMaxSize(), pageSpacing = Space.l) { i ->
+        androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.fillMaxSize().dragScroll(pager, Orientation.Horizontal, flingBehavior = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(pager)), pageSpacing = Space.l) { i ->
             Box(Modifier.fillMaxSize().padding(start = Space.gutter, end = Space.gutter, top = Space.xl, bottom = Size.hudHeight), contentAlignment = Alignment.Center) {
                 Artwork(shots[i], Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
             }
@@ -1572,6 +1589,7 @@ private fun AvailableOn(copies: List<io.github.matiyaaa.fuse.ui.shell.store.Copy
     val now = io.github.matiyaaa.fuse.ui.shell.reach.nowMs()
     LazyRow(
         state = list,
+        modifier = Modifier.dragScroll(list, Orientation.Horizontal),
         horizontalArrangement = Arrangement.spacedBy(Space.l),
         contentPadding = PaddingValues(top = Space.s, end = Space.gutter, bottom = Space.s),
     ) {

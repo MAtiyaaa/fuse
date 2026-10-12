@@ -72,6 +72,8 @@ import io.github.matiyaaa.fuse.ui.shell.components.agoText
 import io.github.matiyaaa.fuse.ui.shell.store.AchievementsFeed
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
+import androidx.compose.foundation.gestures.Orientation
 
 private const val RECENT = "recent"
 private const val PROGRESS = "progress"
@@ -273,7 +275,7 @@ private fun Connected(app: AppState, feed: AchievementsFeed) {
             }
             LazyColumn(
                 state = list,
-                modifier = Modifier.fillMaxWidth().weight(1f).fadingEdges(list, top = Space.xl, bottom = 0.dp),
+                modifier = Modifier.fillMaxWidth().weight(1f).fadingEdges(list, top = Space.xl, bottom = 0.dp).dragScroll(list),
                 contentPadding = PaddingValues(top = Space.s, bottom = Size.hintHeight + Space.xl),
                 verticalArrangement = Arrangement.spacedBy(Space.l),
             ) {
@@ -310,6 +312,7 @@ private fun <T> Section(title: String, column: Int, items: List<T>, modifier: Mo
         Spacer(Modifier.height(Space.m))
         LazyRow(
             state = row,
+            modifier = Modifier.dragScroll(row, Orientation.Horizontal),
             // The spark bar under a focused card stays clear of the next section.
             contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter * 3, top = Space.xs, bottom = Size.sparkClearance),
             horizontalArrangement = Arrangement.spacedBy(Space.xl),

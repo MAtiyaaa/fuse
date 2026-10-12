@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -48,6 +47,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragVerticalScroll
 
 /**
  * A licence text shipped inside the app (composeResources/files/licenses), or [inline] text for
@@ -170,7 +170,7 @@ fun LicensesScreen(app: AppState) {
                                 body,
                                 Fuse.type.caption,
                                 color = Fuse.colors.textMuted,
-                                modifier = Modifier.fillMaxSize().fadingEdges(scroll, top = Space.l, bottom = Space.xl).verticalScroll(scroll)
+                                modifier = Modifier.fillMaxSize().fadingEdges(scroll, top = Space.l, bottom = Space.xl).dragVerticalScroll(scroll)
                                     .padding(horizontal = Space.xl, vertical = Space.l),
                             )
                         }

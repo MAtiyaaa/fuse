@@ -239,6 +239,10 @@ data class StoreSettings(
      * that publishes its files the same way; null for the pack itself.
      */
     val packRepo: String? = null,
+    /** Apps left out of Update All (each still updates from its own page), by key. */
+    val excluded: Set<String> = emptySet(),
+    /** Apps that follow their pre-releases (nightly, beta) instead of their stable releases, by key. */
+    val prerelease: Set<String> = emptySet(),
 )
 
 /** An app the user added to the Store: its GitHub repository, its name and the category it goes under. */

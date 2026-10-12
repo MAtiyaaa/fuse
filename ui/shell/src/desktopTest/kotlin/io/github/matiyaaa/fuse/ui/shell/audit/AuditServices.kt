@@ -51,6 +51,15 @@ internal class AuditControls(val cache: File) {
 
     @Volatile var cartridge: CartridgeStatus = CartridgeStatus(installed = false)
 
+    /** PCSX2's folders for the scenario adding EmuCoreX's packs and cheats; none when null. */
+    @Volatile var pcsx2: io.github.matiyaaa.fuse.launch.patches.Pcsx2Home? = null
+
+    /** Xenia's content folder for the scenario showing its achievements; none when null. */
+    @Volatile var xeniaContent: String? = null
+
+    /** The made-up computer's processor, as Fuse Intelligence reads it; unknown when null. */
+    @Volatile var processor: io.github.matiyaaa.fuse.launch.intelligence.Processor? = null
+
     /** The version an update replaced, as Settings, About offers to go back to it; none when null. */
     @Volatile var previousFuse: io.github.matiyaaa.fuse.ui.shell.store.PreviousRelease? = null
 
@@ -134,6 +143,7 @@ internal class AuditServices(
         io.ktor.client.HttpClient(io.ktor.client.engine.mock.MockEngine { request ->
             AuditJellyfin.answer(this, request)
                 ?: AuditGameBanana.answer(this, request)
+                ?: AuditEmuCoreX.answer(this, request)
                 ?: (if (host == Host.ANDROID || desktop) AuditStore.answer(this, request) else null)
                 ?: respondError(io.ktor.http.HttpStatusCode.NotFound)
         }) { install(io.ktor.client.plugins.HttpTimeout) }
@@ -154,6 +164,7 @@ internal class AuditServices(
         override fun canExecute(path: String) = true
         override fun modified(path: String): Long? = 1_700_000_000_000L
         override fun names(path: String): List<String> = emptyList()
+        override fun processor() = controls.processor
     } to object : io.github.matiyaaa.fuse.launch.intelligence.KnowledgeStore {
         private var text: String? = null
         override fun read() = text
@@ -172,6 +183,8 @@ internal class AuditServices(
         }
 
         override val homeDir: String? = base.emulators.homeDir
+
+        override fun xeniaContentRoots(installed: List<InstalledEmulator>): List<String> = listOfNotNull(controls.xeniaContent)
         override val canLocate: Boolean get() = desktop
 
         override suspend fun locate(emulator: EmulatorId, path: String): Boolean {
@@ -207,7 +220,7 @@ internal class AuditServices(
 
     /** RetroArch on the made-up computer, with the cheats it downloaded for every sample game. */
     override val emulatorFiles: io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles? =
-        if (host == Host.ANDROID) null else AuditEmulatorFiles(File(base.cacheDir, "retroarch"))
+        if (host == Host.ANDROID) null else AuditEmulatorFiles(File(base.cacheDir, "retroarch"), controls)
 
     override val locations = object : DeviceLocations {
         override suspend fun libraryCandidates(): List<LocationHint> = controls.libraryCandidates
@@ -487,10 +500,14 @@ internal class AuditDesktopInstaller(override val host: Host, private val dir: F
     override fun launch(path: String): Boolean = true
 }
 
-/** Steam on a Linux computer, closed, with Fuse not yet in its library. */
-internal class AuditSteam : io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration {
+/**
+ * Steam on a Linux computer, with Fuse not yet in its library: closed, or [open] in Game Mode with
+ * Fuse running inside it ([closesFuse]), where adding Fuse restarts Steam and Fuse with it.
+ */
+internal class AuditSteam(private val open: Boolean = false, override val closesFuse: Boolean = false) : io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration {
     @Volatile private var inLibrary = false
-    override val gameMode: Boolean = false
+    override val gameMode: Boolean = closesFuse
+    override suspend fun steamRunning(): Boolean = open
     override suspend fun added(): Boolean = inLibrary
     override suspend fun addFuse(): Result<String> {
         inLibrary = true
@@ -553,7 +570,7 @@ internal class AuditDecky : io.github.matiyaaa.fuse.ui.shell.platform.DeckyInteg
  * RetroArch's folders on the audit computer: its downloaded cheats (Online Updater, Update Cheats)
  * for every sample game, by libretro system, and room for the game files Fuse writes.
  */
-internal class AuditEmulatorFiles(private val root: File) : io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles {
+internal class AuditEmulatorFiles(private val root: File, private val controls: AuditControls) : io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles {
     init {
         val cheats = File(root, "cheats")
         val names = AuditSamples.games.map { it.folder to it.title } + io.github.matiyaaa.fuse.ui.shell.screenshots.SampleLibrary.games.map { it.folder to it.file }
@@ -572,7 +589,7 @@ internal class AuditEmulatorFiles(private val root: File) : io.github.matiyaaa.f
         return io.github.matiyaaa.fuse.launch.patches.DuckStationHome(d, "$d/gamesettings", "$d/cheats", "$d/patches", null, null)
     }
 
-    override suspend fun pcsx2(installed: InstalledEmulator): io.github.matiyaaa.fuse.launch.patches.Pcsx2Home? = null
+    override suspend fun pcsx2(installed: InstalledEmulator): io.github.matiyaaa.fuse.launch.patches.Pcsx2Home? = controls.pcsx2
 
     override suspend fun retroArch(installed: InstalledEmulator) =
         io.github.matiyaaa.fuse.launch.patches.RetroArchHome(File(root, "retroarch.cfg").absolutePath, File(root, "cheats").absolutePath, File(root, "config").absolutePath)
@@ -597,6 +614,70 @@ internal class AuditEmulatorFiles(private val root: File) : io.github.matiyaaa.f
         val CHEATS = listOf("Infinite Lives", "Start With 99 Coins", "Invincibility", "Moon Jump", "Unlock All Levels")
             .mapIndexed { i, d -> "cheat${i}_desc = \"$d\"\ncheat${i}_code = \"7E0DBE:0$i\"\ncheat${i}_enable = false\n" }
             .joinToString("\n", prefix = "cheats = 5\n\n")
+    }
+}
+
+/**
+ * EmuCoreX's catalogues as the audit has them, for its PS2 disc (SLUS-20946, CRC 0C040404): two
+ * texture packs (one in pieces), widescreen and frame-rate patches, and a cheat file.
+ */
+internal object AuditEmuCoreX {
+    private const val BASE = "https://github.com/sashkinbro/EmuCoreX-Textures/releases/download/texture-catalog"
+    private const val RAW = "https://raw.githubusercontent.com/PCSX2/pcsx2_patches/main/patches"
+    private const val TEXTURES = """{"schemaVersion": 1, "entries": [
+        {"id": "sky-hd", "name": "Sky Racer HD Texture Pack", "gameTitle": "Sky Racer", "serials": ["SLUS-20946"], "version": "2026-07-22 mirror", "authors": ["Aurelia"],
+         "credits": "HD texture pack created by Aurelia; repackaged by EmuCoreX with the original attribution retained.", "description": "Sharper tracks, cars and menus at 4x.",
+         "downloadUrl": "$BASE/sky-racer-hd.zip", "sourceUrl": "https://example.org/threads/sky-racer-hd", "license": "See source page terms",
+         "sizeBytes": 812345678, "sha256": "25A4C2925CB80387155F1EBE14EF18F64445A6BBB5D205758575B4CB55002758", "fileCount": 2129},
+        {"id": "sky-uhd", "name": "Sky Racer UHD Texture Pack", "serials": ["SLUS-20946"], "authors": ["Corvid"], "downloadUrl": "$BASE/sky-uhd.zip.part001",
+         "license": "See source page terms", "sizeBytes": 2326146131, "sha256": "77A46E48D29C003668C7A346720617AA2B32EEAE84C8CDFACB8FED1DBE17D917", "fileCount": 35900,
+         "parts": [{"downloadUrl": "$BASE/sky-uhd.zip.part001"}, {"downloadUrl": "$BASE/sky-uhd.zip.part002"}]}]}"""
+    private const val CHEATS = """{"schemaVersion": 1, "entries": [
+        {"id": "sky-ws", "title": "Sky Racer", "serials": ["SLUS-20946"], "crc": "0C040404", "authors": ["ElHecht"], "description": "Widescreen 16:9",
+         "downloadUrl": "$RAW/SLUS-20946_0C040404.pnach", "sourceName": "PCSX2 Curated Game Patches", "license": "See upstream source terms", "blockCount": 1},
+        {"id": "sky-60", "title": "Sky Racer", "serials": ["SLUS-20946"], "crc": "0C040404", "authors": ["Gabominated"], "description": "60 FPS",
+         "downloadUrl": "$RAW/SLUS-20946_0C040404_60.pnach", "sourceName": "Gabominated PCSX2 Enhancement Patches", "license": "See upstream source terms", "blockCount": 1},
+        {"id": "sky-codes", "title": "Sky Racer", "serials": ["SLUS-20946"], "crc": "0C040404", "authors": ["Codejunkies"], "description": "Infinite Boost, Max Money, All Tracks",
+         "downloadUrl": "https://raw.githubusercontent.com/sashkinbro/EmuCoreX-Cheat/main/files/a/0C040404.pnach", "sourceName": "PS2 Cheats PNACH Collection",
+         "license": "See upstream source terms", "blockCount": 12}]}"""
+
+    fun answer(scope: io.ktor.client.engine.mock.MockRequestHandleScope, request: io.ktor.client.request.HttpRequestData): io.ktor.client.request.HttpResponseData? {
+        val body = when (request.url.toString()) {
+            io.github.matiyaaa.fuse.integrations.emucorex.EmuCoreX.TEXTURES_URL -> TEXTURES
+            io.github.matiyaaa.fuse.integrations.emucorex.EmuCoreX.CHEATS_URL -> CHEATS
+            else -> return null
+        }
+        return with(scope) {
+            respond(body, io.ktor.http.HttpStatusCode.OK, io.ktor.http.headersOf(io.ktor.http.HttpHeaders.ContentType, "application/json"))
+        }
+    }
+
+    /** A minimal PS2 ISO: SYSTEM.CNF naming SLUS_209.46 and a ten-byte boot program (CRC 0C040404). */
+    fun ps2Iso(): ByteArray {
+        val sector = 2048
+        val image = ByteArray(sector * 24)
+        fun le32(at: Int, v: Int) { for (i in 0..3) image[at + i] = (v ushr (8 * i)).toByte() }
+        fun record(at: Int, lba: Int, size: Int, dir: Boolean, name: String): Int {
+            val n = name.encodeToByteArray()
+            val len = 33 + n.size + (if (n.size % 2 == 0) 1 else 0)
+            image[at] = len.toByte(); le32(at + 2, lba); le32(at + 10, size)
+            image[at + 25] = if (dir) 2 else 0; image[at + 32] = n.size.toByte(); n.copyInto(image, at + 33)
+            return len
+        }
+        val pvd = 16 * sector
+        image[pvd] = 1
+        "CD001".encodeToByteArray().copyInto(image, pvd + 1)
+        record(pvd + 156, 18, sector, true, "\u0000")
+        val cnf = "BOOT2 = cdrom0:\\SLUS_209.46;1\r\nVMODE = NTSC\r\n".encodeToByteArray()
+        val elf = ByteArray(10) { (it + 1).toByte() }
+        var at = 18 * sector
+        at += record(at, 18, sector, true, "\u0000")
+        at += record(at, 18, sector, true, "\u0001")
+        at += record(at, 20, cnf.size, false, "SYSTEM.CNF;1")
+        record(at, 21, elf.size, false, "SLUS_209.46;1")
+        cnf.copyInto(image, 20 * sector)
+        elf.copyInto(image, 21 * sector)
+        return image
     }
 }
 

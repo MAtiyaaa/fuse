@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -73,6 +72,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragVerticalScroll
 
 /** Where setting up stands. */
 private sealed interface SetupStep {
@@ -159,7 +159,7 @@ internal fun SyncSetupScreen(app: AppState, host: Boolean) {
             if (wide) StepRail(host, step, Modifier.width(300.dp))
             Panel(Modifier.weight(1f).widthIn(max = 760.dp)) {
                 Swap(step, label = "setup") { s ->
-                    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(if (compact) Space.l else Space.xxl)) {
+                    Column(Modifier.fillMaxWidth().dragVerticalScroll(rememberScrollState()).padding(if (compact) Space.l else Space.xxl)) {
                         when (s) {
                             SetupStep.HostIntro -> HostIntro(app, compact, keys.at(s == step), working, existing, onExisting = { existing = it }) { name, keep, folder ->
                                 working = true

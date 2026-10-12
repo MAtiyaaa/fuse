@@ -141,6 +141,27 @@ internal class DefaultAchievementOps(
                     localReader.ps4Trophies(users, ids, game.displayTitle)
                 }
             }
+            game.platformId.value == "psvita" -> {
+                val files = ctx.services.emulatorFiles
+                val prefs = if (files == null) emptyList() else ctx.installed.value.filter { it.id.value.endsWith(".vita3k") }
+                    .flatMap { runCatching { files.vita3kStorage(it) }.getOrDefault(emptyList()) }.distinct()
+                if (prefs.isEmpty()) null else {
+                    // The trophy sets the game itself ships (sce_sys/trophy/<NPWR id>), where its folder is at hand.
+                    val folders = listOfNotNull(game.location.path, io.github.matiyaaa.fuse.library.FsPath.parent(game.location.path))
+                    val ids = folders.flatMap { f ->
+                        runCatching { ctx.services.fs.list(io.github.matiyaaa.fuse.library.FsPath.join(f, "sce_sys", "trophy")) }.getOrDefault(emptyList())
+                            .filter { it.isDirectory }.map { it.name }
+                    }.distinct()
+                    localReader.vitaTrophies(prefs, game.tags.serial, ids)
+                }
+            }
+            game.platformId.value == "xbox360" -> {
+                // The game's title id, from what Fuse read for it or the [4D5307E6] tag in its file name; never its name.
+                val titleId = game.tags.serial?.uppercase()?.takeIf { X360_TITLE.matches(it) }
+                    ?: X360_TAG.find(game.location.path)?.groupValues?.get(1)?.uppercase()
+                val roots = ctx.services.emulators.xeniaContentRoots(ctx.installed.value)
+                if (titleId == null || roots.isEmpty()) null else localReader.xbox360Achievements(roots, titleId)
+            }
             else -> steamAppId(game)?.let { appId ->
                 val roots = runCatching { ctx.services.locations.steamRoots().roots }.getOrDefault(emptyList())
                 localReader.steam(roots, appId, steamAccount(roots))
@@ -156,8 +177,10 @@ internal class DefaultAchievementOps(
         val points = items.sumOf { it.points }
         val source = when (set.source) {
             io.github.matiyaaa.fuse.library.achievements.LocalAchievementSource.STEAM -> io.github.matiyaaa.fuse.model.AchievementSource.STEAM
-            io.github.matiyaaa.fuse.library.achievements.LocalAchievementSource.PS3_TROPHIES,
-            io.github.matiyaaa.fuse.library.achievements.LocalAchievementSource.PS4_TROPHIES -> io.github.matiyaaa.fuse.model.AchievementSource.TROPHIES
+            io.github.matiyaaa.fuse.library.achievements.LocalAchievementSource.PS3_TROPHIES -> io.github.matiyaaa.fuse.model.AchievementSource.TROPHIES
+            io.github.matiyaaa.fuse.library.achievements.LocalAchievementSource.PS4_TROPHIES -> io.github.matiyaaa.fuse.model.AchievementSource.SHADPS4
+            io.github.matiyaaa.fuse.library.achievements.LocalAchievementSource.VITA_TROPHIES -> io.github.matiyaaa.fuse.model.AchievementSource.VITA3K
+            io.github.matiyaaa.fuse.library.achievements.LocalAchievementSource.XBOX360 -> io.github.matiyaaa.fuse.model.AchievementSource.XENIA
         }
         return AchievementState(
             raGameId = 0,
@@ -176,13 +199,14 @@ internal class DefaultAchievementOps(
                 io.github.matiyaaa.fuse.model.Achievement(
                     id = i.toLong(),
                     gameId = 0,
-                    title = if (secret) "Hidden ${if (source == io.github.matiyaaa.fuse.model.AchievementSource.TROPHIES) "trophy" else "achievement"}" else a.name,
+                    title = if (secret) "Hidden ${if (source.noun == "Trophies") "trophy" else "achievement"}" else a.name,
                     description = (if (secret) "Keep playing to find out." else a.description) +
                         // Earned on another device: said, never shown as earned here.
                         (if (a.unlockedAt == null) elsewhere[a.id]?.let { " Earned on ${it.deviceName.ifBlank { "another device" }}." }.orEmpty() else ""),
                     points = a.points,
-                    badgeUrl = a.icon.orEmpty(),
-                    badgeLockedUrl = (a.iconLocked ?: a.icon).orEmpty(),
+                    // A secret one's picture would give it away, so it has none until it is earned.
+                    badgeUrl = if (secret) "" else a.icon.orEmpty(),
+                    badgeLockedUrl = if (secret) "" else (a.iconLocked ?: a.icon).orEmpty(),
                     earnedAt = a.unlockedAt,
                     earnedHardcoreAt = null,
                     type = a.grade,
@@ -381,6 +405,10 @@ internal class DefaultAchievementOps(
 
     private companion object {
         private val STEAM_ID = Regex("(?:rungameid/|^\\s*)(\\d{1,10})")
+
+        /** An Xbox 360 title id, and the way it is tagged in a file name ("Halo 3 [4D5307E6].iso"). */
+        private val X360_TITLE = Regex("[0-9A-Fa-f]{8}")
+        private val X360_TAG = Regex("\\[([0-9A-Fa-f]{8})]")
         const val NS = "retroachievements"
         const val KEY_USER = "user"
         const val KEY_RECENT = "recent"

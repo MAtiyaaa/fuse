@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.Dp
 import io.github.matiyaaa.fuse.ui.designsystem.effects.lightEdge
 import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
@@ -47,7 +48,13 @@ fun CoverCollage(games: List<GameCard>, height: Dp, background: Any? = null) {
             Modifier.fillMaxSize(),
             focusX = first.art.heroFocusX,
             focusY = first.art.heroFocusY,
-            fallback = { GeneratedArt(first.title, first.accent.toColor(), slot = ArtSlot.WIDE, showText = false) },
+            // Without art of its own, the first game's colour falling to the night. It sits under the
+            // dimming and the covers, so the full generated picture (radial lights over the whole
+            // card) cost about a third of every frame of a screen of these for nothing seen.
+            fallback = {
+                val accent = first.accent.toColor()
+                Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(lerp(c.ink, accent, 0.5f), lerp(c.ink, accent, 0.08f)))))
+            },
         )
         // Dimmed toward the bottom, where the covers stand, so they lift off the background.
         Box(

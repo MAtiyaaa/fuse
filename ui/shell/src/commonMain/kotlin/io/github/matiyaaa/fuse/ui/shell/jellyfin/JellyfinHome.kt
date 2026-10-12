@@ -60,6 +60,8 @@ import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import io.github.matiyaaa.fuse.ui.shell.components.ReportScroll
 import io.github.matiyaaa.fuse.ui.shell.components.subTabsRoom
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
+import androidx.compose.foundation.gestures.Orientation
 
 /** What the Jellyfin home keeps while you go into a page and come back. */
 internal class JellyfinHomeState {
@@ -245,7 +247,7 @@ private fun Shelves(app: AppState, page: JellyfinHomeState, focused: Boolean, to
         }
         LazyColumn(
             state = list,
-            modifier = Modifier.fillMaxSize().padding(top = topPadding).fadingEdges(top = if (list.canScrollBackward) Space.xl else 0.dp),
+            modifier = Modifier.fillMaxSize().padding(top = topPadding).fadingEdges(top = if (list.canScrollBackward) Space.xl else 0.dp).dragScroll(list),
             contentPadding = PaddingValues(top = room + if (compact) Space.s else Space.m, bottom = Size.hintHeight + Space.xl),
             verticalArrangement = Arrangement.spacedBy(if (compact) Space.l else Space.xl),
         ) {
@@ -316,6 +318,7 @@ internal fun ShelfRow(
         )
         LazyRow(
             state = list,
+            modifier = Modifier.dragScroll(list, Orientation.Horizontal),
             contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter * 2, top = Space.xs, bottom = Space.xs),
             horizontalArrangement = Arrangement.spacedBy(Space.l),
             content = content,

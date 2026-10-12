@@ -109,6 +109,8 @@ import io.github.matiyaaa.fuse.ui.shell.store.HomeFeed
 import io.github.matiyaaa.fuse.ui.shell.systems.moveSystem
 import io.github.matiyaaa.fuse.ui.shell.systems.moveSystemBy
 import io.github.matiyaaa.fuse.ui.shell.systems.systemMenu
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
+import androidx.compose.foundation.gestures.Orientation
 
 /** Shorter than this (a handheld), the stage's title and logo are set smaller. */
 private val COMPACT_BELOW = 560.dp
@@ -348,7 +350,8 @@ fun FlowHome(app: AppState) {
                             reorder = null
                             app.platform.haptics.drop()
                         },
-                    ),
+                    )
+                    .dragScroll(rows),
                 // Only room for the hint line: the list ends where its content ends, by stick or by touch.
                 contentPadding = PaddingValues(bottom = Size.hintHeight + Space.xl),
             ) {
@@ -540,7 +543,7 @@ private fun ShelfRow(
         }
         LazyRow(
             state = row,
-            modifier = if (!reorderable) Modifier else Modifier.dragReorder(
+            modifier = Modifier.dragScroll(row, Orientation.Horizontal).then(if (!reorderable) Modifier else Modifier.dragReorder(
                 drag,
                 visibleKeys = { row.layoutInfo.visibleItemsInfo.map { it.key } },
                 scrollBy = { row.scrollBy(it) },
@@ -558,7 +561,7 @@ private fun ShelfRow(
                     shelf.items.indexOfFirst { it.key == key }.takeIf { it >= 0 }?.let { from -> onMoveSystem?.invoke(from, to) }
                     app.platform.haptics.drop()
                 },
-            ),
+            )),
             // Clear of the spark bar and the lift before the next shelf's title.
             contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter * 3, bottom = Size.sparkClearance + Space.xs),
             horizontalArrangement = Arrangement.spacedBy(metrics.gap),

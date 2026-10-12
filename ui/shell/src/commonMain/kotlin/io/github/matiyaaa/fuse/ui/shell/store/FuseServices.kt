@@ -193,6 +193,9 @@ interface EmulatorDetector {
     /** shadPS4's user folders on this device, where its trophies are kept. */
     fun shadPs4UserDirs(installed: List<InstalledEmulator>): List<String> = emptyList()
 
+    /** Xenia's content folders on this device, where each profile keeps its achievements. */
+    fun xeniaContentRoots(installed: List<InstalledEmulator>): List<String> = emptyList()
+
     /**
      * Paths Fuse can never read on this device (Android 11+ `Android/data` of other apps). Firmware
      * that could only be there is reported as Unknown, never as Missing.
@@ -472,10 +475,10 @@ interface EmulatorFiles {
 
     /**
      * Downloads [url] into a folder of Fuse's own as [name], at most [maxBytes], and checks it against
-     * [md5] when given (and [size] when known). Returns the file, or null when it couldn't be fetched
-     * or wasn't what was promised (then nothing of it is kept). Nothing is opened or run.
+     * [md5] and [sha256] when given (and [size] when known). Returns the file, or null when it couldn't
+     * be fetched or wasn't what was promised (then nothing of it is kept). Nothing is opened or run.
      */
-    suspend fun fetch(url: String, name: String, size: Long?, md5: String?, maxBytes: Long, onProgress: (Float) -> Unit = {}): String? = null
+    suspend fun fetch(url: String, name: String, size: Long?, md5: String?, maxBytes: Long, onProgress: (Float) -> Unit = {}, sha256: String? = null): String? = null
 
     /** Removes what [fetch] downloaded. */
     suspend fun clearFetched() = Unit

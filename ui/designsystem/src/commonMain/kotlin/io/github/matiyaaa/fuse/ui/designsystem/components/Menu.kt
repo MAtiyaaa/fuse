@@ -88,6 +88,7 @@ import io.github.matiyaaa.fuse.ui.fuseline.tween
 import kotlin.math.abs
 import kotlin.math.sqrt
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
 
 /** What the right side of a menu row shows. */
 sealed interface Trailing {
@@ -662,7 +663,7 @@ fun MenuList(
                 }
             }
             }
-        },
+        }.dragScroll(state),
         state = state,
         verticalArrangement = Arrangement.spacedBy(Space.xxs),
     ) {

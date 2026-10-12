@@ -80,6 +80,20 @@ internal class DesktopEmulatorDetector(
         return (beside + known).filter { File(it).isDirectory }.map { File(it).absoluteFile.fusePath }.distinct()
     }
 
+    override fun xeniaContentRoots(installed: List<InstalledEmulator>): List<String> {
+        val home = env.homeDir.trimEnd('/')
+        // Its storage root (xenia_main.cc): beside the program when portable (Windows builds are by
+        // default, any build with portable.txt beside it), else Xenia in Documents on Windows and in
+        // $XDG_DATA_HOME (or ~/.local/share) elsewhere; content is in it.
+        val beside = installed.filter { it.id.value.endsWith(".xenia") }.mapNotNull { e -> File(e.appId).parentFile?.let { File(it, "content").path } }
+        val known = when (os) {
+            DesktopOs.LINUX -> listOf((System.getenv("XDG_DATA_HOME")?.takeIf { it.isNotBlank() } ?: "$home/.local/share") + "/Xenia/content", "$home/Xenia/content")
+            DesktopOs.WINDOWS -> listOfNotNull(System.getenv("USERPROFILE"), System.getenv("OneDrive")).map { "$it/Documents/Xenia/content" }
+            DesktopOs.MACOS -> emptyList()
+        }
+        return (beside + known).filter { File(it).isDirectory }.map { File(it).absoluteFile.fusePath }.distinct()
+    }
+
     override fun retroArchCorePath(installed: InstalledEmulator, core: String): String? = when (os) {
         DesktopOs.LINUX -> LinuxDetector.findRetroArchCore(env, installed, core)
         DesktopOs.WINDOWS -> WindowsDetector.findRetroArchCore(files, installed, core)

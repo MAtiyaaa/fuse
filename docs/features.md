@@ -143,7 +143,10 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
   and Moonlight can stand on the Systems page as a system of its own (Settings, Addons, Streaming).
 - **Series** on Home and in Search wear their first game's art and logo.
 - **Touch everywhere**: every screen answers a finger, and on computers' touch screens a swipe in
-  from either edge goes back.
+  from either edge goes back. On Linux and Windows a finger reaches Fuse as the mouse (Compose
+  Desktop is never told a finger made it), so there a held drag scrolls lists, shelves, grids, boards
+  and pages and flings them on when let go, a hold opens a game's options, and nothing lights up as
+  it passes under the drag. A real mouse dragged with its button held scrolls the same way.
 - **A second screen with pages**: what's chosen (or the remote while a film plays), Status with the
   battery large, and Controls with brightness, volume and switches, on the screen below or above.
 - **Twenty themes** and community themes from a link or a file ([docs/THEMES.md](docs/THEMES.md)), square

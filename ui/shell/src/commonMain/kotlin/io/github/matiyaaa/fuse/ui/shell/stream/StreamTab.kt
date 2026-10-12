@@ -67,6 +67,8 @@ import io.github.matiyaaa.fuse.ui.shell.downloads.ActionPill
 import io.github.matiyaaa.fuse.ui.shell.downloads.TopAction
 import io.github.matiyaaa.fuse.ui.shell.store.StreamHostView
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
+import androidx.compose.foundation.gestures.Orientation
 
 /**
  * Streaming in Addons: each computer at home with its state (ready, asleep and wakeable, not
@@ -126,7 +128,7 @@ fun StreamTab(app: AppState, active: Boolean, topPadding: Dp) {
         val tile = if (compact) 136.dp else 168.dp
         LazyColumn(
             state = list,
-            modifier = Modifier.fillMaxSize().padding(top = topPadding).fadingEdges(list, top = Space.xl, bottom = Space.xl),
+            modifier = Modifier.fillMaxSize().padding(top = topPadding).fadingEdges(list, top = Space.xl, bottom = Space.xl).dragScroll(list),
             contentPadding = PaddingValues(top = subTabsRoom() + Space.s, bottom = Size.hintHeight + Space.l),
             verticalArrangement = Arrangement.spacedBy(if (compact) Space.m else Space.l),
         ) {
@@ -187,7 +189,7 @@ private fun HostShelf(h: StreamHostView, chosen: Int, tile: Dp, onClick: (Int) -
         }
         val listState = rememberLazyListState()
         LaunchedEffect(chosen) { if (chosen >= 0) listState.animateScrollToItem((chosen - 1).coerceAtLeast(0)) }
-        LazyRow(state = listState, contentPadding = PaddingValues(horizontal = Space.gutter), horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+        LazyRow(state = listState, modifier = Modifier.dragScroll(listState, Orientation.Horizontal), contentPadding = PaddingValues(horizontal = Space.gutter), horizontalArrangement = Arrangement.spacedBy(Space.m)) {
             itemsIndexed(h.host.apps) { i, a -> AppTile(a, appIcon(a), chosen == i, tile, dim = h.online == false && !h.canWake) { onClick(i) } }
             item("add") { AppTile("Add App", FuseIcons.Plus, chosen == h.host.apps.size, tile, quiet = true) { onClick(h.host.apps.size) } }
         }

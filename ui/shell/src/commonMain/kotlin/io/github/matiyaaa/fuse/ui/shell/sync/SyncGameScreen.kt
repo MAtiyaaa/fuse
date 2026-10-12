@@ -33,7 +33,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -70,6 +69,8 @@ import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.store.impl.TimeWords
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragVerticalScroll
 
 /**
  * One game as the Fuse Sync host keeps it. On top, its cover and title with the figures that matter
@@ -146,7 +147,7 @@ internal fun SyncGameScreen(app: AppState, game: String, name: String) {
             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(Space.l)) {
                 LazyColumn(
                     state = list,
-                    modifier = Modifier.weight(1f).fillMaxHeight().fadingEdges(list, top = Space.l, bottom = Space.xl),
+                    modifier = Modifier.weight(1f).fillMaxHeight().fadingEdges(list, top = Space.l, bottom = Space.xl).dragScroll(list),
                     contentPadding = PaddingValues(bottom = Size.hintHeight + Space.m),
                 ) {
                     when {
@@ -185,7 +186,7 @@ internal fun SyncGameScreen(app: AppState, game: String, name: String) {
                 }
                 if (wide && g != null) {
                     Column(
-                        Modifier.width(340.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(bottom = Size.hintHeight + Space.m),
+                        Modifier.width(340.dp).fillMaxHeight().dragVerticalScroll(rememberScrollState()).padding(bottom = Size.hintHeight + Space.m),
                         verticalArrangement = Arrangement.spacedBy(Space.m),
                     ) {
                         convergence?.takeIf { it.slots.isNotEmpty() }?.let { DevicesCard(it) }

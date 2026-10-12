@@ -45,6 +45,8 @@ import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
+import androidx.compose.foundation.gestures.Orientation
 
 /** Which of Home's pages shows, kept with the route so coming back to Home finds the same page. */
 internal class HomePageState {
@@ -191,7 +193,7 @@ internal fun BoardPages(app: AppState, space: BoardSpace) {
                         if (by != 0) go((pager.currentPage + by).coerceIn(0, count - 1))
                     }
                 }
-            },
+            }.dragScroll(pager, Orientation.Horizontal, enabled = count > 1 && !arranging, flingBehavior = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(pager)),
             // Arranging, a drag moves a widget, never the page.
             userScrollEnabled = count > 1 && !arranging,
             key = { keys.getOrElse(it) { "first" } },

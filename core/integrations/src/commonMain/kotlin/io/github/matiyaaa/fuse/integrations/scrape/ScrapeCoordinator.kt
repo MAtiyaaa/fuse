@@ -112,7 +112,9 @@ enum class Guess {
  * A provider that runs out of requests (a quota, a monthly allowance, a long rate limit), rejects
  * its key or keeps failing to answer rests for a while: the jobs that follow skip it and the other
  * providers take over, and each skip is reported as that job's error so nothing is remembered as
- * missing because of it. Short rate limits are waited out once.
+ * missing because of it. Short rate limits are waited out once. A provider with a fifth or less of
+ * its allowance left ([Allowance.low]) is asked only for games a person opens, not by background
+ * fills, which go on with the other providers (libretro's thumbnails ask nothing of anyone).
  */
 class ScrapeCoordinator(
     sources: List<ScrapeSource>,
@@ -427,6 +429,13 @@ class ScrapeCoordinator(
      */
     private suspend fun <T> call(provider: ScrapeProviderId, block: suspend () -> ApiResult<T>): ApiResult<T> {
         lock.withLock { rests[provider]?.takeIf { it.until > now() } }?.let { return ApiResult.RateLimited(null, it.reason) }
+        // Looking by itself, Fuse leaves a provider's last requests for the games a person opens.
+        val demand = currentCoroutineContext()[Demand]?.value ?: ScrapeDemand.VISIBLE
+        if (demand == ScrapeDemand.BACKGROUND || demand == ScrapeDemand.NEARBY) {
+            if (sources[provider]?.allowance?.low == true) {
+                return ApiResult.RateLimited(null, "${provider.displayName}'s requests are running low, so the rest are kept for games you open")
+            }
+        }
         var result = block()
         val wait = (result as? ApiResult.RateLimited)?.retryAfterSeconds
         if (wait != null && wait <= SHORT_WAIT_SECONDS) {

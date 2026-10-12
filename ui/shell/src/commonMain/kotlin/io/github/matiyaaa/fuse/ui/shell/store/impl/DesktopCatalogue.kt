@@ -23,6 +23,8 @@ internal data class DesktopEntry(
     /** Rolling projects that only publish pre-releases ("continuous", "latest"). */
     val prereleases: Boolean = false,
     val inFuse: InFuse = InFuse.LAUNCHES_GAMES,
+    /** The systems it is offered on, where its builds exist for only some; null: every computer. */
+    val hosts: Set<Host>? = null,
 ) {
     fun repoFor(host: Host): String? = repos[host] ?: repo
 }
@@ -42,6 +44,7 @@ internal object DesktopCatalogue {
         EMULATORS to 0xFF5B8DEF,
         STREAMING to 0xFF8E6CEF,
         TOOLS to 0xFF4FB39A,
+        io.github.matiyaaa.fuse.ui.shell.store.AppStoreOps.COMPANIONS to 0xFFE0702E,
         io.github.matiyaaa.fuse.ui.shell.store.AppStoreOps.OTHER to 0xFF8A93A6,
     )
 
@@ -97,6 +100,13 @@ internal object DesktopCatalogue {
             EMULATORS, listOf("xbox"), repo = "https://github.com/xemu-project/xemu", emulator = "xemu",
         ),
         DesktopEntry(
+            // Its releases carry a Windows build Fuse can install (xenia_canary_windows_.zip); the
+            // Linux one is a tarball, not an AppImage, so it is left to its page there.
+            "xenia", "Xenia Canary", "Xenia Canary team", "Xbox 360, the Canary branch that runs most games.",
+            EMULATORS, listOf("xbox360"), repo = "https://github.com/xenia-canary/xenia-canary-releases", emulator = "xenia",
+            prereleases = true, hosts = setOf(Host.WINDOWS),
+        ),
+        DesktopEntry(
             "ppsspp", "PPSSPP", "Henrik Rydgård", "PlayStation Portable. Its builds are on its own site.",
             EMULATORS, listOf("psp"), emulator = "ppsspp", page = "https://www.ppsspp.org/download/",
         ),
@@ -111,6 +121,13 @@ internal object DesktopCatalogue {
         DesktopEntry(
             "moonlight", "Moonlight", "Moonlight team", "Streams games from your PC, from Sunshine or GeForce Experience.",
             STREAMING, emptyList(), repo = "https://github.com/moonlight-stream/moonlight-qt", inFuse = InFuse.STREAMING,
+        ),
+        DesktopEntry(
+            // Cartridge runs on Linux (and Android): its releases carry Cartridge-x86_64.AppImage.
+            "cartridge", "Cartridge", "abdu2304", "Your RomM library on this computer: the games you pick land in the right system folders, firmware included.",
+            io.github.matiyaaa.fuse.ui.shell.store.AppStoreOps.COMPANIONS, emptyList(),
+            repo = "https://github.com/${io.github.matiyaaa.fuse.integrations.cartridge.CartridgeProtocol.RELEASE_REPO}",
+            inFuse = InFuse.TOOL, hosts = setOf(Host.LINUX),
         ),
         DesktopEntry(
             "srm", "Steam ROM Manager", "SteamGridDB", "Adds your emulated games to Steam, with their art.",

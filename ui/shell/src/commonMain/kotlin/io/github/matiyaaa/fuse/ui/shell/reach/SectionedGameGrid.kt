@@ -43,6 +43,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.room
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
 
 /** One game in a [SectionedGameGrid]: its card (for the room behind the page), its tile, and what opening it does. */
 class SectionItem(
@@ -118,7 +119,7 @@ fun SectionedGameGrid(
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             state = grid,
-            modifier = Modifier.fillMaxSize().padding(top = Size.hudHeight),
+            modifier = Modifier.fillMaxSize().padding(top = Size.hudHeight).dragScroll(grid),
             contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.m, bottom = Size.hintHeight + Space.l),
             horizontalArrangement = Arrangement.spacedBy(gap),
             verticalArrangement = Arrangement.spacedBy(gap),

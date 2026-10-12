@@ -122,7 +122,8 @@ internal class DefaultReachOps(
     /** Every library game's ids with the household, the one it is known by first. */
     private val householdIds: suspend () -> Map<Long, List<String>>,
     private val choiceFor: suspend (Game) -> EmulatorChoice,
-    private val fillRemote: (List<GameId>) -> Unit,
+    /** Finds art and details for these games; true for one a person has open. */
+    private val fillRemote: (List<GameId>, Boolean) -> Unit,
     /** Downloads shows other devices' transfers through this. */
     private val showRemote: (List<TransferRow>, (TransferRow, TransferAction) -> Unit) -> Unit,
 ) : ReachOps {
@@ -359,12 +360,18 @@ internal class DefaultReachOps(
         }
     }
 
+    /** Games already sent to be looked for while Fuse runs, so a list redrawn isn't sent again. */
+    private val lookedFor: MutableSet<GameId> = java.util.Collections.synchronizedSet(HashSet())
+
     private val lists = combine(index, redraw, ctx.gameArtFound, transfers.items) { idx, _, _, _ -> idx }
         .mapLatest { idx ->
             val records = games.allRecords()
             val sorted = idx.groups.sortedBy { (records[it.key]?.titleCustom ?: it.best.title).lowercase() }
-            // What shows first gets its art first, as RomM's games do.
-            fillRemote(idx.groups.sortedByDescending { it.addedAt }.take(60).map { it.id })
+            // Every game gets its art and details looked for, once each while Fuse runs, the newest
+            // first (what the lists show first); a game already looked for is remembered as for the
+            // library, so this asks nothing of games that have theirs or that sources didn't have.
+            val waiting = idx.groups.sortedByDescending { it.addedAt }.map { it.id }.filter { lookedFor.add(it) }
+            fillRemote(waiting, false)
             toGames(sorted)
         }
         .flowOn(Dispatchers.Default)
@@ -399,7 +406,7 @@ internal class DefaultReachOps(
 
     private fun detail(id: GameId): Flow<GameDetail?> {
         val owner = MediaOwner.OfGame(id)
-        fillRemote(listOf(id))
+        fillRemote(listOf(id), true)
         return combine(index, redraw, ctx.data.media.observe(owner)) { _, _, m -> m }.mapLatest { media ->
             val key = games.keyOf(id) ?: return@mapLatest null
             val entry = bestEntry(key) ?: return@mapLatest null

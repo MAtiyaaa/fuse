@@ -42,6 +42,9 @@ sealed interface Route {
     /** An app's page in the Store, by its key in the catalogue. */
     data class StoreApp(val key: String) : Route
 
+    /** Every installed app's updates in one place (see StoreUpdatesScreen). */
+    data object StoreUpdates : Route
+
     /** Jellyfin: its settings, an item's page, a library's grid, and Jellyfin's own search. */
     data object JellyfinSettings : Route
 
@@ -80,6 +83,9 @@ sealed interface Route {
 
     /** One system's games on the household's other devices (every system's when [platform] is null). */
     data class HouseholdGames(val platform: io.github.matiyaaa.fuse.model.PlatformId?, val name: String) : Route
+
+    /** Every game of one system from everywhere (this device, RomM, other devices), each once: what All's systems open. */
+    data class SystemEverywhere(val platform: io.github.matiyaaa.fuse.model.PlatformId, val name: String, val rommSlug: String?) : Route
 
     /** Where play time went: today, this week, this month, per day, per game and per system. */
     data object PlayTime : Route

@@ -132,4 +132,9 @@ enum class AchievementSource(val label: String, val noun: String, val hasPoints:
     RETRO_ACHIEVEMENTS("RetroAchievements", "Achievements", true),
     STEAM("Steam", "Achievements", false),
     TROPHIES("RPCS3", "Trophies", true),
+    SHADPS4("shadPS4", "Trophies", true),
+    VITA3K("Vita3K", "Trophies", true),
+
+    /** Xbox 360 achievements, with their gamerscore as points. */
+    XENIA("Xenia", "Achievements", true),
 }

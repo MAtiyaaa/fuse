@@ -53,6 +53,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Radius
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import kotlin.math.roundToInt
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
 
 /**
  * A game's achievements in one slim bar: a trophy (a badge once mastered), how many are unlocked and
@@ -123,8 +124,10 @@ internal fun AchievementsSheet(store: FuseStore, id: GameId) {
         Column(Modifier.fillMaxSize().padding(top = CompanionTopBar)) {
             AchievementSummary(state, detail?.game?.displayTitle ?: state.title, Modifier.padding(horizontal = Space.l).widthIn(max = 720.dp).fillMaxWidth())
             Spacer(Modifier.height(Space.m))
+            val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
             LazyColumn(
-                Modifier.fillMaxWidth().weight(1f).fadingEdges(top = 12.dp, bottom = 24.dp),
+                Modifier.fillMaxWidth().weight(1f).fadingEdges(top = 12.dp, bottom = 24.dp).dragScroll(scroll),
+                state = scroll,
                 contentPadding = PaddingValues(start = Space.l, end = Space.l, top = Space.xs, bottom = Space.l),
                 verticalArrangement = Arrangement.spacedBy(Space.xs),
             ) {

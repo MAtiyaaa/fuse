@@ -81,6 +81,8 @@ import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 import kotlinx.coroutines.delay
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
+import androidx.compose.foundation.gestures.Orientation
 
 /**
  * True when the menus are on the other screen and this one's pages can leave out what the
@@ -154,7 +156,7 @@ fun ShowcaseApp(store: FuseStore, platform: PlatformUi, displaySession: io.githu
             LaunchedEffect(playingId) { if (playingId != null && pager.currentPage != 0) pager.animateScrollToPage(0) }
             // A film here takes every touch (its timeline drags sideways), so the pages hold still.
             val filmShown = player?.item != null && !io.github.matiyaaa.fuse.ui.player.PlayerPlacement.withMenus && pager.currentPage == 0
-            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1, userScrollEnabled = !filmShown) { page ->
+            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize().dragScroll(pager, Orientation.Horizontal, enabled = !filmShown, flingBehavior = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(pager)), beyondViewportPageCount = 1, userScrollEnabled = !filmShown) { page ->
                 when (page) {
                     0 -> Box(Modifier.fillMaxSize()) {
                         BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = Space.gutter, vertical = Space.l)) {

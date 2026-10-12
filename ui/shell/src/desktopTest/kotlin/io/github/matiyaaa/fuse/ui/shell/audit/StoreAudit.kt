@@ -11,8 +11,11 @@ import io.github.matiyaaa.fuse.model.PadButton
 internal fun AuditDriver.addonsScreens() {
     val store = androidStore
     scenario("addons", "store first run") {
+        // Cartridge is on here, so the Store tab is moved first, as a person would.
+        store.updatePrefs { it.copy(addonsOrder = listOf("STORE")) }
         store.updatePrefs { it.copy(storeVariant = null) }
-        show(store)
+        // The editions differ only for a second screen, so the choice is asked on a two-screen device.
+        show(store, AuditPlatform(size, features = io.github.matiyaaa.fuse.ui.shell.screenshots.ScreenshotPlatform.features.copy(secondScreen = true)))
         tab(Destination.CARTRIDGE)
         waitFor("Choose your Store")
         shoot("choose an edition, Standard recommended")
@@ -26,32 +29,69 @@ internal fun AuditDriver.addonsScreens() {
     }
 
     scenario("addons", "store shelves") {
+        // Cartridge is on here, so the Store tab is moved first, as a person would; Cartridge was
+        // chosen for RomM in setup, so the Store puts it in the spotlight.
+        store.updatePrefs { it.copy(addonsOrder = listOf("STORE"), rommAnswer = "CARTRIDGE") }
         show(store)
         tab(Destination.CARTRIDGE)
         waitFor("Standard edition")
-        tap(PadButton.DPAD_DOWN)
         settle(1_200)
-        shoot("updates shelf focused")
+        shoot("the Store, opened")
+        tap(PadButton.DPAD_DOWN)
+        settle(900)
+        shoot("the spotlight: what your library needs most")
+        tap(PadButton.DPAD_DOWN, 3)
+        settle(900)
+        shoot("emulators by maker", 900)
         tap(PadButton.X)
         waitFor("View source")
         shoot("an app's options")
         tap(PadButton.B)
         waitGone("View source")
-        tap(PadButton.DPAD_DOWN)
-        shoot("next shelf")
-        tap(PadButton.DPAD_DOWN, 2)
-        shoot("a category shelf", 900)
         tap(PadButton.DPAD_RIGHT, 3)
         shoot("further along a shelf")
+        store.updatePrefs { it.copy(rommAnswer = "") }
     }
 
-    scenario("addons", "app page with an update") {
+    scenario("addons", "updates in one place") {
+        store.updatePrefs { it.copy(addonsOrder = listOf("STORE")) }
         show(store)
         tab(Destination.CARTRIDGE)
         waitFor("Standard edition")
-        tap(PadButton.DPAD_DOWN)
-        settle(800)
+        // Search, then Updates along the top row.
+        tap(PadButton.DPAD_RIGHT)
         tap(PadButton.A)
+        waitFor("Update All (2)")
+        settle(900)
+        shoot("every installed app's updates, Update All first")
+        tap(PadButton.DPAD_DOWN, 2)
+        tap(PadButton.A)
+        waitFor("Leave Out of Update All")
+        shoot("an app's choices: now, left out, pre-releases")
+        tapText("Leave Out of Update All")
+        waitFor("Update All (1)")
+        settle(600)
+        shoot("one left out of Update All")
+        // Back as it was, for the scenarios after this one.
+        tap(PadButton.A)
+        waitFor("Put Back in Update All")
+        tapText("Put Back in Update All")
+        waitFor("Update All (2)")
+    }
+
+    scenario("addons", "app page with an update") {
+        store.updatePrefs { it.copy(addonsOrder = listOf("STORE")) }
+        show(store)
+        tab(Destination.CARTRIDGE)
+        waitFor("Standard edition")
+        // Search, then Updates along the top row.
+        tap(PadButton.DPAD_RIGHT)
+        tap(PadButton.A)
+        waitFor("Update All (2)")
+        tap(PadButton.DPAD_DOWN, 2)
+        tap(PadButton.A)
+        waitFor("Details and What's New")
+        tapText("Details and What's New")
         waitFor("What's new")
         shoot("an installed app with an update", 1_200)
         tap(PadButton.DPAD_DOWN, 3)
@@ -60,32 +100,37 @@ internal fun AuditDriver.addonsScreens() {
     }
 
     scenario("addons", "installing") {
+        store.updatePrefs { it.copy(addonsOrder = listOf("STORE"), rommAnswer = "CARTRIDGE") }
         show(store)
         tab(Destination.CARTRIDGE)
         waitFor("Standard edition")
-        tap(PadButton.DPAD_DOWN, 4)
+        tap(PadButton.DPAD_DOWN)
         settle(800)
+        // The spotlight's own button installs it, right there.
         tap(PadButton.A)
-        waitFor("Install")
-        settle(1_200)
-        shoot("an app not installed")
-        tap(PadButton.A)
-        waitFor("Downloading")
-        shoot("downloading, 42 percent", 1_500)
+        waitFor("Cancel")
+        shoot("downloading from the spotlight", 1_500)
+        tap(PadButton.X)
+        waitFor("Details")
+        tapText("Details")
+        waitFor("Cancel")
+        settle(900)
+        shoot("its page while it downloads")
         tap(PadButton.B)
         settle(900)
-        shoot("the shelf with the download and the top line's activity")
+        shoot("the Store with the download and the top line's activity")
+        store.updatePrefs { it.copy(rommAnswer = "") }
     }
 
     scenario("addons", "tabs and cartridge") {
+        // The usual order: Cartridge first, then the Store.
+        store.updatePrefs { it.copy(addonsOrder = emptyList()) }
         show(store)
         tab(Destination.CARTRIDGE)
-        waitFor("Standard edition")
-        tap(PadButton.DPAD_UP)
-        shoot("Addons tabs focused")
-        tap(PadButton.DPAD_LEFT)
         waitFor("Your RomM library, on this device")
         shoot("Cartridge inside Addons, not installed")
+        tap(PadButton.DPAD_UP)
+        shoot("Addons tabs focused")
         // Held A lifts the tab; Right carries it past the Store, and the order is kept.
         hold(PadButton.A)
         waitFor("Done")

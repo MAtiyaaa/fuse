@@ -42,6 +42,8 @@ import io.github.matiyaaa.fuse.ui.shell.romm.liftRoom
 import io.github.matiyaaa.fuse.ui.shell.store.HouseholdGame
 import io.github.matiyaaa.fuse.ui.shell.store.HouseholdSystem
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
+import androidx.compose.foundation.gestures.Orientation
 
 /** Where another device's game is, in a few words: "On Gaming PC", "On Thor and Deck". */
 fun holdersText(g: HouseholdGame): String {
@@ -91,6 +93,7 @@ fun HouseholdShelf(
         ShelfTitle(title, icon, trailing)
         LazyRow(
             state = state,
+            modifier = Modifier.dragScroll(state, Orientation.Horizontal),
             contentPadding = PaddingValues(horizontal = Space.gutter, vertical = liftRoom(tile)),
             horizontalArrangement = Arrangement.spacedBy(LocalTileMetrics.current.gap),
         ) {
@@ -125,7 +128,7 @@ fun HouseholdSystemShelf(systems: List<HouseholdSystem>, library: Map<PlatformId
     LaunchedEffect(selected) { if (selected >= 0) state.animateScrollToItem(maxOf(0, selected - 1)) }
     Column {
         ShelfTitle("Systems", FuseIcons.Chip, "${systems.size}")
-        LazyRow(state = state, contentPadding = PaddingValues(horizontal = Space.gutter, vertical = liftRoom(tile)), horizontalArrangement = Arrangement.spacedBy(LocalTileMetrics.current.gap)) {
+        LazyRow(state = state, modifier = Modifier.dragScroll(state, Orientation.Horizontal), contentPadding = PaddingValues(horizontal = Space.gutter, vertical = liftRoom(tile)), horizontalArrangement = Arrangement.spacedBy(LocalTileMetrics.current.gap)) {
             itemsIndexed(systems, key = { _, s -> s.platform.value }) { i, s ->
                 Column(Modifier.width(tile)) {
                     val card = householdSystemCard(s, library)

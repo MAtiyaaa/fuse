@@ -198,6 +198,34 @@ class DesktopStoreTest {
     }
 
     /**
+     * DuckStation here came with the system (on the PATH under /usr): the Store never offers to
+     * update it with a copy of its own beside it, whatever GitHub has. Leaving an app out of Update
+     * All is kept, and a channel is offered only where a project publishes stable releases.
+     */
+    @Test
+    fun aProgramTheSystemInstalledIsNeverDoubledAndChoicesAreKept(): Unit = runBlocking {
+        val (services, _) = services()
+        val store = createFuseStore(services, scope)
+        val ops = store.appStore
+        ops.open()
+        eventually("found") { ops.state.value.installed["duckstation"] }
+        assertEquals(Managed.SYSTEM, ops.state.value.managedBy("duckstation"))
+        ops.check("duckstation", force = true)
+        eventually("release") { ops.state.value.releases["duckstation"] as? ReleaseCheck.Ready }
+        assertTrue(ops.state.value.updates.none { it.key == "duckstation" })
+
+        ops.setExcluded("duckstation", true)
+        eventually("left out") { true.takeIf { "duckstation" in ops.state.value.excluded } }
+        assertTrue("duckstation" in services.data.settings.current().store.excluded, "kept in settings")
+        ops.setExcluded("duckstation", false)
+        eventually("back") { true.takeIf { "duckstation" !in ops.state.value.excluded } }
+
+        // DuckStation only publishes rolling pre-releases; PCSX2 has stable ones to choose against.
+        assertFalse("duckstation" in ops.state.value.channels)
+        assertTrue("pcsx2" in ops.state.value.channels)
+    }
+
+    /**
      * A program found on this computer that Fuse didn't install (DuckStation on the PATH here) is
      * removed too: the account's password is asked for when only an administrator can, asked again
      * when it was wrong, and Back gives up without removing anything.

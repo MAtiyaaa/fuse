@@ -185,9 +185,10 @@ class AppStoreTest {
     fun theCatalogueLoadsAndIsKeptForOffline(): Unit = runBlocking {
         val (store, _) = ready()
         val c = store.appStore.state.value.catalogue!!
-        // The pack's five, and Fuse's own companion (Syncthing-Fork) in every edition.
-        assertEquals(6, c.apps.size)
+        // The pack's five, and Fuse's own companions (Syncthing-Fork, Cartridge) in every edition.
+        assertEquals(7, c.apps.size)
         assertTrue(c.apps.any { it.id == "com.github.catfriend1.syncthingfork" })
+        assertTrue(c.apps.any { it.id == io.github.matiyaaa.fuse.integrations.cartridge.CartridgeProtocol.PACKAGE_NAME && it.sourceUrl == "https://github.com/MAtiyaaa/cartridge" })
         assertEquals("v7.18.0", c.packVersion)
         assertEquals(Availability.TRACK_ONLY, c.apps.first { it.id == "com.example.epsilon" }.availability)
         val data = FuseData(DesktopDatabase.open(File(cache, "fuse.db").absolutePath))
@@ -199,7 +200,7 @@ class AppStoreTest {
         online = false
         val again = createFuseStore(services(), scope)
         val offline = eventually("cached catalogue") { again.appStore.state.value.catalogue }
-        assertEquals(6, offline.apps.size)
+        assertEquals(7, offline.apps.size)
         again.appStore.refresh()
         eventually("refresh problem") { again.appStore.state.value.refreshProblem }
         assertNotNull(again.appStore.state.value.catalogue)

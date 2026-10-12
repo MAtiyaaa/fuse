@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -89,6 +88,7 @@ import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.FuseMark
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragVerticalScroll
 
 /** A button at the bottom of a step. [note] says why it is off, under the buttons, when it is. */
 data class StepAction(val label: String, val primary: Boolean = false, val enabled: Boolean = true, val note: String? = null, val run: () -> Unit)
@@ -382,7 +382,7 @@ private fun StepView(app: AppState, step: Step, state: OnboardingState, isCurren
     }
     if (layout.stacked) {
         Column(
-            Modifier.fillMaxSize().ringRoom().verticalScroll(rememberScrollState()).padding(RING_ROOM),
+            Modifier.fillMaxSize().ringRoom().dragVerticalScroll(rememberScrollState()).padding(RING_ROOM),
             verticalArrangement = Arrangement.spacedBy(Space.xl),
         ) {
             Spacer(Modifier.height(Space.s))
@@ -397,7 +397,7 @@ private fun StepView(app: AppState, step: Step, state: OnboardingState, isCurren
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
             // A short screen gives the words more of the width, so the buttons keep to one line.
             Box(Modifier.weight(if (layout.short) 1.15f else 0.92f).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
-                words(Modifier.ringRoom().verticalScroll(scroll).padding(RING_ROOM))
+                words(Modifier.ringRoom().dragVerticalScroll(scroll).padding(RING_ROOM))
             }
             Spacer(Modifier.width(if (layout.rail) Space.x3 else if (layout.short) Space.xl else Space.xxl))
             stage(Modifier.weight(if (layout.short) 0.85f else 1.08f).fillMaxHeight())

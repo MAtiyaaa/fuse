@@ -256,6 +256,15 @@ class MoreAdaptersTest {
     }
 
     @Test
+    fun xeniaOnLinuxKeepsItsContentInTheDataFolder() {
+        // Without XDG_DATA_HOME, Xenia's user folder is ~/.local/share (filesystem_posix.cc), not the home folder.
+        val content = "/home/mo/.local/share/Xenia/content"
+        val env = FakeEnv("LINUX", "/home/mo", files = mapOf("$content/E030000012345678/4D5307E6/" to ""))
+        val spot = SaveAdapters.forEmulator("xenia")!!.locate(q("xbox360", "/roms/x360/Halo 3 [4D5307E6].iso", "xenia"), env).single()
+        assertEquals("$content/E030000012345678/4D5307E6/00000001", spot.root)
+    }
+
+    @Test
     fun conversionsKeepTheSave() {
         val raw = ByteArray(0x80000) { (it % 251).toByte() }
         val footer = ByteArray(122).also { "|-DESMUME SAVE-|".encodeToByteArray().copyInto(it, 122 - 16) }

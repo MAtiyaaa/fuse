@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -62,6 +61,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import kotlinx.coroutines.launch
 import kotlinx.datetime.offsetAt
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragVerticalScroll
 
 /**
  * A save conflict on screen: the game it is about, and what to do once the person picks
@@ -126,7 +126,7 @@ internal fun SaveConflictOverlay(app: AppState) {
                     .widthIn(min = minOf(440.dp, room), max = minOf(720.dp, room))
                     .heightIn(max = maxHeight - Space.l * 2),
             ) {
-                Column(Modifier.verticalScroll(rememberScrollState()).padding(if (compact) Space.l else Space.xl)) {
+                Column(Modifier.dragVerticalScroll(rememberScrollState()).padding(if (compact) Space.l else Space.xl)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             Modifier.size(if (compact) 44.dp else 52.dp).clip(RoundedCornerShape(Fuse.geometry.control)).background(c.accent.copy(alpha = 0.14f)),

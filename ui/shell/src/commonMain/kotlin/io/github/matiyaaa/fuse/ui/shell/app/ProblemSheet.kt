@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -62,6 +61,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.ProblemKind
 import io.github.matiyaaa.fuse.ui.shell.store.Severity
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragVerticalScroll
 
 /**
  * A [Problem] on screen, with what it is about: the game it happened to ([card]) and how to try
@@ -263,7 +263,7 @@ internal fun ProblemOverlay(app: AppState) {
                             Spacer(Modifier.height(Space.m))
                             Box(
                                 Modifier.fillMaxWidth().heightIn(max = 140.dp).clip(RoundedCornerShape(Fuse.geometry.control))
-                                    .background(c.text.copy(alpha = 0.05f)).padding(Space.m).verticalScroll(rememberScrollState()),
+                                    .background(c.text.copy(alpha = 0.05f)).padding(Space.m).dragVerticalScroll(rememberScrollState()),
                             ) {
                                 FText(p.details.orEmpty(), Fuse.type.caption, color = c.textMuted, maxLines = 40)
                             }

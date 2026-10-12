@@ -186,7 +186,10 @@ internal fun storeAction(app: AppState, state: StoreState, item: StoreApp): Stor
         null -> when {
             item.availability == Availability.TRACK_ONLY ->
                 StoreAction("View releases", FuseIcons.External, ButtonKind.SECONDARY) { open(release?.pageUrl ?: item.sourceUrl) }
-            installed && state.standing(key) == Standing.UPDATE && item.availability == Availability.INSTALLABLE && release?.file != null ->
+            // Only Fuse's own installs update from here: a Flatpak, the system's or the person's own copy is never doubled.
+            installed && state.managedBy(key) == io.github.matiyaaa.fuse.ui.shell.store.Managed.FLATPAK && state.standing(key) == Standing.UPDATE ->
+                StoreAction("Update with Flatpak", FuseIcons.CircleArrowDown, ButtonKind.PRIMARY) { ops.updateOther(key) }
+            installed && state.managedBy(key) == io.github.matiyaaa.fuse.ui.shell.store.Managed.FUSE && state.standing(key) == Standing.UPDATE && item.availability == Availability.INSTALLABLE && release?.file != null ->
                 StoreAction("Update" + (release.version?.let { " to ${it.removePrefix("v")}" } ?: ""), FuseIcons.CircleArrowDown, ButtonKind.PRIMARY) { ops.install(key) }
             installed -> StoreAction("Open", FuseIcons.Play, ButtonKind.PRIMARY) {
                 if (!ops.launch(key)) app.toasts.show("${item.name} has nothing to open.")

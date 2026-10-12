@@ -1,7 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -68,6 +67,7 @@ import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 import io.github.matiyaaa.fuse.ui.fuseline.rememberGlide
 import io.github.matiyaaa.fuse.ui.fuseline.shrinkHorizontally
 import io.github.matiyaaa.fuse.ui.fuseline.tween
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragHorizontalScroll
 
 /** One tab of [ViewTabs]. [warn] tints it as a warning; [badge] is a small count shown after the label. */
 data class ViewTab(
@@ -147,7 +147,7 @@ fun ViewTabs(
     Row(
         modifier
             .fadingEdgesHorizontal(start = scroll.value > 0, end = scroll.value < scroll.maxValue, width = Space.xxl)
-            .horizontalScroll(scroll)
+            .dragHorizontalScroll(scroll)
             // Drawn across the padded row, so the bar sits in the room under the tabs.
             .drawBehind {
                 val g = glide ?: return@drawBehind

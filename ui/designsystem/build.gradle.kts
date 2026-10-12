@@ -13,6 +13,8 @@ kotlin {
             dependencies {
                 // Pixel tests execute real Skia; compose-ui alone supplies no platform native.
                 implementation(compose.desktop.currentOs)
+                // Input tests drive real gestures through a composition.
+                implementation(libs.compose.ui.test)
             }
         }
     }

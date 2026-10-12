@@ -76,6 +76,7 @@ import io.github.matiyaaa.fuse.ui.shell.components.ViewTab
 import io.github.matiyaaa.fuse.ui.shell.components.ViewTabs
 import io.github.matiyaaa.fuse.ui.shell.store.AppCard
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
 
 private val allFilters = listOf(
     AppFilter.PINNED to "Pinned", AppFilter.EMULATORS to "Emulators", AppFilter.STREAMING to "Streaming",
@@ -199,7 +200,7 @@ fun AppsScreen(app: AppState) {
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(columns),
                         state = grid,
-                        modifier = Modifier.fadingEdges(grid, top = Space.l, bottom = 0.dp),
+                        modifier = Modifier.fadingEdges(grid, top = Space.l, bottom = 0.dp).dragScroll(grid),
                         // Room above the first row for a lifted tile, and below the last for the hints.
                         contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.l, bottom = Size.hintHeight + Space.x4),
                         horizontalArrangement = Arrangement.spacedBy(Space.xl),

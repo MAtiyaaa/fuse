@@ -7,6 +7,7 @@ import io.github.matiyaaa.fuse.model.Host
 import io.github.matiyaaa.fuse.ui.shell.store.DesktopInstaller
 import io.github.matiyaaa.fuse.ui.shell.store.DownloadSink
 import io.github.matiyaaa.fuse.ui.shell.store.RemoveOutcome
+import io.github.matiyaaa.fuse.ui.shell.store.UpdateOutcome
 import io.github.matiyaaa.fuse.desktop.system.Processes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -148,6 +149,28 @@ internal class DesktopStoreInstaller(
         return asAdministrator(command, name, password)
     }
 
+    /**
+     * A Flatpak, updated by Flatpak from its own remote (Flathub, usually): never a second copy of
+     * Fuse's beside it. One installed for every account needs an administrator, as removing does.
+     */
+    override suspend fun updateOther(appId: String, name: String, password: String?): UpdateOutcome = withContext(Dispatchers.IO) {
+        if (os != DesktopOs.LINUX || !DesktopLauncher.isFlatpakId(appId)) return@withContext UpdateOutcome.Failed("$name is kept up to date the way it was installed.")
+        val flatpak = Processes.which("flatpak") ?: return@withContext UpdateOutcome.Failed("Flatpak isn't here, so Fuse can't update $name.")
+        val installation = Processes.run(listOf(flatpak, "list", "--app", "--columns=application,installation"), timeoutMs = 20_000)?.stdout
+            ?.lineSequence()?.map { it.split('\t').map(String::trim) }?.firstOrNull { it.firstOrNull() == appId }?.getOrNull(1)
+            ?: return@withContext UpdateOutcome.Failed("$name isn't installed with Flatpak any more.")
+        val command = listOf(flatpak, "update", "--noninteractive", "-y", if (installation == "user") "--user" else "--system", appId)
+        if (installation == "user") {
+            val r = Processes.run(command, timeoutMs = UPDATE_MS, withErrors = true)
+            return@withContext if (r?.exitCode == 0) UpdateOutcome.Updated else UpdateOutcome.Failed("Flatpak couldn't update $name${detail(r)}")
+        }
+        when (val r = asAdministrator(command, name, password, UPDATE_MS)) {
+            RemoveOutcome.Removed -> UpdateOutcome.Updated
+            is RemoveOutcome.NeedsPassword -> UpdateOutcome.NeedsPassword(r.wrong)
+            is RemoveOutcome.Failed -> UpdateOutcome.Failed(r.message.replace("couldn't be removed", "couldn't be updated"))
+        }
+    }
+
     /** An AppImage: its file, deleted; one in a folder only an administrator can change, through sudo. */
     private fun removeAppImage(file: File, name: String, password: String?): RemoveOutcome {
         if (!file.exists() || file.delete()) return RemoveOutcome.Removed
@@ -158,16 +181,16 @@ internal class DesktopStoreInstaller(
      * Runs [command] as an administrator with sudo: at once where sudo needs no password here, else
      * with [password] given on sudo's input (never on its command line, never kept or logged).
      */
-    private fun asAdministrator(command: List<String>, name: String, password: String?): RemoveOutcome {
+    private fun asAdministrator(command: List<String>, name: String, password: String?, timeoutMs: Long = REMOVE_MS): RemoveOutcome {
         val sudo = Processes.which("sudo") ?: return RemoveOutcome.Failed("Only an administrator can remove $name, and this computer has no sudo.")
         // Allowed without a password (a rule that lets this account): no need to ask.
         if (password == null) {
-            val free = Processes.run(listOf(sudo, "-n", "--") + command, timeoutMs = REMOVE_MS, withErrors = true)
+            val free = Processes.run(listOf(sudo, "-n", "--") + command, timeoutMs = timeoutMs, withErrors = true)
             if (free?.exitCode == 0) return RemoveOutcome.Removed
             return RemoveOutcome.NeedsPassword()
         }
         // -k: never a remembered sign-in; -p "": no prompt text mixed into the output.
-        val r = Processes.run(listOf(sudo, "-S", "-k", "-p", "", "--") + command, timeoutMs = REMOVE_MS, stdin = password + "\n", withErrors = true)
+        val r = Processes.run(listOf(sudo, "-S", "-k", "-p", "", "--") + command, timeoutMs = timeoutMs, stdin = password + "\n", withErrors = true)
             ?: return RemoveOutcome.Failed("Removing $name took too long.")
         if (r.exitCode == 0) return RemoveOutcome.Removed
         val out = r.stdout.lowercase()
@@ -347,6 +370,8 @@ internal class DesktopStoreInstaller(
     private companion object {
         /** How long a removal may take (a Flatpak removing its runtime too). */
         const val REMOVE_MS = 180_000L
+        /** A Flatpak update downloads from its remote: given longer. */
+        const val UPDATE_MS = 900_000L
 
         /** What sudo says when the password was wrong or missing. */
         val SUDO_REFUSED = listOf("incorrect password", "sorry, try again", "no password was provided", "a password is required", "authentication failure")

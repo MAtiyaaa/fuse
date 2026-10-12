@@ -54,6 +54,11 @@ import java.awt.image.BufferedImage
 
 fun main(args: Array<String>) {
     if ("--self-test" in args) kotlin.system.exitProcess(SelfTest.run())
+    // The helper that restarts Steam for a Fuse running inside it (see SteamApplyMain): no window.
+    args.indexOf(io.github.matiyaaa.fuse.desktop.platform.SteamApplyMain.ARG).takeIf { it >= 0 }?.let { at ->
+        val job = args.getOrNull(at + 1) ?: kotlin.system.exitProcess(2)
+        kotlin.system.exitProcess(io.github.matiyaaa.fuse.desktop.platform.SteamApplyMain.run(java.io.File(job)))
+    }
     if ("--sync-host" in args) {
         val dirs = FuseDirs.fromEnvironment().also { it.ensure() }
         kotlin.system.exitProcess(SyncHostMain.run(dirs))

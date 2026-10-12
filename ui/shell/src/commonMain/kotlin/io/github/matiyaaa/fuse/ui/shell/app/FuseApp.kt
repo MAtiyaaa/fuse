@@ -449,6 +449,9 @@ private fun FuseAppContent(
             androidx.compose.ui.platform.LocalLayoutDirection provides direction,
             LocalInputRouter provides router,
             io.github.matiyaaa.fuse.ui.designsystem.input.LocalPointerRouter provides router,
+            // Touch screens on Linux and Windows reach Fuse as the mouse, so a held drag scrolls lists there.
+            io.github.matiyaaa.fuse.ui.designsystem.input.LocalPointerDragScroll provides
+                (platform.host == io.github.matiyaaa.fuse.model.Host.LINUX || platform.host == io.github.matiyaaa.fuse.model.Host.WINDOWS),
             LocalUiSounds provides platform.sounds,
             io.github.matiyaaa.fuse.ui.designsystem.effects.LocalGlassBackdrop provides backdrop,
         ) {
@@ -469,6 +472,7 @@ private fun FuseAppContent(
                                         mouse = ch.type != androidx.compose.ui.input.pointer.PointerType.Touch,
                                         x = ch.position.x, y = ch.position.y,
                                         pressed = e.type == androidx.compose.ui.input.pointer.PointerEventType.Press,
+                                        held = ch.pressed,
                                     )
                                 }
                             }
@@ -948,6 +952,7 @@ private fun PushedPages(app: AppState, current: Route, direction: NavDirection, 
             is Route.GameContent -> io.github.matiyaaa.fuse.ui.shell.game.GameContentScreen(app, route.game)
             is Route.PickFile -> io.github.matiyaaa.fuse.ui.shell.files.FilePickerScreen(app, route.purpose, route.locate, route.licence)
             is Route.StoreApp -> io.github.matiyaaa.fuse.ui.shell.addons.StoreAppScreen(app, route.key)
+            Route.StoreUpdates -> io.github.matiyaaa.fuse.ui.shell.addons.StoreUpdatesScreen(app)
             is Route.MediaPage -> io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaItemScreen(app, route.id)
             is Route.MediaLibrary -> io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaLibraryScreen(app, route.id, route.name, route.kind)
             Route.MediaSearch -> io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaSearchScreen(app)
@@ -965,6 +970,7 @@ private fun PushedPages(app: AppState, current: Route, direction: NavDirection, 
             is Route.RommGames -> io.github.matiyaaa.fuse.ui.shell.romm.RommGamesScreen(app, route.slug, route.name, route.collection)
             Route.HouseholdLibrary -> io.github.matiyaaa.fuse.ui.shell.reach.HouseholdLibraryScreen(app)
             is Route.HouseholdGames -> io.github.matiyaaa.fuse.ui.shell.reach.HouseholdGamesScreen(app, route.platform, route.name)
+            is Route.SystemEverywhere -> io.github.matiyaaa.fuse.ui.shell.library.SystemEverywhereScreen(app, route.platform, route.name, route.rommSlug)
                     is Route.Root -> Unit
                 }
             }

@@ -92,7 +92,9 @@ internal object LaunchProblems {
     /**
      * The emulator didn't start, or stopped as it started. With a [diagnostic] the likely reason is
      * read from what it wrote (see [io.github.matiyaaa.fuse.launch.LaunchDiagnosis]) and the fix
-     * that goes with it offered first; the details hold the command, exit code and output.
+     * that goes with it offered first; the details hold the command, exit code and output. A
+     * [requirement] the computer doesn't meet (see [io.github.matiyaaa.fuse.launch.intelligence.EmulatorRequirements])
+     * is said first where what it wrote doesn't name a reason of its own.
      */
     fun refused(
         emulator: InstalledEmulator,
@@ -103,6 +105,7 @@ internal object LaunchProblems {
         diagnostic: io.github.matiyaaa.fuse.launch.LaunchDiagnostic? = null,
         platform: PlatformId? = null,
         home: String? = null,
+        requirement: String? = null,
     ): Problem {
         val access = android && (message.contains("didn't let", ignoreCase = true) || message.contains("permission", ignoreCase = true))
         val diagnosis = io.github.matiyaaa.fuse.launch.LaunchDiagnosis
@@ -118,6 +121,7 @@ internal object LaunchProblems {
             title = "Couldn't start ${emulator.name}",
             message = when {
                 access -> "Android didn't let Fuse hand this game to ${emulator.name}. This usually means the game's folder hasn't been allowed inside ${emulator.name}: open it and add the folder there."
+                requirement != null && cause in UNMET_SHOWS -> "${emulator.name} may not run on this computer. $requirement."
                 cause != null && cause != io.github.matiyaaa.fuse.launch.LaunchCause.UNKNOWN -> diagnosis.explain(cause, emulator.name)
                 else -> message
             },
@@ -130,9 +134,16 @@ internal object LaunchProblems {
                 ProblemAction.PickEmulator(game = game, label = "Try another emulator").takeIf { fix !is ProblemAction.PickEmulator },
             ),
             details = (diagnostic?.let { diagnosis.report(it, emulator.name, emulator.version, cause!!, home) } ?: "${emulator.name} (${emulator.appId}): $message") +
+                (requirement?.let { "\nRequirement not met: $it." } ?: "") +
                 (goBack?.let { "\nFuse updated ${emulator.name} lately and kept the version before; ${it.label.lowercase()} puts it back." } ?: ""),
         )
     }
+
+    /** Causes a requirement the computer doesn't meet can explain; a missing BIOS or game file is its own reason. */
+    private val UNMET_SHOWS = setOf(
+        null, io.github.matiyaaa.fuse.launch.LaunchCause.UNKNOWN, io.github.matiyaaa.fuse.launch.LaunchCause.CRASH,
+        io.github.matiyaaa.fuse.launch.LaunchCause.GRAPHICS, io.github.matiyaaa.fuse.launch.LaunchCause.LIBRARY,
+    )
 
     fun gone(): Problem = Problem(
         title = "This game is no longer in your library",

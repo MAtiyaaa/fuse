@@ -89,6 +89,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.TransferRow
 import io.github.matiyaaa.fuse.ui.shell.app.TransferSpot
 import io.github.matiyaaa.fuse.ui.shell.app.rememberShownSystems
 import io.github.matiyaaa.fuse.ui.shell.app.transferRoom
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
 
 /**
  * Downloads: everything Fuse moves for the person, in one list. Each transfer is one slim row: its
@@ -202,7 +203,7 @@ fun DownloadsScreen(app: AppState) {
         LazyColumn(
             state = list,
             modifier = Modifier.fillMaxSize().padding(top = Size.hudHeight).padding(horizontal = if (maxWidth < 600.dp) Space.gutterCompact else Space.gutter)
-                .fadingEdges(list, top = Space.l, bottom = Size.hintHeight),
+                .fadingEdges(list, top = Space.l, bottom = Size.hintHeight).dragScroll(list),
             contentPadding = PaddingValues(top = Space.s, bottom = Size.hintHeight + Space.m),
             verticalArrangement = Arrangement.spacedBy(Space.xs),
         ) {
