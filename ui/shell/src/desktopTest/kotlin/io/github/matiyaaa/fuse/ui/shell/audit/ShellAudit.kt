@@ -677,6 +677,29 @@ internal fun AuditDriver.onboardingScreens(exhaustive: Boolean) {
         shoot("Fuse, Steam and Decky as one, checked")
     }
 
+    scenario("onboarding", "steam in game mode") {
+        // Fuse runs inside Steam: adding it restarts Steam, and Fuse closes and opens again with it.
+        val platform = AuditPlatform(size, steam = AuditSteam(open = true, closesFuse = true), decky = AuditDecky(), host = io.github.matiyaaa.fuse.model.Host.LINUX)
+        // Setup from its first step, whatever an earlier scenario left it at.
+        firstRunStore.updatePrefs { it.copy(onboardingStep = "", steam = it.steam.copy(fuseInSteam = false, decky = false)) }
+        show(firstRunStore, platform)
+        waitFor("Welcome to Fuse")
+        tap(PadButton.A)
+        waitFor("Integrate Fuse with Steam?")
+        tap(PadButton.A)
+        waitFor("Decky")
+        settle(800)
+        tapText("Not now")
+        settleUntil("Add Fuse to your Steam library?", timeoutMs = 30_000)
+        settle(1_200)
+        shoot("Game Mode: restart Steam to add Fuse, or wait")
+        tap(PadButton.A)
+        waitFor("Restart Steam and Fuse?")
+        settle(800)
+        shoot("asked before Steam and Fuse restart")
+        tap(PadButton.B)
+    }
+
     scenario("onboarding", "your game library") {
         // Setup picks up where it was left: here, the step for where else games come from.
         firstRunStore.updatePrefs { it.copy(onboardingStep = "romm") }

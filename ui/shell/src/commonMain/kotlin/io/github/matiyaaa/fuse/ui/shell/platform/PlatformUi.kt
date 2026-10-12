@@ -161,6 +161,12 @@ interface SteamIntegration {
     /** A queued [addWhenSteamCloses] still waiting for Steam to close. */
     val waitingForSteam: Boolean get() = false
 
+    /**
+     * Closing Steam closes Fuse too (Game Mode, or Fuse started from its Steam entry). Restarting
+     * Steam then hands the change to a helper that opens Fuse again afterwards, so say so first.
+     */
+    val closesFuse: Boolean get() = false
+
     /** Takes Fuse's own entry (and only Fuse's) out of Steam's library; its art stays for the person to delete. */
     suspend fun removeFuse(): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
     /** The games Fuse put in Steam's library here, by Fuse's game id, for any Steam user. */
@@ -182,6 +188,16 @@ interface SteamIntegration {
         art: Map<Long, io.github.matiyaaa.fuse.library.steam.SteamArt>,
         collections: Boolean,
     ): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
+
+    /**
+     * Like [addGames], but restarts Steam to put them in now rather than waiting for it to close:
+     * never while a game runs. With [closesFuse], Fuse closes with Steam and opens again after.
+     */
+    suspend fun addGamesRestartingSteam(
+        games: List<io.github.matiyaaa.fuse.library.steam.SteamGameEntry>,
+        art: Map<Long, io.github.matiyaaa.fuse.library.steam.SteamArt>,
+        collections: Boolean,
+    ): Result<String> = addGames(games, art, collections)
 
     /** Games waiting for Steam to close before they go into its library. */
     val waitingForSteamGames: Boolean get() = false

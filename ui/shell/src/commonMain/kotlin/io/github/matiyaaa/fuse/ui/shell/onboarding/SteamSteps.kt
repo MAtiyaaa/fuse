@@ -205,22 +205,21 @@ private fun SteamFlow.addStep(steam: io.github.matiyaaa.fuse.ui.shell.platform.S
             look()
             when {
                 !steamOpen -> done(steam.addFuse())
-                steam.gameMode -> {
-                    // Steam is the whole session in Game Mode: it is never closed from here.
-                    done(steam.addWhenSteamCloses())
-                    queued = steam.waitingForSteam
-                }
                 else -> {
                     busy = null
+                    // In Game Mode (or started from Steam) Fuse closes with Steam: a helper of Fuse's
+                    // restarts Steam and opens Fuse again, here, where setup left off.
+                    val withFuse = steam.closesFuse
                     app.confirm = ConfirmSpec(
-                        "Close Steam for a moment?",
-                        "Steam writes its library when it quits, so Fuse adds itself while Steam is closed, then opens Steam again. A game running in Steam is never closed. Or Fuse can wait until you close Steam yourself.",
-                        "Close and add",
+                        if (withFuse) "Restart Steam and Fuse?" else "Close Steam for a moment?",
+                        if (withFuse) "Steam writes its library when it quits, so Steam closes, Fuse adds itself, and Steam comes back. Fuse closes with it and opens again where setup left off. A game running in Steam is never closed. To wait for Steam to close by itself instead, cancel and choose Add when Steam closes."
+                        else "Steam writes its library when it quits, so Fuse adds itself while Steam is closed, then opens Steam again. A game running in Steam is never closed. To wait for you to close Steam instead, cancel and choose Add when Steam closes.",
+                        if (withFuse) "Restart Steam" else "Close and add",
                     ) {
                         busy = "steam"
                         app.scope.launch {
                             if (steam.gameRunning()) error = "A game is running in Steam. Fuse never closes it: add Fuse when Steam closes instead."
-                            else done(steam.addForSetup())
+                            else steam.addForSetup().also { r -> if (withFuse) r.onSuccess { app.toasts.show(it) } }.let { done(it) }
                             busy = null
                             look()
                         }
@@ -251,7 +250,7 @@ private fun SteamFlow.addStep(steam: io.github.matiyaaa.fuse.ui.shell.platform.S
             busy == "steam" -> "Fuse writes its entry with its capsule, banner, hero, logo and icon. Your other shortcuts and any art you chose stay as they are."
             inIt -> "Start Fuse from Steam and Gaming Mode, with its own art. Repair it from Settings, Library, Steam whenever you like."
             queued -> "Fuse doesn't close Steam for this. The next time Steam closes while Fuse is open, Fuse puts itself in Steam's library."
-            steam.gameMode -> "In Gaming Mode Steam is never closed from here: Fuse adds itself the next time Steam closes, or add it from Desktop Mode."
+            steam.closesFuse && steamOpen -> "Fuse restarts Steam to add itself, with its capsule, banner, hero, logo and icon. Fuse closes with Steam and opens again right here. Or it waits until Steam closes by itself."
             else -> "Fuse appears in Steam with its own capsule, banner, hero, logo and icon, and starts full screen from Gaming Mode. Your other shortcuts and custom art stay exactly as they are."
         },
         optional = true, icon = FuseIcons.Gamepad, chapter = Chapters.START,
@@ -259,7 +258,7 @@ private fun SteamFlow.addStep(steam: io.github.matiyaaa.fuse.ui.shell.platform.S
         actions = when {
             busy == "steam" -> listOf(StepAction("Adding", enabled = false) {})
             inIt || queued -> listOf(StepAction("Continue", primary = true, run = next))
-            steamOpen && !steam.gameMode -> listOf(
+            steamOpen -> listOf(
                 StepAction("Yes, add Fuse to Steam", primary = true) { add() },
                 StepAction("Add when Steam closes") { wait() },
                 StepAction("No, keep Fuse separate", run = next),

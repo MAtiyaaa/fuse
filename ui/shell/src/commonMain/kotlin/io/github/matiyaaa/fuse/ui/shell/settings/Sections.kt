@@ -1127,29 +1127,36 @@ private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.pla
         ),
         MenuAction(
             "steam.add",
-            when {
-                steam.gameMode -> "Fuse in Game Mode"
-                live.inSteam == true -> "Fuse in Steam"
-                else -> "Add Fuse to Steam"
-            },
+            if (live.inSteam == true) "Fuse in Steam" else "Add Fuse to Steam",
             FuseIcons.Gamepad,
             detail = when {
-                steam.gameMode -> "Fuse is running in Game Mode now. Cartridge opens inside it, over Fuse"
                 steam.waitingForSteam -> "Waiting for Steam to close. Steam isn't closed for it"
                 live.inSteam == true -> "In Steam's library with its art. Select to put back anything missing; what you changed in Steam stays"
                 else -> "So Steam and SteamOS's Game Mode can start Fuse, full screen, with its own art"
             },
-            trailing = if (live.inSteam == true && !steam.gameMode) Trailing.Value("Added") else Trailing.None,
-            enabled = !steam.gameMode && !live.busy,
+            trailing = if (live.inSteam == true) Trailing.Value("Added") else Trailing.None,
+            enabled = !live.busy,
             onSelect = {
-                app.scope.launch {
+                fun run(block: suspend () -> Result<String>) = app.scope.launch {
                     live.busy = true
-                    // Never closes Steam: when it is open, Fuse waits for it to close by itself.
-                    (if (steam.steamRunning()) steam.addWhenSteamCloses() else steam.addFuse())
+                    block()
                         .onSuccess { app.toasts.show(it) }
                         .onFailure { app.toasts.show(it.message ?: "Couldn't add Fuse to Steam", ToastKind.ERROR) }
                     live.refresh(app)
                     live.busy = false
+                }
+                app.scope.launch {
+                    if (!steam.steamRunning()) { run { steam.addFuse() }; return@launch }
+                    // Steam is open: restart it now (asked, never during a game), or wait for it to close.
+                    app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+                        title = "Steam is open",
+                        message = "Steam writes its library when it quits." + if (steam.closesFuse) " Restarting it closes Fuse too; Fuse opens again right here." else "",
+                        icon = FuseIcons.Gamepad,
+                        options = listOf(
+                            MenuAction("steam.add.restart", "Restart Steam and Add", FuseIcons.RotateCcw, detail = "Never while a game is running", onSelect = { app.choice = null; run { steam.addForSetup() } }),
+                            MenuAction("steam.add.wait", "Add When Steam Closes", FuseIcons.Clock, detail = "Steam isn't closed for it", onSelect = { app.choice = null; run { steam.addWhenSteamCloses() } }),
+                        ),
+                    )
                 }
             },
         ),
@@ -2000,10 +2007,18 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
                 add(MenuAction(
                     "dev.steam.rebuild", "Rebuild Steam Integration", FuseIcons.RotateCcw,
                     detail = "Repair Fuse entries and bundled artwork. Custom artwork and unrelated shortcuts stay",
-                    onSelect = { app.scope.launch {
-                        steam.rebuild().onSuccess { app.toasts.show(it) }
-                            .onFailure { app.toasts.show(it.message ?: "Steam could not be repaired", io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.ERROR) }
-                    } },
+                    onSelect = {
+                        fun rebuild() = app.scope.launch {
+                            steam.rebuild().onSuccess { app.toasts.show(it) }
+                                .onFailure { app.toasts.show(it.message ?: "Steam could not be repaired", io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.ERROR) }
+                        }
+                        // Steam restarts for it; from inside Steam, Fuse closes with it, so ask first.
+                        if (steam.closesFuse) app.confirm = io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec(
+                            "Restart Steam and Fuse?",
+                            "Steam closes, Fuse's entries are put right, and Steam comes back. Fuse closes with it and opens again. A game running in Steam is never closed.",
+                            "Restart Steam",
+                        ) { rebuild() } else rebuild()
+                    },
                 ))
             }
         }

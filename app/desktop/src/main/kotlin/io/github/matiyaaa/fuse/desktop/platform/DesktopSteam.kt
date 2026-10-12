@@ -37,8 +37,17 @@ internal class DesktopSteam(
     private val folders: KnownFolders,
     /** What Steam should start for Fuse; the running AppImage or program unless a test says otherwise. */
     private val programPath: () -> String? = ::runningProgram,
+    /** Fuse's data folder, where a restart of Steam leaves its job and its note; null: no restarts from inside Steam. */
+    private val dataDir: String? = null,
 ) : SteamIntegration {
     override val gameMode: Boolean get() = GameMode.active
+
+    /**
+     * Fuse runs inside Steam: Game Mode, or started from its Steam entry (Steam names the entry it
+     * started in the environment). Closing Steam closes this Fuse too, so a helper of its own does
+     * the restart and opens Fuse again (see [SteamApplyMain]).
+     */
+    override val closesFuse: Boolean get() = gameMode || insideSteam(System.getenv())
 
     override suspend fun added(): Boolean = withContext(Dispatchers.IO) {
         val exe = program() ?: return@withContext false
@@ -88,29 +97,72 @@ internal class DesktopSteam(
     override suspend fun rebuild(): Result<String> = lifecycle(repair = true)
     override suspend fun addForSetup(): Result<String> = lifecycle(repair = false)
 
+    /** Closes Steam, writes Fuse's entry while it is closed, and starts Steam again (never while a game runs). */
     private suspend fun lifecycle(repair: Boolean): Result<String> = mutation.withLock {
         withContext(Dispatchers.IO) {
-            if (gameMode) return@withContext Result.failure(IllegalStateException("Open Fuse directly in Desktop Mode to update Steam safely."))
             val executable = program()
             if (executable == null || (!File(executable).canExecute() && !(DesktopOs.isMac && File(executable).isDirectory)))
                 return@withContext Result.failure(IllegalStateException("Run Fuse from its AppImage or installed copy, then retry."))
             if (userConfigDirs(create = false).isEmpty())
                 return@withContext Result.failure(IllegalStateException("Sign in to Steam once before adding Fuse."))
-            val steam = Processes.which("steam")
-            val wasRunning = steamRunningNow()
-            if (wasRunning) {
-                if (steam == null || Processes.run(listOf(steam, "-shutdown"), timeoutMs = 5_000) == null)
-                    return@withContext Result.failure(IllegalStateException("Steam could not be asked to close. Close it and retry."))
-                var tries = 0
-                while (steamRunningNow() && tries++ < 120) delay(250)
-                if (steamRunningNow()) return@withContext Result.failure(IllegalStateException("Steam has not closed yet. Finish its prompts, then retry."))
-            }
-            try {
-                mutateUnlocked(repair)
-            } finally {
-                if (steam != null) runCatching { Processes.builder(listOf(steam)).start() }
+            restart(SteamRestartJob(executable, home = "", note = "", gameMode = gameMode, fuse = if (repair) "repair" else "add")) { mutateUnlocked(repair) }
+        }
+    }
+
+    override suspend fun addGamesRestartingSteam(games: List<SteamGameEntry>, art: Map<Long, SteamArt>, collections: Boolean): Result<String> {
+        if (games.isEmpty()) return Result.success("Nothing to add.")
+        if (!steamRunning()) return addGames(games, art, collections)
+        return mutation.withLock {
+            withContext(Dispatchers.IO) {
+                val executable = program() ?: return@withContext Result.failure(IllegalStateException("Run Fuse from its AppImage or installed copy: Steam starts these games through it."))
+                waitingGames?.cancel()
+                restart(SteamRestartJob(executable, home = "", note = "", gameMode = gameMode, games = SteamRestartJob.games(games, art), collections = collections)) {
+                    writeGames(games, art, collections)
+                }
             }
         }
+    }
+
+    /**
+     * Restarts Steam around [apply]. From outside Steam, here and now; from inside it (see
+     * [closesFuse]) by handing [job] to a helper that outlives Steam and this Fuse, and opens Fuse
+     * again afterwards, where setup or the page it was on picks up.
+     */
+    private fun restart(job: SteamRestartJob, apply: () -> Result<String>): Result<String> {
+        val ops = SystemSteamProcessOps(fuseProgram = { program() }, fuseGameId = { fuseGameId() })
+        if (!closesFuse) return SteamRestarter(ops, gameMode = false).run(reopenFuse = false, apply = apply)
+        if (ops.gameRunning()) return Result.failure(IllegalStateException("A game is running in Steam. Fuse never closes it: try again when it ends, or wait for Steam to close."))
+        val data = dataDir ?: return Result.failure(IllegalStateException("Steam can't be restarted from here. Add it when Steam closes instead."))
+        val file = File(data, "steam-restart.json")
+        val full = job.copy(home = folders.homePath, note = File(data, SteamApplyMain.NOTE).path)
+        runCatching { full.write(file) }.onFailure { return Result.failure(IllegalStateException("Fuse couldn't prepare the restart: ${it.message}")) }
+        if (!SteamApplyMain.launch(full.program, file)) {
+            file.delete()
+            return Result.failure(IllegalStateException("Fuse couldn't start its helper to restart Steam. Add it when Steam closes instead."))
+        }
+        return Result.success("Steam and Fuse are restarting. Fuse opens again in a moment, right where you were.")
+    }
+
+    /** What a helper's job asks for, done now that Steam is closed (see [SteamApplyMain]). */
+    internal fun applyRestartJob(job: SteamRestartJob): Result<String> {
+        val parts = buildList {
+            job.fuse?.let { add(mutateUnlocked(repair = it == "repair")) }
+            if (job.games.isNotEmpty()) add(writeGames(job.games.map { it.entry }, job.games.associate { it.id to it.art }, job.collections))
+        }
+        parts.firstOrNull { it.isFailure }?.let { return it }
+        return Result.success(parts.mapNotNull { it.getOrNull() }.joinToString(" ").ifEmpty { "Nothing needed changing." })
+    }
+
+    /** Steam's id for running Fuse's own entry (`steam://rungameid/...`), from the first Steam user that has it. */
+    internal fun fuseGameId(): Long? {
+        val exe = program()
+        for (dir in userConfigDirs(create = false)) {
+            val bytes = File(dir, "shortcuts.vdf").takeIf { it.isFile }?.let { runCatching { it.readBytes() }.getOrNull() } ?: continue
+            val id = SteamShortcuts.idsOf(bytes) { path, name -> isFuse(path, name, exe) }.firstOrNull() ?: continue
+            // A shortcut's 32-bit id in the top half, and the "shortcut" kind in the bottom.
+            return ((id and 0xFFFFFFFFL) shl 32) or 0x02000000L
+        }
+        return null
     }
 
     private suspend fun mutate(repair: Boolean): Result<String> = mutation.withLock {
@@ -398,6 +450,10 @@ internal class DesktopSteam(
 
     companion object {
         /** What Steam should start: the AppImage Fuse runs from, or the installed program. */
+        /** Steam started this process from one of its entries: it says which in the environment. */
+        internal fun insideSteam(env: Map<String, String>): Boolean =
+            !env["SteamGameId"].isNullOrBlank() || !env["SteamAppId"].isNullOrBlank() || env["SteamClientLaunch"] == "1"
+
         internal fun runningProgram(): String? {
             System.getenv("APPIMAGE")?.takeIf { File(it).isFile }?.let { return it }
             val command = ProcessHandle.current().info().command().orElse(null) ?: return null
@@ -469,11 +525,11 @@ internal class DesktopSteam(
 
     private val watcher = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
 
-    /** A game started by Steam is running: Steam's launch wrapper ("reaper") is alive on Linux. */
-    private fun gameRunningNow(): Boolean = when (DesktopOs.current) {
-        DesktopOs.LINUX -> Processes.run(listOf("pgrep", "-f", "SteamLaunch AppId="), timeoutMs = 3_000)?.exitCode == 0
-        else -> false
-    }
+    /**
+     * A game started by Steam is running: Steam's launch wrapper ("reaper") is alive on Linux. The
+     * wrapper that started Fuse itself, from its Steam entry, isn't a game.
+     */
+    private fun gameRunningNow(): Boolean = SystemSteamProcessOps(fuseProgram = { program() }, fuseGameId = { null }).gameRunning()
 
     private fun steamRunningNow(): Boolean = when (DesktopOs.current) {
         DesktopOs.WINDOWS -> Processes.run(listOf("tasklist", "/FI", "IMAGENAME eq steam.exe", "/NH"), timeoutMs = 3_000)?.stdout?.contains("steam.exe", ignoreCase = true) == true

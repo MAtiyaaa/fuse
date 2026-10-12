@@ -14,6 +14,9 @@ import java.io.File
  */
 internal class KnownFolders(private val home: String, private val os: DesktopOs = DesktopOs.current) {
 
+    /** The home folder these are found under. */
+    val homePath: String get() = home
+
     /** A folder with the setup it belongs to. */
     data class Found(val path: String, val label: String)
 

@@ -487,10 +487,14 @@ internal class AuditDesktopInstaller(override val host: Host, private val dir: F
     override fun launch(path: String): Boolean = true
 }
 
-/** Steam on a Linux computer, closed, with Fuse not yet in its library. */
-internal class AuditSteam : io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration {
+/**
+ * Steam on a Linux computer, with Fuse not yet in its library: closed, or [open] in Game Mode with
+ * Fuse running inside it ([closesFuse]), where adding Fuse restarts Steam and Fuse with it.
+ */
+internal class AuditSteam(private val open: Boolean = false, override val closesFuse: Boolean = false) : io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration {
     @Volatile private var inLibrary = false
-    override val gameMode: Boolean = false
+    override val gameMode: Boolean = closesFuse
+    override suspend fun steamRunning(): Boolean = open
     override suspend fun added(): Boolean = inLibrary
     override suspend fun addFuse(): Result<String> {
         inLibrary = true

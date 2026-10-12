@@ -4,6 +4,7 @@ import io.github.matiyaaa.fuse.library.steam.SteamArt
 import io.github.matiyaaa.fuse.library.steam.SteamGameAction
 import io.github.matiyaaa.fuse.library.steam.SteamGameEntry
 import io.github.matiyaaa.fuse.library.steam.SteamHealthIssue
+import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
@@ -72,24 +73,41 @@ internal fun AppState.addToSteam(cards: List<GameCard>, what: String) {
             elsewhere.takeIf { it.isNotEmpty() }?.let { "Already in Steam from another tool, left as they are: ${list(it)}." },
         )
         val open = runCatching { steam.steamRunning() }.getOrDefault(false)
-        confirm = ConfirmSpec(
-            title = "Add $what to Steam?",
-            message = (
-                lines + listOf(
-                    "Each starts through Fuse, with its emulator, saves and play time as in Fuse, and Fuse's own art. " +
-                        "Systems become Steam collections, and Settings, Library, Steam can undo it." +
-                        (if (open) " Steam is open, so they go in when it next closes. It isn't closed for this." else ""),
-                )
-                ).joinToString("\n\n"),
-            confirmLabel = "Add",
-        ) {
-            scope.launch {
-                steam.addGames(pairs.map { it.first }, pairs.associate { it.first.gameId to it.second }, collections = true)
-                    .onSuccess { toasts.show(it, icon = FuseIcons.Gamepad) }
-                    .onFailure { toasts.show(it.message ?: "Couldn't add them to Steam", ToastKind.ERROR) }
-                refreshSteamGames()
-            }
+        val games = pairs.map { it.first }
+        val art = pairs.associate { it.first.gameId to it.second }
+        fun add(block: suspend () -> Result<String>) = scope.launch {
+            block()
+                .onSuccess { toasts.show(it, icon = FuseIcons.Gamepad) }
+                .onFailure { toasts.show(it.message ?: "Couldn't add them to Steam", ToastKind.ERROR) }
+            refreshSteamGames()
         }
+        val message = (
+            lines + listOf(
+                "Each starts through Fuse, with its emulator, saves and play time as in Fuse, and Fuse's own art. " +
+                    "Systems become Steam collections, and Settings, Library, Steam can undo it.",
+            )
+            ).joinToString("\n\n")
+        if (!open) {
+            confirm = ConfirmSpec(title = "Add $what to Steam?", message = message, confirmLabel = "Add") { add { steam.addGames(games, art, collections = true) } }
+            return@launch
+        }
+        // Steam is open: it writes its library when it quits. Restart it now (asked here, never
+        // during a game), or wait for it to close by itself.
+        choice = ChoiceSpec(
+            title = "Add $what to Steam?",
+            message = message + "\n\nSteam is open." + if (steam.closesFuse) " Restarting it closes Fuse too; Fuse opens again right here." else "",
+            icon = FuseIcons.Gamepad,
+            options = listOf(
+                MenuAction("steam.games.restart", "Restart Steam and Add", FuseIcons.RotateCcw, detail = "Never while a game is running", onSelect = {
+                    choice = null
+                    add { steam.addGamesRestartingSteam(games, art, collections = true) }
+                }),
+                MenuAction("steam.games.wait", "Add When Steam Closes", FuseIcons.Clock, detail = "Steam isn't closed for it", onSelect = {
+                    choice = null
+                    add { steam.addGames(games, art, collections = true) }
+                }),
+            ),
+        )
     }
 }
 
