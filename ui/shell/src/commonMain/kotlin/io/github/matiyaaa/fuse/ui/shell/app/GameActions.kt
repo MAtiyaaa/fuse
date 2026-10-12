@@ -496,6 +496,7 @@ fun AppState.showEmulator(id: io.github.matiyaaa.fuse.model.EmulatorId) {
     scope.launch {
         val d = store.emulators.details(id) ?: return@launch
         val test = if (d.installed) store.emulators.testGame(id) else null
+        val moves = if (d.installed) store.emulators.familyMoves(id) else null
         val actions = buildList {
             if (d.installed) {
                 add(MenuAction("open", "Open ${d.name}", FuseIcons.External, detail = "Its own settings, controls and firmware", onSelect = {
@@ -506,6 +507,35 @@ fun AppState.showEmulator(id: io.github.matiyaaa.fuse.model.EmulatorId) {
                     add(MenuAction("settings", "Settings for Every Game", FuseIcons.Sliders, detail = "Resolution, renderer and display, in its own settings", trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Chevron, onSelect = {
                         emulatorSettingsSheet(null, id)
                     }))
+                }
+                // Another emulator of its family on this computer: its keys, saves, installed content and mods brought over.
+                moves?.offers?.forEach { f ->
+                    add(MenuAction(
+                        "bring.${f.id}", "Bring Over From ${f.name}", FuseIcons.FolderInput,
+                        detail = "Keys, saves, installed updates and add-ons, and mods. ${f.name} keeps everything",
+                        trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Chevron,
+                        onSelect = { planBringOver(id, d.name, f.id) },
+                    ))
+                }
+                moves?.done?.forEach { m ->
+                    add(MenuAction(
+                        "takeback.${m.id}", "Take Back What Came From ${m.from}", FuseIcons.Undo,
+                        detail = "The ${if (m.files == 1) "file" else "${m.files} files"} Fuse brought over go; everything else stays",
+                        onSelect = {
+                            contextMenu = null
+                            confirm = ConfirmSpec(
+                                "Take back what came from ${m.from}?",
+                                "The files Fuse copied from ${m.from} leave ${d.name}'s folder. Anything ${d.name} made since stays, and ${m.from} still has everything.",
+                                "Take Back", destructive = true,
+                            ) {
+                                scope.launch {
+                                    if (store.emulators.takeBackFamilyMove(id, m.id)) toasts.show("Taken back", ToastKind.SUCCESS)
+                                    else toasts.show("Couldn't take everything back. What's left is kept aside, so try again", ToastKind.WARNING)
+                                    showEmulator(id)
+                                }
+                            }
+                        },
+                    ))
                 }
                 add(MenuAction(
                     "test", if (test != null) "Try it with ${test.title}" else "Try it with a game", FuseIcons.Play,
@@ -1110,3 +1140,35 @@ internal fun AppState.applyPatch(card: GameCard) {
 
 /** Systems whose games are installed packages or programs, where ROM patches (IPS, UPS, BPS) don't apply. */
 private val NO_ROM_PATCHES = setOf("switch", "ps3", "ps4", "ps5", "psvita", "wiiu", "xbox", "xbox360", "win", "win3x", "win9x", "steam", "android", "dos", "mac", "scummvm", "pico8", "flash", "j2me")
+
+/**
+ * What bringing [from]'s things over to [emulator] (called [name]) would copy, then doing it: only
+ * files [name] doesn't have, from the folders that hold a person's things, with what stays behind
+ * said. Nothing is copied before the person agrees, and a restoration point makes it undoable.
+ */
+private fun AppState.planBringOver(emulator: io.github.matiyaaa.fuse.model.EmulatorId, name: String, from: String) {
+    contextMenu = null
+    scope.launch {
+        when (val p = store.emulators.planFamilyMove(emulator, from)) {
+            is io.github.matiyaaa.fuse.ui.shell.store.FamilyMovePreview.Unavailable -> showProblem(Problem(p.title, p.reason, ProblemKind.EMULATOR, Severity.INFO))
+            is io.github.matiyaaa.fuse.ui.shell.store.FamilyMovePreview.Ready -> confirm = ConfirmSpec(
+                title = "Bring ${p.from}'s things over to ${p.to}?",
+                message = listOfNotNull(
+                    "${if (p.files == 1) "1 file" else "${p.files} files"} from ${p.carried.joinToString(", ")} in ${p.fromFolder} are copied to ${p.toFolder}." +
+                        if (p.truncated) " That's as many as Fuse copies at once; bring over again for the rest." else "",
+                    "Left behind: ${p.leftOut.joinToString("; ")}.",
+                    "Close both emulators first. ${p.from} keeps everything, nothing ${p.to} has is replaced, and a restoration point means Take Back removes exactly what was copied.",
+                ).joinToString("\n\n"),
+                confirmLabel = "Bring Over",
+            ) {
+                scope.launch {
+                    toasts.show("Bringing over ${p.from}'s things")
+                    val why = store.emulators.bringOver(p.token)
+                    if (why == null) toasts.show("${p.to} has ${p.from}'s things now", ToastKind.SUCCESS)
+                    else showProblem(Problem("Couldn't bring them over", why, ProblemKind.EMULATOR, Severity.ATTENTION))
+                    showEmulator(emulator)
+                }
+            }
+        }
+    }
+}

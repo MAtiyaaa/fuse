@@ -694,6 +694,22 @@ interface EmulatorOps {
     val searchFolders: StateFlow<List<String>> get() = MutableStateFlow(emptyList())
 
     suspend fun setSearchFolders(folders: List<String>) = Unit
+
+    /**
+     * Bringing a person's things over to [emulator] from another of its family: where they could
+     * come from, and what was brought over already (to take back).
+     */
+    suspend fun familyMoves(emulator: EmulatorId): FamilyMoves = FamilyMoves(emptyList(), emptyList())
+
+    /** What bringing [from]'s things over to [emulator] would copy; nothing changes until [bringOver]. */
+    suspend fun planFamilyMove(emulator: EmulatorId, from: String): FamilyMovePreview =
+        FamilyMovePreview.Unavailable("Not on this device", "This is done from Fuse on a computer.")
+
+    /** Copies what [token]'s preview showed. Null when it worked, else why it didn't. */
+    suspend fun bringOver(token: String): String? = "Not on this device."
+
+    /** Takes back what was brought over as [move]: the files it copied go, and nothing else changes. */
+    suspend fun takeBackFamilyMove(emulator: EmulatorId, move: String): Boolean = false
 }
 
 interface MediaOps {

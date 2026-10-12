@@ -348,6 +348,26 @@ class DesktopEmulatorFiles(
         }
     }
 
+    private fun saveEnv(): io.github.matiyaaa.fuse.sync.SaveEnvironment {
+        val host = when (os) { DesktopOs.WINDOWS -> "WINDOWS"; DesktopOs.MACOS -> "MACOS"; DesktopOs.LINUX -> "LINUX" }
+        return io.github.matiyaaa.fuse.sync.FileSaveEnvironment(host, home) { env[it] }
+    }
+
+    override suspend fun familyFolders(installed: InstalledEmulator): List<io.github.matiyaaa.fuse.sync.FamilyFolder> = withContext(Dispatchers.IO) {
+        io.github.matiyaaa.fuse.sync.EmulatorFamilies.others(saveEnv(), installed.id.value)
+    }
+
+    override suspend fun familyMove(installed: InstalledEmulator, from: String): io.github.matiyaaa.fuse.sync.FamilyMove? = withContext(Dispatchers.IO) {
+        val e = saveEnv()
+        val self = io.github.matiyaaa.fuse.sync.EmulatorFamilies.family(installed.id.value)?.firstOrNull { installed.id.value.substringAfter('.').startsWith(it) }
+            ?: return@withContext null
+        val program = File(installed.appId).takeIf { it.isAbsolute }?.absolutePath
+        val to = io.github.matiyaaa.fuse.sync.EmulatorFamilies.folder(e, self, program) ?: return@withContext null
+        val source = io.github.matiyaaa.fuse.sync.EmulatorFamilies.others(e, installed.id.value).firstOrNull { it.id == from } ?: return@withContext null
+        roots += File(to).absolutePath
+        io.github.matiyaaa.fuse.sync.EmulatorFamilies.plan(e, source, io.github.matiyaaa.fuse.sync.FamilyFolder(self, io.github.matiyaaa.fuse.sync.EmulatorFamilies.name(self), to))
+    }
+
     override suspend fun rpcs3GameFiles(installed: InstalledEmulator, launchPath: String, serial: String?): String? = withContext(Dispatchers.IO) {
         val launch = File(launchPath)
         // A game folder: PS3_GAME/USRDIR/EBOOT.BIN, or the folder itself.

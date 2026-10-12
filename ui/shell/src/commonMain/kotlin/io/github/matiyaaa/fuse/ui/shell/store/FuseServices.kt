@@ -482,6 +482,18 @@ interface EmulatorFiles {
      * when the game isn't a folder with an eboot.bin.
      */
     suspend fun shadPs4Mods(launchPath: String): Pair<String, Set<String>>? = null
+
+    /**
+     * The other emulators of [installed]'s family (see [io.github.matiyaaa.fuse.sync.EmulatorFamilies])
+     * with a folder here holding a person's things, as places to bring them over from.
+     */
+    suspend fun familyFolders(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): List<io.github.matiyaaa.fuse.sync.FamilyFolder> = emptyList()
+
+    /**
+     * What bringing [from]'s things over to [installed] would copy (nothing yet), with [installed]'s
+     * own folder then open to [install]; null when [installed] has no folder yet.
+     */
+    suspend fun familyMove(installed: io.github.matiyaaa.fuse.model.InstalledEmulator, from: String): io.github.matiyaaa.fuse.sync.FamilyMove? = null
 }
 
 /**

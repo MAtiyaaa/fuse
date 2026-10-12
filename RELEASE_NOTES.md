@@ -121,6 +121,13 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   settings to give your other games, and it follows you to your other devices through Fuse One.
   Profiles are starting points, not promises; the emulators' own fixes for a game still apply, and
   Put Back undoes a profile like any change.
+- **Bring over from another emulator of the family.** An emulator's page offers Bring Over From
+  yuzu, Citron, Sudachi, suyu or torzu for Eden (and between any of them), and from Citra or Lime3DS
+  for Azahar, when the newer one has started already and won't offer its own migration. Only what
+  is a person's comes over (keys, the emulated NAND and SD card with saves and installed content,
+  mods; for the 3DS also system data and cheats), only files not there yet, with the other emulator
+  left as it was. Shader caches, save states, logs and settings stay behind, and the preview says so.
+  Take Back removes exactly what was copied.
 - **Going back after an emulator update.** When the Store updates an emulator on a computer, Fuse
   keeps the version it replaces in its own folder, out of the way of the new one. An update that
   fails to install puts it straight back; after one that works, the Store offers Go Back to it, and

@@ -189,4 +189,23 @@ class EnhancementFilesTest {
         assertTrue(files.undo("rp-ps3"))
         assertEquals("original", File(usr, "data.pak").readText())
     }
+
+    @Test
+    fun yuzusThingsAreBroughtOverToEdenAndTakenBackExactly(): Unit = runBlocking {
+        val share = File(home, ".local/share")
+        File(share, "yuzu/nand/user/save/x/save.bin").apply { parentFile.mkdirs(); writeText("yuzu save") }
+        File(share, "yuzu/keys/prod.keys").apply { parentFile.mkdirs(); writeText("yuzu keys") }
+        File(share, "eden/keys/prod.keys").apply { parentFile.mkdirs(); writeText("eden keys") }
+        val files = DesktopEmulatorFiles(DesktopOs.LINUX, env = mapOf("XDG_DATA_HOME" to share.absolutePath), home = home.absolutePath, backups = backups)
+        val eden = InstalledEmulator(EmulatorId("linux.eden"), "Eden", Host.LINUX, "/usr/bin/eden", platforms = setOf(PlatformId("switch")), detectedVia = "PATH")
+        assertEquals(listOf("yuzu"), files.familyFolders(eden).map { it.id })
+        val move = files.familyMove(eden, "yuzu")!!
+        assertEquals(listOf("nand/user/save/x/save.bin"), move.files)
+        assertTrue(files.install(move.from.folder, move.files.map { PlannedFile(it, "${move.to.folder}/$it") }, emptyMap(), "move-1"))
+        assertEquals("yuzu save", File(share, "eden/nand/user/save/x/save.bin").readText())
+        assertEquals("eden keys", File(share, "eden/keys/prod.keys").readText(), "nothing Eden has is replaced")
+        assertTrue(files.undo("move-1"))
+        assertFalse(File(share, "eden/nand").exists())
+        assertEquals("yuzu save", File(share, "yuzu/nand/user/save/x/save.bin").readText(), "yuzu keeps everything")
+    }
 }

@@ -148,6 +148,61 @@ internal class DefaultEmulatorOps(private val ctx: StoreContext) : EmulatorOps {
     private fun builtIn(adapter: io.github.matiyaaa.fuse.launch.EmulatorAdapter): InstalledEmulator? =
         if (adapter.builtIn) InstalledEmulator(adapter.id, adapter.name, ctx.host, appId = "", platforms = adapter.platforms, detectedVia = "Built in") else null
 
+    // Bringing a person's things over from another emulator of the family -------------------------
+
+    @kotlinx.serialization.Serializable
+    private data class MoveRecord(val id: String, val from: String, val files: Int, val at: Long)
+
+    private val moveJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+    private val movePlans = HashMap<String, Pair<EmulatorId, io.github.matiyaaa.fuse.sync.FamilyMove>>()
+
+    private suspend fun moveRecords(emulator: EmulatorId): List<MoveRecord> = ctx.data.owned.get(MOVES, emulator.value).mapNotNull {
+        runCatching { moveJson.decodeFromString(MoveRecord.serializer(), it) }.getOrNull()
+    }
+
+    override suspend fun familyMoves(emulator: EmulatorId): io.github.matiyaaa.fuse.ui.shell.store.FamilyMoves {
+        val files = ctx.services.emulatorFiles ?: return io.github.matiyaaa.fuse.ui.shell.store.FamilyMoves(emptyList(), emptyList())
+        val here = installed.value.firstOrNull { it.id == emulator }
+        val offers = if (here == null || io.github.matiyaaa.fuse.sync.EmulatorFamilies.family(emulator.value) == null) emptyList() else files.familyFolders(here)
+        val done = moveRecords(emulator).sortedByDescending { it.at }.map { io.github.matiyaaa.fuse.ui.shell.store.FamilyMoveDone(it.id, it.from, it.files, it.at) }
+        return io.github.matiyaaa.fuse.ui.shell.store.FamilyMoves(offers, done)
+    }
+
+    override suspend fun planFamilyMove(emulator: EmulatorId, from: String): io.github.matiyaaa.fuse.ui.shell.store.FamilyMovePreview {
+        fun no(t: String, r: String) = io.github.matiyaaa.fuse.ui.shell.store.FamilyMovePreview.Unavailable(t, r)
+        val files = ctx.services.emulatorFiles ?: return no("Not on this device", "This is done from Fuse on a computer.")
+        val here = installed.value.firstOrNull { it.id == emulator } ?: return no("Not installed", "Install it first.")
+        val move = files.familyMove(here, from) ?: return no("${here.name} isn't set up yet", "Start ${here.name} once so it makes its folder, then come back.")
+        if (move.files.isEmpty()) return no("Nothing to bring over", "${here.name} already has everything ${move.from.name} keeps in ${move.carried.joinToString(", ")}.")
+        val token = ctx.now().toString(36) + "-" + kotlin.random.Random.nextInt(1 shl 30).toString(36)
+        movePlans[token] = emulator to move
+        return io.github.matiyaaa.fuse.ui.shell.store.FamilyMovePreview.Ready(
+            token, move.from.name, move.to.name, move.from.folder, move.to.folder, move.files.size, move.kept, move.carried, move.leftOut, move.truncated,
+        )
+    }
+
+    override suspend fun bringOver(token: String): String? {
+        val (emulator, move) = movePlans.remove(token) ?: return "That preview is out of date. Look again."
+        val files = ctx.services.emulatorFiles ?: return "Not on this device."
+        val id = "move-" + token.filter { it.isLetterOrDigit() || it == '-' }
+        val planned = move.files.map { io.github.matiyaaa.fuse.launch.patches.PlannedFile(it, "${move.to.folder}/$it") }
+        if (!files.install(move.from.folder, planned, emptyMap(), id)) {
+            return "Fuse couldn't copy everything, so it put back what it had copied and changed nothing. ${move.to.name}'s folder may be read-only, or there may not be room for it."
+        }
+        val record = MoveRecord(id, move.from.name, planned.size, ctx.now())
+        ctx.data.owned.set(MOVES, emulator.value, (moveRecords(emulator) + record).map { moveJson.encodeToString(MoveRecord.serializer(), it) }.toSet())
+        return null
+    }
+
+    override suspend fun takeBackFamilyMove(emulator: EmulatorId, move: String): Boolean {
+        val files = ctx.services.emulatorFiles ?: return false
+        val all = moveRecords(emulator)
+        if (all.none { it.id == move }) return false
+        if (!files.undo(move)) return false
+        ctx.data.owned.set(MOVES, emulator.value, all.filter { it.id != move }.map { moveJson.encodeToString(MoveRecord.serializer(), it) }.toSet())
+        return true
+    }
+
     override suspend fun details(emulator: EmulatorId): EmulatorDetails? {
         val adapter = ctx.registry[emulator]?.takeIf { it.host == ctx.host } ?: return null
         val here = installed.value.firstOrNull { it.id == emulator }
@@ -288,3 +343,5 @@ internal class DefaultEmulatorOps(private val ctx: StoreContext) : EmulatorOps {
         detectNow()
     }
 }
+
+private const val MOVES = "family.moves"

@@ -538,6 +538,29 @@ sealed interface EmulatorSettingsView {
     data class Unavailable(val title: String, val reason: String) : EmulatorSettingsView
 }
 
+/** Places [FamilyMoves.offers] to bring an emulator's family's things from, and what was brought already. */
+data class FamilyMoves(val offers: List<io.github.matiyaaa.fuse.sync.FamilyFolder>, val done: List<FamilyMoveDone>)
+
+/** Something brought over: from which emulator, how many files, when. */
+data class FamilyMoveDone(val id: String, val from: String, val files: Int, val at: Long)
+
+sealed interface FamilyMovePreview {
+    data class Ready(
+        val token: String,
+        val from: String,
+        val to: String,
+        val fromFolder: String,
+        val toFolder: String,
+        val files: Int,
+        val kept: Int,
+        val carried: List<String>,
+        val leftOut: List<String>,
+        val truncated: Boolean,
+    ) : FamilyMovePreview
+
+    data class Unavailable(val title: String, val reason: String) : FamilyMovePreview
+}
+
 /** One setting profile a game can be given: [active] when every value in it is the game's now. */
 data class SettingProfileView(val id: String, val name: String, val about: String, val own: Boolean, val active: Boolean)
 
