@@ -274,7 +274,12 @@ internal class DefaultAppStoreOps(
         packApps = byKey
         val catalogue = StoreCatalogue(variant, apps, categories, version, fetchedAt, sourceUrl)
         // Releases already known stay; apps gone from the edition lose theirs and their jobs.
-        mutable.update { s -> s.copy(catalogue = catalogue, releases = s.releases.filterKeys { it in byKey }) }
+        // A channel can be chosen for apps on GitHub that the pack follows by their stable releases.
+        val channels = byKey.filter { (_, a) -> a.source == PackSourceKind.GITHUB && !a.rules.includePrereleases }.keys
+        val store = ctx.settings.value.store
+        mutable.update { s ->
+            s.copy(catalogue = catalogue, releases = s.releases.filterKeys { it in byKey }, channels = channels, excluded = store.excluded, prerelease = store.prerelease)
+        }
         for (key in previous.keys - byKey.keys) {
             val job = running.value[key] ?: continue
             job.cancel()
@@ -469,7 +474,9 @@ internal class DefaultAppStoreOps(
                 return failed(key, "GitHub's limit for checks is used up for now.", gitHubLimitedUntil)
             }
             if (known !is ReleaseCheck.Ready) mutable.update { s -> s.copy(releases = s.releases + (key to ReleaseCheck.Checking)) }
-            val result = checks.withPermit { resolver.resolve(app, bridge.abis) }
+            // On the pre-release channel the app's pre-releases count too.
+            val asked = if (key in ctx.settings.value.store.prerelease && !app.rules.includePrereleases) app.copy(rules = app.rules.copy(includePrereleases = true)) else app
+            val result = checks.withPermit { resolver.resolve(asked, bridge.abis) }
             return when (result) {
                 is ApiResult.Success -> {
                     val r = release(result.value)
@@ -524,7 +531,35 @@ internal class DefaultAppStoreOps(
     }
 
     override fun updateAll() {
-        mutable.value.updates.forEach { install(it.key) }
+        // An emulator is never updated under a game being played: the updates start once it ends.
+        if (ctx.playing.value != null) {
+            if (!mutable.value.holding) noticesFlow.tryEmit("Updates wait until your game ends.")
+            mutable.update { it.copy(holding = true) }
+            ctx.scope.launch {
+                ctx.playing.first { it == null }
+                mutable.update { it.copy(holding = false) }
+                updateAll()
+            }
+            return
+        }
+        mutable.value.updatable.forEach { install(it.key) }
+    }
+
+    override fun setExcluded(key: String, excluded: Boolean) {
+        ctx.scope.launch {
+            val next = ctx.data.settings.update { s -> s.copy(store = s.store.copy(excluded = if (excluded) s.store.excluded + key else s.store.excluded - key)) }
+            ctx.settings.value = next
+            mutable.update { it.copy(excluded = next.store.excluded) }
+        }
+    }
+
+    override fun setPrerelease(key: String, on: Boolean) {
+        ctx.scope.launch {
+            val next = ctx.data.settings.update { s -> s.copy(store = s.store.copy(prerelease = if (on) s.store.prerelease + key else s.store.prerelease - key)) }
+            ctx.settings.value = next
+            mutable.update { it.copy(prerelease = next.store.prerelease) }
+            checkNow(key, force = true)
+        }
     }
 
     override fun cancel(key: String) {
@@ -753,8 +788,24 @@ internal class DefaultAppStoreOps(
             ),
         )
 
+        /** Cartridge, for RomM on this device (Addons, Cartridge): from its releases, which carry its Android build. */
+        val CARTRIDGE = PackApp(
+            id = io.github.matiyaaa.fuse.integrations.cartridge.CartridgeProtocol.PACKAGE_NAME,
+            url = "https://github.com/${io.github.matiyaaa.fuse.integrations.cartridge.CartridgeProtocol.RELEASE_REPO}",
+            name = "Cartridge",
+            author = "abdu2304",
+            categories = listOf(AppStoreOps.COMPANIONS),
+            source = PackSourceKind.GITHUB,
+            allowIdChange = false,
+            preferredApkIndex = null,
+            rules = io.github.matiyaaa.fuse.integrations.obtainium.PackRules(
+                about = "Your RomM library on this device: Cartridge downloads the games you pick into the right system folders, firmware included, and Fuse shows them as they arrive.",
+                fallbackToOlderReleases = true,
+            ),
+        )
+
         /** Apps Fuse offers in every edition of the Store, beside the pack's. */
-        val COMPANIONS = listOf(SYNCTHING_FORK)
+        val COMPANIONS = listOf(SYNCTHING_FORK, CARTRIDGE)
 
         /** The Store's key for Syncthing-Fork. */
         val SYNCTHING_KEY: String get() = keyOf(SYNCTHING_FORK)

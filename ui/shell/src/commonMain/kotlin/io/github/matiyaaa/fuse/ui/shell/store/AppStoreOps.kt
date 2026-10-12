@@ -40,8 +40,23 @@ interface AppStoreOps {
     /** Downloads the newest release of [key] and hands it to Android's installer (install or update). */
     fun install(key: String)
 
-    /** Every update, one after another; Android asks about each one. */
+    /**
+     * Every update not left out ([StoreState.excluded]), one after another; Android asks about each
+     * one. While a game is being played they wait, and start once it ends.
+     */
     fun updateAll()
+
+    /** Leaves [key] out of Update All, or puts it back. */
+    fun setExcluded(key: String, excluded: Boolean) = Unit
+
+    /** Makes [key] follow its pre-releases (nightly, beta), or its stable releases again; looks again at once. */
+    fun setPrerelease(key: String, on: Boolean) = Unit
+
+    /**
+     * Updates [key], found on this computer but installed some other way, the way it was installed:
+     * a Flatpak through Flatpak (asking for the account's password when only an administrator may).
+     */
+    fun updateOther(key: String) = Unit
 
     /** Goes back to the version [key]'s last update replaced (kept by Fuse on a computer). */
     fun rollBack(key: String) = Unit
@@ -157,8 +172,18 @@ data class StoreState(
     val folder: String? = null,
     /** The repository the catalogue follows when it isn't the Obtainium Emulation Pack. */
     val packRepo: String? = null,
-    /** A program waiting for the account's password to be removed; null when none is. */
+    /** A program waiting for the account's password to be removed (or updated); null when none is. */
     val password: PasswordAsk? = null,
+    /** Apps left out of Update All, by key. */
+    val excluded: Set<String> = emptySet(),
+    /** Apps following their pre-releases, by key. */
+    val prerelease: Set<String> = emptySet(),
+    /** Apps whose source publishes pre-releases beside stable ones, so a channel can be chosen. */
+    val channels: Set<String> = emptySet(),
+    /** Who looks after each installed app on a computer; apps not in it are Fuse's (always so on Android). */
+    val managed: Map<String, Managed> = emptyMap(),
+    /** Updates asked for while a game is played, waiting for it to end. */
+    val holding: Boolean = false,
 ) {
     fun app(key: String): StoreApp? = catalogue?.apps?.firstOrNull { it.key == key }
 
@@ -169,12 +194,36 @@ data class StoreState(
         return StoreStanding.of(installed, release)
     }
 
-    /** Installed apps with a newer release Fuse can install, in catalogue order. */
+    /**
+     * Installed apps with a newer release Fuse can install, in catalogue order. Only Fuse's own
+     * installs: one a Flatpak, the system or the person put there is never doubled by a copy of Fuse's.
+     */
     val updates: List<StoreApp>
         get() = catalogue?.apps.orEmpty().filter { app ->
-            app.availability == Availability.INSTALLABLE && app.key in installed && standing(app.key) == Standing.UPDATE &&
-                (releases[app.key] as? ReleaseCheck.Ready)?.release?.file != null
+            app.availability == Availability.INSTALLABLE && app.key in installed && managedBy(app.key) == Managed.FUSE &&
+                standing(app.key) == Standing.UPDATE && (releases[app.key] as? ReleaseCheck.Ready)?.release?.file != null
         }
+
+    /** The updates Update All installs: [updates] less those left out. */
+    val updatable: List<StoreApp> get() = updates.filter { it.key !in excluded }
+
+    /** Who looks after [key]'s installed copy. */
+    fun managedBy(key: String): Managed = managed[key] ?: Managed.FUSE
+}
+
+/** Who looks after an installed program, so the Store updates it the right way (or leaves it be). */
+enum class Managed {
+    /** Fuse put it there: the Store updates it from its releases. */
+    FUSE,
+
+    /** A Flatpak: Flatpak updates it, from its own remote (Flathub). */
+    FLATPAK,
+
+    /** The system's package manager installed it: it updates it, not Fuse. */
+    SYSTEM,
+
+    /** The person put it there themselves (an AppImage of their own): left as it is. */
+    ELSEWHERE,
 }
 
 /** How an app stands on this device. */
@@ -340,4 +389,4 @@ sealed interface StoreJob {
  * The account's password is needed to remove [name] ([key]): it was installed for every account.
  * [wrong] after a password that didn't work.
  */
-data class PasswordAsk(val key: String, val name: String, val wrong: Boolean = false)
+data class PasswordAsk(val key: String, val name: String, val wrong: Boolean = false, val update: Boolean = false)

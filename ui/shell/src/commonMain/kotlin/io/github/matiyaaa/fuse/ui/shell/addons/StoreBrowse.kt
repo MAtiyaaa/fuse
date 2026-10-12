@@ -92,6 +92,11 @@ private sealed interface StoreRow {
         override val key = "top"
     }
 
+    /** The app the library needs most, large at the top, with why and its main action. */
+    data class Spotlight(val app: StoreApp, val reason: String) : StoreRow {
+        override val key = "spotlight"
+    }
+
     /** A shelf of apps under [title]; [featured] shelves are wider cards with a reason. */
     data class Shelf(
         override val key: String,
@@ -177,26 +182,28 @@ private fun StoreShelves(app: AppState, state: StoreState, active: Boolean, topP
     }
 
     val updates = state.updates
-    val rows: List<StoreRow> = remember(state, platforms, page.query) {
+    val cartridgeChosen = app.store.prefs.value.rommAnswer == "CARTRIDGE"
+    val rows: List<StoreRow> = remember(state, platforms, page.query, cartridgeChosen) {
         buildList {
             add(
                 StoreRow.Top(
                     listOfNotNull(
                         TopButton(if (page.query.isEmpty()) "Search" else "Search: ${page.query}", FuseIcons.Search) { search() },
                         TopButton("Clear search", FuseIcons.SearchX) { page.query = "" }.takeIf { page.query.isNotEmpty() },
-                        TopButton("Update all (${updates.size})", FuseIcons.CircleArrowDown, primary = true) { ops.updateAll() }.takeIf { updates.size > 1 },
-                        TopButton(if (state.refreshing) "Checking" else "Check for updates", FuseIcons.Refresh, loading = state.refreshing) {
-                            ops.refresh()
-                            ops.checkInstalled(force = true)
+                        // One place for updates: what each installed app has, channels, Update All.
+                        TopButton(if (updates.isEmpty()) "Updates" else "Updates (${updates.size})", FuseIcons.CircleArrowDown, primary = updates.isNotEmpty()) {
+                            app.go(Route.StoreUpdates)
                         },
                         TopButton("Add an app", FuseIcons.Plus) { app.addStoreApp() },
                     ),
                 ),
             )
             if (page.query.isNotEmpty()) add(StoreRow.Shelf("results", "Results", searchApps(catalogue.apps, page.query), FuseIcons.Search))
-            if (updates.isNotEmpty()) add(StoreRow.Shelf("updates", "Updates", updates, FuseIcons.CircleArrowDown))
             val wanted = platforms.filter { it.gameCount > 0 && !it.emulatorInstalled }.sortedByDescending { it.gameCount }
             val reasons = LinkedHashMap<String, String>()
+            // Cartridge, chosen in setup for RomM and not here yet, comes first.
+            catalogue.apps.firstOrNull { it.name == "Cartridge" && it.key !in state.installed && it.availability == Availability.INSTALLABLE }
+                ?.takeIf { cartridgeChosen }?.let { reasons[it.key] = "You chose Cartridge for RomM" }
             for (p in wanted) {
                 for (a in catalogue.apps) {
                     if (a.availability == Availability.INSTALLABLE && a.key !in state.installed && p.platform.id in a.systems && a.key !in reasons) {
@@ -204,17 +211,23 @@ private fun StoreShelves(app: AppState, state: StoreState, active: Boolean, topP
                     }
                 }
             }
-            if (reasons.isNotEmpty()) {
-                add(StoreRow.Shelf("featured", "For your library", reasons.keys.mapNotNull(state::app).take(8), FuseIcons.Sparkles, featured = reasons))
+            // The first suggestion stands large at the top; the rest follow on their shelf.
+            val spotlight = if (page.query.isEmpty()) reasons.entries.firstOrNull()?.let { (k, why) -> state.app(k)?.let { StoreRow.Spotlight(it, why) } } else null
+            spotlight?.let(::add)
+            val more = reasons.filterKeys { it != spotlight?.app?.key }
+            if (more.isNotEmpty()) {
+                add(StoreRow.Shelf("featured", "For your library", more.keys.mapNotNull(state::app).take(8), FuseIcons.Sparkles, featured = more))
             }
             val installed = catalogue.apps.filter { it.key in state.installed }
             if (installed.isNotEmpty()) add(StoreRow.Shelf("installed", "Installed", installed, FuseIcons.PackageCheck))
-            // Each app sits in its first category; apps only followed sit in Track Only, last.
+            // Emulators by who made the systems they play; everything else in its own category.
             val (tracked, rest) = catalogue.categories.partition { it.trackOnly }
+            val emulators = catalogue.apps.filter { it.availability != Availability.TRACK_ONLY && it.isEmulator() }
+            for ((maker, apps) in byMaker(emulators)) add(StoreRow.Shelf("maker:$maker", maker, apps, FuseIcons.Gamepad))
             fun shelfOf(a: StoreApp): String? =
                 if (a.availability == Availability.TRACK_ONLY) tracked.firstOrNull()?.name ?: a.categories.firstOrNull() else a.categories.firstOrNull { c -> rest.any { it.name == c } }
             for (cat in rest + tracked) {
-                val apps = catalogue.apps.filter { shelfOf(it) == cat.name }
+                val apps = catalogue.apps.filter { it !in emulators && shelfOf(it) == cat.name }
                 if (apps.isNotEmpty()) add(StoreRow.Shelf("cat:${cat.name}", cat.name, apps))
             }
         }
@@ -223,12 +236,13 @@ private fun StoreShelves(app: AppState, state: StoreState, active: Boolean, topP
     fun sizeOf(key: String): Int = when (val r = rows.firstOrNull { it.key == key }) {
         is StoreRow.Top -> r.buttons.size
         is StoreRow.Shelf -> r.apps.size
+        is StoreRow.Spotlight -> 1
         null -> 0
     }
     sel.clamp(keys, ::sizeOf)
     val row = rows.getOrNull(sel.row) ?: rows.first()
     val col = sel.column(row.key)
-    val current = (row as? StoreRow.Shelf)?.apps?.getOrNull(col)
+    val current = (row as? StoreRow.Shelf)?.apps?.getOrNull(col) ?: (row as? StoreRow.Spotlight)?.app
 
     fun openApp(a: StoreApp) = app.go(Route.StoreApp(a.key))
     fun options(a: StoreApp) {
@@ -263,13 +277,20 @@ private fun StoreShelves(app: AppState, state: StoreState, active: Boolean, topP
         when (val target = rows[r]) {
             is StoreRow.Top -> target.buttons.getOrNull(i)?.run?.invoke()
             is StoreRow.Shelf -> target.apps.getOrNull(i)?.let(::openApp)
+            is StoreRow.Spotlight -> storeAction(app, state, target.app).run()
         }
     }
 
-    PageEffect(row.key, current?.key, focused) {
+    // The spotlight's hint follows its button (Install, then Cancel while it downloads, then Open).
+    val spotlightLabel = (row as? StoreRow.Spotlight)?.let { storeAction(app, state, it.app).label }
+    PageEffect(row.key, current?.key, focused, spotlightLabel) {
         if (!focused) return@PageEffect
         app.hero = null
-        app.hints = if (current != null) listOf(Hint(HintButton.CONFIRM, "Details"), Hint(HintButton.OPTIONS, "Options")) else listOf(Hint(HintButton.CONFIRM, "Choose"))
+        app.hints = when {
+            spotlightLabel != null -> listOf(Hint(HintButton.CONFIRM, spotlightLabel), Hint(HintButton.OPTIONS, "Options"))
+            current != null -> listOf(Hint(HintButton.CONFIRM, "Details"), Hint(HintButton.OPTIONS, "Options"))
+            else -> listOf(Hint(HintButton.CONFIRM, "Choose"))
+        }
         // An app in view has its newest release looked up, from the cache when it is fresh.
         current?.let { ops.check(it.key) }
     }
@@ -282,6 +303,8 @@ private fun StoreShelves(app: AppState, state: StoreState, active: Boolean, topP
                 when (row) {
                     is StoreRow.Top -> row.buttons.getOrNull(col)?.run?.invoke()
                     is StoreRow.Shelf -> current?.let(::openApp)
+                    // The spotlight's own button: install it, or open it once it is there.
+                    is StoreRow.Spotlight -> storeAction(app, state, row.app).run()
                 }
                 NavResult.ACTIVATED
             }
@@ -308,6 +331,10 @@ private fun StoreShelves(app: AppState, state: StoreState, active: Boolean, topP
                     val chosen = if (focused && sel.row == ri) sel.column(r.key) else -1
                     when (r) {
                         is StoreRow.Top -> StoreHeader(state, r.buttons, chosen, compact) { i -> tap(r.key, i) }
+                        is StoreRow.Spotlight -> SpotlightCard(
+                            r.app, r.reason, state, storeAction(app, state, r.app), chosen == 0, compact, ops.iconModel(r.app.key),
+                            onClick = { tap(r.key, 0) }, onDetails = { openApp(r.app) },
+                        )
                         is StoreRow.Shelf -> AppShelf(
                             r, state, chosen, sel.column(r.key), compact,
                             iconOf = { ops.iconModel(it.key) },
@@ -582,5 +609,98 @@ private fun HeaderChip(icon: androidx.compose.ui.graphics.vector.ImageVector, te
         FuseIcon(icon, size = 14.dp, tint = color)
         Spacer(Modifier.width(Space.xs + Space.xxs))
         FText(text, Fuse.type.caption, color = color, maxLines = 1)
+    }
+}
+
+/** An app that plays games: an emulator Fuse starts, or one that opens itself. */
+private fun StoreApp.isEmulator(): Boolean =
+    systems.isNotEmpty() && (inFuse == io.github.matiyaaa.fuse.ui.shell.store.InFuse.LAUNCHES_GAMES || inFuse == io.github.matiyaaa.fuse.ui.shell.store.InFuse.OPENS_APP)
+
+/**
+ * Emulators grouped by the systems they play: by the maker of their consoles and handhelds
+ * (Nintendo, PlayStation, Xbox, Sega, then other classic makers together), else Arcade, else PC and
+ * computers; one whose consoles come from several makers goes under "Many systems", last.
+ */
+internal fun byMaker(apps: List<StoreApp>): List<Pair<String, List<StoreApp>>> {
+    fun groupOf(a: StoreApp): String {
+        val platforms = a.systems.mapNotNull { io.github.matiyaaa.fuse.library.PlatformCatalog.byId(it) }
+        val consoles = platforms.filter { it.kind == io.github.matiyaaa.fuse.model.PlatformKind.CONSOLE || it.kind == io.github.matiyaaa.fuse.model.PlatformKind.HANDHELD }
+            .map { consoleGroup(it.family) }.distinct()
+        return when {
+            consoles.size == 1 -> consoles.single()
+            consoles.size > 1 -> MANY
+            platforms.any { it.kind == io.github.matiyaaa.fuse.model.PlatformKind.ARCADE } -> "Arcade"
+            platforms.any { it.kind == io.github.matiyaaa.fuse.model.PlatformKind.PC_GAMES || it.kind == io.github.matiyaaa.fuse.model.PlatformKind.COMPUTER } -> "PC and computers"
+            else -> MANY
+        }
+    }
+    val order = listOf("Nintendo", "PlayStation", "Xbox", "Sega", "Classic consoles", "Arcade", "PC and computers", MANY)
+    return apps.groupBy(::groupOf).entries.sortedBy { order.indexOf(it.key).let { i -> if (i < 0) 98 else i } }.map { it.key to it.value }
+}
+
+private const val MANY = "Many systems"
+
+/** A console maker as a person calls their systems; the smaller classic makers share a shelf. */
+private fun consoleGroup(family: io.github.matiyaaa.fuse.model.PlatformFamily): String = when (family) {
+    io.github.matiyaaa.fuse.model.PlatformFamily.NINTENDO -> "Nintendo"
+    io.github.matiyaaa.fuse.model.PlatformFamily.SONY -> "PlayStation"
+    io.github.matiyaaa.fuse.model.PlatformFamily.MICROSOFT -> "Xbox"
+    io.github.matiyaaa.fuse.model.PlatformFamily.SEGA -> "Sega"
+    else -> "Classic consoles"
+}
+
+/**
+ * The app the library needs most, wide at the top of the Store: lit in its colour, with its mark,
+ * why it is suggested, what it is, and its main action (A) beside Details.
+ */
+@Composable
+private fun SpotlightCard(
+    item: StoreApp,
+    reason: String,
+    state: StoreState,
+    action: StoreAction,
+    selected: Boolean,
+    compact: Boolean,
+    icon: Any?,
+    onClick: () -> Unit,
+    onDetails: () -> Unit,
+) {
+    val c = Fuse.colors
+    val tint = item.tint()
+    val shape = remember { SquircleShape.fraction(0.08f) }
+    Box(Modifier.padding(horizontal = Space.gutter)) {
+        Tile(
+            selected = selected,
+            modifier = Modifier.widthIn(max = 980.dp).fillMaxWidth().height(if (compact) 180.dp else 220.dp),
+            shape = shape, cornerFraction = 0.08f, glow = tint,
+            onClick = onClick, onLongClick = onDetails,
+            // As wide as a page: lifting by the usual share would push it into the margin.
+            maxGrow = Space.s,
+        ) {
+            Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(lerp(tint, Color.Black, 0.25f), lerp(tint, Color.Black, 0.82f)))))
+            // A soft light from the mark's side, so the card reads as one piece, not a flat panel.
+            Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.10f), Color.Transparent), radius = 900f)))
+            Box(Modifier.fillMaxSize().border(1.dp, Color.White.copy(alpha = 0.08f), shape))
+            Row(Modifier.fillMaxSize().padding(if (compact) Space.l else Space.xl), verticalAlignment = Alignment.CenterVertically) {
+                AppMark(item, icon, if (compact) 96.dp else 124.dp)
+                Spacer(Modifier.width(if (compact) Space.l else Space.xl))
+                Column(Modifier.weight(1f)) {
+                    FText(reason.uppercase(), Fuse.type.overline, color = c.onArtMuted, maxLines = 1)
+                    Spacer(Modifier.height(Space.xxs))
+                    FText(item.name, if (compact) Fuse.type.title else Fuse.type.display, color = c.onArt, maxLines = 1)
+                    FText(item.about ?: item.author, Fuse.type.body, color = c.onArtMuted, maxLines = 2)
+                    Spacer(Modifier.height(if (compact) Space.s else Space.m))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                        FuseButton(action.label, selected = selected, onClick = onClick, icon = action.icon, kind = action.kind, height = if (compact) 40.dp else Size.touch, loading = action.busy)
+                        FuseButton("Details", selected = false, onClick = onDetails, icon = FuseIcons.Info, kind = ButtonKind.SECONDARY, height = if (compact) 40.dp else Size.touch)
+                    }
+                    val job = state.jobs[item.key]
+                    if (job != null && job.active) {
+                        Spacer(Modifier.height(Space.s))
+                        ProgressBar(jobProgress(job), Modifier.widthIn(max = 420.dp).fillMaxWidth(), color = lerp(tint, Color.White, 0.3f), height = 3.dp)
+                    }
+                }
+            }
+        }
     }
 }

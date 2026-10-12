@@ -139,6 +139,23 @@ interface DesktopInstaller {
      */
     suspend fun removeOther(appId: String, name: String, password: String? = null): RemoveOutcome =
         RemoveOutcome.Failed("Remove $name the way it was installed.")
+
+    /**
+     * Updates a program found here that Fuse didn't put in place, the way it was installed: a
+     * Flatpak ([appId] its id) through Flatpak, from its own remote. [password] as for [removeOther].
+     */
+    suspend fun updateOther(appId: String, name: String, password: String? = null): UpdateOutcome =
+        UpdateOutcome.Failed("Update $name the way it was installed.")
+}
+
+/** How updating a program Fuse didn't install went. */
+sealed interface UpdateOutcome {
+    data object Updated : UpdateOutcome
+
+    /** Only an administrator can update it: ask for the account's password. [wrong] after one that didn't work. */
+    data class NeedsPassword(val wrong: Boolean = false) : UpdateOutcome
+
+    data class Failed(val message: String) : UpdateOutcome
 }
 
 /** How removing a program Fuse didn't install went. */

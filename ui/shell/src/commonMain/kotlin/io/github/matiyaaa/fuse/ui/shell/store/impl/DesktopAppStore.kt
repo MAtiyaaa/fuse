@@ -17,6 +17,8 @@ import io.github.matiyaaa.fuse.ui.shell.store.DesktopInstaller
 import io.github.matiyaaa.fuse.ui.shell.store.InFuse
 import io.github.matiyaaa.fuse.ui.shell.store.InstallRecord
 import io.github.matiyaaa.fuse.ui.shell.store.InstalledApp
+import io.github.matiyaaa.fuse.ui.shell.store.Managed
+import io.github.matiyaaa.fuse.ui.shell.store.UpdateOutcome
 import io.github.matiyaaa.fuse.ui.shell.store.PasswordAsk
 import io.github.matiyaaa.fuse.ui.shell.store.RemoveOutcome
 import io.github.matiyaaa.fuse.ui.shell.store.ReleaseCheck
@@ -38,6 +40,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -116,10 +119,10 @@ internal class DesktopAppStoreOps(
 
     private fun build() {
         val custom = ctx.settings.value.store.custom.map(::customEntry)
-        val all = (DesktopCatalogue.entries + custom).associateBy { it.key }
+        val all = (DesktopCatalogue.entries.filter { it.hosts == null || installer.host in it.hosts } + custom).associateBy { it.key }
         entries = all
         val categories = all.values.map { it.category }.distinct()
-            .sortedBy { listOf(DesktopCatalogue.EMULATORS, DesktopCatalogue.STREAMING, DesktopCatalogue.TOOLS).indexOf(it).let { i -> if (i < 0) 99 else i } }
+            .sortedBy { listOf(DesktopCatalogue.EMULATORS, DesktopCatalogue.STREAMING, AppStoreOps.COMPANIONS, DesktopCatalogue.TOOLS).indexOf(it).let { i -> if (i < 0) 99 else i } }
         val catalogue = StoreCatalogue(
             variant = StoreVariant.STANDARD,
             apps = all.values.map(::storeApp),
@@ -128,7 +131,15 @@ internal class DesktopAppStoreOps(
             fetchedAt = ctx.now(),
             sourceUrl = "https://github.com/matiyaaa/fuse",
         )
-        mutable.update { s -> s.copy(catalogue = catalogue, releases = s.releases.filterKeys { it in all }, jobs = s.jobs.filterKeys { it in all }) }
+        // A channel can be chosen where the project publishes stable releases on GitHub (pre-releases beside them).
+        val channels = all.values.filter { it.repoFor(installer.host) != null && !it.prereleases }.map { it.key }.toSet()
+        val store = ctx.settings.value.store
+        mutable.update { s ->
+            s.copy(
+                catalogue = catalogue, releases = s.releases.filterKeys { it in all }, jobs = s.jobs.filterKeys { it in all },
+                channels = channels, excluded = store.excluded, prerelease = store.prerelease,
+            )
+        }
     }
 
     private fun customEntry(c: CustomStoreApp): DesktopEntry {
@@ -175,6 +186,7 @@ internal class DesktopAppStoreOps(
             else -> "linux."
         }
         val detected = ctx.installed.value.associateBy { it.id.value }
+        val managed = HashMap<String, Managed>()
         for (e in entries.values) {
             val rec = records[e.key]
             if (rec != null && installer.exists(rec.packageName)) {
@@ -186,8 +198,70 @@ internal class DesktopAppStoreOps(
             // Just removed: detection catches up a moment later.
             if (e.key in gone) continue
             found[e.key] = InstalledApp(other.appId, other.version, 0, other.name)
+            managed[e.key] = managedOf(other.appId, other.detectedVia)
         }
-        mutable.update { it.copy(installed = found) }
+        mutable.update { it.copy(installed = found, managed = managed) }
+    }
+
+    // Updates: left out, channels, and programs installed some other way.
+
+    override fun setExcluded(key: String, excluded: Boolean) {
+        ctx.scope.launch {
+            val next = ctx.data.settings.update { s -> s.copy(store = s.store.copy(excluded = if (excluded) s.store.excluded + key else s.store.excluded - key)) }
+            ctx.settings.value = next
+            mutable.update { it.copy(excluded = next.store.excluded) }
+        }
+    }
+
+    override fun setPrerelease(key: String, on: Boolean) {
+        ctx.scope.launch {
+            val next = ctx.data.settings.update { s -> s.copy(store = s.store.copy(prerelease = if (on) s.store.prerelease + key else s.store.prerelease - key)) }
+            ctx.settings.value = next
+            mutable.update { it.copy(prerelease = next.store.prerelease) }
+            checkNow(key, force = true)
+        }
+    }
+
+    override fun updateOther(key: String) {
+        if (mutable.value.jobs[key]?.active == true) return
+        ctx.scope.launch { updateOtherNow(key, password = null) }
+    }
+
+    private suspend fun updateOtherNow(key: String, password: String?) {
+        val name = entries[key]?.name ?: key
+        val other = mutable.value.installed[key] ?: return
+        if (mutable.value.managedBy(key) != Managed.FLATPAK) return
+        if (holdForGame { updateOtherNow(key, password) }) return
+        setJob(key, StoreJob.Installing(waitingTurn = false))
+        when (val r = installer.updateOther(other.packageName, name, password)) {
+            UpdateOutcome.Updated -> {
+                clearJob(key)
+                redetect()
+                refreshInstalled()
+                noticesFlow.tryEmit("$name is up to date.")
+            }
+            is UpdateOutcome.NeedsPassword -> {
+                clearJob(key)
+                ask(PasswordAsk(key, name, r.wrong, update = true))
+            }
+            is UpdateOutcome.Failed -> setJob(key, StoreJob.Failed(r.message, retry = false))
+        }
+    }
+
+    /**
+     * While a game is played nothing is updated (a running emulator is never replaced under it):
+     * [then] runs once it ends, and true says it was held.
+     */
+    private fun holdForGame(then: suspend () -> Unit): Boolean {
+        if (ctx.playing.value == null) return false
+        if (!mutable.value.holding) noticesFlow.tryEmit("Updates wait until your game ends.")
+        mutable.update { it.copy(holding = true) }
+        ctx.scope.launch {
+            ctx.playing.first { it == null }
+            mutable.update { it.copy(holding = false) }
+            then()
+        }
+        return true
     }
 
     override fun onResume() {
@@ -232,7 +306,7 @@ internal class DesktopAppStoreOps(
         if (!force && known is ReleaseCheck.Ready && !known.stale && ctx.now() - known.checkedAt < freshFor) return known.release
         if (ctx.now() < gitHubLimitedUntil) return failed(key, "GitHub's limit for checks is used up for now.", gitHubLimitedUntil)
         if (known !is ReleaseCheck.Ready) mutable.update { s -> s.copy(releases = s.releases + (key to ReleaseCheck.Checking)) }
-        return when (val result = checks.withPermit { resolver.desktop(repo, e.name, installer.host, installer.arch, prereleases = e.prereleases) }) {
+        return when (val result = checks.withPermit { resolver.desktop(repo, e.name, installer.host, installer.arch, prereleases = e.prereleases || key in ctx.settings.value.store.prerelease) }) {
             is ApiResult.Success -> {
                 val r = release(e, result.value)
                 mutable.update { s -> s.copy(releases = s.releases + (key to ReleaseCheck.Ready(r, ctx.now()))) }
@@ -281,7 +355,8 @@ internal class DesktopAppStoreOps(
     }
 
     override fun updateAll() {
-        mutable.value.updates.forEach { install(it.key) }
+        if (holdForGame { updateAll() }) return
+        mutable.value.updatable.forEach { install(it.key) }
     }
 
     override fun rollBack(key: String) {
@@ -380,7 +455,13 @@ internal class DesktopAppStoreOps(
     }
 
     override fun uninstallWith(key: String, password: String?) {
+        val asked = mutable.value.password
         mutable.update { it.copy(password = null) }
+        // The password was asked for an update (a Flatpak for every account), not a removal.
+        if (asked?.update == true && asked.key == key) {
+            if (password != null) ctx.scope.launch { updateOtherNow(key, password) }
+            return
+        }
         if (key == ALL) {
             val keys = pendingAll
             pendingAll = emptyList()
@@ -558,3 +639,16 @@ internal fun DesktopAssetKind.word(): String = when (this) {
     DesktopAssetKind.ZIP -> "zip"
     DesktopAssetKind.DMG -> "disk image"
 }
+
+/**
+ * Who looks after a program found on this computer (not put there by Fuse), from how it was found
+ * ([appId], [detectedVia]): Flatpak, Linux's packages (under /usr, /bin, /opt or /snap), or the
+ * person (an AppImage of their own, a program installed with its own installer).
+ */
+internal fun managedOf(appId: String, detectedVia: String): Managed = when {
+    detectedVia.contains("flatpak", ignoreCase = true) -> Managed.FLATPAK
+    SYSTEM_PLACES.any { appId.startsWith(it) } -> Managed.SYSTEM
+    else -> Managed.ELSEWHERE
+}
+
+private val SYSTEM_PLACES = listOf("/usr/", "/bin/", "/sbin/", "/opt/", "/snap/")

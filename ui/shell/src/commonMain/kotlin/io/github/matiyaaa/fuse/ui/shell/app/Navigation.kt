@@ -42,6 +42,9 @@ sealed interface Route {
     /** An app's page in the Store, by its key in the catalogue. */
     data class StoreApp(val key: String) : Route
 
+    /** Every installed app's updates in one place (see StoreUpdatesScreen). */
+    data object StoreUpdates : Route
+
     /** Jellyfin: its settings, an item's page, a library's grid, and Jellyfin's own search. */
     data object JellyfinSettings : Route
 
