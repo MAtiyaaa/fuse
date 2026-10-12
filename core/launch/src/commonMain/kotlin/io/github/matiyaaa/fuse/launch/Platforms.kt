@@ -26,7 +26,7 @@ object Platforms {
         "vic-20", "videopac-g7400", "vircon32", "wasm-4", "win3x", "win9x", "x1", "z-machine", "zx81",
     ).map(::PlatformId) + desktopOnly
 
-    /** Systems no Android emulator runs yet (PlayStation 5: SharpEmu and KytyPS5 are x86 desktop programs). */
+    /** Systems no Android emulator runs yet (PlayStation 5: SharpEmu, KytyPS5 and the games AnyPS5 relinks are x86 desktop programs). */
     val desktopOnly: List<PlatformId> get() = DESKTOP_ONLY
 
     private val known = all.toSet()

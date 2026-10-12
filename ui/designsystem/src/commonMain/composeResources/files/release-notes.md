@@ -151,6 +151,14 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   mods; for the 3DS also system data and cheats), only files not there yet, with the other emulator
   left as it was. Shader caches, save states, logs and settings stay behind, and the preview says so.
   Take Back removes exactly what was copied.
+- **PlayStation 5 games ported with AnyPS5.** AnyPS5 isn't an emulator: its relinker makes a
+  dumped PS5 game a program of the computer's own (Linux, Windows or a Mac), with
+  AnyPS5's libraries in `libs` and the game's files in `app0` beside it. Fuse finds such a folder as
+  one PS5 game, with its title id and art from `app0`, and starts its program from that folder, as
+  AnyPS5's own guide does; a folder relinked for two systems starts with the one for the computer
+  it is on. Its saves (`_sd`, and `_sd_mem`) are kept in step with the same game's port on your
+  other computers. Fuse never runs the relinker or changes the port; games still as eboot.bin go to
+  SharpEmu or KytyPS5. Only a few games are known to play in AnyPS5 so far.
 - **Going back after an emulator update.** When the Store updates an emulator on a computer, Fuse
   keeps the version it replaces in its own folder, out of the way of the new one. An update that
   fails to install puts it straight back; after one that works, the Store offers Go Back to it, and

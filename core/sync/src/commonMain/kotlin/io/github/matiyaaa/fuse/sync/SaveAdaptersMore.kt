@@ -564,3 +564,20 @@ internal object Xenia : SaveAdapter {
         return listOf(SaveSpot(SaveKind.SAVE, "x360.savedata", root = "$content/$profile/$id/00000001"))
     }
 }
+
+/**
+ * PlayStation 5 games ported with AnyPS5: each port is its own folder, and its saves stay in it.
+ * AnyPS5's libc roots a game's paths at the folder it starts in (General.cpp), which is the port's
+ * own when Fuse starts it, and its save data libraries keep saves there: libSceSaveData in `_sd`
+ * (`/_sd/<save folder>`, with its `sce_sys/param.bin`) and libSceSaveData.native's save memory in
+ * `_sd_mem`. Both folders are the game's whole save, so they travel as they are to the same game's
+ * port on another device, whichever system it was relinked for.
+ */
+internal object AnyPs5 : SaveAdapter {
+    override val emulators = setOf("anyps5")
+
+    override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
+        val port = SaveAdapters.parent(q.romPath)
+        return listOf(SaveSpot(SaveKind.SAVE, "anyps5.savedata", root = port, folders = listOf("_sd", "_sd_mem")))
+    }
+}

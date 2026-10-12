@@ -512,6 +512,21 @@ class FolderInterpreter(
                 walk.list(usrdir.path).orEmpty().any { it.name.equals("EBOOT.BIN", ignoreCase = true) }
             if (hasEboot) return game(folder.path, sfoSerial(folder, children, walk))
         }
+        // An AnyPS5 port: its relinker makes a PS5 game's eboot.bin a program of this computer's own,
+        // run from a folder with AnyPS5's system libraries in libs/ and the game's files in app0/
+        // (AnyPS5's docs/user/USAGE.md, "Runtime layout"). The program is what starts.
+        if (walk.platform.id.value == "ps5") {
+            val app0 = dir("app0")
+            val libs = dir("libs")
+            if (app0 != null && libs != null && walk.list(libs.path).orEmpty().any { !it.isDirectory && it.extension == "prx" }) {
+                anyPs5Program(folder, children)?.let { program ->
+                    val inside = walk.list("${app0.path}/sce_sys").orEmpty()
+                    val json = inside.firstOrNull { it.name.equals("param.json", ignoreCase = true) }
+                    val serial = FilenameParser.parse(folder.name, hasExtension = false).tags.serial ?: json?.let { readSerial(it.path) }
+                    return game(program.path, serial).copy(localMedia = sceSysMedia(inside, walk))
+                }
+            }
+        }
         // PS Vita and PS4: sce_sys/param.sfo. PS5: sce_sys/param.json beside eboot.bin.
         dir("sce_sys")?.let { sceSys ->
             val inside = walk.list(sceSys.path).orEmpty()
@@ -564,6 +579,20 @@ class FolderInterpreter(
                 return game(pcLaunchFile(folder, launchables)?.path ?: folder.path)
             }
         }
+        return null
+    }
+
+    /**
+     * The program an AnyPS5 port starts with: a Windows `.exe`, a Linux ELF (`.elf`, or no extension
+     * as the relinker allows), or a Mac one (no extension). A port relinked for more than one system
+     * starts with the one for the system its folder is on: a drive letter (`C:/`) is Windows.
+     */
+    private fun anyPs5Program(folder: FsEntry, children: List<FsEntry>): FsEntry? {
+        val programs = children.filter { !it.isDirectory && (it.extension in ANYPS5_PROGRAMS || (it.extension.isEmpty() && !it.name.startsWith("."))) }
+            .filterNot { it.name.lowercase() in ANYPS5_NOT_PROGRAMS }
+        val windows = WINDOWS_ROOT.containsMatchIn(folder.path)
+        val order = if (windows) listOf("exe", "elf", "") else listOf("elf", "", "exe")
+        for (ext in order) programs.filter { it.extension == ext }.minByOrNull { it.name.lowercase() }?.let { return it }
         return null
     }
 
@@ -826,6 +855,10 @@ class FolderInterpreter(
         val STRUCTURED_ROOTS = setOf("ps3", "ps4", "ps5", "psvita", "psp", "wiiu", "xbox", "xbox360")
 
         val PC_LAUNCHABLE = setOf("desktop", "conf", "exe", "bat", "com")
+        private val ANYPS5_PROGRAMS = setOf("exe", "elf")
+        // Files a port's folder may hold beside its program that have no extension either.
+        private val ANYPS5_NOT_PROGRAMS = setOf("license", "readme", "copying", "authors", "notice")
+        private val WINDOWS_ROOT = Regex("^[A-Za-z]:[/\\\\]")
 
         /** Installers, uninstallers and helpers that are never the game. */
         val PC_HELPER = Regex(

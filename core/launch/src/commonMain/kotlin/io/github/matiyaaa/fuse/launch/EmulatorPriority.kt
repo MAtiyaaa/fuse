@@ -103,7 +103,8 @@ object EmulatorPriority {
         listOf("ps2") to ids("linux.pcsx2", LRA, "linux.play", LRAS),
         listOf("ps3") to ids("linux.rpcs3"),
         listOf("ps4") to ids("linux.shadps4"),
-        listOf("ps5") to ids("linux.sharpemu"),
+        // AnyPS5 first: it takes only the programs its relinker made, and nothing else runs those.
+        listOf("ps5") to ids("linux.anyps5", "linux.sharpemu"),
         listOf("psp") to ids("linux.ppsspp", LRA, LRAS),
         listOf("psvita") to ids("linux.vita3k"),
         listOf("n64") to ids(LRA, "linux.mupen64plus", LRAS),
@@ -162,7 +163,7 @@ object EmulatorPriority {
             expand(
                 listOf("win") to ids("windows.shortcut", "windows.steam"),
                 listOf("steam") to ids("windows.steam", "windows.shortcut"),
-                listOf("ps5") to ids("windows.sharpemu", "windows.kytyps5"),
+                listOf("ps5") to ids("windows.anyps5", "windows.sharpemu", "windows.kytyps5"),
             ),
         )
     }
@@ -174,6 +175,7 @@ object EmulatorPriority {
             expand(
                 listOf("steam") to ids("macos.steam-url", "macos.open"),
                 listOf("win") to ids("macos.open", "macos.steam-url"),
+                listOf("ps5") to ids("macos.anyps5", "macos.sharpemu"),
             ),
         )
     }

@@ -10,10 +10,12 @@ import io.github.matiyaaa.fuse.launch.RetroArchCores
 import io.github.matiyaaa.fuse.launch.Sources
 import io.github.matiyaaa.fuse.launch.TargetKind
 import io.github.matiyaaa.fuse.launch.TitleIdMode
+import io.github.matiyaaa.fuse.launch.desktop.AnyPs5Adapter
 import io.github.matiyaaa.fuse.launch.platforms
 import io.github.matiyaaa.fuse.model.AdapterCapabilities
 import io.github.matiyaaa.fuse.model.ContentSupport
 import io.github.matiyaaa.fuse.model.FolderSupport
+import io.github.matiyaaa.fuse.model.Host
 import io.github.matiyaaa.fuse.model.PlatformId
 
 /**
@@ -429,7 +431,7 @@ object LinuxCatalog {
     )
 
     /** Adapters for every entry plus the built-in `.desktop` shortcut adapter. */
-    val adapters: List<EmulatorAdapter> = defs.map(::LinuxCommandAdapter) + DesktopShortcutAdapter
+    val adapters: List<EmulatorAdapter> = defs.map(::LinuxCommandAdapter) + DesktopShortcutAdapter + AnyPs5Adapter(Host.LINUX)
 
     fun def(id: String): LinuxEmulatorDef? = defs.firstOrNull { it.id == id }
 }

@@ -97,7 +97,8 @@ internal class DesktopLauncher(
                 val msg = e.message.orEmpty()
                 return@withContext when {
                     "error=2," in msg || "error=3," in msg || "No such file" in msg -> RunResult.NotInstalled
-                    "error=13," in msg -> RunResult.Failed("$name is not marked as executable.")
+                    // The file that wouldn't run, which is the game itself for a port started as its own program.
+                    "error=13," in msg -> RunResult.Failed("${baseName(argv[0])} is not marked as executable.")
                     "error=5," in msg -> RunResult.Failed("Windows did not allow $name to start.")
                     "error=740," in msg -> RunResult.Failed("$name asks to run as administrator. Fuse starts programs as you.")
                     else -> RunResult.Failed("$name could not start: ${msg.substringAfterLast(": ").ifEmpty { "unknown error" }}")

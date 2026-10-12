@@ -88,6 +88,19 @@ class MoreAdaptersTest {
     }
 
     @Test
+    fun anyPs5PortsKeepTheirSavesInTheirOwnFolder() {
+        val sarah = q("ps5", "/games/ps5/Dreaming Sarah/app.elf", "linux.anyps5", serial = "PPSA02929")
+        val spot = SaveAdapters.forEmulator("linux.anyps5")!!.locate(sarah, FakeEnv("LINUX", "/home/mo")).single()
+        assertEquals("anyps5.savedata", spot.format)
+        assertEquals("/games/ps5/Dreaming Sarah", spot.root)
+        assertEquals(listOf("_sd", "_sd_mem"), spot.folders)
+        // The same game's Windows port takes the same save.
+        val windows = SaveAdapters.forEmulator("windows.anyps5")!!.locate(sarah.copy(romPath = "D:/PS5/Sarah/app.exe", emulatorId = "windows.anyps5"), FakeEnv("WINDOWS", "C:/Users/mo")).single()
+        assertEquals("D:/PS5/Sarah", windows.root)
+        assertEquals(spot.format, windows.format)
+    }
+
+    @Test
     fun duckStationOnWindowsKeepsItsDataWhereItsOwnCodeSays() {
         val ff7 = q("psx", "C:/roms/psx/Final Fantasy VII.chd", "windows.duckstation", serial = "SCUS-94163", title = "Final Fantasy VII")
         fun card(env: FakeEnv) = SaveAdapters.forEmulator("windows.duckstation")!!.locate(ff7.copy(emulatorPath = "C:/Emu/DuckStation/duckstation-qt-x64-ReleaseLTCG.exe"), env).first().pathFor("card1.mcd")
