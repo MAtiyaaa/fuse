@@ -1,5 +1,7 @@
 package io.github.matiyaaa.fuse.link
 
+import io.github.matiyaaa.fuse.data.settings.ExtensionScope
+import io.github.matiyaaa.fuse.data.settings.Extensions
 import io.github.matiyaaa.fuse.ui.shell.app.ExternalRequest
 import io.github.matiyaaa.fuse.ui.shell.app.ExternalRequests
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
@@ -25,6 +27,7 @@ import java.security.SecureRandom
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -39,7 +42,8 @@ import kotlinx.serialization.json.putJsonObject
  * device. Fuse owns everything (the library, profiles, Fuse One, saves and transfers); the plugin
  * only asks, and shows answers in Steam. Nothing here can touch saves, change emulator files or
  * hand out household secrets or Steam credentials: the bridge offers a short list of read-only
- * views and a few actions the person could do in Fuse themselves.
+ * views and a few actions the person could do in Fuse themselves, each only as far as the person
+ * lets the plugin ([Extensions.DECKY]: emulators not until they allow it).
  *
  * It listens on the loopback address only, on a port the system picks, and every request must carry
  * a random token. Both are written to [discovery] (readable by this user only) for the plugin to
@@ -71,19 +75,22 @@ class DeckyBridge(
             }
             routing {
                 get("/v1/hello") { call.json(hello()) }
-                get("/v1/status") { call.json(status()) }
-                get("/v1/steam/{appId}") { call.json(steamGame(call.appId() ?: return@get call.bad())) }
-                post("/v1/steam/{appId}/add") { call.json(addSteam(listOf(call.appId() ?: return@post call.bad()))) }
-                post("/v1/steam/{appId}/remove") { call.json(removeSteam(call.appId() ?: return@post call.bad())) }
-                post("/v1/steam/{appId}/open") { call.json(openSteam(call.appId() ?: return@post call.bad())) }
+                // Each of the rest only as far as the person lets the plugin (Settings, Library, Decky).
+                get("/v1/status") { call.allowedTo(ExtensionScope.STATUS) { call.json(status()) } }
+                get("/v1/steam/{appId}") { call.allowedTo(ExtensionScope.LIBRARY) { call.json(steamGame(call.appId() ?: return@allowedTo call.bad())) } }
+                post("/v1/steam/{appId}/add") { call.allowedTo(ExtensionScope.CHANGE_LIBRARY) { call.json(addSteam(listOf(call.appId() ?: return@allowedTo call.bad()))) } }
+                post("/v1/steam/{appId}/remove") { call.allowedTo(ExtensionScope.CHANGE_LIBRARY) { call.json(removeSteam(call.appId() ?: return@allowedTo call.bad())) } }
+                post("/v1/steam/{appId}/open") { call.allowedTo(ExtensionScope.PLAY) { call.json(openSteam(call.appId() ?: return@allowedTo call.bad())) } }
                 post("/v1/steam/import") {
-                    val ids = runCatching { Json.parseToJsonElement(call.receiveText()).jsonObject["appIds"]?.jsonArray?.mapNotNull { it.jsonPrimitive.longOrNull } }.getOrNull()
-                    if (ids.isNullOrEmpty()) call.bad() else call.json(addSteam(ids.take(MAX_IMPORT)))
+                    call.allowedTo(ExtensionScope.CHANGE_LIBRARY) {
+                        val ids = runCatching { Json.parseToJsonElement(call.receiveText()).jsonObject["appIds"]?.jsonArray?.mapNotNull { it.jsonPrimitive.longOrNull } }.getOrNull()
+                        if (ids.isNullOrEmpty()) call.bad() else call.json(addSteam(ids.take(MAX_IMPORT)))
+                    }
                 }
-                get("/v1/emulators") { call.json(emulators()) }
-                post("/v1/emulators/update-all") { call.json(storeAction { updateAll() }) }
-                post("/v1/emulators/install-all") { call.json(storeAction { installAll() }) }
-                post("/v1/emulators/uninstall-all") { call.json(storeAction { uninstallAll() }) }
+                get("/v1/emulators") { call.allowedTo(ExtensionScope.EMULATORS) { call.json(emulators()) } }
+                post("/v1/emulators/update-all") { call.allowedTo(ExtensionScope.EMULATORS) { call.json(storeAction { updateAll() }) } }
+                post("/v1/emulators/install-all") { call.allowedTo(ExtensionScope.EMULATORS) { call.json(storeAction { installAll() }) } }
+                post("/v1/emulators/uninstall-all") { call.allowedTo(ExtensionScope.EMULATORS) { call.json(storeAction { uninstallAll() }) } }
             }
         }
         return try {
@@ -115,7 +122,24 @@ class DeckyBridge(
         put("app", "Fuse")
         put("version", version)
         put("protocol", PROTOCOL)
-        put("profile", store.sync.service?.activeProfile?.value?.name)
+        // Who is playing is part of what Fuse shows: only with that allowed.
+        put("profile", if (allows(ExtensionScope.STATUS)) store.sync.service?.activeProfile?.value?.name else null)
+        // What the plugin may do here, so it offers only that.
+        putJsonArray("allowed") { for (s in Extensions.granted(store.prefs.value.extensions, Extensions.DECKY)) add(JsonPrimitive(s.name.lowercase())) }
+    }
+
+    private fun allows(scope: ExtensionScope) = Extensions.allows(store.prefs.value.extensions, Extensions.DECKY, scope)
+
+    /** Runs [block] when the person lets the plugin do [scope]; otherwise says where they can allow it. */
+    private suspend fun ApplicationCall.allowedTo(scope: ExtensionScope, block: suspend () -> Unit) {
+        if (!allows(scope)) {
+            respondText(
+                buildJsonObject { put("error", "not-allowed"); put("message", Extensions.refusal(Extensions.DECKY, scope)); put("scope", scope.name.lowercase()) }.toString(),
+                ContentType.Application.Json, HttpStatusCode.Forbidden,
+            )
+            return
+        }
+        block()
     }
 
     /** Fuse One at a glance, and what is moving: all things Fuse already shows the person. */

@@ -40,6 +40,8 @@ data class AppSettings(
     val videoPreview: VideoPreviewSettings = VideoPreviewSettings(),
     /** Fuse and Steam together: the integration's answers and parts (this device's own). */
     val steam: SteamIntegrationSettings = SteamIntegrationSettings(),
+    /** What apps that talk to Fuse (the Decky plugin, Phone Link) may do here (this device's own). */
+    val extensions: ExtensionSettings = ExtensionSettings(),
     val library: LibraryPreferences = LibraryPreferences(),
     val sound: SoundSettings = SoundSettings(),
     val music: MusicSettings = MusicSettings(),

@@ -18,6 +18,8 @@ import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.net.Socket
 import java.nio.file.Files
+import io.github.matiyaaa.fuse.data.settings.ExtensionScope
+import io.github.matiyaaa.fuse.data.settings.Extensions
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -133,6 +135,15 @@ class PhoneLinkServerTest {
         assertEquals(400, art.status)
         val match = http(port, "POST", "/api/games/$id/identify", """{"providerId":"IGDB","providerGameId":"1"}""", cookie = cookie)
         assertEquals(400, match.status)
+
+        // What the person takes from Phone Link (Settings, Accounts, Phone Link) is refused, with where to allow it.
+        store.updatePrefs { it.copy(extensions = Extensions.set(Extensions.set(it.extensions, Extensions.PHONE_LINK, ExtensionScope.CHANGE_LIBRARY, false), Extensions.PHONE_LINK, ExtensionScope.CAPTURES, false)) }
+        withTimeout(10_000) { while (Extensions.allows(store.prefs.value.extensions, Extensions.PHONE_LINK, ExtensionScope.CAPTURES)) kotlinx.coroutines.delay(20) }
+        val fill = http(port, "POST", "/api/games/$id/fill", cookie = cookie)
+        assertEquals(403, fill.status)
+        assertTrue("Settings, Accounts, Phone Link" in fill.body, fill.body)
+        assertEquals(403, http(port, "GET", "/api/captures", cookie = cookie).status)
+        assertEquals(200, http(port, "GET", "/api/games/$id", cookie = cookie).status, "browsing stays allowed")
 
         // Signing everyone out ends the session.
         link.signOutAll()

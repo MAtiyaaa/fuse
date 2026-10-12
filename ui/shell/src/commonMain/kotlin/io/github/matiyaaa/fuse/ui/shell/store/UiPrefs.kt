@@ -80,6 +80,8 @@ data class UiPrefs(
     val soundVolume: Float = 0.6f,
     /** Fuse and Steam on this device (see [io.github.matiyaaa.fuse.data.settings.SteamIntegrationSettings]). */
     val steam: io.github.matiyaaa.fuse.data.settings.SteamIntegrationSettings = io.github.matiyaaa.fuse.data.settings.SteamIntegrationSettings(),
+    /** What apps that talk to Fuse may do (see [io.github.matiyaaa.fuse.data.settings.Extensions]). */
+    val extensions: io.github.matiyaaa.fuse.data.settings.ExtensionSettings = io.github.matiyaaa.fuse.data.settings.ExtensionSettings(),
     /** Which view the Library opens on: "INSTALLED" (this device's games) or "ALL" (everywhere). */
     val libraryOpensOn: String = "ALL",
     /** All of Fuse's sound off: music, interface sounds and the startup sound, whatever their own switches say. */

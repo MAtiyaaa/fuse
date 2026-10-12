@@ -68,6 +68,13 @@ def _call(method, path, body=None):
         with urllib.request.urlopen(request, timeout=TIMEOUT_S) as response:
             return json.loads(response.read().decode("utf-8") or "{}")
     except urllib.error.HTTPError as e:
+        # Fuse says why it refused (something the person hasn't allowed the plugin): pass that on.
+        try:
+            answer = json.loads(e.read().decode("utf-8") or "{}")
+            if isinstance(answer, dict) and isinstance(answer.get("message"), str):
+                return {"error": answer.get("error") or "http-" + str(e.code), "message": answer["message"]}
+        except (ValueError, OSError):
+            pass
         return {"error": "http-" + str(e.code), "message": "Fuse refused that (" + str(e.code) + ")."}
     except (urllib.error.URLError, OSError, ValueError):
         return {"error": "not-running", "message": "Fuse isn't answering. Open Fuse, then try again."}

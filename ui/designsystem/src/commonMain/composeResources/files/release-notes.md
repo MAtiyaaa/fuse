@@ -164,6 +164,12 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   fails to install puts it straight back; after one that works, the Store offers Go Back to it, and
   so does the problem Fuse shows when an emulator updated in the last month won't start. The
   emulator's own settings and saves are never touched.
+- **What other apps may do.** The Fuse Decky plugin and Phone Link each do only what you allow,
+  set where each is set up (Settings, Library, Decky; Settings, Accounts, Phone Link): see what Fuse
+  shows, see or change your library, open games, type into Fuse, see captures, and, for the plugin,
+  install and remove emulators, which it can't until you allow it. Fuse refuses anything else and
+  says where to allow it, and the plugin offers only what it may do. Household passwords and keys,
+  saves, emulators' files and your files aren't among them: no app can be given them.
 - **Updating Fuse safely.** A Fuse download that stops (a lost connection, Fuse closed) carries on
   where it stopped the next time, and is still checked against the checksum GitHub publishes before
   anything installs. On Linux the version an update replaces is kept beside it: Settings, About

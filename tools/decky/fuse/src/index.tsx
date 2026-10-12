@@ -18,6 +18,7 @@ import {
   Hello,
   importGames,
   installAllEmulators,
+  may,
   openGame,
   addGame,
   status,
@@ -183,6 +184,15 @@ const Emulators: VFC = () => {
   );
 };
 
+/** A part of the plugin Fuse doesn't let it use, and where the person can allow it. */
+const NotAllowed: VFC<{ title: string; what: string }> = ({ title, what }) => (
+  <PanelSection title={title}>
+    <PanelSectionRow>
+      <Field label="Not allowed" description={`Fuse doesn't let this plugin ${what}. Allow it in Fuse: Settings, Library, Decky.`} />
+    </PanelSectionRow>
+  </PanelSection>
+);
+
 const Content: VFC = () => {
   const [hi] = usePoll<Hello>(() => hello());
   const [s] = usePoll<Status>(() => status());
@@ -190,10 +200,10 @@ const Content: VFC = () => {
   return (
     <>
       <Connection hi={hi} />
-      {connected && <ThisGame />}
-      {connected && <FuseOne s={s} />}
-      {connected && <SteamGames />}
-      {connected && <Emulators />}
+      {connected && may(hi, "library") && <ThisGame />}
+      {connected && may(hi, "status") && <FuseOne s={s} />}
+      {connected && may(hi, "change_library") && <SteamGames />}
+      {connected && (may(hi, "emulators") ? <Emulators /> : <NotAllowed title="Emulators" what="install and remove emulators" />)}
     </>
   );
 };

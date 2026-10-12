@@ -23,6 +23,10 @@ const definePlugin = (fn) => {
     };
 };
 
+/** Whether Fuse lets the plugin do [scope]: an older Fuse that doesn't say lets it do everything it offers. */
+function may(hi, scope) {
+    return !hi?.allowed || hi.allowed.includes(scope);
+}
 const hello = callable("hello");
 const status = callable("status");
 const steamGame = callable("steam_game");
@@ -277,16 +281,20 @@ const Emulators = () => {
         window.SP_REACT.createElement(DFL.PanelSectionRow, null,
             window.SP_REACT.createElement(DFL.ButtonItem, { layout: "below", onClick: () => confirm("Uninstall every emulator Fuse installed?", "Your games and saves stay. Emulators you installed yourself stay too.", async () => say(await uninstallAllEmulators(), "Uninstalling in Fuse")) }, "Uninstall all"))));
 };
+/** A part of the plugin Fuse doesn't let it use, and where the person can allow it. */
+const NotAllowed = ({ title, what }) => (window.SP_REACT.createElement(DFL.PanelSection, { title: title },
+    window.SP_REACT.createElement(DFL.PanelSectionRow, null,
+        window.SP_REACT.createElement(DFL.Field, { label: "Not allowed", description: `Fuse doesn't let this plugin ${what}. Allow it in Fuse: Settings, Library, Decky.` }))));
 const Content = () => {
     const [hi] = usePoll(() => hello());
     const [s] = usePoll(() => status());
     const connected = !failure(hi);
     return (window.SP_REACT.createElement(window.SP_REACT.Fragment, null,
         window.SP_REACT.createElement(Connection, { hi: hi }),
-        connected && window.SP_REACT.createElement(ThisGame, null),
-        connected && window.SP_REACT.createElement(FuseOne, { s: s }),
-        connected && window.SP_REACT.createElement(SteamGames, null),
-        connected && window.SP_REACT.createElement(Emulators, null)));
+        connected && may(hi, "library") && window.SP_REACT.createElement(ThisGame, null),
+        connected && may(hi, "status") && window.SP_REACT.createElement(FuseOne, { s: s }),
+        connected && may(hi, "change_library") && window.SP_REACT.createElement(SteamGames, null),
+        connected && (may(hi, "emulators") ? window.SP_REACT.createElement(Emulators, null) : window.SP_REACT.createElement(NotAllowed, { title: "Emulators", what: "install and remove emulators" }))));
 };
 var index = definePlugin(() => {
     // Steam's game menu gets the Fuse entries where this Steam build allows it.

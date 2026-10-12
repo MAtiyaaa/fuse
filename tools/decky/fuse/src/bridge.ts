@@ -11,6 +11,13 @@ export interface Hello extends Failure {
   version?: string;
   protocol?: number;
   profile?: string | null;
+  /** What Fuse lets the plugin do (status, library, play, change_library, emulators); absent from older Fuse. */
+  allowed?: string[];
+}
+
+/** Whether Fuse lets the plugin do [scope]: an older Fuse that doesn't say lets it do everything it offers. */
+export function may(hi: Hello | null | undefined, scope: string): boolean {
+  return !hi?.allowed || hi.allowed.includes(scope);
 }
 
 export interface Device {

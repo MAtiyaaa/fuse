@@ -61,6 +61,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         gameArt = library.gameArt,
         libraryOpensOn = library.opensOn,
         steam = steam,
+        extensions = extensions,
         showHero = scoped.showHero,
         showLogo = scoped.showLogo,
         videoPreview = videoPreview.enabled,
@@ -214,6 +215,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
         updates = updates.copy(checkForUpdates = prefs.checkForUpdates),
         capture = capture.copy(combo = prefs.captureCombo, sound = prefs.captureSound),
         steam = prefs.steam,
+        extensions = prefs.extensions,
         // What Fuse installed is kept as it is: only the Store writes it.
         store = store.copy(enabled = prefs.storeEnabled, variant = prefs.storeVariant, autoCheck = prefs.storeAutoCheck),
         jellyfin = prefs.jellyfin,

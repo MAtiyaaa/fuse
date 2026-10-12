@@ -415,6 +415,28 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         shoot("off")
     }
 
+    // What apps that talk to Fuse may do, where each is set up: Phone Link in Accounts, the Decky plugin in Library.
+    scenario("settings", "what other apps may do") {
+        phoneLink.state.value = io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkState(running = true, addresses = listOf("http://192.168.1.20:47300/"), username = "player", sessions = 1)
+        useLibrary { it.copy(phoneLinkEnabled = true) }
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("phonelink"))
+        tap(PadButton.DPAD_RIGHT)
+        tapText("What a phone may do")
+        focusText("Never given to any app")
+        settle(600)
+        shoot("a phone: everything it asks, and what no app is given")
+        phoneLink.state.value = io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkState()
+        useLibrary(AuditPlatform(size, steam = AuditSteam(), decky = AuditDecky(), host = io.github.matiyaaa.fuse.model.Host.LINUX)) { it.copy(phoneLinkEnabled = false, steam = it.steam.copy(decky = true)) }
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("library"))
+        tap(PadButton.DPAD_RIGHT)
+        tapText("What the plugin may do")
+        focusText("Install and remove emulators")
+        settle(600)
+        shoot("the Decky plugin: emulators not until allowed")
+    }
+
     // Storage at every size: two panes when wide, the systems as a filter row when narrow.
     scenario("settings", "storage at a glance") {
         useLibrary()

@@ -1269,6 +1269,7 @@ private fun deckyRows(app: AppState, decky: io.github.matiyaaa.fuse.ui.shell.pla
             if (p.steam.decky) "The plugin can ask Fuse what it shows, on this device only. It can't touch saves or secrets" else "Off: the plugin shows that Fuse isn't answering",
             enabled = !live.busy,
         ) { v -> app.store.updatePrefs { q -> q.copy(steam = q.steam.copy(decky = v)) } })
+        addAll(extensionRows(app, io.github.matiyaaa.fuse.data.settings.Extensions.DECKY, p))
         if (st?.plugin == true) add(app.confirmRow(
             "decky.remove", "Remove the Fuse plugin", FuseIcons.Trash,
             "Remove the Fuse plugin?", "It leaves Decky, which reloads by itself. Steam, your games and everything in Fuse stay as they are. The system asks for your password.", "Remove",

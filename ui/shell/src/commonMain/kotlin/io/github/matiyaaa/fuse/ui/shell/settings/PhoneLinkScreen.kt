@@ -87,6 +87,7 @@ fun phoneLinkRows(app: AppState): List<MenuAction> {
         ))
         addAll(phoneLinkAccountRows(app, link, state))
         add(phoneControllerSwitch(app, prefs.phoneLinkController))
+        addAll(extensionRows(app, io.github.matiyaaa.fuse.data.settings.Extensions.PHONE_LINK, prefs))
         labelled("") { addAll(phoneLinkInfoRows()) }
     }
 }
@@ -94,7 +95,7 @@ fun phoneLinkRows(app: AppState): List<MenuAction> {
 /** Whether a signed-in phone's Remote may press this device's buttons. */
 private fun phoneControllerSwitch(app: AppState, on: Boolean) = toggleRow(
     "controller", "Phone as a controller", FuseIcons.Gamepad, on,
-    detail = "A signed-in phone's Remote moves around Fuse like a controller. Typing from a phone works either way",
+    detail = "A signed-in phone's Remote moves around Fuse like a controller. Typing follows What a phone may do, below",
 ) { v -> app.store.updatePrefs { it.copy(phoneLinkController = v) } }
 
 private fun phoneLinkSwitch(app: AppState, on: Boolean) = toggleRow(
@@ -134,8 +135,8 @@ private fun phoneLinkAccountRows(app: AppState, link: PhoneLinkControl, state: P
 
 private fun phoneLinkInfoRows(): List<MenuAction> = listOf(
     infoRow(
-        "can", "What a phone can do",
-        detail = "See what's playing and downloading, browse and search your library, fix names, details and art, fill art, download your screenshots and recordings, type into the field on screen, and move around Fuse as a controller",
+        "can", "What Phone Link offers",
+        detail = "See what's playing and downloading, browse and search your library, fix names, details and art, fill art, download your screenshots and recordings, type into the field on screen, and move around Fuse as a controller: each as far as you allow above",
         icon = FuseIcons.MonitorSmartphone,
     ),
     infoRow(
