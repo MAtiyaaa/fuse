@@ -53,6 +53,47 @@ internal class DesktopEmulatorDetector(
     override fun biosFolders(installed: List<InstalledEmulator>): List<String> =
         (folders.retroArchSystemDirs(installed) + folders.biosRoots()).distinct()
 
+    /**
+     * Where Eden, Citron, Ryujinx, RPCS3 and Vita3K keep what is installed from their menus: a
+     * portable folder beside the program first (`user` for the yuzu line, `portable` for Ryujinx,
+     * the program's own folder for RPCS3 on Windows), then the system's data or config folder.
+     */
+    override fun firmwareFolders(installed: List<InstalledEmulator>): List<io.github.matiyaaa.fuse.library.bios.EmulatorDataFolder> {
+        val home = env.homeDir.trimEnd('/')
+        val data = System.getenv("XDG_DATA_HOME")?.takeIf { it.startsWith("/") } ?: "$home/.local/share"
+        val config = System.getenv("XDG_CONFIG_HOME")?.takeIf { it.startsWith("/") } ?: "$home/.config"
+        val appData = System.getenv("APPDATA")
+        val mac = "$home/Library/Application Support"
+        val out = ArrayList<io.github.matiyaaa.fuse.library.bios.EmulatorDataFolder>()
+        for (e in installed) {
+            val name = e.id.value.substringAfter('.')
+            val dir = File(e.appId).takeIf { it.isAbsolute }?.parentFile?.path
+            fun add(platform: String, family: String, vararg paths: String?) =
+                paths.filterNotNull().forEach { out += io.github.matiyaaa.fuse.library.bios.EmulatorDataFolder(platform, family, e.name, it) }
+            when (name) {
+                "eden", "citron" -> add(
+                    "switch", "yuzu", dir?.let { "$it/user" },
+                    when (os) { DesktopOs.LINUX -> "$data/$name"; DesktopOs.WINDOWS -> appData?.let { "$it/$name" }; DesktopOs.MACOS -> "$mac/$name" },
+                    if (os == DesktopOs.LINUX && name == "eden") "$home/.var/app/dev.eden_emu.eden/data/eden" else null,
+                )
+                "ryujinx" -> add(
+                    "switch", "ryujinx", dir?.let { "$it/portable" },
+                    when (os) { DesktopOs.LINUX -> "$config/Ryujinx"; DesktopOs.WINDOWS -> appData?.let { "$it/Ryujinx" }; DesktopOs.MACOS -> "$mac/Ryujinx" },
+                )
+                "rpcs3" -> add(
+                    "ps3", "rpcs3", if (os == DesktopOs.WINDOWS) dir else null,
+                    when (os) { DesktopOs.LINUX -> "$config/rpcs3"; DesktopOs.MACOS -> "$mac/rpcs3"; DesktopOs.WINDOWS -> null },
+                    if (os == DesktopOs.LINUX) "$home/.var/app/net.rpcs3.RPCS3/config/rpcs3" else null,
+                )
+                "vita3k" -> add(
+                    "psvita", "vita3k", dir?.let { "$it/portable/fs" },
+                    when (os) { DesktopOs.LINUX -> "$data/Vita3K/Vita3K"; DesktopOs.WINDOWS -> appData?.let { "$it/Vita3K/Vita3K" }; DesktopOs.MACOS -> "$mac/Vita3K/Vita3K" },
+                )
+            }
+        }
+        return out.distinctBy { it.platform to it.folder }
+    }
+
     override fun rpcs3DevHdd0(installed: List<InstalledEmulator>): List<String> {
         val home = env.homeDir.trimEnd('/')
         val known = when (os) {

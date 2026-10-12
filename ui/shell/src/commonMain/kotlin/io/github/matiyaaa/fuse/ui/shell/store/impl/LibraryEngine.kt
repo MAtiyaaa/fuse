@@ -387,13 +387,14 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
             val roots = runCatching { services.locations.biosRoots() }.getOrDefault(emptyList())
             val emulatorFolders = services.emulators.biosFolders(ctx.installed.value)
             val unreadable = services.emulators.unreadablePaths()
+            val inside = runCatching { services.emulators.firmwareFolders(ctx.installed.value) }.getOrDefault(emptyList())
             val checker = BiosChecker(services.fs)
             val platforms = data.games.platformCounts().first().keys.mapNotNull(ctx::platform).filter { it.bios != null }
             val result = HashMap<PlatformId, BiosStatus>()
             for (p in platforms) {
                 val paths = BiosSearchPaths.forPlatform(p, roots, sources, emulatorFolders)
                 result[p.id] = try {
-                    checker.check(p, paths, unreadable)
+                    io.github.matiyaaa.fuse.library.bios.InEmulatorFirmware.merge(p.id.value, checker.check(p, paths, unreadable), inside, services.fs)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {

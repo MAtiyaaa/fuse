@@ -187,6 +187,9 @@ interface EmulatorDetector {
     /** Firmware folders of installed emulators that Fuse can read (RetroArch `system/`, Dolphin `Sys/`). */
     fun biosFolders(installed: List<InstalledEmulator>): List<String> = emptyList()
 
+    /** The data folders of the emulators that install firmware inside themselves (Switch, PS3, Vita), to check it is there. */
+    fun firmwareFolders(installed: List<InstalledEmulator>): List<io.github.matiyaaa.fuse.library.bios.EmulatorDataFolder> = emptyList()
+
     /** RPCS3's dev_hdd0 folders on this device, where its trophies are kept. */
     fun rpcs3DevHdd0(installed: List<InstalledEmulator>): List<String> = emptyList()
 
