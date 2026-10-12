@@ -211,9 +211,41 @@ class SyncClient(
     ): T = try {
         callOnce(method, path, body, out, bodyHash, content, raw, headers)
     } catch (e: SyncException) {
-        // The host is away, or another keeps the household now: once more, at the host there is.
-        if (e.code !in MOVED || link.hosts.size < 2 || content != null || !failover()) throw e
+        // The host is away, or another keeps the household now: once more, at the host there is,
+        // or at the address the household's host answers from at home now (a new computer, a new address).
+        if (e.code !in MOVED || content != null) throw e
+        if (!(link.hosts.size >= 2 && failover()) && !(e.code == "offline" && rediscover())) throw e
         callOnce(method, path, body, out, bodyHash, content, raw, headers)
+    }
+
+    /** When this device last asked the home network where its host is (see [rediscover]). */
+    @Volatile private var rediscoveredAt = 0L
+
+    /**
+     * Asks the home network where this household's host is when it doesn't answer where it was:
+     * the same host (by its id), as the household's host, of a generation this device may follow,
+     * answering at an address this device didn't know. Asked at most every few minutes. True when
+     * the link now has that address.
+     */
+    suspend fun rediscover(find: suspend () -> List<FoundHost> = { Discovery.find() }): Boolean {
+        val now = clock()
+        if (now - rediscoveredAt < REDISCOVER_EVERY_MS) return false
+        rediscoveredAt = now
+        val known = link.localAddress?.let(::normalise)
+        for (f in find()) {
+            val h = f.hello
+            if (h.hostId != link.hostId || h.role != Leadership.PRIMARY || h.generation < link.generation) continue
+            for (candidate in f.candidates) {
+                val address = normalise(candidate)
+                if (address == known) continue
+                val answer = hello(address, quickHttp) ?: continue
+                if (answer.hostId != link.hostId) continue
+                changeLink(link.copy(localAddress = address, generation = maxOf(link.generation, answer.generation), hosts = answer.hosts.ifEmpty { link.hosts }))
+                route = null
+                return true
+            }
+        }
+        return false
     }
 
     private suspend fun <T> callOnce(
@@ -489,6 +521,9 @@ class SyncClient(
 
         /** How often home is looked at while away. */
         const val HOME_LOOK_MS = 60_000L
+
+        /** How often the home network is asked where the host went. */
+        const val REDISCOVER_EVERY_MS = 3 * 60_000L
 
         /** Files moved at once, each way. */
         const val TRANSFERS = 4

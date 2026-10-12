@@ -39,6 +39,7 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -124,6 +125,68 @@ class SyncHost(
     fun restoreHousehold(name: String): HouseholdSnapshot {
         val b = checkNotNull(backups) { "This host keeps no backups." }
         return b.restore(name, store).also { bump() }
+    }
+
+    @Volatile private var recovery: RecoveryJob? = null
+
+    /** The recovery package being made or restored here, or the last one; null when there was none. */
+    fun recoveryJob(): RecoveryJob? = recovery
+
+    /**
+     * Starts making ([RecoveryJob.WRITE]) or restoring ([RecoveryJob.RESTORE]) the recovery package
+     * at [file] with [password], on a thread of its own; [recoveryJob] says how it goes. Only the
+     * household's host does either, one at a time.
+     */
+    fun startRecovery(kind: String, file: File, password: String): RecoveryJob {
+        check(store.leadership.isLeader) { "Only the household's host does this." }
+        synchronized(this) {
+            check(recovery?.running != true) { "A recovery package is being made or restored already." }
+            if (kind == RecoveryJob.WRITE) require(password.length >= RecoveryPackage.MIN_PASSWORD) { "The password needs at least ${RecoveryPackage.MIN_PASSWORD} characters." }
+            if (kind == RecoveryJob.RESTORE) require(file.isFile) { "There's no file at ${file.path}." }
+            recovery = RecoveryJob(kind, RecoveryJob.RUNNING, file.path.replace('\\', '/'), startedAt = clock())
+        }
+        kotlin.concurrent.thread(name = "fuse-recovery", isDaemon = true) {
+            fun progress(done: Long, total: Long) { recovery = recovery?.copy(done = done, total = total) }
+            val result = runCatching {
+                if (kind == RecoveryJob.WRITE) {
+                    file.parentFile?.mkdirs()
+                    RecoveryPackage.write(store, file, password, fuseVersion, clock, ::progress)
+                } else {
+                    restorePackage(file, password, ::progress)
+                }
+            }
+            recovery = result.fold(
+                { m -> recovery!!.copy(state = RecoveryJob.DONE, hostName = m.hostName, createdAt = m.createdAt, profiles = m.profiles, devices = m.devices, revisions = m.revisions) },
+                { e -> recovery!!.copy(state = RecoveryJob.FAILED, message = e.message ?: e::class.simpleName) },
+            )
+        }
+        return recovery!!
+    }
+
+    /**
+     * Puts the household back as the package at [file] kept it, after reading all of it and checking
+     * every file: the household as it is here kept first as a backup of its own, the saves' files
+     * put in, then everything else. This computer then holds a newer generation of hosts than the
+     * package knew, so devices take it as the host, and a host the package came from is fenced
+     * should it come back.
+     */
+    private fun restorePackage(file: File, password: String, progress: (Long, Long) -> Unit): RecoveryManifest {
+        val tmp = File(store.dir, ".restore-objects")
+        tmp.deleteRecursively()
+        try {
+            val pkg = RecoveryPackage.open(file, password, tmp, progress)
+            val now = store.status(port, fuseVersion)
+            if (now.profiles.isNotEmpty() || now.devices.size > 1) {
+                (backups ?: HouseholdBackups(File(store.dir, "household-backups"), clock)).snapshot(store, listOf(HouseholdBackups.BEFORE_RESTORE))
+            }
+            for (h in pkg.manifest.objects) if (!store.content.has(h)) File(tmp, h).inputStream().use { store.content.put(it, expected = h) }
+            store.restoreFrom(pkg.files)
+            store.leadership.promote(maxOf(pkg.manifest.generation, store.leadership.current.generation) + 1, store.seq())
+            bump()
+            return pkg.manifest
+        } finally {
+            tmp.deleteRecursively()
+        }
     }
 
     /** Makes this backup the household's host when a person says so (set where a backup runs; null elsewhere). */
@@ -659,6 +722,21 @@ class SyncHost(
                         return@post call.fail(HttpStatusCode.Conflict, it.message ?: "Couldn't put the household back.", "no-restore")
                     }
                     call.json(HouseholdSnapshot.serializer(), snap)
+                }
+                get("/recovery") {
+                    if (!admin()) return@get
+                    val job = recoveryJob() ?: return@get call.fail(HttpStatusCode.NotFound, "No recovery package was made or restored here.", "no-recovery")
+                    call.json(RecoveryJob.serializer(), job)
+                }
+                post("/recovery/{kind}") {
+                    if (!admin()) return@post
+                    val req = body(RecoveryRequest.serializer()) ?: return@post
+                    val kind = call.parameters["kind"].orEmpty().takeIf { it == RecoveryJob.WRITE || it == RecoveryJob.RESTORE }
+                        ?: return@post call.fail(HttpStatusCode.NotFound, "Make or restore?", "bad-request")
+                    val job = runCatching { startRecovery(kind, File(req.file), req.password) }.getOrElse {
+                        return@post call.fail(HttpStatusCode.Conflict, it.message ?: "Couldn't start.", "no-recovery")
+                    }
+                    call.json(RecoveryJob.serializer(), job)
                 }
                 post("/takeover") {
                     if (!admin()) return@post

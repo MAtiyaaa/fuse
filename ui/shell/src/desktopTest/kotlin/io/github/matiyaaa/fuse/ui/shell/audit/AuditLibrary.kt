@@ -99,7 +99,8 @@ internal object AuditLibrary {
                     feed.collections.size == AuditSamples.collections.size + 2 &&
                     feed.pinnedGames.size == 3 &&
                     feed.pinnedApps.size == pinnedApps.size &&
-                    feed.playtime.weekSeconds > 0
+                    // Not this week's: early on a Monday every sample session ended last week.
+                    feed.playtime.totalSeconds > 0
             }
             store.library.platforms.first { list ->
                 list.firstOrNull { it.platform.id == PlatformId("psx") }?.bios?.state == BiosState.MISSING &&

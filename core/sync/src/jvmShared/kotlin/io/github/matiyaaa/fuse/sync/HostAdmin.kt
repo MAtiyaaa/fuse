@@ -50,6 +50,9 @@ class HostAdmin(private val port: Int, private val token: String, private val ht
     suspend fun householdBackups(): HouseholdBackupsState = json.decodeFromString(HouseholdBackupsState.serializer(), call(HttpMethod.Get, "/household-backups"))
     suspend fun backUpNow(): HouseholdSnapshot = json.decodeFromString(HouseholdSnapshot.serializer(), call(HttpMethod.Post, "/household-backups"))
     suspend fun restoreHousehold(name: String): HouseholdSnapshot = json.decodeFromString(HouseholdSnapshot.serializer(), call(HttpMethod.Post, "/household-backups/restore/$name"))
+    suspend fun recovery(): RecoveryJob? = runCatching { json.decodeFromString(RecoveryJob.serializer(), call(HttpMethod.Get, "/recovery")) }.getOrNull()
+    suspend fun startRecovery(kind: String, file: String, password: String): RecoveryJob =
+        json.decodeFromString(RecoveryJob.serializer(), call(HttpMethod.Post, "/recovery/$kind", json.encodeToString(RecoveryRequest.serializer(), RecoveryRequest(file, password))))
     suspend fun takeOver(): Leadership = json.decodeFromString(Leadership.serializer(), call(HttpMethod.Post, "/takeover"))
     suspend fun acceptBackup(device: String): Leadership = json.decodeFromString(Leadership.serializer(), call(HttpMethod.Post, "/backups/accept/$device"))
     suspend fun removeBackup(node: String): Leadership = json.decodeFromString(Leadership.serializer(), call(HttpMethod.Delete, "/backups/$node"))

@@ -917,6 +917,31 @@ class JvmSyncService(
         }
     }
 
+    override suspend fun startRecovery(kind: String, file: String, password: String): Result<RecoveryJob> = withContext(Dispatchers.IO) {
+        runCatching {
+            val server = hostServer
+            val job = if (server != null) server.startRecovery(kind, java.io.File(file), password)
+            else checkNotNull(hostAdmin) { "This device isn't the host." }.startRecovery(kind, file, password)
+            log(if (kind == RecoveryJob.WRITE) "Making a recovery package of the household" else "Putting the household back from a recovery package", kind = SyncActivity.HOST)
+            job
+        }
+    }
+
+    override suspend fun recoveryJob(): RecoveryJob? = withContext(Dispatchers.IO) {
+        val job = hostServer?.recoveryJob() ?: runCatching { hostAdmin?.recovery() }.getOrNull()
+        // A restore that finished: the household here is another now, so everything is looked at again.
+        if (job != null && job.kind == RecoveryJob.RESTORE && job.state == RecoveryJob.DONE && seenRestore != job.startedAt) {
+            seenRestore = job.startedAt
+            runCatching { refreshLists() }
+            refreshHostView()
+        }
+        job
+    }
+
+    @Volatile private var seenRestore = 0L
+
+    override suspend fun peekRecoveryPackage(file: String): Pair<String, Long>? = withContext(Dispatchers.IO) { RecoveryPackage.peek(java.io.File(file)) }
+
     private val _hosts = MutableStateFlow<HostsView?>(null)
     override val hosts: StateFlow<HostsView?> = _hosts.asStateFlow()
 

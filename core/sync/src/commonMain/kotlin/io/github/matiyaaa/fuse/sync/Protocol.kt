@@ -597,3 +597,41 @@ data class ServicesShare(
 /** One Jellyfin sign-in, inside a sealed map. */
 @Serializable
 data class JellyfinLogin(val username: String, val password: String)
+
+/**
+ * Making or restoring a recovery package ([kind] "write" or "restore"), which runs on the host
+ * while Fuse looks in: [state] "running", "done" or "failed" (with [message] saying why), how far
+ * it is ([done] of [total] files), and once done what the household held.
+ */
+@Serializable
+data class RecoveryJob(
+    val kind: String,
+    val state: String,
+    val file: String,
+    val done: Long = 0,
+    val total: Long = 0,
+    val message: String? = null,
+    val hostName: String = "",
+    val createdAt: Long = 0,
+    val profiles: Int = 0,
+    val devices: Int = 0,
+    val revisions: Int = 0,
+    val startedAt: Long = 0,
+) {
+    val running: Boolean get() = state == RUNNING
+
+    companion object {
+        const val WRITE = "write"
+        const val RESTORE = "restore"
+        const val RUNNING = "running"
+        const val DONE = "done"
+        const val FAILED = "failed"
+
+        /** The shortest password a recovery package takes. */
+        const val MIN_PASSWORD = 8
+    }
+}
+
+/** A recovery package to make or restore, at [file] on the host computer, with its [password]. */
+@Serializable
+data class RecoveryRequest(val file: String, val password: String)

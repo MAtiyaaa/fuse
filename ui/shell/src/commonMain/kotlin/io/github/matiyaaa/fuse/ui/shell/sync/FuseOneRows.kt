@@ -4,6 +4,7 @@ import io.github.matiyaaa.fuse.data.settings.SyncSettings
 import io.github.matiyaaa.fuse.sync.DeviceInfo
 import io.github.matiyaaa.fuse.sync.HostView
 import io.github.matiyaaa.fuse.sync.ProfileInfo
+import io.github.matiyaaa.fuse.sync.RecoveryJob
 import io.github.matiyaaa.fuse.sync.SyncApi
 import io.github.matiyaaa.fuse.sync.SyncService
 import io.github.matiyaaa.fuse.sync.SyncStatus
@@ -272,6 +273,12 @@ internal fun syncRows(
             detail = backupsDetail(backups),
             trailing = Trailing.Chevron, section = hostSection,
             onSelect = { householdBackupsSheet(app, svc) },
+        ))
+        add(MenuAction(
+            "recovery", "Recovery Package", FuseIcons.Lock,
+            detail = "The whole household in one file sealed with a password, to keep offline or to move the host to a new computer",
+            trailing = Trailing.Chevron, section = hostSection,
+            onSelect = { recoverySheet(app, svc) },
         ))
         add(MenuAction(
             "hostdata", "Where Saves Are Kept", FuseIcons.HardDrive,
@@ -707,5 +714,110 @@ private fun householdBackupsSheet(app: AppState, svc: SyncService) {
             message = "The whole household, kept by itself every day for a week, every week for a month and every month for half a year. Each save file is kept once, however many backups use it. Best on another drive than the host's.",
             options = actions + snaps,
         )
+    }
+}
+
+/**
+ * The household in one file sealed with a password: made here to keep offline (another drive, a
+ * USB stick), or restored on a new host computer, with the two ways to move the host said plainly.
+ */
+private fun recoverySheet(app: AppState, svc: SyncService) {
+    app.scope.launch {
+        val last = svc.recoveryJob()
+        val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+        val offset = localOffsetMillis(now)
+        val lastRow = last?.takeIf { !it.running }?.let { j ->
+            infoRow(
+                "last", if (j.kind == RecoveryJob.WRITE) "Last Package" else "Last Restore",
+                value = if (j.state == RecoveryJob.DONE) TimeWords.relative(j.startedAt, now, offset).replaceFirstChar { it.uppercase() } else "Didn't finish",
+                detail = if (j.state == RecoveryJob.DONE) j.file else j.message ?: "",
+                icon = if (j.state == RecoveryJob.DONE) FuseIcons.PackageCheck else FuseIcons.Alert,
+            )
+        }
+        app.choice = ChoiceSpec(
+            title = "Recovery Package",
+            icon = FuseIcons.Lock,
+            message = "Everything the host keeps (profiles, every save and its history, records, device links) in one file sealed with a password. " +
+                "To move the host to a new computer, either make the new one a backup host and then Make This Computer the Host there, or make a package here and restore it on the new host.",
+            options = listOfNotNull(
+                MenuAction("make", "Make a Recovery Package", FuseIcons.HardDriveDownload, detail = "Best kept on another drive or a USB stick, with its password kept apart", trailing = Trailing.Chevron, onSelect = { makePackage(app, svc) }),
+                MenuAction("restore", "Restore From a Package", FuseIcons.ArchiveRestore, detail = "This computer becomes the household's host, as the package kept it", trailing = Trailing.Chevron, onSelect = { restorePackage(app, svc) }),
+                lastRow,
+            ),
+        )
+    }
+}
+
+private fun makePackage(app: AppState, svc: SyncService) {
+    app.choice = null
+    app.scope.launch {
+        val folder = app.platform.storage.pickFolder("Where should the recovery package go?") ?: return@launch
+        askPassword(app, "A password for the package", "At least ${RecoveryJob.MIN_PASSWORD} characters. Without it the package can't be opened, so keep it somewhere safe, apart from the package.") { password ->
+            askPassword(app, "The password again", "To be sure it is the one you meant.") { again ->
+                if (again != password) {
+                    app.toasts.show("The passwords weren't the same, so nothing was made", ToastKind.WARNING)
+                    return@askPassword
+                }
+                val stamp = kotlin.time.Clock.System.now().toString().take(10)
+                val file = folder.trimEnd('/', '\\') + "/Fuse One household $stamp.fuserecovery"
+                runRecovery(app, svc, RecoveryJob.WRITE, file, password)
+            }
+        }
+    }
+}
+
+private fun restorePackage(app: AppState, svc: SyncService) {
+    app.choice = null
+    app.scope.launch {
+        val file = app.platform.storage.pickFile("Choose the recovery package", "Fuse recovery packages", listOf("fuserecovery")) ?: return@launch
+        val (name, made) = svc.peekRecoveryPackage(file) ?: run {
+            app.toasts.show("That isn't a Fuse recovery package", ToastKind.WARNING)
+            return@launch
+        }
+        val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+        app.confirm = ConfirmSpec(
+            "Restore $name's household from ${TimeWords.relative(made, now, localOffsetMillis(now))}?",
+            "This computer becomes the household's host, as the package kept it: profiles, every save and its history, records and device links. " +
+                "The household here now is kept as a household backup first. Every file is checked before anything changes, and a wrong password or a damaged package changes nothing. " +
+                "Devices at home find this host by themselves; one that was away needs this host's address from outside.",
+            "Continue",
+        ) {
+            askPassword(app, "The package's password", null) { password -> runRecovery(app, svc, RecoveryJob.RESTORE, file, password) }
+        }
+    }
+}
+
+private fun askPassword(app: AppState, title: String, message: String?, then: (String) -> Unit) {
+    app.textInput = TextInputSpec(title, "", "Password", secret = true, capitalize = false, doneLabel = "Continue", message = message) { v ->
+        app.textInput = null
+        if (v.isNotEmpty()) then(v)
+    }
+}
+
+/** Starts making or restoring a package and follows it to the end, saying how far it is. */
+private fun runRecovery(app: AppState, svc: SyncService, kind: String, file: String, password: String) {
+    app.scope.launch {
+        val started = svc.startRecovery(kind, file, password).getOrElse {
+            app.toasts.show(it.message ?: "Couldn't start", ToastKind.ERROR)
+            return@launch
+        }
+        app.toasts.show(if (kind == RecoveryJob.WRITE) "Making the recovery package" else "Checking the package and restoring the household")
+        var job: RecoveryJob = started
+        var shown = 0L
+        while (job.running) {
+            kotlinx.coroutines.delay(1_000)
+            job = svc.recoveryJob() ?: break
+            // A word now and then for a big household, not a toast a second.
+            if (job.total > 0 && job.done - shown >= maxOf(50L, job.total / 4)) {
+                shown = job.done
+                app.toasts.show("${job.done} of ${job.total} files")
+            }
+        }
+        when {
+            job.state == RecoveryJob.DONE && kind == RecoveryJob.WRITE ->
+                app.toasts.show("The household is in the package: ${job.profiles} profiles, ${job.revisions} save versions", ToastKind.SUCCESS)
+            job.state == RecoveryJob.DONE -> app.toasts.show("This computer is the household's host now, as the package kept it", ToastKind.SUCCESS)
+            else -> app.toasts.show(job.message ?: "It didn't finish", ToastKind.ERROR)
+        }
     }
 }

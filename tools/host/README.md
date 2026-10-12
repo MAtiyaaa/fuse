@@ -38,6 +38,8 @@ Prefer Compose directly? [compose.yaml](compose.yaml) is the same setup: `docker
 | Make a backup the host (the old one is gone for good) | `docker exec fuse-one-host fuse-one-host take-over` |
 | Household backups (made by themselves: daily for a week, weekly for a month, monthly for half a year) | `docker exec fuse-one-host fuse-one-host household-backups` |
 | A household backup now | `docker exec fuse-one-host fuse-one-host backup-now` |
+| The whole household in one file sealed with a password, to keep offline (written inside the data volume) | `docker exec -it fuse-one-host fuse-one-host recovery-package /data/household.fuserecovery` |
+| Restore the household from a recovery package on a new host (this host takes over) | `docker exec -it fuse-one-host fuse-one-host restore-package /data/household.fuserecovery` |
 | Put the household back as a backup kept it | `docker exec fuse-one-host fuse-one-host restore <name>` (the household as it is is kept first) |
 | Keep household backups on another drive | mount it in the container and set `FUSE_ONE_BACKUPS` to that path in `~/fuse-one-host/.env` |
 | Back up the whole volume | `docker stop fuse-one-host && docker run --rm -v fuse-one-data:/data:ro -v "$PWD":/backup --entrypoint tar ghcr.io/matiyaaa/fuse-one-host -czf /backup/fuse-one-backup.tgz -C /data . && docker start fuse-one-host` |

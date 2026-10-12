@@ -22,6 +22,9 @@ import kotlin.system.exitProcess
  * - `take-over`: on a backup whose host is gone for good, makes this host the household's host.
  * - `household-backups`, `backup-now`, `restore <name>`: the whole household's copies (made by
  *   themselves every day, week and month), one now, and putting the household back as one kept it.
+ * - `recovery-package <file>` / `restore-package <file>`: the whole household in one file sealed with
+ *   a password (from `FUSE_ONE_PACKAGE_PASSWORD` or standard input), to keep offline, and putting
+ *   the household back from one on a new host.
  * - `version`.
  *
  * The data folder, port and name come from [HostConfig] (environment variables, so a container sets
@@ -43,6 +46,8 @@ fun main(args: Array<String>) {
         "household-backups" -> householdBackups(config)
         "backup-now" -> backupNow(config)
         "restore" -> restore(config, args.getOrNull(1))
+        "recovery-package" -> recovery(config, io.github.matiyaaa.fuse.sync.RecoveryJob.WRITE, args.getOrNull(1))
+        "restore-package" -> recovery(config, io.github.matiyaaa.fuse.sync.RecoveryJob.RESTORE, args.getOrNull(1))
         "version", "--version" -> { println(HostConfig.version()); 0 }
         "help", "--help", "-h" -> { println(HostConfig.USAGE); 0 }
         else -> { System.err.println(HostConfig.USAGE); 64 }
@@ -222,6 +227,50 @@ private fun restore(config: HostConfig, name: String?): Int {
     )
 }
 
+/**
+ * Makes ([io.github.matiyaaa.fuse.sync.RecoveryJob.WRITE]) or restores a recovery package at [path]
+ * on the running host, showing how far it is until it is done.
+ */
+private fun recovery(config: HostConfig, kind: String, path: String?): Int {
+    val write = kind == io.github.matiyaaa.fuse.sync.RecoveryJob.WRITE
+    if (path.isNullOrBlank()) {
+        System.err.println("Usage: fuse-one-host ${if (write) "recovery-package" else "restore-package"} <file>  (password from FUSE_ONE_PACKAGE_PASSWORD or standard input)")
+        return 64
+    }
+    val password = System.getenv("FUSE_ONE_PACKAGE_PASSWORD")?.takeIf { it.isNotEmpty() }
+        ?: System.console()?.readPassword(if (write) "A password for the package: " else "The package's password: ")?.let(::String)
+        ?: readlnOrNull()
+    if (password.isNullOrEmpty() || (write && password.length < HostConfig.MIN_PASSWORD)) {
+        System.err.println("Choose a password of at least ${HostConfig.MIN_PASSWORD} characters. Keep it apart from the package: without it, the package can't be opened.")
+        return 64
+    }
+    val admin = admin(config) ?: return 69
+    val file = File(path).absoluteFile.path
+    return runCatching {
+        runBlocking {
+            admin.startRecovery(kind, file, password)
+            var job = admin.recovery()
+            while (job != null && job.running) {
+                if (job.total > 0) print("\r${job.done} of ${job.total} files")
+                kotlinx.coroutines.delay(500)
+                job = admin.recovery()
+            }
+            println()
+            job
+        }
+    }.fold(
+        onSuccess = { job ->
+            when {
+                job == null -> { System.err.println("The host didn't say how it went."); 70 }
+                job.state == io.github.matiyaaa.fuse.sync.RecoveryJob.FAILED -> { System.err.println(job.message ?: "It didn't work."); 70 }
+                write -> { println("The household is in $file: ${job.profiles} profiles, ${job.devices} devices, ${job.revisions} save versions. Keep it, and its password, somewhere other than this computer."); 0 }
+                else -> { println("The household is back as ${job.hostName}'s package kept it. Devices find this host by themselves at home; one that was away needs this host's address from outside."); 0 }
+            }
+        },
+        onFailure = { System.err.println(it.message ?: "The host couldn't do it."); 70 },
+    )
+}
+
 /** Where the host keeps the household, which port it serves and what it calls itself. */
 data class HostConfig(val dataDir: File, val port: Int, val name: String, val backupsDir: File = File(dataDir, "household-backups")) {
     companion object {
@@ -243,8 +292,10 @@ data class HostConfig(val dataDir: File, val port: Int, val name: String, val ba
             |  household-backups  the household's whole copies (one a day, kept a week; weekly, a month; monthly, half a year)
             |  backup-now     a copy of the whole household now
             |  restore        put the household back as a backup kept it (the household as it is is kept first)
+            |  recovery-package <file>  the whole household in one file sealed with a password, to keep offline
+            |  restore-package <file>   put the household back from a recovery package (this host takes over)
             |Environment: FUSE_ONE_DATA (default /data), FUSE_ONE_PORT (default $DEFAULT_PORT), FUSE_ONE_NAME (default the computer's name),
-            |  FUSE_ONE_BACKUPS (default <data>/household-backups; best another drive)
+            |  FUSE_ONE_BACKUPS (default <data>/household-backups; best another drive), FUSE_ONE_PACKAGE_PASSWORD
         """.trimMargin()
 
         fun from(env: Map<String, String>): HostConfig {

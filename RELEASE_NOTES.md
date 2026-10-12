@@ -40,6 +40,14 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   Settings, Fuse One, Devices, with a word when one is older than the host. Devices from before
   0.4.2 sync as they did. A device and a host that share no protocol are refused with what to
   update, before anything changes, so neither is made to read what it doesn't understand.
+- **Recovery package.** The whole household in one file sealed with a password (Settings, Fuse
+  One, Recovery Package, or `fuse-one-host recovery-package`), to keep offline or to move the host to
+  a new computer: AES-256-GCM in numbered pieces, the key stretched from the password, so a wrong
+  password is told apart from a package changed or cut off. Restoring reads it all and checks every
+  file before anything changes, keeps the household that was there as a household backup, and
+  makes this computer the host of a newer generation, so devices take it as the household's host
+  and the old one is fenced should it come back. The sheet also says the other way to move the host:
+  make the new computer a backup host, then make it the host.
 - **Sync without a household.** A device keeping its own profiles has its Sync page: each person's
   games, play time and the saves kept for them here, with what a host would add and the two ways
   to set one up.

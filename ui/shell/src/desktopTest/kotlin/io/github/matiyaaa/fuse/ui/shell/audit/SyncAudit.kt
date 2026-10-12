@@ -195,6 +195,16 @@ internal fun AuditDriver.syncScreens() {
         tap(PadButton.B)
     }
 
+    scenario("sync", "recovery package") {
+        useSync(asHost = true)
+        openSyncPage()
+        focusText("Recovery Package")
+        tap(PadButton.A)
+        waitFor("Make a Recovery Package")
+        shoot("the recovery package: make one to keep offline, or restore one here, and the two ways to move the host", 1_000)
+        tap(PadButton.B)
+    }
+
     scenario("sync", "settings on a device") {
         useSync(asHost = false)
         openSyncPage()

@@ -362,6 +362,18 @@ interface SyncService {
     /** On the host: puts the household back as the backup [name] kept it, keeping the household as it is first. */
     suspend fun restoreHousehold(name: String): Result<Unit> = Result.failure(UnsupportedOperationException("This device isn't the host."))
 
+    /**
+     * On the host: starts making ([RecoveryJob.WRITE]) or restoring ([RecoveryJob.RESTORE]) a
+     * recovery package at [file] with [password]; [recoveryJob] says how it goes.
+     */
+    suspend fun startRecovery(kind: String, file: String, password: String): Result<RecoveryJob> = Result.failure(UnsupportedOperationException("This device isn't the host."))
+
+    /** On the host: the recovery package being made or restored, or the last one; null when none was. */
+    suspend fun recoveryJob(): RecoveryJob? = null
+
+    /** The household's name and when a recovery package at [file] was made (readable without its password); null when it isn't one. */
+    suspend fun peekRecoveryPackage(file: String): Pair<String, Long>? = null
+
     /** The household's hosts and this computer's place among them; null before Fuse One is set up. */
     val hosts: StateFlow<HostsView?> get() = NO_HOSTS
 
