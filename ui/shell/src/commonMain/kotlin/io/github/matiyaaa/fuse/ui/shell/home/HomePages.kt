@@ -116,7 +116,7 @@ internal fun BoardPages(app: AppState, space: BoardSpace) {
     val arranging = editorOf(currentKey).arranging
 
     fun go(page: Int) {
-        if (page !in 0 until count || page == pager.currentPage) return
+        if (page !in 0 until count || page == pager.targetPage) return
         // Arranging carries over to the page turned to; a widget in hand is put back first.
         val from = editorOf(currentKey)
         val wasArranging = from.arranging
@@ -128,7 +128,8 @@ internal fun BoardPages(app: AppState, space: BoardSpace) {
         app.platform.haptics.tick()
     }
     fun turn(step: Int, fromEdge: Boolean): Boolean {
-        val next = pager.currentPage + step
+        // From the page already being turned to: two quick flicks turn two pages, never one.
+        val next = pager.targetPage + step
         if (next !in 0 until count) return false
         // Off the board's side, only while not arranging: arranging, a widget pushed there bumps.
         if (fromEdge && arranging) return false
@@ -190,7 +191,7 @@ internal fun BoardPages(app: AppState, space: BoardSpace) {
                         if (claim.taken || count <= 1 || arranging) continue
                         if (kotlin.math.abs(d.x) <= kotlin.math.abs(d.y)) continue
                         val by = steps.feed(d.x, at)
-                        if (by != 0) go((pager.currentPage + by).coerceIn(0, count - 1))
+                        if (by != 0) go((pager.targetPage + by).coerceIn(0, count - 1))
                     }
                 }
             }.dragScroll(pager, Orientation.Horizontal, enabled = count > 1 && !arranging, flingBehavior = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(pager)),

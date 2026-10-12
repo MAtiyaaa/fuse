@@ -217,7 +217,10 @@ internal class HomeSpace(
         // The Systems widget shows a system at a time: it is what the room, and the second screen
         // (with the emulator that plays it), follow, as on the Systems page.
         if (w?.kind == WidgetKind.SYSTEMS) {
-            val system = feed.systems.getOrNull(at) ?: feed.systems.firstOrNull() ?: return null
+            // By the carousel's own order (the one played last first), so the room, the second screen
+            // and opening it all name the system the carousel shows.
+            val shown = systemsInOrder(feed)
+            val system = shown.getOrNull(at) ?: shown.firstOrNull() ?: return null
             return HeroSource(system.platform.id, system.art.hero, system.platform.accent.toColor())
         }
         val game = w?.let { shownGame(it.kind, at) } ?: return null

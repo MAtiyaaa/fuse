@@ -885,7 +885,7 @@ internal fun AppState.openWidget(kind: WidgetKind, feed: HomeFeed, at: Int = 0) 
             librarySegment = io.github.matiyaaa.fuse.ui.shell.library.LibrarySegment.FAVORITES
             selectTab(Destination.LIBRARY)
         }
-        WidgetKind.SYSTEMS -> feed.systems.getOrNull(at)?.let { go(Route.PlatformGames(it.platform.id)) } ?: selectTab(Destination.SYSTEMS)
+        WidgetKind.SYSTEMS -> systemsInOrder(feed).getOrNull(at)?.let { go(Route.PlatformGames(it.platform.id)) } ?: selectTab(Destination.SYSTEMS)
         WidgetKind.PINNED_APPS -> selectTab(Destination.APPS)
         WidgetKind.COLLECTIONS -> (feed.collections.getOrNull(at) ?: feed.collections.firstOrNull())?.let { go(Route.CollectionGames(it.id, it.name)) } ?: go(Route.Collections)
         WidgetKind.RECENT_ACHIEVEMENT, WidgetKind.RECENT_ACHIEVEMENTS, WidgetKind.ACHIEVEMENT_PROGRESS,

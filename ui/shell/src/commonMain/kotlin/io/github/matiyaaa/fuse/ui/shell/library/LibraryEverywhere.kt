@@ -269,6 +269,22 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
     }
     val chosen = gamesOf(row).getOrNull(col)
     val chosenSystem = if (row == ROW_SYSTEMS) systems.getOrNull(col) else null
+    // Games arriving (another device answering, RomM's list coming in) can reorder a shelf: the
+    // selection stays on the game it was on, never on whatever slid into its place.
+    val following = remember { HashMap<String, String>() }
+    val lists = remember { HashMap<String, List<EverywhereGame>>() }
+    for (key in listOf(ROW_RECENT, ROW_ROMM, ROW_ELSEWHERE, ROW_STREAM)) {
+        val games = gamesOf(key)
+        val at = sel.column(key)
+        val was = following[key]
+        // Only when the shelf itself changed: a move the person made is theirs to keep.
+        val arrived = lists.put(key, games).let { it != null && it !== games }
+        if (was != null && arrived) {
+            val now = games.indexOfFirst { identity(it) == was }
+            if (now >= 0 && now != at) sel.setColumn(key, now)
+        }
+        games.getOrNull(sel.column(key))?.let { following[key] = identity(it) } ?: following.remove(key)
+    }
 
     fun open(e: EverywhereGame) = when (e) {
         is EverywhereGame.Here -> app.activateGame(e.card)
@@ -387,6 +403,9 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
         }
     }
 }
+
+/** What a shelf's game is across arrivals: its kind and id, as the shelf keys its tiles. */
+private fun identity(g: EverywhereGame): String = g::class.simpleName + g.card.id.value
 
 private const val ROW_RECENT = "recent"
 private const val ROW_SYSTEMS = "systems"

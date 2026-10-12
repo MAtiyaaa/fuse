@@ -410,7 +410,8 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
 
     // Where each section starts in the page, so moving down brings the whole section into view.
     val tops = remember(game.id) { mutableStateMapOf<String, Int>() }
-    val inset = with(LocalDensity.current) { Space.l.roundToPx() }
+    // A section scrolled to stops below the top fade (fadingEdges, Space.xl), so its heading is never faded or cut.
+    val inset = with(LocalDensity.current) { (Space.xl + Space.s).roundToPx() }
     // Every line of detail cards scrolls to the Details section, so it stays in view as a whole.
     val section = if (row.startsWith("details:")) "details" else row
     // Where the time played ends, so the stick brings all of it above the hint line, not half.
@@ -1589,9 +1590,11 @@ private fun AvailableOn(copies: List<io.github.matiyaaa.fuse.ui.shell.store.Copy
     val now = io.github.matiyaaa.fuse.ui.shell.reach.nowMs()
     LazyRow(
         state = list,
-        modifier = Modifier.dragScroll(list, Orientation.Horizontal),
+        // Room on every side for the chosen card's lift and focus ring, the first card still lined up
+        // with the heading above it.
+        modifier = Modifier.offset(x = -Space.m).dragScroll(list, Orientation.Horizontal),
         horizontalArrangement = Arrangement.spacedBy(Space.l),
-        contentPadding = PaddingValues(top = Space.s, end = Space.gutter, bottom = Space.s),
+        contentPadding = PaddingValues(start = Space.m, top = Space.m, end = Space.gutter, bottom = Space.m),
     ) {
         itemsIndexed(copies, key = { _, cp -> cp.place.name + cp.id }) { i, cp ->
             CopyCard(cp, now, selected == i, onClick = { onCopy(i) }, modifier = Modifier.width(Size.touch * 5).height(IntrinsicSize.Min))

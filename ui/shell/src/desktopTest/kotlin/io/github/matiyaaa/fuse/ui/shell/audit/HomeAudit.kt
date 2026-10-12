@@ -309,6 +309,49 @@ internal fun AuditDriver.libraryTab() = tab(Destination.LIBRARY)
 
 /** Home's pages: the dots, turning with the right stick, a page of its own, an empty one, and adding one. */
 internal fun AuditDriver.homePages() {
+    // The owner's recording: Home with several pages, moved through fast with both sticks, the
+    // D-pad off a board's edge and a trip to another tab and back. Every page must keep its widgets.
+    scenario("home", "pages moved through fast") {
+        fun page(id: String, vararg kinds: io.github.matiyaaa.fuse.model.WidgetKind) =
+            io.github.matiyaaa.fuse.model.HomePage(id, kinds.mapIndexed { i, k -> io.github.matiyaaa.fuse.model.HomeWidget(k.name.lowercase(), k, i) })
+        useLibrary {
+            it.copy(
+                home = HomeLayoutConfig(
+                    mode = HomeMode.CHANNELS,
+                    pages = listOf(
+                        page("page2", io.github.matiyaaa.fuse.model.WidgetKind.SYSTEMS, io.github.matiyaaa.fuse.model.WidgetKind.CLOCK, io.github.matiyaaa.fuse.model.WidgetKind.PLAYTIME_TOTAL, io.github.matiyaaa.fuse.model.WidgetKind.FAVORITES),
+                        page("page3", io.github.matiyaaa.fuse.model.WidgetKind.RECENTLY_ADDED, io.github.matiyaaa.fuse.model.WidgetKind.STORAGE, io.github.matiyaaa.fuse.model.WidgetKind.MOST_PLAYED),
+                    ),
+                ),
+            )
+        }
+        waitFor("Continue playing")
+        settle(1_200)
+        shoot("page one, three pages")
+        // Two flicks of the right stick in quick succession, caught mid-turn and settled.
+        tap(PadButton.RSTICK_RIGHT); settle(60); tap(PadButton.RSTICK_RIGHT); settle(120)
+        shoot("two quick flicks, mid-turn", 0)
+        settle(900)
+        shoot("two quick flicks, settled on page three", 0)
+        // Back and forth faster than a page takes to turn.
+        repeat(3) { tap(PadButton.RSTICK_LEFT); settle(40); tap(PadButton.RSTICK_RIGHT); settle(40) }
+        tap(PadButton.RSTICK_LEFT); settle(900)
+        shoot("back and forth, settled on page two", 0)
+        // The left stick held to the side runs the selection across the board and off its edge.
+        router.stick(1f, 0f); settle(1_400); router.stick(0f, 0f); settle(900)
+        shoot("left stick held right, off the board's edge", 0)
+        router.stick(-1f, 0f); settle(2_200); router.stick(0f, 0f); settle(900)
+        shoot("left stick held left, back to page one", 0)
+        // Away to another tab and straight back.
+        tap(PadButton.R1); settle(150); tap(PadButton.L1); settle(120)
+        shoot("away and back, mid-entrance", 0)
+        settle(900)
+        shoot("away and back, settled", 0)
+        // A turn started and a tab switch on top of it.
+        tap(PadButton.RSTICK_RIGHT); settle(30); tap(PadButton.R1); settle(30); tap(PadButton.L1); settle(1_000)
+        shoot("a turn interrupted by a tab switch, settled", 0)
+    }
+
     scenario("home", "pages") {
         val second = listOf(
             io.github.matiyaaa.fuse.model.WidgetKind.SYSTEMS,
