@@ -966,6 +966,8 @@ object Slots {
                     val name = f.relativeTo(root).path.replace(File.separatorChar, '/')
                     when {
                         f.name.startsWith(".") -> {}
+                        // A folder many games share (a GCI folder): only this game's files.
+                        spot.only != null && !name.startsWith(spot.only) -> {}
                         f.isFile -> if (!SaveNoise.file(f.name) && SavePath.isSafe(name)) files += LocalFile(name, f)
                         // An empty folder inside the save is part of its structure too.
                         f != dir && f.isDirectory && f.list()?.isEmpty() == true -> if (SavePath.isSafe(name)) empty += name
@@ -978,7 +980,9 @@ object Slots {
         for ((prefix, dir) in mounts) {
             if (!dir.isDirectory) continue
             dir.walkTopDown().onEnter { d -> d == dir || !SaveNoise.folder(d.name) }.forEach { f ->
-                val name = prefix + "/" + f.relativeTo(dir).path.replace(File.separatorChar, '/')
+                val inside = f.relativeTo(dir).path.replace(File.separatorChar, '/')
+                val name = "$prefix/$inside"
+                if (spot.only != null && !inside.startsWith(spot.only)) return@forEach
                 if (f.isFile && !f.name.startsWith(".") && !SaveNoise.file(f.name) && SavePath.isSafe(name)) files += LocalFile(name, f)
             }
         }

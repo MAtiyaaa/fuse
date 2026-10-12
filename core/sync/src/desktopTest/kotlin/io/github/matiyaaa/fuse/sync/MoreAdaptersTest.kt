@@ -541,7 +541,9 @@ class MoreAdaptersTest {
         assertEquals("/storage/emulated/0/Games/ppsspp/PSP/SAVEDATA", psp.root)
         assertEquals(listOf("ULUS10041DATA00"), psp.folders)
         val gc = SaveAdapters.forEmulator("dolphin")!!.locate(q("ngc", "/roms/gc/game.iso", "dolphin", serial = "GALE01"), env).first()
-        assertTrue(gc.files.single().path.startsWith("/storage/emulated/0/Games/Dolphin/GC/"), gc.files.toString())
+        // Dolphin's own default: slot A is a GCI folder, this game's files in it.
+        assertEquals("/storage/emulated/0/Games/Dolphin/GC/USA/Card A", gc.root)
+        assertEquals("01-GALE-", gc.only)
         val psx = SaveAdapters.forEmulator("duckstation")!!.locate(q("psx", "/roms/psx/game.cue", "duckstation", title = "Game"), env).first()
         assertTrue(psx.files.single().path.startsWith("/storage/emulated/0/Games/DuckStation/memcards/"))
         val ps2 = SaveAdapters.forEmulator("armsx2")!!.locate(q("ps2", "/roms/ps2/game.iso", "armsx2"), env).first()

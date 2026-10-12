@@ -98,6 +98,11 @@ data class SaveSpot(
      * `@device/x` is `x` in that folder. The parts are one save, captured and put back together.
      */
     val mounts: Map<String, String> = emptyMap(),
+    /**
+     * For a [root] shared by many games' files (a GameCube GCI folder): only files whose names
+     * start with this are this game's. The others are never read, written or removed.
+     */
+    val only: String? = null,
 ) {
     /** Where the file named [name] goes here. */
     fun pathFor(name: String): String? = files.firstOrNull { it.name == name }?.path
@@ -470,33 +475,93 @@ internal object Ppsspp : SaveAdapter {
 internal object Dolphin : SaveAdapter {
     override val emulators = setOf("dolphin", "dolphin-mmjr", "dolphin-mmjr2")
 
-    internal fun userDir(env: SaveEnvironment, emuPath: String?): String? = when (env.host) {
-        "WINDOWS" -> SaveAdapters.firstDir(env, emuPath?.let { SaveAdapters.join(SaveAdapters.parent(it), "User") }, "${SaveAdapters.documents(env)}/Dolphin Emulator", "${SaveAdapters.appData(env)}/Dolphin Emulator")
-        "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/Dolphin")
-        "ANDROID" -> SaveAdapters.firstDir(env, "/storage/emulated/0/dolphin-emu")
-            ?: DataFolders.find(env, "dolphin", listOf("dolphin", "gamecube", "wii")) { d -> d.takeIf { (env.isDirectory("$it/GC") || env.isDirectory("$it/Wii")) && env.isDirectory("$it/Config") } }.firstOrNull()
-        else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgData(env)}/dolphin-emu", "${env.home}/.dolphin-emu", "${env.home}/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu")
+    /**
+     * Dolphin's user folder (UICommon::SetUserDirectory): DOLPHIN_EMU_USERPATH when set; on Windows
+     * a portable User beside the program, else Documents; on Linux ~/.dolphin-emu when it exists,
+     * else its XDG data folder (the Flatpak's own); its own folder on macOS and Android.
+     */
+    internal fun userDir(env: SaveEnvironment, emuPath: String?): String? {
+        env.env("DOLPHIN_EMU_USERPATH")?.replace('\\', '/')?.trimEnd('/')?.takeIf { env.isDirectory(it) }?.let { return it }
+        return when (env.host) {
+            "WINDOWS" -> SaveAdapters.firstDir(env, emuPath?.let { SaveAdapters.join(SaveAdapters.parent(it), "User") }?.takeIf { emuPath.let { p -> env.exists(SaveAdapters.parent(p) + "/portable.txt") } || env.isDirectory(it) }, "${SaveAdapters.documents(env)}/Dolphin Emulator", "${SaveAdapters.appData(env)}/Dolphin Emulator")
+            "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/Dolphin")
+            "ANDROID" -> SaveAdapters.firstDir(env, "/storage/emulated/0/dolphin-emu")
+                ?: DataFolders.find(env, "dolphin", listOf("dolphin", "gamecube", "wii")) { d -> d.takeIf { (env.isDirectory("$it/GC") || env.isDirectory("$it/Wii")) && env.isDirectory("$it/Config") } }.firstOrNull()
+            else -> SaveAdapters.firstDir(env, "${env.home}/.dolphin-emu", "${SaveAdapters.xdgData(env)}/dolphin-emu", "${env.home}/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu")
+        }
+    }
+
+    /** Dolphin.ini: in Config of the user folder, or on Linux in the XDG config folder beside an XDG data folder. */
+    private fun config(env: SaveEnvironment, user: String): Map<String, String> {
+        val xdg = when {
+            user.endsWith("/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu") -> user.replace("/data/dolphin-emu", "/config/dolphin-emu")
+            env.host == "LINUX" && user == "${SaveAdapters.xdgData(env)}/dolphin-emu" -> "${SaveAdapters.xdgConfig(env)}/dolphin-emu"
+            else -> null
+        }
+        return IniText.parse(listOfNotNull(xdg?.let { "$it/Dolphin.ini" }, "$user/Config/Dolphin.ini").firstNotNullOfOrNull { env.readText(it) })
     }
 
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
         val user = SaveAdapters.chosen(env, q) ?: userDir(env, q.emulatorPath)
             ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "dolphin", if (env.host == "ANDROID") SaveAdapters.androidPrivateNote("Dolphin", "Use its Export user data, then choose that folder in Fuse, Settings, Save folders.") else "Dolphin's folder wasn't found here."))
+        val ini = config(env, user)
         val id = q.serial?.uppercase()?.takeIf { it.length >= 4 }
-        if (q.platform == "wii" && id == null) {
-            val titles = "$user/Wii/title/00010000"
-            val learned = SaveAdapters.learned(env, q, "wii.nand").firstOrNull()
-                ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "wii.nand", SaveAdapters.PLAY_ONCE, learnIn = titles))
-            return listOf(SaveSpot(SaveKind.SAVE, "wii.nand", root = "$titles/$learned/data"))
-        }
-        return if (q.platform == "wii" && id != null) {
+        if (q.platform == "wii") {
+            // The NAND: [General] NANDRootPath when set, else Wii in the user folder.
+            val nand = ini["General/NANDRootPath"]?.takeIf { it.isNotBlank() }?.replace('\\', '/')?.trimEnd('/') ?: "$user/Wii"
+            if (id == null) {
+                val titles = "$nand/title/00010000"
+                val learned = SaveAdapters.learned(env, q, "wii.nand").firstOrNull()
+                    ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "wii.nand", SaveAdapters.PLAY_ONCE, learnIn = titles))
+                return listOf(SaveSpot(SaveKind.SAVE, "wii.nand", root = "$titles/$learned/data"))
+            }
             val title = id.take(4).map { c -> "%02x".format(c.code) }.joinToString("")
-            listOf(SaveSpot(SaveKind.SAVE, "wii.nand", root = "$user/Wii/title/00010000/$title/data", folders = emptyList()))
-        } else {
-            // GameCube: the region's memory card files, shared by the games on them.
-            val region = when (id?.getOrNull(3)) { 'E' -> "USA"; 'J' -> "JAP"; else -> "EUR" }
-            listOf(SaveSpot(SaveKind.MEMORY_CARD, "gc.card.$region", listOf(SpotFile("MemoryCardA.$region.raw", "$user/GC/MemoryCardA.$region.raw"))))
+            // Disc games are 00010000; a title found elsewhere (00010004, games that install data) is used where it is.
+            val where = listOf("00010000", "00010004").map { "$nand/title/$it/$title/data" }.firstOrNull(env::isDirectory) ?: "$nand/title/00010000/$title/data"
+            return listOf(SaveSpot(SaveKind.SAVE, "wii.nand", root = where))
         }
+        // GameCube. Its region's folders (Config::GetDirectoryForRegion), from the game id's fourth letter.
+        val region = when (id?.getOrNull(3)) { 'E' -> "USA"; 'J' -> "JAP"; else -> "EUR" }
+        val gci = ArrayList<String>()
+        val raw = ArrayList<SpotFile>()
+        for (slot in listOf('A', 'B')) {
+            // Slot A is a GCI folder unless set (MainSettings.cpp MAIN_SLOT_A), slot B is empty.
+            val type = ini["Core/Slot$slot"]?.toIntOrNull() ?: if (slot == 'A') FOLDER else NONE
+            when (type) {
+                FOLDER -> {
+                    val custom = ini["Core/GCIFolder${slot}Path"]?.takeIf { it.isNotBlank() }?.replace('\\', '/')?.trimEnd('/')
+                    gci += custom?.let { c -> listOf("/USA", "/JAP", "/EUR", "/DEV").firstOrNull { c.endsWith(it) }?.let { c.dropLast(it.length) } ?: c }?.let { "$it/$region" }
+                        ?: "$user/GC/$region/Card $slot"
+                }
+                CARD -> {
+                    val custom = ini["Core/Memcard${slot}Path"]?.takeIf { it.isNotBlank() }?.replace('\\', '/')
+                    val path = custom?.let { c ->
+                        val dir = SaveAdapters.parent(c)
+                        val name = c.substringAfterLast('/').substringBeforeLast('.').let { n -> listOf(".USA", ".JAP", ".EUR", ".DEV").firstOrNull { n.endsWith(it) }?.let { n.dropLast(it.length) } ?: n }
+                        "$dir/$name.$region.raw"
+                    } ?: "$user/GC/MemoryCard$slot.$region.raw"
+                    raw += SpotFile("MemoryCard$slot.$region.raw", path)
+                }
+            }
+        }
+        val spots = ArrayList<SaveSpot>()
+        // A GCI folder keeps each game's saves as its own files ("<maker>-<game code>-<name>.gci"):
+        // this game's alone, from slot A's folder, with slot B's as another part.
+        if (gci.isNotEmpty() && id != null && id.length >= 6) {
+            val prefix = "${id.substring(4, 6)}-${id.substring(0, 4)}-"
+            spots += SaveSpot(SaveKind.SAVE, "gc.gci", root = gci[0], only = prefix,
+                mounts = gci.drop(1).associate { "@cardB" to it })
+        } else if (gci.isNotEmpty()) {
+            spots += SaveAdapters.unavailable(SaveKind.SAVE, "gc.gci", "Fuse needs the game's id (GALE01 and the like) to tell its saves apart in Dolphin's GCI folder.")
+        }
+        // A memory card file holds every game on it: the person's, not one game's.
+        if (raw.isNotEmpty()) spots += SaveSpot(SaveKind.MEMORY_CARD, "gc.card.$region", raw)
+        return spots
     }
+
+    private const val CARD = 1
+    private const val FOLDER = 8
+    private const val NONE = 0xFF
 }
 
 /** RPCS3: each game's save folders under dev_hdd0 by its serial (BLUS30109...). */

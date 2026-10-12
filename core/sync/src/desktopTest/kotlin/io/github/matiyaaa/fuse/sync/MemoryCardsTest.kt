@@ -78,3 +78,70 @@ class SaveConversionsTest {
         assertEquals(512 * 1024, SaveConversions.convert("nds.dsv", "sram", mapOf("save.srm" to ByteArray(512 * 1024)))!!.values.single().size)
     }
 }
+
+class DolphinCardsTest {
+    private class Env(val files: Map<String, String>, val vars: Map<String, String> = emptyMap()) : SaveEnvironment {
+        override val host = "LINUX"
+        override val home = "/home/mo"
+        override fun env(name: String) = vars[name]
+        override fun exists(path: String) = path in files || files.keys.any { it.startsWith("$path/") }
+        override fun isDirectory(path: String) = files.keys.any { it.startsWith("$path/") }
+        override fun list(path: String) = files.keys.filter { it.startsWith("$path/") }.map { it.removePrefix("$path/").substringBefore('/') }.distinct().sorted()
+        override fun readText(path: String, limit: Int) = files[path]
+    }
+
+    private fun q(serial: String = "GALE01", platform: String = "ngc") = SaveQuery(GameKey.of(platform, serial, null, "Game"), platform, "/roms/gc/game.iso", "dolphin", serial = serial, title = "Game")
+    private val data = "/home/mo/.local/share/dolphin-emu"
+
+    @Test
+    fun theDefaultIsAGciFolderWithThisGamesFilesOnly() {
+        val env = Env(mapOf("$data/GC/USA/Card A/01-GALE-SuperSmash.gci" to "x", "$data/GC/USA/Card A/01-GMSE-Sunshine.gci" to "x"))
+        val spot = SaveAdapters.forEmulator("dolphin")!!.locate(q(), env).single()
+        assertEquals("gc.gci", spot.format)
+        assertEquals("$data/GC/USA/Card A", spot.root)
+        assertEquals("01-GALE-", spot.only)
+    }
+
+    @Test
+    fun configuredSlotsAndFoldersAreFollowed() {
+        val env = Env(mapOf(
+            "/home/mo/.config/dolphin-emu/Dolphin.ini" to "[Core]\nSlotA = 1\nMemcardAPath = /mnt/gc/Mine.USA.raw\nSlotB = 8\nGCIFolderBPath = /mnt/gci/USA\n[General]\nNANDRootPath = /mnt/nand\n",
+            "$data/GC/" to "",
+        ))
+        val spots = SaveAdapters.forEmulator("dolphin")!!.locate(q(serial = "GALP01"), env)
+        val gci = spots.single { it.kind == SaveKind.SAVE }
+        assertEquals("/mnt/gci/EUR", gci.root, "the folder's region follows the game's")
+        val card = spots.single { it.kind == SaveKind.MEMORY_CARD }
+        assertEquals(listOf(SpotFile("MemoryCardA.EUR.raw", "/mnt/gc/Mine.EUR.raw")), card.files)
+        val wii = SaveAdapters.forEmulator("dolphin")!!.locate(q(serial = "RMGE01", platform = "wii"), env).single()
+        assertEquals("/mnt/nand/title/00010000/524d4745/data", wii.root)
+    }
+
+    @Test
+    fun dolphinsUserPathVariableWins() {
+        val env = Env(mapOf("/srv/dolphin/GC/" to ""), vars = mapOf("DOLPHIN_EMU_USERPATH" to "/srv/dolphin"))
+        assertEquals("/srv/dolphin/GC/USA/Card A", SaveAdapters.forEmulator("dolphin")!!.locate(q(), env).single().root)
+    }
+}
+
+class GciFolderTest {
+    @Test
+    fun onlyThisGamesFilesAreCarriedAndReplaced(): Unit = kotlinx.coroutines.runBlocking {
+        val root = java.nio.file.Files.createTempDirectory("gci").toFile()
+        try {
+            val card = java.io.File(root, "Card A").apply { mkdirs() }
+            java.io.File(card, "01-GALE-Smash.gci").writeText("john smash")
+            java.io.File(card, "01-GMSE-Sunshine.gci").writeText("someone's sunshine")
+            val game = GameKey.of("ngc", "GALE01", null, "Smash")
+            val spot = SaveSpot(SaveKind.SAVE, "gc.gci", root = card.path, only = "01-GALE-")
+            val d = SyncDevice(java.io.File(root, "state"), "pc", "PC")
+            assertEquals(listOf("01-GALE-Smash.gci"), Slots.of(game, spot).files.map { it.path })
+            d.handover("john", Slots.of(game, spot))
+            d.handover("mark", Slots.of(game, spot))
+            assertTrue(!java.io.File(card, "01-GALE-Smash.gci").exists())
+            assertEquals("someone's sunshine", java.io.File(card, "01-GMSE-Sunshine.gci").readText(), "another game's save on the card is never touched")
+            d.handover("john", Slots.of(game, spot))
+            assertEquals("john smash", java.io.File(card, "01-GALE-Smash.gci").readText())
+        } finally { root.deleteRecursively() }
+    }
+}
