@@ -1007,6 +1007,39 @@ fun AppState.applyUpdate() {
     }
 }
 
+/**
+ * Goes back to the version of Fuse the last update replaced (or returns to the newer one, after
+ * going back), once the person has read what it means.
+ */
+fun AppState.goBackToPreviousFuse(previous: io.github.matiyaaa.fuse.ui.shell.store.PreviousRelease) {
+    val current = store.updates.currentVersion
+    val newer = io.github.matiyaaa.fuse.integrations.github.SemVer.isNewer(previous.version, current)
+    val verb = if (newer) "Return to" else "Go back to"
+    choice = ChoiceSpec(
+        title = "$verb Fuse ${previous.version}",
+        icon = FuseIcons.History,
+        message = buildString {
+            append("Fuse closes and starts again in ${previous.version}. ")
+            when {
+                newer -> append("It brings your library up to date again from how it is now. ")
+                previous.libraryGoesBack -> append("Your library goes back to how it was before $current updated it; what changed since is kept in a copy beside it. ")
+            }
+            append("Your games, emulators and their saves stay as they are, and $current is kept, to come back to the same way.")
+        },
+        options = listOf(
+            MenuAction("go", "$verb ${previous.version}", FuseIcons.History, onSelect = {
+                choice = null
+                scope.launch {
+                    store.updates.goBack()
+                        .onSuccess { restart -> if (restart) platform.restart() }
+                        .onFailure { toasts.show(it.message ?: "Fuse couldn't go back") }
+                }
+            }),
+            MenuAction("stay", "Stay on $current", FuseIcons.Close, onSelect = { choice = null }),
+        ),
+    )
+}
+
 /** The kinds a person can say a game really is, with their names in a sentence. */
 private val PART_KINDS = listOf(
     io.github.matiyaaa.fuse.model.ContentKind.UPDATE to "An update",

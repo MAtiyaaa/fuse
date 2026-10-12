@@ -26,6 +26,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -152,6 +153,11 @@ class DesktopSession(
                 val store = createFuseStore(services, scope, safeMode = safe != null)
                 // Phone Link waits for a normal start: safe mode runs nothing that listens on the network.
                 startState = StartState.Ready(store, services, if (safe == null) startPhoneLink(store, services) else null, safe)
+                // An update on trial has come up: once it has stayed up a while, it is the one kept.
+                scope.launch {
+                    delay(UPDATE_PROVEN_MS)
+                    withContext(Dispatchers.IO) { io.github.matiyaaa.fuse.desktop.services.UpdateTrial(File(dirs.data, io.github.matiyaaa.fuse.desktop.services.UpdateTrial.FILE)).healthy() }
+                }
                 // The Fuse Decky Bridge follows its switch (Steam integration, Linux), and never runs in safe mode.
                 if (safe == null && io.github.matiyaaa.fuse.desktop.system.DesktopOs.current == io.github.matiyaaa.fuse.desktop.system.DesktopOs.LINUX) followDecky(store)
             } catch (e: CancellationException) {
@@ -364,3 +370,6 @@ internal object StartupFailure {
 
 /** The longest quitting waits for Fuse's servers and devices to close (they carry on closing as the process ends). */
 private const val CLOSE_WAIT_MS = 1_200L
+
+/** How long a newly updated Fuse stays up before it is the version kept (its trial ends). */
+private const val UPDATE_PROVEN_MS = 20_000L

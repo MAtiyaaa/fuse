@@ -316,7 +316,23 @@ interface ReleaseInstaller {
      * false when the system takes over (Android asks to confirm and restarts Fuse).
      */
     suspend fun applyUpdate(downloaded: String): Result<Boolean> = Result.success(false)
+
+    /** The version the last update replaced, while Fuse can still go back to it (Linux); null elsewhere. */
+    fun previous(): PreviousRelease? = null
+
+    /** Puts [previous] back in this one's place. Success(true): restart Fuse now to start it. */
+    suspend fun goBack(): Result<Boolean> = Result.failure(UnsupportedOperationException("Fuse can't go back to an earlier version here."))
+
+    /** What Fuse says once at start about an update it went back from (or the library it brought back); null when nothing. */
+    fun takeStartupNote(): String? = null
 }
+
+/**
+ * A version of Fuse an update replaced, kept to go back to: [libraryGoesBack] when going back also
+ * brings back the library as it was before the update (the newer one is kept aside), [since] when
+ * it was replaced.
+ */
+data class PreviousRelease(val version: String, val libraryGoesBack: Boolean, val since: Long)
 
 /** Launchable apps (Android launcher apps; Linux `.desktop` applications). */
 interface AppsProvider {

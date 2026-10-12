@@ -51,6 +51,9 @@ internal class AuditControls(val cache: File) {
 
     @Volatile var cartridge: CartridgeStatus = CartridgeStatus(installed = false)
 
+    /** The version an update replaced, as Settings, About offers to go back to it; none when null. */
+    @Volatile var previousFuse: io.github.matiyaaa.fuse.ui.shell.store.PreviousRelease? = null
+
     @Volatile var libraryCandidates: List<LocationHint> = emptyList()
 
     /** Where Fuse's file picker starts. */
@@ -111,6 +114,12 @@ internal class AuditServices(
 
     /** Windows and macOS: no app list, and emulators the user can point Fuse at. */
     private val desktop = host == Host.WINDOWS || host == Host.MACOS
+
+    /** Fuse's own updates as the audit's computer has them: a version to go back to when a scenario sets one. */
+    override val installer: io.github.matiyaaa.fuse.ui.shell.store.ReleaseInstaller = object : io.github.matiyaaa.fuse.ui.shell.store.ReleaseInstaller by base.installer {
+        override fun previous() = controls.previousFuse
+        override suspend fun goBack(): Result<Boolean> = Result.success(false)
+    }
 
     /** Android has the Store: its catalogue and releases come from [AuditStore], its apps from [AuditPackages]. */
     override val packages: io.github.matiyaaa.fuse.ui.shell.store.PackageBridge? =

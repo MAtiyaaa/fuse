@@ -56,6 +56,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.forgetScreenCalibration
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.addGame
 import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
+import io.github.matiyaaa.fuse.ui.shell.app.goBackToPreviousFuse
 import io.github.matiyaaa.fuse.ui.shell.app.liftTab
 import io.github.matiyaaa.fuse.ui.shell.app.emulatorFoldersPicker
 import io.github.matiyaaa.fuse.ui.shell.app.hasTwoScreens
@@ -1813,6 +1814,16 @@ fun updateRows(app: AppState): List<MenuAction> {
             trailing = Trailing.Chevron,
             onSelect = { app.openInstalledNotes() },
         ))
+        // The version the last update replaced, kept to go back to (Linux).
+        app.store.updates.previous()?.let { prev ->
+            val newer = io.github.matiyaaa.fuse.integrations.github.SemVer.isNewer(prev.version, app.store.updates.currentVersion)
+            add(MenuAction(
+                "goback", "${if (newer) "Return to" else "Go back to"} Fuse ${prev.version}", FuseIcons.History,
+                detail = if (newer) "The version you went back from, kept beside this one" else "The version this update replaced, kept beside it in case this one doesn't suit",
+                trailing = Trailing.Chevron,
+                onSelect = { app.goBackToPreviousFuse(prev) },
+            ))
+        }
         add(MenuAction("check", "Check for updates", FuseIcons.Refresh, onSelect = {
             app.scope.launch { app.toasts.show(if (app.store.updates.check() != null) "An update is available" else "Fuse is up to date") }
         }))

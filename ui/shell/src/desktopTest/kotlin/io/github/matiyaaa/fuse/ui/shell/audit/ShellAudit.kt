@@ -605,6 +605,21 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         shoot("library licences, scrolled one page")
     }
 
+    scenario("settings", "going back to the version before") {
+        useLibrary()
+        // The audit's Fuse is 0.0.1, so the version before it is 0.0.0.
+        controls.previousFuse = io.github.matiyaaa.fuse.ui.shell.store.PreviousRelease("0.0.0", libraryGoesBack = true, since = 0L)
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("about"))
+        tap(PadButton.DPAD_RIGHT)
+        focusText("Go back to Fuse 0.0.0")
+        shoot("the version an update replaced, offered in About")
+        tap(PadButton.A)
+        waitFor("what changed since is kept in a copy")
+        settle(600)
+        shoot("what going back means, before it happens")
+    }
+
     scenario("settings", "home arrangement") {
         useLibrary()
         home()

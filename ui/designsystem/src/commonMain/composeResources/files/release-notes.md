@@ -164,6 +164,15 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   fails to install puts it straight back; after one that works, the Store offers Go Back to it, and
   so does the problem Fuse shows when an emulator updated in the last month won't start. The
   emulator's own settings and saves are never touched.
+- **Updating Fuse safely.** A Fuse download that stops (a lost connection, Fuse closed) carries on
+  where it stopped the next time, and is still checked against the checksum GitHub publishes before
+  anything installs. On Linux the version an update replaces is kept beside it: Settings, About
+  offers Go Back to it (and Return to the newer one after), and a new version that doesn't come up
+  in its first two starts puts the one before back by itself and says so. Going back brings back
+  the library as it was before the update, with the newer one kept in a copy beside it, never
+  deleted. Android doesn't let an app go back to an older version, so there an update resumes and
+  is checked. The macOS release is signed with a Developer ID and notarized by Apple once the
+  project's certificate is in its release workflow; until then it is signed ad hoc, as before.
 - **Why an emulator didn't start.** When an emulator stops as it starts, Fuse reads what it wrote
   and says the likely reason in plain words (a missing core, missing firmware, graphics that
   couldn't start, a missing library, a file it couldn't open, a crash), with the fix that goes with

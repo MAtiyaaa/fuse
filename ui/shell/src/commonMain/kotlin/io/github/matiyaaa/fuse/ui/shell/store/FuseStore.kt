@@ -953,6 +953,15 @@ interface UpdateOps {
 
     /** False where an update is got from its release page instead (Windows and macOS). */
     val inPlace: Boolean get() = true
+
+    /** The version Fuse can go back to, while it is kept. */
+    fun previous(): PreviousRelease? = null
+
+    /** Goes back to [previous]. Success(true): restart Fuse now. */
+    suspend fun goBack(): Result<Boolean> = Result.failure(UnsupportedOperationException())
+
+    /** What Fuse says once at start about an update it went back from; null when nothing. */
+    fun takeStartupNote(): String? = null
 }
 
 sealed interface UpdateState {

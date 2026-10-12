@@ -16,6 +16,7 @@ import io.github.matiyaaa.fuse.model.ReleaseInfo
 import io.github.matiyaaa.fuse.model.ScanPhase
 import io.github.matiyaaa.fuse.model.ScanScope
 import io.github.matiyaaa.fuse.ui.shell.store.CartridgeOps
+import io.github.matiyaaa.fuse.ui.shell.store.PreviousRelease
 import io.github.matiyaaa.fuse.ui.shell.store.RecentDownload
 import io.github.matiyaaa.fuse.ui.shell.store.UpdateOps
 import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
@@ -258,6 +259,16 @@ internal class DefaultCartridgeOps(
 internal class DefaultUpdateOps(private val ctx: StoreContext) : UpdateOps {
     override val currentVersion: String = ctx.services.appVersion
     override val inPlace: Boolean get() = ctx.services.installer.inPlace
+
+    override fun previous(): PreviousRelease? = ctx.services.installer.previous()
+
+    override suspend fun goBack(): Result<Boolean> {
+        // A download of a newer version isn't wanted once Fuse goes back.
+        cancelDownload()
+        return ctx.services.installer.goBack()
+    }
+
+    override fun takeStartupNote(): String? = ctx.services.installer.takeStartupNote()
 
     /**
      * A release counts for this device once it has this device's build: the APK is published first

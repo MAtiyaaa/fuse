@@ -240,6 +240,12 @@ private fun FuseAppContent(
         platform.startupPlay?.let { id -> if (app.safeMode == null) app.playOnStart(id) }
     }
     LaunchedEffect(Unit) { app.refreshSteamGames() }
+    // An update Fuse went back from at this start, or a library brought back for this version: said once.
+    LaunchedEffect(Unit) {
+        val note = app.store.updates.takeStartupNote() ?: return@LaunchedEffect
+        delay(StartupGuard.SETTLE_MS)
+        app.toasts.show(note, io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.WARNING, FuseIcons.History, durationMs = 9000)
+    }
     // Back after a long while away (the device slept, the screen was off): the animation again, as
     // though Fuse had just been switched on. Only where this start would have played it.
     LaunchedEffect(Unit) {

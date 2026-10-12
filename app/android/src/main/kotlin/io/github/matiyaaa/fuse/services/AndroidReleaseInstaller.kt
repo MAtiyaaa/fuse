@@ -9,28 +9,20 @@ import android.provider.Settings
 import androidx.core.net.toUri
 import io.github.matiyaaa.fuse.ActivityHolder
 import io.github.matiyaaa.fuse.integrations.github.ReleasePlatform
+import io.github.matiyaaa.fuse.integrations.github.ResumableDownload
 import io.github.matiyaaa.fuse.model.ReleaseAsset
-import io.github.matiyaaa.fuse.storage.toHex
 import io.github.matiyaaa.fuse.ui.shell.store.ReleaseInstaller
 import io.ktor.client.HttpClient
-import io.ktor.client.plugins.timeout
-import io.ktor.client.request.prepareGet
-import io.ktor.client.statement.bodyAsChannel
-import io.ktor.http.contentLength
-import io.ktor.http.isSuccess
-import io.ktor.utils.io.jvm.javaio.toInputStream
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
-import java.security.MessageDigest
 
 /**
- * Downloads an APK from a GitHub release into `cache/updates`, checks its `sha256:` digest when
- * GitHub published one, and hands it to the system installer through a [PackageInstaller] session.
+ * Downloads an APK from a GitHub release into `cache/updates`, carrying on where an interrupted
+ * download stopped (a lost connection, Fuse closed), checks its `sha256:` digest when GitHub
+ * published one, and hands it to the system installer through a [PackageInstaller] session.
  * Android always shows its own confirmation ([InstallResultReceiver] opens it); nothing is ever
  * installed silently.
  */
@@ -50,24 +42,24 @@ class AndroidReleaseInstaller(
         return try {
             withContext(Dispatchers.IO) {
                 if (!dir.isDirectory && !dir.mkdirs()) throw InstallException("Fuse couldn't prepare its download folder.")
-                // Only the update being downloaded is kept.
-                dir.listFiles()?.filter { it != file }?.forEach { it.delete() }
+                // Only the update being downloaded is kept (with what arrived of it so far).
+                dir.listFiles()?.filter { it != file && it != ResumableDownload.noteOf(file) }?.forEach { it.delete() }
                 val actual = download(asset, file, onProgress)
                 if (expected != null && expected != actual) {
-                    file.delete()
+                    ResumableDownload.forget(file)
                     throw InstallException("The download didn't match the checksum GitHub published, so it was deleted. Try again.")
                 }
+                ResumableDownload.finished(file)
             }
             Result.success(file.absolutePath)
         } catch (e: CancellationException) {
-            file.delete()
+            // Stopped: what arrived stays, and the next download carries on from it.
             throw e
         } catch (e: InstallException) {
-            file.delete()
+            ResumableDownload.forget(file)
             Result.failure(e)
         } catch (e: IOException) {
-            file.delete()
-            Result.failure(InstallException("The download failed. Check the connection and try again."))
+            Result.failure(InstallException("The download stopped. Download it again to carry on from where it stopped."))
         }
     }
 
@@ -143,66 +135,36 @@ class AndroidReleaseInstaller(
                 if (!dir.isDirectory && !dir.mkdirs()) throw InstallException("Fuse couldn't prepare its download folder.")
                 val actual = download(asset, file, onProgress)
                 if (expected != null && expected != actual) {
-                    file.delete()
+                    ResumableDownload.forget(file)
                     throw InstallException("The download didn't match the checksum GitHub published, so it was deleted. Try again.")
                 }
+                ResumableDownload.finished(file)
                 commit(file)
             }
             Result.success(Unit)
         } catch (e: CancellationException) {
-            file.delete()
+            // Stopped: what arrived stays, and the next download carries on from it.
             throw e
         } catch (e: InstallException) {
-            file.delete()
+            ResumableDownload.forget(file)
             Result.failure(e)
         } catch (e: IOException) {
-            file.delete()
-            Result.failure(InstallException("The download failed. Check the connection and try again."))
+            Result.failure(InstallException("The download stopped. Download it again to carry on from where it stopped."))
         } catch (e: RuntimeException) {
-            file.delete()
+            ResumableDownload.forget(file)
             Result.failure(InstallException("Android couldn't start the installation."))
         }
     }
 
-    /** Streams [asset] into [file] and returns the lower-case hex SHA-256 of what was written. */
+    /**
+     * Streams [asset] into [file], carrying on what an interrupted download left there for the same
+     * asset ([ResumableDownload]), and returns the lower-case hex SHA-256 of the whole file.
+     */
     private suspend fun download(asset: ReleaseAsset, file: File, onProgress: (Float) -> Unit): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        http.prepareGet(asset.url) {
-            timeout {
-                requestTimeoutMillis = DOWNLOAD_TIMEOUT_MS
-                socketTimeoutMillis = 60_000
-            }
-        }.execute { response ->
-            if (!response.status.isSuccess()) throw InstallException("GitHub answered ${response.status.value} for the download.")
-            val total = response.contentLength()?.takeIf { it > 0 } ?: asset.sizeBytes.takeIf { it > 0 }
-            var written = 0L
-            var lastReported = -1
-            onProgress(0f)
-            response.bodyAsChannel().toInputStream().use { input ->
-                FileOutputStream(file).use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    while (true) {
-                        val n = input.read(buffer)
-                        if (n < 0) break
-                        output.write(buffer, 0, n)
-                        digest.update(buffer, 0, n)
-                        written += n
-                        if (total != null) {
-                            val percent = (written * 100 / total).toInt().coerceIn(0, 100)
-                            if (percent != lastReported) {
-                                lastReported = percent
-                                onProgress(percent / 100f)
-                            }
-                        }
-                        kotlin.coroutines.coroutineContext.ensureActive()
-                    }
-                    output.fd.sync()
-                }
-            }
-            if (total != null && written != total) throw InstallException("The download was incomplete. Try again.")
-            onProgress(1f)
-        }
-        return digest.digest().toHex()
+        onProgress(0f)
+        val sha = ResumableDownload.fetch(http, asset.url, file, asset.sizeBytes, "${asset.url} ${asset.sizeBytes} ${asset.digest.orEmpty()}", onProgress)
+        onProgress(1f)
+        return sha
     }
 
     private fun commit(file: File, keep: Boolean = false, selfUpdate: Boolean = false) {
@@ -250,8 +212,4 @@ class AndroidReleaseInstaller(
     }
 
     class InstallException(message: String) : Exception(message)
-
-    private companion object {
-        const val DOWNLOAD_TIMEOUT_MS = 60L * 60 * 1000
-    }
 }

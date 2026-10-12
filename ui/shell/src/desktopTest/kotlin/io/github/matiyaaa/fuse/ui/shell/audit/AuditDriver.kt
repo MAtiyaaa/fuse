@@ -145,6 +145,7 @@ internal class AuditDriver(
         val theme = System.getProperty("fuse.audit.theme")?.takeIf { it.isNotBlank() }
         store.updatePrefs { prefs(base).let { p -> if (theme != null && p.themeId == base.themeId) p.copy(themeId = theme) else p } }
         controls.cartridge = io.github.matiyaaa.fuse.model.CartridgeStatus(installed = false)
+        controls.previousFuse = null
         store.cartridge.refresh()
         show(store, platform)
     }
