@@ -99,6 +99,9 @@ internal class FakeServices(
         )
     }
 
+    /** What the fake launcher answers instead of starting the game, when a test sets it. */
+    @Volatile var runResult: RunResult? = null
+
     /** The device's second screen, when the test gives it one, and the display each launch asked for. */
     var secondDisplay: Int? = null
     val launchedOn = mutableListOf<Int?>()
@@ -109,6 +112,7 @@ internal class FakeServices(
         override suspend fun run(launch: ResolvedLaunch, displayId: Int?): RunResult {
             launched += launch
             launchedOn += displayId
+            runResult?.let { return it }
             val waiter = exit
             return RunResult.Started(awaitExit = waiter?.let { w -> { w.await() } })
         }
@@ -172,6 +176,13 @@ internal class FakeServices(
     override suspend fun readFile(path: String, maxBytes: Int): ByteArray? =
         File(path).takeIf { it.isFile && it.length() <= maxBytes }?.readBytes()
 
+    override suspend fun writeBeside(beside: String, name: String, bytes: ByteArray): String? {
+        val file = File(File(beside).parentFile, name)
+        if (file.exists()) return null
+        file.writeBytes(bytes)
+        return file.absolutePath
+    }
+
     override suspend fun keepFile(relativePath: String, bytes: ByteArray): String? {
         require(!relativePath.contains("..")) { "Kept files never leave the data folder" }
         val file = File(cache, "kept/$relativePath")
@@ -180,16 +191,26 @@ internal class FakeServices(
         return file.absolutePath
     }
 
-    /** Where the fake PCSX2 keeps its data; null when it isn't set up. */
+    /** Where the fake PCSX2, DuckStation and PPSSPP keep their data; null when they aren't set up. */
     @Volatile var pcsx2Home: io.github.matiyaaa.fuse.launch.patches.Pcsx2Home? = null
+    @Volatile var duckstationHome: io.github.matiyaaa.fuse.launch.patches.DuckStationHome? = null
+    @Volatile var ppssppHome: io.github.matiyaaa.fuse.launch.patches.PpssppHome? = null
+    @Volatile var retroArchHome: io.github.matiyaaa.fuse.launch.patches.RetroArchHome? = null
 
     override val emulatorFiles = object : EmulatorFiles {
         override suspend fun pcsx2(installed: InstalledEmulator) = pcsx2Home
+        override suspend fun duckstation(installed: InstalledEmulator) = duckstationHome
+        override suspend fun ppsspp(installed: InstalledEmulator) = ppssppHome
+        override suspend fun retroArch(installed: InstalledEmulator) = retroArchHome
+        override suspend fun remove(path: String): Boolean = inside(path) && File(path).delete()
         override suspend fun zipText(zip: String, entry: String): String? =
             java.util.zip.ZipFile(zip).use { z -> z.getEntry(entry)?.let { e -> z.getInputStream(e).use { it.readBytes().decodeToString() } } }
+        private fun inside(path: String): Boolean =
+            listOfNotNull(pcsx2Home?.dataRoot, duckstationHome?.dataRoot, ppssppHome?.memstick, retroArchHome?.cheats, retroArchHome?.configDir)
+                .any { path.startsWith("$it/") }
+
         override suspend fun write(path: String, text: String): Boolean {
-            val root = pcsx2Home?.dataRoot ?: return false
-            if (!path.startsWith("$root/")) return false
+            if (!inside(path)) return false
             File(path).also { it.parentFile.mkdirs() }.writeText(text)
             return true
         }
@@ -208,7 +229,89 @@ internal class FakeServices(
         override suspend fun clearStaged() {
             File(cache, "staged").deleteRecursively()
         }
+
+        override suspend fun inspect(source: String): SourceListing? {
+            val f = File(source)
+            return when {
+                f.isDirectory -> f.walkTopDown().filter { it.isFile }.map { it.relativeTo(f).invariantSeparatorsPath }.sorted().toList()
+                    .let { SourceListing(f.name, SourceForm.FOLDER, it, f.walkTopDown().filter { x -> x.isFile }.sumOf { x -> x.length() }) }
+                f.isFile && f.name.endsWith(".zip") -> java.util.zip.ZipFile(f).use { z ->
+                    SourceListing(f.name, SourceForm.ARCHIVE, z.entries().toList().filterNot { it.isDirectory }.map { it.name }, f.length())
+                }
+                f.isFile -> SourceListing(f.name, SourceForm.FILE, listOf(f.name), f.length())
+                else -> null
+            }
+        }
+
+        private fun bytes(source: String, entry: String): ByteArray? {
+            val f = File(source)
+            return when {
+                entry.isEmpty() || (f.isFile && !f.name.endsWith(".zip") && entry == f.name) -> f.readBytes()
+                f.isDirectory -> File(f, entry).takeIf { it.isFile }?.readBytes()
+                else -> java.util.zip.ZipFile(f).use { z -> z.getEntry(entry)?.let { e -> z.getInputStream(e).use { it.readBytes() } } }
+            }
+        }
+
+        override suspend fun sourceText(source: String, entry: String): String? = bytes(source, entry)?.decodeToString()
+
+        private fun allowedHere(path: String): Boolean = inside(path) ||
+            (listOfNotNull(pcsx2Home?.textures, duckstationHome?.textures) + modRoots).filter { it.isNotEmpty() }.any { path.startsWith("$it/") }
+
+        override suspend fun modHome(query: io.github.matiyaaa.fuse.sync.SaveQuery): Result<io.github.matiyaaa.fuse.sync.ModHome> {
+            modQueries += query
+            val h = modHomeFor(query) ?: return Result.failure(IllegalStateException("No mod folder in this test."))
+            modRoots += listOfNotNull(h.folder, h.graphicsMods, h.settingsFile?.substringBeforeLast('/'))
+            return Result.success(h)
+        }
+
+        override suspend fun install(source: String?, files: List<io.github.matiyaaa.fuse.launch.patches.PlannedFile>, texts: Map<String, String>, restorePoint: String): Boolean {
+            val dests = files.map { it.to } + texts.keys
+            if (dests.any { !allowedHere(it) } || restorePoints.containsKey(restorePoint)) return false
+            // Each destination with what was there before it (null for a new file).
+            restorePoints[restorePoint] = dests.associateWith { File(it).takeIf { f -> f.isFile }?.readBytes() }
+            for (p in files) {
+                val b = bytes(source!!, p.from) ?: run { undo(restorePoint); return false }
+                File(p.to).also { it.parentFile.mkdirs() }.writeBytes(b)
+            }
+            for ((path, text) in texts) File(path).also { it.parentFile.mkdirs() }.writeText(text)
+            return true
+        }
+
+        override suspend fun fetch(url: String, name: String, size: Long?, md5: String?, maxBytes: Long, onProgress: (Float) -> Unit): String? {
+            fetchedUrls += url
+            val from = downloads[url] ?: return null
+            val sum = java.security.MessageDigest.getInstance("MD5").digest(from.readBytes()).joinToString("") { "%02x".format(it) }
+            if (md5 != null && sum != md5) return null
+            onProgress(1f)
+            val dir = File(cache, "fetched").also { it.mkdirs() }
+            return from.copyTo(File(dir, name), overwrite = true).absolutePath
+        }
+
+        override suspend fun clearFetched() {
+            File(cache, "fetched").deleteRecursively()
+        }
+
+        override suspend fun undo(restorePoint: String, keep: Set<String>): Boolean {
+            val point = restorePoints.remove(restorePoint) ?: return false
+            for ((path, was) in point) {
+                if (path in keep) continue
+                if (was == null) File(path).delete() else File(path).writeBytes(was)
+            }
+            return true
+        }
     }
+
+    /** Where the fake's emulators keep a game's mods, and the games asked about. */
+    @Volatile var modHomeFor: (io.github.matiyaaa.fuse.sync.SaveQuery) -> io.github.matiyaaa.fuse.sync.ModHome? = { null }
+    val modQueries: MutableList<io.github.matiyaaa.fuse.sync.SaveQuery> = java.util.Collections.synchronizedList(mutableListOf())
+    private val modRoots: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
+
+    /** Files the fake fetches for each address, and the addresses asked for. */
+    val downloads = java.util.concurrent.ConcurrentHashMap<String, File>()
+    val fetchedUrls: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
+
+    /** What each restoration point of the fake keeps: every destination with its bytes before (null when it was new). */
+    val restorePoints = java.util.concurrent.ConcurrentHashMap<String, Map<String, ByteArray?>>()
 
     /** RPCS3's dev_hdd0 and Vita3K's pref path for the fake, and what its installer does with each run. */
     @Volatile var rpcs3Hdd: String? = null

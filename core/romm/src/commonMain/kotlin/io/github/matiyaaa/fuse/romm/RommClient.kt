@@ -45,7 +45,7 @@ class RommClient(
         private set
 
     /** The address calls go to first right now (for downloads, which carry on by range if it changes). */
-    fun base(): String = routes.preferred()?.second ?: throw RommException("Fuse RomM has no address for the server. Add one in Settings, Addons, Fuse RomM.", code = "no-address")
+    fun base(): String = routes.preferred()?.second ?: throw RommException("RomM has no address for the server. Add one in Settings, Addons, RomM.", code = "no-address")
 
     /** Adds the sign-in to a request (downloads made outside this client use it too). */
     fun authorize(b: HttpRequestBuilder) {
@@ -74,7 +74,7 @@ class RommClient(
         read: suspend (HttpResponse) -> T,
     ): T {
         val targets = routes.bases()
-        if (targets.isEmpty()) throw RommException("Fuse RomM has no address for the server. Add one in Settings, Addons, Fuse RomM.", code = "no-address")
+        if (targets.isEmpty()) throw RommException("RomM has no address for the server. Add one in Settings, Addons, RomM.", code = "no-address")
         var last: Exception? = null
         for ((route, base) in targets) {
             val resp = try {
@@ -133,7 +133,7 @@ class RommClient(
         val detail = runCatching { (RommParse.element(resp.bodyAsText()) as? JsonObject)?.get("detail")?.let { (it as? JsonPrimitive)?.contentOrNull } }.getOrNull()
         val s = resp.status.value
         val words = when {
-            s == 401 -> "RomM didn't accept Fuse's sign-in. Sign in again in Settings, Addons, Fuse RomM."
+            s == 401 -> "RomM didn't accept Fuse's sign-in. Sign in again in Settings, Addons, RomM."
             s == 403 -> "Your RomM sign-in isn't allowed to do this."
             s == 404 -> detail?.takeIf { it != "Not Found" } ?: "RomM doesn't have that."
             s == 409 -> detail ?: "RomM is already doing that."

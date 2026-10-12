@@ -36,6 +36,12 @@ enum class WidgetKind(val defaultSpan: WidgetSpan) {
     PLAYTIME_WEEK(WidgetSpan.MEDIUM),
     MOST_PLAYED(WidgetSpan.MEDIUM),
     CURRENT_GAME(WidgetSpan.MEDIUM),
+
+    /** Games suggested from the person's own library, each with its reason. */
+    FOR_YOU(WidgetSpan.WIDE),
+
+    /** One game from the collection, a different one each day, with why and a way to play it. */
+    SPOTLIGHT(WidgetSpan.LARGE),
     CARTRIDGE_DOWNLOADS(WidgetSpan.MEDIUM),
     STORAGE(WidgetSpan.SMALL),
     CLOCK(WidgetSpan.SMALL),
@@ -76,7 +82,7 @@ val WidgetKind.isRow: Boolean
 private val RowKinds = setOf(
     WidgetKind.CONTINUE_PLAYING, WidgetKind.RECENTLY_PLAYED, WidgetKind.FAVORITES, WidgetKind.RECENTLY_ADDED,
     WidgetKind.PINNED_GAMES, WidgetKind.MOST_PLAYED, WidgetKind.PINNED_APPS, WidgetKind.COLLECTIONS,
-    WidgetKind.SYSTEMS, WidgetKind.RECENT_ACHIEVEMENTS,
+    WidgetKind.SYSTEMS, WidgetKind.RECENT_ACHIEVEMENTS, WidgetKind.FOR_YOU, WidgetKind.SPOTLIGHT,
     WidgetKind.JELLYFIN_CONTINUE, WidgetKind.JELLYFIN_NEXT_UP, WidgetKind.JELLYFIN_RECENTLY_ADDED,
     WidgetKind.JELLYFIN_FAVORITES, WidgetKind.JELLYFIN_MOVIES, WidgetKind.JELLYFIN_MUSIC,
 )
@@ -112,7 +118,7 @@ data class GridSpot(val column: Int, val row: Int)
 /** The size a widget of this kind takes on the board until it is resized. */
 val WidgetKind.boardSize: BoardSize
     get() = when (this) {
-        WidgetKind.CONTINUE_PLAYING -> BoardSize(2, 2)
+        WidgetKind.CONTINUE_PLAYING, WidgetKind.SPOTLIGHT -> BoardSize(2, 2)
         WidgetKind.CLOCK, WidgetKind.STORAGE, WidgetKind.PLAYTIME_TOTAL, WidgetKind.RECENT_ACHIEVEMENT,
         WidgetKind.ACHIEVEMENT_PROGRESS, WidgetKind.RECENTLY_MASTERED,
         -> BoardSize(1, 1)

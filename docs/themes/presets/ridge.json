@@ -28,6 +28,7 @@
   "focus": "bar",
   "motion": "standard",
   "sound": "click",
+  "quickMenu": "soft",
   "glass": {
     "enabled": false,
     "blur": 24.0,

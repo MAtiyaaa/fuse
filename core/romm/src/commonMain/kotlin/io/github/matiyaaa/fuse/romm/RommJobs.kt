@@ -6,7 +6,7 @@ import io.ktor.client.HttpClient
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-/** The source name Fuse RomM's transfers carry. */
+/** The source name RomM's transfers carry. */
 const val ROMM_SOURCE = "romm"
 
 /** One file of a download: RomM's file and where it goes inside the transfer's place. */
@@ -14,7 +14,7 @@ const val ROMM_SOURCE = "romm"
 data class RommDownloadFile(val file: RommFile, val relative: String)
 
 /**
- * A Fuse RomM download, kept with its transfer: a game's files (all, or the missing discs, an
+ * A RomM download, kept with its transfer: a game's files (all, or the missing discs, an
  * update, DLC), or one BIOS file. [newFolder] is true when the game's folder is made by this download
  * (its files are gathered beside it first and the folder appears whole, so a scan never sees half a game).
  */
@@ -36,7 +36,7 @@ data class RommDownloadJob(
 data class RommUploadFile(val path: String, val name: String, val folder: String = "", val sizeBytes: Long = 0)
 
 /**
- * A Fuse RomM upload, kept with its transfer so it carries on after a restart: which file it is on,
+ * A RomM upload, kept with its transfer so it carries on after a restart: which file it is on,
  * RomM's id for that file's upload and how many chunks are in.
  */
 @Serializable
@@ -54,9 +54,9 @@ data class RommUploadJob(
     val skipped: List<String> = emptyList(),
 )
 
-/** What Fuse RomM's transfers need from the app: the client in use, the mirror, and what to do once something lands. */
+/** What RomM's transfers need from the app: the client in use, the mirror, and what to do once something lands. */
 interface RommTransferHost {
-    /** The client for [server], signed in; null when Fuse RomM is off or signed out. */
+    /** The client for [server], signed in; null when RomM is off or signed out. */
     fun client(server: String): RommClient?
     val mirror: RommMirror
 
@@ -75,5 +75,5 @@ fun RommUploadJob.encode(): String = jobJson.encodeToString(RommUploadJob.serial
 /** Uploads have their own source name, so they have their own handler. */
 const val ROMM_UPLOAD_SOURCE = "romm-upload"
 
-/** Fuse RomM's two transfer handlers (downloads, uploads), for Fuse's transfers. */
+/** RomM's two transfer handlers (downloads, uploads), for Fuse's transfers. */
 expect fun rommHandlers(http: HttpClient, host: RommTransferHost): List<TransferHandler>

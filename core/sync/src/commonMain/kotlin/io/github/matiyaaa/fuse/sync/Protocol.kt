@@ -14,6 +14,39 @@ object SyncApi {
     const val VERSION = 1
     const val BASE = "/sync/v1"
 
+    /**
+     * The oldest protocol this Fuse still speaks. A host refuses a device older than its own, and a
+     * device whose own is newer than the host's [VERSION] is told to wait for the host's update,
+     * so neither is ever made to read what it can't understand. Devices from before 0.4.2 send no
+     * version and are taken as speaking version 1.
+     */
+    const val MIN_VERSION = 1
+
+    /** Headers every device call carries: its protocol, the oldest it speaks, and its Fuse version. */
+    const val PROTOCOL_HEADER = "X-Fuse-Protocol"
+    const val MIN_PROTOCOL_HEADER = "X-Fuse-Protocol-Min"
+    const val APP_HEADER = "X-Fuse-App"
+
+    /** True when Fuse version [a] ("0.4.1") is older than [b], comparing their numbers in turn. */
+    fun older(a: String, b: String): Boolean {
+        fun parts(v: String) = v.split(Regex("[^0-9]+")).filter { it.isNotEmpty() }.map { it.toIntOrNull() ?: 0 }
+        val x = parts(a)
+        val y = parts(b)
+        for (i in 0 until maxOf(x.size, y.size)) {
+            val p = x.getOrElse(i) { 0 }
+            val q = y.getOrElse(i) { 0 }
+            if (p != q) return p < q
+        }
+        return false
+    }
+
+    /** Why a device speaking [protocol] (oldest [min]) and this host can't work together; null when they can. */
+    fun incompatible(protocol: Int, min: Int): ApiError? = when {
+        protocol < MIN_VERSION -> ApiError("This device's Fuse is too old for the household's host. Update Fuse on this device to keep syncing; nothing was changed.", "device-too-old")
+        min > VERSION -> ApiError("The household's host runs an older Fuse than this device. Update Fuse on the host to keep syncing; nothing was changed.", "host-too-old")
+        else -> null
+    }
+
     /** The UDP port hosts answer discovery on, and the port they serve on by default. */
     const val DISCOVERY_PORT = 47310
     const val DEFAULT_PORT = 47311
@@ -24,6 +57,9 @@ object SyncApi {
 
     /** The household's games (0.3.8): lists, requests between devices, passing games through. */
     const val FEATURE_HOUSEHOLD = "household"
+
+    /** Backup hosts (0.4.2): copies of the household that take over when the host is gone. */
+    const val FEATURE_BACKUPS = "backups"
 
     /** The most a piece of a game passed through the host carries (a tunnel refuses big uploads). */
     const val RELAY_PIECE = 32L * 1024 * 1024
@@ -48,7 +84,96 @@ data class HostHello(
     val account: Boolean = false,
     /** What this host offers beyond saves and records ([SyncApi.FEATURE_HOUSEHOLD]); a device asks only for what is listed. */
     val features: List<String> = emptyList(),
+    /** This computer among the household's hosts ([HostNode.nodeId]); empty from a host before backups. */
+    val node: String = "",
+    /** The household's generation of hosts this computer knows ([Leadership.generation]). */
+    val generation: Long = 0,
+    /** What this computer is for the household now: [Leadership.PRIMARY], [Leadership.BACKUP] or [Leadership.FENCED]. */
+    val role: String = Leadership.PRIMARY,
+    /** Every computer that keeps the household, the host first. */
+    val hosts: List<HostNode> = emptyList(),
+    /** The oldest protocol this host serves ([SyncApi.MIN_VERSION]); 1 from hosts before 0.4.2. */
+    val minVersion: Int = 1,
 )
+
+/**
+ * A computer that keeps the household: the host, or a backup ready to take over. [deviceId] is the
+ * backup's own device in the household (it signs in as that device to copy the household); null
+ * for a computer that only ever was the host.
+ */
+@Serializable
+data class HostNode(
+    val nodeId: String,
+    val name: String,
+    val deviceId: String? = null,
+    /** Its address at home and from outside, as devices reach it. */
+    val local: String? = null,
+    val remote: String? = null,
+)
+
+/**
+ * Which computer keeps the household, and since which generation. Every computer that keeps it has
+ * one: a generation only ever grows, and a new one is made only by a majority of the household's
+ * hosts (or by a person, when there are too few to make a majority), so two computers can never be
+ * the host of the same generation. A computer that learns of a newer generation than its own stops
+ * taking changes ([FENCED]) until it has handed what it took meanwhile to the new host.
+ */
+@Serializable
+data class Leadership(
+    val generation: Long = 0,
+    /** The [HostNode.nodeId] of the host of this generation. */
+    val leader: String = "",
+    val hosts: List<HostNode> = emptyList(),
+    /** When this generation began. */
+    val since: Long = 0,
+    /** The journal position the new host had when it took over: what an older host took after it was its own. */
+    val forkSeq: Long = 0,
+) {
+    val leaderNode: HostNode? get() = hosts.firstOrNull { it.nodeId == leader }
+
+    /** The backups, in the order they take over. */
+    val backups: List<HostNode> get() = hosts.filter { it.nodeId != leader }
+
+    /** How many of the hosts make a majority. */
+    val majority: Int get() = hosts.size / 2 + 1
+
+    companion object {
+        const val PRIMARY = "PRIMARY"
+        const val BACKUP = "BACKUP"
+        const val FENCED = "FENCED"
+    }
+}
+
+/**
+ * A host telling another of the household's hosts which host it knows of, and the answer in kind.
+ * [reconciled] names the computer whose changes the new host has just taken back: it becomes a backup.
+ */
+@Serializable
+data class Announcement(val leadership: Leadership, val reconciled: String? = null, val role: String = "", val seq: Long = 0)
+
+/** A backup asking another host for its vote to become the host of [generation]. */
+@Serializable
+data class VoteRequest(val generation: Long, val candidate: String, val candidateSeq: Long)
+
+@Serializable
+data class VoteAnswer(
+    val granted: Boolean,
+    val leadership: Leadership,
+    val reason: String = "",
+    /** The newest generation the voter has voted in: a candidate that lost asks again past it. */
+    val votedIn: Long = 0,
+)
+
+/**
+ * Everything a host keeps but its files, for a backup: each file of its folder by its path, and the
+ * files (by hash) its saves use, which the backup fetches as any device does.
+ */
+@Serializable
+data class ReplicaBundle(val seq: Long, val generation: Long, val files: Map<String, String>, val objects: List<String>)
+
+/** [ReplicaBundle] sealed with the backup's own secret: what crosses the network, even at home. */
+@Serializable
+data class SealedReplica(val salt: String, val sealed: String, val seq: Long, val unchanged: Boolean = false)
 
 /** A device asking to join: the code shown on the host, and who the device is. */
 @Serializable
@@ -110,6 +235,9 @@ data class DeviceInfo(
     /** LOCAL, REMOTE or empty. */
     val connection: String = "",
     val revoked: Boolean = false,
+    /** The Fuse it runs ("0.4.2") and the protocol it speaks; empty and 0 until it calls from 0.4.2 or later. */
+    val fuseVersion: String = "",
+    val protocol: Int = 0,
 )
 
 @Serializable
@@ -127,7 +255,36 @@ data class HostStatus(
     val journalSeq: Long,
     val startedAt: Long,
     val freeBytes: Long = -1,
+    /** The household's hosts, and the computers offering to be backups (shown on the host to accept). */
+    val leadership: Leadership? = null,
+    val backupOffers: List<HostNode> = emptyList(),
 )
+
+/** One kept copy of the whole household: when, which kinds of keeping it counts for, and how much it holds. */
+@Serializable
+data class HouseholdSnapshot(
+    /** Its folder's name (`2026-10-11-2215`). */
+    val name: String,
+    val at: Long,
+    /** "daily", "weekly", "monthly" (kept for each kind it counts for), "manual", "before-restore". */
+    val kinds: List<String>,
+    val seq: Long,
+    val generation: Long,
+    val profiles: Int,
+    val devices: Int,
+    val revisions: Int,
+    /** The saves' files it needs, by hash (kept once for every snapshot, in the backups' `objects`). */
+    val objects: List<String>,
+    val bytes: Long = 0,
+)
+
+/** The household's backups as the host keeps them: where, which, and what went wrong last. */
+@Serializable
+data class HouseholdBackupsState(val folder: String, val snapshots: List<HouseholdSnapshot>, val problem: String? = null)
+
+/** Where a device stands as a backup: the household's hosts, and whether its offer waits on the host. */
+@Serializable
+data class BackupState(val leadership: Leadership, val offered: Boolean, val backup: Boolean)
 
 /** A device's change to a profile's records, merged on the host, which answers with the whole. */
 @Serializable
@@ -296,6 +453,8 @@ data class ProfileReport(
     val savesBytes: Long,
     /** Where the host keeps its files, on the host computer. */
     val storePath: String = "",
+    /** Made by this device alone, without a host: what it keeps for the person by itself. */
+    val local: Boolean = false,
 )
 
 @Serializable
@@ -438,3 +597,41 @@ data class ServicesShare(
 /** One Jellyfin sign-in, inside a sealed map. */
 @Serializable
 data class JellyfinLogin(val username: String, val password: String)
+
+/**
+ * Making or restoring a recovery package ([kind] "write" or "restore"), which runs on the host
+ * while Fuse looks in: [state] "running", "done" or "failed" (with [message] saying why), how far
+ * it is ([done] of [total] files), and once done what the household held.
+ */
+@Serializable
+data class RecoveryJob(
+    val kind: String,
+    val state: String,
+    val file: String,
+    val done: Long = 0,
+    val total: Long = 0,
+    val message: String? = null,
+    val hostName: String = "",
+    val createdAt: Long = 0,
+    val profiles: Int = 0,
+    val devices: Int = 0,
+    val revisions: Int = 0,
+    val startedAt: Long = 0,
+) {
+    val running: Boolean get() = state == RUNNING
+
+    companion object {
+        const val WRITE = "write"
+        const val RESTORE = "restore"
+        const val RUNNING = "running"
+        const val DONE = "done"
+        const val FAILED = "failed"
+
+        /** The shortest password a recovery package takes. */
+        const val MIN_PASSWORD = 8
+    }
+}
+
+/** A recovery package to make or restore, at [file] on the host computer, with its [password]. */
+@Serializable
+data class RecoveryRequest(val file: String, val password: String)

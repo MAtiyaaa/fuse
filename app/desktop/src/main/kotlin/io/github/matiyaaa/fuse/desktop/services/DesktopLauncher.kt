@@ -3,6 +3,7 @@ package io.github.matiyaaa.fuse.desktop.services
 import io.github.matiyaaa.fuse.desktop.Log
 import io.github.matiyaaa.fuse.desktop.system.DesktopOs
 import io.github.matiyaaa.fuse.desktop.system.Processes
+import io.github.matiyaaa.fuse.launch.LaunchDiagnostic
 import io.github.matiyaaa.fuse.launch.ResolvedLaunch
 import io.github.matiyaaa.fuse.launch.linux.DesktopExec
 import io.github.matiyaaa.fuse.launch.pc.ShortcutParser
@@ -96,13 +97,15 @@ internal class DesktopLauncher(
                 val msg = e.message.orEmpty()
                 return@withContext when {
                     "error=2," in msg || "error=3," in msg || "No such file" in msg -> RunResult.NotInstalled
-                    "error=13," in msg -> RunResult.Failed("$name is not marked as executable.")
+                    // The file that wouldn't run, which is the game itself for a port started as its own program.
+                    "error=13," in msg -> RunResult.Failed("${baseName(argv[0])} is not marked as executable.")
                     "error=5," in msg -> RunResult.Failed("Windows did not allow $name to start.")
                     "error=740," in msg -> RunResult.Failed("$name asks to run as administrator. Fuse starts programs as you.")
                     else -> RunResult.Failed("$name could not start: ${msg.substringAfterLast(": ").ifEmpty { "unknown error" }}")
                 }
             }
             val stderr = StderrTail(process)
+            val family = ProcessFamily(process)
             // A command that fails at once (missing core, uninstalled Flatpak) is reported, not hidden.
             if (process.waitFor(QUICK_FAIL_MS, TimeUnit.MILLISECONDS) && process.exitValue() != 0) {
                 val detail = stderr.firstLine(500)
@@ -110,18 +113,70 @@ internal class DesktopLauncher(
                 return@withContext if (detail != null && "not installed" in detail) {
                     RunResult.NotInstalled
                 } else {
-                    RunResult.Failed("$name stopped right away (exit code ${process.exitValue()})" + (detail?.let { ": ${it.take(160)}" } ?: "."))
+                    RunResult.Failed(
+                        "$name stopped right away (exit code ${process.exitValue()})" + (detail?.let { ": ${it.take(160)}" } ?: "."),
+                        LaunchDiagnostic(argv, process.exitValue(), stderr.text(0)),
+                    )
                 }
             }
             // Hand-off commands return at once while the game runs elsewhere (Steam, gio, xdg-open);
             // the play session then ends when Fuse comes back to the front, like on Android.
-            if (isHandoff(argv)) return@withContext RunResult.Started(awaitExit = null)
+            if (isHandoff(argv)) {
+                family.stop()
+                return@withContext RunResult.Started(awaitExit = null)
+            }
             hooks.onGameStarted?.invoke()
             RunResult.Started(awaitExit = {
                 process.onExit().await()
+                // A launcher that hands the game to a process of its own (a wrapper script, an
+                // AppImage's runtime, an emulator that starts itself again) has left: the game is
+                // over only once what it started is too.
+                family.awaitRest()
                 hooks.onGameExited?.invoke()
             })
         }
+
+    /**
+     * Every process [process] starts, noted while it runs (often at first, when launchers hand
+     * over), so they can be waited for once it is gone: after a process exits, the system no longer
+     * says which processes were its children. Helpers that outlive any game by design (a sandbox's
+     * D-Bus proxy, Wine's server, desktop daemons) are left out.
+     */
+    internal class ProcessFamily(private val process: Process, private val clock: () -> Long = System::currentTimeMillis) {
+        private val seen = java.util.concurrent.ConcurrentHashMap<Long, ProcessHandle>()
+        @Volatile private var stopped = false
+        private val started = clock()
+
+        init {
+            Thread({
+                while (!stopped && process.isAlive) {
+                    runCatching { process.descendants().forEach { seen.putIfAbsent(it.pid(), it) } }
+                    // Often at first, while launchers hand over; then now and then.
+                    Thread.sleep(if (clock() - started < 10_000) 50 else 1_000)
+                }
+            }, "fuse-process-family").apply { isDaemon = true }.start()
+        }
+
+        fun stop() { stopped = true }
+
+        /** What it started that still runs, helpers left out. */
+        fun rest(): List<ProcessHandle> = seen.values.filter { it.isAlive && !helper(it) }
+
+        /** Waits until everything it started (but helpers) has ended too. */
+        suspend fun awaitRest() {
+            stopped = true
+            while (true) {
+                val alive = rest()
+                if (alive.isEmpty()) return
+                for (h in alive) h.onExit().await()
+            }
+        }
+
+        private fun helper(h: ProcessHandle): Boolean {
+            val name = h.info().command().orElse("").let(::baseName).lowercase().removeSuffix(".exe")
+            return name in HELPERS
+        }
+    }
 
     /** Keeps the first few KB of a child's stderr and drains the rest so it never blocks. */
     private class StderrTail(process: Process) {
@@ -147,15 +202,23 @@ internal class DesktopLauncher(
             }, "fuse-child-stderr").apply { isDaemon = true }.start()
         }
 
-        fun firstLine(waitMs: Long): String? {
+        fun firstLine(waitMs: Long): String? = text(waitMs).lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }
+
+        /** What it wrote, up to the first few KB. */
+        fun text(waitMs: Long): String {
             done.await(waitMs, TimeUnit.MILLISECONDS)
-            val text = synchronized(buffer) { String(buffer.toByteArray(), StandardCharsets.UTF_8) }
-            return text.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }
+            return synchronized(buffer) { String(buffer.toByteArray(), StandardCharsets.UTF_8) }
         }
     }
 
     companion object {
         private const val QUICK_FAIL_MS = 600L
+
+        /** Processes a launcher may leave behind that never are the game. */
+        private val HELPERS = setOf(
+            "xdg-dbus-proxy", "dbus-daemon", "dbus-launch", "wineserver", "winedevice", "services", "plugplay", "explorer", "rpcss",
+            "conhost", "gvfsd", "at-spi-bus-launcher", "at-spi2-registryd", "pulseaudio", "pipewire", "ssh-agent", "gpg-agent",
+        )
         private val HANDOFF = setOf("gio", "xdg-open", "steam", "kde-open", "kde-open5", "gnome-open", "exo-open", "explorer")
 
         /** The last part of a path, with Windows' backslashes too (a Windows program's own path keeps them). */

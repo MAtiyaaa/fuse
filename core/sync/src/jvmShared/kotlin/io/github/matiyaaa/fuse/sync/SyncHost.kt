@@ -39,6 +39,7 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -87,6 +88,133 @@ class SyncHost(
     private val unreachable = ConcurrentHashMap<String, Long>()
 
     private fun liveDevices(): Set<String> = store.devices().filter { !it.revoked }.map { it.id }.toSet()
+
+    /** What the Hub's forms carry, so a page on another site can't post them through this computer's browser. */
+    private val hubFormToken = SyncCrypto.token(18)
+
+    /** Where the household's whole copies are kept (set by whoever runs this host; null for none). */
+    @Volatile var backups: HouseholdBackups? = null
+
+    @Volatile private var backupProblem: String? = null
+
+    /** The household's backups, and what went wrong the last time one was made. */
+    fun householdBackups(): HouseholdBackupsState? = backups?.let { HouseholdBackupsState(it.dir.path.replace('\\', '/'), it.list(), backupProblem) }
+
+    /**
+     * Makes the scheduled backup when one is due (only the household's host keeps them). Null when
+     * none was due, or when it couldn't be made (said in [householdBackups]).
+     */
+    fun backUpIfDue(): HouseholdSnapshot? {
+        val b = backups ?: return null
+        if (!store.leadership.isLeader || !b.due()) return null
+        return backUp(emptyList())
+    }
+
+    /** A backup now, of [kinds] ("manual" by a person). */
+    fun backUp(kinds: List<String>): HouseholdSnapshot? {
+        val b = backups ?: return null
+        return try {
+            b.snapshot(store, kinds).also { backupProblem = null }
+        } catch (e: Exception) {
+            backupProblem = "The last backup couldn't be made: ${e.message ?: e::class.simpleName}"
+            null
+        }
+    }
+
+    /** Puts the household back as the backup [name] kept it. */
+    fun restoreHousehold(name: String): HouseholdSnapshot {
+        val b = checkNotNull(backups) { "This host keeps no backups." }
+        return b.restore(name, store).also { bump() }
+    }
+
+    /** The household's artwork cache (see [HouseholdArt]). */
+    val art = HouseholdArt(File(store.dir, "art"), clock = clock)
+
+    @Volatile private var recovery: RecoveryJob? = null
+
+    /** The recovery package being made or restored here, or the last one; null when there was none. */
+    fun recoveryJob(): RecoveryJob? = recovery
+
+    /**
+     * Starts making ([RecoveryJob.WRITE]) or restoring ([RecoveryJob.RESTORE]) the recovery package
+     * at [file] with [password], on a thread of its own; [recoveryJob] says how it goes. Only the
+     * household's host does either, one at a time.
+     */
+    fun startRecovery(kind: String, file: File, password: String): RecoveryJob {
+        check(store.leadership.isLeader) { "Only the household's host does this." }
+        synchronized(this) {
+            check(recovery?.running != true) { "A recovery package is being made or restored already." }
+            if (kind == RecoveryJob.WRITE) require(password.length >= RecoveryPackage.MIN_PASSWORD) { "The password needs at least ${RecoveryPackage.MIN_PASSWORD} characters." }
+            if (kind == RecoveryJob.RESTORE) require(file.isFile) { "There's no file at ${file.path}." }
+            recovery = RecoveryJob(kind, RecoveryJob.RUNNING, file.path.replace('\\', '/'), startedAt = clock())
+        }
+        kotlin.concurrent.thread(name = "fuse-recovery", isDaemon = true) {
+            fun progress(done: Long, total: Long) { recovery = recovery?.copy(done = done, total = total) }
+            val result = runCatching {
+                if (kind == RecoveryJob.WRITE) {
+                    file.parentFile?.mkdirs()
+                    RecoveryPackage.write(store, file, password, fuseVersion, clock, ::progress)
+                } else {
+                    restorePackage(file, password, ::progress)
+                }
+            }
+            recovery = result.fold(
+                { m -> recovery!!.copy(state = RecoveryJob.DONE, hostName = m.hostName, createdAt = m.createdAt, profiles = m.profiles, devices = m.devices, revisions = m.revisions) },
+                { e -> recovery!!.copy(state = RecoveryJob.FAILED, message = e.message ?: e::class.simpleName) },
+            )
+        }
+        return recovery!!
+    }
+
+    /**
+     * Puts the household back as the package at [file] kept it, after reading all of it and checking
+     * every file: the household as it is here kept first as a backup of its own, the saves' files
+     * put in, then everything else. This computer then holds a newer generation of hosts than the
+     * package knew, so devices take it as the host, and a host the package came from is fenced
+     * should it come back.
+     */
+    private fun restorePackage(file: File, password: String, progress: (Long, Long) -> Unit): RecoveryManifest {
+        val tmp = File(store.dir, ".restore-objects")
+        tmp.deleteRecursively()
+        try {
+            val pkg = RecoveryPackage.open(file, password, tmp, progress)
+            val now = store.status(port, fuseVersion)
+            if (now.profiles.isNotEmpty() || now.devices.size > 1) {
+                (backups ?: HouseholdBackups(File(store.dir, "household-backups"), clock)).snapshot(store, listOf(HouseholdBackups.BEFORE_RESTORE))
+            }
+            for (h in pkg.manifest.objects) if (!store.content.has(h)) File(tmp, h).inputStream().use { store.content.put(it, expected = h) }
+            store.restoreFrom(pkg.files)
+            store.leadership.promote(maxOf(pkg.manifest.generation, store.leadership.current.generation) + 1, store.seq())
+            bump()
+            return pkg.manifest
+        } finally {
+            tmp.deleteRecursively()
+        }
+    }
+
+    /** Makes this backup the household's host when a person says so (set where a backup runs; null elsewhere). */
+    @Volatile var onTakeOver: (suspend () -> Leadership)? = null
+
+    /** Computers offering to be the household's backups, by device, until the host accepts or they go. */
+    private val offers = ConcurrentHashMap<String, Pair<HostNode, Long>>()
+
+    /** The offers to be a backup still waiting, newest first. */
+    fun backupOffers(): List<HostNode> {
+        val now = clock()
+        offers.entries.removeIf { now - it.value.second > OFFER_TTL_MS || store.isBackupDevice(it.key) }
+        return offers.values.sortedByDescending { it.second }.map { it.first }
+    }
+
+    /** Makes the computer that offered from [deviceId] one of the household's backups. Null when no such offer waits. */
+    fun acceptBackup(deviceId: String): Leadership? {
+        val (node, _) = offers.remove(deviceId) ?: return null
+        val l = runCatching { store.addBackup(node) }.getOrNull()
+        bump()
+        return l
+    }
+
+    /** The household's status, with its hosts and the offers waiting. */
+    fun status(): HostStatus = store.status(port, fuseVersion).copy(leadership = store.leadership.current, backupOffers = backupOffers())
 
     /** The journal's newest entry, for watching what changes (the Hub's live view). */
     val changes: StateFlow<Long> = changed
@@ -235,8 +363,19 @@ class SyncHost(
                     call.respondText("The Hub opens on the host computer. To open it from away, set up a host account in Fuse on the host.", ContentType.Text.Plain, HttpStatusCode.Forbidden)
                 }
             }
-            val status = store.status(port, fuseVersion)
-            call.html(HubPage.render(status, status.profiles.mapNotNull { store.report(it.id) }, clock(), away = away))
+            val status = status()
+            call.html(HubPage.render(status, status.profiles.mapNotNull { store.report(it.id) }, clock(), away = away, formToken = hubFormToken))
+        }
+        // Accepting a backup from the Hub: this computer, or signed in, with the page's own token.
+        post("/hub/backups/accept") {
+            if (limited(weight = 5)) return@post
+            if (!fromThisComputer() && !hubSignedIn()) return@post call.respondText("Sign in to the Hub first.", ContentType.Text.Plain, HttpStatusCode.Forbidden)
+            val form = runCatching { io.ktor.http.parseQueryString(call.receiveChannel().readRemaining(8_192).readByteArray().decodeToString()) }.getOrNull()
+            val token = form?.get("token").orEmpty()
+            if (!SyncCrypto.constantEquals(token, hubFormToken)) return@post call.respondText("That form is out of date. Refresh the Hub and try again.", ContentType.Text.Plain, HttpStatusCode.Forbidden)
+            acceptBackup(form?.get("device").orEmpty())
+            call.response.headers.append("Location", "/hub")
+            call.respondText("", ContentType.Text.Plain, HttpStatusCode.SeeOther)
         }
         // One game's versions and files, asked for when it is opened on the Hub (or as a page of
         // its own, without scripting). The same rule as the Hub: this computer, or signed in.
@@ -288,6 +427,7 @@ class SyncHost(
             // Asking to join without a code: someone already in (or the host) lets the device in.
             post("/join") {
                 if (limited(weight = 20)) return@post
+                if (!compatible()) return@post
                 val req = body(JoinRequest.serializer()) ?: return@post
                 if (req.deviceId.length !in 8..64 || req.deviceName.isBlank() || req.publicKey.length > 400) return@post call.fail(HttpStatusCode.BadRequest, "Bad device", "bad-device")
                 joinRequests()
@@ -331,6 +471,7 @@ class SyncHost(
             }
             post("/pair") {
                 if (limited(weight = 20)) return@post
+                if (!compatible()) return@post
                 val req = body(PairRequest.serializer()) ?: return@post
                 val p = pairing
                 if (p == null || p.until < clock()) return@post call.fail(HttpStatusCode.Forbidden, "No device is being added on the host right now. Add a device there to get a code.", "no-pairing")
@@ -476,6 +617,52 @@ class SyncHost(
                 store.touchDevice(d.id, route())
                 call.respondText("{}", ContentType.Application.Json)
             }
+            // A copy of the household, for its backups only, sealed with the backup's own secret.
+            get("/replica") {
+                val d = device() ?: return@get
+                if (!store.isBackupDevice(d.id)) return@get call.fail(HttpStatusCode.Forbidden, "Only the household's backups copy it.", "not-a-backup")
+                val have = call.request.queryParameters["have"]?.toLongOrNull() ?: -1
+                val seq = store.seq()
+                if (have == seq) return@get call.json(SealedReplica.serializer(), SealedReplica("", "", seq, unchanged = true))
+                val files = withContext(Dispatchers.IO) { store.replicaFiles() }
+                val bundle = ReplicaBundle(seq, store.leadership.current.generation, files.mapValues { SyncCrypto.encode(it.value) }, store.referencedObjects().sorted())
+                val salt = SyncCrypto.token(16)
+                val sealed = withContext(Dispatchers.Default) { SyncCrypto.seal(Gzip.pack(json.encodeToString(ReplicaBundle.serializer(), bundle).toByteArray()), d.secret, salt) }
+                call.json(SealedReplica.serializer(), SealedReplica(salt, sealed, seq))
+            }
+            // Between the household's hosts: votes for a new host, and news of one.
+            post("/leadership/vote") {
+                val (_, body) = node() ?: return@post
+                val req = runCatching { json.decodeFromString(VoteRequest.serializer(), body.decodeToString()) }.getOrNull()
+                    ?: return@post call.fail(HttpStatusCode.BadRequest, "That isn't a call this host understands.", "bad-body")
+                val reachable = leaderAnswers()
+                call.json(VoteAnswer.serializer(), store.leadership.grant(req, reachable, store.seq()))
+            }
+            post("/leadership/announce") {
+                val (_, body) = node() ?: return@post
+                val note = runCatching { json.decodeFromString(Announcement.serializer(), body.decodeToString()) }.getOrNull()
+                    ?: return@post call.fail(HttpStatusCode.BadRequest, "That isn't a call this host understands.", "bad-body")
+                store.leadership.observe(note.leadership)
+                // The new host has taken what this computer took meanwhile: it is one of its backups now.
+                if (note.reconciled == store.leadership.nodeId && note.leadership.leader != store.leadership.nodeId) store.leadership.becomeBackup(note.leadership)
+                bump()
+                call.json(Announcement.serializer(), Announcement(store.leadership.current, role = store.leadership.role, seq = store.seq()))
+            }
+            // The household's artwork: a picture one device fetched, kept for the others.
+            get("/art/{key}") {
+                device() ?: return@get
+                val bytes = withContext(Dispatchers.IO) { art.get(call.parameters["key"].orEmpty()) }
+                    ?: return@get call.fail(HttpStatusCode.NotFound, "Not on the host.", "no-art")
+                call.respondBytes(bytes, ContentType.Application.OctetStream)
+            }
+            put("/art/{key}") {
+                val key = call.parameters["key"].orEmpty()
+                if (!SavePath.isHash(key)) return@put call.fail(HttpStatusCode.BadRequest, "Not a key.", "bad-hash")
+                device() ?: return@put
+                val body = lastBodies.remove(call) ?: ByteArray(0)
+                if (!withContext(Dispatchers.IO) { art.put(key, body) }) return@put call.fail(HttpStatusCode.UnprocessableEntity, "Not a picture Fuse keeps.", "not-art")
+                call.respondText("{}", ContentType.Application.Json)
+            }
             get("/blobs/{hash}") {
                 device() ?: return@get
                 val hash = call.parameters["hash"].orEmpty()
@@ -535,7 +722,71 @@ class SyncHost(
                     bump()
                     call.json(ProfileInfo.serializer(), admin)
                 }
-                get("/status") { if (!admin()) return@get; call.json(HostStatus.serializer(), store.status(port, fuseVersion)) }
+                get("/status") { if (!admin()) return@get; call.json(HostStatus.serializer(), status()) }
+                get("/household-backups") {
+                    if (!admin()) return@get
+                    val state = householdBackups() ?: return@get call.fail(HttpStatusCode.NotFound, "This host keeps no backups.", "no-backups")
+                    call.json(HouseholdBackupsState.serializer(), state)
+                }
+                post("/household-backups") {
+                    if (!admin()) return@post
+                    val snap = withContext(Dispatchers.IO) { backUp(listOf(HouseholdBackups.MANUAL)) }
+                        ?: return@post call.fail(HttpStatusCode.InternalServerError, householdBackups()?.problem ?: "This host keeps no backups.", "no-backup")
+                    call.json(HouseholdSnapshot.serializer(), snap)
+                }
+                post("/household-backups/restore/{name}") {
+                    if (!admin()) return@post
+                    val snap = runCatching { withContext(Dispatchers.IO) { restoreHousehold(call.parameters["name"].orEmpty()) } }.getOrElse {
+                        return@post call.fail(HttpStatusCode.Conflict, it.message ?: "Couldn't put the household back.", "no-restore")
+                    }
+                    call.json(HouseholdSnapshot.serializer(), snap)
+                }
+                get("/recovery") {
+                    if (!admin()) return@get
+                    val job = recoveryJob() ?: return@get call.fail(HttpStatusCode.NotFound, "No recovery package was made or restored here.", "no-recovery")
+                    call.json(RecoveryJob.serializer(), job)
+                }
+                post("/recovery/{kind}") {
+                    if (!admin()) return@post
+                    val req = body(RecoveryRequest.serializer()) ?: return@post
+                    val kind = call.parameters["kind"].orEmpty().takeIf { it == RecoveryJob.WRITE || it == RecoveryJob.RESTORE }
+                        ?: return@post call.fail(HttpStatusCode.NotFound, "Make or restore?", "bad-request")
+                    val job = runCatching { startRecovery(kind, File(req.file), req.password) }.getOrElse {
+                        return@post call.fail(HttpStatusCode.Conflict, it.message ?: "Couldn't start.", "no-recovery")
+                    }
+                    call.json(RecoveryJob.serializer(), job)
+                }
+                post("/takeover") {
+                    if (!admin()) return@post
+                    val take = onTakeOver ?: return@post call.fail(HttpStatusCode.Conflict, "This host isn't a backup of another.", "not-a-backup")
+                    if (store.leadership.role != Leadership.BACKUP) return@post call.fail(HttpStatusCode.Conflict, "This host isn't a backup now.", "not-a-backup")
+                    val l = take()
+                    bump()
+                    call.json(Leadership.serializer(), l)
+                }
+                post("/backups/accept/{device}") {
+                    if (!admin()) return@post
+                    val l = acceptBackup(call.parameters["device"].orEmpty()) ?: return@post call.fail(HttpStatusCode.NotFound, "That offer isn't waiting any more.", "no-offer")
+                    call.json(Leadership.serializer(), l)
+                }
+                post("/backups") {
+                    if (!admin()) return@post
+                    val node = body(HostNode.serializer()) ?: return@post
+                    if (node.nodeId.length !in 6..64 || node.deviceId == null) return@post call.fail(HttpStatusCode.BadRequest, "Bad backup", "bad-backup")
+                    val l = runCatching { store.addBackup(node.copy(name = node.name.take(64))) }.getOrElse {
+                        return@post call.fail(HttpStatusCode.BadRequest, it.message ?: "Not a backup", "bad-backup")
+                    }
+                    bump()
+                    call.json(Leadership.serializer(), l)
+                }
+                delete("/backups/{node}") {
+                    if (!admin()) return@delete
+                    val l = runCatching { store.removeBackup(call.parameters["node"].orEmpty()) }.getOrElse {
+                        return@delete call.fail(HttpStatusCode.BadRequest, it.message ?: "No such backup", "bad-backup")
+                    }
+                    bump()
+                    call.json(Leadership.serializer(), l)
+                }
                 patch("/devices/{id}") {
                     if (!admin()) return@patch
                     val req = body(DeviceChange.serializer()) ?: return@patch
@@ -551,6 +802,37 @@ class SyncHost(
                 }
             }
             get("/devices") { device() ?: return@get; call.json(ListSerializer(DeviceInfo.serializer()), store.devices()) }
+            // A computer of the household offering to keep a copy and take over when the host is gone.
+            post("/backups/offer") {
+                val d = device() ?: return@post
+                val node = signedBody(d, HostNode.serializer()) ?: return@post
+                if (node.nodeId.length !in 6..64) return@post call.fail(HttpStatusCode.BadRequest, "Bad backup", "bad-backup")
+                if (!store.isBackupDevice(d.id)) {
+                    offers[d.id] = node.copy(name = node.name.take(64), deviceId = d.id) to clock()
+                    store.noteJoin()
+                    bump()
+                }
+                call.json(BackupState.serializer(), BackupState(store.leadership.current, offered = offers.containsKey(d.id), backup = store.isBackupDevice(d.id)))
+            }
+            get("/backups") {
+                val d = device() ?: return@get
+                call.json(BackupState.serializer(), BackupState(store.leadership.current, offered = offers.containsKey(d.id), backup = store.isBackupDevice(d.id)))
+            }
+            // A backup that stops being one: its copy goes from the household's hosts.
+            post("/backups/leave") {
+                val d = device() ?: return@post
+                offers.remove(d.id)
+                store.leadership.current.hosts.firstOrNull { it.deviceId == d.id && it.nodeId != store.leadership.nodeId }?.let { runCatching { store.removeBackup(it.nodeId) } }
+                bump()
+                call.json(BackupState.serializer(), BackupState(store.leadership.current, offered = false, backup = false))
+            }
+            // The host computer's own Fuse (its owner device) accepts offers as the admin calls do.
+            post("/backups/accept/{device}") {
+                val d = device() ?: return@post
+                if (!d.owner) return@post call.fail(HttpStatusCode.Forbidden, "Only Fuse on the host accepts a backup.", "not-owner")
+                val l = acceptBackup(call.parameters["device"].orEmpty()) ?: return@post call.fail(HttpStatusCode.NotFound, "That offer isn't waiting any more.", "no-offer")
+                call.json(Leadership.serializer(), l)
+            }
             get("/presence") { device() ?: return@get; call.json(ListSerializer(Presence.serializer()), presence()) }
             post("/presence") {
                 val d = device() ?: return@post
@@ -775,6 +1057,7 @@ class SyncHost(
             call.fail(HttpStatusCode.Unauthorized, "This device isn't paired with this host.", "unsigned")
             return null
         }
+        if (!compatible()) return null
         val d = store.device(id)
         if (d == null || d.revoked) {
             call.fail(HttpStatusCode.Unauthorized, "This device was unlinked from the host. Connect it again.", "revoked")
@@ -804,9 +1087,80 @@ class SyncHost(
             return null
         }
         if (nonces.size > 50_000) nonces.entries.removeIf { now - it.value > RequestSigning.WINDOW_MS * 2 }
+        // A device that knows a newer generation of hosts than this computer's: this one is the
+        // host no longer, and takes no changes until the new host has what it took meanwhile.
+        h[HostLeadership.GENERATION]?.toLongOrNull()?.let { if (store.leadership.observeGeneration(it)) bump() }
+        if (!store.leadership.isLeader && !standbyCall()) {
+            val fenced = store.leadership.role == Leadership.FENCED
+            call.fail(
+                HttpStatusCode.Conflict,
+                if (fenced) "A newer host keeps the household now." else "This computer is a backup of the household's host.",
+                if (fenced) "fenced" else "not-leader",
+            )
+            return null
+        }
         store.touchDevice(d.id, route())
+        h[SyncApi.PROTOCOL_HEADER]?.toIntOrNull()?.let { store.noteVersion(d.id, h[SyncApi.APP_HEADER].orEmpty(), it) }
         learnOutside()
         return d
+    }
+
+    /**
+     * Whether the calling device and this host speak a protocol in common (answering why not when
+     * they don't): a device too old is told to update, and one newer than this host never has its
+     * changes taken in a form this host would misread. Devices before 0.4.2 send no version and
+     * speak version 1.
+     */
+    private suspend fun RoutingContext.compatible(): Boolean {
+        val h = call.request.headers
+        val protocol = h[SyncApi.PROTOCOL_HEADER]?.toIntOrNull() ?: 1
+        val min = h[SyncApi.MIN_PROTOCOL_HEADER]?.toIntOrNull() ?: 1
+        val problem = SyncApi.incompatible(protocol, min) ?: return true
+        call.fail(HttpStatusCode.UpgradeRequired, problem.error, problem.code)
+        return false
+    }
+
+    /** What a backup or a fenced host still answers: its copy of the household, and the files it keeps, for the hosts. */
+    private fun RoutingContext.standbyCall(): Boolean {
+        val path = call.request.uri.substringBefore('?')
+        return path == SyncApi.BASE + "/replica" || (call.request.httpMethod.value == "GET" && path.startsWith(SyncApi.BASE + "/blobs/"))
+    }
+
+    /**
+     * A call from another of the household's hosts, signed with the hosts' own secret: the calling
+     * computer's id and the body, or null (answered) when it isn't one.
+     */
+    private suspend fun RoutingContext.node(): Pair<String, ByteArray>? {
+        if (limited()) return null
+        val h = call.request.headers
+        val id = h[HostLeadership.NODE]
+        val time = h[RequestSigning.TIME]?.toLongOrNull()
+        val nonce = h[RequestSigning.NONCE]
+        val sig = h[HostLeadership.NODE_SIGNATURE]
+        val body = call.receiveChannel().readRemaining(MAX_JSON + 1).readByteArray()
+        val l = store.leadership.current
+        if (id == null || time == null || nonce == null || sig == null || nonce.length !in 16..64 || l.hosts.none { it.nodeId == id } || body.size > MAX_JSON) {
+            call.fail(HttpStatusCode.Unauthorized, "Not one of the household's hosts.", "not-a-host")
+            return null
+        }
+        val now = clock()
+        val expected = store.leadership.signature(call.request.httpMethod.value, call.request.uri, time, nonce, body)
+        if (kotlin.math.abs(now - time) > RequestSigning.WINDOW_MS || !SyncCrypto.constantEquals(expected, sig) || nonces.putIfAbsent("node/$id/$nonce", now) != null) {
+            call.fail(HttpStatusCode.Unauthorized, "The call's signature doesn't match.", "bad-signature")
+            return null
+        }
+        return id to body
+    }
+
+    /**
+     * Whether the household's host answers as the host, at any of its addresses: what a backup asks
+     * before it votes for another backup. Asked briefly, so a vote never waits long.
+     */
+    private suspend fun leaderAnswers(): Boolean {
+        val l = store.leadership.current
+        val leader = l.leaderNode ?: return false
+        if (leader.nodeId == store.leadership.nodeId) return store.leadership.isLeader
+        return BackupCalls.answersAsHost(leader, l.generation, store.identity.hostId, peerHttp)
     }
 
     private val lastBodies = java.util.Collections.synchronizedMap(java.util.WeakHashMap<ApplicationCall, ByteArray>())
@@ -965,6 +1319,9 @@ class SyncHost(
         respondText(json.encodeToString(ApiError.serializer(), ApiError(message, code)), ContentType.Application.Json, status)
 
     companion object {
+        /** How long an offer to be a backup waits for the host. */
+        const val OFFER_TTL_MS = 24 * 60 * 60_000L
+
         /** Answers this long or longer are gzipped for a caller that takes it. */
         const val GZIP_FROM = 1_024
 

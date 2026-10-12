@@ -65,7 +65,8 @@ fun toggleRow(id: String, label: String, icon: ImageVector, on: Boolean, detail:
 
 /**
  * A row that shows its value and opens a choice list. The list opens under the row's own icon and
- * title, with the current value checked.
+ * title, with the current value checked. With [aid], a picture of what the option under focus does
+ * sits beside the list.
  */
 fun <T> AppState.choiceRow(
     id: String,
@@ -75,6 +76,7 @@ fun <T> AppState.choiceRow(
     options: List<Pair<T, String>>,
     detail: String? = null,
     optionDetail: (T) -> String? = { null },
+    aid: ((T) -> ChoiceAid)? = null,
     set: (T) -> Unit,
 ): MenuAction {
     val currentLabel = options.firstOrNull { it.first == current }?.second ?: current.toString()
@@ -89,6 +91,7 @@ fun <T> AppState.choiceRow(
                     choice = null
                 })
             },
+            aids = aid?.let { a -> options.map { a(it.first) } },
         )
     })
 }

@@ -53,6 +53,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
@@ -162,8 +163,8 @@ internal fun useSyncthing(app: AppState, svc: SyncthingService, on: Boolean) {
     when {
         !on -> turnOffSyncthing(app)
         app.store.prefs.value.sync.enabled -> app.confirm = ConfirmSpec(
-            title = "Use Syncthing instead of Fuse Sync?",
-            message = "Both would move the same saves. Fuse Sync turns off on this device (its host and profiles stay as they are), and Syncthing takes over the save folders.",
+            title = "Use Syncthing instead of Fuse One?",
+            message = "Only one should move saves between devices. Fuse One stops syncing on this device and Syncthing takes over the save folders. Profiles, each person's saves and the save history here keep working, without a host.",
             confirmLabel = "Use Syncthing",
         ) {
             // A Fuse Sync that is working asks once more before it stops.
@@ -175,7 +176,7 @@ internal fun useSyncthing(app: AppState, svc: SyncthingService, on: Boolean) {
 
 /** Where things stand, as a dot (well, not, neither), a word, and a sentence. */
 internal fun syncthingWords(state: SyncthingState): Triple<Boolean?, String, String> = when (state) {
-    SyncthingState.Off -> Triple(null, "Off", "Fuse Sync is the one Fuse recommends; Syncthing is here for people who already run it")
+    SyncthingState.Off -> Triple(null, "Off", "Fuse One is the one Fuse recommends; Syncthing is here for people who already run it")
     SyncthingState.Looking -> Triple(null, "Looking", "Finding Syncthing on this device")
     is SyncthingState.NotFound -> Triple(false, "Not found", if (state.installed) "It's installed but not running. Start it, then look again" else "Syncthing isn't running on this device")
     is SyncthingState.NeedsKey -> Triple(null, if (state.refused) "Wrong key" else "Needs its key", "Found at ${state.address}. Fuse needs its API key once")
@@ -202,8 +203,8 @@ private fun syncthingRows(
     }
     add(toggleRow("enabled", "Use Syncthing", FuseIcons.Power, s.enabled, "Keep your emulators' save folders in step through the Syncthing you run") { v -> useSyncthing(app, svc, v) })
     if (!s.enabled) {
-        add(MenuAction("fusesync", "Fuse Sync Instead", FuseIcons.RefreshCcw, detail = "Knows each game whatever its file is called, adds up play time, and gives each person their own saves. Syncthing keeps one save per game for everyone", trailing = Trailing.Chevron, onSelect = {
-            app.go(io.github.matiyaaa.fuse.ui.shell.app.Route.SyncSettings)
+        add(MenuAction("fusesync", "Fuse One Instead", FuseMarks.FuseOne, detail = "Knows each game whatever its file is called, adds up play time, and gives each person their own saves. Syncthing keeps one save per game for everyone", trailing = Trailing.Chevron, onSelect = {
+            app.go(io.github.matiyaaa.fuse.ui.shell.app.Route.Settings("fuseone"))
         }))
         return@buildList
     }
@@ -349,7 +350,7 @@ private fun syncthingRows(
             // Syncthing moves folders, not people's saves: say so where it matters.
             add(infoRow(
                 "everyone", "One Save per Game, for Everyone",
-                detail = "Syncthing keeps one save per game for everyone who plays on these devices. Fuse Sync gives each person their own",
+                detail = "Syncthing keeps one save per game for everyone who plays on these devices. Fuse One gives each person their own",
                 icon = FuseIcons.Users,
             ).copy(section = saves))
             // Around each game.
@@ -470,9 +471,9 @@ private fun SyncthingSide(app: AppState, state: SyncthingState, modifier: Modifi
                 }
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(c.hairline))
-            FText("Fuse Sync does more", Fuse.type.bodyStrong, maxLines = 1)
+            FText("Fuse One does more", Fuse.type.bodyStrong, maxLines = 1)
             FText(
-                "Syncthing moves files as they are named, so a save only matches where the game's file has the same name on every device, and everyone shares one save per game. Fuse Sync knows each game by what it is, adds up play time, and gives each person their own saves.",
+                "Syncthing moves files as they are named, so a save only matches where the game's file has the same name on every device, and everyone shares one save per game. Fuse One knows each game by what it is, adds up play time, and gives each person their own saves.",
                 Fuse.type.caption, color = c.textMuted, maxLines = 6,
             )
         }

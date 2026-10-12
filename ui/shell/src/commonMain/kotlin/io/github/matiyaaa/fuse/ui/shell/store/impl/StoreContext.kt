@@ -19,6 +19,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.FuseServices
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.Unavailable
 import kotlin.time.Clock
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -38,9 +39,18 @@ import kotlinx.coroutines.delay
 /** State and helpers shared by every part of the default store. */
 internal class StoreContext(
     val services: FuseServices,
-    val scope: CoroutineScope,
+    scope: CoroutineScope,
     initialSettings: AppSettings,
 ) {
+    /**
+     * Where the store's background work runs: the given scope, with one difference. A background
+     * job that fails (the database closed under it as the app quits, a network that went away) is
+     * let go quietly instead of reaching the platform's crash handler, unless the app gave a
+     * handler of its own. Each caller already reports the failures a person needs to see.
+     */
+    val scope: CoroutineScope = if (scope.coroutineContext[CoroutineExceptionHandler] != null) scope
+    else CoroutineScope(scope.coroutineContext + CoroutineExceptionHandler { _, _ -> })
+
     val data = services.data
     val host = services.host
     val platforms: PlatformLookup = PlatformCatalog
@@ -73,6 +83,12 @@ internal class StoreContext(
 
     /** The last launch problems, newest last, for the diagnostics report. Kept in memory only. */
     val recentProblems = MutableStateFlow<List<Pair<Long, io.github.matiyaaa.fuse.ui.shell.store.Problem>>>(emptyList())
+
+    /** Fuse Engine's Performance Governor: what Fuse is doing now, and what optional work that allows. */
+    val governor = PerformanceGovernor(scope, playing, ::now) {
+        io.github.matiyaaa.fuse.ui.fuseline.FramePacing.lastInputNanos.takeIf { it != Long.MIN_VALUE }
+            ?.let { io.github.matiyaaa.fuse.ui.fuseline.monotonicNanos() - it }
+    }
 
     fun recordProblem(problem: io.github.matiyaaa.fuse.ui.shell.store.Problem) {
         recentProblems.update { (it + (now() to problem)).takeLast(10) }
@@ -118,7 +134,7 @@ internal class StoreContext(
 
     /**
      * Gives a game just added to the library the art already found for it elsewhere (the RomM game
-     * it was downloaded from), so it isn't looked for again. True when it took some. Set by Fuse RomM.
+     * it was downloaded from), so it isn't looked for again. True when it took some. Set by RomM.
      */
     @kotlin.concurrent.Volatile var adoptArt: suspend (io.github.matiyaaa.fuse.model.GameId) -> Boolean = { false }
 

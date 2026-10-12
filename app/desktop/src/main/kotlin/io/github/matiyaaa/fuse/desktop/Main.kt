@@ -67,6 +67,7 @@ fun main(args: Array<String>) {
     dirs.ensure()
     CrashLog(java.io.File(dirs.data, "crash")).install()
     Log.info("Fuse ${BuildInfo.VERSION} starting")
+    goBackFromAFailedUpdate(dirs, args)
     // Lives as long as the process; runs on the AWT event thread, which is Compose's UI thread.
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     application {
@@ -74,6 +75,25 @@ fun main(args: Array<String>) {
         session.exit = ::exitApplication
         DisposableEffect(session) { onDispose { session.close() } }
         FuseWindow(session)
+    }
+}
+
+/**
+ * An update that hasn't come up in its first starts goes back to the version before it, which
+ * starts in its place (see UpdateTrial). Returns only when this start carries on.
+ */
+private fun goBackFromAFailedUpdate(dirs: FuseDirs, args: Array<String>) {
+    val trial = io.github.matiyaaa.fuse.desktop.services.UpdateTrial(java.io.File(dirs.data, io.github.matiyaaa.fuse.desktop.services.UpdateTrial.FILE))
+    val start = trial.onStart(System.getenv("APPIMAGE"), BuildInfo.VERSION)
+    if (start !is io.github.matiyaaa.fuse.desktop.services.UpdateTrial.Start.WentBack) return
+    Log.warn("Fuse ${start.version} didn't come up in its first starts; going back to ${start.from}")
+    val before = start.from.ifEmpty { null }?.let { "Fuse $it" } ?: "the version before it"
+    runCatching {
+        java.io.File(dirs.data, io.github.matiyaaa.fuse.desktop.services.UpdateTrial.NOTE)
+            .writeText("Fuse ${start.version} didn't start properly, so Fuse went back to $before.")
+    }
+    if (io.github.matiyaaa.fuse.desktop.system.Processes.spawn(listOf(start.target) + args.filter { it.startsWith("--") }) != null) {
+        kotlin.system.exitProcess(0)
     }
 }
 

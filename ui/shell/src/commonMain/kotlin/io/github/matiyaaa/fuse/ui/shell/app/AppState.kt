@@ -69,6 +69,8 @@ data class ChoiceSpec(
     val message: String? = null,
     val options: List<MenuAction>,
     val icon: ImageVector? = null,
+    /** A picture of what each option does, in the options' order, shown beside the list for the one under focus. */
+    val aids: List<io.github.matiyaaa.fuse.ui.shell.settings.ChoiceAid>? = null,
 )
 
 /**
@@ -81,6 +83,8 @@ data class ReorderSpec(
     val entries: List<ReorderEntry>,
     val message: String? = null,
     val icon: ImageVector? = null,
+    /** The entry held to open it: it starts picked up, ready to move. */
+    val lifted: String? = null,
     val onMoved: (List<String>) -> Unit,
 )
 
@@ -124,7 +128,17 @@ class AppState(
     var finishRehearsal: (() -> Unit)? = null
 
     val navigator = kept.navigator
-    val toasts = ToastState()
+    val toasts = ToastState().apply {
+        // A light vibration with each notice: firmer when something finished well, a double knock when it didn't.
+        onShown = { kind ->
+            when (kind) {
+                io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.SUCCESS -> platform.haptics.success()
+                io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.WARNING,
+                io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.ERROR -> platform.haptics.reject()
+                io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.INFO -> platform.haptics.notice()
+            }
+        }
+    }
 
     /** Screenshots and recordings of Fuse's screen; null where the platform can't capture it. */
     val capture: io.github.matiyaaa.fuse.ui.shell.capture.CaptureController? = platform.capture?.let { c ->
@@ -166,6 +180,9 @@ class AppState(
     var phoneTyping by mutableStateOf(false)
     var reorder by mutableStateOf<ReorderSpec?>(null)
 
+    /** The top line's tab picked up to move, in place, as Addons' tabs move ([liftTab]). */
+    var liftedTab by mutableStateOf<Destination?>(null)
+
     /** Fuse's startup animation is playing ([StartupIntroOverlay]). */
     var intro by mutableStateOf(false)
 
@@ -191,6 +208,9 @@ class AppState(
         set(value) { if (value) store.displaySession.enterStandby() else store.displaySession.wake() }
 
     /** A Library view asked for from elsewhere (the Favourites widget), opened once and cleared. */
+    /** Setup has looked once for a step to resume (after a restart in the middle of it). */
+    var setupResumeChecked = false
+
     var librarySegment by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.library.LibrarySegment?>(null)
 
     /** Set while Fuse runs in safe mode ([SafeMode]); cleared when the user leaves it. */
@@ -201,6 +221,9 @@ class AppState(
 
     /** Who is playing here (Fuse Sync's profile in use); null while Fuse Sync is off or no one is chosen. */
     var syncProfile by mutableStateOf<io.github.matiyaaa.fuse.sync.ProfileInfo?>(null)
+
+    /** The games Fuse put in Steam's library here (by id), as last read; empty where Steam isn't. */
+    var steamGameIds by mutableStateOf<Set<Long>>(emptySet())
 
     /** How many profiles the Fuse Sync host has (0 while it is off): the top line shows who is playing only with two or more. */
     var syncProfileCount by mutableStateOf(0)
@@ -231,6 +254,9 @@ class AppState(
 
     /** "Who's playing?", Fuse Sync's profile picker, and why it is open. */
     var whoAreYou by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.sync.WhoMode?>(null)
+
+    /** The screen being calibrated (its size, edges and text), while it is. */
+    var calibrating by mutableStateOf<CalibrationSession?>(null)
 
     /** A profile being edited (name, picture, PIN), with its PIN as typed to open it when it has one. */
     var profileEdit by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.sync.ProfileEditSpec?>(null)
@@ -290,7 +316,7 @@ class AppState(
     /**
      * Where setup is: kept here rather than in its page, so a detour from it (setting up Fuse Sync
      * or Syncthing, which are pages of their own) comes back to the very step it left, with that
-     * step's news ("Fuse Sync is on"). Setup opened afresh starts from the beginning.
+     * step's news ("Fuse One is on"). Setup opened afresh starts from the beginning.
      */
     var onboarding by mutableStateOf(io.github.matiyaaa.fuse.ui.shell.onboarding.OnboardingState())
         private set

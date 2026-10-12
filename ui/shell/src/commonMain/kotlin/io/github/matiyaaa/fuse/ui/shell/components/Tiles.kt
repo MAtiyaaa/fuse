@@ -158,6 +158,7 @@ fun GameIconTile(
     val dims = style.tileSize(size)
     Tile(
         selected = selected,
+        label = "${card.title}, ${card.platformShort}",
         glow = accent,
         modifier = modifier.size(dims),
         shape = shape,
@@ -201,6 +202,7 @@ fun GameCoverTile(
     val artLabel = label.takeUnless { border.carriesTag }
     Tile(
         selected = selected,
+        label = "${card.title}, ${card.platformShort}",
         glow = accent,
         cornerFraction = corner,
         shape = shape,
@@ -236,6 +238,7 @@ fun GameWideTile(
     val shape = remember(corner) { SquircleShape.fraction(corner) }
     Tile(
         selected = selected,
+        label = "${card.title}, ${card.platformShort}",
         glow = accent,
         cornerFraction = corner,
         shape = shape,
@@ -295,6 +298,8 @@ internal data class GameMark(
     val tint: MarkTint,
     val count: Int? = null,
     val onStage: Boolean = true,
+    /** A quiet confirmation (a favourite) drawn smaller than marks that ask for attention. */
+    val quiet: Boolean = false,
 )
 
 /** How a mark is coloured: as text on art, or as a warning. */
@@ -305,7 +310,9 @@ internal enum class MarkTint { PLAIN, WARNING }
  * spans several discs, it is a favourite. Tiles, list rows and the stage use the same icons, so a
  * mark means the same thing everywhere.
  */
-internal fun GameCard.marks(favourite: Boolean = true): List<GameMark> = buildList {
+internal fun GameCard.marks(favourite: Boolean = true, installed: Boolean = false): List<GameMark> = buildList {
+    // Library, All: what is on this device, among games that are elsewhere. First, so it always fits.
+    if (installed && !missing && unavailable == null) add(GameMark(FuseIcons.Check, "Installed", MarkTint.PLAIN, onStage = false))
     val away = unavailable
     // A drive that is out is calmer than a file that is gone: the game comes back by itself.
     if (away != null) add(GameMark(if (away.state == io.github.matiyaaa.fuse.model.SourceState.NO_ACCESS) FuseIcons.LockKeyhole else FuseIcons.HardDrive, away.label, MarkTint.PLAIN))
@@ -314,7 +321,7 @@ internal fun GameCard.marks(favourite: Boolean = true): List<GameMark> = buildLi
     if (dlc > 0) add(GameMark(FuseIcons.Puzzle, "$dlc DLC", MarkTint.PLAIN))
     if (discs > 1) add(GameMark(FuseIcons.Disc, "$discs discs", MarkTint.PLAIN, count = discs))
     // A favourite's heart is on its tile, and named on the stage while the game is selected.
-    if (favorite && favourite) add(GameMark(FuseIcons.HeartFilled, "Favourite", MarkTint.PLAIN))
+    if (favorite && favourite) add(GameMark(FuseIcons.HeartFilled, "Favourite", MarkTint.PLAIN, quiet = true))
 }
 
 /**
@@ -322,6 +329,12 @@ internal fun GameCard.marks(favourite: Boolean = true): List<GameMark> = buildLi
  * tag says nothing inside a system's own page, see [LocalTileShowsSystem]).
  */
 val LocalTileShowsFavourite = staticCompositionLocalOf { true }
+
+/**
+ * True only in Library, All, where games from RomM and other devices sit beside this device's: there
+ * a game here carries an Installed check among its marks. Everywhere else the Library is this device.
+ */
+val LocalTileShowsInstalled = staticCompositionLocalOf { false }
 
 /**
  * A game's state marks in a tile's top corner, one consistent family: small dark-glass discs lit
@@ -332,7 +345,7 @@ val LocalTileShowsFavourite = staticCompositionLocalOf { true }
  */
 @Composable
 internal fun GameMarks(card: GameCard, modifier: Modifier = Modifier, inset: Dp = Space.s, reserve: Dp = 0.dp) {
-    val marks = card.marks(favourite = LocalTileShowsFavourite.current)
+    val marks = card.marks(favourite = LocalTileShowsFavourite.current, installed = LocalTileShowsInstalled.current)
     if (marks.isEmpty()) return
     val gap = Space.xs
     Layout(
@@ -370,7 +383,7 @@ private fun TileMark(mark: GameMark) {
     val c = Fuse.colors
     val tint = if (mark.tint == MarkTint.WARNING) c.warning else c.onArt
     if (mark.count == null) {
-        IconBadge(mark.icon, tint = tint, background = MARK_GLASS, size = Size.badge)
+        IconBadge(mark.icon, tint = tint, background = MARK_GLASS, size = if (mark.quiet) Size.badgeSmall else Size.badge)
     } else {
         Row(
             Modifier
@@ -469,6 +482,7 @@ fun SystemTile(
     val accent = card.platform.accent.toColor()
     Tile(
         selected = selected,
+        label = "${card.platform.name}, ${gamesText(card.gameCount)}",
         glow = accent,
         modifier = modifier.size(size),
         onClick = onClick,
@@ -484,13 +498,13 @@ fun SystemTile(
  * no art at all, Fuse's own typographic [SystemGlyph].
  */
 @Composable
-fun SystemCardArt(card: PlatformCard, large: Boolean = false) {
+fun SystemCardArt(card: PlatformCard, large: Boolean = false, maker: Boolean = true) {
     val accent = card.platform.accent.toColor()
     when {
         (card.art.square ?: card.art.icon) != null ->
-            Artwork(card.art.square ?: card.art.icon, Modifier.fillMaxSize(), fallback = { SystemGlyph(card, accent, large) })
+            Artwork(card.art.square ?: card.art.icon, Modifier.fillMaxSize(), fallback = { SystemGlyph(card, accent, large, maker) })
         card.art.boxart != null || card.art.logo != null -> PackCard(card, accent, large)
-        else -> SystemGlyph(card, accent, large)
+        else -> SystemGlyph(card, accent, large, maker)
     }
 }
 
@@ -618,7 +632,7 @@ private fun SystemWarning(card: PlatformCard, modifier: Modifier) {
 
 /** Generated system art: short name large, maker and count small when the tile has room. */
 @Composable
-fun SystemGlyph(card: PlatformCard, accent: Color, large: Boolean = false) {
+fun SystemGlyph(card: PlatformCard, accent: Color, large: Boolean = false, maker: Boolean = true) {
     val c = Fuse.colors
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // Small tiles (the Systems grid, Home) show the name alone.
@@ -629,7 +643,7 @@ fun SystemGlyph(card: PlatformCard, accent: Color, large: Boolean = false) {
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
             FText(
-                if (roomy) card.platform.manufacturer?.uppercase() ?: "" else "",
+                if (roomy && maker) card.platform.manufacturer?.uppercase() ?: "" else "",
                 Fuse.type.overline,
                 color = c.onArtMuted,
                 maxLines = 1,
@@ -666,6 +680,7 @@ fun AppTile(
     val c = Fuse.colors
     Tile(
         selected = selected,
+        label = app.entry.label,
         glow = c.accent,
         modifier = modifier.size(size),
         onClick = onClick,

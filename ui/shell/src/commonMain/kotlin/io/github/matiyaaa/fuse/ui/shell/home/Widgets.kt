@@ -132,7 +132,7 @@ fun WidgetContent(kind: WidgetKind, feed: HomeFeed, cartridge: CartridgeStatus, 
     }
     val c = Fuse.colors
     val tint = widgetTint(kind, feed, cartridge)
-    BoxWithConstraints(Modifier.fillMaxSize().widgetSurface(c.surfaceRaised, tint.copy(alpha = if (c.isDark) WASH_DARK else WASH_LIGHT))) {
+    BoxWithConstraints(Modifier.fillMaxSize().widgetSurface(c.surfaceRaised, tint.copy(alpha = if (c.isDark) WASH_DARK else WASH_LIGHT), Fuse.look.spec.widgets)) {
         val room = widgetRoom(maxWidth, maxHeight)
         CompositionLocalProvider(LocalWidgetRoom provides room) {
         Column(Modifier.fillMaxSize().padding(if (room.compact) Space.m else Space.l)) {
@@ -263,6 +263,8 @@ internal fun widgetIcon(kind: WidgetKind): ImageVector = when (kind) {
     WidgetKind.PLAYTIME_TOTAL -> FuseIcons.Hourglass
     WidgetKind.MOST_PLAYED -> FuseIcons.TrendingUp
     WidgetKind.CURRENT_GAME -> FuseIcons.Gamepad
+    WidgetKind.FOR_YOU -> FuseIcons.Compass
+    WidgetKind.SPOTLIGHT -> FuseIcons.Star
     WidgetKind.RECENT_ACHIEVEMENT, WidgetKind.RECENT_ACHIEVEMENTS -> FuseIcons.Trophy
     WidgetKind.ACHIEVEMENT_PROGRESS -> FuseIcons.Target
     WidgetKind.RECENTLY_MASTERED -> FuseIcons.Crown
@@ -283,7 +285,7 @@ internal fun widgetIcon(kind: WidgetKind): ImageVector = when (kind) {
     WidgetKind.JELLYFIN_FAVORITES -> FuseIcons.Heart
     WidgetKind.JELLYFIN_MOVIES -> FuseIcons.Clapperboard
     WidgetKind.JELLYFIN_MUSIC -> FuseIcons.Disc
-    WidgetKind.SYNC_STATUS -> FuseIcons.RefreshCcw
+    WidgetKind.SYNC_STATUS -> FuseMarks.FuseOne
     WidgetKind.SYNC_DEVICES -> FuseIcons.MonitorSmartphone
 }
 
@@ -333,8 +335,12 @@ internal fun widgetTint(kind: WidgetKind, feed: HomeFeed, cartridge: CartridgeSt
 
 internal fun storageLow(feed: HomeFeed): Boolean = feed.storage?.let { it.freeBytes.toFloat() / it.totalBytes.coerceAtLeast(1) < 0.1f } ?: false
 
-/** The raised fill with a soft light in [wash] gathering in its top right corner. Built once per size. */
-internal fun Modifier.widgetSurface(base: Color, wash: Color): Modifier = drawWithCache {
+/**
+ * A widget's fill in the theme's [look] (see [io.github.matiyaaa.fuse.model.WidgetLook]): the raised
+ * panel with a soft light in [wash] gathering in its top right corner; that panel washed through in
+ * the wash's colour; or frosted glass over the room. Built once per size.
+ */
+internal fun Modifier.widgetSurface(base: Color, wash: Color, look: io.github.matiyaaa.fuse.model.WidgetLook = io.github.matiyaaa.fuse.model.WidgetLook.LIT): Modifier = drawWithCache {
     val light = Brush.radialGradient(
         0f to wash,
         0.55f to wash.copy(alpha = wash.alpha * 0.35f),
@@ -342,9 +348,40 @@ internal fun Modifier.widgetSurface(base: Color, wash: Color): Modifier = drawWi
         center = Offset(size.width, 0f),
         radius = maxOf(size.width, size.height) * 0.95f,
     )
-    onDrawBehind {
-        drawRect(base)
-        drawRect(light)
+    val hue = wash.copy(alpha = 1f)
+    when (look) {
+        io.github.matiyaaa.fuse.model.WidgetLook.LIT -> onDrawBehind {
+            drawRect(base)
+            drawRect(light)
+        }
+        io.github.matiyaaa.fuse.model.WidgetLook.TINTED -> {
+            // The widget's own colour through the panel, deepest at the bottom left, with the
+            // corner's light kept on top so it still reads as lit from one side.
+            val through = Brush.linearGradient(
+                0f to androidx.compose.ui.graphics.lerp(base, hue, 0.34f),
+                1f to androidx.compose.ui.graphics.lerp(base, hue, 0.12f),
+                start = Offset(0f, size.height),
+                end = Offset(size.width, 0f),
+            )
+            onDrawBehind {
+                drawRect(through)
+                drawRect(light)
+            }
+        }
+        io.github.matiyaaa.fuse.model.WidgetLook.GLASS -> {
+            val sheen = Brush.verticalGradient(
+                0f to Color.White.copy(alpha = 0.14f),
+                0.35f to Color.White.copy(alpha = 0.03f),
+                1f to Color.Transparent,
+            )
+            onDrawBehind {
+                drawRect(base.copy(alpha = base.alpha * 0.58f))
+                drawRect(light)
+                drawRect(sheen)
+                // A hairline of light along the top edge, as a pane's rim catches it.
+                drawRect(Color.White.copy(alpha = 0.16f), size = androidx.compose.ui.geometry.Size(size.width, 1.dp.toPx()))
+            }
+        }
     }
 }
 
@@ -807,7 +844,10 @@ internal fun widgetStage(kind: WidgetKind, key: Any, feed: HomeFeed, cartridge: 
         in MediaKinds -> mediaItems(kind, feed).firstOrNull()?.let {
             info(mediaTitle(it), kind.title(), mediaCaption(it), "Jellyfin")
         } ?: info(kind.title(), "Jellyfin", "Nothing here yet")
-        WidgetKind.SYNC_STATUS, WidgetKind.SYNC_DEVICES -> info(kind.title(), "Fuse Sync", "Your saves, play time and settings on every device")
+        WidgetKind.SYNC_STATUS, WidgetKind.SYNC_DEVICES -> info(kind.title(), "Fuse One", "Your saves, play time and settings on every device")
+        WidgetKind.FOR_YOU, WidgetKind.SPOTLIGHT -> boardGames(kind, feed).firstOrNull()?.let {
+            info(it.title, kind.title(), feed.reasons[it.id], it.platformShort)
+        } ?: info(kind.title(), "Home", emptySuggestionNote(kind))
         else -> feed.achievements?.recent?.firstOrNull()?.let {
             info(it.achievement.title, kind.title(), it.gameTitle, "${it.achievement.points} points")
         } ?: info(kind.title(), "Achievements", "Connect RetroAchievements in Settings")
@@ -838,7 +878,7 @@ internal fun AppState.openWidget(kind: WidgetKind, feed: HomeFeed, at: Int = 0) 
     val media = mediaItems(kind, feed).let { it.getOrNull(at) ?: it.firstOrNull() }
     when (kind) {
         WidgetKind.CONTINUE_PLAYING, WidgetKind.RECENTLY_PLAYED, WidgetKind.PINNED_GAMES, WidgetKind.CURRENT_GAME,
-        WidgetKind.MOST_PLAYED, WidgetKind.RECENTLY_ADDED,
+        WidgetKind.MOST_PLAYED, WidgetKind.RECENTLY_ADDED, WidgetKind.FOR_YOU, WidgetKind.SPOTLIGHT,
         -> game?.let { activateGame(it) } ?: selectTab(Destination.LIBRARY)
         // Favourites opens the game in front; with none, the Library on them.
         WidgetKind.FAVORITES -> game?.let { activateGame(it) } ?: run {

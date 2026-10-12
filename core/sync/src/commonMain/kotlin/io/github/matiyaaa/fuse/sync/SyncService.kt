@@ -30,7 +30,28 @@ data class JoinWaiting(val hostName: String, val match: String, val account: Boo
 data class NearbyHost(val name: String, val hostId: String, val address: String)
 
 /** One thing Fuse Sync did, for the Sync tab's recent activity. */
-data class SyncActivity(val at: Long, val text: String, val game: String? = null, val kind: String = "")
+@kotlinx.serialization.Serializable
+data class SyncActivity(
+    val at: Long,
+    val text: String,
+    val game: String? = null,
+    /** What it touched, for the history's icons: see [SyncActivity.Companion]'s kinds. */
+    val kind: String = "",
+    /** The device it happened on (this one's name when it happened here). */
+    val device: String = "",
+) {
+    companion object {
+        const val SAVE = "save"
+        const val CONFLICT = "conflict"
+        const val RESTORE = "restore"
+        const val FAILED = "failed"
+        /** Records and settings: favourites, play time, collections, themes. */
+        const val CHANGES = "changes"
+        const val PROFILE = "profile"
+        const val DEVICE = "device"
+        const val HOST = "host"
+    }
+}
 
 /** This device as a host: whether it serves, who is connected, and a pairing code while one is shown. */
 data class HostView(
@@ -46,6 +67,33 @@ data class HostView(
     val outside: String = "",
     /** The username of its account, for joining and the Hub from away; null when it has none. */
     val accountName: String? = null,
+)
+
+/**
+ * The household's hosts as this device knows them: the host and its backups, with what this
+ * computer is among them, and on a backup how its copy and the host stand.
+ */
+data class HostsView(
+    val generation: Long,
+    val hosts: List<HostNode>,
+    /** The [HostNode.nodeId] of the host. */
+    val leader: String,
+    /** What this computer is among the hosts ([Leadership.PRIMARY], [Leadership.BACKUP], [Leadership.FENCED]); null when it keeps no copy. */
+    val thisRole: String?,
+    val thisNode: String?,
+    /** On the host: computers offering to be backups, to accept. */
+    val offers: List<HostNode> = emptyList(),
+    /** This computer chose to be a backup. */
+    val backupOn: Boolean = false,
+    /** Its offer waits for the host to accept it. */
+    val waiting: Boolean = false,
+    /** When its copy was last brought up to date, and since when the host hasn't answered (0: it answers). */
+    val copiedAt: Long = 0,
+    val hostAwaySince: Long = 0,
+    /** A person may make this backup the host now (the host hasn't answered a while). */
+    val canTakeOver: Boolean = false,
+    /** What went wrong the last time, said plainly. */
+    val problem: String? = null,
 )
 
 /** How a host keeps running when Fuse is closed, and after a restart. */
@@ -211,6 +259,9 @@ interface SyncService {
      */
     suspend fun householdServices(): HouseholdShared? = null
 
+    /** The room Fuse One's files take here: this device's saves, the host's (on a host) and kept ones. Null when it has none. */
+    suspend fun footprint(): SyncFootprint? = null
+
     /** Shares this device's RomM and Jellyfin with the household, or says no ([declined]); false when it can't. */
     suspend fun shareServices(romm: ServiceAddress?, jellyfin: ServiceAddress?, signIns: Map<String, String>, declined: Boolean = false): Boolean = false
 
@@ -274,16 +325,16 @@ interface SyncService {
      * The answer is the number this device shows; someone lets it in on the host, or on any
      * device already connected, after checking theirs shows the same.
      */
-    suspend fun askToJoin(address: String, remoteAddress: String? = null): Result<JoinWaiting> = Result.failure(UnsupportedOperationException("Fuse Sync isn't part of this build."))
+    suspend fun askToJoin(address: String, remoteAddress: String? = null): Result<JoinWaiting> = Result.failure(UnsupportedOperationException("Fuse One isn't part of this build."))
 
     /** Waits for the request [askToJoin] made: the host's name once let in, a failure when turned away or out of time. */
-    suspend fun awaitJoin(): Result<String> = Result.failure(UnsupportedOperationException("Fuse Sync isn't part of this build."))
+    suspend fun awaitJoin(): Result<String> = Result.failure(UnsupportedOperationException("Fuse One isn't part of this build."))
 
     /** Gives up on a request to join. */
     fun cancelJoin() {}
 
     /** Joins the host asked with [askToJoin] using its account, when nobody is at a screen. The host's name. */
-    suspend fun joinWithAccount(username: String, password: String): Result<String> = Result.failure(UnsupportedOperationException("Fuse Sync isn't part of this build."))
+    suspend fun joinWithAccount(username: String, password: String): Result<String> = Result.failure(UnsupportedOperationException("Fuse One isn't part of this build."))
 
     /** On the host: its account for joining and the Hub from away ([password] null keeps the one it has). */
     suspend fun setHostAccount(username: String, password: String?): Result<Unit> = Result.failure(UnsupportedOperationException("This device isn't a host."))
@@ -296,7 +347,62 @@ interface SyncService {
     /** Devices asking to join right now, for this device to let in (on the host, and every device already connected). */
     val joinRequests: StateFlow<List<JoinAsk>> get() = NO_JOIN_REQUESTS
 
-    suspend fun answerJoin(id: String, allow: Boolean): Result<Unit> = Result.failure(UnsupportedOperationException("Fuse Sync isn't set up."))
+    /** On the host: the household's backups (whole copies, every day, week and month); null elsewhere. */
+    val householdBackups: StateFlow<HouseholdBackupsState?> get() = NO_BACKUPS
+
+    /** Reads the household's backups again (after one was made, or the folder changed). */
+    suspend fun refreshHouseholdBackups() = Unit
+
+    /** On the host: a backup of the whole household now, beside the scheduled ones. */
+    suspend fun backUpHouseholdNow(): Result<HouseholdSnapshot> = Result.failure(UnsupportedOperationException("This device isn't the host."))
+
+    /** On the host: where the household's backups go from now on (best another drive). */
+    suspend fun setHouseholdBackupFolder(path: String): Result<Unit> = Result.failure(UnsupportedOperationException("This device isn't the host."))
+
+    /** On the host: puts the household back as the backup [name] kept it, keeping the household as it is first. */
+    suspend fun restoreHousehold(name: String): Result<Unit> = Result.failure(UnsupportedOperationException("This device isn't the host."))
+
+    /**
+     * On the host: starts making ([RecoveryJob.WRITE]) or restoring ([RecoveryJob.RESTORE]) a
+     * recovery package at [file] with [password]; [recoveryJob] says how it goes.
+     */
+    suspend fun startRecovery(kind: String, file: String, password: String): Result<RecoveryJob> = Result.failure(UnsupportedOperationException("This device isn't the host."))
+
+    /** On the host: the recovery package being made or restored, or the last one; null when none was. */
+    suspend fun recoveryJob(): RecoveryJob? = null
+
+    /** The household's name and when a recovery package at [file] was made (readable without its password); null when it isn't one. */
+    suspend fun peekRecoveryPackage(file: String): Pair<String, Long>? = null
+
+    /**
+     * The household's copy of a picture (by [key], the SHA-256 of the address it came from), so a
+     * cover one device fetched comes from the host to the others; null when the host has none,
+     * isn't reachable, or this device isn't connected to one.
+     */
+    suspend fun householdArt(key: String): ByteArray? = null
+
+    /** Gives the host a picture this device fetched itself, for the household's other devices. */
+    suspend fun shareArt(key: String, bytes: ByteArray) = Unit
+
+    /** The household's hosts and this computer's place among them; null before Fuse One is set up. */
+    val hosts: StateFlow<HostsView?> get() = NO_HOSTS
+
+    /** Makes this computer one of the household's backups (it offers itself; the host accepts), or stops it being one. */
+    suspend fun setBackupHost(on: Boolean): Result<Unit> = Result.failure(UnsupportedOperationException("Backup hosts are on computers."))
+
+    /** On the host: accepts the computer offering from [deviceId] as a backup. */
+    suspend fun acceptBackup(deviceId: String): Result<Unit> = Result.failure(UnsupportedOperationException("This device isn't the host."))
+
+    /** On the host: takes a backup ([nodeId]) out of the household's hosts. */
+    suspend fun removeBackup(nodeId: String): Result<Unit> = Result.failure(UnsupportedOperationException("This device isn't the host."))
+
+    /**
+     * On a backup, by a person, when the host has been away a while: makes this computer the host.
+     * The old host, if it comes back, takes no more changes and hands over what it took.
+     */
+    suspend fun takeOverAsHost(): Result<Unit> = Result.failure(UnsupportedOperationException("This computer isn't a backup."))
+
+    suspend fun answerJoin(id: String, allow: Boolean): Result<Unit> = Result.failure(UnsupportedOperationException("Fuse One isn't set up."))
 
     /**
      * Profiles work without a host: made here, they are this device's own (PINs kept as a salted
@@ -377,7 +483,7 @@ interface SyncService {
      * [fromMine], the person playing's newest save of it becomes the shared one; otherwise everyone
      * starts it together. Each person's own saves stay in their history either way.
      */
-    suspend fun setShared(game: GameKey, shared: Boolean, fromMine: Boolean): Result<Unit> = Result.failure(UnsupportedOperationException("Fuse Sync isn't set up."))
+    suspend fun setShared(game: GameKey, shared: Boolean, fromMine: Boolean): Result<Unit> = Result.failure(UnsupportedOperationException("Fuse One isn't set up."))
 
     /**
      * Where each emulator in [samples] keeps its saves on this device, with the folders the person
@@ -449,6 +555,8 @@ private val NO_PLAYING: StateFlow<String?> = kotlinx.coroutines.flow.MutableStat
 private val NO_NOTICES: kotlinx.coroutines.flow.SharedFlow<SyncNotice> = kotlinx.coroutines.flow.MutableSharedFlow()
 
 private val NO_JOIN_REQUESTS: StateFlow<List<JoinAsk>> = kotlinx.coroutines.flow.MutableStateFlow(emptyList())
+private val NO_HOSTS: StateFlow<HostsView?> = kotlinx.coroutines.flow.MutableStateFlow(null)
+private val NO_BACKUPS: StateFlow<HouseholdBackupsState?> = kotlinx.coroutines.flow.MutableStateFlow(null)
 
 private val NO_MERGE: StateFlow<ProfileMerge?> = kotlinx.coroutines.flow.MutableStateFlow(null)
 
@@ -458,5 +566,18 @@ private val NO_SHARED_GAMES: StateFlow<Set<String>> = kotlinx.coroutines.flow.Mu
 
 /** The household's services as a device sees them: what the host keeps, with this device's sign-ins opened. */
 data class HouseholdShared(val services: HouseholdServices, val signIns: Map<String, String>)
+
+/**
+ * What Fuse One keeps on this device, in bytes: each person's saves kept here (each file once, by
+ * its contents, however many versions share it), the household's on a host, and saves of profiles
+ * removed from this device, kept as plain files.
+ */
+data class SyncFootprint(
+    val deviceBytes: Long,
+    val deviceFiles: Int,
+    val hostBytes: Long? = null,
+    val hostFiles: Int? = null,
+    val keptBytes: Long = 0,
+)
 
 private val NoRounds: StateFlow<Int> = kotlinx.coroutines.flow.MutableStateFlow(0)

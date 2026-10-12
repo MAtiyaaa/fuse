@@ -76,8 +76,8 @@ class PlaySyncService : Service() {
         val manager = getSystemService(NotificationManager::class.java)
         if (manager?.getNotificationChannel(CHANNEL) == null) {
             manager?.createNotificationChannel(
-                NotificationChannel(CHANNEL, "Fuse Sync while playing", NotificationManager.IMPORTANCE_MIN).apply {
-                    description = "Shown while Fuse Sync keeps a game's save in step"
+                NotificationChannel(CHANNEL, "Fuse One while playing", NotificationManager.IMPORTANCE_MIN).apply {
+                    description = "Shown while Fuse One keeps a game's save in step"
                     setShowBadge(false)
                 },
             )
@@ -90,7 +90,7 @@ class PlaySyncService : Service() {
         return NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_sync_save)
             .setContentTitle(if (title.isBlank()) "Keeping your save in step" else "Keeping $title's save in step")
-            .setContentText("Fuse Sync sends it to your host as soon as the game saves")
+            .setContentText("Fuse One sends it to your host as soon as the game saves")
             .setContentIntent(open)
             .setOngoing(true)
             .setSilent(true)

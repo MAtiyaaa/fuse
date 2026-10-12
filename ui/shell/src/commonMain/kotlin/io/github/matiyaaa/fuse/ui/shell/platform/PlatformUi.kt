@@ -44,6 +44,12 @@ interface PlatformUi {
     /** Steam on a computer: Fuse in Steam's library, for Game Mode. Null where there is no Steam (Android). */
     val steam: SteamIntegration? get() = null
 
+    /** Decky Loader and the Fuse Decky plugin, where they can run (Linux); null elsewhere. */
+    val decky: DeckyIntegration? get() = null
+
+    /** Reads game manuals (PDF and CBZ) on this device; null where it can't. */
+    val manuals: ManualReader? get() = null
+
     /**
      * Recent second-screen events (companion started or closed and why, refused displays, display
      * changes), oldest first, for a status row in Settings. Empty where there is no companion screen.
@@ -52,6 +58,16 @@ interface PlatformUi {
 
     fun openUrl(url: String)
     fun restart()
+
+    /**
+     * What the system lets Fuse do while it isn't on screen (Android's battery optimization and
+     * background restriction); null where nothing limits it. Read on every access: it changes in
+     * the system's settings.
+     */
+    val background: BackgroundLimits? get() = null
+
+    /** Opens the system's own screen where [background]'s limits are lifted. */
+    fun openBackgroundSettings() = Unit
 
     /**
      * Keeps the device from sleeping while Fuse works in the background ([StayAwake.cpu]: art and
@@ -76,6 +92,12 @@ interface PlatformUi {
 
     /** Leaves Fuse. Not offered while Fuse is the Home app (Home has nowhere to exit to). */
     fun exit()
+
+    /**
+     * The game Fuse was started to play (`--play <id>`, from a game's entry in Steam), or null. Fuse
+     * starts it as soon as it is ready and closes again once it ends.
+     */
+    val startupPlay: Long? get() = null
 
     /** Text on the system clipboard, or null when it is empty, not text or can't be read. */
     suspend fun readClipboardText(): String? = null
@@ -123,6 +145,105 @@ interface SteamIntegration {
 
     /** Repairs only positively identified Fuse entries; existing custom artwork is retained. */
     suspend fun rebuild(): Result<String> = addFuse()
+
+    /** Steam is open right now (its library can't be written safely until it closes). */
+    suspend fun steamRunning(): Boolean = false
+
+    /** Steam is running a game right now: nothing may close Steam. */
+    suspend fun gameRunning(): Boolean = false
+
+    /**
+     * Adds Fuse the next time Steam closes, for people who don't want Fuse to close it: Fuse looks
+     * while it runs and writes the entry once Steam is gone, without starting Steam again.
+     */
+    suspend fun addWhenSteamCloses(): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
+
+    /** A queued [addWhenSteamCloses] still waiting for Steam to close. */
+    val waitingForSteam: Boolean get() = false
+
+    /** Takes Fuse's own entry (and only Fuse's) out of Steam's library; its art stays for the person to delete. */
+    suspend fun removeFuse(): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
+    /** The games Fuse put in Steam's library here, by Fuse's game id, for any Steam user. */
+    suspend fun gamesInSteam(): Set<Long> = emptySet()
+
+    /**
+     * What putting [games] in Steam's library would do, game by game, over this computer's Steam
+     * users, before anything is written. Null where Steam's library can't be read.
+     */
+    suspend fun planGames(games: List<io.github.matiyaaa.fuse.library.steam.SteamGameEntry>): List<io.github.matiyaaa.fuse.library.steam.SteamGamePlanItem>? = null
+
+    /**
+     * Puts [games] in Steam's library for every Steam user here, each starting through Fuse, with its
+     * pictures from [art] and, with [collections], in a Steam collection for its system. Steam is
+     * never closed for it: while it is open, the games go in when it next closes.
+     */
+    suspend fun addGames(
+        games: List<io.github.matiyaaa.fuse.library.steam.SteamGameEntry>,
+        art: Map<Long, io.github.matiyaaa.fuse.library.steam.SteamArt>,
+        collections: Boolean,
+    ): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
+
+    /** Games waiting for Steam to close before they go into its library. */
+    val waitingForSteamGames: Boolean get() = false
+
+    /** Takes Fuse's entries for [gameIds] (null: all of Fuse's games) out of Steam's library; nobody else's. */
+    suspend fun removeGames(gameIds: Set<Long>?): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
+
+    /** What is wrong with Fuse's game entries: games no longer in [library], an older Fuse, doubles. */
+    suspend fun gamesHealth(library: Set<Long>): List<io.github.matiyaaa.fuse.library.steam.SteamHealthIssue> = emptyList()
+
+    /**
+     * Puts Fuse's game entries right: those for games no longer in [library] and doubles go, and
+     * [moved] (entries that start an older Fuse) are pointed at this one, keeping what the person changed.
+     */
+    suspend fun repairGames(
+        library: Set<Long>,
+        moved: List<io.github.matiyaaa.fuse.library.steam.SteamGameEntry>,
+        art: Map<Long, io.github.matiyaaa.fuse.library.steam.SteamArt>,
+    ): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
+
+    /** Fuse's last change to Steam's games can be undone. */
+    val canUndoGames: Boolean get() = false
+
+    /** Puts Steam's library back as it was before Fuse's last change to its games. */
+    suspend fun undoGames(): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
+}
+
+/** What Decky Loader and the Fuse Decky plugin look like on this device. */
+data class DeckyState(
+    /** Decky Loader is installed. */
+    val loader: Boolean,
+    /** The Fuse Decky plugin is installed, at [pluginVersion] when it says. */
+    val plugin: Boolean,
+    val pluginVersion: String? = null,
+    /** The plugin this Fuse carries. */
+    val bundledVersion: String,
+    /** The system can ask for the person's password to put the plugin in place (pkexec). */
+    val canInstall: Boolean,
+) {
+    val upToDate: Boolean get() = plugin && pluginVersion == bundledVersion
+}
+
+/**
+ * The Fuse Decky plugin's installation. Decky keeps its plugins in a folder only the system
+ * account can write, so installing always goes through a password prompt the person answers
+ * themselves; Fuse never runs a privileged command silently. Where that isn't possible (no prompt
+ * can show, no password set), [stage] gives the plugin as a ZIP for Decky's own Install from ZIP.
+ */
+interface DeckyIntegration {
+    suspend fun state(): DeckyState
+
+    /** Installs or updates the plugin and reloads Decky so it loads; what happened, in words. */
+    suspend fun install(): Result<String>
+
+    /** Takes the plugin out of Decky. Nothing of Fuse's (its library, play time, saves) changes. */
+    suspend fun remove(): Result<String>
+
+    /** The plugin as a ZIP in Fuse's own folder, for Decky's Install from ZIP; null when it can't be made. */
+    suspend fun stage(): String?
+
+    /** Where Decky Loader's own installer and instructions are, for a device without it. */
+    val loaderInstructions: String get() = "https://decky.xyz"
 }
 
 /** A file the user picked to open: its name and its bytes. */
@@ -162,6 +283,15 @@ interface Haptics {
 
     /** A moved item put down. */
     fun drop() = tick()
+
+    /** Something to know arrived (a notice). */
+    fun notice() = tick()
+
+    /** Something finished well: a download, a profile ready, Fuse up and running. */
+    fun success() = confirm()
+
+    /** How strong, 0 to 1 (Settings, Input, Vibration); 0 is off. */
+    fun setStrength(level: Float) = Unit
 
     object None : Haptics {
         override fun tick() = Unit
@@ -254,6 +384,10 @@ interface StorageAccess {
     suspend fun pickAudio(title: String): PickedFile? = null
     /** A save file or archive, copied into temporary app storage where document access needs it. */
     suspend fun pickSave(title: String): String? = null
+    /** An IPS, UPS or BPS patch, readable by Fuse (copied into temporary app storage where document access needs it). */
+    suspend fun pickPatch(title: String): String? = null
+    /** A file of one of [extensions] (described as [label]), read where it is; null where Fuse can't open files that way. */
+    suspend fun pickFile(title: String, label: String, extensions: List<String>): String? = null
     fun refresh()
 }
 
@@ -366,4 +500,14 @@ data class StayAwake(val cpu: Boolean, val screen: Boolean) {
             return StayAwake(cpu = working, screen = working && standby)
         }
     }
+}
+
+/**
+ * What the system does to Fuse in the background: [optimized] when battery optimization may stop it
+ * soon after it leaves the screen (Android's Doze and app standby), [restricted] when the person or
+ * the system restricted its background use outright. Either can hold a save back until Fuse is open
+ * again; nothing is lost, it just goes later.
+ */
+data class BackgroundLimits(val optimized: Boolean, val restricted: Boolean) {
+    val limited: Boolean get() = optimized || restricted
 }

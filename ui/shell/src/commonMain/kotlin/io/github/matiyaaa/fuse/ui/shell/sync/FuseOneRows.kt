@@ -1,212 +1,35 @@
 package io.github.matiyaaa.fuse.ui.shell.sync
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.data.settings.SyncSettings
-import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.sync.DeviceInfo
 import io.github.matiyaaa.fuse.sync.HostView
-import io.github.matiyaaa.fuse.sync.ProfileChange
 import io.github.matiyaaa.fuse.sync.ProfileInfo
-import io.github.matiyaaa.fuse.sync.SyncActivity
+import io.github.matiyaaa.fuse.sync.RecoveryJob
+import io.github.matiyaaa.fuse.sync.SyncApi
 import io.github.matiyaaa.fuse.sync.SyncService
 import io.github.matiyaaa.fuse.sync.SyncStatus
-import io.github.matiyaaa.fuse.ui.designsystem.components.FText
-import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
-import io.github.matiyaaa.fuse.ui.designsystem.components.MenuList
-import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
-import io.github.matiyaaa.fuse.ui.designsystem.components.ProfileAvatar
-import io.github.matiyaaa.fuse.ui.designsystem.components.StatusDot
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
-import io.github.matiyaaa.fuse.ui.designsystem.components.handleMenuAction
-import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberReveal
-import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
-import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
-import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
-import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
-import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
-import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
-import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
-import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import io.github.matiyaaa.fuse.ui.shell.settings.choiceRow
 import io.github.matiyaaa.fuse.ui.shell.settings.infoRow
 import io.github.matiyaaa.fuse.ui.shell.settings.toggleRow
 import io.github.matiyaaa.fuse.ui.shell.store.impl.TimeWords
 import kotlinx.coroutines.launch
 
-/** The page's own state while it is open. */
-internal class SyncSettingsState {
-    val sel = LinearSelection()
-}
-
 /**
- * Settings, Addons, Fuse Sync: one place for all of it. It leads with where things stand; off, it
- * says what it is and that nothing runs; not set up, it offers the two ways in (this computer as
- * the host, or connecting to one); set up, it holds who is playing, what syncs, the connection,
- * this device, the host's devices and service when this is the host, and leaving.
+ * Fuse One's own rows for Settings, Fuse One: whether it runs, setting it up, who is playing, what
+ * syncs, the connection, this device as the host, and leaving, each under its own heading. The
+ * section arranges them ([io.github.matiyaaa.fuse.ui.shell.settings.fuseOneRows]).
  */
-@Composable
-internal fun SyncSettingsScreen(app: AppState) {
-    val svc = app.store.sync.service
-    val prefs by app.store.prefs.collectAsState()
-    val page = rememberRouteState(app.navigator, "sync.settings") { SyncSettingsState() }
-    val reveal = rememberReveal()
-    LaunchedEffect(Unit) {
-        app.hero = null
-        app.hints = listOf(Hint(HintButton.CONFIRM, "Change"), Hint(HintButton.BACK, "Back"))
-    }
-    if (svc == null) {
-        val rows = listOf(infoRow("none", "Fuse Sync isn't part of this build", icon = FuseIcons.RefreshCcw))
-        InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e -> handleMenuAction(e, rows, page.sel) }
-        Column(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {
-            Spacer(Modifier.height(Size.hudHeight + Space.l))
-            Panel { MenuList(rows, page.sel, modifier = Modifier.padding(Space.s)) }
-        }
-        return
-    }
-    val status by svc.status.collectAsState()
-    val profiles by svc.profiles.collectAsState()
-    val active by svc.activeProfile.collectAsState()
-    val host by svc.host.collectAsState()
-    val devices by svc.devices.collectAsState()
-    val activity by svc.activity.collectAsState()
-    val c = prefs.sync
-    val words = syncWords(if (c.enabled) status else SyncStatus.Off)
-    val rows = syncRows(app, svc, c, status, profiles, active, host, devices)
-    page.sel.keepOn(rows.map { it.id })
-    page.sel.clamp(rows.size)
-    InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
-        if (e.action == NavAction.LEFT) NavResult.BLOCKED else handleMenuAction(e, rows, page.sel)
-    }
-
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val compact = maxHeight < Size.touch * 12
-        val wide = maxWidth >= 1040.dp
-        Column(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {
-            Spacer(Modifier.height(Size.hudHeight + if (compact) Space.s else Space.l))
-            Row(Modifier.reveal(reveal, 0), verticalAlignment = Alignment.CenterVertically) {
-                SyncMark(if (compact) Size.thumb else Size.thumbL)
-                Spacer(Modifier.width(Space.l))
-                Column(verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-                    FText(SYNC_NAME, if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        StatusDot(words.ok)
-                        Spacer(Modifier.width(Space.s))
-                        FText(words.title, Fuse.type.bodyStrong, maxLines = 1)
-                        FText("  ·  ${words.detail}", Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 1)
-                    }
-                }
-            }
-            Spacer(Modifier.height(if (compact) Space.m else Space.l))
-            Row(Modifier.weight(1f).padding(bottom = Size.hintHeight + Space.s), horizontalArrangement = Arrangement.spacedBy(Space.l)) {
-                Panel(Modifier.widthIn(max = Size.touch * 18).weight(1f, fill = !wide).fillMaxHeight().reveal(reveal, 1)) {
-                    MenuList(rows, page.sel, modifier = Modifier.padding(Space.s), showSelection = app.focusZone == FocusZone.CONTENT)
-                }
-                if (wide) SideCard(c, status, active, host, devices, activity, Modifier.width(320.dp).reveal(reveal, 2))
-            }
-        }
-    }
-}
-
-/** On wide screens: who is playing, the host and its devices, and what Fuse Sync did lately. */
-@Composable
-private fun SideCard(
-    c: SyncSettings,
-    status: SyncStatus,
-    active: ProfileInfo?,
-    host: HostView?,
-    devices: List<DeviceInfo>,
-    activity: List<SyncActivity>,
-    modifier: Modifier,
-) {
-    val colors = Fuse.colors
-    Panel(modifier) {
-        Column(Modifier.fillMaxWidth().padding(Space.l), verticalArrangement = Arrangement.spacedBy(Space.m)) {
-            if (!c.enabled || c.role.isEmpty()) {
-                FText(SYNC_BYLINE, Fuse.type.bodyStrong, maxLines = 1)
-                for ((icon, line) in listOf(
-                    FuseIcons.Save to "Saves and save states, there before you play and kept after",
-                    FuseIcons.Clock to "Play time that adds up: 30 minutes here and 20 offline elsewhere is 50",
-                    FuseIcons.Users to "A profile for each person, with their own library, Home and theme",
-                    FuseIcons.Server to "On your own computer at home. Nothing goes to anyone else",
-                )) {
-                    Row(verticalAlignment = Alignment.Top) {
-                        FuseIcon(icon, size = Size.iconS, tint = colors.accent)
-                        Spacer(Modifier.width(Space.s))
-                        FText(line, Fuse.type.caption, color = colors.textMuted, maxLines = 3)
-                    }
-                }
-                return@Column
-            }
-            if (active != null) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    ProfileAvatar(active.avatar, 52.dp)
-                    Spacer(Modifier.width(Space.m))
-                    Column {
-                        FText("Playing as", Fuse.type.caption, color = colors.textMuted, maxLines = 1)
-                        FText(active.name, Fuse.type.title, maxLines = 1)
-                    }
-                }
-            }
-            Fact("Host", c.hostName.ifBlank { host?.name ?: "Not connected" })
-            Fact("Reaching it", when (status) {
-                is SyncStatus.Online -> if (status.route == io.github.matiyaaa.fuse.sync.Route.LOCAL) "At home" else "From outside"
-                is SyncStatus.Offline -> "Not right now"
-                else -> "Not yet"
-            })
-            if (devices.isNotEmpty()) Fact("Devices", devices.filterNot { it.revoked }.joinToString(", ") { it.name })
-            if (activity.isNotEmpty()) {
-                FText("Lately", Fuse.type.caption, color = colors.textMuted, maxLines = 1)
-                val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
-                val offset = localOffsetMillis(now)
-                for (a in activity.take(4)) {
-                    Column {
-                        FText(a.text, Fuse.type.label, maxLines = 2)
-                        FText(TimeWords.relative(a.at, now, offset).replaceFirstChar { it.uppercase() }, Fuse.type.caption, color = colors.textFaint, maxLines = 1)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun Fact(label: String, value: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        FText(label, Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1)
-        FText(value, Fuse.type.label, maxLines = 2)
-    }
-}
-
-private fun syncRows(
+internal fun syncRows(
     app: AppState,
     svc: SyncService,
     c: SyncSettings,
@@ -215,6 +38,8 @@ private fun syncRows(
     active: ProfileInfo?,
     host: HostView?,
     devices: List<DeviceInfo>,
+    hosts: io.github.matiyaaa.fuse.sync.HostsView? = null,
+    backups: io.github.matiyaaa.fuse.sync.HouseholdBackupsState? = null,
 ): List<MenuAction> = buildList {
     fun configure(change: (SyncSettings) -> SyncSettings) = app.scope.launch { app.store.sync.configure(change) }
     add(toggleRow("enabled", "Use $SYNC_NAME", FuseIcons.Power, c.enabled, "Your saves, play time, library and settings on every device, from a host of your own") { v ->
@@ -262,6 +87,20 @@ private fun syncRows(
     // What syncs -----------------------------------------------------------------------------------
     val what = "What syncs"
     add(toggleRow("saves", "Saves", FuseIcons.Save, c.saves, "Each game's saves, put in place before it starts and kept after it closes") { v -> configure { it.copy(saves = v) } }.copy(section = what))
+    // Android may stop Fuse soon after a game takes the screen: the save then goes only once Fuse is
+    // open again. Said where saves are turned on, with the way to lift it.
+    app.platform.background?.takeIf { c.saves && it.limited }?.let { limits ->
+        add(MenuAction(
+            "background", "Saves in the Background", FuseIcons.BatteryWarning,
+            detail = if (limits.restricted) {
+                "Android restricts Fuse in the background, so a save waits until Fuse is open again. Set its battery use to Unrestricted"
+            } else {
+                "Android's battery optimization can stop Fuse while a game plays, so a save may wait until Fuse is open again. Set its battery use to Unrestricted"
+            },
+            trailing = Trailing.Chevron, section = what,
+            onSelect = { app.platform.openBackgroundSettings() },
+        ))
+    }
     // Whose saves move on this device: its own choice (a child's handheld that never takes a
     // grown-up's saves, a profile kept to one device).
     if (c.saves && profiles.isNotEmpty()) {
@@ -292,7 +131,7 @@ private fun syncRows(
     add(toggleRow("settings", "Settings", FuseIcons.Palette, c.settings, "Your theme, Home, tabs, quick menu, sounds and music. Controllers, screens and drives stay this device's own") { v -> configure { it.copy(settings = v) } }.copy(section = what))
     add(toggleRow(
         "signins", "Share Sign-ins", FuseIcons.Key, c.shareSignIns,
-        "RomM and Jellyfin, with each person's own Jellyfin account, go to your other devices and come to this one. Sealed, never in plain text",
+        "RomM, Jellyfin with each person's own account, and your keys (SteamGridDB, TheGamesDB, IGDB, ScreenScraper, RetroAchievements) go to your other devices and come to this one. Sealed, never in plain text. A key removed here stays off this device only",
     ) { v -> app.scope.launch { app.store.sync.setShareSignIns(v) } }.copy(section = what))
     // Home's scope only means something while settings follow a profile.
     if (c.settings && active != null) {
@@ -389,7 +228,7 @@ private fun syncRows(
             "devices", "Devices", FuseIcons.MonitorSmartphone,
             detail = linked.joinToString(", ") { it.name }.ifBlank { "Only this one so far" },
             trailing = Trailing.Value(count(linked.size, "device")), section = hostSection,
-            onSelect = { manageDevices(app, svc, linked, c.deviceId) },
+            onSelect = { manageDevices(app, svc, linked, c.deviceId, host?.status?.hello?.fuseVersion.orEmpty()) },
         ))
         val outside = host?.outside.orEmpty()
         add(MenuAction(
@@ -444,12 +283,27 @@ private fun syncRows(
             add(infoRow("addresses", "Its Addresses", value = a.first(), detail = "Other devices on this network find it by themselves" + if (a.size > 1) ". Also ${a.drop(1).joinToString(", ")}" else "", icon = FuseIcons.Network).copy(section = hostSection))
         }
         add(MenuAction(
+            "householdbackups", "Household Backups", FuseIcons.ArchiveRestore,
+            detail = backupsDetail(backups),
+            trailing = Trailing.Chevron, section = hostSection,
+            onSelect = { householdBackupsSheet(app, svc) },
+        ))
+        add(MenuAction(
+            "recovery", "Recovery Package", FuseIcons.Lock,
+            detail = "The whole household in one file sealed with a password, to keep offline or to move the host to a new computer",
+            trailing = Trailing.Chevron, section = hostSection,
+            onSelect = { recoverySheet(app, svc) },
+        ))
+        add(MenuAction(
             "hostdata", "Where Saves Are Kept", FuseIcons.HardDrive,
             detail = c.hostDataDir.ifBlank { "Fuse's own folder" } + ". Choose another folder to move them there",
             trailing = Trailing.Chevron, section = hostSection,
             onSelect = { moveHostData(app, svc) },
         ))
     }
+
+    // Backup hosts -------------------------------------------------------------------------------
+    addAll(backupHostRows(app, svc, c, hosts))
 
     // Leaving --------------------------------------------------------------------------------------
     val leave = "Leave"
@@ -460,7 +314,7 @@ private fun syncRows(
             section = leave,
             onSelect = {
                 app.confirm = ConfirmSpec(
-                    "Stop hosting Fuse Sync?",
+                    "Stop hosting Fuse One?",
                     "Other devices keep everything they have and stop syncing until there is a host again. Every save, version and profile stays on this computer, so hosting again here carries on where it was.",
                     "Stop Hosting", destructive = true,
                 ) {
@@ -603,8 +457,19 @@ private fun moveHostData(app: AppState, svc: SyncService) {
     }
 }
 
-/** The host's devices: when each was last seen, and renaming or unlinking one. */
-private fun manageDevices(app: AppState, svc: SyncService, devices: List<DeviceInfo>, self: String) {
+/** Which Fuse [d] runs, and whether it is older than the host's; null before it has called. */
+private fun deviceVersion(d: DeviceInfo, hostVersion: String): String? = when {
+    d.fuseVersion.isNotEmpty() && hostVersion.isNotEmpty() && SyncApi.older(d.fuseVersion, hostVersion) -> "Fuse ${d.fuseVersion}, older than the host's. Update it to use everything new"
+    d.fuseVersion.isNotEmpty() -> "Fuse ${d.fuseVersion}"
+    d.lastSeen > 0 -> "Fuse 0.4.1 or older. Update it to use everything new"
+    else -> null
+}
+
+/**
+ * The host's devices: when each was last seen and which Fuse it runs (one older than the host's
+ * is said to be, since it can't use what is newer), and renaming or unlinking one.
+ */
+private fun manageDevices(app: AppState, svc: SyncService, devices: List<DeviceInfo>, self: String, hostVersion: String) {
     val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
     val offset = localOffsetMillis(now)
     app.choice = ChoiceSpec(
@@ -618,7 +483,10 @@ private fun manageDevices(app: AppState, svc: SyncService, devices: List<DeviceI
             }
             MenuAction(
                 "d.${d.id}", d.name + if (d.id == self) " (this one)" else "", icon,
-                detail = if (d.lastSeen > 0) "Seen ${TimeWords.relative(d.lastSeen, now, offset)}" else "Not seen yet",
+                detail = listOfNotNull(
+                    if (d.lastSeen > 0) "Seen ${TimeWords.relative(d.lastSeen, now, offset)}" else "Not seen yet",
+                    deviceVersion(d, hostVersion),
+                ).joinToString("  ·  "),
                 trailing = Trailing.Chevron,
                 onSelect = {
                     app.choice = ChoiceSpec(
@@ -646,4 +514,324 @@ private fun manageDevices(app: AppState, svc: SyncService, devices: List<DeviceI
             )
         },
     )
+}
+
+/**
+ * Backup hosts: on the host, the computers that keep a copy and those offering to; on a joined
+ * computer, keeping a copy itself, how the host and the copy stand, and taking over when the host is
+ * gone for good.
+ */
+private fun backupHostRows(app: AppState, svc: SyncService, c: SyncSettings, hosts: io.github.matiyaaa.fuse.sync.HostsView?): List<MenuAction> = buildList {
+    val section = "Backup Hosts"
+    val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+    val offset = localOffsetMillis(now)
+    val leader = hosts?.hosts?.firstOrNull { it.nodeId == hosts.leader }
+    when {
+        c.role == "HOST" && hosts?.thisRole == io.github.matiyaaa.fuse.sync.Leadership.FENCED -> add(infoRow(
+            "fenced", "Another Computer Keeps the Household",
+            detail = "A backup became the host while this computer was away. This one takes no changes until the new host has taken back what it kept meanwhile",
+            icon = FuseIcons.ShieldAlert,
+        ).copy(section = section))
+        c.role == "HOST" && hosts?.thisRole == io.github.matiyaaa.fuse.sync.Leadership.BACKUP -> add(infoRow(
+            "isbackup", "This Computer Is a Backup Now",
+            detail = "${leader?.name ?: "Another computer"} keeps the household. This one keeps a copy and can take over again",
+            icon = FuseIcons.DatabaseBackup,
+        ).copy(section = section))
+        c.role == "HOST" -> {
+            val backups = hosts?.hosts.orEmpty().filter { it.nodeId != hosts?.leader }
+            val offers = hosts?.offers.orEmpty()
+            add(MenuAction(
+                "backups", "Backup Hosts", FuseIcons.DatabaseBackup,
+                detail = if (offers.isNotEmpty()) "${offers.size} waiting to be accepted" else "Computers that keep a copy of the household and take over if this one is gone",
+                trailing = if (offers.isNotEmpty()) Trailing.Badge("${offers.size}") else Trailing.Value(if (backups.isEmpty()) "None" else "${backups.size}"),
+                section = section,
+                onSelect = { backupHostsSheet(app, svc, hosts) },
+            ))
+        }
+        svc.canHost -> {
+            val on = c.backupHost
+            val role = hosts?.thisRole
+            val detail = when {
+                !on -> "Keep a copy of the household on this computer, so it can take over if the host is gone"
+                hosts?.problem != null -> hosts.problem
+                hosts?.waiting == true -> "Waiting for the host to accept it, in its Fuse One settings"
+                hosts?.hostAwaySince != null && hosts.hostAwaySince > 0 -> "The host hasn't answered since ${TimeWords.relative(hosts.hostAwaySince, now, offset)}. The copy here is as of then"
+                (hosts?.copiedAt ?: 0) > 0 -> "A copy of the household here, brought up to date ${TimeWords.relative(hosts!!.copiedAt, now, offset)}"
+                role == io.github.matiyaaa.fuse.sync.Leadership.BACKUP -> "A copy of the household here, kept up to date"
+                else -> "Getting a copy of the household"
+            }
+            add(toggleRow("backup", "Be a Backup Host", FuseIcons.DatabaseBackup, on, detail) { v ->
+                if (v) {
+                    app.confirm = ConfirmSpec(
+                        "Keep a copy of the household here?",
+                        "This computer keeps a copy of everything the host keeps: every profile, save and device link, sealed on the way. The host accepts it first. If the host is ever gone for good, this computer can become the host with nothing lost. It needs to be on now and then to stay up to date.",
+                        "Offer This Computer",
+                    ) {
+                        app.scope.launch {
+                            svc.setBackupHost(true).onSuccess { app.toasts.show("Offered. Accept it on the host", icon = FuseIcons.DatabaseBackup) }
+                                .onFailure { app.toasts.show(it.message ?: "Couldn't offer this computer", ToastKind.ERROR) }
+                        }
+                    }
+                } else {
+                    app.confirm = ConfirmSpec(
+                        "Stop being a backup host?",
+                        "The copy of the household on this computer is deleted, and the host stops counting on it. Nothing else here changes.",
+                        "Stop", destructive = true,
+                    ) {
+                        app.scope.launch {
+                            svc.setBackupHost(false).onSuccess { app.toasts.show("This computer keeps no copy now") }
+                                .onFailure { app.toasts.show(it.message ?: "Couldn't change that", ToastKind.ERROR) }
+                        }
+                    }
+                }
+            }.copy(section = section))
+            if (on && hosts?.canTakeOver == true) {
+                add(MenuAction(
+                    "takeover", "Make This Computer the Host", FuseIcons.Crown,
+                    detail = "The host has been away a while. Only if it is gone for good: when it comes back, it hands over what it kept meanwhile",
+                    section = section,
+                    onSelect = {
+                        app.confirm = ConfirmSpec(
+                            "Make this computer the host?",
+                            "Devices move to this computer and carry on from its copy. If the old host comes back, it takes no more changes, hands this computer every save it kept while away (kept as versions, never put over newer ones) and becomes a backup. Do this only if the host is gone for good, or for a long while.",
+                            "Make This the Host", destructive = true,
+                        ) {
+                            app.scope.launch {
+                                svc.takeOverAsHost().onSuccess { app.toasts.show("This computer keeps the household now", ToastKind.SUCCESS) }
+                                    .onFailure { app.toasts.show(it.message ?: "Couldn't take over", ToastKind.ERROR) }
+                            }
+                        }
+                    },
+                ))
+            }
+        }
+    }
+}
+
+/** The host's backups, with those offering to be one, each to accept or take out. */
+private fun backupHostsSheet(app: AppState, svc: SyncService, hosts: io.github.matiyaaa.fuse.sync.HostsView?) {
+    val backups = hosts?.hosts.orEmpty().filter { it.nodeId != hosts?.leader }
+    val offers = hosts?.offers.orEmpty()
+    val rows = offers.map { o ->
+        MenuAction(
+            "offer.${o.deviceId}", o.name, FuseIcons.UserPlus,
+            detail = "Offers to keep a copy" + (o.local?.let { " at $it" } ?: ""),
+            trailing = Trailing.Value("Accept"), section = "Waiting",
+            onSelect = {
+                app.choice = null
+                app.confirm = ConfirmSpec(
+                    "Make ${o.name} a backup host?",
+                    "It gets a copy of everything this host keeps, every profile, save and device link and the household's sign-ins, sealed with its own key, and keeps it up to date. If this computer is ever gone, it can take over. Only accept a computer of your own household.",
+                    "Accept",
+                ) {
+                    app.scope.launch {
+                        svc.acceptBackup(o.deviceId.orEmpty()).onSuccess { app.toasts.show("${o.name} is a backup host now", ToastKind.SUCCESS) }
+                            .onFailure { app.toasts.show(it.message ?: "Couldn't accept it", ToastKind.ERROR) }
+                    }
+                }
+            },
+        )
+    } + backups.map { b ->
+        MenuAction(
+            "backup.${b.nodeId}", b.name, FuseIcons.DatabaseBackup,
+            detail = "Keeps a copy" + (b.local?.let { " at $it" } ?: ""),
+            trailing = Trailing.Chevron, section = "Backups",
+            onSelect = {
+                app.choice = null
+                app.confirm = ConfirmSpec(
+                    "Take ${b.name} out?",
+                    "It stops being a backup host and gets no more copies. Turn Be a Backup Host off on it to delete the copy it has.",
+                    "Take Out", destructive = true,
+                ) {
+                    app.scope.launch {
+                        svc.removeBackup(b.nodeId).onSuccess { app.toasts.show("${b.name} is no longer a backup host") }
+                            .onFailure { app.toasts.show(it.message ?: "Couldn't take it out", ToastKind.ERROR) }
+                    }
+                }
+            },
+        )
+    }
+    app.choice = ChoiceSpec(
+        title = "Backup Hosts",
+        icon = FuseIcons.DatabaseBackup,
+        message = if (rows.isEmpty()) {
+            "None yet. On another computer of the household, turn on Be a Backup Host in its Fuse One settings, then accept it here. With two backups, they choose a new host by themselves if this one is gone; with one, a person decides."
+        } else {
+            "Backups keep a copy of the household. With two or more, a majority of the hosts chooses a new one if this computer is gone; with one, a person on it decides."
+        },
+        options = rows,
+    )
+}
+
+/** What the household's backups say at a glance: the newest, or that none was made yet. */
+private fun backupsDetail(view: io.github.matiyaaa.fuse.sync.HouseholdBackupsState?): String {
+    if (view == null) return "Copies of the whole household, every day, week and month"
+    view.problem?.let { return it }
+    val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+    val newest = view.snapshots.firstOrNull() ?: return "None yet. The first is made within the hour"
+    return "Newest ${TimeWords.relative(newest.at, now, localOffsetMillis(now))}, ${view.snapshots.size} kept"
+}
+
+/**
+ * The household's backups: made by themselves every day (kept a week), week (kept a month) and month
+ * (kept half a year), one made now, where they go, and putting the household back as one of them.
+ */
+private fun householdBackupsSheet(app: AppState, svc: SyncService) {
+    app.scope.launch {
+        svc.refreshHouseholdBackups()
+        val view = svc.householdBackups.value
+        val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+        val offset = localOffsetMillis(now)
+        fun kinds(k: List<String>) = k.joinToString(", ") { when (it) {
+            "daily" -> "daily"; "weekly" -> "weekly"; "monthly" -> "monthly"; "manual" -> "made by you"; "before-restore" -> "before a restore"; else -> it
+        } }.replaceFirstChar { it.uppercase() }
+        val snaps = view?.snapshots.orEmpty().map { s ->
+            MenuAction(
+                "snap.${s.name}", TimeWords.relative(s.at, now, offset).replaceFirstChar { it.uppercase() }, FuseIcons.ArchiveRestore,
+                detail = "${kinds(s.kinds)}  ·  ${s.profiles} profiles, ${s.revisions} save versions  ·  ${sizeText(s.bytes)}",
+                trailing = Trailing.Chevron, section = "Kept",
+                onSelect = {
+                    app.choice = null
+                    app.confirm = ConfirmSpec(
+                        "Put the household back as it was ${TimeWords.relative(s.at, now, offset)}?",
+                        "Profiles, every save and its versions, records and device links go back to this backup. The household as it is now is kept as a backup first, so this can be undone. Devices that joined after it have to connect again, and saves made since stay on the devices that made them and come back with their next sync.",
+                        "Put It Back", destructive = true,
+                    ) {
+                        app.scope.launch {
+                            svc.restoreHousehold(s.name).onSuccess { app.toasts.show("The household is back as it was", ToastKind.SUCCESS) }
+                                .onFailure { app.toasts.show(it.message ?: "Couldn't put it back", ToastKind.ERROR) }
+                        }
+                    }
+                },
+            )
+        }
+        val actions = listOf(
+            MenuAction("now", "Back Up Now", FuseIcons.DatabaseBackup, detail = "A copy of the whole household, kept beside the scheduled ones", section = "", onSelect = {
+                app.choice = null
+                app.scope.launch {
+                    svc.backUpHouseholdNow().onSuccess { app.toasts.show("The household is backed up", ToastKind.SUCCESS) }
+                        .onFailure { app.toasts.show(it.message ?: "Couldn't back it up", ToastKind.ERROR) }
+                }
+            }),
+            MenuAction("where", "Where Backups Go", FuseIcons.FolderOpen, detail = view?.folder ?: "Fuse's own folder", trailing = Trailing.Chevron, section = "", onSelect = {
+                app.choice = null
+                app.scope.launch {
+                    val folder = app.platform.storage.pickFolder("Where should the household's backups go?") ?: return@launch
+                    svc.setHouseholdBackupFolder(folder).onSuccess { app.toasts.show("Backups go to $folder now") }
+                        .onFailure { app.toasts.show(it.message ?: "Couldn't use that folder", ToastKind.ERROR) }
+                }
+            }),
+        )
+        app.choice = ChoiceSpec(
+            title = "Household Backups",
+            icon = FuseIcons.ArchiveRestore,
+            message = "The whole household, kept by itself every day for a week, every week for a month and every month for half a year. Each save file is kept once, however many backups use it. Best on another drive than the host's.",
+            options = actions + snaps,
+        )
+    }
+}
+
+/**
+ * The household in one file sealed with a password: made here to keep offline (another drive, a
+ * USB stick), or restored on a new host computer, with the two ways to move the host said plainly.
+ */
+private fun recoverySheet(app: AppState, svc: SyncService) {
+    app.scope.launch {
+        val last = svc.recoveryJob()
+        val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+        val offset = localOffsetMillis(now)
+        val lastRow = last?.takeIf { !it.running }?.let { j ->
+            infoRow(
+                "last", if (j.kind == RecoveryJob.WRITE) "Last Package" else "Last Restore",
+                value = if (j.state == RecoveryJob.DONE) TimeWords.relative(j.startedAt, now, offset).replaceFirstChar { it.uppercase() } else "Didn't finish",
+                detail = if (j.state == RecoveryJob.DONE) j.file else j.message ?: "",
+                icon = if (j.state == RecoveryJob.DONE) FuseIcons.PackageCheck else FuseIcons.Alert,
+            )
+        }
+        app.choice = ChoiceSpec(
+            title = "Recovery Package",
+            icon = FuseIcons.Lock,
+            message = "Everything the host keeps (profiles, every save and its history, records, device links) in one file sealed with a password. " +
+                "To move the host to a new computer, either make the new one a backup host and then Make This Computer the Host there, or make a package here and restore it on the new host.",
+            options = listOfNotNull(
+                MenuAction("make", "Make a Recovery Package", FuseIcons.HardDriveDownload, detail = "Best kept on another drive or a USB stick, with its password kept apart", trailing = Trailing.Chevron, onSelect = { makePackage(app, svc) }),
+                MenuAction("restore", "Restore From a Package", FuseIcons.ArchiveRestore, detail = "This computer becomes the household's host, as the package kept it", trailing = Trailing.Chevron, onSelect = { restorePackage(app, svc) }),
+                lastRow,
+            ),
+        )
+    }
+}
+
+private fun makePackage(app: AppState, svc: SyncService) {
+    app.choice = null
+    app.scope.launch {
+        val folder = app.platform.storage.pickFolder("Where should the recovery package go?") ?: return@launch
+        askPassword(app, "A password for the package", "At least ${RecoveryJob.MIN_PASSWORD} characters. Without it the package can't be opened, so keep it somewhere safe, apart from the package.") { password ->
+            askPassword(app, "The password again", "To be sure it is the one you meant.") { again ->
+                if (again != password) {
+                    app.toasts.show("The passwords weren't the same, so nothing was made", ToastKind.WARNING)
+                    return@askPassword
+                }
+                val stamp = kotlin.time.Clock.System.now().toString().take(10)
+                val file = folder.trimEnd('/', '\\') + "/Fuse One household $stamp.fuserecovery"
+                runRecovery(app, svc, RecoveryJob.WRITE, file, password)
+            }
+        }
+    }
+}
+
+private fun restorePackage(app: AppState, svc: SyncService) {
+    app.choice = null
+    app.scope.launch {
+        val file = app.platform.storage.pickFile("Choose the recovery package", "Fuse recovery packages", listOf("fuserecovery")) ?: return@launch
+        val (name, made) = svc.peekRecoveryPackage(file) ?: run {
+            app.toasts.show("That isn't a Fuse recovery package", ToastKind.WARNING)
+            return@launch
+        }
+        val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+        app.confirm = ConfirmSpec(
+            "Restore $name's household from ${TimeWords.relative(made, now, localOffsetMillis(now))}?",
+            "This computer becomes the household's host, as the package kept it: profiles, every save and its history, records and device links. " +
+                "The household here now is kept as a household backup first. Every file is checked before anything changes, and a wrong password or a damaged package changes nothing. " +
+                "Devices at home find this host by themselves; one that was away needs this host's address from outside.",
+            "Continue",
+        ) {
+            askPassword(app, "The package's password", null) { password -> runRecovery(app, svc, RecoveryJob.RESTORE, file, password) }
+        }
+    }
+}
+
+private fun askPassword(app: AppState, title: String, message: String?, then: (String) -> Unit) {
+    app.textInput = TextInputSpec(title, "", "Password", secret = true, capitalize = false, doneLabel = "Continue", message = message) { v ->
+        app.textInput = null
+        if (v.isNotEmpty()) then(v)
+    }
+}
+
+/** Starts making or restoring a package and follows it to the end, saying how far it is. */
+private fun runRecovery(app: AppState, svc: SyncService, kind: String, file: String, password: String) {
+    app.scope.launch {
+        val started = svc.startRecovery(kind, file, password).getOrElse {
+            app.toasts.show(it.message ?: "Couldn't start", ToastKind.ERROR)
+            return@launch
+        }
+        app.toasts.show(if (kind == RecoveryJob.WRITE) "Making the recovery package" else "Checking the package and restoring the household")
+        var job: RecoveryJob = started
+        var shown = 0L
+        while (job.running) {
+            kotlinx.coroutines.delay(1_000)
+            job = svc.recoveryJob() ?: break
+            // A word now and then for a big household, not a toast a second.
+            if (job.total > 0 && job.done - shown >= maxOf(50L, job.total / 4)) {
+                shown = job.done
+                app.toasts.show("${job.done} of ${job.total} files")
+            }
+        }
+        when {
+            job.state == RecoveryJob.DONE && kind == RecoveryJob.WRITE ->
+                app.toasts.show("The household is in the package: ${job.profiles} profiles, ${job.revisions} save versions", ToastKind.SUCCESS)
+            job.state == RecoveryJob.DONE -> app.toasts.show("This computer is the household's host now, as the package kept it", ToastKind.SUCCESS)
+            else -> app.toasts.show(job.message ?: "It didn't finish", ToastKind.ERROR)
+        }
+    }
 }

@@ -1,0 +1,27 @@
+# Fuse One Host with Docker Compose. Start it with:  docker compose up -d
+#
+# Host networking lets devices at home find it on their own (Fuse looks for hosts on the local
+# network) and keeps the host's real address. Everything it keeps is in the fuse-one-data volume:
+# recreating, updating or removing the container never touches it.
+services:
+  fuse-one-host:
+    image: ${FUSE_ONE_IMAGE:-ghcr.io/matiyaaa/fuse-one-host:latest}
+    container_name: fuse-one-host
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      FUSE_ONE_NAME: ${FUSE_ONE_NAME:-}
+      FUSE_ONE_PORT: ${FUSE_ONE_PORT:-47311}
+    volumes:
+      - fuse-one-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:exec,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  fuse-one-data:
+    name: fuse-one-data

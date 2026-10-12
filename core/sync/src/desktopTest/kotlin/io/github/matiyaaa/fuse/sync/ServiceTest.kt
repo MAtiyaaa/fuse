@@ -96,7 +96,7 @@ class ServiceTest {
         )
         val (pc, _) = service("Gaming PC", pcLib)
         val (deck, deckSettings) = service("Steam Deck", deckLib)
-        // The code "Fuse Sync is ready" shows is the one another device types: it has to work.
+        // The code "Fuse One is ready" shows is the one another device types: it has to work.
         val ready = pc.hostHere("Gaming PC", installService = false).getOrThrow()
         val code = assertNotNull(ready.pairingCode)
         assertEquals("Gaming PC", deck.connect("127.0.0.1:$port", code).getOrThrow())
@@ -181,6 +181,29 @@ class ServiceTest {
         deck.switchTo(mo.id).getOrThrow()
         assertEquals(mo.id, deckSettings.current().sync.activeProfile)
         assertEquals(600L, deckLib.gamesNow()[ct.id]?.totalSeconds)
+    }
+
+    @Test
+    fun withTheHostAwayAPinEnteredHereBeforeStillOpensTheProfile(): Unit = runBlocking {
+        val (pc, _) = service("Gaming PC", Library())
+        val (deck, deckSettings) = service("Steam Deck", Library())
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        val sam = pc.createProfile("Sam", "owl", "2468").getOrThrow()
+        deck.syncNow().getOrThrow()
+        // Sam plays on the Deck once while the host is there: the PIN is checked by the host.
+        deck.switchTo(sam.id, "2468").getOrThrow()
+        deck.switchTo(mo.id).getOrThrow()
+        pc.stop()
+        // Offline, a wrong PIN is refused and the Deck stays with Mo.
+        val wrong = deck.switchTo(sam.id, "1111").exceptionOrNull()
+        assertTrue(wrong?.message.orEmpty().contains("PIN"), wrong?.message)
+        assertEquals(mo.id, deckSettings.current().sync.activeProfile)
+        // The right one opens Sam's profile without the host, and checking it alone does too.
+        deck.openProfile(sam.id, "2468").getOrThrow()
+        deck.switchTo(sam.id, "2468").getOrThrow()
+        assertEquals(sam.id, deckSettings.current().sync.activeProfile)
     }
 
     @Test

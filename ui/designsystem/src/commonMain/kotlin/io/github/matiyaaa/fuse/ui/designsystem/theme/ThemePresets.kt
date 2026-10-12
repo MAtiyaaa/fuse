@@ -8,6 +8,7 @@ import io.github.matiyaaa.fuse.model.FocusStyle
 import io.github.matiyaaa.fuse.model.GlassSettings
 import io.github.matiyaaa.fuse.model.MotionProfile
 import io.github.matiyaaa.fuse.model.NavigationStyle
+import io.github.matiyaaa.fuse.model.QuickMenuLook
 import io.github.matiyaaa.fuse.model.SoundProfile
 import io.github.matiyaaa.fuse.model.ThemePalette
 import io.github.matiyaaa.fuse.model.ThemeSpec
@@ -69,6 +70,8 @@ object ThemePresets {
         ),
         background = BackgroundStyle.HERO,
         geometry = CornerFamily.ROUND,
+        quickMenu = QuickMenuLook.GLASS,
+        widgets = io.github.matiyaaa.fuse.model.WidgetLook.GLASS,
         focus = FocusStyle.RING,
         motion = MotionProfile.STANDARD,
         glass = GlassSettings(enabled = true, blur = 28f, surfaceOpacity = 0.64f),
@@ -89,6 +92,7 @@ object ThemePresets {
         ),
         background = BackgroundStyle.WAVE,
         geometry = CornerFamily.SHARP,
+        quickMenu = QuickMenuLook.OUTLINED,
         focus = FocusStyle.BAR,
         motion = MotionProfile.STANDARD,
         navigation = NavigationStyle.CROSSBAR,
@@ -149,6 +153,7 @@ object ThemePresets {
         ),
         background = BackgroundStyle.AURORA,
         geometry = CornerFamily.SHARP,
+        quickMenu = QuickMenuLook.SOLID,
         focus = FocusStyle.RING,
         motion = MotionProfile.STANDARD,
         sound = SoundProfile.CLICK,
@@ -169,6 +174,8 @@ object ThemePresets {
         ),
         background = BackgroundStyle.STRIPES,
         geometry = CornerFamily.PILL,
+        quickMenu = QuickMenuLook.SOLID,
+        widgets = io.github.matiyaaa.fuse.model.WidgetLook.TINTED,
         focus = FocusStyle.RING,
         motion = MotionProfile.STANDARD,
         sound = SoundProfile.SOFT,
@@ -188,6 +195,7 @@ object ThemePresets {
         ),
         background = BackgroundStyle.GRID,
         geometry = CornerFamily.SHARP,
+        quickMenu = QuickMenuLook.OUTLINED,
         focus = FocusStyle.BAR,
         motion = MotionProfile.STANDARD,
         sound = SoundProfile.CLICK,
@@ -229,6 +237,7 @@ object ThemePresets {
         ),
         background = BackgroundStyle.SOLID,
         geometry = CornerFamily.SOFT,
+        quickMenu = QuickMenuLook.SOLID,
         focus = FocusStyle.RING,
         motion = MotionProfile.MINIMAL,
         sound = SoundProfile.SOFT,
@@ -269,6 +278,8 @@ object ThemePresets {
         ),
         background = BackgroundStyle.CAUSTICS,
         geometry = CornerFamily.PILL,
+        quickMenu = QuickMenuLook.GLASS,
+        widgets = io.github.matiyaaa.fuse.model.WidgetLook.GLASS,
         focus = FocusStyle.GLOW,
         motion = MotionProfile.STANDARD,
         sound = SoundProfile.CHIME,
@@ -308,6 +319,8 @@ object ThemePresets {
         ),
         background = BackgroundStyle.HORIZON,
         geometry = CornerFamily.SHARP,
+        quickMenu = QuickMenuLook.SOLID,
+        widgets = io.github.matiyaaa.fuse.model.WidgetLook.TINTED,
         focus = FocusStyle.RING,
         motion = MotionProfile.ENHANCED,
         sound = SoundProfile.CLICK,
@@ -348,6 +361,8 @@ object ThemePresets {
         ),
         background = BackgroundStyle.MESH,
         geometry = CornerFamily.PILL,
+        quickMenu = QuickMenuLook.GLASS,
+        widgets = io.github.matiyaaa.fuse.model.WidgetLook.GLASS,
         focus = FocusStyle.RING,
         motion = MotionProfile.ENHANCED,
         sound = SoundProfile.CHIME,
@@ -407,6 +422,7 @@ object ThemePresets {
         ),
         background = BackgroundStyle.LCD,
         geometry = CornerFamily.SHARP,
+        quickMenu = QuickMenuLook.OUTLINED,
         focus = FocusStyle.BAR,
         motion = MotionProfile.STANDARD,
         sound = SoundProfile.CLICK,

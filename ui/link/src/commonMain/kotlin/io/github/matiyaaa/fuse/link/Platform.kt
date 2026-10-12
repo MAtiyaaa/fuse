@@ -21,6 +21,9 @@ internal expect fun unbase64(text: String): ByteArray
 /** This device's addresses on the local network (IPv4 first), for the address and QR code. */
 internal expect fun lanAddresses(): List<String>
 
+/** Whether nothing listens on [port] on any of this device's addresses. */
+internal expect fun portFree(port: Int): Boolean
+
 /** The QR code for [text] as rows of dark modules, or null when it can't be made. */
 expect fun qrModules(text: String): List<BooleanArray>?
 

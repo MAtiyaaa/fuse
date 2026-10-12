@@ -53,6 +53,15 @@ internal class DesktopStorage(private val dirs: FuseDirs, private val host: Dial
         pick(title, SAVES)?.takeIf { File(it).isFile }
     }
 
+    override suspend fun pickPatch(title: String): String? = host.withDialog {
+        pick(title, PATCHES)?.takeIf { File(it).isFile }
+    }
+
+    override suspend fun pickFile(title: String, label: String, extensions: List<String>): String? = host.withDialog {
+        // Read where it is: what is in it is copied only once the person has seen exactly what goes where.
+        pick(title, Filter(label, extensions))?.takeIf { File(it).isFile }
+    }
+
     override suspend fun pickImage(title: String): String? {
         val picked = host.withDialog { pick(title, IMAGES) } ?: return null
         return withContext(Dispatchers.IO) { copyIntoMedia(File(picked)) }
@@ -267,6 +276,7 @@ internal class DesktopStorage(private val dirs: FuseDirs, private val host: Dial
     private companion object {
         val SAVES = Filter("Saves and archives", listOf("zip", "sav", "srm", "dsv", "mcd", "ps2", "eep", "mpk", "sra", "fla", "bin", "dat", "raw", "mcr"))
         val IMAGES = Filter("Images", listOf("png", "jpg", "jpeg", "webp", "gif", "bmp"))
+        val PATCHES = Filter("Patches", listOf("ips", "ups", "bps"))
 
         /** What [DesktopMenuMusic] can play. */
         val AUDIO = Filter("Music", listOf("mp3", "wav"))

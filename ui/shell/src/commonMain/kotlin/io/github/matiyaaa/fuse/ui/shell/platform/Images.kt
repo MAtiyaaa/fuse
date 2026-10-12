@@ -46,11 +46,13 @@ fun fuseImageLoader(
             .build()
     }
     .components {
+        // Providers' artwork through Fuse One's host first, once for the household (HouseholdImages).
+        add(HouseholdImages.Fetch(http))
         add(KtorNetworkFetcherFactory(httpClient = { http }))
         // Jellyfin's pictures: fetched on the route in use, cached by the picture (JellyfinImages).
         add(JellyfinImages.Key())
         add(JellyfinImages.Fetch(http))
-        // Fuse RomM's pictures: fetched with Fuse's sign-in, kept for offline (RommImages).
+        // RomM's pictures: fetched with Fuse's sign-in, kept for offline (RommImages).
         add(RommImages.Key())
         add(RommImages.Fetch())
         // System logos from the system art pack are SVG.

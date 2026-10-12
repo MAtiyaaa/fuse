@@ -38,11 +38,27 @@ private fun AuditDriver.settleUntil(text: String, shown: Boolean = true, timeout
     throw NotCovered("Waited ${timeoutMs / 1000} s for \"$text\" to ${if (shown) "show" else "go away"}")
 }
 
-/** Quick menu (Start), then its Settings row. */
+/** The quick menu (Start) on its section [label]: LB back to the first, then RB until it is open. */
+internal fun AuditDriver.openQuickMenu(label: String = "Quick settings") {
+    tap(PadButton.START)
+    waitFor("Quick settings")
+    settle()
+    tap(PadButton.L1, 3)
+    repeat(4) {
+        if (isSelectedDescribed(label)) {
+            settle()
+            return
+        }
+        tap(PadButton.R1)
+        settle(400)
+    }
+    throw NotCovered("The quick menu's $label section never opened")
+}
+
+/** Quick menu (Start), its Fuse section, then Settings. */
 internal fun AuditDriver.openSettings() {
     home()
-    tap(PadButton.START)
-    waitFor("Arrange Home")
+    openQuickMenu("Fuse")
     tapText("Settings")
     waitFor("Search settings")
     settle()
@@ -78,8 +94,7 @@ internal fun AuditDriver.overlayScreens(exhaustive: Boolean) {
     scenario("overlays", "capture") {
         useLibrary(capturePlatform)
         waitFor("Continue playing")
-        tap(PadButton.START)
-        waitFor("Arrange Home")
+        openQuickMenu()
         focusText("Screenshot") { if (nav(NavAction.RIGHT) != NavResult.MOVED) { nav(NavAction.DOWN); nav(NavAction.LEFT); nav(NavAction.LEFT) } }
         shoot("quick menu, Screenshot tile focused")
         tap(PadButton.A)
@@ -117,11 +132,79 @@ internal fun AuditDriver.overlayScreens(exhaustive: Boolean) {
         shoot("Inputs, Screenshots and recordings open")
     }
 
+    scenario("settings", "guided controls") {
+        useLibrary()
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("inputs"))
+        tap(PadButton.DPAD_RIGHT)
+        settle()
+        shoot("Inputs, Controller setup first")
+        tapText("Controller setup")
+        waitFor("Guided")
+        settle()
+        shoot("Guided, before starting")
+        tap(PadButton.A)
+        waitFor("Step 1")
+        settle()
+        shoot("Guided, first question")
+        tap(PadButton.B)
+        settle()
+        tap(PadButton.A)
+        settle()
+        shoot("Guided, after two answers")
+        // Held five seconds: guided setup ends, with what was answered kept.
+        router.press(PadButton.X, InputSource.GAMEPAD)
+        // The app's timers run between looks (see settleUntil): the ring fills, then it ends.
+        settleUntil("Keep holding to stop", timeoutMs = 20_000)
+        shoot("Guided, a button held, the ring filling")
+        settleUntil("Set up your controller one button at a time")
+        router.release(PadButton.X, InputSource.GAMEPAD)
+        settle()
+        shoot("Guided, left by holding a button")
+        tap(PadButton.R1)
+        settle()
+        shoot("Edit, every action")
+    }
+
+    scenario("overlays", "arranging the tabs") {
+        useLibrary()
+        waitFor("Continue playing")
+        // Up to the top line, along to Library, and confirm held: Library is picked up to move.
+        tap(PadButton.DPAD_UP, 3)
+        tap(PadButton.R1, 2)
+        settle()
+        hold(PadButton.A)
+        settle(900)
+        shoot("a tab held: picked up in place, as Addons' tabs are")
+        tap(PadButton.DPAD_RIGHT)
+        settle(700)
+        shoot("moved one place along, the next tab making room")
+        tap(PadButton.A)
+        settle(900)
+        shoot("put down: the top line in its new order")
+    }
+
+    scenario("overlays", "liquid glass") {
+        // Switched as Settings switches it, so the theme's glass comes along.
+        useLibrary { it.withTheme(ThemePresets.Glass) }
+        waitFor("Continue playing")
+        openQuickMenu()
+        settle(1_200)
+        shoot("the quick menu as liquid glass over Home", 1_500)
+        tap(PadButton.B)
+        // Drawn without a graphics card here, the Glass room takes its time to let a menu go.
+        waitGone("Quick settings")
+        tap(PadButton.DPAD_LEFT)
+        tap(PadButton.X)
+        waitFor("Game Info")
+        shoot("a game's options as liquid glass", 3_000)
+        tap(PadButton.B)
+    }
+
     scenario("overlays", "quick menu") {
         useLibrary()
         waitFor("Continue playing")
-        tap(PadButton.START)
-        waitFor("Arrange Home")
+        openQuickMenu()
         shoot("open, first tile focused")
         // Low Power shows whether it is on while focused, before and after pressing it.
         val nextTile = {
@@ -139,13 +222,29 @@ internal fun AuditDriver.overlayScreens(exhaustive: Boolean) {
         tap(PadButton.A)
         focusText("Find games", step = nextTile)
         shoot("Find games focused")
+        // The sections, along the top: RB to each.
+        tap(PadButton.R1)
+        settle(700)
+        shoot("Downloads, nothing moving")
+        tap(PadButton.R1)
+        settle(700)
+        shoot("Performance: the quality, Low Power and the overlay")
+        tap(PadButton.DPAD_DOWN, 3)
+        tap(PadButton.A)
+        settle(600)
+        shoot("High quality chosen, what it does under it")
+        tap(PadButton.DPAD_UP, 3)
+        tap(PadButton.A)
+        tap(PadButton.R1)
+        settle(700)
+        shoot("Fuse: its own actions")
         tap(PadButton.B)
         if (!exhaustive) return@scenario
-        tap(PadButton.START)
-        waitFor("Arrange Home")
+        openQuickMenu()
         tap(PadButton.DPAD_DOWN, 4)
         shoot("brightness slider focused")
-        tap(PadButton.DPAD_DOWN, 6)
+        tap(PadButton.R1, 3)
+        tap(PadButton.DPAD_DOWN, 8)
         shoot("last row (Exit Fuse) focused")
         tap(PadButton.A)
         waitFor("Exit Fuse?")
@@ -255,24 +354,26 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         tap(PadButton.DPAD_RIGHT)
         waitFor("Section order")
         tapText("Section order")
-        waitFor("Home always comes first")
-        shoot("the sheet, Home locked first")
+        settle(900)
+        shoot("Section order: the first tab after Home picked up in the top bar")
+        tap(PadButton.DPAD_RIGHT)
+        settle(700)
+        shoot("carried with the controller, one place along")
         tap(PadButton.A)
-        tap(PadButton.DPAD_DOWN)
-        shoot("carried with the controller, one place down")
-        tap(PadButton.A)
+        settle(700)
         shoot("put down, saved")
-        // By touch: the last row's grip, dragged up two rows.
-        val last = describedBounds("Move ").maxBy { it.top }
-        val from = last.center
-        val to = from - androidx.compose.ui.geometry.Offset(0f, last.height * 2.2f)
+        // By touch: Apps held, then dragged left past the tab before it.
+        val from = textCentre("Apps", topmost = true)
+        val to = from - androidx.compose.ui.geometry.Offset(260f, 0f)
         touch { down(from) }
+        // Held long enough to pick it up, by the app's own clock.
+        advanceExactly(700)
         settle(150)
         touch { moveTo(from + (to - from) * 0.5f) }
         settle(150)
         touch { moveTo(to) }
         settle(400)
-        shoot("dragged by its grip, the others make room")
+        shoot("dragged along the top bar, the others make room")
         touch { up() }
         settle(900)
         shoot("dropped by touch")
@@ -314,6 +415,28 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         shoot("off")
     }
 
+    // What apps that talk to Fuse may do, where each is set up: Phone Link in Accounts, the Decky plugin in Library.
+    scenario("settings", "what other apps may do") {
+        phoneLink.state.value = io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkState(running = true, addresses = listOf("http://192.168.1.20:47300/"), username = "player", sessions = 1)
+        useLibrary { it.copy(phoneLinkEnabled = true) }
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("phonelink"))
+        tap(PadButton.DPAD_RIGHT)
+        tapText("What a phone may do")
+        focusText("Never given to any app")
+        settle(600)
+        shoot("a phone: everything it asks, and what no app is given")
+        phoneLink.state.value = io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkState()
+        useLibrary(AuditPlatform(size, steam = AuditSteam(), decky = AuditDecky(), host = io.github.matiyaaa.fuse.model.Host.LINUX)) { it.copy(phoneLinkEnabled = false, steam = it.steam.copy(decky = true)) }
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("library"))
+        tap(PadButton.DPAD_RIGHT)
+        tapText("What the plugin may do")
+        focusText("Install and remove emulators")
+        settle(600)
+        shoot("the Decky plugin: emulators not until allowed")
+    }
+
     // Storage at every size: two panes when wide, the systems as a filter row when narrow.
     scenario("settings", "storage at a glance") {
         useLibrary()
@@ -324,6 +447,20 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         waitFor("Delete selected games")
         settle(2_500)
         shoot("drives, systems and games")
+    }
+    scenario("settings", "transfer rules") {
+        useLibrary()
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("downloads"))
+        tap(PadButton.DPAD_RIGHT)
+        waitFor("Only while charging")
+        tap(PadButton.DPAD_DOWN, 8)
+        settle(1_200)
+        shoot("charger, battery and quiet hours")
+        tapText("Quiet hours")
+        waitFor("10 PM to 7 AM")
+        settle(800)
+        shoot("quiet hours offered")
     }
     if (!exhaustive) return
 
@@ -457,9 +594,10 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         openSettings()
         tap(PadButton.DPAD_DOWN, sectionIndex("inputs"))
         tap(PadButton.DPAD_RIGHT)
-        var steps = 0
-        while (steps < 40 && nav(NavAction.DOWN) == NavResult.MOVED) steps++
-        tap(PadButton.A)
+        tapText("Controller setup")
+        waitFor("Guided")
+        // The mapping and the controller test are Edit, the second tab.
+        tap(PadButton.R1)
         waitFor("Controller test")
         shoot("button mapping and controller test")
         router.press(PadButton.X, InputSource.GAMEPAD)
@@ -468,6 +606,8 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         } finally {
             router.release(PadButton.X, InputSource.GAMEPAD)
         }
+        // Past "Button labels", the first action.
+        focusText("Confirm")
         tap(PadButton.A)
         waitFor("Press a button for")
         shoot("waiting for a button (capture mode)", 900)
@@ -487,11 +627,25 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         shoot("library licences, scrolled one page")
     }
 
+    scenario("settings", "going back to the version before") {
+        useLibrary()
+        // The audit's Fuse is 0.0.1, so the version before it is 0.0.0.
+        controls.previousFuse = io.github.matiyaaa.fuse.ui.shell.store.PreviousRelease("0.0.0", libraryGoesBack = true, since = 0L)
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("about"))
+        tap(PadButton.DPAD_RIGHT)
+        focusText("Go back to Fuse 0.0.0")
+        shoot("the version an update replaced, offered in About")
+        tap(PadButton.A)
+        waitFor("what changed since is kept in a copy")
+        settle(600)
+        shoot("what going back means, before it happens")
+    }
+
     scenario("settings", "home arrangement") {
         useLibrary()
         home()
-        tap(PadButton.START)
-        waitFor("Arrange Home")
+        openQuickMenu("Fuse")
         tapText("Arrange Home")
         waitFor("Style, rows or widgets")
         shoot("Arrange Home from the quick menu")
@@ -501,6 +655,28 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
 // --------------------------------------------------------------------------------- onboarding
 
 internal fun AuditDriver.onboardingScreens(exhaustive: Boolean) {
+    scenario("onboarding", "steam") {
+        val platform = AuditPlatform(size, steam = AuditSteam(), decky = AuditDecky(), host = io.github.matiyaaa.fuse.model.Host.LINUX)
+        show(firstRunStore, platform)
+        waitFor("Welcome to Fuse")
+        tap(PadButton.A)
+        waitFor("Integrate Fuse with Steam?")
+        settle(1_200)
+        shoot("the one Steam question first")
+        tap(PadButton.A)
+        waitFor("Decky")
+        settle(1_200)
+        shoot("the Decky plugin, Decky Loader found")
+        tap(PadButton.A)
+        settleUntil("Add Fuse to your Steam library?", timeoutMs = 30_000)
+        settle(1_200)
+        shoot("Fuse in Steam's library, with its art")
+        tap(PadButton.A)
+        settleUntil("Fuse and Steam, together", timeoutMs = 30_000)
+        settle(2_500)
+        shoot("Fuse, Steam and Decky as one, checked")
+    }
+
     scenario("onboarding", "steps") {
         val platform = AuditPlatform(
             size,
@@ -520,7 +696,7 @@ internal fun AuditDriver.onboardingScreens(exhaustive: Boolean) {
         tap(PadButton.DPAD_RIGHT)
         tap(PadButton.A)
         waitFor("Play on, anywhere")
-        shoot("every device: Fuse Sync, Syncthing or skip (optional)", 1_500)
+        shoot("every device: Fuse One, Syncthing or skip (optional)", 1_500)
         tap(PadButton.DPAD_RIGHT, 2)
         tap(PadButton.A)
         waitFor("Make your profile")
@@ -976,6 +1152,69 @@ internal fun AuditDriver.companionScreens() {
 
 /** The theme page: the gallery and its filters, the studio and a save, and a bright theme; at every size. */
 internal fun AuditDriver.themeScreens() {
+    scenario("settings", "calibrate this screen") {
+        useLibrary()
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("accessibility"))
+        tap(PadButton.DPAD_RIGHT)
+        tapText("Calibrate this screen")
+        waitFor("How large everything is")
+        shoot("step one: the interface's size", 1_500)
+        tap(PadButton.A)
+        waitFor("Where your screen ends")
+        tap(PadButton.DPAD_RIGHT, 5)
+        shoot("step two: the edges moved in 5%", 1_500)
+        tap(PadButton.A)
+        waitFor("Text you can read")
+        tap(PadButton.DPAD_RIGHT)
+        shoot("step three: large text", 1_500)
+        tap(PadButton.A)
+        waitFor("Calibrated")
+        shoot("saved: this screen keeps its own", 1_500)
+        tap(PadButton.B)
+        libraryStore.updatePrefs { it.copy(display = it.display.copy(calibrations = emptyMap())) }
+    }
+
+    scenario("settings", "visual aids") {
+        useLibrary()
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("library"))
+        tap(PadButton.DPAD_RIGHT)
+        tapText("Default view")
+        waitFor("Cover grid")
+        shoot("default view: grid", 1_500)
+        tap(PadButton.DPAD_DOWN)
+        shoot("default view: capsules", 1_500)
+        tap(PadButton.DPAD_DOWN)
+        shoot("default view: cover grid", 1_500)
+        tap(PadButton.DPAD_DOWN)
+        shoot("default view: list", 1_500)
+        tap(PadButton.B)
+        waitGone("Cover grid")
+        tapText("Library opens on", step = PadButton.DPAD_UP)
+        waitFor("The games on this device")
+        shoot("library opens on: all", 1_500)
+        tap(PadButton.DPAD_DOWN)
+        shoot("library opens on: installed", 1_500)
+        tap(PadButton.B)
+        waitGone("The games on this device")
+        tapText("Selecting a game")
+        waitFor("Opens its page")
+        tap(PadButton.DPAD_DOWN)
+        shoot("selecting a game: opens its page, mid-way", 1_200)
+        tap(PadButton.B)
+        waitGone("Opens its page")
+        tap(PadButton.B)
+        tap(PadButton.DPAD_UP, sectionIndex("library"))
+        tap(PadButton.DPAD_DOWN, sectionIndex("appearance"))
+        tap(PadButton.DPAD_RIGHT)
+        tapText("Game art")
+        waitFor("Posters")
+        tap(PadButton.DPAD_DOWN)
+        shoot("game art: posters", 1_500)
+        tap(PadButton.B)
+    }
+
     scenario("settings", "themes gallery") {
         useLibrary()
         // A theme someone shared, added as if from its link.
@@ -1012,9 +1251,24 @@ internal fun AuditDriver.themeScreens() {
         focusText("Make your own") { if (nav(NavAction.LEFT) != NavResult.MOVED) { nav(NavAction.UP); repeat(6) { nav(NavAction.RIGHT) } } }
         tap(PadButton.A)
         waitFor("Light or dark")
-        shoot("the studio, step one: the room", 2_500)
+        shoot("the studio in Simple, step one: light or dark", 2_500)
+        // Simple's shape step: corners and the quick menu's look, shown on the stage.
+        tap(PadButton.R1, 2)
+        waitFor("Quick menu")
+        focusText("Quick menu")
+        tap(PadButton.DPAD_RIGHT)
+        shoot("the quick menu drawn Solid, on the stage", 2_500)
+        tap(PadButton.DPAD_RIGHT, 2)
+        shoot("the quick menu drawn as Glass, on the stage", 2_500)
+        tap(PadButton.DPAD_RIGHT)
+        // Back to the first step, and Advanced: every colour.
+        tap(PadButton.L1, 2)
+        focusText("Simple or Advanced", step = { tap(PadButton.DPAD_UP) })
+        tap(PadButton.DPAD_RIGHT)
+        waitFor("Raised panels")
+        shoot("the studio in Advanced, step one: the room", 2_500)
         // The room's colour, opened: its hue, saturation and lightness.
-        tap(PadButton.DPAD_DOWN)
+        tap(PadButton.DPAD_DOWN, 2)
         tap(PadButton.A)
         waitFor("Hue")
         tap(PadButton.DPAD_RIGHT, 4)
@@ -1073,6 +1327,7 @@ internal fun AuditDriver.themeScreens() {
         waitFor("Light or dark")
         shoot("the studio in a bright theme", 3_000)
         // Turned dark: the room and text are made again around the accent.
+        focusText("Light or dark")
         tap(PadButton.DPAD_LEFT)
         shoot("the bright theme turned dark", 3_000)
         tap(PadButton.B)

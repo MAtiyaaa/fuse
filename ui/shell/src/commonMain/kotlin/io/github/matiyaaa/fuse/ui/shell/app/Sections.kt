@@ -64,23 +64,73 @@ internal val AppState.sections: Sections get() {
     val p = store.prefs.value
     return Sections(
         addons = (store.appStore.supported && p.storeEnabled) || (store.jellyfin != null && p.jellyfin.enabled) ||
-            (store.sync.service != null && p.sync.enabled) || syncthingOn || (store.romm.supported && p.romm.enabled) ||
+            (store.sync.service != null && (p.sync.enabled || keepsOwnPeople)) || syncthingOn ||
             (store.streaming.supported && p.streaming.enabled && p.streaming.hosts.isNotEmpty()),
         cartridgeOn = platform.features.cartridge && p.cartridgeEnabled,
     )
 }
 
+/**
+ * People kept on this device without a household (profiles made here, Fuse One's household not
+ * set up): their saves are still kept apart, so the Sync page has something to show.
+ */
+internal val AppState.keepsOwnPeople: Boolean
+    get() = store.sync.service?.profiles?.value?.isNotEmpty() == true
+
 /** The tabs shown in the top line: Home first, then the user's order, each offered and present here. */
 @Composable
 internal fun rememberTabs(app: AppState, prefs: UiPrefs): List<Destination> {
     val cartridge by app.store.cartridge.status.collectAsState()
+    // Profiles coming or going can bring the Sync page (and with it Addons) or take it away.
+    app.store.sync.service?.profiles?.collectAsState()?.value
     val sections = app.sections
     return (listOf(Destination.HOME) + prefs.destinations.filter { it != Destination.HOME })
         .filter { sections.showsTab(it, app.offers(it), cartridge) }
 }
 
+/** The tabs the top line shows, in its order: Home first, then the person's. */
+internal fun AppState.shownTabs(): List<Destination> {
+    val p = store.prefs.value
+    val cartridge = store.cartridge.status.value
+    return (listOf(Destination.HOME) + p.destinations.filter { it != Destination.HOME }).filter { sections.showsTab(it, offers(it), cartridge) }
+}
+
+/**
+ * Picks [tab] up on the top line, to move along it in place (the D-pad, a finger or the mouse), as
+ * Addons' tabs move. Home stays first, so it is never picked up. Null picks up the first that moves.
+ */
+internal fun AppState.liftTab(tab: Destination? = null) {
+    val shown = shownTabs()
+    val t = tab ?: shown.firstOrNull { it != Destination.HOME } ?: return
+    if (t == Destination.HOME) {
+        toasts.show("Home always comes first", icon = io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons.Home)
+        return
+    }
+    focusZone = FocusZone.TABS
+    hudButton = null
+    liftedTab = t
+}
+
+/** Moves the picked-up tab [by] places along the top line (never before Home). True when it moved. */
+internal fun AppState.moveLiftedTab(by: Int): Boolean {
+    val t = liftedTab ?: return false
+    val shown = shownTabs()
+    val at = shown.indexOf(t)
+    val to = at + by
+    if (at < 0 || to < 1 || to > shown.lastIndex) return false
+    val next = shown.toMutableList().apply { add(to, removeAt(at)) }
+    // Sections not shown here (not offered on this device) keep their places after the rest.
+    store.updatePrefs { s -> s.copy(destinations = next + s.destinations.filter { it !in next }) }
+    return true
+}
+
+/** Puts the picked-up tab down where it is. */
+internal fun AppState.dropTab() {
+    liftedTab = null
+}
+
 /** Which part of Addons is showing. */
-enum class AddonsPart { CARTRIDGE, ROMM, STORE, JELLYFIN, SYNC, SYNCTHING, STREAMING }
+enum class AddonsPart { CARTRIDGE, STORE, JELLYFIN, SYNC, SYNCTHING, STREAMING }
 
 /** Opens Streaming in Addons. */
 internal fun AppState.openStreaming() {
@@ -109,10 +159,10 @@ internal fun AppState.openCartridge() {
     selectTab(Destination.CARTRIDGE)
 }
 
-/** Opens Fuse RomM in Addons. */
+/** Opens RomM's games: the Library's All view, where they sit with every other game. */
 internal fun AppState.openRomm() {
-    addonsPart = AddonsPart.ROMM
-    selectTab(Destination.CARTRIDGE)
+    librarySegment = io.github.matiyaaa.fuse.ui.shell.library.LibrarySegment.EVERYWHERE
+    selectTab(Destination.LIBRARY)
 }
 
 /** Opens the Store in Addons, on the page of the app with [key] when given. */

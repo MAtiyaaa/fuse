@@ -146,6 +146,38 @@ class SchemaTest {
         assertFailsWith<IllegalStateException> { DesktopDatabase.openDriver(path) }
         dir.deleteRecursively()
     }
+
+    @Test
+    fun goingBackFromAnUpdateBringsBackTheLibraryFromBeforeItAndKeepsTheNewerOne() = runBlocking {
+        val dir = createTempDirectory("fuse-db").toFile()
+        val path = File(dir, "fuse.db").path
+        // The library as this Fuse left it, then a newer Fuse's copy of it before updating it to 6.
+        DesktopDatabase.openDriver(path).use { FuseData(FuseDatabase(it)).sources.add("/roms", "ROMs", LibrarySourceKind.ROMS_ROOT) }
+        File(path).copyTo(File(DesktopDatabase.backupPath(path, 6)))
+        JdbcSqliteDriver("jdbc:sqlite:$path", Properties()).use {
+            it.execute(null, "INSERT INTO library_source(path, label, kind, enabled) VALUES ('/newer', 'Newer', 'ROMS_ROOT', 1)", 0)
+            it.execute(null, "PRAGMA user_version = 6", 0)
+        }
+        DesktopDatabase.restoredNote = null
+        DesktopDatabase.openDriver(path).use { driver ->
+            assertEquals(5L, DesktopDatabase.userVersion(driver))
+            assertEquals(listOf("/roms"), FuseData(FuseDatabase(driver)).sources.all().map { it.path })
+        }
+        // The newer library is kept whole beside it, and the person is told.
+        val kept = File("$path.v6.kept")
+        assertTrue(kept.isFile)
+        JdbcSqliteDriver("jdbc:sqlite:${kept.path}", Properties()).use { assertEquals(listOf("/newer", "/roms"), it.strings("SELECT path FROM library_source ORDER BY path")) }
+        assertTrue("fuse.db.v6.kept" in DesktopDatabase.restoredNote!!)
+        // A copy in another form than this Fuse's is never put in its place.
+        val other = File(dir, "other.db").path
+        JdbcSqliteDriver("jdbc:sqlite:$other", Properties()).use { it.execute(null, "PRAGMA user_version = 8", 0) }
+        JdbcSqliteDriver("jdbc:sqlite:${DesktopDatabase.backupPath(other, 8)}", Properties()).use { it.execute(null, "PRAGMA user_version = 7", 0) }
+        assertFailsWith<IllegalStateException> { DesktopDatabase.openDriver(other) }
+        assertTrue(File(other).isFile && !File("$other.v8.kept").exists())
+        DesktopDatabase.restoredNote = null
+        dir.deleteRecursively()
+        Unit
+    }
 }
 
 fun SqlDriver.strings(sql: String): List<String> = executeQuery(

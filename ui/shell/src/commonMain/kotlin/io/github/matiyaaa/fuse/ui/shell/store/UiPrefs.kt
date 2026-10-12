@@ -26,7 +26,7 @@ data class UiPrefs(
     val jellyfin: io.github.matiyaaa.fuse.data.settings.JellyfinSettings = io.github.matiyaaa.fuse.data.settings.JellyfinSettings(),
     /** Syncthing, an addon. Whether it is on follows [FuseStore.syncthing]'s state; only how it behaves changes here. */
     val syncthing: io.github.matiyaaa.fuse.data.settings.SyncthingSettings = io.github.matiyaaa.fuse.data.settings.SyncthingSettings(),
-    /** Fuse RomM, the Fuse RomM native integration. Its sign-in is in the secret store. */
+    /** RomM, the RomM native integration. Its sign-in is in the secret store. */
     val romm: io.github.matiyaaa.fuse.data.settings.FuseRommSettings = io.github.matiyaaa.fuse.data.settings.FuseRommSettings(),
     /** Streaming from a computer at home with Moonlight. */
     val streaming: io.github.matiyaaa.fuse.data.settings.StreamingSettings = io.github.matiyaaa.fuse.data.settings.StreamingSettings(),
@@ -38,6 +38,8 @@ data class UiPrefs(
      */
     val sync: io.github.matiyaaa.fuse.data.settings.SyncSettings = io.github.matiyaaa.fuse.data.settings.SyncSettings(),
     val onboardingDone: Boolean = false,
+    /** The step setup was on (by id), kept so a restart in the middle resumes there. */
+    val onboardingStep: String = "",
     /** The answer to setup's "Do you use RomM?": "FUSE", "CARTRIDGE", "NONE", or "" when not asked yet. */
     val rommAnswer: String = "",
     val themeId: String = "fuse",
@@ -45,6 +47,10 @@ data class UiPrefs(
     val glass: GlassSettings = GlassSettings(),
     val crt: CrtSettings = CrtSettings(),
     val highContrastFocus: Boolean = false,
+    /** The colours states use (Settings, Accessibility, Colours). */
+    val colorVision: io.github.matiyaaa.fuse.model.ColorVision = io.github.matiyaaa.fuse.model.ColorVision.TYPICAL,
+    /** Which way Fuse is laid out (Settings, Accessibility, Layout direction). */
+    val layoutDirection: io.github.matiyaaa.fuse.model.LayoutDirectionChoice = io.github.matiyaaa.fuse.model.LayoutDirectionChoice.AUTOMATIC,
     /** Text size: 1 as designed, 1.15 (Large) or 1.3 (Extra large). */
     val textScale: Float = 1f,
     /** Room kept clear at every edge, in percent, for TVs that cut the picture's edges off. */
@@ -76,6 +82,16 @@ data class UiPrefs(
     val performanceOverlay: Boolean = false,
     val sound: SoundProfile = SoundProfile.SOFT,
     val soundVolume: Float = 0.6f,
+    /** Fuse and Steam on this device (see [io.github.matiyaaa.fuse.data.settings.SteamIntegrationSettings]). */
+    val steam: io.github.matiyaaa.fuse.data.settings.SteamIntegrationSettings = io.github.matiyaaa.fuse.data.settings.SteamIntegrationSettings(),
+    /** What apps that talk to Fuse may do (see [io.github.matiyaaa.fuse.data.settings.Extensions]). */
+    val extensions: io.github.matiyaaa.fuse.data.settings.ExtensionSettings = io.github.matiyaaa.fuse.data.settings.ExtensionSettings(),
+    /** Which view the Library opens on: "INSTALLED" (this device's games) or "ALL" (everywhere). */
+    val libraryOpensOn: String = "ALL",
+    /** All of Fuse's sound off: music, interface sounds and the startup sound, whatever their own switches say. */
+    val muted: Boolean = false,
+    /** 0..1, over every sound's own volume. */
+    val masterVolume: Float = 1f,
     val music: MusicPrefs = MusicPrefs(),
     val clock24h: Boolean = false,
     val showWifi: Boolean = true,
@@ -105,6 +121,8 @@ data class UiPrefs(
     val collectionsEnabled: Boolean = true,
     /** Automatic series collections. */
     val autoSeries: Boolean = true,
+    /** A system's page names a game from it to try today. */
+    val systemSpotlight: Boolean = true,
     /** Series Fuse no longer makes (hidden, or kept as the user's own), lower case. */
     val hiddenSeries: List<String> = emptyList(),
     /** Systems whose firmware the user marked as set up, by platform id. */
@@ -113,6 +131,8 @@ data class UiPrefs(
     val drivesAsked: List<String> = emptyList(),
     /** Steam's games in the library: "ON", "OFF", or "" (never asked). */
     val steamGames: String = "",
+    /** Manuals read on this device, by their file: where each was left and its bookmarks. */
+    val manuals: Map<String, io.github.matiyaaa.fuse.model.ManualPlace> = emptyMap(),
     val scraperOrder: List<ScrapeProviderId> = io.github.matiyaaa.fuse.data.settings.ScrapingSettings.DefaultProviderOrder,
     val scraperLanguage: String = "en",
     val scraperRegion: String = "any",
@@ -134,6 +154,8 @@ data class UiPrefs(
     val startupAnimation: Boolean = true,
     /** Colours picked last in the theme studio, newest first. */
     val recentColors: List<Long> = emptyList(),
+    /** The theme studio in Advanced: every colour and effect; Simple shows its main choices. */
+    val themeStudioAdvanced: Boolean = false,
     /** Tabs keep where you were in them; off, each tab opens at its start. */
     val rememberPlace: Boolean = true,
     /** Minutes idle before the standby screen; 0 never. */

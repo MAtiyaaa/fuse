@@ -138,6 +138,12 @@ data class GameRecord(
     val emulator: Lww<String?>? = null,
     /** Its name as a device last showed it, for the Hub (not the person's own name for it: that's [title]). */
     val name: String? = null,
+    /**
+     * Trophies an emulator made on one of the person's devices (RPCS3's), by "source:id": the
+     * history of who earned what where. Never an unlock on another device: each device's emulator
+     * keeps its own, and these only say where one was earned.
+     */
+    val trophies: Map<String, TrophyUnlock> = emptyMap(),
 ) {
     val totalSeconds: Long get() = playSeconds.values.sum()
 
@@ -155,6 +161,7 @@ data class GameRecord(
             title = title.mergeWith(other.title),
             emulator = emulator.mergeWith(other.emulator),
             name = other.name ?: name,
+            trophies = (trophies.keys + other.trophies.keys).associateWith { k -> TrophyUnlock.earlier(trophies[k], other.trophies[k])!! },
         )
     }
 
@@ -288,4 +295,31 @@ fun ProfileMeta.latestRevision(): Hlc {
         collection.members.values.forEach { observe(it.at) }
     }
     return latest
+}
+
+/**
+ * One trophy earned in an emulator on one of the person's devices: which ([source] "ps3", [id] as
+ * the emulator numbers it), when, and on which device. Kept as history; it never unlocks anything.
+ */
+@Serializable
+data class TrophyUnlock(
+    val source: String,
+    val id: String,
+    val title: String = "",
+    val unlockedAt: Long,
+    val device: String,
+    val deviceName: String = "",
+    val emulator: String = "",
+) {
+    val key: String get() = "$source:$id"
+
+    companion object {
+        /** The first time it was earned, wherever: the earlier of two, the same one choosing the same. */
+        fun earlier(a: TrophyUnlock?, b: TrophyUnlock?): TrophyUnlock? = when {
+            a == null -> b
+            b == null -> a
+            a.unlockedAt != b.unlockedAt -> if (a.unlockedAt < b.unlockedAt) a else b
+            else -> if (a.device <= b.device) a else b
+        }
+    }
 }

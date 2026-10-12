@@ -146,7 +146,8 @@ class ReadmeScreenshots {
                     feed.favorites.size == SampleLibrary.games.count { it.favorite } &&
                     // Series (Zelda, Mario Kart and the like) join the collections the user made.
                     feed.collections.size >= SampleLibrary.collections.size &&
-                    feed.playtime.weekSeconds > 0
+                    // Not this week's: early on a Monday every sample session ended last week.
+                    feed.playtime.totalSeconds > 0
             }
         }
         store
@@ -231,7 +232,7 @@ class ReadmeScreenshots {
 
         // Quick menu (Start).
         router.tap(PadButton.START)
-        pumpUntil { hasText("Arrange Home") }
+        pumpUntil { hasText("Quick settings") }
         settle()
         shoot("quick-menu")
 

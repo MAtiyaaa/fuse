@@ -122,6 +122,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
 import io.github.matiyaaa.fuse.ui.shell.app.showProblem
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
 import io.github.matiyaaa.fuse.ui.shell.components.agoText
+import kotlin.math.roundToInt
 import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.home.bytesText
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
@@ -166,7 +167,7 @@ private enum class InfoCard { STARTS, PLAY, EXTRAS, FILE }
  */
 @Composable
 fun GameScreen(app: AppState, id: GameId) {
-    // A RomM game Fuse doesn't have yet opens on the same page, from Fuse RomM's mirror; once it is
+    // A RomM game Fuse doesn't have yet opens on the same page, from RomM's mirror; once it is
     // downloaded (or found here) the page is the library game's, with Play instead of Download.
     val romOnly = id.rommOnly
     // The same for another device's game: once it comes here, the page is the library game's.
@@ -209,7 +210,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
         value = if (!card.isApp && game.platformId.value in CONTENT_SYSTEMS) app.store.content.view(game.id) else null
     }
     val contentStates = content?.states.orEmpty()
-    // Fuse RomM: a game only on RomM (downloaded from this page), or what RomM has of a game here.
+    // RomM: a game only on RomM (downloaded from this page), or what RomM has of a game here.
     val remote = game.id.rommOnly
     val rommFlow = remember(game.id) { if (remote != null) app.store.romm.forRom(remote) else app.store.romm.forGame(game.id) }
     val romm by rommFlow.collectAsState(initial = null)
@@ -359,7 +360,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
             InfoCard.STARTS -> app.emulatorPicker(card)
             InfoCard.FILE -> app.go(Route.FolderBrowser(game.id))
             InfoCard.PLAY -> app.go(Route.PlayTime)
-            else -> Unit
+            InfoCard.EXTRAS -> app.readManual(game.displayTitle, game.content)
         }
     }
     /** The detail card at the selection, when the selection is on a line of them. */
@@ -679,6 +680,17 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                         badges.getOrNull(col.takeIf { row == "achievements" } ?: -1)?.let { b ->
                             Spacer(Modifier.height(Space.s))
                             FText("${b.title}: ${b.description}" + (if (b.points > 0) " (${b.points} points)" else ""), Fuse.type.body, color = c.textMuted, maxLines = 2, modifier = Modifier.widthIn(max = layout.reading))
+                            // When it was earned, and how rare it is where its platform says.
+                            val earnedAt = (b.earnedHardcoreAt ?: b.earnedAt)?.takeIf { it > 0 }
+                            val facts = listOfNotNull(
+                                when {
+                                    earnedAt != null -> "Unlocked ${agoText(earnedAt)}"
+                                    b.earned -> "Unlocked"
+                                    else -> null
+                                },
+                                b.rarity?.let { r -> "${if (r < 10f) ((r * 10).roundToInt() / 10f).toString() else r.roundToInt().toString()}% of players have it" },
+                            )
+                            if (facts.isNotEmpty()) FText(facts.joinToString("  ·  "), Fuse.type.caption, color = c.textFaint, maxLines = 1)
                         }
                     }
                 }
@@ -736,6 +748,15 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                         repeat(perLine - chunk.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
+            }
+            // Where it is, quietly, at the very end: the folder it is in and the name it has there.
+            game.location.path.takeIf { it.isNotBlank() && !it.startsWith("http") }?.let { path ->
+                val (folder, name) = splitPath(path)
+                FText(
+                    listOf(shortFolder(folder), name).filter { it.isNotEmpty() }.joinToString("  /  "),
+                    Fuse.type.caption, color = c.textFaint, maxLines = 1,
+                    modifier = Modifier.padding(top = Space.l),
+                )
             }
             Spacer(Modifier.height(Size.hintHeight + Space.x4))
         }
@@ -1170,7 +1191,8 @@ private fun PlayCard(d: GameDetail, selected: Boolean, onClick: () -> Unit, modi
 @Composable
 private fun ExtrasCard(d: GameDetail, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
     val c = Fuse.colors
-    InfoPanel("Updates and extras", FuseIcons.Package, selected, onClick, modifier) {
+    val manuals = d.game.content.count { it.kind == ContentKind.MANUAL }
+    InfoPanel("Updates and extras", FuseIcons.Package, selected, onClick, modifier, actionable = manuals > 0) {
         for ((kind, items) in d.game.content.groupBy { it.kind }) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                 FuseIcon(kindIcon(kind), size = Size.iconS, tint = c.text)
@@ -1179,7 +1201,33 @@ private fun ExtrasCard(d: GameDetail, selected: Boolean, onClick: () -> Unit, mo
             d.contentNotes.firstOrNull { it.kind == kind }?.let {
                 FText(it.message, Fuse.type.caption, color = c.textMuted, maxLines = 3, modifier = Modifier.padding(start = Size.iconS + Space.s, bottom = Space.xs))
             }
+            if (kind == ContentKind.MANUAL) {
+                FText(if (manuals == 1) "Press to read it here" else "Press to choose one to read", Fuse.type.caption, color = c.textMuted, maxLines = 1, modifier = Modifier.padding(start = Size.iconS + Space.s, bottom = Space.xs))
+            }
         }
+    }
+}
+
+/**
+ * Opens [title]'s manual among its [content]: straight away when it has one, from a list when it has
+ * several (each by its file's name).
+ */
+internal fun AppState.readManual(title: String, content: List<io.github.matiyaaa.fuse.model.ChildContent>) {
+    val manuals = content.filter { it.kind == ContentKind.MANUAL && !it.isDirectory }
+    when (manuals.size) {
+        0 -> Unit
+        1 -> go(Route.Manual(manuals[0].path, "$title manual"))
+        else -> choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+            title = "$title manuals",
+            icon = FuseIcons.BookOpen,
+            options = manuals.map { m ->
+                io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction(
+                    "manual.${m.path}", m.name.substringBeforeLast('.'), FuseIcons.BookOpen,
+                    detail = m.name.substringAfterLast('.').uppercase(),
+                    onSelect = { choice = null; go(Route.Manual(m.path, m.name.substringBeforeLast('.'))) },
+                )
+            },
+        )
     }
 }
 

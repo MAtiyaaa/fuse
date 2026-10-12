@@ -208,6 +208,7 @@ internal fun ThemeStage(
     val quality = Fuse.quality
     val glyphs = Fuse.glyphs
     val contrast = Fuse.look.highContrastFocus
+    val vision = Fuse.look.colorVision
     val shape = RoundedCornerShape(Fuse.geometry.panel)
     var shown by remember { mutableStateOf(spec) }
     LaunchedEffect(spec) {
@@ -258,7 +259,7 @@ internal fun ThemeStage(
             label = "stage",
         ) { s ->
             VirtualScreen(Modifier.fillMaxSize()) {
-                FuseTheme(spec = s, motion = scene.motion, quality = quality, glyphs = glyphs, highContrastFocus = contrast) {
+                FuseTheme(spec = s, motion = scene.motion, quality = quality, glyphs = glyphs, highContrastFocus = contrast, colorVision = vision) {
                     CompositionLocalProvider(
                         LocalTileMetrics provides TileMetrics.forHeight(VirtualHeight, VirtualWidth),
                         LocalGameArt provides scene.gameArt,
@@ -386,6 +387,7 @@ private fun MiniHome(spec: ThemeSpec, scene: StageScene, spotlight: Spotlight? =
         HintBar(MINI_HINTS, Modifier.align(Alignment.BottomEnd).padding(horizontal = Space.gutter, vertical = Space.s).spot(targets, SpotPart.HINTS))
         // In the studio a panel stands on Home too, so panels, buttons and signals can be seen at work.
         if (spotlight?.sheet == true) MiniSheet(targets, Modifier.align(Alignment.TopEnd).padding(top = Size.hudHeight + Space.x5 + Space.xl, end = Space.gutter))
+        if (spotlight?.quick == true) MiniQuick(targets, Modifier.align(Alignment.TopEnd).padding(top = Size.hudHeight + Space.x5 + Space.xl, end = Space.gutter))
         if (spec.crt.enabled && Fuse.quality.crtShader) CrtOverlay(spec.crt)
         SpotOverlay(targets, spotlight)
     }
@@ -678,12 +680,38 @@ internal fun SoundProfile.label(): String = when (this) {
     SoundProfile.CHIME -> "Chime"
 }
 
+internal fun io.github.matiyaaa.fuse.model.QuickMenuLook.label(): String = when (this) {
+    io.github.matiyaaa.fuse.model.QuickMenuLook.SOFT -> "Soft"
+    io.github.matiyaaa.fuse.model.QuickMenuLook.SOLID -> "Solid"
+    io.github.matiyaaa.fuse.model.QuickMenuLook.OUTLINED -> "Outlined"
+    io.github.matiyaaa.fuse.model.QuickMenuLook.GLASS -> "Glass"
+}
+
+internal fun io.github.matiyaaa.fuse.model.QuickMenuLook.note(): String = when (this) {
+    io.github.matiyaaa.fuse.model.QuickMenuLook.SOFT -> "Tiles faintly tinted over the panel"
+    io.github.matiyaaa.fuse.model.QuickMenuLook.SOLID -> "Tiles in the raised panel colour"
+    io.github.matiyaaa.fuse.model.QuickMenuLook.OUTLINED -> "Only the tiles' edges are drawn"
+    io.github.matiyaaa.fuse.model.QuickMenuLook.GLASS -> "Tiles catch a light across their top, like glass"
+}
+
+internal fun io.github.matiyaaa.fuse.model.WidgetLook.label(): String = when (this) {
+    io.github.matiyaaa.fuse.model.WidgetLook.LIT -> "Lit"
+    io.github.matiyaaa.fuse.model.WidgetLook.TINTED -> "Tinted"
+    io.github.matiyaaa.fuse.model.WidgetLook.GLASS -> "Glass"
+}
+
+internal fun io.github.matiyaaa.fuse.model.WidgetLook.note(): String = when (this) {
+    io.github.matiyaaa.fuse.model.WidgetLook.LIT -> "Panels lit from a corner in each widget's own colour"
+    io.github.matiyaaa.fuse.model.WidgetLook.TINTED -> "Each widget washed in its own colour, so Home reads as colour"
+    io.github.matiyaaa.fuse.model.WidgetLook.GLASS -> "Frosted over the room, with a light across the top"
+}
+
 internal fun SoundProfile.icon(): ImageVector = if (this == SoundProfile.OFF) FuseIcons.VolumeOff else FuseIcons.Volume
 
 // ---------------------------------------------------------------------------------- spotlight
 
 /** A part of the miniature the studio can point at. */
-internal enum class SpotPart { TOP_LINE, TITLE, LABELS, FOCUSED_TILE, TILES, HINTS, SHEET, SHEET_RAISED, SHEET_MUTED, SHEET_BUTTON, SHEET_SIGNALS }
+internal enum class SpotPart { TOP_LINE, TITLE, LABELS, FOCUSED_TILE, TILES, HINTS, SHEET, SHEET_RAISED, SHEET_MUTED, SHEET_BUTTON, SHEET_SIGNALS, QUICK }
 
 /**
  * What the studio's selected setting changes, as the stage shows it: the [parts] it lights (none
@@ -691,7 +719,7 @@ internal enum class SpotPart { TOP_LINE, TITLE, LABELS, FOCUSED_TILE, TILES, HIN
  * needs its panel ([sheet]) to show it.
  */
 @Immutable
-internal data class Spotlight(val parts: Set<SpotPart>, val title: String, val note: String, val sheet: Boolean = false)
+internal data class Spotlight(val parts: Set<SpotPart>, val title: String, val note: String, val sheet: Boolean = false, val quick: Boolean = false)
 
 /** Where each part of the miniature is, measured as it is laid out. Not state: the overlay reads it as it draws. */
 private class SpotTargets {
@@ -741,6 +769,35 @@ private fun MiniSheet(targets: SpotTargets, modifier: Modifier) {
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * The quick menu on the miniature: a few of its switches (one on, one focused) and Now playing
+ * across the panel, so a quick menu look is seen on every kind of item it draws.
+ */
+@Composable
+private fun MiniQuick(targets: SpotTargets, modifier: Modifier) {
+    val c = Fuse.colors
+    val icons = io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+    io.github.matiyaaa.fuse.ui.designsystem.components.Panel(modifier.width(380.dp).spot(targets, SpotPart.QUICK)) {
+        Column(Modifier.padding(Space.l), verticalArrangement = Arrangement.spacedBy(Space.m)) {
+            FText("Quick settings", Fuse.type.titleSmall, maxLines = 1)
+            // Two across, so every word fits at the miniature's size: one focused, one switched on.
+            val tiles = listOf(
+                Triple("Wi-Fi", icons.Wifi, "Connected"),
+                Triple("Sound", icons.Volume, null),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+                tiles.forEachIndexed { i, (label, icon, detail) ->
+                    io.github.matiyaaa.fuse.ui.shell.components.ControlTile(
+                        label, icon, selected = i == 0, modifier = Modifier.weight(1f).height(104.dp),
+                        active = i == 1, detail = detail, toggle = i > 0, onClick = {},
+                    )
+                }
+            }
+            io.github.matiyaaa.fuse.ui.shell.quick.MiniNowPlaying(Modifier.fillMaxWidth().height(64.dp))
         }
     }
 }

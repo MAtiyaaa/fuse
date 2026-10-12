@@ -107,6 +107,11 @@ data class InputProfile(
     val soundsEnabled: Boolean = true,
     /** User remaps: button -> action. Empty means the defaults for the layout. */
     val remap: Map<PadButton, NavAction> = emptyMap(),
+    /**
+     * The controller that moves around Fuse, by the name it gives itself; empty: any of them. While
+     * it is away (unplugged, asleep), every controller does, so nobody is ever left without one.
+     */
+    val controller: String = "",
 ) {
     /** Confirm is the right face button: Nintendo labels without a swap, or other labels with one. */
     val confirmOnRight: Boolean get() = (glyphs == GlyphStyle.NINTENDO) != swapConfirmBack

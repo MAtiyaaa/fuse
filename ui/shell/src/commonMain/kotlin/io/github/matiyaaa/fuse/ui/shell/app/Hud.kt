@@ -2,7 +2,8 @@ package io.github.matiyaaa.fuse.ui.shell.app
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,10 +32,13 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
@@ -51,6 +55,7 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -69,6 +74,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import io.github.matiyaaa.fuse.model.CornerFamily
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.SystemStatus
@@ -80,6 +86,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyphDefaults
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
+import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
@@ -161,6 +168,14 @@ fun Hud(
     profile: HudProfile? = null,
     /** Transfers moving (or failed), for the Downloads button; null hides it. */
     downloads: HudDownloads? = null,
+    /** The tab picked up to move along the line, in place (as Addons' tabs move). */
+    lifted: Destination? = null,
+    /** A tab held (a long touch or click) is picked up; dragging it moves it along. */
+    onLift: ((Destination) -> Unit)? = null,
+    /** Moves the picked-up tab by one place either way; true when it moved. */
+    onMoveLifted: ((Int) -> Boolean)? = null,
+    /** The picked-up tab let go. */
+    onDrop: (() -> Unit)? = null,
 ) {
     val time = rememberClockText(clock24h)
     val anchors = remember { HudAnchors() }
@@ -186,7 +201,7 @@ fun Hud(
             Modifier.fillMaxSize().padding(horizontal = gutter),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FuseMark(Modifier.size(Size.iconL))
+            LitFuseMark(Modifier.size(Size.iconL))
             Spacer(Modifier.width(Space.s))
             // The tabs take what is left after the buttons and status, which never shrink. The LB/RB
             // glyphs keep their place while hidden, so nothing moves when the stick reaches the tabs;
@@ -205,6 +220,24 @@ fun Hud(
                 // shown whole, and tabs slipping past either edge shrink and fade into it.
                 val scroll = rememberScrollState()
                 val requesters = remember(destinations) { destinations.associateWith { BringIntoViewRequester() } }
+                // Moving tabs: where each sits (x and width), the one a finger or the mouse drags
+                // and how far, read while drawing so a drag never recomposes the line.
+                val placed = remember { mutableStateMapOf<Destination, Pair<Float, Float>>() }
+                var dragged by remember { mutableStateOf<Destination?>(null) }
+                val dragOffset = remember { mutableFloatStateOf(0f) }
+                val moveScope = rememberCoroutineScope()
+                val motionNow = Fuse.motion
+                val latestDestinations by rememberUpdatedState(destinations)
+                val latestLift by rememberUpdatedState(onLift)
+                val latestMove by rememberUpdatedState(onMoveLifted)
+                val latestDrop by rememberUpdatedState(onDrop)
+                // The picked-up tab is always in view as it moves.
+                val liftRoom = with(LocalDensity.current) { 56.dp.toPx() }
+                LaunchedEffect(lifted, placed[lifted]) {
+                    val d = lifted ?: return@LaunchedEffect
+                    val w = placed[d]?.second ?: return@LaunchedEffect
+                    requesters[d]?.bringIntoView(Rect(-liftRoom, 0f, w + liftRoom, 1f))
+                }
                 var viewport by remember { mutableIntStateOf(0) }
                 val edge = with(LocalDensity.current) { 56.dp.toPx() }
                 val activeWidth = remember { mutableIntStateOf(0) }
@@ -245,30 +278,91 @@ fun Hud(
                     for (d in destinations) key(d) {
                         var x by remember { mutableFloatStateOf(0f) }
                         var w by remember { mutableIntStateOf(0) }
+                        val held = d == lifted || dragged == d
+                        val lift by fuselineFloat(if (held) 1f else 0f, Fuse.motion.focusSpring(), label = "tab lift")
+                        // A tab that changes place slides there from where it was, so a move reads as
+                        // the others making room, never as a jump.
+                        val slide = remember { FuselineValue(0f) }
+                        val lastX = remember { floatArrayOf(Float.NaN) }
                         Tab(
-                            sections.label(d), sections.icon(d), selected = d == active, focused = tabsFocused && focusedButton == null && d == active, showLabel = labels || (d == active && nameFits),
+                            sections.label(d), sections.icon(d), selected = d == active, focused = (tabsFocused && focusedButton == null && lifted == null && d == active) || held, showLabel = labels || (d == active && nameFits) || held,
                             modifier = Modifier
                                 .bringIntoViewRequester(requesters.getValue(d))
                                 .onPlaced {
-                                    x = it.positionInParent().x
+                                    val px = it.positionInParent().x
+                                    x = px
                                     w = it.size.width
+                                    placed[d] = px to it.size.width.toFloat()
                                     if (d == active) {
                                         activeWidth.intValue = it.size.width
-                                        activeX[0] = it.positionInParent().x
+                                        activeX[0] = px
+                                    }
+                                    val before = lastX[0]
+                                    lastX[0] = px
+                                    if (!before.isNaN() && before != px) {
+                                        if (dragged == d) {
+                                            // Its place moved under the finger: the finger stays where it is.
+                                            dragOffset.floatValue -= px - before
+                                        } else {
+                                            moveScope.launch {
+                                                slide.snapTo(slide.value + (before - px))
+                                                slide.animateTo(0f, motionNow.focusSpring())
+                                            }
+                                        }
                                     }
                                 }
                                 .anchor(anchors, d)
+                                .zIndex(if (held) 1f else 0f)
                                 .graphicsLayer {
-                                    // The active tab always shows whole and at full strength.
-                                    if (viewport <= 0 || scroll.maxValue == 0 || d == active) return@graphicsLayer
-                                    val center = x - scroll.value + w / 2f
-                                    val nearest = minOf(center, viewport - center)
-                                    val t = (nearest / edge).coerceIn(0f, 1f)
-                                    val s = 0.84f + 0.16f * t
+                                    translationX = slide.value + if (dragged == d) dragOffset.floatValue else 0f
+                                    // Picked up: it rises a little, with a shadow, over the others.
+                                    val lifted01 = lift
+                                    var s = 1f + LIFT_SCALE * lifted01
+                                    var a = 1f
+                                    // The active tab (and the one held) always shows whole and at full strength.
+                                    if (viewport > 0 && scroll.maxValue != 0 && d != active && !held) {
+                                        val center = x - scroll.value + w / 2f
+                                        val nearest = minOf(center, viewport - center)
+                                        val t = (nearest / edge).coerceIn(0f, 1f)
+                                        s *= 0.84f + 0.16f * t
+                                        a = 0.45f + 0.55f * t
+                                    }
                                     scaleX = s
                                     scaleY = s
-                                    alpha = 0.45f + 0.55f * t
-                                },
+                                    alpha = a
+                                    shadowElevation = LIFT_SHADOW.toPx() * lifted01
+                                    shape = PillShape
+                                    clip = false
+                                }
+                                .then(
+                                    if (onLift == null || d == Destination.HOME) Modifier else Modifier.pointerInput(d) {
+                                        // Held, then dragged: a finger or the mouse moves the tab along, the
+                                        // others making room as its middle passes theirs.
+                                        detectDragGesturesAfterLongPress(
+                                            onDragStart = {
+                                                dragOffset.floatValue = 0f
+                                                dragged = d
+                                                latestLift?.invoke(d)
+                                            },
+                                            onDrag = { change, amount ->
+                                                change.consume()
+                                                dragOffset.floatValue += amount.x
+                                                val order = latestDestinations
+                                                val at = order.indexOf(d)
+                                                val me = placed[d] ?: return@detectDragGesturesAfterLongPress
+                                                val centre = me.first + me.second / 2 + dragOffset.floatValue
+                                                val next = order.getOrNull(at + 1)?.let { placed[it] }
+                                                val prev = order.getOrNull(at - 1)?.takeIf { it != Destination.HOME }?.let { placed[it] }
+                                                when {
+                                                    next != null && centre > next.first + next.second / 2 -> latestMove?.invoke(1)
+                                                    prev != null && centre < prev.first + prev.second / 2 -> latestMove?.invoke(-1)
+                                                }
+                                            },
+                                            onDragEnd = { settleTabDrag(moveScope, dragOffset, motionNow) { dragged = null; latestDrop?.invoke() } },
+                                            onDragCancel = { settleTabDrag(moveScope, dragOffset, motionNow) { dragged = null; latestDrop?.invoke() } },
+                                        )
+                                    },
+                                ),
                             onClick = { onSelect(d) },
                         )
                     }
@@ -346,6 +440,9 @@ fun Hud(
         if (key != null) ActiveMarker(anchors, key)
     }
 }
+
+/** The active bar's length under a round button, as a share of [Size.sparkWidth]: inside its circle. */
+private const val BUTTON_SPARK = 0.58f
 
 /** How long tabs scrolled by touch stay put before gliding back to the place you are on. */
 private const val TABS_SETTLE_MS = 10_000L
@@ -435,7 +532,11 @@ private fun BoxScope.ActiveMarker(anchors: HudAnchors, key: Any) {
             val atLead = start0 + (target - start0) * l
             val atTrail = start0 + (target - start0) * t
             drawn[0] = (atLead + atTrail) / 2
-            val half = Size.sparkWidth.toPx() / 2
+            // Under a round button (Search, Settings) the bar is shorter, so it sits inside the
+            // button's circle instead of poking past its edge; it widens again on its way to a tab.
+            fun halfOf(k: Any?) = (if (k is HudButton) Size.sparkWidth * BUTTON_SPARK else Size.sparkWidth).toPx() / 2
+            val halfFrom = halfOf(from[0] ?: shown[0])
+            val half = halfFrom + (halfOf(key) - halfFrom) * l
             var start: Float
             var end: Float
             if (target >= start0) {
@@ -704,6 +805,22 @@ private fun HudIconButton(icon: ImageVector, label: String, focused: Boolean, ac
     }
 }
 
+/** A dragged tab let go: it glides from under the finger into its place, then the move ends. */
+private fun settleTabDrag(scope: kotlinx.coroutines.CoroutineScope, offset: androidx.compose.runtime.MutableFloatState, motion: io.github.matiyaaa.fuse.ui.fuseline.FuselineMotion, done: () -> Unit) {
+    scope.launch {
+        try {
+            io.github.matiyaaa.fuse.ui.fuseline.animate(offset.floatValue, 0f, animationSpec = motion.focusSpring()) { v, _ -> offset.floatValue = v }
+        } finally {
+            offset.floatValue = 0f
+            done()
+        }
+    }
+}
+
+/** How much a picked-up tab grows, and its shadow. */
+private const val LIFT_SCALE = 0.08f
+private val LIFT_SHADOW = 10.dp
+
 @Composable
 private fun Tab(label: String, icon: ImageVector, selected: Boolean, focused: Boolean, showLabel: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = Fuse.colors
@@ -778,6 +895,76 @@ fun FuseMark(modifier: Modifier = Modifier, color: Color = Fuse.colors.text, spa
     Canvas(modifier) {
         drawBrandMark(Offset.Zero, size.width, color, spark)
     }
+}
+
+/**
+ * Fuse's mark in the top line, with a small secret: tapped (or clicked), the fuse is lit. The mark
+ * hops and turns once, its spark flares, and a ring of embers bursts from the spark and fades, all
+ * in its own spot and in under a second. Nothing else on the line moves, and it never takes focus.
+ * Reduced motion keeps only the flare.
+ */
+@Composable
+private fun LitFuseMark(modifier: Modifier = Modifier) {
+    val c = Fuse.colors
+    val motion = Fuse.motion
+    val lit = remember { FuselineValue(1f) }
+    var lights by remember { mutableIntStateOf(0) }
+    LaunchedEffect(lights) {
+        if (lights == 0) return@LaunchedEffect
+        lit.snapTo(0f)
+        lit.animateTo(1f, io.github.matiyaaa.fuse.ui.fuseline.Tween(if (motion.reduced) 360 else 900, curve = Curves.Linear))
+    }
+    val ink = c.text
+    val accent = c.accent
+    val reduced = motion.reduced
+    Canvas(
+        modifier
+            .pointerInput(Unit) { detectTapGestures { lights++ } }
+            .semantics { contentDescription = "Fuse" },
+    ) {
+        val p = lit.value
+        val active = p < 1f
+        val w = size.width
+        val spark = Offset(w * BrandArt.SPARK.x / BrandArt.MARK, w * BrandArt.SPARK.y / BrandArt.MARK)
+        if (!active) {
+            drawBrandMark(Offset.Zero, w, ink, accent)
+            return@Canvas
+        }
+        // A hop that lands softly, and one turn that settles with a little overshoot.
+        val hop = if (reduced) 0f else -kotlin.math.sin(p * kotlin.math.PI.toFloat()).let { it * it } * w * 0.28f
+        val turn = if (reduced) 0f else 360f * easeOutBack(p.coerceIn(0f, 1f))
+        val squash = if (reduced) 1f else 1f + 0.12f * kotlin.math.sin(p * 2f * kotlin.math.PI.toFloat())
+        withTransform({
+            translate(0f, hop)
+            rotate(turn, Offset(w / 2, w / 2))
+            scale(squash, 2f - squash, Offset(w / 2, w))
+        }) { drawBrandMark(Offset.Zero, w, ink, accent) }
+        // The spark flares and fades back.
+        val flare = kotlin.math.sin(p * kotlin.math.PI.toFloat())
+        drawCircle(
+            Brush.radialGradient(listOf(accent.copy(alpha = 0.55f * flare), accent.copy(alpha = 0f)), center = spark + Offset(0f, hop), radius = w * (0.3f + 0.5f * flare)),
+            radius = w * (0.3f + 0.5f * flare), center = spark + Offset(0f, hop),
+        )
+        if (!reduced) {
+            // Embers: a ring of small sparks thrown out from the spark, slowing and fading.
+            val out = 1f - (1f - p) * (1f - p)
+            for (i in 0 until EMBERS) {
+                val a = (i * 2f * kotlin.math.PI.toFloat() / EMBERS) + 0.35f
+                val d = w * (0.15f + 0.95f * out) * (if (i % 2 == 0) 1f else 0.72f)
+                val at = spark + Offset(kotlin.math.cos(a) * d, kotlin.math.sin(a) * d + hop * (1f - p))
+                drawCircle(if (i % 3 == 0) ink else accent, radius = w * 0.045f * (1f - p * 0.7f), center = at, alpha = (1f - p).coerceIn(0f, 1f))
+            }
+        }
+    }
+}
+
+private const val EMBERS = 9
+
+private fun easeOutBack(t: Float): Float {
+    val c1 = 1.4f
+    val c3 = c1 + 1f
+    val x = t - 1f
+    return 1f + c3 * x * x * x + c1 * x * x
 }
 
 /** Current local time, updated on the minute (not every second) to keep the idle home screen idle. */

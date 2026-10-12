@@ -146,6 +146,8 @@ class FuselineValue<T>(
 
         override fun freeze() {
             if (ride === this) current()
+            this@FuselineValue.steppedBumps = 0
+            this@FuselineValue.leavePulse(always = true)
         }
 
         override val unread: Boolean get() = unreadSinceShown
@@ -159,6 +161,24 @@ class FuselineValue<T>(
     // the floats and kept until the next bump, so reading it twice in a frame builds it once.
     private val version = mutableIntStateOf(0)
     private var readAt = -1
+
+    /**
+     * Fuseline 4.1: the frame driver whose [FrameDriver.pulse] readers watch instead of [version],
+     * while the value moves visibly frame after frame ([steppedBumps] in a row); null otherwise.
+     */
+    private var pulsing: FrameDriver? = null
+    private var steppedBumps = 0
+    private var calmSteps = 0
+
+    /** How many times readers have been moved over to the pulse (for the inspector and tests). */
+    internal var pulsedRuns = 0
+        private set
+
+    /** A subscribing read: the state readers are told through right now. */
+    private fun watch() {
+        val p = pulsing
+        if (p != null) p.pulse.intValue else version.intValue
+    }
     private var read: T = initialValue
 
     // The target is kept as floats too ([goal]), and put together only when read.
@@ -209,6 +229,12 @@ class FuselineValue<T>(
 
     /** A read that subscribes: the value is being shown, so if it was resting unread it comes back. */
     private fun seen() {
+        if (pulsing != null) {
+            // Every reader of a pulsing value reads it again on each pulse (another value's too): what
+            // they show is what was just read, and the next change is measured from it.
+            shown0 = now[0]
+            shownRest?.let { now.copyInto(it) }
+        }
         if (!unreadSinceShown) return
         unreadSinceShown = false
         if (shownStale) {
@@ -236,7 +262,8 @@ class FuselineValue<T>(
     /** Where the value is now. */
     val value: T
         get() {
-            val v = version.intValue
+            watch()
+            val v = published
             current()
             seen()
             if (v != readAt) {
@@ -248,7 +275,7 @@ class FuselineValue<T>(
 
     /** One number of the value (x of a position, the width of a size), read without building the value. */
     fun component(index: Int): Float {
-        version.intValue
+        watch()
         current()
         seen()
         return now[index]
@@ -256,7 +283,7 @@ class FuselineValue<T>(
 
     /** One number of the velocity, read without building it. */
     fun velocityComponent(index: Int): Float {
-        version.intValue
+        watch()
         current()
         seen()
         dragSpeed()
@@ -293,7 +320,7 @@ class FuselineValue<T>(
     /** A one-number value as a float, without boxing it. */
     val floatValue: Float
         get() {
-            version.intValue
+            watch()
             current()
             seen()
             return now[0]
@@ -389,7 +416,7 @@ class FuselineValue<T>(
     /** How far the motion under way has played, 0 to 1 (1 at rest; 0 for a loop that never ends). */
     val progress: Float
         get() {
-            version.intValue
+            watch()
             seen()
             return peekProgress()
         }
@@ -423,10 +450,65 @@ class FuselineValue<T>(
      * stepped at all ([frame]), so it makes no bumps to write.
      */
     private fun bump() {
+        steppedBumps = 0
+        val p = pulsing
+        if (p != null) {
+            // Readers watch the pulse: told through it, they read again and watch the value's own state.
+            pulsing = null
+            p.pulse(always = true)
+        }
         // Written from a counter of its own: bumping the state itself would read it first, a
         // snapshot lookup for nothing. Any new number does, so the value and its target share it.
         version.intValue = ++published
         unreadSinceShown = true
+    }
+
+    /**
+     * Tells readers a frame moved the value visibly. The first frame of a run writes the value's own
+     * state, as [bump]; from the second in a row, readers are moved over to the frame driver's
+     * [FrameDriver.pulse] (one write for every value it moves), and stay there while it keeps moving.
+     */
+    private fun bumpStepped(r: Ride) {
+        calmSteps = 0
+        val p = pulsing
+        if (p != null) {
+            published++
+            unreadSinceShown = true
+            p.pulse()
+            return
+        }
+        val driver = r.move?.driver
+        val run = steppedBumps + 1
+        bump()
+        if (driver != null && run >= 2) {
+            pulsing = driver
+            pulsedRuns++
+        }
+        steppedBumps = run
+    }
+
+    /** A frame stepped the value without moving it visibly: readers go back to its own state. */
+    private fun stillStepped() {
+        steppedBumps = 0
+        // A slow mover shows a change every few frames: it keeps the pulse through a short calm, so
+        // its readers aren't moved back and forth; a longer one sends them back to its own state.
+        if (pulsing != null && ++calmSteps < CALM_FRAMES) return
+        calmSteps = 0
+        leavePulse(always = false)
+    }
+
+    /**
+     * Readers stop watching the pulse: told through it once more, they read again and watch the
+     * value's own state. Within a frame one pulse tells everyone; outside one ([always]) it is written.
+     */
+    private fun leavePulse(always: Boolean) {
+        val p = pulsing ?: return
+        pulsing = null
+        p.pulse(always)
+        // They read it again here, so the next change they are told of is measured from here.
+        shown0 = now[0]
+        shownRest?.let { now.copyInto(it) }
+        published++
     }
 
     private fun aimChanged() {
@@ -610,6 +692,10 @@ class FuselineValue<T>(
         }
         step(r, play)
         nowAt = frameNanos
+        if (arriving) {
+            steppedBumps = 0
+            leavePulse(always = false)
+        }
         r.block?.invoke(this)
         if (arriving || r.eager) return FrameDriver.PLAY_NEXT
         return horizon(play)
@@ -630,7 +716,9 @@ class FuselineValue<T>(
             val d = v - shown0
             if (d > publishStep || d < -publishStep) {
                 shown0 = v
-                bump()
+                bumpStepped(r)
+            } else {
+                stillStepped()
             }
             return
         }
@@ -653,7 +741,9 @@ class FuselineValue<T>(
         if (seen) {
             for (i in 0 until dims) shown[i] = now[i]
             shown0 = now[0]
-            bump()
+            bumpStepped(r)
+        } else {
+            stillStepped()
         }
     }
 
@@ -995,6 +1085,9 @@ class FuselineValue<T>(
 
 /** How far (a share of a value's threshold) a frame must move it to be shown. */
 private const val PUBLISH_SHARE = 0.125f
+
+/** Calm frames in a row after which a pulsing value's readers go back to watching it alone. */
+private const val CALM_FRAMES = 4
 
 /** A horizon nearer than this many frames isn't worth proving: the value is stepped instead. */
 private const val HORIZON_FRAMES = 8f

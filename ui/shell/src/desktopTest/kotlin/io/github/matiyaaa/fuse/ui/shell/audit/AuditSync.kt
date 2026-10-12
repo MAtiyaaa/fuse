@@ -36,6 +36,8 @@ internal class AuditSync(private val settings: SettingsStore) : SyncService {
     override val activeProfile = MutableStateFlow<ProfileInfo?>(null)
     override val activity = MutableStateFlow<List<SyncActivity>>(emptyList())
     override val host = MutableStateFlow<HostView?>(null)
+    override val hosts = MutableStateFlow<io.github.matiyaaa.fuse.sync.HostsView?>(null)
+    override val householdBackups = MutableStateFlow<io.github.matiyaaa.fuse.sync.HouseholdBackupsState?>(null)
     override val devices = MutableStateFlow<List<DeviceInfo>>(emptyList())
     override val canHost = true
     override val defaultName = "Gaming PC"
@@ -132,13 +134,34 @@ internal class AuditSync(private val settings: SettingsStore) : SyncService {
                 service = ServiceState(installed = true, running = true, description = "Starts with this computer, before anyone signs in"),
             )
         }
+        // The household's hosts: this PC with a backup in the study, and the living room's offering to be one.
+        val pcNode = io.github.matiyaaa.fuse.sync.HostNode("n-pc", "Gaming PC", "pc", local = "192.168.1.20:47311")
+        val desk = io.github.matiyaaa.fuse.sync.HostNode("n-desk", "Study PC", "deck", local = "192.168.1.24:47311")
+        hosts.value = if (asHost) {
+            io.github.matiyaaa.fuse.sync.HostsView(
+                0, listOf(pcNode, desk), "n-pc", io.github.matiyaaa.fuse.sync.Leadership.PRIMARY, "n-pc",
+                offers = listOf(io.github.matiyaaa.fuse.sync.HostNode("n-living", "Living Room PC", "living", local = "192.168.1.31:47311")),
+            )
+        } else {
+            io.github.matiyaaa.fuse.sync.HostsView(
+                0, listOf(pcNode, desk), "n-pc", io.github.matiyaaa.fuse.sync.Leadership.BACKUP, "n-desk",
+                backupOn = true, copiedAt = t - 3 * MINUTE,
+            )
+        }
+        fun snap(daysAgo: Int, vararg kinds: String) = io.github.matiyaaa.fuse.sync.HouseholdSnapshot(
+            "snap-$daysAgo", t - daysAgo * DAY, kinds.toList(), 9_000L - daysAgo, 0, 3, 3, 212 - daysAgo, emptyList(), 1_240_000_000L - daysAgo * 3_000_000L,
+        )
+        householdBackups.value = if (!asHost) null else io.github.matiyaaa.fuse.sync.HouseholdBackupsState(
+            "/run/media/mo/Backup Drive/Fuse One",
+            listOf(snap(0, "daily"), snap(1, "daily"), snap(2, "manual"), snap(6, "daily", "weekly"), snap(13, "daily", "weekly"), snap(41, "daily", "weekly", "monthly")),
+        )
         status.value = SyncStatus.Online("Gaming PC", Route.LOCAL)
         runBlocking {
             settings.update {
                 it.copy(sync = it.sync.copy(
                     enabled = true, role = if (asHost) "HOST" else "CLIENT", deviceId = if (asHost) "pc" else "deck",
                     deviceName = if (asHost) "Gaming PC" else "Steam Deck", hostName = "Gaming PC", hostId = "h1",
-                    localAddress = "192.168.1.20:47311", activeProfile = playing.orEmpty(),
+                    localAddress = "192.168.1.20:47311", activeProfile = playing.orEmpty(), backupHost = !asHost,
                 ))
             }
         }
@@ -267,6 +290,16 @@ internal class AuditSync(private val settings: SettingsStore) : SyncService {
             )),
             io.github.matiyaaa.fuse.sync.GameReport("snes:t.chrono-trigger", "Chrono Trigger", "snes", 4 * HOUR_S + 30 * 60, mapOf("deck" to 4 * HOUR_S + 30 * 60), 6, t - 9 * DAY, false, emptyList()),
         )
+        // Without a household: what this device keeps for the person, its own versions only.
+        if (status.value is SyncStatus.Off || status.value is SyncStatus.NotSetUp) {
+            val here = games.take(3).map { g ->
+                g.copy(devicePlay = mapOf("pc" to g.playSeconds), slots = g.slots.map { sl ->
+                    val vs = sl.versions.take(2).map { it.copy(deviceId = "pc", device = "Gaming PC", files = it.files.map { f -> f.copy(stored = "") }) }
+                    sl.copy(versions = vs, bytes = vs.sumOf { it.bytes })
+                })
+            }
+            return io.github.matiyaaa.fuse.sync.ProfileReport(p, here.sumOf { it.playSeconds }, mapOf("pc" to here.sumOf { it.playSeconds }), emptyList(), here, here.sumOf { g -> g.slots.sumOf { it.bytes } }, "/home/mo/.local/share/fuse/sync/device/objects", local = true)
+        }
         return io.github.matiyaaa.fuse.sync.ProfileReport(
             p, games.sumOf { it.playSeconds },
             mapOf("deck" to 40 * HOUR_S + 30 * 60, "phone" to 18 * HOUR_S, "pc" to 22 * HOUR_S + 12 * 60),

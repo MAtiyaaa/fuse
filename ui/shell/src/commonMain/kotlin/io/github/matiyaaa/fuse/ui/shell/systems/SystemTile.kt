@@ -97,10 +97,11 @@ internal fun SystemTileFace(card: PlatformCard, look: SystemTileLook?) {
             }
         }
         if (icon != null) {
-            // The set's pictures sit in a square with room around them: drawn a little past the tile's short side.
+            // The set's pictures sit in a square with room around them: drawn just inside the tile, so the
+            // tile's rounded corners never cut into a picture, focused and enlarged or not.
             Artwork(
                 SystemIcons.url(icon),
-                Modifier.align(Alignment.Center).size(short * 1.04f),
+                Modifier.align(Alignment.Center).size(short * 0.96f),
                 contentScale = ContentScale.Fit,
                 fadeIn = true,
                 fallback = logo,

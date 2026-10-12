@@ -13,7 +13,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.RommDownloadWhat
 import kotlinx.coroutines.launch
 
 /**
- * Upload to RomM, through Fuse RomM: Fuse works out what belongs to the game (its discs, update, DLC),
+ * Upload to RomM, through RomM: Fuse works out what belongs to the game (its discs, update, DLC),
  * shows every file and the total before anything goes (unless the person turned that off), then the
  * upload runs in Downloads. A read-only sign-in is told what it needs instead.
  */

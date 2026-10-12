@@ -24,6 +24,8 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertContentEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertSame
@@ -594,6 +596,34 @@ class StoreIntegrationTest {
             store.sources.rescan(ScanScope.FULL)
             withTimeout(20_000) { store.sources.scan.first { it.phase == ScanPhase.DONE } }
             assertEquals(listOf(id), store.library.games(GameQuery(platform = PlatformId("gb"))).first().map { it.id })
+        } finally {
+            elsewhere.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun aPatchMakesACopyBesideTheGameAndNeverChangesIt() = runBlocking {
+        val services = FakeServices(FuseData(DesktopDatabase.open(freshDb())), cache)
+        val store = createFuseStore(services, scope)
+        val elsewhere = Files.createTempDirectory("fuse-patch").toFile()
+        try {
+            val rom = ByteArray(64) { it.toByte() }
+            val game = File(elsewhere, "Metroid (USA).gb").apply { writeBytes(rom) }
+            val id = assertNotNull(store.library.addGameFile(game.absolutePath, PlatformId("gb")))
+            // An IPS patch writing "HI" at 16.
+            val patch = File(elsewhere, "Hard Mode.ips").apply { writeBytes("PATCH".encodeToByteArray() + byteArrayOf(0, 0, 16, 0, 2, 'H'.code.toByte(), 'I'.code.toByte()) + "EOF".encodeToByteArray()) }
+            val made = assertIs<io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.Made>(store.library.applyPatch(id, patch.absolutePath))
+            assertEquals("Metroid (USA) - Hard Mode.gb", made.name)
+            val copy = File(elsewhere, made.name)
+            assertEquals("HI", copy.readBytes().copyOfRange(16, 18).decodeToString())
+            assertContentEquals(rom, game.readBytes(), "the game itself is never changed")
+            assertNotNull(made.game)
+            // Again: the copy is there, and is never written over.
+            assertIs<io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.Failed>(store.library.applyPatch(id, patch.absolutePath))
+            // Not a patch: refused, nothing written.
+            val notPatch = File(elsewhere, "notes.ips").apply { writeText("hello") }
+            assertIs<io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.Failed>(store.library.applyPatch(id, notPatch.absolutePath))
+            assertFalse(File(elsewhere, "Metroid (USA) - notes.gb").exists())
         } finally {
             elsewhere.deleteRecursively()
         }

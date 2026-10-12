@@ -28,6 +28,21 @@ object Drawing {
     /** Android retains offscreen hardware surfaces; desktop retains drawing commands instead. */
     @Volatile
     var cachedLayers: Boolean = false
+
+    /**
+     * Whether a layer can blur what it draws (Android 12 and later, and the desktop). Without it,
+     * glass over the interface stays a tinted pane rather than showing the screen behind unblurred.
+     */
+    @Volatile
+    var backdropBlur: Boolean = true
+
+    /**
+     * How many screen pixels each of Fuse's pixels becomes (1 when drawn at the screen's own size).
+     * Above 1 under SteamOS's Game Mode on a TV, where gamescope enlarges Fuse's picture: one-pixel
+     * detail such as the grain over gradients then shows as squares, so it is kept fainter.
+     */
+    @Volatile
+    var upscale: Float = 1f
 }
 
 /**

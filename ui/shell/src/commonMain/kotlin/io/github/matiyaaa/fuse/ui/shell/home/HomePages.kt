@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.ui.designsystem.components.ButtonKind
@@ -163,10 +164,34 @@ internal fun BoardPages(app: AppState, space: BoardSpace) {
     }
     LaunchedEffect(pager) { snapshotFlow { pager.settledPage }.collect { state.page = it } }
 
+    // A wheel or a trackpad turns the pages a whole page at a time ([ScrollSteps]), never sliding
+    // them by halves; a carousel under the pointer takes its own scrolling first ([ScrollClaim]).
+    // Touch and drags still move the pages as before.
+    val claim = remember { ScrollClaim() }
     Box(Modifier.fillMaxSize()) {
+        androidx.compose.runtime.CompositionLocalProvider(LocalScrollClaim provides claim) {
         HorizontalPager(
             state = pager,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().pointerInput(count, arranging) {
+                val steps = ScrollSteps()
+                awaitPointerEventScope {
+                    while (true) {
+                        val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                        if (e.type != androidx.compose.ui.input.pointer.PointerEventType.Scroll) continue
+                        claim.taken = false
+                        // Kept from the pager's own scrolling, which would slide the pages by the amount.
+                        val change = e.changes.firstOrNull() ?: continue
+                        val d = change.scrollDelta
+                        val at = change.uptimeMillis
+                        e.changes.forEach { it.consume() }
+                        awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Final)
+                        if (claim.taken || count <= 1 || arranging) continue
+                        if (kotlin.math.abs(d.x) <= kotlin.math.abs(d.y)) continue
+                        val by = steps.feed(d.x, at)
+                        if (by != 0) go((pager.currentPage + by).coerceIn(0, count - 1))
+                    }
+                }
+            },
             // Arranging, a drag moves a widget, never the page.
             userScrollEnabled = count > 1 && !arranging,
             key = { keys.getOrElse(it) { "first" } },
@@ -184,6 +209,7 @@ internal fun BoardPages(app: AppState, space: BoardSpace) {
                     )
                 }
             }
+        }
         }
         // Which page shows, over the board's foot: above the arranging bar while it is up.
         if (count > 1) {

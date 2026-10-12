@@ -163,6 +163,10 @@ data class EmulatorChoice(
 @Immutable
 data class ContentNote(val kind: ContentKind, val count: Int, val message: String)
 
+/** A game suggested to someone, and why. */
+@Immutable
+data class Suggestion(val card: GameCard, val reason: String)
+
 /** One card on Home. */
 @Immutable
 data class HomeFeed(
@@ -180,6 +184,12 @@ data class HomeFeed(
     val storage: StorageSummary? = null,
     /** Jellyfin's Home widgets, empty while Jellyfin is off or no widget of it is on Home. */
     val media: io.github.matiyaaa.fuse.jellyfin.MediaFeed = io.github.matiyaaa.fuse.jellyfin.MediaFeed(),
+    /** Games suggested for this person, best first; why each is suggested is in [reasons]. */
+    val forYou: List<GameCard> = emptyList(),
+    /** The game in today's spotlight. */
+    val spotlight: GameCard? = null,
+    /** Why each suggested or spotlit game is there ("Next in the Metroid series, after Metroid Fusion"). */
+    val reasons: Map<io.github.matiyaaa.fuse.model.GameId, String> = emptyMap(),
 )
 
 @Immutable
@@ -321,6 +331,10 @@ sealed interface ProblemAction {
     data class Retry(override val label: String = "Try again") : ProblemAction
     data class PickEmulator(val game: GameId? = null, val platform: io.github.matiyaaa.fuse.model.PlatformId? = null, override val label: String = "Choose another emulator") : ProblemAction
     data class OpenEmulator(val emulator: EmulatorId, val name: String, override val label: String = "Open $name") : ProblemAction
+    /** The game's emulator settings (its renderer, for one), in Fuse. */
+    data class EmulatorSettings(val game: GameId, override val label: String = "Change the renderer") : ProblemAction
+    /** Back to the version of a Store program its last update replaced (kept by Fuse). */
+    data class GoBack(val storeKey: String, override val label: String) : ProblemAction
     data class OpenLink(val url: String, override val label: String) : ProblemAction
     data class CheckDrives(override val label: String = "Check drives again") : ProblemAction
     data class OpenStorage(override val label: String = "Storage") : ProblemAction
@@ -328,7 +342,7 @@ sealed interface ProblemAction {
     data class GrantAccess(override val label: String = "Allow access") : ProblemAction
     data class OpenSystem(val platform: io.github.matiyaaa.fuse.model.PlatformId, override val label: String) : ProblemAction
     data class OpenGame(val game: GameId, override val label: String) : ProblemAction
-    /** A system's missing firmware from the person's own RomM server, through Fuse RomM. */
+    /** A system's missing firmware from the person's own RomM server, through RomM. */
     data class BiosFromRomm(val platform: io.github.matiyaaa.fuse.model.PlatformId, val name: String, override val label: String = "Download from RomM") : ProblemAction
     /** The game's Installed Content page, to install it into its emulator. */
     data class InstallContent(val game: GameId, override val label: String = "Install it") : ProblemAction
@@ -345,6 +359,24 @@ sealed interface ProblemAction {
     data class ResetAppearance(override val label: String = "Reset appearance") : ProblemAction
 }
 
+/** One emulator as Fuse supports it on this system, for the Emulator support dashboard. */
+data class EmulatorSupportRow(
+    val id: EmulatorId,
+    val name: String,
+    val installed: Boolean,
+    val version: String?,
+    /** How it was found ("Flatpak", "PATH", "Located"), and where. */
+    val foundVia: String?,
+    val path: String?,
+    /** How Fuse knows how to start it: its makers' documentation, the community, or not confirmed. */
+    val evidence: String,
+    /** The furthest step Fuse has seen for itself here ("Launch verified"), when installed. */
+    val checked: String?,
+    val systems: Int,
+    /** What Fuse does with it here: starts games, finds saves, patches, cheats, settings. */
+    val features: List<String>,
+)
+
 /** Emulator choice option for pickers. */
 @Immutable
 data class EmulatorOption(
@@ -356,18 +388,181 @@ data class EmulatorOption(
     val unavailable: String? = null,
 )
 
-/** A PS2 game's PCSX2 patches and who turned each on, or why Fuse can't show them. */
-sealed interface Pcsx2PatchList {
+/**
+ * A game's patches and cheats in its emulator's own settings (PCSX2 for PS2, DuckStation for
+ * PlayStation, PPSSPP for PSP) and who turned each on, or why Fuse can't show them.
+ */
+sealed interface GamePatchList {
     data class Ready(
         val serial: String,
+        /** PCSX2's CRC of the boot program; empty for emulators that file codes by serial alone. */
         val crc: String,
         val patches: List<io.github.matiyaaa.fuse.launch.patches.PatchStatus>,
-        /** False when PCSX2's bundled patches couldn't be read here (only patch files in its patches folder are listed). */
+        /** False when the emulator's bundled codes couldn't be read here (only its own folders are listed). */
         val bundledRead: Boolean,
-    ) : Pcsx2PatchList
+        /** The game's cheats, and who turned each on. */
+        val cheats: List<io.github.matiyaaa.fuse.launch.patches.PatchStatus> = emptyList(),
+        /** The emulator applies cheats to this game (its own setting, or the emulator's for every game). */
+        val cheatsOn: Boolean = false,
+        /** The emulator's name, as the sheet says it. */
+        val emulator: String = "PCSX2",
+        /** Where its codes come from, said when there are none. */
+        val whereFrom: String = "",
+        /** Something in the emulator's settings that keeps them from applying, said above the list. */
+        val warning: String? = null,
+        /** How turning on a cheat reaches the emulator's own cheats switch. */
+        val cheatsNote: String = "Turning a cheat on turns on PCSX2's cheats for this game, and off again with the last one.",
+    ) : GamePatchList
 
-    data class Unavailable(val title: String, val reason: String) : Pcsx2PatchList
+    data class Unavailable(val title: String, val reason: String) : GamePatchList
 }
+
+/** A person's own cheats, patches and texture packs added to a game, and what can be added to it here. */
+data class Enhancements(
+    val added: List<EnhancementView>,
+    /** What this game's emulator takes from a person's own files, here; empty when nothing. */
+    val kinds: List<io.github.matiyaaa.fuse.launch.patches.EnhancementKind>,
+)
+
+/** One thing a person added to a game. */
+data class EnhancementView(
+    val id: String,
+    val kind: io.github.matiyaaa.fuse.launch.patches.EnhancementKind,
+    /** The name of the file, folder or archive it came from. */
+    val name: String,
+    val emulator: String,
+    val files: Int,
+    val addedAt: Long,
+    /** Where it went: the folder, or the file its codes were added to (home as `~`). */
+    val where: String,
+    /** It turned on something in the emulator's settings for the game, put back when it is taken out. */
+    val settingsChanged: Boolean,
+    /** Where it came from when Fuse fetched it ("GameBanana"), with its page and version. */
+    val origin: String? = null,
+    val originUrl: String? = null,
+    val version: String? = null,
+)
+
+/** Exactly what adding a file, folder or archive would do, worked out before anything changes; or why it can't be added. */
+sealed interface EnhancementPreview {
+    data class Ready(
+        /** Hands the plan back to [FuseStore.LibraryOps.addEnhancement]. */
+        val token: String,
+        val kind: io.github.matiyaaa.fuse.launch.patches.EnhancementKind,
+        val emulator: String,
+        val name: String,
+        /** The folder it goes in (home as `~`). */
+        val target: String,
+        /** New files it puts in place. */
+        val adds: List<String>,
+        /** Files there now that it takes the place of; each is kept and put back when it is taken out. */
+        val replaces: List<String>,
+        /** The file its codes are added to the end of, when they are. */
+        val appendsTo: String?,
+        /** Settings it turns on for the game, said plainly. */
+        val settings: List<String>,
+        /** What in it was left out, and why. */
+        val rejected: List<String>,
+        val notes: List<String>,
+        /** Cheats or patches in it, as the emulator reads them; 0 for textures. */
+        val codes: Int,
+        val bytes: Long,
+    ) : EnhancementPreview
+
+    data class Unavailable(val title: String, val reason: String) : EnhancementPreview
+}
+
+/** Which game on GameBanana a library game is: the one chosen, and the ones a search found. */
+data class ModSiteGames(
+    val linked: io.github.matiyaaa.fuse.integrations.gamebanana.GbGame?,
+    val found: List<io.github.matiyaaa.fuse.integrations.gamebanana.GbGame>,
+    /** What was searched for. */
+    val query: String,
+    /** Why the search couldn't be made, when it couldn't. */
+    val problem: String? = null,
+)
+
+/** A mod on GameBanana, with the kind Fuse can add it as for this game (null: a kind Fuse doesn't add). */
+data class ModSiteMod(
+    val mod: io.github.matiyaaa.fuse.integrations.gamebanana.GbMod,
+    val kind: io.github.matiyaaa.fuse.launch.patches.EnhancementKind?,
+)
+
+/** A page of a game's mods on GameBanana, or why there is none. */
+sealed interface ModSiteMods {
+    data class Ready(
+        val game: io.github.matiyaaa.fuse.integrations.gamebanana.GbGame,
+        val mods: List<ModSiteMod>,
+        val page: Int,
+        val total: Long,
+        val more: Boolean,
+    ) : ModSiteMods
+
+    /** [needsGame]: which game on GameBanana this is hasn't been chosen yet. */
+    data class Unavailable(val title: String, val reason: String, val needsGame: Boolean = false) : ModSiteMods
+}
+
+/** A mod's page on GameBanana: its files and what Fuse can do with each, or why it can't be read. */
+sealed interface ModSitePage {
+    data class Ready(
+        val page: io.github.matiyaaa.fuse.integrations.gamebanana.GbModPage,
+        val kind: io.github.matiyaaa.fuse.launch.patches.EnhancementKind?,
+    ) : ModSitePage
+
+    data class Unavailable(val title: String, val reason: String) : ModSitePage
+}
+
+/** How taking out something a person added went. */
+sealed interface EnhancementRemoval {
+    data object Removed : EnhancementRemoval
+
+    /** What Fuse added was changed in the emulator since; [message] asks whether to put the earlier file back anyway. */
+    data class ChangedSince(val message: String) : EnhancementRemoval
+
+    data class Failed(val message: String) : EnhancementRemoval
+}
+
+/** An emulator's own settings, for one game or for every game, or why Fuse can't change them. */
+sealed interface EmulatorSettingsView {
+    data class Ready(
+        val emulator: String,
+        /** The game these are for; null when they are for every game. */
+        val game: String?,
+        val values: List<io.github.matiyaaa.fuse.launch.settings.SettingValue>,
+        /** Fuse changed something in this file that it can put back. */
+        val canRestore: Boolean,
+        /** For a game: the sets of these settings it can be given at once, Fuse's first, then the person's own. */
+        val profiles: List<SettingProfileView> = emptyList(),
+    ) : EmulatorSettingsView
+
+    data class Unavailable(val title: String, val reason: String) : EmulatorSettingsView
+}
+
+/** Places [FamilyMoves.offers] to bring an emulator's family's things from, and what was brought already. */
+data class FamilyMoves(val offers: List<io.github.matiyaaa.fuse.sync.FamilyFolder>, val done: List<FamilyMoveDone>)
+
+/** Something brought over: from which emulator, how many files, when. */
+data class FamilyMoveDone(val id: String, val from: String, val files: Int, val at: Long)
+
+sealed interface FamilyMovePreview {
+    data class Ready(
+        val token: String,
+        val from: String,
+        val to: String,
+        val fromFolder: String,
+        val toFolder: String,
+        val files: Int,
+        val kept: Int,
+        val carried: List<String>,
+        val leftOut: List<String>,
+        val truncated: Boolean,
+    ) : FamilyMovePreview
+
+    data class Unavailable(val title: String, val reason: String) : FamilyMovePreview
+}
+
+/** One setting profile a game can be given: [active] when every value in it is the game's now. */
+data class SettingProfileView(val id: String, val name: String, val about: String, val own: Boolean, val active: Boolean)
 
 /** What RPCS3's compatibility list says about a PS3 game, asked for by the user. */
 sealed interface CompatibilityAnswer {
@@ -404,4 +599,6 @@ data class EmulatorDetails(
     val homepage: String?,
     /** True when it only opens its own app (the game is picked there). */
     val opensAppOnly: Boolean,
+    /** How far Fuse has seen it go here, step by step with evidence; null when not installed or built in. */
+    val verification: io.github.matiyaaa.fuse.launch.intelligence.Verification? = null,
 )

@@ -56,6 +56,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.RommPresence
  */
 @Composable
 fun RommGamesScreen(app: AppState, slug: String?, name: String, collection: String?) {
+    io.github.matiyaaa.fuse.ui.shell.app.CompanionShowsCopies(true)
     val ops = app.store.romm
     val flow = remember(slug, collection) { if (collection != null) ops.collection(collection) else ops.games(slug) }
     val games by flow.collectAsState(initial = null)

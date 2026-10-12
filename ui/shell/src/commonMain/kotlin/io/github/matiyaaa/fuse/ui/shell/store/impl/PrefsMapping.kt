@@ -40,12 +40,15 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         sync = sync,
         onboardingDone = onboarding.completed,
         rommAnswer = onboarding.romm,
+        onboardingStep = onboarding.stepId,
         themeId = theme.id,
         customThemes = custom,
         motion = appearance.motion,
         glass = appearance.glass ?: theme.glass,
         crt = appearance.crt ?: theme.crt,
         highContrastFocus = appearance.highContrastFocus,
+        colorVision = appearance.colorVision,
+        layoutDirection = appearance.layoutDirection,
         textScale = appearance.textScale.coerceIn(1f, 1.5f),
         screenMargin = appearance.screenMargin.coerceIn(0, 10),
         home = home.layout,
@@ -58,6 +61,9 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         destinations = home.visibleDestinations(),
         defaultLayout = scoped.layout,
         gameArt = library.gameArt,
+        libraryOpensOn = library.opensOn,
+        steam = steam,
+        extensions = extensions,
         showHero = scoped.showHero,
         showLogo = scoped.showLogo,
         videoPreview = videoPreview.enabled,
@@ -69,6 +75,8 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         performanceOverlay = performance.overlay,
         sound = if (!sound.enabled) SoundProfile.OFF else sound.profile ?: theme.sound,
         soundVolume = sound.volume,
+        muted = sound.muted,
+        masterVolume = sound.master,
         music = MusicPrefs(
             music.enabled, music.volume, music.songPath, music.songName,
             track = music.track ?: if (music.songPath != null) BundledMusic.OWN_SONG else BundledMusic.MENU_DEFAULT,
@@ -91,10 +99,12 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         phoneLinkEnabled = library.phoneLinkEnabled,
         phoneLinkController = library.phoneLinkController,
         autoSeries = library.autoSeries,
+        systemSpotlight = library.systemSpotlight,
         hiddenSeries = library.hiddenSeries,
         biosConfirmed = library.biosConfirmed,
         drivesAsked = library.drivesAsked,
         steamGames = library.steamGames,
+        manuals = library.manuals,
         scraperOrder = scraping.providerOrder,
         scraperLanguage = scraping.preferredLanguage,
         scraperRegion = scraping.preferredRegion ?: ANY_REGION,
@@ -109,6 +119,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         heroDim = appearance.heroDim,
         startupAnimation = appearance.startupAnimation,
         recentColors = appearance.recentColors,
+        themeStudioAdvanced = appearance.studioAdvanced,
         rememberPlace = appearance.rememberPlace,
         standbyMinutes = appearance.standbyMinutes,
         appsFilter = library.appsFilter,
@@ -131,7 +142,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
     val destinations = visible.map { DestinationSetting(it, visible = true) } +
         Destination.entries.filterNot { it in visible }.map { DestinationSetting(it, visible = false) }
     return copy(
-        onboarding = onboarding.copy(completed = prefs.onboardingDone, romm = prefs.rommAnswer),
+        onboarding = onboarding.copy(completed = prefs.onboardingDone, romm = prefs.rommAnswer, stepId = prefs.onboardingStep),
         home = home.copy(layout = prefs.home, systemsBoard = prefs.systemsBoard, systemsBoardFlipped = prefs.systemsBoardFlipped, systemTileStep = prefs.systemTileStep, systemTileStepFlipped = prefs.systemTileStepFlipped, systemsCardsSeen = prefs.systemsCardsSeen, destinations = destinations, continueDismissed = prefs.continueDismissed, addonsOrder = prefs.addonsOrder, quickMenu = prefs.quickMenu),
         appearance = appearance.copy(
             themeId = theme.id,
@@ -140,10 +151,13 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             crt = prefs.crt.takeIf { it != theme.crt },
             heroDim = prefs.heroDim.coerceIn(0f, 0.9f),
             highContrastFocus = prefs.highContrastFocus,
+            colorVision = prefs.colorVision,
+            layoutDirection = prefs.layoutDirection,
             textScale = prefs.textScale,
             screenMargin = prefs.screenMargin,
             startupAnimation = prefs.startupAnimation,
             recentColors = prefs.recentColors.distinct().take(RECENT_COLORS),
+            studioAdvanced = prefs.themeStudioAdvanced,
             rememberPlace = prefs.rememberPlace,
             standbyMinutes = prefs.standbyMinutes.coerceIn(0, 120),
         ),
@@ -169,18 +183,24 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             phoneLinkEnabled = prefs.phoneLinkEnabled,
             phoneLinkController = prefs.phoneLinkController,
             autoSeries = prefs.autoSeries,
+            systemSpotlight = prefs.systemSpotlight,
             hiddenSeries = prefs.hiddenSeries,
             biosConfirmed = prefs.biosConfirmed,
             drivesAsked = prefs.drivesAsked,
             steamGames = prefs.steamGames,
+            // The most recently read, so the list never grows without end.
+            manuals = prefs.manuals.entries.sortedByDescending { it.value.readAt }.take(MANUALS_KEPT).associate { it.key to it.value },
             appsFilter = prefs.appsFilter,
             gameArt = prefs.gameArt,
             systemTiles = prefs.systemTiles,
+            opensOn = prefs.libraryOpensOn,
         ),
         sound = sound.copy(
             enabled = prefs.sound != SoundProfile.OFF,
             volume = prefs.soundVolume.coerceIn(0f, 1f),
             profile = prefs.sound.takeIf { it != SoundProfile.OFF && it != theme.sound },
+            muted = prefs.muted,
+            master = prefs.masterVolume.coerceIn(0f, 1f),
         ),
         music = music.copy(
             enabled = prefs.music.enabled,
@@ -198,6 +218,8 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
         cartridge = cartridge.copy(autoRefreshOnReturn = prefs.autoRefreshFromCartridge, enabled = prefs.cartridgeEnabled, rommDetails = prefs.cartridgeRommDetails),
         updates = updates.copy(checkForUpdates = prefs.checkForUpdates),
         capture = capture.copy(combo = prefs.captureCombo, sound = prefs.captureSound),
+        steam = prefs.steam,
+        extensions = prefs.extensions,
         // What Fuse installed is kept as it is: only the Store writes it.
         store = store.copy(enabled = prefs.storeEnabled, variant = prefs.storeVariant, autoCheck = prefs.storeAutoCheck),
         jellyfin = prefs.jellyfin,
@@ -211,3 +233,6 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
 
 /** How many recent colours the theme studio keeps. */
 internal const val RECENT_COLORS = 10
+
+/** How many manuals keep their page and bookmarks. */
+private const val MANUALS_KEPT = 200

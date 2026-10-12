@@ -107,7 +107,7 @@ object SaveAdapters {
     val all: List<SaveAdapter> = listOf(
         RetroArch, Lemuroid, DuckStation, Pcsx2, Ppsspp, Dolphin, MelonDs, NooDs, Mgba, SkyEmu, Mednafen, MyBoy, UnpublishedHandheld, Rpcs3, Vita3k, ShadPs4, Flycast,
         DraStic, Mupen64, Redream, Epsxe, Fpse, PlayPs2, SaturnBackup, Mame, ScummVm,
-        ThreeDs, SwitchNand, Ryujinx, Cemu, Xenia,
+        ThreeDs, SwitchNand, Ryujinx, Cemu, Xenia, AnyPs5,
     )
 
     /** The adapter for [emulatorId] (any host's id), or null when Fuse can't sync this one yet. */
@@ -157,6 +157,7 @@ object SaveAdapters {
     internal fun firstDir(env: SaveEnvironment, vararg candidates: String?): String? = candidates.filterNotNull().firstOrNull { env.isDirectory(it) }
 
     internal fun appData(env: SaveEnvironment): String = env.env("APPDATA")?.replace('\\', '/') ?: "${env.home}/AppData/Roaming"
+    internal fun localAppData(env: SaveEnvironment): String = env.env("LOCALAPPDATA")?.replace('\\', '/') ?: "${env.home}/AppData/Local"
     internal fun documents(env: SaveEnvironment): String = "${env.home}/Documents"
     internal fun xdgData(env: SaveEnvironment): String = env.env("XDG_DATA_HOME") ?: "${env.home}/.local/share"
     internal fun xdgConfig(env: SaveEnvironment): String = env.env("XDG_CONFIG_HOME") ?: "${env.home}/.config"
@@ -207,10 +208,18 @@ internal object RetroArch : SaveAdapter {
         )
     }
 
-    private fun defaults(env: SaveEnvironment, config: String?, emuPath: String?): Pair<String, String> {
+    /**
+     * Where "default" saves and states go, as RetroArch's frontend drivers set them: on Android
+     * `RetroArch` in the device's storage (platform_unix.c, storage writable), on a Mac
+     * `~/Documents/RetroArch` unless it is portable or Steam's, which keep them in Application
+     * Support (platform_darwin.m), and elsewhere beside its config.
+     */
+    private fun defaults(env: SaveEnvironment, config: String?, emuPath: String?, emulatorId: String): Pair<String, String> {
+        val macData = "${SaveAdapters.macSupport(env)}/RetroArch"
         val base = when {
-            config != null -> SaveAdapters.parent(config)
             env.host == "ANDROID" -> "/storage/emulated/0/RetroArch"
+            env.host == "MACOS" -> if (emulatorId.endsWith("retroarch-steam") || env.exists("$macData/portable.txt")) macData else "${SaveAdapters.documents(env)}/RetroArch"
+            config != null -> SaveAdapters.parent(config)
             env.host == "WINDOWS" && emuPath != null -> SaveAdapters.parent(emuPath)
             else -> "${SaveAdapters.xdgConfig(env)}/retroarch"
         }
@@ -222,29 +231,30 @@ internal object RetroArch : SaveAdapter {
             // On Android, its folder may be anywhere the person moved it.
             ?: DataFolders.find(env, "retroarch", listOf("retroarch")) { d -> "$d/retroarch.cfg".takeIf(env::exists) }.firstOrNull()
         val cfg = config?.let { env.readText(it) }?.let(::parseCfg).orEmpty()
-        val (defSaves, defStates) = defaults(env, config, q.emulatorPath)
+        val (defSaves, defStates) = defaults(env, config, q.emulatorPath, q.emulatorId)
+        val content = SaveAdapters.parent(q.romPath)
         fun dir(key: String, fallback: String): String {
             val v = cfg[key]?.replace('\\', '/')?.let { if (it.startsWith("~")) env.home + it.drop(1) else it }
             return when {
-                v.isNullOrEmpty() || v == "default" -> fallback
+                // Set but empty: RetroArch saves beside the game (runloop_path_set_redirect).
+                v != null && v.isEmpty() -> content
+                v == null || v == "default" -> fallback
                 v.startsWith(":") -> SaveAdapters.join(config?.let(SaveAdapters::parent) ?: "", v.drop(1).trimStart('/'))
                 else -> v
             }
         }
-        val content = SaveAdapters.parent(q.romPath)
         val inContent = cfg["savefiles_in_content_dir"] == "true"
         val statesInContent = cfg["savestates_in_content_dir"] == "true"
-        val sortSaves = cfg["sort_savefiles_enable"] == "true" || cfg["sort_savefiles_by_content_enable"] == "true"
-        val sortStates = cfg["sort_savestates_enable"] == "true" || cfg["sort_savestates_by_content_enable"] == "true"
         val coreFolder = q.core?.let { CoreNames.libraryName(it) }
         val contentFolder = SaveAdapters.parent(q.romPath).substringAfterLast('/')
+        // RetroArch's own order (runloop_path_set_redirect): the content's folder, then the core's.
         fun sorted(dir: String, byCore: Boolean, byContent: Boolean): String = buildString {
             append(dir)
             if (byContent) append('/').append(contentFolder)
             if (byCore && coreFolder != null) append('/').append(coreFolder)
         }
-        val savesDir = if (inContent) content else sorted(dir("savefile_directory", defSaves), sortSaves, cfg["sort_savefiles_by_content_enable"] == "true")
-        val statesDir = if (statesInContent) content else sorted(dir("savestate_directory", defStates), sortStates, cfg["sort_savestates_by_content_enable"] == "true")
+        val savesDir = sorted(if (inContent) content else dir("savefile_directory", defSaves), cfg["sort_savefiles_enable"] == "true", cfg["sort_savefiles_by_content_enable"] == "true")
+        val statesDir = sorted(if (statesInContent) content else dir("savestate_directory", defStates), cfg["sort_savestates_enable"] == "true", cfg["sort_savestates_by_content_enable"] == "true")
         val stem = SaveAdapters.stem(q.romPath)
         val format = SaveAdapters.sramFormat(q.platform)
         val save = spot(env, SaveKind.SAVE, format, savesDir, listOf("save.srm" to "$stem.srm"))
@@ -262,6 +272,9 @@ internal object RetroArch : SaveAdapter {
         return SaveSpot(kind, format, names.map { (n, f) -> SpotFile(n, "$dir/$f") }, available = env.isDirectory(dir) || env.isDirectory(SaveAdapters.parent(dir)))
     }
 }
+
+/** The library name of the libretro [core] (`mgba` to `mGBA`), which RetroArch names its per-core folders after; null when unknown. */
+fun retroArchLibraryName(core: String): String? = CoreNames.libraryName(core)
 
 /** libretro cores' library names, which RetroArch uses for its per-core folders. */
 internal object CoreNames {
@@ -291,13 +304,30 @@ internal object CoreNames {
 internal object DuckStation : SaveAdapter {
     override val emulators = setOf("duckstation")
 
+    // Where DuckStation keeps its data, as its Core::SetDataRoot decides: beside the program when
+    // portable.txt or settings.ini is there; on Windows Documents\DuckStation for older installs,
+    // else %LOCALAPPDATA%\DuckStation; on Linux $XDG_CONFIG_HOME/duckstation when that is set, else
+    // ~/.local/share/duckstation. Flatpak always sets XDG_CONFIG_HOME inside its sandbox, so its
+    // Flatpak keeps everything in ~/.var/app/org.duckstation.DuckStation/config/duckstation.
     private fun dataDir(env: SaveEnvironment, emuPath: String?): String? = when (env.host) {
-        // Portable when portable.txt sits beside the program.
-        "WINDOWS" -> SaveAdapters.firstDir(env, emuPath?.let(SaveAdapters::parent)?.takeIf { env.exists("$it/portable.txt") }, "${SaveAdapters.documents(env)}/DuckStation")
+        "WINDOWS" -> SaveAdapters.firstDir(
+            env,
+            emuPath?.let(SaveAdapters::parent)?.takeIf { env.exists("$it/portable.txt") || env.exists("$it/settings.ini") },
+            "${SaveAdapters.documents(env)}/DuckStation",
+            "${SaveAdapters.localAppData(env)}/DuckStation",
+        )
         "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/DuckStation")
         "ANDROID" -> SaveAdapters.firstDir(env, "/storage/emulated/0/duckstation", "/storage/emulated/0/DuckStation", "/storage/emulated/0/Android/data/com.github.stenzek.duckstation/files")
             ?: DataFolders.find(env, "duckstation", listOf("duckstation", "psx", "ps1")) { d -> d.takeIf { env.isDirectory("$it/memcards") && (env.exists("$it/settings.ini") || env.isDirectory("$it/savestates")) } }.firstOrNull()
-        else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgData(env)}/duckstation", "${SaveAdapters.xdgConfig(env)}/duckstation", "${env.home}/.var/app/org.duckstation.DuckStation/data/duckstation")
+        else -> SaveAdapters.firstDir(
+            env,
+            emuPath?.let(SaveAdapters::parent)?.takeIf { env.exists("$it/portable.txt") || env.exists("$it/settings.ini") },
+            env.env("XDG_CONFIG_HOME")?.takeIf { it.startsWith("/") }?.let { "$it/duckstation" },
+            "${env.home}/.local/share/duckstation",
+            "${SaveAdapters.xdgData(env)}/duckstation",
+            "${env.home}/.var/app/org.duckstation.DuckStation/config/duckstation",
+            "${env.home}/.var/app/org.duckstation.DuckStation/data/duckstation",
+        )
     }
 
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
@@ -376,7 +406,7 @@ internal object Ppsspp : SaveAdapter {
 internal object Dolphin : SaveAdapter {
     override val emulators = setOf("dolphin", "dolphin-mmjr", "dolphin-mmjr2")
 
-    private fun userDir(env: SaveEnvironment, emuPath: String?): String? = when (env.host) {
+    internal fun userDir(env: SaveEnvironment, emuPath: String?): String? = when (env.host) {
         "WINDOWS" -> SaveAdapters.firstDir(env, emuPath?.let { SaveAdapters.join(SaveAdapters.parent(it), "User") }, "${SaveAdapters.documents(env)}/Dolphin Emulator", "${SaveAdapters.appData(env)}/Dolphin Emulator")
         "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/Dolphin")
         "ANDROID" -> SaveAdapters.firstDir(env, "/storage/emulated/0/dolphin-emu")
@@ -415,7 +445,7 @@ internal object Rpcs3 : SaveAdapter {
             "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/rpcs3")
             else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgConfig(env)}/rpcs3", "${env.home}/.var/app/net.rpcs3.RPCS3/config/rpcs3")
         } ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "ps3.savedata", "RPCS3's folder wasn't found here."))
-        val savedata = "$base/dev_hdd0/home/00000001/savedata"
+        val savedata = "${hdd0(env, base)}/home/00000001/savedata"
         val serial = q.serial?.uppercase()?.filter { it.isLetterOrDigit() } ?: run {
             val learned = SaveAdapters.learned(env, q, "ps3.savedata")
             if (learned.isNotEmpty()) return listOf(SaveSpot(SaveKind.SAVE, "ps3.savedata", root = savedata, folders = learned))
@@ -425,19 +455,71 @@ internal object Rpcs3 : SaveAdapter {
     }
 }
 
-/** Vita3K: each game's saves under ux0/user/00/savedata by its title id. */
+/**
+ * Where RPCS3's dev_hdd0 is: its vfs.yml (`config/vfs.yml` in its folder, `vfs.yml` in older
+ * versions) may move it, as `/dev_hdd0/: $(EmulatorDir)dev_hdd0/` with `$(EmulatorDir)` its own
+ * folder unless set (RPCS3's Emu/vfs_config.h). Unset or not there: beside its config.
+ */
+internal fun Rpcs3.hdd0(env: SaveEnvironment, base: String): String {
+    val text = env.readText("$base/config/vfs.yml") ?: env.readText("$base/vfs.yml")
+    if (text != null) {
+        val values = text.lineSequence().mapNotNull { line ->
+            val i = line.indexOf(": ")
+            if (i <= 0) null else line.substring(0, i).trim().trim('"', '\'') to line.substring(i + 2).trim().trim('"', '\'')
+        }.toMap()
+        val emulatorDir = values["\$(EmulatorDir)"]?.takeIf { it.isNotEmpty() }?.replace('\\', '/')?.trimEnd('/') ?: base.trimEnd('/')
+        val hdd = values["/dev_hdd0/"]?.takeIf { it.isNotEmpty() }?.replace("\$(EmulatorDir)", "$emulatorDir/")?.replace('\\', '/')?.replace("//", "/")?.trimEnd('/')
+        if (hdd != null && env.isDirectory(hdd)) return hdd
+    }
+    return "$base/dev_hdd0"
+}
+
+/**
+ * Vita3K: each game's saves under `ux0/user/00/savedata` by its title id. Where ux0 is, as its
+ * init_paths decides: `portable/fs` beside the program when that folder is there; else the
+ * `pref-path` its config.yml names; else SDL's preference folder (`Vita3K/Vita3K`, with ux0 in an
+ * `fs` folder on a Mac unless an older ux0 is already there), or `Vita3K/Vita3K` in the XDG data
+ * folder on Linux. On Android it is the app's own folder, which other apps can't open.
+ */
 internal object Vita3k : SaveAdapter {
     override val emulators = setOf("vita3k")
 
+    private val PREF = Regex("^pref-path:\\s*['\"]?(.*?)['\"]?\\s*$")
+
+    /** The folder holding the program, or a Mac app's folder, where a `portable` folder would be. */
+    private fun programDir(emuPath: String?): String? = emuPath?.let { p ->
+        p.substringBefore(".app/", "").takeIf { it.isNotEmpty() }?.let(SaveAdapters::parent) ?: SaveAdapters.parent(p)
+    }
+
+    private fun prefPath(env: SaveEnvironment, configDirs: List<String>): String? =
+        configDirs.firstNotNullOfOrNull { env.readText("$it/config.yml") }?.lineSequence()
+            ?.firstNotNullOfOrNull { PREF.find(it.trim())?.groupValues?.get(1) }
+            ?.replace('\\', '/')?.trimEnd('/')?.takeIf { it.isNotEmpty() }
+
+    internal fun ux0(env: SaveEnvironment, emuPath: String?): String? {
+        val dir = programDir(emuPath)
+        dir?.let { "$it/portable/fs/ux0" }?.takeIf(env::isDirectory)?.let { return it }
+        val prefs = when (env.host) {
+            "WINDOWS" -> "${SaveAdapters.appData(env)}/Vita3K/Vita3K"
+            "MACOS" -> "${SaveAdapters.macSupport(env)}/Vita3K/Vita3K"
+            else -> "${SaveAdapters.xdgData(env)}/Vita3K/Vita3K"
+        }
+        val configDirs = when (env.host) {
+            // The config sits beside the program on Windows, in the preference folder on a Mac.
+            "WINDOWS" -> listOfNotNull(dir)
+            "MACOS" -> listOfNotNull(dir, prefs)
+            else -> listOf("${SaveAdapters.xdgConfig(env)}/Vita3K")
+        }
+        prefPath(env, configDirs)?.let { "$it/ux0" }?.takeIf(env::isDirectory)?.let { return it }
+        return SaveAdapters.firstDir(env, "$prefs/ux0", "$prefs/fs/ux0")
+    }
+
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
-        val base = SaveAdapters.chosen(env, q)?.let { c -> if (env.isDirectory("$c/ux0")) "$c/ux0" else c } ?: when (env.host) {
-            "WINDOWS" -> SaveAdapters.firstDir(env, q.emulatorPath?.let { SaveAdapters.parent(it) + "/ux0" }, "${SaveAdapters.appData(env)}/Vita3K/Vita3K/ux0")
-            "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/Vita3K/Vita3K/ux0")
-            "ANDROID" -> null
-            else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgData(env)}/Vita3K/Vita3K/ux0")
-        } ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "vita.savedata", "Vita3K's folder wasn't found here."))
+        val base = SaveAdapters.chosen(env, q)?.let { c -> if (env.isDirectory("$c/ux0")) "$c/ux0" else c }
+            ?: (if (env.host == "ANDROID") null else ux0(env, q.emulatorPath))
+            ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "vita.savedata", if (env.host == "ANDROID") SaveAdapters.androidPrivateNote("Vita3K") else "Vita3K's folder wasn't found here."))
         val savedata = "$base/user/00/savedata"
-        val id = q.serial?.uppercase() ?: run {
+        val id = q.serial?.uppercase()?.filter { it.isLetterOrDigit() } ?: run {
             val learned = SaveAdapters.learned(env, q, "vita.savedata")
             if (learned.isNotEmpty()) return listOf(SaveSpot(SaveKind.SAVE, "vita.savedata", root = savedata, folders = learned))
             return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "vita.savedata", SaveAdapters.PLAY_ONCE, learnIn = savedata))
@@ -446,9 +528,24 @@ internal object Vita3k : SaveAdapter {
     }
 }
 
-/** shadPS4: each game's saves by its CUSA id, in its user folder (beside it when portable). */
+/**
+ * shadPS4: each game's saves by its CUSA id, in its user folder (`user` beside it when portable,
+ * else the system's data folder; common/path_util.cpp). Newer builds keep them per console user,
+ * `home/1000/savedata/<id>` for the first, and move the older `savedata/1/<id>` there on their
+ * first start (core/user_manager.cpp CheckAndMigrateSaves); Fuse reads whichever holds the game.
+ */
 internal object ShadPs4 : SaveAdapter {
     override val emulators = setOf("shadps4")
+
+    /** The newer per-user folder first, then the older one. */
+    internal fun savedata(env: SaveEnvironment, user: String, id: String?): String {
+        val newer = "$user/home/$FIRST_USER/savedata"
+        val older = "$user/savedata/1"
+        if (id != null) listOf(newer, older).firstOrNull { env.isDirectory("$it/$id") }?.let { return it }
+        return if (env.isDirectory("$user/home") || !env.isDirectory(older)) newer else older
+    }
+
+    private const val FIRST_USER = "1000"
 
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
         val user = SaveAdapters.chosen(env, q) ?: SaveAdapters.firstDir(
@@ -459,8 +556,9 @@ internal object ShadPs4 : SaveAdapter {
             "${SaveAdapters.macSupport(env)}/shadPS4",
             "${SaveAdapters.appData(env)}/shadPS4",
         ) ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "ps4.savedata", "shadPS4's user folder wasn't found here."))
-        val savedata = "$user/savedata/1"
-        val id = q.serial?.uppercase()?.takeIf { it.startsWith("CUSA") || it.startsWith("PPSA") } ?: run {
+        val id = q.serial?.uppercase()?.filter { it.isLetterOrDigit() }?.takeIf { it.startsWith("CUSA") || it.startsWith("PPSA") }
+        val savedata = savedata(env, user, id)
+        if (id == null) {
             val learned = SaveAdapters.learned(env, q, "ps4.savedata")
             if (learned.isNotEmpty()) return listOf(SaveSpot(SaveKind.SAVE, "ps4.savedata", root = savedata, folders = learned))
             return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "ps4.savedata", SaveAdapters.PLAY_ONCE, learnIn = savedata))
@@ -469,19 +567,82 @@ internal object ShadPs4 : SaveAdapter {
     }
 }
 
-/** Flycast: the Dreamcast's VMU files, shared by every game on them. */
+/**
+ * Flycast: the Dreamcast's VMUs, as its hostfs::getVmuPath names them. With "Per-game VMU" on (its
+ * default, `PerGameVmu` in emu.cfg) the first VMU is the game's own, `<product number>_vmu_save_A1.bin`
+ * with the disc's product number from its boot header; with it off, one `vmu_save_A1.bin` that every
+ * game shares. A game's own VMU and a shared one are different things, so each only ever syncs with
+ * its own kind. They are in the folder `Dreamcast.VMUPath` names, else Flycast's data folder:
+ * `data` beside the program on Windows, `data` in its config folder on a Mac, Flycast in the XDG data
+ * folder on Linux (core/windows/winmain.cpp, emulator-osx/osx-main.mm, linux-dist/main.cpp).
+ */
 internal object Flycast : SaveAdapter {
     override val emulators = setOf("flycast")
 
+    private fun configDirs(env: SaveEnvironment, emuPath: String?): List<String> = when (env.host) {
+        "WINDOWS" -> listOfNotNull(emuPath?.let(SaveAdapters::parent))
+        "MACOS" -> listOf("${env.home}/.flycast", "${SaveAdapters.macSupport(env)}/Flycast")
+        "ANDROID" -> listOf("/storage/emulated/0/Flycast")
+        else -> listOf("${SaveAdapters.xdgConfig(env)}/flycast", "${env.home}/.var/app/org.flycast.Flycast/config/flycast")
+    }
+
+    private fun dataDir(env: SaveEnvironment, emuPath: String?): String? = when (env.host) {
+        "WINDOWS" -> SaveAdapters.firstDir(env, emuPath?.let { SaveAdapters.parent(it) + "/data" })
+        "MACOS" -> SaveAdapters.firstDir(env, "${env.home}/.flycast/data", "${SaveAdapters.macSupport(env)}/Flycast/data")
+        "ANDROID" -> SaveAdapters.firstDir(env, "/storage/emulated/0/Flycast/data")
+            ?: DataFolders.find(env, "flycast", listOf("flycast", "dreamcast")) { d -> "$d/data".takeIf { env.isDirectory(it) && env.exists("$d/emu.cfg") } }.firstOrNull()
+        else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgData(env)}/flycast", "${env.home}/.var/app/org.flycast.Flycast/data/flycast")
+    }
+
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
-        val dir = SaveAdapters.chosen(env, q) ?: when (env.host) {
-            "WINDOWS" -> SaveAdapters.firstDir(env, q.emulatorPath?.let { SaveAdapters.parent(it) + "/data" })
-            "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/Flycast")
-            "ANDROID" -> SaveAdapters.firstDir(env, "/storage/emulated/0/Flycast/data")
-                ?: DataFolders.find(env, "flycast", listOf("flycast", "dreamcast")) { d -> "$d/data".takeIf { env.exists("$it/vmu_save_A1.bin") } }.firstOrNull()
-            else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgData(env)}/flycast", "${env.home}/.var/app/org.flycast.Flycast/data/flycast")
-        } ?: return listOf(SaveAdapters.unavailable(SaveKind.MEMORY_CARD, "dc.vmu", if (env.host == "ANDROID") SaveAdapters.androidPrivateNote("Flycast", "Use its save data export, then choose that folder in Fuse, Settings, Save folders.") else "Flycast's folder wasn't found here."))
-        return listOf(SaveSpot(SaveKind.MEMORY_CARD, "dc.vmu", listOf(SpotFile("vmu_save_A1.bin", "$dir/vmu_save_A1.bin"))))
+        val config = configDirs(env, q.emulatorPath).map { "$it/emu.cfg" }.firstOrNull(env::exists)?.let { env.readText(it) }
+        val vmuPath = HandheldSaves.setting(config, "config", "Dreamcast.VMUPath")?.trimEnd('/')?.takeIf { it.isNotEmpty() && env.isDirectory(it) }
+        val dir = SaveAdapters.chosen(env, q) ?: vmuPath ?: dataDir(env, q.emulatorPath)
+            ?: return listOf(SaveAdapters.unavailable(SaveKind.MEMORY_CARD, "dc.vmu", if (env.host == "ANDROID") SaveAdapters.androidPrivateNote("Flycast", "Use its save data export, then choose that folder in Fuse, Settings, Save folders.") else "Flycast's folder wasn't found here."))
+        val perGame = HandheldSaves.setting(config, "config", "PerGameVmu")?.lowercase()?.let { it == "yes" || it == "true" || it == "1" } ?: true
+        if (!perGame) return listOf(SaveSpot(SaveKind.MEMORY_CARD, "dc.vmu", listOf(SpotFile("vmu_save_A1.bin", "$dir/vmu_save_A1.bin"))))
+        val id = DreamcastDisc.productNumber(env, q.romPath) ?: q.serial?.trim()?.takeIf { it.isNotEmpty() }
+            ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "dc.vmu.game", "Flycast names this game's own VMU after its product number, which Fuse reads from GDI games. For CHD and CDI games, turn off Per-game VMU A1 in Flycast to keep one shared VMU in step."))
+        val name = id.map { if (it in VMU_INVALID) '_' else it }.joinToString("") + "_vmu_save_A1.bin"
+        return listOf(SaveSpot(SaveKind.SAVE, "dc.vmu.game", listOf(SpotFile("vmu_save_A1.bin", "$dir/$name"))))
+    }
+
+    /** The characters Flycast swaps for `_` in a VMU's name. */
+    private const val VMU_INVALID = " /\\:*?|<>\""
+}
+
+/**
+ * A Dreamcast disc's product number, from its boot header (IP.BIN: "SEGA SEGAKATANA" at the start,
+ * the product number at 0x40, ten characters), the way Flycast reads it to name a game's own VMU.
+ * Read from a GDI's first high density track (track 3), or a plain image that starts with it.
+ */
+internal object DreamcastDisc {
+    private const val MAGIC = "SEGA SEGAKATANA"
+
+    fun productNumber(env: SaveEnvironment, path: String): String? {
+        val track = when (path.substringAfterLast('.').lowercase()) {
+            "gdi" -> gdiTrack3(env, path) ?: return null
+            "iso", "bin", "img" -> path to 0L
+            else -> return null
+        }
+        // Raw 2352-byte sectors carry 16 bytes of sync and header before the data.
+        for (at in listOf(track.second, track.second + 16)) {
+            val b = env.readBytes(track.first, at, 0x50) ?: continue
+            if (b.size < 0x4A || b.decodeToString(0, MAGIC.length) != MAGIC) continue
+            return b.decodeToString(0x40, 0x4A).substringBefore('\u0000').trimEnd().takeIf { it.isNotEmpty() }
+        }
+        return null
+    }
+
+    /** Track 3's file (beside the .gdi) and where its data begins, from the .gdi's track list. */
+    private fun gdiTrack3(env: SaveEnvironment, gdi: String): Pair<String, Long>? {
+        val text = env.readText(gdi) ?: return null
+        for (line in text.lineSequence().drop(1)) {
+            val parts = Regex("\"[^\"]*\"|\\S+").findAll(line.trim()).map { it.value.trim('"') }.toList()
+            if (parts.size < 5 || parts[0] != "3") continue
+            return "${SaveAdapters.parent(gdi)}/${parts[4]}" to 0L
+        }
+        return null
     }
 }
 
@@ -490,6 +651,9 @@ internal object TitleMatch {
     private fun norm(s: String) = s.lowercase().replace(Regex("\\(.*?\\)|\\[.*?]"), "").filter { it.isLetterOrDigit() }
 
     fun same(a: String, b: String): Boolean = norm(a).isNotEmpty() && norm(a) == norm(b)
+
+    /** [title] begins with [cut], a name an emulator shortened (Mupen64Plus keeps 32 characters). */
+    fun startsWith(title: String, cut: String): Boolean = norm(cut).length >= 8 && norm(title).startsWith(norm(cut))
 }
 
 /**

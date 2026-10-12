@@ -58,6 +58,12 @@ enum class WaitReason {
     /** Only on Wi-Fi, and this connection isn't. */
     WIFI,
 
+    /** Only while charging, or not below a battery level, and this device is on its battery. */
+    POWER,
+
+    /** Inside the quiet hours the person chose. */
+    QUIET,
+
     /** The other device it comes from (or goes to) is off or away. [TransferItem.waitingFor] names it. */
     DEVICE,
 }
@@ -161,6 +167,13 @@ data class TransferSettings(
     val downloadsWhilePlaying: WhilePlaying = WhilePlaying.REDUCED,
     val uploadsWhilePlaying: WhilePlaying = WhilePlaying.REDUCED,
     val wifiOnly: Boolean = false,
+    /** Only while plugged in (a device without a battery always is). */
+    val chargingOnly: Boolean = false,
+    /** On battery, transfers wait below this level (percent); 0 for never. */
+    val minBattery: Int = 0,
+    /** Quiet hours, as minutes since midnight: transfers wait from [quietFrom] until [quietTo]. Equal for none. */
+    val quietFrom: Int = 0,
+    val quietTo: Int = 0,
     /** Carry on transfers left unfinished when Fuse closed. */
     val resumeOnStart: Boolean = true,
     /** How long finished transfers stay listed, in days (0 clears them as soon as Fuse restarts). */
@@ -170,9 +183,33 @@ data class TransferSettings(
 
     fun whilePlaying(direction: TransferDirection): WhilePlaying = if (direction == TransferDirection.DOWNLOAD) downloadsWhilePlaying else uploadsWhilePlaying
 
+    /** Whether [minute] (since midnight) is inside the quiet hours, which may run past midnight. */
+    fun quietAt(minute: Int): Boolean {
+        val from = quietFrom.mod(MINUTES_A_DAY)
+        val to = quietTo.mod(MINUTES_A_DAY)
+        if (from == to) return false
+        val m = minute.mod(MINUTES_A_DAY)
+        return if (from < to) m in from until to else m >= from || m < to
+    }
+
+    /**
+     * Why transfers going [direction] wait under [c], or null when they may run. A condition this
+     * device doesn't report (no battery, no clock yet) never holds anything.
+     */
+    fun held(direction: TransferDirection, c: TransferConditions): WaitReason? {
+        if (wifiOnly && !c.unmetered) return WaitReason.WIFI
+        if (c.playing && whilePlaying(direction) == WhilePlaying.PAUSE) return WaitReason.PLAYING
+        val onBattery = c.battery != null && !c.charging
+        if (onBattery && (chargingOnly || (minBattery > 0 && c.battery!! < minBattery))) return WaitReason.POWER
+        if (c.minute != null && quietAt(c.minute)) return WaitReason.QUIET
+        return null
+    }
+
     companion object {
         /** Never more than five each way, whatever a setting says. */
         const val MAX_PARALLEL = 5
+
+        const val MINUTES_A_DAY = 24 * 60
 
         /** Bytes a second a REDUCED transfer gets while a game runs, at most. */
         const val REDUCED_RATE = 2L * 1024 * 1024
@@ -195,7 +232,18 @@ data class TransferConditions(
     val playing: Boolean = false,
     /** The connection is Wi-Fi or wired (not mobile data). */
     val unmetered: Boolean = true,
-)
+    /** Battery level in percent; null on a device without one (or that doesn't say). */
+    val battery: Int? = null,
+    /** Plugged in (or full and plugged in). */
+    val charging: Boolean = false,
+    /** Minutes since local midnight; null until known. */
+    val minute: Int? = null,
+) {
+    companion object {
+        /** Reasons that clear when conditions change, rather than with time. */
+        val CONDITIONS: Set<WaitReason> = setOf(WaitReason.PLAYING, WaitReason.WIFI, WaitReason.POWER, WaitReason.QUIET)
+    }
+}
 
 /** The counts the Downloads button shows. */
 data class TransferSummary(

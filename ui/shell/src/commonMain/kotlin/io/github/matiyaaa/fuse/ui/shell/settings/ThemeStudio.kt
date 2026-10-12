@@ -64,6 +64,7 @@ import io.github.matiyaaa.fuse.model.FocusStyle
 import io.github.matiyaaa.fuse.model.GlassSettings
 import io.github.matiyaaa.fuse.model.MotionProfile
 import io.github.matiyaaa.fuse.model.NavAction
+import io.github.matiyaaa.fuse.model.QuickMenuLook
 import io.github.matiyaaa.fuse.model.SoundProfile
 import io.github.matiyaaa.fuse.model.ThemeCodec
 import io.github.matiyaaa.fuse.model.ThemePalette
@@ -149,17 +150,26 @@ private const val STUDIO_ID = "studio"
  * The studio's steps, in the order it guides you through them. Each has a line saying what it is
  * for; you can move between them freely (the shoulder buttons, or the dots at the top).
  */
-internal enum class StudioStep(val title: String, val guide: String) {
-    ROOM("The room", "Light or dark, then the colours of the room and the panels on it."),
+internal enum class StudioStep(val title: String, val guide: String, val simpleGuide: String? = null) {
+    ROOM("The room", "Light or dark, then the colours of the room and the panels on it.", "A bright room or a dark one, its colours made around your accent."),
     TEXT("Text", "Words in the main colour, details in a quieter one. Both should read well."),
-    ACCENT("Accent", "The spark: what's selected, buttons and progress, and the text on them."),
+    ACCENT("Accent", "The spark: what's selected, buttons and progress, and the text on them.", "The colour of what's chosen, of buttons and of progress."),
     SIGNALS("Focus and signals", "The outline on what you're on, and the colours for done, careful and wrong."),
-    SHAPE("Shape", "How round tiles and panels are, and how the one you're on stands out."),
-    SCENE("Background", "A picture of your own, or a scene drawn by Fuse: which one, how bright and how lively."),
-    EFFECTS("Effects", "Frosted glass panels and an old screen's glow, each with its own amount."),
+    SHAPE("Shape", "How round tiles and panels are, how the one you're on stands out, and the quick menu's tiles.", "How round things are, and how the quick menu's tiles are drawn."),
+    SCENE("Background", "A picture of your own, or a scene drawn by Fuse: which one, how bright and how lively.", "A picture of your own, or a scene drawn by Fuse."),
+    EFFECTS("Effects", "Frosted glass panels and an old screen's glow, each with its own amount.", "Frosted glass panels, and an old screen's glow."),
     FEEL("Motion and sound", "How the interface moves and sounds as you use it."),
     SAVE("Save", "Check what reads well, then keep it as your theme."),
 }
+
+/** The steps Simple keeps: the few that make a theme your own. Advanced has them all. */
+private val SimpleSteps = listOf(StudioStep.ROOM, StudioStep.ACCENT, StudioStep.SHAPE, StudioStep.SCENE, StudioStep.EFFECTS, StudioStep.SAVE)
+
+/** The rows Simple shows: one choice each, nothing to fine-tune. */
+private val SimpleRows = setOf(
+    StudioRow.DEPTH, StudioRow.MODE, StudioRow.ACCENT, StudioRow.CORNERS, StudioRow.QUICK_LOOK, StudioRow.WIDGET_LOOK, StudioRow.PICTURE, StudioRow.PICTURE_REMOVE,
+    StudioRow.BACKGROUND, StudioRow.GLASS, StudioRow.CRT, StudioRow.SAVE, StudioRow.NEXT,
+)
 
 /** A colour the studio lets you change, what it sits on, and how strongly it must stand out there. */
 internal enum class ColorRole(val label: String, val note: String) {
@@ -181,6 +191,7 @@ internal enum class RowKind { COLOR, CHOICE, SWITCH, LEVEL, ACTION }
 
 /** One line of the studio. [step] is where it lives; [role] is the colour a COLOR row changes. */
 internal enum class StudioRow(val label: String, val icon: ImageVector, val step: StudioStep?, val kind: RowKind, val role: ColorRole? = null) {
+    DEPTH("Simple or Advanced", FuseIcons.SlidersVertical, StudioStep.ROOM, RowKind.CHOICE),
     MODE("Light or dark", FuseIcons.SunMoon, StudioStep.ROOM, RowKind.CHOICE),
     ROOM_COLOR("Room", FuseIcons.Square, StudioStep.ROOM, RowKind.COLOR, ColorRole.BACKGROUND),
     SURFACE("Panels", FuseIcons.PanelsTop, StudioStep.ROOM, RowKind.COLOR, ColorRole.SURFACE),
@@ -195,6 +206,8 @@ internal enum class StudioRow(val label: String, val icon: ImageVector, val step
     DANGER("Wrong", FuseIcons.CircleX, StudioStep.SIGNALS, RowKind.COLOR, ColorRole.DANGER),
     CORNERS("Corners", FuseIcons.Corners, StudioStep.SHAPE, RowKind.CHOICE),
     FOCUS("Focus", FuseIcons.Target, StudioStep.SHAPE, RowKind.CHOICE),
+    QUICK_LOOK("Quick menu", FuseIcons.Sliders, StudioStep.SHAPE, RowKind.CHOICE),
+    WIDGET_LOOK("Home's widgets", FuseIcons.Grid, StudioStep.SHAPE, RowKind.CHOICE),
     PICTURE("Your picture", FuseIcons.ImagePlay, StudioStep.SCENE, RowKind.ACTION),
     PICTURE_DIM("Picture dimming", FuseIcons.SunDim, StudioStep.SCENE, RowKind.LEVEL),
     PICTURE_ALIGN("Picture position", FuseIcons.Move, StudioStep.SCENE, RowKind.CHOICE),
@@ -260,6 +273,8 @@ internal data class StudioValues(
     val picture: String?,
     val pictureDim: Float,
     val pictureAlign: WallpaperAlign,
+    val quickMenu: QuickMenuLook,
+    val widgets: io.github.matiyaaa.fuse.model.WidgetLook,
 )
 
 /**
@@ -269,8 +284,32 @@ internal data class StudioValues(
  * sections are laid out, the finer glass settings).
  */
 @Stable
-internal class StudioState(val base: ThemeSpec, val editing: ThemeSpec?, val extendsId: String?) {
+internal class StudioState(val base: ThemeSpec, val editing: ThemeSpec?, val extendsId: String?, advanced: Boolean = true) {
     private val initial: StudioValues = valuesOf(base)
+
+    /**
+     * Simple shows the main choices only (light or dark, a colour, corners, the background, glass);
+     * Advanced every colour, amount, motion and sound. Switching keeps everything already chosen.
+     */
+    var simple by mutableStateOf(!advanced)
+        private set
+
+    /** The steps on offer now, in order. */
+    fun steps(): List<StudioStep> = if (simple) SimpleSteps else StudioStep.entries
+
+    /** The step [by] places along from this one, or null past either end. */
+    fun stepAlong(by: Int): StudioStep? = steps().let { list -> list.getOrNull(list.indexOf(step) + by) }
+
+    /** Switches between Simple and Advanced, staying on the same row, or the nearest step Simple has. */
+    fun showAdvanced(on: Boolean) {
+        if (simple == !on) return
+        simple = !on
+        if (step !in steps()) {
+            step = SimpleSteps.lastOrNull { it.ordinal < step.ordinal } ?: StudioStep.ROOM
+            openColor = null
+        }
+        index = lines().indexOfFirst { (it as? StudioLine.Main)?.row == StudioRow.DEPTH }.takeIf { it >= 0 } ?: 0
+    }
 
     var dark by mutableStateOf(initial.dark)
     val colors = mutableStateMapOf<ColorRole, Long>().apply { putAll(initial.colors) }
@@ -290,6 +329,8 @@ internal class StudioState(val base: ThemeSpec, val editing: ThemeSpec?, val ext
     var picture by mutableStateOf(initial.picture)
     var pictureDim by mutableStateOf(initial.pictureDim)
     var pictureAlign by mutableStateOf(initial.pictureAlign)
+    var quickMenu by mutableStateOf(initial.quickMenu)
+    var widgets by mutableStateOf(initial.widgets)
 
     /** Colours picked lately (newest first), offered in every colour's editor. */
     val recents = mutableStateListOf<Long>()
@@ -341,6 +382,8 @@ internal class StudioState(val base: ThemeSpec, val editing: ThemeSpec?, val ext
         picture = v.picture
         pictureDim = v.pictureDim
         pictureAlign = v.pictureAlign
+        quickMenu = v.quickMenu
+        widgets = v.widgets
     }
 
     var step by mutableStateOf(StudioStep.ROOM)
@@ -359,7 +402,7 @@ internal class StudioState(val base: ThemeSpec, val editing: ThemeSpec?, val ext
 
     fun values(): StudioValues = StudioValues(
         dark, colors.toMap(), background, light, speed, corners, focus, motion, sound, glass, blur, opacity, crt, scanlines, bloom,
-        picture, pictureDim, pictureAlign,
+        picture, pictureDim, pictureAlign, quickMenu, widgets,
     )
 
     val changed: Boolean get() = values() != initial
@@ -375,10 +418,10 @@ internal class StudioState(val base: ThemeSpec, val editing: ThemeSpec?, val ext
                 .filter { it != EditRow.RECENT || recents.isNotEmpty() }
                 .map { StudioLine.Edit(it) }
         }
-        val rows = StudioRow.entries.filter { it.step == step }.filter { r ->
+        val rows = StudioRow.entries.filter { it.step == step }.filter { r -> !simple || r in SimpleRows }.filter { r ->
             when (r) {
-                StudioRow.BLUR, StudioRow.OPACITY -> glass
-                StudioRow.SCANLINES, StudioRow.BLOOM -> crt
+                StudioRow.BLUR, StudioRow.OPACITY -> glass && !simple
+                StudioRow.SCANLINES, StudioRow.BLOOM -> crt && !simple
                 StudioRow.LIGHT, StudioRow.SPEED, StudioRow.SECOND -> picture == null && background != BackgroundStyle.HERO && background != BackgroundStyle.SOLID
                 StudioRow.BACKGROUND -> picture == null
                 StudioRow.PICTURE_DIM, StudioRow.PICTURE_ALIGN, StudioRow.PICTURE_REMOVE -> picture != null
@@ -411,6 +454,8 @@ internal class StudioState(val base: ThemeSpec, val editing: ThemeSpec?, val ext
         picture = initial.picture
         pictureDim = initial.pictureDim
         pictureAlign = initial.pictureAlign
+        quickMenu = initial.quickMenu
+        widgets = initial.widgets
         openColor = null
         index = index.coerceAtMost(lines().lastIndex)
     }
@@ -458,6 +503,8 @@ internal class StudioState(val base: ThemeSpec, val editing: ThemeSpec?, val ext
         when (row) {
             // Dark is on the left, light on the right.
             StudioRow.MODE -> if (dark == delta < 0) return false else switchRoom(dark = delta < 0)
+            // Simple on the left, Advanced on the right.
+            StudioRow.DEPTH -> if (simple == delta < 0) return false else showAdvanced(delta > 0)
             StudioRow.ACCENT -> {
                 val list = swatches
                 val now = list.indexOfFirst { it.argb == color(ColorRole.ACCENT) }
@@ -466,6 +513,8 @@ internal class StudioState(val base: ThemeSpec, val editing: ThemeSpec?, val ext
             StudioRow.BACKGROUND -> background = Backgrounds.cycle(background, delta)
             StudioRow.CORNERS -> corners = CornerFamily.entries.cycle(corners, delta)
             StudioRow.FOCUS -> focus = FocusStyle.entries.cycle(focus, delta)
+            StudioRow.QUICK_LOOK -> quickMenu = QuickMenuLook.entries.cycle(quickMenu, delta)
+            StudioRow.WIDGET_LOOK -> widgets = io.github.matiyaaa.fuse.model.WidgetLook.entries.cycle(widgets, delta)
             StudioRow.MOTION -> motion = MotionProfile.entries.cycle(motion, delta)
             StudioRow.SOUND -> sound = SoundProfile.entries.cycle(sound, delta)
             StudioRow.GLASS -> if (glass == delta > 0) return false else glass = delta > 0
@@ -646,6 +695,8 @@ internal class StudioState(val base: ThemeSpec, val editing: ThemeSpec?, val ext
             glass = if (glass) base.glass.copy(enabled = true, blur = blur, surfaceOpacity = opacity) else base.glass.copy(enabled = false),
             crt = base.crt.copy(enabled = crt, scanlines = scanlines, bloom = bloom),
             wallpaper = picture?.let { Wallpaper(it, pictureDim, pictureAlign) },
+            quickMenu = quickMenu,
+            widgets = widgets,
         )
     }
 
@@ -654,9 +705,9 @@ internal class StudioState(val base: ThemeSpec, val editing: ThemeSpec?, val ext
          * A studio for [spec]: a built-in theme is the start of something new; an added one is
          * changed in place. [file] is an added theme's file, read for the theme it extends.
          */
-        fun of(spec: ThemeSpec, custom: Boolean, file: String?): StudioState {
+        fun of(spec: ThemeSpec, custom: Boolean, file: String?, advanced: Boolean = true): StudioState {
             val extends = if (!custom) spec.id else file?.let { Regex(""""extends"\s*:\s*"([^"]+)"""").find(it)?.groupValues?.get(1)?.trim()?.lowercase() }
-            return StudioState(spec, if (custom) spec else null, extends?.takeIf { ThemePresets.find(it) != null })
+            return StudioState(spec, if (custom) spec else null, extends?.takeIf { ThemePresets.find(it) != null }, advanced)
         }
 
         private fun valuesOf(t: ThemeSpec): StudioValues {
@@ -687,6 +738,8 @@ internal class StudioState(val base: ThemeSpec, val editing: ThemeSpec?, val ext
                 picture = t.wallpaper?.path,
                 pictureDim = t.wallpaper?.dim ?: 0.35f,
                 pictureAlign = t.wallpaper?.align ?: WallpaperAlign.CENTER,
+                quickMenu = t.quickMenu,
+                widgets = t.widgets,
             )
         }
     }
@@ -795,6 +848,11 @@ internal fun StudioPanel(
     }
     // The colours picked lately, kept across visits to the studio.
     LaunchedEffect(studio) { if (studio.recents.isEmpty()) studio.recents.addAll(prefs.recentColors) }
+    // Simple or Advanced is remembered for next time.
+    LaunchedEffect(studio.simple) {
+        val advanced = !studio.simple
+        if (app.store.prefs.value.themeStudioAdvanced != advanced) app.store.updatePrefs { it.copy(themeStudioAdvanced = advanced) }
+    }
     fun keepRecent(argb: Long) = app.store.updatePrefs { p -> p.copy(recentColors = (listOf(argb) + p.recentColors.filter { it != argb }).take(10)) }
     fun closeColor() = studio.close(::keepRecent)
     LaunchedEffect(current, studio.changed, active, studio.step, studio.canUndo) {
@@ -822,7 +880,7 @@ internal fun StudioPanel(
         }
     }
 
-    fun nextStep() = StudioStep.entries.getOrNull(studio.step.ordinal + 1)?.let { studio.go(it) }
+    fun nextStep() = studio.stepAlong(1)?.let { studio.go(it) }
 
     fun change(line: StudioLine, delta: Int): Boolean = studio.edit {
         when (line) {
@@ -869,7 +927,7 @@ internal fun StudioPanel(
                 }
                 RowKind.SWITCH -> studio.edit { studio.step(line.row, if (line.row == StudioRow.GLASS && studio.glass || line.row == StudioRow.CRT && studio.crt) -1 else 1) }
                 RowKind.COLOR -> line.row.role?.let(studio::open)
-                RowKind.CHOICE, RowKind.LEVEL -> change(line, 1)
+                RowKind.CHOICE, RowKind.LEVEL -> if (line.row == StudioRow.DEPTH) studio.showAdvanced(studio.simple) else change(line, 1)
             }
             is StudioLine.Edit -> {
                 val role = studio.openColor ?: return
@@ -895,7 +953,7 @@ internal fun StudioPanel(
             NavAction.PREVIOUS_SECTION, NavAction.NEXT_SECTION, NavAction.PAGE_UP, NavAction.PAGE_DOWN -> {
                 if (studio.openColor != null) return@InputLayer NavResult.BLOCKED
                 val back = e.action == NavAction.PREVIOUS_SECTION || e.action == NavAction.PAGE_UP
-                val to = StudioStep.entries.getOrNull(studio.step.ordinal + if (back) -1 else 1)
+                val to = studio.stepAlong(if (back) -1 else 1)
                 if (to == null) NavResult.BLOCKED else { studio.go(to); NavResult.MOVED }
             }
             NavAction.LEFT, NavAction.RIGHT -> if (change(line, if (e.action == NavAction.LEFT) -1 else 1)) NavResult.MOVED else NavResult.BLOCKED
@@ -906,7 +964,7 @@ internal fun StudioPanel(
             NavAction.BACK -> {
                 when {
                     studio.openColor != null -> closeColor()
-                    studio.step.ordinal > 0 -> studio.go(StudioStep.entries[studio.step.ordinal - 1])
+                    studio.stepAlong(-1) != null -> studio.go(studio.stepAlong(-1)!!)
                     else -> onLeave()
                 }
                 NavResult.CONSUMED
@@ -1039,7 +1097,10 @@ private fun detailOf(line: StudioLine, studio: StudioState, userMotion: String?)
     is StudioLine.Main -> when (line.row) {
         StudioRow.MOTION -> userMotion?.let { "Your Motion setting ($it) is used instead" }
         StudioRow.SAVE -> studio.editing?.let { "Saving under its name replaces ${it.name}" } ?: "Name it, and it joins your themes"
-        StudioRow.NEXT -> StudioStep.entries.getOrNull(studio.step.ordinal + 1)?.title
+        StudioRow.NEXT -> studio.stepAlong(1)?.title
+        StudioRow.DEPTH -> if (studio.simple) "The main choices. Advanced has every colour, amount, motion and sound" else "Every colour, amount, motion and sound. Simple keeps the main choices"
+        StudioRow.QUICK_LOOK -> studio.quickMenu.note()
+        StudioRow.WIDGET_LOOK -> studio.widgets.note()
         StudioRow.MODE -> if (studio.dark) "A dark room. Changing it makes the room and text again" else "A bright room. Changing it makes the room and text again"
         StudioRow.LIGHT -> "How bright the scene's light is"
         StudioRow.SPEED -> "How fast it drifts; none holds it still"
@@ -1066,10 +1127,11 @@ private fun StepHeader(studio: StudioState, compact: Boolean, onGo: (StudioStep)
     val step = studio.step
     Column(Modifier.fillMaxWidth().padding(start = Space.l, end = Space.l, top = if (compact) Space.m else Space.l, bottom = Space.s)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            FText("STEP ${step.ordinal + 1} OF ${StudioStep.entries.size}", Fuse.type.overline, color = c.accent, maxLines = 1)
+            val steps = studio.steps()
+            FText("STEP ${steps.indexOf(step) + 1} OF ${steps.size}", Fuse.type.overline, color = c.accent, maxLines = 1)
             Spacer(Modifier.weight(1f))
             Row(horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalAlignment = Alignment.CenterVertically) {
-                for (s in StudioStep.entries) {
+                for (s in steps) {
                     val on = s == step
                     val w by fuselineFloat(if (on) 1f else 0f, Fuse.motion.value(), label = "stepDot")
                     Box(
@@ -1089,7 +1151,7 @@ private fun StepHeader(studio: StudioState, compact: Boolean, onGo: (StudioStep)
         // On a short screen the rows need the room more: each row says what it does itself.
         if (!compact) {
             Spacer(Modifier.height(Space.xxs))
-            FText(studio.openColor?.note ?: step.guide, Fuse.type.caption, color = c.textMuted, maxLines = 2)
+            FText(studio.openColor?.note ?: (if (studio.simple) step.simpleGuide else null) ?: step.guide, Fuse.type.caption, color = c.textMuted, maxLines = 2)
         }
     }
 }
@@ -1224,6 +1286,9 @@ private fun StudioLineView(
                         SwatchStrip(list, chosen, onPick)
                     }
                 }
+                StudioRow.DEPTH -> Stepper(!studio.simple, dir, selected, onStep, narrow) { advanced ->
+                    FText(if (advanced) "Advanced" else "Simple", Fuse.type.label, maxLines = 1)
+                }
                 StudioRow.MODE -> Stepper(studio.dark, dir, selected, onStep, narrow) { d ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         FuseIcon(if (d) FuseIcons.Moon else FuseIcons.Sun, size = Size.iconS, tint = c.textMuted)
@@ -1254,6 +1319,8 @@ private fun StudioLineView(
                         FText(f.label(), Fuse.type.label, maxLines = 1)
                     }
                 }
+                StudioRow.QUICK_LOOK -> Stepper(studio.quickMenu, dir, selected, onStep, narrow) { q -> FText(q.label(), Fuse.type.label, maxLines = 1) }
+                StudioRow.WIDGET_LOOK -> Stepper(studio.widgets, dir, selected, onStep, narrow) { q -> FText(q.label(), Fuse.type.label, maxLines = 1) }
                 StudioRow.MOTION -> Stepper(studio.motion, dir, selected, onStep, narrow) { m -> FText(m.label(), Fuse.type.label, maxLines = 1) }
                 StudioRow.SOUND -> Stepper(studio.sound, dir, selected, onStep, narrow) { s ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1516,6 +1583,8 @@ internal fun spotlightOf(studio: StudioState): Spotlight? {
         StudioRow.MODE -> Spotlight(emptySet(), "Light or dark", "A bright room or a dark one; the colours are made again around your accent")
         StudioRow.CORNERS -> Spotlight(setOf(SpotPart.TILES, SpotPart.SHEET), "Corners", "How round tiles, panels and buttons are", sheet = true)
         StudioRow.FOCUS -> Spotlight(setOf(SpotPart.FOCUSED_TILE), "Focus", "How the tile you're on stands out from the rest")
+        StudioRow.QUICK_LOOK -> Spotlight(setOf(SpotPart.QUICK), "Quick menu", "How its tiles and widgets are drawn", quick = true)
+        StudioRow.WIDGET_LOOK -> Spotlight(setOf(SpotPart.TILES), "Home's widgets", "Lit from a corner, washed in their own colour, or glass over the room")
         StudioRow.BACKGROUND, StudioRow.LIGHT, StudioRow.SPEED -> Spotlight(emptySet(), row.label, "The scene behind everything: which one, how bright, how lively")
         StudioRow.PICTURE, StudioRow.PICTURE_DIM, StudioRow.PICTURE_ALIGN, StudioRow.PICTURE_REMOVE -> Spotlight(emptySet(), "Your picture", "Behind everything, darkened so text reads over it")
         StudioRow.GLASS, StudioRow.BLUR, StudioRow.OPACITY -> Spotlight(setOf(SpotPart.SHEET), row.label, "Panels like frosted glass, with the room showing through", sheet = true)

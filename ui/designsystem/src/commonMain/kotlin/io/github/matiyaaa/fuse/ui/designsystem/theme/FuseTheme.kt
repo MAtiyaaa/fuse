@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.designsystem.theme
 
+import io.github.matiyaaa.fuse.model.ColorVision
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
@@ -63,6 +64,8 @@ data class FuseLook(
     val glass: GlassSettings,
     /** High contrast focus: adds an outline ring to every focus style. */
     val highContrastFocus: Boolean,
+    /** The colours states use for how the person sees colour ([colors] already has them). */
+    val colorVision: ColorVision = ColorVision.TYPICAL,
 )
 
 val LocalFuseLook = staticCompositionLocalOf<FuseLook> { error("FuseTheme missing") }
@@ -102,18 +105,19 @@ fun FuseTheme(
     highContrastFocus: Boolean = false,
     animateChanges: Boolean = false,
     textScale: Float = 1f,
+    colorVision: ColorVision = ColorVision.TYPICAL,
     content: @Composable () -> Unit,
 ) {
     if (!animateChanges) {
-        FuseThemeLocals(spec, motion, quality, glyphs, glass, highContrastFocus, textScale, content)
+        FuseThemeLocals(spec, motion, quality, glyphs, glass, highContrastFocus, textScale, colorVision, content)
         return
     }
     val reduced = (motion ?: spec.motion) == MotionProfile.REDUCED
     ThemeTransition(
-        requested = ThemeLookKey(spec, glass, highContrastFocus),
+        requested = ThemeLookKey(spec, glass, highContrastFocus, colorVision),
         animate = !reduced && quality.animatedBackground,
     ) { shown ->
-        FuseThemeLocals(shown.spec, motion, quality, glyphs, shown.glass, shown.highContrastFocus, textScale, content)
+        FuseThemeLocals(shown.spec, motion, quality, glyphs, shown.glass, shown.highContrastFocus, textScale, shown.colorVision, content)
     }
 }
 
@@ -126,10 +130,11 @@ private fun FuseThemeLocals(
     glass: GlassSettings?,
     highContrastFocus: Boolean,
     textScale: Float,
+    colorVision: ColorVision,
     content: @Composable () -> Unit,
 ) {
-    val colors = remember(spec) { FuseColors.from(spec.palette) }
-    val look = remember(spec, glass, highContrastFocus) {
+    val colors = remember(spec, colorVision) { FuseColors.from(spec.palette).forVision(colorVision) }
+    val look = remember(spec, glass, highContrastFocus, colors) {
         FuseLook(
             spec = spec,
             colors = colors,
@@ -137,6 +142,7 @@ private fun FuseThemeLocals(
             focusStyle = spec.focus,
             glass = glass ?: spec.glass,
             highContrastFocus = highContrastFocus,
+            colorVision = colorVision,
         )
     }
     val type = rememberFuseTypography(textScale)

@@ -117,6 +117,31 @@ class HouseholdTest {
     }
 
     @Test
+    fun `keys shared by one device reach every other, and nothing else rides along`() = runBlocking<Unit> {
+        val deck = Device("Deck", "LINUX").join()
+        val thor = Device("Thor", "ANDROID").join()
+        val given = mapOf(
+            "key:sgdb.apikey" to "sgdb-123",
+            "key:ra.username" to "mo",
+            "key:ra.apikey" to "ra-456",
+            // Not a sign-in or key the household keeps: never kept, never passed on.
+            "anything" to "x",
+            "key:../escape" to "y",
+        )
+        assertTrue(deck.client.shareServices(null, null, given))
+        val (services, open) = assertNotNull(thor.client.services())
+        assertTrue(services.shared)
+        assertEquals(mapOf("key:sgdb.apikey" to "sgdb-123", "key:ra.username" to "mo", "key:ra.apikey" to "ra-456"), open)
+        assertTrue("sgdb-123" !in File(root, "host/services.json").readText(), "kept sealed on the host")
+
+        // A key changed on the Thor replaces the household's; the others stay.
+        assertTrue(thor.client.shareServices(null, null, mapOf("key:sgdb.apikey" to "sgdb-789")))
+        val after = assertNotNull(deck.client.services()).second
+        assertEquals("sgdb-789", after["key:sgdb.apikey"])
+        assertEquals("ra-456", after["key:ra.apikey"])
+    }
+
+    @Test
     fun `one save reaches every device that has the game, and the host knows who is current`() = runBlocking<Unit> {
         val deck = Device("Deck", "LINUX").join()
         val pc = Device("PC", "WINDOWS").join()

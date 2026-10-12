@@ -349,3 +349,120 @@ internal fun AuditDriver.homePages() {
         shoot("back on the first page")
     }
 }
+
+/**
+ * Suggestions: For You and the Spotlight as Home rows, each game's reason under it and on the
+ * stage, and a system's page naming its game of the day.
+ */
+internal fun AuditDriver.discoverScreens() {
+    scenario("home", "for you and spotlight") {
+        val rows = listOf(WidgetKind.SPOTLIGHT, WidgetKind.FOR_YOU, WidgetKind.CONTINUE_PLAYING)
+            .mapIndexed { i, k -> HomeWidget(id = k.name.lowercase(), kind = k, order = i) }
+        useLibrary { it.copy(home = HomeLayoutConfig(widgets = rows)) }
+        waitFor("Spotlight", timeoutMs = 20_000)
+        tap(PadButton.DPAD_LEFT)
+        shoot("the spotlight first, with why", 2_000)
+        if (nav(NavAction.DOWN) != NavResult.MOVED) throw NotCovered("Could not move down to For you")
+        shoot("for you, each game with its reason", 1_500)
+        tap(PadButton.DPAD_RIGHT)
+        shoot("the next suggestion", 1_200)
+    }
+    scenario("home", "for you on the board") {
+        val board = listOf(
+            HomeWidget("spotlight", WidgetKind.SPOTLIGHT, 0, width = 2, height = 2),
+            HomeWidget("for_you", WidgetKind.FOR_YOU, 1, width = 2, height = 2),
+        )
+        useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS, board = board)) }
+        waitFor("Spotlight", timeoutMs = 20_000)
+        tap(PadButton.DPAD_LEFT)
+        shoot("the spotlight and for you, side by side", 2_000)
+    }
+    scenario("library", "system spotlight") {
+        useLibrary()
+        tab(Destination.SYSTEMS)
+        tap(PadButton.A)
+        settle(1_500)
+        if (nav(NavAction.UP) != NavResult.MOVED) throw NotCovered("Up did not reach the system's toolbar")
+        shoot("a system's game of the day in its toolbar", 1_500)
+    }
+}
+
+/**
+ * Fuse's games in Steam: a system's options add them all, the question says which are new and which
+ * another tool already put there, the game's own options then offer to take it out, and Settings,
+ * Library has them to look over, take out or undo.
+ */
+internal fun AuditDriver.steamGamesScreens() {
+    scenario("library", "steam games") {
+        val platform = AuditPlatform(size, steam = AuditSteam(), host = io.github.matiyaaa.fuse.model.Host.LINUX)
+        useLibrary(platform)
+        tab(Destination.SYSTEMS)
+        tap(PadButton.A)
+        waitFor("Title")
+        settle(1_500)
+        tap(PadButton.X)
+        waitFor("Add to Steam")
+        shoot("a game's options: add it to Steam", 1_200)
+        // Further down, the system's own: all of its games at once.
+        tapText("Add all to Steam")
+        waitFor("to Steam?")
+        shoot("what will happen, before anything is written", 1_200)
+        tap(PadButton.A)
+        waitFor("added")
+        shoot("added, said in a notice", 1_200)
+        settle(2_000)
+        tap(PadButton.X)
+        waitFor("Remove from Steam")
+        shoot("a game in Steam: its options offer to take it out", 1_200)
+        tap(PadButton.B)
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("library"))
+        tap(PadButton.DPAD_RIGHT)
+        settle(600)
+        tapText("Your games in Steam")
+        waitFor("Look them over")
+        shoot("Settings, Library: Fuse's games in Steam", 1_200)
+    }
+}
+
+internal fun AuditDriver.cheatScreens() {
+    scenario("library", "game cheats") {
+        useLibrary(AuditPlatform(size, host = io.github.matiyaaa.fuse.model.Host.LINUX))
+        search("Emberline Saga")
+        tap(PadButton.START)
+        tap(PadButton.X)
+        tapText("Cheats")
+        waitFor("RetroArch cheats")
+        shoot("a RetroArch game's cheats, from the ones RetroArch downloaded", 1_200)
+        tap(PadButton.A)
+        waitFor("turned on in Fuse")
+        shoot("one turned on in Fuse, and Apply Cheats After Game Load for this game alone", 1_200)
+        // Off again, so the files are as they were.
+        tap(PadButton.A)
+        settle(900)
+        tapText("Add Cheats From a File")
+        waitFor("restoration point")
+        shoot("a cheat file of the player's own: exactly where it goes, before anything changes", 1_200)
+        tap(PadButton.B)
+        settle(600)
+        tap(PadButton.B)
+    }
+    scenario("library", "game mods") {
+        useLibrary(AuditPlatform(size, host = io.github.matiyaaa.fuse.model.Host.LINUX))
+        search("Emberline Saga")
+        tap(PadButton.START)
+        tap(PadButton.X)
+        tapText("Cheats")
+        waitFor("RetroArch cheats")
+        tapText("Find Mods on GameBanana")
+        waitFor("Which is Emberline Saga")
+        shoot("which game on GameBanana it is: chosen, never guessed", 1_200)
+        tapText("Emberline Saga")
+        waitFor("Treasure Hunter Cheats")
+        shoot("its mods, those Fuse can add first", 1_200)
+        tapText("Treasure Hunter Cheats")
+        waitFor("treasure_hunter_1.3.zip")
+        shoot("a mod's files, with what GameBanana's checks said and what Fuse won't open", 1_200)
+        tap(PadButton.B)
+    }
+}

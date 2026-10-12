@@ -55,6 +55,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.effects.background
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter
@@ -116,8 +117,8 @@ private fun StepInput(app: AppState, keys: ActiveKeys, actions: List<SetupAction
 
 /**
  * Setting Fuse Sync up, one clear step at a time. As the host: what it means, a name, whether it
- * keeps running when Fuse is closed, then "Fuse Sync is ready" with the code other devices type.
- * Connecting: the hosts found on this network ("Fuse Sync found"), or an address typed in, then the
+ * keeps running when Fuse is closed, then "Fuse One is ready" with the code other devices type.
+ * Connecting: the hosts found on this network ("Fuse One found"), or an address typed in, then the
  * host's code, then who's playing.
  */
 @Composable
@@ -130,6 +131,9 @@ internal fun SyncSetupScreen(app: AppState, host: Boolean) {
     var connectError by remember { mutableStateOf<String?>(null) }
     // The host's address from outside, when given: used for asking and for a code alike.
     var remote by remember { mutableStateOf<String?>(null) }
+    // Whether Fuse One is already in use on another device (on its own): the host then says how that
+    // device joins with everything it has.
+    var existing by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         app.hero = null
         app.hints = listOf(Hint(HintButton.CONFIRM, "Choose"), Hint(HintButton.BACK, "Back"))
@@ -157,7 +161,7 @@ internal fun SyncSetupScreen(app: AppState, host: Boolean) {
                 Swap(step, label = "setup") { s ->
                     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(if (compact) Space.l else Space.xxl)) {
                         when (s) {
-                            SetupStep.HostIntro -> HostIntro(app, compact, keys.at(s == step), working) { name, keep, folder ->
+                            SetupStep.HostIntro -> HostIntro(app, compact, keys.at(s == step), working, existing, onExisting = { existing = it }) { name, keep, folder ->
                                 working = true
                                 app.scope.launch {
                                     app.store.sync.configure { it.copy(hostDataDir = folder) }
@@ -167,7 +171,7 @@ internal fun SyncSetupScreen(app: AppState, host: Boolean) {
                                     working = false
                                 }
                             }
-                            SetupStep.HostReady -> HostReady(app, compact, keys.at(s == step))
+                            SetupStep.HostReady -> HostReady(app, compact, keys.at(s == step), existing)
                             SetupStep.Find -> Find(app, compact, keys.at(s == step)) { connectError = null; step = SetupStep.Way(it) }
                             is SetupStep.Way -> JoinWay(app, s.host, compact, keys.at(s == step), working, connectError, remote, onRemote = { remote = it }, onCode = { connectError = null; step = SetupStep.Code(s.host) }) {
                                 working = true
@@ -294,7 +298,7 @@ private fun ChoiceRow(label: String, value: String, icon: ImageVector, selected:
 }
 
 @Composable
-private fun HostIntro(app: AppState, compact: Boolean, keys: ActiveKeys, working: Boolean, onGo: (String, Boolean, String) -> Unit) {
+private fun HostIntro(app: AppState, compact: Boolean, keys: ActiveKeys, working: Boolean, existing: Boolean, onExisting: (Boolean) -> Unit, onGo: (String, Boolean, String) -> Unit) {
     val actions = mutableListOf<SetupAction>()
     val index = keys.index
     val svc = app.store.sync.service ?: return
@@ -309,6 +313,7 @@ private fun HostIntro(app: AppState, compact: Boolean, keys: ActiveKeys, working
     fun askFolder() {
         app.scope.launch { app.platform.storage.pickFolder("Where should the host keep everyone's saves?")?.let { folder = it } }
     }
+    actions += SetupAction("existing") { onExisting(!existing) }
     actions += SetupAction("name") { askName() }
     if (lifetime.supported) actions += SetupAction("keep") { keep = !keep }
     actions += SetupAction("folder") { askFolder() }
@@ -324,11 +329,17 @@ private fun HostIntro(app: AppState, compact: Boolean, keys: ActiveKeys, working
     Point(FuseIcons.WifiOff, "Devices keep playing while it's off, and catch up when it's back.")
     Point(FuseIcons.History, "Every save keeps its earlier versions, so nothing is ever lost.")
     Spacer(Modifier.height(Space.l))
-    ChoiceRow("Host name", name, FuseIcons.Pencil, selected = index == 0, detail = "How your other devices see it") { askName() }
+    ChoiceRow(
+        "Already using Fuse One on another device?", if (existing) "Yes" else "No", FuseMarks.FuseOne, selected = index == 0,
+        detail = if (existing) "It joins this host with its profiles, saves and settings; nothing on it is replaced" else "A handheld keeping its own profiles, say",
+        trailing = { io.github.matiyaaa.fuse.ui.designsystem.components.Toggle(existing) },
+    ) { onExisting(!existing) }
+    Spacer(Modifier.height(Space.s))
+    ChoiceRow("Host name", name, FuseIcons.Pencil, selected = index == 1, detail = "How your other devices see it") { askName() }
     if (lifetime.supported) {
         Spacer(Modifier.height(Space.s))
         ChoiceRow(
-            "Keep running when Fuse is closed", if (keep) "On" else "Off", FuseIcons.ServerCog, selected = index == 1,
+            "Keep running when Fuse is closed", if (keep) "On" else "Off", FuseIcons.ServerCog, selected = index == 2,
             detail = listOfNotNull(lifetime.description, lifetime.caveat).joinToString(". "),
             trailing = { io.github.matiyaaa.fuse.ui.designsystem.components.Toggle(keep) },
         ) { keep = !keep }
@@ -360,7 +371,7 @@ private fun Modifier.keptInView(selected: Boolean): Modifier {
 
 /** The big moment: a ring that draws itself round a check, the host's name, and the code to add devices. */
 @Composable
-private fun HostReady(app: AppState, compact: Boolean, keys: ActiveKeys) {
+private fun HostReady(app: AppState, compact: Boolean, keys: ActiveKeys, existing: Boolean) {
     val actions = mutableListOf<SetupAction>()
     val index = keys.index
     val svc = app.store.sync.service ?: return
@@ -371,7 +382,7 @@ private fun HostReady(app: AppState, compact: Boolean, keys: ActiveKeys) {
     actions += SetupAction("profile") { app.back(); app.whoAreYou = WhoMode.ADD }
     SuccessMark(if (compact) 64.dp else 88.dp)
     Spacer(Modifier.height(Space.l))
-    FText("Fuse Sync is ready", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1, modifier = Modifier.semantics { heading() })
+    FText("Fuse One is ready", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1, modifier = Modifier.semantics { heading() })
     Spacer(Modifier.height(Space.xs))
     val admin = profiles.firstOrNull { it.hostOnly }
     FText(
@@ -380,8 +391,12 @@ private fun HostReady(app: AppState, compact: Boolean, keys: ActiveKeys) {
     )
     Spacer(Modifier.height(Space.xs))
     FText(
-        "On each of your other devices, choose Connect to a Host and ask to join: a card asks here to let it in. Or type this code:",
-        Fuse.type.body, color = c.textMuted, maxLines = 3,
+        if (existing) {
+            "Now bring in the device already using Fuse One: on it, Settings, Fuse One, Connect to a Host, and choose ${hostView?.name ?: "this computer"}. Its profiles, saves and settings become the household's as they are, and nothing on it is replaced. A card asks here to let it in, or type this code there:"
+        } else {
+            "On each of your other devices, choose Connect to a Host and ask to join: a card asks here to let it in. Or type this code:"
+        },
+        Fuse.type.body, color = c.textMuted, maxLines = 5,
     )
     Spacer(Modifier.height(Space.l))
     PairingCard(app, hostView?.pairingCode, hostView?.addresses.orEmpty(), compact)
@@ -434,7 +449,7 @@ internal fun PairingCard(app: AppState, code: String?, addresses: List<String>, 
         verticalArrangement = Arrangement.spacedBy(Space.m),
     ) {
         FText("To add a device", Fuse.type.bodyStrong, maxLines = 1)
-        FText("On it: Settings, Addons, Fuse Sync, Connect to a Host, choose your host, then Type a Code:", Fuse.type.caption, color = c.textMuted, maxLines = 3)
+        FText("On it: Settings, Fuse One, Connect to a Host, choose your host, then Type a Code:", Fuse.type.caption, color = c.textMuted, maxLines = 3)
         val letters = current?.toList() ?: List(8) { ' ' }
         Row(horizontalArrangement = Arrangement.spacedBy(if (compact) Space.xs else Space.s), verticalAlignment = Alignment.CenterVertically) {
             letters.forEachIndexed { i, ch ->
@@ -461,7 +476,7 @@ internal fun PairingCard(app: AppState, code: String?, addresses: List<String>, 
     }
 }
 
-/** "Fuse Sync found": the hosts that answered on this network, or typing an address. */
+/** "Fuse One found": the hosts that answered on this network, or typing an address. */
 @Composable
 private fun Find(app: AppState, compact: Boolean, keys: ActiveKeys, onPick: (NearbyHost) -> Unit) {
     val actions = mutableListOf<SetupAction>()
@@ -487,10 +502,10 @@ private fun Find(app: AppState, compact: Boolean, keys: ActiveKeys, onPick: (Nea
     if (!looking) actions += SetupAction("again") { round++ }
 
     Heading(
-        if (found.isNotEmpty()) "Fuse Sync found" else "Find your host",
+        if (found.isNotEmpty()) "Fuse One found" else "Find your host",
         when {
-            looking -> "Looking for a Fuse Sync host on this network."
-            found.isEmpty() -> "Nothing answered on this network. Check the host is on and Fuse Sync is set up there, or type its address."
+            looking -> "Looking for a Fuse One host on this network."
+            found.isEmpty() -> "Nothing answered on this network. Check the host is on and Fuse One is set up there, or type its address."
             found.size == 1 -> "Your host is on this network. Choose it to connect."
             else -> "These hosts are on this network. Choose yours."
         },
@@ -707,7 +722,7 @@ private fun CodeEntry(app: AppState, host: NearbyHost, compact: Boolean, keys: A
 
     Heading(
         "Enter the code from ${host.name}",
-        "On the host: Settings, Addons, Fuse Sync, Add a Device. It shows a code that works once.",
+        "On the host: Settings, Fuse One, Add a Device. It shows a code that works once.",
         compact, FuseIcons.Key,
     )
     Spacer(Modifier.height(Space.l))

@@ -62,6 +62,25 @@ class LocalAchievementsTest {
         assertNull(LocalAchievements(fs).steam(listOf("/steam"), 999), "a game without a schema has none")
     }
 
+    @Test
+    fun twoAccountsOnOneComputerNeverSeeEachOthersAchievements() = runTest {
+        // Account 123's stats unlock two; account 456's (the newer file) unlock none.
+        val none = BinaryVdf.write(block("cache" to block("crc" to Int32(1), "1" to block("data" to Int32(0)))))
+        val fs = InMemoryFileSystem()
+            .bytes("/steam/appcache/stats/UserGameStatsSchema_620.bin", schema())
+            .bytes("/steam/appcache/stats/UserGameStats_123_620.bin", stats())
+            .bytes("/steam/appcache/stats/UserGameStats_456_620.bin", none)
+        val reader = LocalAchievements(fs)
+        // SteamIDs are the account ids plus 76561197960265728.
+        val mine = assertNotNull(reader.steam(listOf("/steam"), 620, steamId = "76561197960265851"))
+        assertEquals(2, mine.items.count { it.unlockedAt != null })
+        val theirs = assertNotNull(reader.steam(listOf("/steam"), 620, steamId = "76561197960266184"))
+        assertEquals(0, theirs.items.count { it.unlockedAt != null })
+        // An account with no stats here sees the set, with nothing unlocked: never someone else's.
+        val stranger = assertNotNull(reader.steam(listOf("/steam"), 620, steamId = "76561197960265729"))
+        assertEquals(0, stranger.items.count { it.unlockedAt != null })
+    }
+
     private val conf = """<?xml version="1.0" encoding="UTF-8"?>
 <trophyconf version="1.0" policy="large">
 <npcommid>NPWR00508_00</npcommid>
@@ -102,5 +121,37 @@ class LocalAchievementsTest {
         // Without the game's own folders, the set's name finds it.
         assertNotNull(reader.ps3Trophies(listOf("/rpcs3/dev_hdd0"), emptyList(), null, "Uncharted: Drake's Fortune"))
         assertNull(reader.ps3Trophies(listOf("/rpcs3/dev_hdd0"), emptyList(), null, "Another Game"))
+    }
+
+    @Test
+    fun ps4TrophiesComeFromShadPs4() = runTest {
+        // As shadPS4 keeps them (np_trophy.cpp): the set's TROP.XML, and each user's unlocks.
+        val trop = """<?xml version="1.0" encoding="UTF-8"?>
+<trophyconf version="1.0" platform="ps4">
+  <title-name>Bloodborne&#8482;</title-name>
+  <trophy id="000" hidden="no" ttype="P" pid="-1"><name>Bloodborne</name><detail>All trophies.</detail></trophy>
+  <trophy ttype="B" id="001" hidden="no"><name>Yharnam, Pthumerian Birthplace</name><detail>Discover &amp; enter.</detail></trophy>
+  <trophy id="002" hidden="yes" ttype="G"><name>Secret</name><detail>Hidden.</detail></trophy>
+</trophyconf>"""
+        val state = """<trophyconf><trophy id="0" hidden="no" ttype="P" unlockstate="false"/>
+<trophy id="1" unlockstate="true" timestamp="1700000000" ttype="B"/><trophy id="2" ttype="G" unlockstate="false" timestamp="0"/></trophyconf>"""
+        val fs = InMemoryFileSystem()
+            .file("/shadPS4/trophy/NPWR08661_00/Xml/TROP.XML", content = trop)
+            .file("/shadPS4/home/1000/trophy/NPWR08661_00.xml", content = state)
+            .file("/shadPS4/trophy/NPWR00001_00/Xml/TROP.XML", content = trop.replace("Bloodborne&#8482;", "Another Game"))
+        val reader = LocalAchievements(fs)
+        val npbind = "....NPWR08661_00\u0000\u0000....".encodeToByteArray()
+        assertEquals(listOf("NPWR08661_00"), reader.npCommIds(npbind))
+        val set = assertNotNull(reader.ps4Trophies(listOf("/shadPS4"), listOf("NPWR08661_00"), "Bloodborne"))
+        assertEquals(LocalAchievementSource.PS4_TROPHIES, set.source)
+        assertEquals(listOf("platinum", "bronze", "gold"), set.items.map { it.grade })
+        assertEquals("Discover & enter.", set.items[1].description)
+        assertEquals(1_700_000_000_000L, set.items[1].unlockedAt)
+        assertNull(set.items[0].unlockedAt)
+        assertTrue(set.items[2].hidden)
+        assertEquals("/shadPS4/trophy/NPWR08661_00/Icons/TROP001.PNG", set.items[1].icon)
+        // Without the game's npbind.dat, the set's title finds it; another set's never does.
+        assertEquals("Another Game", reader.ps4Trophies(listOf("/shadPS4"), emptyList(), "Another Game")?.title)
+        assertNull(reader.ps4Trophies(listOf("/shadPS4"), emptyList(), "Not There"))
     }
 }

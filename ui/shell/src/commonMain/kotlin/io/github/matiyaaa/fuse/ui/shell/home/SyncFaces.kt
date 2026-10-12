@@ -36,6 +36,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.ProfileAvatar
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
@@ -63,7 +64,7 @@ internal fun SyncStatusFace(face: FaceSize) {
     val svc = LocalSyncService.current
     Framed(WidgetKind.SYNC_STATUS, null, null, tint = Fuse.colors.accent) {
         if (svc == null) {
-            EmptyFace(FuseIcons.RefreshCcw, "Fuse Sync", "Turn on Fuse Sync in Settings, Addons")
+            EmptyFace(FuseMarks.FuseOne, "Fuse One", "Turn on Fuse One in Settings")
             return@Framed
         }
         val status by svc.status.collectAsState()
@@ -83,7 +84,7 @@ internal fun SyncStatusFace(face: FaceSize) {
         }
         when (face) {
             FaceSize.SMALL -> {
-                WidgetHeader(FuseIcons.RefreshCcw, "Fuse Sync", short = "Sync")
+                WidgetHeader(FuseMarks.FuseOne, "Fuse One", short = "Sync")
                 Spacer(Modifier.weight(1f))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     StateMark(tone, working, 34.dp)
@@ -92,7 +93,7 @@ internal fun SyncStatusFace(face: FaceSize) {
                 }
             }
             FaceSize.WIDE -> {
-                WidgetHeader(FuseIcons.RefreshCcw, "Fuse Sync", trailing = pending.takeIf { it > 0 }?.let { "$it waiting" })
+                WidgetHeader(FuseMarks.FuseOne, "Fuse One", trailing = pending.takeIf { it > 0 }?.let { "$it waiting" })
                 Spacer(Modifier.weight(1f))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     StateMark(tone, working, 48.dp)
@@ -108,7 +109,7 @@ internal fun SyncStatusFace(face: FaceSize) {
                 }
             }
             else -> {
-                WidgetHeader(FuseIcons.RefreshCcw, "Fuse Sync", trailing = pending.takeIf { it > 0 }?.let { "$it waiting" })
+                WidgetHeader(FuseMarks.FuseOne, "Fuse One", trailing = pending.takeIf { it > 0 }?.let { "$it waiting" })
                 Spacer(Modifier.height(Space.m))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     StateMark(tone, working, 56.dp)
@@ -138,7 +139,7 @@ internal fun SyncDevicesFace(face: FaceSize) {
     val svc = LocalSyncService.current
     Framed(WidgetKind.SYNC_DEVICES, null, null, tint = Fuse.colors.accent) {
         if (svc == null) {
-            EmptyFace(FuseIcons.MonitorSmartphone, "Your devices", "Turn on Fuse Sync in Settings, Addons")
+            EmptyFace(FuseIcons.MonitorSmartphone, "Your devices", "Turn on Fuse One in Settings")
             return@Framed
         }
         val devices by svc.devices.collectAsState()

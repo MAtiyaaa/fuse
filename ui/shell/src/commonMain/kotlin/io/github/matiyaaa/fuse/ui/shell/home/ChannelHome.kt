@@ -911,7 +911,8 @@ private fun Modifier.boardPlace(rect: Rect, animate: Boolean): Modifier {
         val width = w.value.roundToInt().coerceAtLeast(1)
         val height = h.value.roundToInt().coerceAtLeast(1)
         val p = measurable.measure(Constraints.fixed(width, height))
-        layout(width, height) { p.place(x.value.roundToInt(), y.value.roundToInt()) }
+        // Relative: laid out right to left, the whole board mirrors, as the rest of Fuse does.
+        layout(width, height) { p.placeRelative(x.value.roundToInt(), y.value.roundToInt()) }
     }
 }
 

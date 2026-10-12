@@ -65,6 +65,21 @@ internal class DesktopEmulatorDetector(
         return (known + beside).filter { File(it).isDirectory }.map { File(it).absoluteFile.fusePath }.distinct()
     }
 
+    override fun shadPs4UserDirs(installed: List<InstalledEmulator>): List<String> {
+        val home = env.homeDir.trimEnd('/')
+        // Portable (`user` beside the program) first, then the system's data folder (common/path_util.cpp).
+        val beside = installed.filter { it.id.value.endsWith(".shadps4") }.mapNotNull { e -> File(e.appId).parentFile?.let { File(it, "user").path } }
+        val known = when (os) {
+            DesktopOs.LINUX -> listOf(
+                (System.getenv("XDG_DATA_HOME")?.takeIf { it.isNotBlank() } ?: "$home/.local/share") + "/shadPS4",
+                "$home/.var/app/net.shadps4.shadPS4/data/shadPS4",
+            )
+            DesktopOs.MACOS -> listOf("$home/Library/Application Support/shadPS4")
+            DesktopOs.WINDOWS -> listOfNotNull(System.getenv("APPDATA")?.let { "$it/shadPS4" })
+        }
+        return (beside + known).filter { File(it).isDirectory }.map { File(it).absoluteFile.fusePath }.distinct()
+    }
+
     override fun retroArchCorePath(installed: InstalledEmulator, core: String): String? = when (os) {
         DesktopOs.LINUX -> LinuxDetector.findRetroArchCore(env, installed, core)
         DesktopOs.WINDOWS -> WindowsDetector.findRetroArchCore(files, installed, core)

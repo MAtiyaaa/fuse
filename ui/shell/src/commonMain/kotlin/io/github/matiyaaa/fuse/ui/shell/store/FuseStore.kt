@@ -105,7 +105,7 @@ interface FuseStore {
     /** Downloads: every transfer Fuse makes for the person, in one place. */
     val transfers: TransfersOps get() = TransfersOps.None
 
-    /** Fuse RomM, the Fuse RomM native integration. */
+    /** RomM, the RomM native integration. */
     val romm: RommOps get() = RommOps.None
 
     /** The Fuse Library: the household's games on its other devices, through Fuse Sync. */
@@ -275,6 +275,9 @@ interface StorageOps {
     /** Connected drives games can be moved to, each with its games folder when it has one. */
     suspend fun moveTargets(): List<MoveTarget> = emptyList()
 
+    /** What Fuse's own art and caches take (the system may clear them), or null when it can't tell. */
+    suspend fun cacheBytes(): Long? = null
+
     /** The drive [game]'s files are on (a [MoveTarget.volumeId]), or null when Fuse can't tell. */
     suspend fun driveOf(game: GameId): String? = null
 
@@ -397,6 +400,9 @@ enum class GameSet { LIBRARY, MISSING, HIDDEN, REMOVED }
 
 interface LibraryOps {
     val home: StateFlow<HomeFeed>
+
+    /** Today's game in [platform]'s spotlight, and why; null while the system has no games. */
+    fun spotlight(platform: PlatformId): Flow<Suggestion?> = kotlinx.coroutines.flow.flowOf(null)
     val platforms: StateFlow<List<PlatformCard>>
     fun games(query: GameQuery): Flow<List<GameCard>>
     fun game(id: GameId): Flow<GameDetail?>
@@ -436,6 +442,15 @@ interface LibraryOps {
     /** Forgets a game whose file is gone, with its art and play history. Files are never touched. */
     suspend fun forgetMissing(id: GameId)
 
+    /**
+     * Removes removed games for good: their art goes and they leave the Removed view, while Fuse
+     * still remembers them so a scan never brings them back. Files are never touched.
+     */
+    suspend fun purgeRemoved(ids: List<GameId>) {}
+
+    /** The library's game for Steam's app [appId], when Steam's game is in the library here. */
+    suspend fun steamGame(appId: Long): GameId? = null
+
     /** Clean Display Names: preview, apply and undo. Files are never renamed. */
     suspend fun previewCleanNames(): List<Pair<String, String>>
     suspend fun applyCleanNames(enabled: Boolean)
@@ -458,16 +473,76 @@ interface LibraryOps {
     suspend fun rpcs3Compatibility(id: GameId): CompatibilityAnswer = CompatibilityAnswer.Unreachable
 
     /**
-     * The PCSX2 patches for the PS2 game [id] (its patch files and PCSX2's bundled ones), each with
-     * who turned it on. Reads only.
+     * The patches and cheats for the game [id] in its emulator's own settings (PCSX2, DuckStation,
+     * PPSSPP), each with who turned it on. Reads only.
      */
-    suspend fun pcsx2Patches(id: GameId): Pcsx2PatchList = Pcsx2PatchList.Unavailable("Not here", "PCSX2's patches can only be changed from Fuse on a computer.")
+    suspend fun gamePatches(id: GameId): GamePatchList = GamePatchList.Unavailable("Not here", "Patches and cheats can only be changed from Fuse on a computer.")
 
     /**
-     * Turns the patch [name] on or off in PCSX2's settings for [id]. Fuse turns off only patches it
-     * turned on itself; anything set in PCSX2 stays as it is. False when nothing changed.
+     * Turns the patch or cheat [name] on or off in the emulator's settings for [id]. Fuse turns off
+     * only what it turned on itself; anything set in the emulator stays as it is. False when nothing
+     * changed.
      */
-    suspend fun setPcsx2Patch(id: GameId, name: String, on: Boolean): Boolean = false
+    suspend fun setGamePatch(id: GameId, name: String, on: Boolean, cheat: Boolean = false): Boolean = false
+
+    /** The cheats, patches and texture packs a person added to [id] from files of their own, and what can be added here. */
+    suspend fun enhancements(id: GameId): Enhancements = Enhancements(emptyList(), emptyList())
+
+    /**
+     * What adding [source] (a file, folder or `.zip`) to [id] as [kind] would do: which files go in,
+     * which they replace, which settings change, and what is left out. Nothing changes yet.
+     */
+    suspend fun planEnhancement(id: GameId, kind: io.github.matiyaaa.fuse.launch.patches.EnhancementKind, source: String): EnhancementPreview =
+        EnhancementPreview.Unavailable("Not here", "Your own cheats, patches and textures can be added from Fuse on a computer.")
+
+    /** Adds what the preview with [token] showed, after making a restoration point. Null when it worked, else why not. */
+    suspend fun addEnhancement(token: String): String? = "Not here."
+
+    /** Which game on GameBanana [id] is, and the games a search for [query] (else its name) finds there. */
+    suspend fun modSiteGames(id: GameId, query: String? = null): ModSiteGames = ModSiteGames(null, emptyList(), query.orEmpty(), "Mods can be found from Fuse on a computer.")
+
+    /** Remembers [game] as [id]'s game on GameBanana (null forgets it). */
+    suspend fun linkModSiteGame(id: GameId, game: io.github.matiyaaa.fuse.integrations.gamebanana.GbGame?) = Unit
+
+    /** A page (from 1) of the mods on GameBanana for [id]'s game there, most liked first. */
+    suspend fun modSiteMods(id: GameId, page: Int = 1): ModSiteMods = ModSiteMods.Unavailable("Not here", "Mods can be found from Fuse on a computer.")
+
+    /** A mod's page on GameBanana, with what Fuse can do with each of its files for [id]. */
+    suspend fun modSitePage(id: GameId, modId: Long): ModSitePage = ModSitePage.Unavailable("Not here", "Mods can be found from Fuse on a computer.")
+
+    /**
+     * Fetches the file [fileId] of mod [modId] into Fuse's own folder (checked against GameBanana's
+     * size and checksum) and works out what adding it to [id] would do, as [planEnhancement] does.
+     * Nothing in the emulator's folders changes yet.
+     */
+    suspend fun fetchModSiteFile(id: GameId, modId: Long, fileId: Long, onProgress: (Float) -> Unit = {}): EnhancementPreview =
+        EnhancementPreview.Unavailable("Not here", "Mods can be added from Fuse on a computer.")
+
+    /** Takes out [enhancement] from [id], putting back what was there before; [force] even when it was changed since. */
+    suspend fun removeEnhancement(id: GameId, enhancement: String, force: Boolean = false): EnhancementRemoval =
+        EnhancementRemoval.Failed("Not here.")
+
+    /**
+     * The emulator's own settings (PCSX2, DuckStation, PPSSPP) for the game [id], or for every game
+     * in [emulator] when [id] is null, each with where its value comes from.
+     */
+    suspend fun emulatorSettings(id: GameId?, emulator: EmulatorId? = null): EmulatorSettingsView =
+        EmulatorSettingsView.Unavailable("Not here", "Emulator settings can only be changed from Fuse on a computer.")
+
+    /** Gives [setting] the [value] for the game [id] (or every game); null makes a game follow every game's again. */
+    suspend fun setEmulatorSetting(id: GameId?, emulator: EmulatorId?, setting: String, value: String?): Boolean = false
+
+    /** Puts back what Fuse changed in these settings; anything changed in the emulator since stays. */
+    suspend fun restoreEmulatorSettings(id: GameId?, emulator: EmulatorId?): Boolean = false
+
+    /** Gives the game [id] (in [emulator]'s settings) every value of [profile], one of [EmulatorSettingsView.Ready.profiles]. */
+    suspend fun applySettingProfile(id: GameId?, emulator: EmulatorId?, profile: String): Boolean = false
+
+    /** Keeps the game [id]'s settings now as a profile of the person's own called [name], for their other games. */
+    suspend fun saveSettingProfile(id: GameId?, emulator: EmulatorId?, name: String): Boolean = false
+
+    /** Deletes one of the person's own setting profiles; games given it keep their settings. */
+    suspend fun deleteSettingProfile(profile: String): Boolean = false
 
     /** Play time today, this week, this month and in all, per day, per game and per system. */
     fun playTime(): Flow<PlayTimeReport> = kotlinx.coroutines.flow.flowOf(PlayTimeReport(loaded = true))
@@ -480,6 +555,31 @@ interface LibraryOps {
 
     /** Adds the game file at [path], wherever it is on the device, to [platform]. Null when it can't be read. */
     suspend fun addGameFile(path: String, platform: PlatformId): GameId? = null
+
+    /**
+     * Adds the game folder at [path] (a game with its updates, DLC and other parts, laid out the way
+     * the library scan reads folders) to [platform]. Every game found in it; empty when there is none.
+     */
+    suspend fun addGameFolder(path: String, platform: PlatformId): List<GameId> = emptyList()
+
+    /**
+     * [child] is part of [owner] (an update, DLC or other content Fuse took for a game of its own):
+     * it joins [owner]'s content for good, with its play time. False when they can't be joined.
+     */
+    suspend fun attachAsContent(child: GameId, owner: GameId, kind: io.github.matiyaaa.fuse.model.ContentKind): Boolean = false
+
+    /** Undoes [attachAsContent]: [child] is a game again. The game it was part of, or null. */
+    suspend fun detachContent(child: GameId): GameId? = null
+
+    /**
+     * Applies the IPS, UPS or BPS patch at [patchPath] to [id]'s game file, as a new copy beside it
+     * that joins the library: the game itself is never changed. UPS and BPS are checked against the
+     * game they were made for, and a patch for another version is refused.
+     */
+    suspend fun applyPatch(id: GameId, patchPath: String): PatchApplied = PatchApplied.Failed("Patching isn't available here.")
+
+    /** The parts the person attached to [owner]: id, title and kind. */
+    suspend fun userParts(owner: GameId): List<Triple<GameId, String, io.github.matiyaaa.fuse.model.ContentKind>> = emptyList()
 
     /** What is in the folder at [path] for Fuse's file picker; the device's storage when null. */
     suspend fun browse(path: String?): BrowseListing = BrowseListing(null, null, emptyList())
@@ -572,6 +672,12 @@ interface EmulatorOps {
     /** Every emulator Fuse can start on this device, found or not, by name. */
     fun known(): List<EmulatorOption> = emptyList()
 
+    /** Every emulator Fuse knows for this system, with what it supports and what Fuse has checked. */
+    suspend fun support(): List<EmulatorSupportRow> = emptyList()
+
+    /** [support] as plain text to share, with the home folder and user names taken out. */
+    suspend fun supportReport(): String = ""
+
     /** Where the user located each emulator, by id. */
     val located: StateFlow<Map<EmulatorId, String>> get() = MutableStateFlow(emptyMap())
 
@@ -581,10 +687,29 @@ interface EmulatorOps {
     /** Forgets where [emulator] was located and looks again. */
     suspend fun forget(emulator: EmulatorId) = Unit
 
+    /** The settings folder Fuse Intelligence found for [emulator] is wrong: forgotten, and never found again. */
+    suspend fun rejectSettingsFolder(emulator: EmulatorId) = Unit
+
     /** Extra folders searched for emulators. */
     val searchFolders: StateFlow<List<String>> get() = MutableStateFlow(emptyList())
 
     suspend fun setSearchFolders(folders: List<String>) = Unit
+
+    /**
+     * Bringing a person's things over to [emulator] from another of its family: where they could
+     * come from, and what was brought over already (to take back).
+     */
+    suspend fun familyMoves(emulator: EmulatorId): FamilyMoves = FamilyMoves(emptyList(), emptyList())
+
+    /** What bringing [from]'s things over to [emulator] would copy; nothing changes until [bringOver]. */
+    suspend fun planFamilyMove(emulator: EmulatorId, from: String): FamilyMovePreview =
+        FamilyMovePreview.Unavailable("Not on this device", "This is done from Fuse on a computer.")
+
+    /** Copies what [token]'s preview showed. Null when it worked, else why it didn't. */
+    suspend fun bringOver(token: String): String? = "Not on this device."
+
+    /** Takes back what was brought over as [move]: the files it copied go, and nothing else changes. */
+    suspend fun takeBackFamilyMove(emulator: EmulatorId, move: String): Boolean = false
 }
 
 interface MediaOps {
@@ -828,6 +953,15 @@ interface UpdateOps {
 
     /** False where an update is got from its release page instead (Windows and macOS). */
     val inPlace: Boolean get() = true
+
+    /** The version Fuse can go back to, while it is kept. */
+    fun previous(): PreviousRelease? = null
+
+    /** Goes back to [previous]. Success(true): restart Fuse now. */
+    suspend fun goBack(): Result<Boolean> = Result.failure(UnsupportedOperationException())
+
+    /** What Fuse says once at start about an update it went back from; null when nothing. */
+    fun takeStartupNote(): String? = null
 }
 
 sealed interface UpdateState {
@@ -871,4 +1005,23 @@ data class PhoneLinkState(
 /** What a "Restore Fuse Default Art" replaced, for Undo; [count] systems had art of their own. */
 interface ArtUndo {
     val count: Int
+}
+
+/** What applying a patch to a game came to. */
+sealed interface PatchApplied {
+    /**
+     * The patched copy, [name], made beside the game and added to the library as [game]. [checked]
+     * when the patch said which game it fits and this was it; [headerRemoved] when the game's copier
+     * header was left off for it.
+     */
+    data class Made(val game: GameId?, val name: String, val format: String, val checked: Boolean, val headerRemoved: Boolean) : PatchApplied
+
+    /** The patch is for another version of the game (its CRC32s, as 8 hex digits). */
+    data class WrongGame(val format: String, val expected: String, val actual: String) : PatchApplied
+
+    /** The game already is what the patch makes. */
+    data object AlreadyPatched : PatchApplied
+
+    /** It couldn't be done; [reason] says why, in words for the person. */
+    data class Failed(val reason: String) : PatchApplied
 }

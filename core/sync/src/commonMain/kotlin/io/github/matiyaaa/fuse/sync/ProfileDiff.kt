@@ -37,6 +37,12 @@ object ProfileDiff {
             reg(now.continueDismissed, before.continueDismissed, null)?.let { change = change.copy(continueDismissed = it); changed = true }
             reg(now.title, before.title, null)?.let { change = change.copy(title = it); changed = true }
             reg(now.emulator, before.emulator, null)?.let { change = change.copy(emulator = it); changed = true }
+            // Trophies earned here that the household hasn't heard of (or heard of later than here).
+            val earned = now.trophies.filter { (k, t) -> before.trophies[k]?.let { it.unlockedAt > t.unlockedAt } ?: true }
+            if (earned.isNotEmpty()) {
+                change = change.copy(trophies = earned)
+                changed = true
+            }
             if (changed) games[id] = change
         }
         val collections = HashMap<String, CollectionRecord>()

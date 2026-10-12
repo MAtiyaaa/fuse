@@ -117,7 +117,7 @@ internal fun rommStatus(s: RommState, p: FuseRommSettings): Triple<Boolean?, Str
 }
 
 /**
- * Settings, Addons, Fuse RomM: the Fuse RomM native integration. Connection (Auto recommended, home
+ * Settings, Addons, RomM: the RomM native integration. Connection (Auto recommended, home
  * and outside addresses, the account), the library and where games land, how transfers behave, BIOS
  * from the server, and uploads. Turning it off keeps all of it.
  */
@@ -149,7 +149,7 @@ fun RommSettingsScreen(app: AppState) {
                 RommMark(if (compact) Size.thumb else Size.thumbL)
                 Spacer(Modifier.width(Space.l))
                 Column(verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-                    FText("Fuse RomM", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1)
+                    FText("RomM", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         StatusDot(ok)
                         Spacer(Modifier.width(Space.s))
@@ -184,7 +184,7 @@ private fun rommRows(
 ): List<MenuAction> = buildList {
     val ops = app.store.romm
     add(toggleRow(
-        "enabled", "Fuse RomM", FuseIcons.LibraryBig, p.enabled,
+        "enabled", "RomM", FuseIcons.LibraryBig, p.enabled,
         if (cartridgeOn && !p.enabled) "Turning it on turns Cartridge off in Fuse (Cartridge keeps its own setup)" else "Your RomM server's games, downloads and uploads, inside Fuse",
     ) { v -> app.scope.launch { ops.setEnabled(v) } })
     if (!p.enabled) {
@@ -248,7 +248,7 @@ private fun rommRows(
         onSelect = { app.go(Route.RommSetup(pairing = true)) },
     ))
     if (p.account.isNotBlank()) add(MenuAction("signout", "Forget sign-in", FuseIcons.LogOut, detail = "Removes Fuse's token from this device. Addresses and preferences stay", destructive = true, section = account, onSelect = {
-        app.confirm = ConfirmSpec("Forget Fuse RomM's sign-in?", "Fuse removes its RomM token from this device. Your server and this device's games stay as they are; the library Fuse kept stays to browse.", "Forget", true) {
+        app.confirm = ConfirmSpec("Forget RomM's sign-in?", "Fuse removes its RomM token from this device. Your server and this device's games stay as they are; the library Fuse kept stays to browse.", "Forget", true) {
             app.scope.launch { ops.signOut() }
         }
     }))
@@ -302,7 +302,7 @@ private fun rommRows(
     add(toggleRow("upload.scan", "Ask RomM to add uploads", FuseIcons.ScanSearch, p.scanAfterUpload, if (state.canScan) "RomM scans the system after an upload" else "Needs scan permission when pairing") { v -> set { it.copy(scanAfterUpload = v) } }.copy(section = upload))
 }
 
-/** Downloads' own settings, shared by Settings, Downloads and Fuse RomM's page. */
+/** Downloads' own settings, shared by Settings, Downloads and RomM's page. */
 internal fun transferRows(app: AppState, dl: DownloadSettings, setDl: ((DownloadSettings) -> DownloadSettings) -> Unit, section: String?): List<MenuAction> {
     val counts = (1..5).map { it to "$it at once" }
     val modes = listOf("FULL" to "Full speed", "REDUCED" to "Slower", "PAUSE" to "Pause")
@@ -318,9 +318,31 @@ internal fun transferRows(app: AppState, dl: DownloadSettings, setDl: ((Download
             optionDetail = { when (it) { "REDUCED" -> "Kept slow so games online stay smooth"; "PAUSE" -> "Held until the game closes"; else -> "As fast as the connection goes" } }) { v -> setDl { it.copy(downloadsWhilePlaying = v) } },
         app.choiceRow("ul.play", "Uploads while playing", FuseIcons.Gamepad, dl.uploadsWhilePlaying, modes) { v -> setDl { it.copy(uploadsWhilePlaying = v) } },
         toggleRow("dl.wifi", "Only on Wi-Fi", FuseIcons.Wifi, dl.wifiOnly, "Waits for Wi-Fi or a cable rather than using mobile data") { v -> setDl { it.copy(wifiOnly = v) } },
+        toggleRow("dl.charging", "Only while charging", FuseIcons.Zap, dl.chargingOnly, "On battery, transfers wait for a charger. Saves always go: they are small") { v -> setDl { it.copy(chargingOnly = v) } },
+        app.choiceRow("dl.battery", "On battery, wait below", FuseIcons.BatteryLow, dl.minBattery, listOf(0 to "Never wait", 20 to "20%", 30 to "30%", 50 to "50%"),
+            detail = "Transfers carry on once plugged in") { v -> setDl { it.copy(minBattery = v) } },
+        app.choiceRow("dl.quiet", "Quiet hours", FuseIcons.Moon, dl.quietFrom to dl.quietTo, quietHours(app.store.prefs.value.clock24h).let { q -> if (q.any { it.first == dl.quietFrom to dl.quietTo }) q else q + ((dl.quietFrom to dl.quietTo) to quietLabel(dl.quietFrom, dl.quietTo, app.store.prefs.value.clock24h)) },
+            detail = "Transfers wait in these hours and carry on after") { (from, to) -> setDl { it.copy(quietFrom = from, quietTo = to) } },
         toggleRow("dl.resume", "Carry on unfinished transfers", FuseIcons.Play, dl.resumeOnStart, "When Fuse starts, from where they stopped") { v -> setDl { it.copy(resumeOnStart = v) } },
         app.choiceRow("dl.keep", "Keep finished ones listed", FuseIcons.History, dl.keepFinishedDays, listOf(0 to "Until Fuse restarts", 1 to "A day", 7 to "A week", 30 to "A month")) { v -> setDl { it.copy(keepFinishedDays = v) } },
     ).map { if (section != null) it.copy(section = section) else it }
+}
+
+/** Quiet hours offered, as minutes since midnight from and to; "None" first. */
+private fun quietHours(clock24h: Boolean): List<Pair<Pair<Int, Int>, String>> =
+    listOf(0 to 0, 22 * 60 to 7 * 60, 23 * 60 to 7 * 60, 0 to 8 * 60, 1 * 60 to 6 * 60, 9 * 60 to 17 * 60)
+        .map { (from, to) -> (from to to) to quietLabel(from, to, clock24h) }
+
+private fun quietLabel(from: Int, to: Int, clock24h: Boolean): String =
+    if (from == to) "None" else "${clockText(from, clock24h)} to ${clockText(to, clock24h)}"
+
+private fun clockText(minute: Int, clock24h: Boolean): String {
+    val h = minute / 60 % 24
+    val m = minute % 60
+    if (clock24h) return "${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}"
+    if (h == 0 && m == 0) return "Midnight"
+    val h12 = if (h % 12 == 0) 12 else h % 12
+    return if (m == 0) "$h12 ${if (h < 12) "AM" else "PM"}" else "$h12:${m.toString().padStart(2, '0')} ${if (h < 12) "AM" else "PM"}"
 }
 
 private fun shortFolder(path: String): String = path.replace('\\', '/').trimEnd('/').split('/').takeLast(2).joinToString("/").ifBlank { path }
@@ -369,7 +391,7 @@ private fun biosFlow(app: AppState, page: RommSettingsState, all: Boolean) {
 }
 
 /**
- * Setting up Fuse RomM: the server's addresses (one is enough; Automatic needs no thought), then
+ * Setting up RomM: the server's addresses (one is enough; Automatic needs no thought), then
  * pairing. Pairing shows a short code and a QR to approve in RomM, so a handheld never types a long
  * token; a pairing code made in RomM, a token or a password work too. Reading is asked for by
  * default; uploads only when the person wants them.
@@ -404,7 +426,7 @@ fun RommSetupScreen(app: AppState, pairing: Boolean) {
         }
     }
     fun signedIn(name: String) {
-        app.toasts.show("Fuse RomM is connected as $name", ToastKind.SUCCESS, icon = FuseIcons.CircleCheck)
+        app.toasts.show("RomM is connected as $name", ToastKind.SUCCESS, icon = FuseIcons.CircleCheck)
         app.back()
     }
     fun pair() {
@@ -481,7 +503,7 @@ fun RommSetupScreen(app: AppState, pairing: Boolean) {
                 RommMark(if (compact) Size.thumb else Size.thumbL)
                 Spacer(Modifier.width(Space.l))
                 Column {
-                    FText("Set Up Fuse RomM", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1)
+                    FText("Set Up RomM", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1)
                     FText(problem ?: "Connect Fuse to your RomM server. Automatic finds it at home and from outside.", Fuse.type.body, color = if (problem != null) Fuse.colors.warning else Fuse.colors.textMuted, maxLines = 2)
                 }
             }

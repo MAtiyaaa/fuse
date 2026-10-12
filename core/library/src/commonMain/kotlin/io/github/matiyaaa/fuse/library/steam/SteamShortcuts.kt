@@ -124,26 +124,41 @@ object SteamShortcuts {
      */
     fun appId(exe: String, name: String): Int = (crc32((exe + name).encodeToByteArray()) or 0x80000000L).toInt()
 
-    /** [existing] (the file's bytes, or null for a new file) with [shortcut] in it; null when the file can't be read. */
-    fun add(existing: ByteArray?, shortcut: SteamShortcut): ByteArray? {
+    /**
+     * [existing] (the file's bytes, or null for a new file) with [shortcut] in it; null when the file
+     * can't be read. Idempotent: an entry already there for the same program, or one [owned] says is
+     * Fuse's (its program moved, a new AppImage), is brought up to date in place rather than added
+     * again. What the person changed on it stays theirs: its name, launch options, icon and the
+     * Steam collections it is in. Other entries are never touched.
+     */
+    fun add(existing: ByteArray?, shortcut: SteamShortcut, owned: ((exe: String, name: String) -> Boolean)? = null): ByteArray? {
         val root = if (existing == null || existing.isEmpty()) BinaryVdf.Block() else BinaryVdf.parse(existing) ?: return null
         val value = root["shortcuts"]
         if (value != null && value !is BinaryVdf.Block) return null
         val list = value as? BinaryVdf.Block ?: BinaryVdf.Block().also { root["shortcuts"] = it }
-        val same = list.entries.map { it.second }.filterIsInstance<BinaryVdf.Block>().firstOrNull { e ->
-            (e["Exe"] as? BinaryVdf.Str)?.value == shortcut.exe
-        }
+        val blocks = list.entries.map { it.second }.filterIsInstance<BinaryVdf.Block>()
+        val same = blocks.firstOrNull { e -> (e["Exe"] as? BinaryVdf.Str)?.value == shortcut.exe }
+            ?: owned?.let { o ->
+                blocks.firstOrNull { e ->
+                    o((e["Exe"] as? BinaryVdf.Str)?.value.orEmpty().trim('"'), (e["AppName"] as? BinaryVdf.Str)?.value.orEmpty())
+                }
+            }
+        val fresh = same == null
         val entry = same ?: BinaryVdf.Block().also { b ->
             val next = (list.entries.mapNotNull { it.first.toIntOrNull() }.maxOrNull() ?: -1) + 1
             list.entries += next.toString() to b
         }
+        fun keep(key: String, value: String) {
+            val now = (entry[key] as? BinaryVdf.Str)?.value
+            if (fresh || now.isNullOrEmpty()) entry[key] = BinaryVdf.Str(value)
+        }
         entry["appid"] = entry["appid"] ?: BinaryVdf.Int32(appId(shortcut.exe, shortcut.name))
-        entry["AppName"] = BinaryVdf.Str(shortcut.name)
+        keep("AppName", shortcut.name)
         entry["Exe"] = BinaryVdf.Str(shortcut.exe)
         entry["StartDir"] = BinaryVdf.Str(shortcut.startDir)
-        entry["icon"] = BinaryVdf.Str(shortcut.icon)
+        keep("icon", shortcut.icon)
         entry["ShortcutPath"] = entry["ShortcutPath"] ?: BinaryVdf.Str("")
-        entry["LaunchOptions"] = BinaryVdf.Str(shortcut.launchOptions)
+        if (fresh || entry["LaunchOptions"] == null) entry["LaunchOptions"] = BinaryVdf.Str(shortcut.launchOptions)
         entry["IsHidden"] = entry["IsHidden"] ?: BinaryVdf.Int32(0)
         entry["AllowDesktopConfig"] = entry["AllowDesktopConfig"] ?: BinaryVdf.Int32(1)
         entry["AllowOverlay"] = entry["AllowOverlay"] ?: BinaryVdf.Int32(1)
@@ -153,9 +168,30 @@ object SteamShortcuts {
         entry["DevkitOverrideAppID"] = entry["DevkitOverrideAppID"] ?: BinaryVdf.Int32(0)
         entry["LastPlayTime"] = entry["LastPlayTime"] ?: BinaryVdf.Int32(0)
         entry["FlatpakAppID"] = entry["FlatpakAppID"] ?: BinaryVdf.Str("")
+        // The person's collections stay; Fuse's own tags join them once.
+        val had = (entry["tags"] as? BinaryVdf.Block)?.entries?.mapNotNull { (it.second as? BinaryVdf.Str)?.value }.orEmpty()
         val tags = BinaryVdf.Block()
-        shortcut.tags.forEachIndexed { i, t -> tags.entries += i.toString() to BinaryVdf.Str(t) }
+        (had + shortcut.tags.filter { it !in had }).forEachIndexed { i, t -> tags.entries += i.toString() to BinaryVdf.Str(t) }
         entry["tags"] = tags
+        return BinaryVdf.write(root)
+    }
+
+    /**
+     * [existing] without the entries [owned] picks (by program, quotes taken off, and name), the rest
+     * numbered again in order as Steam numbers them. Null when the file can't be read; the same bytes
+     * when nothing was Fuse's.
+     */
+    fun remove(existing: ByteArray?, owned: (exe: String, name: String) -> Boolean): ByteArray? {
+        if (existing == null || existing.isEmpty()) return existing
+        val root = BinaryVdf.parse(existing) ?: return null
+        val list = root["shortcuts"] as? BinaryVdf.Block ?: return existing
+        val kept = list.entries.filterNot { (_, v) ->
+            val e = v as? BinaryVdf.Block ?: return@filterNot false
+            owned((e["Exe"] as? BinaryVdf.Str)?.value.orEmpty().trim('"'), (e["AppName"] as? BinaryVdf.Str)?.value.orEmpty())
+        }
+        if (kept.size == list.entries.size) return existing
+        list.entries.clear()
+        kept.forEachIndexed { i, (_, v) -> list.entries += i.toString() to v }
         return BinaryVdf.write(root)
     }
 

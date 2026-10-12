@@ -170,7 +170,25 @@ internal fun SaveHistoryScreen(app: AppState, game: GameId, title: String) {
             onSelect = { shareChoice(app, q, shared, hasMine = !versions.isNullOrEmpty()) { round++ } },
         )
     }
-    val rows = listOfNotNull(shareRow) + versions.orEmpty().map { v ->
+    // Kept here alone: this device never sends or brings this game's saves (each person's still swap here).
+    val config by app.store.sync.config.collectAsState()
+    val localOnly = query?.game?.id?.let { it in config.localOnlyGames } == true
+    val localRow = query?.let { q ->
+        MenuAction(
+            "local", "Keep Saves on This Device Only", FuseIcons.HardDrive,
+            detail = if (localOnly) "Never sent to or brought from other devices. Each person's save still switches here" else "Off: this game's saves go to your other devices",
+            trailing = Trailing.Switch(localOnly),
+            onSelect = {
+                app.scope.launch {
+                    app.store.sync.configure { c ->
+                        c.copy(localOnlyGames = if (localOnly) c.localOnlyGames - q.game.id else (c.localOnlyGames + q.game.id).distinct())
+                    }
+                }
+                app.toasts.show(if (localOnly) "$title's saves sync again" else "$title's saves stay on this device")
+            },
+        )
+    }
+    val rows = listOfNotNull(shareRow, localRow) + versions.orEmpty().map { v ->
         MenuAction(
             v.id,
             TimeWords.relative(v.at, now, offset).replaceFirstChar { it.uppercase() },
@@ -225,18 +243,18 @@ internal fun SaveHistoryScreen(app: AppState, game: GameId, title: String) {
             when {
                 query == null && versions == null -> Center { Spinner(size = 24.dp, color = c.textMuted) }
                 versions == null -> Center { Spinner(size = 24.dp, color = c.textMuted) }
-                rows.size <= 1 && shareRow != null -> Column {
+                versions.isNullOrEmpty() && shareRow != null -> Column {
                     MenuList(rows, page.sel, modifier = Modifier.padding(Space.s), showSelection = app.focusZone == FocusZone.CONTENT)
                     EmptyState(
                         FuseIcons.History,
                         if (page.kind == SaveKind.SAVE) "No saves yet" else "No save states yet",
-                        message = "Play it with Fuse Sync on, and each time it closes its save is kept here, from every device.",
+                        message = "Play it with Fuse One on, and each time it closes its save is kept here, from every device.",
                     )
                 }
                 rows.isEmpty() -> EmptyState(
                     FuseIcons.History,
                     if (page.kind == SaveKind.SAVE) "No saves yet" else "No save states yet",
-                    message = "Play it with Fuse Sync on, and each time it closes its save is kept here, from every device.",
+                    message = "Play it with Fuse One on, and each time it closes its save is kept here, from every device.",
                 )
                 else -> MenuList(rows, page.sel, modifier = Modifier.padding(Space.s), showSelection = app.focusZone == FocusZone.CONTENT)
             }

@@ -44,6 +44,115 @@ class MoreAdaptersTest {
         SaveQuery(GameKey.of(platform, null, null, title.ifEmpty { "Game" }), platform, rom, emulator, serial = serial, title = title)
 
     @Test
+    fun edenSavesWhereItsConfigOrThePersonPutThem() {
+        val user = "0123456789ABCDEF0123456789ABCDEF"
+        val zelda = q("switch", "/roms/switch/Zelda [01007EF00011E000].nsp", "eden")
+        // A save data folder of its own, named in Eden's config (as its Data Storage settings write it).
+        val saves = "/mnt/games/eden-saves"
+        val config = "[Data%20Storage]\nnand_directory\\default=true\nnand_directory=\nsave_directory\\default=false\nsave_directory=$saves/\n[UI]\nsave_directory=/elsewhere\n"
+        // On Linux its config is in the XDG config folder, apart from its data (common/fs/path_util.cpp).
+        val desktop = FakeEnv("LINUX", "/home/mo", files = mapOf(
+            "/home/mo/.config/eden/qt-config.ini" to config,
+            "/home/mo/.local/share/eden/nand/user/save/0000000000000000/$user/" to "",
+            "$saves/user/save/0000000000000000/$user/01007EF00011E000/" to "",
+        ))
+        assertEquals("$saves/user/save/0000000000000000/$user/01007EF00011E000", SaveAdapters.forEmulator("eden")!!.locate(zelda, desktop).single().root)
+        // The Flatpak keeps both in its own folder.
+        val flatpak = FakeEnv("LINUX", "/home/mo", files = mapOf(
+            "/home/mo/.var/app/dev.eden_emu.eden/config/eden/qt-config.ini" to config,
+            "/home/mo/.var/app/dev.eden_emu.eden/data/eden/nand/user/save/0000000000000000/$user/" to "",
+            "$saves/user/save/0000000000000000/$user/01007EF00011E000/" to "",
+        ))
+        assertEquals("$saves/user/save/0000000000000000/$user/01007EF00011E000", SaveAdapters.forEmulator("eden")!!.locate(zelda, flatpak).single().root)
+        // A NAND moved elsewhere, with saves left in it (an empty save_directory), on a portable Windows install.
+        val nand = "D:/Switch/nand"
+        val portable = FakeEnv("WINDOWS", "C:/Users/mo", files = mapOf(
+            "C:/Emu/Eden/user/config/qt-config.ini" to "[Data%20Storage]\nnand_directory\\default=false\nnand_directory=D:\\Switch\\nand\\\nsave_directory=\n",
+            "C:/Emu/Eden/user/nand/user/save/0000000000000000/$user/" to "",
+            "$nand/user/save/0000000000000000/$user/01007EF00011E000/" to "",
+        ))
+        assertEquals("$nand/user/save/0000000000000000/$user/01007EF00011E000", SaveAdapters.forEmulator("eden")!!.locate(zelda.copy(emulatorPath = "C:/Emu/Eden/eden.exe"), portable).single().root)
+        // On macOS it keeps the XDG folders too.
+        val mac = FakeEnv("MACOS", "/Users/mo", files = mapOf("/Users/mo/.local/share/eden/nand/user/save/0000000000000000/$user/01007EF00011E000/" to ""))
+        assertEquals("/Users/mo/.local/share/eden/nand/user/save/0000000000000000/$user/01007EF00011E000", SaveAdapters.forEmulator("eden")!!.locate(zelda, mac).single().root)
+        // On Android, the folder chosen in Eden's Save Data Directory (or NAND Directory) and in Fuse.
+        for (chosen in listOf("/storage/emulated/0/Eden/saves", "/storage/emulated/0/Eden/nand")) {
+            val phone = FakeEnv("ANDROID", "/storage/emulated/0", files = mapOf("$chosen/user/save/0000000000000000/$user/01007EF00011E000/" to ""), chosen = mapOf("eden" to chosen))
+            val spot = SaveAdapters.forEmulator("eden")!!.locate(zelda, phone).single()
+            assertEquals("$chosen/user/save/0000000000000000/$user/01007EF00011E000", spot.root, chosen)
+        }
+        // Not chosen yet: it says which Eden setting to use.
+        val none = SaveAdapters.forEmulator("eden")!!.locate(zelda, FakeEnv("ANDROID", "/storage/emulated/0")).single()
+        assertFalse(none.available)
+        assertTrue("Save Data Directory" in none.note!!, none.note)
+    }
+
+    @Test
+    fun anyPs5PortsKeepTheirSavesInTheirOwnFolder() {
+        val sarah = q("ps5", "/games/ps5/Dreaming Sarah/app.elf", "linux.anyps5", serial = "PPSA02929")
+        val spot = SaveAdapters.forEmulator("linux.anyps5")!!.locate(sarah, FakeEnv("LINUX", "/home/mo")).single()
+        assertEquals("anyps5.savedata", spot.format)
+        assertEquals("/games/ps5/Dreaming Sarah", spot.root)
+        assertEquals(listOf("_sd", "_sd_mem"), spot.folders)
+        // The same game's Windows port takes the same save.
+        val windows = SaveAdapters.forEmulator("windows.anyps5")!!.locate(sarah.copy(romPath = "D:/PS5/Sarah/app.exe", emulatorId = "windows.anyps5"), FakeEnv("WINDOWS", "C:/Users/mo")).single()
+        assertEquals("D:/PS5/Sarah", windows.root)
+        assertEquals(spot.format, windows.format)
+    }
+
+    @Test
+    fun duckStationOnWindowsKeepsItsDataWhereItsOwnCodeSays() {
+        val ff7 = q("psx", "C:/roms/psx/Final Fantasy VII.chd", "windows.duckstation", serial = "SCUS-94163", title = "Final Fantasy VII")
+        fun card(env: FakeEnv) = SaveAdapters.forEmulator("windows.duckstation")!!.locate(ff7.copy(emulatorPath = "C:/Emu/DuckStation/duckstation-qt-x64-ReleaseLTCG.exe"), env).first().pathFor("card1.mcd")
+        // A new install: %LOCALAPPDATA%\DuckStation.
+        assertEquals("C:/Users/mo/AppData/Local/DuckStation/memcards/Final Fantasy VII_1.mcd", card(FakeEnv("WINDOWS", "C:/Users/mo", files = mapOf("C:/Users/mo/AppData/Local/DuckStation/memcards/" to ""))))
+        // An older one still in Documents, which DuckStation keeps using.
+        assertEquals("C:/Users/mo/Documents/DuckStation/memcards/Final Fantasy VII_1.mcd", card(FakeEnv("WINDOWS", "C:/Users/mo", files = mapOf("C:/Users/mo/Documents/DuckStation/memcards/" to "", "C:/Users/mo/AppData/Local/DuckStation/memcards/" to ""))))
+        // Portable: settings.ini beside the program is enough.
+        assertEquals("C:/Emu/DuckStation/memcards/Final Fantasy VII_1.mcd", card(FakeEnv("WINDOWS", "C:/Users/mo", files = mapOf("C:/Emu/DuckStation/settings.ini" to "", "C:/Emu/DuckStation/memcards/" to "", "C:/Users/mo/AppData/Local/DuckStation/memcards/" to ""))))
+    }
+
+    @Test
+    fun duckStationsFlatpakKeepsItsDataInItsConfigFolder() {
+        val ff7 = q("psx", "/roms/psx/Final Fantasy VII.chd", "linux.duckstation", serial = "SCUS-94163", title = "Final Fantasy VII")
+        // Flatpak sets XDG_CONFIG_HOME inside its sandbox, so DuckStation's SetDataRoot picks config/duckstation.
+        val env = FakeEnv("LINUX", "/home/mo", files = mapOf("/home/mo/.var/app/org.duckstation.DuckStation/config/duckstation/memcards/" to ""))
+        assertEquals(
+            "/home/mo/.var/app/org.duckstation.DuckStation/config/duckstation/memcards/Final Fantasy VII_1.mcd",
+            SaveAdapters.forEmulator("linux.duckstation")!!.locate(ff7, env).first().pathFor("card1.mcd"),
+        )
+    }
+
+    @Test
+    fun rpcs3FollowsDevHdd0WhereItsVfsConfigMovedIt() {
+        val game = q("ps3", "/roms/ps3/Demon's Souls/PS3_GAME/USRDIR/EBOOT.BIN", "rpcs3", serial = "BLUS30443")
+        val base = "/home/mo/.config/rpcs3"
+        val moved = "/mnt/big/ps3-hdd0"
+        val env = FakeEnv("LINUX", "/home/mo", files = mapOf(
+            "$base/config/vfs.yml" to "\$(EmulatorDir): \"\"\n/dev_hdd0/: $moved/\n/dev_hdd1/: \$(EmulatorDir)dev_hdd1/\n",
+            "$moved/home/00000001/savedata/BLUS30443-SAVE01/" to "",
+        ))
+        val spot = SaveAdapters.forEmulator("rpcs3")!!.locate(game, env).single()
+        assertEquals("$moved/home/00000001/savedata", spot.root)
+        assertEquals(listOf("BLUS30443-SAVE01"), spot.folders)
+        // Left as RPCS3 comes: beside its config.
+        val plain = FakeEnv("LINUX", "/home/mo", files = mapOf("$base/config/vfs.yml" to "/dev_hdd0: \$(EmulatorDir)dev_hdd0/\n", "$base/dev_hdd0/home/00000001/savedata/" to ""))
+        assertEquals("$base/dev_hdd0/home/00000001/savedata", SaveAdapters.forEmulator("rpcs3")!!.locate(game, plain).single().root)
+    }
+
+    @Test
+    fun kenjiNxIsRyujinxUnderneath() {
+        assertEquals(SaveAdapters.forEmulator("ryujinx"), SaveAdapters.forEmulator("kenji-nx"))
+        val chosen = "/storage/emulated/0/Kenji"
+        val extra = byteArrayOf(0x00, 0xE0.toByte(), 0x11, 0x00, 0xF0.toByte(), 0x7E, 0x00, 0x01)
+        val env = FakeEnv("ANDROID", "/storage/emulated/0", files = mapOf("$chosen/bis/user/save/0000000000000001/0/" to ""), bin = mapOf("$chosen/bis/user/save/0000000000000001/ExtraData0" to extra), chosen = mapOf("kenji-nx" to chosen))
+        val spot = SaveAdapters.forEmulator("kenji-nx")!!.locate(q("switch", "/roms/switch/Zelda [01007EF00011E000].nsp", "kenji-nx"), env).single()
+        assertEquals("$chosen/bis/user/save/0000000000000001/0", spot.root)
+        val none = SaveAdapters.forEmulator("kenji-nx")!!.locate(q("switch", "/roms/switch/Zelda [01007EF00011E000].nsp", "kenji-nx"), FakeEnv("ANDROID", "/storage/emulated/0")).single()
+        assertTrue("Kenji-NX" in none.note!!, none.note)
+    }
+
+    @Test
     fun draSticSavesInItsChosenFolder() {
         val env = FakeEnv("ANDROID", "/storage/emulated/0", files = mapOf("/storage/emulated/0/DraStic/backup/" to ""), chosen = mapOf("drastic" to "/storage/emulated/0/DraStic"))
         val spot = SaveAdapters.forEmulator("drastic")!!.locate(q("nds", "/roms/nds/Pokemon Platinum.nds", "drastic"), env).single()

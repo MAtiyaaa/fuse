@@ -40,6 +40,14 @@ internal actual fun base64(data: ByteArray): String = Base64.getEncoder().encode
 
 internal actual fun unbase64(text: String): ByteArray = Base64.getDecoder().decode(text)
 
+internal actual fun portFree(port: Int): Boolean = runCatching {
+    java.net.ServerSocket().use { socket ->
+        // Not shared: on Windows a shared address would bind even where another program listens.
+        socket.reuseAddress = false
+        socket.bind(java.net.InetSocketAddress(port))
+    }
+}.isSuccess
+
 internal actual fun lanAddresses(): List<String> = runCatching {
     NetworkInterface.getNetworkInterfaces().toList()
         .filter { it.isUp && !it.isLoopback && !it.isVirtual }

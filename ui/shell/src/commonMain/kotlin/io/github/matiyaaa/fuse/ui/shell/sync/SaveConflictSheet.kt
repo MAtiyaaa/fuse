@@ -151,13 +151,13 @@ internal fun SaveConflictOverlay(app: AppState) {
                     val cards = @Composable { i: Int, mod: Modifier ->
                         val side = if (i == 0) conflict.here else conflict.host
                         SideCard(
-                            title = if (i == 0) "This Device" else "Fuse Sync",
+                            title = if (i == 0) "This Device" else "Fuse One",
                             from = if (i == 0) side.device else "From ${side.device}",
                             icon = if (i == 0) FuseIcons.MonitorSmartphone else FuseIcons.Cloud,
                             side = side,
                             savedAt = describe(side.at, now, offset),
                             badges = listOfNotNull("Newer".takeIf { newer == i }, "Played longer".takeIf { morePlayed == i }),
-                            action = if (i == 0) "Use This Device" else "Use Fuse Sync",
+                            action = if (i == 0) "Use This Device" else "Use Fuse One",
                             selected = choice == i,
                             busy = busy && choice == i,
                             onClick = { choice = i; settle(keepHere = i == 0) },

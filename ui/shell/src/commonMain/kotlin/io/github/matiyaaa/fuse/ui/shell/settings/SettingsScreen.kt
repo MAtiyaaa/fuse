@@ -67,6 +67,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
@@ -139,8 +140,9 @@ val settingsSections: List<SettingsSection> = listOf(
     SettingsSection("displays", "Display", FuseIcons.Monitor, "Screens, rotation, performance", ::displayAndPerformanceRows, group = DEVICE),
     SettingsSection("sound", "Sound", FuseIcons.Volume, "Menu music and interface sounds", ::soundRows, group = DEVICE),
     SettingsSection("accounts", "Accounts", FuseIcons.CircleUser, "RetroAchievements and Phone Link", ::accountsRows, group = CONNECTIONS),
-    SettingsSection("addons", "Addons", FuseIcons.Blocks, "Fuse RomM, Fuse Sync, Jellyfin and more", ::addonsRows, group = CONNECTIONS, status = ::addonsStatus),
-    SettingsSection("downloads", "Downloads", FuseIcons.Download, "How many at once, speed, while playing", ::downloadsRows, group = CONNECTIONS),
+    SettingsSection("fuseone", "Fuse One", FuseMarks.FuseOne, "Profiles, saves, the library, the host", ::fuseOneRows, group = CONNECTIONS, available = { it.store.sync.service != null || it.store.syncthing != null }),
+    SettingsSection("addons", "Addons", FuseIcons.Blocks, "RomM, Jellyfin, streaming and the Store", ::addonsRows, group = CONNECTIONS, status = ::addonsStatus),
+    SettingsSection("downloads", "Downloads", FuseIcons.Download, "How many, how fast, and when they move", ::downloadsRows, group = CONNECTIONS),
     SettingsSection("health", "System health", FuseIcons.HeartPulse, "What needs attention, and a bug report", ::healthRows, group = GENERAL, status = ::healthStatus),
     SettingsSection("storage", "Storage and backups", FuseIcons.HardDrive, "File access, drives, backup and restore", ::storageAndBackupRows, group = GENERAL),
     SettingsSection("about", "About", FuseIcons.Info, "Updates, privacy, licences, setup", ::aboutRows, group = GENERAL, status = ::aboutStatus),
@@ -155,6 +157,7 @@ val settingsAliases: Map<String, String> = mapOf(
     "performance" to "displays",
     "achievements" to "accounts",
     "cartridge" to "addons",
+    "sync" to "fuseone",
     "store" to "addons",
     "phonelink" to "accounts",
     "backup" to "storage",
@@ -256,7 +259,7 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
             capitalize = false,
             doneLabel = "Search",
         ) { query ->
-            val hits = SettingsIndex.search(query, sections, limit = SEARCH_LIMIT, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen)
+            val hits = SettingsIndex.search(query, sections, limit = SEARCH_LIMIT, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen, steam = app.platform.steam != null, decky = app.platform.decky != null)
             when {
                 query.isBlank() -> Unit
                 hits.isEmpty() -> app.toasts.show("Nothing in Settings matches \"${query.trim()}\"", icon = FuseIcons.Search)

@@ -31,6 +31,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.StoreState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,6 +42,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 
 /**
  * The Store on a computer: emulators and companions fetched from their own GitHub releases, each
@@ -176,7 +178,8 @@ internal class DesktopAppStoreOps(
         for (e in entries.values) {
             val rec = records[e.key]
             if (rec != null && installer.exists(rec.packageName)) {
-                found[e.key] = InstalledApp(rec.packageName, rec.version, rec.versionCode, e.name, InstallRecord(rec.version, rec.file, rec.versionCode))
+                val back = rec.previousVersion?.takeIf { rec.previous != null && installer.exists(rec.previous!!) }
+                found[e.key] = InstalledApp(rec.packageName, rec.version, rec.versionCode, e.name, InstallRecord(rec.version, rec.file, rec.versionCode, back))
                 continue
             }
             val other = e.emulator?.let { detected["$prefix$it"] } ?: continue
@@ -281,6 +284,29 @@ internal class DesktopAppStoreOps(
         mutable.value.updates.forEach { install(it.key) }
     }
 
+    override fun rollBack(key: String) {
+        if (mutable.value.jobs[key]?.active == true) return
+        val e = entries[key] ?: return
+        val rec = ctx.settings.value.store.installs[key] ?: return
+        val kept = rec.previous ?: return
+        ctx.scope.launch {
+            setJob(key, StoreJob.Installing(waitingTurn = false))
+            try {
+                val path = installer.restorePrevious(kept, rec.packageName)
+                remember(key, StoreInstall(path, rec.previousVersion, null, 0, ctx.now()))
+                refreshInstalled()
+                clearJob(key)
+                redetect()
+                noticesFlow.tryEmit("${e.name} is back to ${rec.previousVersion?.let { "version $it" } ?: "the version you had"}.")
+            } catch (x: CancellationException) {
+                clearJob(key)
+                throw x
+            } catch (x: Exception) {
+                setJob(key, StoreJob.Failed(x.message ?: "Fuse couldn't go back to the earlier version.", retry = false))
+            }
+        }
+    }
+
     override fun cancel(key: String) {
         running.value[key]?.cancel()
         clearJob(key)
@@ -310,16 +336,21 @@ internal class DesktopAppStoreOps(
                         throw Failure(x.message ?: "The download failed.", retry = true)
                     }
                     setJob(key, StoreJob.Installing(waitingTurn = false))
-                    val previous = ctx.settings.value.store.installs[key]?.packageName
+                    val before = ctx.settings.value.store.installs[key]
+                    val previous = before?.packageName
                     val replaces = previous != null && installer.exists(previous)
+                    // The version being replaced is kept aside, to go back to; a failed update puts it straight back.
+                    val kept = if (replaces) runCatching { installer.keepPrevious(e.name, previous!!) }.getOrNull() else null
                     val path = try {
-                        installer.install(e.name, sink.path, file.name, kind, previous)
+                        installer.install(e.name, sink.path, file.name, kind, if (kept != null) null else previous)
                     } catch (x: CancellationException) {
+                        kept?.let { k -> withContext(NonCancellable) { runCatching { installer.restorePrevious(k, null) } } }
                         throw x
                     } catch (x: Exception) {
-                        throw Failure(x.message ?: "Fuse couldn't put ${e.name} in place.", retry = true)
+                        val restored = kept?.let { k -> runCatching { installer.restorePrevious(k, null) }.isSuccess } == true
+                        throw Failure((x.message ?: "Fuse couldn't put ${e.name} in place.") + if (restored) " The version you had is back in place." else "", retry = true)
                     }
-                    remember(key, StoreInstall(path, release.version, file.url, 0, ctx.now()))
+                    remember(key, StoreInstall(path, release.version, file.url, 0, ctx.now(), previous = kept, previousVersion = if (kept != null) before?.version else null))
                     refreshInstalled()
                     clearJob(key)
                     redetect()

@@ -115,7 +115,7 @@ data class RommArt(val server: String, val path: String) {
 }
 
 /**
- * Fuse RomM in the app: one client for the server set up (Local, Remote or Auto), the library mirror
+ * RomM in the app: one client for the server set up (Local, Remote or Auto), the library mirror
  * kept in Fuse's database, its games matched to the library's, and its transfers through Downloads.
  */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -125,7 +125,7 @@ internal class DefaultRommOps(
     private val transfers: Transfers,
     /** Writes the settings (through the store, so the interface follows). */
     private val write: suspend ((FuseRommSettings) -> FuseRommSettings) -> Unit,
-    /** Turns Cartridge off in Fuse while Fuse RomM is on (and nothing else about it). */
+    /** Turns Cartridge off in Fuse while RomM is on (and nothing else about it). */
     private val cartridgeOff: suspend () -> Unit,
     /** Which emulator would play a game, as the game page says it. */
     private val choiceFor: suspend (Game) -> EmulatorChoice,
@@ -443,7 +443,7 @@ internal class DefaultRommOps(
     }
 
     override suspend fun awaitPairing(code: RommDeviceCode): Result<String> = runCatching {
-        val c = client ?: throw RommException("Fuse RomM isn't set up.")
+        val c = client ?: throw RommException("RomM isn't set up.")
         val until = ctx.now() + code.expiresInSeconds * 1000L
         var interval = code.intervalSeconds.coerceAtLeast(2) * 1000L
         while (ctx.now() < until) {
@@ -805,7 +805,7 @@ internal class DefaultRommOps(
     // ------------------------------------------------------------------ downloads
 
     override suspend fun download(romId: Long, what: RommDownloadWhat): String? = withContext(Dispatchers.Default) {
-        if (!settings.enabled) return@withContext "Turn on Fuse RomM in Settings, Addons, Fuse RomM."
+        if (!settings.enabled) return@withContext "Turn on RomM in Settings, Addons, RomM."
         val r = mirror.withFiles(clientFor(server), server, romId) ?: return@withContext "That game isn't in your RomM library any more."
         if (r.files.isEmpty()) return@withContext "Fuse needs RomM to list this game's files first. Try again once the server answers."
         val platform = ctx.platforms.resolveFolder(r.platformSlug) ?: return@withContext "Fuse doesn't know RomM's system \"${r.platformSlug}\", so it can't tell where this goes."
@@ -826,7 +826,7 @@ internal class DefaultRommOps(
         val existingDir = existing?.location?.takeIf { it.kind == LocationKind.FOLDER }?.path
         val folder = existing?.location?.path?.let { if (existingDir != null) FsPath.parent(it) else FsPath.parent(it) }
             ?: systemFolder(platform, r)?.first
-            ?: return@withContext "Choose where games go first: Settings, Addons, Fuse RomM, Library."
+            ?: return@withContext "Choose where games go first: Settings, Addons, RomM, Library."
         val placement = RommPlacement.layout(r, files, folder, existingDir)
         val newFolder = existingDir == null && placement.gamePath != files.singleOrNull()?.let { placement.files[it.id] } && !fileExists(placement.gamePath)
         val placeRoot = placement.gamePath.takeIf { newFolder || existingDir != null } ?: folder
@@ -875,7 +875,7 @@ internal class DefaultRommOps(
         return RommPlacement.systemFolder(platform, rommFs, roots, s.systemFolders, s.libraryRoot.ifBlank { null }, ctx.platforms::resolveFolder)
     }
 
-    /** Fuse RomM's transfers ask the app for these. */
+    /** RomM's transfers ask the app for these. */
     private val host = object : RommTransferHost {
         override fun client(server: String): RommClient? = clientFor(server)
         override val mirror: RommMirror get() = this@DefaultRommOps.mirror
@@ -1050,7 +1050,7 @@ internal class DefaultRommOps(
         /** The last two parts of a folder, as the person reads where something goes. */
         fun shortPath(path: String): String = FsPath.normalize(path).split('/').filter { it.isNotEmpty() }.takeLast(2).joinToString("/")
 
-        /** The art cache in use, for the image loader (set when Fuse RomM starts). */
+        /** The art cache in use, for the image loader (set when RomM starts). */
         @kotlin.concurrent.Volatile var rommArtCache: RommArtCache? = null
     }
 }

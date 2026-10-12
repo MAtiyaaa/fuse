@@ -20,13 +20,13 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import kotlinx.coroutines.launch
 
 /** Fuse Sync's name wherever it is presented as one of Fuse's own. */
-internal const val SYNC_NAME = "Fuse Sync"
-internal const val SYNC_BYLINE = "Fuse Sync by Fuse"
+internal const val SYNC_NAME = "Fuse One"
+internal const val SYNC_BYLINE = "Fuse One"
 
 /** Where Fuse Sync stands, in a few words and a sentence, with whether it is well (null: neither). */
-internal data class SyncWords(val ok: Boolean?, val title: String, val detail: String)
+data class SyncWords(val ok: Boolean?, val title: String, val detail: String)
 
-internal fun syncWords(status: SyncStatus): SyncWords = when (status) {
+fun syncWords(status: SyncStatus): SyncWords = when (status) {
     SyncStatus.Off -> SyncWords(null, "Off", "Turn it on to keep your saves, play time and settings on every device")
     SyncStatus.NotSetUp -> SyncWords(null, "Not set up", "Make this the host, or connect to the one you have")
     is SyncStatus.Connecting -> SyncWords(null, "Connecting", "Reaching ${status.hostName}")

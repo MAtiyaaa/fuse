@@ -125,7 +125,7 @@ internal fun JoinRequestOverlay(app: AppState) {
                         Spacer(Modifier.width(Space.l))
                         Column(Modifier.weight(1f)) {
                             FText("${a.deviceName} wants to join", Fuse.type.title, maxLines = 2, modifier = Modifier.semantics { heading() })
-                            FText("Fuse Sync, from ${platformWord(a.platform)}", Fuse.type.body, color = c.textMuted, maxLines = 1)
+                            FText("Fuse One, from ${platformWord(a.platform)}", Fuse.type.body, color = c.textMuted, maxLines = 1)
                         }
                     }
                     Spacer(Modifier.height(Space.l))

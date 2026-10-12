@@ -91,6 +91,12 @@ interface FuseServices {
     val jellyfinDiscovery: io.github.matiyaaa.fuse.jellyfin.ServerDiscovery? get() = null
 
     val emulators: EmulatorDetector
+
+    /**
+     * Fuse Intelligence's place on this device: what it may look at (never change) and Fuse's own
+     * file for what it learns. Null where it has nothing to look at.
+     */
+    fun intelligence(): Pair<io.github.matiyaaa.fuse.launch.intelligence.ReadOnlyLook, io.github.matiyaaa.fuse.launch.intelligence.KnowledgeStore>? = null
     val launcher: GameLauncher
     val cartridge: CartridgeBridge
     val installer: ReleaseInstaller
@@ -132,6 +138,14 @@ interface FuseServices {
      * null when it could not be written. [relativePath] never leaves that folder.
      */
     suspend fun keepFile(relativePath: String, bytes: ByteArray): String? = null
+
+    /**
+     * Writes [bytes] as a new file named [name] in the folder [beside] is in (a patched copy of a
+     * game, beside the game): written under a temporary name and moved into place, so a half-written
+     * file never appears, and never over a file that is there. Returns its path, or null when it
+     * could not be written (the folder can't be written to, or the name is taken).
+     */
+    suspend fun writeBeside(beside: String, name: String, bytes: ByteArray): String? = null
 
     /** Where the Store puts programs on a computer; null on Android (which has [packages]) and in tests. */
     val desktopApps: io.github.matiyaaa.fuse.ui.shell.store.DesktopInstaller? get() = null
@@ -175,6 +189,9 @@ interface EmulatorDetector {
 
     /** RPCS3's dev_hdd0 folders on this device, where its trophies are kept. */
     fun rpcs3DevHdd0(installed: List<InstalledEmulator>): List<String> = emptyList()
+
+    /** shadPS4's user folders on this device, where its trophies are kept. */
+    fun shadPs4UserDirs(installed: List<InstalledEmulator>): List<String> = emptyList()
 
     /**
      * Paths Fuse can never read on this device (Android 11+ `Android/data` of other apps). Firmware
@@ -226,7 +243,8 @@ sealed interface RunResult {
     /** The app is not installed (any more). */
     data object NotInstalled : RunResult
 
-    data class Failed(val message: String) : RunResult
+    /** It couldn't start; [diagnostic] holds what an emulator that stopped at once left behind, when there is that. */
+    data class Failed(val message: String, val diagnostic: io.github.matiyaaa.fuse.launch.LaunchDiagnostic? = null) : RunResult
 }
 
 /** Runs launch plans. Implementations never change emulator configuration. */
@@ -301,7 +319,23 @@ interface ReleaseInstaller {
      * false when the system takes over (Android asks to confirm and restarts Fuse).
      */
     suspend fun applyUpdate(downloaded: String): Result<Boolean> = Result.success(false)
+
+    /** The version the last update replaced, while Fuse can still go back to it (Linux); null elsewhere. */
+    fun previous(): PreviousRelease? = null
+
+    /** Puts [previous] back in this one's place. Success(true): restart Fuse now to start it. */
+    suspend fun goBack(): Result<Boolean> = Result.failure(UnsupportedOperationException("Fuse can't go back to an earlier version here."))
+
+    /** What Fuse says once at start about an update it went back from (or the library it brought back); null when nothing. */
+    fun takeStartupNote(): String? = null
 }
+
+/**
+ * A version of Fuse an update replaced, kept to go back to: [libraryGoesBack] when going back also
+ * brings back the library as it was before the update (the newer one is kept aside), [since] when
+ * it was replaced.
+ */
+data class PreviousRelease(val version: String, val libraryGoesBack: Boolean, val since: Long)
 
 /** Launchable apps (Android launcher apps; Linux `.desktop` applications). */
 interface AppsProvider {
@@ -364,6 +398,18 @@ interface EmulatorFiles {
     /** Where the PCSX2 install [installed] keeps its data; null when it hasn't been set up or can't be found. */
     suspend fun pcsx2(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): io.github.matiyaaa.fuse.launch.patches.Pcsx2Home?
 
+    /** Where the DuckStation install [installed] keeps its data; null when it hasn't been set up or can't be found. */
+    suspend fun duckstation(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): io.github.matiyaaa.fuse.launch.patches.DuckStationHome? = null
+
+    /** The memory stick of the PPSSPP install [installed] (the folder holding `PSP`); null when it can't be found. */
+    suspend fun ppsspp(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): io.github.matiyaaa.fuse.launch.patches.PpssppHome? = null
+
+    /** Where the RetroArch install [installed] keeps its settings and cheats; null until it has a retroarch.cfg. */
+    suspend fun retroArch(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): io.github.matiyaaa.fuse.launch.patches.RetroArchHome? = null
+
+    /** Removes the file at [path] inside a known emulator data folder; for a file Fuse made and emptied again. */
+    suspend fun remove(path: String): Boolean = false
+
     /** The text of [entry] inside the zip at [zip], or null. */
     suspend fun zipText(zip: String, entry: String): String?
 
@@ -396,7 +442,93 @@ interface EmulatorFiles {
 
     /** Removes what [stage] copied. */
     suspend fun clearStaged() = Unit
+
+
+    /**
+     * What is in the file, folder or archive at [source], before anything is copied: its entries
+     * (paths below a folder, the entries of a `.zip`, or just its name for any other file). Links
+     * inside a folder are left out. Null when it can't be read.
+     */
+    suspend fun inspect(source: String): SourceListing? = null
+
+    /** The text of [entry] in [source] (as [inspect] listed it), up to 1 MB; null when it isn't there or isn't text. */
+    suspend fun sourceText(source: String, entry: String): String? = null
+
+    /**
+     * Puts [files] from [source] and [texts] (destination to its whole text) in place inside known
+     * emulator folders, all or nothing. First a restoration point named [restorePoint] is made: each
+     * file already at a destination is copied aside, and what is new is noted, so [undo] can put
+     * everything back as it was. False when any destination is outside the emulator's folders or a
+     * copy fails, with whatever was done already put back.
+     */
+    suspend fun install(source: String?, files: List<io.github.matiyaaa.fuse.launch.patches.PlannedFile>, texts: Map<String, String>, restorePoint: String): Boolean = false
+
+    /**
+     * Puts back what [install] changed under [restorePoint]: new files are removed (and the folders made
+     * for them, once empty), files that were replaced get their earlier copy back. Destinations in
+     * [keep] are left as they are. The restoration point goes too. False when it is not there.
+     */
+    suspend fun undo(restorePoint: String, keep: Set<String> = emptySet()): Boolean = false
+
+    /**
+     * Downloads [url] into a folder of Fuse's own as [name], at most [maxBytes], and checks it against
+     * [md5] when given (and [size] when known). Returns the file, or null when it couldn't be fetched
+     * or wasn't what was promised (then nothing of it is kept). Nothing is opened or run.
+     */
+    suspend fun fetch(url: String, name: String, size: Long?, md5: String?, maxBytes: Long, onProgress: (Float) -> Unit = {}): String? = null
+
+    /** Removes what [fetch] downloaded. */
+    suspend fun clearFetched() = Unit
+
+    /**
+     * Where the game [query] describes keeps its mods in the emulator it starts in (Dolphin, Cemu,
+     * the Switch emulators), found as the save adapters find that emulator's folder, with that
+     * folder then open to [install]. A failure says why, in a sentence.
+     */
+    suspend fun modHome(query: io.github.matiyaaa.fuse.sync.SaveQuery): Result<io.github.matiyaaa.fuse.sync.ModHome> =
+        Result.failure(IllegalStateException("Mods are added from Fuse on a computer."))
+
+    /**
+     * The `USRDIR` folder of the RPCS3 game at [launchPath] (a game folder's `PS3_GAME/USRDIR`, or
+     * `dev_hdd0/game/<serial>/USRDIR` for one installed in RPCS3), then open to [install]; null when
+     * there is none.
+     */
+    suspend fun rpcs3GameFiles(installed: io.github.matiyaaa.fuse.model.InstalledEmulator, launchPath: String, serial: String?): String? = null
+
+    /**
+     * The shadPS4 mods folder for the game at [launchPath] (`<game folder>-mods`, beside it) and the
+     * names at the top of the game's own folder, with the mods folder then open to [install]; null
+     * when the game isn't a folder with an eboot.bin.
+     */
+    suspend fun shadPs4Mods(launchPath: String): Pair<String, Set<String>>? = null
+
+    /**
+     * The other emulators of [installed]'s family (see [io.github.matiyaaa.fuse.sync.EmulatorFamilies])
+     * with a folder here holding a person's things, as places to bring them over from.
+     */
+    suspend fun familyFolders(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): List<io.github.matiyaaa.fuse.sync.FamilyFolder> = emptyList()
+
+    /**
+     * What bringing [from]'s things over to [installed] would copy (nothing yet), with [installed]'s
+     * own folder then open to [install]; null when [installed] has no folder yet.
+     */
+    suspend fun familyMove(installed: io.github.matiyaaa.fuse.model.InstalledEmulator, from: String): io.github.matiyaaa.fuse.sync.FamilyMove? = null
 }
+
+/**
+ * A file, folder or archive someone chose to add, as Fuse read it: [entries] are paths below a folder
+ * or in an archive (or the file's own name), [bytes] their size together, and [truncated] when there
+ * were more than Fuse lists.
+ */
+data class SourceListing(
+    val name: String,
+    val form: SourceForm,
+    val entries: List<String>,
+    val bytes: Long,
+    val truncated: Boolean = false,
+)
+
+enum class SourceForm { FILE, FOLDER, ARCHIVE }
 
 /**
  * One run of an emulator's installer: [argv] (program first), started in [workingDir] with [env]

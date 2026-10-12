@@ -8,6 +8,7 @@ import io.github.matiyaaa.fuse.ui.fuseline.bench.DrawModel
 import io.github.matiyaaa.fuse.ui.fuseline.bench.ENGINES
 import io.github.matiyaaa.fuse.ui.fuseline.bench.Engine
 import io.github.matiyaaa.fuse.ui.fuseline.bench.Fuseline4
+import io.github.matiyaaa.fuse.ui.fuseline.bench.Fuseline40
 import io.github.matiyaaa.fuse.ui.fuseline.bench.Spec
 import io.github.matiyaaa.fuse.ui.fuseline.bench.CurveId
 import kotlinx.coroutines.CoroutineScope
@@ -48,6 +49,10 @@ class MotionBenchmark {
     private val enabled = System.getProperty("fuse.bench").orEmpty().toBoolean()
     private val only = System.getProperty("fuse.bench.only").orEmpty()
     private val rounds = System.getProperty("fuse.bench.rounds")?.toIntOrNull() ?: 15
+
+    /** The engines measured: every one, or those named in `-Pfuse.bench.engines` (comma separated). */
+    private val engines: List<Engine> = System.getProperty("fuse.bench.engines").orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        .let { pick -> if (pick.isEmpty()) ENGINES else ENGINES.filter { it.name in pick || it === Fuseline4 || it === Fuseline40 } }
 
     enum class Mode(val label: String) { DRAWN("drawn"), READ("read"), UNREAD("unread") }
 
@@ -156,7 +161,7 @@ class MotionBenchmark {
 
     private fun case(c: Case) {
         if (only.isNotEmpty() && !c.name.contains(only)) return
-        val engines = ENGINES.filter(c.supports)
+        val engines = engines.filter(c.supports)
         val base = baseline(c)
         repeat(WARM) { for (e in engines) round(e, c) }
         val got = HashMap<Engine, MutableList<Round>>()
@@ -168,7 +173,7 @@ class MotionBenchmark {
             }
         }
         if (warming) return
-        val results = ENGINES.map { e ->
+        val results = this.engines.map { e ->
             val rs = got[e] ?: return@map null
             val ns = rs.map { (it.nanos - base).coerceAtLeast(0.0) }
             val (low, high) = bootstrap(ns)
@@ -184,8 +189,8 @@ class MotionBenchmark {
             )
         }
         rows += Row(c, results)
-        val v4 = results[0]
-        println("${c.name} [${c.mode.label}]: " + results.filterNotNull().joinToString { "${it.e.name} ${"%.2f".format(it.nanos / 1000)} µs" } + "  (Fuseline 4 ${v4?.let { "%.0f".format(it.bytes) }} B)")
+        val v41 = results[0]
+        println("${c.name} [${c.mode.label}]: " + results.filterNotNull().joinToString { "${it.e.name} ${"%.2f".format(it.nanos / 1000)} µs" } + "  (Fuseline 4.1 ${v41?.let { "%.0f".format(it.bytes) }} B)")
     }
 
     private fun median(xs: List<Double>): Double = xs.sorted().let { s -> if (s.size % 2 == 1) s[s.size / 2] else (s[s.size / 2 - 1] + s[s.size / 2]) / 2 }
@@ -459,16 +464,27 @@ class MotionBenchmark {
         return if (at.size == 1) at[0].e.name else "tie: " + at.joinToString { it.e.name }
     }
 
+    /**
+     * Fuseline 4.1's time per frame for each of the row's values, in nanoseconds, for rows of many
+     * values ("1000 springs, drawn": the frame's time over 1000). Blank where a row isn't per value.
+     */
+    private fun perValue(r: Row): String {
+        val n = r.case.name.substringBefore(' ').toIntOrNull()?.takeIf { it > 1 } ?: return ""
+        val v41 = r.results[0] ?: return ""
+        if (v41.high < TIME_FLOOR) return "< %.2f ns".format(TIME_FLOOR / n)
+        return "%.1f ns".format(v41.nanos / n)
+    }
+
     private fun reduction(r: Row): Pair<String, String> {
-        val v4 = r.results[0] ?: return "n/a" to "n/a"
-        val v31 = r.results[1] ?: return "n/a" to "n/a"
-        if (v31.nanos < TIME_FLOOR) return "both below floor" to "n/a"
-        if (v4.nanos < TIME_FLOOR) return "> %.1f%%".format(100 * (1 - TIME_FLOOR / v31.nanos)) to "> %.0f×".format(v31.nanos / TIME_FLOOR)
-        return "%.1f%%".format(100 * (1 - v4.nanos / v31.nanos)) to "%.2f×".format(v31.nanos / v4.nanos)
+        val v41 = r.results[0] ?: return "n/a" to "n/a"
+        val v4 = r.results[1] ?: return "n/a" to "n/a"
+        if (v4.nanos < TIME_FLOOR) return "both below floor" to "n/a"
+        if (v41.nanos < TIME_FLOOR) return "> %.1f%%".format(100 * (1 - TIME_FLOOR / v4.nanos)) to "> %.0f×".format(v4.nanos / TIME_FLOOR)
+        return "%.1f%%".format(100 * (1 - v41.nanos / v4.nanos)) to "%.2f×".format(v4.nanos / v41.nanos)
     }
 
     private fun report() {
-        val names = ENGINES.map { it.name }
+        val names = engines.map { it.name }
         val text = buildString {
             appendLine("# Fuseline benchmark")
             appendLine()
@@ -477,11 +493,11 @@ class MotionBenchmark {
                 if (rs.isEmpty()) continue
                 appendLine("## ${g.title}: time per frame")
                 appendLine()
-                appendLine("| Test | ${names.joinToString(" | ")} | Reduction vs 3.1 | Speedup vs 3.1 | Winner |")
-                appendLine("|---|${names.joinToString("") { "---|" }}---|---|---|")
+                appendLine("| Test | ${names.joinToString(" | ")} | Reduction vs 4 | Speedup vs 4 | 4.1 per value | Winner |")
+                appendLine("|---|${names.joinToString("") { "---|" }}---|---|---|---|")
                 for (r in rs) {
                     val (red, up) = reduction(r)
-                    appendLine("| ${r.case.name} | ${r.results.joinToString(" | ") { us(it) }} | $red | $up | ${winner(r)} |")
+                    appendLine("| ${r.case.name} | ${r.results.joinToString(" | ") { us(it) }} | $red | $up | ${perValue(r)} | ${winner(r)} |")
                 }
                 appendLine()
             }
@@ -491,9 +507,9 @@ class MotionBenchmark {
             appendLine("|---|${names.joinToString("") { "---|" }}---|")
             for (r in rows) appendLine("| ${r.case.name} | ${r.results.joinToString(" | ") { bytes(it) }} | ${memoryWinner(r)} |")
             appendLine()
-            appendLine("## Frame distribution, Fuseline 4 and Fuseline 3.1 (µs per frame, harness included)")
+            appendLine("## Frame distribution, Fuseline 4.1 and Fuseline 4 (µs per frame, harness included)")
             appendLine()
-            appendLine("| Test | 4 mean | 4 p50 | 4 p90 | 4 p95 | 4 p99 | 4 worst | 3.1 mean | 3.1 p50 | 3.1 p90 | 3.1 p95 | 3.1 p99 | 3.1 worst |")
+            appendLine("| Test | 4.1 mean | 4.1 p50 | 4.1 p90 | 4.1 p95 | 4.1 p99 | 4.1 worst | 4 mean | 4 p50 | 4 p90 | 4 p95 | 4 p99 | 4 worst |")
             appendLine("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
             fun ps(m: Measured?) = m?.p?.let { p -> listOf(p.mean, p.p50, p.p90, p.p95, p.p99, p.worst).joinToString(" | ") { "%.2f".format(it / 1000) } } ?: "n/a | n/a | n/a | n/a | n/a | n/a"
             for (r in rows) appendLine("| ${r.case.name} | ${ps(r.results[0])} | ${ps(r.results[1])} |")
@@ -504,10 +520,10 @@ class MotionBenchmark {
             appendLine("|---|${names.joinToString("") { "---|" }}")
             for (r in rows) appendLine("| ${r.case.name} | ${r.results.joinToString(" | ") { m -> m?.let { "%.0f%%".format(it.requested * 100) } ?: "n/a" }} |")
             appendLine()
-            val v4first = rows.count { winner(it) == Fuseline4.name }
+            val v41first = rows.count { winner(it) == Fuseline4.name }
             val unresolved = rows.filter { winner(it).startsWith("unresolved") }
             val lost = rows.filter { w -> val x = winner(w); x != Fuseline4.name && !x.startsWith("unresolved") && !x.startsWith("no work") && !x.startsWith("only") }
-            appendLine("Rows: ${rows.size}. Fuseline 4 first: $v4first. Unresolved: ${unresolved.size}${if (unresolved.isEmpty()) "" else " (" + unresolved.joinToString { it.case.name } + ")"}. Another engine first: ${lost.size}${if (lost.isEmpty()) "" else " (" + lost.joinToString { "${it.case.name}: ${winner(it)}" } + ")"}.")
+            appendLine("Rows: ${rows.size}. Fuseline 4.1 first: $v41first. Unresolved: ${unresolved.size}${if (unresolved.isEmpty()) "" else " (" + unresolved.joinToString { it.case.name } + ")"}. Another engine first: ${lost.size}${if (lost.isEmpty()) "" else " (" + lost.joinToString { "${it.case.name}: ${winner(it)}" } + ")"}.")
             appendLine()
             appendLine("""
                 Method: one thread; a fresh manual frame clock and an inline scope for every round, so
@@ -521,7 +537,7 @@ class MotionBenchmark {
                 harness included. "drawn" rows re-read a value only when what it read changed (each
                 reader's reads recorded and indexed by state, changes applied after every frame, as
                 Compose does before drawing); "read" rows read every value every frame; "unread" rows read
-                nothing. Fuseline 3.1 (0.3.7.5), 3 (0.3.7), 2 (0.3.6) and 1 (0.2.7) are those engines
+                nothing. Fuseline 4 (0.4.1), 3.1 (0.3.7.5), 3 (0.3.7), 2 (0.3.6) and 1 (0.2.7) are those engines
                 kept unchanged in the tests.
                 JVM: ${System.getProperty("java.vm.name")} ${System.getProperty("java.version")}, ${Runtime.getRuntime().availableProcessors()} processors, ${System.getProperty("os.name")} ${System.getProperty("os.arch")}.
             """.trimIndent())
@@ -529,7 +545,7 @@ class MotionBenchmark {
         println(text)
         File("build/motion-bench.md").apply { parentFile.mkdirs() }.writeText(text)
         val notFirst = rows.filter { winner(it) != Fuseline4.name && !winner(it).startsWith("no work") && !winner(it).startsWith("only") }
-        assertTrue(notFirst.isEmpty() || System.getProperty("fuse.bench.lenient").toBoolean(), "Fuseline 4 is not clearly first in: ${notFirst.map { it.case.name }}")
+        assertTrue(notFirst.isEmpty() || System.getProperty("fuse.bench.lenient").toBoolean(), "Fuseline 4.1 is not clearly first in: ${notFirst.map { it.case.name }}")
     }
 
     private companion object {

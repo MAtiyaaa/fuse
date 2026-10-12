@@ -121,7 +121,7 @@ class SyncHostService(private val dirs: FuseDirs, private val port: () -> Int, p
         """.trimIndent()
         val out = PowerShell.run(script)
         if (out?.exitCode != 0) throw IOException("Windows didn't accept the task.")
-        marker().apply { parentFile.mkdirs() }.writeText("Fuse Sync's host starts at sign-in through the task '$TASK'.\n")
+        marker().apply { parentFile.mkdirs() }.writeText("Fuse One's host starts at sign-in through the task '$TASK'.\n")
     }
 
     private fun unit() = File("${dirs.xdgConfigHome}/systemd/user/$UNIT")

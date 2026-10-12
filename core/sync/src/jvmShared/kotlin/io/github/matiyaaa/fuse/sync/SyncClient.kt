@@ -43,6 +43,10 @@ data class HostLink(
     val localAddress: String? = null,
     /** The address from outside (HTTPS behind a reverse proxy, or a VPN address). */
     val remoteAddress: String? = null,
+    /** The newest generation of the household's hosts this device knows: it never goes back to an older host. */
+    val generation: Long = 0,
+    /** Every computer that keeps the household, to try when the host doesn't answer. */
+    val hosts: List<HostNode> = emptyList(),
 )
 
 /**
@@ -75,6 +79,16 @@ class SyncException(message: String, val code: String, val status: Int) : IOExce
 internal class NotTheHost(status: Int) : IOException("Something other than the host answered ($status).")
 
 /** A failed answer as Fuse Sync takes it: the host's own error, or [NotTheHost] when it wasn't the host's. */
+/** The Fuse this process is ([SyncApi.APP_HEADER]); set once at start by whoever knows it. */
+@Volatile var fuseAppVersion: String = ""
+
+/** Says which protocol this device speaks, the oldest it still does, and its Fuse version. */
+internal fun HttpRequestBuilder.versionHeaders() {
+    header(SyncApi.PROTOCOL_HEADER, SyncApi.VERSION.toString())
+    header(SyncApi.MIN_PROTOCOL_HEADER, SyncApi.MIN_VERSION.toString())
+    if (fuseAppVersion.isNotEmpty()) header(SyncApi.APP_HEADER, fuseAppVersion)
+}
+
 internal fun hostError(status: Int, text: String, json: Json): IOException {
     val err = runCatching { json.decodeFromString(ApiError.serializer(), text) }.getOrNull() ?: return NotTheHost(status)
     return SyncException(err.error, err.code, status)
@@ -96,6 +110,55 @@ class SyncClient(
 
     @Volatile var route: Route? = null
         private set
+
+    /** Told whenever the link changes (a newer host, the household's hosts), so it is kept. */
+    @Volatile var onLinkChange: ((HostLink) -> Unit)? = null
+
+    private fun changeLink(next: HostLink) {
+        if (next == link) return
+        link = next
+        onLinkChange?.invoke(next)
+    }
+
+    /** Learns from [hello] (this household's host answering) the generation and the hosts it knows. */
+    fun learn(hello: HostHello) {
+        if (hello.hostId != link.hostId || hello.generation < link.generation) return
+        val hosts = hello.hosts.ifEmpty { link.hosts }
+        if (hello.generation != link.generation || hosts != link.hosts) changeLink(link.copy(generation = hello.generation, hosts = hosts))
+    }
+
+    /**
+     * The host didn't answer, or answered that it isn't the host any more: asks every other computer
+     * that keeps the household, and moves to the one that answers as the host of the newest
+     * generation (never an older one than this device knows). True when it moved.
+     */
+    suspend fun failover(): Boolean {
+        var best: Pair<HostNode, HostHello>? = null
+        for (node in link.hosts) {
+            for (address in listOfNotNull(node.local, node.remote)) {
+                val h = hello(address, quickHttp) ?: continue
+                // Only this household's host, as the computer it says it is, of a generation this device may follow.
+                if (h.hostId != link.hostId || h.role != Leadership.PRIMARY || h.generation < link.generation || (h.node.isNotEmpty() && h.node != node.nodeId)) continue
+                if (best == null || h.generation > best.second.generation) best = node to h
+                break
+            }
+        }
+        val (node, h) = best ?: return false
+        val local = node.local?.let(::normalise)
+        val remote = node.remote?.let(::normalise)
+        val moved = local != link.localAddress?.let(::normalise) || remote != link.remoteAddress?.let(::normalise)
+        val newer = h.generation > link.generation
+        changeLink(link.copy(localAddress = local, remoteAddress = remote, generation = h.generation, hosts = h.hosts.ifEmpty { link.hosts }))
+        if (moved) route = null
+        return moved || newer
+    }
+
+    private val quickHttp: HttpClient by lazy {
+        SyncHttp.client {
+            install(HttpTimeout) { connectTimeoutMillis = 1_500; requestTimeoutMillis = 4_000 }
+            expectSuccess = false
+        }
+    }
 
     /** When home was last looked at while away (see [bases]). */
     @Volatile private var homeLookedAt = 0L
@@ -145,6 +208,55 @@ class SyncClient(
         content: OutgoingContent? = null,
         raw: (suspend (io.ktor.client.statement.HttpResponse) -> T)? = null,
         headers: Map<String, String> = emptyMap(),
+    ): T = try {
+        callOnce(method, path, body, out, bodyHash, content, raw, headers)
+    } catch (e: SyncException) {
+        // The host is away, or another keeps the household now: once more, at the host there is,
+        // or at the address the household's host answers from at home now (a new computer, a new address).
+        if (e.code !in MOVED || content != null) throw e
+        if (!(link.hosts.size >= 2 && failover()) && !(e.code == "offline" && rediscover())) throw e
+        callOnce(method, path, body, out, bodyHash, content, raw, headers)
+    }
+
+    /** When this device last asked the home network where its host is (see [rediscover]). */
+    @Volatile private var rediscoveredAt = 0L
+
+    /**
+     * Asks the home network where this household's host is when it doesn't answer where it was:
+     * the same host (by its id), as the household's host, of a generation this device may follow,
+     * answering at an address this device didn't know. Asked at most every few minutes. True when
+     * the link now has that address.
+     */
+    suspend fun rediscover(find: suspend () -> List<FoundHost> = { Discovery.find() }): Boolean {
+        val now = clock()
+        if (now - rediscoveredAt < REDISCOVER_EVERY_MS) return false
+        rediscoveredAt = now
+        val known = link.localAddress?.let(::normalise)
+        for (f in find()) {
+            val h = f.hello
+            if (h.hostId != link.hostId || h.role != Leadership.PRIMARY || h.generation < link.generation) continue
+            for (candidate in f.candidates) {
+                val address = normalise(candidate)
+                if (address == known) continue
+                val answer = hello(address, quickHttp) ?: continue
+                if (answer.hostId != link.hostId) continue
+                changeLink(link.copy(localAddress = address, generation = maxOf(link.generation, answer.generation), hosts = answer.hosts.ifEmpty { link.hosts }))
+                route = null
+                return true
+            }
+        }
+        return false
+    }
+
+    private suspend fun <T> callOnce(
+        method: HttpMethod,
+        path: String,
+        body: ByteArray?,
+        out: KSerializer<T>?,
+        bodyHash: String? = null,
+        content: OutgoingContent? = null,
+        raw: (suspend (io.ktor.client.statement.HttpResponse) -> T)? = null,
+        headers: Map<String, String> = emptyMap(),
     ): T {
         val targets = bases()
         if (targets.isEmpty()) throw SyncException("This device has no address for its host.", "no-address", 0)
@@ -167,6 +279,8 @@ class SyncClient(
                     header(RequestSigning.NONCE, nonce)
                     header(RequestSigning.SIGNATURE, sig)
                     header("X-Fuse-Route", r.name)
+                    header(HostLeadership.GENERATION, link.generation.toString())
+                    versionHeaders()
                     header(io.ktor.http.HttpHeaders.AcceptEncoding, "gzip")
                     for ((k, v) in headers) header(k, v)
                     when {
@@ -215,7 +329,16 @@ class SyncClient(
 
     // ---------------------------------------------------------------- calls
 
-    suspend fun status(): HostStatus = get("/status", HostStatus.serializer())
+    suspend fun status(): HostStatus = get("/status", HostStatus.serializer()).also { learn(it.hello) }
+
+    /** Offers this computer as one of the household's backups ([node]: its place among the hosts). */
+    suspend fun offerBackup(node: HostNode): BackupState = send(HttpMethod.Post, "/backups/offer", node, HostNode.serializer(), BackupState.serializer())
+    suspend fun backupState(): BackupState = get("/backups", BackupState.serializer())
+    suspend fun leaveBackups(): BackupState = send(HttpMethod.Post, "/backups/leave", kotlinx.serialization.json.JsonObject(emptyMap()), kotlinx.serialization.json.JsonObject.serializer(), BackupState.serializer())
+    suspend fun acceptBackup(device: String): Leadership = send(HttpMethod.Post, "/backups/accept/$device", kotlinx.serialization.json.JsonObject(emptyMap()), kotlinx.serialization.json.JsonObject.serializer(), Leadership.serializer())
+
+    /** A copy of the household, for a backup ([have] is the journal position it already has). */
+    suspend fun replica(have: Long): SealedReplica = get("/replica?have=$have", SealedReplica.serializer())
     suspend fun profiles(): List<ProfileInfo> = get("/profiles", ListSerializer(ProfileInfo.serializer()))
     suspend fun createProfile(p: NewProfile): ProfileInfo = send(HttpMethod.Post, "/profiles", p, NewProfile.serializer(), ProfileInfo.serializer())
     suspend fun changeProfile(id: String, c: ProfileChange): ProfileInfo = send(HttpMethod.Patch, "/profiles/$id", c, ProfileChange.serializer(), ProfileInfo.serializer())
@@ -312,6 +435,18 @@ class SyncClient(
      * Fetches [hash] into [store] (checked against its hash on the way in): nothing is kept when
      * the bytes don't match, and the next try starts again.
      */
+    /** The household's copy of the picture kept for [key] (see [HouseholdArt]); null when the host has none. */
+    suspend fun artwork(key: String): ByteArray? = try {
+        callOnce(HttpMethod.Get, "/art/$key", null, null, raw = { resp -> resp.bodyAsChannel().toInputStream().use { it.readBytes() } })
+    } catch (e: SyncException) {
+        if (e.status == 404 || e.code == "no-art") null else throw e
+    }
+
+    /** Gives the host [bytes], the picture fetched for [key], for the household's other devices. */
+    suspend fun shareArtwork(key: String, bytes: ByteArray) {
+        callOnce<Unit>(HttpMethod.Put, "/art/$key", bytes, null)
+    }
+
     suspend fun download(hash: String, store: ContentStore) {
         if (store.has(hash)) return
         call<String>(HttpMethod.Get, "/blobs/$hash", null, null, raw = { resp ->
@@ -388,13 +523,19 @@ class SyncClient(
 
     /** The host this device is linked to, as it says hello now (its features); null when it doesn't answer. */
     suspend fun helloNow(): HostHello? {
-        for ((_, base) in bases()) hello(base, http)?.let { return it }
+        for ((_, base) in bases()) hello(base, http)?.let { learn(it); return it }
         return null
     }
 
     companion object {
+        /** What a host answers when it is away or isn't the household's host any more. */
+        private val MOVED = setOf("offline", "not-leader", "fenced")
+
         /** How often home is looked at while away. */
         const val HOME_LOOK_MS = 60_000L
+
+        /** How often the home network is asked where the host went. */
+        const val REDISCOVER_EVERY_MS = 3 * 60_000L
 
         /** Files moved at once, each way. */
         const val TRANSFERS = 4
@@ -448,6 +589,7 @@ class SyncClient(
             val resp = http.request {
                 method = HttpMethod.Post
                 url(base + SyncApi.BASE + "/pair")
+                versionHeaders()
                 contentType(ContentType.Application.Json)
                 setBody(json.encodeToString(PairRequest.serializer(), PairRequest(code.trim().uppercase(), deviceId, deviceName, platform)))
             }
@@ -471,6 +613,7 @@ class SyncClient(
             val resp = http.request {
                 method = HttpMethod.Post
                 url(base + SyncApi.BASE + "/join")
+                versionHeaders()
                 contentType(ContentType.Application.Json)
                 setBody(json.encodeToString(JoinRequest.serializer(), JoinRequest(deviceId, deviceName, platform, mine)))
             }

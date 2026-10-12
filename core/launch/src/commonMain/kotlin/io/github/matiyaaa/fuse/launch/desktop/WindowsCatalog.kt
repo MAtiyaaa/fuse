@@ -107,7 +107,7 @@ object WindowsCatalog {
     )
 
     /** Adapters for every entry plus the built-in programs and shortcuts adapter. */
-    val adapters: List<EmulatorAdapter> = defs.map { LinuxCommandAdapter(it.def, Host.WINDOWS) } + WindowsShortcutAdapter
+    val adapters: List<EmulatorAdapter> = defs.map { LinuxCommandAdapter(it.def, Host.WINDOWS) } + WindowsShortcutAdapter + AnyPs5Adapter(Host.WINDOWS)
 
     fun def(id: String): DesktopEmulatorDef? = defs.firstOrNull { it.def.id == id }
 }

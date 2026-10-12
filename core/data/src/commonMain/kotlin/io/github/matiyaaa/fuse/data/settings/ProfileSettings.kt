@@ -16,7 +16,8 @@ object ProfileSettings {
         // How it looks.
         "appearance.themeId", "appearance.customThemes", "appearance.glass", "appearance.crt", "appearance.motion",
         "appearance.heroDim", "appearance.highContrastFocus", "appearance.textScale", "appearance.startupAnimation",
-        "appearance.recentColors", "appearance.rememberPlace", "appearance.standbyMinutes",
+        "appearance.colorVision", "appearance.layoutDirection",
+        "appearance.recentColors", "appearance.studioAdvanced", "appearance.rememberPlace", "appearance.standbyMinutes",
         // Home, the tabs and the quick menu.
         // The Systems page's arrangement is each device's own: a TV, a monitor and a handheld (each
         // of a two-screen handheld's screens) size systems for themselves. The order follows the
@@ -24,11 +25,12 @@ object ProfileSettings {
         "home.layout", "home.destinations", "home.addonsOrder", "home.quickMenu",
         // The library as they like it.
         "library.cleanDisplayNames", "library.systemOrder", "library.sort", "library.systemArtStyle",
-        "library.selectOpensGamePage", "library.collectionsEnabled", "library.autoSeries", "library.hiddenSeries",
-        "library.systemColors", "library.systemTiles", "library.appsFilter", "library.gameArt",
+        "library.selectOpensGamePage", "library.collectionsEnabled", "library.autoSeries", "library.hiddenSeries", "library.systemSpotlight",
+        "library.systemColors", "library.systemTiles", "library.appsFilter", "library.gameArt", "library.opensOn",
+        "library.settingProfiles",
         "videoPreview.enabled", "videoPreview.delaySeconds",
         // Sound and music (not a song's path, which is this device's file).
-        "sound.enabled", "sound.volume", "sound.profile",
+        "sound.enabled", "sound.volume", "sound.profile", "sound.muted", "sound.master",
         "music.enabled", "music.volume", "music.track", "music.shuffle",
         // The status line.
         "statusArea.showClock", "statusArea.use24HourClock", "statusArea.showBattery", "statusArea.showWifi", "statusArea.showBluetooth",

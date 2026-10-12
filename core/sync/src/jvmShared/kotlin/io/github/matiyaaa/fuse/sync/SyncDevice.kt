@@ -336,6 +336,56 @@ class SyncDevice(
         }
     }
 
+    /**
+     * What this device keeps for [profile] on its own, without a host: each game it has play time or
+     * saves for, and each save as it is kept here (the newest, waiting for a host, and one set aside
+     * while someone else plays). Read only; the Sync page shows it while there is no household.
+     */
+    fun localReport(profile: ProfileInfo): ProfileReport {
+        val s = state
+        val meta = meta(profile.id)
+        val revisions = s.outbox.mapNotNull { it.revision }.filter { it.profile == profile.id }
+        // Parked saves are kept by `profile|game|KIND`.
+        val parked = s.parked.mapNotNull { (key, manifest) ->
+            if (key.substringBefore('|') != profile.id) return@mapNotNull null
+            val rest = key.substringAfter('|')
+            val kind = SaveKind.entries.firstOrNull { it.name == rest.substringAfterLast('|') } ?: return@mapNotNull null
+            Triple(rest.substringBeforeLast('|'), kind, manifest)
+        }
+        fun files(m: SaveManifest) = m.files.map { FileReport(it.path, it.size, "") }
+        fun stored(m: SaveManifest) = m.files.maxOfOrNull { f -> if (store.has(f.hash)) store.fileOf(f.hash).lastModified() else 0L } ?: 0L
+        val ids = (meta.games.keys + revisions.map { it.game } + parked.map { it.first }).distinct()
+        val games = ids.mapNotNull { id ->
+            val record = meta.games[id]
+            val kinds = (revisions.filter { it.game == id }.map { it.kind } + parked.filter { it.first == id }.map { it.second }).distinct()
+            val slots = kinds.map { kind ->
+                val versions = revisions.filter { it.game == id && it.kind == kind }.map { r ->
+                    VersionReport(r.id, r.device, r.deviceName, r.at.millis, r.playSeconds, r.reason, current = false, bytes = r.manifest.size, files = files(r.manifest), kept = r.pinned, provenance = r.provenance)
+                } + parked.filter { it.first == id && it.second == kind }.map { (_, _, m) ->
+                    VersionReport("parked:$id:${kind.name}", deviceId, deviceName, stored(m), 0, RevisionReason.PLAYED, current = false, bytes = m.size, files = files(m))
+                }
+                val newest = versions.sortedByDescending { it.at }
+                val bytes = (revisions.filter { it.game == id && it.kind == kind }.flatMap { it.manifest.files } + parked.filter { it.first == id && it.second == kind }.flatMap { it.third.files })
+                    .distinctBy { it.hash }.sumOf { it.size }
+                val format = revisions.firstOrNull { it.game == id && it.kind == kind }?.manifest?.format
+                    ?: parked.first { it.first == id && it.second == kind }.third.format
+                SlotReport(kind, format, bytes, newest.mapIndexed { i, v -> if (i == 0) v.copy(current = true) else v })
+            }
+            val seconds = record?.totalSeconds ?: 0L
+            if (slots.isEmpty() && seconds <= 0L) return@mapNotNull null
+            val name = record?.title?.value ?: record?.name ?: revisions.firstOrNull { it.game == id && it.title.isNotBlank() }?.title ?: id.substringAfter(':')
+            GameReport(
+                game = id, name = name, platform = record?.key?.platform ?: id.substringBefore(':'),
+                playSeconds = seconds, devicePlay = record?.playSeconds.orEmpty(), sessions = record?.sessions?.size ?: 0,
+                lastPlayed = record?.lastPlayed, favorite = record?.favorite?.value == true, slots = slots,
+            )
+        }.sortedByDescending { g -> maxOf(g.lastPlayed ?: 0L, g.slots.flatMap { it.versions }.maxOfOrNull { it.at } ?: 0L) }
+        val devicePlay = HashMap<String, Long>()
+        games.forEach { g -> g.devicePlay.forEach { (d, sec) -> devicePlay[d] = (devicePlay[d] ?: 0L) + sec } }
+        val savesBytes = (revisions.flatMap { it.manifest.files } + parked.flatMap { it.third.files }).distinctBy { it.hash }.sumOf { it.size }
+        return ProfileReport(profile, games.sumOf { it.playSeconds }, devicePlay, emptyList(), games, savesBytes, store.root.path, local = true)
+    }
+
     // ---------------------------------------------------------------- people coming and going
 
     /** Everyone this device keeps anything for: records, saves waiting to go, saves parked or in a folder. */

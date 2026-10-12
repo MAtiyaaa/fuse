@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.1 is the <b>Connected Update</b>, built directly on shipped Fuseline 4: durable profile revisions, stronger household identity, safe save importing, independent display refresh and desktop rendering work. This branch is still undergoing integration and physical acceptance. <a href="docs/audits/0.4.1-convergence.md">Engineering acceptance record.</a></sub><br>
+<sub>0.4.2 is the <b>Native Update</b>: Steam and Decky in setup, guided controller setup, Fuse One for the whole household (with or without a host), the Fuse One Host in Docker, and Fuse Intelligence. Physical acceptance on SteamOS, the Steam Deck, the AYN Thor and macOS is still to come.</sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -38,7 +38,7 @@ Home screen.
 <b><a href="#made-by-fuse">Made by Fuse</a></b> &nbsp;&nbsp;·&nbsp;&nbsp;
 <b><a href="#everything-in-its-place">Features</a></b> &nbsp;&nbsp;·&nbsp;&nbsp;
 <b><a href="#install">Install</a></b> &nbsp;&nbsp;·&nbsp;&nbsp;
-<b><a href="#fuse-romm-fuses-native-romm-integration">Fuse RomM</a></b> &nbsp;&nbsp;·&nbsp;&nbsp;
+<b><a href="#romm-fuses-native-romm-integration">RomM</a></b> &nbsp;&nbsp;·&nbsp;&nbsp;
 <b><a href="#romm-through-cartridge">Cartridge</a></b> &nbsp;&nbsp;·&nbsp;&nbsp;
 <b><a href="#build-it-yourself">Build</a></b> &nbsp;&nbsp;·&nbsp;&nbsp;
 <b><a href="#documentation">Docs</a></b>
@@ -124,10 +124,12 @@ They behave the same on every device, answer to one design, and get better with 
   <tr>
     <td colspan="2" valign="top">
       <img src="docs/assets/icons/sync.svg" width="56" height="56" alt=""><br>
-      <h3>Fuse Sync <sub>by Fuse</sub></h3>
-      Your saves, play time, library and settings, the same on every device you play on, from a
-      computer of your own at home. Stop on the PC, carry on on the handheld; nothing goes to anyone
-      else's server, and nothing is ever silently lost.
+      <h3>Fuse One <sub>by Fuse</sub></h3>
+      Your household in one place: Fuse Profiles, Fuse Save Sync and the Fuse Library. Your saves,
+      play time, library, settings and keys, the same on every device you play on, from a computer of
+      your own at home (or the Fuse One Host, on its own in Docker). Without a host, each person's
+      saves are still kept apart on the device. Stop on the PC, carry on on the handheld; nothing goes
+      to anyone else's server, and nothing is ever silently lost.
       <ul>
         <li><b>Saves where you play.</b> The newest save is put in place before a game starts and kept
         after it closes, matched by the game, not the path, in over 60 emulators: RetroArch,
@@ -157,7 +159,7 @@ They behave the same on every device, answer to one design, and get better with 
         <li><b>Already run Syncthing?</b> Fuse can share your emulators' save folders through it
         instead, bring in the newest save before a game and ask when two devices both played.</li>
       </ul>
-      <a href="docs/sync.md"><b>How Fuse Sync works</b></a>
+      <a href="docs/sync.md"><b>How Fuse One works</b></a> &nbsp;·&nbsp; <a href="tools/host/README.md"><b>The Fuse One Host</b></a>
     </td>
   </tr>
   <tr>
@@ -300,7 +302,7 @@ Play.
     <td width="33%" valign="top">
       <img src="docs/assets/icons/cartridge.svg" width="44" height="44" alt=""><br>
       <b>RomM, built in or through Cartridge</b><br>
-      <sub>Fuse RomM browses your server, downloads games and BIOS into the folders you have and uploads yours, with an offline copy of the library. Or pair with the Cartridge app, still fully supported.</sub>
+      <sub>RomM in Fuse browses your server, downloads games and BIOS into the folders you have and uploads yours, with an offline copy of the library. Or pair with the Cartridge app, still fully supported.</sub>
     </td>
     <td width="33%" valign="top">
       <img src="docs/assets/icons/second-screen.svg" width="44" height="44" alt=""><br>
@@ -378,255 +380,18 @@ Play.
   </tr>
 </table>
 
-### In detail
-
-<details>
-<summary><b>Library and folders</b></summary>
-<br>
-
-- **Library roots** in ES-DE style `ROMs/<system>` folders, RomM Structure A and B libraries, single
-  platform folders and folders of Steam or PC shortcuts.
-- **157 systems** recognised by RomM slug, RomM alias, ES-DE name or full name: every game system
-  folder ES-DE knows, from the Apple II and the VIC-20 to the PC-98, the Model 3 and WASM-4, each
-  reading the file types ES-DE accepts for it.
-- **One game, however it is stored.** Multi-disc sets, `.m3u`, `.cue` and `.gdi` files, PS3, PS Vita,
-  PSP, Wii U, Xbox 360 and PC game folders, RomM content folders (DLC, updates, patches, hacks,
-  translations and more) and loose Switch updates are each grouped into one game.
-- **Folder behaviour you control**: Auto, File, Folder as game or Folder browser, set globally, per
-  system or per game.
-- **Android games** in their own system: any installed app can be a game, an app or an emulator, and
-  games get box art, details and play time like the rest.
-- **A game in the wrong system** moves to the right one from its options, and stays there.
-- **Add a game from anywhere**: an installed app, an APK file, or a game file outside your library
-  folders, picked with Fuse's own file picker.
-- **Quick rescans** only read the folders that changed.
-- **Your files, left alone.** Fuse never moves or renames your files, and deletes a game's files only
-  when you ask in Settings, Storage and backups and confirm (never from Phone Link). Missing games are marked,
-  not removed, and playlists for multi-disc games are written to Fuse's own cache.
-- **BIOS checks** report Unknown, never Missing, when a location cannot be read.
-
-</details>
-
-<details>
-<summary><b>Launching</b></summary>
-<br>
-
-- **Documented, not guessed.** Emulators and launchers are described as data, each with its source
-  (ES-DE's MIT-licensed configuration, the emulator's own code or its vendor's guide) and a
-  confidence level.
-- **More than 100 definitions on Android** (RetroArch, Dolphin, PPSSPP, DuckStation, NetherSX2,
-  ARMSX2, aPS3e, melonDS, Azahar, Eden, Vita3K, Flycast, Lemuroid, MAME4droid, ScummVM and many
-  more), **38 on Linux**, found on `$PATH`, as Flatpaks or as AppImages (RetroArch, PCSX2, RPCS3,
-  Dolphin, Cemu, Ryujinx, xemu, Xenia, shadPS4, MAME, DOSBox Staging, Ruffle, PICO-8 and more),
-  **36 on Windows**, found in portable folders, Program Files, AppData, Scoop, Chocolatey, winget
-  and Steam libraries, and **32 on macOS**, found as apps or Homebrew programs. Anything Fuse misses on Windows or macOS
-  can be located from Settings. An AppImage is known by the release it updates from, so a renamed
-  one is still found.
-- **RetroArch for every system it runs**, with ES-DE's cores in ES-DE's order, on Android, Linux,
-  Windows and macOS.
-- **Pick an emulator** per system or per game. Forks and renamed builds are recognised by family, and
-  shared package names are trusted only after Fuse checks that the expected activity exists.
-- **Honest fallbacks.** When an app has no documented way to start a specific game, Fuse opens the app
-  and says why.
-- **Steam and Windows games** start through GameNative, GameHub Lite, Winlator Cmod, WinNative or
-  Bannerlator on Android, through Steam or `.desktop` shortcuts on Linux, and as they are on Windows
-  (`.exe` games, `.lnk` shortcuts and `.bat` scripts).
-- **DLC and updates**: Fuse explains, per emulator, how they are used.
-- **Installs PS3, Vita and 3DS games itself**: packages, updates, DLC and licences, from any drive,
-  into RPCS3, Vita3K and Azahar. They go in the right order, missing licences are shown first, and
-  each step is checked in the emulator's storage. The game page says Ready to play, Needs
-  installation, Missing licence, or Update or DLC available locally.
-- **Every emulator has a page**: how it was found, what it runs, how Fuse starts it and its limits,
-  with a test launch. A game's emulator list says why one can't open that game.
-- **PCSX2 patches** (widescreen, 60 FPS and more) for a PS2 game, turned on in PCSX2's own settings
-  for that game. Fuse only turns off what it turned on, and leaves anything set in PCSX2 alone.
-- **PlayStation disc details**: the serial and PCSX2's CRC, read from ISO and BIN images.
-- **How a PS3 game runs in RPCS3**, from RPCS3's compatibility list, asked only when you choose it.
-- **Problems that explain themselves**: when a game can't start, Fuse says why, that nothing was
-  changed, and offers the fix. If Fuse itself fails to start three times, it starts in **safe mode**.
-
-</details>
-
-<details>
-<summary><b>Films, shows and music</b></summary>
-<br>
-
-- **Your Jellyfin server in Addons**, connected at home or from away, switching between the two by
-  itself: Continue watching, Next up, Recently added, libraries, seasons and episodes, collections,
-  music by artist and album, and search. Pages you've seen work offline.
-- **Played by Fuse Player by Fuse** ([how it works](docs/player.md)): Direct Play first, then Direct
-  Stream, then a transcode, decided from what your device can decode. Quality caps for home and
-  away, and on weak Wi-Fi a lower quality chosen by itself, from the same second.
-- **Subtitles and audio** in your languages, with size, position, delay and background; resume,
-  up next, the next episode on its own, and your playback speed kept if you like.
-- **On two screens**, the film plays on the screen you choose, the other becomes its remote, and the
-  two swap live. The second screen keeps its pages (Status and Controls) a swipe away.
-- **Home widgets** for Continue watching, Next up and Recently added, and the quick menu's Now
-  playing to pause or skip.
-- **Setup explains Jellyfin** for anyone who hasn't met it, finds servers on your network and signs
-  you in. Your password goes to your server and nowhere else.
-
-</details>
-
-<details>
-<summary><b>Art and details</b></summary>
-<br>
-
-- Media already in **ES-DE and Batocera** layouts is used first.
-- **Square box art** for every game, from SteamGridDB, your own folders or a file; games without it
-  show their cover whole instead of cropped.
-- **SteamGridDB, IGDB, TheGamesDB and libretro thumbnails** fill the rest, with your own keys where a
-  service needs one, by themselves after a scan if you like. When a source runs out of requests,
-  the others take over. The ScreenScraper client is built in and waits for developer credentials, so in
-  0.0.1 it makes no requests.
-- **Found however the file is named**: No-Intro, Redump, GoodTools, TOSEC and scene names, serials
-  and title ids anywhere in the name, list numbers and versions; exact names always win.
-- Uncertain matches are **shown to you** before anything is saved.
-- **Art you choose yourself is never replaced**, except when you ask to reset it.
-- Games without art get **generated placeholder art** instead of a blank tile.
-
-</details>
-
-<details>
-<summary><b>Controllers and interface</b></summary>
-<br>
-
-- Custom **key repeat** that accelerates while held, **hold to reorder**, **stick navigation** with
-  deadzones, **Detect my buttons** (Xbox, Nintendo or PlayStation layout from two presses), and hint
-  glyphs for Xbox, Nintendo, PlayStation or keyboard.
-- A **button mapping** screen with capture and a live button test that no button can leave by accident.
-- **Home** as a board of widgets you move and resize like a phone's home screen (Fused, the one
-  we recommend) or a flowing dashboard of rows (Network): 19 kinds of widgets, each designed for every size from one cell to
-  four by three.
-- **Library** layouts from square box art to capsules to covers to a compact list; **Systems**, **Apps**
-  (on Android), **Search** with filters, game pages, a media manager, a folder browser, the **quick
-  menu** you arrange (tiles and widgets moved, resized, added and taken out by controller, touch or
-  keyboard), a **Play time** page and a guided setup.
-- **Touch everywhere**: every screen answers a finger, and on computers' touch screens a swipe in
-  from either edge goes back.
-- **A second screen with pages**: what's chosen (or the remote while a film plays), Status with the
-  battery large, and Controls with brightness, volume and switches, on the screen below or above.
-- **Twenty themes** and community themes from a link or a file ([docs/THEMES.md](docs/THEMES.md)), square
-  box art or tall posters, four motion levels including Reduced, High contrast focus, optional glass
-  panels and CRT effect, and interface sounds synthesised on the fly.
-- A **performance overlay** that only shows metrics the device can really measure.
-- **Screenshots and recordings** of Fuse on Android: from the quick menu after a 3 second countdown,
-  or at once with L3 + R3 (hold to record), saved to Pictures/Fuse and Movies/Fuse with Fuse's music.
-
-</details>
-
-<details>
-<summary><b>Android, Linux, Windows and macOS</b></summary>
-<br>
-
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <img src="docs/assets/icons/android.svg" width="40" height="40" alt=""><br>
-      <b>Android</b> <sub>9 or newer</sub>
-      <ul>
-        <li>Optional Home screen mode and an app drawer, with Fuse kept in recent apps</li>
-        <li>A companion screen on a second display (Android 10 and later)</li>
-        <li>In-app updates, downloaded only after you confirm and checked against their SHA-256 digest</li>
-        <li>Keys and passwords kept in the Android Keystore</li>
-        <li>Interface sounds and haptics</li>
-        <li>Screenshots and screen recordings of Fuse</li>
-      </ul>
-    </td>
-    <td width="50%" valign="top">
-      <img src="docs/assets/icons/linux.svg" width="40" height="40" alt=""><br>
-      <b>Linux</b> <sub>64-bit x86</sub>
-      <ul>
-        <li>A single AppImage, and an optional login entry</li>
-        <li>Full screen, borderless or window, from Settings, F11 or the command line</li>
-        <li>Gamepad input from <code>/dev/input/js*</code>, with no extra drivers</li>
-        <li>Keys kept in the Secret Service, with an encrypted-file fallback</li>
-        <li>Steam and <code>.desktop</code> shortcuts next to your emulators</li>
-      </ul>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <img src="docs/assets/icons/windows.svg" width="40" height="40" alt=""><br>
-      <b>Windows</b> <sub>10 and 11, 64-bit</sub>
-      <ul>
-        <li>An installer for your account (no administrator needed), or a portable zip that keeps everything next to it</li>
-        <li>Controllers through SDL, like most emulators</li>
-        <li>Keys protected by Windows for your account (DPAPI)</li>
-        <li><code>.exe</code> games, <code>.lnk</code> shortcuts and <code>.bat</code> scripts next to your emulators</li>
-        <li>Emulators you keep anywhere: show Fuse where with Locate</li>
-      </ul>
-    </td>
-    <td width="50%" valign="top">
-      <img src="docs/assets/icons/macos.svg" width="40" height="40" alt=""><br>
-      <b>macOS</b> <sub>Apple silicon (11 or newer) and Intel (10.15 or newer)</sub>
-      <ul>
-        <li>A disk image for each kind of Mac</li>
-        <li>Controllers through SDL, like most emulators</li>
-        <li>Keys kept in the Keychain</li>
-        <li>Emulators as apps or Homebrew programs, found in Applications and the folders inside it</li>
-        <li>An optional login item</li>
-      </ul>
-    </td>
-  </tr>
-</table>
-
-On every computer Fuse manages games only: there is no Apps section, and Cartridge, an Android and
-Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
-
-</details>
+Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.4.1 "The Connected Update" is under integration and physical acceptance.** It builds on shipped Fuseline 4. Fuse's animation engine
-> no longer runs motion just because time passes: a value is worked out from its motion's formula
-> when something looks at it, left alone until it could next change by enough to be seen, and rests
-> while nobody looks, coming back exactly where it would have been. Values on the same spring share
-> one solution a frame. Fuse moves exactly as it did, and Fuseline 4 is measured against Fuseline
-> 3.1, 3, 2, 1 and Compose on every workload. See [the release notes](docs/releases/0.4.0.md).
->
-> 0.3.8, "The Reach Update", brings every game in your household within
-> reach. With Fuse Sync, each device sees what your other devices have, in the RomM tab ("Not on
-> RomM, from another device", and each system in sections) or in a Fuse Library in the Sync tab,
-> and every game's page says where it is: this device, your other devices and RomM, online or away,
-> verified or not. Bring a game here, send it to any device (one that is away gets it when it is
-> back) or have the device that has it upload it to RomM. Fuse picks the best source by itself (a
-> device at home, RomM at home, a device through your host, RomM from outside), checks every file
-> and never shows half a game; every device's downloads are on the Downloads page. 0.3.8.1 reads
-> Switch libraries the way people keep them: every game once, with its updates and DLC, however the
-> files are named and wherever they sit, and uploaded to RomM together. 0.3.8.2 reads a games folder
-> by its files whatever it is called, keeps a background host on the newest Fuse, and starts the
-> Systems page at the left. See [the release notes](docs/releases/0.3.8.2.md).
->
-> 0.3.7.5, "The Motion Update", moves like never before. Fuseline 3, Fuse's
-> animation engine, keeps every motion continuous: whatever interrupts something moving (a new tab, a
-> finger, a reversal, the window changing size), it carries on from where it is at the speed it has.
-> Fuseline 3.1 keeps all of that and takes work off every frame around it, and is measured against
-> Fuseline 3, 2, 1 and Compose on every benchmark. 0.3.6, "The Unity Update",
-> brought everything into one place: Fuse RomM,
-> Fuse's native RomM integration, browses a RomM server, downloads games and BIOS into the folders
-> Fuse already has, uploads yours and keeps an offline copy of the library; Cartridge is still fully
-> supported. Every download and upload Fuse makes is on one Downloads page. Jellyfin films and
-> episodes can be kept for offline, a computer at home streams through Moonlight, and a save made
-> on any device reaches every other one with the game by itself, each game saying how many are
-> current. Computers take screenshots and recordings, and Fusi has a friend, Bo. 0.3.5, "The Swift
-> Update", made Fuse Sync quick from outside home and tabs change in the very next frame. Fuse
-> Sync by Fuse (saves, play time, library and settings on every device, a profile for each person)
-> is still the sync Fuse recommends. 0.3.6.1 brings large RomM libraries in quickly and keeps them,
-> 0.3.6.2 gives RomM games your own art and details, 0.3.6.3 brings your household's RomM and
-> Jellyfin along with Fuse Sync, each person with their own Jellyfin account, 0.3.6.4 shows RomM
-> games' box art at once, makes system panels from your games' screenshots (the PS5's by itself) and
-> puts RomM on the second screen, and 0.3.6.5 sizes Fuse for a 4K TV by itself, lets you arrange
-> your systems like Home, starts emulators in Game Mode, removes any emulator from the Store (or all at
-> once), finds RomM on your network, sharpens big-screen backgrounds, cleans up subtitles and keeps Steam out when you say no, and
-> 0.3.6.6 keeps Fuse responsive while it uploads to RomM and keeps its work going under the standby screen, and
-> 0.3.7.1 puts system cards on a handheld back to the size they were, 0.3.7.2 asks about Fuse Sync
-> before Who's playing and draws the controller anew, and 0.3.7.3 lets systems be as small as box art
-> with a picture of each console, keeps a look for each screen of a two-screen device, finishes RomM
-> uploads and has the second screen follow Downloads, 0.3.7.4 keeps each device's Systems page its
-> own, and 0.3.7.5 undoes 0.3.7.4's slowdown on Android, builds Fuse optimised for your device and
-> brings Fuseline 3.1. See [the release notes](docs/releases/0.3.7.5.md).
+> **Fuse 0.4.2 "The Native Update" makes Fuse feel at home on Linux, SteamOS and Android.** Steam and
+> Decky are part of setup, controllers are set up by being asked for each button, Fuse One brings
+> profiles, saves, the Fuse Library and now your keys to every device (or keeps each person's saves
+> apart on one device with no host at all), the Fuse One Host runs on its own in Docker, and Fuse
+> Intelligence shows how far each emulator has really been checked. Physical acceptance on SteamOS,
+> the Steam Deck's Decky, the AYN Thor and macOS is still to come. See
+> [the release notes](docs/releases/0.4.2.md); every earlier release is in [CHANGELOG.md](CHANGELOG.md).
 
 <details>
 <summary><b>Every release so far</b></summary>
@@ -634,6 +399,7 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 
 | Version | Name | What it brought |
 |---|---|---|
+| [0.4.2](docs/releases/0.4.2.md) | The Native Update | Steam and Decky in setup, guided and multiple controllers, Fuse One (profiles, saves, the Fuse Library and keys) with or without a host, the Fuse One Host in Docker, Fuse Intelligence, Steam achievements per account with rarity, apps your computers stream on the Library shelf, haptics on controllers, Fuse's own files in Storage, Fuseline 4.1 |
 | [0.4.1](docs/releases/0.4.1.md) | The Connected Update | Fuse Library, causal profile settings, strong household identity, save import and display/desktop foundations; physical acceptance in progress |
 | [0.4.0](docs/releases/0.4.0.md) | The Speed Release | Fuseline 4: values worked out from their motion's formula when read, left alone until they could visibly change, resting while nobody looks; springs solved once for every value on them; a Motion Inspector in Developer options; heat and battery saver ease decoration on Android; fading colours that redraw instead of recomposing |
 | [0.3.8.2](docs/releases/0.3.8.2.md) | The Reach Update | Games folders read by their files whatever they are called; a background Fuse Sync host started again on the newest Fuse (the Fuse Library on the host); one or a few systems at the left of the Systems page; a Library list in the developer options |
@@ -742,14 +508,15 @@ sha256sum -c SHA256SUMS.txt --ignore-missing
 Fuse does not include emulators, BIOS files or games. Install the emulators you want; Fuse finds them
 automatically.
 
-## Fuse RomM: Fuse's native RomM integration
+## RomM: Fuse's native RomM integration
 
-Fuse RomM talks to your [RomM](https://github.com/rommapp/romm) server itself, on Android and on
-every computer. Turn it on in setup ("Do you use RomM?") or in Addons, Fuse RomM.
+Fuse talks to your [RomM](https://github.com/rommapp/romm) server itself, on Android and on every
+computer. Turn it on in setup ("Do you use RomM?") or in Settings, Addons, RomM. Its games are in the
+Library's All view with every other game.
 
 ```mermaid
 flowchart LR
-    romm[("Your RomM server")] <-->|"browse, downloads, uploads, BIOS"| fuse["Fuse RomM"]
+    romm[("Your RomM server")] <-->|"browse, downloads, uploads, BIOS"| fuse["Fuse"]
     fuse -->|"places games in"| folders[/"Your system folders"/]
     fuse -->|"offline copy"| db[("Fuse's database")]
 ```
@@ -764,7 +531,7 @@ flowchart LR
 - **What the server can do, from the server.** Fuse reads RomM's own API description, so features
   a server lacks are simply not offered.
 - **An offline copy.** The server's library is kept in Fuse's database, brought up to date a page
-  at a time, so the Fuse RomM tab, its systems and collections, and Search work without the server.
+  at a time, so RomM's games, systems and collections, and Search work without the server.
 - **Games in the folders you have.** Downloads go through Downloads into the system folders Fuse
   already uses, resumed where they stopped and checked before they are put in place. A RomM game
   is matched to one in your library only by its RomM link, a hash, the console's own title id, the
@@ -775,14 +542,14 @@ flowchart LR
   replaced by one of the same name; firmware an emulator installs itself goes to a Firmware folder
   with how to install it.
 
-Fuse RomM and Cartridge are both supported. Turning one on turns the other off in Fuse, keeping
+RomM in Fuse and Cartridge are both supported. Turning one on turns the other off in Fuse, keeping
 both set up, so you can switch back at any time.
 
 ## RomM through Cartridge
 
 <a href="docs/assets/screenshots/cartridge.webp"><img src="docs/assets/screenshots/cartridge.webp" width="100%" alt="Fuse's Cartridge page, connected to RomM: Open Cartridge, Browse, Search, Upload, Downloads and Consoles, then Browse by system with Steam, PlayStation, PS2, PS3, PSP, Nintendo 64 and DS, and Recently downloaded games."></a>
 
-Cartridge remains fully supported for people who prefer it to Fuse RomM. With Cartridge, Fuse
+Cartridge remains fully supported for people who prefer it to RomM in Fuse. With Cartridge, Fuse
 itself does not talk to RomM: [Cartridge](https://github.com/abdu2304/cartridge) by
 [abdu2304](https://github.com/abdu2304), a RomM companion app, signs in to your RomM server, keeps
 the credentials, and downloads games into folders on your device. Fuse scans those folders like any other and reads Cartridge's local status to show
@@ -829,7 +596,7 @@ You need JDK 17 or newer and, for Android, the Android SDK with API level 37 ins
 ## Privacy
 
 Fuse contains **no telemetry, analytics, advertising or crash reporting**, and your library works
-fully offline. Fuse only contacts a service after you set it up: your own Fuse Sync host, your own Syncthing, your own Jellyfin server,
+fully offline. Fuse only contacts a service after you set it up: your own Fuse One host, your own Syncthing, your own Jellyfin server,
 RetroAchievements, SteamGridDB, IGDB, TheGamesDB, ScreenScraper and libretro thumbnails receive only what they need to answer (for example a
 game's title, or your own API key). The one service used without setup is GitHub, to check for new
 versions of Fuse; you can turn automatic checks off in Settings, About, and nothing is ever
@@ -846,7 +613,10 @@ what each service receives and when.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Modules, domain model, scanning, launching, input, storage, security |
 | [INTEGRATIONS.md](INTEGRATIONS.md) | Every online service and the Cartridge bridge, and what leaves the device |
 | [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) | Tokens, type, focus, motion, themes, sound, accessibility |
-| [docs/sync.md](docs/sync.md) | Fuse Sync by Fuse: hosting, profiles, what syncs, saves, conflicts, security, and Syncthing instead |
+| [docs/features.md](docs/features.md) | Everything Fuse does, part by part |
+| [docs/sync.md](docs/sync.md) | Fuse One: profiles, save sync, the Fuse Library, hosting, what syncs, conflicts, security, and Syncthing instead |
+| [tools/host/README.md](tools/host/README.md) | The Fuse One Host: installing, updating, backing up and removing it |
+| [docs/fuseline-sdk.md](docs/fuseline-sdk.md) | Using Fuseline in your own Compose Multiplatform app |
 | [docs/player.md](docs/player.md) | Fuse Player by Fuse: engines, subtitles, controls, two screens |
 | [docs/fuseline.md](docs/fuseline.md) | Fuseline by Fuse: curves, springs, transitions and how fast it is |
 | [docs/jellyfin.md](docs/jellyfin.md) | Jellyfin in Fuse: connecting, home and away, what is sent |
@@ -872,7 +642,7 @@ Third-party components keep their own licences; see [THIRD_PARTY_NOTICES.md](THI
 
 ## Credits
 
-- **Fuse Sync by Fuse**, **Fuse Player by Fuse** and **Fuseline by Fuse**, Fuse's own sync,
+- **Fuse One**, **Fuse Player by Fuse** and **Fuseline by Fuse**, Fuse's own household system,
   media player and animation engine, written for Fuse and part of this repository, under its licence.
 - [ES-DE](https://es-de.org/), whose MIT-licensed emulator configuration is the best public record of
   how emulators accept games.

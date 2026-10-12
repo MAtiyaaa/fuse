@@ -27,6 +27,8 @@ dependencies {
     implementation(libs.coil.svg)
     // MP3 decoding for menu music (LGPL-2.1-or-later, see THIRD_PARTY_NOTICES.md).
     implementation(libs.jlayer)
+    // Game manuals (PDF), drawn page by page.
+    implementation(libs.pdfbox)
     // Recordings: the FFmpeg program Fuse Player already carries encodes them (see DesktopScreenCapture).
     implementation(libs.ffmpeg)
     implementation(libs.javacpp)
@@ -89,6 +91,17 @@ val generateBuildInfo = tasks.register<GenerateBuildInfo>("generateBuildInfo") {
 kotlin {
     sourceSets.named("main") { kotlin.srcDir(generateBuildInfo) }
 }
+
+// The Fuse Decky plugin, as Decky installs it (a Fuse folder), carried so setup can install it.
+// Its JavaScript is built from tools/decky/fuse and kept in the repository (see its README).
+val deckyPlugin = tasks.register<Sync>("deckyPlugin") {
+    from(rootProject.layout.projectDirectory.dir("tools/decky/fuse")) {
+        include("plugin.json", "package.json", "main.py", "README.md", "dist/index.js")
+    }
+    into(layout.buildDirectory.dir("generated/decky/decky/Fuse"))
+}
+
+sourceSets.named("main") { resources.srcDir(deckyPlugin.map { it.destinationDir.parentFile.parentFile }) }
 
 compose.desktop {
     application {

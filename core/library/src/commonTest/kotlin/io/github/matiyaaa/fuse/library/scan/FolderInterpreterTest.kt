@@ -102,6 +102,41 @@ class FolderInterpreterTest {
     }
 
     @Test
+    fun anyPs5PortStartsWithTheProgramItsRelinkerMade() = runTest {
+        // AnyPS5's runtime layout: the program, its system libraries in libs/, the game's files in app0/.
+        fun port(root: String, vararg programs: String) {
+            programs.forEach { fs.file("$root/$it", size = 8_000_000) }
+            fs.file("$root/libs/libkernel.prx", size = 100_000)
+            fs.file("$root/libs/libc.prx", size = 100_000)
+            fs.file("$root/app0/eboot.bin", size = 5_000_000)
+            fs.file("$root/app0/sce_sys/param.json", content = "{\"titleId\": \"PPSA02929\"}")
+            fs.file("$root/app0/sce_sys/icon0.png", size = 1000)
+            fs.file("$root/app0/sce_module/libfmod.prx", size = 10_000)
+            fs.file("$root/app.registry.json", size = 300)
+            fs.file("$root/anyps5-input.ini", size = 30)
+            fs.file("$root/_sd/SAVEDATA00/sce_sys/param.bin", size = 1024)
+        }
+        port("/ROMs/ps5/Dreaming Sarah", "app.elf")
+        val linux = scan("ps5", "/ROMs/ps5").games.single()
+        assertEquals("/ROMs/ps5/Dreaming Sarah", linux.path)
+        assertEquals("/ROMs/ps5/Dreaming Sarah/app.elf", linux.launchPath)
+        assertEquals("PPSA02929", linux.tags.serial)
+        assertEquals("/ROMs/ps5/Dreaming Sarah/app0/sce_sys/icon0.png", linux.localMedia[MediaKind.SQUARE])
+        // A Mac port's program has no extension; one relinked for Windows too starts with the
+        // program for the system its folder is on.
+        port("/mac/ps5/Sarah", "eboot")
+        assertEquals("/mac/ps5/Sarah/eboot", scan("ps5", "/mac/ps5").games.single().launchPath)
+        port("C:/Games/ps5/Sarah", "app.elf", "app.exe")
+        assertEquals("C:/Games/ps5/Sarah/app.exe", scan("ps5", "C:/Games/ps5").games.single().launchPath)
+        port("/home/mo/ps5/Sarah", "app.elf", "app.exe")
+        assertEquals("/home/mo/ps5/Sarah/app.elf", scan("ps5", "/home/mo/ps5").games.single().launchPath)
+        // Without AnyPS5's libraries it is an ordinary dump: eboot.bin in app0 is not started from here.
+        fs.file("/plain/ps5/Sarah/app0/eboot.bin", size = 5_000_000)
+        fs.file("/plain/ps5/Sarah/app.elf", size = 8_000_000)
+        assertFalse(scan("ps5", "/plain/ps5").games.any { it.launchPath == "/plain/ps5/Sarah/app.elf" })
+    }
+
+    @Test
     fun ps5DumpFolderIsOneGame() = runTest {
         val game = "/ROMs/ps5/Astro Bot [PPSA01234]"
         fs.file("$game/eboot.bin", size = 5_000_000)

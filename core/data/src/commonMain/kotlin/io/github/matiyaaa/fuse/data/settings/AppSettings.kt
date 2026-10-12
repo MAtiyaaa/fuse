@@ -38,6 +38,10 @@ data class AppSettings(
     val display: DisplayProfile = DisplayProfile(),
     val scraping: ScrapingSettings = ScrapingSettings(),
     val videoPreview: VideoPreviewSettings = VideoPreviewSettings(),
+    /** Fuse and Steam together: the integration's answers and parts (this device's own). */
+    val steam: SteamIntegrationSettings = SteamIntegrationSettings(),
+    /** What apps that talk to Fuse (the Decky plugin, Phone Link) may do here (this device's own). */
+    val extensions: ExtensionSettings = ExtensionSettings(),
     val library: LibraryPreferences = LibraryPreferences(),
     val sound: SoundSettings = SoundSettings(),
     val music: MusicSettings = MusicSettings(),
@@ -128,6 +132,11 @@ data class SyncSettings(
     /** Games the household plays as one save, as the host last said (kept here so it holds offline). */
     val sharedGames: List<String> = emptyList(),
     /**
+     * Games whose saves stay on this device, by the household's id for them: each person's saves
+     * are still kept apart and swapped here, but never sent to or brought from other devices.
+     */
+    val localOnlyGames: List<String> = emptyList(),
+    /**
      * Save folders the person chose, by emulator id ("drastic" to its folder), for emulators that
      * save where you tell them or that Fuse can't find alone. Used by Fuse Sync and Syncthing alike.
      */
@@ -140,6 +149,10 @@ data class SyncSettings(
     val hostPort: Int = 47311,
     /** Where the host keeps everyone's saves and profiles; empty is Fuse's own data folder. */
     val hostDataDir: String = "",
+    /** This computer keeps a copy of the household and takes over when the host is gone for good (a joined computer). */
+    val backupHost: Boolean = false,
+    /** Where the host keeps whole copies of the household (every day, week and month); empty is Fuse's own folder. */
+    val householdBackupDir: String = "",
     /** Profiles whose saves this device never brings in (it still sends theirs). This device's own choice. */
     val noPullProfiles: List<String> = emptyList(),
     /** Profiles whose saves never move on this device, either way. This device's own choice. */
@@ -151,6 +164,12 @@ data class SyncSettings(
      * up, asked once), "AUTO" (joined on this version, or the household already shares), "YES" or "NO".
      */
     val signInsChoice: String = "",
+    /**
+     * Keys (SteamGridDB, TheGamesDB, RetroAchievements and the rest, by their secret store names)
+     * the person removed on this device: the household's copy never comes back here by itself.
+     * Adding one here again takes it off this list.
+     */
+    val keysKeptOff: List<String> = emptyList(),
     /** Profiles that have had their welcome on this device: the first time someone plays here, they get the grand one. */
     val welcomedProfiles: List<String> = emptyList(),
     /** [welcomedProfiles] was started (with everyone already playing here on a device that updated). */
@@ -239,6 +258,9 @@ data class StoreInstall(
     val file: String? = null,
     val versionCode: Long = 0,
     val installedAt: Long = 0,
+    /** The earlier version an update replaced, kept to go back to (its program's path), and its version. */
+    val previous: String? = null,
+    val previousVersion: String? = null,
 )
 
 /** Screenshots and recordings of Fuse's own screen. */
@@ -257,6 +279,11 @@ data class OnboardingState(
     val step: Int = 0,
     /** What the person answered to "Do you use RomM?": "FUSE", "CARTRIDGE", "NONE", or "" when not asked. */
     val romm: String = "",
+    /**
+     * The step setup was on, by its id, so a restart in the middle (Steam's, Decky's or Fuse's own)
+     * comes back to the same step instead of the beginning.
+     */
+    val stepId: String = "",
 )
 
 /** One root destination and whether it is shown. */
@@ -328,6 +355,10 @@ data class AppearanceSettings(
     val heroDim: Float = 0.3f,
     /** Adds an outline to the focused element on top of the glow. */
     val highContrastFocus: Boolean = false,
+    /** The colours states use, for how this person sees colour. */
+    val colorVision: io.github.matiyaaa.fuse.model.ColorVision = io.github.matiyaaa.fuse.model.ColorVision.TYPICAL,
+    /** Left to right, right to left, or as the system's language reads. */
+    val layoutDirection: io.github.matiyaaa.fuse.model.LayoutDirectionChoice = io.github.matiyaaa.fuse.model.LayoutDirectionChoice.AUTOMATIC,
     /** How large text is: 1 as designed, up to 1.3 for reading from further away. */
     val textScale: Float = 1f,
     /** Room kept clear at every edge, in percent of the screen, for TVs that cut the picture's edges off. */
@@ -338,6 +369,8 @@ data class AppearanceSettings(
     val startupAnimation: Boolean = true,
     /** Colours picked last in the theme studio, newest first (ARGB), to pick again in one move. */
     val recentColors: List<Long> = emptyList(),
+    /** The theme studio offers every colour and effect, not only its main choices. */
+    val studioAdvanced: Boolean = false,
     /** Each tab keeps the game or row you were on when you come back to it. */
     val rememberPlace: Boolean = true,
     /**
@@ -430,6 +463,8 @@ data class LibraryPreferences(
      * Library, Steam), or "" when never asked: then on a computer only when Steam games were added.
      */
     val steamGames: String = "",
+    /** Manuals read on this device, by their file: the page each opens on and its bookmarks. */
+    val manuals: Map<String, io.github.matiyaaa.fuse.model.ManualPlace> = emptyMap(),
     /** Fetch system logos and art from the system art pack when a system has none. */
     val systemArtAuto: Boolean = true,
     /** How the Library is sorted. */
@@ -454,6 +489,8 @@ data class LibraryPreferences(
     val collectionsEnabled: Boolean = true,
     /** Fuse makes a collection for each series it finds and keeps it up to date. */
     val autoSeries: Boolean = true,
+    /** A system's page names a game from it to try today (its spotlight). */
+    val systemSpotlight: Boolean = true,
     /** Series the user hid or kept as their own collection, lower case, so Fuse doesn't make them again. */
     val hiddenSeries: List<String> = emptyList(),
     /** Brand colours from the system art pack (opaque ARGB), by platform id. */
@@ -466,7 +503,23 @@ data class LibraryPreferences(
     val appsFilter: io.github.matiyaaa.fuse.model.AppFilter = io.github.matiyaaa.fuse.model.AppFilter.ALL,
     /** Square box art or tall posters on game tiles. */
     val gameArt: io.github.matiyaaa.fuse.model.GameArtStyle = io.github.matiyaaa.fuse.model.GameArtStyle.BOX_ART,
+    /**
+     * Removed games the person removed for good, by game id: gone from the Removed view, their art
+     * deleted, and still remembered as removed so a scan never brings them back. Files are never touched.
+     */
+    val purgedGames: List<Long> = emptyList(),
+    /** Which view the Library opens on: "INSTALLED" (games on this device) or "ALL" (everywhere they are). */
+    val opensOn: String = "ALL",
+    /** Emulator settings a person saved to give their games at once; theirs on every device. */
+    val settingProfiles: List<OwnSettingProfile> = emptyList(),
 )
+
+/**
+ * A person's own set of an emulator's settings ([family]: `pcsx2`, `duckstation`, `ppsspp`), by
+ * Fuse's id for each setting to the value the emulator stores.
+ */
+@Serializable
+data class OwnSettingProfile(val id: String, val family: String, val name: String, val values: Map<String, String>)
 
 /**
  * Interface sounds. [InputProfile.soundsEnabled] and [InputProfile.navigationSoundVolume] cover
@@ -479,6 +532,10 @@ data class SoundSettings(
     val volume: Float = 0.7f,
     /** Null follows the theme's sound profile. */
     val profile: SoundProfile? = null,
+    /** Every sound Fuse makes is off (music, interface sounds, startup), whatever each one's own switch says. */
+    val muted: Boolean = false,
+    /** 0..1: scales every sound Fuse makes, under each one's own volume. */
+    val master: Float = 1f,
 )
 
 /**
@@ -515,7 +572,7 @@ data class StatusAreaSettings(
 )
 
 /**
- * Fuse RomM, the Fuse RomM native integration (Settings, Addons, Fuse RomM): off until set up. How
+ * RomM, the RomM native integration (Settings, Addons, RomM): off until set up. How
  * Fuse reaches the RomM server, where its games land and how transfers to it behave. The sign-in
  * itself is in the secret store, never here. Turning it off keeps all of this, so turning it on again
  * reconnects without setting it up again.
@@ -541,7 +598,7 @@ data class FuseRommSettings(
     val systemFolders: Map<String, String> = emptyMap(),
     /** Look at a downloaded game's folder at once, so it is playable without a full scan. */
     val scanAfterDownload: Boolean = true,
-    /** What new games on the server do: "BADGE" (marked new in Fuse RomM), "NOTIFY" (and a message), "QUIET". */
+    /** What new games on the server do: "BADGE" (marked new in RomM), "NOTIFY" (and a message), "QUIET". */
     val newGames: String = "BADGE",
     /** Keep the library mirrored for browsing while the server is away. */
     val offlineMirror: Boolean = true,
@@ -573,6 +630,13 @@ data class DownloadSettings(
     val downloadsWhilePlaying: String = "REDUCED",
     val uploadsWhilePlaying: String = "REDUCED",
     val wifiOnly: Boolean = false,
+    /** Transfers move only while plugged in. */
+    val chargingOnly: Boolean = false,
+    /** On battery, transfers wait below this percent; 0 for never. */
+    val minBattery: Int = 0,
+    /** Quiet hours as minutes since midnight, from and to; equal for none. */
+    val quietFrom: Int = 0,
+    val quietTo: Int = 0,
     val resumeOnStart: Boolean = true,
     /** Days finished transfers stay listed. */
     val keepFinishedDays: Int = 7,
@@ -643,7 +707,18 @@ data class StreamingSettings(
     val wakeWaitSeconds: Int = 75,
     /** Which Moonlight to start when several are installed (an Android package, or a program path); empty picks one. */
     val client: String = "",
+    /**
+     * Games played by streaming them rather than here, Moonlight as their emulator: each game (by its
+     * id on this device) to the computer and the app there. A game's own choice wins over its system's.
+     */
+    val games: Map<String, StreamPick> = emptyMap(),
+    /** Systems whose games stream from a computer (by its id) unless a game chooses otherwise. */
+    val systems: Map<String, String> = emptyMap(),
 )
+
+/** A game streamed from [host] (a [StreamHostSettings.id]) as [app] there; empty: the app named as the game. */
+@Serializable
+data class StreamPick(val host: String, val app: String = "")
 
 /** One computer to stream from. [uniqueId] and [mac] are filled in from what it says about itself. */
 @Serializable
@@ -659,3 +734,21 @@ data class StreamHostSettings(
     val apps: List<String> = listOf("Desktop", "Steam Big Picture"),
 )
 
+
+/**
+ * How Fuse works with Steam on this device. [integrate] is the answer to setup's first Steam
+ * question ("YES", "NO", or "" when never asked); [decky] runs the Fuse Decky Bridge the Fuse
+ * Decky plugin talks to (Linux); [fuseInSteam] remembers that Fuse was added to Steam's library.
+ * None of these are a person's: they belong to the device and its Steam install.
+ */
+@Serializable
+data class SteamIntegrationSettings(
+    val integrate: String = "",
+    val decky: Boolean = false,
+    val fuseInSteam: Boolean = false,
+    /**
+     * The Steam account (its 64-bit SteamID) whose achievements Fuse shows on this device; empty
+     * follows the account Steam remembers as most recent. Never switched by switching Fuse profiles.
+     */
+    val achievementsAccount: String = "",
+)

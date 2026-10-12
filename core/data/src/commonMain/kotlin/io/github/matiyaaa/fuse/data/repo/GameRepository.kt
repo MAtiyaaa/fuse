@@ -78,6 +78,36 @@ class GameRepository(
 
     fun observeByGenre(genre: String): Flow<List<GameSummary>> = q.byGenre(genre).summaries()
 
+    /** The visible games with [ids], in the order given, kept current. */
+    fun observeSummariesInOrder(ids: List<GameId>): Flow<List<GameSummary>> {
+        if (ids.isEmpty()) return kotlinx.coroutines.flow.flowOf(emptyList())
+        val flows = ids.map { it.value }.distinct().chunked(SQL_CHUNK).map { q.summariesByIds(it).asFlow().mapToList(dispatcher) }
+        val order = ids.withIndex().associate { (i, id) -> id to i }
+        return kotlinx.coroutines.flow.combine(flows) { parts -> parts.flatMap { it }.map { it.toSummary() }.sortedBy { order[it.id] ?: Int.MAX_VALUE } }.flowOn(dispatcher)
+    }
+
+    /** Every game suggestions may choose from, with its details and play, kept current. */
+    fun observeRecommendationInputs(): Flow<List<RecommendationRow>> = q.recommendationInputs().asFlow().mapToList(dispatcher).map { rows ->
+        rows.map { r ->
+            val meta = decodeOrNull(GameMetadata.serializer(), r.metadata_json)
+            RecommendationRow(
+                id = GameId(r.id),
+                platformId = PlatformId(r.platform_id),
+                title = GameTitles(r.title_original, r.title_cleaned, r.title_custom, r.title_metadata, r.use_cleaned != 0L).display,
+                favorite = r.favorite != 0L,
+                lastPlayedAt = r.last_played_at,
+                playSeconds = r.tracked_seconds + r.imported_seconds,
+                sessions = r.session_count.toInt(),
+                addedAt = r.added_at,
+                year = r.release_year?.toInt() ?: meta?.releaseYear,
+                genres = meta?.genres.orEmpty(),
+                developer = meta?.developer?.trim()?.ifEmpty { null },
+                franchise = meta?.franchise?.trim()?.ifEmpty { null },
+                rating = meta?.rating,
+            )
+        }
+    }.flowOn(dispatcher)
+
     /** Games whose files are gone, for the Missing Games screen. */
     fun observeMissing(): Flow<List<GameSummary>> = q.missingGames().summaries()
 
@@ -139,7 +169,7 @@ class GameRepository(
         q.selectInPlatform(platform.value).executeAsList().map { Triple(GameId(it.id), LibrarySourceId(it.source_id), it.hidden != 0L) }
     }
 
-    /** Every game with what tells it apart (its file, serial and RomM link), for Fuse RomM's matching. */
+    /** Every game with what tells it apart (its file, serial and RomM link), for RomM's matching. */
     suspend fun matchRows(): List<GameMatchRow> = withContext(dispatcher) {
         q.matchRows().executeAsList().map { r ->
             GameMatchRow(
@@ -313,6 +343,70 @@ class GameRepository(
     }
 
     /**
+     * The person says [child] is part of [owner] (an update, DLC or other content Fuse took for a
+     * game of its own). The child stops being a title and is listed with [owner]'s content, through
+     * every rescan; its play time, sessions, favourite and collections go to [owner]. Both must be
+     * games of the same system. False when they can't be joined (one is gone, or already part of
+     * another).
+     */
+    suspend fun attachAsContent(child: GameId, owner: GameId, kind: io.github.matiyaaa.fuse.model.ContentKind): Boolean = withContext(dispatcher) {
+        if (child == owner) return@withContext false
+        var done = false
+        db.transaction {
+            val c = db.gameQueries.selectById(child.value).executeAsOneOrNull() ?: return@transaction
+            val o = db.gameQueries.selectById(owner.value).executeAsOneOrNull() ?: return@transaction
+            if (c.platform_id != o.platform_id || c.removed_at != null || o.removed_at != null) return@transaction
+            if (db.gameAbsorptionQueries.selectOwner(child.value).executeAsOneOrNull() != null) return@transaction
+            if (db.gameAbsorptionQueries.selectOwner(owner.value).executeAsOneOrNull() != null) return@transaction
+            val now = clock()
+            db.gameAbsorptionQueries.put(child.value, owner.value, USER_REASON + kind.name, now)
+            db.gameQueries.mergeAbsorbedIntent(childId = child.value, now = now, ownerId = owner.value)
+            db.collectionQueries.copyAbsorbedMemberships(ownerId = owner.value, childId = child.value)
+            db.playSessionQueries.reassignAbsorbed(ownerId = owner.value, childId = child.value)
+            db.gameQueries.archiveAbsorbed(now, child.value)
+            val next = db.gameContentQueries.contentFor(listOf(owner.value)).executeAsList().size.toLong()
+            db.gameContentQueries.insertContent(owner.value, next, kind.name, c.title_original, c.path, if (c.kind == "FOLDER") 1 else 0, c.size_bytes)
+            db.gameContentQueries.recountContent(owner.value)
+            done = true
+        }
+        done
+    }
+
+    /**
+     * Undoes [attachAsContent]: [child] is a game of its own again. Play time it brought stays with
+     * the game it was part of. Returns that game, or null when [child] wasn't attached by the person.
+     */
+    suspend fun detachContent(child: GameId): GameId? = withContext(dispatcher) {
+        var owner: GameId? = null
+        db.transaction {
+            val row = db.gameAbsorptionQueries.userOwnerOf(child.value).executeAsOneOrNull() ?: return@transaction
+            val c = db.gameQueries.selectById(child.value).executeAsOneOrNull() ?: return@transaction
+            db.gameAbsorptionQueries.deleteUser(child.value)
+            db.gameContentQueries.deleteContentPath(row.owner_id, c.path)
+            db.gameContentQueries.recountContent(row.owner_id)
+            q.setRemoved(removedAt = null, hidden = 0, now = clock(), id = child.value)
+            owner = GameId(row.owner_id)
+        }
+        owner
+    }
+
+    /** What the person attached to [owner]: each part's own game id, title and kind. */
+    suspend fun userParts(owner: GameId): List<Triple<GameId, String, io.github.matiyaaa.fuse.model.ContentKind>> = withContext(dispatcher) {
+        db.gameAbsorptionQueries.userChildren(owner.value).executeAsList().mapNotNull { u ->
+            val kind = runCatching { io.github.matiyaaa.fuse.model.ContentKind.valueOf(u.reason.removePrefix(USER_REASON)) }.getOrNull() ?: return@mapNotNull null
+            Triple(GameId(u.child_id), u.title_original, kind)
+        }
+    }
+
+    /** The game [child] was attached to by the person, if it was. */
+    suspend fun attachedTo(child: GameId): GameId? = withContext(dispatcher) {
+        db.gameAbsorptionQueries.userOwnerOf(child.value).executeAsOneOrNull()?.let { GameId(it.owner_id) }
+    }
+
+    /** Deletes the art Fuse kept for [id] (a game removed for good). Its record stays, so scans skip it. */
+    suspend fun dropMedia(id: GameId) = write { db.mediaQueries.deleteOwner(MediaOwner.OfGame(id).type(), id.value.toString()) }
+
+    /**
      * Deletes the record of a game whose file is missing, with its media, sessions and collection
      * entries. Only for an explicit user action on the Missing Games screen; returns false (and
      * deletes nothing) when the game is not missing.
@@ -439,7 +533,7 @@ fun GameMetadata.overwriteWith(other: GameMetadata) = GameMetadata(
     source = other.source ?: source,
 )
 
-/** A game as Fuse RomM's matching sees it. */
+/** A game as RomM's matching sees it. */
 data class GameMatchRow(
     val id: GameId,
     val platform: String,
@@ -449,3 +543,6 @@ data class GameMatchRow(
     val rommRomId: Long?,
     val missing: Boolean,
 )
+
+/** How a content attachment the person made is marked in game_absorption.reason (then the kind). */
+internal const val USER_REASON = "USER:"

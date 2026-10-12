@@ -91,7 +91,7 @@ internal fun GameCarousel(kind: WidgetKind, games: List<GameCard>, feed: HomeFee
         cardShape = cardShape(),
         header = { dots -> CarouselHeader(widgetIcon(kind), widgetLabel(kind), dots, compact = compact) },
     ) { i, depth ->
-        GameSlide(shown[i], gameLine(kind, shown[i]), feed.systems.firstOrNull { it.platform.id == shown[i].platformId }, face, depth)
+        GameSlide(shown[i], gameLine(kind, shown[i], feed), feed.systems.firstOrNull { it.platform.id == shown[i].platformId }, face, depth)
     }
 }
 
@@ -152,14 +152,17 @@ private fun GameSlide(game: GameCard, line: String, system: PlatformCard?, face:
                 }
             }
         }
-        // The system it runs on, top right, where the card has the room for it beside a cover.
+        // The system it runs on, top right, where the card has the room for it beside a cover; below
+        // the carousel's header (its name and dots), never on it.
         if (w >= 260.dp && room != Room.TINY && !(coverBeside && room == Room.SHORT)) {
-            Box(Modifier.align(Alignment.TopEnd).padding(pad).graphicsLayer { alpha = frontness(depth) }) { PlatformChip(game, system) }
+            val header = if (face == FaceSize.SMALL || face == FaceSize.TALL) CAROUSEL_HEADER_COMPACT else CAROUSEL_HEADER
+            Box(Modifier.align(Alignment.TopEnd).padding(top = maxOf(pad, header), end = pad).graphicsLayer { alpha = frontness(depth) }) { PlatformChip(game, system) }
         }
     }
 }
 
-private fun gameLine(kind: WidgetKind, g: GameCard): String = when (kind) {
+private fun gameLine(kind: WidgetKind, g: GameCard, feed: HomeFeed): String = when (kind) {
+    WidgetKind.FOR_YOU -> feed.reasons[g.id] ?: g.platformShort
     WidgetKind.RECENTLY_ADDED -> "Added ${agoText(g.addedAt)}"
     WidgetKind.RECENTLY_PLAYED -> g.lastPlayedAt?.let { "Played ${agoText(it)}" } ?: g.platformShort
     WidgetKind.FAVORITES, WidgetKind.PINNED_GAMES -> listOfNotNull(
@@ -174,6 +177,7 @@ private fun emptyGamesText(kind: WidgetKind): String = when (kind) {
     WidgetKind.FAVORITES -> "Add favourites from a game's options"
     WidgetKind.PINNED_GAMES -> "Pin games from their options"
     WidgetKind.RECENTLY_ADDED -> "New games show here after a scan"
+    WidgetKind.FOR_YOU -> emptySuggestionNote(kind)
     else -> "Nothing here yet"
 }
 
@@ -217,7 +221,7 @@ private fun SystemSlide(s: PlatformCard, face: FaceSize, depth: CarouselDepth) {
         when {
             // Art of the person's own choosing (or a square icon) fills the card; its name goes over a soft floor.
             (s.art.square ?: s.art.icon) != null -> {
-                Box(Modifier.fillMaxSize().carouselParallax(depth)) { SystemCardArt(s, large = room == Room.BIG) }
+                Box(Modifier.fillMaxSize().carouselParallax(depth)) { SystemCardArt(s, large = room == Room.BIG, maker = false) }
                 if (face != FaceSize.SMALL) {
                     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to c.artScrim)))
                     Column(Modifier.align(Alignment.BottomStart).padding(if (room == Room.TINY) Space.m else Space.l).graphicsLayer { alpha = frontness(depth) }) {
@@ -227,7 +231,8 @@ private fun SystemSlide(s: PlatformCard, face: FaceSize, depth: CarouselDepth) {
                 }
             }
             s.art.boxart != null || s.art.logo != null -> SystemPackSlide(s, room, depth)
-            else -> Box(Modifier.fillMaxSize()) { SystemCardArt(s, large = room == Room.BIG) }
+            // The carousel's own header sits where the maker's name would: the slide leaves it out.
+            else -> Box(Modifier.fillMaxSize()) { SystemCardArt(s, large = room == Room.BIG, maker = false) }
         }
     }
 }

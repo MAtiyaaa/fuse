@@ -38,4 +38,5 @@ include(
     ":ui:link",
     ":app:android",
     ":app:desktop",
+    ":app:host",
 )

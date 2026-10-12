@@ -71,6 +71,16 @@ jobs:
           :app:android:testDebugUnitTest
           :app:android:assembleDebug
           :app:desktop:test
+          :app:host:test
+          :app:host:installDist
+
+      # The Fuse One Host image builds from what installDist made (nothing is pushed here).
+      - name: Build the Fuse One Host image
+        run: |
+          set -euo pipefail
+          docker build -f tools/host/Dockerfile -t fuse-one-host:ci .
+          docker run --rm --entrypoint fuse-one-host fuse-one-host:ci version
+          sh -n tools/host/install.sh
 
       - name: Upload test reports
         if: failure()
@@ -86,6 +96,43 @@ jobs:
         with:
           name: fuse-debug-apk
           path: app/android/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  decky:
+    name: Decky plugin
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: tools/decky/fuse
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Type-check and build the plugin
+        run: |
+          npm ci --no-audit --no-fund --ignore-scripts
+          npx tsc --noEmit
+          npx rollup -c
+          python3 -c "import ast; ast.parse(open('main.py').read())"
+
+      - name: Package the plugin as Decky installs it
+        run: |
+          mkdir -p out/Fuse
+          cp -r plugin.json package.json main.py README.md dist out/Fuse/
+          cd out && zip -qr Fuse.zip Fuse
+
+      - name: Upload the plugin
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuse-decky-plugin
+          path: tools/decky/fuse/out/Fuse.zip
           if-no-files-found: error
           retention-days: 14
 

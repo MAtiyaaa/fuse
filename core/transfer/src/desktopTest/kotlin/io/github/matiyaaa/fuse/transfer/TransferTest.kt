@@ -399,6 +399,51 @@ class TransferTest {
     }
 
     @Test
+    fun `on battery or in quiet hours transfers wait, and carry on when that ends`() = runBlocking<Unit> {
+        val m = manager()
+        m.configure(TransferSettings(chargingOnly = true))
+        m.conditions(TransferConditions(battery = 80, charging = false))
+        delay(50)
+        m.register(FileHandler(Server()))
+        val id = m.enqueue(download("Power.bin"))
+        delay(200)
+        val held = m.items.value.first { it.id == id }
+        assertTrue(held.status == TransferStatus.QUEUED || (held.status == TransferStatus.WAITING && held.waiting == WaitReason.POWER), "$held")
+        assertFalse(File(root, "games/Power.bin").exists())
+        // Plugged in, but inside quiet hours now: still waiting, and saying why.
+        m.configure(TransferSettings(chargingOnly = true, quietFrom = 22 * 60, quietTo = 7 * 60))
+        m.conditions(TransferConditions(battery = 80, charging = true, minute = 23 * 60))
+        delay(200)
+        assertEquals(WaitReason.QUIET, m.items.value.first { it.id == id }.waiting)
+        m.conditions(TransferConditions(battery = 80, charging = true, minute = 7 * 60))
+        m.awaitStatus(id, TransferStatus.DONE)
+    }
+
+    @Test
+    fun `the battery and the clock hold transfers only by the person's rules`() {
+        val down = TransferDirection.DOWNLOAD
+        // Nothing chosen: nothing holds, whatever the battery and the hour.
+        assertNull(TransferSettings().held(down, TransferConditions(battery = 5, charging = false, minute = 3 * 60)))
+        // A device without a battery is always plugged in.
+        assertNull(TransferSettings(chargingOnly = true, minBattery = 50).held(down, TransferConditions(battery = null)))
+        assertEquals(WaitReason.POWER, TransferSettings(minBattery = 30).held(down, TransferConditions(battery = 29, charging = false)))
+        assertNull(TransferSettings(minBattery = 30).held(down, TransferConditions(battery = 30, charging = false)))
+        assertNull(TransferSettings(minBattery = 30).held(down, TransferConditions(battery = 10, charging = true)))
+        // Quiet hours past midnight, start included and end not.
+        val night = TransferSettings(quietFrom = 22 * 60, quietTo = 7 * 60)
+        assertEquals(WaitReason.QUIET, night.held(down, TransferConditions(minute = 22 * 60)))
+        assertEquals(WaitReason.QUIET, night.held(down, TransferConditions(minute = 3 * 60)))
+        assertNull(night.held(down, TransferConditions(minute = 7 * 60)))
+        assertNull(night.held(down, TransferConditions(minute = 12 * 60)))
+        assertNull(night.held(down, TransferConditions(minute = null)), "an hour not known yet holds nothing")
+        val day = TransferSettings(quietFrom = 9 * 60, quietTo = 17 * 60)
+        assertEquals(WaitReason.QUIET, day.held(down, TransferConditions(minute = 12 * 60)))
+        assertNull(day.held(down, TransferConditions(minute = 20 * 60)))
+        // Wi-Fi is said first: it is the one the person can usually fix.
+        assertEquals(WaitReason.WIFI, TransferSettings(wifiOnly = true, chargingOnly = true).held(down, TransferConditions(unmetered = false, battery = 50)))
+    }
+
+    @Test
     fun `many at once respect the limit`() = runBlocking<Unit> {
         val m = manager()
         m.configure(TransferSettings(maxDownloads = 2, bandwidthLimit = 2_000_000))

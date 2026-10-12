@@ -71,7 +71,7 @@ class UiAudit {
         }
     }
 
-    @Test fun m01Home() = audit(AuditSize.M) { homeFlow(exhaustive = true); homeChannels(exhaustive = true); homeEmpty() }
+    @Test fun m01Home() = audit(AuditSize.M) { homeFlow(exhaustive = true); homeChannels(exhaustive = true); homeEmpty(); discoverScreens(); steamGamesScreens(); cheatScreens() }
 
     @Test fun m02Library() = audit(AuditSize.M) { libraryScreens(exhaustive = true) }
 
@@ -81,7 +81,7 @@ class UiAudit {
 
     @Test fun systemsEverySize() = AuditSize.entries.filter { it.name in (System.getProperty("fuse.audit.sizes")?.takeIf { s -> s.isNotBlank() } ?: "T,M,D,H,J,L").split(',') }.forEach { size -> audit(size) { systemsScreens(exhaustive = false) } }
 
-    @Test fun m04Game() = audit(AuditSize.M) { gameScreens(exhaustive = true); contentScreens() }
+    @Test fun m04Game() = audit(AuditSize.M) { gameScreens(exhaustive = true); contentScreens(); manualScreens() }
 
     @Test fun m05Launch() = audit(AuditSize.M) { launchScreens() }
 

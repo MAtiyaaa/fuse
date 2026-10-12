@@ -21,7 +21,10 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size as GeoSize
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -32,7 +35,9 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.CornerFamily
+import io.github.matiyaaa.fuse.model.QuickMenuLook
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.effects.background
 import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
@@ -41,6 +46,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Elevation
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseColors
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.flourishOn
@@ -85,20 +91,9 @@ fun ControlTile(
     val c = Fuse.colors
     val motion = Fuse.motion
     val shape = controlTileShape()
-    val bg by fuselineColor(
-        when {
-            active -> c.accent.copy(alpha = if (c.isDark) 0.13f else 0.1f)
-            selected -> c.text.copy(alpha = if (c.isDark) 0.11f else 0.08f)
-            else -> c.text.copy(alpha = if (c.isDark) 0.06f else 0.045f)
-        },
-        motion.tween(Durations.BASE),
-        label = "tile",
-    )
     val lift by fuselineFloat(if (selected) 1f else 0f, motion.focusSpring(), label = "tile lift")
     val stateColor by fuselineColor(if (active) c.accent else c.textMuted, motion.tween(Durations.BASE), label = "tile state")
     val ring = c.focus
-    val edgeRest = Elevation.tile.edgeAlpha(c.isDark)
-    val edgeLit = Elevation.tileFocused.edgeAlpha(c.isDark)
     val gap = Size.focusGap
     val ringWidth = Size.focusStroke
     Box(
@@ -125,8 +120,7 @@ fun ControlTile(
                 this.shape = shape
                 clip = true
             }
-            .background({ bg })
-            .lightEdge(shape, { edgeRest + (edgeLit - edgeRest) * lift.coerceIn(0f, 1f) })
+            .quickSurface(shape, lit = active, selected = selected) { lift }
             .semantics { this.selected = selected }
             .padding(if (compact) Space.s else Space.m),
     ) {
@@ -162,6 +156,71 @@ fun ControlTile(
             }
         }
     }
+}
+
+/**
+ * The face of a quick menu tile or widget in the theme's [QuickMenuLook]: Soft tints it faintly over
+ * the panel, Solid gives it the raised panel colour, Outlined draws only its edge, and Glass catches a
+ * light across its top. While [lit] (a switch that is on) it takes a wash of the accent; while
+ * [selected] it brightens a little; [lift] (0 to 1, the focus lift) strengthens its edge. The caller
+ * clips to [shape] first.
+ */
+@Composable
+internal fun Modifier.quickSurface(shape: Shape, lit: Boolean, selected: Boolean, lift: () -> Float): Modifier {
+    val c = Fuse.colors
+    val motion = Fuse.motion
+    val look = Fuse.look.spec.quickMenu
+    val fill by fuselineColor(quickFill(look, c, lit, selected), motion.tween(Durations.BASE), label = "quick fill")
+    val line by fuselineColor(quickLine(look, c, lit, selected), motion.tween(Durations.BASE), label = "quick line")
+    val sheen = if (look == QuickMenuLook.GLASS) Color.White.copy(alpha = if (c.isDark) 0.1f else 0.45f) else Color.Transparent
+    val edgeRest = Elevation.tile.edgeAlpha(c.isDark)
+    val edgeLit = Elevation.tileFocused.edgeAlpha(c.isDark)
+    val surface = drawWithCache {
+        val path = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }
+        // Centred on the edge and clipped by the tile, so half of it shows: a crisp 1.25 dp line.
+        val stroke = Stroke(2.5.dp.toPx())
+        val glass = Brush.verticalGradient(0f to sheen, 0.55f to sheen.copy(alpha = 0f), endY = size.height)
+        onDrawBehind {
+            drawPath(path, fill)
+            if (sheen.alpha > 0f) drawPath(path, glass)
+            if (line.alpha > 0f) drawPath(path, line, style = stroke)
+        }
+    }
+    // The outlined look is its line alone; the others keep the light along their top edge.
+    return if (look == QuickMenuLook.OUTLINED) then(surface) else then(surface).lightEdge(shape, { edgeRest + (edgeLit - edgeRest) * lift().coerceIn(0f, 1f) })
+}
+
+private fun quickFill(look: QuickMenuLook, c: FuseColors, lit: Boolean, selected: Boolean): Color = when (look) {
+    QuickMenuLook.SOFT -> when {
+        lit -> c.accent.copy(alpha = if (c.isDark) 0.13f else 0.1f)
+        selected -> c.text.copy(alpha = if (c.isDark) 0.11f else 0.08f)
+        else -> c.text.copy(alpha = if (c.isDark) 0.06f else 0.045f)
+    }
+    QuickMenuLook.SOLID -> when {
+        lit -> lerp(c.surfaceRaised, c.accent, if (c.isDark) 0.2f else 0.14f)
+        selected -> lerp(c.surfaceRaised, c.text, 0.07f)
+        else -> c.surfaceRaised
+    }
+    QuickMenuLook.OUTLINED -> when {
+        lit -> c.accent.copy(alpha = 0.08f)
+        selected -> c.text.copy(alpha = 0.05f)
+        else -> Color.Transparent
+    }
+    QuickMenuLook.GLASS -> when {
+        lit -> c.accent.copy(alpha = if (c.isDark) 0.18f else 0.14f)
+        selected -> if (c.isDark) c.text.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.8f)
+        else -> if (c.isDark) c.text.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.55f)
+    }
+}
+
+private fun quickLine(look: QuickMenuLook, c: FuseColors, lit: Boolean, selected: Boolean): Color = when (look) {
+    QuickMenuLook.OUTLINED -> when {
+        lit -> c.accent.copy(alpha = 0.8f)
+        selected -> c.text.copy(alpha = 0.32f)
+        else -> c.text.copy(alpha = 0.16f)
+    }
+    QuickMenuLook.GLASS -> c.text.copy(alpha = if (c.isDark) 0.1f else 0.08f)
+    else -> Color.Transparent
 }
 
 /**

@@ -45,7 +45,7 @@ data class TransferRow(
 )
 
 /**
- * Downloads: every transfer Fuse makes for the person, in one list (Fuse RomM's games, uploads and
+ * Downloads: every transfer Fuse makes for the person, in one list (RomM's games, uploads and
  * BIOS, Jellyfin's films, apps and emulators, Fuse's own update), plus Cartridge's downloads as it
  * reports them. [rows] changes only when a transfer starts, stops or moves; the moving numbers of each
  * are in [live], so a page with many transfers redraws only the rows whose numbers move.
@@ -60,6 +60,9 @@ interface TransfersOps {
     fun pauseAll()
     fun resumeAll()
     fun clearFinished()
+
+    /** This device's battery ([batteryPercent] null without one) and whether it is plugged in. */
+    fun power(batteryPercent: Int?, charging: Boolean) {}
 
     object None : TransfersOps {
         override val rows: StateFlow<List<TransferRow>> = MutableStateFlow(emptyList())

@@ -33,6 +33,22 @@ internal class DefaultStorageOps(
     private val sources: io.github.matiyaaa.fuse.ui.shell.store.SourceOps? = null,
 ) : StorageOps {
     private val state = MutableStateFlow<StorageUsage?>(null)
+
+    override suspend fun cacheBytes(): Long? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+        // Walked folder by folder; a cache too large to walk quickly is reported as unknown, not guessed.
+        var total = 0L
+        var seen = 0
+        val folders = ArrayDeque(listOf(ctx.services.cacheDir))
+        while (folders.isNotEmpty()) {
+            val entries = runCatching { ctx.services.fs.list(folders.removeFirst()) }.getOrDefault(emptyList())
+            for (e in entries) {
+                if (++seen > CACHE_WALK_LIMIT) return@withContext null
+                if (e.isSymlink) continue
+                if (e.isDirectory) folders.addLast(e.path) else total += e.sizeBytes
+            }
+        }
+        total
+    }
     override val usage: StateFlow<StorageUsage?> = state
     private var job: Job? = null
 
@@ -375,3 +391,6 @@ internal class DefaultStorageOps(
     private fun Volume.withGames(games: List<GameSize>): VolumeUsage =
         VolumeUsage(label, total, free, games.sumOf { it.bytes }, sharesOf(games), games = games.size)
 }
+
+/** The most cache entries Fuse walks to measure it. */
+private const val CACHE_WALK_LIMIT = 200_000

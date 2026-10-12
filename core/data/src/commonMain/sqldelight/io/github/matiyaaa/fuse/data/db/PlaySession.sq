@@ -49,3 +49,12 @@ GROUP BY platform_id ORDER BY seconds DESC;
 -- Sessions describe actual observed play and now refer to the proven title rather than its package.
 reassignAbsorbed:
 UPDATE play_session SET game_id = :ownerId WHERE game_id = :childId;
+
+-- Each emulator's latest game seen running through Fuse on this device for at least :minMs, and how
+-- many such sessions there were (what "Launch verified" rests on). Sessions from other devices or
+-- imported time never count.
+playedByEmulator:
+SELECT emulator_id, MAX(ended_at) AS lastEnded, COUNT(*) AS sessions FROM play_session
+WHERE emulator_id IS NOT NULL AND ended_at IS NOT NULL AND ended_at - started_at >= :minMs
+AND source IN ('FUSE_LAUNCH', 'USAGE_STATS')
+GROUP BY emulator_id;

@@ -57,7 +57,7 @@ private data class LicenceDoc(val file: String, val title: String, val covers: S
 
 private val docs = listOf(
     LicenceDoc("GPL-3.0.txt", "Fuse", "GNU General Public License 3.0 or later"),
-    LicenceDoc("Apache-2.0.txt", "Libraries", "Apache License 2.0: Kotlin, Compose Multiplatform, AndroidX, Ktor, Coil, SQLDelight, kotlinx, Media3, Typesafe Config, libGDX Jamepad"),
+    LicenceDoc("Apache-2.0.txt", "Libraries", "Apache License 2.0: Kotlin, Compose Multiplatform, AndroidX, Ktor, Coil, SQLDelight, kotlinx, Media3, Typesafe Config, libGDX Jamepad, Apache PDFBox (game manuals in the desktop apps)"),
     LicenceDoc("OFL-Sora.txt", "Sora typeface", "SIL Open Font License 1.1"),
     LicenceDoc("OFL-Manrope.txt", "Manrope typeface", "SIL Open Font License 1.1"),
     LicenceDoc("LICENSE-lucide.txt", "Lucide icons", "ISC License (and MIT for icons derived from Feather)"),

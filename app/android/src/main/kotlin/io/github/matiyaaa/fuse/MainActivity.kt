@@ -105,6 +105,9 @@ class MainActivity : ComponentActivity(), ActivityRequests {
         )
         super.onCreate(savedInstanceState)
         io.github.matiyaaa.fuse.services.UpdateRelaunch.clearReopenNotice(this)
+        // Which controllers are connected, kept current, so one can be chosen to move around Fuse.
+        getSystemService(android.hardware.input.InputManager::class.java)?.registerInputDeviceListener(gamepad.deviceListener, null)
+        gamepad.refreshControllers()
         androidx.core.content.ContextCompat.registerReceiver(
             this, dreamWatch,
             android.content.IntentFilter().apply {
@@ -376,6 +379,7 @@ class MainActivity : ComponentActivity(), ActivityRequests {
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(dreamWatch) }
+        runCatching { getSystemService(android.hardware.input.InputManager::class.java)?.unregisterInputDeviceListener(gamepad.deviceListener) }
         folderSlot.cancel()
         imageSlot.cancel()
         audioSlot.cancel()

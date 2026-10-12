@@ -62,9 +62,9 @@ class Pcsx2PatchesTest {
         val global = IniText("[EmuCore]\nEnableNoInterlacingPatches = true\n")
         var owned = emptySet<String>()
         var states = Pcsx2PatchRules.states(patches, game, global, owned).associateBy { it.patch.name }
-        assertEquals(PatchState.ON_IN_PCSX2, states.getValue("Widescreen 16:9").state)
+        assertEquals(PatchState.ON_IN_EMULATOR, states.getValue("Widescreen 16:9").state)
         assertEquals(PatchState.OFF, states.getValue("60 FPS").state)
-        assertEquals(PatchState.OFF_IN_PCSX2, states.getValue("No-Interlacing").state)
+        assertEquals(PatchState.OFF_IN_EMULATOR, states.getValue("No-Interlacing").state)
 
         // The user's own patch can't be turned off from Fuse.
         assertNull(Pcsx2PatchRules.change(states.getValue("Widescreen 16:9"), on = false, game = game, owned = owned))

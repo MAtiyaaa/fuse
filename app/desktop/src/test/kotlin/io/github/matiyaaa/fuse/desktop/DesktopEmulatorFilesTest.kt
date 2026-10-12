@@ -101,6 +101,20 @@ class DesktopEmulatorFilesTest {
     }
 
     @Test
+    fun vita3kOnWindowsKeepsUx0InAppDataUnlessPortable() = runBlocking {
+        val appData = File(home, "AppData/Roaming").apply { mkdirs() }
+        val program = File(home, "Emu/Vita3K/Vita3K.exe").apply { parentFile.mkdirs(); writeText("") }
+        val files = DesktopEmulatorFiles(DesktopOs.WINDOWS, env = mapOf("APPDATA" to appData.absolutePath), home = home.absolutePath, backups = backups)
+        val vita = InstalledEmulator(EmulatorId("windows.vita3k"), "Vita3K", Host.WINDOWS, program.absolutePath, platforms = setOf(PlatformId("psvita")), detectedVia = "Folder")
+        val storage = files.vita3kStorage(vita)
+        assertTrue(p(File(appData, "Vita3K/Vita3K")) in storage)
+        assertTrue(p(File(program.parentFile, "portable/fs")) in storage)
+        // Its config.yml sits beside the program, and can move ux0 anywhere.
+        File(program.parentFile, "config.yml").writeText("pref-path: D:/Vita\n")
+        assertEquals("D:/Vita", files.vita3kStorage(vita).first())
+    }
+
+    @Test
     fun anInstallerIsWaitedForAndStoppedWhenItSaysItIsDone() = runBlocking {
         if (System.getProperty("os.name").lowercase().contains("win")) return@runBlocking
         val files = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
@@ -128,5 +142,99 @@ class DesktopEmulatorFilesTest {
         files.clearStaged()
         assertFalse(File(staged).exists())
         assertTrue(source.isFile, "the original stays")
+    }
+
+    private fun emulator(name: String, appId: String, via: String = "PATH") =
+        InstalledEmulator(EmulatorId("linux.$name"), name, Host.LINUX, appId, platforms = emptySet(), detectedVia = via)
+
+    @Test
+    fun duckStationKeepsItsDataWhereItsSetDataRootSays() = runBlocking {
+        // Linux: ~/.local/share/duckstation, or $XDG_CONFIG_HOME/duckstation when that is set.
+        val linux = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        assertNull(linux.duckstation(emulator("duckstation", "/usr/bin/duckstation-qt")), "not set up yet")
+        val data = File(home, ".local/share/duckstation").apply { mkdirs() }
+        val moved = File(home, "srv/my-cheats")
+        File(data, "settings.ini").writeText("[Folders]\nCheats = ${p(moved)}\n")
+        val found = linux.duckstation(emulator("duckstation", "/usr/bin/duckstation-qt"))!!
+        assertEquals(p(data), found.dataRoot)
+        assertEquals(p(moved), found.cheats)
+        assertEquals("${p(data)}/patches", found.patches)
+        assertEquals("${p(data)}/gamesettings", found.gameSettings)
+        assertNull(found.cheatsZip)
+        val xdg = File(home, "xdg").apply { File(this, "duckstation").mkdirs() }
+        File(xdg, "duckstation/settings.ini").writeText("")
+        assertEquals(p(File(xdg, "duckstation")), DesktopEmulatorFiles(DesktopOs.LINUX, env = mapOf("XDG_CONFIG_HOME" to xdg.absolutePath), home = home.absolutePath, backups = backups).duckstation(emulator("duckstation", "/usr/bin/duckstation-qt"))!!.dataRoot)
+
+        // Its Flatpak: inside the sandbox XDG_CONFIG_HOME is always set, so its config folder.
+        val flat = File(home, ".var/app/org.duckstation.DuckStation/config/duckstation").apply { mkdirs() }
+        File(flat, "settings.ini").writeText("")
+        assertEquals(p(flat), linux.duckstation(emulator("duckstation", "org.duckstation.DuckStation", via = "Flatpak"))!!.dataRoot)
+
+        // Portable: settings.ini beside the program, with its bundled codes in resources.
+        val app = File(home, "Emu/DuckStation").apply { File(this, "resources").mkdirs() }
+        File(app, "settings.ini").writeText("")
+        File(app, "resources/cheats.zip").writeText("zip")
+        File(app, "resources/patches.zip").writeText("zip")
+        val portable = linux.duckstation(emulator("duckstation", p(File(app, "duckstation-qt"))))!!
+        assertEquals(p(app), portable.dataRoot)
+        assertEquals("${p(app)}/resources/cheats.zip", portable.cheatsZip)
+        assertEquals("${p(app)}/resources/patches.zip", portable.patchesZip)
+    }
+
+    @Test
+    fun duckStationOnWindowsPrefersAnOlderDocumentsFolder() = runBlocking {
+        val local = File(home, "AppData/Local/DuckStation").apply { mkdirs(); File(this, "settings.ini").writeText("") }
+        val env = mapOf("USERPROFILE" to home.absolutePath, "LOCALAPPDATA" to File(home, "AppData/Local").absolutePath)
+        val files = DesktopEmulatorFiles(DesktopOs.WINDOWS, env = env, home = home.absolutePath, backups = backups)
+        val exe = p(File(home, "Programs/DuckStation/duckstation-qt-x64-ReleaseLTCG.exe"))
+        assertEquals(p(local), files.duckstation(emulator("duckstation", exe))!!.dataRoot)
+        val docs = File(home, "Documents/DuckStation").apply { mkdirs(); File(this, "settings.ini").writeText("") }
+        assertEquals(p(docs), files.duckstation(emulator("duckstation", exe))!!.dataRoot)
+    }
+
+    @Test
+    fun ppssppsMemoryStickIsFoundOnEachSystem() = runBlocking {
+        val linux = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        assertNull(linux.ppsspp(emulator("ppsspp", "/usr/bin/PPSSPPSDL")), "no PSP folder yet")
+        val config = File(home, ".config/ppsspp").apply { File(this, "PSP").mkdirs() }
+        assertEquals(p(config), linux.ppsspp(emulator("ppsspp", "/usr/bin/PPSSPPSDL"))!!.memstick)
+        val flat = File(home, ".var/app/org.ppsspp.PPSSPP/config/ppsspp").apply { File(this, "PSP").mkdirs() }
+        assertEquals(p(flat), linux.ppsspp(emulator("ppsspp", "org.ppsspp.PPSSPP", via = "Flatpak"))!!.memstick)
+
+        // Windows: memstick beside the program, unless installed.txt sends it to Documents\PPSSPP.
+        val app = File(home, "Emu/PPSSPP").apply { File(this, "memstick/PSP").mkdirs() }
+        val docs = File(home, "Documents/PPSSPP").apply { File(this, "PSP").mkdirs() }
+        val windows = DesktopEmulatorFiles(DesktopOs.WINDOWS, env = mapOf("USERPROFILE" to home.absolutePath), home = home.absolutePath, backups = backups)
+        val exe = p(File(app, "PPSSPPWindows64.exe"))
+        assertEquals(p(File(app, "memstick")), windows.ppsspp(emulator("ppsspp", exe))!!.memstick)
+        File(app, "installed.txt").writeText("")
+        assertEquals(p(docs), windows.ppsspp(emulator("ppsspp", exe))!!.memstick)
+    }
+
+    @Test
+    fun retroArchsCheatAndOverrideFoldersFollowItsConfig() = runBlocking {
+        val linux = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        assertNull(linux.retroArch(emulator("retroarch", "/usr/bin/retroarch")), "never started")
+        val config = File(home, ".config/retroarch").apply { mkdirs() }
+        File(config, "retroarch.cfg").writeText("video_driver = \"vulkan\"\n")
+        val defaults = linux.retroArch(emulator("retroarch", "/usr/bin/retroarch"))!!
+        assertEquals("${p(config)}/cheats", defaults.cheats)
+        assertEquals("${p(config)}/config", defaults.configDir)
+        File(config, "retroarch.cfg").writeText("cheat_database_path = \"~/srv/cht\"\nrgui_config_directory = \"default\"\n")
+        val moved = linux.retroArch(emulator("retroarch", "/usr/bin/retroarch"))!!
+        assertEquals("${p(home)}/srv/cht", moved.cheats)
+        assertEquals("${p(config)}/config", moved.configDir)
+        // Fuse may write only inside them, and remove only a file there.
+        assertTrue(linux.write("${moved.cheats}/mGBA/A.cht", "cheats = 0\n"))
+        assertTrue(linux.remove("${moved.cheats}/mGBA/A.cht"))
+        assertFalse(linux.remove(p(File(config, "retroarch.cfg"))))
+
+        // Windows keeps everything beside the program, which `:` in its config stands for.
+        val app = File(home, "Emu/RetroArch").apply { mkdirs() }
+        File(app, "retroarch.cfg").writeText("cheat_database_path = \":\\cheats\"\n")
+        val windows = DesktopEmulatorFiles(DesktopOs.WINDOWS, env = mapOf("APPDATA" to File(home, "AppData/Roaming").absolutePath), home = home.absolutePath, backups = backups)
+        val found = windows.retroArch(emulator("retroarch", p(File(app, "retroarch.exe"))))!!
+        assertEquals("${p(app)}/cheats", found.cheats)
+        assertEquals("${p(app)}/config", found.configDir)
     }
 }

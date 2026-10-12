@@ -83,6 +83,9 @@ class AndroidStorageAccess(
         return withContext(Dispatchers.IO) { copyImage(uri) }
     }
 
+    /** A patch, copied into private staging like a save; the original is never changed. */
+    override suspend fun pickPatch(title: String): String? = pickSave(title)
+
     /** Copies the selected source into private staging without ever changing the original. */
     override suspend fun pickSave(title: String): String? {
         val requests = activities.requests ?: return null

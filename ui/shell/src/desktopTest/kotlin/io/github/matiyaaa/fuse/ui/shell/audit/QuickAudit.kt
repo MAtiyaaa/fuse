@@ -1,6 +1,22 @@
 package io.github.matiyaaa.fuse.ui.shell.audit
 
 import io.github.matiyaaa.fuse.model.PadButton
+import io.github.matiyaaa.fuse.transfer.TransferDirection
+import io.github.matiyaaa.fuse.transfer.TransferItem
+import io.github.matiyaaa.fuse.transfer.TransferKind
+import io.github.matiyaaa.fuse.transfer.TransferLive
+import io.github.matiyaaa.fuse.transfer.TransferPhase
+import io.github.matiyaaa.fuse.transfer.TransferSettings
+import io.github.matiyaaa.fuse.transfer.TransferStatus
+import io.github.matiyaaa.fuse.transfer.TransferSummary
+import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
+import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
+import io.github.matiyaaa.fuse.ui.shell.store.TransferAction
+import io.github.matiyaaa.fuse.ui.shell.store.TransferRow
+import io.github.matiyaaa.fuse.ui.shell.store.TransfersOps
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 
 /**
  * The quick menu's grid on a device with a second screen: its widgets (Now playing, the second
@@ -12,8 +28,7 @@ internal fun AuditDriver.quickScreens() {
         useLibrary(twoScreens)
         io.github.matiyaaa.fuse.ui.shell.music.MenuMusicRemote.current = "puddleworld"
         waitFor("Continue playing")
-        tap(PadButton.START)
-        waitFor("Arrange Home")
+        openQuickMenu()
         shoot("open, first tile focused")
         tap(PadButton.DPAD_DOWN)
         shoot("the second screen's three ways focused")
@@ -33,8 +48,7 @@ internal fun AuditDriver.quickScreens() {
     scenario("quick", "editing") {
         useLibrary(twoScreens)
         waitFor("Continue playing")
-        tap(PadButton.START)
-        waitFor("Arrange Home")
+        openQuickMenu()
         tap(PadButton.X)
         waitFor("Edit quick menu")
         shoot("editing, first item")
@@ -71,8 +85,7 @@ internal fun AuditDriver.quickScreens() {
     scenario("quick", "editing by touch") {
         useLibrary(twoScreens)
         waitFor("Continue playing")
-        tap(PadButton.START)
-        waitFor("Arrange Home")
+        openQuickMenu()
         tap(PadButton.X)
         waitFor("Edit quick menu")
         settle(500)
@@ -93,6 +106,42 @@ internal fun AuditDriver.quickScreens() {
         tap(PadButton.B)
         tap(PadButton.B)
         libraryStore.updatePrefs { it.copy(quickMenu = emptyList()) }
+    }
+    quickDownloadScreens()
+}
+
+/** The quick menu's Downloads section with things moving: progress, what is waiting, what finished. */
+internal fun AuditDriver.quickDownloadScreens() {
+    scenario("quick", "downloads moving") {
+        val base = libraryStore
+        val velvet = runBlocking { base.library.games(GameQuery()).first().first { it.title == "Velvet Orbit" } }
+        val gb = 1L shl 30
+        val down = TransferItem(
+            "q1", "romm:rom:7", "romm", TransferDirection.DOWNLOAD, TransferKind.GAME, "Velvet Orbit", platform = "dc",
+            target = "SD card", totalBytes = 4 * gb, doneBytes = 2 * gb, status = TransferStatus.ACTIVE, phase = TransferPhase.TRANSFERRING,
+        )
+        val queued = down.copy(id = "q2", key = "romm:rom:8", title = "Hollow Meridian", platform = "psx", totalBytes = 700L shl 20, doneBytes = 0, status = TransferStatus.QUEUED, phase = null, order = 1)
+        val done = down.copy(id = "q3", key = "romm:rom:9", title = "Lantern Coast", platform = "gba", totalBytes = 16L shl 20, doneBytes = 16L shl 20, status = TransferStatus.DONE, phase = null, finishedAt = 1)
+        val rows = MutableStateFlow(listOf(TransferRow(down, emptyList(), game = velvet.id), TransferRow(queued, emptyList()), TransferRow(done, emptyList())))
+        val live = mapOf("q1" to TransferLive(2 * gb + (300L shl 20), 4 * gb, 24L shl 20, 74))
+        val ops = object : TransfersOps {
+            override val rows = rows
+            override val summary = MutableStateFlow(TransferSummary(activeDownloads = 1, queued = 1))
+            override val settings = MutableStateFlow(TransferSettings())
+            override fun live(id: String) = MutableStateFlow(live[id] ?: TransferLive())
+            override fun act(id: String, action: TransferAction) = Unit
+            override fun pauseAll() = Unit
+            override fun resumeAll() = Unit
+            override fun clearFinished() = Unit
+        }
+        show(object : FuseStore by base { override val transfers = ops })
+        waitFor("Continue playing")
+        openQuickMenu("Downloads")
+        settle(800)
+        shoot("a download moving, one waiting its turn, one finished")
+        tap(PadButton.DPAD_DOWN, 2)
+        shoot("Pause everything focused")
+        tap(PadButton.B)
     }
 }
 

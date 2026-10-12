@@ -34,6 +34,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import io.ktor.client.engine.mock.respond
 import java.io.File
 
 /**
@@ -49,6 +50,9 @@ internal class AuditControls(val cache: File) {
     @Volatile var launchResult: RunResult = RunResult.Failed("The audit never starts games.")
 
     @Volatile var cartridge: CartridgeStatus = CartridgeStatus(installed = false)
+
+    /** The version an update replaced, as Settings, About offers to go back to it; none when null. */
+    @Volatile var previousFuse: io.github.matiyaaa.fuse.ui.shell.store.PreviousRelease? = null
 
     @Volatile var libraryCandidates: List<LocationHint> = emptyList()
 
@@ -111,6 +115,12 @@ internal class AuditServices(
     /** Windows and macOS: no app list, and emulators the user can point Fuse at. */
     private val desktop = host == Host.WINDOWS || host == Host.MACOS
 
+    /** Fuse's own updates as the audit's computer has them: a version to go back to when a scenario sets one. */
+    override val installer: io.github.matiyaaa.fuse.ui.shell.store.ReleaseInstaller = object : io.github.matiyaaa.fuse.ui.shell.store.ReleaseInstaller by base.installer {
+        override fun previous() = controls.previousFuse
+        override suspend fun goBack(): Result<Boolean> = Result.success(false)
+    }
+
     /** Android has the Store: its catalogue and releases come from [AuditStore], its apps from [AuditPackages]. */
     override val packages: io.github.matiyaaa.fuse.ui.shell.store.PackageBridge? =
         if (host == Host.ANDROID) AuditPackages(File(base.cacheDir, "store")) else null
@@ -123,6 +133,7 @@ internal class AuditServices(
     override val http: io.ktor.client.HttpClient =
         io.ktor.client.HttpClient(io.ktor.client.engine.mock.MockEngine { request ->
             AuditJellyfin.answer(this, request)
+                ?: AuditGameBanana.answer(this, request)
                 ?: (if (host == Host.ANDROID || desktop) AuditStore.answer(this, request) else null)
                 ?: respondError(io.ktor.http.HttpStatusCode.NotFound)
         }) { install(io.ktor.client.plugins.HttpTimeout) }
@@ -132,6 +143,21 @@ internal class AuditServices(
             controls.beforeList()
             return base.fs.list(path)
         }
+    }
+
+    /** Fuse Intelligence looking at a made-up computer where every program can run and has its folders. */
+    override fun intelligence() = object : io.github.matiyaaa.fuse.launch.intelligence.ReadOnlyLook {
+        override val home = "/home/mo"
+        override fun env(name: String): String? = null
+        override fun exists(path: String) = true
+        override fun isDirectory(path: String) = !path.substringAfterLast('/').contains('.') || path.endsWith(".app")
+        override fun canExecute(path: String) = true
+        override fun modified(path: String): Long? = 1_700_000_000_000L
+        override fun names(path: String): List<String> = emptyList()
+    } to object : io.github.matiyaaa.fuse.launch.intelligence.KnowledgeStore {
+        private var text: String? = null
+        override fun read() = text
+        override fun write(text: String) { this.text = text }
     }
 
     override val emulators = object : EmulatorDetector {
@@ -178,6 +204,10 @@ internal class AuditServices(
     override val volumes = object : io.github.matiyaaa.fuse.ui.shell.store.VolumeMonitor {
         override suspend fun volumes() = controls.drives
     }
+
+    /** RetroArch on the made-up computer, with the cheats it downloaded for every sample game. */
+    override val emulatorFiles: io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles? =
+        if (host == Host.ANDROID) null else AuditEmulatorFiles(File(base.cacheDir, "retroarch"))
 
     override val locations = object : DeviceLocations {
         override suspend fun libraryCandidates(): List<LocationHint> = controls.libraryCandidates
@@ -285,6 +315,10 @@ internal class AuditPlatform(
     override val capture: io.github.matiyaaa.fuse.ui.shell.platform.ScreenCapture? = null,
     /** How the device draws (null: not reported, so Fuse draws with every effect). */
     drawing: io.github.matiyaaa.fuse.ui.shell.platform.DrawingInfo? = null,
+    /** Steam and Decky as a Linux computer has them, for setup's Steam journey. */
+    override val steam: io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration? = null,
+    override val decky: io.github.matiyaaa.fuse.ui.shell.platform.DeckyIntegration? = null,
+    override val host: io.github.matiyaaa.fuse.model.Host = ScreenshotPlatform.host,
 ) : PlatformUi by ScreenshotPlatform {
     override val drawing: StateFlow<io.github.matiyaaa.fuse.ui.shell.platform.DrawingInfo?> = MutableStateFlow(drawing)
     override val device: CapabilityProfile = ScreenshotPlatform.device.copy(
@@ -293,6 +327,19 @@ internal class AuditPlatform(
         densityDpi = (size.density * 160).toInt(),
     )
     override val performance: StateFlow<List<PerformanceMetric>> = MutableStateFlow(metrics)
+
+    /** A cheat file of a person's own, as the file picker hands it to the Patches and Cheats sheet. */
+    private val ownCheats: File by lazy {
+        val dir = java.nio.file.Files.createTempDirectory("fuse-audit-own").toFile().apply { deleteOnExit() }
+        File(dir, "Emberline Saga extras.cht").apply {
+            writeText("cheats = 2\n\ncheat0_desc = \"Max Gold\"\ncheat0_code = \"7E0DC0:FF\"\ncheat0_enable = false\n\ncheat1_desc = \"Walk Through Walls\"\ncheat1_code = \"7E0DC4:01\"\ncheat1_enable = false\n")
+            deleteOnExit()
+        }
+    }
+
+    override val storage: io.github.matiyaaa.fuse.ui.shell.platform.StorageAccess = object : io.github.matiyaaa.fuse.ui.shell.platform.StorageAccess by ScreenshotPlatform.storage {
+        override suspend fun pickFile(title: String, label: String, extensions: List<String>): String? = ownCheats.absolutePath
+    }
 
     /** What the file picker hands back next (a backup to restore); null is a cancelled picker. */
     @Volatile var pickedFile: io.github.matiyaaa.fuse.ui.shell.platform.OpenedFile? = null
@@ -438,4 +485,149 @@ internal class AuditDesktopInstaller(override val host: Host, private val dir: F
     override suspend fun exists(path: String): Boolean = false
 
     override fun launch(path: String): Boolean = true
+}
+
+/** Steam on a Linux computer, closed, with Fuse not yet in its library. */
+internal class AuditSteam : io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration {
+    @Volatile private var inLibrary = false
+    override val gameMode: Boolean = false
+    override suspend fun added(): Boolean = inLibrary
+    override suspend fun addFuse(): Result<String> {
+        inLibrary = true
+        return Result.success("Fuse is in Steam's library, with its art.")
+    }
+    override suspend fun removeFuse(): Result<String> {
+        inLibrary = false
+        return Result.success("Fuse is out of Steam's library.")
+    }
+
+    // Games: Steam ROM Manager already put the Metroid games there; the rest are Fuse's to add.
+    private val games = java.util.concurrent.ConcurrentHashMap.newKeySet<Long>()
+    @Volatile private var undo: Set<Long>? = null
+    override suspend fun gamesInSteam(): Set<Long> = games.toSet()
+    override suspend fun planGames(games: List<io.github.matiyaaa.fuse.library.steam.SteamGameEntry>) = games.map { g ->
+        io.github.matiyaaa.fuse.library.steam.SteamGamePlanItem(
+            g,
+            when {
+                g.gameId in this.games -> io.github.matiyaaa.fuse.library.steam.SteamGameAction.UNCHANGED
+                "Metroid" in g.name -> io.github.matiyaaa.fuse.library.steam.SteamGameAction.ELSEWHERE
+                else -> io.github.matiyaaa.fuse.library.steam.SteamGameAction.CREATE
+            },
+        )
+    }
+    override suspend fun addGames(games: List<io.github.matiyaaa.fuse.library.steam.SteamGameEntry>, art: Map<Long, io.github.matiyaaa.fuse.library.steam.SteamArt>, collections: Boolean): Result<String> {
+        undo = this.games.toSet()
+        val new = games.filter { "Metroid" !in it.name }.map { it.gameId }
+        this.games += new
+        return Result.success(if (new.size == 1) "1 game added. Start Steam to see it." else "${new.size} games added. Start Steam to see them.")
+    }
+    override suspend fun removeGames(gameIds: Set<Long>?): Result<String> {
+        undo = games.toSet()
+        if (gameIds == null) games.clear() else games -= gameIds
+        return Result.success("Out of Steam's library.")
+    }
+    override val canUndoGames: Boolean get() = undo != null
+    override suspend fun undoGames(): Result<String> {
+        val back = undo ?: return Result.failure(IllegalStateException("There's no change of Fuse's to undo."))
+        games.clear(); games += back; undo = null
+        return Result.success("Steam's library is back as it was before Fuse's last change.")
+    }
+}
+
+/** Decky Loader installed, the Fuse plugin not yet. Installing succeeds, as the password prompt would. */
+internal class AuditDecky : io.github.matiyaaa.fuse.ui.shell.platform.DeckyIntegration {
+    @Volatile private var plugin = false
+    override suspend fun state() = io.github.matiyaaa.fuse.ui.shell.platform.DeckyState(loader = true, plugin = plugin, pluginVersion = if (plugin) "0.4.2" else null, bundledVersion = "0.4.2", canInstall = true)
+    override suspend fun install(): Result<String> {
+        plugin = true
+        return Result.success("The Fuse plugin is in Decky.")
+    }
+    override suspend fun remove(): Result<String> {
+        plugin = false
+        return Result.success("The Fuse plugin is out of Decky.")
+    }
+    override suspend fun stage(): String? = null
+}
+
+/**
+ * RetroArch's folders on the audit computer: its downloaded cheats (Online Updater, Update Cheats)
+ * for every sample game, by libretro system, and room for the game files Fuse writes.
+ */
+internal class AuditEmulatorFiles(private val root: File) : io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles {
+    init {
+        val cheats = File(root, "cheats")
+        val names = AuditSamples.games.map { it.folder to it.title } + io.github.matiyaaa.fuse.ui.shell.screenshots.SampleLibrary.games.map { it.folder to it.file }
+        for ((folder, name) in names) {
+            for (system in io.github.matiyaaa.fuse.integrations.libretro.LibretroThumbnails.systemsFor(PlatformId(folder))) {
+                File(cheats, "$system/$name.cht").apply { parentFile.mkdirs() }.writeText(CHEATS)
+            }
+        }
+        File(root, "retroarch.cfg").writeText("apply_cheats_after_load = \"false\"\n")
+        File(root, "duckstation").mkdirs()
+        File(root, "duckstation/settings.ini").writeText("[GPU]\nRenderer = Vulkan\nResolutionScale = 3\n\n[Display]\nAspectRatio = Auto (Game Native)\n")
+    }
+
+    override suspend fun duckstation(installed: InstalledEmulator): io.github.matiyaaa.fuse.launch.patches.DuckStationHome {
+        val d = File(root, "duckstation").absolutePath
+        return io.github.matiyaaa.fuse.launch.patches.DuckStationHome(d, "$d/gamesettings", "$d/cheats", "$d/patches", null, null)
+    }
+
+    override suspend fun pcsx2(installed: InstalledEmulator): io.github.matiyaaa.fuse.launch.patches.Pcsx2Home? = null
+
+    override suspend fun retroArch(installed: InstalledEmulator) =
+        io.github.matiyaaa.fuse.launch.patches.RetroArchHome(File(root, "retroarch.cfg").absolutePath, File(root, "cheats").absolutePath, File(root, "config").absolutePath)
+
+    override suspend fun zipText(zip: String, entry: String): String? = null
+
+    override suspend fun write(path: String, text: String): Boolean {
+        if (!path.startsWith(root.absolutePath + "/")) return false
+        File(path).apply { parentFile.mkdirs() }.writeText(text)
+        return true
+    }
+
+    override suspend fun remove(path: String): Boolean = path.startsWith(root.absolutePath + "/") && File(path).delete()
+
+    override suspend fun inspect(source: String): io.github.matiyaaa.fuse.ui.shell.store.SourceListing? = File(source).takeIf { it.isFile }?.let {
+        io.github.matiyaaa.fuse.ui.shell.store.SourceListing(it.name, io.github.matiyaaa.fuse.ui.shell.store.SourceForm.FILE, listOf(it.name), it.length())
+    }
+
+    override suspend fun sourceText(source: String, entry: String): String? = File(source).takeIf { it.isFile && it.name == entry }?.readText()
+
+    private companion object {
+        val CHEATS = listOf("Infinite Lives", "Start With 99 Coins", "Invincibility", "Moon Jump", "Unlock All Levels")
+            .mapIndexed { i, d -> "cheat${i}_desc = \"$d\"\ncheat${i}_code = \"7E0DBE:0$i\"\ncheat${i}_enable = false\n" }
+            .joinToString("\n", prefix = "cheats = 5\n\n")
+    }
+}
+
+/** GameBanana as the audit has it: one game, a few mods of different kinds, and a cheat file. */
+internal object AuditGameBanana {
+    private const val GAMES = """{"_aMetadata": {"_nRecordCount": 2, "_bIsComplete": true}, "_aRecords": [
+        {"_idRow": 4401, "_sModelName": "Game", "_sName": "Emberline Saga II"},
+        {"_idRow": 4400, "_sModelName": "Game", "_sName": "Emberline Saga"}]}"""
+    private const val MODS = """{"_aMetadata": {"_nRecordCount": 4, "_bIsComplete": true}, "_aRecords": [
+        {"_idRow": 9101, "_sModelName": "Mod", "_sName": "Treasure Hunter Cheats", "_aRootCategory": {"_sName": "Cheats"}, "_sVersion": "1.3", "_aSubmitter": {"_sName": "Kestrel"}, "_nLikeCount": 212},
+        {"_idRow": 9102, "_sModelName": "Mod", "_sName": "Speedrun Practice Codes", "_aRootCategory": {"_sName": "Cheats"}, "_sVersion": "2.0", "_aSubmitter": {"_sName": "Mira"}, "_nLikeCount": 87},
+        {"_idRow": 9103, "_sModelName": "Mod", "_sName": "Restored Script", "_aRootCategory": {"_sName": "Game files"}, "_sVersion": "1.0", "_aSubmitter": {"_sName": "Oren"}, "_nLikeCount": 164},
+        {"_idRow": 9104, "_sModelName": "Mod", "_sName": "Widescreen Hack", "_aRootCategory": {"_sName": "Other/Misc"}, "_aSubmitter": {"_sName": "Pell"}, "_nLikeCount": 31}]}"""
+    private const val MOD = """{"_idRow": 9101, "_sName": "Treasure Hunter Cheats", "_sProfileUrl": "https://gamebanana.com/mods/9101", "_aCategory": {"_sName": "Cheats"}, "_sVersion": "1.3",
+        "_sText": "Max gold, every chest marked on the map, and a walk-through-walls toggle for finding the last few.<br>Made for the US release.",
+        "_sLicense": "Free to share with credit",
+        "_aFiles": [
+          {"_idRow": 70001, "_sFile": "treasure_hunter_1.3.zip", "_nFilesize": 4812, "_sDownloadUrl": "https://gamebanana.com/dl/70001", "_sMd5Checksum": "0123456789abcdef0123456789abcdef", "_sAnalysisResult": "ok", "_sAvResult": "clean", "_sVersion": "1.3"},
+          {"_idRow": 70000, "_sFile": "treasure_hunter_1.2.7z", "_nFilesize": 4100, "_sDownloadUrl": "https://gamebanana.com/dl/70000", "_sAnalysisResult": "ok", "_sAvResult": "clean", "_sVersion": "1.2"}]}"""
+
+    fun answer(scope: io.ktor.client.engine.mock.MockRequestHandleScope, request: io.ktor.client.request.HttpRequestData): io.ktor.client.request.HttpResponseData? {
+        if (request.url.host != "gamebanana.com") return null
+        val path = request.url.encodedPath
+        val body = when {
+            path.endsWith("/Util/Search/Results") -> GAMES
+            path.endsWith("/Mod/Index") -> MODS
+            path.endsWith("/Mod/9101/ProfilePage") -> MOD
+            else -> return null
+        }
+        return with(scope) {
+            respond(body, io.ktor.http.HttpStatusCode.OK, io.ktor.http.headersOf(io.ktor.http.HttpHeaders.ContentType, "application/json"))
+        }
+    }
 }

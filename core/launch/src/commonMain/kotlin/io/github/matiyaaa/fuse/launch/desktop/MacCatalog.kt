@@ -91,7 +91,7 @@ object MacCatalog {
     )
 
     /** Adapters for every entry plus the built-in apps and scripts adapter. */
-    val adapters: List<EmulatorAdapter> = defs.map { LinuxCommandAdapter(it.def, Host.MACOS) } + MacOpenAdapter
+    val adapters: List<EmulatorAdapter> = defs.map { LinuxCommandAdapter(it.def, Host.MACOS) } + MacOpenAdapter + AnyPs5Adapter(Host.MACOS)
 
     fun def(id: String): DesktopEmulatorDef? = defs.firstOrNull { it.def.id == id }
 }

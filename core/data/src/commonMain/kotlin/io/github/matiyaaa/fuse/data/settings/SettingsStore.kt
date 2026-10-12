@@ -46,12 +46,21 @@ class SettingsStore(
                 var next = transform(before).copy(version = AppSettings.CURRENT_VERSION)
                 val switched = next.sync.activeProfile != before.sync.activeProfile
                 if (switched) {
-                    // Even untouched inherited preferences belong to this person once selected.
-                    // Keep them before another profile hydrates the shared settings document.
-                    rememberPreferences(before)
+                    // The outgoing person's preferences as they are at this moment, including an edit
+                    // written together with the switch (a theme chosen just before changing person).
+                    // Recorded under their own name before the next person's are put in place, so a
+                    // switch can never quietly undo what they just chose.
+                    val outgoing = next.copy(sync = next.sync.copy(activeProfile = before.sync.activeProfile))
+                    settleOutgoing(before, outgoing)
                     // A profile transition is hydration, not an edit of the next person's preferences.
                     val remembered = document(next.sync.activeProfile).values
-                    next = ProfileSettings.apply(next, remembered.filterKeys { it != "home.layout" || next.sync.homeScope == "PROFILE" }.mapValues { it.value.value })
+                    next = if (remembered.isEmpty() && before.sync.activeProfile.isNotEmpty()) {
+                        // Someone new to this device starts from Fuse's own defaults, not from the
+                        // previous person's look. The device's theme library stays available to them.
+                        ProfileSettings.apply(next, ProfileSettings.extract(AppSettings()) - NEW_PERSON_KEEPS)
+                    } else {
+                        ProfileSettings.apply(next, remembered.filterKeys { it != "home.layout" || next.sync.homeScope == "PROFILE" }.mapValues { it.value.value })
+                    }
                     rememberPreferences(next)
                 } else recordEdits(before, next)
                 q.put(GLOBAL, "", KEY, AppSettingsCodec.encode(next, stored), clock())
@@ -131,12 +140,30 @@ class SettingsStore(
         saveDocument(settings.sync.activeProfile, ProfileSettingDocument(known + values))
     }
 
-    private fun recordEdits(before: AppSettings, after: AppSettings) {
+    /**
+     * Makes [outgoing]'s durable document match what that person sees right now. A value that differs
+     * from the document (changed in [before] -> [outgoing], or never recorded) is their latest choice and
+     * gets a fresh revision; untouched values keep the revision they had.
+     */
+    private fun settleOutgoing(before: AppSettings, outgoing: AppSettings) {
+        val profile = outgoing.sync.activeProfile
+        val known = document(profile).values
         val old = ProfileSettings.extract(before)
-        val current = ProfileSettings.extract(after)
-        val changed = current.filter { (path, value) -> old[path] != value &&
-            (path != "home.layout" || after.sync.homeScope == "PROFILE") }
-        if (changed.isEmpty()) return
+        val current = ProfileSettings.extract(outgoing).filterKeys { it != "home.layout" || outgoing.sync.homeScope == "PROFILE" }
+        val stamped = current.filter { (path, value) ->
+            val k = known[path]
+            if (k == null) old[path] != value else k.value != value
+        }
+        val values = current.mapValues { (path, value) -> known[path]?.takeIf { it.value == value } ?: ProfileSettingValue(value) }.toMutableMap()
+        if (stamped.isNotEmpty()) {
+            val revision = nextRevision(outgoing)
+            for ((path, value) in stamped) values[path] = ProfileSettingValue(value, revision)
+        }
+        saveDocument(profile, ProfileSettingDocument(known + values))
+    }
+
+    /** The next local revision: after both the wall clock and anything already observed. */
+    private fun nextRevision(after: AppSettings): ProfileSettingRevision {
         val persisted = revisionClock()
         val origin = after.sync.deviceId.ifBlank { persisted.origin.ifBlank {
             Random.nextLong().toString(16) + Random.nextLong().toString(16)
@@ -144,12 +171,22 @@ class SettingsStore(
         val wall = clock()
         val revision = if (wall > persisted.revision.millis) ProfileSettingRevision(wall, 0, origin)
             else ProfileSettingRevision(persisted.revision.millis, persisted.revision.counter + 1, origin)
+        q.put(GLOBAL, "", CLOCK_KEY, json.encodeToString(ProfileSettingClock.serializer(), ProfileSettingClock(revision, origin)), wall)
+        return revision
+    }
+
+    private fun recordEdits(before: AppSettings, after: AppSettings) {
+        val old = ProfileSettings.extract(before)
+        val current = ProfileSettings.extract(after)
+        val changed = current.filter { (path, value) -> old[path] != value &&
+            (path != "home.layout" || after.sync.homeScope == "PROFILE") }
+        if (changed.isEmpty()) return
+        val revision = nextRevision(after)
         val known = document(after.sync.activeProfile).values
         // Seed legacy preferences without claiming that defaults were explicitly chosen now.
         val values = current.mapValues { (path, value) -> known[path] ?: ProfileSettingValue(value) }.toMutableMap()
         for ((path, value) in changed) values[path] = ProfileSettingValue(value, revision)
         saveDocument(after.sync.activeProfile, ProfileSettingDocument(values))
-        q.put(GLOBAL, "", CLOCK_KEY, json.encodeToString(ProfileSettingClock.serializer(), ProfileSettingClock(revision, origin)), wall)
     }
 
     /** Restores every default (a user action in Settings -> Reset). */
@@ -162,5 +199,8 @@ class SettingsStore(
         const val KEY = "app"
         const val REVISION_KEY = "profile-preference-revisions"
         const val CLOCK_KEY = "profile-preference-clock"
+
+        /** What a new person keeps from the device rather than starting at the default: the themes added here. */
+        val NEW_PERSON_KEEPS = setOf("appearance.customThemes")
     }
 }

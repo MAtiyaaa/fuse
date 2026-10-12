@@ -121,6 +121,18 @@ class PlaySessionRepository(
             Unit
         }
 
+    /**
+     * For each emulator, the latest end of a session on this device that lasted at least [minMs],
+     * and how many there were: games Fuse saw it really run. Other devices' and imported time never count.
+     */
+    suspend fun playedByEmulator(minMs: Long): Map<String, Pair<Long, Long>> = withContext(dispatcher) {
+        q.playedByEmulator(minMs).executeAsList().mapNotNull { r ->
+            val id = r.emulator_id ?: return@mapNotNull null
+            val last = r.lastEnded ?: return@mapNotNull null
+            id to (last to r.sessions)
+        }.toMap()
+    }
+
     /** The session currently open (the game being played), if any. */
     fun openSession(): Flow<PlaySession?> =
         q.selectOpen().asFlow().mapToOneOrNull(dispatcher).map { it?.toModel() }.flowOn(dispatcher)

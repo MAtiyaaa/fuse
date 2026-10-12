@@ -118,4 +118,15 @@ class SwitchLibraryTest {
         // DLC for a game that isn't here stays on its own.
         assertEquals(2, games.size)
     }
+
+    @Test
+    fun anUpdatesFolderChosenInsideTheSystemsFolderNeverBecomesAGame() = runTest {
+        // Named so nothing in them says "update": only the folder chosen for updates does.
+        file("River Tale [0100CCCC33335000][v0].nsp", 900)
+        file("Patches/River Tale.nsp", 40)
+        file("Patches/Extra/River Tale.nsz", 20)
+        val games = scan(listOf(ContentFolder(ContentKind.UPDATE, "$root/Patches"))).games
+        assertEquals(listOf("$root/River Tale [0100CCCC33335000][v0].nsp"), games.map { it.path }, games.joinToString("\n") { it.path })
+        assertEquals(2, games.single().count(ContentKind.UPDATE))
+    }
 }

@@ -52,6 +52,13 @@ internal class DefaultFuseStore private constructor(
     private val data = ctx.data
     private val prefsState = MutableStateFlow(initialPrefs)
     @kotlin.concurrent.Volatile private var prefsProfile = ctx.settings.value.sync.activeProfile
+
+    /**
+     * The preferences as storage holds them for [prefsProfile], as last read or written: what the
+     * interface shows beyond this is a choice not saved yet. It starts as [initialPrefs], read from
+     * storage a moment ago: a choice made before anything is written is then known as one.
+     */
+    @kotlin.concurrent.Volatile private var storedPrefs: UiPrefs? = initialPrefs
     override val prefs: StateFlow<UiPrefs> = prefsState
     private val writes = Channel<UiPrefs>(Channel.CONFLATED)
     private val writeLock = Mutex()
@@ -62,8 +69,15 @@ internal class DefaultFuseStore private constructor(
     override val collections = DefaultCollectionOps(ctx)
     override val apps = DefaultAppOps(ctx)
     private val mediaOps: DefaultMediaOps
-    override val credentials = DefaultCredentialOps(ctx) { key ->
+    override val credentials = DefaultCredentialOps(ctx) { key, removed ->
         if (key != SecretKeys.RA_USERNAME && key != SecretKeys.RA_API_KEY) mediaOps.invalidate()
+        // A key removed here stays off this device; adding it again lets the household's follow.
+        if (key in SecretKeys.all) ctx.scope.launch {
+            sync.configure { c ->
+                val off = if (removed) (c.keysKeptOff + key).distinct() else c.keysKeptOff - key
+                if (off == c.keysKeptOff) c else c.copy(keysKeptOff = off)
+            }
+        }
     }
     override val achievements = DefaultAchievementOps(ctx, credentials)
     override val cartridge = DefaultCartridgeOps(ctx, engine)
@@ -91,7 +105,8 @@ internal class DefaultFuseStore private constructor(
     }
     override val content = DefaultContentOps(ctx, emulators) { engine.drives.volumes.value }
     override val backup = DefaultBackupOps(ctx) { restore ->
-        writeLock.withLock { restore().also { reloadLocked() } }
+        // A restored backup replaces everything: nothing shown before it is carried over.
+        writeLock.withLock { restore().also { storedPrefs = null; reloadLocked() } }
     }
     override val library: DefaultLibraryOps
     override val health: DefaultHealthOps
@@ -119,7 +134,7 @@ internal class DefaultFuseStore private constructor(
         // Apps that became games and games added by hand are identified and filled straight away.
         val findArt: (List<io.github.matiyaaa.fuse.model.GameId>) -> Unit = { ids -> mediaOps.fillNew(ids) }
         apps.onGamesAdded = findArt
-        library = DefaultLibraryOps(ctx, engine, emulators, collections, apps, achievements, cartridge) { enabled ->
+        library = DefaultLibraryOps(ctx, engine, emulators, collections, apps, achievements, cartridge, changeSettings = { t -> writeSettings(t) }) { enabled ->
             updatePrefs { it.copy(cleanDisplayNames = enabled) }
         }
         library.onGamesAdded = findArt
@@ -135,6 +150,7 @@ internal class DefaultFuseStore private constructor(
             }
         }
         library.installedBoot = { id -> content.bootFile(id) }
+        library.writeSettings = { t -> writeSettings(t) }
         library.notInstalled = { id ->
             content.view(id)?.takeIf { it.plan.storageReadable && !it.plan.gameInstalled && it.mode == io.github.matiyaaa.fuse.ui.shell.store.InstallMode.FUSE }?.let { v ->
                 io.github.matiyaaa.fuse.ui.shell.store.Problem(
@@ -168,14 +184,20 @@ internal class DefaultFuseStore private constructor(
     /** The settings with anything still on its way to the database written first. */
     private suspend fun settingsNow() = writeLock.withLock {
         val current = data.settings.current()
-        val next = if (prefsProfile == current.sync.activeProfile) current.withUiPrefs(prefsState.value) else current
-        if (next == current) current else data.settings.update { it.withUiPrefs(prefsState.value) }.also { ctx.settings.value = it }
+        val shown = prefsState.value
+        val next = if (prefsProfile == current.sync.activeProfile) current.withUiPrefs(shown) else current
+        if (next == current) current else data.settings.update { it.withUiPrefs(shown) }.also { ctx.settings.value = it; storedPrefs = shown }
     }
 
     /** Changes the settings (Fuse Sync bringing in a profile's) and has the interface follow at once. */
     private suspend fun writeSettings(transform: (io.github.matiyaaa.fuse.data.settings.AppSettings) -> io.github.matiyaaa.fuse.data.settings.AppSettings) = writeLock.withLock {
         val before = data.settings.current()
-        val after = data.settings.update { transform(if (prefsProfile == it.sync.activeProfile) it.withUiPrefs(prefsState.value) else it) }
+        val shown = prefsState.value
+        var wroteShown = false
+        val after = data.settings.update { if (prefsProfile == it.sync.activeProfile) { wroteShown = true; transform(it.withUiPrefs(shown)) } else transform(it) }
+        // What was written is what is stored now, before the reload: a choice made since is newer
+        // than it, and is carried over rather than replaced by it.
+        if (wroteShown) storedPrefs = shown
         if (after != before) reloadLocked()
     }
 
@@ -185,7 +207,9 @@ internal class DefaultFuseStore private constructor(
         // A profile switch changes the persisted owner before the old UI preferences are reloaded.
         // Those old preferences must not become a local edit belonging to the next person.
         if (prefsProfile == before.sync.activeProfile && prefsState.value != before.toUiPrefs(globalScoped(ctx))) {
-            data.settings.update { it.withUiPrefs(prefsState.value) }
+            val shown = prefsState.value
+            data.settings.update { it.withUiPrefs(shown) }
+            storedPrefs = shown
         }
         val after = data.settings.mergeProfileValues(profile, values)
         if (after != before || prefsState.value != after.toUiPrefs(globalScoped(ctx))) reloadLocked()
@@ -301,6 +325,7 @@ internal class DefaultFuseStore private constructor(
         if (prefs != prefsState.value) return@withLock
         if (prefsProfile != data.settings.current().sync.activeProfile) { reloadLocked(); return@withLock }
         ctx.settings.value = data.settings.update { it.withUiPrefs(prefs) }
+        storedPrefs = prefs
         val scoped = data.scopedSettings
         val global = ScopeRef.Global
         if (scoped.resolve(ScopedSettings.Layout, null, null).value != prefs.defaultLayout) scoped.set(ScopedSettings.Layout, global, prefs.defaultLayout)
@@ -311,11 +336,40 @@ internal class DefaultFuseStore private constructor(
     /** Re-reads preferences after a global scoped setting changed outside [updatePrefs]. */
     private suspend fun reloadPrefs() = writeLock.withLock { reloadLocked() }
 
+    /**
+     * Shows the settings as stored, keeping any choice the interface shows that isn't saved yet: it
+     * is the newest thing the person did, so it is written over what came in (a sync round bringing
+     * the profile's values, a setting changed elsewhere) instead of being thrown away. That holds
+     * across a profile switch the interface is catching up with too: whatever the outgoing person
+     * had chosen was saved as theirs when the switch began (it reads the settings through
+     * [settingsNow]), so a choice not saved yet was made after, by the new person, and stays theirs.
+     */
     private suspend fun reloadLocked() {
-        val settings = data.settings.current()
+        val shown = prefsState.value
+        val base = storedPrefs
+        var settings = data.settings.current()
+        if (base != null && shown != base && io.github.matiyaaa.fuse.data.settings.UnsavedChoices.carry(settings, settings.withUiPrefs(base), settings.withUiPrefs(shown)) != null) {
+            settings = data.settings.update { now -> io.github.matiyaaa.fuse.data.settings.UnsavedChoices.carry(now, now.withUiPrefs(base), now.withUiPrefs(shown)) ?: now }
+            ctx.userChanged()
+        }
         ctx.settings.value = settings
         prefsProfile = settings.sync.activeProfile
-        prefsState.value = settings.toUiPrefs(globalScoped(ctx))
+        val scoped = globalScoped(ctx)
+        val loaded = settings.toUiPrefs(scoped)
+        storedPrefs = loaded
+        // A choice can be made while this runs ([updatePrefs] doesn't wait for it): it is newer than
+        // anything read here, so it stays, laid over what came in, and is written.
+        while (true) {
+            val now = prefsState.value
+            if (now == shown) {
+                if (prefsState.compareAndSet(now, loaded)) break else continue
+            }
+            val merged = io.github.matiyaaa.fuse.data.settings.UnsavedChoices.carry(settings, settings.withUiPrefs(shown), settings.withUiPrefs(now))?.toUiPrefs(scoped) ?: loaded
+            if (prefsState.compareAndSet(now, merged)) {
+                if (merged != loaded) writes.trySend(merged)
+                break
+            }
+        }
         ctx.systemOrder.value = prefsState.value.systemOrder
     }
 
@@ -351,14 +405,19 @@ internal class DefaultFuseStore private constructor(
 
     private fun start() {
         io.github.matiyaaa.fuse.ui.shell.platform.JellyfinImages.service = jellyfin
-        // Downloads, and Fuse RomM feeding the library through them.
+        // Downloads, and RomM feeding the library through them.
         transfers.start()
         romm.start()
         reach.start()
         offlineMedia.start()
         streaming.start()
         ctx.scope.launch { ctx.playing.collect { transfers.conditions(playing = it != null) } }
-        // One RomM integration at a time: turning Cartridge on in Fuse turns Fuse RomM off, and the
+        // Fuse Engine's Performance Governor: decorative motion follows what Fuse is doing.
+        ctx.governor.start()
+        ctx.scope.launch {
+            ctx.governor.state.collect { io.github.matiyaaa.fuse.ui.fuseline.FramePacing.decorationRate = io.github.matiyaaa.fuse.ui.shell.store.EnginePolicy.of(it).motion }
+        }
+        // One RomM integration at a time: turning Cartridge on in Fuse turns RomM off, and the
         // other way round. Turning one off keeps everything it was set up with.
         ctx.scope.launch {
             var before = prefsState.value.cartridgeEnabled to prefsState.value.romm.enabled
@@ -418,6 +477,22 @@ internal class DefaultFuseStore private constructor(
                         return true
                     }
                 },
+                keys = object : HouseholdSignIns.Keys {
+                    override suspend fun mine() = SecretKeys.all.mapNotNull { k -> credentials.get(k)?.let { k to it } }.toMap()
+                    override suspend fun take(name: String, value: String) {
+                        if (name !in SecretKeys.all || name in sync.config.value.keysKeptOff) return
+                        credentials.put(name, value)
+                        if (name == SecretKeys.RA_USERNAME || name == SecretKeys.RA_API_KEY) {
+                            achievements.load()
+                            if (achievements.configured.value) achievements.refresh(force = true)
+                        }
+                    }
+                    override fun keptOff() = sync.config.value.keysKeptOff.toSet()
+                    override suspend fun agreed() = SecretKeys.all.mapNotNull { k -> credentials.get(AGREED + k)?.let { k to it } }.toMap()
+                    override suspend fun agree(values: Map<String, String>) {
+                        for ((k, v) in values) if (k in SecretKeys.all) runCatching { ctx.services.secrets.put(AGREED + k, v) }
+                    }
+                },
                 ask = sync.ask,
             )
             sync.signIns = household
@@ -426,7 +501,8 @@ internal class DefaultFuseStore private constructor(
                     ctx.settings.map { Triple(it.romm.localAddress + "|" + it.romm.remoteAddress, it.romm.enabled, it.romm.account) },
                     prefsState.map { Triple(it.jellyfin.localAddress + "|" + it.jellyfin.remoteAddress, it.jellyfin.enabled, it.jellyfin.mode) },
                     jellyfin.state.map { it.account?.userId },
-                ) { a, b, c -> Triple(a, b, c) }.distinctUntilChanged(),
+                    credentials.revision,
+                ) { a, b, c, d -> listOf(a, b, c, d) }.distinctUntilChanged(),
             )
         }
         // The interface follows Fuse Sync's settings as stored (the service writes some itself).
@@ -583,3 +659,6 @@ internal class DefaultFuseStore private constructor(
         }
     }
 }
+
+/** Where the secret store keeps each key's value as this device and the household last had it alike. */
+private const val AGREED = "household.agreed."

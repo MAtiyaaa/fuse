@@ -70,7 +70,7 @@ private class SaveImportPreview(private val app: AppState, private val plan: Sav
                     } + MenuAction("back", "Back to Import", FuseIcons.ArrowLeft, onSelect = { show() }), FuseIcons.FileSearch)
                 }))
             add(MenuAction("import", "Import ${selected.size} Saves", FuseIcons.FileUp,
-                detail = "Current saves are kept first. Imported revisions enter normal Fuse Sync history, including while offline",
+                detail = "Current saves are kept first. Imported revisions enter normal Fuse One history, including while offline",
                 unavailableReason = if (who == null) "Choose whose saves these are" else if (selected.isEmpty()) "Choose a save destination" else null,
                 onSelect = { confirm() }))
             add(MenuAction("cancel", "Cancel Import", FuseIcons.CircleX, onSelect = {

@@ -75,9 +75,9 @@ internal object SelfTest {
     }
 
     private object NoSink : GamepadSink {
-        override fun press(button: PadButton) = Unit
-        override fun release(button: PadButton) = Unit
-        override fun stick(x: Float, y: Float) = Unit
-        override fun trigger(button: PadButton, value: Float) = Unit
+        override fun press(button: PadButton, device: String?) = Unit
+        override fun release(button: PadButton, device: String?) = Unit
+        override fun stick(x: Float, y: Float, device: String?) = Unit
+        override fun trigger(button: PadButton, value: Float, device: String?) = Unit
     }
 }

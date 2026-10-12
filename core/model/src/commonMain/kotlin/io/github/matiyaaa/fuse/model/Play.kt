@@ -81,6 +81,8 @@ data class Achievement(
     val earnedHardcoreAt: Long?,
     val type: String? = null,
     val displayOrder: Int = 0,
+    /** The share of its players who have it, in percent, where its platform publishes that (Steam). */
+    val rarity: Float? = null,
 ) {
     val earned: Boolean get() = earnedAt != null || earnedHardcoreAt != null
 }

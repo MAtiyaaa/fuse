@@ -101,6 +101,13 @@ object Spotlight {
 
     private val state = MutableStateFlow(Focus(null))
     val focused: StateFlow<Focus> = state
+
+    /**
+     * The main screen is browsing games wherever they are (the Library's All view, RomM's or other
+     * devices' lists): only then does the second screen say which devices have the focused game.
+     * Everywhere else it is about the game itself, not where its copies are.
+     */
+    val showsCopies = MutableStateFlow(false)
     private var pending = 0
     private var pendingAt: TimeSource.Monotonic.ValueTimeMark? = null
 
@@ -151,7 +158,7 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
         return
     }
     val prefs by store.prefs.collectAsState()
-    val standby by store.displaySession.standby.collectAsState()
+    val standby by session.standby.collectAsState()
     val spec = prefs.theme
     FuseTheme(
         spec = spec,
@@ -159,13 +166,15 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
         quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower),
         glass = prefs.glass,
         highContrastFocus = prefs.highContrastFocus,
+        colorVision = prefs.colorVision,
     ) {
         if (standby) {
-            val wakeScope = rememberCoroutineScope()
-            val wakeRouter = remember { io.github.matiyaaa.fuse.ui.designsystem.input.InputRouter(wakeScope) }
-            CompositionLocalProvider(io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter provides wakeRouter) {
-                StandbyScreen(prefs.clock24h) { store.displaySession.wake() }
-            }
+            // The second screen rests black while the main one shows Standby: nothing lit to wear an
+            // OLED panel, and a touch here wakes both.
+            Box(
+                Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)
+                    .pointerInput(Unit) { detectTapGestures { session.wake() } },
+            )
             return@FuseTheme
         }
         val home by store.homeFeed.collectAsState()
@@ -466,7 +475,8 @@ private fun FocusedGame(store: FuseStore, id: GameId, onAchievements: (GameId) -
     val flow = remember(id) { store.library.game(id) }
     val detail by flow.collectAsState(initial = null)
     // Where else the game is: the household's other devices and RomM, each with a dot when it is around.
-    val copiesFlow = remember(id) { store.reach.availability(id) }
+    val browsingEverywhere by Spotlight.showsCopies.collectAsState()
+    val copiesFlow = remember(id, browsingEverywhere) { if (browsingEverywhere) store.reach.availability(id) else kotlinx.coroutines.flow.flowOf(null) }
     val copies by copiesFlow.collectAsState(initial = null)
     val elsewhere = copies?.copies.orEmpty().filter { it.place != io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.HERE }
     val d = detail ?: return
@@ -650,5 +660,14 @@ internal fun RehearsalCompanionSurface() {
         Box(Modifier.fillMaxSize().background(Fuse.colors.ink), contentAlignment = Alignment.Center) {
             FText("Onboarding rehearsal", Fuse.type.title, color = Fuse.colors.text)
         }
+    }
+}
+
+/** While on screen with [on], the second screen names where the focused game's copies are (see [Spotlight.showsCopies]). */
+@Composable
+internal fun CompanionShowsCopies(on: Boolean) {
+    androidx.compose.runtime.DisposableEffect(on) {
+        Spotlight.showsCopies.value = on
+        onDispose { Spotlight.showsCopies.value = false }
     }
 }

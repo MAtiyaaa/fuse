@@ -17,6 +17,9 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
+import io.github.matiyaaa.fuse.ui.designsystem.effects.LocalGlassBackdrop
+import io.github.matiyaaa.fuse.ui.designsystem.effects.LocalGlassFloating
+import io.github.matiyaaa.fuse.ui.designsystem.effects.glassFloating
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.fuseline.Appear
 import io.github.matiyaaa.fuse.ui.fuseline.Curves
@@ -56,7 +59,8 @@ fun Overlay(
 ) {
     val motion = Fuse.motion
     val c = Fuse.colors
-    Box(modifier.fillMaxSize()) {
+    // Floating over the screen: left out of what glass shows, and its panels are liquid glass.
+    Box(modifier.fillMaxSize().glassFloating(LocalGlassBackdrop.current)) {
         Appear(
             visible = visible,
             enter = fadeIn(motion.tween(Durations.BASE, Curves.Fade)),
@@ -95,7 +99,7 @@ fun Overlay(
             enter = overlayEnter(edge, motion),
             exit = overlayExit(edge, motion),
         ) {
-            CompositionLocalProvider(LocalOverlaySurface provides true) {
+            CompositionLocalProvider(LocalOverlaySurface provides true, LocalGlassFloating provides true) {
                 // The panel takes every touch on it, keys and the gaps between them alike, so only
                 // a touch outside it (on the scrim) closes it.
                 Box(Modifier.absorbTouches(), content = content)

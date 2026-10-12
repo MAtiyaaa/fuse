@@ -21,13 +21,14 @@ data class LocalAchievement(
 )
 
 /** Where a set of achievements came from, for its label. */
-enum class LocalAchievementSource { STEAM, PS3_TROPHIES }
+enum class LocalAchievementSource { STEAM, PS3_TROPHIES, PS4_TROPHIES }
 
 data class LocalAchievementSet(val source: LocalAchievementSource, val title: String?, val items: List<LocalAchievement>, val icon: String? = null)
 
 /**
  * Reads achievements from what a game's own platform keeps on this computer, without accounts or
- * keys: Steam's stats cache ([steam]) and RPCS3's trophy folders ([ps3Trophies]). Only reads.
+ * keys: Steam's stats cache ([steam]), RPCS3's trophy folders ([ps3Trophies]) and shadPS4's
+ * ([ps4Trophies]). Only reads.
  */
 class LocalAchievements(private val fs: FuseFileSystem) {
 
@@ -36,15 +37,19 @@ class LocalAchievements(private val fs: FuseFileSystem) {
     /**
      * The achievements of Steam game [appId] as Steam's client last cached them: their names and
      * pictures from its schema (appcache/stats/UserGameStatsSchema_<app>.bin) and what is unlocked,
-     * with when, from the newest user's stats (UserGameStats_<user>_<app>.bin). Null when the game
-     * has no achievements or Steam has no record of them here.
+     * with when, from the user's stats (UserGameStats_<account>_<app>.bin). With [steamId] (a 64-bit
+     * SteamID) only that account's are read, so people sharing a computer never see each other's;
+     * without, the newest stats there are. Null when the game has no achievements or Steam has no
+     * record of them here.
      */
-    suspend fun steam(steamRoots: List<String>, appId: Long): LocalAchievementSet? {
+    suspend fun steam(steamRoots: List<String>, appId: Long, steamId: String? = null): LocalAchievementSet? {
+        val account = steamId?.toULongOrNull()?.let { (it - STEAM_ID_BASE).toLong() }
         for (root in steamRoots) {
             val stats = FsPath.join(root, "appcache", "stats")
             val schema = read(FsPath.join(stats, "UserGameStatsSchema_$appId.bin"), MAX_SCHEMA)?.let(BinaryVdf::parse) ?: continue
             val user = runCatching { fs.list(stats) }.getOrDefault(emptyList())
                 .filter { it.name.startsWith("UserGameStats_") && it.name.endsWith("_$appId.bin") && !it.name.startsWith("UserGameStatsSchema") }
+                .filter { account == null || it.name == "UserGameStats_${account}_$appId.bin" }
                 .maxByOrNull { it.modifiedAt }
                 ?.let { read(it.path, MAX_STATS) }?.let(BinaryVdf::parse)
             return steamFrom(schema, user, appId)
@@ -197,6 +202,78 @@ class LocalAchievements(private val fs: FuseFileSystem) {
         return out
     }
 
+    // PlayStation 4 (shadPS4)
+
+    /**
+     * A PS4 game's trophies as shadPS4 keeps them, in its user folders [userDirs] (src/core/libraries/
+     * np/np_trophy.cpp, common/path_util.h): the set's names, kinds and pictures in
+     * `trophy/<NPWR id>/Xml/TROP.XML` and `Icons/`, and each console user's unlocks (with the time,
+     * in seconds) in `home/<user>/trophy/<NPWR id>.xml`. The set is the one [npCommIds] names (read
+     * from the game's own npbind.dat), else the one whose title is [title]. Only reads.
+     */
+    suspend fun ps4Trophies(userDirs: List<String>, npCommIds: List<String>, title: String): LocalAchievementSet? {
+        for (user in userDirs) {
+            val sets = dirNames(FsPath.join(user, "trophy"))
+            if (sets.isEmpty()) continue
+            val chosen = npCommIds.firstOrNull { it in sets } ?: sets.firstOrNull { set ->
+                val conf = ps4Conf(user, set) ?: return@firstOrNull false
+                TITLE.find(conf)?.groupValues?.get(1)?.let { sameTitle(xml(it), title) } == true
+            } ?: continue
+            val conf = ps4Conf(user, chosen) ?: continue
+            // The first console user with a record of the set (shadPS4's first is 1000).
+            val homes = dirNames(FsPath.join(user, "home")).sorted()
+            val state = homes.firstNotNullOfOrNull { u -> read(FsPath.join(user, "home", u, "trophy", "$chosen.xml"), MAX_CONF)?.decodeToString() }
+            return ps4Set(conf, state, FsPath.join(user, "trophy", chosen, "Icons"))
+        }
+        return null
+    }
+
+    private suspend fun ps4Conf(user: String, set: String): String? {
+        val dir = FsPath.join(user, "trophy", set, "Xml")
+        return (read(FsPath.join(dir, "TROP.XML"), MAX_CONF) ?: read(FsPath.join(dir, "TROP_01.XML"), MAX_CONF))?.decodeToString()
+    }
+
+    /** A set from its TROP.XML ([conf]), a user's unlock record ([state], or none) and its [icons] folder. */
+    fun ps4Set(conf: String, state: String?, icons: String): LocalAchievementSet? {
+        val unlocked = HashMap<Int, Long>()
+        if (state != null) for (m in TAG.findAll(state)) {
+            val attrs = m.groupValues[1]
+            val id = ATTR_ID.find(attrs)?.groupValues?.get(1)?.toIntOrNull() ?: continue
+            if (ATTR_UNLOCK.find(attrs)?.groupValues?.get(1)?.lowercase() != "true") continue
+            unlocked[id] = ATTR_TIME.find(attrs)?.groupValues?.get(1)?.toLongOrNull()?.takeIf { it > 0 }?.let { it * 1000 } ?: 0L
+        }
+        val items = TROPHY_BLOCK.findAll(conf).mapNotNull { m ->
+            val attrs = m.groupValues[1]
+            val body = m.groupValues[2]
+            val number = ATTR_ID.find(attrs)?.groupValues?.get(1)?.toIntOrNull() ?: return@mapNotNull null
+            val grade = when (ATTR_TYPE.find(attrs)?.groupValues?.get(1)?.uppercase()) {
+                "P" -> "platinum"
+                "G" -> "gold"
+                "S" -> "silver"
+                else -> "bronze"
+            }
+            val icon = FsPath.join(icons, "TROP${number.toString().padStart(3, '0')}.PNG")
+            LocalAchievement(
+                id = number.toString(),
+                name = NAME.find(body)?.groupValues?.get(1)?.let(::xml) ?: "Trophy",
+                description = DETAIL.find(body)?.groupValues?.get(1)?.let(::xml).orEmpty(),
+                hidden = ATTR_HIDDEN.find(attrs)?.groupValues?.get(1).equals("yes", ignoreCase = true),
+                icon = icon,
+                iconLocked = icon,
+                unlockedAt = unlocked[number],
+                points = POINTS.getValue(grade),
+                grade = grade,
+            )
+        }.toList()
+        if (items.isEmpty()) return null
+        val title = TITLE.find(conf)?.groupValues?.get(1)?.let(::xml)
+        return LocalAchievementSet(LocalAchievementSource.PS4_TROPHIES, title, items, icon = FsPath.join(icons, "ICON0.PNG"))
+    }
+
+    /** The trophy set ids (NPWRxxxxx_00) a PS4 game's npbind.dat names. */
+    fun npCommIds(npbind: ByteArray): List<String> =
+        NPWR.findAll(npbind.decodeToString(throwOnInvalidSequence = false)).map { it.value }.distinct().toList()
+
     // Shared
 
     private suspend fun dirNames(path: String): List<String> =
@@ -209,6 +286,7 @@ class LocalAchievements(private val fs: FuseFileSystem) {
     }
 
     private fun xml(s: String): String = s.trim()
+        .replace(NUMERIC) { m -> m.groupValues[1].toIntOrNull()?.takeIf { it in 1..0xFFFF }?.toChar()?.toString() ?: m.value }
         .replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&amp;", "&")
 
     private fun sameTitle(a: String, b: String): Boolean {
@@ -217,6 +295,8 @@ class LocalAchievements(private val fs: FuseFileSystem) {
     }
 
     private companion object {
+        /** A 64-bit SteamID minus this is the account id Steam names its stats files by. */
+        const val STEAM_ID_BASE: ULong = 76561197960265728uL
         const val MAX_SCHEMA = 8 * 1024 * 1024
         const val MAX_STATS = 2 * 1024 * 1024
         const val MAX_CONF = 2 * 1024 * 1024
@@ -228,6 +308,19 @@ class LocalAchievements(private val fs: FuseFileSystem) {
 
         val TROPHY = Regex("""<trophy\s+id="(\d+)"\s+hidden="(\w+)"\s+ttype="(\w)"[^>]*>\s*<name>(.*?)</name>\s*<detail>(.*?)</detail>""", RegexOption.DOT_MATCHES_ALL)
         val TITLE = Regex("""<title-name>(.*?)</title-name>""", RegexOption.DOT_MATCHES_ALL)
+
+        // shadPS4's XML, read attribute by attribute (their order isn't fixed).
+        val TAG = Regex("""<trophy\b([^>]*)/?>""")
+        val TROPHY_BLOCK = Regex("""<trophy\b([^>]*)>(.*?)</trophy>""", RegexOption.DOT_MATCHES_ALL)
+        val ATTR_ID = Regex("""\bid="(\d+)"""")
+        val ATTR_UNLOCK = Regex("""\bunlockstate="(\w+)"""")
+        val ATTR_TIME = Regex("""\btimestamp="(\d+)"""")
+        val ATTR_TYPE = Regex("""\bttype="(\w)"""")
+        val ATTR_HIDDEN = Regex("""\bhidden="(\w+)"""")
+        val NAME = Regex("""<name>(.*?)</name>""", RegexOption.DOT_MATCHES_ALL)
+        val DETAIL = Regex("""<detail>(.*?)</detail>""", RegexOption.DOT_MATCHES_ALL)
+        val NPWR = Regex("""NPWR\d{5}_\d{2}""")
+        val NUMERIC = Regex("""&#(\d+);""")
         val POINTS = mapOf("platinum" to 180, "gold" to 90, "silver" to 30, "bronze" to 15)
     }
 }

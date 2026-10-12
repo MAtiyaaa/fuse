@@ -179,7 +179,7 @@ private sealed interface Hit {
         override val detail = "In Cartridge, every system on your RomM server"
     }
 
-    /** A game on the person's RomM server that isn't here yet, from Fuse RomM's copy of the library. */
+    /** A game on the person's RomM server that isn't here yet, from RomM's copy of the library. */
     data class RommGame(val g: io.github.matiyaaa.fuse.ui.shell.store.RommGame) : Hit {
         override val key = "rg${g.romId}"
         override val title = g.card.title
@@ -248,7 +248,7 @@ fun SearchScreen(app: AppState) {
             .flatMapLatest { q -> app.store.library.search(q) }
     }
     val results by flow.collectAsState(initial = SearchResults())
-    // Fuse RomM on: the same words through its copy of the server's library, offline too. Games
+    // RomM on: the same words through its copy of the server's library, offline too. Games
     // already here are found above as themselves, so only what isn't here is listed.
     val rommOn = app.store.prefs.collectAsState().value.romm.enabled
     val rommFlow = remember(rommOn) {
@@ -260,7 +260,7 @@ fun SearchScreen(app: AppState) {
     val sections = remember { settingsSections.filter { it.available(app) } }
     val hits = remember(results, rommGames) {
         // Settings are found by name alone, never with filters.
-        val settings = if (results.chips.isEmpty()) SettingsIndex.search(results.query, sections, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen).map { Hit.Setting(it) } else emptyList()
+        val settings = if (results.chips.isEmpty()) SettingsIndex.search(results.query, sections, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen, steam = app.platform.steam != null, decky = app.platform.decky != null).map { Hit.Setting(it) } else emptyList()
         val choosing = SearchSyntax.parse(results.query).pending != null
         results.suggestions.map { Hit.Suggestion(it, choosing) } +
             results.games.map { Hit.Game(it) } + results.platforms.map { Hit.System(it) } +

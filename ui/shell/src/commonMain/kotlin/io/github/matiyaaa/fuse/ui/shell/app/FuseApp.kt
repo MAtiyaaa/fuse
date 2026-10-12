@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -24,6 +25,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import io.github.matiyaaa.fuse.ui.designsystem.effects.glassBackdropSource
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -39,6 +41,7 @@ import io.github.matiyaaa.fuse.model.RenderQuality
 import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.ui.designsystem.background.AmbientBackground
 import io.github.matiyaaa.fuse.ui.designsystem.background.CrtOverlay
+import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.HintBar
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastHost
@@ -97,6 +100,7 @@ import io.github.matiyaaa.fuse.ui.shell.home.HomeScreen
 import io.github.matiyaaa.fuse.ui.shell.library.LibraryScope
 import io.github.matiyaaa.fuse.ui.shell.library.LibraryScreen
 import io.github.matiyaaa.fuse.ui.shell.media.MediaScreen
+import io.github.matiyaaa.fuse.ui.shell.music.AudioMix
 import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
 import io.github.matiyaaa.fuse.ui.shell.music.MenuMusicPlan
 import io.github.matiyaaa.fuse.ui.shell.onboarding.OnboardingScreen
@@ -169,11 +173,14 @@ fun FuseApp(
     val owner = session ?: remember(store, platform) { FuseAppSession(platform.host, store.displaySession) }
     // Choose the environment before a preference flow, theme or interface scale is read.
     if (owner.displaySession.rehearsalOpen) {
-        RehearsalApp(owner.host, router) { owner.displaySession.rehearsalOpen = false }
+        RehearsalApp(owner.displaySession.rehearsalHost ?: owner.host, router) { owner.displaySession.rehearsalOpen = false }
         return
     }
     val prefs by store.prefs.collectAsState()
-    InterfaceSize(prefs.display.interfaceSize) {
+    // A screen calibrated on this device has its own size, edges and text.
+    val screens by platform.displays.collectAsState()
+    val calibration = prefs.calibration(screens)
+    InterfaceSize(calibration?.interfaceSize ?: prefs.display.interfaceSize) {
         CompositionLocalProvider(LocalShowcaseElsewhere provides showcaseElsewhere) {
             FuseAppContent(store, platform, router, phoneLink, safeMode, onSettled, startupIntro, keepPlace, onRehearsalFinished, owner)
         }
@@ -220,13 +227,25 @@ private fun FuseAppContent(
     LaunchedEffect(Unit) {
         // The startup animation, once per start of Fuse (a window made again doesn't replay it).
         // The very first start opens setup with its own, longer opening instead.
-        if (startupIntro && !StartupIntro.played && app.safeMode == null && stored.startupAnimation) {
+        // Started from a game's entry in Steam: straight to the game, without the animation.
+        if (startupIntro && !StartupIntro.played && app.safeMode == null && stored.startupAnimation && !(platform.startupPlay != null && stored.onboardingDone)) {
             if (stored.onboardingDone) app.intro = true else app.setupOpening = true
         }
         StartupIntro.played = true
         if (app.safeMode != null) app.showSafeMode()
         delay(StartupGuard.SETTLE_MS)
         onSettled()
+    }
+    // A game's entry in Steam started Fuse to play it, and which games are in Steam already.
+    LaunchedEffect(Unit) {
+        platform.startupPlay?.let { id -> if (app.safeMode == null) app.playOnStart(id) }
+    }
+    LaunchedEffect(Unit) { app.refreshSteamGames() }
+    // An update Fuse went back from at this start, or a library brought back for this version: said once.
+    LaunchedEffect(Unit) {
+        val note = app.store.updates.takeStartupNote() ?: return@LaunchedEffect
+        delay(StartupGuard.SETTLE_MS)
+        app.toasts.show(note, io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.WARNING, FuseIcons.History, durationMs = 9000)
     }
     // Back after a long while away (the device slept, the screen was off): the animation again, as
     // though Fuse had just been switched on. Only where this start would have played it.
@@ -251,6 +270,9 @@ private fun FuseAppContent(
         app.intro || app.standby || app.launching != null || homeFeed.playtime.currentGame != null || app.navigator.current == Route.Onboarding
     }
     val spec = prefs.theme
+    // This screen's own text size and edges, when it is calibrated.
+    val screensHere by platform.displays.collectAsState()
+    val calibration = prefs.calibration(screensHere)
     // Drawn without the graphics card, every moving frame is costly: lighter effects and calmer
     // motion (short fades, no sliding pages) keep it smooth instead of stuttering.
     val drawing by platform.drawing.collectAsState()
@@ -270,12 +292,26 @@ private fun FuseAppContent(
     if (phoneLink != null) LaunchedEffect(padFamily) { RemoteInput.padInUse(padFamily) }
     val glyphStyle = when {
         !prefs.input.autoGlyphs -> prefs.input.glyphs
-        lastSource == InputSource.KEYBOARD -> GlyphStyle.KEYBOARD
+        // A mouse in hand goes with the keyboard: its hints name keys, never a controller that isn't there.
+        lastSource == InputSource.KEYBOARD || lastSource == InputSource.POINTER -> GlyphStyle.KEYBOARD
         else -> padGlyphs(prefs.input.glyphs, padFamily)
     }
 
     // Input settings, sounds and haptics follow preferences.
     LaunchedEffect(prefs.input) { router.profile = prefs.input }
+    LaunchedEffect(prefs.input.vibration) { platform.haptics.setStrength(prefs.input.vibration) }
+    // Transfers kept to a charger or above a battery level follow the battery.
+    LaunchedEffect(store) { platform.status.collect { s -> store.transfers.power(s.batteryPercent, s.charging || s.batteryFull) } }
+    // A download or transfer of this device's finishing: one firm pulse (never for ones already done at start).
+    LaunchedEffect(store) {
+        var done: Set<String>? = null
+        store.transfers.rows.collect { rows ->
+            val now = rows.filter { it.device == null && it.item.status == io.github.matiyaaa.fuse.transfer.TransferStatus.DONE }.map { it.item.id }.toSet()
+            val before = done
+            done = now
+            if (before != null && (now - before).isNotEmpty()) platform.haptics.success()
+        }
+    }
     // L3 + R3: a screenshot, or held, a recording (where Fuse can capture its screen).
     val capture = app.capture
     DisposableEffect(router, capture, prefs.captureCombo) {
@@ -316,6 +352,17 @@ private fun FuseAppContent(
                 RemoteInput.closed(id)
             }
         }
+        // What other programs here ask to show (the Fuse Decky plugin opening a game from Steam).
+        LaunchedEffect(app) {
+            ExternalRequests.requests.collect { r ->
+                when (r) {
+                    is ExternalRequest.OpenGame -> {
+                        app.closeOverlays()
+                        app.go(Route.GameInfo(r.game))
+                    }
+                }
+            }
+        }
         // What phones ask for: text for the field open, and buttons pressed on a phone used as a controller.
         LaunchedEffect(router) {
             RemoteInput.commands.collect { c ->
@@ -334,9 +381,11 @@ private fun FuseAppContent(
     }
     // The companion screen (second display) follows what the main screen has in focus.
     if (app.shareWindowFocus) SpotlightFollows(app)
-    LaunchedEffect(prefs.sound, prefs.soundVolume) {
-        platform.sounds.setProfile(prefs.sound)
-        platform.sounds.setVolume(prefs.soundVolume)
+    LaunchedEffect(prefs.sound, prefs.soundVolume, prefs.muted, prefs.masterVolume) {
+        // One audio state: the master switch and volume sit over the interface sounds' own.
+        val audio = AudioMix.of(prefs)
+        platform.sounds.setProfile(audio.interfaceProfile)
+        platform.sounds.setVolume(audio.interfaceVolume)
     }
     // The hint line answers the hand: a pressed button's glyph flashes when it did something.
     val hintFlash = rememberHintFlash()
@@ -388,13 +437,26 @@ private fun FuseAppContent(
         glass = prefs.glass,
         highContrastFocus = prefs.highContrastFocus,
         animateChanges = true,
-        textScale = prefs.textScale,
+        textScale = calibration?.textScale ?: prefs.textScale,
+        colorVision = prefs.colorVision,
     ) {
-        CompositionLocalProvider(LocalInputRouter provides router, io.github.matiyaaa.fuse.ui.designsystem.input.LocalPointerRouter provides router, LocalUiSounds provides platform.sounds) {
+        // What glass menus, sheets and notices show through: this window's screen, without them.
+        val backdrop = io.github.matiyaaa.fuse.ui.designsystem.effects.rememberGlassBackdrop()
+        // Mirrored for a right-to-left language (or by choice), with the D-pad and shoulders following the screen.
+        val direction = layoutDirectionFor(prefs.layoutDirection)
+        SideEffect { router.mirrored = direction == androidx.compose.ui.unit.LayoutDirection.Rtl }
+        CompositionLocalProvider(
+            androidx.compose.ui.platform.LocalLayoutDirection provides direction,
+            LocalInputRouter provides router,
+            io.github.matiyaaa.fuse.ui.designsystem.input.LocalPointerRouter provides router,
+            LocalUiSounds provides platform.sounds,
+            io.github.matiyaaa.fuse.ui.designsystem.effects.LocalGlassBackdrop provides backdrop,
+        ) {
             BoxWithConstraints(
                 Modifier
                     .fillMaxSize()
                     .background(Fuse.colors.ink)
+                    .glassBackdropSource(backdrop)
                     // A touch or the pointer counts as being here, for standby.
                     .pointerInput(Unit) {
                         awaitPointerEventScope {
@@ -404,7 +466,7 @@ private fun FuseAppContent(
                                 // Whether it is a mouse, and whether it really moved, for hovering and clicking.
                                 e.changes.firstOrNull()?.let { ch ->
                                     router.pointer(
-                                        mouse = ch.type == androidx.compose.ui.input.pointer.PointerType.Mouse,
+                                        mouse = ch.type != androidx.compose.ui.input.pointer.PointerType.Touch,
                                         x = ch.position.x, y = ch.position.y,
                                         pressed = e.type == androidx.compose.ui.input.pointer.PointerEventType.Press,
                                     )
@@ -421,7 +483,7 @@ private fun FuseAppContent(
             ) {
                 // The room fills the whole screen; everything on it keeps clear of edges a TV cuts off.
                 Room(app, prefs.showHero, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds, spec.ambient, spec.wallpaper)
-                val margin = prefs.screenMargin.coerceIn(0, 10) / 100f
+                val margin = (calibration?.margin ?: prefs.screenMargin).coerceIn(0, 10) / 100f
                 // On an ultrawide screen (wider than about 21:9) the interface keeps a 21:9-like frame
                 // in the middle, so the top line, the pages and the hints stay together; the room
                 // still fills the whole screen around it.
@@ -458,6 +520,7 @@ private fun FuseAppContent(
                     HintLine(app, hintFlash)
                     QuickMenu(app)
                     OverlayHost(app)
+                    CalibrationOverlay(app)
                     ToastHost(app.toasts)
                     app.capture?.let { CaptureOverlay(it) }
                     LaunchVeilView(app)
@@ -470,7 +533,12 @@ private fun FuseAppContent(
                         if (opening) OpeningVeil.showing.value = true
                         onDispose { if (opening) OpeningVeil.showing.value = false }
                     }
-                    if (app.intro) StartupIntroOverlay(onDone = { app.intro = false; StartupIntro.lastPlayedAt = kotlin.time.Clock.System.now().toEpochMilliseconds() })
+                    if (app.intro) StartupIntroOverlay(onDone = {
+                        app.intro = false
+                        StartupIntro.lastPlayedAt = kotlin.time.Clock.System.now().toEpochMilliseconds()
+                        // Fuse is up: one pulse as the intro gives way.
+                        platform.haptics.success()
+                    })
                     if (app.setupOpening) SetupOpening(onDone = { app.setupOpening = false })
                 }
                 }
@@ -531,18 +599,18 @@ private fun FuseAppContent(
             app.choice = null
             app.scope.launch {
                 store.sync.answerSignIns(share)
-                if (share) app.toasts.show("Sharing RomM and Jellyfin with your household", ToastKind.SUCCESS, icon = FuseIcons.Key)
-                else app.toasts.show("Not shared from this device. You can turn it on in Settings, Fuse Sync", icon = FuseIcons.Key)
+                if (share) app.toasts.show("Sharing your sign-ins and keys with your household", ToastKind.SUCCESS, icon = FuseIcons.Key)
+                else app.toasts.show("Not shared from this device. You can turn it on in Settings, Fuse One", icon = FuseIcons.Key)
             }
         }
         app.choice = ChoiceSpec(
             "Share your sign-ins?",
-            "Fuse Sync can now bring RomM and Jellyfin to every device in your household, with each person's own Jellyfin account. " +
+            "Fuse One can now bring RomM, Jellyfin (with each person's own account) and your keys for art, details and RetroAchievements to every device in your household. " +
                 "Share them from this device and your others sign in by themselves. They are sealed for each device and never kept in plain text.",
             listOf(
                 MenuAction(
                     "yes", "Share From This Device", FuseIcons.Key,
-                    detail = "RomM's addresses and sign-in, Jellyfin's addresses and each person's account",
+                    detail = "RomM and Jellyfin, each person's Jellyfin account, and keys like SteamGridDB's",
                     onSelect = { answer(true) },
                 ),
                 MenuAction(
@@ -591,6 +659,10 @@ private fun BoxScope.TopLine(app: AppState, platform: PlatformUi, tabs: List<Des
         showBluetooth = prefs.showBluetooth,
         onSelect = { app.focusZone = FocusZone.CONTENT; app.selectTab(it) },
         onStatusClick = { app.quickMenuOpen = true },
+        lifted = app.liftedTab,
+        onLift = { app.liftTab(it) },
+        onMoveLifted = { by -> app.moveLiftedTab(by) },
+        onDrop = { app.dropTab() },
         activities = hudActivities(app),
         profile = hudProfile(app),
         downloads = rememberHudDownloads(app),
@@ -603,8 +675,15 @@ private fun BoxScope.TopLine(app: AppState, platform: PlatformUi, tabs: List<Des
  */
 @Composable
 private fun BoxScope.HintLine(app: AppState, hintFlash: HintFlash) {
+    // An options sheet or a choice over the page answers to Confirm and Back, wherever it was opened:
+    // its hints, not the page's under it.
+    val hints = when {
+        app.contextMenu != null || app.choice != null -> MENU_HINTS
+        app.liftedTab != null -> LIFTED_TAB_HINTS
+        else -> app.hints
+    }
     // Content fades out under the hint line, so hints never sit on top of tiles.
-    if (app.hints.isNotEmpty()) {
+    if (hints.isNotEmpty()) {
         Box(
             Modifier
                 .align(Alignment.BottomCenter)
@@ -613,8 +692,11 @@ private fun BoxScope.HintLine(app: AppState, hintFlash: HintFlash) {
                 .background(Brush.verticalGradient(0f to Color.Transparent, 0.55f to Fuse.colors.ink.copy(alpha = 0.78f), 1f to Fuse.colors.ink.copy(alpha = 0.94f))),
         )
     }
-    HintBar(app.hints, Modifier.align(Alignment.BottomEnd).padding(horizontal = Space.gutter, vertical = Space.s), flash = hintFlash)
+    HintBar(hints, Modifier.align(Alignment.BottomEnd).padding(horizontal = Space.gutter, vertical = Space.s), flash = hintFlash)
 }
+
+private val MENU_HINTS = listOf(Hint(HintButton.CONFIRM, "Select"), Hint(HintButton.BACK, "Back"))
+private val LIFTED_TAB_HINTS = listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Done"))
 
 /** The background: theme renderer, then the selected item's art with video after it rests. */
 @Composable
@@ -862,6 +944,7 @@ private fun PushedPages(app: AppState, current: Route, direction: NavDirection, 
             Route.Themes -> io.github.matiyaaa.fuse.ui.shell.settings.ThemesScreen(app)
             Route.Onboarding -> OnboardingScreen(app)
             is Route.FolderBrowser -> FolderBrowserScreen(app, route.game)
+            is Route.Manual -> io.github.matiyaaa.fuse.ui.shell.game.ManualScreen(app, route)
             is Route.GameContent -> io.github.matiyaaa.fuse.ui.shell.game.GameContentScreen(app, route.game)
             is Route.PickFile -> io.github.matiyaaa.fuse.ui.shell.files.FilePickerScreen(app, route.purpose, route.locate, route.licence)
             is Route.StoreApp -> io.github.matiyaaa.fuse.ui.shell.addons.StoreAppScreen(app, route.key)
@@ -869,7 +952,6 @@ private fun PushedPages(app: AppState, current: Route, direction: NavDirection, 
             is Route.MediaLibrary -> io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaLibraryScreen(app, route.id, route.name, route.kind)
             Route.MediaSearch -> io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaSearchScreen(app)
             Route.JellyfinSettings -> io.github.matiyaaa.fuse.ui.shell.jellyfin.JellyfinSettingsScreen(app)
-            Route.SyncSettings -> io.github.matiyaaa.fuse.ui.shell.sync.SyncSettingsScreen(app)
             Route.SyncthingSettings -> io.github.matiyaaa.fuse.ui.shell.sync.SyncthingScreen(app)
             Route.SaveFolders -> io.github.matiyaaa.fuse.ui.shell.sync.SaveFoldersScreen(app)
             is Route.SyncSetup -> io.github.matiyaaa.fuse.ui.shell.sync.SyncSetupScreen(app, route.host)
@@ -878,6 +960,7 @@ private fun PushedPages(app: AppState, current: Route, direction: NavDirection, 
             Route.Downloads -> io.github.matiyaaa.fuse.ui.shell.downloads.DownloadsScreen(app)
             Route.OfflineMedia -> io.github.matiyaaa.fuse.ui.shell.jellyfin.OfflineMediaScreen(app)
             Route.RommSettings -> io.github.matiyaaa.fuse.ui.shell.romm.RommSettingsScreen(app)
+            Route.JellyfinSetup -> io.github.matiyaaa.fuse.ui.shell.jellyfin.JellyfinSetupScreen(app)
             is Route.RommSetup -> io.github.matiyaaa.fuse.ui.shell.romm.RommSetupScreen(app, route.pairing)
             is Route.RommGames -> io.github.matiyaaa.fuse.ui.shell.romm.RommGamesScreen(app, route.slug, route.name, route.collection)
             Route.HouseholdLibrary -> io.github.matiyaaa.fuse.ui.shell.reach.HouseholdLibraryScreen(app)
@@ -898,7 +981,7 @@ internal fun hudPage(stack: List<Route>): HudButton? {
         when (route) {
             Route.Downloads -> return HudButton.DOWNLOADS
             Route.Search -> return HudButton.SEARCH
-            is Route.Settings, is Route.PlatformSettings, Route.Controls, Route.Licenses, is Route.ReleaseNotes, Route.Themes, Route.Storage, Route.PhoneLink, Route.JellyfinSettings, Route.SyncSettings, Route.SyncthingSettings, Route.SaveFolders, is Route.SyncSetup, Route.RommSettings, is Route.RommSetup ->
+            is Route.Settings, is Route.PlatformSettings, Route.Controls, Route.Licenses, is Route.ReleaseNotes, Route.Themes, Route.Storage, Route.PhoneLink, Route.JellyfinSettings, Route.SyncthingSettings, Route.SaveFolders, is Route.SyncSetup, Route.RommSettings, is Route.RommSetup, Route.JellyfinSetup ->
                 return HudButton.SETTINGS
             else -> Unit
         }
@@ -916,7 +999,10 @@ private fun ShellInput(app: AppState) {
     val tabs = rememberTabs(app, prefs)
     val onboarding = app.navigator.current == Route.Onboarding
     val downloads = rememberHudDownloads(app) != null
-    InputLayer(priority = LayerPriority.SHELL) { e ->
+    // Leaving the top line (or a page opening over it) puts down whatever tab was picked up.
+    LaunchedEffect(app.focusZone, app.overlayOpen) { if (app.focusZone != FocusZone.TABS || app.overlayOpen) app.dropTab() }
+    // On the top line, holding confirm on a tab picks it up to move it along the line.
+    InputLayer(priority = LayerPriority.SHELL, longPress = app.focusZone == FocusZone.TABS && app.hudButton == null) { e ->
         if (onboarding) return@InputLayer NavResult.IGNORED
         val active = app.navigator.root?.destination
         fun cycle(delta: Int): NavResult {
@@ -928,6 +1014,13 @@ private fun ShellInput(app: AppState) {
         if (app.focusZone == FocusZone.TABS) {
             val button = app.hudButton
             fun leave(): NavResult { app.focusZone = FocusZone.CONTENT; app.hudButton = null; return NavResult.MOVED }
+            // A tab picked up moves along the line in place, as Addons' tabs do, until put down.
+            if (app.liftedTab != null) return@InputLayer when (e.action) {
+                NavAction.LEFT -> if (app.moveLiftedTab(-1)) NavResult.MOVED else NavResult.BLOCKED
+                NavAction.RIGHT -> if (app.moveLiftedTab(1)) NavResult.MOVED else NavResult.BLOCKED
+                NavAction.SELECT, NavAction.BACK, NavAction.REORDER, NavAction.DOWN -> { app.dropTab(); NavResult.ACTIVATED }
+                else -> NavResult.BLOCKED
+            }
             return@InputLayer when (e.action) {
                 // After the last tab the stick moves on to Search and Settings.
                 NavAction.LEFT -> when (button) {
@@ -962,6 +1055,7 @@ private fun ShellInput(app: AppState) {
                     null -> if (tabs.lastOrNull() == active) { app.hudButton = if (downloads) HudButton.DOWNLOADS else HudButton.SEARCH; NavResult.MOVED } else cycle(1)
                 }
                 NavAction.SELECT -> if (button != null) { leave(); app.runHudButton(button); NavResult.ACTIVATED } else leave()
+                NavAction.REORDER -> if (button == null && active != null) { app.liftTab(active); NavResult.ACTIVATED } else NavResult.BLOCKED
                 NavAction.DOWN -> leave()
                 NavAction.BACK -> { leave(); NavResult.CONSUMED }
                 NavAction.UP -> NavResult.BLOCKED
@@ -1070,7 +1164,8 @@ private fun MenuMusic(app: AppState, player: MenuMusicPlayer?) {
     player ?: return
     val prefs by app.store.prefs.collectAsState()
     val home by app.store.homeFeed.collectAsState()
-    val music = prefs.music
+    // The music as the master switch and volume let it be heard.
+    val music = AudioMix.of(prefs).music
     // Shuffle: the song it picked and the ones it played lately, so none comes back too soon. A song
     // that ends picks the next; the player reports it from its own thread.
     var shuffled by remember { mutableStateOf<String?>(null) }
@@ -1207,7 +1302,7 @@ private fun hudActivities(app: AppState): List<HudActivity> {
                 progress = f.fraction.takeIf { f.total > 0 },
             ) { app.go(Route.Settings("media")) })
         }
-        // Transfers (Cartridge's downloads and uploads, Store installs, Fuse's own update, Fuse RomM,
+        // Transfers (Cartridge's downloads and uploads, Store installs, Fuse's own update, RomM,
         // Jellyfin) all live behind the Downloads button now; only what isn't one stays here.
         when (val u = update) {
             is UpdateState.Downloading -> Unit
@@ -1344,4 +1439,12 @@ private fun RehearsalApp(host: io.github.matiyaaa.fuse.model.Host, parentRouter:
     }
     val owner = remember { FuseAppSession(host, store.displaySession, playerSession = null, shareWindowFocus = false) }
     FuseApp(store, platform, router, onRehearsalFinished = finish, session = owner)
+}
+
+/** The way Fuse lays itself out for [choice]: as the system's language reads, or as chosen. */
+@Composable
+internal fun layoutDirectionFor(choice: io.github.matiyaaa.fuse.model.LayoutDirectionChoice): androidx.compose.ui.unit.LayoutDirection = when (choice) {
+    io.github.matiyaaa.fuse.model.LayoutDirectionChoice.LEFT_TO_RIGHT -> androidx.compose.ui.unit.LayoutDirection.Ltr
+    io.github.matiyaaa.fuse.model.LayoutDirectionChoice.RIGHT_TO_LEFT -> androidx.compose.ui.unit.LayoutDirection.Rtl
+    io.github.matiyaaa.fuse.model.LayoutDirectionChoice.AUTOMATIC -> androidx.compose.ui.platform.LocalLayoutDirection.current
 }

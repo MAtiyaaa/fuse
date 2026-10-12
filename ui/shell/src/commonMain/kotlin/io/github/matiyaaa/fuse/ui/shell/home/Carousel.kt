@@ -115,7 +115,7 @@ internal val WidgetKind.carouselPeeks: Boolean
 
 private val CarouselKinds = setOf(
     WidgetKind.CONTINUE_PLAYING, WidgetKind.SYSTEMS, WidgetKind.RECENTLY_ADDED, WidgetKind.RECENTLY_PLAYED,
-    WidgetKind.FAVORITES, WidgetKind.PINNED_GAMES, WidgetKind.COLLECTIONS,
+    WidgetKind.FAVORITES, WidgetKind.PINNED_GAMES, WidgetKind.COLLECTIONS, WidgetKind.FOR_YOU,
     WidgetKind.JELLYFIN_CONTINUE, WidgetKind.JELLYFIN_NEXT_UP, WidgetKind.JELLYFIN_RECENTLY_ADDED,
     WidgetKind.JELLYFIN_FAVORITES, WidgetKind.JELLYFIN_MOVIES, WidgetKind.JELLYFIN_MUSIC,
 )
@@ -196,23 +196,28 @@ internal fun Carousel(
         val first = (base - 1).coerceAtLeast(0)
         val last = (base + 2).coerceAtMost(count - 1)
 
+        val claim = LocalScrollClaim.current
         Box(
             Modifier.fillMaxSize()
-                // A mouse wheel (or a two-finger swipe on a trackpad) turns it one card per notch.
-                .pointerInput(count) {
+                // A mouse wheel turns it one card per notch; a two-finger swipe on a trackpad, one
+                // card per swipe ([ScrollSteps]). Up and down on a trackpad are left to the page.
+                .pointerInput(count, claim) {
                     if (count <= 1) return@pointerInput
-                    var pending = 0f
+                    val steps = ScrollSteps()
                     awaitPointerEventScope {
                         while (true) {
                             val e = awaitPointerEvent()
                             if (e.type != androidx.compose.ui.input.pointer.PointerEventType.Scroll) continue
-                            val d = e.changes.firstOrNull()?.scrollDelta ?: continue
-                            pending += if (kotlin.math.abs(d.x) > kotlin.math.abs(d.y)) d.x else d.y
-                            if (kotlin.math.abs(pending) >= 1f) {
-                                val by = if (pending > 0f) 1 else -1
-                                pending = 0f
-                                if (state.step(by, nudge = false)) e.changes.forEach { it.consume() }
-                            }
+                            val change = e.changes.firstOrNull() ?: continue
+                            val d = change.scrollDelta
+                            val across = kotlin.math.abs(d.x) > kotlin.math.abs(d.y)
+                            val delta = if (across) d.x else d.y
+                            val wheel = delta != 0f && delta == kotlin.math.round(delta)
+                            if (!across && !wheel) continue
+                            claim?.taken = true
+                            e.changes.forEach { it.consume() }
+                            val by = steps.feed(delta, change.uptimeMillis)
+                            if (by != 0) state.step(by, nudge = false)
                         }
                     }
                 }
@@ -386,7 +391,7 @@ internal fun CarouselDots(count: Int, position: () -> Float, color: Color = Fuse
 internal fun BoxScope.CarouselHeader(icon: ImageVector, label: String, dots: @Composable () -> Unit, compact: Boolean = false) {
     val c = Fuse.colors
     Box(
-        Modifier.fillMaxWidth().height(if (compact) 44.dp else 64.dp)
+        Modifier.fillMaxWidth().height(if (compact) CAROUSEL_HEADER_COMPACT else CAROUSEL_HEADER)
             .background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.34f), 1f to Color.Transparent)),
     )
     // The name on the left, always whole (set smaller when the card is narrow, never cut short), the
@@ -407,6 +412,10 @@ internal fun BoxScope.CarouselHeader(icon: ImageVector, label: String, dots: @Co
         dots()
     }
 }
+
+/** How tall a carousel's header is (its name and dots over the art), and on a small or narrow card. */
+internal val CAROUSEL_HEADER = 64.dp
+internal val CAROUSEL_HEADER_COMPACT = 44.dp
 
 /** How dark the next item waits, before it comes forward. */
 private const val PEEK_DIM = 0.5f

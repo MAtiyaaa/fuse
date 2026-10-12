@@ -14,7 +14,7 @@ data class MirrorResult(val added: Int, val changed: Int, val removed: Int, val 
 data class MirrorProgress(val label: String, val done: Int, val total: Int?)
 
 /**
- * Fuse RomM's copy of a server's library, in Fuse's own database, so it opens at once, works
+ * RomM's copy of a server's library, in Fuse's own database, so it opens at once, works
  * offline and scales to very large libraries: games are read and written a page at a time (never
  * the whole answer in memory), and only what changed since last time is asked for where the server
  * can. A game the server stopped listing stays, marked gone, never deleted: a server that is down
@@ -218,7 +218,7 @@ class RommMirror(
         q.collections(server).executeAsList().map { c -> RommCollection(c.id, c.name, c.smart == 1L, c.rom_ids.split(',').mapNotNull { it.toLongOrNull() }, c.cover) }
     }
 
-    /** Forgets everything about [server] (the person removed it, not just turned Fuse RomM off). */
+    /** Forgets everything about [server] (the person removed it, not just turned RomM off). */
     suspend fun forget(server: String) = withContext(dispatcher) {
         db.transaction {
             q.forgetRoms(server)

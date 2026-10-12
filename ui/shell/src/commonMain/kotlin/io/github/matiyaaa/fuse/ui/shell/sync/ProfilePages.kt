@@ -238,21 +238,21 @@ private fun MergePage(app: AppState, svc: SyncService, m: ProfileMerge) {
         val names = left.joinToString(", ") { it.name }
         app.confirm = ConfirmSpec(
             if (left.size == 1) "Leave out ${left[0].name}?" else "Leave out ${left.size} profiles?",
-            "$names ${if (left.size == 1) "leaves" else "leave"} this device. Their saves are kept as plain files in Fuse Sync's kept folder.",
+            "$names ${if (left.size == 1) "leaves" else "leave"} this device. Their saves are kept as plain files in Fuse One's kept folder.",
             "Leave Out", destructive = true,
         ) { withPins(::bring) }
     }
     fun onlyTheirs() {
         app.confirm = ConfirmSpec(
             "Use only ${m.hostName}'s profiles?",
-            "${m.here.joinToString(", ") { it.name }} ${if (m.here.size == 1) "leaves" else "leave"} this device. Their saves are kept as plain files in Fuse Sync's kept folder.",
+            "${m.here.joinToString(", ") { it.name }} ${if (m.here.size == 1) "leaves" else "leave"} this device. Their saves are kept as plain files in Fuse One's kept folder.",
             "Use Theirs", destructive = true,
         ) { bring(m.here.associate { it.id to MergeChoice.LeaveOut }) }
     }
     fun notNow() {
         app.confirm = ConfirmSpec(
             "Stop joining ${m.hostName}?",
-            "This device keeps its own profiles and isn't linked. Join again any time from Settings, Addons, Fuse Sync.",
+            "This device keeps its own profiles and isn't linked. Join again any time from Settings, Fuse One.",
             "Stop Joining",
         ) { app.scope.launch { svc.cancelMerge() } }
     }

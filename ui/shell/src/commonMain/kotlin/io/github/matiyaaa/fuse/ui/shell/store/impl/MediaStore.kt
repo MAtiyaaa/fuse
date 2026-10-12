@@ -78,7 +78,20 @@ internal class DefaultMediaOps(
     private var cached: Pair<Set<ScrapeProviderId>, ScrapeCoordinator>? = null
 
     private val progress = MutableStateFlow<FillProgress?>(null)
-    override val fillProgress: StateFlow<FillProgress?> = progress
+
+    /**
+     * The fill as it stands, with games since hidden or removed from Fuse left out of those that
+     * need a choice: a game taken out of the library never asks for anything again.
+     */
+    override val fillProgress: StateFlow<FillProgress?> = combine(
+        progress,
+        ctx.data.games.observeHidden(),
+        ctx.data.games.observeRemoved(),
+    ) { p, hidden, removed ->
+        if (p == null || p.needsYou.isEmpty()) return@combine p
+        val gone = HashSet<Long>(hidden.size + removed.size).apply { hidden.forEach { add(it.id.value) }; removed.forEach { add(it.id.value) } }
+        if (p.needsYou.none { it.game.value in gone }) p else p.copy(needsYou = p.needsYou.filter { it.game.value !in gone })
+    }.stateIn(ctx.scope, SharingStarted.Eagerly, null)
 
     private val systemArt = SystemArtStore(ctx)
     override val systemArtProgress: StateFlow<FillProgress?> = systemArt.progress
@@ -254,7 +267,7 @@ internal class DefaultMediaOps(
         return SearchTitle(current = searchAs(g) ?: defaultSearchTitle(g), custom = searchAs(g) != null, default = defaultSearchTitle(g))
     }
 
-    private suspend fun request(game: Game, kinds: Set<MediaKind>, metadata: Boolean, collectAll: Boolean, demand: io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand = io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand.VISIBLE): Pair<ScrapeRequest, ScrapeCoordinator> {
+    private suspend fun request(game: Game, kinds: Set<MediaKind>, metadata: Boolean, collectAll: Boolean, demand: io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand = io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand.VISIBLE, fresh: Boolean = false): Pair<ScrapeRequest, ScrapeCoordinator> {
         val (configured, coordinator) = coordinator()
         val strictness = ctx.data.scopedSettings.resolve(ScopedSettings.Matching, game.platformId, game.id).value
         val request = ScrapeRequest(
@@ -266,6 +279,7 @@ internal class DefaultMediaOps(
             wantMetadata = metadata,
             collectAllArtwork = collectAll,
             demand = demand,
+            fresh = fresh,
         )
         return request to coordinator
     }
@@ -554,7 +568,7 @@ internal class DefaultMediaOps(
                     when (val tried = coveredBy(g, job, kinds, details, configured)) {
                         null -> true
                         else -> {
-                            if (tried.choice) waiting += FillChoice(g.id, g.displayTitle)
+                            if (tried.choice && !g.hidden) waiting += FillChoice(g.id, g.displayTitle)
                             false
                         }
                     }
@@ -636,13 +650,15 @@ internal class DefaultMediaOps(
      * remembered when a source failed or was resting, since it may have had the rest.
      */
     private suspend fun fillOne(game: Game, job: FillJob, kinds: Set<MediaKind>, detailSources: Boolean, configured: Set<ScrapeProviderId>): GameFill {
+        // Looking by itself waits while a game runs or the device has just woken; asked-for fills don't.
+        if (job.auto) ctx.governor.await { it.artwork }
         val owner = MediaOwner.OfGame(game.id)
         val plan = FillPlanner.plan(media.get(owner), job.mode, kinds)
         // Screenshots come along when the game is searched anyway, but never cause a search.
         val needed = if (job.mode == MediaFillMode.FILL_MISSING) plan.fetch intersect MediaKind.needed(kinds) else plan.fetch
         val wantDetails = detailSources && job.wantsDetails && game.metadata.lacksDetails()
         if (needed.isEmpty() && !wantDetails) return GameFill()
-        val (request, coordinator) = request(game, plan.fetch, metadata = true, collectAll = false, demand = if (job.game != null) io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand.NEW_GAME else io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand.BACKGROUND)
+        val (request, coordinator) = request(game, plan.fetch, metadata = true, collectAll = false, demand = if (job.game != null) io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand.NEW_GAME else io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand.BACKGROUND, fresh = job.game != null)
         val remember = job.remembers
         val key = game.id.value.toString()
         if (job.game != null) ctx.data.cache.remove(FILL_TRIED, key)

@@ -232,6 +232,16 @@ private fun jellyfinRows(
         return@buildList
     }
 
+    // Not signed in yet: the guided page does it all, step by step.
+    if (state.account == null) {
+        add(MenuAction(
+            "setup", "Set Up Jellyfin", FuseIcons.Sparkles,
+            detail = "Find your server, then sign in, on a page of its own",
+            trailing = Trailing.Chevron,
+            onSelect = { app.go(io.github.matiyaaa.fuse.ui.shell.app.Route.JellyfinSetup) },
+        ))
+    }
+
     // Server ---------------------------------------------------------------------------------------
     val server = "Server"
     add(app.choiceRow(

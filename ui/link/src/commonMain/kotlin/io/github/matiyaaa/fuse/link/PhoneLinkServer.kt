@@ -1,5 +1,7 @@
 package io.github.matiyaaa.fuse.link
 
+import io.github.matiyaaa.fuse.data.settings.ExtensionScope
+import io.github.matiyaaa.fuse.data.settings.Extensions
 import io.github.matiyaaa.fuse.data.settings.SecretStore
 import io.github.matiyaaa.fuse.ui.shell.app.RemoteInput
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
@@ -44,6 +46,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -73,6 +76,8 @@ class PhoneLinkServer(
     /** The device's screenshots and recordings; null where Fuse takes none (the desktop for now). */
     captures: LinkCaptures? = null,
     private val clock: () -> Long = { kotlin.time.Clock.System.now().toEpochMilliseconds() },
+    /** The port tried first; the next nine follow when it is taken. */
+    private val basePort: Int = PORT,
 ) : PhoneLinkControl {
     internal val auth = LinkAuth(secrets, clock)
     internal val api = LinkApi(store, auth, deviceName, version, readUri, capturesAvailable = captures != null)
@@ -148,12 +153,25 @@ class PhoneLinkServer(
         if (server != null) return@withLock
         var lastError: Throwable? = null
         // The usual port, or the next free one (Cartridge's own remote uses 47280 and 47281).
-        for (candidate in PORT until PORT + 10) {
+        for (candidate in basePort until basePort + 10) {
+            // The server binds its port only after starting, and a port another program holds fails
+            // there, out of reach (Phone Link would wait forever): so a port is used only once it is
+            // known to be free, and the server only once it says it is listening on it.
+            if (!withContext(ioDispatcher) { portFree(candidate) }) {
+                lastError = IllegalStateException("port $candidate is in use")
+                continue
+            }
             try {
                 // Starting blocks its thread until the server is bound, and stopping can block for a
                 // second: both on the threads made for blocking, never the shared computation ones
                 // the server's own start-up (and everything else in Fuse) runs on.
                 val s = withContext(ioDispatcher) { launchServer(candidate) }
+                val bound = runCatching { withTimeoutOrNull(BIND_WAIT_MS) { s.engine.resolvedConnectors().firstOrNull()?.port } }.getOrNull()
+                if (bound != candidate) {
+                    withContext(ioDispatcher) { runCatching { s.stop(0, 200) } }
+                    lastError = IllegalStateException("port $candidate couldn't be listened on")
+                    continue
+                }
                 server = s
                 port = candidate
                 refreshState(error = null)
@@ -164,7 +182,7 @@ class PhoneLinkServer(
                 lastError = e
             }
         }
-        refreshState(error = "Phone Link couldn't start: no free port near $PORT (${lastError?.message ?: "unknown"})")
+        refreshState(error = "Phone Link couldn't start: no free port near $basePort (${lastError?.message ?: "unknown"})")
     }
 
     /**
@@ -247,26 +265,26 @@ class PhoneLinkServer(
                 scope.launch { refreshState() }
             }
 
-            get("/api/now") { call.signedIn { call.json(api.now()) } }
-            get("/api/systems") { call.signedIn { call.json(api.systems()) } }
+            get("/api/now") { call.signedIn(ExtensionScope.STATUS) { call.json(api.now()) } }
+            get("/api/systems") { call.signedIn(ExtensionScope.LIBRARY) { call.json(api.systems()) } }
             get("/api/games") {
-                call.signedIn {
+                call.signedIn(ExtensionScope.LIBRARY) {
                     val q = call.request.queryParameters
                     call.json(api.games(q["query"].orEmpty(), q["system"].orEmpty(), q["sort"].orEmpty(), q["offset"]?.toIntOrNull() ?: 0, q["limit"]?.toIntOrNull() ?: 60))
                 }
             }
-            get("/api/games/{id}") { call.signedIn { call.reply(api.game(call.gameId())) } }
-            put("/api/games/{id}/search-as") { call.signedIn { call.reply(api.searchAs(call.gameId(), call.body())) } }
-            get("/api/games/{id}/identify") { call.signedIn { call.reply(api.identify(call.gameId())) } }
-            post("/api/games/{id}/identify") { call.signedIn { call.reply(api.accept(call.gameId(), call.body())) } }
-            get("/api/games/{id}/art/{kind}") { call.signedIn { call.reply(api.artOptions(call.gameId(), call.parameters["kind"].orEmpty())) } }
-            post("/api/games/{id}/art/{kind}") { call.signedIn { call.reply(api.applyArt(call.gameId(), call.parameters["kind"].orEmpty(), call.body())) } }
-            post("/api/games/{id}/fill") { call.signedIn { call.reply(api.fillGame(call.gameId())) } }
-            post("/api/fill") { call.signedIn { call.reply(api.fill(call.body())) } }
-            post("/api/fill/cancel") { call.signedIn { call.reply(api.cancelFill()) } }
-            post("/api/system-art") { call.signedIn { call.reply(api.systemArt()) } }
+            get("/api/games/{id}") { call.signedIn(ExtensionScope.LIBRARY) { call.reply(api.game(call.gameId())) } }
+            put("/api/games/{id}/search-as") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.searchAs(call.gameId(), call.body())) } }
+            get("/api/games/{id}/identify") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.identify(call.gameId())) } }
+            post("/api/games/{id}/identify") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.accept(call.gameId(), call.body())) } }
+            get("/api/games/{id}/art/{kind}") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.artOptions(call.gameId(), call.parameters["kind"].orEmpty())) } }
+            post("/api/games/{id}/art/{kind}") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.applyArt(call.gameId(), call.parameters["kind"].orEmpty(), call.body())) } }
+            post("/api/games/{id}/fill") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.fillGame(call.gameId())) } }
+            post("/api/fill") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.fill(call.body())) } }
+            post("/api/fill/cancel") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.cancelFill()) } }
+            post("/api/system-art") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.systemArt()) } }
             get("/api/img/{token}") {
-                call.signedIn {
+                call.signedIn(ExtensionScope.LIBRARY) {
                     val image = api.image(call.parameters["token"].orEmpty())
                     if (image == null) {
                         call.json(buildJsonObject { put("error", "No such image.") }, HttpStatusCode.NotFound)
@@ -276,18 +294,18 @@ class PhoneLinkServer(
                     }
                 }
             }
-            get("/api/events") { call.signedIn { call.events() } }
+            get("/api/events") { call.signedIn(ExtensionScope.STATUS) { call.events() } }
 
             // Typing from the phone into the field open on the device, and the phone as a controller.
-            get("/api/input") { call.signedIn { call.json(RemoteApi.field(RemoteInput.field.value)) } }
-            put("/api/input/text") { call.signedIn { call.reply(RemoteApi.setText(call.body())) } }
-            post("/api/input/done") { call.signedIn { call.reply(RemoteApi.submit(call.body())) } }
-            post("/api/input/cancel") { call.signedIn { call.reply(RemoteApi.cancel(call.body())) } }
-            post("/api/pad") { call.signedIn { call.reply(RemoteApi.pad(call.body(), store.prefs.value.phoneLinkController)) } }
+            get("/api/input") { call.signedIn(ExtensionScope.CONTROL) { call.json(RemoteApi.field(RemoteInput.field.value)) } }
+            put("/api/input/text") { call.signedIn(ExtensionScope.CONTROL) { call.reply(RemoteApi.setText(call.body())) } }
+            post("/api/input/done") { call.signedIn(ExtensionScope.CONTROL) { call.reply(RemoteApi.submit(call.body())) } }
+            post("/api/input/cancel") { call.signedIn(ExtensionScope.CONTROL) { call.reply(RemoteApi.cancel(call.body())) } }
+            post("/api/pad") { call.signedIn(null) { call.reply(RemoteApi.pad(call.body(), store.prefs.value.phoneLinkController)) } }
 
             // Screenshots and recordings: look and download, never change or delete.
             get("/api/captures") {
-                call.signedIn {
+                call.signedIn(ExtensionScope.CAPTURES) {
                     val s = share
                     if (s == null) {
                         call.json(buildJsonObject { put("available", false); putJsonArray("items") {} })
@@ -297,7 +315,7 @@ class PhoneLinkServer(
                 }
             }
             get("/api/captures/{id}/thumb") {
-                call.signedIn {
+                call.signedIn(ExtensionScope.CAPTURES) {
                     val bytes = share?.thumbnail(call.parameters["id"].orEmpty())
                     if (bytes == null) {
                         call.json(buildJsonObject { put("error", "No such picture.") }, HttpStatusCode.NotFound)
@@ -308,7 +326,7 @@ class PhoneLinkServer(
                 }
             }
             get("/api/captures/{id}") {
-                call.signedIn {
+                call.signedIn(ExtensionScope.CAPTURES) {
                     val s = share
                     val capture = s?.capture(call.parameters["id"].orEmpty())
                     if (s == null || capture == null) {
@@ -319,7 +337,7 @@ class PhoneLinkServer(
                 }
             }
             post("/api/captures/download") {
-                call.signedIn {
+                call.signedIn(ExtensionScope.CAPTURES) {
                     val s = share ?: return@signedIn call.json(buildJsonObject { put("error", "There are no captures on this device.") }, HttpStatusCode.NotFound)
                     val ids = ((call.body() as? JsonObject)?.get("ids") as? JsonArray)
                         ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
@@ -452,9 +470,17 @@ class PhoneLinkServer(
         if (text.length > MAX_BODY) null else if (text.isBlank()) null else LinkJson.parseToJsonElement(text)
     }.getOrNull()
 
-    private suspend fun ApplicationCall.signedIn(block: suspend () -> Unit) {
+    /**
+     * Runs [block] for a signed-in phone that may do [scope] (Settings, Accounts, Phone Link); refuses
+     * otherwise. The Remote's buttons (no scope) follow their own switch there.
+     */
+    private suspend fun ApplicationCall.signedIn(scope: ExtensionScope?, block: suspend () -> Unit) {
         if (!auth.isSignedIn(token())) {
             json(buildJsonObject { put("error", "Sign in") }, HttpStatusCode.Unauthorized)
+            return
+        }
+        if (scope != null && !Extensions.allows(store.prefs.value.extensions, Extensions.PHONE_LINK, scope)) {
+            json(buildJsonObject { put("error", Extensions.refusal(Extensions.PHONE_LINK, scope)); put("scope", scope.name) }, HttpStatusCode.Forbidden)
             return
         }
         block()
@@ -513,6 +539,9 @@ class PhoneLinkServer(
 
     companion object {
         const val PORT = 47300
+
+        /** How long a started server has to say it is listening. */
+        const val BIND_WAIT_MS = 5_000L
         private const val COOKIE = "fuse_session"
         private const val MAX_BODY = 64 * 1024L
         private const val COPY_BUFFER = 256 * 1024

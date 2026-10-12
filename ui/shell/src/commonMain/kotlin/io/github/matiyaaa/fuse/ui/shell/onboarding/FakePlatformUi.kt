@@ -27,6 +27,7 @@ class FakePlatformUi(override val host: Host, private val leave: () -> Unit = {}
         override suspend fun pickImage(title: String) = "/rehearsal/picked-image.png"
         override suspend fun pickAudio(title: String) = PickedFile("/rehearsal/picked-song.ogg", "Rehearsal song")
         override suspend fun pickSave(title: String) = "/rehearsal/picked-save.zip"
+        override suspend fun pickPatch(title: String): String? = null
         override fun refresh() = Unit
     }
     override val quick = object : QuickControls {
@@ -42,12 +43,22 @@ class FakePlatformUi(override val host: Host, private val leave: () -> Unit = {}
         override fun openControllerSettings() = Unit
     }
     override val video: VideoPreview? = null
-    override val appVersion = "0.4.1 rehearsal"
-    override val steam = if (host == Host.LINUX) object : SteamIntegration {
+    override val appVersion = "0.4.2 rehearsal"
+    // Pretend Steam on every computer, and pretend Decky on Linux only (as the real ones are):
+    // nothing they "do" leaves the rehearsal.
+    override val steam = if (host != Host.ANDROID) object : SteamIntegration {
         private var present = false
         override val gameMode = false
         override suspend fun added() = present
         override suspend fun addFuse(): Result<String> { present = true; return Result.success("Rehearsal Steam entry added") }
+        override suspend fun removeFuse(): Result<String> { present = false; return Result.success("Rehearsal Steam entry removed") }
+    } else null
+    override val decky = if (host == Host.LINUX) object : io.github.matiyaaa.fuse.ui.shell.platform.DeckyIntegration {
+        private var plugin = false
+        override suspend fun state() = io.github.matiyaaa.fuse.ui.shell.platform.DeckyState(loader = true, plugin = plugin, pluginVersion = if (plugin) "rehearsal" else null, bundledVersion = "rehearsal", canInstall = true)
+        override suspend fun install(): Result<String> { plugin = true; return Result.success("Rehearsal plugin installed") }
+        override suspend fun remove(): Result<String> { plugin = false; return Result.success("Rehearsal plugin removed") }
+        override suspend fun stage(): String? = null
     } else null
     override fun openUrl(url: String) = Unit
     override fun restart() = Unit

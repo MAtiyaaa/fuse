@@ -3,6 +3,40 @@
 // graphics layer it draws through (see docs/fuseline.md).
 plugins {
     id("fuse.kmp.compose")
+    `maven-publish`
+}
+
+// Fuseline is published on its own (docs/fuseline-sdk.md): any Compose Multiplatform app can use it
+// without anything else of Fuse's. Its version is its own, separate from Fuse's.
+group = "io.github.matiyaaa.fuseline"
+version = providers.gradleProperty("fuseline.version").getOrElse("0.0.0")
+
+publishing {
+    publications.withType<MavenPublication>().configureEach {
+        pom {
+            name.set("Fuseline")
+            description.set("Fuse's animation engine for Compose Multiplatform: continuity-first animated values, springs, curves, gestures, transitions, timelines and cues.")
+            url.set("https://github.com/MAtiyaaa/fuse/blob/main/docs/fuseline-sdk.md")
+            licenses {
+                license {
+                    name.set("GPL-3.0-or-later")
+                    url.set("https://www.gnu.org/licenses/gpl-3.0.html")
+                }
+            }
+            scm { url.set("https://github.com/MAtiyaaa/fuse") }
+        }
+    }
+    repositories {
+        // GitHub Packages, from the release workflow (GITHUB_ACTOR and GITHUB_TOKEN); publishToMavenLocal works anywhere.
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/MAtiyaaa/fuse")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR")
+                password = System.getenv("GITHUB_TOKEN")
+            }
+        }
+    }
 }
 
 kotlin {
@@ -22,7 +56,7 @@ kotlin {
 tasks.withType<Test>().configureEach {
     systemProperty("fuse.bench", providers.gradleProperty("fuse.bench").getOrElse("false"))
     systemProperty("fuse.bench.only", providers.gradleProperty("fuse.bench.only").getOrElse(""))
-    for (name in listOf("fuse.bench.rounds", "fuse.bench.lenient", "fuse.fuzz.seeds", "fuse.fuzz.from", "fuse.fuzz.trail", "fuse.fuzz.debug")) {
+    for (name in listOf("fuse.bench.rounds", "fuse.bench.lenient", "fuse.bench.engines", "fuse.fuzz.seeds", "fuse.fuzz.from", "fuse.fuzz.trail", "fuse.fuzz.debug")) {
         providers.gradleProperty(name).orNull?.let { systemProperty(name, it) }
     }
     // The benchmark keeps thousands of values per engine alive at once.

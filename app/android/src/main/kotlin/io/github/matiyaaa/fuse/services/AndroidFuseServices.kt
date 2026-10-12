@@ -135,6 +135,11 @@ class AndroidFuseServices(
     }
 
     override val emulators: EmulatorDetector = AndroidEmulatorDetector(appContext, storageVolumes)
+
+    // Android keeps other apps private: Intelligence only remembers each emulator's install here,
+    // so a launch is verified for the version it ran in.
+    override fun intelligence() = io.github.matiyaaa.fuse.launch.intelligence.FileLook() to
+        io.github.matiyaaa.fuse.launch.intelligence.FileKnowledgeStore(java.io.File(appContext.filesDir, "intelligence.json"))
     override val launcher: GameLauncher = AndroidGameLauncher(
         appContext,
         activities,
@@ -196,6 +201,27 @@ class AndroidFuseServices(
             val temp = File(parent, ".${file.name}.tmp")
             temp.writeBytes(bytes)
             if (!temp.renameTo(file)) {
+                temp.delete()
+                return@withContext null
+            }
+            file.absolutePath
+        } catch (e: IOException) {
+            null
+        } catch (e: SecurityException) {
+            null
+        }
+    }
+
+    override suspend fun writeBeside(beside: String, name: String, bytes: ByteArray): String? = withContext(Dispatchers.IO) {
+        if (name.isBlank() || '/' in name || '\\' in name || name == "." || name == "..") return@withContext null
+        try {
+            val dir = File(beside).absoluteFile.parentFile ?: return@withContext null
+            val file = File(dir, name)
+            if (file.exists()) return@withContext null
+            val temp = File(dir, ".$name.fuse-part")
+            temp.writeBytes(bytes)
+            // Never over a file that appeared meanwhile.
+            if (file.exists() || !temp.renameTo(file)) {
                 temp.delete()
                 return@withContext null
             }

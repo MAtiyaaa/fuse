@@ -62,6 +62,22 @@ platform services), `ui:link` (Phone Link), `ui:player`, `core:jellyfin` and `co
 desktop tests too, and CI runs every one of them. Test reports are written to
 `<module>/build/reports/tests/desktopTest/`.
 
+### Screen audits and visual changes
+
+The screen audit renders every screen, dialog and state at the sizes Fuse runs at (handhelds, phones,
+two-screen handhelds, laptops, ultrawides and TVs; right to left with `-Pfuse.audit.rtl=true`) and
+fails when a scenario's control is never reached. Two audit runs compare pixel by pixel with
+`scripts/visual-diff.py`, which writes a report of every screen that changed, the changes marked,
+and exits 1 when anything did:
+
+```sh
+./gradlew :ui:shell:desktopAudit -Pfuse.audit.dir=/tmp/before   # on the known-good commit
+./gradlew :ui:shell:desktopAudit -Pfuse.audit.dir=/tmp/after    # on the change
+python3 scripts/visual-diff.py /tmp/before /tmp/after /tmp/visual-report
+```
+
+`-Pfuse.audit.only=<group>/<scenario>` and `-Pfuse.audit.sizes=M` narrow a run.
+
 ## AppImage
 
 `scripts/build-appimage.sh` builds the desktop app and packages it as
@@ -87,9 +103,14 @@ builds carry.
 ## macOS
 
 `scripts/build-macos.sh` builds `Fuse.app` for the Mac it runs on (`arm64` on Apple silicon, `x64`
-on Intel), signs it ad hoc (Apple silicon runs nothing unsigned), runs `--self-test`, and puts it on
-`Fuse-<version>-macos-<arch>.dmg` next to a link to Applications. The app isn't notarized, so the
-first launch needs right-click, Open. The bundle's version is `<major + 1>.<minor>.<patch>` (1.1.0
+on Intel), signs it, runs `--self-test`, and puts it on `Fuse-<version>-macos-<arch>.dmg` next to a
+link to Applications. With `MACOS_SIGNING_IDENTITY` set (`Developer ID Application: Name (TEAMID)`,
+its certificate in the keychain, or in `MACOS_SIGNING_KEYCHAIN`) the app is signed with it under the
+hardened runtime by Compose's own signing, native libraries inside its jars included, and the disk
+image is signed too; with `MACOS_NOTARY_APPLE_ID`, `MACOS_NOTARY_PASSWORD` (an app-specific password)
+and `MACOS_NOTARY_TEAM_ID` as well, Apple notarizes the disk image and its ticket is stapled to it.
+Without them the app is signed ad hoc (Apple silicon runs nothing unsigned) and isn't notarized, so
+the first launch needs right-click, Open. The bundle's version is `<major + 1>.<minor>.<patch>` (1.1.0
 for 0.1.0), because macOS and Windows Installer don't accept a leading 0; Fuse itself shows
 `fuse.version`. Apple silicon builds need macOS 11 or newer, Intel builds 10.15 or newer.
 
@@ -188,6 +209,20 @@ keytool -genkeypair -storetype PKCS12 -keystore fuse-release.p12 -alias fuse \
   -keyalg RSA -keysize 4096 -validity 18250 -dname "CN=Fuse, OU=Fuse, O=Fuse"
 base64 -w0 fuse-release.p12   # the value of ANDROID_KEYSTORE_BASE64
 ```
+
+For the macOS disk images, these make the release signed and notarized (without the first two
+the app is signed ad hoc, as above, and the workflow warns):
+
+| Secret | Content |
+|---|---|
+| `MACOS_CERTIFICATE_P12_BASE64` | The Developer ID Application certificate with its private key, exported from Keychain Access as .p12, base64 encoded (`base64 -i fuse-developer-id.p12`) |
+| `MACOS_CERTIFICATE_PASSWORD` | The .p12's password |
+| `MACOS_SIGNING_IDENTITY` | The certificate's name, `Developer ID Application: Name (TEAMID)` |
+| `MACOS_NOTARY_APPLE_ID` | The Apple ID that notarizes |
+| `MACOS_NOTARY_PASSWORD` | An app-specific password for that Apple ID (appleid.apple.com) |
+| `MACOS_NOTARY_TEAM_ID` | The team id |
+
+The certificate goes into a keychain of the run's own, which is deleted when the job ends.
 
 `.github/workflows/ci.yml` runs every test suite and builds the debug APK for every pull request and
 every push to a branch other than `main`. On Windows and on both kinds of Mac it also runs the shared

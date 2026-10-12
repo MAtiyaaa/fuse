@@ -18,6 +18,8 @@ import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.net.Socket
 import java.nio.file.Files
+import io.github.matiyaaa.fuse.data.settings.ExtensionScope
+import io.github.matiyaaa.fuse.data.settings.Extensions
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -134,6 +136,15 @@ class PhoneLinkServerTest {
         val match = http(port, "POST", "/api/games/$id/identify", """{"providerId":"IGDB","providerGameId":"1"}""", cookie = cookie)
         assertEquals(400, match.status)
 
+        // What the person takes from Phone Link (Settings, Accounts, Phone Link) is refused, with where to allow it.
+        store.updatePrefs { it.copy(extensions = Extensions.set(Extensions.set(it.extensions, Extensions.PHONE_LINK, ExtensionScope.CHANGE_LIBRARY, false), Extensions.PHONE_LINK, ExtensionScope.CAPTURES, false)) }
+        withTimeout(10_000) { while (Extensions.allows(store.prefs.value.extensions, Extensions.PHONE_LINK, ExtensionScope.CAPTURES)) kotlinx.coroutines.delay(20) }
+        val fill = http(port, "POST", "/api/games/$id/fill", cookie = cookie)
+        assertEquals(403, fill.status)
+        assertTrue("Settings, Accounts, Phone Link" in fill.body, fill.body)
+        assertEquals(403, http(port, "GET", "/api/captures", cookie = cookie).status)
+        assertEquals(200, http(port, "GET", "/api/games/$id", cookie = cookie).status, "browsing stays allowed")
+
         // Signing everyone out ends the session.
         link.signOutAll()
         assertEquals(401, http(port, "GET", "/api/now", cookie = cookie).status)
@@ -210,5 +221,24 @@ class PhoneLinkServerTest {
 
         store.updatePrefs { it.copy(phoneLinkEnabled = false) }
         withTimeout(10_000) { link.state.first { !it.running } }
+    }
+
+    @Test
+    fun aPortAnotherProgramHoldsIsPassedOver(): Unit = runBlocking {
+        // Another program listening where Phone Link would start: it carries on at the next port.
+        java.net.ServerSocket(0).use { other ->
+            val services = FakeServices(FuseData(DesktopDatabase.open(File(cache, "fuse.db").absolutePath)), cache)
+            val store = createFuseStore(services, scope)
+            val link = PhoneLinkServer(store, services.secrets, scope, "Test Device", "0.4.2", basePort = other.localPort)
+            link.start()
+            store.updatePrefs { it.copy(phoneLinkEnabled = true) }
+            val state = withTimeout(20_000) { link.state.first { it.running || it.error != null } }
+            assertTrue(state.running, "${state.error}")
+            val port = link.boundPort()!!
+            assertTrue(port in other.localPort + 1 until other.localPort + 10, "started at $port")
+            assertEquals(401, http(port, "GET", "/api/input").status, "the server Phone Link says it runs answers")
+            store.updatePrefs { it.copy(phoneLinkEnabled = false) }
+            withTimeout(10_000) { link.state.first { !it.running } }
+        }
     }
 }

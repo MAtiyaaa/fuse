@@ -216,10 +216,10 @@ interface ReachOps {
         override fun games(platform: PlatformId?): Flow<List<HouseholdGame>> = flowOf(emptyList())
         override val notOnRomm: StateFlow<List<HouseholdGame>> = MutableStateFlow(emptyList())
         override fun availability(id: GameId): Flow<GameCopies?> = flowOf(null)
-        override suspend fun download(id: GameId): String? = "Fuse Sync isn't set up."
+        override suspend fun download(id: GameId): String? = "Fuse One isn't set up."
         override suspend fun sendTargets(id: GameId): List<SendTarget> = emptyList()
-        override suspend fun sendTo(id: GameId, device: String): String? = "Fuse Sync isn't set up."
-        override suspend fun uploadToRomm(id: GameId): String? = "Fuse Sync isn't set up."
+        override suspend fun sendTo(id: GameId, device: String): String? = "Fuse One isn't set up."
+        override suspend fun uploadToRomm(id: GameId): String? = "Fuse One isn't set up."
         override val remoteTransfers: StateFlow<List<RemoteTransferRow>> = MutableStateFlow(emptyList())
         override val requests: StateFlow<List<DeviceCommand>> = MutableStateFlow(emptyList())
         override fun watchTransfers(on: Boolean) = Unit

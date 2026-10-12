@@ -143,8 +143,15 @@ internal class AuditDriver(
         val base = libraryPrefs!!
         // -Pfuse.audit.theme renders every screen in that theme, unless a scenario picks its own.
         val theme = System.getProperty("fuse.audit.theme")?.takeIf { it.isNotBlank() }
-        store.updatePrefs { prefs(base).let { p -> if (theme != null && p.themeId == base.themeId) p.copy(themeId = theme) else p } }
+        // -Pfuse.audit.rtl lays every screen out right to left, as an Arabic or Hebrew system would.
+        val rtl = System.getProperty("fuse.audit.rtl") == "true"
+        store.updatePrefs {
+            prefs(base)
+                .let { p -> if (theme != null && p.themeId == base.themeId) p.copy(themeId = theme) else p }
+                .let { p -> if (rtl) p.copy(layoutDirection = io.github.matiyaaa.fuse.model.LayoutDirectionChoice.RIGHT_TO_LEFT) else p }
+        }
         controls.cartridge = io.github.matiyaaa.fuse.model.CartridgeStatus(installed = false)
+        controls.previousFuse = null
         store.cartridge.refresh()
         show(store, platform)
     }
@@ -270,6 +277,10 @@ internal class AuditDriver(
         val texts = tree.lines().filter { "Text = " in it }.map { it.substringAfter("Text = ").trim() }.distinct().take(40)
         throw NotCovered("Waited ${timeoutMs / 1000} s for $what. On screen: ${texts.joinToString(", ")}")
     }
+
+    /** Whether the item described as [description] is the selected one (a section's tab). */
+    fun isSelectedDescribed(description: String): Boolean =
+        ui.onAllNodes(androidx.compose.ui.test.hasContentDescription(description) and androidx.compose.ui.test.isSelected(), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
 
     fun hasText(text: String, ignoreCase: Boolean = true): Boolean =
         ui.onAllNodesWithText(text, substring = true, ignoreCase = ignoreCase, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()

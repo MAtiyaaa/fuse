@@ -159,7 +159,46 @@ fun AppState.addGame() {
                 detail = "A ROM or game file anywhere on this device, for the system you pick", trailing = Trailing.Chevron,
                 onSelect = { choice = null; go(Route.PickFile(FilePurpose.GAME)) },
             ),
+            MenuAction(
+                "folder", "A game folder", FuseIcons.FolderPlus,
+                detail = "A folder with a game and its updates, DLC or discs, read as the library reads folders", trailing = Trailing.Chevron,
+                onSelect = {
+                    choice = null
+                    scope.launch {
+                        val path = platform.storage.pickFolder("Choose the game's folder") ?: return@launch
+                        addGameFolder(path)
+                    }
+                },
+            ),
         ),
+    )
+}
+
+/** The picked folder: for the system chosen next, its game with every part of it joins the library. */
+internal fun AppState.addGameFolder(path: String) {
+    val name = FsPath.name(path)
+    val all = PlatformCatalog.all.sortedBy { it.name.lowercase() }
+    fun add(platform: PlatformId, platformName: String) {
+        choice = null
+        scope.launch {
+            val ids = store.library.addGameFolder(path, platform)
+            toasts.show(
+                when (ids.size) {
+                    0 -> "Fuse found no $platformName game in $name"
+                    1 -> "$name is in $platformName now, with every part of it Fuse found"
+                    else -> "${ids.size} games from $name are in $platformName now"
+                },
+                if (ids.isEmpty()) ToastKind.ERROR else ToastKind.SUCCESS,
+            )
+        }
+    }
+    choice = ChoiceSpec(
+        icon = FuseIcons.Folder,
+        title = "Which system is $name for?",
+        message = "Fuse reads the folder the way it reads a system's folder: updates, DLC and discs inside it join their game.",
+        options = all.map { p ->
+            MenuAction("sys.${p.id.value}", p.name, null, detail = p.maker(), onSelect = { add(p.id, p.name) })
+        },
     )
 }
 

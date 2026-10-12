@@ -596,7 +596,7 @@ internal class DefaultReachOps(
     override suspend fun sendTo(id: GameId, device: String): String? = withContext(Dispatchers.Default) {
         if (device == household.self) return@withContext downloadFor(id, null)
         val keys = keysOf(id)
-        val key = keys.firstOrNull() ?: id.rommOnly?.let { "romm:$it" } ?: return@withContext "Fuse can't tell which game this is for the household yet. Try again once Fuse Sync has caught up."
+        val key = keys.firstOrNull() ?: id.rommOnly?.let { "romm:$it" } ?: return@withContext "Fuse can't tell which game this is for the household yet. Try again once Fuse One has caught up."
         val title = ctx.remoteGames?.takeIf { it.owns(id) }?.get(id)?.displayTitle ?: ctx.data.games.get(id)?.displayTitle ?: ""
         val platform = (ctx.remoteGames?.takeIf { it.owns(id) }?.get(id) ?: ctx.data.games.get(id))?.platformId?.value
         household.ask(DeviceCommand(target = device, type = DeviceCommand.FETCH, game = key, title = title, platform = platform))
@@ -739,7 +739,7 @@ internal class DefaultReachOps(
                 val game = localByKey.value[command.game.orEmpty()]?.let(::GameId)
                 when {
                     game == null -> CommandResult(DeviceCommand.FAILED, "${ctx.services.deviceName} doesn't have this game any more.")
-                    !romm.enabled -> CommandResult(DeviceCommand.FAILED, "Fuse RomM isn't on on ${ctx.services.deviceName}.")
+                    !romm.enabled -> CommandResult(DeviceCommand.FAILED, "RomM isn't on on ${ctx.services.deviceName}.")
                     else -> {
                         val plan = romm.uploadPlan(game)
                         val why = plan?.problem ?: if (plan == null) "That game isn't in the library any more." else romm.upload(game, plan)

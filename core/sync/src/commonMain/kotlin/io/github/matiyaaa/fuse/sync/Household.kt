@@ -290,9 +290,9 @@ interface Household {
         override fun attach(local: HouseholdLocal) = Unit
         override fun libraryChanged() = Unit
         override suspend fun refresh() = Unit
-        override suspend fun ticket(source: String, game: String, files: List<String>): PeerTicket = throw UnsupportedOperationException("Fuse Sync isn't set up.")
-        override suspend fun ask(command: DeviceCommand): Result<DeviceCommand> = Result.failure(UnsupportedOperationException("Fuse Sync isn't set up."))
-        override suspend fun cancel(command: String): Result<Unit> = Result.failure(UnsupportedOperationException("Fuse Sync isn't set up."))
+        override suspend fun ticket(source: String, game: String, files: List<String>): PeerTicket = throw UnsupportedOperationException("Fuse One isn't set up.")
+        override suspend fun ask(command: DeviceCommand): Result<DeviceCommand> = Result.failure(UnsupportedOperationException("Fuse One isn't set up."))
+        override suspend fun cancel(command: String): Result<Unit> = Result.failure(UnsupportedOperationException("Fuse One isn't set up."))
         override fun watchTransfers(on: Boolean) = Unit
         override fun transfersChanged() = Unit
     }

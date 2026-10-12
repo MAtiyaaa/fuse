@@ -16,3 +16,17 @@ SELECT owner_id FROM game_absorption WHERE child_id = ?;
 
 put:
 INSERT OR IGNORE INTO game_absorption(child_id, owner_id, reason, migrated_at) VALUES (?, ?, ?, ?);
+
+-- Games the person said are part of another (an update or DLC Fuse took for a game of its own):
+-- their reason starts with USER:, followed by the content kind. They outlast every rescan.
+userChildren:
+SELECT a.child_id, a.reason, g.path, g.title_original, g.size_bytes
+FROM game_absorption a JOIN game g ON g.id = a.child_id
+WHERE a.owner_id = ? AND a.reason LIKE 'USER:%'
+ORDER BY a.migrated_at, a.child_id;
+
+userOwnerOf:
+SELECT owner_id, reason FROM game_absorption WHERE child_id = ? AND reason LIKE 'USER:%';
+
+deleteUser:
+DELETE FROM game_absorption WHERE child_id = ? AND reason LIKE 'USER:%';

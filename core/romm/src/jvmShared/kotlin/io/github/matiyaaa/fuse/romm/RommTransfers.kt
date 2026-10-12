@@ -27,8 +27,8 @@ class RommDownloadHandler(private val http: HttpClient, private val host: RommTr
 
     override suspend fun run(item: TransferItem, io: TransferIo) {
         val job = jobJson.decodeFromString(RommDownloadJob.serializer(), item.payload)
-        val client = host.client(job.server) ?: throw TransferFailure("Fuse RomM is signed out. Sign in again in Settings, Addons, Fuse RomM.", retryable = false)
-        val place = item.place ?: throw TransferFailure("Fuse RomM doesn't know where this goes.", retryable = false)
+        val client = host.client(job.server) ?: throw TransferFailure("RomM is signed out. Sign in again in Settings, Addons, RomM.", retryable = false)
+        val place = item.place ?: throw TransferFailure("RomM doesn't know where this goes.", retryable = false)
         val root = File(io.resolve(place))
         if (job.firmware != null) return firmware(client, job.firmware, root, io)
 
@@ -125,7 +125,7 @@ class RommUploadHandler(private val host: RommTransferHost) : TransferHandler {
 
     override suspend fun run(item: TransferItem, io: TransferIo) {
         var job = jobJson.decodeFromString(RommUploadJob.serializer(), item.payload)
-        val client = host.client(job.server) ?: throw TransferFailure("Fuse RomM is signed out. Sign in again in Settings, Addons, Fuse RomM.", retryable = false)
+        val client = host.client(job.server) ?: throw TransferFailure("RomM is signed out. Sign in again in Settings, Addons, RomM.", retryable = false)
         if (!client.may(RommScopes.ROMS_WRITE)) throw TransferFailure(UPLOAD_PERMISSION, retryable = false)
         if (!client.capabilities.chunkedUploads && client.capabilities.version.isNotEmpty()) {
             throw TransferFailure("This RomM server (${client.capabilities.version}) is too old to take uploads from Fuse. Update RomM, then try again.", retryable = false)
@@ -255,7 +255,7 @@ class RommUploadHandler(private val host: RommTransferHost) : TransferHandler {
     }
 
     companion object {
-        const val UPLOAD_PERMISSION = "Fuse's RomM sign-in can only read. To upload, pair Fuse again in Settings, Addons, Fuse RomM and allow uploads."
+        const val UPLOAD_PERMISSION = "Fuse's RomM sign-in can only read. To upload, pair Fuse again in Settings, Addons, RomM and allow uploads."
 
         /** How long a finished upload RomM is still writing is waited for, and how often it is looked for. */
         internal var LANDING_WAIT_MS = 10 * 60_000L

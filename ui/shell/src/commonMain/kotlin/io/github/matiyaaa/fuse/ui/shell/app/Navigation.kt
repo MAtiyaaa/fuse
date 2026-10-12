@@ -44,12 +44,14 @@ sealed interface Route {
 
     /** Jellyfin: its settings, an item's page, a library's grid, and Jellyfin's own search. */
     data object JellyfinSettings : Route
+
+    /** Setting up Jellyfin on a page of its own: the server, then signing in. */
+    data object JellyfinSetup : Route
     data class MediaPage(val id: String) : Route
     data class MediaLibrary(val id: String, val name: String, val kind: String? = null) : Route
     data object MediaSearch : Route
 
-    /** Fuse Sync by Fuse: its settings, setting it up ([host]: this computer as the host, else connecting), and a game's saves through time. */
-    data object SyncSettings : Route
+    /** Syncthing's settings (Fuse One's own are in Settings, Fuse One). */
     data object SyncthingSettings : Route
 
     /** Where each emulator keeps its saves here, and a folder to choose where Fuse can't find them (Fuse Sync and Syncthing). */
@@ -66,7 +68,7 @@ sealed interface Route {
     /** Jellyfin films and episodes kept on this device: play, delete, move to another drive. */
     data object OfflineMedia : Route
 
-    /** Fuse RomM's settings (Settings, Addons, Fuse RomM) and its setup ([pairing]: straight to signing in). */
+    /** RomM's settings (Settings, Addons, RomM) and its setup ([pairing]: straight to signing in). */
     data object RommSettings : Route
     data class RommSetup(val pairing: Boolean = false) : Route
 
@@ -84,6 +86,9 @@ sealed interface Route {
     data object Themes : Route
     data object Onboarding : Route
     data class FolderBrowser(val game: GameId) : Route
+
+    /** A game's manual ([path], a PDF or CBZ), read page by page. */
+    data class Manual(val path: String, val title: String) : Route
 
     /** A PS3 or Vita game's packages, updates, DLC and licences, and installing them into its emulator. */
     data class GameContent(val game: GameId) : Route

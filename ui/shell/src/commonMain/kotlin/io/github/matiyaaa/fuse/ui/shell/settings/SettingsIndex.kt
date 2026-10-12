@@ -17,6 +17,10 @@ class SettingTopic(
     val cartridge: Boolean = false,
     /** Only on a device with a second screen. */
     val secondScreen: Boolean = false,
+    /** Only where Steam can be (computers). */
+    val steam: Boolean = false,
+    /** Only where Decky can be (Linux). */
+    val decky: Boolean = false,
 )
 
 /** A setting found by search, with where it is ("Settings, Appearance"). */
@@ -59,6 +63,11 @@ object SettingsIndex {
         SettingTopic("library", "Clean display names", "titles tags names usa", group = "library.names"),
         SettingTopic("library", "Collections", "playlists groups"),
         SettingTopic("library", "Automatic series", "franchise series"),
+        SettingTopic("library", "Library opens on", "start installed all default tab"),
+        SettingTopic("library", "Add Fuse to Steam", "steam game mode shortcut non-steam steamos", steam = true),
+        SettingTopic("library", "Remove Fuse from Steam", "steam shortcut uninstall", steam = true),
+        SettingTopic("library", "Fuse plugin for Decky", "decky loader plugin steam gaming mode steamos", decky = true),
+        SettingTopic("library", "Decky bridge", "decky plugin connection", decky = true),
         SettingTopic("addons", null, "addons jellyfin media server films movies shows tv music store cartridge"),
         SettingTopic("addons", "Jellyfin", "media server films movies shows tv series music player stream"),
         SettingTopic("addons", "Server and playback", "jellyfin sign in address quality subtitles audio language", group = ADDONS_JELLYFIN),
@@ -67,12 +76,27 @@ object SettingsIndex {
         SettingTopic("addons", "Catalogue", "refresh obtainium emulation pack apps store", group = ADDONS_STORE),
         SettingTopic("addons", "Check installed apps for updates", "emulator updates automatic store", group = ADDONS_STORE),
         SettingTopic("addons", "GitHub token", "rate limit api github store", group = ADDONS_STORE),
-        SettingTopic("addons", "Fuse Library", "household other devices games send transfer share fetch peer fuse library"),
-        SettingTopic("addons", "Share This Device's Games", "share library household other devices", group = ADDONS_REACH),
-        SettingTopic("addons", "Let Other Devices Send Games Here", "send receive accept games household", group = ADDONS_REACH),
-        SettingTopic("addons", "Where Games Sent Here Go", "folder receive download location", group = ADDONS_REACH),
-        SettingTopic("addons", "Pass Games Through the Host", "relay host away remote outside", group = ADDONS_REACH),
-        SettingTopic("addons", "Show Other Devices' Games in RomM", "romm not on romm other devices", group = ADDONS_REACH),
+        SettingTopic("fuseone", null, "fuse one sync household host saves profiles devices"),
+        SettingTopic("fuseone", "Use Fuse One", "sync on off enable household"),
+        SettingTopic("fuseone", "Make This the Host", "host server household set up"),
+        SettingTopic("fuseone", "Connect to a Host", "join pair code household set up"),
+        SettingTopic("fuseone", "Sync Now", "sync now refresh upload"),
+        SettingTopic("fuseone", "Saves", "save sync game saves"),
+        SettingTopic("fuseone", "Don't Take Saves From", "pull profile saves child"),
+        SettingTopic("fuseone", "Don't Sync Saves For", "profile saves local only"),
+        SettingTopic("fuseone", "Save Folders", "emulator save folder location path"),
+        SettingTopic("fuseone", "Import Saves", "import save file archive zip"),
+        SettingTopic("fuseone", "Save States", "states snapshots"),
+        SettingTopic("fuseone", "Play Time and Library", "records play time favourites collections"),
+        SettingTopic("fuseone", "Share Sign-ins", "keys romm jellyfin steamgriddb igdb retroachievements share household"),
+        SettingTopic("fuseone", "Home on This Device", "home layout profile device"),
+        SettingTopic("fuseone", "Use Syncthing", "syncthing folders"),
+        SettingTopic("fuseone", "Fuse Library Sync", "household other devices games send transfer share fetch peer fuse library one"),
+        SettingTopic("fuseone", "Share This Device's Games", "share library household other devices"),
+        SettingTopic("fuseone", "Let Other Devices Send Games Here", "send receive accept games household"),
+        SettingTopic("fuseone", "Where Games Sent Here Go", "folder receive download location"),
+        SettingTopic("fuseone", "Pass Games Through the Host", "relay host away remote outside"),
+        SettingTopic("fuseone", "Show Other Devices' Games in RomM", "romm not on romm other devices"),
         SettingTopic("systems", null, "emulator per system bios folders consoles"),
         SettingTopic("systems", "Look for emulators again", "detect find retroarch", group = "systems.finding"),
         SettingTopic("systems", "Locate an emulator", "path executable app", group = "systems.finding"),
@@ -92,10 +116,8 @@ object SettingsIndex {
         SettingTopic("media", "IGDB Client ID", "igdb twitch metadata key", group = "media.sources"),
         SettingTopic("media", "ScreenScraper username", "screenscraper account", group = "media.sources"),
         SettingTopic("media", "Source order", "scraper providers order", group = "media.sources"),
-        SettingTopic("inputs", "Detect my buttons", "controller gamepad buttons mapping"),
-        SettingTopic("inputs", "Button layout", "xbox nintendo playstation abxy"),
-        SettingTopic("inputs", "Swap confirm and back", "a b swap accept cancel"),
-        SettingTopic("inputs", "Button mapping and test", "test controller remap"),
+        SettingTopic("inputs", "Controller setup", "controller gamepad buttons mapping remap test guided detect layout xbox nintendo playstation abxy swap confirm back"),
+        SettingTopic("inputs", "Controller that moves around Fuse", "multiple controllers second player choose pad"),
         SettingTopic("inputs", "Stick deadzone", "analog drift joystick", group = "inputs.feel"),
         SettingTopic("inputs", "Repeat delay", "scroll speed held direction", group = "inputs.feel"),
         SettingTopic("inputs", "Vibration", "rumble haptics", group = "inputs.feel"),
@@ -132,11 +154,11 @@ object SettingsIndex {
         SettingTopic("about", "Made with", "credits thanks", group = "about.credits"),
     )
 
-    fun search(query: String, sections: List<SettingsSection>, limit: Int = 8, cartridge: Boolean = true, secondScreen: Boolean = true): List<SettingHit> {
+    fun search(query: String, sections: List<SettingsSection>, limit: Int = 8, cartridge: Boolean = true, secondScreen: Boolean = true, steam: Boolean = true, decky: Boolean = true): List<SettingHit> {
         val needle = TitleText.normalize(query)
         if (needle.length < 2) return emptyList()
         val byId = sections.associateBy { it.id }
-        val topics = sections.map { SettingTopic(it.id, null, it.summary) } + rows.filter { (cartridge || !it.cartridge) && (secondScreen || !it.secondScreen) }
+        val topics = sections.map { SettingTopic(it.id, null, it.summary) } + rows.filter { (cartridge || !it.cartridge) && (secondScreen || !it.secondScreen) && (steam || !it.steam) && (decky || !it.decky) }
         return topics.mapNotNull { t ->
             val section = byId[t.section] ?: return@mapNotNull null
             val title = t.row ?: section.label

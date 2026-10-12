@@ -24,6 +24,12 @@ internal data class ProfileRecord(
 /** A map of sign-ins, by key ("romm", "jellyfin:<profile>"). */
 internal val SignInsSerializer = kotlinx.serialization.builtins.MapSerializer(String.serializer(), String.serializer())
 
+/**
+ * A key the whole household uses (a scraper's API key, RetroAchievements' username and key):
+ * "key:" and the name Fuse keeps it under on each device. Any trusted device may share one.
+ */
+internal val HOUSEHOLD_KEY = Regex("^key:[A-Za-z0-9._-]{1,64}$")
+
 /** A device as the host keeps it, with the secret its calls are signed with. */
 @Serializable
 internal data class DeviceRecord(
@@ -41,6 +47,9 @@ internal data class DeviceRecord(
     val owner: Boolean = false,
     /** Profiles this device has opened, with the PIN epoch they were opened at. */
     val opened: Map<String, Int> = emptyMap(),
+    /** The Fuse it last called from, and that Fuse's protocol (0 before 0.4.2). */
+    val fuseVersion: String = "",
+    val protocol: Int = 0,
 )
 
 @Serializable
@@ -109,7 +118,8 @@ class HostStore(
         f.readText().trim()
     }
 
-    internal val identity: HostIdentity
+    @Volatile internal var identity: HostIdentity
+        private set
     private val devices = LinkedHashMap<String, DeviceRecord>()
     private val profiles = LinkedHashMap<String, ProfileRecord>()
     private val metas = HashMap<String, ProfileMeta>()
@@ -130,6 +140,15 @@ class HostStore(
         } else {
             HostIdentity(SyncCrypto.token(12), hostName, clock()).also { writeAtomically(identityFile, json.encodeToString(HostIdentity.serializer(), it).toByteArray()) }
         }
+        load()
+    }
+
+    /** Reads everything kept in [dir] (at start, and after a backup takes a new copy of the household). */
+    private fun load() {
+        devices.clear(); profiles.clear(); metas.clear(); revisions.clear(); shared.clear(); journal.clear(); applied.clear(); aliases.clear()
+        account = null
+        outside = OutsideAddress()
+        seq = 0
         if (devicesFile.isFile) json.decodeFromString(ListSerializer(DeviceRecord.serializer()), devicesFile.readText()).forEach { devices[it.id] = it }
         if (profilesFile.isFile) json.decodeFromString(ListSerializer(ProfileRecord.serializer()), profilesFile.readText()).forEach { profiles[it.id] = it }
         for (p in profiles.values) {
@@ -161,6 +180,141 @@ class HostStore(
     }
 
     private fun profileDir(id: String) = File(File(dir, "profiles"), id)
+
+    // ---------------------------------------------------------------- backups
+
+    /** This computer's place among the household's hosts (see [HostLeadership]). */
+    val leadership: HostLeadership by lazy { HostLeadership(dir, clock) { identity.name } }
+
+    /** Whether a path in [dir] (with `/`) is part of the household a backup copies. */
+    private fun replicated(path: String): Boolean {
+        if (path in NOT_COPIED || path.split('/').any { it.isEmpty() || it == "." || it == ".." }) return false
+        val name = path.substringAfterLast('/')
+        if (name.startsWith(".") && name.endsWith(".tmp")) return false
+        return path.substringBefore('/') in COPIED
+    }
+
+    /** Everything a backup needs but the saves' files, by path: a consistent copy, taken under the lock. */
+    fun replicaFiles(): Map<String, ByteArray> = synchronized(lock) {
+        val out = java.util.TreeMap<String, ByteArray>()
+        for (f in dir.walkTopDown().onEnter { it == dir || replicated(it.relativeTo(dir).path.replace('\\', '/')) }) {
+            if (!f.isFile) continue
+            val rel = f.relativeTo(dir).path.replace('\\', '/')
+            if (replicated(rel)) out[rel] = f.readBytes()
+        }
+        out
+    }
+
+    /** The files (by hash) the household's saves use: what a backup fetches beside [replicaFiles]. */
+    fun referencedObjects(): Set<String> = synchronized(lock) { revisions.values.flatten().flatMap { it.manifest.files }.map { it.hash }.toSet() }
+
+    /**
+     * Takes [files] (a copy of the household from its host) in place of this backup's own, and reads
+     * them back. Never on the host itself. Files of the household no longer in the copy go.
+     */
+    fun applyReplica(files: Map<String, ByteArray>) = synchronized(lock) {
+        check(!leadership.isLeader) { "The host never takes a copy over its own" }
+        require(files.keys.all(::replicated)) { "Not a household file" }
+        val keep = files.keys.toSet()
+        dir.walkTopDown().filter { it.isFile }.forEach { f ->
+            val rel = f.relativeTo(dir).path.replace('\\', '/')
+            if (replicated(rel) && rel !in keep && rel != HostLeadership.HOSTS_FILE) f.delete()
+        }
+        for ((path, bytes) in files) {
+            if (path == HostLeadership.HOSTS_FILE) continue
+            val f = File(dir, path)
+            f.parentFile?.mkdirs()
+            writeAtomically(f, bytes)
+        }
+        files[HostLeadership.HOSTS_FILE]?.let { leadership.adoptCopied(it) }
+        if (identityFile.isFile) identity = json.decodeFromString(HostIdentity.serializer(), identityFile.readText())
+        load()
+    }
+
+    /**
+     * Puts the household back as [files] (a household backup) kept it, on the host itself: the
+     * household's hosts and their secret stay as they are now (a backup from an older generation
+     * would otherwise make this host give way), and the journal goes on from where it is, so every
+     * device looks again and catches up.
+     */
+    fun restoreFrom(files: Map<String, ByteArray>) = synchronized(lock) {
+        check(leadership.isLeader) { "Only the household's host is restored" }
+        require(files.keys.all(::replicated)) { "Not a household file" }
+        val before = seq
+        val keepAsIs = setOf(HostLeadership.HOSTS_FILE, HostLeadership.SECRET_FILE)
+        val incoming = files.filterKeys { it !in keepAsIs }
+        dir.walkTopDown().filter { it.isFile }.forEach { f ->
+            val rel = f.relativeTo(dir).path.replace('\\', '/')
+            if (replicated(rel) && rel !in incoming && rel !in keepAsIs) f.delete()
+        }
+        for ((path, bytes) in incoming) {
+            val f = File(dir, path)
+            f.parentFile?.mkdirs()
+            writeAtomically(f, bytes)
+        }
+        if (identityFile.isFile) identity = json.decodeFromString(HostIdentity.serializer(), identityFile.readText())
+        load()
+        if (seq < before) seq = before
+        event(JournalEvent.PROFILE)
+        event(JournalEvent.DEVICE)
+    }
+
+    /** What [reconcile] took from an older host. */
+    data class Reconciled(val devices: Int, val profiles: Int, val revisions: Int, val conflicts: Int)
+
+    /**
+     * Takes from [older] (a copy of a host that went on taking changes after this computer became
+     * the host) what this one hasn't: devices paired and profiles made there, records merged, and
+     * every save it took, pushed as from the device that made it, so one that doesn't follow this
+     * host's newest is kept as a conflict copy, never lost and never put over the newest. The
+     * saves' files must be here first.
+     */
+    fun reconcile(older: HostStore): Reconciled = synchronized(lock) {
+        var newDevices = 0
+        var newProfiles = 0
+        var revs = 0
+        var conflicts = 0
+        val theirs = synchronized(older.lock) {
+            Triple(older.devices.values.toList(), older.profiles.values.toList(), older.metas.toMap()) to (older.revisions.mapValues { it.value.toList() } to (older.shared.toSet() to older.aliases.toMap()))
+        }
+        val (lists, rest) = theirs
+        val (theirDevices, theirProfiles, theirMetas) = lists
+        val (theirRevisions, more) = rest
+        val (theirShared, theirAliases) = more
+        for (d in theirDevices) if (d.id !in devices) { devices[d.id] = d; newDevices++ }
+        if (newDevices > 0) saveDevices()
+        for (p in theirProfiles) if (p.id !in profiles) { profiles[p.id] = p; newProfiles++ }
+        if (newProfiles > 0) saveProfiles()
+        for ((p, meta) in theirMetas) if (p in profiles) {
+            val before = metas[p] ?: ProfileMeta()
+            val merged = before.merge(meta)
+            if (merged != before) {
+                metas[p] = merged
+                writeAtomically(File(profileDir(p), "meta.json"), json.encodeToString(ProfileMeta.serializer(), merged).toByteArray())
+                event(JournalEvent.META, profile = p, device = "reconcile")
+            }
+        }
+        for ((p, list) in theirRevisions) {
+            if (p != SHARED_SAVES && p !in profiles) continue
+            val mine = revisions[p].orEmpty().map { it.id }.toSet()
+            for (r in list.filter { it.id !in mine }.sortedBy { it.at }) {
+                if (r.manifest.files.any { !content.has(it.hash) }) continue
+                val result = push(p, r.device, r)
+                revs++
+                if (result.conflict) conflicts++
+            }
+        }
+        if (!shared.containsAll(theirShared)) {
+            shared += theirShared
+            writeAtomically(sharedFile, json.encodeToString(SharedGames.serializer(), SharedGames(shared.toList())).toByteArray())
+        }
+        val newAliases = theirAliases.filterKeys { it !in aliases }
+        if (newAliases.isNotEmpty()) {
+            aliases += newAliases
+            writeAtomically(aliasFile, json.encodeToString(GameAliasesSerializer, aliases).toByteArray())
+        }
+        Reconciled(newDevices, newProfiles, revs, conflicts)
+    }
 
     private fun saveDevices() = writeAtomically(devicesFile, json.encodeToString(ListSerializer(DeviceRecord.serializer()), devices.values.toList()).toByteArray())
     private fun saveProfiles() = writeAtomically(profilesFile, json.encodeToString(ListSerializer(ProfileRecord.serializer()), profiles.values.toList()).toByteArray())
@@ -200,8 +354,29 @@ class HostStore(
 
     val name: String get() = identity.name
 
-    fun hello(port: Int, fuseVersion: String) =
-        HostHello(identity.hostId, identity.name, SyncApi.VERSION, port, fuseVersion, outside = outside.address, account = account != null, features = listOf(SyncApi.FEATURE_HOUSEHOLD))
+    fun hello(port: Int, fuseVersion: String): HostHello {
+        val l = leadership.current
+        return HostHello(
+            identity.hostId, identity.name, SyncApi.VERSION, port, fuseVersion, minVersion = SyncApi.MIN_VERSION, outside = outside.address, account = account != null,
+            features = listOf(SyncApi.FEATURE_HOUSEHOLD, SyncApi.FEATURE_BACKUPS),
+            node = leadership.nodeId, generation = l.generation, role = leadership.role, hosts = l.hosts,
+        )
+    }
+
+    /** Adds [backup] to the household's hosts: it copies everything the host keeps from now on. */
+    fun addBackup(backup: HostNode): Leadership = synchronized(lock) {
+        require(backup.deviceId != null && devices[backup.deviceId]?.revoked == false) { "A backup is one of the household's devices" }
+        // The hosts' own secret exists before the first copy goes, so every backup has it.
+        leadership.secret
+        leadership.addBackup(backup).also { event(JournalEvent.DEVICE, device = backup.deviceId) }
+    }
+
+    fun removeBackup(nodeId: String): Leadership = synchronized(lock) {
+        leadership.removeBackup(nodeId).also { event(JournalEvent.DEVICE) }
+    }
+
+    /** True when [device] is one of the household's backups, so it may copy the household. */
+    fun isBackupDevice(device: String): Boolean = leadership.current.hosts.any { it.deviceId == device }
 
     // ---------------------------------------------------------------- the account and the outside address
 
@@ -326,7 +501,16 @@ class HostStore(
         true
     }
 
-    private fun deviceInfoOf(d: DeviceRecord) = DeviceInfo(d.id, d.name, d.platform, d.profile, d.lastSeen, d.lastSync, d.connection, d.revoked)
+    private fun deviceInfoOf(d: DeviceRecord) = DeviceInfo(d.id, d.name, d.platform, d.profile, d.lastSeen, d.lastSync, d.connection, d.revoked, d.fuseVersion, d.protocol)
+
+    /** Notes the Fuse [id] calls from, kept only when it changed (an update, or the first call from 0.4.2). */
+    internal fun noteVersion(id: String, fuseVersion: String, protocol: Int) = synchronized(lock) {
+        val d = devices[id] ?: return@synchronized
+        val v = fuseVersion.take(32)
+        if (d.fuseVersion == v && d.protocol == protocol) return@synchronized
+        devices[id] = d.copy(fuseVersion = v, protocol = protocol)
+        saveDevices()
+    }
 
     // ---------------------------------------------------------------- profiles
 
@@ -617,7 +801,7 @@ class HostStore(
     private data class KeptServices(
         val romm: ServiceAddress? = null,
         val jellyfin: ServiceAddress? = null,
-        /** "romm" and "jellyfin:<profile>" to each sign-in, sealed with [servicesKey]. */
+        /** "romm", "jellyfin:<profile>" and "key:<name>" to each sign-in or key, sealed with [servicesKey]. */
         val signIns: Map<String, String> = emptyMap(),
         val salt: String = "",
         val shared: Boolean = false,
@@ -666,7 +850,7 @@ class HostStore(
             val plain = SyncCrypto.open(sealedText, d.secret, share.salt) ?: return@synchronized false
             runCatching { json.decodeFromString(SignInsSerializer, plain.decodeToString()) }.getOrNull() ?: return@synchronized false
         }.orEmpty().filterKeys { key ->
-            key == "romm" || key.substringAfter("jellyfin:", "").let { it.isNotEmpty() && mayUse(device, it) }
+            key == "romm" || HOUSEHOLD_KEY.matches(key) || key.substringAfter("jellyfin:", "").let { it.isNotEmpty() && mayUse(device, it) }
         }
         // Every sign-in is sealed again under one fresh salt with the host's key.
         val current = kept.signIns.mapNotNull { (k, v) -> SyncCrypto.open(v, servicesKey, kept.salt)?.let { k to it.decodeToString() } }.toMap()
@@ -944,6 +1128,7 @@ object HostFiles {
     private val OWN = setOf(
         "host.json", "devices.json", "profiles.json", "shared-games.json", "game-aliases.json", "account.json", "outside.json",
         "journal.jsonl", "applied.json", "admin.token", "objects", "profiles", "services.json", "services.key",
+        "household", HostLeadership.HOSTS_FILE, HostLeadership.NODE_FILE, HostLeadership.SECRET_FILE,
     )
 
     /** The host's own files and folders in [dir] (with any write a crash left half done). */
@@ -963,6 +1148,14 @@ object HostFiles {
 
 /** Journal entries kept (twice as many before it is trimmed). */
 private const val JOURNAL_KEEP = 10_000
+
+/** What a backup copies of a host's folder: everything but the saves' files, the admin token and the computer's own place. */
+private val COPIED = setOf(
+    "host.json", "devices.json", "profiles.json", "shared-games.json", "game-aliases.json", "account.json", "outside.json",
+    "journal.jsonl", "applied.json", "services.json", "services.key", "profiles", "household",
+    HostLeadership.HOSTS_FILE, HostLeadership.SECRET_FILE,
+)
+private val NOT_COPIED = setOf("admin.token", HostLeadership.NODE_FILE)
 
 /** The most ids one game may be claimed under at once. */
 private const val MAX_ALIASES = 8

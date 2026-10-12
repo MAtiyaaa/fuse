@@ -13,7 +13,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.impl.RommArt
 import okio.Path.Companion.toPath
 
 /**
- * Fuse RomM's pictures for Coil. A [RommArt] is fetched once, with Fuse's sign-in, into Fuse's cache
+ * RomM's pictures for Coil. A [RommArt] is fetched once, with Fuse's sign-in, into Fuse's cache
  * and drawn from there: the same picture is never fetched twice (whichever route is in use), and
  * pictures already seen show while the server is away.
  */
@@ -24,7 +24,7 @@ object RommImages {
 
     class Fetch : Fetcher.Factory<RommArt> {
         override fun create(data: RommArt, options: Options, imageLoader: ImageLoader): Fetcher = Fetcher {
-            val cache = DefaultRommOps.rommArtCache ?: error("Fuse RomM isn't running")
+            val cache = DefaultRommOps.rommArtCache ?: error("RomM isn't running")
             val file = cache.file(data.server, data.path) ?: error("RomM's picture couldn't be had")
             SourceFetchResult(ImageSource(file.toPath(), options.fileSystem), null, DataSource.DISK) as FetchResult
         }

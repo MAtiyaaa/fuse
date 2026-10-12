@@ -14,7 +14,7 @@ import kotlinx.coroutines.runBlocking
 private val AuditDriver.sync: AuditSync
     get() {
         libraryStore
-        return controls.sync ?: throw NotCovered("This store has no Fuse Sync")
+        return controls.sync ?: throw NotCovered("This store has no Fuse One")
     }
 
 /** Fuse Sync back to off and never set up, before a scenario sets its own state. */
@@ -37,21 +37,17 @@ internal fun AuditDriver.useSync(asHost: Boolean, playing: String? = "mo", prefs
     settle(600)
 }
 
-/** Settings, Addons, Fuse Sync's page (through Addons, as a person gets there). */
+/** Settings, Fuse One (as a person gets there): every Fuse One setting is in this one section. */
 private fun AuditDriver.openSyncPage() {
     openSettings()
-    focusText("Addons")
+    tap(PadButton.DPAD_DOWN, sectionIndex("fuseone"))
     tap(PadButton.DPAD_RIGHT)
-    waitFor("Your saves, play time, library and settings on every device")
-    tapText("Fuse Sync")
-    focusAny("Set Up Fuse Sync", "Profiles, Devices and What Syncs")
-    tap(PadButton.A)
     settle(900)
 }
 
 /**
  * Fuse Sync by Fuse, every screen: off (and nothing of it anywhere), turned on, the two ways in,
- * setting up a host to "Fuse Sync is ready", connecting from "Fuse Sync found" to the code and
+ * setting up a host to "Fuse One is ready", connecting from "Fuse One found" to the code and
  * "Connected", Who's playing (people, a PIN, a new profile), the settings once set up as a host and
  * as a device, the Sync tab, the top line's profile, a save conflict, a game's save history, the
  * Home scope while arranging, and Add a Device.
@@ -61,19 +57,13 @@ internal fun AuditDriver.syncScreens() {
         syncOff()
         useLibrary()
         openSettings()
-        focusText("Addons")
+        tap(PadButton.DPAD_DOWN, sectionIndex("fuseone"))
         tap(PadButton.DPAD_RIGHT)
-        waitFor("Your saves, play time, library and settings on every device")
-        shoot("Addons, with Fuse Sync among them")
-        tapText("Fuse Sync")
-        waitFor("Use Fuse Sync")
-        shoot("Fuse Sync off: its switch, and nothing else")
-        tapText("Use Fuse Sync")
-        waitFor("Set Up Fuse Sync")
-        shoot("on, not set up yet")
-        tapText("Set Up Fuse Sync")
+        waitFor("Use Fuse One")
+        shoot("Fuse One off: its switch, and Syncthing")
+        tapText("Use Fuse One")
         waitFor("Make This the Host")
-        shoot("its page: make this the host, or connect")
+        shoot("on, not set up yet: make this the host, or connect")
     }
 
     scenario("sync", "setting up a host") {
@@ -88,8 +78,8 @@ internal fun AuditDriver.syncScreens() {
         tap(PadButton.DPAD_DOWN, 3)
         shoot("Make This the Host chosen")
         tap(PadButton.A)
-        waitFor("Fuse Sync is ready")
-        shoot("Fuse Sync is ready, with the code for other devices", 1_600)
+        waitFor("Fuse One is ready")
+        shoot("Fuse One is ready, with the code for other devices", 1_600)
     }
 
     scenario("sync", "connecting") {
@@ -98,8 +88,8 @@ internal fun AuditDriver.syncScreens() {
         useLibrary()
         openSyncPage()
         tapText("Connect to a Host")
-        waitFor("Fuse Sync found")
-        shoot("Fuse Sync found on this network", 1_000)
+        waitFor("Fuse One found")
+        shoot("Fuse One found on this network", 1_000)
         tap(PadButton.A)
         waitFor("Join Gaming PC")
         tap(PadButton.DPAD_DOWN)
@@ -160,13 +150,15 @@ internal fun AuditDriver.syncScreens() {
         useSync(asHost = true)
         openSyncPage()
         waitFor("Playing As")
-        shoot("set up as the host: who's playing and what syncs", 1_200)
-        tap(PadButton.DPAD_DOWN, 8)
-        shoot("the connection and this device")
-        tap(PadButton.DPAD_DOWN, 4)
+        shoot("set up as the host: the household, who's playing and what syncs", 1_200)
+        focusText("Save States")
+        shoot("Fuse Save Sync: what syncs")
+        focusText("Pass Games Through the Host")
+        shoot("Fuse Library Sync")
+        focusText("Devices")
         shoot("the host: devices and keeping it running")
-        tap(PadButton.DPAD_DOWN, 6)
-        shoot("leaving")
+        tap(PadButton.DPAD_DOWN, 12)
+        shoot("Syncthing, and leaving")
         tapText("Devices", step = PadButton.DPAD_UP)
         waitFor("Every device connected to this host")
         shoot("the host's devices")
@@ -174,6 +166,42 @@ internal fun AuditDriver.syncScreens() {
         tapText("Add a Device", step = PadButton.DPAD_UP)
         waitFor("Works once, for ten minutes")
         shoot("Add a Device: the code", 1_000)
+        tap(PadButton.B)
+    }
+
+    scenario("sync", "backup hosts") {
+        useSync(asHost = true)
+        openSyncPage()
+        focusText("Backup Hosts")
+        shoot("the host: its backup hosts, one computer offering to be one", 1_000)
+        tap(PadButton.A)
+        waitFor("Living Room PC")
+        shoot("backup hosts: the one waiting to be accepted, and the one keeping a copy", 1_000)
+        tap(PadButton.B)
+        useSync(asHost = false)
+        openSyncPage()
+        focusText("Be a Backup Host")
+        shoot("a computer keeping a copy of the household, and how up to date it is", 1_000)
+    }
+
+    scenario("sync", "household backups") {
+        useSync(asHost = true)
+        openSyncPage()
+        focusText("Household Backups")
+        shoot("the host: the household's backups at a glance", 1_000)
+        tap(PadButton.A)
+        waitFor("Back Up Now")
+        shoot("household backups: back up now, where they go, and every one kept", 1_000)
+        tap(PadButton.B)
+    }
+
+    scenario("sync", "recovery package") {
+        useSync(asHost = true)
+        openSyncPage()
+        focusText("Recovery Package")
+        tap(PadButton.A)
+        waitFor("Make a Recovery Package")
+        shoot("the recovery package: make one to keep offline, or restore one here, and the two ways to move the host", 1_000)
         tap(PadButton.B)
     }
 
@@ -185,10 +213,6 @@ internal fun AuditDriver.syncScreens() {
         tapText("Home on This Device")
         waitFor("All devices on this profile")
         shoot("Home: the profile's everywhere, or this device's own")
-        tap(PadButton.B)
-        tapText("At Startup", step = PadButton.DPAD_UP)
-        waitFor("Ask who's playing")
-        shoot("who Fuse starts as")
         tap(PadButton.B)
         tapText("Profiles", step = PadButton.DPAD_UP)
         waitFor("Add Profile")
@@ -225,6 +249,29 @@ internal fun AuditDriver.syncScreens() {
         shoot("further down the games: the header folded away", 600)
     }
 
+    scenario("sync", "this device alone") {
+        syncOff()
+        sync.ownProfiles()
+        useLibrary()
+        settle(600)
+        tab(Destination.CARTRIDGE)
+        tap(PadButton.DPAD_UP)
+        focusText("Sync") { tap(PadButton.DPAD_RIGHT) }
+        tap(PadButton.DPAD_DOWN)
+        waitFor("Your games on this device")
+        shoot("Sync without a household: each person's saves kept here, and what a host adds", 1_500)
+        tap(PadButton.DPAD_RIGHT, 2)
+        tap(PadButton.A)
+        waitFor("Connect to a Host")
+        shoot("Other Devices: the two ways into a household")
+        tap(PadButton.B)
+        tap(PadButton.DPAD_DOWN)
+        tap(PadButton.A)
+        waitFor("Kept on this device")
+        shoot("one game's saves, kept on this device", 1_000)
+        tap(PadButton.B)
+    }
+
     scenario("sync", "top line") {
         useSync(asHost = false)
         waitFor("Continue playing")
@@ -252,7 +299,7 @@ internal fun AuditDriver.syncScreens() {
         waitFor("Which save should")
         shoot("both played since they last synced: which save to use", 1_400)
         tap(PadButton.DPAD_RIGHT)
-        shoot("Use Fuse Sync chosen")
+        shoot("Use Fuse One chosen")
         tap(PadButton.B)
     }
 
@@ -324,7 +371,7 @@ internal fun AuditDriver.joinScreens() {
         useLibrary()
         openSyncPage()
         tapText("Connect to a Host")
-        waitFor("Fuse Sync found")
+        waitFor("Fuse One found")
         tap(PadButton.A)
         waitFor("Join Gaming PC")
         shoot("join the host: ask, a code, or an outside address", 1_000)
@@ -368,14 +415,14 @@ internal fun AuditDriver.syncthingScreens() {
         focusText("Addons")
         tap(PadButton.DPAD_RIGHT)
         waitFor("Your emulators' save folders, through the Syncthing you already run")
-        shoot("Addons, with Syncthing beside Fuse Sync")
+        shoot("Addons, with Syncthing beside Fuse One")
         tapText("Syncthing")
         waitFor("Set Up Syncthing")
         shoot("Syncthing's group, off")
         focusText("Set Up Syncthing")
         tap(PadButton.A)
-        waitFor("Fuse Sync Instead")
-        shoot("its page, off: what it is, and Fuse Sync instead", 1_000)
+        waitFor("Fuse One Instead")
+        shoot("its page, off: what it is, and Fuse One instead", 1_000)
     }
 
     scenario("syncthing", "not found") {

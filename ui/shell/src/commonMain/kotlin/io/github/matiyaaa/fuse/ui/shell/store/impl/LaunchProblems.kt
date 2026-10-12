@@ -89,22 +89,48 @@ internal object LaunchProblems {
      * they are the explanation; a refused file on Android usually means the emulator lacks access to
      * the folder, which is said outright.
      */
-    fun refused(emulator: InstalledEmulator, game: GameId, message: String, android: Boolean): Problem {
+    /**
+     * The emulator didn't start, or stopped as it started. With a [diagnostic] the likely reason is
+     * read from what it wrote (see [io.github.matiyaaa.fuse.launch.LaunchDiagnosis]) and the fix
+     * that goes with it offered first; the details hold the command, exit code and output.
+     */
+    fun refused(
+        emulator: InstalledEmulator,
+        game: GameId,
+        message: String,
+        android: Boolean,
+        goBack: ProblemAction.GoBack? = null,
+        diagnostic: io.github.matiyaaa.fuse.launch.LaunchDiagnostic? = null,
+        platform: PlatformId? = null,
+        home: String? = null,
+    ): Problem {
         val access = android && (message.contains("didn't let", ignoreCase = true) || message.contains("permission", ignoreCase = true))
+        val diagnosis = io.github.matiyaaa.fuse.launch.LaunchDiagnosis
+        val cause = diagnostic?.let(diagnosis::cause)
+        val family = emulator.id.value.substringAfter('.')
+        val fix = when (cause) {
+            io.github.matiyaaa.fuse.launch.LaunchCause.GRAPHICS -> ProblemAction.EmulatorSettings(game).takeIf { family in io.github.matiyaaa.fuse.launch.settings.NativeSettings.families }
+            io.github.matiyaaa.fuse.launch.LaunchCause.FIRMWARE -> platform?.let { ProblemAction.OpenSystem(it, "Check its firmware") }
+            io.github.matiyaaa.fuse.launch.LaunchCause.CORE_MISSING -> ProblemAction.PickEmulator(game = game, label = "Choose another core or emulator")
+            else -> null
+        }
         return Problem(
             title = "Couldn't start ${emulator.name}",
-            message = if (access) {
-                "Android didn't let Fuse hand this game to ${emulator.name}. This usually means the game's folder hasn't been allowed inside ${emulator.name}: open it and add the folder there."
-            } else {
-                message
+            message = when {
+                access -> "Android didn't let Fuse hand this game to ${emulator.name}. This usually means the game's folder hasn't been allowed inside ${emulator.name}: open it and add the folder there."
+                cause != null && cause != io.github.matiyaaa.fuse.launch.LaunchCause.UNKNOWN -> diagnosis.explain(cause, emulator.name)
+                else -> message
             },
             kind = if (access) ProblemKind.ACCESS else ProblemKind.EMULATOR,
-            actions = listOf(
+            actions = listOfNotNull(
+                fix,
                 ProblemAction.Retry(),
+                goBack,
                 ProblemAction.OpenEmulator(emulator.id, emulator.name),
-                ProblemAction.PickEmulator(game = game, label = "Try another emulator"),
+                ProblemAction.PickEmulator(game = game, label = "Try another emulator").takeIf { fix !is ProblemAction.PickEmulator },
             ),
-            details = "${emulator.name} (${emulator.appId}): $message",
+            details = (diagnostic?.let { diagnosis.report(it, emulator.name, emulator.version, cause!!, home) } ?: "${emulator.name} (${emulator.appId}): $message") +
+                (goBack?.let { "\nFuse updated ${emulator.name} lately and kept the version before; ${it.label.lowercase()} puts it back." } ?: ""),
         )
     }
 

@@ -172,7 +172,8 @@ class SyncthingTest {
         devices += obj("deviceID" to deck, "name" to "Steam Deck")
         pendingFolders["fuse-retroarch-saves"] = JsonObject(mapOf("offeredBy" to JsonObject(mapOf(deck to obj("label" to "Fuse: RetroArch saves")))))
         svc.connect("127.0.0.1:$port", key).getOrThrow()
-        val until = System.currentTimeMillis() + 10_000
+        // Long enough for the service's retry after a first look that failed on a busy machine (10 s).
+        val until = System.currentTimeMillis() + 30_000
         while (folders.none { it.s("id") == "fuse-retroarch-saves" } && System.currentTimeMillis() < until) kotlinx.coroutines.delay(100)
         val accepted = assertNotNull(folders.firstOrNull { it.s("id") == "fuse-retroarch-saves" })
         assertTrue(accepted.s("path")!!.endsWith(".config/retroarch/saves"))

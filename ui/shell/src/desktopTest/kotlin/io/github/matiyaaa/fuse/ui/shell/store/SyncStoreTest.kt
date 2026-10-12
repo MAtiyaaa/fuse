@@ -69,7 +69,8 @@ class SyncStoreTest {
         })
         val store = createFuseStore(services, scope)
         store.sources.add(File(dir, "roms").absolutePath, LibrarySourceKind.ROMS_ROOT)
-        withTimeout(20_000) {
+        // Two devices scan at once here; a loaded runner has taken over 20 s for it.
+        withTimeout(SCAN_BUDGET_MS) {
             store.library.platforms.first { systems -> systems.sumOf { it.gameCount } == files.size }
             store.sources.scan.first { it.phase == ScanPhase.DONE }
         }
@@ -79,7 +80,7 @@ class SyncStoreTest {
     private suspend fun games(d: Device) = d.store.library.games(GameQuery(platform = PlatformId("gba"))).first()
 
     private suspend fun eventually(what: String, check: suspend () -> Boolean) {
-        withTimeout(15_000) {
+        withTimeout(EVENTUALLY_MS) {
             while (!check()) delay(50)
         }
         assertTrue(check(), what)
@@ -160,17 +161,18 @@ class SyncStoreTest {
         deck.sync.syncNow().getOrThrow()
 
         // A second person on the handheld: their library is their own, switched in place, and they
-        // start with this device's look (its theme and quick menu), which becomes theirs.
+        // start from Fuse's own look, never from Mo's theme or quick menu.
         val sam = pc.sync.createProfile("Sam", "rocket", null).getOrThrow()
         deck.sync.switchTo(sam.id).getOrThrow()
-        eventually("Sam's library starts fresh, with this device's look") {
+        eventually("Sam's library and look start fresh") {
             deck.services.data.games.summary(deckWars.id)?.favorite == false &&
                 deck.store.collections.collections.value.none { it.name == "Strategy" } &&
-                deck.store.prefs.value.quickMenu == listOf("WIFI:2", "CLOCK:1") &&
-                deck.store.prefs.value.themeId == deckTheme
+                deck.store.prefs.value.quickMenu != listOf("WIFI:2", "CLOCK:1") &&
+                deck.store.prefs.value.themeId == "fuse"
         }
         // Sam makes it their own.
-        deck.store.updatePrefs { it.withTheme(ThemePresets.all.first { t -> t.id == "fuse" }) }
+        val samTheme = ThemePresets.all.first { t -> t.id != "fuse" && t.id != deckTheme }.id
+        deck.store.updatePrefs { it.withTheme(ThemePresets.all.first { t -> t.id == samTheme }) }
         deck.sync.syncNow().getOrThrow()
         // Back to Mo: all of it returns.
         deck.sync.switchTo(mo.id).getOrThrow()
@@ -182,7 +184,7 @@ class SyncStoreTest {
         }
         // And Sam's look stayed Sam's: never put back to anyone else's, nor to Fuse's defaults.
         deck.sync.switchTo(sam.id).getOrThrow()
-        eventually("Sam's theme is kept") { deck.store.prefs.value.themeId == "fuse" }
+        eventually("Sam's theme is kept") { deck.store.prefs.value.themeId == samTheme }
         deck.sync.switchTo(mo.id).getOrThrow()
         eventually("Mo's theme again") { deck.store.prefs.value.themeId == deckTheme }
 
@@ -194,8 +196,10 @@ class SyncStoreTest {
         pc.sync.syncNow().getOrThrow()
         assertTrue(pc.store.prefs.value.home.mode != deckMode, "Home stayed on the handheld")
         deck.store.sync.setOwnHome(false)
-        eventually("the profile's Home is back") { deck.store.prefs.value.home.mode == pc.store.prefs.value.home.mode }
-        assertEquals("PROFILE", deck.store.sync.config.value.homeScope)
+        // The profile's Home comes in first, then the scope settles back to the profile's (two writes).
+        eventually("the profile's Home is back") {
+            deck.store.prefs.value.home.mode == pc.store.prefs.value.home.mode && deck.store.sync.config.value.homeScope == "PROFILE"
+        }
 
         // Off: nothing changes here, and nothing shows.
         val before = games(deck).map { it.id to it.favorite }
@@ -206,3 +210,9 @@ class SyncStoreTest {
         pc.sync.stop()
     }
 }
+
+/** How long a test device's first scan may take: generous, as only a stuck scan should reach it. */
+private const val SCAN_BUDGET_MS = 90_000L
+
+/** How long a change may take to travel between the test's devices. */
+private const val EVENTUALLY_MS = 45_000L

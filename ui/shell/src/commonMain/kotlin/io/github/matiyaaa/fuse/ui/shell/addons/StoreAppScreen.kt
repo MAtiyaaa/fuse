@@ -125,6 +125,16 @@ private fun StorePage(app: AppState, state: StoreState, item: StoreApp) {
                 )
             })
         }
+        installed?.record?.previousVersion?.takeIf { job == null || !job.active }?.let { back ->
+            add(PageButton("Go Back to $back", FuseIcons.Undo, ButtonKind.SECONDARY) {
+                app.confirm = ConfirmSpec(
+                    title = "Go back to ${item.name} $back?",
+                    message = "Fuse kept the version this update replaced and puts it back in place of ${installed.versionName ?: "this one"}. ${item.name}'s own settings and saves, and your games, stay where they are.",
+                    confirmLabel = "Go Back",
+                    onConfirm = { ops.rollBack(key) },
+                )
+            })
+        }
         add(PageButton(if (item.sourceKind == SourceKind.GITHUB) "GitHub" else "Website", FuseIcons.External, ButtonKind.GHOST) { app.platform.openUrl(item.sourceUrl) })
         add(PageButton("Check again", FuseIcons.Refresh, ButtonKind.GHOST, busy = check == ReleaseCheck.Checking) { ops.check(key, force = true) })
     }

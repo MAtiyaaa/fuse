@@ -59,6 +59,7 @@ class AndroidPlatformUi(
     override val video: VideoPreview = AndroidVideoPreview()
     override val music: AndroidMenuMusic = AndroidMenuMusic()
     override val capture: AndroidScreenCapture = AndroidScreenCapture(appContext, activities, scope)
+    override val manuals: AndroidManuals = AndroidManuals(appContext)
     override val secondScreenLog: StateFlow<List<String>> = SecondScreenLog.entries
 
     private val hasBluetooth = appContext.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)
@@ -150,6 +151,26 @@ class AndroidPlatformUi(
     private val awake = AndroidStayAwake(appContext, activities)
 
     override fun stayAwake(awake: io.github.matiyaaa.fuse.ui.shell.platform.StayAwake) = this.awake.apply(awake)
+
+    override val background: io.github.matiyaaa.fuse.ui.shell.platform.BackgroundLimits
+        get() {
+            val power = appContext.getSystemService(android.os.PowerManager::class.java)
+            val optimized = power?.isIgnoringBatteryOptimizations(appContext.packageName) == false
+            val restricted = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P &&
+                appContext.getSystemService(android.app.ActivityManager::class.java)?.isBackgroundRestricted == true
+            return io.github.matiyaaa.fuse.ui.shell.platform.BackgroundLimits(optimized, restricted)
+        }
+
+    /**
+     * Fuse's own page in the system's app settings, where its battery use is set to Unrestricted
+     * (this is where both battery optimization and background restriction are lifted on recent
+     * Android); the list of battery optimizations where that page can't be opened.
+     */
+    override fun openBackgroundSettings() {
+        val own = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${appContext.packageName}".toUri())
+        val list = Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+        if (!activities.start(own)) activities.start(list)
+    }
 
     override fun openUrl(url: String) {
         val uri = url.toUri()

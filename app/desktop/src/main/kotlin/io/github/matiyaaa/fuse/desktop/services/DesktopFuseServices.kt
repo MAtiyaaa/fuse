@@ -82,6 +82,9 @@ class DesktopFuseServices private constructor(
     private val desktopLauncher = DesktopLauncher(desktopFiles, launcherHooks)
 
     override val emulators: EmulatorDetector = DesktopEmulatorDetector(env, folders, dirs.config, os)
+
+    override fun intelligence() = io.github.matiyaaa.fuse.launch.intelligence.FileLook() to
+        io.github.matiyaaa.fuse.launch.intelligence.FileKnowledgeStore(File(dirs.data, "intelligence.json"))
     override val launcher: GameLauncher = desktopLauncher
     override val cartridge: CartridgeBridge = if (os == DesktopOs.LINUX) DesktopCartridgeBridge(dirs) else NoCartridgeBridge
     override val installer: ReleaseInstaller =
@@ -89,7 +92,7 @@ class DesktopFuseServices private constructor(
 
     /** The Store's programs: fetched from their releases and put where Fuse finds emulators. */
     override val desktopApps: io.github.matiyaaa.fuse.ui.shell.store.DesktopInstaller =
-        DesktopStoreInstaller(os, File(dirs.home.toString()), File(dirs.cache, "store-downloads"))
+        DesktopStoreInstaller(os, File(dirs.home.toString()), File(dirs.cache, "store-downloads"), File(dirs.data, "previous-versions"))
 
     /** No Apps section on a desktop: Fuse manages games there, not programs. */
     override val apps: AppsProvider? = null
@@ -164,6 +167,27 @@ class DesktopFuseServices private constructor(
 
     override suspend fun keepFile(relativePath: String, bytes: ByteArray): String? = withContext(Dispatchers.IO) {
         writeBelow(dirs.data, relativePath) { bytes }
+    }
+
+    override suspend fun writeBeside(beside: String, name: String, bytes: ByteArray): String? = withContext(Dispatchers.IO) {
+        if (name.isBlank() || '/' in name || '\\' in name || name == "." || name == "..") return@withContext null
+        try {
+            val dir = File(beside).absoluteFile.parentFile ?: return@withContext null
+            val file = File(dir, name)
+            if (file.exists()) return@withContext null
+            val temp = File(dir, ".$name.fuse-part")
+            temp.writeBytes(bytes)
+            // Never over a file that appeared meanwhile.
+            if (file.exists() || !temp.renameTo(file)) {
+                temp.delete()
+                return@withContext null
+            }
+            file.absolutePath
+        } catch (e: IOException) {
+            null
+        } catch (e: SecurityException) {
+            null
+        }
     }
 
     override fun utcOffsetMillis(): Long = TimeZone.getDefault().getOffset(System.currentTimeMillis()).toLong()

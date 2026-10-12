@@ -96,7 +96,7 @@ class UiFlowTest {
     private fun newServices() = FakeServices(FuseData(DesktopDatabase.open(File(cache, "fuse-${System.nanoTime()}.db").absolutePath)), cache)
 
     @Test
-    fun firstRunStartsOnboardingAndConfirmAdvances() = runComposeUiTest {
+    fun firstRunStartsOnboardingAndConfirmAdvances() = runComposeUiTest(testTimeout = FLOW_TEST_TIMEOUT) {
         val services = newServices()
         val store = runBlocking { createFuseStore(services, scope) }
         val router = InputRouter(scope)
@@ -110,7 +110,7 @@ class UiFlowTest {
     }
 
     @Test
-    fun homeShowsTheLibraryAndConfirmLaunchesTheGame() = runComposeUiTest {
+    fun homeShowsTheLibraryAndConfirmLaunchesTheGame() = runComposeUiTest(testTimeout = FLOW_TEST_TIMEOUT) {
         val services = newServices()
         val store: FuseStore = runBlocking {
             createFuseStore(services, scope).also { s ->
@@ -139,7 +139,7 @@ class UiFlowTest {
     }
 
     @Test
-    fun oneMouseClickPlaysAGame() = runComposeUiTest {
+    fun oneMouseClickPlaysAGame() = runComposeUiTest(testTimeout = FLOW_TEST_TIMEOUT) {
         val services = newServices()
         val store: FuseStore = runBlocking {
             createFuseStore(services, scope).also { s ->
@@ -170,12 +170,13 @@ class UiFlowTest {
     }
 
     @Test
-    fun aGridScrolledUpByTouchStaysWhereTheFingerLeftIt() = runComposeUiTest(testTimeout = kotlin.time.Duration.parse("3m")) {
+    fun aGridScrolledUpByTouchStaysWhereTheFingerLeftIt() = runComposeUiTest(testTimeout = FLOW_TEST_TIMEOUT) {
         repeat(80) { File(root, "gba/Quest %02d (USA).gba".format(it)).writeBytes(ByteArray(512)) }
         val services = newServices()
         val store: FuseStore = runBlocking {
             createFuseStore(services, scope).also { s ->
-                s.updatePrefs { it.copy(onboardingDone = true) }
+                // The grid of this device's games (the Library opens on All by default).
+                s.updatePrefs { it.copy(onboardingDone = true, libraryOpensOn = "INSTALLED") }
                 s.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
                 withTimeout(30_000) { s.library.home.first { feed -> feed.recentlyAdded.isNotEmpty() } }
             }
@@ -219,7 +220,7 @@ class UiFlowTest {
     }
 
     @Test
-    fun tabsSwitchedQuicklyMidSlideStillShowThePage() = runComposeUiTest {
+    fun tabsSwitchedQuicklyMidSlideStillShowThePage() = runComposeUiTest(testTimeout = FLOW_TEST_TIMEOUT) {
         val services = newServices()
         val store: FuseStore = runBlocking {
             createFuseStore(services, scope).also { s ->
@@ -255,7 +256,7 @@ class UiFlowTest {
     }
 
     @Test
-    fun aTabChosenFromHomeIsThereInTheVeryNextFrame() = runComposeUiTest {
+    fun aTabChosenFromHomeIsThereInTheVeryNextFrame() = runComposeUiTest(testTimeout = FLOW_TEST_TIMEOUT) {
         val services = newServices()
         val store: FuseStore = runBlocking {
             createFuseStore(services, scope).also { s ->
@@ -286,7 +287,7 @@ class UiFlowTest {
     }
 
     @Test
-    fun aGameOpenedOnTheOtherScreenLeavesFuseUsableHere() = runComposeUiTest {
+    fun aGameOpenedOnTheOtherScreenLeavesFuseUsableHere() = runComposeUiTest(testTimeout = FLOW_TEST_TIMEOUT) {
         val services = newServices().also { it.secondDisplay = 2 }
         val store: FuseStore = runBlocking {
             createFuseStore(services, scope).also { s ->
@@ -317,7 +318,7 @@ class UiFlowTest {
     }
 
     @Test
-    fun setupMakesTheFirstProfileAndComesBackToTheStepItLeft() = runComposeUiTest {
+    fun setupMakesTheFirstProfileAndComesBackToTheStepItLeft() = runComposeUiTest(testTimeout = FLOW_TEST_TIMEOUT) {
         lateinit var services: FakeServices
         services = FakeServices(FuseData(DesktopDatabase.open(File(cache, "fuse-${System.nanoTime()}.db").absolutePath)), cache, sync = { port, sc ->
             io.github.matiyaaa.fuse.sync.JvmSyncService(
@@ -389,7 +390,7 @@ class UiFlowTest {
     private fun <T : Any> assertNotNullOf(v: T?): T = kotlin.test.assertNotNull(v)
 
     @Test
-    fun theSyncTabShowsAtLeastFourGamesAtOnceEvenOnTheThorsUpperScreen() = runComposeUiTest {
+    fun theSyncTabShowsAtLeastFourGamesAtOnceEvenOnTheThorsUpperScreen() = runComposeUiTest(testTimeout = FLOW_TEST_TIMEOUT) {
         val data = FuseData(DesktopDatabase.open(File(cache, "fuse-${System.nanoTime()}.db").absolutePath))
         val sync = io.github.matiyaaa.fuse.ui.shell.audit.AuditSync(data.settings).also { it.household(asHost = true) }
         val store = runBlocking { createFuseStore(FakeServices(data, cache, sync = { _, _ -> sync }), scope) }
@@ -426,7 +427,7 @@ class UiFlowTest {
     }
 
     @Test
-    fun theProfileEditorFitsTheThorsScreensAndTheDpadReachesEveryPart() = runComposeUiTest {
+    fun theProfileEditorFitsTheThorsScreensAndTheDpadReachesEveryPart() = runComposeUiTest(testTimeout = FLOW_TEST_TIMEOUT) {
         val store = runBlocking { createFuseStore(newServices(), scope) }
         val router = InputRouter(scope)
         mainClock.autoAdvance = false
@@ -521,6 +522,13 @@ private fun androidx.compose.ui.test.ComposeUiTest.pumpUntil(timeoutMs: Long = 1
 
 /** The most real time a wait may take, whatever the machine: only a test that is truly stuck reaches it. */
 private const val REAL_TIME_CAP_MS = 120_000L
+
+/**
+ * How long a whole flow may run. Each test scans a library and waits on the interface several times,
+ * each wait allowed up to [REAL_TIME_CAP_MS] of real time, so the test library's default of a minute
+ * is less than the waits it holds: a loaded runner ended a test that was still passing.
+ */
+private val FLOW_TEST_TIMEOUT = kotlin.time.Duration.parse("10m")
 
 private fun InputRouter.tap(button: PadButton) {
     press(button, InputSource.GAMEPAD)

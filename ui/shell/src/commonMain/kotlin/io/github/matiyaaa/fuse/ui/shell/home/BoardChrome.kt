@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
@@ -94,6 +95,28 @@ internal fun GridWells(
     val litTarget by fuselineFloat(if (target != null) 1f else 0f, Fuse.motion.fade(Durations.FAST), label = "target")
     Canvas(modifier) {
         if (shown <= 0.01f) return@Canvas
+        // The board is worked out left to right; laid out right to left, the wells mirror with the widgets.
+        if (layoutDirection == androidx.compose.ui.unit.LayoutDirection.Rtl) {
+            withTransform({ scale(scaleX = -1f, scaleY = 1f, pivot = center) }) { drawWells(geometry, rows, occupied, target, cornerFraction, shown, well, edge, accent, litTarget) }
+        } else {
+            drawWells(geometry, rows, occupied, target, cornerFraction, shown, well, edge, accent, litTarget)
+        }
+    }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawWells(
+    geometry: BoardGeometry,
+    rows: Int,
+    occupied: BoardLayout,
+    target: BoardRect?,
+    cornerFraction: Float,
+    shown: Float,
+    well: androidx.compose.ui.graphics.Color,
+    edge: androidx.compose.ui.graphics.Color,
+    accent: androidx.compose.ui.graphics.Color,
+    litTarget: Float,
+) {
+    run {
         val corner = minOf(geometry.cellW, geometry.cellH) * cornerFraction
         val cell = squirclePath(geometry.cellW, geometry.cellH, corner, 0.6f)
         val hair = Stroke(1.dp.toPx())

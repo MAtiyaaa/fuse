@@ -228,13 +228,7 @@ class TransferManager(
 
     // ------------------------------------------------------------------ running
 
-    private fun held(direction: TransferDirection): WaitReason? {
-        val c = _conditions.value
-        val s = _settings.value
-        if (s.wifiOnly && !c.unmetered) return WaitReason.WIFI
-        if (c.playing && s.whilePlaying(direction) == WhilePlaying.PAUSE) return WaitReason.PLAYING
-        return null
-    }
+    private fun held(direction: TransferDirection): WaitReason? = _settings.value.held(direction, _conditions.value)
 
     private fun applyConditions() {
         // The rates first, at once: a transfer started right after a new limit is set moves at that limit.
@@ -252,9 +246,10 @@ class TransferManager(
                 if (reason != null) {
                     val ids = _items.value.filter { it.direction == d && it.status == TransferStatus.ACTIVE }.map { it.id }
                     ids.forEach { jobs.remove(it)?.cancel(Held()) }
-                    update { list -> list.map { if (it.direction == d && (it.status == TransferStatus.ACTIVE || it.status == TransferStatus.QUEUED)) it.copy(status = TransferStatus.WAITING, waiting = reason, phase = null) else it } }
+                    // Those already held say why now (Wi-Fi back, but still in quiet hours).
+                    update { list -> list.map { if (it.direction == d && (it.status == TransferStatus.ACTIVE || it.status == TransferStatus.QUEUED || (it.status == TransferStatus.WAITING && it.waiting in TransferConditions.CONDITIONS))) it.copy(status = TransferStatus.WAITING, waiting = reason, phase = null) else it } }
                 } else {
-                    update { list -> list.map { if (it.direction == d && it.status == TransferStatus.WAITING && (it.waiting == WaitReason.PLAYING || it.waiting == WaitReason.WIFI)) it.copy(status = TransferStatus.QUEUED, waiting = null) else it } }
+                    update { list -> list.map { if (it.direction == d && it.status == TransferStatus.WAITING && it.waiting in TransferConditions.CONDITIONS) it.copy(status = TransferStatus.QUEUED, waiting = null) else it } }
                 }
             }
             kick()

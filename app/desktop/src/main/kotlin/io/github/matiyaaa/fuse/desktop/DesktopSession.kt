@@ -26,7 +26,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.plus
 import kotlinx.coroutines.withContext
 
@@ -135,6 +138,8 @@ class DesktopSession(
     /** Builds the services and the store off the UI thread; the splash shows until then. */
     fun start() {
         gamepads.start()
+        // Fuse's haptics rumble the controller in use, where its motors can be driven.
+        platform.haptics.rumble = gamepads::rumble
         scope.launch {
             try {
                 val safe = withContext(Dispatchers.IO) { safeMode() }
@@ -148,11 +153,34 @@ class DesktopSession(
                 val store = createFuseStore(services, scope, safeMode = safe != null)
                 // Phone Link waits for a normal start: safe mode runs nothing that listens on the network.
                 startState = StartState.Ready(store, services, if (safe == null) startPhoneLink(store, services) else null, safe)
+                // An update on trial has come up: once it has stayed up a while, it is the one kept.
+                scope.launch {
+                    delay(UPDATE_PROVEN_MS)
+                    withContext(Dispatchers.IO) { io.github.matiyaaa.fuse.desktop.services.UpdateTrial(File(dirs.data, io.github.matiyaaa.fuse.desktop.services.UpdateTrial.FILE)).healthy() }
+                }
+                // The Fuse Decky Bridge follows its switch (Steam integration, Linux), and never runs in safe mode.
+                if (safe == null && io.github.matiyaaa.fuse.desktop.system.DesktopOs.current == io.github.matiyaaa.fuse.desktop.system.DesktopOs.LINUX) followDecky(store)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
                 Log.warn("startup failed", e)
                 startState = StartState.Failed(StartupFailure.explain(e, dirs.data), e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName)
+            }
+        }
+    }
+
+    /** The Fuse Decky Bridge while it is switched on; closed with the session. */
+    @Volatile private var decky: io.github.matiyaaa.fuse.link.DeckyBridge? = null
+
+    private fun followDecky(store: FuseStore) {
+        scope.launch(Dispatchers.IO) {
+            store.prefs.map { it.steam.decky }.distinctUntilChanged().collect { on ->
+                decky?.close()
+                decky = null
+                if (on) {
+                    val bridge = io.github.matiyaaa.fuse.link.DeckyBridge(store, BuildInfo.VERSION, io.github.matiyaaa.fuse.link.DeckyBridge.discoveryFile())
+                    if (bridge.start() > 0) decky = bridge else Log.warn("the Fuse Decky Bridge could not start")
+                }
             }
         }
     }
@@ -244,7 +272,12 @@ class DesktopSession(
     }
 
     override fun exitApplication() {
-        EventQueue.invokeLater { exit() }
+        EventQueue.invokeLater {
+            // Gone from the screen at once (Steam's Game Mode shows the next thing straight away);
+            // what is left to close happens out of sight.
+            window?.isVisible = false
+            exit()
+        }
     }
 
     override val currentWindowMode: WindowMode get() = windowMode
@@ -256,9 +289,19 @@ class DesktopSession(
     /** Releases devices, the database and the HTTP client. Safe to call twice. */
     fun close() {
         if (!closed.compareAndSet(false, true)) return
-        gamepads.close()
-        platform.close()
-        (startState as? StartState.Ready)?.phoneLink?.close()
+        window?.isVisible = false
+        // Each part closes on its own at once (servers give their open calls a moment each), and
+        // Fuse waits for them together, never longer than [CLOSE_WAIT_MS]: quitting is quick.
+        val parts = listOf<() -> Unit>(
+            { gamepads.close() },
+            { platform.close() },
+            { (startState as? StartState.Ready)?.phoneLink?.close() },
+            { decky?.close() },
+        )
+        val threads = parts.map { part -> Thread({ runCatching { part() } }, "fuse-close").apply { isDaemon = true; start() } }
+        val deadline = System.currentTimeMillis() + CLOSE_WAIT_MS
+        for (t in threads) t.join(maxOf(1L, deadline - System.currentTimeMillis()))
+        // The database last, once nothing above writes to it.
         (startState as? StartState.Ready)?.services?.close()
     }
 
@@ -267,20 +310,26 @@ class DesktopSession(
         private val latestStick = AtomicReference(0f to 0f)
         private val stickPosted = AtomicBoolean(false)
 
-        override fun press(button: PadButton) = EventQueue.invokeLater {
+        override fun press(button: PadButton, device: String?) = EventQueue.invokeLater {
             if (!focused) return@invokeLater
+            // Only the chosen controller moves around Fuse, when one was chosen and is here.
+            if (!router.fromController(device)) return@invokeLater
             pointerHidden = true
             router.press(button, InputSource.GAMEPAD)
         }
 
-        override fun release(button: PadButton) = EventQueue.invokeLater { router.release(button, InputSource.GAMEPAD) }
+        override fun release(button: PadButton, device: String?) = EventQueue.invokeLater { router.release(button, InputSource.GAMEPAD) }
 
         override fun identified(name: String?) {
             val family = io.github.matiyaaa.fuse.model.PadFamily.of(name)
             EventQueue.invokeLater { router.padIdentified(family) }
         }
 
-        override fun stick(x: Float, y: Float) {
+        override fun connected(devices: List<String>) = EventQueue.invokeLater { router.controllersChanged(devices) }
+
+        override fun stick(x: Float, y: Float, device: String?) {
+            // A controller that doesn't navigate has its stick ignored; letting go is always passed on.
+            if (!router.allows(device) && (x != 0f || y != 0f)) return
             latestStick.set(x to y)
             // Coalesce: many axis events per frame become one router update.
             if (!stickPosted.compareAndSet(false, true)) return
@@ -291,7 +340,8 @@ class DesktopSession(
             }
         }
 
-        override fun trigger(button: PadButton, value: Float) = EventQueue.invokeLater {
+        override fun trigger(button: PadButton, value: Float, device: String?) = EventQueue.invokeLater {
+            if (!router.allows(device) && value > 0f) return@invokeLater
             if (focused || value <= 0f) router.trigger(button, value, InputSource.GAMEPAD)
         }
     }
@@ -317,3 +367,9 @@ internal object StartupFailure {
         }
     }
 }
+
+/** The longest quitting waits for Fuse's servers and devices to close (they carry on closing as the process ends). */
+private const val CLOSE_WAIT_MS = 1_200L
+
+/** How long a newly updated Fuse stays up before it is the version kept (its trial ends). */
+private const val UPDATE_PROVEN_MS = 20_000L

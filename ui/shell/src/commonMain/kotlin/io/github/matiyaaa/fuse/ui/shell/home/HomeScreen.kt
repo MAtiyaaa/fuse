@@ -607,7 +607,12 @@ private fun ShelfRow(
  */
 private fun ShelfItem.stage(shelf: Shelf?, feed: HomeFeed, cartridge: CartridgeStatus, time: String, accent: Long): StageInfo = when (this) {
     is ShelfItem.Game -> card.stage().let { s ->
-        if (shelf?.kind == WidgetKind.RECENTLY_ADDED && card.addedAt > 0) s.copy(meta = listOf("Added ${agoText(card.addedAt)}") + s.meta) else s
+        val why = feed.reasons[card.id]?.takeIf { shelf?.kind == WidgetKind.FOR_YOU || shelf?.kind == WidgetKind.SPOTLIGHT }
+        when {
+            why != null -> s.copy(meta = listOf(why) + s.meta)
+            shelf?.kind == WidgetKind.RECENTLY_ADDED && card.addedAt > 0 -> s.copy(meta = listOf("Added ${agoText(card.addedAt)}") + s.meta)
+            else -> s
+        }
     }
     is ShelfItem.System -> card.stage()
     is ShelfItem.App -> StageInfo(key = key, title = card.entry.displayTitle, accent = accent, eyebrow = when (card.entry.kind) {

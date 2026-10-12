@@ -90,6 +90,8 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
         // Android keeps a hardware layer as a finished picture until it changes: drawing that never
         // changes (scrims, a resting room, generated art) is recorded once and kept by the graphics card.
         io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.cachedLayers = true
+        // RenderEffect blur arrived in Android 12.
+        io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.backdropBlur = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
         super.onCreate()
         crashLog.install()
         // Heat and battery saver reach Fuseline: decoration eases off, interaction never does.

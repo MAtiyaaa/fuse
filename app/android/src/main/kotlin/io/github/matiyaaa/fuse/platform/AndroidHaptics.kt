@@ -32,6 +32,9 @@ class AndroidHaptics(context: Context) : Haptics {
     override fun lift() = vibrate(Kind.LIFT)
     override fun slot() = vibrate(Kind.SLOT)
     override fun drop() = vibrate(Kind.DROP)
+    override fun notice() = vibrate(Kind.TICK)
+    override fun success() = vibrate(Kind.LIFT)
+    override fun setStrength(level: Float) { intensity = level }
 
     private enum class Kind { TICK, CONFIRM, REJECT, LIFT, SLOT, DROP }
 

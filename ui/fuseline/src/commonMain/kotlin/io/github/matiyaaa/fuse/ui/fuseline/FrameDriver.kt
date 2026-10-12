@@ -189,6 +189,25 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
         private set
     private var previousFrame = Long.MIN_VALUE
 
+    /**
+     * Fuseline 4.1: one number that every value moving visibly frame after frame is watched through.
+     * A value that moved last frame and moves again this one tells its readers through this rather
+     * than through a state of its own, so a frame of many moving values writes one state, not one
+     * per value: Compose's snapshot then applies one change, and its observers look up one object.
+     * A value that comes to rest, is snapped or held, or stops moving visibly goes back to its own
+     * state (telling its readers through this one last time), so nothing reads a value that is still.
+     */
+    internal val pulse = androidx.compose.runtime.mutableIntStateOf(0)
+    private var pulses = 0
+    private var pulsedAt = Long.MIN_VALUE
+
+    /** Tells every reader of a pulsing value that this frame moved it ([always]: even if this frame already did). */
+    internal fun pulse(always: Boolean = false) {
+        if (!always && pulsedAt == lastFrame) return
+        pulsedAt = lastFrame
+        pulse.intValue = ++pulses
+    }
+
     /** While a frame is being stepped, and the move it has reached. */
     private var passing = false
     private var cursor = Long.MAX_VALUE
@@ -769,12 +788,19 @@ object FramePacing {
     var powerSaving: Boolean = false
 
     /**
+     * How much decoration the app wants for what it is doing (set by the app, not measured): every
+     * update, a third of them (idle on screen), or none (behind another window, a game running,
+     * the device asleep). Paused decoration stays where it was and carries on from there.
+     */
+    var decorationRate: DecorationRate = DecorationRate.FULL
+
+    /**
      * Of decoration's updates, one in this many is kept for the device's sake: 1 normally, 2 while
      * it runs hot or battery saver is on, 3 while it is throttling.
      */
     val pressureEvery: Int
         get() = when {
-            devicePressure >= DevicePressure.THROTTLED -> 3
+            devicePressure >= DevicePressure.THROTTLED || decorationRate == DecorationRate.REDUCED -> 3
             powerSaving || devicePressure >= DevicePressure.HOT -> 2
             else -> 1
         }
@@ -822,7 +848,12 @@ object FramePacing {
      */
     fun input(nowNanos: Long = monotonicNanos()) {
         lastInput = nowNanos
+        lastInputNanos = nowNanos
     }
+
+    /** When input last arrived ([monotonicNanos]), or [Long.MIN_VALUE] before any: for the app to tell when it sits idle. */
+    var lastInputNanos: Long = Long.MIN_VALUE
+        private set
 
     /**
      * Whether decoration holds briefly after input while actual frame or thermal pressure exists.
@@ -853,6 +884,8 @@ object FramePacing {
         lastObserved = defaultHistory
         devicePressure = DevicePressure.NONE
         powerSaving = false
+        decorationRate = DecorationRate.FULL
+        lastInputNanos = Long.MIN_VALUE
         sources.fill(null)
         histories.fill(null)
     }
@@ -860,3 +893,6 @@ object FramePacing {
 
 /** How much the device itself says it is struggling (its thermal state), from none to throttling. */
 enum class DevicePressure { NONE, WARM, HOT, THROTTLED }
+
+/** How much decorative motion the app wants right now ([FramePacing.decorationRate]). */
+enum class DecorationRate { FULL, REDUCED, PAUSED }

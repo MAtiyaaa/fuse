@@ -203,7 +203,7 @@ fun ThemesScreen(app: AppState) {
     }
     fun openStudio(spec: ThemeSpec, custom: Boolean) {
         view.inFilters = false
-        view.studio = StudioState.of(spec, custom, if (custom) app.store.themes.export(spec) else null)
+        view.studio = StudioState.of(spec, custom, if (custom) app.store.themes.export(spec) else null, advanced = app.store.prefs.value.themeStudioAdvanced)
     }
     fun leaveStudio(s: StudioState) {
         if (!s.changed) {
@@ -776,7 +776,7 @@ internal fun ThemePreview(spec: ThemeSpec, animate: Boolean, modifier: Modifier 
     val glyphs = Fuse.glyphs
     val outerMotion = Fuse.motion
     val contrast = Fuse.look.highContrastFocus
-    FuseTheme(spec = spec, quality = quality, glyphs = glyphs, highContrastFocus = contrast) {
+    FuseTheme(spec = spec, quality = quality, glyphs = glyphs, highContrastFocus = contrast, colorVision = Fuse.look.colorVision) {
         val c = Fuse.colors
         val moving = animate && !outerMotion.reduced && quality.animatedBackground && Fuse.motion.ambient
         BoxWithConstraints(modifier.background(c.ink)) {

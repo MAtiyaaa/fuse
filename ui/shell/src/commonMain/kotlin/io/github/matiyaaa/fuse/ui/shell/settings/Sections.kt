@@ -37,18 +37,27 @@ import io.github.matiyaaa.fuse.model.SoundProfile
 import io.github.matiyaaa.fuse.model.Support
 import io.github.matiyaaa.fuse.model.WidgetKind
 import io.github.matiyaaa.fuse.model.isRow
+import io.github.matiyaaa.fuse.model.mainScreen
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.ReorderEntry
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.checkSteamGames
+import io.github.matiyaaa.fuse.ui.shell.app.refreshSteamGames
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ReorderSpec
+import io.github.matiyaaa.fuse.ui.shell.app.calibrateScreen
+import io.github.matiyaaa.fuse.ui.shell.app.calibration
+import io.github.matiyaaa.fuse.ui.shell.app.forgetScreenCalibration
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.addGame
 import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
+import io.github.matiyaaa.fuse.ui.shell.app.goBackToPreviousFuse
+import io.github.matiyaaa.fuse.ui.shell.app.liftTab
 import io.github.matiyaaa.fuse.ui.shell.app.emulatorFoldersPicker
 import io.github.matiyaaa.fuse.ui.shell.app.hasTwoScreens
 import io.github.matiyaaa.fuse.ui.shell.app.locatePicker
@@ -105,6 +114,7 @@ fun appearanceRows(app: AppState): List<MenuAction> {
             "art", "Game art", FuseIcons.GalleryThumbnails, p.gameArt,
             listOf(GameArtStyle.BOX_ART to "Box art", GameArtStyle.POSTER to "Posters"),
             detail = "How game tiles look on Home, in the Library and in Cartridge",
+            aid = { ChoiceAid.GameArt(it) },
             optionDetail = {
                 when (it) {
                     GameArtStyle.BOX_ART -> "Square art, as Fuse has always shown"
@@ -165,17 +175,24 @@ fun appearanceRows(app: AppState): List<MenuAction> {
 fun accessibilityRows(app: AppState): List<MenuAction> {
     val p by app.store.prefs.collectAsState()
     val set = app.store::updatePrefs
+    val screens by app.platform.displays.collectAsState()
+    val calibrated = p.calibration(screens)
+    // While this screen has its own fit, the shared rows say so: they set every other screen.
+    val shared = if (calibrated != null) "This screen is calibrated and keeps its own. This sets the others" else null
     return buildList {
         labelled("Reading") {
+            add(calibrateRow(app, calibrated))
             add(app.choiceRow(
                 "textsize", "Text size", FuseIcons.TextSize, p.textScale,
                 listOf(1f to "Default", 1.15f to "Large", 1.3f to "Extra large"),
-                detail = "Larger text for reading from the sofa. Titles grow a little less",
+                detail = shared ?: "Larger text for reading from the sofa. Titles grow a little less",
+                aid = { ChoiceAid.TextSize(it) },
             ) { v -> set { it.copy(textScale = v) } })
             add(app.choiceRow(
                 "margin", "Screen edges", FuseIcons.Maximize, p.screenMargin,
                 listOf(0 to "Use all of it", 2 to "2% in", 4 to "4% in", 6 to "6% in"),
-                detail = "Keeps everything clear of edges a TV cuts off. The background still fills the screen",
+                detail = shared ?: "Keeps everything clear of edges a TV cuts off. The background still fills the screen",
+                aid = { ChoiceAid.ScreenEdges(it) },
             ) { v -> set { it.copy(screenMargin = v) } })
         }
         labelled("Motion and focus") {
@@ -197,10 +214,67 @@ fun accessibilityRows(app: AppState): List<MenuAction> {
                         MotionProfile.ENHANCED -> "Richer springs and flourishes, for devices with room to spare"
                     }
                 },
+                aid = { ChoiceAid.Motion(it ?: automatic) },
             ) { v -> set { it.copy(motion = v) } })
             add(toggleRow("contrast", "High contrast focus", FuseIcons.ScanEye, p.highContrastFocus, "Adds an outline to everything that's selected") { v -> set { it.copy(highContrastFocus = v) } })
         }
+        labelled("Colour and direction") {
+            add(app.choiceRow(
+                "colours", "Colours", FuseIcons.Contrast, p.colorVision,
+                io.github.matiyaaa.fuse.model.ColorVision.entries.map { it to it.title },
+                detail = "The colours of done, needs a look and went wrong. Each also says itself in words or a symbol",
+                optionDetail = { it.detail },
+            ) { v -> set { it.copy(colorVision = v) } })
+            add(app.choiceRow(
+                "direction", "Layout direction", FuseIcons.ArrowLeftRight, p.layoutDirection,
+                io.github.matiyaaa.fuse.model.LayoutDirectionChoice.entries.map { it to it.title },
+                detail = "Right to left mirrors Fuse, and the D-pad and shoulders follow it",
+                optionDetail = { d ->
+                    when (d) {
+                        io.github.matiyaaa.fuse.model.LayoutDirectionChoice.AUTOMATIC -> "As the system's language reads: right to left for Arabic, Hebrew, Persian and Urdu"
+                        io.github.matiyaaa.fuse.model.LayoutDirectionChoice.LEFT_TO_RIGHT -> "Always, whatever the system's language"
+                        io.github.matiyaaa.fuse.model.LayoutDirectionChoice.RIGHT_TO_LEFT -> "Always mirrored, whatever the system's language"
+                    }
+                },
+            ) { v -> set { it.copy(layoutDirection = v) } })
+        }
     }
+}
+
+/**
+ * Calibrating the screen Fuse is on: its own size, edges and text, kept for it alone. Once it is
+ * calibrated the row says how, and opening it offers to calibrate again or to forget it.
+ */
+internal fun calibrateRow(app: AppState, calibrated: io.github.matiyaaa.fuse.model.ScreenCalibration?): MenuAction {
+    val screen = app.platform.displays.value.let { it.mainScreen() }?.name?.trim()?.takeIf { it.isNotEmpty() } ?: "this screen"
+    return MenuAction(
+        "calibrate", "Calibrate this screen", FuseIcons.Tv,
+        detail = if (calibrated == null) {
+            "Size, edges and text for $screen, kept for it alone. For a TV that cuts off its edges, or one seen from the sofa"
+        } else {
+            listOf(
+                if (calibrated.interfaceSize == 0) "Automatic size" else "${calibrated.interfaceSize}% size",
+                if (calibrated.margin == 0) "all of the screen" else "${calibrated.margin}% edges",
+                when (calibrated.textScale) { 1.3f -> "extra large text"; 1.15f -> "large text"; else -> "default text" },
+            ).joinToString(", ").replaceFirstChar { it.uppercase() } + ". Only on $screen"
+        },
+        trailing = if (calibrated == null) Trailing.Chevron else Trailing.Badge("Calibrated"),
+        onSelect = {
+            if (calibrated == null) {
+                app.calibrateScreen()
+            } else {
+                app.choice = ChoiceSpec(
+                    title = "Calibrate this screen",
+                    icon = FuseIcons.Tv,
+                    message = "$screen has its own size, edges and text.",
+                    options = listOf(
+                        MenuAction("again", "Calibrate Again", FuseIcons.Tv, detail = "Starts from what it has now", onSelect = { app.choice = null; app.calibrateScreen() }),
+                        MenuAction("forget", "Forget Its Calibration", FuseIcons.RotateCcw, detail = "It goes back to the settings every screen shares", onSelect = { app.choice = null; app.forgetScreenCalibration() }),
+                    ),
+                )
+            }
+        },
+    )
 }
 
 @Composable
@@ -219,9 +293,11 @@ fun homeRows(app: AppState): List<MenuAction> {
                     onSelect = { if (isHome) homeRole.openHomeSettings() else homeRole.request() },
                 ))
             }
-            add(app.choiceRow("mode", "Home style", FuseIcons.Dashboard, p.home.mode, listOf(HomeMode.CHANNELS to "Fused (recommended)", HomeMode.FLOW to "Network"), optionDetail = {
-                if (it == HomeMode.FLOW) "A continuous dashboard of shelves" else "A board of tiles you arrange yourself"
-            }) { v -> set { it.copy(home = it.home.copy(mode = v)) } })
+            add(app.choiceRow(
+                "mode", "Home style", FuseIcons.Dashboard, p.home.mode, listOf(HomeMode.CHANNELS to "Fused (recommended)", HomeMode.FLOW to "Network"),
+                optionDetail = { if (it == HomeMode.FLOW) "A continuous dashboard of shelves" else "A board of tiles you arrange yourself" },
+                aid = { ChoiceAid.HomeStyle(it) },
+            ) { v -> set { it.copy(home = it.home.copy(mode = v)) } })
             add(toggleRow(
                 "rememberplace", "Remember where you were", FuseIcons.Bookmark, p.rememberPlace,
                 if (p.rememberPlace) "Each tab opens on the game or row you left it on" else "Each tab opens at its start",
@@ -247,20 +323,8 @@ fun homeRows(app: AppState): List<MenuAction> {
                 }
             })
             val shownTabs = p.destinations.filter { app.offers(it) }
-            add(MenuAction("dest.order", "Section order", FuseIcons.MoveHorizontal, detail = shownTabs.joinToString("  ·  ") { sections.label(it) }, trailing = Trailing.Chevron, onSelect = {
-                app.reorder = ReorderSpec(
-                    title = "Section order",
-                    icon = FuseIcons.MoveHorizontal,
-                    message = "The order of the top bar. Home always comes first. Drag a row by its grip, or press A to pick it up and move it with the D-pad",
-                    entries = shownTabs.map { d -> ReorderEntry(d.name, sections.label(d), sections.icon(d), locked = d == Destination.HOME) },
-                    onMoved = { keys ->
-                        set { s ->
-                            val moved = keys.mapNotNull { k -> Destination.entries.firstOrNull { it.name == k } }
-                            // Sections hidden from this list (not offered here) keep their places after the rest.
-                            s.copy(destinations = moved + s.destinations.filter { it !in moved })
-                        }
-                    },
-                )
+            add(MenuAction("dest.order", "Section order", FuseIcons.MoveHorizontal, detail = shownTabs.joinToString("  ·  ") { sections.label(it) } + ". Picks up a tab in the top bar to move, as holding one does", trailing = Trailing.Chevron, onSelect = {
+                app.liftTab()
             }))
             if (app.store.apps.supported) {
                 add(app.choiceRow(
@@ -320,49 +384,9 @@ fun homeRows(app: AppState): List<MenuAction> {
                 }
             }
         } else {
-            // The board's widgets: their sizes here for the controller; on Home, hold one to move or resize it.
-            labelled("Widgets") {
-                val board = p.home.boardWidgets().filter { app.offers(it.kind) }
-                fun saveBoard(change: (List<io.github.matiyaaa.fuse.model.HomeWidget>) -> List<io.github.matiyaaa.fuse.model.HomeWidget>) =
-                    set { s -> s.copy(home = s.home.copy(board = change(s.home.boardWidgets()).mapIndexed { i, w -> w.copy(order = i) })) }
-                for (w in board) {
-                    val size = w.boardSize
-                    add(MenuAction(
-                        "b.${w.id}", w.kind.title(), widgetIcon(w.kind),
-                        trailing = Trailing.Value("${size.width} by ${size.height}"),
-                        onSelect = {
-                            app.choice = ChoiceSpec(
-                                title = w.kind.title(),
-                                icon = widgetIcon(w.kind),
-                                message = "Its size on Home, in cells across by down. On Home you can also drag its corner",
-                                options = BoardSizes.map { (bw, bh) ->
-                                    MenuAction("size.$bw.$bh", "$bw by $bh", null, trailing = Trailing.Check(size.width == bw && size.height == bh), onSelect = {
-                                        saveBoard { list -> list.map { if (it.id == w.id) it.copy(width = bw, height = bh) else it } }
-                                        app.choice = null
-                                    })
-                                } + MenuAction("remove", "Remove from Home", FuseIcons.Minus, destructive = true, onSelect = {
-                                    saveBoard { list -> list.filterNot { it.id == w.id } }
-                                    app.choice = null
-                                }),
-                            )
-                        },
-                    ))
-                }
-                val missing = WidgetKind.entries.filter { k -> app.offersToAdd(k) && board.none { it.kind == k } }
-                if (missing.isNotEmpty()) {
-                    add(MenuAction("b.add", "Add a widget", FuseIcons.CirclePlus, detail = "It goes at the end of the board", trailing = Trailing.Chevron, onSelect = {
-                        app.choice = ChoiceSpec(
-                            title = "Add a widget",
-                            icon = FuseIcons.CirclePlus,
-                            options = missing.map { k ->
-                                MenuAction("add.$k", k.title(), widgetIcon(k), onSelect = {
-                                    saveBoard { list -> list + io.github.matiyaaa.fuse.model.HomeWidget(k.name.lowercase(), k, list.size) }
-                                    app.choice = null
-                                })
-                            },
-                        )
-                    }))
-                }
+            // Widgets are arranged on Home itself (hold one to move, resize or remove it, or open
+            // the board's edit mode to add one). Settings keeps only what can't be done there.
+            labelled("Board") {
                 add(MenuAction("b.reset", "Reset the board", FuseIcons.RotateCcw, detail = "Back to the widgets and sizes Home comes with, on this device", onSelect = {
                     app.confirm = ConfirmSpec(
                         title = "Reset the board?",
@@ -386,9 +410,6 @@ fun homeRows(app: AppState): List<MenuAction> {
     }
 }
 
-/** The sizes a widget can take on the board, small to large. */
-private val BoardSizes = listOf(1 to 1, 2 to 1, 3 to 1, 4 to 1, 1 to 2, 2 to 2, 3 to 2, 4 to 2, 1 to 3, 2 to 3, 3 to 3, 4 to 3)
-
 private fun widgetIcon(k: WidgetKind) = when (k) {
     WidgetKind.CONTINUE_PLAYING -> FuseIcons.CirclePlay
     WidgetKind.RECENTLY_PLAYED -> FuseIcons.History
@@ -405,6 +426,8 @@ private fun widgetIcon(k: WidgetKind) = when (k) {
     WidgetKind.PLAYTIME_WEEK -> FuseIcons.CalendarClock
     WidgetKind.MOST_PLAYED -> FuseIcons.TrendingUp
     WidgetKind.CURRENT_GAME -> FuseIcons.Gamepad
+    WidgetKind.FOR_YOU -> FuseIcons.Compass
+    WidgetKind.SPOTLIGHT -> FuseIcons.Star
     WidgetKind.CARTRIDGE_DOWNLOADS -> io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks.Cartridge
     WidgetKind.STORAGE -> FuseIcons.HardDrive
     WidgetKind.CLOCK -> FuseIcons.Clock
@@ -414,7 +437,7 @@ private fun widgetIcon(k: WidgetKind) = when (k) {
     WidgetKind.JELLYFIN_FAVORITES -> FuseIcons.Heart
     WidgetKind.JELLYFIN_MOVIES -> FuseIcons.Clapperboard
     WidgetKind.JELLYFIN_MUSIC -> FuseIcons.Disc
-    WidgetKind.SYNC_STATUS -> FuseIcons.RefreshCcw
+    WidgetKind.SYNC_STATUS -> FuseMarks.FuseOne
     WidgetKind.SYNC_DEVICES -> FuseIcons.MonitorSmartphone
 }
 
@@ -447,6 +470,14 @@ fun libraryRows(app: AppState): List<MenuAction> {
                 onSelect = { app.addGame() },
             ))
         }
+        labelled("Browsing") {
+            add(app.choiceRow(
+                "opensOn", "Library opens on", FuseIcons.LibraryBig, p.libraryOpensOn,
+                listOf("ALL" to "All", "INSTALLED" to "Installed"),
+                optionDetail = { if (it == "ALL") "Every game wherever it is: here, on RomM and on your other devices" else "The games on this device" },
+                aid = { ChoiceAid.OpensOn(installed = it == "INSTALLED") },
+            ) { v -> app.store.updatePrefs { it.copy(libraryOpensOn = v) } })
+        }
         app.platform.steam?.let { steam ->
             // Never asked: on only when Steam games were added (as the library does).
             val steamOn = when (p.steamGames) {
@@ -454,7 +485,24 @@ fun libraryRows(app: AppState): List<MenuAction> {
                 io.github.matiyaaa.fuse.ui.shell.store.impl.STEAM_OFF -> false
                 else -> sources.any { it.kind == io.github.matiyaaa.fuse.model.LibrarySourceKind.STEAM_LIBRARY || (it.kind == io.github.matiyaaa.fuse.model.LibrarySourceKind.SHORTCUTS && it.label == "Steam") }
             }
-            labelled("Steam") { addAll(steamRows(app, steam, steamOn)) }
+            val live = rememberSteamLive(app)
+            // Steam's remembered accounts here, for whose achievements show (only asked with more than one).
+            val accounts by androidx.compose.runtime.produceState(emptyList<io.github.matiyaaa.fuse.library.steam.SteamAccount>()) {
+                value = runCatching { app.store.sources.steamAccounts() }.getOrDefault(emptyList()).distinctBy { it.steamId }
+            }
+            labelled("Steam") {
+                addAll(steamRows(app, steam, steamOn, live))
+                if (accounts.size > 1) {
+                    val chosen = p.steam.achievementsAccount.takeIf { id -> accounts.any { it.steamId == id } } ?: ""
+                    add(app.choiceRow(
+                        "steam.account", "Steam achievements of", FuseIcons.Trophy, chosen,
+                        listOf("" to "Steam's most recent account") + accounts.map { it.steamId to it.personaName },
+                        optionDetail = { id -> if (id.isEmpty()) "Whoever last signed in to Steam here" else "Only this account's achievements, whoever plays in Fuse" },
+                    ) { v -> app.store.updatePrefs { it.copy(steam = it.steam.copy(achievementsAccount = v)) } })
+                }
+            }
+            // Decky is Linux's (SteamOS and its kind): the platform offers it nowhere else.
+            app.platform.decky?.let { decky -> labelled("Decky") { addAll(deckyRows(app, decky, live)) } }
         }
         labelled("Scanning") {
             add(MenuAction("scan", "Scan for changes", FuseIcons.Refresh, detail = "Only folders that changed. Also runs whenever you return to Fuse", trailing = Trailing.Value(scan.phase.name.lowercase().replaceFirstChar { it.uppercase() }), onSelect = {
@@ -466,12 +514,21 @@ fun libraryRows(app: AppState): List<MenuAction> {
             add(MenuAction("bios", "Check BIOS again", FuseIcons.Key, detail = "After adding firmware to a BIOS folder", onSelect = { app.store.sources.refreshBios(); app.toasts.show("Checking BIOS files") }))
         }
         labelled("Browsing") {
-            add(app.choiceRow("layout", "Default view", FuseIcons.Grid, p.defaultLayout, LibraryLayout.entries.map { it to layoutName(it) }, detail = "How the Library first shows your games") { v -> app.store.updatePrefs { it.copy(defaultLayout = v) } })
+            add(app.choiceRow(
+                "layout", "Default view", FuseIcons.Grid, p.defaultLayout, LibraryLayout.entries.map { it to layoutName(it) },
+                detail = "How the Library first shows your games",
+                aid = { ChoiceAid.LibraryView(it) },
+            ) { v -> app.store.updatePrefs { it.copy(defaultLayout = v) } })
             add(app.choiceRow(
                 "select", "Selecting a game", FuseIcons.Play, p.openGamePage,
                 listOf(false to "Plays it", true to "Opens its page"),
                 detail = "What confirm (or a tap on a selected game) does. Play is always on the game's page",
+                aid = { ChoiceAid.SelectGame(opensPage = it) },
             ) { v -> app.store.updatePrefs { it.copy(openGamePage = v) } })
+            add(toggleRow(
+                "spotlight", "Spotlight on systems", FuseIcons.Star, p.systemSpotlight,
+                "A system's page names a game of it to try today, with why. From your library alone, on this device",
+            ) { v -> app.store.updatePrefs { it.copy(systemSpotlight = v) } })
         }
         labelled("Collections") {
             add(toggleRow("collections", "Collections", FuseIcons.LibraryBig, p.collectionsEnabled, "Your own collections and the series Fuse finds. Off hides them everywhere; nothing is deleted") { v ->
@@ -735,8 +792,11 @@ fun mediaRows(app: AppState): List<MenuAction> {
     val stored by app.store.credentials.stored.collectAsState()
     val fill by app.store.media.fillProgress.collectAsState()
     val set = app.store::updatePrefs
+    // Keys go to the household's other devices while Fuse One shares sign-ins.
+    val sharing = app.store.sync.inUse && app.store.sync.config.value.shareSignIns
     fun secretRow(key: String, label: String, detail: String) = app.textRow(
-        "key.$key", label, FuseIcons.Key, if (key in stored) "Saved" else null, detail = detail, placeholder = "Paste or type",
+        "key.$key", label, FuseIcons.Key, if (key in stored) "Saved" else null,
+        detail = if (sharing) "$detail. Your other devices get it through Fuse One" else detail, placeholder = "Paste or type",
     ) { v -> app.scope.launch { if (v.isBlank()) app.store.credentials.remove(key) else app.store.credentials.put(key, v) } }
     // What a provider's last key test says, as its row's value, icon and note.
     fun providerRow(s: io.github.matiyaaa.fuse.model.ProviderStatus): MenuAction {
@@ -1022,7 +1082,7 @@ fun cartridgeRows(app: AppState): List<MenuAction> {
  * Steam on a computer: its installed games in the library (found on every drive, or in a folder the
  * user picks), and Fuse in Steam's library for Game Mode.
  */
-private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration, on: Boolean): List<MenuAction> {
+private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration, on: Boolean, live: SteamLive): List<MenuAction> {
     fun addFound(games: List<io.github.matiyaaa.fuse.library.steam.SteamGame>) {
         if (games.isEmpty()) {
             app.toasts.show("No Steam games found there")
@@ -1066,18 +1126,185 @@ private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.pla
             },
         ),
         MenuAction(
-            "steam.add", if (steam.gameMode) "Fuse in Game Mode" else "Add Fuse to Steam", FuseIcons.Gamepad,
-            detail = if (steam.gameMode) "Fuse is running in Game Mode now. Cartridge opens inside it, over Fuse" else "So SteamOS's Game Mode can start Fuse, full screen. Close Steam first",
-            enabled = !steam.gameMode,
+            "steam.add",
+            when {
+                steam.gameMode -> "Fuse in Game Mode"
+                live.inSteam == true -> "Fuse in Steam"
+                else -> "Add Fuse to Steam"
+            },
+            FuseIcons.Gamepad,
+            detail = when {
+                steam.gameMode -> "Fuse is running in Game Mode now. Cartridge opens inside it, over Fuse"
+                steam.waitingForSteam -> "Waiting for Steam to close. Steam isn't closed for it"
+                live.inSteam == true -> "In Steam's library with its art. Select to put back anything missing; what you changed in Steam stays"
+                else -> "So Steam and SteamOS's Game Mode can start Fuse, full screen, with its own art"
+            },
+            trailing = if (live.inSteam == true && !steam.gameMode) Trailing.Value("Added") else Trailing.None,
+            enabled = !steam.gameMode && !live.busy,
             onSelect = {
                 app.scope.launch {
-                    steam.addFuse()
+                    live.busy = true
+                    // Never closes Steam: when it is open, Fuse waits for it to close by itself.
+                    (if (steam.steamRunning()) steam.addWhenSteamCloses() else steam.addFuse())
                         .onSuccess { app.toasts.show(it) }
-                        .onFailure { app.toasts.show(it.message ?: "Couldn't add Fuse to Steam", io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.ERROR) }
+                        .onFailure { app.toasts.show(it.message ?: "Couldn't add Fuse to Steam", ToastKind.ERROR) }
+                    live.refresh(app)
+                    live.busy = false
                 }
             },
         ),
+    ) + listOfNotNull(
+        // Games Fuse put in Steam, each starting through Fuse: look them over, take them out, undo.
+        MenuAction(
+            "steam.games.fuse", "Your games in Steam", FuseIcons.LibraryBig,
+            detail = when {
+                steam.waitingForSteamGames -> "Waiting for Steam to close to add them. Steam isn't closed for it"
+                app.steamGameIds.isEmpty() -> "Add a game from its options, or a whole system from its page's options"
+                else -> "${app.steamGameIds.size} ${if (app.steamGameIds.size == 1) "game starts" else "games start"} through Fuse from Steam. Look them over, take them out or undo"
+            },
+            trailing = if (app.steamGameIds.isEmpty()) Trailing.None else Trailing.Value(app.steamGameIds.size.toString()),
+            enabled = !live.busy,
+            onSelect = {
+                app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+                    title = "Your games in Steam",
+                    icon = FuseIcons.LibraryBig,
+                    message = "Each starts through Fuse, so it plays with its emulator, saves and time as in Fuse. Steam must be closed while its library changes.",
+                    options = listOfNotNull(
+                        MenuAction("steam.games.check", "Look them over", FuseIcons.ScanSearch, detail = "Games no longer in Fuse, entries for an older Fuse, and doubles", onSelect = {
+                            app.choice = null
+                            app.checkSteamGames()
+                        }),
+                        MenuAction("steam.games.remove", "Take them all out", FuseIcons.Trash, detail = "Only the entries Fuse made. Your other shortcuts stay", onSelect = {
+                            app.choice = null
+                            app.confirm = io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec(
+                                "Take Fuse's games out of Steam?",
+                                "Only the entries Fuse made for its games leave Steam's library, with their collections. The games stay in Fuse; Fuse's own entry and your other shortcuts stay as they are.",
+                                "Take out", destructive = true,
+                            ) {
+                                app.scope.launch {
+                                    steam.removeGames(null).onSuccess { app.toasts.show(it) }.onFailure { app.toasts.show(it.message ?: "Couldn't change Steam's library", ToastKind.ERROR) }
+                                    app.refreshSteamGames()
+                                }
+                            }
+                        }).takeIf { app.steamGameIds.isNotEmpty() },
+                        MenuAction("steam.games.undo", "Undo Fuse's last change", FuseIcons.Undo, detail = "Steam's library as it was before it", onSelect = {
+                            app.choice = null
+                            app.scope.launch {
+                                steam.undoGames().onSuccess { app.toasts.show(it, icon = FuseIcons.Undo) }.onFailure { app.toasts.show(it.message ?: "Couldn't change Steam's library", ToastKind.ERROR) }
+                                app.refreshSteamGames()
+                            }
+                        }).takeIf { steam.canUndoGames },
+                    ),
+                )
+            },
+        ).takeIf { !steam.gameMode },
+        app.confirmRow(
+            "steam.remove", "Remove Fuse from Steam", FuseIcons.Trash,
+            "Remove Fuse from Steam?", "Only Fuse's own entry leaves Steam's library. Your other shortcuts, your games and everything in Fuse stay as they are. Close Steam first.", "Remove",
+            detail = "Only Fuse's entry. Your other shortcuts stay",
+        ) {
+            app.scope.launch {
+                live.busy = true
+                steam.removeFuse()
+                    .onSuccess { app.toasts.show(it); app.store.updatePrefs { p -> p.copy(steam = p.steam.copy(fuseInSteam = false)) } }
+                    .onFailure { app.toasts.show(it.message ?: "Couldn't remove Fuse from Steam", ToastKind.ERROR) }
+                live.refresh(app)
+                live.busy = false
+            }
+        }.takeIf { live.inSteam == true && !steam.gameMode },
     )
+}
+
+/** What Steam and Decky say right now, read when Settings opens and again after each change. */
+internal class SteamLive {
+    var inSteam by mutableStateOf<Boolean?>(null)
+    var decky by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.platform.DeckyState?>(null)
+    var busy by mutableStateOf(false)
+
+    suspend fun refresh(app: AppState) {
+        inSteam = app.platform.steam?.let { runCatching { it.added() }.getOrNull() }
+        decky = app.platform.decky?.let { runCatching { it.state() }.getOrNull() }
+    }
+}
+
+@Composable
+private fun rememberSteamLive(app: AppState): SteamLive {
+    val live = remember { SteamLive() }
+    androidx.compose.runtime.LaunchedEffect(live) { live.refresh(app) }
+    return live
+}
+
+/**
+ * The Fuse Decky plugin: installed, updated or taken out only when the person selects it (the
+ * system asks for their password), and the bridge it talks to, which answers on this device only.
+ */
+private fun deckyRows(app: AppState, decky: io.github.matiyaaa.fuse.ui.shell.platform.DeckyIntegration, live: SteamLive): List<MenuAction> {
+    val st = live.decky
+    val p = app.store.prefs.value
+    fun install() {
+        app.scope.launch {
+            live.busy = true
+            if (st?.canInstall == true) {
+                decky.install()
+                    .onSuccess { app.toasts.show(it); app.store.updatePrefs { q -> q.copy(steam = q.steam.copy(decky = true)) } }
+                    .onFailure { app.toasts.show(it.message ?: "The plugin couldn't be installed. Nothing was changed.", ToastKind.ERROR) }
+            } else {
+                val zip = decky.stage()
+                if (zip == null) app.toasts.show("This copy of Fuse doesn't carry the plugin", ToastKind.ERROR)
+                else app.toasts.show("In Decky: Settings, Developer, Install Plugin from ZIP, then choose $zip")
+            }
+            live.refresh(app)
+            live.busy = false
+        }
+    }
+    return buildList {
+        add(MenuAction(
+            "decky.plugin", "Fuse plugin for Decky", FuseIcons.Puzzle,
+            detail = when {
+                live.busy -> "Working. Answer the system's password prompt if one shows"
+                st == null -> "Looking for Decky Loader"
+                !st.loader -> "Decky Loader isn't here. Install it from ${decky.loaderInstructions} in Desktop Mode, then come back"
+                !st.plugin -> "Fuse's library, Fuse One and downloads, inside Steam's Gaming Mode"
+                st.upToDate -> "Installed and up to date, version ${st.bundledVersion}"
+                else -> "Version ${st.pluginVersion ?: "unknown"} is installed. This Fuse carries ${st.bundledVersion}"
+            },
+            trailing = when {
+                st == null || !st.loader -> Trailing.None
+                !st.plugin -> Trailing.Value("Install")
+                st.upToDate -> Trailing.Value("Installed")
+                else -> Trailing.Value("Update")
+            },
+            enabled = !live.busy && st != null,
+            onSelect = {
+                when {
+                    st == null -> Unit
+                    !st.loader -> app.scope.launch { live.refresh(app) }
+                    st.upToDate -> app.toasts.show("The Fuse plugin is up to date")
+                    else -> install()
+                }
+            },
+        ))
+        add(toggleRow(
+            "decky.bridge", "Decky bridge", FuseIcons.Link, p.steam.decky,
+            if (p.steam.decky) "The plugin can ask Fuse what it shows, on this device only. It can't touch saves or secrets" else "Off: the plugin shows that Fuse isn't answering",
+            enabled = !live.busy,
+        ) { v -> app.store.updatePrefs { q -> q.copy(steam = q.steam.copy(decky = v)) } })
+        addAll(extensionRows(app, io.github.matiyaaa.fuse.data.settings.Extensions.DECKY, p))
+        if (st?.plugin == true) add(app.confirmRow(
+            "decky.remove", "Remove the Fuse plugin", FuseIcons.Trash,
+            "Remove the Fuse plugin?", "It leaves Decky, which reloads by itself. Steam, your games and everything in Fuse stay as they are. The system asks for your password.", "Remove",
+            detail = "Steam and Fuse stay as they are",
+        ) {
+            app.scope.launch {
+                live.busy = true
+                decky.remove()
+                    .onSuccess { app.toasts.show(it); app.store.updatePrefs { q -> q.copy(steam = q.steam.copy(decky = false)) } }
+                    .onFailure { app.toasts.show(it.message ?: "The plugin couldn't be removed", ToastKind.ERROR) }
+                live.refresh(app)
+                live.busy = false
+            }
+        })
+    }
 }
 
 /** Menu music and interface sounds, each with its own volume. */
@@ -1087,6 +1314,14 @@ fun soundRows(app: AppState): List<MenuAction> {
     val music = p.music
     fun setMusic(change: (MusicPrefs) -> MusicPrefs) = app.store.updatePrefs { it.copy(music = change(it.music)) }
     return buildList {
+        // The master over everything below: off means silence, whatever each one's own switch says.
+        labelled("Sound") {
+            add(toggleRow(
+                "audio", "Sound", if (p.muted) FuseIcons.VolumeOff else FuseIcons.Volume, !p.muted,
+                if (p.muted) "Everything is silent: music, interface sounds and the startup sound" else "Music and interface sounds, each with its own setting below",
+            ) { v -> app.store.updatePrefs { it.copy(muted = !v) } })
+            if (!p.muted) add(app.percentRow("master", "Master volume", FuseIcons.Volume, p.masterVolume, "Scales every sound Fuse makes") { v -> app.store.updatePrefs { it.copy(masterVolume = v) } })
+        }
         labelled("Menu music") {
             if (app.platform.music == null) {
                 add(infoRow("music", "Menu music", "Not available", icon = FuseIcons.Music, detail = "This device can't play music in Fuse"))
@@ -1173,21 +1408,30 @@ private fun songRow(app: AppState, music: MusicPrefs, setMusic: ((MusicPrefs) ->
 fun inputRows(app: AppState): List<MenuAction> {
     val p by app.store.prefs.collectAsState()
     val i = p.input
+    val controllers by io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter.current.controllers.collectAsState()
     fun setInput(t: (io.github.matiyaaa.fuse.model.InputProfile) -> io.github.matiyaaa.fuse.model.InputProfile) = app.store.updatePrefs { it.copy(input = t(it.input)) }
     return buildList {
-        labelled("Buttons") {
-            add(MenuAction("detect", "Detect my buttons", FuseIcons.ScanSearch, detail = "Press two buttons and Fuse sets the layout and confirm button for you", onSelect = { app.buttonDetect = true }))
-            add(app.choiceRow(
-                "layout", "Button layout", FuseIcons.Gamepad, i.glyphs,
-                listOf(GlyphStyle.XBOX to "Xbox (A at the bottom)", GlyphStyle.NINTENDO to "Nintendo (A on the right)", GlyphStyle.PLAYSTATION to "PlayStation (shapes)"),
-                detail = "The letters printed on your buttons. Hints use them",
-            ) { v -> setInput { it.copy(glyphs = v) } })
-            add(toggleRow("swap", "Swap confirm and back", FuseIcons.Swap, i.swapConfirmBack, if (i.confirmOnRight) "Now: confirm is the right button" else "Now: confirm is the bottom button") { v -> setInput { it.copy(swapConfirmBack = v) } })
+        // One place to set a controller up: guided first, every action to edit after. The layout,
+        // the confirm button and each mapping are all answered there, so nothing here repeats them.
+        labelled("Controller") {
+            add(MenuAction(
+                "mapping", "Controller setup", FuseIcons.Joystick,
+                detail = buildString {
+                    append(when (i.glyphs) { GlyphStyle.NINTENDO -> "Nintendo labels"; GlyphStyle.PLAYSTATION -> "PlayStation labels"; else -> "Xbox labels" })
+                    append(if (i.confirmOnRight) ", confirm on the right" else ", confirm at the bottom")
+                    if (i.remap.isNotEmpty()) append(", ${i.remap.size} custom ${if (i.remap.size == 1) "mapping" else "mappings"}")
+                },
+                trailing = Trailing.Chevron, onSelect = { app.go(Route.Controls) },
+            ))
+            if (controllers.size > 1 || i.controller.isNotEmpty()) {
+                add(app.choiceRow(
+                    "controller", "Controller that moves around Fuse", FuseIcons.Gamepad, i.controller,
+                    listOf("" to "Any controller") + (controllers + listOfNotNull(i.controller.takeIf { it.isNotEmpty() && it !in controllers })).map { it to it },
+                    optionDetail = { if (it.isEmpty()) "Every connected controller moves around Fuse" else if (it in controllers) "Connected now. The others are left for games" else "Not connected now. Until it is, any controller does" },
+                ) { v -> setInput { it.copy(controller = v) } })
+            }
             add(toggleRow("shoulders", "Swap bumpers and triggers", FuseIcons.Swap, i.swapShoulders, if (i.swapShoulders) "Now: L2 and R2 switch tabs, L1 and R1 turn widgets" else "Now: L1 and R1 switch tabs, L2 and R2 turn widgets") { v -> setInput { it.copy(swapShoulders = v) } })
             add(toggleRow("keyhints", "Keyboard hints when typing", FuseIcons.Keyboard, i.autoGlyphs, "Show keyboard keys in hints after a keyboard key is used") { v -> setInput { it.copy(autoGlyphs = v) } })
-        }
-        labelled("Mapping") {
-            add(MenuAction("mapping", "Button mapping and test", FuseIcons.Joystick, detail = if (i.remap.isEmpty()) "Standard layout. See what Fuse receives from each button" else "${i.remap.size} custom mappings", trailing = Trailing.Chevron, onSelect = { app.go(Route.Controls) }))
         }
         labelled("Feel") {
             val d = io.github.matiyaaa.fuse.model.InputProfile()
@@ -1261,6 +1505,15 @@ fun displayRows(app: AppState): List<MenuAction> {
     val automaticSize = io.github.matiyaaa.fuse.ui.shell.app.LocalAutomaticInterfaceSize.current
     return buildList {
         labelled("This screen") {
+            // Game Mode on a TV: Fuse drawn at the handheld's size and enlarged. Said plainly, with the fix.
+            connectedDisplays.firstOrNull { it.isPrimary && it.outputWidthPx != null }?.let { s ->
+                add(infoRow(
+                    "drawn", "Drawn at ${s.widthPx} by ${s.heightPx}",
+                    detail = "Game Mode enlarges Fuse to this screen's ${s.outputWidthPx} by ${s.outputHeightPx}, which softens text and art. " +
+                        "For a sharp picture, in Steam open Fuse's Properties, set Game Resolution to Native, and start Fuse again",
+                    icon = FuseIcons.Scaling,
+                ))
+            }
             if (rates.isNotEmpty()) {
                 val choices = (rates + listOfNotNull(d.maxRefreshRate.takeIf { it > 0 })).distinct().sorted()
                 add(app.choiceRow(
@@ -1269,12 +1522,14 @@ fun displayRows(app: AppState): List<MenuAction> {
                     detail = "Each screen uses its highest native rate within this cap. Low Power changes visual effects, not your refresh choice",
                 ) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(maxRefreshRate = v)) } })
             }
+            val calibratedHere = p.calibration(app.platform.displays.collectAsState().value)
+            add(calibrateRow(app, calibratedHere))
             add(app.choiceRow(
                 "uisize", "Interface size", FuseIcons.Scaling, d.interfaceSize,
                 io.github.matiyaaa.fuse.ui.shell.app.InterfaceSizes.map { v ->
                     v to if (v == 0) "Automatic (${(automaticSize * 100).toInt()}%)" else "$v%"
                 },
-                detail = "Automatic draws Fuse larger on a big screen with many pixels, like a 4K TV, so it looks as it does on a 1080p one",
+                detail = if (calibratedHere != null) "This screen is calibrated and keeps its own. This sets the others" else "Automatic draws Fuse larger on a big screen with many pixels, like a 4K TV, so it looks as it does on a 1080p one",
                 optionDetail = { v -> if (v == 0) "Sized for this screen, and again when it changes" else null },
             ) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(interfaceSize = v)) } })
             if (app.platform.features.rotation) {
@@ -1419,6 +1674,8 @@ fun performanceRows(app: AppState): List<MenuAction> {
                             detail = listOfNotNull(
                                 disp.requestedRefreshRate?.let { "$it Hz requested" },
                                 disp.measuredRefreshRate?.let { "${(it * 10).toInt() / 10f} Hz observed while drawing" },
+                                disp.supportedRefreshRates.takeIf { it.size > 1 }?.let { r -> "Runs at ${r.joinToString(", ") { "${it.toInt()}" }} Hz" },
+                                disp.hdrFormats?.let { f -> if (f.isEmpty()) "No HDR reported" else "HDR: ${f.joinToString(", ")}" },
                                 when (disp.canLaunchActivities) {
                                     Support.YES -> "Games can be opened here"
                                     Support.NO -> "This display can't run other apps"
@@ -1580,6 +1837,16 @@ fun updateRows(app: AppState): List<MenuAction> {
             trailing = Trailing.Chevron,
             onSelect = { app.openInstalledNotes() },
         ))
+        // The version the last update replaced, kept to go back to (Linux).
+        app.store.updates.previous()?.let { prev ->
+            val newer = io.github.matiyaaa.fuse.integrations.github.SemVer.isNewer(prev.version, app.store.updates.currentVersion)
+            add(MenuAction(
+                "goback", "${if (newer) "Return to" else "Go back to"} Fuse ${prev.version}", FuseIcons.History,
+                detail = if (newer) "The version you went back from, kept beside this one" else "The version this update replaced, kept beside it in case this one doesn't suit",
+                trailing = Trailing.Chevron,
+                onSelect = { app.goBackToPreviousFuse(prev) },
+            ))
+        }
         add(MenuAction("check", "Check for updates", FuseIcons.Refresh, onSelect = {
             app.scope.launch { app.toasts.show(if (app.store.updates.check() != null) "An update is available" else "Fuse is up to date") }
         }))
@@ -1620,7 +1887,7 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
         addAll(app.group("about.credits", "Credits and links", FuseIcons.Heart, detail = "Who Fuse is built on, and where it lives") {
             listOf(
                 // Fuse's own systems first: they are what Fuse is made of.
-                infoRow("credits.sync", "Fuse Sync by Fuse", detail = "Fuse's own sync: saves, play time, library and settings on every device, from a host of your own", icon = FuseIcons.RefreshCcw),
+                infoRow("credits.sync", "Fuse One", detail = "Fuse's own sync: saves, play time, library and settings on every device, from a host of your own", icon = FuseMarks.FuseOne),
                 infoRow("credits.player", "Fuse Player by Fuse", detail = "Fuse's own video and music player: Media3 on Android, FFmpeg on computers, every subtitle drawn by Fuse", icon = FuseIcons.Clapperboard),
                 infoRow("credits.fuseline", "Fuseline by Fuse", detail = "Fuse's own animation engine: every movement in Fuse, at about a tenth of Compose's cost", icon = FuseIcons.Waves),
                 infoRow("credits", "Made with", detail = "Kotlin, Compose Multiplatform, SQLDelight, Ktor, Coil. Video: Media3 (Apache 2.0) and FFmpeg (GPL). Icons: Lucide (ISC). Fonts: Sora and Manrope (SIL OFL). Systems and emulator launch data: ES-DE (MIT), RomM and Cartridge (MIT). Hashing rules: rcheevos (MIT). Music: boipurple", icon = FuseIcons.Blocks),
@@ -1640,10 +1907,27 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
         labelled("Developer") {
             add(MenuAction(
                 "dev.setup", "Start Onboarding", FuseIcons.RotateCcw,
-                detail = "A separate rehearsal with pretend folders, accounts and profiles",
+                detail = "A separate rehearsal with pretend folders, accounts and profiles, as any system",
                 trailing = Trailing.Chevron,
                 onSelect = {
-                    app.dev.rehearsalOpen = true
+                    // Setup differs by system (Steam on computers, Decky on Linux only): any can be rehearsed here.
+                    fun rehearse(host: io.github.matiyaaa.fuse.model.Host?) {
+                        app.choice = null
+                        app.store.displaySession.rehearsalHost = host
+                        app.dev.rehearsalOpen = true
+                    }
+                    app.choice = ChoiceSpec(
+                        title = "Start Onboarding",
+                        message = "Nothing in it is saved, and nothing of yours shows in it.",
+                        icon = FuseIcons.RotateCcw,
+                        options = listOf(
+                            MenuAction("dev.setup.here", "As this device", FuseIcons.Smartphone, onSelect = { rehearse(null) }),
+                            MenuAction("dev.setup.linux", "As Linux", FuseIcons.Monitor, detail = "Steam, then the Decky plugin, then Fuse in Steam", onSelect = { rehearse(io.github.matiyaaa.fuse.model.Host.LINUX) }),
+                            MenuAction("dev.setup.windows", "As Windows", FuseIcons.Monitor, detail = "Steam without Decky", onSelect = { rehearse(io.github.matiyaaa.fuse.model.Host.WINDOWS) }),
+                            MenuAction("dev.setup.macos", "As macOS", FuseIcons.Monitor, detail = "Steam without Decky", onSelect = { rehearse(io.github.matiyaaa.fuse.model.Host.MACOS) }),
+                            MenuAction("dev.setup.android", "As Android", FuseIcons.Smartphone, detail = "Home screen, storage access, no Steam", onSelect = { rehearse(io.github.matiyaaa.fuse.model.Host.ANDROID) }),
+                        ),
+                    )
                 },
             ))
             add(MenuAction(
@@ -1690,6 +1974,12 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
                 trailing = Trailing.Chevron,
                 onSelect = { app.showLibraryList() },
             ))
+            add(MenuAction(
+                "dev.emulators", "Emulator support", FuseIcons.Chip,
+                detail = "Every emulator Fuse knows here: installed, its version, what Fuse checked and does with it, and a report to share",
+                trailing = Trailing.Chevron,
+                onSelect = { app.showEmulatorSupport() },
+            ))
             add(toggleRow("dev.skip", "Skip required setup steps", FuseIcons.ChevronsRight, app.dev.skipRequired) { app.dev.skipRequired = it })
             add(toggleRow("dev.frames", "Frame-time overlay", FuseIcons.Activity, app.dev.frameGraph) { app.dev.frameGraph = it })
             add(toggleRow("dev.motion", "Motion inspector", FuseIcons.Gauge, app.dev.motionInspector) {
@@ -1735,7 +2025,7 @@ private fun eraseRow(app: AppState): MenuAction = MenuAction(
         app.confirm = ConfirmSpec(
             "Erase Fuse?",
             "Fuse's library, settings, themes, Home, profiles, play time, art and caches are erased" +
-                (if (host) ", and the Fuse Sync host on this computer with everyone's saves and profiles." else if (app.store.sync.inUse) ", and this device leaves Fuse Sync." else ".") +
+                (if (host) ", and the Fuse One host on this computer with everyone's saves and profiles." else if (app.store.sync.inUse) ", and this device leaves Fuse One." else ".") +
                 " Game files, emulators and the saves in the emulators' folders stay exactly where they are.",
             "Continue", destructive = true,
         ) {

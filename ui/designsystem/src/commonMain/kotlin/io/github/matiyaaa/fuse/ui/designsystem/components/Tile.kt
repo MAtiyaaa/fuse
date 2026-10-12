@@ -26,6 +26,9 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.Dp
@@ -96,6 +99,11 @@ fun Tile(
      * lift, the bar and the ring stay.
      */
     surface: Boolean = true,
+    /**
+     * What a screen reader says for the tile (a game's or a system's name), for tiles whose words are
+     * part of their art; a tile with words of its own is read from them.
+     */
+    label: String? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val motion = Fuse.motion
@@ -307,8 +315,12 @@ fun Tile(
             }
             .clip(shape)
             .then(clickable)
-            // Screen readers (and UI tests) can tell which tile the controller is on.
-            .semantics { this.selected = selected },
+            // Screen readers (and UI tests) can tell which tile the controller is on, and what it is.
+            .semantics {
+                this.selected = selected
+                if (label != null) contentDescription = label
+                if (interactive) role = Role.Button
+            },
         content = content,
     )
 }

@@ -120,7 +120,7 @@ class DesktopPlatformUi(
     override val performance: StateFlow<List<PerformanceMetric>> = _performance.asStateFlow()
 
     override val sounds: UiSounds get() = desktopSounds
-    override val haptics: Haptics = Haptics.None
+    override val haptics = io.github.matiyaaa.fuse.desktop.input.ControllerHaptics()
     override val homeRole: HomeRole? = null
     private val files = DesktopStorage(dirs, window)
     override val storage: StorageAccess = files
@@ -225,6 +225,8 @@ class DesktopPlatformUi(
 
     override fun exit() = window.exitApplication()
 
+    override val startupPlay: Long? = args.indexOf("--play").takeIf { it >= 0 }?.let { args.getOrNull(it + 1)?.toLongOrNull() }
+
     private val crashLog = io.github.matiyaaa.fuse.desktop.CrashLog(File(dirs.data, "crash"))
 
     override suspend fun readClipboardText(): String? = kotlinx.coroutines.withContext(Dispatchers.IO) {
@@ -255,7 +257,13 @@ class DesktopPlatformUi(
     override fun clearCrashReport() = crashLog.clear()
 
     private val desktopSteam = DesktopSteam(io.github.matiyaaa.fuse.desktop.services.KnownFolders(dirs.home, os))
+    override val manuals: io.github.matiyaaa.fuse.ui.shell.platform.ManualReader = DesktopManuals()
+
     override val steam: io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration = desktopSteam
+
+    /** Decky runs on Linux only (SteamOS, Bazzite and other Steam Gaming Mode systems). */
+    override val decky: io.github.matiyaaa.fuse.ui.shell.platform.DeckyIntegration? =
+        if (os == DesktopOs.LINUX) DesktopDecky(staging = java.io.File(dirs.data, "decky-plugin").apply { mkdirs() }) else null
 
     init {
         // Fuse's art for any Steam entry that starts it, even one Steam made, every time Fuse starts.
@@ -333,6 +341,9 @@ class DesktopPlatformUi(
             val primary = ge.defaultScreenDevice
             ge.screenDevices.mapIndexed { i, d ->
                 val mode = d.displayMode
+                // In Game Mode the screen Java sees is the picture gamescope enlarges: say by how much.
+                val enlarged = if (d == primary) io.github.matiyaaa.fuse.desktop.system.RenderScale.read(mode.width, mode.height)?.takeIf { it.enlarged } else null
+                io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.upscale = if (d == primary) enlarged?.factor ?: 1f else io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.upscale
                 DisplayInfo(
                     id = i,
                     name = "Screen ${i + 1}",
@@ -342,6 +353,8 @@ class DesktopPlatformUi(
                     isPrimary = d == primary,
                     isPresentation = false,
                     isOn = true,
+                    outputWidthPx = enlarged?.output?.width,
+                    outputHeightPx = enlarged?.output?.height,
                 )
             }
         } catch (e: Exception) {

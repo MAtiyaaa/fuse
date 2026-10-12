@@ -35,17 +35,12 @@ private fun LibraryLayout.words(): String = when (this) {
 
 
 /**
- * Chooses a layout the way a user does: Options, "View as", then the layout. [shootChoice] also
- * captures the "View as" choice list.
+ * Sets the library layout as Settings, Library, Default view does. [shootChoice] is kept for its
+ * callers; there is no choice list on the page to capture any more.
  */
 internal fun AuditDriver.viewAs(layout: LibraryLayout, shootChoice: Boolean = false) {
-    tap(PadButton.X)
-    // "View as" sits below the game actions, often past the bottom of the menu.
-    waitFor("Manage Media")
-    tapText("View as")
-    waitFor("Cover grid")
-    if (shootChoice) shoot("View as choice list open")
-    choose(layout.ordinal)
+    // There is no "View as" on the page any more: the layout is Settings, Library, Default view.
+    libraryStore.updatePrefs { it.copy(defaultLayout = layout) }
     settle(600)
 }
 
@@ -84,7 +79,7 @@ internal fun AuditDriver.openGame(title: String) {
 
 internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
     scenario("library", "all") {
-        useLibrary()
+        useLibrary(prefs = { it.copy(libraryOpensOn = "INSTALLED") })
         libraryTab()
         waitFor("Recently played")
         tap(PadButton.DPAD_LEFT)
@@ -101,10 +96,46 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
         tap(PadButton.DPAD_DOWN, 4)
         shoot("Compact List layout, fifth game focused")
     }
+    scenario("library", "everywhere") {
+        useLibrary()
+        libraryTab()
+        waitFor("Recently played")
+        // All, where the Library opens: every game wherever it is, in shelves.
+        settle(1_200)
+        tap(PadButton.DPAD_DOWN)
+        settle()
+        shoot("All, Recently Added focused")
+        tap(PadButton.DPAD_DOWN)
+        settle()
+        shoot("All, Systems shelf")
+    }
+
+    scenario("library", "streamed apps") {
+        // Two computers at home, one game on both: one tile, and a choice of computer.
+        val hosts = listOf(
+            io.github.matiyaaa.fuse.data.settings.StreamHostSettings("pc-1", "Gaming PC", "192.168.1.20", apps = listOf("Desktop", "Steam Big Picture", "Aurora Outpost", "Hollow Pines")),
+            io.github.matiyaaa.fuse.data.settings.StreamHostSettings("pc-2", "Living Room", "192.168.1.30", apps = listOf("Steam Big Picture", "Hollow Pines")),
+        )
+        useLibrary(prefs = { it.copy(streaming = it.streaming.copy(enabled = true, hosts = hosts)) })
+        libraryTab()
+        waitFor("Recently played")
+        libraryFilter(1)
+        settle(1_200)
+        tap(PadButton.DPAD_DOWN, 6)
+        settle(900)
+        waitFor("Stream From Your Computers")
+        shoot("All, Stream From Your Computers: each app once", 900)
+        tap(PadButton.DPAD_RIGHT)
+        settle(400)
+        tap(PadButton.X)
+        waitFor("Stream Steam Big Picture from")
+        shoot("choosing which computer streams it")
+        tap(PadButton.B)
+    }
     if (!exhaustive) return
 
     scenario("library", "favourites") {
-        useLibrary()
+        useLibrary(prefs = { it.copy(libraryOpensOn = "INSTALLED") })
         libraryTab()
         waitFor("Recently played")
         libraryFilter(1)
@@ -115,7 +146,7 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
     }
 
     scenario("library", "recently played") {
-        useLibrary()
+        useLibrary(prefs = { it.copy(libraryOpensOn = "INSTALLED") })
         libraryTab()
         waitFor("Recently played")
         libraryFilter(2)
@@ -123,7 +154,7 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
     }
 
     scenario("library", "badges") {
-        useLibrary()
+        useLibrary(prefs = { it.copy(libraryOpensOn = "INSTALLED") })
         libraryTab()
         waitFor("Recently played")
         libraryFilter(3 + platformIndex("psx"))
@@ -141,7 +172,7 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
     }
 
     scenario("library", "filter chips focused") {
-        useLibrary()
+        useLibrary(prefs = { it.copy(libraryOpensOn = "INSTALLED") })
         libraryTab()
         waitFor("Recently played")
         if (nav(NavAction.UP) != NavResult.MOVED) throw NotCovered("Up did not reach the filter chips")
@@ -711,7 +742,7 @@ internal fun AuditDriver.gameScreens(exhaustive: Boolean) {
         useLibrary()
         openGame("Aurora Outpost")
         tap(PadButton.X)
-        waitFor("Folder Behaviour")
+        waitFor("Manage Media")
         shoot("options menu from the game page")
         focusText("Remove from Fuse")
         shoot("options menu, last row (Remove from Fuse)")

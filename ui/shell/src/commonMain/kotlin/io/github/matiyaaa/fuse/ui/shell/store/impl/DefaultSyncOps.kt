@@ -46,6 +46,7 @@ internal class DefaultSyncOps(
     }
 
     override val service: SyncService? = runCatching { ctx.services.syncService(port, ctx.scope) }.getOrNull()
+        .also { io.github.matiyaaa.fuse.ui.shell.platform.HouseholdImages.sync = it }
 
     override val config: StateFlow<SyncSettings> = ctx.data.settings.settings.map { it.sync }
         .stateIn(ctx.scope, SharingStarted.Eagerly, ctx.settings.value.sync)
