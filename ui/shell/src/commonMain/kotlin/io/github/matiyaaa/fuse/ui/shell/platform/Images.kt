@@ -46,6 +46,8 @@ fun fuseImageLoader(
             .build()
     }
     .components {
+        // Providers' artwork through Fuse One's host first, once for the household (HouseholdImages).
+        add(HouseholdImages.Fetch(http))
         add(KtorNetworkFetcherFactory(httpClient = { http }))
         // Jellyfin's pictures: fetched on the route in use, cached by the picture (JellyfinImages).
         add(JellyfinImages.Key())

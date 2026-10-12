@@ -3,6 +3,7 @@ package io.github.matiyaaa.fuse.sync
 import io.github.matiyaaa.fuse.data.settings.SecretStore
 import io.github.matiyaaa.fuse.data.settings.SettingsStore
 import io.github.matiyaaa.fuse.data.settings.SyncSettings
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -939,6 +940,49 @@ class JvmSyncService(
     }
 
     @Volatile private var seenRestore = 0L
+
+    /**
+     * Artwork through the host, kept to a budget so it never crowds out saves: a few at once, a few
+     * hundred a minute, and nothing for a minute after the host said it has had enough.
+     */
+    private val artGate = kotlinx.coroutines.sync.Semaphore(4)
+    @Volatile private var artMinute = 0L
+    @Volatile private var artCalls = 0
+    @Volatile private var artPausedUntil = 0L
+
+    private fun artAllowed(): Boolean {
+        val now = System.currentTimeMillis()
+        if (now < artPausedUntil) return false
+        val minute = now / 60_000
+        if (minute != artMinute) { artMinute = minute; artCalls = 0 }
+        return ++artCalls <= ART_PER_MINUTE
+    }
+
+    private suspend fun <T> artCall(block: suspend (SyncClient) -> T): T? {
+        val c = client ?: return null
+        if (!cached.enabled || !artAllowed()) return null
+        return artGate.withPermit {
+            try {
+                block(c)
+            } catch (e: SyncException) {
+                // Too many calls, or the host away: pictures come from the providers for a while,
+                // never waiting on a host that doesn't answer.
+                artPausedUntil = System.currentTimeMillis() + if (e.code == "rate" || e.status == 429) 60_000 else ART_AWAY_MS
+                null
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                artPausedUntil = System.currentTimeMillis() + ART_AWAY_MS
+                null
+            }
+        }
+    }
+
+    override suspend fun householdArt(key: String): ByteArray? = withContext(Dispatchers.IO) { artCall { it.artwork(key) } }
+
+    override suspend fun shareArt(key: String, bytes: ByteArray) {
+        withContext(Dispatchers.IO) { artCall { it.shareArtwork(key, bytes) } }
+    }
 
     override suspend fun peekRecoveryPackage(file: String): Pair<String, Long>? = withContext(Dispatchers.IO) { RecoveryPackage.peek(java.io.File(file)) }
 
@@ -2361,6 +2405,12 @@ class JvmSyncService(
     private fun lanAddresses(): List<String> = LanAddresses.list()
 
     companion object {
+        /** At most this many artwork calls a minute go to the host; the rest go to the providers. */
+        const val ART_PER_MINUTE = 300
+
+        /** How long pictures skip a host that didn't answer. */
+        const val ART_AWAY_MS = 2 * 60_000L
+
         /** Why a host at [address] might not answer, and what to check. */
         internal fun unreachableWords(address: String): String {
             val shown = address.removePrefix("http://").removePrefix("https://")

@@ -127,6 +127,9 @@ class SyncHost(
         return b.restore(name, store).also { bump() }
     }
 
+    /** The household's artwork cache (see [HouseholdArt]). */
+    val art = HouseholdArt(File(store.dir, "art"), clock = clock)
+
     @Volatile private var recovery: RecoveryJob? = null
 
     /** The recovery package being made or restored here, or the last one; null when there was none. */
@@ -644,6 +647,21 @@ class SyncHost(
                 if (note.reconciled == store.leadership.nodeId && note.leadership.leader != store.leadership.nodeId) store.leadership.becomeBackup(note.leadership)
                 bump()
                 call.json(Announcement.serializer(), Announcement(store.leadership.current, role = store.leadership.role, seq = store.seq()))
+            }
+            // The household's artwork: a picture one device fetched, kept for the others.
+            get("/art/{key}") {
+                device() ?: return@get
+                val bytes = withContext(Dispatchers.IO) { art.get(call.parameters["key"].orEmpty()) }
+                    ?: return@get call.fail(HttpStatusCode.NotFound, "Not on the host.", "no-art")
+                call.respondBytes(bytes, ContentType.Application.OctetStream)
+            }
+            put("/art/{key}") {
+                val key = call.parameters["key"].orEmpty()
+                if (!SavePath.isHash(key)) return@put call.fail(HttpStatusCode.BadRequest, "Not a key.", "bad-hash")
+                device() ?: return@put
+                val body = lastBodies.remove(call) ?: ByteArray(0)
+                if (!withContext(Dispatchers.IO) { art.put(key, body) }) return@put call.fail(HttpStatusCode.UnprocessableEntity, "Not a picture Fuse keeps.", "not-art")
+                call.respondText("{}", ContentType.Application.Json)
             }
             get("/blobs/{hash}") {
                 device() ?: return@get

@@ -52,6 +52,13 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   restriction could stop Fuse while a game plays, Settings, Fuse One says so where saves are turned
   on, with a way straight to the system screen that lifts it. A save held back that way still goes
   once Fuse is open again; nothing is lost.
+- **Artwork fetched once for the household.** With Fuse One connected, a cover from SteamGridDB,
+  TheGamesDB, IGDB, ScreenScraper, libretro's thumbnails, RetroAchievements or Steam is asked of the
+  host before the provider, and one a device fetched itself is given to the host, so five devices
+  wanting the same cover fetch it from the internet once. The host keeps up to 2 GB, the pictures
+  asked for longest ago going first, only for paired devices, and only pictures; it learns each
+  picture's address as a hash, never your own servers' pictures (Jellyfin, RomM). A host away or
+  busy is skipped for a while, so art never waits on it.
 - **Sync without a household.** A device keeping its own profiles has its Sync page: each person's
   games, play time and the saves kept for them here, with what a host would add and the two ways
   to set one up.
@@ -240,6 +247,8 @@ and the library, and a first step toward Fuse knowing emulators for itself.
 
 ## Fixed
 
+- Quitting Fuse (from Steam's Game Mode too) takes it off the screen at once; its servers and
+  devices close together out of sight, never holding the quit for more than a moment.
 - A game started through a launcher that hands it on (a wrapper script, an AppImage's runtime, an
   emulator that starts itself again) counts as playing until what the launcher started has ended
   too, so play time, achievements and the save sent after play no longer end with the launcher.

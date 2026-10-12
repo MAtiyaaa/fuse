@@ -266,7 +266,12 @@ class DesktopSession(
     }
 
     override fun exitApplication() {
-        EventQueue.invokeLater { exit() }
+        EventQueue.invokeLater {
+            // Gone from the screen at once (Steam's Game Mode shows the next thing straight away);
+            // what is left to close happens out of sight.
+            window?.isVisible = false
+            exit()
+        }
     }
 
     override val currentWindowMode: WindowMode get() = windowMode
@@ -278,10 +283,19 @@ class DesktopSession(
     /** Releases devices, the database and the HTTP client. Safe to call twice. */
     fun close() {
         if (!closed.compareAndSet(false, true)) return
-        gamepads.close()
-        platform.close()
-        (startState as? StartState.Ready)?.phoneLink?.close()
-        decky?.close()
+        window?.isVisible = false
+        // Each part closes on its own at once (servers give their open calls a moment each), and
+        // Fuse waits for them together, never longer than [CLOSE_WAIT_MS]: quitting is quick.
+        val parts = listOf<() -> Unit>(
+            { gamepads.close() },
+            { platform.close() },
+            { (startState as? StartState.Ready)?.phoneLink?.close() },
+            { decky?.close() },
+        )
+        val threads = parts.map { part -> Thread({ runCatching { part() } }, "fuse-close").apply { isDaemon = true; start() } }
+        val deadline = System.currentTimeMillis() + CLOSE_WAIT_MS
+        for (t in threads) t.join(maxOf(1L, deadline - System.currentTimeMillis()))
+        // The database last, once nothing above writes to it.
         (startState as? StartState.Ready)?.services?.close()
     }
 
@@ -347,3 +361,6 @@ internal object StartupFailure {
         }
     }
 }
+
+/** The longest quitting waits for Fuse's servers and devices to close (they carry on closing as the process ends). */
+private const val CLOSE_WAIT_MS = 1_200L

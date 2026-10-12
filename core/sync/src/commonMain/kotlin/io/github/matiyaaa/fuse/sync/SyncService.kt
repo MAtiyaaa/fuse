@@ -374,6 +374,16 @@ interface SyncService {
     /** The household's name and when a recovery package at [file] was made (readable without its password); null when it isn't one. */
     suspend fun peekRecoveryPackage(file: String): Pair<String, Long>? = null
 
+    /**
+     * The household's copy of a picture (by [key], the SHA-256 of the address it came from), so a
+     * cover one device fetched comes from the host to the others; null when the host has none,
+     * isn't reachable, or this device isn't connected to one.
+     */
+    suspend fun householdArt(key: String): ByteArray? = null
+
+    /** Gives the host a picture this device fetched itself, for the household's other devices. */
+    suspend fun shareArt(key: String, bytes: ByteArray) = Unit
+
     /** The household's hosts and this computer's place among them; null before Fuse One is set up. */
     val hosts: StateFlow<HostsView?> get() = NO_HOSTS
 

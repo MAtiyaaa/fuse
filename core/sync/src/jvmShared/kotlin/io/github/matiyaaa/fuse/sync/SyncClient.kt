@@ -435,6 +435,18 @@ class SyncClient(
      * Fetches [hash] into [store] (checked against its hash on the way in): nothing is kept when
      * the bytes don't match, and the next try starts again.
      */
+    /** The household's copy of the picture kept for [key] (see [HouseholdArt]); null when the host has none. */
+    suspend fun artwork(key: String): ByteArray? = try {
+        callOnce(HttpMethod.Get, "/art/$key", null, null, raw = { resp -> resp.bodyAsChannel().toInputStream().use { it.readBytes() } })
+    } catch (e: SyncException) {
+        if (e.status == 404 || e.code == "no-art") null else throw e
+    }
+
+    /** Gives the host [bytes], the picture fetched for [key], for the household's other devices. */
+    suspend fun shareArtwork(key: String, bytes: ByteArray) {
+        callOnce<Unit>(HttpMethod.Put, "/art/$key", bytes, null)
+    }
+
     suspend fun download(hash: String, store: ContentStore) {
         if (store.has(hash)) return
         call<String>(HttpMethod.Get, "/blobs/$hash", null, null, raw = { resp ->
