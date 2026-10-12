@@ -121,6 +121,12 @@ sealed interface LaunchGate {
      * came from that device).
      */
     data class Busy(val device: String, val title: String, val playing: Boolean, val at: Long, val lastSave: Long?) : LaunchGate
+
+    /**
+     * This person's save couldn't be put in place (the swap failed, or an interrupted one needs a
+     * look): the game must not start, or it would play with someone else's save. [why] says what to do.
+     */
+    data class Blocked(val title: String, val why: String) : LaunchGate
 }
 
 /** Something Fuse Sync did that the person would want to know, shown as a quiet toast. */

@@ -122,6 +122,7 @@ class SyncDevice(
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val stateFile = File(dir, "device-state.json")
     private val importJournal = File(dir, "save-import-transaction.json")
+    private val handoverJournal = File(dir, "save-handover-transaction.json")
     val store = ContentStore(File(dir, "objects"))
     private val mutex = Mutex()
     private val hlc = HlcClock(deviceId, clock)
@@ -131,6 +132,9 @@ class SyncDevice(
 
     init {
         SaveImportTransaction.recover(importJournal) { revision -> state.outbox.any { it.revision?.id == revision } }
+        // An interrupted profile swap is undone (or finished) before anything else; one that needs a
+        // person's eye stays journaled, and the next handover refuses to launch until it is resolved.
+        runCatching { SaveImportTransaction.recover(handoverJournal, ::handoverCommitted) }
         // Device clocks cannot restart at wall time behind a revision they already accepted.
         (state.metas.values + state.pendingMeta.values).forEach { hlc.seen(it.latestRevision()) }
     }
@@ -298,42 +302,98 @@ class SyncDevice(
      * Makes [slot]'s folder hold [profile]'s save before they play, on a device more than one person
      * uses. Whoever played last keeps theirs: anything they changed is captured for them first, and
      * their save is parked here by content. Then this person's own comes back from where it was
-     * parked, or, if they never played this game here, the folder is cleared so they start their own
-     * game (nothing is deleted: every file is in the device's store). The host's newest still comes
-     * down afterwards, in [prepare].
+     * parked, or, if they never played this game here, the folder is emptied so they start their own
+     * game (nothing is deleted: every file is in the device's store).
+     *
+     * The swap is one recoverable transaction ([SaveImportTransaction]): every file is staged and
+     * backed up, a journal is written before the first destination changes, and the new owner is
+     * recorded in the same commit. A crash at any step is rolled back on the next start; a file the
+     * emulator changed meanwhile stops recovery with both copies kept. Any failure is thrown, so the
+     * caller never launches with the wrong person's save.
+     *
+     * A save already in the folder that no profile owns is never given to whoever launches first
+     * when [othersHere] (someone else already has saves held or parked on this device): it is parked
+     * as [UNCLAIMED] until a person claims it ([claimUnclaimed]). On a device only this person has
+     * used, it is theirs, as before.
      */
-    suspend fun handover(profile: String, slot: LocalSlot, holderSeconds: (String) -> Long = { 0L }, orphanTo: File? = null) {
+    suspend fun handover(profile: String, slot: LocalSlot, holderSeconds: (String) -> Long = { 0L }, orphanTo: File? = null, othersHere: Boolean = false) {
         if (!slot.available) return
+        mutex.withLock { SaveImportTransaction.recover(handoverJournal, ::handoverCommitted) }
         val holder = state.holders[slot.key]
         if (holder == profile) return
         if (holder == null) {
-            // The first person to play it here with Fuse Sync: what is in the folder is theirs.
-            mutex.withLock {
-                state = state.copy(holders = state.holders + (slot.key to profile))
-                persist()
+            val (current, _) = mutex.withLock { fingerprintOf(slot) }
+            if (!othersHere || current.files.isEmpty()) {
+                // The first person to play it here with Fuse Sync, alone on this device: what is in the folder is theirs.
+                mutex.withLock {
+                    state = state.copy(holders = state.holders + (slot.key to profile))
+                    persist()
+                }
+                return
             }
-            return
         }
         // A removed profile's save has no one to keep it for: it goes to [orphanTo] as plain files.
-        val orphan = holder == ORPHAN
-        if (!orphan) capture(holder, slot, holderSeconds(holder), Priority.SAVE)
+        val from = holder ?: UNCLAIMED
+        val orphan = from == ORPHAN
+        if (!orphan && from != UNCLAIMED) capture(from, slot, holderSeconds(from), Priority.SAVE)
         mutex.withLock {
             val (current, hashed) = fingerprintOf(slot)
             for ((lf, h) in hashed) if (!store.has(h)) lf.file.inputStream().use { store.put(it, expected = h) }
             if (orphan && orphanTo != null && current.files.isNotEmpty()) writeOut(File(File(orphanTo, part(slot.game.id)), part(slot.kind.label)), current)
-            val mine = state.parked[keyOf(profile, slot)]
-            // Clear what is there (every file of it is in the store), then put this person's own
-            // back. A file Fuse Sync can't keep (a name it can't carry) is never touched.
-            val cleared = hashed.filter { (lf, h) -> store.has(h) && lf.file.delete() }.map { it.first.file }
-            // The folders the last person's save made go too, so theirs never shapes this one's.
-            slot.folders.mapNotNull(slot::target).forEach { it.delete() }
-            prune(slot, cleared + slot.folders.mapNotNull(slot::target))
-            if (mine != null && mine.files.all { store.has(it.hash) }) write(slot, mine)
+            val mine = state.parked[keyOf(profile, slot)]?.takeIf { m -> m.files.all { store.has(it.hash) } }
+            val incoming = mine ?: SaveManifest(slot.format, emptyList())
+            // Only files Fuse Sync can carry take part: a name it can't keep is never touched.
+            val carried = slot.copy(files = hashed.map { it.first })
             var parked = state.parked - keyOf(profile, slot)
-            if (current.files.isNotEmpty() && (!orphan || orphanTo == null)) parked = parked + (keyOf(holder, slot) to current)
-            state = state.copy(parked = parked, holders = state.holders + (slot.key to profile))
-            persist()
+            if (current.files.isNotEmpty() && (!orphan || orphanTo == null)) parked = parked + (keyOf(from, slot) to current)
+            val before = state
+            val leftFolders = slot.folders.filter { it !in incoming.folders }
+            SaveImportTransaction.write(carried, incoming, store, journal = handoverJournal, revision = "${slot.key}>$profile",
+                expectedOriginal = current, beforeMove = handoverFault, commit = {
+                    state = state.copy(parked = parked, holders = state.holders + (slot.key to profile))
+                    try {
+                        persist()
+                    } catch (e: Exception) {
+                        state = before
+                        runCatching { persist() }.onFailure(e::addSuppressed)
+                        throw e
+                    }
+                })
+            // The folders the last person's save made go too, when empty, so theirs never shapes this one's.
+            val gone = leftFolders.mapNotNull(slot::target).filter { it.isDirectory && it.list()?.isEmpty() == true }
+            gone.forEach { it.delete() }
+            prune(slot, hashed.map { it.first.file } + gone, keep = incoming.folders)
         }
+    }
+
+    /** Everyone whose saves this device holds in a folder or keeps parked: the people a found save might belong to. */
+    fun saveKeepers(): Set<String> = (state.holders.values + state.parked.keys.map { it.substringBefore('|') }).toSet() - ORPHAN - UNCLAIMED
+
+    /** The handover journal's [revision] is `slot key>profile`: it committed once that profile holds the slot. */
+    private fun handoverCommitted(revision: String): Boolean =
+        state.holders[revision.substringBeforeLast('>')] == revision.substringAfterLast('>')
+
+    /** Test hook: runs before each file moves in a handover, to interrupt it at that step. */
+    internal var handoverFault: (Int) -> Unit = {}
+
+    /** A save of [slot]'s game that no profile owned, parked aside on a shared device, when there is one. */
+    fun unclaimed(slot: LocalSlot): SaveManifest? = state.parked[keyOf(UNCLAIMED, slot)]
+
+    /**
+     * [profile] says the unowned save of [slot]'s game is theirs: it becomes their parked save
+     * (theirs already parked here is kept in the store's history as a revision first), and goes into
+     * place at their next [handover].
+     */
+    suspend fun claimUnclaimed(profile: String, slot: LocalSlot): Boolean = mutex.withLock {
+        val found = state.parked[keyOf(UNCLAIMED, slot)] ?: return@withLock false
+        state.parked[keyOf(profile, slot)]?.let { theirs ->
+            val kept = SaveRevision(SyncCrypto.token(12), profile, slot.game.id, slot.kind, state.slots[keyOf(profile, slot)]?.base,
+                deviceId, deviceName, hlc.now(), theirs, reason = RevisionReason.BEFORE_RESTORE, provenance = "Before claiming an unowned save")
+            state = state.copy(outbox = state.outbox + Outgoing(kept.id, Priority.SAVE.rank, profile, kept))
+        }
+        state = state.copy(parked = state.parked - keyOf(UNCLAIMED, slot) + (keyOf(profile, slot) to found))
+        persist()
+        true
     }
 
     /**
@@ -396,7 +456,7 @@ class SyncDevice(
         state.parked.keys.forEach { add(it.substringBefore('|')) }
         state.slots.keys.forEach { add(it.substringBefore('|')) }
         addAll(state.holders.values)
-    } - ORPHAN - ""
+    } - ORPHAN - UNCLAIMED - ""
 
     /**
      * People's ids change ([ids], old to new: profiles made here going to a host, or one found to be
@@ -840,6 +900,9 @@ class SyncDevice(
 
 /** Whose save a folder holds after its person's profile was removed here. */
 internal const val ORPHAN = "~removed"
+
+/** Who holds a save found on a shared device that no profile owned: kept aside until someone claims it. */
+internal const val UNCLAIMED = "~unclaimed"
 
 /** [text] as a safe folder name. */
 private fun part(text: String) = text.replace(Regex("[^A-Za-z0-9 ._()-]+"), "_").trim('.', ' ').take(80).ifEmpty { "_" }

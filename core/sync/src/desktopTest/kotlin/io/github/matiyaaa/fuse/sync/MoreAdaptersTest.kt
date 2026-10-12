@@ -44,6 +44,79 @@ class MoreAdaptersTest {
         SaveQuery(GameKey.of(platform, null, null, title.ifEmpty { "Game" }), platform, rom, emulator, serial = serial, title = title)
 
     @Test
+    fun edenUserIdsReadTheSameInBothLayouts() {
+        // Legacy: user_id[1] then user_id[0] as {:016X}; newer: the 16 bytes in order, lower case.
+        val legacy = "0123456789ABCDEFFEDCBA9876543210"
+        val raw = EdenUser.fromLegacy(legacy)
+        assertEquals("1032547698badcfeefcdab8967452301", raw)
+        assertEquals(legacy, EdenUser.toLegacy(raw))
+        assertEquals("0100A3D008C5C000", EdenUser.masked("0100A3D008C5C0FF"))
+    }
+
+    @Test
+    fun edenFindsTheNewerAccountLayoutTheThorMissed() {
+        // The Thor: Eden's Save Data Directory chosen in Fuse; Eden keeps Red Dead Redemption in the newer layout.
+        val chosen = "/storage/emulated/0/Emulation/saves/switch"
+        val legacyUser = "37111DFF1B5BCC59550000000000000A"
+        val raw = EdenUser.fromLegacy(legacyUser)
+        val rdr = q("switch", "/roms/switch/[ROMsNS] Red Dead Redemption v0 (01007820196A6000) (BASE).nsp", "eden", serial = "01007820196A6000")
+        val phone = FakeEnv("ANDROID", "/storage/emulated/0", files = mapOf(
+            "$chosen/user/save/0000000000000000/$legacyUser/" to "",
+            "$chosen/user/save/account/$raw/01007820196A6000/0/slot1.dat" to "x",
+        ), chosen = mapOf("eden" to chosen))
+        val spot = SaveAdapters.forEmulator("eden")!!.locate(rdr, phone).single()
+        assertEquals("$chosen/user/save/account/$raw/01007820196A6000/0", spot.root)
+        // Both layouts there: Eden prefers the newer one, and so does Fuse.
+        val both = FakeEnv("ANDROID", "/storage/emulated/0", files = mapOf(
+            "$chosen/user/save/0000000000000000/$legacyUser/01007820196A6000/old.dat" to "x",
+            "$chosen/user/save/account/$raw/01007820196A6000/0/slot1.dat" to "x",
+        ), chosen = mapOf("eden" to chosen))
+        assertEquals("$chosen/user/save/account/$raw/01007820196A6000/0", SaveAdapters.forEmulator("eden")!!.locate(rdr, both).single().root)
+        // The low byte of the title id is cleared in the newer layout.
+        val masked = FakeEnv("ANDROID", "/storage/emulated/0", files = mapOf(
+            "$chosen/user/save/account/$raw/0100A3D008C5C000/0/a" to "x",
+        ), chosen = mapOf("eden" to chosen))
+        assertEquals("$chosen/user/save/account/$raw/0100A3D008C5C000/0",
+            SaveAdapters.forEmulator("eden")!!.locate(q("switch", "/r/g.nsp", "eden", serial = "0100A3D008C5C0FF"), masked).single().root)
+    }
+
+    @Test
+    fun edenDeviceSavesAndOtherUsers() {
+        val space = "/home/mo/.local/share/eden/nand/user/save"
+        val game = q("switch", "/roms/switch/Game [0100000000010000].nsp", "eden")
+        // A device save (not tied to a user), newer and legacy.
+        val newer = FakeEnv("LINUX", "/home/mo", files = mapOf("$space/device/0100000000010000/0/d" to "x"))
+        assertEquals("$space/device/0100000000010000/0", SaveAdapters.forEmulator("eden")!!.locate(game, newer).single().root)
+        val legacy = FakeEnv("LINUX", "/home/mo", files = mapOf("$space/0000000000000000/00000000000000000000000000000000/0100000000010000/d" to "x"))
+        assertEquals("$space/0000000000000000/00000000000000000000000000000000/0100000000010000", SaveAdapters.forEmulator("eden")!!.locate(game, legacy).single().root)
+        // Two users, the game saved by only one: that one, never the first in the list.
+        val a = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        val b = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+        val two = FakeEnv("LINUX", "/home/mo", files = mapOf(
+            "$space/0000000000000000/$a/" to "",
+            "$space/0000000000000000/$b/0100000000010000/s" to "x",
+        ))
+        assertEquals("$space/0000000000000000/$b/0100000000010000", SaveAdapters.forEmulator("eden")!!.locate(game, two).single().root)
+        // Two users, neither has it, no profile selected: Fuse doesn't guess.
+        val neither = FakeEnv("LINUX", "/home/mo", files = mapOf("$space/0000000000000000/$a/" to "", "$space/0000000000000000/$b/" to ""))
+        val none = SaveAdapters.forEmulator("eden")!!.locate(game, neither).single()
+        assertFalse(none.available)
+        assertTrue("more than one user" in none.note!!, none.note)
+        // The config's current user picks, through Eden's profile list (its second entry here).
+        val profiles = ByteArray(0x10 + 2 * 0xC8).also { bytes ->
+            EdenUser.fromLegacy(b).chunked(2).forEachIndexed { i, h -> bytes[0x10 + 0xC8 + i] = h.toInt(16).toByte() }
+        }
+        val selected = FakeEnv("LINUX", "/home/mo", files = mapOf(
+            "/home/mo/.config/eden/qt-config.ini" to "[System]\ncurrent_user=1\n",
+            "$space/0000000000000000/$a/0100000000010000/s" to "x",
+            "$space/0000000000000000/$b/" to "",
+        ), bin = mapOf("/home/mo/.local/share/eden/nand/system/save/8000000000000010/su/avators/profiles.dat" to profiles))
+        val spot = SaveAdapters.forEmulator("eden")!!.locate(game, selected).single()
+        assertEquals("$space/0000000000000000/$b/0100000000010000", spot.root, "the selected user's place, not user A's save")
+        assertTrue("may not have saved yet" in spot.note!!, spot.note)
+    }
+
+    @Test
     fun edenSavesWhereItsConfigOrThePersonPutThem() {
         val user = "0123456789ABCDEF0123456789ABCDEF"
         val zelda = q("switch", "/roms/switch/Zelda [01007EF00011E000].nsp", "eden")

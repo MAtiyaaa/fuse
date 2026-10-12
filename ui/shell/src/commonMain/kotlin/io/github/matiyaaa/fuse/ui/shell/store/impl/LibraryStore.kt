@@ -579,6 +579,15 @@ internal class DefaultLibraryOps(
                     when (val gate = link.service.beforeLaunch(save, waitForOthers = !playAnyway)) {
                         is io.github.matiyaaa.fuse.sync.LaunchGate.Conflict -> return LaunchOutcome.SaveConflict(gate.conflict)
                         is io.github.matiyaaa.fuse.sync.LaunchGate.Busy -> return LaunchOutcome.SyncBusy(gate)
+                        is io.github.matiyaaa.fuse.sync.LaunchGate.Blocked -> return LaunchOutcome.Problem(
+                            io.github.matiyaaa.fuse.ui.shell.store.Problem(
+                                title = "${gate.title} wasn't started",
+                                message = gate.why,
+                                kind = io.github.matiyaaa.fuse.ui.shell.store.ProblemKind.DATA,
+                                reassurance = "Every save file is kept on this device.",
+                                actions = listOf(io.github.matiyaaa.fuse.ui.shell.store.ProblemAction.Retry()),
+                            ),
+                        )
                         is io.github.matiyaaa.fuse.sync.LaunchGate.Go -> note = gate.note
                     }
                 }

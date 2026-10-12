@@ -2014,8 +2014,18 @@ class JvmSyncService(
             // On a device more than one person plays, the folder must hold this person's save
             // first (whoever played last keeps theirs); this needs no host, so it happens offline too.
             val owner = ownerOf(query, slot, profile)
-            runCatching { d.handover(owner, slot, { who -> if (who == SHARED_SAVES) 0L else canonical(d.meta(who)).game(query.game).totalSeconds }, File(File(dir, KEPT_DIR), REMOVED_DIR)) }
-                .onFailure { log("${query.title}: couldn't swap in this person's save (${it.message})", query.game.id, SyncActivity.FAILED) }
+            val swapped = runCatching {
+                d.handover(owner, slot, { who -> if (who == SHARED_SAVES) 0L else canonical(d.meta(who)).game(query.game).totalSeconds },
+                    File(File(dir, KEPT_DIR), REMOVED_DIR), othersHere = d.saveKeepers().any { it != owner && it != SHARED_SAVES })
+            }
+            swapped.exceptionOrNull()?.let { e ->
+                // Never start with someone else's save: the person sees why, and nothing was lost (every file is kept).
+                log("${query.title}: couldn't swap in this person's save (${e.message})", query.game.id, SyncActivity.FAILED)
+                busy -= query.game.id
+                return@withContext LaunchGate.Blocked(query.title,
+                    "Fuse couldn't put your save for ${query.title} in place, so it didn't start, to keep from playing with someone else's save. " +
+                        "Every file is kept. ${e.message ?: ""}".trim())
+            }
             // This person's saves aren't taken here: the game starts with the save this device has.
             if (!takesFrom(owner, query.game.id)) continue
             if (c == null) {
