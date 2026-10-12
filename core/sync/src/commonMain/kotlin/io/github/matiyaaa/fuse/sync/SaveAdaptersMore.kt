@@ -323,7 +323,7 @@ internal object ThreeDs : SaveAdapter {
         val titles = titles(env, base)
         val id = read ?: SaveAdapters.learned(env, q, FORMAT).firstOrNull()?.let { "00040000" + it.uppercase() }
             ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, FORMAT, SaveAdapters.PLAY_ONCE, learnIn = titles))
-        val save = SaveSpot(SaveKind.SAVE, FORMAT, root = "$titles/${id.drop(8).lowercase()}/data")
+        val save = SaveSpot(SaveKind.SAVE, FORMAT, root = "$titles/${id.drop(8).lowercase()}/data", learnIn = titles, learnedAs = listOf(id.drop(8).lowercase()))
         // Save states: `states/<TITLE ID>.<slot>.cst` in the same user folder, slots 0 to 10.
         val states = SaveSpot(SaveKind.STATE, "3ds.state", (0..STATE_SLOTS).map { n ->
             val slot = n.toString().padStart(2, '0')

@@ -37,6 +37,8 @@ data class LocalSlot(
      * change Fuse makes is counted as done, so a failure undoes the change instead.
      */
     val sink: (() -> Unit)? = null,
+    /** The game's own folders, as [SaveSpot.learnedAs] says, to send with its saves. */
+    val learnedAs: List<String> = emptyList(),
 ) {
     val key: String get() = "${game.id}|${kind.name}"
 
@@ -262,6 +264,7 @@ class SyncDevice(
             id = SyncCrypto.token(12), profile = profile, game = slot.game.id, kind = slot.kind,
             parent = if (replaces != null) replaces.revision?.parent else waiting?.revision?.id ?: slotState.base,
             device = deviceId, deviceName = deviceName, at = hlc.now(), manifest = manifest, playSeconds = playSeconds, title = title,
+            learned = slot.learnedAs.ifEmpty { learned(slot.game.id, slot.format) },
         )
         state = state.copy(
             outbox = state.outbox.filterNot { it.id == replaces?.id } + Outgoing(revision.id, priority.rank, profile, revision),
@@ -986,7 +989,7 @@ object Slots {
                 if (f.isFile && !f.name.startsWith(".") && !SaveNoise.file(f.name) && SavePath.isSafe(name)) files += LocalFile(name, f)
             }
         }
-        return LocalSlot(game, spot.kind, spot.format, root, files.sortedBy { it.path }, spot.available, targets, empty.sorted(), mounts)
+        return LocalSlot(game, spot.kind, spot.format, root, files.sortedBy { it.path }, spot.available, targets, empty.sorted(), mounts, learnedAs = spot.learnedAs)
     }
 }
 

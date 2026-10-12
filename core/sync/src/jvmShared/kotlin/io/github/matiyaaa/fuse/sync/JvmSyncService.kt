@@ -469,6 +469,7 @@ class JvmSyncService(
         val query = canonical(provider(gameId) ?: return)
         if (query.game.id in busy) return
         val notes = ArrayList<AppliedNote>()
+        runCatching { learnFromHousehold(c, d, query, profile) }
         for (slot in slots(query)) {
             val owner = ownerOf(query, slot, profile)
             // This person's saves aren't taken here (Settings, Fuse Sync, Saves on this device).
@@ -2019,8 +2020,9 @@ class JvmSyncService(
         getReady(query.title)
         busy += query.game.id
         scope.launch { delay(READY_MS); if (watch?.query?.game != query.game) busy -= query.game.id }
-        // Saves Fuse can't place yet (the game's id unknown): what each game's folder looks like now,
-        // so the folders this play changes are learned as this game's.
+        // Saves Fuse can't place yet (the game's id unknown): where another device keeps them, if it
+        // knows; else what each game's folder looks like now, so this play teaches Fuse.
+        if (c != null) withTimeoutOrNull(LAUNCH_WAIT_MS) { runCatching { learnFromHousehold(c, d, query, profile) } }
         snapshotLearnable(query)
         var note: String? = null
         for (slot in slots(query)) {
@@ -2140,6 +2142,25 @@ class JvmSyncService(
         if (watch == null) _nowPlaying.value = null
     }
 
+    /**
+     * For each of [query]'s saves Fuse can't place here because the game's id can't be read (a
+     * compressed 3DS image): the folders the newest save says it is kept in on the device that made
+     * it, when the formats match and the names are plain folder names. Learned here as if played.
+     */
+    private suspend fun learnFromHousehold(c: SyncClient, d: SyncDevice, query: SaveQuery, profile: String) {
+        val adapter = SaveAdapters.forEmulator(query.emulatorId) ?: return
+        val owner = if (query.game.id in cached.sharedGames) SHARED_SAVES else profile
+        for (spot in runCatching { adapter.locate(query, saveEnv) }.getOrDefault(emptyList())) {
+            if (spot.available || spot.learnIn == null || d.learned(query.game.id, spot.format).isNotEmpty()) continue
+            val head = c.revisions(owner, query.game.id, spot.kind).firstOrNull { it.canBeNewest } ?: continue
+            if (!SaveSlotFormats.compatible(head.manifest.format, spot.format)) continue
+            val folders = head.learned.filter { LEARNABLE_NAME.matches(it) }
+            if (folders.isEmpty() || folders.size != head.learned.size) continue
+            d.learn(query.game.id, spot.format, folders)
+            log("${query.title}: learned where its save goes from ${head.deviceName}", query.game.id, "save")
+        }
+    }
+
     /** A learnable save's folders as they were before a game: each game's subfolder and when it last changed. */
     private class LearnSnap(val format: String, val folder: String, val times: Map<String, Long>)
 
@@ -2151,6 +2172,8 @@ class JvmSyncService(
     private fun snapshotLearnable(query: SaveQuery) {
         val adapter = SaveAdapters.forEmulator(query.emulatorId) ?: return
         val snaps = runCatching { adapter.locate(query, saveEnv) }.getOrDefault(emptyList()).mapNotNull { spot ->
+            // Only a save that can't be placed is learned from a play.
+            if (spot.available) return@mapNotNull null
             val folder = spot.learnIn ?: return@mapNotNull null
             LearnSnap(spot.format, folder, saveEnv.list(folder).associateWith { saveEnv.modified("$folder/$it") ?: 0L })
         }
@@ -2554,6 +2577,9 @@ class JvmSyncService(
         /** Tries, a moment apart, for a background service holding the host's port to answer. */
         /** The most game folders one play may change and still be learned as one game's. */
         const val LEARN_MAX = 4
+
+        /** A folder name learned from another device: one plain name, never a path. */
+        val LEARNABLE_NAME = Regex("^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 
         /** Systems whose games keep their own saves (PC games, Android apps): nothing to explain. */
         val OWN_SAVES_PLATFORMS = setOf("win", "steam", "android", "dos")

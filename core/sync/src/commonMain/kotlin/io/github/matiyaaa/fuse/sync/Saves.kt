@@ -93,6 +93,8 @@ data class SaveRevision(
     val pinned: Boolean = false,
     /** Additive provenance keeps imported saves compatible with older hosts' reason enum. */
     val provenance: String = "",
+    /** The game's own folders where the saving device keeps it (see [SaveSpot.learnedAs]), for devices that can't tell. */
+    val learned: List<String> = emptyList(),
 ) {
     val size: Long get() = manifest.size
 

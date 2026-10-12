@@ -207,6 +207,47 @@ class ServiceTest {
     }
 
     @Test
+    fun aThreeDsSaveMadeOnAndroidIsInPlaceOnLinuxEvenWhenLinuxCantReadTheGamesId(): Unit = runBlocking {
+        // Tomodachi Life: a cartridge image on the Thor (its title id in the header), a compressed
+        // .zcci on the PC (the id can't be read from it), and the PC has never played it.
+        val tl = GameKey.of("3ds", null, null, "Tomodachi Life")
+        val pcHome = File(root, "pc-home")
+        File(pcHome, ".local/share/azahar-emu").mkdirs()
+        val (pc, _) = service("Gaming PC", Library(), home = pcHome)
+        val (thor, thorSettings) = service("AYN Thor", Library(), platform = "ANDROID", home = File(root, "thor-home").apply { mkdirs() })
+        val thorUser = File(root, "thor-azahar")
+        thorSettings.update { it.copy(sync = it.sync.copy(saveFolders = mapOf("azahar" to thorUser.path.replace('\\', '/')))) }
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        thor.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        thor.switchTo(mo.id).getOrThrow()
+        pc.switchTo(mo.id).getOrThrow()
+        val zero = "00000000000000000000000000000000"
+        fun saveIn(user: File) = File(user, "sdmc/Nintendo 3DS/$zero/$zero/title/00040000/00176f00/data/00000001/system.dat")
+        // The Thor's cartridge image: "NCSD" at 0x100 and the media id at 0x108, little-endian.
+        val thorRom = File(root, "thor-roms/Tomodachi Life (USA).3ds").apply { parentFile.mkdirs() }
+        thorRom.writeBytes(ByteArray(0x200).also { b ->
+            "NCSD".encodeToByteArray().copyInto(b, 0x100)
+            byteArrayOf(0x00, 0x6F, 0x17, 0x00, 0x00, 0x00, 0x04, 0x00).copyInto(b, 0x108)
+        })
+        saveIn(thorUser).apply { parentFile.mkdirs() }.writeText("thor: island of 40")
+        val tq = SaveQuery(tl, "3ds", thorRom.path.replace('\\', '/'), "azahar", title = "Tomodachi Life")
+        thor.afterExit(tq, 0, 60 * 60_000)
+        // The PC can't read the compressed image's id, and it has never played: the save is still in place before it starts.
+        val pcRom = File(root, "pc-roms/Tomodachi Life.zcci").apply { parentFile.mkdirs(); writeBytes(ByteArray(0x200) { 0x5A }) }
+        val pq = SaveQuery(tl, "3ds", pcRom.path.replace('\\', '/'), "linux.azahar", title = "Tomodachi Life")
+        assertIs<LaunchGate.Go>(pc.beforeLaunch(pq))
+        assertEquals("thor: island of 40", saveIn(File(pcHome, ".local/share/azahar-emu")).readText())
+        // Played on the PC: it goes back up as the next step, not a conflict, and the Thor takes it.
+        saveIn(File(pcHome, ".local/share/azahar-emu")).writeText("pc: island of 41")
+        pc.afterExit(pq, 0, 60 * 60_000)
+        assertIs<LaunchGate.Go>(thor.beforeLaunch(tq))
+        assertEquals("pc: island of 41", saveIn(thorUser).readText())
+        pc.stop()
+        thor.stop()
+    }
+
+    @Test
     fun aTitleOnlyCopyCannotAcquireASerialIdentifiedGamesSaveWithoutEvidence(): Unit = runBlocking {
         // The Thor's copy has no serial (only its title); the PC's scan read the serial.
         val byTitle = GameKey.of("gba", null, null, "Pokemon Ruby (USA)")
