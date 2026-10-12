@@ -184,6 +184,8 @@ data class StoreState(
     val managed: Map<String, Managed> = emptyMap(),
     /** Updates asked for while a game is played, waiting for it to end. */
     val holding: Boolean = false,
+    /** Why this computer can't run an app, by key (its processor, its graphics), as its developers publish what it needs. */
+    val requirements: Map<String, String> = emptyMap(),
 ) {
     fun app(key: String): StoreApp? = catalogue?.apps?.firstOrNull { it.key == key }
 

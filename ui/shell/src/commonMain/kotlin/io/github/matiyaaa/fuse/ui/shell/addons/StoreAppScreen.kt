@@ -209,6 +209,12 @@ private fun StorePage(app: AppState, state: StoreState, item: StoreApp) {
                 }
             }
 
+            // What this computer lacks to run it, before anything is installed.
+            state.requirements[key]?.let { why ->
+                Spacer(Modifier.height(Space.l))
+                Note(FuseIcons.Warning, "This computer may not run ${item.name}. $why.", Modifier.widthIn(max = 1180.dp), color = Fuse.colors.warning)
+            }
+
             // Why there is no Install button.
             val note = when {
                 item.availability == Availability.TRACK_ONLY ->

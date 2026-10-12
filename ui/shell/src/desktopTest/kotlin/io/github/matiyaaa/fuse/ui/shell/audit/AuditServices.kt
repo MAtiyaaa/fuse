@@ -51,6 +51,9 @@ internal class AuditControls(val cache: File) {
 
     @Volatile var cartridge: CartridgeStatus = CartridgeStatus(installed = false)
 
+    /** The made-up computer's processor, as Fuse Intelligence reads it; unknown when null. */
+    @Volatile var processor: io.github.matiyaaa.fuse.launch.intelligence.Processor? = null
+
     /** The version an update replaced, as Settings, About offers to go back to it; none when null. */
     @Volatile var previousFuse: io.github.matiyaaa.fuse.ui.shell.store.PreviousRelease? = null
 
@@ -154,6 +157,7 @@ internal class AuditServices(
         override fun canExecute(path: String) = true
         override fun modified(path: String): Long? = 1_700_000_000_000L
         override fun names(path: String): List<String> = emptyList()
+        override fun processor() = controls.processor
     } to object : io.github.matiyaaa.fuse.launch.intelligence.KnowledgeStore {
         private var text: String? = null
         override fun read() = text

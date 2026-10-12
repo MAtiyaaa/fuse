@@ -64,4 +64,27 @@ class LaunchDiagnosticStoreTest {
         val plain = assertIs<LaunchOutcome.Problem>(store.library.launch(games.first { it.platformId.value == "gba" }.id)).problem
         assertEquals("mGBA stopped right away (exit code 1).", plain.message)
     }
+
+    @Test
+    fun aRequirementTheComputerLacksIsSaidWhereWhatItWroteGivesNoReason() {
+        val shad = io.github.matiyaaa.fuse.model.InstalledEmulator(
+            io.github.matiyaaa.fuse.model.EmulatorId("linux.shadps4"), "shadPS4", io.github.matiyaaa.fuse.model.Host.LINUX,
+            "/home/mo/Apps/shadPS4.AppImage", null, setOf(io.github.matiyaaa.fuse.model.PlatformId("ps4")), "AppImage",
+        )
+        val game = io.github.matiyaaa.fuse.model.GameId(1L)
+        val lacks = "It needs a processor with x86-64-v3 (Intel Haswell, AMD Excavator or newer), and this one doesn't have it"
+        val crash = io.github.matiyaaa.fuse.ui.shell.store.impl.LaunchProblems.refused(
+            shad, game, "shadPS4 stopped right away.", android = false, diagnostic = LaunchDiagnostic(listOf(shad.appId), 132, "Illegal instruction\n"), requirement = lacks,
+        )
+        assertEquals("shadPS4 may not run on this computer. $lacks.", crash.message)
+        assertTrue("Requirement not met: $lacks." in crash.details.orEmpty() && "Exit code: 132" in crash.details.orEmpty())
+        // A missing BIOS is its own reason, and stays what is said.
+        val bios = io.github.matiyaaa.fuse.ui.shell.store.impl.LaunchProblems.refused(
+            shad, game, "shadPS4 stopped right away.", android = false, diagnostic = LaunchDiagnostic(listOf(shad.appId), 1, "BIOS not found\n"), requirement = lacks,
+        )
+        assertTrue("firmware" in bios.message, bios.message)
+        // Without a requirement, nothing changes.
+        val plain = io.github.matiyaaa.fuse.ui.shell.store.impl.LaunchProblems.refused(shad, game, "shadPS4 stopped right away.", android = false)
+        assertEquals("shadPS4 stopped right away.", plain.message)
+    }
 }

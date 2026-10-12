@@ -206,7 +206,8 @@ private fun StoreShelves(app: AppState, state: StoreState, active: Boolean, topP
                 ?.takeIf { cartridgeChosen }?.let { reasons[it.key] = "You chose Cartridge for RomM" }
             for (p in wanted) {
                 for (a in catalogue.apps) {
-                    if (a.availability == Availability.INSTALLABLE && a.key !in state.installed && p.platform.id in a.systems && a.key !in reasons) {
+                    // Never suggested when this computer can't run it.
+                    if (a.availability == Availability.INSTALLABLE && a.key !in state.installed && a.key !in state.requirements && p.platform.id in a.systems && a.key !in reasons) {
                         reasons[a.key] = "For your ${p.platform.shortName} games"
                     }
                 }

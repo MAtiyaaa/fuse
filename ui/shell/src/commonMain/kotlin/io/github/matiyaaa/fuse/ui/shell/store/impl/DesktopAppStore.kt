@@ -134,10 +134,15 @@ internal class DesktopAppStoreOps(
         // A channel can be chosen where the project publishes stable releases on GitHub (pre-releases beside them).
         val channels = all.values.filter { it.repoFor(installer.host) != null && !it.prereleases }.map { it.key }.toSet()
         val store = ctx.settings.value.store
+        // What this computer can't run, said before installing (read only: its processor and graphics).
+        val look = ctx.services.intelligence()?.first
+        val requirements = if (look == null) emptyMap() else all.values.mapNotNull { e ->
+            e.emulator?.let { io.github.matiyaaa.fuse.launch.intelligence.EmulatorRequirements.unmet(it, installer.host, look) }?.let { e.key to it }
+        }.toMap()
         mutable.update { s ->
             s.copy(
                 catalogue = catalogue, releases = s.releases.filterKeys { it in all }, jobs = s.jobs.filterKeys { it in all },
-                channels = channels, excluded = store.excluded, prerelease = store.prerelease,
+                channels = channels, excluded = store.excluded, prerelease = store.prerelease, requirements = requirements,
             )
         }
     }

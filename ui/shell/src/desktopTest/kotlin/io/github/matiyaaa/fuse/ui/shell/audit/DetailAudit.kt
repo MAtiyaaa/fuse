@@ -169,6 +169,28 @@ internal fun AuditDriver.detailScreens() {
         settle(1_500)
         shoot("a program's page")
         tap(PadButton.B)
+        // A processor older than shadPS4 needs (no AVX2): its page says so before anything is installed.
+        controls.processor = io.github.matiyaaa.fuse.launch.intelligence.Processor("x86_64", setOf("sse4_1", "sse4_2", "avx"))
+        try {
+            windowsStore.appStore.open()
+            settle(900)
+            focusText("Search") { tap(PadButton.DPAD_UP) }
+            tap(PadButton.A)
+            type("shadPS4")
+            router.textInput?.submit()
+            waitFor("Search: shadPS4")
+            settle(900)
+            // The search puts its results first and selects them.
+            focusHint("Details") { tap(PadButton.DPAD_DOWN) }
+            tap(PadButton.A)
+            waitFor("may not run shadPS4")
+            settle(1_200)
+            shoot("a program this computer can't run")
+            tap(PadButton.B)
+        } finally {
+            controls.processor = null
+            windowsStore.appStore.open()
+        }
     }
 
     scenario("details", "a game with many facts") {
