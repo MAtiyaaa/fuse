@@ -225,12 +225,17 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
     val onRomm = remember(rommGames) { rommGames.filter { it.presence != RommPresence.INSTALLED }.map { EverywhereGame.OnRomm(it) } }
     val elsewhere = remember(householdRecent) { householdRecent.map { EverywhereGame.Elsewhere(it) } }
     val recent = remember(home.recentlyAdded, rommGames, householdRecent) { mergeRecent(home.recentlyAdded, rommGames, householdRecent) }
-    val systems = remember(platforms, rommSystems, library) {
+    val householdSystems by store.reach.systems.collectAsState()
+    val systems = remember(platforms, rommSystems, householdSystems, library) {
         val local = platforms.filter { it.gameCount > 0 }.map { EverywhereSystem(it, rommSystems.firstOrNull { r -> r.platform == it.platform.id }?.slug, local = true) }
-        val known = local.map { it.card.platform.id }.toSet()
+        val known = local.map { it.card.platform.id }.toMutableSet()
         val remote = rommSystems.filter { it.platform != null && it.platform !in known }
             .mapNotNull { r -> systemCard(r, library)?.let { EverywhereSystem(it, r.slug, local = false) } }
-        local + remote
+        known += remote.map { it.card.platform.id }
+        // Systems only the household's other devices have.
+        val elsewhere = householdSystems.filter { it.platform !in known }
+            .mapNotNull { h -> io.github.matiyaaa.fuse.ui.shell.reach.householdSystemCard(h, library)?.let { EverywhereSystem(it, null, local = false) } }
+        local + remote + elsewhere
     }
 
     val rows = buildList {
@@ -275,11 +280,8 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
         is EverywhereGame.Elsewhere -> app.openContextMenu(householdMenu(app, e.game, romm = rommState.canUpload))
         is EverywhereGame.Streamed -> streamFrom(app, e.app, always = true)
     }
-    fun openSystem(s: EverywhereSystem) = when {
-        s.local -> app.go(Route.PlatformGames(s.card.platform.id))
-        s.rommSlug != null -> app.go(Route.RommGames(s.rommSlug, s.card.platform.shortName))
-        else -> Unit
-    }
+    // Every game of the system from everywhere, installed or not, each once.
+    fun openSystem(s: EverywhereSystem) = app.go(Route.SystemEverywhere(s.card.platform.id, s.card.platform.name, s.rommSlug))
     fun seeAll(key: String) = when (key) {
         // Everything on this device, newest first: the Installed view sorted by when games came.
         ROW_RECENT -> {

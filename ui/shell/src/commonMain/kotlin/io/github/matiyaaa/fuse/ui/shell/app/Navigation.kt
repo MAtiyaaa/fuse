@@ -84,6 +84,9 @@ sealed interface Route {
     /** One system's games on the household's other devices (every system's when [platform] is null). */
     data class HouseholdGames(val platform: io.github.matiyaaa.fuse.model.PlatformId?, val name: String) : Route
 
+    /** Every game of one system from everywhere (this device, RomM, other devices), each once: what All's systems open. */
+    data class SystemEverywhere(val platform: io.github.matiyaaa.fuse.model.PlatformId, val name: String, val rommSlug: String?) : Route
+
     /** Where play time went: today, this week, this month, per day, per game and per system. */
     data object PlayTime : Route
     data object Themes : Route
