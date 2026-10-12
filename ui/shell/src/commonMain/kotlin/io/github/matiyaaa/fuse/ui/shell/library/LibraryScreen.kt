@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.library
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -161,6 +162,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
 
 /** What a library view lists. */
 sealed interface LibraryScope {
@@ -442,8 +444,11 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     // Dragging the grid by touch decides the fold from the scroll; a controller decides it from the selection.
     val dragged by gridState.interactionSource.collectIsDraggedAsState()
     val listDragged by listState.interactionSource.collectIsDraggedAsState()
+    // A touch screen on a computer drags as the mouse (dragScroll), which says so here.
+    val pointerDrags = remember { MutableInteractionSource() }
+    val pointerDragged by pointerDrags.collectIsDraggedAsState()
     var touchScroll by remember { mutableStateOf(false) }
-    PageEffect(dragged, listDragged) { if (dragged || listDragged) touchScroll = true }
+    PageEffect(dragged, listDragged, pointerDragged) { if (dragged || listDragged || pointerDragged) touchScroll = true }
 
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
         if (touchScroll) {
@@ -687,7 +692,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                         }
                         Spacer(Modifier.height(if (inSystem) lerp(Space.m, Space.s, collapse) else lerp(Space.l, Space.s, collapse)))
                         columns = cols
-                        IconGrid(list, state, gridState, cols, tileBase, metrics.gap, reveal, follow = { !touchScroll }, onTap = { i -> tapAt(i, list) }, onHover = { i -> hoverAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
+                        IconGrid(list, state, gridState, cols, tileBase, metrics.gap, reveal, follow = { !touchScroll }, onTap = { i -> tapAt(i, list) }, onHover = { i -> hoverAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused, drags = pointerDrags)
                     }
                     LibraryLayout.CAPSULE -> {
                         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).padding(horizontal = Space.gutter).reveal(reveal, 1), contentAlignment = Alignment.BottomStart) {
@@ -721,11 +726,11 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                         val coverW = metrics.coverWidth
                         val cols = ((maxW - Space.gutter * 2 + metrics.gap) / (coverW + metrics.gap)).toInt().coerceAtLeast(2)
                         columns = cols
-                        CoverGrid(list, state, gridState, cols, coverW, metrics.gap, reveal, follow = { !touchScroll }, onTap = { i -> tapAt(i, list) }, onHover = { i -> hoverAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
+                        CoverGrid(list, state, gridState, cols, coverW, metrics.gap, reveal, follow = { !touchScroll }, onTap = { i -> tapAt(i, list) }, onHover = { i -> hoverAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused, drags = pointerDrags)
                     }
                     LibraryLayout.COMPACT_LIST -> {
                         columns = 1
-                        CompactList(list, state, listState, reveal, follow = { !touchScroll }, onTap = { i -> tapAt(i, list) }, onHover = { i -> hoverAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
+                        CompactList(list, state, listState, reveal, follow = { !touchScroll }, onTap = { i -> tapAt(i, list) }, onHover = { i -> hoverAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused, drags = pointerDrags)
                     }
                   }
                 }
@@ -869,6 +874,7 @@ private fun IconGrid(
     onLong: (Int) -> Unit,
     onHover: (Int) -> Unit = {},
     focused: Boolean,
+    drags: MutableInteractionSource? = null,
 ) {
     // The chosen row stays clear of the top's fading edge, and is followed again as tiles shrink with the folding stage.
     val fade = with(androidx.compose.ui.platform.LocalDensity.current) { (Space.xl + Space.s).roundToPx() }
@@ -876,7 +882,7 @@ private fun IconGrid(
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
         state = grid,
-        modifier = Modifier.padding(bottom = Size.hintHeight).fadingEdges(grid, top = Space.xl, bottom = BOTTOM_FADE),
+        modifier = Modifier.padding(bottom = Size.hintHeight).fadingEdges(grid, top = Space.xl, bottom = BOTTOM_FADE).dragScroll(grid, interactionSource = drags),
         contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.s, bottom = Space.xxl),
         horizontalArrangement = Arrangement.spacedBy(gap),
         verticalArrangement = Arrangement.spacedBy(gap + Space.s),
@@ -915,6 +921,7 @@ private fun CoverGrid(
     onLong: (Int) -> Unit,
     onHover: (Int) -> Unit = {},
     focused: Boolean,
+    drags: MutableInteractionSource? = null,
 ) {
     FollowSelection(grid, { state.grid.index }, anchor = 0.1f, enabled = follow)
     val selected = list.getOrNull(state.grid.index)
@@ -927,7 +934,7 @@ private fun CoverGrid(
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             state = grid,
-            modifier = Modifier.padding(bottom = Size.hintHeight).fadingEdges(grid, top = Space.xl, bottom = BOTTOM_FADE),
+            modifier = Modifier.padding(bottom = Size.hintHeight).fadingEdges(grid, top = Space.xl, bottom = BOTTOM_FADE).dragScroll(grid, interactionSource = drags),
             contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.m, bottom = Space.xxl),
             horizontalArrangement = Arrangement.spacedBy(gap),
             verticalArrangement = Arrangement.spacedBy(gap + Space.m),
@@ -963,6 +970,7 @@ private fun CompactList(
     onLong: (Int) -> Unit,
     onHover: (Int) -> Unit = {},
     focused: Boolean,
+    drags: MutableInteractionSource? = null,
 ) {
     FollowSelection(listState, { state.grid.index }, anchor = 0.35f, enabled = follow)
     val selected = list.getOrNull(state.grid.index)
@@ -976,6 +984,7 @@ private fun CompactList(
             GlidingList(
                 list, state.grid.index, listState, focused,
                 Modifier.weight(LIST_WEIGHT).fillMaxHeight(),
+                drags,
             ) { i, card, sel ->
                 GameRow(
                     card, sel, showsSystem, dense,
@@ -1005,6 +1014,7 @@ private fun GlidingList(
     listState: LazyListState,
     focused: Boolean,
     modifier: Modifier,
+    drags: MutableInteractionSource? = null,
     row: @Composable (Int, GameCard, Boolean) -> Unit,
 ) {
     val c = Fuse.colors
@@ -1072,7 +1082,7 @@ private fun GlidingList(
                         alpha = shown,
                     )
                 }
-            },
+            }.dragScroll(listState, interactionSource = drags),
         contentPadding = PaddingValues(top = CONTENT_TOP, bottom = Space.xl),
         verticalArrangement = Arrangement.spacedBy(Space.xxs),
     ) {

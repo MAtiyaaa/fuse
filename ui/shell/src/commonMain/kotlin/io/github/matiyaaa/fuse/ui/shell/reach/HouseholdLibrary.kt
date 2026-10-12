@@ -62,6 +62,7 @@ import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
 import io.github.matiyaaa.fuse.ui.shell.store.HouseholdGame
 import io.github.matiyaaa.fuse.ui.shell.store.HouseholdState
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
 
 /** "12 games on Gaming PC and Thor", or what is missing for there to be any. */
 fun householdWords(s: HouseholdState): String {
@@ -203,7 +204,7 @@ fun HouseholdLibraryScreen(app: AppState) {
         val compact = maxHeight < 560.dp
         LazyColumn(
             state = list,
-            modifier = Modifier.fillMaxSize().padding(top = Size.hudHeight).fadingEdges(list, top = Space.xl, bottom = Space.xl),
+            modifier = Modifier.fillMaxSize().padding(top = Size.hudHeight).fadingEdges(list, top = Space.xl, bottom = Space.xl).dragScroll(list),
             contentPadding = PaddingValues(top = Space.m, bottom = Size.hintHeight + Space.l),
             verticalArrangement = Arrangement.spacedBy(if (compact) Space.s else Space.m),
         ) {

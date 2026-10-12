@@ -89,6 +89,8 @@ import io.github.matiyaaa.fuse.ui.shell.store.RommState
 import io.github.matiyaaa.fuse.ui.shell.store.RommSystem
 import io.github.matiyaaa.fuse.ui.shell.store.impl.TimeWords
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
+import androidx.compose.foundation.gestures.Orientation
 
 /**
  * Room above and below a shelf for its chosen tile: it lifts toward you (it grows and its glow
@@ -139,6 +141,7 @@ internal fun GameShelf(
         ShelfTitle(title, icon, trailing)
         LazyRow(
             state = state,
+            modifier = Modifier.dragScroll(state, Orientation.Horizontal),
             contentPadding = PaddingValues(horizontal = Space.gutter, vertical = room),
             horizontalArrangement = Arrangement.spacedBy(LocalTileMetrics.current.gap),
         ) {

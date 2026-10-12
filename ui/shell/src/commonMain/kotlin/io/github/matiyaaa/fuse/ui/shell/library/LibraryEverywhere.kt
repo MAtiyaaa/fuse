@@ -72,6 +72,8 @@ import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 import io.github.matiyaaa.fuse.ui.shell.store.RommGame
 import io.github.matiyaaa.fuse.ui.shell.store.RommLink
 import io.github.matiyaaa.fuse.ui.shell.store.RommPresence
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
+import androidx.compose.foundation.gestures.Orientation
 
 /**
  * One game on the All page, wherever it is: on this device, on RomM, or on another device of the
@@ -352,7 +354,7 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
         }
         LazyColumn(
             state = list,
-            modifier = Modifier.fillMaxSize().fadingEdges(list, top = Space.l, bottom = Space.xl),
+            modifier = Modifier.fillMaxSize().fadingEdges(list, top = Space.l, bottom = Space.xl).dragScroll(list),
             contentPadding = PaddingValues(top = Space.s, bottom = Size.hintHeight + Space.l),
             verticalArrangement = Arrangement.spacedBy(Space.m),
         ) {
@@ -441,6 +443,7 @@ private fun EverywhereShelf(
         ShelfTitle(title, icon, if (games.size == 1) "1 $noun" else "${games.size} ${noun}s")
         LazyRow(
             state = state,
+            modifier = Modifier.dragScroll(state, Orientation.Horizontal),
             contentPadding = PaddingValues(horizontal = Space.gutter, vertical = liftRoom(tile)),
             horizontalArrangement = Arrangement.spacedBy(LocalTileMetrics.current.gap),
         ) {
@@ -476,7 +479,7 @@ private fun SystemsShelf(systems: List<EverywhereSystem>, selected: Int, tile: D
     LaunchedEffect(selected) { if (selected >= 0) state.animateScrollToItem(maxOf(0, selected - 1)) }
     Column {
         ShelfTitle("Systems", FuseIcons.Chip, "${systems.size}")
-        LazyRow(state = state, contentPadding = PaddingValues(horizontal = Space.gutter, vertical = liftRoom(tile)), horizontalArrangement = Arrangement.spacedBy(LocalTileMetrics.current.gap)) {
+        LazyRow(state = state, modifier = Modifier.dragScroll(state, Orientation.Horizontal), contentPadding = PaddingValues(horizontal = Space.gutter, vertical = liftRoom(tile)), horizontalArrangement = Arrangement.spacedBy(LocalTileMetrics.current.gap)) {
             itemsIndexed(systems, key = { _, s -> s.card.platform.id.value }) { i, s ->
                 SystemTile(s.card, selected == i, size = tile, onClick = { onOpen(i) })
             }

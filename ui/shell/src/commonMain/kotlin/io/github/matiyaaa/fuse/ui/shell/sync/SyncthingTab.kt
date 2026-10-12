@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -69,6 +68,7 @@ import io.github.matiyaaa.fuse.ui.shell.components.subTabsRoom
 import io.github.matiyaaa.fuse.ui.shell.home.bytesText
 import io.github.matiyaaa.fuse.ui.shell.settings.QrCode
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragVerticalScroll
 
 /**
  * Addons, Syncthing: what Syncthing is doing with your saves, the way Addons, Sync shows Fuse Sync.
@@ -208,7 +208,7 @@ internal fun SyncthingTab(app: AppState, active: Boolean, topPadding: Dp) {
                 }
                 if (side) {
                     Box(Modifier.width(if (roomy) 380.dp else if (compact) 290.dp else 320.dp).fillMaxHeight()) {
-                        Column(Modifier.fillMaxSize().verticalScroll(sideScroll), verticalArrangement = Arrangement.spacedBy(Space.m)) {
+                        Column(Modifier.fillMaxSize().dragVerticalScroll(sideScroll), verticalArrangement = Arrangement.spacedBy(Space.m)) {
                             DevicesCard(others, pending)
                             if (connected != null) ThisDeviceCard(app, connected)
                         }

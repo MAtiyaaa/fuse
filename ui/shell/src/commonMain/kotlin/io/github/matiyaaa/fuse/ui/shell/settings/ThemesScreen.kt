@@ -109,6 +109,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import io.github.matiyaaa.fuse.ui.shell.components.ViewTab
 import io.github.matiyaaa.fuse.ui.shell.components.ViewTabs
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
 
 /** Where people share themes: the Themes part of Fuse's website. */
 const val THEMES_URL = "https://matiyaaa.github.io/fuse/#themes"
@@ -587,7 +588,7 @@ private fun Gallery(
         columns = GridCells.Fixed(columns),
         state = grid,
         // The grid reaches past the pane on both sides, so a lifted card's ring and glow are never cut.
-        modifier = modifier.bleed(bleed).fadingEdges(grid, top = Space.xl, bottom = Space.xl),
+        modifier = modifier.bleed(bleed).fadingEdges(grid, top = Space.xl, bottom = Space.xl).dragScroll(grid),
         contentPadding = PaddingValues(start = bleed, end = bleed, top = Space.l, bottom = Size.hintHeight + Space.x4),
         horizontalArrangement = Arrangement.spacedBy(gap),
         // Room under each row for the focused card's spark bar before the next row starts.

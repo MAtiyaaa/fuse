@@ -27,7 +27,6 @@ import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -120,6 +119,8 @@ import io.github.matiyaaa.fuse.ui.shell.store.SearchTitle
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragVerticalScroll
 
 private val slots = listOf(
     MediaKind.SQUARE to "Box art",
@@ -547,7 +548,7 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
                 .fillMaxWidth()
                 .weight(1f)
                 .fadingEdges(listScroll, top = Space.l, bottom = Space.xl)
-                .verticalScroll(listScroll)
+                .dragVerticalScroll(listScroll)
                 .padding(bottom = Size.hintHeight + Space.l)
                 .then(highlight.drawModifier()),
         ) {
@@ -892,7 +893,7 @@ private fun ArtworkGrid(b: Browser.Options, grid: GridSelection, current: String
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             state = state,
-            modifier = Modifier.fadingEdges(state, top = Space.l, bottom = Space.xl),
+            modifier = Modifier.fadingEdges(state, top = Space.l, bottom = Space.xl).dragScroll(state),
             horizontalArrangement = Arrangement.spacedBy(Space.m),
             verticalArrangement = Arrangement.spacedBy(Space.m),
             // Room above the first row for a lifted tile.

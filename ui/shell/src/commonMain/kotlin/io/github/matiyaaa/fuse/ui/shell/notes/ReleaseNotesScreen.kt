@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -60,6 +59,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragVerticalScroll
 
 /**
  * The notes of the version Fuse is running, bundled with it (a copy of docs/releases/<version>.md),
@@ -164,7 +164,7 @@ fun ReleaseNotesScreen(app: AppState, route: Route.ReleaseNotes) {
                 .fillMaxSize()
                 .padding(top = Size.hudHeight, bottom = Size.hintHeight)
                 .fadingEdges(scroll, top = Space.l, bottom = Space.xl)
-                .verticalScroll(scroll)
+                .dragVerticalScroll(scroll)
                 .padding(horizontal = gutter),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {

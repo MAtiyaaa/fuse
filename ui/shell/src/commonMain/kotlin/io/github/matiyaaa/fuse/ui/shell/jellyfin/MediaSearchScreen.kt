@@ -51,6 +51,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
 
 /** The search page while it is open: what was asked, what came back, and where you are. */
 internal class MediaSearchState {
@@ -153,7 +154,7 @@ internal fun MediaSearchScreen(app: AppState) {
         val wide = if (compact) 232.dp else 296.dp
         LazyColumn(
             state = list,
-            modifier = Modifier.fillMaxSize().padding(top = Size.hudHeight).fadingEdges(top = if (list.canScrollBackward) Space.xl else 0.dp),
+            modifier = Modifier.fillMaxSize().padding(top = Size.hudHeight).fadingEdges(top = if (list.canScrollBackward) Space.xl else 0.dp).dragScroll(list),
             contentPadding = PaddingValues(top = if (compact) Space.s else Space.l, bottom = Size.hintHeight + Space.xl),
             verticalArrangement = Arrangement.spacedBy(if (compact) Space.l else Space.xl),
         ) {

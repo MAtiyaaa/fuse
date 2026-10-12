@@ -25,6 +25,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import androidx.compose.ui.geometry.Offset
 
 private fun LibraryLayout.words(): String = when (this) {
     LibraryLayout.ICON -> "Grid"
@@ -213,18 +214,7 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
     }
 
     scenario("library", "system folding") {
-        useLibrary()
-        // Enough Super Nintendo games for three rows, so there are rows to move down.
-        val snes = File(root, "snes")
-        val extra = (1..14).map { File(snes, "Folding Test ${'A' + it - 1}.sfc").apply { writeBytes(ByteArray(512)) } }
-        try {
-            libraryStore.sources.rescan(ScanScope.PLATFORM, PlatformId("snes"))
-            pumpUntil("the extra games") { libraryStore.library.platforms.value.firstOrNull { it.platform.id == PlatformId("snes") }?.gameCount == 20 }
-            val systems = libraryStore.library.platforms.value.filter { it.gameCount > 0 }
-            tab(Destination.SYSTEMS)
-            Grid(systems.size).goTo(platformIndex("snes"))
-            tap(PadButton.A)
-            waitFor("20 games")
+        withSnesRows {
             viewAs(LibraryLayout.ICON)
             settle(900)
             shoot("Super Nintendo, first row")
@@ -237,15 +227,25 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
             tap(PadButton.DPAD_UP, 2)
             settle(900)
             shoot("Super Nintendo, back on the first row")
-        } finally {
-            // Gone from disk, then forgotten, so later screens see the library as it was.
-            extra.forEach { it.delete() }
-            libraryStore.sources.rescan(ScanScope.PLATFORM, PlatformId("snes"))
-            pumpUntil("the extra games to go") { libraryStore.library.platforms.value.firstOrNull { it.platform.id == PlatformId("snes") }?.gameCount == 6 }
-            runBlocking {
-                val missing = withTimeout(10_000) { libraryStore.library.games(GameQuery(set = GameSet.MISSING)).first { list -> list.count { it.title.startsWith("Folding Test") } == extra.size } }
-                missing.filter { it.title.startsWith("Folding Test") }.forEach { libraryStore.library.forgetMissing(it.id) }
-            }
+        }
+    }
+    scenario("library", "dragged on a computer's touch screen") {
+        // A finger on a Linux or Windows touch screen reaches Fuse as the mouse with its button held.
+        withSnesRows {
+            viewAs(LibraryLayout.ICON)
+            settle(900)
+            // On the grid, a little below the middle of the window.
+            val start = Offset(size.widthPx * 0.5f, size.heightPx * 0.62f)
+            mouse { moveTo(start - Offset(0f, 40f)); moveTo(start) }
+            settle(300)
+            shoot("the pointer resting on a game")
+            mouse { press() }
+            repeat(12) { mouse { moveBy(Offset(0f, -18f), delayMillis = 16) }; advanceExactly(16) }
+            shoot("held and dragged up: the grid follows, nothing it passes is lit", 0)
+            mouse { repeat(6) { moveBy(Offset(0f, -30f), delayMillis = 8) }; release() }
+            shoot("let go at speed: it flings on and the header folds, as under a finger", 1_500)
+            mouse { moveTo(start); press(); repeat(10) { moveBy(Offset(0f, 22f), delayMillis = 16) }; release() }
+            shoot("dragged back down", 1_500)
         }
     }
 
@@ -1202,5 +1202,33 @@ internal fun AuditDriver.cartridgeScreens(exhaustive: Boolean) {
         waitFor("Cartridge")
         tap(PadButton.DPAD_LEFT)
         shoot("Cartridge widget with an active download")
+    }
+}
+
+/**
+ * Enough Super Nintendo games for three rows (twenty in all), the system open in the Library, for
+ * [block]; then gone from disk and forgotten, so later screens see the library as it was.
+ */
+private fun AuditDriver.withSnesRows(block: () -> Unit) {
+    useLibrary()
+    val snes = File(root, "snes")
+    val extra = (1..14).map { File(snes, "Folding Test ${'A' + it - 1}.sfc").apply { writeBytes(ByteArray(512)) } }
+    try {
+        libraryStore.sources.rescan(ScanScope.PLATFORM, PlatformId("snes"))
+        pumpUntil("the extra games") { libraryStore.library.platforms.value.firstOrNull { it.platform.id == PlatformId("snes") }?.gameCount == 20 }
+        val systems = libraryStore.library.platforms.value.filter { it.gameCount > 0 }
+        tab(Destination.SYSTEMS)
+        Grid(systems.size).goTo(platformIndex("snes"))
+        tap(PadButton.A)
+        waitFor("20 games")
+        block()
+    } finally {
+        extra.forEach { it.delete() }
+        libraryStore.sources.rescan(ScanScope.PLATFORM, PlatformId("snes"))
+        pumpUntil("the extra games to go") { libraryStore.library.platforms.value.firstOrNull { it.platform.id == PlatformId("snes") }?.gameCount == 6 }
+        runBlocking {
+            val missing = withTimeout(10_000) { libraryStore.library.games(GameQuery(set = GameSet.MISSING)).first { list -> list.count { it.title.startsWith("Folding Test") } == extra.size } }
+            missing.filter { it.title.startsWith("Folding Test") }.forEach { libraryStore.library.forgetMissing(it.id) }
+        }
     }
 }

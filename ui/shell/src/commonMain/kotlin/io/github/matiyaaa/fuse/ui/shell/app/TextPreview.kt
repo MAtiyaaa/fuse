@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,6 +44,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineScrollTo
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragVerticalScroll
 
 /** A button under a [TextPreviewSpec]: what it says, its icon, what it does. */
 data class PreviewAction(val label: String, val icon: ImageVector?, val primary: Boolean = false, val run: () -> Unit)
@@ -113,7 +113,7 @@ internal fun TextPreviewOverlay(app: AppState) {
                     ) {
                         FText(
                             s.text, Fuse.type.caption, color = c.textMuted, maxLines = Int.MAX_VALUE,
-                            modifier = Modifier.fadingEdges(scroll, top = Space.l, bottom = Space.l).verticalScroll(scroll).padding(Space.l),
+                            modifier = Modifier.fadingEdges(scroll, top = Space.l, bottom = Space.l).dragVerticalScroll(scroll).padding(Space.l),
                         )
                     }
                     Spacer(Modifier.height(Space.l))

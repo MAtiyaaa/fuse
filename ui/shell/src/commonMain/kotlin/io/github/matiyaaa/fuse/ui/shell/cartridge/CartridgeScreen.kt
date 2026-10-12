@@ -104,6 +104,8 @@ import io.github.matiyaaa.fuse.ui.shell.store.AppIconModel
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 import io.github.matiyaaa.fuse.ui.shell.store.RecentDownload
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
+import androidx.compose.foundation.gestures.Orientation
 
 /** One action card: what it says, and what it does. [needsBridge] cards wait for Cartridge 0.9.10. */
 private data class CartAction(
@@ -341,7 +343,7 @@ fun CartridgeContent(app: AppState, embedded: Boolean, active: Boolean, topPaddi
                 CartridgeSkeleton(Modifier.padding(top = topPadding + room + Space.l).padding(horizontal = Space.gutter))
             } else LazyColumn(
                 state = page,
-                modifier = Modifier.fillMaxSize().padding(top = topPadding).fadingEdges(top = if (page.canScrollBackward) Space.xl else 0.dp),
+                modifier = Modifier.fillMaxSize().padding(top = topPadding).fadingEdges(top = if (page.canScrollBackward) Space.xl else 0.dp).dragScroll(page),
                 contentPadding = PaddingValues(top = room + if (compact) Space.s else Space.m, bottom = Size.hintHeight + Space.xl),
                 verticalArrangement = Arrangement.spacedBy(if (compact) Space.l else Space.xl),
             ) {
@@ -465,6 +467,7 @@ private fun ShelfRow(title: String?, count: Int, selected: Int, remembered: Int,
         }
         LazyRow(
             state = state,
+            modifier = Modifier.dragScroll(state, Orientation.Horizontal),
             contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter * 2, top = Space.xs, bottom = Space.xs),
             horizontalArrangement = Arrangement.spacedBy(Space.m),
         ) {

@@ -22,7 +22,6 @@ import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -131,6 +130,7 @@ import io.github.matiyaaa.fuse.transfer.TransferStatus
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragVerticalScroll
 
 /**
  * A tile; a [toggle] says On or Off under its name and is lit while [active]. [hold] is what holding
@@ -864,7 +864,7 @@ fun QuickMenu(app: AppState) {
                             .fillMaxWidth()
                             .weight(1f)
                             .fadingEdges(scroll, top = Space.l, bottom = Space.xl)
-                            .verticalScroll(scroll)
+                            .dragVerticalScroll(scroll)
                             // Room for a lifted tile's ring and the edit badges at the top, the sheet's corner at the bottom.
                             .padding(horizontal = Space.l)
                             .padding(top = Space.l, bottom = Space.l)

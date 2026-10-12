@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -70,6 +69,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.StoreApp
 import io.github.matiyaaa.fuse.ui.shell.store.StoreJob
 import io.github.matiyaaa.fuse.ui.shell.store.StoreState
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragVerticalScroll
 
 private data class PageButton(val label: String, val icon: ImageVector, val kind: ButtonKind, val busy: Boolean = false, val run: () -> Unit)
 
@@ -161,7 +161,7 @@ private fun StorePage(app: AppState, state: StoreState, item: StoreApp) {
         val compact = maxHeight < 600.dp
         val wide = maxWidth > 900.dp
         Column(
-            Modifier.fillMaxSize().fadingEdges(top = if (scroll.value > 0) Space.xl else 0.dp).verticalScroll(scroll)
+            Modifier.fillMaxSize().fadingEdges(top = if (scroll.value > 0) Space.xl else 0.dp).dragVerticalScroll(scroll)
                 .padding(top = Size.hudHeight + Space.s, bottom = Size.hintHeight + Space.xl)
                 .padding(horizontal = Space.gutter),
         ) {

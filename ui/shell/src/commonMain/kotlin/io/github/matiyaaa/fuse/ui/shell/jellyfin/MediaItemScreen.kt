@@ -66,6 +66,8 @@ import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
+import androidx.compose.foundation.gestures.Orientation
 
 /** What an item's page holds while it is open. */
 internal class MediaPageState {
@@ -297,7 +299,7 @@ internal fun MediaItemScreen(app: AppState, id: String) {
         val narrow = maxWidth < 700.dp
         LazyColumn(
             state = list,
-            modifier = Modifier.fillMaxSize().padding(top = Size.hudHeight).fadingEdges(top = if (list.canScrollBackward) Space.xl else 0.dp),
+            modifier = Modifier.fillMaxSize().padding(top = Size.hudHeight).fadingEdges(top = if (list.canScrollBackward) Space.xl else 0.dp).dragScroll(list),
             contentPadding = PaddingValues(top = if (compact) Space.l else maxHeight * 0.16f, bottom = Size.hintHeight + Space.xl),
             verticalArrangement = Arrangement.spacedBy(if (compact) Space.l else Space.xl),
         ) {
@@ -394,7 +396,10 @@ private fun Facts(item: MediaItem) {
 @Composable
 private fun SeasonChips(seasons: List<MediaItem>, shown: Int, chosen: Int, onClick: (Int) -> Unit) {
     val c = Fuse.colors
+    val row = androidx.compose.foundation.lazy.rememberLazyListState()
     androidx.compose.foundation.lazy.LazyRow(
+        state = row,
+        modifier = Modifier.dragScroll(row, Orientation.Horizontal),
         contentPadding = PaddingValues(horizontal = Space.gutter),
         horizontalArrangement = Arrangement.spacedBy(Space.s),
     ) {

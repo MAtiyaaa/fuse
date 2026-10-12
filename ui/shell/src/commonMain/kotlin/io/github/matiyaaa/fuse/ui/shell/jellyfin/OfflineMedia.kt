@@ -75,6 +75,7 @@ import io.github.matiyaaa.fuse.ui.shell.downloads.ActionPill
 import io.github.matiyaaa.fuse.ui.shell.downloads.TopAction
 import io.github.matiyaaa.fuse.ui.shell.downloads.sizeOf
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
 
 /** Whether [type] can be kept offline: a film, an episode, or every episode of a season or show. */
 internal fun downloadable(type: MediaType) = type == MediaType.MOVIE || type == MediaType.EPISODE || type == MediaType.VIDEO || type == MediaType.SEASON || type == MediaType.SERIES
@@ -343,7 +344,7 @@ fun OfflineMediaScreen(app: AppState) {
         LazyColumn(
             state = list,
             modifier = Modifier.fillMaxSize().padding(top = Size.hudHeight).padding(horizontal = if (maxWidth < 600.dp) Space.gutterCompact else Space.gutter)
-                .fadingEdges(list, top = Space.l, bottom = Size.hintHeight),
+                .fadingEdges(list, top = Space.l, bottom = Size.hintHeight).dragScroll(list),
             contentPadding = PaddingValues(top = Space.s, bottom = Size.hintHeight + Space.m),
             verticalArrangement = Arrangement.spacedBy(Space.xs),
         ) {

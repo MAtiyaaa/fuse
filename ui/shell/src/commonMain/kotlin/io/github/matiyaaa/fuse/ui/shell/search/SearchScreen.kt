@@ -120,6 +120,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
 
 /** The kinds of result, in the order their groups are listed. */
 private enum class HitKind(val label: String, val icon: ImageVector) {
@@ -551,7 +552,7 @@ private fun ResultList(
                     val x = if (r > bh / 2) r - kotlin.math.sqrt(r * r - (bh / 2) * (bh / 2)) else 0f
                     drawRoundRect(accent, Offset(x, t + (h - bh) / 2), androidx.compose.ui.geometry.Size(BAR.toPx(), bh), CornerRadius(BAR.toPx()), alpha = shown)
                 }
-            },
+            }.dragScroll(list),
     ) {
         hits.forEachIndexed { i, h ->
             if (layout.firstOfGroup(i) == i) {

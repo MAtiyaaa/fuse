@@ -89,6 +89,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
+import androidx.compose.foundation.gestures.Orientation
 
 /**
  * What the main screen has in focus, shared with the companion screen. Keys are [GameId] or
@@ -259,7 +261,7 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
             // Something starting to play brings the first page round, so its remote is in view.
             val playingId = player?.item?.id
             LaunchedEffect(playingId) { if (playingId != null && pager.currentPage != 0) pager.animateScrollToPage(0) }
-            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1, userScrollEnabled = sheet == null && !(pictureHere && pager.currentPage == 0)) { page ->
+            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize().dragScroll(pager, Orientation.Horizontal, enabled = sheet == null && !(pictureHere && pager.currentPage == 0), flingBehavior = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(pager)), beyondViewportPageCount = 1, userScrollEnabled = sheet == null && !(pictureHere && pager.currentPage == 0)) { page ->
                 when (page) {
                     0 -> when {
                         pictureHere && player != null -> CompanionPicture(player) { placement.swap() }

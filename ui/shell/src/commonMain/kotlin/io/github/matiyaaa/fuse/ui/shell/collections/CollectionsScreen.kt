@@ -92,6 +92,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
 
 /** A card on the Collections screen: a collection. */
 private sealed interface CollectionItem {
@@ -264,7 +265,7 @@ fun CollectionsScreen(app: AppState) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(columns),
                     state = grid,
-                    modifier = Modifier.weight(1f).fadingEdges(grid, top = Space.xl, bottom = Size.hintHeight + Space.l),
+                    modifier = Modifier.weight(1f).fadingEdges(grid, top = Space.xl, bottom = Size.hintHeight + Space.l).dragScroll(grid),
                     contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.l, bottom = Size.hintHeight + Space.x4),
                     horizontalArrangement = Arrangement.spacedBy(gap),
                     verticalArrangement = Arrangement.spacedBy(Space.xl),

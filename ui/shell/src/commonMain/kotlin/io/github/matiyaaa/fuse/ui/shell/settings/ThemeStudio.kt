@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
@@ -114,6 +113,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragVerticalScroll
 
 /** A colour the studio offers for the accent, and the name it goes by (colour is never the only cue). */
 @Immutable
@@ -1021,7 +1021,7 @@ internal fun StudioPanel(
                     Column(
                         Modifier
                             .fadingEdges(scroll, top = Space.xl, bottom = Space.xl)
-                            .verticalScroll(scroll)
+                            .dragVerticalScroll(scroll)
                             .padding(Space.xs)
                             .drawBehind {
                                 if (shown <= 0.01f) return@drawBehind

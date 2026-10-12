@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
@@ -114,6 +113,7 @@ import kotlin.math.sin
 import kotlin.time.TimeSource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragVerticalScroll
 
 /** The room Undo and Reset take above the board while it is arranged. */
 private val ARRANGE_TOOLS_ROOM = 64.dp
@@ -584,7 +584,7 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                                 (BoardGrid.move(base, id, column, row) as? BoardChange.Done)?.let { d -> base.rects.getValue(id).let { BoardRect(column, row, it.width, it.height) } to d.layout }
                             },
                         )
-                        .verticalScroll(scroll),
+                        .dragVerticalScroll(scroll),
                 ) {
                     Box(
                         Modifier

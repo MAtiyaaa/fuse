@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -87,6 +86,8 @@ import androidx.compose.foundation.gestures.animateScrollBy
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragVerticalScroll
 
 /**
  * Addons, Sync: what the host keeps for the person playing. A slim line at the top says who is
@@ -270,7 +271,7 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
                 state = list,
                 // Below the top line, never under it: what scrolls past softens away at the top edge.
                 modifier = Modifier.weight(1f).fillMaxHeight().padding(top = topPadding)
-                    .fadingEdges(list, top = Space.xl, bottom = Space.xl),
+                    .fadingEdges(list, top = Space.xl, bottom = Space.xl).dragScroll(list),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(top = subTabsRoom() + Space.s, bottom = Size.hintHeight + Space.m),
                 verticalArrangement = Arrangement.spacedBy(Space.xs),
             ) {
@@ -323,7 +324,7 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
             }
             if (side) {
                 Box(Modifier.width(340.dp).fillMaxHeight().padding(top = topPadding + subTabsRoom() + Space.s, bottom = Size.hintHeight + Space.m)) {
-                    Column(Modifier.fillMaxSize().verticalScroll(sideScroll), verticalArrangement = Arrangement.spacedBy(Space.m)) {
+                    Column(Modifier.fillMaxSize().dragVerticalScroll(sideScroll), verticalArrangement = Arrangement.spacedBy(Space.m)) {
                         if (alone) {
                             HouseholdInvite(app, svc.canHost)
                         } else {

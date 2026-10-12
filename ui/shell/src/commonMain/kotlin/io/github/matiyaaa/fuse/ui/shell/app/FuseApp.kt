@@ -449,6 +449,9 @@ private fun FuseAppContent(
             androidx.compose.ui.platform.LocalLayoutDirection provides direction,
             LocalInputRouter provides router,
             io.github.matiyaaa.fuse.ui.designsystem.input.LocalPointerRouter provides router,
+            // Touch screens on Linux and Windows reach Fuse as the mouse, so a held drag scrolls lists there.
+            io.github.matiyaaa.fuse.ui.designsystem.input.LocalPointerDragScroll provides
+                (platform.host == io.github.matiyaaa.fuse.model.Host.LINUX || platform.host == io.github.matiyaaa.fuse.model.Host.WINDOWS),
             LocalUiSounds provides platform.sounds,
             io.github.matiyaaa.fuse.ui.designsystem.effects.LocalGlassBackdrop provides backdrop,
         ) {
@@ -469,6 +472,7 @@ private fun FuseAppContent(
                                         mouse = ch.type != androidx.compose.ui.input.pointer.PointerType.Touch,
                                         x = ch.position.x, y = ch.position.y,
                                         pressed = e.type == androidx.compose.ui.input.pointer.PointerEventType.Press,
+                                        held = ch.pressed,
                                     )
                                 }
                             }

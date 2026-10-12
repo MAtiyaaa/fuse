@@ -64,6 +64,7 @@ import io.github.matiyaaa.fuse.ui.fuseline.Durations
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 import io.github.matiyaaa.fuse.ui.fuseline.tween
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
 
 /** One row of a [ReorderList]. A [locked] row keeps its place (Home stays first). */
 @Immutable
@@ -250,7 +251,7 @@ fun ReorderList(
                         state.place(key.toString(), to, locked)?.let(onMoved)
                         onDrop()
                     },
-                ),
+                ).dragScroll(list),
             contentPadding = PaddingValues(vertical = Space.xs),
             verticalArrangement = Arrangement.spacedBy(Space.xxs),
         ) {

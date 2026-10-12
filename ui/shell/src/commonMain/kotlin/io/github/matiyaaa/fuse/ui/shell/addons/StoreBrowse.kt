@@ -76,6 +76,8 @@ import io.github.matiyaaa.fuse.ui.shell.store.Availability
 import io.github.matiyaaa.fuse.ui.shell.store.StoreApp
 import io.github.matiyaaa.fuse.ui.shell.store.StoreState
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
+import androidx.compose.foundation.gestures.Orientation
 
 /** Where the Store page is: its selection and the search being shown. */
 internal class StoreBrowseState {
@@ -323,7 +325,7 @@ private fun StoreShelves(app: AppState, state: StoreState, active: Boolean, topP
         val compact = maxHeight < 600.dp
         LazyColumn(
             state = list,
-            modifier = Modifier.fillMaxSize().padding(top = topPadding).fadingEdges(top = if (list.canScrollBackward) Space.xl else 0.dp),
+            modifier = Modifier.fillMaxSize().padding(top = topPadding).fadingEdges(top = if (list.canScrollBackward) Space.xl else 0.dp).dragScroll(list),
             contentPadding = PaddingValues(top = room + if (compact) Space.s else Space.m, bottom = Size.hintHeight + Space.xl),
             verticalArrangement = Arrangement.spacedBy(if (compact) Space.l else Space.xl),
         ) {
@@ -486,6 +488,7 @@ private fun AppShelf(
         val latestSelected = androidx.compose.runtime.rememberUpdatedState(selected)
         LazyRow(
             state = list,
+            modifier = Modifier.dragScroll(list, Orientation.Horizontal),
             contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter * 2, top = Space.l, bottom = io.github.matiyaaa.fuse.ui.designsystem.theme.Size.sparkClearance),
             horizontalArrangement = Arrangement.spacedBy(Space.m),
         ) {

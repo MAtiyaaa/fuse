@@ -104,10 +104,12 @@ class InputRouter(
 
     /**
      * A pointer event at the root, in the window's own coordinates: [mouse] says what kind, and a
-     * mouse whose place in the window changed has moved, so hovering may move the highlight.
+     * mouse whose place in the window changed has moved, so hovering may move the highlight. One
+     * moved with a button [held] is a drag (a finger on a computer's touch screen arrives as one):
+     * it is still the input in use, but what scrolls under it afterwards isn't being pointed at.
      */
-    fun pointer(mouse: Boolean, x: Float, y: Float, pressed: Boolean) {
-        redirectTo?.let { it.pointer(mouse, x, y, pressed); return }
+    fun pointer(mouse: Boolean, x: Float, y: Float, pressed: Boolean, held: Boolean = false) {
+        redirectTo?.let { it.pointer(mouse, x, y, pressed, held); return }
         this.mouse = mouse
         if (!mouse) return
         if (lastMouseX.isNaN()) {
@@ -116,7 +118,7 @@ class InputRouter(
         } else if (kotlin.math.abs(x - lastMouseX) + kotlin.math.abs(y - lastMouseY) >= MOUSE_MOVE_PX) {
             // A real move (not a desk's tremble): the mouse is the input in use now, so hints stop
             // naming controller buttons that may not even be connected.
-            mouseMovedAt = kotlin.time.Clock.System.now().toEpochMilliseconds()
+            mouseMovedAt = if (held && !pressed) 0L else kotlin.time.Clock.System.now().toEpochMilliseconds()
             lastMouseX = x
             lastMouseY = y
             _lastSource.value = InputSource.POINTER

@@ -2,7 +2,6 @@ package io.github.matiyaaa.fuse.ui.shell.sync
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,7 +20,6 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,6 +57,8 @@ import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragVerticalScroll
+import io.github.matiyaaa.fuse.ui.designsystem.input.dragHorizontalScroll
 
 /** What the editor does with a profile's PIN: leave it as it is, take it off, or set a new one. */
 sealed interface PinChoice {
@@ -212,7 +212,7 @@ internal fun ProfileEditor(
             // Everything but the buttons: centred when it fits, scrolled when it doesn't.
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Column(
-                    Modifier.widthIn(max = 720.dp).verticalScroll(rememberScrollState()),
+                    Modifier.widthIn(max = 720.dp).dragVerticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     FText(title, if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1, modifier = Modifier.semantics { heading() })
@@ -259,7 +259,7 @@ internal fun ProfileEditor(
                     }
                     if (short) {
                         // One row, sideways: the chosen picture is always the one in view.
-                        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = Space.s), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                        Row(Modifier.dragHorizontalScroll(rememberScrollState()).padding(horizontal = Space.s), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                             for (i in avatars.indices) pictures(i)
                         }
                     } else {
