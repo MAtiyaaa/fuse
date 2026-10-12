@@ -30,6 +30,8 @@ object RenderScale {
             .mapNotNull { dir ->
                 val status = runCatching { File(dir, "status").readText().trim() }.getOrNull()
                 if (status != "connected") return@mapNotNull null
+                // A connected screen the compositor turned off (the Deck's own panel while docked) isn't shown on.
+                if (runCatching { File(dir, "enabled").readText().trim() }.getOrNull() == "disabled") return@mapNotNull null
                 val mode = runCatching { File(dir, "modes").useLines { it.firstOrNull() } }.getOrNull()
                 parseMode(mode)?.let { (w, h) -> Output(dir.name.substringAfter('-'), w, h) }
             }
@@ -44,12 +46,14 @@ object RenderScale {
     }
 
     /**
-     * Fuse's drawing against the largest connected screen. Only in Game Mode, where one app owns
-     * the screen and is enlarged to it; on a desktop, a window smaller than the screen is a choice.
+     * Fuse's drawing against the screen it is shown on. Only in Game Mode, where one app owns the
+     * screen and is enlarged to it; on a desktop, a window smaller than the screen is a choice. The
+     * screen is the one connected and enabled output; with several, which one shows Fuse can't be
+     * told from here, so there is no answer rather than a guess at the largest.
      */
     fun read(drawnWidth: Int, drawnHeight: Int, gameMode: Boolean = GameMode.active, drm: File = File("/sys/class/drm")): Reading? {
         if (!gameMode || drawnWidth <= 0 || drawnHeight <= 0) return null
-        val output = outputs(drm).firstOrNull() ?: return null
+        val output = outputs(drm).singleOrNull() ?: return null
         return Reading(drawnWidth, drawnHeight, output)
     }
 

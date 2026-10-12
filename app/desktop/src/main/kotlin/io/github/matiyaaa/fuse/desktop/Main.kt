@@ -103,6 +103,35 @@ private fun goBackFromAFailedUpdate(dirs: FuseDirs, args: Array<String>) {
 }
 
 /**
+ * What the window is really drawn with (Skiko's render info names the GL driver), where it is shown
+ * (X11, Wayland, nested gamescope or Steam's Game Mode), and whether gamescope is scaling a smaller
+ * window up to the screen, which makes everything soft however sharp the art is.
+ */
+private fun probeRenderer(session: DesktopSession, window: java.awt.Window) {
+    fun layers(c: java.awt.Component): List<org.jetbrains.skiko.SkiaLayer> =
+        (if (c is org.jetbrains.skiko.SkiaLayer) listOf(c) else emptyList()) + ((c as? java.awt.Container)?.components?.flatMap(::layers) ?: emptyList())
+    val layer = layers(window).firstOrNull() ?: return
+    val api = layer.renderApi.name
+    val info = runCatching { layer.renderInfo }.getOrNull()
+    val device = window.graphicsConfiguration.device
+    val mode = device.displayMode
+    val scale = window.graphicsConfiguration.defaultTransform.scaleX
+    val w = (window.width * scale).toInt()
+    val h = (window.height * scale).toInt()
+    val output = io.github.matiyaaa.fuse.desktop.system.ActiveOutput.currentMode()
+    val kind = io.github.matiyaaa.fuse.desktop.system.FramePacing.session(System::getenv)
+    val gpu = io.github.matiyaaa.fuse.desktop.system.Renderer.classify(api, info).gpu
+    val profile = io.github.matiyaaa.fuse.desktop.system.FramePacing.profile(kind, w, h, output?.first ?: mode.width, output?.second ?: mode.height,
+        mode.refreshRate.toDouble(), gpu)
+    if (profile.refreshHz > 0) UiRenderTrace.expectedFrameNanos = profile.budgetNanos
+    val note = if (profile.upscaled) "Shown at ${w}x$h and scaled up to ${output?.first ?: mode.width}x${output?.second ?: mode.height}, which looks soft. " +
+        "In Steam, Fuse's Properties, General, set Game Resolution to Native" else null
+    Log.info("Display: ${kind.name.lowercase()}, window ${w}x$h, output ${output?.first ?: mode.width}x${output?.second ?: mode.height} at ${profile.refreshHz} Hz, large ${profile.largeOutput}, upscaled ${profile.upscaled}")
+    session.platform.noteRenderer(api, info, note)
+    UiRenderTrace.renderer = api
+}
+
+/**
  * A comfortable first window: three quarters of the screen's width at 16:10, never smaller than
  * 960 by 600 nor larger than the screen leaves room for.
  */
@@ -154,6 +183,11 @@ private fun ApplicationScope.FuseWindow(session: DesktopSession) {
                 window.addWindowFocusListener(listener)
                 if (window.isFocused) session.onFocusChanged(true)
                 onDispose { window.removeWindowFocusListener(listener) }
+            }
+            // Skiko settles on its renderer with the first frames: then the real driver is known.
+            LaunchedEffect(window) {
+                kotlinx.coroutines.delay(1_500)
+                runCatching { probeRenderer(session, window) }.onFailure { Log.warn("Renderer probe", it) }
             }
             SideEffect { UiRenderTrace.composition() }
             if (UiRenderTrace.enabled) {
