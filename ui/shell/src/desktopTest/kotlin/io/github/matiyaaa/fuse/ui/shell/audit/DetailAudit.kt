@@ -193,6 +193,45 @@ internal fun AuditDriver.detailScreens() {
         }
     }
 
+    scenario("details", "achievements from xenia") {
+        // A Windows PC of its own with one Xbox 360 game, tagged with its title id, and Xenia's
+        // profile holding that game's achievements (a GPD, as Xenia writes it).
+        val dir = File(cache, "xenia-audit").apply { deleteRecursively() }
+        File(dir, "games/xbox360").mkdirs()
+        File(dir, "games/xbox360/Halo 3 [4D5307E6].iso").writeBytes(ByteArray(512))
+        val profile = File(dir, "content/E030000012345678/FFFE07D1/00010000/E030000012345678").apply { mkdirs() }
+        File(profile, "4D5307E6.gpd").writeBytes(AuditGpd.halo())
+        controls.xeniaContent = File(dir, "content").absolutePath
+        val pc = runBlocking {
+            io.github.matiyaaa.fuse.ui.shell.store.createFuseStore(AuditServices.create(cache, controls, io.github.matiyaaa.fuse.model.Host.WINDOWS), scope).also { s ->
+                s.updatePrefs { it.copy(onboardingDone = true) }
+                s.sources.add(File(dir, "games").absolutePath, io.github.matiyaaa.fuse.model.LibrarySourceKind.ROMS_ROOT)
+                kotlinx.coroutines.withTimeout(30_000) { s.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).first { it.isNotEmpty() } }
+            }
+        }
+        try {
+            show(pc, windowsPlatform)
+            search("Halo 3")
+            tap(PadButton.START)
+            tap(PadButton.X)
+            tapText("Game Info")
+            waitFor("Xenia")
+            settle(1_200)
+            shoot("its page, with Xenia's achievements below")
+            tap(PadButton.DPAD_DOWN, 2)
+            settle(900)
+            shoot("Xbox 360 achievements from Xenia, gamerscore as points")
+            tap(PadButton.DPAD_RIGHT, 2)
+            settle(900)
+            shoot("a secret one not yet earned, behind a lock")
+            tap(PadButton.DPAD_RIGHT)
+            settle(900)
+            shoot("one not yet earned, dimmed")
+        } finally {
+            controls.xeniaContent = null
+        }
+    }
+
     scenario("details", "a game with many facts") {
         useLibrary()
         val card = runBlocking { libraryStore.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).first().first { it.title == "Emberline Saga" } }
@@ -236,5 +275,61 @@ internal fun AuditDriver.detailScreens() {
                 libraryStore.media.reset(owner, io.github.matiyaaa.fuse.model.MediaKind.SCREENSHOT)
             }
         }
+    }
+}
+
+/**
+ * An Xbox 360 title's GPD as Xenia writes it (xdbf_io.h, gpd_info.h), for the audit: the XDBF
+ * header, 18-byte entries, one free slot, then achievements (section 1) with their pictures (2) and
+ * the game's name (5).
+ */
+internal object AuditGpd {
+    private fun picture(color: Int): List<Byte> {
+        val img = java.awt.image.BufferedImage(64, 64, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+        val g = img.createGraphics()
+        g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON)
+        g.color = java.awt.Color(color)
+        g.fillRect(0, 0, 64, 64)
+        g.color = java.awt.Color(255, 255, 255, 210)
+        g.fillOval(18, 14, 28, 28)
+        g.fillRect(28, 40, 8, 10)
+        g.fillRect(20, 48, 24, 5)
+        g.dispose()
+        return java.io.ByteArrayOutputStream().also { javax.imageio.ImageIO.write(img, "png", it) }.toByteArray().toList()
+    }
+
+    fun halo(): ByteArray {
+        val out = ArrayList<Byte>()
+        fun u16(v: Int) { out += (v shr 8).toByte(); out += v.toByte() }
+        fun u32(v: Long) { u16((v ushr 16).toInt() and 0xFFFF); u16((v and 0xFFFF).toInt()) }
+        fun u64(v: Long) { u32(v ushr 32); u32(v and 0xFFFFFFFFL) }
+        fun utf16(s: String): List<Byte> = (s + "\u0000").flatMap { listOf((it.code shr 8).toByte(), it.code.toByte()) }
+        fun achievement(id: Long, image: Long, score: Long, flags: Long, earnedSeconds: Long, vararg texts: String): List<Byte> {
+            val b = ArrayList<Byte>()
+            fun b32(v: Long) { for (i in 3 downTo 0) b += (v ushr (8 * i)).toByte() }
+            val fileTime = if (earnedSeconds == 0L) 0L else (earnedSeconds * 1000 + 11_644_473_600_000L) * 10_000
+            b32(0x1C); b32(id); b32(image); b32(score); b32(flags); b32(fileTime ushr 32); b32(fileTime and 0xFFFFFFFFL)
+            texts.forEach { b += utf16(it) }
+            return b
+        }
+        val shown = 0x8L or 3
+        val earned = 0x20000L
+        val blocks = listOf(
+            Triple(1, 1L, achievement(1, 101, 10, shown or earned, 1_759_000_000, "Finish the Fight", "Completed the campaign on any difficulty.", "Complete the campaign on any difficulty.")),
+            Triple(1, 2L, achievement(2, 102, 50, 3, 0, "Annual", "Found every skull.", "Keep playing.")),
+            Triple(1, 3L, achievement(3, 103, 25, shown or earned, 1_759_400_000, "Lost Platoon", "Found the lost platoon.", "Find the lost platoon.")),
+            Triple(1, 4L, achievement(4, 104, 30, shown, 0, "Tourist", "Found every terminal.", "Find every terminal in the campaign.")),
+            Triple(2, 101L, picture(0xFF3A6EA5.toInt())),
+            Triple(2, 102L, picture(0xFF6B4FA0.toInt())),
+            Triple(2, 103L, picture(0xFF3C8D5A.toInt())),
+            Triple(2, 104L, picture(0xFFA5703A.toInt())),
+            Triple(5, 0x8000L, utf16("Halo 3")),
+        )
+        out += "XDBF".encodeToByteArray().toList(); u32(0x10000); u32(blocks.size.toLong()); u32(blocks.size.toLong()); u32(1); u32(1)
+        var offset = 0L
+        for ((section, id, data) in blocks) { u16(section); u64(id); u32(offset); u32(data.size.toLong()); offset += data.size }
+        u32(offset); u32(0)
+        blocks.forEach { out += it.third }
+        return out.toByteArray()
     }
 }

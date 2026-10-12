@@ -173,7 +173,7 @@ class EmulatorSourceTest {
     }
 
     @Test
-    fun xeniaOnLinuxWithoutXdgDataHomeUsesTheHomeFolderAndSkipsTheSharedProfile() {
+    fun xeniaOnLinuxFromAnOlderBuildInTheHomeFolderSkipsTheSharedProfile() {
         val content = "/home/mo/Xenia/content"
         val env = FakeEnv("LINUX", "/home/mo", files = mapOf("$content/0000000000000000/4D5307E6/00000002/" to "", "$content/E030000012345678/" to ""))
         val spot = SaveAdapters.forEmulator("xenia")!!.locate(q("xbox360", "/roms/Halo 3 [4D5307E6].iso", "xenia"), env).single()

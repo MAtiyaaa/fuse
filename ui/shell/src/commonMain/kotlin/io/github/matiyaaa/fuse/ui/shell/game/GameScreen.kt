@@ -670,7 +670,20 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                                         modifier = Modifier.size(Size.thumbL),
                                         onClick = { sel.row = rows.indexOf("achievements"); sel.setColumn("achievements", i) },
                                     ) {
-                                        Artwork(if (b.earned) b.badgeUrl else b.badgeLockedUrl, Modifier.fillMaxSize())
+                                        // A locked one without a picture of its own for that (trophies, Xbox 360) is
+                                        // shaded over; a secret one shows a lock until it is earned. Both stay opaque.
+                                        Artwork(
+                                            (if (b.earned) b.badgeUrl else b.badgeLockedUrl).ifEmpty { null },
+                                            Modifier.fillMaxSize(),
+                                            fallback = {
+                                                Box(Modifier.fillMaxSize().background(c.surfaceRaised), contentAlignment = Alignment.Center) {
+                                                    FuseIcon(if (b.earned) FuseIcons.Trophy else FuseIcons.Lock, size = Size.iconXL, tint = c.textMuted)
+                                                }
+                                            },
+                                        )
+                                        if (!b.earned && b.badgeLockedUrl.isNotEmpty() && b.badgeLockedUrl == b.badgeUrl) {
+                                            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.58f)))
+                                        }
                                     }
                                     Spacer(Modifier.height(Size.sparkClearance))
                                     FText(b.title, Fuse.type.caption, color = if (selected) c.text else c.textMuted, maxLines = 2, minLines = 2)

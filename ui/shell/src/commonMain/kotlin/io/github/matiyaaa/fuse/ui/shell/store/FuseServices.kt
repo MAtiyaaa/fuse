@@ -193,6 +193,9 @@ interface EmulatorDetector {
     /** shadPS4's user folders on this device, where its trophies are kept. */
     fun shadPs4UserDirs(installed: List<InstalledEmulator>): List<String> = emptyList()
 
+    /** Xenia's content folders on this device, where each profile keeps its achievements. */
+    fun xeniaContentRoots(installed: List<InstalledEmulator>): List<String> = emptyList()
+
     /**
      * Paths Fuse can never read on this device (Android 11+ `Android/data` of other apps). Firmware
      * that could only be there is reported as Unknown, never as Missing.

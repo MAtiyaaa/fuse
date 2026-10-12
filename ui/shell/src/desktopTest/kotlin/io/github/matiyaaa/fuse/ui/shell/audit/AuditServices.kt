@@ -51,6 +51,9 @@ internal class AuditControls(val cache: File) {
 
     @Volatile var cartridge: CartridgeStatus = CartridgeStatus(installed = false)
 
+    /** Xenia's content folder for the scenario showing its achievements; none when null. */
+    @Volatile var xeniaContent: String? = null
+
     /** The made-up computer's processor, as Fuse Intelligence reads it; unknown when null. */
     @Volatile var processor: io.github.matiyaaa.fuse.launch.intelligence.Processor? = null
 
@@ -176,6 +179,8 @@ internal class AuditServices(
         }
 
         override val homeDir: String? = base.emulators.homeDir
+
+        override fun xeniaContentRoots(installed: List<InstalledEmulator>): List<String> = listOfNotNull(controls.xeniaContent)
         override val canLocate: Boolean get() = desktop
 
         override suspend fun locate(emulator: EmulatorId, path: String): Boolean {

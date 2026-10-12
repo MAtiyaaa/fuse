@@ -154,4 +154,124 @@ class LocalAchievementsTest {
         assertEquals("Another Game", reader.ps4Trophies(listOf("/shadPS4"), emptyList(), "Another Game")?.title)
         assertNull(reader.ps4Trophies(listOf("/shadPS4"), emptyList(), "Not There"))
     }
+
+    /** Vita3K's TROPUSR.DAT (context.cpp save_trophy_progress_file): little-endian, 1648 bytes. */
+    private fun vitaUsr(unlocked: Map<Int, Long>): ByteArray {
+        val b = ByteArray(1648)
+        fun put32(at: Int, v: Long) { for (i in 0 until 4) b[at + i] = (v ushr (8 * i)).toByte() }
+        fun put64(at: Int, v: Long) { for (i in 0 until 8) b[at + i] = (v ushr (8 * i)).toByte() }
+        put32(0, 0x12D5819AL)
+        for ((id, seconds) in unlocked) {
+            b[4 + id / 8] = (b[4 + id / 8].toInt() or (1 shl (id % 8))).toByte()
+            put64(112 + id * 8, seconds)
+        }
+        return b
+    }
+
+    @Test
+    fun vitaTrophiesComeFromVita3kByTheGamesOwnSet() = runTest {
+        val sfm = """<?xml version="1.0" encoding="UTF-8"?>
+<trophyconf version="1.1" policy="large">
+  <npcommid>NPWR01234_00</npcommid>
+  <title-name>Gravity Rush</title-name>
+  <trophy id="000" hidden="no" ttype="P" pid="-1"><name>Queen of Gravity</name><detail>All trophies.</detail></trophy>
+  <trophy id="001" hidden="no" ttype="B" pid="000"><name>First Fall</name><detail>Fall &amp; land.</detail></trophy>
+  <trophy pid="000" ttype="S" id="002" hidden="yes"><name>Secret</name><detail>Hidden.</detail></trophy>
+</trophyconf>"""
+        val user = "/vita/ux0/user/00/trophy"
+        val fs = InMemoryFileSystem()
+            .file("/vita/ux0/app/PCSA00011/sce_sys/trophy/NPWR01234_00/TROPHY.TRP", content = "trp")
+            .file("$user/conf/NPWR01234_00/TROP.SFM", content = sfm)
+            .bytes("$user/data/NPWR01234_00/TROPUSR.DAT", vitaUsr(mapOf(1 to 1_700_000_000L, 2 to 0L)))
+            .file("$user/conf/NPWR09999_00/TROP.SFM", content = sfm.replace("Gravity Rush", "Another Game"))
+        val reader = LocalAchievements(fs)
+        // By the title id of its installed copy: the set its sce_sys/trophy names.
+        val set = assertNotNull(reader.vitaTrophies(listOf("/vita"), "PCSA00011", emptyList()))
+        assertEquals(LocalAchievementSource.VITA_TROPHIES, set.source)
+        assertEquals("Gravity Rush", set.title)
+        assertEquals(listOf("platinum", "bronze", "silver"), set.items.map { it.grade })
+        assertEquals("Fall & land.", set.items[1].description)
+        assertEquals(1_700_000_000_000L, set.items[1].unlockedAt)
+        // Unlocked at a time Vita3K didn't keep: unlocked all the same.
+        assertEquals(0L, set.items[2].unlockedAt)
+        assertNull(set.items[0].unlockedAt)
+        assertTrue(set.items[2].hidden)
+        assertEquals("$user/conf/NPWR01234_00/TROP001.PNG", set.items[1].icon)
+        assertEquals("$user/conf/NPWR01234_00/ICON0.PNG", set.icon)
+        // By the set the game's own folder ships, without an installed copy.
+        assertEquals("Another Game", reader.vitaTrophies(listOf("/vita"), null, listOf("NPWR09999_00"))?.title)
+        // Never by name: a game whose set isn't known has none, even with a set of the same title there.
+        assertNull(reader.vitaTrophies(listOf("/vita"), "PCSE00000", emptyList()))
+        assertNull(reader.vitaTrophies(listOf("/vita"), null, listOf("Gravity Rush")))
+        // A file that isn't Vita3K's (wrong magic, cut short) unlocks nothing.
+        assertTrue(reader.vitaTropusr(ByteArray(1648)).isEmpty())
+        assertTrue(reader.vitaTropusr(vitaUsr(mapOf(1 to 5L)).copyOf(600)).isEmpty())
+    }
+
+    /**
+     * A title's GPD as Xenia writes it (xdbf_io.h, gpd_info.h): the XDBF header, 18-byte entries, one
+     * free slot, then the data: achievements (section 1), a picture (2) and the game's name (5).
+     */
+    private fun gpd(): ByteArray {
+        val out = ArrayList<Byte>()
+        fun u16(v: Int) { out += (v shr 8).toByte(); out += v.toByte() }
+        fun u32(v: Long) { u16((v ushr 16).toInt() and 0xFFFF); u16((v and 0xFFFF).toInt()) }
+        fun u64(v: Long) { u32(v ushr 32); u32(v and 0xFFFFFFFFL) }
+        fun utf16(s: String): List<Byte> = (s + "\u0000").flatMap { listOf((it.code shr 8).toByte(), it.code.toByte()) }
+        fun achievement(id: Long, image: Long, score: Long, flags: Long, fileTime: Long, vararg texts: String): List<Byte> {
+            val b = ArrayList<Byte>()
+            fun b32(v: Long) { for (i in 3 downTo 0) b += (v ushr (8 * i)).toByte() }
+            b32(0x1C); b32(id); b32(image); b32(score); b32(flags); b32(fileTime ushr 32); b32(fileTime and 0xFFFFFFFFL)
+            texts.forEach { b += utf16(it) }
+            return b
+        }
+        val earnedAt = (1_700_000_000_000L + 11_644_473_600_000L) * 10_000
+        val png = listOf(0x89, 'P'.code, 'N'.code, 'G'.code, 13, 10, 26, 10, 0, 0).map { it.toByte() }
+        val blocks = listOf(
+            Triple(1, 1L, achievement(1, 101, 10, 0x8 or 0x20000 or 3, earnedAt, "Finish the Fight", "You finished it.", "Finish the fight.")),
+            Triple(1, 2L, achievement(2, 101, 50, 3, 0, "Secret", "Found it.", "Keep playing.")),
+            Triple(1, 3L, achievement(3, 999, 25, 0x8 or 3, 0, "Locked", "", "Do the thing.")),
+            Triple(2, 101L, png),
+            Triple(5, 0x8000L, utf16("Halo 3")),
+        )
+        out += "XDBF".encodeToByteArray().toList(); u32(0x10000); u32(blocks.size.toLong()); u32(blocks.size.toLong()); u32(1); u32(1)
+        var offset = 0L
+        for ((section, id, data) in blocks) { u16(section); u64(id); u32(offset); u32(data.size.toLong()); offset += data.size }
+        u32(offset); u32(0)
+        blocks.forEach { out += it.third }
+        return out.toByteArray()
+    }
+
+    @Test
+    fun xbox360AchievementsComeFromXeniasProfileByTitleId() = runTest {
+        val profile = "/xenia/content/E030000012345678/FFFE07D1/00010000/E030000012345678"
+        val other = "/xenia/content/E0300000AAAAAAAA/FFFE07D1/00010000/E0300000AAAAAAAA"
+        val fs = InMemoryFileSystem()
+            .bytes("$other/4D5307E6.gpd", gpd().also { it[it.size - 4] = 'X'.code.toByte() })
+            // Played last on this profile: its file is the newer one.
+            .bytes("$profile/4D5307E6.gpd", gpd())
+            .bytes("/xenia/content/0000000000000000/FFFE07D1/00010000/0000000000000000/4D5307E6.gpd", gpd())
+        val reader = LocalAchievements(fs)
+        val set = assertNotNull(reader.xbox360Achievements(listOf("/xenia/content"), "4d5307e6"))
+        assertEquals(LocalAchievementSource.XBOX360, set.source)
+        assertEquals("Halo 3", set.title)
+        assertEquals(listOf("1", "2", "3"), set.items.map { it.id })
+        val first = set.items[0]
+        assertEquals("Finish the Fight", first.name)
+        assertEquals("You finished it.", first.description)
+        assertEquals(1_700_000_000_000L, first.unlockedAt)
+        assertEquals(10, first.points)
+        assertTrue(first.icon!!.startsWith("data:image/png;base64,"))
+        // Not shown before it is earned: hidden, and what to do is the description while locked.
+        assertTrue(set.items[1].hidden)
+        assertEquals("Keep playing.", set.items[1].description)
+        assertNull(set.items[1].unlockedAt)
+        // A picture the file doesn't have is none, rather than a broken one.
+        assertNull(set.items[2].icon)
+        // Only by title id: another id, or a name, finds nothing.
+        assertNull(reader.xbox360Achievements(listOf("/xenia/content"), "41560817"))
+        assertNull(reader.xbox360Achievements(listOf("/xenia/content"), "Halo 3"))
+        // Not a GPD: nothing.
+        assertNull(reader.gpd("not an xdbf file at all".encodeToByteArray()))
+    }
 }

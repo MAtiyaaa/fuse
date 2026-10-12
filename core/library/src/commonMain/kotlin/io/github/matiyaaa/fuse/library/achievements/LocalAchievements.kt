@@ -21,14 +21,14 @@ data class LocalAchievement(
 )
 
 /** Where a set of achievements came from, for its label. */
-enum class LocalAchievementSource { STEAM, PS3_TROPHIES, PS4_TROPHIES }
+enum class LocalAchievementSource { STEAM, PS3_TROPHIES, PS4_TROPHIES, VITA_TROPHIES, XBOX360 }
 
 data class LocalAchievementSet(val source: LocalAchievementSource, val title: String?, val items: List<LocalAchievement>, val icon: String? = null)
 
 /**
  * Reads achievements from what a game's own platform keeps on this computer, without accounts or
- * keys: Steam's stats cache ([steam]), RPCS3's trophy folders ([ps3Trophies]) and shadPS4's
- * ([ps4Trophies]). Only reads.
+ * keys: Steam's stats cache ([steam]), RPCS3's trophy folders ([ps3Trophies]), shadPS4's
+ * ([ps4Trophies]), Vita3K's ([vitaTrophies]) and Xenia's profiles ([xbox360Achievements]). Only reads.
  */
 class LocalAchievements(private val fs: FuseFileSystem) {
 
@@ -242,7 +242,18 @@ class LocalAchievements(private val fs: FuseFileSystem) {
             if (ATTR_UNLOCK.find(attrs)?.groupValues?.get(1)?.lowercase() != "true") continue
             unlocked[id] = ATTR_TIME.find(attrs)?.groupValues?.get(1)?.toLongOrNull()?.takeIf { it > 0 }?.let { it * 1000 } ?: 0L
         }
-        val items = TROPHY_BLOCK.findAll(conf).mapNotNull { m ->
+        val items = confItems(conf, unlocked, icons)
+        if (items.isEmpty()) return null
+        val title = TITLE.find(conf)?.groupValues?.get(1)?.let(::xml)
+        return LocalAchievementSet(LocalAchievementSource.PS4_TROPHIES, title, items, icon = FsPath.join(icons, "ICON0.PNG"))
+    }
+
+    /**
+     * The trophies a trophy set's configuration ([conf], PS4's TROP.XML or the Vita's TROP.SFM) lists,
+     * read attribute by attribute, with [unlocked]'s times (by trophy id) and pictures in [icons].
+     */
+    private fun confItems(conf: String, unlocked: Map<Int, Long>, icons: String): List<LocalAchievement> =
+        TROPHY_BLOCK.findAll(conf).mapNotNull { m ->
             val attrs = m.groupValues[1]
             val body = m.groupValues[2]
             val number = ATTR_ID.find(attrs)?.groupValues?.get(1)?.toIntOrNull() ?: return@mapNotNull null
@@ -265,14 +276,165 @@ class LocalAchievements(private val fs: FuseFileSystem) {
                 grade = grade,
             )
         }.toList()
-        if (items.isEmpty()) return null
-        val title = TITLE.find(conf)?.groupValues?.get(1)?.let(::xml)
-        return LocalAchievementSet(LocalAchievementSource.PS4_TROPHIES, title, items, icon = FsPath.join(icons, "ICON0.PNG"))
-    }
 
     /** The trophy set ids (NPWRxxxxx_00) a PS4 game's npbind.dat names. */
     fun npCommIds(npbind: ByteArray): List<String> =
         NPWR.findAll(npbind.decodeToString(throwOnInvalidSequence = false)).map { it.value }.distinct().toList()
+
+    // PlayStation Vita (Vita3K)
+
+    /**
+     * A Vita game's trophies as Vita3K keeps them under its pref paths [prefPaths] (where its `ux0`
+     * is), following vita3k/np/src/trophy/context.cpp: the set's names, kinds and pictures in
+     * `ux0/user/<user>/trophy/conf/<NPWR id>/` (TROP.SFM, TROPxxx.PNG and ICON0.PNG, copied from the
+     * game's TROPHY.TRP when it first opened them) and what is unlocked in
+     * `trophy/data/<NPWR id>/TROPUSR.DAT`. The set is one the game itself ships: [npCommIds] (the
+     * folders of its `sce_sys/trophy`), or those of its installed copy `ux0/app/<titleId>/sce_sys/trophy`.
+     * Never matched by name. Only reads.
+     */
+    suspend fun vitaTrophies(prefPaths: List<String>, titleId: String?, npCommIds: List<String>): LocalAchievementSet? {
+        for (pref in prefPaths) {
+            val ux0 = FsPath.join(pref, "ux0")
+            val installed = titleId?.uppercase()?.takeIf { VITA_TITLE.matches(it) }?.let { dirNames(FsPath.join(ux0, "app", it, "sce_sys", "trophy")) }.orEmpty()
+            val ids = (npCommIds + installed).filter { NPWR.matches(it) }.distinct()
+            if (ids.isEmpty()) continue
+            // Vita3K's users are numbered folders ("00" by default); the first with a record of the set.
+            for (user in dirNames(FsPath.join(ux0, "user")).sorted()) {
+                val trophy = FsPath.join(ux0, "user", user, "trophy")
+                for (id in ids) {
+                    val conf = FsPath.join(trophy, "conf", id)
+                    val text = (read(FsPath.join(conf, "TROP.SFM"), MAX_CONF) ?: read(FsPath.join(conf, "TROPCONF.SFM"), MAX_CONF))?.decodeToString() ?: continue
+                    val unlocked = read(FsPath.join(trophy, "data", id, "TROPUSR.DAT"), MAX_USR)?.let(::vitaTropusr).orEmpty()
+                    val items = confItems(text, unlocked, conf)
+                    if (items.isEmpty()) continue
+                    val title = TITLE.find(text)?.groupValues?.get(1)?.let(::xml)
+                    return LocalAchievementSet(LocalAchievementSource.VITA_TROPHIES, title, items, icon = FsPath.join(conf, "ICON0.PNG"))
+                }
+            }
+        }
+        return null
+    }
+
+    /**
+     * Unlocked trophies in Vita3K's TROPUSR.DAT (save_trophy_progress_file, in the computer's own
+     * byte order, little-endian on every computer Vita3K runs on): the magic 0x12D5819A, then one
+     * bit per trophy (128 of them) from byte 4, and after the visibility bits, group and trophy
+     * counts, the platinum's id and 16 group counts, each trophy's unlock time from byte 112, in
+     * seconds since 1970 (`std::time`).
+     */
+    fun vitaTropusr(b: ByteArray): Map<Int, Long> {
+        fun u32(at: Int): Long = ((b[at].toLong() and 0xFF) or ((b[at + 1].toLong() and 0xFF) shl 8) or
+            ((b[at + 2].toLong() and 0xFF) shl 16) or ((b[at + 3].toLong() and 0xFF) shl 24))
+        fun u64(at: Int): Long = u32(at) or (u32(at + 4) shl 32)
+        if (b.size < VITA_TIMES + VITA_TROPHIES * 8 || u32(0) != VITA_MAGIC) return emptyMap()
+        val out = HashMap<Int, Long>()
+        for (id in 0 until VITA_TROPHIES) {
+            if (((u32(4 + (id shr 5) * 4) ushr (id and 31)) and 1L) == 0L) continue
+            out[id] = u64(VITA_TIMES + id * 8).takeIf { it in 1..MAX_SECONDS }?.let { it * 1000 } ?: 0L
+        }
+        return out
+    }
+
+    // Xbox 360 (Xenia)
+
+    /**
+     * An Xbox 360 game's achievements as Xenia keeps them, under each of its content folders
+     * [contentRoots] (xenia_main.cc): each profile is a folder named by its 16-digit XUID, holding
+     * `FFFE07D1/00010000/<XUID>/<title id>.gpd` for each game it played (profile_manager.cc,
+     * user_profile.cc). The game is found by its 8-digit [titleId] alone, never by name. Profiles are
+     * separate people, so one profile's are shown: the one that played the game last.
+     */
+    @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
+    suspend fun xbox360Achievements(contentRoots: List<String>, titleId: String): LocalAchievementSet? {
+        val id = titleId.uppercase().takeIf { X360_TITLE.matches(it) } ?: return null
+        val files = contentRoots.flatMap { root ->
+            dirNames(root).filter { XUID.matches(it) && it != "0000000000000000" }.map { xuid ->
+                FsPath.join(root, xuid, "FFFE07D1", "00010000", xuid, "$id.gpd")
+            }
+        }.mapNotNull { path -> runCatching { fs.stat(path) }.getOrNull()?.takeIf { !it.isDirectory } }
+        val newest = files.maxByOrNull { it.modifiedAt } ?: return null
+        return read(newest.path, MAX_GPD)?.let(::gpd)
+    }
+
+    /**
+     * Achievements in a title's GPD (an XDBF file; xdbf_io.h and gpd_info.h): a 24-byte header with
+     * the entry and free-slot counts, 18-byte entries (section, id, offset, size) and the data after
+     * them. Section 1 entries are achievements (id, picture, gamerscore, flags with 0x20000 for
+     * unlocked and 0x8 for shown before it is, the unlock time as a Windows FILETIME, then three
+     * UTF-16 strings: name, how it was earned, and what to do); section 2 holds the pictures (PNG)
+     * and section 5 the strings, the game's name under 0x8000. Pictures are kept as data URIs, so
+     * nothing is written anywhere.
+     */
+    @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
+    fun gpd(b: ByteArray): LocalAchievementSet? {
+        fun u16(at: Int): Int = ((b[at].toInt() and 0xFF) shl 8) or (b[at + 1].toInt() and 0xFF)
+        fun u32(at: Int): Long = (u16(at).toLong() shl 16) or u16(at + 2).toLong()
+        fun u64(at: Int): Long = (u32(at) shl 32) or u32(at + 4)
+        fun text(from: Int, end: Int): Pair<String, Int> {
+            val out = StringBuilder()
+            var i = from
+            while (i + 1 < end) {
+                val c = u16(i)
+                i += 2
+                if (c == 0) break
+                out.append(c.toChar())
+            }
+            return out.toString().trim() to i
+        }
+        if (b.size < 24 || b.decodeToString(0, 4) != "XDBF") return null
+        val entries = u32(8).toInt()
+        val used = u32(12).toInt()
+        val free = u32(16).toInt()
+        if (entries !in 0..MAX_ENTRIES || used !in 0..entries || free !in 0..MAX_ENTRIES) return null
+        val data = 24 + entries * 18 + free * 8
+        val images = HashMap<Long, Pair<Int, Int>>()
+        var title: String? = null
+        class Raw(val id: Long, val image: Long, val score: Int, val flags: Long, val time: Long, val name: String, val earned: String, val howTo: String)
+        val raw = ArrayList<Raw>()
+        for (i in 0 until used) {
+            val e = 24 + i * 18
+            if (e + 18 > b.size) break
+            val section = u16(e)
+            val entryId = u64(e + 2)
+            val start = data + u32(e + 10).toInt()
+            val size = u32(e + 14).toInt()
+            if (start < data || size < 0 || start + size > b.size) continue
+            when (section) {
+                GPD_IMAGE -> images[entryId] = start to size
+                GPD_STRING -> if (entryId == GPD_TITLE) title = text(start, start + size).first.takeIf { it.isNotEmpty() }
+                GPD_ACHIEVEMENT -> if (size >= 0x1C) {
+                    val name = text(start + 0x1C, start + size)
+                    val earned = text(name.second, start + size)
+                    val howTo = text(earned.second, start + size)
+                    raw += Raw(u32(start + 4), u32(start + 8), u32(start + 12).toInt(), u32(start + 16), u64(start + 20), name.first, earned.first, howTo.first)
+                }
+            }
+        }
+        if (raw.isEmpty()) return null
+        fun picture(id: Long): String? = images[id]?.let { (start, size) ->
+            if (size < 8 || size > MAX_PICTURE || b[start] != 0x89.toByte() || b[start + 1] != 'P'.code.toByte()) return@let null
+            "data:image/png;base64," + kotlin.io.encoding.Base64.encode(b, start, start + size)
+        }
+        val items = raw.sortedBy { it.id }.map { a ->
+            val unlocked = (a.flags and GPD_ACHIEVED) != 0L
+            val picture = picture(a.image)
+            LocalAchievement(
+                id = a.id.toString(),
+                name = a.name.ifEmpty { "Achievement" },
+                // Earned, it says how; not yet, what to do (each falls back on the other).
+                description = if (unlocked) a.earned.ifEmpty { a.howTo } else a.howTo.ifEmpty { a.earned },
+                hidden = (a.flags and GPD_SHOW_UNACHIEVED) == 0L,
+                icon = picture,
+                iconLocked = picture,
+                unlockedAt = if (unlocked) fileTime(a.time) ?: 0L else null,
+                points = a.score,
+            )
+        }
+        return LocalAchievementSet(LocalAchievementSource.XBOX360, title, items, icon = picture(GPD_TITLE))
+    }
+
+    /** A Windows FILETIME (100 ns since 1601) as epoch millis, or null when it is unset or unlikely. */
+    private fun fileTime(ticks: Long): Long? = (ticks / 10_000 - FILETIME_EPOCH_MS).takeIf { ticks > 0 && it in 1..MAX_SECONDS * 1000 }
 
     // Shared
 
@@ -321,6 +483,31 @@ class LocalAchievements(private val fs: FuseFileSystem) {
         val DETAIL = Regex("""<detail>(.*?)</detail>""", RegexOption.DOT_MATCHES_ALL)
         val NPWR = Regex("""NPWR\d{5}_\d{2}""")
         val NUMERIC = Regex("""&#(\d+);""")
+        val VITA_TITLE = Regex("""[A-Z]{4}\d{5}""")
+        val X360_TITLE = Regex("""[0-9A-F]{8}""")
+        val XUID = Regex("""[0-9A-Fa-f]{16}""")
+
+        // Vita3K's TROPUSR.DAT: magic, then 128 trophies' bits, and their times from byte 112.
+        const val VITA_MAGIC = 0x12D5819AL
+        const val VITA_TROPHIES = 128
+        const val VITA_TIMES = 112
+
+        // Xenia's GPD sections (gpd_info.h GpdSection), the title's own id, and achievement flags.
+        const val GPD_ACHIEVEMENT = 1
+        const val GPD_IMAGE = 2
+        const val GPD_STRING = 5
+        const val GPD_TITLE = 0x8000L
+        const val GPD_ACHIEVED = 0x20000L
+        const val GPD_SHOW_UNACHIEVED = 0x8L
+        const val MAX_GPD = 8 * 1024 * 1024
+        const val MAX_ENTRIES = 65_536
+        const val MAX_PICTURE = 512 * 1024
+
+        /** Milliseconds from 1601 (FILETIME's start) to 1970. */
+        const val FILETIME_EPOCH_MS = 11_644_473_600_000L
+
+        /** Seconds from 1970 to 2200: a time past that is taken as unset rather than believed. */
+        const val MAX_SECONDS = 7_258_118_400L
         val POINTS = mapOf("platinum" to 180, "gold" to 90, "silver" to 30, "bronze" to 15)
     }
 }
