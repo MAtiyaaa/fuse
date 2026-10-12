@@ -23,6 +23,8 @@ const definePlugin = (fn) => {
     };
 };
 
+/** Whether the person turned off Fuse's entries in Steam's menu (the kill switch). Fails closed: off. */
+const menuOff = callable("menu_off");
 /** Whether Fuse lets the plugin do [scope]: an older Fuse that doesn't say lets it do everything it offers. */
 function may(hi, scope) {
     return !hi?.allowed || hi.allowed.includes(scope);
@@ -48,35 +50,53 @@ function failure(answer) {
 /**
  * "Add to Fuse" in Steam's own game menu (the ... on a game's page and in the library), placed just
  * above Properties. The entry asks Fuse whether the game is already in its library when the menu
- * opens, then offers Add to Fuse, or Open in Fuse and Remove from Fuse. Every lookup into Steam's
- * internals is guarded: if Steam changes them, the menu simply has no Fuse entry and Steam is
- * untouched; the Quick Access panel still offers the same actions.
+ * opens, then offers Add to Fuse, or Open in Fuse and Remove from Fuse.
+ *
+ * Fail safe by design, because Steam's UI changes without notice and other plugins patch the same
+ * menu:
+ * - Only the menu's own render is patched, never a prototype other plugins share.
+ * - Every step is guarded: on any error Steam's menu is returned exactly as Steam made it.
+ * - After a few errors the patch removes itself for the rest of the session.
+ * - The patch is undone when the plugin unloads, even if parts of it failed.
+ * The Quick Access panel still offers the same actions.
  */
 const MARK = "fuse-menu";
+const MAX_ERRORS = 3;
 function entries(appid) {
     const act = async (run, done) => {
-        const answer = await run();
-        toaster.toast({ title: "Fuse", body: failure(answer) ?? answer.message ?? done });
+        try {
+            const answer = await run();
+            toaster.toast({ title: "Fuse", body: failure(answer) ?? answer.message ?? done });
+        }
+        catch {
+            toaster.toast({ title: "Fuse", body: "Fuse didn't answer. Open Fuse, then try again." });
+        }
     };
     return [
         window.SP_REACT.createElement(DFL.MenuItem, { key: MARK, onSelected: async () => {
-                const known = await steamGame(appid);
-                if (failure(known)) {
-                    toaster.toast({ title: "Fuse", body: failure(known) });
-                    return;
+                try {
+                    const known = await steamGame(appid);
+                    if (failure(known)) {
+                        toaster.toast({ title: "Fuse", body: failure(known) });
+                        return;
+                    }
+                    if (known.inFuse)
+                        await act(() => openGame(appid), "Opened in Fuse");
+                    else
+                        await act(() => addGame(appid), "Added to Fuse");
                 }
-                if (known.inFuse)
-                    await act(() => openGame(appid), "Opened in Fuse");
-                else
-                    await act(() => addGame(appid), "Added to Fuse");
+                catch {
+                    toaster.toast({ title: "Fuse", body: "Fuse didn't answer. Open Fuse, then try again." });
+                }
             } }, "Fuse: Add or Open"),
         window.SP_REACT.createElement(DFL.MenuItem, { key: MARK + "-remove", onSelected: () => act(() => removeGame(appid), "Removed from Fuse") }, "Fuse: Remove from Fuse"),
     ];
 }
+/** Adds the entries once (by key), above Properties, without touching anything else in the list. */
 function splice(children, appid) {
     if (!Array.isArray(children) || children.some((c) => c?.key === MARK))
         return;
-    const properties = children.findIndex((item) => DFL.findInReactTree(item, (x) => x?.onSelected && x.onSelected.toString().includes("AppProperties")));
+    const properties = children.findIndex((item) => DFL.findInReactTree(item, (x) => typeof x?.onSelected === "function" && x.onSelected.toString().includes("AppProperties")));
     children.splice(properties >= 0 ? properties : children.length, 0, ...entries(appid));
 }
 function appidOf(component) {
@@ -86,52 +106,68 @@ function appidOf(component) {
 /** Steam's library context menu component, or null where this Steam build hides it. */
 function findLibraryContextMenu() {
     try {
-        const module = DFL.findModuleByExport((e) => e?.toString && e.toString().includes("().LibraryContextMenu"));
+        const module = DFL.findModuleByExport((e) => {
+            try {
+                return typeof e?.toString === "function" && e.toString().includes("().LibraryContextMenu");
+            }
+            catch {
+                return false;
+            }
+        });
         if (!module)
             return null;
-        const render = Object.values(module).find((sibling) => sibling?.toString().includes("createElement") && sibling?.toString().includes("navigator:"));
+        const render = Object.values(module).find((sibling) => {
+            try {
+                const text = sibling?.toString?.() ?? "";
+                return text.includes("createElement") && text.includes("navigator:");
+            }
+            catch {
+                return false;
+            }
+        });
         return render ? DFL.fakeRenderComponent(render).type : null;
     }
     catch {
         return null;
     }
 }
-/** Patches [menu] to carry the Fuse entries; returns how to undo it. */
+/** Patches [menu] to carry the Fuse entries; returns how to undo it, which never throws. */
 function patchContextMenu(menu) {
-    if (!menu?.prototype)
+    if (!menu?.prototype || typeof menu.prototype.render !== "function")
         return () => { };
-    let inner;
-    const outer = DFL.afterPatch(menu.prototype, "render", (_, component) => {
+    let errors = 0;
+    let patch;
+    const undo = () => {
         try {
-            const appid = appidOf(component);
-            if (appid == null)
-                return component;
-            if (!inner && component?.type?.prototype) {
-                inner = DFL.afterPatch(component.type.prototype, "shouldComponentUpdate", ([next], update) => {
-                    try {
-                        const id = next?.overview?.appid ?? appid;
-                        if (update === true)
-                            splice(next?.children, id);
-                    }
-                    catch {
-                        // Steam's menu stays as Steam made it.
-                    }
-                    return update;
-                });
-            }
-            else {
-                splice(component?.props?.children, appid);
-            }
+            patch?.unpatch();
         }
         catch {
-            // Steam's menu stays as Steam made it.
+            // Already gone with Steam's UI: nothing of Fuse's is left to undo.
         }
-        return component;
-    });
-    return () => {
-        outer?.unpatch();
-        inner?.unpatch();
+        patch = undefined;
     };
+    try {
+        patch = DFL.afterPatch(menu.prototype, "render", (_, component) => {
+            if (errors >= MAX_ERRORS)
+                return component;
+            try {
+                const appid = appidOf(component);
+                if (appid != null)
+                    splice(component?.props?.children, appid);
+            }
+            catch {
+                // Steam's menu stays as Steam made it; repeated trouble takes Fuse out of it altogether.
+                errors++;
+                if (errors >= MAX_ERRORS)
+                    setTimeout(undo, 0);
+            }
+            return component;
+        });
+    }
+    catch {
+        patch = undefined;
+    }
+    return undo;
 }
 
 /**
@@ -297,9 +333,24 @@ const Content = () => {
         connected && (may(hi, "emulators") ? window.SP_REACT.createElement(Emulators, null) : window.SP_REACT.createElement(NotAllowed, { title: "Emulators", what: "install and remove emulators" }))));
 };
 var index = definePlugin(() => {
-    // Steam's game menu gets the Fuse entries where this Steam build allows it.
-    const menu = findLibraryContextMenu();
-    const unpatch = menu ? patchContextMenu(menu) : () => { };
+    // Steam's game menu gets the Fuse entries where this Steam build allows it, unless the person
+    // turned them off. Nothing here may throw: a failing plugin must never take Decky down with it.
+    let unpatch = () => { };
+    let unloaded = false;
+    menuOff()
+        .catch(() => true)
+        .then((off) => {
+        if (off || unloaded)
+            return;
+        try {
+            const menu = findLibraryContextMenu();
+            if (menu)
+                unpatch = patchContextMenu(menu);
+        }
+        catch {
+            unpatch = () => { };
+        }
+    });
     return {
         name: "Fuse",
         titleView: (window.SP_REACT.createElement("div", { className: DFL.staticClasses.Title, style: { display: "flex", alignItems: "center", gap: 8 } },
@@ -308,7 +359,13 @@ var index = definePlugin(() => {
         content: window.SP_REACT.createElement(Content, null),
         icon: window.SP_REACT.createElement(FuseMark, null),
         onDismount() {
-            unpatch();
+            unloaded = true;
+            try {
+                unpatch();
+            }
+            catch {
+                // Nothing of Fuse's is left in Steam's UI.
+            }
         },
     };
 });
