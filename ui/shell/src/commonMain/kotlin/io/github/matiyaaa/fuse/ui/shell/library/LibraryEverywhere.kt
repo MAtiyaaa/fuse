@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -462,8 +464,13 @@ private fun EverywhereShelf(
             item("seeall") { SeeAllTile(selected == games.size, tile, onSeeAll) }
         }
         val chosen = games.getOrNull(selected)
-        // Room for both lines, so the next shelf's title never cuts the second.
-        Column(Modifier.padding(horizontal = Space.gutter).padding(bottom = Space.m).heightIn(min = Space.xxl + Space.l)) {
+        // Room for both lines only under the shelf the selection is on, opening as it arrives: the
+        // other shelves sit at the same rhythm as Home's and the systems shelf, with no empty band.
+        val room by io.github.matiyaaa.fuse.ui.fuseline.fuselineDp(
+            if (selected >= 0) Space.xxl + Space.l else 0.dp,
+            Fuse.motion.tween(io.github.matiyaaa.fuse.ui.fuseline.Durations.BASE), label = "shelfName",
+        )
+        Column(Modifier.padding(horizontal = Space.gutter).height(room).clipToBounds()) {
             if (chosen != null) {
                 FText(chosen.card.title, Fuse.type.bodyStrong, maxLines = 1)
                 FText(listOfNotNull(chosen.card.platformShort, chosen.card.year?.toString(), chosen.where).joinToString("  ·  "), Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1)
