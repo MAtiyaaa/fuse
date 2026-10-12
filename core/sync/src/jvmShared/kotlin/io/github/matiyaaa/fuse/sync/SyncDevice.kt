@@ -29,15 +29,27 @@ data class LocalSlot(
     val targets: Map<String, File> = emptyMap(),
     /** A folder save's empty folders, by their path inside [root]: part of its structure. */
     val folders: List<String> = emptyList(),
+    /** Other folders the save keeps parts in, by the name prefix its files carry there (see [SaveSpot.mounts]). */
+    val mounts: Map<String, File> = emptyMap(),
 ) {
     val key: String get() = "${game.id}|${kind.name}"
 
-    /** Where the file named [name] goes: its own target, else inside [root] (never outside it). */
+    /** Where the file named [name] goes: its own target, else inside its part's folder or [root] (never outside it). */
     fun target(name: String): File? {
         targets[name]?.let { return it }
         if (!SavePath.isSafe(name)) return null
+        mounts.entries.firstOrNull { name.startsWith(it.key + "/") }?.let { (prefix, dir) ->
+            val f = File(dir, name.removePrefix("$prefix/"))
+            return f.takeIf { it.canonicalPath.startsWith(dir.canonicalPath + File.separator) }
+        }
         val f = File(root, name)
         return f.takeIf { it.canonicalPath.startsWith(root.canonicalPath + File.separator) }
+    }
+
+    /** The folder [file] must stay inside (and no link may lead out of): its part's, else [root]. */
+    fun boundaryOf(file: File): File {
+        val path = file.absoluteFile.path
+        return mounts.values.firstOrNull { path.startsWith(it.absoluteFile.path + File.separator) } ?: root
     }
 }
 
@@ -378,6 +390,18 @@ class SyncDevice(
 
     /** A save of [slot]'s game that no profile owned, parked aside on a shared device, when there is one. */
     fun unclaimed(slot: LocalSlot): SaveManifest? = state.parked[keyOf(UNCLAIMED, slot)]
+
+    /** Every save kept aside because no profile owned it: its game's id, kind and files. */
+    fun unclaimedSaves(): List<Triple<String, SaveKind, SaveManifest>> = state.parked.mapNotNull { (key, manifest) ->
+        if (key.substringBefore('|') != UNCLAIMED) return@mapNotNull null
+        val rest = key.substringAfter('|')
+        val kind = SaveKind.entries.firstOrNull { it.name == rest.substringAfterLast('|') } ?: return@mapNotNull null
+        Triple(rest.substringBeforeLast('|'), kind, manifest)
+    }
+
+    /** [profile] claims the unowned save of [game]'s [kind] (see [claimUnclaimed]). */
+    suspend fun claimUnclaimed(profile: String, game: GameKey, kind: SaveKind): Boolean =
+        claimUnclaimed(profile, LocalSlot(game, kind, "", File("."), emptyList()))
 
     /**
      * [profile] says the unowned save of [slot]'s game is theirs: it becomes their parked save
@@ -940,7 +964,16 @@ object Slots {
                 }
             }
         }
-        return LocalSlot(game, spot.kind, spot.format, root, files.sortedBy { it.path }, spot.available, targets, empty.sorted())
+        // The save's other parts (a Switch game's device save): every file, named under its part.
+        val mounts = spot.mounts.mapValues { File(it.value) }
+        for ((prefix, dir) in mounts) {
+            if (!dir.isDirectory) continue
+            dir.walkTopDown().onEnter { d -> d == dir || !SaveNoise.folder(d.name) }.forEach { f ->
+                val name = prefix + "/" + f.relativeTo(dir).path.replace(File.separatorChar, '/')
+                if (f.isFile && !f.name.startsWith(".") && !SaveNoise.file(f.name) && SavePath.isSafe(name)) files += LocalFile(name, f)
+            }
+        }
+        return LocalSlot(game, spot.kind, spot.format, root, files.sortedBy { it.path }, spot.available, targets, empty.sorted(), mounts)
     }
 }
 

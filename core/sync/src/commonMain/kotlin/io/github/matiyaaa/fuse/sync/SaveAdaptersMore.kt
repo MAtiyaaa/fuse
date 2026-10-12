@@ -437,20 +437,32 @@ internal object SwitchNand : SaveAdapter {
         val selected = EdenUser.current(env, configFiles(env, q, base), space)?.takeIf { it in users }
         val withGame = users.filter { u -> accountPaths(u).any(env::isDirectory) }
         val user = selected ?: withGame.singleOrNull() ?: users.singleOrNull().takeIf { withGame.isEmpty() }
+        // Where the game's device save is (a save every user shares), or where it would go: the newer
+        // place when the emulator already uses that layout. Carried with the account save as one.
         val device = devicePaths.firstOrNull(env::isDirectory)
+            ?: if (env.isDirectory("$space/device") || env.isDirectory("$space/account")) devicePaths.first() else devicePaths.last()
+        val deviceHere = devicePaths.any(env::isDirectory)
         if (user == null) {
-            if (device != null && withGame.isEmpty()) return listOf(SaveSpot(SaveKind.SAVE, FORMAT, root = device, confidence = SaveConfidence.FOUND))
+            // Only a device save and no user to tell apart: the device save alone is enough to keep.
+            if (deviceHere && withGame.isEmpty()) return listOf(SaveSpot(SaveKind.SAVE, FORMAT, root = "$space/$DEVICE_ONLY", confidence = SaveConfidence.FOUND, mounts = mapOf(DEVICE to device)))
             return listOf(SaveAdapters.unavailable(SaveKind.SAVE, FORMAT, if (users.isEmpty()) NO_USER else MANY_USERS))
         }
         // Eden prefers the newer place whenever it exists (savedata_factory.cpp GetFullPath).
         val account = accountPaths(user).firstOrNull(env::isDirectory)
-        if (account != null) return listOf(SaveSpot(SaveKind.SAVE, FORMAT, root = account, confidence = SaveConfidence.FOUND))
-        // A game that keeps a device save (not tied to a user) has only that one.
-        if (device != null) return listOf(SaveSpot(SaveKind.SAVE, FORMAT, root = device, confidence = SaveConfidence.FOUND))
+        if (account != null || deviceHere) {
+            val root = account ?: if (env.isDirectory("$space/account")) accountPaths(user).first() else accountPaths(user).last()
+            return listOf(SaveSpot(SaveKind.SAVE, FORMAT, root = root, confidence = SaveConfidence.FOUND, mounts = mapOf(DEVICE to device)))
+        }
         // Not saved yet: where the emulator will put it, the newer place when it already uses that layout.
         val next = if (env.isDirectory("$space/account")) accountPaths(user).first() else accountPaths(user).last()
-        return listOf(SaveSpot(SaveKind.SAVE, FORMAT, root = next, note = "Fuse looked in ${(accountPaths(user) + devicePaths).joinToString(", ")}. The game may not have saved yet."))
+        return listOf(SaveSpot(SaveKind.SAVE, FORMAT, root = next, mounts = mapOf(DEVICE to device), note = "Fuse looked in ${(accountPaths(user) + devicePaths).joinToString(", ")}. The game may not have saved yet."))
     }
+
+    /** The name a game's device save carries inside its save, beside the account save's own files. */
+    internal const val DEVICE = "@device"
+
+    /** A folder that never exists, for a game with only a device save and no user: its account part stays empty. */
+    private const val DEVICE_ONLY = ".fuse-no-account"
 
     private const val FORMAT = "switch.savedata"
     private const val ZERO_USER = "00000000000000000000000000000000"

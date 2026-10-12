@@ -101,9 +101,19 @@ class MoreAdaptersTest {
         val game = q("switch", "/roms/switch/Game [0100000000010000].nsp", "eden")
         // A device save (not tied to a user), newer and legacy.
         val newer = FakeEnv("LINUX", "/home/mo", files = mapOf("$space/device/0100000000010000/0/d" to "x"))
-        assertEquals("$space/device/0100000000010000/0", SaveAdapters.forEmulator("eden")!!.locate(game, newer).single().root)
+        assertEquals("$space/device/0100000000010000/0", SaveAdapters.forEmulator("eden")!!.locate(game, newer).single().mounts[SwitchNand.DEVICE])
         val legacy = FakeEnv("LINUX", "/home/mo", files = mapOf("$space/0000000000000000/00000000000000000000000000000000/0100000000010000/d" to "x"))
-        assertEquals("$space/0000000000000000/00000000000000000000000000000000/0100000000010000", SaveAdapters.forEmulator("eden")!!.locate(game, legacy).single().root)
+        assertEquals("$space/0000000000000000/00000000000000000000000000000000/0100000000010000", SaveAdapters.forEmulator("eden")!!.locate(game, legacy).single().mounts[SwitchNand.DEVICE])
+        // An account save and a device save of one game: both, as one save, never one left behind.
+        val u = "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"
+        val both = FakeEnv("LINUX", "/home/mo", files = mapOf(
+            "$space/0000000000000000/$u/0100000000010000/a" to "x",
+            "$space/device/0100000000010000/0/d" to "x",
+        ))
+        val bothSpot = SaveAdapters.forEmulator("eden")!!.locate(game, both).single()
+        assertEquals("$space/0000000000000000/$u/0100000000010000", bothSpot.root)
+        assertEquals("$space/device/0100000000010000/0", bothSpot.mounts[SwitchNand.DEVICE])
+        assertEquals("$space/device/0100000000010000/0/sub/d.bin", bothSpot.pathFor("@device/sub/d.bin"))
         // Two users, the game saved by only one: that one, never the first in the list.
         val a = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
         val b = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"

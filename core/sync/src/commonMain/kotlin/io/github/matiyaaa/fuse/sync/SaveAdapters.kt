@@ -85,9 +85,17 @@ data class SaveSpot(
     val learnIn: String? = null,
     /** How sure Fuse is that the save is (or goes) here; see [SaveConfidence]. */
     val confidence: SaveConfidence = SaveConfidence.KNOWN,
+    /**
+     * More parts of the same save kept in other folders, by the name their files carry in the save
+     * (`@device` for a Switch game's device save beside its account save): a file named
+     * `@device/x` is `x` in that folder. The parts are one save, captured and put back together.
+     */
+    val mounts: Map<String, String> = emptyMap(),
 ) {
     /** Where the file named [name] goes here. */
-    fun pathFor(name: String): String? = files.firstOrNull { it.name == name }?.path ?: root?.let { "$it/$name" }
+    fun pathFor(name: String): String? = files.firstOrNull { it.name == name }?.path
+        ?: mounts.entries.firstOrNull { name.startsWith(it.key + "/") }?.let { (p, dir) -> "$dir/${name.removePrefix("$p/")}" }
+        ?: root?.let { "$it/$name" }
 }
 
 /** Finds a game's saves for one family of emulators. */

@@ -170,6 +170,7 @@ class JvmSyncService(
         }
         val id = ensureDeviceId()
         if (device == null) device = SyncDevice(File(dir, "device"), id, c.deviceName.ifBlank { defaultDeviceName })
+        refreshUnclaimed()
         if (c.role == "HOST") startHostServer(c)
         val l = link()
         if (l == null) {
@@ -204,6 +205,7 @@ class JvmSyncService(
             return
         }
         if (device == null) device = SyncDevice(File(dir, "device"), ensureDeviceId(), cached.deviceName.ifBlank { defaultDeviceName })
+        refreshUnclaimed()
         showPeople(people.ordered(people.profiles.map { it.info }), cached.activeProfile)
     }
 
@@ -2018,6 +2020,10 @@ class JvmSyncService(
                 d.handover(owner, slot, { who -> if (who == SHARED_SAVES) 0L else canonical(d.meta(who)).game(query.game).totalSeconds },
                     File(File(dir, KEPT_DIR), REMOVED_DIR), othersHere = d.saveKeepers().any { it != owner && it != SHARED_SAVES })
             }
+            if (swapped.isSuccess && d.unclaimed(slot) != null && unclaimedTitles.put(query.game.id, query.title) == null) {
+                refreshUnclaimed()
+                _notices.tryEmit(SyncNotice.KeptAside(query.title))
+            }
             swapped.exceptionOrNull()?.let { e ->
                 // Never start with someone else's save: the person sees why, and nothing was lost (every file is kept).
                 log("${query.title}: couldn't swap in this person's save (${e.message})", query.game.id, SyncActivity.FAILED)
@@ -2193,6 +2199,32 @@ class JvmSyncService(
 
     private val _nowPlaying = MutableStateFlow<String?>(null)
     override val nowPlaying: StateFlow<String?> = _nowPlaying.asStateFlow()
+
+    private val _unclaimed = MutableStateFlow<List<UnclaimedSave>>(emptyList())
+    override val unclaimed: StateFlow<List<UnclaimedSave>> = _unclaimed.asStateFlow()
+
+    /** Titles of games whose saves were kept aside, as they were launched (the device keeps only ids). */
+    private val unclaimedTitles = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /** What this device keeps aside for someone to claim, read again after anything that can change it. */
+    private fun refreshUnclaimed() {
+        val d = device ?: return run { _unclaimed.value = emptyList() }
+        _unclaimed.value = d.unclaimedSaves().map { (id, kind, m) ->
+            val key = GameKey(id.substringBefore(':'), id.substringAfter(':'))
+            val title = unclaimedTitles[id] ?: key.identity.replace('-', ' ').replace('_', ' ').split(' ')
+                .joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } }
+            UnclaimedSave(key, title, kind, m.files.size, m.size)
+        }
+    }
+
+    override suspend fun claim(save: UnclaimedSave, profile: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val d = device ?: error("Fuse Sync isn't set up.")
+            require(profile.isNotBlank()) { "Choose whose save it is." }
+            if (!d.claimUnclaimed(profile, save.game, save.kind)) error("That save isn't waiting any more.")
+            log("${save.title}: the save kept aside is now ${people.profiles.firstOrNull { it.info.id == profile }?.info?.name ?: "this person"}'s", save.game.id, "save")
+        }.also { refreshUnclaimed() }
+    }
     @Volatile private var readying: Job? = null
 
     /** About to start [title]: in step from now; if it never starts, that ends by itself. */

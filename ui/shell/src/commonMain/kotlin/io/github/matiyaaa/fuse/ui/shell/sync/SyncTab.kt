@@ -139,7 +139,13 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
     val report = app.syncReport?.takeIf { it.profile.id == profile?.id }
     val names = devices.associate { it.id to it.name }
 
+    val unclaimed by svc.unclaimed.collectAsState()
+    // Saves found here that no one owned are kept aside: first on the line while any wait for an owner.
+    val claim = unclaimed.takeIf { it.isNotEmpty() }?.let { saves ->
+        SyncAction(if (saves.size == 1) "1 Save to Claim" else "${saves.size} Saves to Claim", FuseIcons.Archive) { claimSaves(app, svc, saves, profiles) }
+    }
     val actions = if (alone) buildList {
+        claim?.let(::add)
         add(SyncAction("Switch Profile", FuseIcons.Users) { app.whoAreYou = WhoMode.SWITCH })
         add(SyncAction("New Profile", FuseIcons.UserPlus) { app.whoAreYou = WhoMode.ADD })
         add(SyncAction("Other Devices", FuseIcons.MonitorSmartphone) { householdChoice(app, svc.canHost) })
@@ -155,6 +161,7 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
                 }
             }
         })
+        claim?.let(::add)
         // The household's games on its other devices: their own small library.
         if (hasLib) add(SyncAction("Library", FuseIcons.MonitorSmartphone) { app.go(Route.HouseholdLibrary) })
         add(SyncAction("Switch Profile", FuseIcons.Users) { app.whoAreYou = WhoMode.SWITCH })
@@ -346,6 +353,39 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
 
 /** One of the few things to do on the Sync tab. */
 private class SyncAction(val label: String, val icon: ImageVector, val run: () -> Unit)
+
+/**
+ * Saves kept aside because no one owned them: choose one, then whose it is. It becomes that
+ * person's save and goes into place when they next play the game; nothing is ever deleted.
+ */
+private fun claimSaves(app: AppState, svc: io.github.matiyaaa.fuse.sync.SyncService, saves: List<io.github.matiyaaa.fuse.sync.UnclaimedSave>, profiles: List<io.github.matiyaaa.fuse.sync.ProfileInfo>) {
+    fun whose(save: io.github.matiyaaa.fuse.sync.UnclaimedSave) {
+        app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+            title = "Whose save is it?",
+            icon = FuseIcons.Users,
+            message = "${save.title}'s ${save.kind.label.lowercase()} was here before anyone played it with Fuse. It becomes this person's, and is put in place when they next play.",
+            options = profiles.map { p ->
+                MenuAction("claim.${p.id}", p.name, FuseIcons.User, onSelect = {
+                    app.choice = null
+                    app.scope.launch {
+                        svc.claim(save, p.id)
+                            .onSuccess { app.toasts.show("${save.title}: the save is ${p.name}'s now", ToastKind.SUCCESS, icon = FuseIcons.CloudCheck) }
+                            .onFailure { app.toasts.show(it.message ?: "The save couldn't be claimed", ToastKind.WARNING) }
+                    }
+                })
+            },
+        )
+    }
+    if (saves.size == 1) return whose(saves.single())
+    app.openContextMenu(
+        io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec(
+            title = "Saves to claim", subtitle = "Kept aside: no one owned them", icon = FuseIcons.Archive,
+            actions = saves.map { s ->
+                MenuAction("claim.${s.game.id}.${s.kind}", s.title, FuseIcons.Gamepad, detail = "${s.kind.label}, ${sizeText(s.bytes)}", onSelect = { app.contextMenu = null; whose(s) })
+            },
+        ),
+    )
+}
 
 /**
  * The top of the Sync tab, in one slim line: who is playing and on which host (with their totals

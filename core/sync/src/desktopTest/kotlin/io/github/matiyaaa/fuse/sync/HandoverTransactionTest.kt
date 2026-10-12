@@ -120,8 +120,14 @@ class HandoverTransactionTest {
         assertEquals(emptyMap(), contents(saves))
         val kept = assertNotNull(device.unclaimed(slot(saves)))
         assertEquals("made before Fuse", device.store.fileOf(kept.files.single().hash).readText())
+        // Listed for someone to claim, by game and kind.
+        val (id, kind, manifest) = device.unclaimedSaves().single()
+        assertEquals(game.id, id)
+        assertEquals(SaveKind.SAVE, kind)
+        assertEquals(1, manifest.files.size)
         // John says it is his: it is his parked save, and comes back at his handover.
-        assertTrue(device.claimUnclaimed("john", slot(saves)))
+        assertTrue(device.claimUnclaimed("john", game, SaveKind.SAVE))
+        assertTrue(device.unclaimedSaves().isEmpty())
         assertNull(device.unclaimed(slot(saves)))
         device.handover("john", slot(saves))
         assertEquals(mapOf("found.dat" to "made before Fuse"), contents(saves))

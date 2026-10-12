@@ -13,7 +13,7 @@ import kotlinx.serialization.json.Json
  * only. Shared-memory-card paths remain explicit adapter targets, never inferred archive paths.
  */
 internal object SaveImportTransaction {
-    @Serializable private data class Entry(val target: String, val stage: String?, val backup: String?, val original: String?, val incoming: String?)
+    @Serializable private data class Entry(val target: String, val stage: String?, val backup: String?, val original: String?, val incoming: String?, val boundary: String? = null)
     @Serializable private data class Journal(val revision: String, val root: String, val entries: List<Entry>, val committed: Boolean = false)
     private val json = Json { encodeDefaults = true }
 
@@ -24,7 +24,7 @@ internal object SaveImportTransaction {
         val durable = pending.committed || committed(pending.revision)
         if (!durable) for (entry in pending.entries.asReversed()) {
             val target = File(entry.target)
-            rejectLinks(target, File(pending.root))
+            rejectLinks(target, File(entry.boundary ?: pending.root))
             require(!target.exists() || target.isFile) { "An interrupted import's destination changed into a directory" }
             val current = target.takeIf { it.isFile }?.let(::hash)
             require(current == null || current == entry.original || current == entry.incoming) {
@@ -51,7 +51,7 @@ internal object SaveImportTransaction {
         require(slot.available) { "The save destination isn't available" }
         val destinations = manifest.files.map { f ->
             val target = slot.target(f.path) ?: error("A save path has no safe destination")
-            rejectLinks(target, slot.root)
+            rejectLinks(target, slot.boundaryOf(target))
             require(!target.isDirectory) { "A save file destination is a directory" }
             // Canonical paths also reject a symlink in a parent directory for root-based saves.
             target to f
@@ -59,10 +59,10 @@ internal object SaveImportTransaction {
         require(destinations.map { it.first.canonicalPath }.distinct().size == destinations.size) { "Duplicate save destinations" }
         val incoming = destinations.mapTo(HashSet()) { it.first.canonicalPath }
         val stale = slot.files.map { it.file }.filter { it.canonicalPath !in incoming && it.isFile }
-        stale.forEach { rejectLinks(it, slot.root) }
+        stale.forEach { rejectLinks(it, slot.boundaryOf(it)) }
         val folders = manifest.folders.map { folder ->
             val target = slot.target(folder) ?: error("Unsafe save folder")
-            rejectLinks(target, slot.root)
+            rejectLinks(target, slot.boundaryOf(target))
             require(!target.exists() || target.isDirectory) { "A save folder destination is a file" }
             target
         }
@@ -94,7 +94,7 @@ internal object SaveImportTransaction {
             if (journal != null) {
                 require(!journal.exists()) { "An interrupted save import needs recovery first" }
                 val entries = work.map { (target, stage, backup) -> Entry(target.absolutePath, stage?.absolutePath,
-                    backup?.absolutePath, backup?.let(::hash), stage?.let(::hash)) }
+                    backup?.absolutePath, backup?.let(::hash), stage?.let(::hash), slot.boundaryOf(target).absolutePath) }
                 writeAtomically(journal, json.encodeToString(Journal.serializer(), Journal(revision, slot.root.absolutePath, entries)).toByteArray())
                 recorded = true
             }
@@ -102,7 +102,7 @@ internal object SaveImportTransaction {
             try {
                 for ((target, stage, backup) in work) {
                     beforeMove(moved)
-                    rejectLinks(target, slot.root)
+                    rejectLinks(target, slot.boundaryOf(target))
                     require((target.takeIf { it.isFile }?.let(::hash)) == backup?.let(::hash) &&
                         (!target.exists() || target.isFile)) { "The current save changed during import" }
                     if (stage == null) require(target.delete()) { "The old save could not be replaced" } else move(stage, target)
@@ -117,7 +117,7 @@ internal object SaveImportTransaction {
                 if (success) throw e // The revision committed; leave its marker for cleanup on restart.
                 for ((target, _, backup) in work.take(moved).asReversed()) {
                     try {
-                        rejectLinks(target, slot.root)
+                        rejectLinks(target, slot.boundaryOf(target))
                         val current = target.takeIf { it.isFile }?.let(::hash)
                         val imported = destinations.firstOrNull { it.first == target }?.second?.hash
                         require((!target.exists() || target.isFile) &&
