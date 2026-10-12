@@ -143,7 +143,13 @@ internal class AuditDriver(
         val base = libraryPrefs!!
         // -Pfuse.audit.theme renders every screen in that theme, unless a scenario picks its own.
         val theme = System.getProperty("fuse.audit.theme")?.takeIf { it.isNotBlank() }
-        store.updatePrefs { prefs(base).let { p -> if (theme != null && p.themeId == base.themeId) p.copy(themeId = theme) else p } }
+        // -Pfuse.audit.rtl lays every screen out right to left, as an Arabic or Hebrew system would.
+        val rtl = System.getProperty("fuse.audit.rtl") == "true"
+        store.updatePrefs {
+            prefs(base)
+                .let { p -> if (theme != null && p.themeId == base.themeId) p.copy(themeId = theme) else p }
+                .let { p -> if (rtl) p.copy(layoutDirection = io.github.matiyaaa.fuse.model.LayoutDirectionChoice.RIGHT_TO_LEFT) else p }
+        }
         controls.cartridge = io.github.matiyaaa.fuse.model.CartridgeStatus(installed = false)
         controls.previousFuse = null
         store.cartridge.refresh()

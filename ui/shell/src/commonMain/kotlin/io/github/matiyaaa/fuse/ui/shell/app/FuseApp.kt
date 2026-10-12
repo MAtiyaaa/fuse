@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -437,10 +438,15 @@ private fun FuseAppContent(
         highContrastFocus = prefs.highContrastFocus,
         animateChanges = true,
         textScale = calibration?.textScale ?: prefs.textScale,
+        colorVision = prefs.colorVision,
     ) {
         // What glass menus, sheets and notices show through: this window's screen, without them.
         val backdrop = io.github.matiyaaa.fuse.ui.designsystem.effects.rememberGlassBackdrop()
+        // Mirrored for a right-to-left language (or by choice), with the D-pad and shoulders following the screen.
+        val direction = layoutDirectionFor(prefs.layoutDirection)
+        SideEffect { router.mirrored = direction == androidx.compose.ui.unit.LayoutDirection.Rtl }
         CompositionLocalProvider(
+            androidx.compose.ui.platform.LocalLayoutDirection provides direction,
             LocalInputRouter provides router,
             io.github.matiyaaa.fuse.ui.designsystem.input.LocalPointerRouter provides router,
             LocalUiSounds provides platform.sounds,
@@ -1432,4 +1438,12 @@ private fun RehearsalApp(host: io.github.matiyaaa.fuse.model.Host, parentRouter:
     }
     val owner = remember { FuseAppSession(host, store.displaySession, playerSession = null, shareWindowFocus = false) }
     FuseApp(store, platform, router, onRehearsalFinished = finish, session = owner)
+}
+
+/** The way Fuse lays itself out for [choice]: as the system's language reads, or as chosen. */
+@Composable
+internal fun layoutDirectionFor(choice: io.github.matiyaaa.fuse.model.LayoutDirectionChoice): androidx.compose.ui.unit.LayoutDirection = when (choice) {
+    io.github.matiyaaa.fuse.model.LayoutDirectionChoice.LEFT_TO_RIGHT -> androidx.compose.ui.unit.LayoutDirection.Ltr
+    io.github.matiyaaa.fuse.model.LayoutDirectionChoice.RIGHT_TO_LEFT -> androidx.compose.ui.unit.LayoutDirection.Rtl
+    io.github.matiyaaa.fuse.model.LayoutDirectionChoice.AUTOMATIC -> androidx.compose.ui.platform.LocalLayoutDirection.current
 }

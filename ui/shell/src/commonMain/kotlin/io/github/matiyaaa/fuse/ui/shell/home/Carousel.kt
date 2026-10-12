@@ -386,7 +386,7 @@ internal fun CarouselDots(count: Int, position: () -> Float, color: Color = Fuse
 internal fun BoxScope.CarouselHeader(icon: ImageVector, label: String, dots: @Composable () -> Unit, compact: Boolean = false) {
     val c = Fuse.colors
     Box(
-        Modifier.fillMaxWidth().height(if (compact) 44.dp else 64.dp)
+        Modifier.fillMaxWidth().height(if (compact) CAROUSEL_HEADER_COMPACT else CAROUSEL_HEADER)
             .background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.34f), 1f to Color.Transparent)),
     )
     // The name on the left, always whole (set smaller when the card is narrow, never cut short), the
@@ -407,6 +407,10 @@ internal fun BoxScope.CarouselHeader(icon: ImageVector, label: String, dots: @Co
         dots()
     }
 }
+
+/** How tall a carousel's header is (its name and dots over the art), and on a small or narrow card. */
+internal val CAROUSEL_HEADER = 64.dp
+internal val CAROUSEL_HEADER_COMPACT = 44.dp
 
 /** How dark the next item waits, before it comes forward. */
 private const val PEEK_DIM = 0.5f

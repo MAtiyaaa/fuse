@@ -164,7 +164,7 @@ internal fun useSyncthing(app: AppState, svc: SyncthingService, on: Boolean) {
         !on -> turnOffSyncthing(app)
         app.store.prefs.value.sync.enabled -> app.confirm = ConfirmSpec(
             title = "Use Syncthing instead of Fuse One?",
-            message = "Both would move the same saves. Fuse One turns off on this device (its host and profiles stay as they are), and Syncthing takes over the save folders.",
+            message = "Only one should move saves between devices. Fuse One stops syncing on this device and Syncthing takes over the save folders. Profiles, each person's saves and the save history here keep working, without a host.",
             confirmLabel = "Use Syncthing",
         ) {
             // A Fuse Sync that is working asks once more before it stops.

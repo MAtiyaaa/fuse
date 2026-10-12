@@ -111,6 +111,7 @@ fun ShowcaseApp(store: FuseStore, platform: PlatformUi, displaySession: io.githu
         quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower),
         glass = prefs.glass,
         highContrastFocus = prefs.highContrastFocus,
+        colorVision = prefs.colorVision,
     ) {
         val home by store.homeFeed.collectAsState()
         val status by platform.status.collectAsState()

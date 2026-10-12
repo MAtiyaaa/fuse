@@ -8,6 +8,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import io.github.matiyaaa.fuse.ui.designsystem.res.Res
@@ -80,13 +81,16 @@ private fun fuseTypography(sora: FontFamily, manrope: FontFamily, scale: Float):
     val trim = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both)
     // Titles balance their lines where the platform can, so a wrapped title never leaves a single
     // word on its last line. Reading text keeps the platform's quicker default.
+    // A line reads the way its first letter does; one that starts with a number or symbol ("3 games",
+    // "3:56 AM") reads left to right, as English does, even when Fuse is laid out right to left.
+    val direction = TextDirection.ContentOrLtr
     fun display(size: Int, line: Int, weight: FontWeight, tracking: Double, k: Float = titleScale) = TextStyle(
         fontFamily = sora, fontWeight = weight, fontSize = (size * k).sp, lineHeight = (line * k).sp,
-        letterSpacing = tracking.em, lineHeightStyle = trim, lineBreak = LineBreak.Heading,
+        letterSpacing = tracking.em, lineHeightStyle = trim, lineBreak = LineBreak.Heading, textDirection = direction,
     )
     fun text(size: Int, line: Int, weight: FontWeight, tracking: Double = 0.0) = TextStyle(
         fontFamily = manrope, fontWeight = weight, fontSize = (size * scale).sp, lineHeight = (line * scale).sp,
-        letterSpacing = tracking.em, lineHeightStyle = trim,
+        letterSpacing = tracking.em, lineHeightStyle = trim, textDirection = direction,
     )
     return FuseTypography(
         hero = display(46, 52, FontWeight.Bold, -0.025),

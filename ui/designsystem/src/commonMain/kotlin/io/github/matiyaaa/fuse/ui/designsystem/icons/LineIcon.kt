@@ -25,8 +25,14 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
  * Builds a 24 x 24 line icon from path data. The stroke is slightly lighter than Lucide's default (1.8
  * instead of 2) to match Fuse's typography weight at handheld sizes.
  */
-internal fun lineIcon(name: String, vararg paths: String): ImageVector =
-    ImageVector.Builder(name = name, defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f)
+internal fun lineIcon(name: String, vararg paths: String): ImageVector = lineIcon(name, mirrored = false, *paths)
+
+/**
+ * A line icon; [mirrored] ones point the way a line reads, so they turn round when Fuse is laid out
+ * right to left (chevrons, arrows across, back and undo), as icons of direction should.
+ */
+internal fun lineIcon(name: String, mirrored: Boolean, vararg paths: String): ImageVector =
+    ImageVector.Builder(name = name, defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f, autoMirror = mirrored)
         .apply {
             for (d in paths) {
                 addPath(

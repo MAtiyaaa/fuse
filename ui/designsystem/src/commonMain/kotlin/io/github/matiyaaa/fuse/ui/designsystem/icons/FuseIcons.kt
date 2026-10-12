@@ -15,8 +15,8 @@ object FuseIcons {
     val ArchiveRestore: ImageVector by lazy { lineIcon("ArchiveRestore", "M3 3h18a1 1 0 0 1 1 1v3a1 1 0 0 1 -1 1h-18a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1Z", "M4 8v11a2 2 0 0 0 2 2h2", "M20 8v11a2 2 0 0 1-2 2h-2", "m9 15 3-3 3 3", "M12 12v9") }
     val ArrowDown: ImageVector by lazy { lineIcon("ArrowDown", "M12 5v14", "m19 12-7 7-7-7") }
     val ArrowDownToLine: ImageVector by lazy { lineIcon("ArrowDownToLine", "M12 17V3", "m6 11 6 6 6-6", "M19 21H5") }
-    val ArrowLeft: ImageVector by lazy { lineIcon("ArrowLeft", "m12 19-7-7 7-7", "M19 12H5") }
-    val ArrowRight: ImageVector by lazy { lineIcon("ArrowRight", "M5 12h14", "m12 5 7 7-7 7") }
+    val ArrowLeft: ImageVector by lazy { lineIcon("ArrowLeft", mirrored = true, "m12 19-7-7 7-7", "M19 12H5") }
+    val ArrowRight: ImageVector by lazy { lineIcon("ArrowRight", mirrored = true, "M5 12h14", "m12 5 7 7-7 7") }
     val ArrowUp: ImageVector by lazy { lineIcon("ArrowUp", "m5 12 7-7 7 7", "M12 19V5") }
     val ArrowUpRight: ImageVector by lazy { lineIcon("ArrowUpRight", "M7 7h10v10", "M7 17 17 7") }
     val AudioLines: ImageVector by lazy { lineIcon("AudioLines", "M2 10v3", "M6 6v11", "M10 3v18", "M14 8v7", "M18 5v13", "M22 10v3") }
@@ -60,12 +60,12 @@ object FuseIcons {
     val Check: ImageVector by lazy { lineIcon("Check", "M20 6 9 17l-5-5") }
     val CheckCheck: ImageVector by lazy { lineIcon("CheckCheck", "M18 6 7 17l-5-5", "m22 10-7.5 7.5L13 16") }
     val ChevronDown: ImageVector by lazy { lineIcon("ChevronDown", "m6 9 6 6 6-6") }
-    val ChevronLeft: ImageVector by lazy { lineIcon("ChevronLeft", "m15 18-6-6 6-6") }
-    val ChevronRight: ImageVector by lazy { lineIcon("ChevronRight", "m9 18 6-6-6-6") }
+    val ChevronLeft: ImageVector by lazy { lineIcon("ChevronLeft", mirrored = true, "m15 18-6-6 6-6") }
+    val ChevronRight: ImageVector by lazy { lineIcon("ChevronRight", mirrored = true, "m9 18 6-6-6-6") }
     val ChevronUp: ImageVector by lazy { lineIcon("ChevronUp", "m18 15-6-6-6 6") }
     val ChevronsDown: ImageVector by lazy { lineIcon("ChevronsDown", "m7 6 5 5 5-5", "m7 13 5 5 5-5") }
-    val ChevronsLeft: ImageVector by lazy { lineIcon("ChevronsLeft", "m11 17-5-5 5-5", "m18 17-5-5 5-5") }
-    val ChevronsRight: ImageVector by lazy { lineIcon("ChevronsRight", "m6 17 5-5-5-5", "m13 17 5-5-5-5") }
+    val ChevronsLeft: ImageVector by lazy { lineIcon("ChevronsLeft", mirrored = true, "m11 17-5-5 5-5", "m18 17-5-5 5-5") }
+    val ChevronsRight: ImageVector by lazy { lineIcon("ChevronsRight", mirrored = true, "m6 17 5-5-5-5", "m13 17 5-5-5-5") }
     val ChevronsUp: ImageVector by lazy { lineIcon("ChevronsUp", "m17 11-5-5-5 5", "m17 18-5-5-5 5") }
     val Chip: ImageVector by lazy { lineIcon("Chip", "M12 20v2", "M12 2v2", "M17 20v2", "M17 2v2", "M2 12h2", "M2 17h2", "M2 7h2", "M20 12h2", "M20 17h2", "M20 7h2", "M7 20v2", "M7 2v2", "M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2Z", "M9 8h6a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1v-6a1 1 0 0 1 1 -1Z") }
     val CircleArrowDown: ImageVector by lazy { lineIcon("CircleArrowDown", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "M12 8v8", "m8 12 4 4 4-4") }
@@ -198,7 +198,7 @@ object FuseIcons {
     val Lock: ImageVector by lazy { lineIcon("Lock", "M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-7a2 2 0 0 1 2 -2Z", "M7 11V7a5 5 0 0 1 10 0v4") }
     val LockKeyhole: ImageVector by lazy { lineIcon("LockKeyhole", "M11 16a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z", "M5 10h14a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-8a2 2 0 0 1 2 -2Z", "M7 10V7a5 5 0 0 1 10 0v3") }
     val LockOpen: ImageVector by lazy { lineIcon("LockOpen", "M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-7a2 2 0 0 1 2 -2Z", "M7 11V7a5 5 0 0 1 9.9-1") }
-    val LogOut: ImageVector by lazy { lineIcon("LogOut", "m16 17 5-5-5-5", "M21 12H9", "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4") }
+    val LogOut: ImageVector by lazy { lineIcon("LogOut", mirrored = true, "m16 17 5-5-5-5", "M21 12H9", "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4") }
     val Map: ImageVector by lazy { lineIcon("Map", "M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z", "M15 5.764v15", "M9 3.236v15") }
     val Maximize: ImageVector by lazy { lineIcon("Maximize", "M15 3h6v6", "m21 3-7 7", "m3 21 7-7", "M9 21H3v-6") }
     val Medal: ImageVector by lazy { lineIcon("Medal", "M7.21 15 2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2.8A2 2 0 0 1 6 2h12a2 2 0 0 1 1.6.8l1.6 2.14a2 2 0 0 1 .14 2.2L16.79 15", "M11 12 5.12 2.2", "m13 12 5.88-9.8", "M8 7h8", "M7 17a5 5 0 1 0 10 0a5 5 0 1 0 -10 0Z", "M12 18v-2h-.5") }
@@ -335,7 +335,7 @@ object FuseIcons {
     val Type: ImageVector by lazy { lineIcon("Type", "M12 4v16", "M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2", "M9 20h6") }
     /** Lucide folder-input: things coming into a folder. */
     val FolderInput: ImageVector by lazy { lineIcon("FolderInput", "M2 9V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1", "M2 13h10", "m9 16 3-3-3-3") }
-    val Undo: ImageVector by lazy { lineIcon("Undo", "M9 14 4 9l5-5", "M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11") }
+    val Undo: ImageVector by lazy { lineIcon("Undo", mirrored = true, "M9 14 4 9l5-5", "M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11") }
     val Ungroup: ImageVector by lazy { lineIcon("Ungroup", "M13 14h6a2 2 0 0 1 2 2v3a2 2 0 0 1 -2 2h-6a2 2 0 0 1 -2 -2v-3a2 2 0 0 1 2 -2Z", "M5 3h6a2 2 0 0 1 2 2v3a2 2 0 0 1 -2 2h-6a2 2 0 0 1 -2 -2v-3a2 2 0 0 1 2 -2Z") }
     val Unplug: ImageVector by lazy { lineIcon("Unplug", "m19 5 3-3", "m2 22 3-3", "M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z", "M7.5 13.5 10 11", "M10.5 16.5 13 14", "m12 6 6 6 2.3-2.3a2.4 2.4 0 0 0 0-3.4l-2.6-2.6a2.4 2.4 0 0 0-3.4 0Z") }
     val Upload: ImageVector by lazy { lineIcon("Upload", "M12 3v12", "m17 8-5-5-5 5", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4") }

@@ -218,6 +218,26 @@ fun accessibilityRows(app: AppState): List<MenuAction> {
             ) { v -> set { it.copy(motion = v) } })
             add(toggleRow("contrast", "High contrast focus", FuseIcons.ScanEye, p.highContrastFocus, "Adds an outline to everything that's selected") { v -> set { it.copy(highContrastFocus = v) } })
         }
+        labelled("Colour and direction") {
+            add(app.choiceRow(
+                "colours", "Colours", FuseIcons.Contrast, p.colorVision,
+                io.github.matiyaaa.fuse.model.ColorVision.entries.map { it to it.title },
+                detail = "The colours of done, needs a look and went wrong. Each also says itself in words or a symbol",
+                optionDetail = { it.detail },
+            ) { v -> set { it.copy(colorVision = v) } })
+            add(app.choiceRow(
+                "direction", "Layout direction", FuseIcons.ArrowLeftRight, p.layoutDirection,
+                io.github.matiyaaa.fuse.model.LayoutDirectionChoice.entries.map { it to it.title },
+                detail = "Right to left mirrors Fuse, and the D-pad and shoulders follow it",
+                optionDetail = { d ->
+                    when (d) {
+                        io.github.matiyaaa.fuse.model.LayoutDirectionChoice.AUTOMATIC -> "As the system's language reads: right to left for Arabic, Hebrew, Persian and Urdu"
+                        io.github.matiyaaa.fuse.model.LayoutDirectionChoice.LEFT_TO_RIGHT -> "Always, whatever the system's language"
+                        io.github.matiyaaa.fuse.model.LayoutDirectionChoice.RIGHT_TO_LEFT -> "Always mirrored, whatever the system's language"
+                    }
+                },
+            ) { v -> set { it.copy(layoutDirection = v) } })
+        }
     }
 }
 

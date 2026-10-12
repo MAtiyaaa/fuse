@@ -200,10 +200,15 @@ internal fun Modifier.boardDrag(
     val currentOnLift by rememberUpdatedState(onLift)
     val currentOnTarget by rememberUpdatedState(onTarget)
     val currentOnDrop by rememberUpdatedState(onDrop)
+    val rtl by rememberUpdatedState(androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl)
     return pointerInput(editor) {
         // Where the finger is on screen (this element's pixels), kept so auto-scroll can move the
         // board under a still finger.
         var screen = Offset.Zero
+
+        // The board is worked out left to right; laid out right to left it is mirrored across this
+        // element, so a finger's place is mirrored back before it means a cell.
+        fun Offset.onBoard(): Offset = if (rtl) Offset(size.width - x, y) else this
 
         fun retarget() {
             val op = editor.op as? BoardOp.Drag ?: return
@@ -236,7 +241,7 @@ internal fun Modifier.boardDrag(
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                 if (currentIgnore(down.position)) return@awaitEachGesture
-                val at = down.position - currentOrigin()
+                val at = down.position.onBoard() - currentOrigin()
                 val board = currentLayout()
                 val id = currentGeometry().hit(at, board) ?: return@awaitEachGesture
                 val slop = viewConfiguration.touchSlop
@@ -261,7 +266,7 @@ internal fun Modifier.boardDrag(
                     if (early != null) return@awaitEachGesture
                 }
                 val rect = board[id] ?: return@awaitEachGesture
-                screen = down.position
+                screen = down.position.onBoard()
                 editor.grab = at - currentGeometry().rect(rect).topLeft
                 editor.finger = at
                 editor.start(BoardOp.Drag(id, board, rect))
@@ -275,7 +280,7 @@ internal fun Modifier.boardDrag(
                     }
                     change.consume()
                     if (!change.pressed) break
-                    screen = change.position
+                    screen = change.position.onBoard()
                     retarget()
                 }
                 if (cancelled) {
@@ -317,6 +322,7 @@ internal fun Modifier.resizeHandle(
     val currentOnSize by rememberUpdatedState(onSize)
     val currentOnLimit by rememberUpdatedState(onLimit)
     val currentOnEnd by rememberUpdatedState(onEnd)
+    val rtl by rememberUpdatedState(androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl)
     return pointerInput(id, edge) {
         var from = BoardRect(0, 0, 1, 1)
         var moved = Offset.Zero
@@ -333,7 +339,8 @@ internal fun Modifier.resizeHandle(
             onDrag = { change, delta ->
                 change.consume()
                 val op = editor.op as? BoardOp.Resize ?: return@detectDragGestures
-                moved += delta
+                // Mirrored right to left: a handle dragged toward the board's end grows it, whichever way that is on screen.
+                moved += if (rtl) Offset(-delta.x, delta.y) else delta
                 val g = currentGeometry()
                 val (wanted, fitted) = resized(from, edge, g.cells(moved.x, g.stepX), g.cells(moved.y, g.stepY), g.columns, maxHeight)
                 if (wanted != fitted && !limited) currentOnLimit()

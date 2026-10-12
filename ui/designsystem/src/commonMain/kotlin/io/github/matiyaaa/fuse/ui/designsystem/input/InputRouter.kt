@@ -249,9 +249,16 @@ class InputRouter(
     private fun orderedLayers(): List<Layer> =
         layers.filter { it.enabled }.sortedWith(compareByDescending<Layer> { it.priority }.thenByDescending { it.seq })
 
+    /**
+     * The interface is laid out right to left: left and right (and the shoulders' previous and next)
+     * move the way the screen reads, so right still goes to what is on the right.
+     */
+    @Volatile var mirrored: Boolean = false
+
     /** Sends an action through the layer stack. Returns what the handling layer did. */
-    fun dispatch(action: NavAction, source: InputSource, repeat: Int = 0): NavResult {
-        redirectTo?.let { return it.dispatch(action, source, repeat) }
+    fun dispatch(requested: NavAction, source: InputSource, repeat: Int = 0): NavResult {
+        redirectTo?.let { return it.dispatch(requested, source, repeat) }
+        val action = if (mirrored) requested.mirroredAcross() else requested
         if (repeat > 0 && action in consumedUntilRelease) return NavResult.CONSUMED
         val trace = io.github.matiyaaa.fuse.ui.designsystem.effects.UiRenderTrace
         val started = if (trace.enabled) trace.now() else 0L
@@ -713,3 +720,14 @@ private const val MOUSE_MOVE_PX = 3f
 
 /** Both sticks' positions, each axis -1..1 with y down. */
 data class StickPositions(val leftX: Float = 0f, val leftY: Float = 0f, val rightX: Float = 0f, val rightY: Float = 0f)
+
+/** [this] for a layout read right to left: what was left is right, previous is next. */
+internal fun NavAction.mirroredAcross(): NavAction = when (this) {
+    NavAction.LEFT -> NavAction.RIGHT
+    NavAction.RIGHT -> NavAction.LEFT
+    NavAction.PREVIOUS_SECTION -> NavAction.NEXT_SECTION
+    NavAction.NEXT_SECTION -> NavAction.PREVIOUS_SECTION
+    NavAction.PAGE_PREVIOUS -> NavAction.PAGE_NEXT
+    NavAction.PAGE_NEXT -> NavAction.PAGE_PREVIOUS
+    else -> this
+}

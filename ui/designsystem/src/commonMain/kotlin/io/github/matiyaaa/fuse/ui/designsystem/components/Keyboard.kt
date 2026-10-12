@@ -33,7 +33,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -68,10 +70,12 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import io.github.matiyaaa.fuse.model.NavAction
@@ -83,6 +87,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavEvent
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
+import io.github.matiyaaa.fuse.ui.designsystem.input.mirroredAcross
 import io.github.matiyaaa.fuse.ui.designsystem.media.collectAsStateCompat
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
@@ -211,6 +216,12 @@ private const val HOLD_REPEATS = 3
  */
 @Stable
 class KeyboardState(val autoCapitalize: Boolean = false) {
+    /**
+     * The screen around the keyboard is laid out right to left, so what reaches it is mirrored; its
+     * keys stay in their own (left to right) order, so it turns left and right back.
+     */
+    internal var mirroredInput: Boolean = false
+
     var page by mutableStateOf(KeyPage.LETTERS)
     var shift by mutableStateOf(ShiftState.OFF)
     var row by mutableIntStateOf(0)
@@ -320,7 +331,8 @@ class KeyboardState(val autoCapitalize: Boolean = false) {
      * up to whole words), Y types a space, LB and RB move the caret, LT and RT jump a word, and
      * Start finishes.
      */
-    fun handle(event: NavEvent, field: EditableText, onDone: () -> Unit, onPaste: (() -> Unit)? = null, onPhone: (() -> Unit)? = null): NavResult {
+    fun handle(given: NavEvent, field: EditableText, onDone: () -> Unit, onPaste: (() -> Unit)? = null, onPhone: (() -> Unit)? = null): NavResult {
+        val event = if (mirroredInput) given.copy(action = given.action.mirroredAcross()) else given
         clampFocus()
         touchMode = false
         // Alternatives on show: left and right choose, A types the one chosen.
@@ -508,29 +520,34 @@ fun OnScreenKeyboard(
     val rowGap = rowGapFor(keyHeight)
     // Focus belongs to the controller and the keyboard; after a touch there is none to show.
     val focusShown = showFocus && !state.touchMode
-    Box(modifier.onSizeChanged { width = it.width }) {
-        if (width > 0) KeyHighlight(state, width, keyHeight, rowGap, visible = focusShown)
-        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(rowGap)) {
-            rows.forEachIndexed { r, keys ->
-                Row(Modifier.fillMaxWidth()) {
-                    keys.forEachIndexed { col, key ->
-                        if (key.kind == KeyKind.GAP) {
-                            Spacer(Modifier.weight(key.weight))
-                        } else {
-                            Box(Modifier.weight(key.weight).padding(horizontal = KeyGap / 2)) {
-                                KeyCap(
-                                    key = key,
-                                    state = state,
-                                    field = field,
-                                    position = KeyPosition(state.page, r, col),
-                                    doneLabel = doneLabel,
-                                    selected = focusShown && r == state.row && col == state.column,
-                                    enabled = key.kind != KeyKind.PASTE || onPaste != null,
-                                    height = keyHeight,
-                                    onFocus = { state.row = r; state.column = col },
-                                    onPress = { onKey(); state.press(key, field, onDone, onPaste, onPhone) },
-                                    onKey = onKey,
-                                )
+    // A keyboard's rows keep their own order (q w e r t y, left to right) whichever way Fuse is laid out.
+    val outerRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    SideEffect { state.mirroredInput = outerRtl }
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        Box(modifier.onSizeChanged { width = it.width }) {
+            if (width > 0) KeyHighlight(state, width, keyHeight, rowGap, visible = focusShown)
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(rowGap)) {
+                rows.forEachIndexed { r, keys ->
+                    Row(Modifier.fillMaxWidth()) {
+                        keys.forEachIndexed { col, key ->
+                            if (key.kind == KeyKind.GAP) {
+                                Spacer(Modifier.weight(key.weight))
+                            } else {
+                                Box(Modifier.weight(key.weight).padding(horizontal = KeyGap / 2)) {
+                                    KeyCap(
+                                        key = key,
+                                        state = state,
+                                        field = field,
+                                        position = KeyPosition(state.page, r, col),
+                                        doneLabel = doneLabel,
+                                        selected = focusShown && r == state.row && col == state.column,
+                                        enabled = key.kind != KeyKind.PASTE || onPaste != null,
+                                        height = keyHeight,
+                                        onFocus = { state.row = r; state.column = col },
+                                        onPress = { onKey(); state.press(key, field, onDone, onPaste, onPhone) },
+                                        onKey = onKey,
+                                    )
+                                }
                             }
                         }
                     }

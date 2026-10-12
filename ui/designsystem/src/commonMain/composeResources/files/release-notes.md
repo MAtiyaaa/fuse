@@ -164,6 +164,13 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   fails to install puts it straight back; after one that works, the Store offers Go Back to it, and
   so does the problem Fuse shows when an emulator updated in the last month won't start. The
   emulator's own settings and saves are never touched.
+- **Colours, direction and screen readers.** Settings, Accessibility has Colours: states (done,
+  needs a look, went wrong) in colours that red-green or blue-yellow colour blindness tells apart,
+  made to read on every theme; and Layout direction: Automatic follows the system's language, so
+  Fuse mirrors for Arabic, Hebrew, Persian and Urdu, or always left to right or right to left.
+  Mirrored, the D-pad, shoulders and touch follow the screen, Home's board mirrors with its widgets,
+  arrows and chevrons turn round, and a line that starts with a number keeps its order. Game,
+  system and app tiles tell screen readers what they are.
 - **What other apps may do.** The Fuse Decky plugin and Phone Link each do only what you allow,
   set where each is set up (Settings, Library, Decky; Settings, Accounts, Phone Link): see what Fuse
   shows, see or change your library, open games, type into Fuse, see captures, and, for the plugin,
@@ -274,6 +281,10 @@ and the library, and a first step toward Fuse knowing emulators for itself.
 
 ## Fixed
 
+- On Android with a right-to-left system language, Fuse was mirrored but the D-pad and shoulders
+  still moved the left-to-right way; they now follow the screen.
+- Home's Systems widget no longer prints the maker's name under its own header, and a game's
+  system chip no longer sits on a widget's page dots.
 - Quitting Fuse (from Steam's Game Mode too) takes it off the screen at once; its servers and
   devices close together out of sight, never holding the quit for more than a moment.
 - A game started through a launcher that hands it on (a wrapper script, an AppImage's runtime, an

@@ -208,6 +208,7 @@ internal fun ThemeStage(
     val quality = Fuse.quality
     val glyphs = Fuse.glyphs
     val contrast = Fuse.look.highContrastFocus
+    val vision = Fuse.look.colorVision
     val shape = RoundedCornerShape(Fuse.geometry.panel)
     var shown by remember { mutableStateOf(spec) }
     LaunchedEffect(spec) {
@@ -258,7 +259,7 @@ internal fun ThemeStage(
             label = "stage",
         ) { s ->
             VirtualScreen(Modifier.fillMaxSize()) {
-                FuseTheme(spec = s, motion = scene.motion, quality = quality, glyphs = glyphs, highContrastFocus = contrast) {
+                FuseTheme(spec = s, motion = scene.motion, quality = quality, glyphs = glyphs, highContrastFocus = contrast, colorVision = vision) {
                     CompositionLocalProvider(
                         LocalTileMetrics provides TileMetrics.forHeight(VirtualHeight, VirtualWidth),
                         LocalGameArt provides scene.gameArt,

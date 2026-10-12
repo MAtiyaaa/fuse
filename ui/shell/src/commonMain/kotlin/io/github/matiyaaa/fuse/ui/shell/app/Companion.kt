@@ -166,6 +166,7 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
         quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower),
         glass = prefs.glass,
         highContrastFocus = prefs.highContrastFocus,
+        colorVision = prefs.colorVision,
     ) {
         if (standby) {
             val wakeScope = rememberCoroutineScope()

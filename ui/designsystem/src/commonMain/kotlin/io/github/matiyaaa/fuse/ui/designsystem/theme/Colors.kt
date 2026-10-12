@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
+import io.github.matiyaaa.fuse.model.ColorVision
 import io.github.matiyaaa.fuse.model.ThemePalette
 
 /**
@@ -64,6 +65,38 @@ data class FuseColors(
     /** The dark floor laid under text on artwork, at its strongest point. */
     val artScrim: Color = Color.Black.copy(alpha = 0.72f),
 ) {
+    /**
+     * These colours with the states ([success], [warning], [danger]) in [vision]'s: colours those eyes
+     * tell apart, after Okabe and Ito's palette, apart in lightness too, and readable on this theme.
+     */
+    fun forVision(vision: ColorVision): FuseColors {
+        val (s, w, d) = when (vision) {
+            ColorVision.TYPICAL -> return this
+            ColorVision.RED_GREEN ->
+                if (isDark) Triple(0xFF56B4E9, 0xFFF0E442, 0xFFE8743B) else Triple(0xFF00508A, 0xFF9A7A00, 0xFFA63A0A)
+            ColorVision.BLUE_YELLOW ->
+                if (isDark) Triple(0xFF2EC4B6, 0xFFFFC2DC, 0xFFFF4D4D) else Triple(0xFF00897B, 0xFFAD1457, 0xFF8E0000)
+        }
+        val on = listOf(ink, surface, surfaceRaised)
+        return copy(success = readableOn(Color(s), on), warning = readableOn(Color(w), on), danger = readableOn(Color(d), on))
+    }
+
+    /**
+     * [state] as it is, or darkened (a light theme) or lightened (a dark one) just enough to read at
+     * 3:1 on every one of [surfaces], as icons and badges must: a theme with tinted panels keeps its
+     * states legible.
+     */
+    private fun readableOn(state: Color, surfaces: List<Color>): Color {
+        val toward = if (isDark) Color.White else Color.Black
+        var c = state
+        var step = 0
+        while (step < 20 && surfaces.any { contrastOf(c, it) < 3f }) {
+            step++
+            c = lerp(state, toward, step * 0.05f)
+        }
+        return c
+    }
+
     /** A surface tinted slightly toward [tint], for cards that belong to a platform or game. */
     fun tinted(tint: Color, amount: Float = 0.14f): Color = lerp(surface, tint, amount)
 
@@ -119,6 +152,8 @@ data class FuseColors(
             }
             return muted.copy(alpha = alpha.coerceAtMost(0.92f))
         }
+
+        internal fun contrastOf(a: Color, b: Color): Float = contrast(a, b)
 
         private fun contrast(a: Color, b: Color): Float {
             val la = a.luminance()

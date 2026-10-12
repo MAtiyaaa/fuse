@@ -27,7 +27,12 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** What a theme change crossfades: everything that changes how the interface looks. */
-internal data class ThemeLookKey(val spec: ThemeSpec, val glass: GlassSettings?, val highContrastFocus: Boolean)
+internal data class ThemeLookKey(
+    val spec: ThemeSpec,
+    val glass: GlassSettings?,
+    val highContrastFocus: Boolean,
+    val colorVision: io.github.matiyaaa.fuse.model.ColorVision = io.github.matiyaaa.fuse.model.ColorVision.TYPICAL,
+)
 
 /**
  * The state of one theme crossfade: a picture of the interface just before the change, laid over

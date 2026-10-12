@@ -355,6 +355,10 @@ data class AppearanceSettings(
     val heroDim: Float = 0.3f,
     /** Adds an outline to the focused element on top of the glow. */
     val highContrastFocus: Boolean = false,
+    /** The colours states use, for how this person sees colour. */
+    val colorVision: io.github.matiyaaa.fuse.model.ColorVision = io.github.matiyaaa.fuse.model.ColorVision.TYPICAL,
+    /** Left to right, right to left, or as the system's language reads. */
+    val layoutDirection: io.github.matiyaaa.fuse.model.LayoutDirectionChoice = io.github.matiyaaa.fuse.model.LayoutDirectionChoice.AUTOMATIC,
     /** How large text is: 1 as designed, up to 1.3 for reading from further away. */
     val textScale: Float = 1f,
     /** Room kept clear at every edge, in percent of the screen, for TVs that cut the picture's edges off. */

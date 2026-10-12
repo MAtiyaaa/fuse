@@ -47,6 +47,10 @@ data class UiPrefs(
     val glass: GlassSettings = GlassSettings(),
     val crt: CrtSettings = CrtSettings(),
     val highContrastFocus: Boolean = false,
+    /** The colours states use (Settings, Accessibility, Colours). */
+    val colorVision: io.github.matiyaaa.fuse.model.ColorVision = io.github.matiyaaa.fuse.model.ColorVision.TYPICAL,
+    /** Which way Fuse is laid out (Settings, Accessibility, Layout direction). */
+    val layoutDirection: io.github.matiyaaa.fuse.model.LayoutDirectionChoice = io.github.matiyaaa.fuse.model.LayoutDirectionChoice.AUTOMATIC,
     /** Text size: 1 as designed, 1.15 (Large) or 1.3 (Extra large). */
     val textScale: Float = 1f,
     /** Room kept clear at every edge, in percent, for TVs that cut the picture's edges off. */

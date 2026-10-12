@@ -158,6 +158,7 @@ fun GameIconTile(
     val dims = style.tileSize(size)
     Tile(
         selected = selected,
+        label = "${card.title}, ${card.platformShort}",
         glow = accent,
         modifier = modifier.size(dims),
         shape = shape,
@@ -201,6 +202,7 @@ fun GameCoverTile(
     val artLabel = label.takeUnless { border.carriesTag }
     Tile(
         selected = selected,
+        label = "${card.title}, ${card.platformShort}",
         glow = accent,
         cornerFraction = corner,
         shape = shape,
@@ -236,6 +238,7 @@ fun GameWideTile(
     val shape = remember(corner) { SquircleShape.fraction(corner) }
     Tile(
         selected = selected,
+        label = "${card.title}, ${card.platformShort}",
         glow = accent,
         cornerFraction = corner,
         shape = shape,
@@ -479,6 +482,7 @@ fun SystemTile(
     val accent = card.platform.accent.toColor()
     Tile(
         selected = selected,
+        label = "${card.platform.name}, ${gamesText(card.gameCount)}",
         glow = accent,
         modifier = modifier.size(size),
         onClick = onClick,
@@ -494,13 +498,13 @@ fun SystemTile(
  * no art at all, Fuse's own typographic [SystemGlyph].
  */
 @Composable
-fun SystemCardArt(card: PlatformCard, large: Boolean = false) {
+fun SystemCardArt(card: PlatformCard, large: Boolean = false, maker: Boolean = true) {
     val accent = card.platform.accent.toColor()
     when {
         (card.art.square ?: card.art.icon) != null ->
-            Artwork(card.art.square ?: card.art.icon, Modifier.fillMaxSize(), fallback = { SystemGlyph(card, accent, large) })
+            Artwork(card.art.square ?: card.art.icon, Modifier.fillMaxSize(), fallback = { SystemGlyph(card, accent, large, maker) })
         card.art.boxart != null || card.art.logo != null -> PackCard(card, accent, large)
-        else -> SystemGlyph(card, accent, large)
+        else -> SystemGlyph(card, accent, large, maker)
     }
 }
 
@@ -628,7 +632,7 @@ private fun SystemWarning(card: PlatformCard, modifier: Modifier) {
 
 /** Generated system art: short name large, maker and count small when the tile has room. */
 @Composable
-fun SystemGlyph(card: PlatformCard, accent: Color, large: Boolean = false) {
+fun SystemGlyph(card: PlatformCard, accent: Color, large: Boolean = false, maker: Boolean = true) {
     val c = Fuse.colors
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // Small tiles (the Systems grid, Home) show the name alone.
@@ -639,7 +643,7 @@ fun SystemGlyph(card: PlatformCard, accent: Color, large: Boolean = false) {
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
             FText(
-                if (roomy) card.platform.manufacturer?.uppercase() ?: "" else "",
+                if (roomy && maker) card.platform.manufacturer?.uppercase() ?: "" else "",
                 Fuse.type.overline,
                 color = c.onArtMuted,
                 maxLines = 1,
@@ -676,6 +680,7 @@ fun AppTile(
     val c = Fuse.colors
     Tile(
         selected = selected,
+        label = app.entry.label,
         glow = c.accent,
         modifier = modifier.size(size),
         onClick = onClick,
