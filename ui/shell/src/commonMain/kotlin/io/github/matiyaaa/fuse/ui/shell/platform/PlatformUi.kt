@@ -393,6 +393,13 @@ interface StorageAccess {
     /** Opens the platform folder picker; returns a filesystem path Fuse can read, or null. */
     suspend fun pickFolder(title: String): String?
 
+    /**
+     * Opens the folder picker for an emulator's saves. On Android it also takes folders another app
+     * shares through the picker (Eden's own data folder, a card): those come back as a `tree:` link
+     * Fuse Sync reads and writes through the system, with the access kept. Elsewhere, [pickFolder].
+     */
+    suspend fun pickSaveFolder(title: String): String? = pickFolder(title)
+
     /** Opens the platform image picker; returns a readable path (copied into Fuse's storage if needed), or null. */
     suspend fun pickImage(title: String): String?
 

@@ -48,6 +48,8 @@ class JvmSyncService(
     private val discoveryLock: () -> AutoCloseable? = { null },
     /** How often a running game's save is looked at. */
     private val liveLookMs: Long = LIVE_LOOK_MS,
+    /** Folders granted through the system's folder picker (`tree:` save folders), by their link; none on computers. */
+    private val trees: (String) -> DocumentTree? = { null },
 ) : SyncService {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val _status = MutableStateFlow<SyncStatus>(SyncStatus.Off)
@@ -109,7 +111,10 @@ class JvmSyncService(
     override val merge: StateFlow<ProfileMerge?> = _merge.asStateFlow()
 
     /** The device's files, with the save folders the person chose on top. */
-    private val saveEnv: SaveEnvironment = WithSaveFolders(files, { game, format -> device?.learned(game, format).orEmpty() }) { cached.saveFolders }
+    private val saveEnv: SaveEnvironment = WithSaveFolders(TreeSaveEnvironment(files, trees), { game, format -> device?.learned(game, format).orEmpty() }) { cached.saveFolders }
+
+    /** Saves in granted folders, worked on through copies here (see [TreeMirror]). */
+    private val treeMirror by lazy { TreeMirror(File(dir, "trees"), trees) }
 
     init {
         if (fuseVersion.isNotEmpty()) fuseAppVersion = fuseVersion
@@ -1899,7 +1904,7 @@ class JvmSyncService(
 
     // ---------------------------------------------------------------- saves around a game
 
-    private fun slots(query: SaveQuery): List<LocalSlot> {
+    private fun slots(query: SaveQuery, live: Boolean = false): List<LocalSlot> {
         val adapter = SaveAdapters.forEmulator(query.emulatorId) ?: return emptyList()
         val c = cached
         return adapter.locate(query, saveEnv)
@@ -1907,7 +1912,9 @@ class JvmSyncService(
             .map { spot ->
                 // Cards shared by every game on them are the profile's, keyed by the card, not the game.
                 val key = if (spot.kind == SaveKind.MEMORY_CARD) GameKey(query.platform, "card." + spot.format) else query.game
-                Slots.of(key, spot)
+                // A save in a granted folder: a fresh copy to work on, and its changes pushed back.
+                if (live || !spot.available) return@map Slots.of(key, spot)
+                treeMirror.pull(spot)?.let { (local, parts) -> Slots.of(key, local).copy(sink = { treeMirror.push(parts) }) } ?: Slots.of(key, spot)
             }
     }
 
@@ -2271,8 +2278,16 @@ class JvmSyncService(
     }
 
     /** What a slot's files look like now, cheaply (sizes and times; the content is only read once they settle). */
-    private fun looks(query: SaveQuery): List<String> = slots(query).flatMap { slot ->
-        slot.files.map { f -> "${f.path}:${if (f.file.isFile) "${f.file.length()}@${f.file.lastModified()}" else "-"}" }
+    private fun looks(query: SaveQuery): List<String> {
+        val adapter = SaveAdapters.forEmulator(query.emulatorId) ?: return emptyList()
+        // A save in a granted folder is looked at through the folder's own times, never copied every few seconds.
+        val spots = runCatching { adapter.locate(query, saveEnv) }.getOrDefault(emptyList())
+        if (spots.any { s -> listOfNotNull(s.root) .plus(s.mounts.values).plus(s.files.map { it.path }).any(TreePaths::isTree) }) {
+            return spots.flatMap { s -> listOfNotNull(s.root).plus(s.mounts.values).plus(s.files.map { it.path }) }.map { "$it@${saveEnv.modified(it)}" }
+        }
+        return slots(query, live = true).flatMap { slot ->
+            slot.files.map { f -> "${f.path}:${if (f.file.isFile) "${f.file.length()}@${f.file.lastModified()}" else "-"}" }
+        }
     }
 
     /**

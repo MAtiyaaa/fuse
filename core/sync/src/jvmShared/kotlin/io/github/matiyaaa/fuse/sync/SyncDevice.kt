@@ -31,6 +31,12 @@ data class LocalSlot(
     val folders: List<String> = emptyList(),
     /** Other folders the save keeps parts in, by the name prefix its files carry there (see [SaveSpot.mounts]). */
     val mounts: Map<String, File> = emptyMap(),
+    /**
+     * For a save worked on through a copy (one in a folder granted through the system's picker, see
+     * [TreeMirror]): puts the copy's changes back where the emulator reads them. Runs before any
+     * change Fuse makes is counted as done, so a failure undoes the change instead.
+     */
+    val sink: (() -> Unit)? = null,
 ) {
     val key: String get() = "${game.id}|${kind.name}"
 
@@ -297,6 +303,7 @@ class SyncDevice(
         }
         val beforeImport = state
         SaveImportTransaction.write(slot, incoming, store, journal = importJournal, revision = revision.id, expectedOriginal = current, commit = {
+            slot.sink?.invoke()
             state = state.copy(outbox = state.outbox + Outgoing(revision.id, Priority.SAVE.rank, profile, revision),
                 holders = state.holders + (slot.key to profile))
             try {
@@ -362,6 +369,7 @@ class SyncDevice(
             val leftFolders = slot.folders.filter { it !in incoming.folders }
             SaveImportTransaction.write(carried, incoming, store, journal = handoverJournal, revision = "${slot.key}>$profile",
                 expectedOriginal = current, beforeMove = handoverFault, commit = {
+                    slot.sink?.invoke()
                     state = state.copy(parked = parked, holders = state.holders + (slot.key to profile))
                     try {
                         persist()
@@ -790,6 +798,7 @@ class SyncDevice(
         } finally {
             staged.forEach { (tmp, _) -> tmp.delete() }
         }
+        slot.sink?.invoke()
     }
 
     /**
