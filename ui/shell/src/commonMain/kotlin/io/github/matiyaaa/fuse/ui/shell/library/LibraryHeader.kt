@@ -225,7 +225,7 @@ private fun LibraryTabs(
                 label = s.label,
                 icon = if (s == LibrarySegment.MISSING) FuseIcons.FileQuestion else null,
                 warn = s == LibrarySegment.MISSING,
-                badge = (if (s == active) count else counts[s])?.toString(),
+                badge = (if (s == active && s != LibrarySegment.EVERYWHERE) count else counts[s] ?: count.takeIf { s == active })?.toString(),
             )
         },
         active = views.indexOf(active),

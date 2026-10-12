@@ -263,8 +263,13 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         } else {
             val base = store.library.games(GameQuery(platform = state.system))
             val all = if (state.showHidden) store.library.games(GameQuery(platform = state.system, includeHidden = true)) else base
-            combine(base, all) { b, a ->
+            combine(base, all, store.romm.systems, store.reach.state) { b, a, romm, household ->
+                // All counts every game once: this device's, then what RomM and the household's other
+                // devices have that this device doesn't.
+                val onRomm = romm.filter { state.system == null || it.platform == state.system }.sumOf { (it.games - it.installed).coerceAtLeast(0) }
+                val elsewhere = if (state.system == null) household.games else 0
                 mapOf(
+                    LibrarySegment.EVERYWHERE to a.size + onRomm + elsewhere,
                     LibrarySegment.INSTALLED to a.size,
                     LibrarySegment.FAVORITES to b.count { it.favorite },
                     LibrarySegment.RECENT to b.count { it.lastPlayedAt != null },
