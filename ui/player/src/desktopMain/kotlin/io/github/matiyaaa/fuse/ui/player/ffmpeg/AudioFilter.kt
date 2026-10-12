@@ -23,6 +23,13 @@ import org.bytedeco.javacpp.BytePointer
  * Decoded sound to what the card plays: resampled to 48 kHz, mixed to stereo (surround folds down),
  * 16-bit, and at another speed without changing pitch (FFmpeg's atempo). Rebuilt when the decoder's
  * format or the speed changes.
+ *
+ * Surround folds down in floating point. Straight to 16-bit, FFmpeg's resampler scales the whole
+ * mix down so no channel sum can pass full scale (swresample's rematrix_maxval): a 5.1 film came out
+ * about 8 dB quieter, its dialogue in the centre channel quieter still, which is what made Jellyfin
+ * films faint on a TV. In floating point the mix keeps the standard levels (centre and surrounds at
+ * -3 dB), and a peak limiter (alimiter, auto level off) catches the rare peak a full mix would push
+ * past full scale, so nothing clips and nothing quiet is raised. Stereo is untouched.
  */
 internal class AudioFilter {
     private var graph: AVFilterGraph? = null
@@ -51,8 +58,9 @@ internal class AudioFilter {
             chain += c
             return true
         }
-        if (!add("rate", "aresample", "${AudioOut.RATE}")) return fail(g)
-        if (!add("fmt", "aformat", "sample_fmts=s16:channel_layouts=stereo")) return fail(g)
+        for ((name, filter, filterArgs) in steps(frame.ch_layout().nb_channels())) {
+            if (!add(name, filter, filterArgs)) return fail(g)
+        }
         // atempo takes 0.5 to 2 at a time; the player's speeds stay inside that.
         if (speed != 1f && !add("tempo", "atempo", speed.coerceIn(0.5f, 2f).toString())) return fail(g)
         val snk = AVFilterContext()
@@ -67,6 +75,18 @@ internal class AudioFilter {
         sink = snk
         key = k
         return true
+    }
+
+    companion object {
+        /** The filters from the decoder's [channels] to 48 kHz 16-bit stereo, by name, filter and arguments. */
+        fun steps(channels: Int): List<Triple<String, String, String>> = buildList {
+            add(Triple("rate", "aresample", "${AudioOut.RATE}"))
+            if (channels > 2) {
+                add(Triple("mix", "aformat", "sample_fmts=dbl:channel_layouts=stereo"))
+                add(Triple("limit", "alimiter", "limit=0.98:attack=5:release=50:level=0"))
+            }
+            add(Triple("fmt", "aformat", "sample_fmts=s16:channel_layouts=stereo"))
+        }
     }
 
     private fun fail(g: AVFilterGraph): Boolean {
