@@ -31,6 +31,13 @@ interface SaveEnvironment {
     /** Where people's own files live, to look for an emulator's data folder in (Android: its storage and cards). */
     fun storageRoots(): List<String> = emptyList()
 
+    /**
+     * A folder in Fuse's own storage for a part of [game]'s save the emulator has no place for yet
+     * ([part], such as a device save Ryujinx hasn't made a record for): kept there, never dropped,
+     * and carried on with the rest of the save. Null where there is no such storage (tests).
+     */
+    fun held(game: String, part: String): String? = null
+
     /** [compute]'s answer for [key], kept a while by environments that can (searching storage is slow). */
     fun remember(key: String, compute: () -> List<String>): List<String> = compute()
 }
@@ -163,6 +170,12 @@ object SaveAdapters {
 
     /** The data folder of a desktop emulator, by host, first that exists. */
     internal fun firstDir(env: SaveEnvironment, vararg candidates: String?): String? = candidates.filterNotNull().firstOrNull { env.isDirectory(it) }
+
+    /** [path] from an emulator's settings: as it is when absolute, else inside [base]. */
+    internal fun resolve(base: String, path: String): String {
+        val p = path.replace('\\', '/').trimEnd('/')
+        return if (p.startsWith("/") || (p.length > 1 && p[1] == ':')) p else "$base/$p"
+    }
 
     internal fun appData(env: SaveEnvironment): String = env.env("APPDATA")?.replace('\\', '/') ?: "${env.home}/AppData/Roaming"
     internal fun localAppData(env: SaveEnvironment): String = env.env("LOCALAPPDATA")?.replace('\\', '/') ?: "${env.home}/AppData/Local"
@@ -341,18 +354,46 @@ internal object DuckStation : SaveAdapter {
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
         val dir = SaveAdapters.chosen(env, q) ?: dataDir(env, q.emulatorPath)
             ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "psx.mcd", if (env.host == "ANDROID") SaveAdapters.androidPrivateNote("DuckStation", "Use its Transfer data (or choose its data folder in your storage), then choose that folder in Fuse, Settings, Save folders.") else "DuckStation's folder wasn't found here. Start DuckStation once so it makes it."))
-        val cards = "$dir/memcards"
-        // Its own card for this game: by title (the default) or by serial, whichever is there.
-        val names = env.list(cards)
         val serial = q.serial?.uppercase()
-        val byTitle = names.firstOrNull { n -> n.endsWith("_1.mcd") && TitleMatch.same(n.removeSuffix("_1.mcd"), q.title) }
-        val bySerial = serial?.let { s -> names.firstOrNull { it.equals("${s}_1.mcd", ignoreCase = true) } }
-        val card = byTitle ?: bySerial ?: "${q.title.ifBlank { SaveAdapters.stem(q.romPath) }}_1.mcd"
-        val save = SaveSpot(SaveKind.SAVE, "psx.mcd", listOf(SpotFile("card1.mcd", "$cards/$card")))
+        // Its settings (settings.ini), and the game's own (gamesettings/<serial>.ini), which win.
+        val global = IniText.parse(env.readText("$dir/settings.ini"))
+        val game = serial?.let { IniText.parse(env.readText("$dir/gamesettings/$it.ini")) } ?: emptyMap()
+        fun setting(key: String): String? = game["MemoryCards/$key"] ?: global["MemoryCards/$key"]
+        // Its cards' folder: [MemoryCards] Directory, from its data folder when not absolute (EmuFolders).
+        val cards = global["MemoryCards/Directory"]?.takeIf { it.isNotBlank() }?.let { SaveAdapters.resolve(dir, it) } ?: "$dir/memcards"
+        val names = env.list(cards)
+        val perGame = ArrayList<SpotFile>()
+        val shared = ArrayList<SpotFile>()
+        for (slot in 1..2) {
+            // As settings.cpp: card 1 is per game by title unless set, card 2 is off unless set.
+            val type = setting("Card${slot}Type") ?: if (slot == 1) "PerGameTitle" else "None"
+            val custom = setting("Card${slot}Path")?.takeIf { it.isNotBlank() }
+            when (type) {
+                "Shared" -> shared += SpotFile("shared$slot.mcd", custom?.let { SaveAdapters.resolve(cards, it) } ?: "$cards/shared_card_$slot.mcd")
+                // By serial (Settings::GetGameMemoryCardPath).
+                "PerGame" -> serial?.let { perGame += SpotFile("card$slot.mcd", "$cards/${it}_$slot.mcd") }
+                // By the game's file name.
+                "PerGameFileTitle" -> perGame += SpotFile("card$slot.mcd", "$cards/${SaveAdapters.stem(q.romPath)}_$slot.mcd")
+                // By its title (DuckStation's own, from its game list, or a multi-disc set's): the card
+                // DuckStation made for this game is found by name; the serial one is its older default.
+                "PerGameTitle" -> {
+                    val byTitle = names.firstOrNull { n -> n.endsWith("_$slot.mcd") && TitleMatch.same(n.removeSuffix("_$slot.mcd"), q.title) }
+                    val bySerial = serial?.let { s -> names.firstOrNull { it.equals("${s}_$slot.mcd", ignoreCase = true) } }
+                    perGame += SpotFile("card$slot.mcd", "$cards/${byTitle ?: bySerial ?: "${q.title.ifBlank { SaveAdapters.stem(q.romPath) }}_$slot.mcd"}")
+                }
+                // None and NonPersistent keep nothing.
+                else -> {}
+            }
+        }
         val states = serial?.let { s ->
             SaveSpot(SaveKind.STATE, "duckstation.state", (1..10).map { i -> SpotFile("state$i.sav", "$dir/savestates/${s}_$i.sav") } + SpotFile("resume.sav", "$dir/savestates/${s}_resume.sav"))
         }
-        return listOfNotNull(save, states)
+        return listOfNotNull(
+            perGame.takeIf { it.isNotEmpty() }?.let { SaveSpot(SaveKind.SAVE, "psx.mcd", it) },
+            // A card every game shares is the person's, not this game's.
+            shared.takeIf { it.isNotEmpty() }?.let { SaveSpot(SaveKind.MEMORY_CARD, "psx.sharedcard", it) },
+            states,
+        )
     }
 }
 
@@ -373,8 +414,23 @@ internal object Pcsx2 : SaveAdapter {
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
         val dir = SaveAdapters.chosen(env, q) ?: dataDir(env, q.emulatorPath)
             ?: return listOf(SaveAdapters.unavailable(SaveKind.MEMORY_CARD, "ps2.card", if (env.host == "ANDROID") SaveAdapters.androidPrivateNote("This PlayStation 2 emulator", "ARMSX2 saves in the folder you chose when setting it up: choose that same folder in Fuse, Settings, Save folders. NetherSX2 needs its Transfer data first.") else "PCSX2's folder wasn't found here."))
-        val cards = "$dir/memcards"
-        return listOf(SaveSpot(SaveKind.MEMORY_CARD, "ps2.card", listOf(SpotFile("Mcd001.ps2", "$cards/Mcd001.ps2"), SpotFile("Mcd002.ps2", "$cards/Mcd002.ps2"))))
+        // Its settings (inis/PCSX2.ini): the cards' folder, and each slot's card, on or off.
+        val ini = IniText.parse(listOf("$dir/inis/PCSX2.ini", "$dir/inis/PCSX2_ui.ini", "$dir/PCSX2.ini").firstNotNullOfOrNull { env.readText(it) })
+        val cards = ini["Folders/MemoryCards"]?.takeIf { it.isNotBlank() }?.let { SaveAdapters.resolve(dir, it) } ?: "$dir/memcards"
+        val files = ArrayList<SpotFile>()
+        val folders = LinkedHashMap<String, String>()
+        for (slot in 1..2) {
+            if (ini["MemoryCards/Slot${slot}_Enable"]?.equals("false", ignoreCase = true) == true) continue
+            val name = ini["MemoryCards/Slot${slot}_Filename"]?.takeIf { it.isNotBlank() } ?: "Mcd00$slot.ps2"
+            val path = SaveAdapters.resolve(cards, name)
+            // The name each card goes by in the save is its slot's, whatever it is called here.
+            val logical = "Mcd00$slot.ps2"
+            // A folder card is a folder of its games' saves (it has PCSX2's superblock file).
+            if (env.isDirectory(path)) folders[logical] = path else files += SpotFile(logical, path)
+        }
+        if (folders.isEmpty()) return listOf(SaveSpot(SaveKind.MEMORY_CARD, "ps2.card", files))
+        // Folder cards aren't file cards: their own format, so neither is ever put where the other is read.
+        return listOf(SaveSpot(SaveKind.MEMORY_CARD, "ps2.foldercard", files, root = "$cards/.fuse-cards", mounts = folders))
     }
 }
 
@@ -684,10 +740,10 @@ object SaveConversions {
 
     /** [files] (name to bytes, names as the save names them) in [to]'s shape; null when it can't be done. */
     fun convert(from: String, to: String, files: Map<String, ByteArray>): Map<String, ByteArray>? = when (from to to) {
-        "nds.dsv" to "sram" -> files.mapValues { (_, b) -> stripDesmumeFooter(b) }
+        "nds.dsv" to "sram" -> files.mapValues { (_, b) -> stripDesmumeFooter(b) }.takeIf { m -> m.values.all { it.size in DS_SIZES } }
         // DraStic reads a raw save as it is.
         "sram" to "nds.dsv" -> files
-        "n64.split" to "retroarch.n64" -> mapOf("save.srm" to combineN64(files))
+        "n64.split" to "retroarch.n64" -> combineN64(files)?.let { mapOf("save.srm" to it) }
         "retroarch.n64" to "n64.split" -> files["save.srm"]?.let(::splitN64)
         else -> null
     }
@@ -705,18 +761,30 @@ object SaveConversions {
     private val N64_PARTS = listOf("save.eep" to 0x800, "save.mpk" to 0x20000, "save.sra" to 0x8000, "save.fla" to 0x20000)
     private const val N64_SIZE = 0x48800
 
-    internal fun combineN64(files: Map<String, ByteArray>): ByteArray {
+    // The sizes each part really comes in: a 4 or 16 kbit EEPROM, one to four controller paks.
+    private val N64_ALLOWED = mapOf("save.eep" to setOf(0x200, 0x800), "save.mpk" to setOf(0x8000, 0x10000, 0x18000, 0x20000), "save.sra" to setOf(0x8000), "save.fla" to setOf(0x20000))
+
+    // A DS save is one of the chips' sizes (512 bytes to 8 MiB), nothing in between.
+    private val DS_SIZES = setOf(512, 8 * 1024, 32 * 1024, 64 * 1024, 128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024, 2 * 1024 * 1024, 8 * 1024 * 1024)
+
+    /** Mupen64Plus's parts as RetroArch's one save; null for a part of a size no N64 save has (never cut or padded blindly). */
+    internal fun combineN64(files: Map<String, ByteArray>): ByteArray? {
         val out = ByteArray(N64_SIZE)
         var at = 0
         for ((name, size) in N64_PARTS) {
-            files[name]?.let { it.copyInto(out, at, 0, minOf(size, it.size)) }
+            files[name]?.let { part ->
+                if (part.size !in N64_ALLOWED.getValue(name)) return null
+                part.copyInto(out, at)
+            }
             at += size
         }
         return out
     }
 
     /** The parts a game actually uses (any byte not blank); the rest stay unwritten. */
-    internal fun splitN64(srm: ByteArray): Map<String, ByteArray> {
+    internal fun splitN64(srm: ByteArray): Map<String, ByteArray>? {
+        // RetroArch's N64 save is always exactly this size: anything else isn't one.
+        if (srm.size != N64_SIZE) return null
         val out = LinkedHashMap<String, ByteArray>()
         var at = 0
         for ((name, size) in N64_PARTS) {
@@ -778,3 +846,21 @@ fun SaveAdapters.survey(samples: List<SaveQuery>, env: SaveEnvironment): List<Em
             canChoose = adapter !== RetroArch,
         )
     }.sortedWith(compareBy({ it.state.ordinal }, { it.emulator }))
+
+/** An emulator's `.ini` settings as `Section/key` to value (the last one wins, as Qt and SimpleIni read them). */
+internal object IniText {
+    fun parse(text: String?): Map<String, String> {
+        if (text == null) return emptyMap()
+        val out = HashMap<String, String>()
+        var section = ""
+        for (raw in text.lineSequence()) {
+            val line = raw.trim()
+            if (line.isEmpty() || line.startsWith(";") || line.startsWith("#")) continue
+            if (line.startsWith("[") && line.endsWith("]")) { section = line.substring(1, line.length - 1).trim().replace("%20", " "); continue }
+            val i = line.indexOf('=')
+            if (i <= 0) continue
+            out["$section/${line.substring(0, i).trim()}"] = line.substring(i + 1).trim().trim('"')
+        }
+        return out
+    }
+}

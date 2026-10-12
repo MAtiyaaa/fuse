@@ -111,7 +111,11 @@ class JvmSyncService(
     override val merge: StateFlow<ProfileMerge?> = _merge.asStateFlow()
 
     /** The device's files, with the save folders the person chose on top. */
-    private val saveEnv: SaveEnvironment = WithSaveFolders(TreeSaveEnvironment(files, trees), { game, format -> device?.learned(game, format).orEmpty() }) { cached.saveFolders }
+    private val saveEnv: SaveEnvironment = object : SaveEnvironment by WithSaveFolders(TreeSaveEnvironment(files, trees), { game, format -> device?.learned(game, format).orEmpty() }, { cached.saveFolders }) {
+        // A part of a save its emulator has no place for yet is kept here, with the rest of Fuse Sync's.
+        override fun held(game: String, part: String): String =
+            File(File(File(dir, "held"), game.replace(Regex("[^A-Za-z0-9._-]+"), "_").take(120)), part).path
+    }
 
     /** Saves in granted folders, worked on through copies here (see [TreeMirror]). */
     private val treeMirror by lazy { TreeMirror(File(dir, "trees"), trees) }

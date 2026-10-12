@@ -242,7 +242,7 @@ class MoreAdaptersTest {
     fun kenjiNxIsRyujinxUnderneath() {
         assertEquals(SaveAdapters.forEmulator("ryujinx"), SaveAdapters.forEmulator("kenji-nx"))
         val chosen = "/storage/emulated/0/Kenji"
-        val extra = byteArrayOf(0x00, 0xE0.toByte(), 0x11, 0x00, 0xF0.toByte(), 0x7E, 0x00, 0x01)
+        val extra = attribute("01007EF00011E000", "0000000000000001", "0000000000000000", 1)
         val env = FakeEnv("ANDROID", "/storage/emulated/0", files = mapOf("$chosen/bis/user/save/0000000000000001/0/" to ""), bin = mapOf("$chosen/bis/user/save/0000000000000001/ExtraData0" to extra), chosen = mapOf("kenji-nx" to chosen))
         val spot = SaveAdapters.forEmulator("kenji-nx")!!.locate(q("switch", "/roms/switch/Zelda [01007EF00011E000].nsp", "kenji-nx"), env).single()
         assertEquals("$chosen/bis/user/save/0000000000000001/0", spot.root)
@@ -329,10 +329,40 @@ class MoreAdaptersTest {
         assertEquals("$eden/$user/01007EF00011E000", spot.root)
 
         val saves = "/home/mo/.config/Ryujinx/bis/user/save"
-        val extra = byteArrayOf(0x00, 0xE0.toByte(), 0x11, 0x00, 0xF0.toByte(), 0x7E, 0x00, 0x01)
-        val ryu = FakeEnv("LINUX", "/home/mo", files = mapOf("$saves/0000000000000001/0/" to "", "$saves/0000000000000002/0/" to ""), bin = mapOf("$saves/0000000000000002/ExtraData0" to extra))
+        val ryu = FakeEnv("LINUX", "/home/mo", files = mapOf("$saves/0000000000000001/0/" to "", "$saves/0000000000000002/0/" to ""),
+            bin = mapOf("$saves/0000000000000002/ExtraData0" to attribute("01007EF00011E000", "0000000000000001", "0000000000000000", 1)))
         val r = SaveAdapters.forEmulator("ryujinx")!!.locate(q("switch", "/roms/switch/Zelda [01007EF00011E000].nsp", "ryujinx"), ryu).single()
         assertEquals("$saves/0000000000000002/0", r.root)
+    }
+
+    /** A save's attribute as Ryujinx writes ExtraData0: program id, user (high, low), then the save's type. */
+    private fun attribute(program: String, high: String, low: String, type: Int): ByteArray {
+        fun le(hex: String) = hex.chunked(2).reversed().map { it.toInt(16).toByte() }
+        return (le(program) + le(high) + le(low) + List(8) { 0.toByte() } + listOf(type.toByte())).toByteArray()
+    }
+
+    @Test
+    fun ryujinxTakesItsOwnUsersSaveAndTheDeviceSaveTogether() {
+        val base = "/home/mo/.config/Ryujinx"
+        val saves = "$base/bis/user/save"
+        val zelda = q("switch", "/roms/switch/Zelda [01007EF00011E000].nsp", "ryujinx")
+        val files = mapOf("$saves/0000000000000001/0/a" to "x", "$saves/0000000000000002/0/b" to "x", "$saves/0000000000000003/0/d" to "x")
+        val bin = mapOf(
+            "$saves/0000000000000001/ExtraData0" to attribute("01007EF00011E000", "0000000000000001", "0000000000000000", 1),
+            "$saves/0000000000000002/ExtraData0" to attribute("01007EF00011E000", "0000000000000002", "0000000000000000", 1),
+            "$saves/0000000000000003/ExtraData0" to attribute("01007EF00011E000", "0000000000000000", "0000000000000000", 3),
+        )
+        // Two users with saves, the second selected: that one, with the device save as its other part.
+        val chosen = FakeEnv("LINUX", "/home/mo", files = files + ("$base/system/Profiles.json" to "{\"profiles\":[],\"last_opened\":\"00000000000000020000000000000000\"}"), bin = bin)
+        val spot = SaveAdapters.forEmulator("ryujinx")!!.locate(zelda, chosen).single()
+        assertEquals("$saves/0000000000000002/0", spot.root)
+        assertEquals("$saves/0000000000000003/0", spot.mounts[SwitchNand.DEVICE])
+        // Two users and no selection: Fuse doesn't guess between them.
+        val unsure = SaveAdapters.forEmulator("ryujinx")!!.locate(zelda, FakeEnv("LINUX", "/home/mo", files = files, bin = bin)).single()
+        assertFalse(unsure.available)
+        // The selected user has no save of it yet: never someone else's.
+        val other = FakeEnv("LINUX", "/home/mo", files = files + ("$base/system/Profiles.json" to "{\"last_opened\":\"00000000000000090000000000000000\"}"), bin = bin)
+        assertFalse(SaveAdapters.forEmulator("ryujinx")!!.locate(zelda, other).single().available)
     }
 
     @Test

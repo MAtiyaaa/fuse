@@ -566,16 +566,36 @@ internal object Ryujinx : SaveAdapter {
         val base = SaveAdapters.chosen(env, q)?.let { c -> if (env.isDirectory("$c/bis")) c else SaveAdapters.parent(SaveAdapters.parent(SaveAdapters.parent(c))).takeIf { c.trimEnd('/').endsWith("bis/user/save") } ?: c } ?: defaultHome(env, q) ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", if (env.host == "ANDROID") SaveAdapters.androidPrivateNote("Kenji-NX") else "Ryujinx's folder wasn't found here."))
         val id = SwitchIds.of(q, env) ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", "Fuse doesn't know this game's title id yet (a [0100…] tag in its file name tells it)."))
         val saves = "$base/bis/user/save"
-        // A game can have several saves (its account save, a device save, BCAT and cache data): its
-        // ExtraData0 starts with the save's attribute, the program id at 0 and its type at 0x20
-        // (1 account, 3 device), as switchbrew documents SaveDataAttribute.
-        val match = env.list(saves).mapNotNull { n ->
+        // A game can have several saves (its account saves, one per user, a device save, BCAT and
+        // cache data). Each numbered folder's ExtraData0 starts with the save's attribute
+        // (switchbrew SaveDataAttribute): the program id at 0, the user at 8 (high then low half),
+        // its type at 0x20 (1 account, 3 device).
+        class Record(val folder: String, val user: String, val type: Int)
+        val records = env.list(saves).mapNotNull { n ->
             val extra = env.readBytes("$saves/$n/ExtraData0", 0, 0x21) ?: return@mapNotNull null
-            if (extra.size < 8 || leHex(extra, 0, 8) != id) return@mapNotNull null
-            val rank = when (extra.getOrNull(0x20)?.toInt()) { ACCOUNT -> 0; DEVICE -> 1; null -> 2; else -> 3 }
-            n to rank
-        }.filter { it.second < 3 }.minByOrNull { it.second }?.first ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", "Play it once in Ryujinx so it makes its save; from then on Fuse keeps it in step."))
-        return listOf(SaveSpot(SaveKind.SAVE, "switch.savedata", root = "$saves/$match/0"))
+            if (extra.size < 0x21 || leHex(extra, 0, 8) != id) return@mapNotNull null
+            Record(n, (leHex(extra, 8, 8) + leHex(extra, 0x10, 8)).lowercase(), extra[0x20].toInt())
+        }
+        val accounts = records.filter { it.type == ACCOUNT }
+        val device = records.firstOrNull { it.type == DEVICE }
+        // The user Ryujinx plays as (system/Profiles.json, last_opened); else the only one with a save.
+        val selected = Regex("\"last_opened\"\\s*:\\s*\"([0-9a-fA-F]{32})\"").find(env.readText("$base/system/Profiles.json").orEmpty())?.groupValues?.get(1)?.lowercase()
+        val account = if (selected != null) accounts.firstOrNull { it.user == selected } else accounts.singleOrNull()
+        if (account == null && accounts.isNotEmpty()) {
+            // Never another user's save: say why instead.
+            return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata",
+                if (selected != null) "Ryujinx hasn't made a save of this game for the user it plays as yet. Play it once in Ryujinx, then Fuse keeps it in step."
+                else "Ryujinx has saves of this game for more than one user. Open Ryujinx with your user once, then Fuse keeps that one in step."))
+        }
+        if (account == null && device == null) {
+            return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", "Play it once in Ryujinx so it makes its save; from then on Fuse keeps it in step."))
+        }
+        // A part Ryujinx has no record for yet is held by Fuse, never dropped and never put anywhere Ryujinx would misread.
+        val devicePlace = device?.let { "$saves/${it.folder}/0" } ?: env.held(q.game.id, "switch-device")
+        val root = account?.let { "$saves/${it.folder}/0" } ?: env.held(q.game.id, "switch-account")
+            ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", "Play it once in Ryujinx so it makes its save; from then on Fuse keeps it in step."))
+        return listOf(SaveSpot(SaveKind.SAVE, "switch.savedata", root = root, confidence = SaveConfidence.FOUND,
+            mounts = devicePlace?.let { mapOf(SwitchNand.DEVICE to it) }.orEmpty()))
     }
 
     /** Ryujinx's own folder (a `portable` one beside the program first), where its `bis` and `mods` are. */
