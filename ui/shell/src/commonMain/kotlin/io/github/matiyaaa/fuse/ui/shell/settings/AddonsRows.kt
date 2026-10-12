@@ -57,6 +57,9 @@ fun addonsRows(app: AppState): List<MenuAction> {
                             onSelect = { app.openStreaming() },
                         ))
                         add(MenuAction("streaming.add", "Add a Computer", FuseIcons.Plus, detail = "By its address on your network", onSelect = { app.addStreamHost() }))
+                        add(toggleRow("streaming.systems", "Show on Systems", FuseIcons.Grid, s.onSystems, "Moonlight as a system of its own, with every app your computers stream") { v ->
+                            app.store.updatePrefs { it.copy(streaming = it.streaming.copy(onSystems = v)) }
+                        })
                         add(app.choiceRow(
                             "streaming.wait", "Wait for a Computer to Wake", FuseIcons.Clock, s.wakeWaitSeconds.toString(),
                             listOf("45" to "45 seconds", "75" to "75 seconds", "120" to "2 minutes", "180" to "3 minutes"),

@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.2 is the <b>Native Update</b>: Steam and Decky in setup, guided controller setup, Fuse One for the whole household (with or without a host), the Fuse One Host in Docker, and Fuse Intelligence. Physical acceptance on SteamOS, the Steam Deck, the AYN Thor and macOS is still to come.</sub><br>
+<sub>0.4.2 is the <b>Native Update</b>: Steam and Decky in setup, guided controller setup, Fuse One for the whole household (with or without a host), the Fuse One Host in Docker, Fuse Intelligence, and Fuseline 4.1 measured to the nanosecond. Physical acceptance on SteamOS, the Steam Deck, the AYN Thor and macOS is still to come.</sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -399,7 +399,7 @@ Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 
 | Version | Name | What it brought |
 |---|---|---|
-| [0.4.2](docs/releases/0.4.2.md) | The Native Update | Steam and Decky in setup, guided and multiple controllers, Fuse One (profiles, saves, the Fuse Library and keys) with or without a host, the Fuse One Host in Docker, Fuse Intelligence, Steam achievements per account with rarity, apps your computers stream on the Library shelf, haptics on controllers, Fuse's own files in Storage, Fuseline 4.1 |
+| [0.4.2](docs/releases/0.4.2.md) | The Native Update | Steam and Decky in setup, guided and multiple controllers, Fuse One (profiles, saves, the Fuse Library and keys) with or without a host, the Fuse One Host in Docker, Fuse Intelligence, Steam achievements per account with rarity, apps your computers stream on the Library shelf, haptics on controllers, Fuse's own files in Storage, series that wear their games' art, Moonlight on the Systems page, Fuseline 4.1 |
 | [0.4.1](docs/releases/0.4.1.md) | The Connected Update | Fuse Library, causal profile settings, strong household identity, save import and display/desktop foundations; physical acceptance in progress |
 | [0.4.0](docs/releases/0.4.0.md) | The Speed Release | Fuseline 4: values worked out from their motion's formula when read, left alone until they could visibly change, resting while nobody looks; springs solved once for every value on them; a Motion Inspector in Developer options; heat and battery saver ease decoration on Android; fading colours that redraw instead of recomposing |
 | [0.3.8.2](docs/releases/0.3.8.2.md) | The Reach Update | Games folders read by their files whatever they are called; a background Fuse Sync host started again on the newest Fuse (the Fuse Library on the host); one or a few systems at the left of the Systems page; a Library list in the developer options |

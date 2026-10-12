@@ -209,7 +209,11 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   coming in is one frame callback. A value that moves visibly frame after frame now tells its
   readers through one shared pulse instead of a state of its own, so a frame of many moving values
   writes one state rather than one per value. Measured against Fuseline 4 (kept unchanged in the
-  tests), see docs/fuseline.md. Fuseline is publishable on its own as an SDK
+  tests) on every benchmark row, with each value's share of a frame in nanoseconds: 1000 springs
+  drawn in 160 µs a frame (from 336), 10000 in 2.3 ms (from 5.9), about 2× quicker at every refresh
+  rate from 30 to 240 Hz, and 1.5 ns a value for springs nobody reads. Of 111 rows, 4.1 is clearly
+  quicker on 45, 65 are within noise and 4 is quicker on one; all of it is in docs/fuseline.md.
+  Fuseline is publishable on its own as an SDK
   (io.github.matiyaaa.fuseline:fuseline:4.1.0); see docs/fuseline-sdk.md.
 - **Your game library, in setup.** Setup's library step offers Fuse One (recommended: the games on
   every device in your household, nothing else to run), RomM and Cartridge. With Fuse One on it
@@ -268,6 +272,17 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   last change. Steam is never closed for it: while it is open, the games go in when it next closes.
 - **Arrange the top line in place.** Hold a tab (touch, mouse or confirm) and it lifts; move it
   along with the D-pad or a drag, as Addons' tabs move, and put it down. Home stays first.
+- **Series wear their first game's art.** A series on Home and in Search shows its earliest game's
+  picture behind it, darkened so the words read, with that game's logo in place of the name when
+  one was found. No provider publishes a series' own logo, so the first game's stands for it; a
+  series whose games have no art yet keeps its own tile.
+- **Moonlight on the Systems page, if you want it.** Settings, Addons, Streaming, Show on Systems
+  puts Moonlight beside your systems, with every app your computers stream. It is off unless
+  turned on, and its options can take it off again.
+- **shadPS4 needs Vulkan, and Fuse says so.** Fuse Intelligence looks, by name only, for the Vulkan
+  library where Linux and Windows keep it; when shadPS4 is installed and none is there, its check
+  says to install the graphics driver's Vulkan support instead of calling it ready. A Flatpak
+  brings its own, so it isn't asked.
 
 ## Changed
 
@@ -360,3 +375,5 @@ the apps entered for each computer; it doesn't discover them). On Linux Fuse doe
 controllers' motors.
 The Fuse One Host image was built and its installer run in a container; pairing real Android,
 Windows and macOS clients with it was not tested.
+Also not verified on hardware: shadPS4's Vulkan check on a machine without Vulkan, and Moonlight on
+the Systems page with real computers. Fuseline 4.1 was measured on a Linux computer only.

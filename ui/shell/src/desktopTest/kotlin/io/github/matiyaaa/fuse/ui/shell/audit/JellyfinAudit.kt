@@ -81,6 +81,32 @@ internal fun AuditDriver.jellyfinScreens() {
             tap(PadButton.B)
         }
 
+        scenario("jellyfin", "setting it up on its own page") {
+            useLibrary()
+            openSettings()
+            focusText("Addons")
+            tap(PadButton.DPAD_RIGHT)
+            waitFor("Your films, shows and music, played in Fuse Player")
+            tapText("Jellyfin")
+            waitFor("Server and playback")
+            tapText("Use Jellyfin")
+            waitFor("Not set up")
+            tapText("Server and playback")
+            waitFor("Set Up Jellyfin")
+            shoot("not signed in: Set Up Jellyfin first")
+            tapText("Set Up Jellyfin")
+            waitFor("Choose your server, or type its address")
+            shoot("the setup page: servers on this network, or an address", 1_500)
+            // An address that answers: signing in comes next on the same page.
+            libraryStore.updatePrefs { jellyfinOn(it) }
+            tapText("Type an Address")
+            // The field opens with the address already kept; Next tries it.
+            pumpUntil("the address field", 5_000) { router.textInput != null }
+            router.textInput?.submit()
+            waitFor("Sign in with your Jellyfin account")
+            shoot("the server found: Sign In", 1_200)
+        }
+
         scenario("jellyfin", "addons home") {
             useJellyfin { it.copy(cartridgeEnabled = true) }
             tab(Destination.CARTRIDGE)

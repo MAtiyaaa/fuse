@@ -139,4 +139,21 @@ class FuseIntelligenceTest {
         val v = brain().verify(ppsspp, null)
         assertEquals(CheckState.NOT_YET, v[Check.EXECUTABLE]?.state)
     }
+
+    @Test
+    fun anEmulatorThatDrawsOnlyWithVulkanNeedsAVulkanLibrary() {
+        val shad = emu("linux.shadps4", "shadPS4", "/home/mo/Apps/Shadps4-qt.AppImage", "AppImage")
+        disk.programs["/home/mo/Apps/Shadps4-qt.AppImage"] = 10
+        disk.dirs += "/usr/lib"
+        val without = brain().verify(shad, null).checks.single { it.check == Check.EXECUTABLE }
+        assertEquals(CheckState.NOT_YET, without.state)
+        assertTrue("Vulkan" in without.evidence)
+        // Looked for by name only; once it is there, it can run.
+        disk.programs["/usr/lib/libvulkan.so.1"] = 1
+        assertEquals(CheckState.DONE, brain().verify(shad, null).checks.single { it.check == Check.EXECUTABLE }.state)
+        // Others don't need it.
+        disk.programs.remove("/usr/lib/libvulkan.so.1")
+        disk.programs["/usr/bin/PPSSPPSDL"] = 50
+        assertEquals(CheckState.DONE, brain().verify(ppsspp, null).checks.single { it.check == Check.EXECUTABLE }.state)
+    }
 }

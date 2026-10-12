@@ -69,6 +69,7 @@ out).
 | `motion` | How much moves | `reduced`, `minimal`, `standard`, `enhanced` |
 | `sound` | Navigation sounds | `off`, `soft`, `click`, `chime` |
 | `quickMenu` | How the quick menu's tiles and widgets are drawn | `soft` (faint tint), `solid` (raised panel colour), `outlined` (edges only), `glass` (a light across the top) |
+| `widgets` | How Home's widgets are drawn | `lit` (the panel lit from a corner in the widget's colour), `tinted` (washed in its own colour), `glass` (frosted over the room, a light across the top) |
 | `glass` | Frosted panels | `true`, `false`, or `{ "enabled", "blur" (0 to 48), "opacity" (0.3 to 1) }` |
 | `crt` | The CRT effect | `true`, `false`, or `{ "enabled", "scanlines" (0 to 0.6), "bloom", "curvature", "chromatic", "vignette" (0 to 1) }` |
 

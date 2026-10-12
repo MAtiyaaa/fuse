@@ -714,6 +714,8 @@ data class StreamingSettings(
     val games: Map<String, StreamPick> = emptyMap(),
     /** Systems whose games stream from a computer (by its id) unless a game chooses otherwise. */
     val systems: Map<String, String> = emptyMap(),
+    /** Moonlight as a system of its own on the Systems page (never by default), opening the computers' apps. */
+    val onSystems: Boolean = false,
 )
 
 /** A game streamed from [host] (a [StreamHostSettings.id]) as [app] there; empty: the app named as the game. */

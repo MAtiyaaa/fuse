@@ -482,7 +482,7 @@ fun SystemTile(
     val accent = card.platform.accent.toColor()
     Tile(
         selected = selected,
-        label = "${card.platform.name}, ${gamesText(card.gameCount)}",
+        label = "${card.platform.name}, ${card.countText()}",
         glow = accent,
         modifier = modifier.size(size),
         onClick = onClick,
@@ -550,7 +550,7 @@ private fun PackCard(card: PlatformCard, accent: Color, large: Boolean) {
                 FText(card.platform.shortName, if (large) Fuse.type.hero else Fuse.type.title, color = c.onArt, maxLines = 1)
             }
             if (large || cardHeight > ROOMY_CARD) {
-                FText(gamesText(card.gameCount), Fuse.type.caption.copy(fontFeatureSettings = "tnum"), color = c.onArtMuted, maxLines = 1)
+                FText(card.countText(), Fuse.type.caption.copy(fontFeatureSettings = "tnum"), color = c.onArtMuted, maxLines = 1)
             }
         }
         SystemWarning(card, Modifier.align(Alignment.TopEnd))
@@ -656,7 +656,7 @@ fun SystemGlyph(card: PlatformCard, accent: Color, large: Boolean = false, maker
                     maxLines = 1,
                 )
                 if (roomy) {
-                    FText(gamesText(card.gameCount), Fuse.type.caption.copy(fontFeatureSettings = "tnum"), color = c.onArtMuted, maxLines = 1)
+                    FText(card.countText(), Fuse.type.caption.copy(fontFeatureSettings = "tnum"), color = c.onArtMuted, maxLines = 1)
                 }
             }
         }
@@ -666,6 +666,10 @@ fun SystemGlyph(card: PlatformCard, accent: Color, large: Boolean = false, maker
 
 /** "1 game", "12 games". */
 internal fun gamesText(count: Int): String = "$count ${if (count == 1) "game" else "games"}"
+
+/** A system's count: its games, or for Moonlight's tile on the Systems page, the apps it streams. */
+internal fun PlatformCard.countText(): String =
+    if (platform.id == io.github.matiyaaa.fuse.ui.shell.systems.STREAM_SYSTEM) "$gameCount ${if (gameCount == 1) "app" else "apps"}" else gamesText(gameCount)
 
 /** An Android app or Linux application: its icon centred on a soft squircle. */
 @Composable

@@ -273,6 +273,29 @@ value and each frame, whether that frame needs the value at all.
   stepped, curves shared, values woken by a read, and when the next value is due; for each value,
   how the engine treats it. Fuse shows it in Developer options ("Motion inspector").
 
+## Fuseline 4.1
+
+Fuseline 4.1 keeps every motion of Fuseline 4, to the frame, and changes how a moving value tells
+Compose it changed. Fuseline 4 gave every value a version of its own and bumped it whenever the
+value moved far enough to be seen: a thousand springs in flight meant a thousand snapshot writes a
+frame, and a thousand snapshot observers for Compose to look up.
+
+- **The pulse.** A value that moves visibly frame after frame (two visible changes in a row) stops
+  writing its own version and joins its driver's pulse instead: one integer state per driver, bumped
+  once a frame however many values ride it (`FrameDriver.pulse`). Its readers read the pulse in
+  place of the value's own version, so they still run again exactly on the frames it moved, and
+  Compose has one write to apply instead of one per value.
+- **Leaving it.** A value leaves the pulse after 4 calm frames in a row (`CALM_FRAMES`, so a slow
+  value doesn't thrash in and out), on arriving, when it is frozen, and on any change made from
+  outside its motion (a retarget, a seek, a gesture taking it), which writes its own version again
+  so a reader is never a frame late.
+- **Exactly the same motion.** Fuseline 4 is kept in the tests exactly as it shipped (package `v4`).
+  `Fuseline4EquivalenceTest` now runs Fuseline 4.1 against 3.1 as before, and counts each value's
+  pulsed runs: a value that has ridden the pulse gets the same room as one woken from resting
+  unread, a reader showing a place up to two eighths of a threshold from what 3.1 would show (for
+  a position, an eighth of a pixel), never more; positions, velocities, targets and finishes agree
+  as they did.
+
 ## Debugging
 
 - `MotionTrace.enabled = true` records starts, retargets, seeks, gesture takeovers, releases,
@@ -321,6 +344,193 @@ They write `ui/fuseline/build/motion-bench.md` and `ui/fuseline/build/ui-motion-
 allocations, the spread of frame times (p50 to worst) and how often each engine asked for another
 frame alongside the times below. `-Pfuse.bench.rounds=N` sets the rounds and
 `-Pfuse.bench.only=text` runs only the cases whose name contains the text.
+
+### Fuseline 4.1 against Fuseline 4
+
+Measured the same way (below), 11 rounds, every row run on both, with each value's share of the
+frame in nanoseconds where a row moves many values. Of 111 rows, Fuseline 4.1 is clearly first on
+45, 65 are unresolved (within this machine's run-to-run noise) and Fuseline 4 is clearly first on 1.
+
+| Where it shows | Fuseline 4.1 | Fuseline 4 | Speedup | Per value |
+|---|---|---|---|---|
+| 10000 springs, drawn | 2276 µs | 5926 µs | 2.60× | 228 ns |
+| 10000 springs, read | 950 µs | 1275 µs | 1.34× | 95 ns |
+| 1000 springs, drawn | 160 µs | 336 µs | 2.10× | 160 ns |
+| 1000 vector springs, drawn | 229 µs | 446 µs | 1.95× | 229 ns |
+| 1000 values, mixed motions, drawn | 125 µs | 251 µs | 2.01× | 125 ns |
+| 1000 springs seen again after 5 s unseen | 143 µs | 316 µs | 2.20× | 143 ns |
+| 1000 springs retargeted every frame, drawn | 220 µs | 417 µs | 1.90× | 220 ns |
+| 1000 springs, 30 to 240 Hz and irregular frames | 137 to 177 µs | 300 to 344 µs | 1.80 to 2.36× | 137 to 177 ns |
+| a busy screen for 10 s | 50 µs | 78 µs | 1.55× | |
+| 1000 springs, unread | 1.5 µs | 1.5 µs | level | 1.5 ns |
+
+Plainly:
+
+- **The thousands.** Every Fuseline 4 row in the thousands of microseconds was 10000 springs moving
+  at once; drawn, it falls from 5.9 ms to 2.3 ms a frame. It stays above a millisecond because
+  every one of the ten thousand values visibly moves every frame and each still has to be solved
+  and read (about 228 ns each, most of it Compose reading the value back). Nothing in Fuse moves
+  that many at once; a page of tiles moves hundreds.
+- **The one row Fuseline 4 wins.** 100 vector springs given a new target every frame and never
+  read: 23.3 µs against 20.6 µs. A retarget from outside the motion leaves the pulse and writes the
+  value's own version, so a value retargeted every frame pays for both; read or drawn, the same
+  work is level or quicker on 4.1.
+- **Memory** is the same to the byte on almost every row; starting and stopping many values costs up
+  to 1% more (the pulse's bookkeeping).
+- **Whole interface paths** (`UiMotionBenchmark`: 120 tiles composed about 2.2 ms, rapid tab
+  switching about 2.8 ms) were not re-run for 4.1. Most of those frames are Compose composing and
+  laying out, which no motion engine changes; their numbers below are Fuseline 4's.
+
+<details>
+<summary>Every row, Fuseline 4.1 against Fuseline 4</summary>
+
+#### Values in motion: time per frame
+
+| Test | Fuseline 4.1 | Fuseline 4 | Reduction vs 4 | Speedup vs 4 | 4.1 per value | Winner |
+|---|---|---|---|---|---|---|
+| 1 tweens, drawn | 1.24 µs | 1.18 µs | -5.2% | 0.95× |  | unresolved (Fuseline 4 ahead, intervals overlap) |
+| 1 tweens, read | 1.34 µs | 1.25 µs | -7.5% | 0.93× |  | unresolved (Fuseline 4 ahead, intervals overlap) |
+| 1 tweens, unread | 0.94 µs | 0.92 µs | -3.0% | 0.97× |  | unresolved (Fuseline 4 ahead, intervals overlap) |
+| 1 springs, drawn | 1.61 µs | 1.63 µs | 1.0% | 1.01× |  | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 1 springs, read | 1.29 µs | 1.31 µs | 1.9% | 1.02× |  | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 1 springs, unread | 1.87 µs | 1.91 µs | 1.7% | 1.02× |  | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 1 vector springs, drawn | 1.33 µs | 1.15 µs | -16.1% | 0.86× |  | unresolved (Fuseline 4 ahead, intervals overlap) |
+| 1 vector springs, read | 1.42 µs | 1.33 µs | -6.5% | 0.94× |  | unresolved (Fuseline 4 ahead, intervals overlap) |
+| 1 vector springs, unread | 0.69 µs | 0.70 µs | 1.6% | 1.02× |  | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 1 colours, drawn | 1.34 µs | 1.40 µs | 3.9% | 1.04× |  | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 1 colours, read | 1.25 µs | 1.25 µs | -0.4% | 1.00× |  | unresolved (Fuseline 4 ahead, intervals overlap) |
+| 1 colours, unread | 1.67 µs | 1.80 µs | 7.1% | 1.08× |  | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 100 tweens, drawn | 16.08 µs | 14.20 µs | -13.2% | 0.88× | 160.8 ns | unresolved (Fuseline 4 ahead, intervals overlap) |
+| 100 tweens, read | 8.96 µs | 8.92 µs | -0.5% | 1.00× | 89.6 ns | unresolved (Fuseline 4 ahead, intervals overlap) |
+| 100 tweens, unread | 1.64 µs | 1.61 µs | -1.5% | 0.98× | 16.4 ns | unresolved (Fuseline 4 ahead, intervals overlap) |
+| 100 springs, drawn | 15.54 µs | 26.50 µs | 41.4% | 1.71× | 155.4 ns | Fuseline 4.1 |
+| 100 springs, read | 7.36 µs | 9.37 µs | 21.5% | 1.27× | 73.6 ns | Fuseline 4.1 |
+| 100 springs, unread | 1.25 µs | 1.18 µs | -6.2% | 0.94× | 12.5 ns | unresolved (Fuseline 4 ahead, intervals overlap) |
+| 100 vector springs, drawn | 34.34 µs | 52.21 µs | 34.2% | 1.52× | 343.4 ns | Fuseline 4.1 |
+| 100 vector springs, read | 19.68 µs | 22.49 µs | 12.5% | 1.14× | 196.8 ns | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 100 vector springs, unread | 1.23 µs | 1.16 µs | -6.3% | 0.94× | 12.3 ns | unresolved (Fuseline 4 ahead, intervals overlap) |
+| 100 colours, drawn | 22.45 µs | 24.47 µs | 8.3% | 1.09× | 224.5 ns | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 100 colours, read | 15.11 µs | 16.66 µs | 9.3% | 1.10× | 151.1 ns | Fuseline 4.1 |
+| 100 colours, unread | 1.28 µs | 1.28 µs | 0.0% | 1.00× | 12.8 ns | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 1000 tweens, drawn | 179.68 µs | 171.95 µs | -4.5% | 0.96× | 179.7 ns | unresolved (Fuseline 4 ahead, intervals overlap) |
+| 1000 tweens, read | 81.45 µs | 82.57 µs | 1.4% | 1.01× | 81.4 ns | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 1000 tweens, unread | 6.29 µs | 5.99 µs | -5.0% | 0.95× | 6.3 ns | unresolved (Fuseline 4 ahead, intervals overlap) |
+| 1000 springs, drawn | 160.17 µs | 335.80 µs | 52.3% | 2.10× | 160.2 ns | Fuseline 4.1 |
+| 1000 springs, read | 67.25 µs | 94.38 µs | 28.7% | 1.40× | 67.3 ns | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 1000 springs, unread | 1.53 µs | 1.49 µs | -2.3% | 0.98× | 1.5 ns | unresolved (Fuseline 4 ahead, intervals overlap) |
+| 1000 vector springs, drawn | 228.97 µs | 445.78 µs | 48.6% | 1.95× | 229.0 ns | Fuseline 4.1 |
+| 1000 vector springs, read | 126.20 µs | 190.94 µs | 33.9% | 1.51× | 126.2 ns | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 1000 vector springs, unread | 2.96 µs | 3.02 µs | 2.1% | 1.02× | 3.0 ns | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 1000 colours, drawn | 295.93 µs | 308.57 µs | 4.1% | 1.04× | 295.9 ns | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 1000 colours, read | 157.73 µs | 170.70 µs | 7.6% | 1.08× | 157.7 ns | Fuseline 4.1 |
+| 1000 colours, unread | 1.88 µs | 1.87 µs | -0.7% | 0.99× | 1.9 ns | unresolved (Fuseline 4 ahead, intervals overlap) |
+
+#### Scale and kinds of motion: time per frame
+
+| Test | Fuseline 4.1 | Fuseline 4 | Reduction vs 4 | Speedup vs 4 | 4.1 per value | Winner |
+|---|---|---|---|---|---|---|
+| 10000 springs, drawn | 2276.13 µs | 5925.76 µs | 61.6% | 2.60× | 227.6 ns | Fuseline 4.1 |
+| 10000 springs, read | 950.26 µs | 1275.20 µs | 25.5% | 1.34× | 95.0 ns | Fuseline 4.1 |
+| 10000 springs, unread | 34.51 µs | 33.59 µs | -2.7% | 0.97× | 3.5 ns | unresolved (Fuseline 4 ahead, intervals overlap) |
+| 1000 unrelated springs, staggered, drawn | 24.38 µs | 35.71 µs | 31.7% | 1.46× | 24.4 ns | Fuseline 4.1 |
+| 1000 unrelated springs, staggered, read | 43.69 µs | 40.86 µs | -6.9% | 0.94× | 43.7 ns | unresolved (Fuseline 4 ahead, intervals overlap) |
+| 1000 unrelated springs, staggered, unread | 6.45 µs | 6.59 µs | 2.1% | 1.02× | 6.5 ns | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 1000 springs in their tails, drawn | 0.15 µs | 0.10 µs | -48.7% | 0.67× | 0.1 ns | unresolved (Fuseline 4 ahead, intervals overlap) |
+| 1000 springs in their tails, read | 20.61 µs | 23.13 µs | 10.9% | 1.12× | 20.6 ns | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 1000 springs in their tails, unread | 0.39 µs | 0.39 µs | -1.2% | 0.99× | 0.4 ns | unresolved (Fuseline 4 ahead, intervals overlap) |
+| 1000 values, mixed motions, drawn | 125.28 µs | 251.28 µs | 50.1% | 2.01× | 125.3 ns | Fuseline 4.1 |
+| 1000 values, mixed motions, read | 61.42 µs | 89.94 µs | 31.7% | 1.46× | 61.4 ns | Fuseline 4.1 |
+| 1000 values, mixed motions, unread | 2.73 µs | 4.53 µs | 39.8% | 1.66× | 2.7 ns | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 1000 springs seen again after 5 s unseen | 143.32 µs | 315.86 µs | 54.6% | 2.20× | 143.3 ns | Fuseline 4.1 |
+
+#### Retargeting, gestures, decay: time per frame
+
+| Test | Fuseline 4.1 | Fuseline 4 | Reduction vs 4 | Speedup vs 4 | 4.1 per value | Winner |
+|---|---|---|---|---|---|---|
+| 100 springs retargeted once, drawn | 6.84 µs | 11.13 µs | 38.5% | 1.63× | 68.4 ns | Fuseline 4.1 |
+| 100 springs retargeted once, read | 5.98 µs | 7.23 µs | 17.3% | 1.21× | 59.8 ns | Fuseline 4.1 |
+| 100 springs retargeted once, unread | 0.81 µs | 0.88 µs | 7.5% | 1.08× | 8.1 ns | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 100 springs retargeted every frame, drawn | 21.94 µs | 33.70 µs | 34.9% | 1.54× | 219.4 ns | Fuseline 4.1 |
+| 100 springs retargeted every frame, read | 14.87 µs | 18.22 µs | 18.4% | 1.23× | 148.7 ns | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 100 springs retargeted every frame, unread | 17.52 µs | 17.27 µs | -1.5% | 0.99× | 175.2 ns | unresolved (Fuseline 4 ahead, intervals overlap) |
+| 1000 springs retargeted every frame, drawn | 220.21 µs | 417.42 µs | 47.2% | 1.90× | 220.2 ns | Fuseline 4.1 |
+| 1000 springs retargeted every frame, read | 131.88 µs | 175.03 µs | 24.6% | 1.33× | 131.9 ns | Fuseline 4.1 |
+| 1000 springs retargeted every frame, unread | 206.17 µs | 220.58 µs | 6.5% | 1.07× | 206.2 ns | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 100 vector springs retargeted every frame, drawn | 31.12 µs | 43.06 µs | 27.7% | 1.38× | 311.2 ns | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 100 vector springs retargeted every frame, read | 20.50 µs | 22.80 µs | 10.1% | 1.11× | 205.0 ns | Fuseline 4.1 |
+| 100 vector springs retargeted every frame, unread | 23.26 µs | 20.61 µs | -12.9% | 0.89× | 232.6 ns | Fuseline 4 |
+| 1000 vector springs retargeted every frame, drawn | 332.52 µs | 478.00 µs | 30.4% | 1.44× | 332.5 ns | Fuseline 4.1 |
+| 1000 vector springs retargeted every frame, read | 224.73 µs | 246.88 µs | 9.0% | 1.10× | 224.7 ns | Fuseline 4.1 |
+| 1000 vector springs retargeted every frame, unread | 365.75 µs | 283.71 µs | -28.9% | 0.78× | 365.8 ns | unresolved (Fuseline 4 ahead, intervals overlap) |
+| tween velocity, 1000 readings | 46.66 µs | 46.12 µs | -1.2% | 0.99× |  | unresolved (Fuseline 4 ahead, intervals overlap) |
+| 1 decays, drawn | 1.44 µs | 1.49 µs | 3.8% | 1.04× |  | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 1 decays, read | 1.12 µs | 1.12 µs | -0.3% | 1.00× |  | unresolved (Fuseline 4 ahead, intervals overlap) |
+| 1 decays, unread | 0.98 µs | 1.02 µs | 4.5% | 1.05× |  | Fuseline 4.1 |
+| 100 decays, drawn | 15.44 µs | 27.04 µs | 42.9% | 1.75× | 154.4 ns | Fuseline 4.1 |
+| 100 decays, read | 7.25 µs | 11.04 µs | 34.4% | 1.52× | 72.5 ns | Fuseline 4.1 |
+| 100 decays, unread | 1.08 µs | 1.10 µs | 1.5% | 1.02× | 10.8 ns | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 100 values tracking a gesture, drawn | 24.77 µs | 25.02 µs | 1.0% | 1.01× | 247.7 ns | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 100 values tracking a gesture, read | 9.33 µs | 9.24 µs | -0.9% | 0.99× | 93.3 ns | unresolved (Fuseline 4 ahead, intervals overlap) |
+| 100 values tracking a gesture, unread | 12.86 µs | 12.98 µs | 1.0% | 1.01× | 128.6 ns | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+
+#### Transitions and timelines: time per frame
+
+| Test | Fuseline 4.1 | Fuseline 4 | Reduction vs 4 | Speedup vs 4 | 4.1 per value | Winner |
+|---|---|---|---|---|---|---|
+| tab transitions, drawn | 2.64 µs | 2.90 µs | 9.0% | 1.10× |  | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| tab transitions, read | 1.97 µs | 1.97 µs | -0.4% | 1.00× |  | unresolved (Fuseline 4 ahead, intervals overlap) |
+| tab transitions, unread | 1.54 µs | 1.53 µs | -0.2% | 1.00× |  | unresolved (Fuseline 4 ahead, intervals overlap) |
+| tab changes every 3 frames, drawn | 2.89 µs | 3.90 µs | 25.9% | 1.35× |  | Fuseline 4.1 |
+| tab changes every 3 frames, read | 2.38 µs | 2.58 µs | 7.8% | 1.08× |  | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| tab changes every 3 frames, unread | 1.96 µs | 1.97 µs | 0.4% | 1.00× |  | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| tab reversal every 4 frames, drawn | 2.32 µs | 2.75 µs | 15.7% | 1.19× |  | Fuseline 4.1 |
+| tab reversal every 4 frames, read | 1.81 µs | 1.99 µs | 8.8% | 1.10× |  | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| tab reversal every 4 frames, unread | 1.50 µs | 1.56 µs | 3.8% | 1.04× |  | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| timeline, 20 tracks | 0.51 µs | 0.57 µs | 11.0% | 1.12× |  | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| timeline seek, 20 tracks | 0.85 µs | 0.83 µs | -2.6% | 0.97× |  | unresolved (Fuseline 4 ahead, intervals overlap) |
+| timeline reverse, 20 tracks | 0.85 µs | 0.82 µs | -3.3% | 0.97× |  | unresolved (Fuseline 4 ahead, intervals overlap) |
+
+#### Scheduling, start and stop: time per frame
+
+| Test | Fuseline 4.1 | Fuseline 4 | Reduction vs 4 | Speedup vs 4 | 4.1 per value | Winner |
+|---|---|---|---|---|---|---|
+| driver churn, 10 | 4.59 µs | 4.65 µs | 1.3% | 1.01× |  | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| driver churn, 100 | 34.67 µs | 34.61 µs | -0.2% | 1.00× |  | unresolved (Fuseline 4 ahead, intervals overlap) |
+| driver churn, 1000 | 357.81 µs | 373.91 µs | 4.3% | 1.04× |  | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 1000 springs started and cancelled | 573.48 µs | 597.93 µs | 4.1% | 1.04× | 573.5 ns | unresolved (Fuseline 4.1 ahead, intervals overlap) |
+| 1000 springs created, run and dropped | 80.36 µs | 80.17 µs | -0.2% | 1.00× | 80.4 ns | unresolved (Fuseline 4 ahead, intervals overlap) |
+| idle, 1000 settled values | 0.07 µs | 0.07 µs | -0.9% | 0.99× |  | unresolved (Fuseline 4 ahead, intervals overlap) |
+
+#### Refresh rates and irregular frames: time per frame
+
+| Test | Fuseline 4.1 | Fuseline 4 | Reduction vs 4 | Speedup vs 4 | 4.1 per value | Winner |
+|---|---|---|---|---|---|---|
+| 1000 springs at 30 Hz | 163.07 µs | 300.54 µs | 45.7% | 1.84× | 163.1 ns | Fuseline 4.1 |
+| 1000 springs at 40 Hz | 160.81 µs | 340.90 µs | 52.8% | 2.12× | 160.8 ns | Fuseline 4.1 |
+| 1000 springs at 45 Hz | 145.66 µs | 343.83 µs | 57.6% | 2.36× | 145.7 ns | Fuseline 4.1 |
+| 1000 springs at 50 Hz | 150.39 µs | 301.62 µs | 50.1% | 2.01× | 150.4 ns | Fuseline 4.1 |
+| 1000 springs at 60 Hz | 145.88 µs | 304.94 µs | 52.2% | 2.09× | 145.9 ns | Fuseline 4.1 |
+| 1000 springs at 72 Hz | 153.62 µs | 305.09 µs | 49.6% | 1.99× | 153.6 ns | Fuseline 4.1 |
+| 1000 springs at 75 Hz | 142.98 µs | 312.27 µs | 54.2% | 2.18× | 143.0 ns | Fuseline 4.1 |
+| 1000 springs at 90 Hz | 177.08 µs | 318.10 µs | 44.3% | 1.80× | 177.1 ns | Fuseline 4.1 |
+| 1000 springs at 100 Hz | 143.01 µs | 302.34 µs | 52.7% | 2.11× | 143.0 ns | Fuseline 4.1 |
+| 1000 springs at 120 Hz | 144.80 µs | 303.64 µs | 52.3% | 2.10× | 144.8 ns | Fuseline 4.1 |
+| 1000 springs at 125 Hz | 137.18 µs | 304.29 µs | 54.9% | 2.22× | 137.2 ns | Fuseline 4.1 |
+| 1000 springs at 144 Hz | 149.69 µs | 317.05 µs | 52.8% | 2.12× | 149.7 ns | Fuseline 4.1 |
+| 1000 springs at 165 Hz | 149.72 µs | 326.55 µs | 54.2% | 2.18× | 149.7 ns | Fuseline 4.1 |
+| 1000 springs at 240 Hz | 140.17 µs | 321.12 µs | 56.3% | 2.29× | 140.2 ns | Fuseline 4.1 |
+| 1000 springs, jittered 120 Hz | 147.06 µs | 315.56 µs | 53.4% | 2.15× | 147.1 ns | Fuseline 4.1 |
+| 1000 springs, dropped frames | 150.92 µs | 327.56 µs | 53.9% | 2.17× | 150.9 ns | Fuseline 4.1 |
+| 1000 springs, a 500 ms stall every 2 s | 141.59 µs | 322.96 µs | 56.2% | 2.28× | 141.6 ns | Fuseline 4.1 |
+| 1000 springs, 60, 120 and 30 Hz in turn | 150.76 µs | 313.08 µs | 51.8% | 2.08× | 150.8 ns | Fuseline 4.1 |
+
+#### Sustained work: time per frame
+
+| Test | Fuseline 4.1 | Fuseline 4 | Reduction vs 4 | Speedup vs 4 | 4.1 per value | Winner |
+|---|---|---|---|---|---|---|
+| a busy screen for 10 s | 50.46 µs | 78.04 µs | 35.3% | 1.55× |  | Fuseline 4.1 |
+
+</details>
 
 ### Method
 
