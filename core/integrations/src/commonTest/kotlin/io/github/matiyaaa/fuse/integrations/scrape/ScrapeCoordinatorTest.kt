@@ -37,6 +37,7 @@ class ScrapeCoordinatorTest {
         private val results: ApiResult<List<ProviderGame>>,
         private val art: List<ArtworkOption> = emptyList(),
         override val artworkKinds: Set<MediaKind> = MediaKind.entries.toSet(),
+        override val allowance: Allowance? = null,
     ) : ScrapeSource {
         var searches = 0
         var lookups = 0
@@ -496,5 +497,25 @@ class ScrapeCoordinatorTest {
         assertIs<ScrapeOutcome.Accepted>(picked)
         assertEquals(listOf("https://sgdb/square.png"), picked.artwork.map { it.url })
         assertEquals("11", picked.links[ScrapeProviderId.STEAMGRIDDB])
+    }
+
+    @Test
+    fun aProviderRunningLowIsKeptForGamesAPersonOpens() = runTest {
+        val found = ApiResult.Success(listOf(game(ScrapeProviderId.THEGAMESDB, "1", "Super Metroid")))
+        val low = StubSource(ScrapeProviderId.THEGAMESDB, providesMetadata = true, results = found, allowance = Allowance(remaining = 40, total = 3000))
+        val free = StubSource(ScrapeProviderId.LIBRETRO, providesMetadata = false, results = ApiResult.Success(listOf(game(ScrapeProviderId.LIBRETRO, "x", "Super Metroid"))),
+            art = listOf(art(ScrapeProviderId.LIBRETRO, MediaKind.BOXART, "https://thumbnails/x.png")))
+        val coordinator = ScrapeCoordinator(listOf(low, free))
+        // Looking by itself, Fuse doesn't ask it, says why, and goes on with the free thumbnails.
+        val background = coordinator.scrape(request(ScrapeProviderId.THEGAMESDB, ScrapeProviderId.LIBRETRO, kinds = setOf(MediaKind.BOXART)).copy(demand = ScrapeDemand.BACKGROUND))
+        assertEquals(0, low.searches)
+        assertTrue(background.errors.any { it.provider == ScrapeProviderId.THEGAMESDB && "kept for games you open" in it.failure.message })
+        // A game a person opens still gets it.
+        coordinator.scrape(request(ScrapeProviderId.THEGAMESDB, kinds = setOf(MediaKind.BOXART)))
+        assertEquals(1, low.searches)
+        // Plenty left, or a provider that doesn't say: asked as before.
+        assertTrue(!Allowance(remaining = 2000, total = 3000).low)
+        assertTrue(!Allowance(remaining = 1, total = null).low)
+        assertTrue(Allowance(remaining = 600, total = 3000).low)
     }
 }

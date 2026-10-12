@@ -497,10 +497,15 @@ internal class DefaultMediaOps(
      * Finds art and details for games a server has and Fuse shows ([RemoteGames]), first in [ids]
      * first, with the library's sources and order: what is found is kept, and what the sources
      * didn't have is remembered as for the library, so a game is looked for once, not every time
-     * the list is shown. Runs beside any library fill, one game at a time.
+     * the list is shown. Runs beside any library fill, one game at a time. A game a person has
+     * open ([visible]) is looked for at once, and asked as such of providers running low.
      */
-    fun fillRemote(ids: List<GameId>) {
+    fun fillRemote(ids: List<GameId>, visible: Boolean = false) {
         if (ids.isEmpty() || !ctx.settings.value.scraping.autoFill) return
+        if (visible) {
+            ids.distinct().forEach { id -> ctx.scope.launch { runCatching { fillRemoteOne(id, visible = true) } } }
+            return
+        }
         val fresh = ids.distinct().filter { it !in remoteQueued.value }
         if (fresh.isEmpty()) return
         remoteQueued.update { it + fresh }
@@ -509,14 +514,7 @@ internal class DefaultMediaOps(
         remoteWorker = ctx.scope.launch {
             for (id in remoteQueue) {
                 try {
-                    val g = gameOf(id) ?: continue
-                    if (!ctx.data.scopedSettings.resolve(ScopedSettings.ScrapeEnabled, g.platformId, g.id).value) continue
-                    val (configured, coordinator) = coordinator()
-                    val priority = ctx.settings.value.scraping.effectiveOrder()
-                    val kinds = FILLABLE intersect coordinator.availableKinds(priority, configured)
-                    val details = coordinator.providesMetadata(priority, configured)
-                    if (kinds.isEmpty() && !details) continue
-                    fillOne(g, FillJob(MediaFillMode.FILL_MISSING, kinds, platform = null, game = null, everything = false, auto = true), kinds, details, configured)
+                    fillRemoteOne(id, visible = false)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Throwable) {
@@ -526,6 +524,17 @@ internal class DefaultMediaOps(
                 }
             }
         }
+    }
+
+    private suspend fun fillRemoteOne(id: GameId, visible: Boolean) {
+        val g = gameOf(id) ?: return
+        if (!ctx.data.scopedSettings.resolve(ScopedSettings.ScrapeEnabled, g.platformId, g.id).value) return
+        val (configured, coordinator) = coordinator()
+        val priority = ctx.settings.value.scraping.effectiveOrder()
+        val kinds = FILLABLE intersect coordinator.availableKinds(priority, configured)
+        val details = coordinator.providesMetadata(priority, configured)
+        if (kinds.isEmpty() && !details) return
+        fillOne(g, FillJob(MediaFillMode.FILL_MISSING, kinds, platform = null, game = null, everything = false, auto = true, visible = visible), kinds, details, configured)
     }
 
     override fun cancelFill() {
@@ -658,7 +667,11 @@ internal class DefaultMediaOps(
         val needed = if (job.mode == MediaFillMode.FILL_MISSING) plan.fetch intersect MediaKind.needed(kinds) else plan.fetch
         val wantDetails = detailSources && job.wantsDetails && game.metadata.lacksDetails()
         if (needed.isEmpty() && !wantDetails) return GameFill()
-        val (request, coordinator) = request(game, plan.fetch, metadata = true, collectAll = false, demand = if (job.game != null) io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand.NEW_GAME else io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand.BACKGROUND, fresh = job.game != null)
+        val (request, coordinator) = request(game, plan.fetch, metadata = true, collectAll = false, demand = when {
+            job.game != null -> io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand.NEW_GAME
+            job.visible -> io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand.VISIBLE
+            else -> io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand.BACKGROUND
+        }, fresh = job.game != null)
         val remember = job.remembers
         val key = game.id.value.toString()
         if (job.game != null) ctx.data.cache.remove(FILL_TRIED, key)
@@ -826,6 +839,8 @@ private data class FillJob(
     val auto: Boolean = false,
     /** Also the games Fuse shows without having them (RomM's, other devices'). */
     val remote: Boolean = false,
+    /** For a game a person has open: asked of providers as such, even of one running low. */
+    val visible: Boolean = false,
 ) {
     /** A bulk "fill missing" remembers what it didn't find, so the next one can skip the game. */
     val remembers: Boolean get() = game == null && mode == MediaFillMode.FILL_MISSING

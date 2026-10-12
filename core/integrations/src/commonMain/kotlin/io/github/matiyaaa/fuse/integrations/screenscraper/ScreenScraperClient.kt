@@ -296,7 +296,13 @@ class ScreenScraperClient(
         }
     }
 
+    /** The quotas ScreenScraper reported with its last answer. */
+    @kotlin.concurrent.Volatile
+    var lastQuota: SsUser? = null
+        private set
+
     private fun adoptQuota(user: SsUser) {
+        lastQuota = user
         val threads = user.maxthreads.coerceIn(1, 16)
         val interval = if (user.maxrequestspermin > 0) (60_000L + user.maxrequestspermin - 1) / user.maxrequestspermin else 1_000L
         val current = api.limiter

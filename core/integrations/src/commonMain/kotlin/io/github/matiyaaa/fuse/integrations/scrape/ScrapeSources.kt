@@ -62,8 +62,25 @@ data class ProviderGame(
 }
 
 /** A provider as the [ScrapeCoordinator] uses it. Implementations only read; they never store. */
+/**
+ * What a provider says is left of its requests: [remaining] of [total] for the day or month (null
+ * when it doesn't say the whole). When a fifth or less is left, it is [low]: Fuse stops asking it
+ * for games it looks for by itself and keeps the rest for games a person opens.
+ */
+data class Allowance(val remaining: Long, val total: Long?) {
+    val low: Boolean get() = total != null && total > 0 && remaining * RESERVE <= total
+
+    private companion object {
+        /** One part in this many is kept for games a person opens. */
+        const val RESERVE = 5
+    }
+}
+
 interface ScrapeSource {
     val id: ScrapeProviderId
+
+    /** What is left of this provider's requests, as it last said; null where it doesn't say. */
+    val allowance: Allowance? get() = null
 
     /** False for artwork-only providers (SteamGridDB, libretro). */
     val providesMetadata: Boolean
@@ -161,6 +178,17 @@ class IgdbSource(private val client: IgdbClient, private val limit: Int = 10) : 
 class TheGamesDbSource(private val client: TheGamesDbClient) : ScrapeSource {
     override val id = ScrapeProviderId.THEGAMESDB
     override val providesMetadata = true
+
+    /** The most it has said is left since Fuse started, standing in for the month's whole allowance it doesn't report. */
+    private var most = 0L
+
+    override val allowance: Allowance?
+        get() {
+            val a = client.lastAllowance ?: return null
+            val left = (a.remainingMonthly ?: return null) + (a.extra ?: 0)
+            if (left > most) most = left
+            return Allowance(left, most)
+        }
     override val artworkKinds = setOf(MediaKind.BOXART, MediaKind.HERO, MediaKind.GRID, MediaKind.SCREENSHOT, MediaKind.LOGO)
 
     override suspend fun search(query: ScrapeQuery): ApiResult<List<ProviderGame>> {
@@ -216,6 +244,10 @@ class TheGamesDbSource(private val client: TheGamesDbClient) : ScrapeSource {
 class ScreenScraperSource(private val client: ScreenScraperClient) : ScrapeSource {
     override val id = ScrapeProviderId.SCREENSCRAPER
     override val providesMetadata = true
+
+    /** Today's requests, as ScreenScraper reports them with every answer. */
+    override val allowance: Allowance?
+        get() = client.lastQuota?.takeIf { it.maxrequestsperday > 0 }?.let { Allowance((it.maxrequestsperday - it.requeststoday).toLong().coerceAtLeast(0), it.maxrequestsperday.toLong()) }
 
     override suspend fun search(query: ScrapeQuery): ApiResult<List<ProviderGame>> {
         val systemId = ScreenScraperSystems.idFor(query.platform)

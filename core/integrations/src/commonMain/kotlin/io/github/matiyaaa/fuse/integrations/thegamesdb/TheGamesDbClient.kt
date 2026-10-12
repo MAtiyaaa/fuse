@@ -153,6 +153,7 @@ class TheGamesDbClient(
         if (raw.isSuccess) return null
         // An exhausted allowance is reported as 403 with a message about the allowance.
         if (raw.status == 403 && raw.body.contains("allowance", ignoreCase = true)) {
+            lastAllowance = TgdbAllowance(0, 0, lastAllowance?.refreshInSeconds)
             return ApiResult.RateLimited(null, "TheGamesDB monthly allowance is used up")
         }
         return api.failureFor(raw)
@@ -205,11 +206,16 @@ class TheGamesDbClient(
         }.toMap()
     }
 
+    /** The allowance the last answer reported; nothing left once TheGamesDB says it is used up. */
+    @kotlin.concurrent.Volatile
+    var lastAllowance: TgdbAllowance? = null
+        private set
+
     private fun allowance(root: JsonObject) = TgdbAllowance(
         remainingMonthly = root["remaining_monthly_allowance"].flexLong(),
         extra = root["extra_allowance"].flexLong(),
         refreshInSeconds = root["allowance_refresh_timer"].flexLong(),
-    )
+    ).also { lastAllowance = it }
 
     override fun toString(): String = "TheGamesDbClient(apiKey=***)"
 

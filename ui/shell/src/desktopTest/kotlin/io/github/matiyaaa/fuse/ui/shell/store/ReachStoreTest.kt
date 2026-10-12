@@ -64,7 +64,7 @@ class ReachStoreTest {
 
     private val made = ArrayList<Device>()
 
-    private suspend fun device(name: String, files: List<String>): Device {
+    private suspend fun device(name: String, files: List<String>, autoFill: Boolean = false): Device {
         val dir = File(root, name).apply { mkdirs() }
         val roms = File(dir, "roms/gba").apply { mkdirs() }
         files.forEach { File(roms, it).writeBytes(bytesOf(it.substringBefore('('))) }
@@ -72,7 +72,7 @@ class ReachStoreTest {
         val data = FuseData(DesktopDatabase.open(File(dir, "fuse.db").absolutePath))
         data.settings.update { it.copy(sync = it.sync.copy(enabled = true, hostPort = port, deviceName = name)) }
         lateinit var services: FakeServices
-        services = FakeServices(data, cache, sync = { port, scope ->
+        services = FakeServices(data, cache, autoFill = autoFill, sync = { port, scope ->
             JvmSyncService(File(dir, "sync"), data.settings, services.secrets, port, "LINUX", name, "test", NoHostLifetime("test"), scope)
         })
         val store = createFuseStore(services, scope)
@@ -168,5 +168,26 @@ class ReachStoreTest {
         assertNull(rommGameId(42).householdOnly)
         assertNull(GameId(7).householdOnly)
         assertNull(GameId(7).rommOnly)
+    }
+
+    @Test
+    fun everyGameOnOtherDevicesGetsItsDetailsLookedForNotOnlyTheNewest(): Unit = runBlocking {
+        // More games than the newest 60 Fuse used to look for: the older ones were left bare.
+        val titles = (1..65).map { "Quest %02d (USA).gba".format(it) }
+        val pc = device("Gaming PC", titles)
+        val deck = device("Thor", listOf("Metroid Fusion (USA).gba"), autoFill = true)
+        val asked = java.util.Collections.synchronizedSet(HashSet<String>())
+        deck.services.web = { request ->
+            if (request.url.host == "thumbnails.libretro.com") {
+                java.net.URLDecoder.decode(request.url.encodedPath, "UTF-8").substringAfterLast('/').removeSuffix(".png").substringBefore(" (").let(asked::add)
+            }
+            null
+        }
+        pc.sync.hostHere("Gaming PC", installService = false).getOrThrow()
+        val code = assertNotNull(pc.sync.newPairingCode())
+        deck.sync.connect("127.0.0.1:$port", code).getOrThrow()
+        eventually("the Thor lists every game on the PC") { deck.store.reach.games(null).first().size == titles.size }
+        // Each of them is looked for (libretro's thumbnails ask nothing of anyone), the oldest too.
+        eventually("every game's art and details looked for", seconds = 120) { titles.all { t -> t.substringBefore(" (") in asked } }
     }
 }

@@ -132,7 +132,7 @@ internal class DefaultRommOps(
     /** Applies RomM's details and pictures to the games a download brought in (Cartridge's own path, shared). */
     private val details: CartridgeDetails,
     /** Has Fuse's sources find art and details for games Fuse doesn't have, first ones first. */
-    private val fillRemote: (List<GameId>) -> Unit = {},
+    private val fillRemote: (List<GameId>, Boolean) -> Unit = { _, _ -> },
 ) : RommOps {
     override val supported = true
     private val mirror = RommMirror(ctx.data.database, ctx::now)
@@ -154,7 +154,7 @@ internal class DefaultRommOps(
     /** Games on the server that Fuse doesn't have, for Fuse's sources to fill, these first. */
     private fun fillUnmatched(roms: List<RommRom>) {
         val m = matches.value
-        fillRemote(roms.filter { it.id !in m }.map { rommGameId(it.id) })
+        fillRemote(roms.filter { it.id !in m }.map { rommGameId(it.id) }, false)
     }
     private val _state = MutableStateFlow(RommState())
     override val state: StateFlow<RommState> = _state
@@ -724,7 +724,7 @@ internal class DefaultRommOps(
     override fun detail(romId: Long): Flow<GameDetail?> {
         val owner = MediaOwner.OfGame(rommGameId(romId))
         // Opened: its art and details are looked for straight away, if they aren't already there.
-        fillRemote(listOf(rommGameId(romId)))
+        fillRemote(listOf(rommGameId(romId)), true)
         return combine(mirrorRevision, ctx.installed, ctx.data.media.observe(owner)) { _, _, m -> m }.mapLatest { media ->
             val r = mirror.withFiles(clientFor(server), server, romId) ?: return@mapLatest null
             val platform = ctx.platforms.resolveFolder(r.platformSlug) ?: return@mapLatest null

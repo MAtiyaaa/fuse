@@ -170,13 +170,13 @@ internal class DefaultFuseStore private constructor(
             cartridgeOff = { writeSettings { s -> if (s.cartridge.enabled) s.copy(cartridge = s.cartridge.copy(enabled = false)) else s } },
             choiceFor = { g -> library.choiceFor(g) },
             details = CartridgeDetails(ctx),
-            fillRemote = { ids -> mediaOps.fillRemote(ids) },
+            fillRemote = { ids, visible -> mediaOps.fillRemote(ids, visible) },
         )
         reach = DefaultReachOps(
             ctx, engine, transferEngine, sync.service, romm,
             householdIds = { profileData.householdIds() },
             choiceFor = { g -> library.choiceFor(g) },
-            fillRemote = { ids -> mediaOps.fillRemote(ids) },
+            fillRemote = { ids, visible -> mediaOps.fillRemote(ids, visible) },
             showRemote = { rows, act -> transfers.showRemote(rows, act) },
         )
     }
