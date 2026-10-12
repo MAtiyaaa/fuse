@@ -2172,7 +2172,9 @@ class JvmSyncService(
         val saves = here.filter { it.kind != SaveKind.STATE && it.available }
         if (saves.isNotEmpty() && saves.all { it.files.isEmpty() }) {
             val where = saves.first().let { s -> s.targets.values.firstOrNull()?.parentFile ?: s.root }.path.replace('\\', '/')
-            return "Fuse found no save for it in $where. If you saved, choose the emulator's save folder in Fuse, Settings, Save folders."
+            // The emulator's own words on where it saves, when its adapter knows them (melonDS's ROM folders, Eden's users).
+            val advice = spots.firstNotNullOfOrNull { it.note } ?: "If you saved, choose the emulator's save folder in Fuse, Settings, Save folders."
+            return "Fuse found no save for it in $where. $advice"
         }
         return null
     }

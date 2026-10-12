@@ -176,12 +176,16 @@ object DisplayNameCleaner {
  * Midway"). Used for display names and for the names Fuse searches art with.
  */
 object LeadingNumbers {
-    // Spaced separators: "12 - Title", "12 : Title", "12 _ Title".
-    private val spaced = Regex("^#?(\\d{1,6})\\s+[-:_]\\s+(?=\\S)")
+    // Spaced separators: "12 - Title", "12 – Title", "12 : Title", "12 _ Title".
+    private val spaced = Regex("^#?(\\d{1,6})\\s+[-\u2013\u2014:_]\\s+(?=\\S)")
+    // A dash spaced on one side only, as people type it: "3- Title", "3 -Title", "3–Title" stays for [tight].
+    private val halfSpaced = Regex("^#?(\\d{1,6})(?:[-\u2013\u2014]\\s+|\\s+[-\u2013\u2014])\\s*(?=\\p{L})")
     // Dot or bracket, spaces optional: "12. Title", "12.Title", "12) Title".
     private val dotted = Regex("^#?(\\d{1,6})\\s*[.)]\\s*(?=\\p{L})")
     // Tight dash or underscore: only three digits or more, so "10-Yard Fight" keeps its number.
     private val tight = Regex("^#?(\\d{3,6})[-_]\\s*(?=\\p{L})")
+    // Leading zero and a tight dash or underscore: "01_Title", "05-Title".
+    private val zeroTight = Regex("^#?(0\\d{1,5})[-_\u2013]\\s*(?=\\p{L})")
     // Leading zero and a space: "0123 Title", "045 Title".
     private val zero = Regex("^#?(0\\d{1,5})\\s+(?=\\p{L})")
     // A hash number: "#12 Title".
@@ -191,7 +195,7 @@ object LeadingNumbers {
 
     /** The number or code in front of [title] to remove, or null when there is none. */
     fun find(title: String): MatchResult? {
-        val m = spaced.find(title) ?: dotted.find(title) ?: tight.find(title) ?: zero.find(title)
+        val m = spaced.find(title) ?: halfSpaced.find(title) ?: dotted.find(title) ?: tight.find(title) ?: zeroTight.find(title) ?: zero.find(title)
             ?: hashed.find(title) ?: code.find(title) ?: return null
         val number = m.groupValues[1]
         if (number == "007") return null

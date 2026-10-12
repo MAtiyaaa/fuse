@@ -118,12 +118,17 @@ internal object MelonDsAndroid {
         if (env.exists("$game/$name")) return listOf(HandheldSaves.spot(q, "$game/$name", SaveConfidence.FOUND))
         // Readable only on older Android or with special access; when it holds the save, it is the one.
         if (env.exists("$private/$name")) return listOf(HandheldSaves.spot(q, "$private/$name", SaveConfidence.FOUND))
+        // Its save folder setting, when the person put it in their storage: the usual names for it.
+        val own = (listOf("/storage/emulated/0") + env.storageRoots()).distinct()
+            .flatMap { r -> listOf("$r/melonDS/saves", "$r/melonDS/Saves", "$r/Emulation/saves/nds", "$r/Emulation/saves/melonds") }
+            .firstOrNull { env.exists("$it/$name") }
+        if (own != null) return listOf(HandheldSaves.spot(q, "$own/$name", SaveConfidence.FOUND))
         val name0 = packageName(pkg)
         return listOf(
             HandheldSaves.spot(
                 q, "$game/$name", SaveConfidence.KNOWN,
                 note = "$name0 saves beside the game only when the game's folder is in $name0's own ROM folders. " +
-                    "Add your DS folder there (in $name0, Settings, ROM search folders); otherwise it keeps the save in its private folder, which Fuse can't open.",
+                    "Add your DS folder there (in $name0, Settings, ROM search folders), or set its save folder to one in your storage and choose that folder in Fuse, Settings, Save folders. Otherwise it keeps the save in its private folder, which Fuse can't open.",
             ),
         )
     }

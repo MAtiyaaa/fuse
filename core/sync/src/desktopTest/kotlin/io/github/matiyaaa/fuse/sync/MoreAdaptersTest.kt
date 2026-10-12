@@ -44,6 +44,21 @@ class MoreAdaptersTest {
         SaveQuery(GameKey.of(platform, null, null, title.ifEmpty { "Game" }), platform, rom, emulator, serial = serial, title = title)
 
     @Test
+    fun dsSavesOnTheThorAreFoundWhereTheEmulatorsPutThem() {
+        val mama = q("nds", "/storage/emulated/0/Emulation/roms/nds/Cooking Mama.nds", "melonds")
+        // melonDS with its save folder set in the person's storage.
+        val melon = FakeEnv("ANDROID", "/storage/emulated/0", files = mapOf("/storage/emulated/0/melonDS/saves/Cooking Mama.sav" to "x"))
+        assertEquals("/storage/emulated/0/melonDS/saves/Cooking Mama.sav", SaveAdapters.forEmulator("melonds")!!.locate(mama, melon).single().files.single().path)
+        // Nothing found: the note names melonDS's own settings, not only Fuse's.
+        val nothing = SaveAdapters.forEmulator("melonds")!!.locate(mama, FakeEnv("ANDROID", "/storage/emulated/0")).single()
+        assertTrue("ROM search folders" in nothing.note!! && "save folder" in nothing.note!!, nothing.note)
+        // DraStic's folder on an SD card.
+        val card = "/storage/1234-ABCD"
+        val drastic = FakeEnv("ANDROID", "/storage/emulated/0", files = mapOf("$card/DraStic/backup/" to ""), roots = listOf(card))
+        assertEquals("$card/DraStic/backup/Cooking Mama.dsv", SaveAdapters.forEmulator("drastic")!!.locate(mama.copy(emulatorId = "drastic"), drastic).single().files.single().path)
+    }
+
+    @Test
     fun edenUserIdsReadTheSameInBothLayouts() {
         // Legacy: user_id[1] then user_id[0] as {:016X}; newer: the 16 bytes in order, lower case.
         val legacy = "0123456789ABCDEFFEDCBA9876543210"

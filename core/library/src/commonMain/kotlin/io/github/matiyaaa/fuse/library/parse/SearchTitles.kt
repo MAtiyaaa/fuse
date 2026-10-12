@@ -113,7 +113,8 @@ object SearchTitles {
             else -> parsed.unknownTags.firstOrNull()?.text ?: return fallback(original)
         }
 
-        t = LeadingNumbers.strip(collapse(t.replace(strayBrackets, " ")))
+        // The list number first, while its bracket ("12) Title") still marks it as one.
+        t = LeadingNumbers.strip(collapse(LeadingNumbers.strip(collapse(t)).replace(strayBrackets, " ")))
         val scene = ' ' !in t && ('.' in t || '_' in t)
         t = collapse(t.replace('_', ' '))
         group.find(t)?.takeIf { it.range.first > 0 }?.let { m ->

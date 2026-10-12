@@ -33,7 +33,8 @@ internal object DraStic : SaveAdapter {
 
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
         val dir = SaveAdapters.chosen(env, q)
-            ?: SaveAdapters.firstDir(env, "/storage/emulated/0/DraStic", "/storage/emulated/0/Drastic", "/storage/emulated/0/drastic", "${env.home}/.drastic", "/mnt/vendor/deep/drastic")
+            ?: SaveAdapters.firstDir(env, *(listOf("/storage/emulated/0") + env.storageRoots()).distinct()
+                .flatMap { r -> listOf("$r/DraStic", "$r/Drastic", "$r/drastic") }.plus(listOf("${env.home}/.drastic", "/mnt/vendor/deep/drastic")).toTypedArray())
             ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "nds.dsv", SaveAdapters.androidPrivateNote("DraStic", "In DraStic, Change Options, General, System Directory, choose Scoped Storage Folder and a folder named DraStic in your storage; Fuse finds it there.")))
         return listOf(SaveSpot(SaveKind.SAVE, "nds.dsv", listOf(SpotFile("save.srm", "$dir/backup/${SaveAdapters.stem(q.romPath)}.dsv"))))
     }
