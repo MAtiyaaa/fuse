@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.2.1 is the <b>Native Update</b>, followed up: Steam restarts in Game Mode, a better Store with every update in one place, checks before installing an emulator, Xenia and Vita3K achievements, PS2 packs and cheats from EmuCoreX, All counting every game of the household, and touch screens on Linux and Windows. Physical acceptance on SteamOS, the Steam Deck, the AYN Thor and macOS is still to come.</sub><br>
+<sub>0.4.2.1 is the <b>Native Update</b>: Steam restarts in Game Mode, a better Store with every update in one place, checks before installing an emulator, Xenia and Vita3K achievements, PS2 packs and cheats from EmuCoreX, All counting every game of the household, and touch screens on Linux and Windows. Physical acceptance on SteamOS, the Steam Deck, the AYN Thor and macOS is still to come.</sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -385,7 +385,7 @@ Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.4.2.1 "The Native Update" follows up the Native Update**: Steam restarts in Game Mode, the
+> **Fuse 0.4.2.1 "The Native Update"**: Steam restarts in Game Mode, the
 > Store keeps every update in one place, Fuse checks what an emulator needs before installing it, All
 > counts every game of the household, and touch screens work on Linux and Windows. 0.4.2 itself
 > made Fuse feel at home on Linux, SteamOS and Android. Steam and

@@ -1,6 +1,6 @@
 # Fuse 0.4.2.1 - The Native Update
 
-A follow-up to the Native Update: Steam in Game Mode, a better Store, checks before an emulator is
+More of the Native Update: Steam in Game Mode, a better Store, checks before an emulator is
 installed or launched, more achievements, PS2 packs and cheats, the whole household's games in All,
 and touch screens on Linux and Windows.
 
