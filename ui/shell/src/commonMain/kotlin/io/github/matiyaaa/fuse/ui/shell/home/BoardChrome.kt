@@ -359,11 +359,12 @@ internal fun AddTile(selected: Boolean, shape: Shape, modifier: Modifier, label:
 }
 
 /**
- * The toolbar floating over the board while it is arranged: what to do, and Add widget and Done
- * for touch (the controller has the same in its hints). On a narrow screen only the buttons.
+ * The toolbar floating over the board while it is arranged: what to do, and Add widget and Done.
+ * A controller reaches the two buttons by moving down past the board's last row ([focused]: 0 Add,
+ * 1 Done). On a narrow screen only the buttons.
  */
 @Composable
-internal fun ArrangeBar(compact: Boolean, onAdd: () -> Unit, onDone: () -> Unit, ownHome: Boolean? = null, onOwnHome: (Boolean) -> Unit = {}, item: String = "widget", name: String = "Home", look: BoardLook? = null) {
+internal fun ArrangeBar(compact: Boolean, onAdd: () -> Unit, onDone: () -> Unit, ownHome: Boolean? = null, onOwnHome: (Boolean) -> Unit = {}, item: String = "widget", name: String = "Home", look: BoardLook? = null, focused: Int? = null) {
     val c = Fuse.colors
     Panel(raised = true, shape = RoundedCornerShape(Radius.pill)) {
         Row(Modifier.padding(start = if (compact) Space.s else Space.xl, end = Space.s, top = Space.s, bottom = Space.s), verticalAlignment = Alignment.CenterVertically) {
@@ -378,8 +379,8 @@ internal fun ArrangeBar(compact: Boolean, onAdd: () -> Unit, onDone: () -> Unit,
                 // With Fuse Sync, whose Home this is: this device's own, or the profile's everywhere.
                 if (ownHome != null) HomeScopeSwitch(ownHome, compact, onOwnHome)
                 if (look != null) LookSwitch(look, compact)
-                FuseButton("Add $item", selected = false, onClick = onAdd, kind = ButtonKind.SECONDARY, icon = FuseIcons.Plus)
-                FuseButton("Done", selected = false, onClick = onDone, kind = ButtonKind.PRIMARY)
+                FuseButton("Add $item", selected = focused == 0, onClick = onAdd, kind = ButtonKind.SECONDARY, icon = FuseIcons.Plus)
+                FuseButton("Done", selected = focused == 1, onClick = onDone, kind = ButtonKind.PRIMARY)
             }
         }
     }
