@@ -514,6 +514,19 @@ sealed interface ModSitePage {
     data class Unavailable(val title: String, val reason: String) : ModSitePage
 }
 
+/**
+ * What EmuCoreX's catalogues have for a PS2 game: texture packs made for its disc's [serial] and
+ * pnach files for its [crc], each with the kind Fuse adds it as (null: not one this game's emulator
+ * takes), or why nothing could be looked up.
+ */
+data class EmuCoreXFinds(
+    val serial: String?,
+    val crc: String?,
+    val packs: List<Pair<io.github.matiyaaa.fuse.integrations.emucorex.ExTexturePack, io.github.matiyaaa.fuse.launch.patches.EnhancementKind?>>,
+    val pnach: List<Pair<io.github.matiyaaa.fuse.integrations.emucorex.ExCheat, io.github.matiyaaa.fuse.launch.patches.EnhancementKind?>>,
+    val problem: String? = null,
+)
+
 /** How taking out something a person added went. */
 sealed interface EnhancementRemoval {
     data object Removed : EnhancementRemoval

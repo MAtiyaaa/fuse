@@ -277,11 +277,14 @@ internal class FakeServices(
             return true
         }
 
-        override suspend fun fetch(url: String, name: String, size: Long?, md5: String?, maxBytes: Long, onProgress: (Float) -> Unit): String? {
+        override suspend fun fetch(url: String, name: String, size: Long?, md5: String?, maxBytes: Long, onProgress: (Float) -> Unit, sha256: String?): String? {
             fetchedUrls += url
             val from = downloads[url] ?: return null
             val sum = java.security.MessageDigest.getInstance("MD5").digest(from.readBytes()).joinToString("") { "%02x".format(it) }
             if (md5 != null && sum != md5) return null
+            val sum256 = java.security.MessageDigest.getInstance("SHA-256").digest(from.readBytes()).joinToString("") { "%02x".format(it) }
+            if (sha256 != null && !sum256.equals(sha256, ignoreCase = true)) return null
+            if (from.length() > maxBytes) return null
             onProgress(1f)
             val dir = File(cache, "fetched").also { it.mkdirs() }
             return from.copyTo(File(dir, name), overwrite = true).absolutePath

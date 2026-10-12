@@ -58,8 +58,8 @@ internal fun AppState.ownEnhancementRows(card: GameCard, own: Enhancements, emul
             )
         }
     }
-    // Mods made for the game, from GameBanana, where its emulator takes any.
-    val site = if (own.kinds.isEmpty()) emptyList() else listOf(modSiteRow(card))
+    // Mods made for the game, from GameBanana, where its emulator takes any; for a PS2 game, EmuCoreX's packs and cheats too.
+    val site = if (own.kinds.isEmpty()) emptyList() else listOfNotNull(modSiteRow(card), emuCoreXRow(card).takeIf { card.platformId.value == "ps2" })
     return added + add + site
 }
 

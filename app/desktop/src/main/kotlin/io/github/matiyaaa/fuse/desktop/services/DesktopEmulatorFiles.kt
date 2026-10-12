@@ -765,7 +765,7 @@ class DesktopEmulatorFiles(
     }
 
 
-    override suspend fun fetch(url: String, name: String, size: Long?, md5: String?, maxBytes: Long, onProgress: (Float) -> Unit): String? = withContext(Dispatchers.IO) {
+    override suspend fun fetch(url: String, name: String, size: Long?, md5: String?, maxBytes: Long, onProgress: (Float) -> Unit, sha256: String?): String? = withContext(Dispatchers.IO) {
         if (!url.startsWith("https://")) return@withContext null
         val safe = name.replace(Regex("[^A-Za-z0-9._ -]"), "_").trim().ifEmpty { "download" }.take(120)
         val dir = File(fetched, System.nanoTime().toString(36)).apply { mkdirs() }
@@ -788,6 +788,7 @@ class DesktopEmulatorFiles(
             }
             val total = size?.takeIf { it > 0 } ?: response.headers().firstValueAsLong("content-length").orElse(-1)
             val digest = java.security.MessageDigest.getInstance("MD5")
+            val digest256 = sha256?.let { java.security.MessageDigest.getInstance("SHA-256") }
             var read = 0L
             response.body().use { input ->
                 target.outputStream().use { out ->
@@ -799,13 +800,17 @@ class DesktopEmulatorFiles(
                         read += n
                         if (read > maxBytes) throw IOException("larger than allowed")
                         digest.update(buf, 0, n)
+                        digest256?.update(buf, 0, n)
                         out.write(buf, 0, n)
                         if (total > 0) onProgress((read.toFloat() / total).coerceIn(0f, 1f))
                     }
                 }
             }
             val sum = digest.digest().joinToString("") { "%02x".format(it) }
-            if ((md5 != null && !sum.equals(md5, ignoreCase = true)) || (size != null && size > 0 && read != size)) {
+            val sum256 = digest256?.digest()?.joinToString("") { "%02x".format(it) }
+            if ((md5 != null && !sum.equals(md5, ignoreCase = true)) || (sha256 != null && !sha256.equals(sum256, ignoreCase = true)) ||
+                (size != null && size > 0 && read != size)
+            ) {
                 dir.deleteRecursively()
                 return@withContext null
             }

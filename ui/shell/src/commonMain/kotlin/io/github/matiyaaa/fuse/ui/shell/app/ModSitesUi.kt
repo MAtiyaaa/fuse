@@ -185,6 +185,143 @@ private fun AppState.fetchModFile(card: GameCard, modId: Long, file: GbFile) {
     }
 }
 
+/** The row that opens what EmuCoreX's catalogues have for a PS2 game. */
+internal fun AppState.emuCoreXRow(card: GameCard): MenuAction = MenuAction(
+    "mods.emucorex", "Find Packs and Cheats on EmuCoreX", FuseIcons.Globe,
+    detail = "Texture packs for this disc and PCSX2 cheats and patches for its CRC, from EmuCoreX's public catalogue",
+    trailing = Trailing.Chevron,
+    section = "Add Your Own",
+    onSelect = { emuCoreXList(card) },
+)
+
+/** What EmuCoreX has for the game: texture packs first, then patches and cheats, with who made each. */
+private fun AppState.emuCoreXList(card: GameCard) {
+    scope.launch {
+        val found = store.library.emuCoreX(card.id)
+        found.problem?.let {
+            showProblem(Problem("Couldn't look in EmuCoreX's catalogue", it, ProblemKind.NETWORK, Severity.INFO, reassurance = null))
+            return@launch
+        }
+        val packs = found.packs.map { (p, kind) ->
+            MenuAction(
+                "pack.${p.id}", p.name, FuseIcons.Images,
+                detail = listOfNotNull(bytesText(p.sizeBytes), p.authors.takeIf { it.isNotEmpty() }?.let { "by ${it.joinToString(", ")}" }, p.version).joinToString("  ·  "),
+                trailing = Trailing.Chevron,
+                unavailableReason = if (kind == null) "This game's emulator doesn't take texture packs here" else null,
+                section = "Texture Packs",
+                onSelect = { emuCoreXEntry(card, p.id) },
+            )
+        }
+        val pnach = found.pnach.map { (c, kind) ->
+            MenuAction(
+                "pnach.${c.id}", c.description?.takeIf { it.length <= MAX_ROW } ?: c.title,
+                if (c.isPatch) FuseIcons.Bandage else FuseIcons.Wand,
+                detail = listOfNotNull(c.sourceName, c.authors.takeIf { it.isNotEmpty() }?.let { "by ${it.joinToString(", ")}" }).joinToString("  ·  "),
+                trailing = Trailing.Chevron,
+                unavailableReason = if (kind == null) "This game's emulator doesn't take these here" else null,
+                section = if (c.isPatch) "Patches" else "Cheats",
+                onSelect = { emuCoreXEntry(card, c.id) },
+            )
+        }.sortedBy { if (it.section == "Patches") 0 else 1 }
+        val home = MenuAction(
+            "open", "About EmuCoreX's Catalogue", FuseIcons.External, detail = "github.com/sashkinbro/EmuCoreX", section = "",
+            onSelect = { platform.openUrl(io.github.matiyaaa.fuse.integrations.emucorex.EmuCoreX.HOME) },
+        )
+        val which = listOfNotNull(found.serial, found.crc?.let { "CRC $it" }).joinToString(", ")
+        choice = ChoiceSpec(
+            icon = FuseIcons.Globe,
+            title = "${card.title} on EmuCoreX",
+            message = if (packs.isEmpty() && pnach.isEmpty()) {
+                "EmuCoreX's catalogue has nothing for this disc ($which) yet."
+            } else {
+                "Matched by this disc ($which), never by name. Gathered by EmuCoreX from their makers, who keep the credit. Each is shown before anything changes."
+            },
+            options = packs + pnach + home,
+        )
+    }
+}
+
+/** One of EmuCoreX's packs or pnach files: who made it, its licence, and Add or its own page. */
+private fun AppState.emuCoreXEntry(card: GameCard, entryId: String) {
+    scope.launch {
+        val found = store.library.emuCoreX(card.id)
+        val pack = found.packs.firstOrNull { it.first.id == entryId }
+        val pnach = found.pnach.firstOrNull { it.first.id == entryId }
+        val title = pack?.first?.name ?: pnach?.first?.let { it.description?.takeIf { d -> d.length <= MAX_ROW } ?: it.title } ?: return@launch
+        val why = pack?.let { (p, kind) -> if (kind == null) "This game's emulator doesn't take texture packs here" else p.notFetchable }
+            ?: pnach?.let { (c, kind) -> if (kind == null) "This game's emulator doesn't take these here" else c.notFetchable }
+        val reason = why?.replaceFirstChar { it.uppercase() }
+        val source = pack?.first?.sourceUrl ?: pnach?.first?.sourceUrl
+        // Who made it and its licence first, so they are never what a long description pushes out.
+        val about = pack?.first?.let { p ->
+            listOfNotNull(
+                listOfNotNull(
+                    p.authors.takeIf { it.isNotEmpty() }?.let { "Made by ${it.joinToString(", ")}." },
+                    p.license?.let { "Licence: ${it.take(MAX_LICENCE).trimEnd('.')}." },
+                ).joinToString(" ").ifEmpty { null },
+                p.description,
+                p.credits,
+            )
+        } ?: pnach!!.first.let { c ->
+            listOfNotNull(
+                listOfNotNull(
+                    c.authors.takeIf { it.isNotEmpty() }?.let { "Made by ${it.joinToString(", ")}" + (c.sourceName?.let { s -> ", from $s." } ?: ".") },
+                    c.license?.let { "Licence: ${it.take(MAX_LICENCE).trimEnd('.')}." },
+                ).joinToString(" ").ifEmpty { null },
+                c.description?.takeIf { it.length > MAX_ROW },
+            )
+        }
+        val add = MenuAction(
+            "add", if (pack != null) "Add This Pack" else "Add This File", FuseIcons.Download,
+            detail = pack?.first?.let { p -> listOfNotNull(bytesText(p.sizeBytes), "${p.fileCount} pictures".takeIf { p.fileCount > 0 }, "checked against its SHA-256").joinToString("  ·  ") }
+                ?: "From GitHub, then shown before anything changes",
+            unavailableReason = reason,
+            onSelect = { fetchEmuCoreX(card, entryId, title, pack?.first?.sizeBytes) },
+        )
+        val open = source?.let {
+            MenuAction("open", "Open Its Page", FuseIcons.External, detail = it.removePrefix("https://").take(MAX_ROW), section = "", onSelect = { platform.openUrl(it) })
+        }
+        val back = MenuAction("back", "Back to the List", FuseIcons.ArrowLeft, section = "", onSelect = { emuCoreXList(card) })
+        choice = ChoiceSpec(
+            icon = if (pack != null) FuseIcons.Images else FuseIcons.Wand,
+            title = title,
+            message = about.joinToString("\n\n").take(MAX_TEXT * 2).ifEmpty { null },
+            options = listOfNotNull(add, open, back),
+        )
+    }
+}
+
+/** Fetches an EmuCoreX entry with its progress, then shows exactly what adding it would do. */
+private fun AppState.fetchEmuCoreX(card: GameCard, entryId: String, name: String, size: Long?) {
+    fun progress(fraction: Float?) {
+        choice = ChoiceSpec(
+            icon = FuseIcons.Download,
+            title = "Fetching $name",
+            message = "Into Fuse's own folder first, and checked against EmuCoreX's catalogue. Nothing in the emulator's folders changes yet.",
+            options = listOf(
+                MenuAction("fetching", name, FuseIcons.FileArchive, detail = size?.let(::bytesText), trailing = Trailing.Progress(fraction, fraction?.let { "${(it * 100).toInt()}%" } ?: "")),
+            ),
+        )
+    }
+    progress(null)
+    scope.launch {
+        var shown = -1
+        val preview = store.library.fetchEmuCoreX(card.id, entryId) { f ->
+            val step = (f * 50).toInt()
+            if (step != shown) {
+                shown = step
+                progress(f)
+            }
+        }
+        choice = null
+        when (preview) {
+            is EnhancementPreview.Unavailable -> showProblem(Problem(preview.title, preview.reason, ProblemKind.EMULATOR, Severity.INFO))
+            is EnhancementPreview.Ready -> confirmEnhancement(card, preview)
+        }
+    }
+}
+
 private const val MAX_GAMES = 12
+private const val MAX_ROW = 80
 private const val MAX_TEXT = 420
 private const val MAX_LICENCE = 160

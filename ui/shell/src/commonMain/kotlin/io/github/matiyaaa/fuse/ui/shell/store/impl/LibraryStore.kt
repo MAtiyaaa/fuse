@@ -961,6 +961,12 @@ internal class DefaultLibraryOps(
 
     override suspend fun fetchModSiteFile(id: GameId, modId: Long, fileId: Long, onProgress: (Float) -> Unit) = modSites.fetch(id, modId, fileId, onProgress)
 
+    private val emuCoreX by lazy { EmuCoreXMods(ctx, nativeEnhancements, ::discIdentity) }
+
+    override suspend fun emuCoreX(id: GameId) = emuCoreX.finds(id)
+
+    override suspend fun fetchEmuCoreX(id: GameId, entryId: String, onProgress: (Float) -> Unit) = emuCoreX.fetch(id, entryId, onProgress)
+
     /**
      * A PSP game's id as PPSSPP files it (`ULUS10041`): from its name or tags, else read from its ISO
      * or EBOOT.PBP (a game folder's EBOOT.PBP too), kept by path, size and change time.

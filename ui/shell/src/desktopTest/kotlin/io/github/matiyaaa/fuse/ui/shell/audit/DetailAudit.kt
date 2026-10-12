@@ -232,6 +232,55 @@ internal fun AuditDriver.detailScreens() {
         }
     }
 
+    scenario("details", "packs and cheats from emucorex") {
+        // A computer of its own with one PS2 disc Fuse can read (serial and CRC), PCSX2, and its folders.
+        val dir = File(cache, "emucorex-audit").apply { deleteRecursively() }
+        File(dir, "games/ps2").mkdirs()
+        File(dir, "games/ps2/Sky Racer.iso").writeBytes(AuditEmuCoreX.ps2Iso())
+        val pcsx2 = File(dir, "pcsx2").apply { listOf("inis", "patches", "cheats", "gamesettings", "textures").forEach { File(this, it).mkdirs() } }
+        File(pcsx2, "inis/PCSX2.ini").writeText("[EmuCore]\nEnableCheats = false\n")
+        val home = pcsx2.absolutePath
+        controls.pcsx2 = io.github.matiyaaa.fuse.launch.patches.Pcsx2Home(home, "$home/gamesettings", "$home/patches", null, cheats = "$home/cheats", textures = "$home/textures")
+        val pc = runBlocking {
+            io.github.matiyaaa.fuse.ui.shell.store.createFuseStore(AuditServices.create(cache, controls), scope).also { s ->
+                s.updatePrefs { it.copy(onboardingDone = true) }
+                s.sources.add(File(dir, "games").absolutePath, io.github.matiyaaa.fuse.model.LibrarySourceKind.ROMS_ROOT)
+                kotlinx.coroutines.withTimeout(30_000) { s.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).first { it.isNotEmpty() } }
+                kotlinx.coroutines.withTimeout(30_000) { s.emulators.installed.first { it.isNotEmpty() } }
+            }
+        }
+        try {
+            show(pc, AuditPlatform(size, host = io.github.matiyaaa.fuse.model.Host.LINUX))
+            search("Sky Racer")
+            tap(PadButton.START)
+            tap(PadButton.X)
+            tapText("Patches, Cheats and Textures")
+            waitFor("Find Packs and Cheats on EmuCoreX")
+            focusText("Find Packs and Cheats on EmuCoreX")
+            shoot("EmuCoreX beside GameBanana, for a PS2 game", 1_200)
+            tap(PadButton.A)
+            waitFor("Sky Racer HD Texture Pack")
+            settle(900)
+            shoot("what EmuCoreX has for this disc: packs, patches, cheats", 1_200)
+            tapText("Sky Racer HD Texture Pack")
+            waitFor("Add This Pack")
+            shoot("a pack: who made it, its licence, its size and checksum", 1_200)
+            tapText("Back to the List")
+            waitFor("Sky Racer UHD Texture Pack")
+            tapText("Sky Racer UHD Texture Pack")
+            waitFor("Add This Pack")
+            shoot("a pack in pieces, left to its page", 1_200)
+            tapText("Back to the List")
+            waitFor("Infinite Boost, Max Money, All Tracks")
+            tapText("Infinite Boost, Max Money, All Tracks")
+            waitFor("Add This File")
+            shoot("a cheat file: who made it, the collection it is from", 1_200)
+            tap(PadButton.B)
+        } finally {
+            controls.pcsx2 = null
+        }
+    }
+
     scenario("details", "a game with many facts") {
         useLibrary()
         val card = runBlocking { libraryStore.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).first().first { it.title == "Emberline Saga" } }

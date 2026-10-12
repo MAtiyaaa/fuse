@@ -518,6 +518,16 @@ interface LibraryOps {
     suspend fun fetchModSiteFile(id: GameId, modId: Long, fileId: Long, onProgress: (Float) -> Unit = {}): EnhancementPreview =
         EnhancementPreview.Unavailable("Not here", "Mods can be added from Fuse on a computer.")
 
+    /** What EmuCoreX's public catalogues have for [id] (a PS2 game): texture packs by its serial, pnach files by its CRC. */
+    suspend fun emuCoreX(id: GameId): EmuCoreXFinds = EmuCoreXFinds(null, null, emptyList(), emptyList(), "EmuCoreX's packs and cheats can be added from Fuse on a computer.")
+
+    /**
+     * Fetches EmuCoreX's entry [entryId] for [id] into Fuse's own folder (a pack checked against the
+     * catalogue's size and SHA-256) and works out what adding it would do, as [planEnhancement] does.
+     */
+    suspend fun fetchEmuCoreX(id: GameId, entryId: String, onProgress: (Float) -> Unit = {}): EnhancementPreview =
+        EnhancementPreview.Unavailable("Not here", "EmuCoreX's packs and cheats can be added from Fuse on a computer.")
+
     /** Takes out [enhancement] from [id], putting back what was there before; [force] even when it was changed since. */
     suspend fun removeEnhancement(id: GameId, enhancement: String, force: Boolean = false): EnhancementRemoval =
         EnhancementRemoval.Failed("Not here.")
