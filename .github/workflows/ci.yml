@@ -49,7 +49,7 @@ jobs:
 
       # Shared modules have a JVM target named "desktop", so their commonTest and desktopTest
       # sources run in the desktopTest task (see build-logic/src/main/kotlin/fuse.kmp.library.gradle.kts).
-      - name: Test everything and build the debug APK
+      - name: Test everything, build the debug APK and check the release build shrinks
         run: >-
           ./gradlew --refresh-dependencies --stacktrace
           :core:model:desktopTest
@@ -70,6 +70,7 @@ jobs:
           :ui:link:desktopTest
           :app:android:testDebugUnitTest
           :app:android:assembleDebug
+          :app:android:minifyReleaseWithR8
           :app:desktop:test
           :app:host:test
           :app:host:installDist

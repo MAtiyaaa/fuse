@@ -240,7 +240,6 @@ class DeckyBridge(
             put("token", token)
             put("protocol", PROTOCOL)
             put("version", version)
-            put("pid", ProcessHandle.current().pid())
         }.toString()
         val tmp = File(discovery.parentFile, ".${discovery.name}.tmp")
         tmp.writeText(body)
