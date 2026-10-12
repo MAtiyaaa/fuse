@@ -35,7 +35,7 @@ class DrawModel(private val count: Int, private val read: (Int) -> Unit) {
         val list = seen[drawing]
         if (!list.contains(s)) {
             list += s
-            readers.getOrPut(s) { IntList() }.add(drawing)
+            readers.getOrPut(s) { IntList(count) }.add(drawing)
         }
     }
 
@@ -75,9 +75,14 @@ class DrawModel(private val count: Int, private val read: (Int) -> Unit) {
 
     fun dispose() = handle.dispose()
 
-    /** A small list of reader numbers, without boxing them. */
-    class IntList {
+    /**
+     * A state's readers, by number, without boxing them. Few (the usual case) are searched; many get an
+     * index of where each sits, so taking one out costs the same however many share the state, as in
+     * Compose's own scope maps (one scope held directly, many in a hashed set).
+     */
+    class IntList(private val count: Int) {
         private var items = IntArray(2)
+        private var at: IntArray? = null
         var size = 0
             private set
 
@@ -85,14 +90,30 @@ class DrawModel(private val count: Int, private val read: (Int) -> Unit) {
 
         fun add(i: Int) {
             if (size == items.size) items = items.copyOf(size * 2)
+            at?.set(i, size)
             items[size++] = i
+            if (at == null && size > INDEXED) at = IntArray(count) { -1 }.also { a -> for (k in 0 until size) a[items[k]] = k }
         }
 
         fun remove(i: Int) {
+            val a = at
+            if (a != null) {
+                val k = a[i]
+                if (k < 0 || k >= size || items[k] != i) return
+                val last = items[--size]
+                items[k] = last
+                a[last] = k
+                a[i] = -1
+                return
+            }
             for (k in 0 until size) if (items[k] == i) {
                 items[k] = items[--size]
                 return
             }
+        }
+
+        private companion object {
+            const val INDEXED = 8
         }
     }
 }

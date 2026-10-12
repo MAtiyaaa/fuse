@@ -1674,6 +1674,8 @@ fun performanceRows(app: AppState): List<MenuAction> {
                             detail = listOfNotNull(
                                 disp.requestedRefreshRate?.let { "$it Hz requested" },
                                 disp.measuredRefreshRate?.let { "${(it * 10).toInt() / 10f} Hz observed while drawing" },
+                                disp.supportedRefreshRates.takeIf { it.size > 1 }?.let { r -> "Runs at ${r.joinToString(", ") { "${it.toInt()}" }} Hz" },
+                                disp.hdrFormats?.let { f -> if (f.isEmpty()) "No HDR reported" else "HDR: ${f.joinToString(", ")}" },
                                 when (disp.canLaunchActivities) {
                                     Support.YES -> "Games can be opened here"
                                     Support.NO -> "This display can't run other apps"

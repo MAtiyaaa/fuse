@@ -132,7 +132,7 @@ fun WidgetContent(kind: WidgetKind, feed: HomeFeed, cartridge: CartridgeStatus, 
     }
     val c = Fuse.colors
     val tint = widgetTint(kind, feed, cartridge)
-    BoxWithConstraints(Modifier.fillMaxSize().widgetSurface(c.surfaceRaised, tint.copy(alpha = if (c.isDark) WASH_DARK else WASH_LIGHT))) {
+    BoxWithConstraints(Modifier.fillMaxSize().widgetSurface(c.surfaceRaised, tint.copy(alpha = if (c.isDark) WASH_DARK else WASH_LIGHT), Fuse.look.spec.widgets)) {
         val room = widgetRoom(maxWidth, maxHeight)
         CompositionLocalProvider(LocalWidgetRoom provides room) {
         Column(Modifier.fillMaxSize().padding(if (room.compact) Space.m else Space.l)) {
@@ -335,8 +335,12 @@ internal fun widgetTint(kind: WidgetKind, feed: HomeFeed, cartridge: CartridgeSt
 
 internal fun storageLow(feed: HomeFeed): Boolean = feed.storage?.let { it.freeBytes.toFloat() / it.totalBytes.coerceAtLeast(1) < 0.1f } ?: false
 
-/** The raised fill with a soft light in [wash] gathering in its top right corner. Built once per size. */
-internal fun Modifier.widgetSurface(base: Color, wash: Color): Modifier = drawWithCache {
+/**
+ * A widget's fill in the theme's [look] (see [io.github.matiyaaa.fuse.model.WidgetLook]): the raised
+ * panel with a soft light in [wash] gathering in its top right corner; that panel washed through in
+ * the wash's colour; or frosted glass over the room. Built once per size.
+ */
+internal fun Modifier.widgetSurface(base: Color, wash: Color, look: io.github.matiyaaa.fuse.model.WidgetLook = io.github.matiyaaa.fuse.model.WidgetLook.LIT): Modifier = drawWithCache {
     val light = Brush.radialGradient(
         0f to wash,
         0.55f to wash.copy(alpha = wash.alpha * 0.35f),
@@ -344,9 +348,40 @@ internal fun Modifier.widgetSurface(base: Color, wash: Color): Modifier = drawWi
         center = Offset(size.width, 0f),
         radius = maxOf(size.width, size.height) * 0.95f,
     )
-    onDrawBehind {
-        drawRect(base)
-        drawRect(light)
+    val hue = wash.copy(alpha = 1f)
+    when (look) {
+        io.github.matiyaaa.fuse.model.WidgetLook.LIT -> onDrawBehind {
+            drawRect(base)
+            drawRect(light)
+        }
+        io.github.matiyaaa.fuse.model.WidgetLook.TINTED -> {
+            // The widget's own colour through the panel, deepest at the bottom left, with the
+            // corner's light kept on top so it still reads as lit from one side.
+            val through = Brush.linearGradient(
+                0f to androidx.compose.ui.graphics.lerp(base, hue, 0.34f),
+                1f to androidx.compose.ui.graphics.lerp(base, hue, 0.12f),
+                start = Offset(0f, size.height),
+                end = Offset(size.width, 0f),
+            )
+            onDrawBehind {
+                drawRect(through)
+                drawRect(light)
+            }
+        }
+        io.github.matiyaaa.fuse.model.WidgetLook.GLASS -> {
+            val sheen = Brush.verticalGradient(
+                0f to Color.White.copy(alpha = 0.14f),
+                0.35f to Color.White.copy(alpha = 0.03f),
+                1f to Color.Transparent,
+            )
+            onDrawBehind {
+                drawRect(base.copy(alpha = base.alpha * 0.58f))
+                drawRect(light)
+                drawRect(sheen)
+                // A hairline of light along the top edge, as a pane's rim catches it.
+                drawRect(Color.White.copy(alpha = 0.16f), size = androidx.compose.ui.geometry.Size(size.width, 1.dp.toPx()))
+            }
+        }
     }
 }
 

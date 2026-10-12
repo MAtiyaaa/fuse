@@ -196,23 +196,28 @@ internal fun Carousel(
         val first = (base - 1).coerceAtLeast(0)
         val last = (base + 2).coerceAtMost(count - 1)
 
+        val claim = LocalScrollClaim.current
         Box(
             Modifier.fillMaxSize()
-                // A mouse wheel (or a two-finger swipe on a trackpad) turns it one card per notch.
-                .pointerInput(count) {
+                // A mouse wheel turns it one card per notch; a two-finger swipe on a trackpad, one
+                // card per swipe ([ScrollSteps]). Up and down on a trackpad are left to the page.
+                .pointerInput(count, claim) {
                     if (count <= 1) return@pointerInput
-                    var pending = 0f
+                    val steps = ScrollSteps()
                     awaitPointerEventScope {
                         while (true) {
                             val e = awaitPointerEvent()
                             if (e.type != androidx.compose.ui.input.pointer.PointerEventType.Scroll) continue
-                            val d = e.changes.firstOrNull()?.scrollDelta ?: continue
-                            pending += if (kotlin.math.abs(d.x) > kotlin.math.abs(d.y)) d.x else d.y
-                            if (kotlin.math.abs(pending) >= 1f) {
-                                val by = if (pending > 0f) 1 else -1
-                                pending = 0f
-                                if (state.step(by, nudge = false)) e.changes.forEach { it.consume() }
-                            }
+                            val change = e.changes.firstOrNull() ?: continue
+                            val d = change.scrollDelta
+                            val across = kotlin.math.abs(d.x) > kotlin.math.abs(d.y)
+                            val delta = if (across) d.x else d.y
+                            val wheel = delta != 0f && delta == kotlin.math.round(delta)
+                            if (!across && !wheel) continue
+                            claim?.taken = true
+                            e.changes.forEach { it.consume() }
+                            val by = steps.feed(delta, change.uptimeMillis)
+                            if (by != 0) state.step(by, nudge = false)
                         }
                     }
                 }

@@ -118,6 +118,11 @@ data class DisplayInfo(
     /** Recent cadence of frames drawn by this window, absent until observed. */
     val measuredRefreshRate: Float? = null,
     /**
+     * The HDR formats the display says it shows (HDR10, HLG, Dolby Vision, HDR10+), empty when it
+     * says none, null when the system doesn't say (Fuse never guesses).
+     */
+    val hdrFormats: List<String>? = null,
+    /**
      * The screen's own size when Fuse is drawn smaller and enlarged to it (SteamOS's Game Mode on a
      * TV); null when Fuse draws at the screen's size or it can't be read.
      */

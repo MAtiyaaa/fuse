@@ -213,7 +213,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                     syncOn -> "Your saves, play time, favourites and settings stay the same on every device, kept by ${prefs.sync.hostName.ifBlank { "your host" }}. RomM and Jellyfin come along when your household shares them."
                     syncthingOn -> "Fuse shares your emulators' save folders through Syncthing, brings in the newest save before a game, and asks when two devices both played."
                     syncthing == null -> "Fuse One keeps your saves, play time, favourites and settings the same on every device you play on, from a computer of your own at home. Stop on the PC, carry on on the handheld, and joining brings your household's RomM and Jellyfin too. One device? Skip this; it waits in Settings, Fuse One."
-                    else -> "Stop on the PC, carry on on the handheld. Fuse One is Fuse's own, and the one we recommend: it knows each game, adds up play time, gives each person their own saves, and brings your household's RomM and Jellyfin along. Already run Syncthing? Fuse can use it for your save folders instead, with one save per game for everyone. One device? Skip; both wait in Settings, Fuse One."
+                    else -> "Stop on the PC, carry on on the handheld. Choose one to move your saves: Fuse One is Fuse's own and the one we recommend (it knows each game, adds up play time, gives each person their own saves, and brings your household's games, RomM and Jellyfin along). Already run Syncthing? It can move your save folders instead: Fuse One's save sync then stays off, and the rest of Fuse One (profiles, each person's saves on this device, the household's games) still works. One device? Skip; both wait in Settings, Fuse One."
                 },
                 optional = true, icon = FuseIcons.RefreshCcw, chapter = Chapters.START,
                 actions = if (syncOn || syncthingOn) {
@@ -452,10 +452,30 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
         val cartridgeHere = platform.features.cartridge
         val rommHere = store.romm.supported
         val rommConnected = prefs.romm.enabled && prefs.romm.configured
+        // Fuse One's library (Fuse Library) is the first of the three ways in: every game on the
+        // household's devices, with no server to run. RomM can still come along beside it.
+        val fuseOneHere = store.sync.service != null
+        val fuseOneOn = prefs.sync.enabled && prefs.sync.role.isNotEmpty()
         // What the person answered; RomM counts as chosen once it is on, however it got there.
         val answer = when {
             rommConnected -> "FUSE"
             else -> prefs.rommAnswer
+        }
+        fun setUpFuseOne() {
+            val sync = store.sync.service ?: return
+            fun go(host: Boolean) {
+                app.scope.launch { store.sync.setEnabled(true) }
+                app.go(Route.SyncSetup(host))
+            }
+            if (!sync.canHost) { go(host = false); return }
+            app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+                title = "Fuse One", icon = FuseMarks.FuseOne,
+                message = "One computer at home keeps everything; every other device connects to it.",
+                options = listOf(
+                    MenuAction("host", "Make This the Host", FuseIcons.Server, detail = "This device keeps everyone's saves, settings and games list", onSelect = { app.choice = null; go(host = true) }),
+                    MenuAction("connect", "Connect to a Host", FuseIcons.Link2, detail = "Another device already keeps them", onSelect = { app.choice = null; go(host = false) }),
+                ),
+            )
         }
         fun answerRomm(choice: String) {
             store.updatePrefs { p ->
@@ -467,17 +487,23 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                 }
             }
         }
-        if (rommHere || cartridgeHere) add(Step(
-            "romm", "RomM", when (answer) {
+        if (rommHere || cartridgeHere || fuseOneHere) add(Step(
+            "romm", "Your game library", when (answer) {
+                "FUSEONE" -> if (fuseOneOn) "Fuse One brings your games" else "Set up Fuse One"
                 "FUSE" -> if (rommConnected) "RomM is connected" else "Connect RomM"
                 "CARTRIDGE" -> when {
                     cartridge.installed && cartridge.bridge -> "Cartridge is linked"
                     cartridge.installed -> "Cartridge found"
                     else -> "Install Cartridge"
                 }
-                else -> "Do you use RomM?"
+                else -> if (fuseOneOn) "Fuse One is recommended" else "Where are your other games?"
             },
             when (answer) {
+                "FUSEONE" -> if (fuseOneOn) {
+                    "Fuse Library is part of Fuse One: the games on every device in your household are in the Library under All, ready to play or fetch, with nothing else to run. RomM can come along too, if you keep one."
+                } else {
+                    "Fuse One's library needs a host: one computer at home that every device connects to. Set it up now and come straight back here, or carry on and add it later in Settings, Fuse One."
+                }
                 "FUSE" -> if (rommConnected) {
                     "Your RomM games are in the Library under All, next to everything else. Games you download land in the right folders and play like any other."
                 } else {
@@ -488,10 +514,27 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                     cartridge.installed -> "This Cartridge opens from Fuse. Version 0.9.10 or newer adds live download status and direct links."
                     else -> "Cartridge is a companion app that downloads games from your RomM server into the right folders. Install it now, or later from the Cartridge tab."
                 }
-                else -> "RomM is a game library server you run at home. If you keep your games on one, Fuse can connect to it directly, or work with Cartridge. If not, carry on: Fuse plays what is on this device."
+                else -> when {
+                    fuseOneOn -> "You chose Fuse One, so your household's games are already in the Library under All: Fuse Library is included. Keep a RomM server too? Connect it as well, or use Cartridge."
+                    fuseOneHere -> "Three ways in: Fuse One (recommended) brings in the games on every device you own, RomM connects to a game server you run at home, and Cartridge is a companion app for RomM. Or carry on: Fuse plays what is on this device."
+                    else -> "RomM is a game library server you run at home. If you keep your games on one, Fuse can connect to it directly, or work with Cartridge. If not, carry on: Fuse plays what is on this device."
+                }
             },
             optional = true, icon = FuseIcons.LibraryBig, chapter = Chapters.CONNECT,
             actions = when (answer) {
+                "FUSEONE" -> if (fuseOneOn) {
+                    listOfNotNull(
+                        StepAction("Continue", primary = true, run = next),
+                        StepAction("Also Connect RomM") { answerRomm("FUSE"); app.go(Route.RommSetup()) }.takeIf { rommHere },
+                        StepAction("Choose again") { answerRomm("") },
+                    )
+                } else {
+                    listOf(
+                        StepAction("Set Up Fuse One", primary = true) { setUpFuseOne() },
+                        StepAction("Later", run = next),
+                        StepAction("Choose again") { answerRomm("") },
+                    )
+                }
                 "FUSE" -> if (rommConnected) {
                     listOf(StepAction("Continue", primary = true, run = next), StepAction("Choose again") { answerRomm("") })
                 } else {
@@ -522,12 +565,16 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                     )
                 }
                 else -> listOfNotNull(
-                    StepAction("RomM", primary = true) {
+                    StepAction("Fuse One", primary = true) {
+                        answerRomm("FUSEONE")
+                        if (!fuseOneOn) setUpFuseOne()
+                    }.takeIf { fuseOneHere },
+                    StepAction("RomM", primary = !fuseOneHere) {
                         answerRomm("FUSE")
                         app.go(Route.RommSetup())
                     }.takeIf { rommHere },
-                    StepAction("Cartridge", primary = !rommHere, enabled = cartridgeHere, note = "Cartridge runs on Android and Linux") { answerRomm("CARTRIDGE") },
-                    StepAction("Neither") { answerRomm("NONE"); next() },
+                    StepAction("Cartridge", primary = !fuseOneHere && !rommHere, enabled = cartridgeHere, note = "Cartridge runs on Android and Linux") { answerRomm("CARTRIDGE") },
+                    StepAction("Neither") { answerRomm("NONE"); next() }.takeIf { !fuseOneOn },
                 )
             },
             content = {
@@ -537,6 +584,8 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                     cartridgeReady = cartridge.installed,
                     hasRomm = rommHere,
                     hasCartridge = cartridgeHere,
+                    hasFuseOne = fuseOneHere,
+                    fuseOneOn = fuseOneOn,
                 )
             },
         ))
@@ -554,7 +603,9 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                 listOf(StepAction("Continue", primary = true, run = next))
             } else {
                 listOf(
-                    StepAction("Connect Jellyfin", primary = true) { connectJellyfin(app) { if (state.index < state.total - 1) next() } },
+                    StepAction("Connect Jellyfin", primary = true) {
+                        if (store.jellyfin == null) connectJellyfin(app) { if (state.index < state.total - 1) next() } else app.go(Route.JellyfinSetup)
+                    },
                     StepAction("Skip", run = next),
                 )
             },

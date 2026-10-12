@@ -694,6 +694,18 @@ internal fun io.github.matiyaaa.fuse.model.QuickMenuLook.note(): String = when (
     io.github.matiyaaa.fuse.model.QuickMenuLook.GLASS -> "Tiles catch a light across their top, like glass"
 }
 
+internal fun io.github.matiyaaa.fuse.model.WidgetLook.label(): String = when (this) {
+    io.github.matiyaaa.fuse.model.WidgetLook.LIT -> "Lit"
+    io.github.matiyaaa.fuse.model.WidgetLook.TINTED -> "Tinted"
+    io.github.matiyaaa.fuse.model.WidgetLook.GLASS -> "Glass"
+}
+
+internal fun io.github.matiyaaa.fuse.model.WidgetLook.note(): String = when (this) {
+    io.github.matiyaaa.fuse.model.WidgetLook.LIT -> "Panels lit from a corner in each widget's own colour"
+    io.github.matiyaaa.fuse.model.WidgetLook.TINTED -> "Each widget washed in its own colour, so Home reads as colour"
+    io.github.matiyaaa.fuse.model.WidgetLook.GLASS -> "Frosted over the room, with a light across the top"
+}
+
 internal fun SoundProfile.icon(): ImageVector = if (this == SoundProfile.OFF) FuseIcons.VolumeOff else FuseIcons.Volume
 
 // ---------------------------------------------------------------------------------- spotlight

@@ -105,9 +105,24 @@ class DisplayMonitor(context: Context) {
                 }.map { it.refreshRate }.distinct().sorted(),
                 requestedRefreshRate = requested[d.displayId],
                 measuredRefreshRate = cadence[d.displayId],
+                hdrFormats = hdrOf(d),
             )
         }
     }
+
+    /** The HDR formats [d] reports, as Android names them; null when it can't be read. */
+    @Suppress("DEPRECATION")
+    private fun hdrOf(d: Display): List<String>? = runCatching {
+        d.hdrCapabilities?.supportedHdrTypes?.map { t ->
+            when (t) {
+                Display.HdrCapabilities.HDR_TYPE_DOLBY_VISION -> "Dolby Vision"
+                Display.HdrCapabilities.HDR_TYPE_HDR10 -> "HDR10"
+                Display.HdrCapabilities.HDR_TYPE_HLG -> "HLG"
+                HDR10_PLUS -> "HDR10+"
+                else -> "HDR"
+            }
+        }?.distinct() ?: emptyList()
+    }.getOrNull()
 
     /**
      * Private displays belong to one app and never take other windows. Recording and casting apps
@@ -158,3 +173,6 @@ class DisplayMonitor(context: Context) {
         val VIRTUAL_NAME_HINTS = listOf("virtual", "record", "capture", "cast", "mirror", "overlay", "projection")
     }
 }
+
+/** Display.HdrCapabilities.HDR_TYPE_HDR10_PLUS, named from Android 10 (Fuse runs from 9). */
+private const val HDR10_PLUS = 4

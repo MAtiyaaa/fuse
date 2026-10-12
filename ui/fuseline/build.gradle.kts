@@ -56,7 +56,7 @@ kotlin {
 tasks.withType<Test>().configureEach {
     systemProperty("fuse.bench", providers.gradleProperty("fuse.bench").getOrElse("false"))
     systemProperty("fuse.bench.only", providers.gradleProperty("fuse.bench.only").getOrElse(""))
-    for (name in listOf("fuse.bench.rounds", "fuse.bench.lenient", "fuse.fuzz.seeds", "fuse.fuzz.from", "fuse.fuzz.trail", "fuse.fuzz.debug")) {
+    for (name in listOf("fuse.bench.rounds", "fuse.bench.lenient", "fuse.bench.engines", "fuse.fuzz.seeds", "fuse.fuzz.from", "fuse.fuzz.trail", "fuse.fuzz.debug")) {
         providers.gradleProperty(name).orNull?.let { systemProperty(name, it) }
     }
     // The benchmark keeps thousands of values per engine alive at once.

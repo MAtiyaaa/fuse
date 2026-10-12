@@ -707,7 +707,18 @@ data class StreamingSettings(
     val wakeWaitSeconds: Int = 75,
     /** Which Moonlight to start when several are installed (an Android package, or a program path); empty picks one. */
     val client: String = "",
+    /**
+     * Games played by streaming them rather than here, Moonlight as their emulator: each game (by its
+     * id on this device) to the computer and the app there. A game's own choice wins over its system's.
+     */
+    val games: Map<String, StreamPick> = emptyMap(),
+    /** Systems whose games stream from a computer (by its id) unless a game chooses otherwise. */
+    val systems: Map<String, String> = emptyMap(),
 )
+
+/** A game streamed from [host] (a [StreamHostSettings.id]) as [app] there; empty: the app named as the game. */
+@Serializable
+data class StreamPick(val host: String, val app: String = "")
 
 /** One computer to stream from. [uniqueId] and [mac] are filled in from what it says about itself. */
 @Serializable

@@ -79,7 +79,13 @@ internal class CompanionPresentation(
      * game keeps it on by itself, and an idle device still sleeps.
      */
     fun setAway(away: Boolean) {
+        this.away = away
         val window = window ?: return
+        if (away || resting) {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            if (away) window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE) else window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+            return
+        }
         if (away) {
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
@@ -90,6 +96,26 @@ internal class CompanionPresentation(
     }
 
     private val app: FuseApplication get() = owner.application as FuseApplication
+
+    private var away = false
+
+    /** Fuse's standby (the anti-burn-in screen) is up: this screen goes dark with the main one. */
+    private var resting = false
+
+    /**
+     * Standby on or off. Resting, this screen no longer holds itself on and drops to its lowest
+     * brightness, black, so an OLED panel rests too; the system may then turn it off as it would any
+     * idle screen. Woken (a touch on either screen, or the controller), it is as it was.
+     */
+    private fun rest(on: Boolean) {
+        if (resting == on) return
+        resting = on
+        val window = window ?: return
+        window.attributes = window.attributes.apply {
+            screenBrightness = if (on) WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_OFF else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        }
+        setAway(away)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -118,6 +144,7 @@ internal class CompanionPresentation(
         window.hideSystemBars()
         refreshScope.launch {
             val store = app.awaitStore() ?: return@launch
+            launch { store.displaySession.standby.collect { rest(it) } }
             followWindowRefresh(window, app, store, display)
         }
     }

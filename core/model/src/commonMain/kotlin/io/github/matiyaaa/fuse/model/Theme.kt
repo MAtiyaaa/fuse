@@ -29,7 +29,18 @@ data class ThemeSpec(
     val wallpaper: Wallpaper? = null,
     /** How the quick menu's tiles and widgets are drawn. */
     val quickMenu: QuickMenuLook = QuickMenuLook.SOFT,
+    /** How Home's widgets are drawn. */
+    val widgets: WidgetLook = WidgetLook.LIT,
 )
+
+/**
+ * How Home's widgets are drawn: [LIT] is the raised panel with a soft light of the widget's own
+ * colour in a corner (Fuse's own); [TINTED] washes the whole widget in its colour, deeper at one
+ * side, so a board reads as colour; [GLASS] lets the room show through frosted, with a light
+ * across the top.
+ */
+@Serializable
+enum class WidgetLook { LIT, TINTED, GLASS }
 
 /**
  * How the quick menu's tiles and widgets are drawn: [SOFT] tints them faintly over the panel (Fuse's

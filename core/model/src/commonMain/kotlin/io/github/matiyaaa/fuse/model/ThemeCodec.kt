@@ -163,6 +163,7 @@ object ThemeCodec {
             crt = crt,
             wallpaper = wallpaper,
             quickMenu = enumOf(root.string("quickMenu"), start.quickMenu, "quick menu", notes),
+            widgets = enumOf(root.string("widgets"), start.widgets, "widgets", notes),
         )
         return Imported(spec, notes.distinct())
     }
@@ -203,6 +204,7 @@ object ThemeCodec {
             put("motion", spec.motion.name.lowercase())
             put("sound", spec.sound.name.lowercase())
             put("quickMenu", spec.quickMenu.name.lowercase())
+            put("widgets", spec.widgets.name.lowercase())
             put("glass", buildJsonObject {
                 put("enabled", spec.glass.enabled)
                 put("blur", spec.glass.blur)

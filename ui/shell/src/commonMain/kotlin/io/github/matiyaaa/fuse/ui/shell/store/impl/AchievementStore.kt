@@ -127,6 +127,20 @@ internal class DefaultAchievementOps(
                 val folders = listOfNotNull(game.location.path, io.github.matiyaaa.fuse.library.FsPath.parent(game.location.path))
                 localReader.ps3Trophies(ctx.services.emulators.rpcs3DevHdd0(ctx.installed.value), folders, game.tags.serial, game.displayTitle)
             }
+            game.platformId.value == "ps4" -> {
+                val users = ctx.services.emulators.shadPs4UserDirs(ctx.installed.value)
+                if (users.isEmpty()) null else {
+                    // The game's own npbind.dat names its trophy set; the folder is the game's, or holds its eboot.
+                    val fs = ctx.services.fs
+                    val folders = listOfNotNull(game.location.path, io.github.matiyaaa.fuse.library.FsPath.parent(game.location.path))
+                    val ids = folders.firstNotNullOfOrNull { f ->
+                        val path = io.github.matiyaaa.fuse.library.FsPath.join(f, "sce_sys", "npbind.dat")
+                        val size = runCatching { fs.stat(path) }.getOrNull()?.takeIf { !it.isDirectory && it.sizeBytes in 1..65_536 }?.sizeBytes ?: return@firstNotNullOfOrNull null
+                        runCatching { fs.readBytes(path, 0, size.toInt()) }.getOrNull()?.let(localReader::npCommIds)?.takeIf { it.isNotEmpty() }
+                    }.orEmpty()
+                    localReader.ps4Trophies(users, ids, game.displayTitle)
+                }
+            }
             else -> steamAppId(game)?.let { appId ->
                 val roots = runCatching { ctx.services.locations.steamRoots().roots }.getOrDefault(emptyList())
                 localReader.steam(roots, appId, steamAccount(roots))
@@ -142,7 +156,8 @@ internal class DefaultAchievementOps(
         val points = items.sumOf { it.points }
         val source = when (set.source) {
             io.github.matiyaaa.fuse.library.achievements.LocalAchievementSource.STEAM -> io.github.matiyaaa.fuse.model.AchievementSource.STEAM
-            io.github.matiyaaa.fuse.library.achievements.LocalAchievementSource.PS3_TROPHIES -> io.github.matiyaaa.fuse.model.AchievementSource.TROPHIES
+            io.github.matiyaaa.fuse.library.achievements.LocalAchievementSource.PS3_TROPHIES,
+            io.github.matiyaaa.fuse.library.achievements.LocalAchievementSource.PS4_TROPHIES -> io.github.matiyaaa.fuse.model.AchievementSource.TROPHIES
         }
         return AchievementState(
             raGameId = 0,

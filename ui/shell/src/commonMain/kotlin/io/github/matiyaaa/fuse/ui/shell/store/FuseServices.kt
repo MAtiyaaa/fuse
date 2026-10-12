@@ -190,6 +190,9 @@ interface EmulatorDetector {
     /** RPCS3's dev_hdd0 folders on this device, where its trophies are kept. */
     fun rpcs3DevHdd0(installed: List<InstalledEmulator>): List<String> = emptyList()
 
+    /** shadPS4's user folders on this device, where its trophies are kept. */
+    fun shadPs4UserDirs(installed: List<InstalledEmulator>): List<String> = emptyList()
+
     /**
      * Paths Fuse can never read on this device (Android 11+ `Android/data` of other apps). Firmware
      * that could only be there is reported as Unknown, never as Missing.

@@ -34,14 +34,23 @@ import io.github.matiyaaa.fuse.ui.shell.home.CARTRIDGE_TINT
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 
 /**
- * The stage for "Do you use RomM?": three cards fanned out. RomM in the middle, lit in the
- * accent; Cartridge to one side in its own orange; "Neither" to the other, quiet. Before an answer
- * the middle card leads; after one, the chosen card comes forward with a check and the others step
- * back. Each card says in three short lines what that choice means, so the buttons below need no
- * more explaining. Reduced Motion keeps the cards still.
+ * The stage for where else games come from: three cards fanned out. With Fuse One here, Fuse One is
+ * in the middle (recommended: its library is every game on the household's devices), RomM to one
+ * side and Cartridge to the other; without it, RomM leads with Cartridge and "Neither" beside it.
+ * Before an answer the middle card leads; after one, the chosen card comes forward and the others
+ * step back. Each card says in three short lines what that choice means, so the buttons below need
+ * no more explaining. Reduced Motion keeps the cards still.
  */
 @Composable
-internal fun RommChoiceStage(chosen: String, connected: Boolean, cartridgeReady: Boolean, hasRomm: Boolean, hasCartridge: Boolean) {
+internal fun RommChoiceStage(
+    chosen: String,
+    connected: Boolean,
+    cartridgeReady: Boolean,
+    hasRomm: Boolean,
+    hasCartridge: Boolean,
+    hasFuseOne: Boolean = false,
+    fuseOneOn: Boolean = false,
+) {
     val c = Fuse.colors
     val still = Fuse.motion.reduced
     val clock = rememberLoopClock("romm choice stage")
@@ -49,20 +58,25 @@ internal fun RommChoiceStage(chosen: String, connected: Boolean, cartridgeReady:
     val breathe by clock.animateFloat(0f, 1f, infiniteRepeatable(tween(2800), RepeatMode.Reverse), "breathe")
     val cartridgeTint = CARTRIDGE_TINT.toColor()
     val quiet = c.textMuted
-    // Which card leads: 0 Cartridge, 1 RomM, 2 Neither. Animated so the glow and cards glide.
-    val leadTarget = when (chosen) {
-        "CARTRIDGE" -> 0f
-        "NONE" -> 2f
-        else -> if (hasRomm) 1f else if (hasCartridge) 0f else 2f
-    }
+    // The cards, left to right: 0, 1 (the middle, which leads before an answer) and 2.
+    val left = if (hasCartridge) "CARTRIDGE" else null
+    val middle = if (hasFuseOne) "FUSEONE" else if (hasRomm) "FUSE" else null
+    val right = if (hasFuseOne) (if (hasRomm) "FUSE" else null) else "NONE"
+    val slots = listOf(left, middle, right)
+    val leadTarget = slots.indexOf(chosen).takeIf { it >= 0 }?.toFloat() ?: if (middle != null) 1f else if (left != null) 0f else 2f
     val lead by fuselineFloat(leadTarget, spring(dampingRatio = 0.8f, stiffness = 240f), label = "rommLead")
     fun weight(slot: Int) = (1f - kotlin.math.abs(lead - slot)).coerceIn(0f, 1f)
+    fun tintOf(kind: String?) = when (kind) {
+        "CARTRIDGE" -> cartridgeTint
+        "FUSEONE", "FUSE" -> c.accent
+        else -> quiet
+    }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(380.dp, 240.dp), contentAlignment = Alignment.Center) {
             Canvas(Modifier.matchParentSize()) {
                 val tint = when {
-                    lead <= 1f -> lerp(cartridgeTint, c.accent, lead)
-                    else -> lerp(c.accent, quiet, lead - 1f)
+                    lead <= 1f -> lerp(tintOf(left ?: middle), tintOf(middle), lead)
+                    else -> lerp(tintOf(middle), tintOf(right), lead - 1f)
                 }
                 val centre = Offset(size.width * (0.24f + 0.26f * lead), size.height / 2f)
                 drawCircle(
@@ -70,14 +84,10 @@ internal fun RommChoiceStage(chosen: String, connected: Boolean, cartridgeReady:
                     150.dp.toPx(), centre,
                 )
             }
-            val cards = buildList {
-                if (hasCartridge) add(0)
-                if (hasRomm) add(1)
-                add(2)
-            }
-            for (slot in cards) {
+            for (slot in 0..2) {
+                val kind = slots[slot] ?: continue
                 val w = weight(slot)
-                val x = when (slot) { 0 -> if (hasRomm) -116 else -64; 1 -> 0; else -> if (hasRomm || hasCartridge) 116 else 0 }
+                val x = when (slot) { 0 -> if (middle != null) -116 else -64; 1 -> 0; else -> if (middle != null || left != null) 116 else 0 }
                 val tilt = when (slot) { 0 -> -4f; 1 -> 0f; else -> 4f }
                 val m = Modifier.offset(x.dp, if (slot == 1) 0.dp else 10.dp).zIndex(w).graphicsLayer {
                     val s = 0.84f + 0.16f * w
@@ -88,18 +98,24 @@ internal fun RommChoiceStage(chosen: String, connected: Boolean, cartridgeReady:
                     shadowElevation = (6f + 18f * w).dp.toPx()
                     shape = RoundedCornerShape(22.dp)
                 }
-                when (slot) {
-                    0 -> ChoiceCard(
+                when (kind) {
+                    "CARTRIDGE" -> ChoiceCard(
                         name = "Cartridge", tag = if (chosen == "CARTRIDGE") if (cartridgeReady) "Ready" else "Chosen" else "Companion app",
                         tint = cartridgeTint, mark = FuseMarks.Cartridge,
                         lines = listOf(FuseIcons.Download to "Downloads for Fuse", FuseIcons.Server to "Your RomM server", FuseIcons.Link2 to "A separate app"),
                         on = chosen == "CARTRIDGE" && cartridgeReady, filled = false, modifier = m, width = 160.dp,
                     )
-                    1 -> ChoiceCard(
-                        name = "RomM", tag = when { connected -> "Connected"; chosen == "FUSE" -> "Chosen"; else -> "Recommended" },
+                    "FUSEONE" -> ChoiceCard(
+                        name = "Fuse One", tag = when { fuseOneOn -> "On"; chosen == "FUSEONE" -> "Chosen"; else -> "Recommended" },
+                        tint = c.accent, mark = FuseMarks.FuseOne,
+                        lines = listOf(FuseIcons.Library to "Every device's games", FuseIcons.Download to "Fetched when you play", FuseIcons.Server to "No server to run"),
+                        on = fuseOneOn, filled = true, modifier = m, width = 160.dp,
+                    )
+                    "FUSE" -> ChoiceCard(
+                        name = "RomM", tag = when { connected -> "Connected"; chosen == "FUSE" -> "Chosen"; hasFuseOne -> "Alongside, too"; else -> "Recommended" },
                         tint = c.accent, mark = FuseIcons.LibraryBig,
                         lines = listOf(FuseIcons.Server to "Straight to RomM", FuseIcons.Download to "Downloads in Fuse", FuseIcons.Upload to "Uploads too"),
-                        on = connected, filled = true, modifier = m, width = 160.dp,
+                        on = connected, filled = !hasFuseOne, modifier = m, width = 160.dp,
                     )
                     else -> ChoiceCard(
                         name = "Neither", tag = if (chosen == "NONE") "Chosen" else "This device only",
@@ -113,10 +129,11 @@ internal fun RommChoiceStage(chosen: String, connected: Boolean, cartridgeReady:
         Spacer(Modifier.height(Space.m))
         FText(
             when (chosen) {
+                "FUSEONE" -> if (fuseOneOn) "Fuse Library is included" else "Fuse One, with a host at home"
                 "FUSE" -> if (connected) "RomM is connected" else "RomM, built in"
                 "CARTRIDGE" -> if (cartridgeReady) "Cartridge is ready" else "Cartridge, alongside Fuse"
                 "NONE" -> "Just this device"
-                else -> "Three ways to bring in your games"
+                else -> if (hasFuseOne) "Fuse One is recommended" else "Three ways to bring in your games"
             },
             Fuse.type.bodyStrong, maxLines = 1,
         )

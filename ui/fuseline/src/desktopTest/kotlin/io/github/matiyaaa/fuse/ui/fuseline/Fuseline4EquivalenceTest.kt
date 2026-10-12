@@ -488,11 +488,13 @@ class Fuseline4EquivalenceTest {
                 val shownB = b.shows(i)
                 if ((shownA == null) != (shownB == null)) mismatch(after, i, "shown on one engine only")
                 if (shownA != null && shownB != null) {
-                    // Exact, except for a value brought back from resting unread: it may be told of its
-                    // next change a frame sooner or later than 3.1 would have. Each engine's reader then
-                    // shows a value within one publishing step (an eighth of a threshold) of the motion's
-                    // true place, so the two can differ by up to two steps, never more (see FuselineValue).
-                    val room = if (a.values[i].woken > 0) a.values[i].converter.threshold * 0.25f else 0f
+                    // Exact, except for a value brought back from resting unread, or one whose readers
+                    // watched Fuseline 4.1's shared pulse (read again whenever any value moved, not only
+                    // this one): it may be told of a change a frame sooner or later than 3.1 would have.
+                    // Each engine's reader then shows a value within one publishing step (an eighth of a
+                    // threshold) of the motion's true place, so the two can differ by up to two steps,
+                    // never more (see FuselineValue).
+                    val room = if (a.values[i].woken > 0 || a.values[i].pulsedRuns > 0) a.values[i].converter.threshold * 0.25f else 0f
                     for (c in 0 until a.values[i].converter.size) {
                         val x = shownA[c]
                         val y = shownB[c]

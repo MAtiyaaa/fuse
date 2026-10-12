@@ -110,6 +110,8 @@ import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.LocateRequest
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
+import io.github.matiyaaa.fuse.ui.shell.app.setSystemStream
+import io.github.matiyaaa.fuse.ui.shell.app.streamChoices
 import io.github.matiyaaa.fuse.ui.shell.app.startLocate
 import io.github.matiyaaa.fuse.ui.shell.components.SystemCardArt
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
@@ -899,9 +901,14 @@ fun AppState.platformEmulatorPicker(card: PlatformCard) {
         options = listOf(
             MenuAction("auto", "Automatic", FuseIcons.Sparkles, detail = "The first installed emulator in Fuse's recommended order", onSelect = {
                 scope.launch { store.emulators.setPlatformEmulator(card.platform.id, null) }
+                setSystemStream(card.platform.id, null)
                 choice = null
             }),
-        ) + options.map { o ->
+        ) + streamChoices(store.prefs.value.streaming.systems[card.platform.id.value]) { hostId ->
+            setSystemStream(card.platform.id, hostId)
+            choice = null
+            toasts.show("${card.platform.name} games stream with Moonlight from now on")
+        } + options.map { o ->
             // Where Fuse can be shown an emulator, one it didn't find can be located instead.
             val locate = !o.installed && store.emulators.canLocate
             MenuAction(
@@ -913,6 +920,7 @@ fun AppState.platformEmulatorPicker(card: PlatformCard) {
                         startLocate(LocateRequest(o.id, o.name, platform = card.platform.id))
                     } else {
                         scope.launch { store.emulators.setPlatformEmulator(card.platform.id, o.id) }
+                        setSystemStream(card.platform.id, null)
                         choice = null
                     }
                 },

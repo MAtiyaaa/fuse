@@ -124,9 +124,17 @@ class FolderInterpreter(
         ) {
             fs.stat(root)?.let { structure(it, children, walk) }
         } else null
-        val games = rootTitle?.let(::listOf) ?: scanLevel(root, children, depth = 0, walk = walk)
+        // A folder set aside for updates or DLC inside the system's own folder is read as that, first,
+        // so the scan of the system's folder passes over it rather than taking its files for games.
+        val inside = if (walk.switch && rootTitle == null) {
+            contentFolders.flatMap { folder ->
+                val path = FsPath.normalize(folder.path)
+                if (path.startsWith("$root/")) contentFiles(path, folder.kind, 0, walk) else emptyList()
+            }
+        } else emptyList()
+        val games = rootTitle?.let(::listOf) ?: (inside + scanLevel(root, children, depth = 0, walk = walk))
         if (!walk.switch) return walk.result(games)
-        // Folders the person keeps updates and DLC in, anywhere: their files join their games.
+        // Folders the person keeps updates and DLC in, anywhere else: their files join their games.
         val extra = ArrayList<ScannedGame>()
         for (folder in contentFolders) {
             val path = FsPath.normalize(folder.path)

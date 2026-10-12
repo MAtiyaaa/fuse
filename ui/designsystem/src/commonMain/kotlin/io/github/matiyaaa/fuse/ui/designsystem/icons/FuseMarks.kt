@@ -52,16 +52,16 @@ object FuseMarks {
     private const val MARK_STROKE = 8.5f
 
     /**
-     * Cartridge's own mark: a cartridge with its label window and its contact strip, as Cartridge
-     * draws it (`src/components/Logo.vue` in github.com/MAtiyaaa/cartridge, MIT). Readable from 16 px.
+     * Cartridge's own mark, its newer one ("Marquee", Cartridge 0.9.53): a rounded panel with a C cut
+     * out of it, as if lit from behind, as Cartridge draws it (`MARK` in `src/brand.js` of
+     * github.com/abdu2304/cartridge, MIT). One flat colour, even-odd, readable from 16 px.
      */
     val Cartridge: ImageVector by lazy {
         ImageVector.Builder(name = "Cartridge", defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 48f, viewportHeight = 48f)
             .addPath(
                 pathData = addPathNodes(
-                    "M10 3h21.6L41 12.4V41a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4z" +
-                        "M13 10.5a2 2 0 0 0-2 2V26a2 2 0 0 0 2 2h19a2 2 0 0 0 2-2V12.5a2 2 0 0 0-2-2z" +
-                        "M13.5 34a1.75 1.75 0 0 0 0 3.5h20a1.75 1.75 0 0 0 0-3.5z",
+                    "M8 2h32a6 6 0 0 1 6 6v32a6 6 0 0 1-6 6H8a6 6 0 0 1-6-6V8a6 6 0 0 1 6-6z" +
+                        "M24 11a13 13 0 1 0 11.3 19.4l-5.6-3.2A6.6 6.6 0 1 1 29.7 20.8l5.6-3.2A13 13 0 0 0 24 11z",
                 ),
                 pathFillType = PathFillType.EvenOdd,
                 fill = SolidColor(Color.Black),

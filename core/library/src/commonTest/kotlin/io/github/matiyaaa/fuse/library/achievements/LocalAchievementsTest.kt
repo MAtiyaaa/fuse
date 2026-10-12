@@ -122,4 +122,36 @@ class LocalAchievementsTest {
         assertNotNull(reader.ps3Trophies(listOf("/rpcs3/dev_hdd0"), emptyList(), null, "Uncharted: Drake's Fortune"))
         assertNull(reader.ps3Trophies(listOf("/rpcs3/dev_hdd0"), emptyList(), null, "Another Game"))
     }
+
+    @Test
+    fun ps4TrophiesComeFromShadPs4() = runTest {
+        // As shadPS4 keeps them (np_trophy.cpp): the set's TROP.XML, and each user's unlocks.
+        val trop = """<?xml version="1.0" encoding="UTF-8"?>
+<trophyconf version="1.0" platform="ps4">
+  <title-name>Bloodborne&#8482;</title-name>
+  <trophy id="000" hidden="no" ttype="P" pid="-1"><name>Bloodborne</name><detail>All trophies.</detail></trophy>
+  <trophy ttype="B" id="001" hidden="no"><name>Yharnam, Pthumerian Birthplace</name><detail>Discover &amp; enter.</detail></trophy>
+  <trophy id="002" hidden="yes" ttype="G"><name>Secret</name><detail>Hidden.</detail></trophy>
+</trophyconf>"""
+        val state = """<trophyconf><trophy id="0" hidden="no" ttype="P" unlockstate="false"/>
+<trophy id="1" unlockstate="true" timestamp="1700000000" ttype="B"/><trophy id="2" ttype="G" unlockstate="false" timestamp="0"/></trophyconf>"""
+        val fs = InMemoryFileSystem()
+            .file("/shadPS4/trophy/NPWR08661_00/Xml/TROP.XML", content = trop)
+            .file("/shadPS4/home/1000/trophy/NPWR08661_00.xml", content = state)
+            .file("/shadPS4/trophy/NPWR00001_00/Xml/TROP.XML", content = trop.replace("Bloodborne&#8482;", "Another Game"))
+        val reader = LocalAchievements(fs)
+        val npbind = "....NPWR08661_00\u0000\u0000....".encodeToByteArray()
+        assertEquals(listOf("NPWR08661_00"), reader.npCommIds(npbind))
+        val set = assertNotNull(reader.ps4Trophies(listOf("/shadPS4"), listOf("NPWR08661_00"), "Bloodborne"))
+        assertEquals(LocalAchievementSource.PS4_TROPHIES, set.source)
+        assertEquals(listOf("platinum", "bronze", "gold"), set.items.map { it.grade })
+        assertEquals("Discover & enter.", set.items[1].description)
+        assertEquals(1_700_000_000_000L, set.items[1].unlockedAt)
+        assertNull(set.items[0].unlockedAt)
+        assertTrue(set.items[2].hidden)
+        assertEquals("/shadPS4/trophy/NPWR08661_00/Icons/TROP001.PNG", set.items[1].icon)
+        // Without the game's npbind.dat, the set's title finds it; another set's never does.
+        assertEquals("Another Game", reader.ps4Trophies(listOf("/shadPS4"), emptyList(), "Another Game")?.title)
+        assertNull(reader.ps4Trophies(listOf("/shadPS4"), emptyList(), "Not There"))
+    }
 }

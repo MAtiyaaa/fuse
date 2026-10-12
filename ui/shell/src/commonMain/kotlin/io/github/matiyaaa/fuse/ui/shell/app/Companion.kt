@@ -158,7 +158,7 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
         return
     }
     val prefs by store.prefs.collectAsState()
-    val standby by store.displaySession.standby.collectAsState()
+    val standby by session.standby.collectAsState()
     val spec = prefs.theme
     FuseTheme(
         spec = spec,
@@ -169,11 +169,12 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
         colorVision = prefs.colorVision,
     ) {
         if (standby) {
-            val wakeScope = rememberCoroutineScope()
-            val wakeRouter = remember { io.github.matiyaaa.fuse.ui.designsystem.input.InputRouter(wakeScope) }
-            CompositionLocalProvider(io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter provides wakeRouter) {
-                StandbyScreen(prefs.clock24h) { store.displaySession.wake() }
-            }
+            // The second screen rests black while the main one shows Standby: nothing lit to wear an
+            // OLED panel, and a touch here wakes both.
+            Box(
+                Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)
+                    .pointerInput(Unit) { detectTapGestures { session.wake() } },
+            )
             return@FuseTheme
         }
         val home by store.homeFeed.collectAsState()

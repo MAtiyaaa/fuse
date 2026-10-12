@@ -327,7 +327,7 @@ internal fun Framed(
 ) {
     val c = Fuse.colors
     val tint = tint ?: if (feed != null && cartridge != null) widgetTint(kind, feed, cartridge) else c.text
-    BoxWithConstraints(Modifier.fillMaxSize().widgetSurface(c.surfaceRaised, tint.copy(alpha = if (c.isDark) WASH_DARK else WASH_LIGHT))) {
+    BoxWithConstraints(Modifier.fillMaxSize().widgetSurface(c.surfaceRaised, tint.copy(alpha = if (c.isDark) WASH_DARK else WASH_LIGHT), Fuse.look.spec.widgets)) {
         val room = widgetRoom(maxWidth, maxHeight)
         CompositionLocalProvider(LocalWidgetRoom provides room) {
             Column(Modifier.fillMaxSize().padding(if (room.compact) Space.m else Space.l)) {

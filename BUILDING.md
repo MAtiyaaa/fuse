@@ -62,6 +62,22 @@ platform services), `ui:link` (Phone Link), `ui:player`, `core:jellyfin` and `co
 desktop tests too, and CI runs every one of them. Test reports are written to
 `<module>/build/reports/tests/desktopTest/`.
 
+### Screen audits and visual changes
+
+The screen audit renders every screen, dialog and state at the sizes Fuse runs at (handhelds, phones,
+two-screen handhelds, laptops, ultrawides and TVs; right to left with `-Pfuse.audit.rtl=true`) and
+fails when a scenario's control is never reached. Two audit runs compare pixel by pixel with
+`scripts/visual-diff.py`, which writes a report of every screen that changed, the changes marked,
+and exits 1 when anything did:
+
+```sh
+./gradlew :ui:shell:desktopAudit -Pfuse.audit.dir=/tmp/before   # on the known-good commit
+./gradlew :ui:shell:desktopAudit -Pfuse.audit.dir=/tmp/after    # on the change
+python3 scripts/visual-diff.py /tmp/before /tmp/after /tmp/visual-report
+```
+
+`-Pfuse.audit.only=<group>/<scenario>` and `-Pfuse.audit.sizes=M` narrow a run.
+
 ## AppImage
 
 `scripts/build-appimage.sh` builds the desktop app and packages it as

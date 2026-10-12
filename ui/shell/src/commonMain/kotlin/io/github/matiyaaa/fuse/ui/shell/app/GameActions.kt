@@ -45,6 +45,8 @@ val AppState.gameConfirmLabel: String get() = if (store.prefs.value.openGamePage
  */
 fun AppState.play(card: GameCard, emulator: io.github.matiyaaa.fuse.model.EmulatorId? = null, discPath: String? = null) {
     if (launching != null) return
+    // Moonlight as its emulator: the game plays on a computer at home and streams here.
+    if (emulator == null && discPath == null) streamPickFor(card)?.let { streamInstead(card, it); return }
     // On two screens this may ask which one first; the veil only covers the launch itself.
     playOnChosenScreen(card) { display -> launch(card, emulator, discPath, display) }
 }
@@ -458,6 +460,7 @@ fun AppState.emulatorPicker(card: GameCard) {
     scope.launch {
         // Each emulator is checked against this game, so one that can't open it says why.
         val options = store.emulators.optionsForGame(card.id).ifEmpty { store.emulators.optionsFor(card.platformId) }
+        val streamed = store.prefs.value.streaming.games[card.id.value.toString()]?.host
         choice = ChoiceSpec(
             icon = FuseIcons.Chip,
             title = "Emulator for ${card.title}",
@@ -465,9 +468,14 @@ fun AppState.emulatorPicker(card: GameCard) {
             options = listOf(
                 MenuAction("default", "Use the system's emulator", FuseIcons.Layers, onSelect = {
                     scope.launch { store.library.setEmulator(card.id, null) }
+                    setStreamPick(card, null)
                     choice = null
                 }),
-            ) + options.sortedBy { it.unavailable != null }.map { o ->
+            ) + streamChoices(streamed) { hostId ->
+                setStreamPick(card, io.github.matiyaaa.fuse.data.settings.StreamPick(hostId))
+                choice = null
+                toasts.show("${card.title} streams with Moonlight from now on")
+            } + options.sortedBy { it.unavailable != null }.map { o ->
                 val locate = !o.installed && store.emulators.canLocate
                 MenuAction(
                     "e${o.id}", o.name, FuseIcons.Chip,
@@ -478,6 +486,7 @@ fun AppState.emulatorPicker(card: GameCard) {
                             startLocate(LocateRequest(o.id, o.name, game = card.id))
                         } else {
                             scope.launch { store.library.setEmulator(card.id, o.id) }
+                            setStreamPick(card, null)
                             choice = null
                         }
                     },

@@ -214,6 +214,12 @@ internal class HomeSpace(
         shownGame(w.kind, at)?.accent?.toColor() ?: widgetTint(w.kind, feed, cartridge).let { if (it == Fuse.colors.text) Fuse.colors.accent else it }
 
     override fun hero(w: HomeWidget?, at: Int): HeroSource? {
+        // The Systems widget shows a system at a time: it is what the room, and the second screen
+        // (with the emulator that plays it), follow, as on the Systems page.
+        if (w?.kind == WidgetKind.SYSTEMS) {
+            val system = feed.systems.getOrNull(at) ?: feed.systems.firstOrNull() ?: return null
+            return HeroSource(system.platform.id, system.art.hero, system.platform.accent.toColor())
+        }
         val game = w?.let { shownGame(it.kind, at) } ?: return null
         return game.room(systems[game.platformId])
     }

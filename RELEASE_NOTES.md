@@ -59,6 +59,9 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   asked for longest ago going first, only for paired devices, and only pictures; it learns each
   picture's address as a hash, never your own servers' pictures (Jellyfin, RomM). A host away or
   busy is skipped for a while, so art never waits on it.
+- **Trophies from shadPS4.** A PS4 game's trophies as shadPS4 keeps them (its trophy set's names
+  and pictures, and when each was earned), on the game's page beside RPCS3's for PS3. Only read:
+  Fuse never changes them.
 - **Trophy history across devices.** RPCS3's trophies earned on one of your devices are kept as
   history with the game and travel through Fuse One, so the game's trophies elsewhere say "Earned
   on Steam Deck" for one earned there. Only history: a trophy is never shown as earned in an
@@ -78,6 +81,9 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   app the household's computers offer through Sunshine or Apollo, once however many computers have
   it, wearing the library's art when the library has the game. With several computers offering
   it, Fuse asks which, saying which are on, asleep (woken first) or not answering.
+- **Moonlight as an emulator.** A game's or a system's emulator choices include each computer you
+  stream from: Play then wakes that computer if it sleeps and streams the game's app there, the app
+  named as the game, or the one you choose once. Choosing an emulator again plays it here.
 - **Haptics for what happens.** A light vibration with each notice, a firm pulse when something
   finishes well and a double knock when something didn't. On Windows and macOS the controller in
   use rumbles too, scaled by Settings, Input, Vibration.
@@ -200,8 +206,24 @@ and the library, and a first step toward Fuse knowing emulators for itself.
 - **Updates and DLC.** A game Fuse took for its own can be made an update, DLC, patch or mod of
   another game of the same system, and back again.
 - **Fuseline 4.1.** Cues: one clock that many parts of an entrance play from, so a page of tiles
-  coming in is one frame callback. Fuseline is publishable on its own as an SDK
+  coming in is one frame callback. A value that moves visibly frame after frame now tells its
+  readers through one shared pulse instead of a state of its own, so a frame of many moving values
+  writes one state rather than one per value. Measured against Fuseline 4 (kept unchanged in the
+  tests), see docs/fuseline.md. Fuseline is publishable on its own as an SDK
   (io.github.matiyaaa.fuseline:fuseline:4.1.0); see docs/fuseline-sdk.md.
+- **Your game library, in setup.** Setup's library step offers Fuse One (recommended: the games on
+  every device in your household, nothing else to run), RomM and Cartridge. With Fuse One on it
+  says the Fuse Library is already included, and RomM can still come along beside it.
+- **Jellyfin on a page of its own.** Setup and Settings set Jellyfin up on its own page: the
+  servers on this network, an address typed in, the one from outside, then signing in.
+- **A host for a Fuse One you already use.** Making a computer the host asks whether Fuse One is
+  already on another device, and then says how that device joins with its profiles, saves and
+  settings, nothing on it replaced.
+- **Home's widgets in your theme.** A theme draws Home's widgets Lit (Fuse's own), Tinted (each
+  washed in its own colour) or Glass (frosted over the room), the `widgets` key in a theme file;
+  the studio has it beside the quick menu, and some built-in themes use them.
+- **What a display reports.** Settings, Displays shows the refresh rates each display runs at and
+  the HDR formats it reports (Android), never guessing where the system doesn't say.
 - **Quick menu sections.** Along the top of the quick menu, as on Steam's: Quick settings (your
   grid), Downloads (what is moving with its progress, Pause everything, and what finished lately),
   Performance (the quality choice, Low Power Mode and the performance overlay) and Fuse (its own
@@ -275,6 +297,9 @@ and the library, and a first step toward Fuse knowing emulators for itself.
 - The game page names the game's folder and file, small, at its end. Option sheets show Select
   and Back. Hidden or removed games never ask for an art choice.
 - Developer, Start Onboarding can rehearse setup as Linux, Windows, macOS or Android.
+- Setup's save step says plainly to choose one: Syncthing in Fuse One's place turns only its save
+  sync off, and profiles, each person's saves on the device and the household's games keep working.
+- Cartridge wears its new mark wherever Fuse shows it.
 - Developer, Emulator support lists every emulator Fuse knows for the system, installed ones first:
   its version, how Fuse knows to start it, what Fuse has checked for itself and what it does with it
   (games, saves, patches, cheats, settings), with a report to copy or save without folder or user
@@ -282,6 +307,14 @@ and the library, and a first step toward Fuse knowing emulators for itself.
 
 ## Fixed
 
+- On a two-screen handheld the second screen goes dark with Standby, and no longer holds itself on
+  while the main screen rests; a touch on it wakes both.
+- Home's Systems widget brings its system to the room behind Home and to the second screen, as the
+  Systems page does.
+- A trackpad (a Mac's above all) turns a carousel, or Home's pages, once per swipe, instead of
+  racing through them or sliding the pages by halves.
+- A folder chosen for Switch updates or DLC inside the Switch folder itself no longer has its files
+  taken for games.
 - On Android with a right-to-left system language, Fuse was mirrored but the D-pad and shoulders
   still moved the left-to-right way; they now follow the screen.
 - Home's Systems widget no longer prints the maker's name under its own header, and a game's

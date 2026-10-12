@@ -189,6 +189,25 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
         private set
     private var previousFrame = Long.MIN_VALUE
 
+    /**
+     * Fuseline 4.1: one number that every value moving visibly frame after frame is watched through.
+     * A value that moved last frame and moves again this one tells its readers through this rather
+     * than through a state of its own, so a frame of many moving values writes one state, not one
+     * per value: Compose's snapshot then applies one change, and its observers look up one object.
+     * A value that comes to rest, is snapped or held, or stops moving visibly goes back to its own
+     * state (telling its readers through this one last time), so nothing reads a value that is still.
+     */
+    internal val pulse = androidx.compose.runtime.mutableIntStateOf(0)
+    private var pulses = 0
+    private var pulsedAt = Long.MIN_VALUE
+
+    /** Tells every reader of a pulsing value that this frame moved it ([always]: even if this frame already did). */
+    internal fun pulse(always: Boolean = false) {
+        if (!always && pulsedAt == lastFrame) return
+        pulsedAt = lastFrame
+        pulse.intValue = ++pulses
+    }
+
     /** While a frame is being stepped, and the move it has reached. */
     private var passing = false
     private var cursor = Long.MAX_VALUE
