@@ -359,6 +359,48 @@ class NativeCheatsStoreTest {
     }
 
     @Test
+    fun dolphinSettingsGoInItsOwnFilesAndSectionsAndComeBackAsTheyWere(): Unit = runBlocking {
+        val installed = InstalledEmulator(EmulatorId("linux.dolphin"), "Dolphin", Host.LINUX, "/usr/bin/dolphin-emu", platforms = setOf(PlatformId("ngc")), detectedVia = "PATH")
+        val services = services("dolphin.db", installed)
+        // A GameCube disc: its id first, the GameCube magic at 0x1C.
+        val disc = ByteArray(0x440).also { b ->
+            "GZLE01".encodeToByteArray().copyInto(b)
+            byteArrayOf(0xC2.toByte(), 0x33, 0x9F.toByte(), 0x3D).copyInto(b, 0x1C)
+        }
+        File(root, "gc").mkdirs()
+        File(root, "gc/Wind Waker.iso").writeBytes(disc)
+        val config = File(emu, "dolphin/config").apply { mkdirs() }
+        val main = File(config, "Dolphin.ini").apply { writeText("[Core]\nCPUThread = True\n") }
+        val gfx = File(config, "GFX.ini").apply { writeText("[Settings]\nInternalResolution = 2\n") }
+        services.dolphinHome = io.github.matiyaaa.fuse.launch.settings.DolphinHome(config.absolutePath, File(emu, "dolphin/data/GameSettings").absolutePath)
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = withTimeout(20_000) { store.library.games(GameQuery()).first { it.size == 1 } }.single()
+
+        // Every game's resolution is read from GFX.ini.
+        val view = assertIs<EmulatorSettingsView.Ready>(store.library.emulatorSettings(game.id))
+        assertEquals("2x (720p)", view.values.first { it.setting.id == "dolphin.resolution" }.label)
+        // This game's own goes in its file by the disc's id, under the game file's own section names.
+        assertTrue(store.library.setEmulatorSetting(game.id, null, "dolphin.resolution", "3"))
+        assertTrue(store.library.setEmulatorSetting(game.id, null, "dolphin.vsync", "True"))
+        val own = File(emu, "dolphin/data/GameSettings/GZLE01.ini")
+        assertEquals("[Video_Settings]\nInternalResolution = 3\n\n[Video_Hardware]\nVSync = True\n", own.readText())
+        assertEquals("3x (1080p)", assertIs<EmulatorSettingsView.Ready>(store.library.emulatorSettings(game.id)).values.first { it.setting.id == "dolphin.resolution" }.label)
+        assertTrue(store.library.restoreEmulatorSettings(game.id, null))
+        assertFalse(own.exists())
+
+        // For every game: graphics in GFX.ini, the rest in Dolphin.ini, and both put back.
+        assertTrue(store.library.setEmulatorSetting(null, installed.id, "dolphin.shaders", "2"))
+        assertTrue(store.library.setEmulatorSetting(null, installed.id, "dolphin.dualcore", "False"))
+        assertEquals("[Settings]\nInternalResolution = 2\nShaderCompilationMode = 2\n", gfx.readText())
+        assertEquals("[Core]\nCPUThread = False\n", main.readText())
+        assertTrue(assertIs<EmulatorSettingsView.Ready>(store.library.emulatorSettings(null, installed.id)).canRestore)
+        assertTrue(store.library.restoreEmulatorSettings(null, installed.id))
+        assertEquals("[Settings]\nInternalResolution = 2\n", gfx.readText())
+        assertEquals("[Core]\nCPUThread = True\n", main.readText())
+    }
+
+    @Test
     fun duckStationGameSettingsAreFiledUnderTheDiscsSerial(): Unit = runBlocking {
         val services = services("set2.db", duckstationInstalled)
         services.duckstationHome = duckStation()

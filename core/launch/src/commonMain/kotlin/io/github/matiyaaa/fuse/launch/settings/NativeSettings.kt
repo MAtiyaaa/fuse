@@ -22,7 +22,14 @@ data class NativeSetting(
     /** The emulator honours it in a game's own settings file. */
     val perGame: Boolean = true,
     val about: String? = null,
+    /** Which of the emulator's settings files holds it for every game, when it has several (Dolphin's `GFX`); null for its main one. */
+    val file: String? = null,
+    /** Its section in a game's own file, when that differs from [section] (Dolphin's `Video_Settings`). */
+    val gameSection: String? = null,
 ) {
+    /** The section it is kept under: in a game's own file when [game], else in the file for every game. */
+    fun sectionIn(game: Boolean): String = if (game) gameSection ?: section else section
+
     /** What [value] is called; a value Fuse doesn't offer is shown as it is written. */
     fun labelFor(value: String): String = choices.firstOrNull { same(it.value, value) }?.label ?: value
 
@@ -38,8 +45,9 @@ data class NativeSetting(
 /**
  * The settings Fuse offers for each emulator it can change them in, each checked against the
  * emulator's own settings code: PCSX2 (pcsx2/Pcsx2Config.cpp, GSOptions::LoadSave), DuckStation
- * (src/core/settings.cpp, Settings::Load) and PPSSPP (Core/Config.cpp, only those flagged PER_GAME
- * can be set for one game).
+ * (src/core/settings.cpp, Settings::Load), PPSSPP (Core/Config.cpp, only those flagged PER_GAME
+ * can be set for one game) and Dolphin (Core/Config/GraphicsSettings.cpp and MainSettings.cpp; a
+ * game's own file maps its sections onto them in Core/ConfigLoaders/GameConfigLoader.cpp).
  */
 object NativeSettings {
     private val onOff = listOf(SettingChoice("false", "Off"), SettingChoice("true", "On"))
@@ -49,11 +57,15 @@ object NativeSettings {
         "pcsx2" -> pcsx2(host)
         "duckstation" -> duckstation(host)
         "ppsspp" -> ppsspp()
+        "dolphin" -> dolphin()
         else -> emptyList()
     }
 
     /** The emulators Fuse changes settings in, by their family (`pcsx2`, from `linux.pcsx2`). */
-    val families = setOf("pcsx2", "duckstation", "ppsspp")
+    val families = setOf("pcsx2", "duckstation", "ppsspp", "dolphin")
+
+    /** Dolphin's graphics settings file (GFX.ini), beside Dolphin.ini. */
+    const val DOLPHIN_GFX = "GFX"
 
     private fun pcsx2(host: Host): List<NativeSetting> {
         val gs = "EmuCore/GS"
@@ -168,6 +180,46 @@ object NativeSettings {
         ),
         NativeSetting("ppsspp.hwtransform", "Graphics", "Hardware transform", "Graphics", "HardwareTransform", ppssppOnOff, "True"),
     )
+
+    /** Dolphin writes its switches as `True` and `False`. */
+    private val dolphinOnOff = listOf(SettingChoice("False", "Off"), SettingChoice("True", "On"))
+
+    private fun dolphin(): List<NativeSetting> = listOf(
+        NativeSetting(
+            "dolphin.resolution", "Graphics", "Internal resolution", "Settings", "InternalResolution",
+            listOf(
+                SettingChoice("1", "Native (480p)"), SettingChoice("2", "2x (720p)"), SettingChoice("3", "3x (1080p)"),
+                SettingChoice("4", "4x (1440p)"), SettingChoice("5", "5x (about 1800p)"), SettingChoice("6", "6x (4K)"),
+                SettingChoice("8", "8x (5K)"),
+            ),
+            "1", file = DOLPHIN_GFX, gameSection = "Video_Settings",
+            about = "How many times the console's resolution games are drawn at. Higher is sharper and needs a faster graphics card.",
+        ),
+        NativeSetting(
+            "dolphin.aspect", "Display", "Aspect ratio", "Settings", "AspectRatio",
+            listOf(SettingChoice("0", "Automatic"), SettingChoice("1", "Force 16:9"), SettingChoice("2", "Force 4:3"), SettingChoice("3", "Stretch to the window")),
+            "0", file = DOLPHIN_GFX, gameSection = "Video_Settings",
+        ),
+        NativeSetting(
+            "dolphin.widescreen", "Display", "Widescreen hack", "Settings", "wideScreenHack", dolphinOnOff, "False",
+            file = DOLPHIN_GFX, gameSection = "Video_Settings",
+            about = "Draws 3D scenes wider for a wide screen. A game's own widescreen option or patch is better where there is one.",
+        ),
+        NativeSetting(
+            "dolphin.shaders", "Graphics", "Shader compilation", "Settings", "ShaderCompilationMode",
+            listOf(
+                SettingChoice("0", "Specialized (default)"), SettingChoice("1", "Exclusive ubershaders"),
+                SettingChoice("2", "Hybrid ubershaders"), SettingChoice("3", "Skip drawing"),
+            ),
+            "0", file = DOLPHIN_GFX, gameSection = "Video_Settings",
+            about = "Hybrid ubershaders avoid most stutter while shaders compile, at some cost in speed.",
+        ),
+        NativeSetting("dolphin.vsync", "Display", "Vertical sync", "Hardware", "VSync", dolphinOnOff, "False", file = DOLPHIN_GFX, gameSection = "Video_Hardware"),
+        NativeSetting(
+            "dolphin.dualcore", "System", "Dual core", "Core", "CPUThread", dolphinOnOff, "True",
+            about = "Runs the graphics on a second core: much faster, and a few games are unstable with it.",
+        ),
+    )
 }
 
 /** Where a value comes from for one game: its own file, the emulator's for every game, or the emulator's default. */
@@ -188,7 +240,7 @@ object SettingsEdit {
     /** A setting's value for a game: the game's own file, else the emulator's file, else its default. */
     fun valueFor(setting: NativeSetting, game: IniText?, global: IniText?): SettingValue {
         val every = global?.values(setting.section, setting.key)?.lastOrNull()
-        val own = if (setting.perGame) game?.values(setting.section, setting.key)?.lastOrNull() else null
+        val own = if (setting.perGame) game?.values(setting.sectionIn(game = true), setting.key)?.lastOrNull() else null
         val everyGame = every ?: setting.default
         return when {
             own != null -> SettingValue(setting, own, SettingSource.GAME, everyGame)
@@ -234,4 +286,15 @@ object SettingsEdit {
         }
         return kept
     }
+}
+
+/**
+ * Dolphin's folders: [config] holds Dolphin.ini and GFX.ini (Config in its user folder, or its XDG
+ * config folder on Linux), and [gameSettings] each game's own file by its six-letter id.
+ */
+data class DolphinHome(val config: String, val gameSettings: String) {
+    /** The settings file for every game called [name] (`Dolphin`, `GFX`). */
+    fun file(name: String?): String = "$config/${name ?: "Dolphin"}.ini"
+
+    fun gameFile(id: String): String = "$gameSettings/$id.ini"
 }
