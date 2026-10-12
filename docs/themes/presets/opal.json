@@ -30,6 +30,7 @@
   "motion": "enhanced",
   "sound": "chime",
   "quickMenu": "glass",
+  "widgets": "glass",
   "glass": {
     "enabled": false,
     "blur": 24.0,

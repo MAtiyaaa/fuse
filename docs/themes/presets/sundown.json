@@ -27,6 +27,7 @@
   "motion": "enhanced",
   "sound": "click",
   "quickMenu": "solid",
+  "widgets": "tinted",
   "glass": {
     "enabled": false,
     "blur": 24.0,
