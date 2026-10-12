@@ -59,6 +59,10 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   asked for longest ago going first, only for paired devices, and only pictures; it learns each
   picture's address as a hash, never your own servers' pictures (Jellyfin, RomM). A host away or
   busy is skipped for a while, so art never waits on it.
+- **Trophy history across devices.** RPCS3's trophies earned on one of your devices are kept as
+  history with the game and travel through Fuse One, so the game's trophies elsewhere say "Earned
+  on Steam Deck" for one earned there. Only history: a trophy is never shown as earned in an
+  emulator that didn't award it, and the first time each was earned is the one kept.
 - **Sync without a household.** A device keeping its own profiles has its Sync page: each person's
   games, play time and the saves kept for them here, with what a host would add and the two ways
   to set one up.

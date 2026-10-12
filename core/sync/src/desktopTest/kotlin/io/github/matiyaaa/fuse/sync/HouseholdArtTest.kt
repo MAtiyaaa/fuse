@@ -61,3 +61,37 @@ class HouseholdArtTest {
         }
     }
 }
+
+/** Trophies earned on the person's devices travel as history: the first time each was earned, never an unlock elsewhere. */
+class TrophyHistoryTest {
+    private val key = GameKey.of("ps3", "BLUS30443", null, "Demon's Souls")
+
+    @Test
+    fun theFirstTimeEachWasEarnedIsKeptWhereverItWas() {
+        val deck = GameRecord(key, trophies = mapOf(
+            "ps3:1" to TrophyUnlock("ps3", "1", "First", 2_000, "deck", "Steam Deck"),
+            "ps3:2" to TrophyUnlock("ps3", "2", "Second", 5_000, "deck", "Steam Deck"),
+        ))
+        val pc = GameRecord(key, trophies = mapOf(
+            "ps3:1" to TrophyUnlock("ps3", "1", "First", 1_000, "pc", "Gaming PC"),
+            "ps3:3" to TrophyUnlock("ps3", "3", "Third", 9_000, "pc", "Gaming PC"),
+        ))
+        val merged = deck.merge(pc)
+        assertEquals(setOf("ps3:1", "ps3:2", "ps3:3"), merged.trophies.keys)
+        assertEquals("pc", merged.trophies.getValue("ps3:1").device, "the earlier one")
+        assertEquals(merged, pc.merge(deck), "the same either way round")
+    }
+
+    @Test
+    fun aTrophyEarnedHereGoesUpOnceAndOnlyWhenItIsNews() {
+        val clock = HlcClock("deck") { 1_000L }
+        val base = ProfileMeta().withGame(GameRecord(key, trophies = mapOf("ps3:1" to TrophyUnlock("ps3", "1", unlockedAt = 2_000, device = "pc"))))
+        val local = ProfileMeta().withGame(GameRecord(key, trophies = mapOf(
+            "ps3:1" to TrophyUnlock("ps3", "1", unlockedAt = 3_000, device = "deck"),
+            "ps3:2" to TrophyUnlock("ps3", "2", unlockedAt = 4_000, device = "deck"),
+        )))
+        val change = ProfileDiff.changes(base, local, "deck", clock)
+        assertEquals(setOf("ps3:2"), change.games.getValue(key.id).trophies.keys, "the household already knew of the first")
+        assertTrue(ProfileDiff.changes(local, local, "deck", clock).games.isEmpty())
+    }
+}

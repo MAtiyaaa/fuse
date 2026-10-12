@@ -135,6 +135,9 @@ internal class DefaultAchievementOps(
         // How rare each is, where Steam publishes it (public, nothing about the person sent).
         val rarity = if (set.source == io.github.matiyaaa.fuse.library.achievements.LocalAchievementSource.STEAM) steamAppId(game)?.let { steamRarity(it) }.orEmpty() else emptyMap()
         val items = set.items
+        // RPCS3's trophies earned here join the game's history, which Fuse One carries to the
+        // person's other devices; trophies earned on those are said where they were earned.
+        val elsewhere = if (set.source == io.github.matiyaaa.fuse.library.achievements.LocalAchievementSource.PS3_TROPHIES) trophyHistory(game, items) else emptyMap()
         val earned = items.count { it.unlockedAt != null }
         val points = items.sumOf { it.points }
         val source = when (set.source) {
@@ -159,7 +162,9 @@ internal class DefaultAchievementOps(
                     id = i.toLong(),
                     gameId = 0,
                     title = if (secret) "Hidden ${if (source == io.github.matiyaaa.fuse.model.AchievementSource.TROPHIES) "trophy" else "achievement"}" else a.name,
-                    description = if (secret) "Keep playing to find out." else a.description,
+                    description = (if (secret) "Keep playing to find out." else a.description) +
+                        // Earned on another device: said, never shown as earned here.
+                        (if (a.unlockedAt == null) elsewhere[a.id]?.let { " Earned on ${it.deviceName.ifBlank { "another device" }}." }.orEmpty() else ""),
                     points = a.points,
                     badgeUrl = a.icon.orEmpty(),
                     badgeLockedUrl = (a.iconLocked ?: a.icon).orEmpty(),
@@ -173,6 +178,22 @@ internal class DefaultAchievementOps(
             fetchedAt = ctx.now(),
             source = source,
         )
+    }
+
+    /**
+     * Notes the trophies [items] says were earned here in [game]'s history (once each, the first
+     * time) and answers the ones earned on another of the person's devices, by trophy id.
+     */
+    private suspend fun trophyHistory(game: Game, items: List<io.github.matiyaaa.fuse.library.achievements.LocalAchievement>): Map<String, io.github.matiyaaa.fuse.sync.TrophyUnlock> {
+        val sync = ctx.settings.value.sync
+        val device = sync.deviceId.ifBlank { "this-device" }
+        val here = items.filter { it.unlockedAt != null }.map { a ->
+            io.github.matiyaaa.fuse.sync.TrophyUnlock("ps3", a.id, a.name, a.unlockedAt!!, device, sync.deviceName, "rpcs3")
+        }
+        runCatching { TrophyHistory.add(ctx.data, game.id.value, here) }
+        return runCatching { TrophyHistory.read(ctx.data, game.id.value) }.getOrDefault(emptyList())
+            .filter { it.source == "ps3" && it.device != device }
+            .associateBy { it.id }
     }
 
     /**

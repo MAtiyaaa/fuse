@@ -120,6 +120,7 @@ internal class LibraryProfileData(
                     title = Lww(r.customTitle, Hlc.ZERO),
                     emulator = Lww(r.emulator, Hlc.ZERO),
                     name = r.customTitle ?: r.title,
+                    trophies = TrophyHistory.of(data, rows.map { it.id }),
                 )
             }
         }
@@ -189,6 +190,8 @@ internal class LibraryProfileData(
                 }
             }
             data.profileState.write(UserState(rows, sessions.distinct(), collections))
+            // Trophies earned on the person's other devices, kept as history beside each copy of the game.
+            for (r in state.games) meta.games[keys.getValue(r.id).id]?.trophies?.takeIf { it.isNotEmpty() }?.let { TrophyHistory.add(data, r.id, it.values) }
         }
         // Only what the profile has set comes in, and only when it is newer than what is kept here.
         // A new person starts from Fuse's defaults (SettingsStore), never from the previous person's
@@ -245,5 +248,34 @@ internal class LibraryProfileData(
         fun collectionId(createdAt: Long) = "c$createdAt"
 
         fun createdAtOf(id: String): Long = id.removePrefix("c").toLongOrNull() ?: (id.hashCode().toLong() and 0x7fffffff)
+    }
+}
+
+/**
+ * Trophies an emulator made, kept per library game (by its row) as history: earned here, or on
+ * the person's other devices (through Fuse One). Each kept once, the first time it was earned.
+ */
+internal object TrophyHistory {
+    private const val KIND = "trophies"
+    private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
+    suspend fun read(data: FuseData, game: Long): List<io.github.matiyaaa.fuse.sync.TrophyUnlock> = data.owned.get(KIND, game.toString()).mapNotNull {
+        runCatching { json.decodeFromString(io.github.matiyaaa.fuse.sync.TrophyUnlock.serializer(), it) }.getOrNull()
+    }
+
+    /** Every copy's history as one, by trophy. */
+    suspend fun of(data: FuseData, games: List<Long>): Map<String, io.github.matiyaaa.fuse.sync.TrophyUnlock> {
+        val out = HashMap<String, io.github.matiyaaa.fuse.sync.TrophyUnlock>()
+        for (g in games) for (t in read(data, g)) out[t.key] = io.github.matiyaaa.fuse.sync.TrophyUnlock.earlier(out[t.key], t)!!
+        return out
+    }
+
+    /** Adds [unlocks] to [game]'s history, keeping the earlier of two for one trophy; written only when it changed. */
+    suspend fun add(data: FuseData, game: Long, unlocks: Collection<io.github.matiyaaa.fuse.sync.TrophyUnlock>) {
+        val before = read(data, game).associateBy { it.key }
+        val after = HashMap(before)
+        for (t in unlocks) after[t.key] = io.github.matiyaaa.fuse.sync.TrophyUnlock.earlier(after[t.key], t)!!
+        if (after == before) return
+        data.owned.set(KIND, game.toString(), after.values.map { json.encodeToString(io.github.matiyaaa.fuse.sync.TrophyUnlock.serializer(), it) }.toSet())
     }
 }
