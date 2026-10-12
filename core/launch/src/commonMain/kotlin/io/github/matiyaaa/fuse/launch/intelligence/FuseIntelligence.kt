@@ -21,8 +21,14 @@ data class Learned(
     val since: Long,
     /** Where it keeps its settings, once found. */
     val config: Evidence? = null,
-    /** True when a look found no settings folder: looked for again only once the install changes. */
+    /**
+     * True when a look found no settings folder: looked for again when the install changes, and
+     * otherwise once [checkedAt] is [FuseIntelligence.RECHECK_MS] old, since an emulator makes its
+     * folder the first time it runs.
+     */
     val configNotFound: Boolean = false,
+    /** When the settings folder was last looked for. */
+    val checkedAt: Long = 0,
 )
 
 /** Everything Intelligence keeps, in Fuse's own file. */
@@ -74,6 +80,11 @@ class FuseIntelligence(
     look: ReadOnlyLook,
     private val clock: () -> Long,
 ) {
+    companion object {
+        /** How long "no settings folder" stands for an unchanged install before it is looked for again. */
+        const val RECHECK_MS = 6 * 60 * 60 * 1000L
+    }
+
     private val counted = CountingLook(look)
     private val json = Json { ignoreUnknownKeys = true }
     private var knowledge: Knowledge = runCatching { store.read()?.let { json.decodeFromString(Knowledge.serializer(), it) } }.getOrNull() ?: Knowledge()
@@ -96,8 +107,9 @@ class FuseIntelligence(
             val fp = fingerprint(e)
             val prev = next.emulators[key]
             val same = prev != null && prev.fingerprint == fp
-            // Unchanged, and the answer still there: nothing to do.
-            if (same && (prev!!.configNotFound || prev.config?.let { counted.isDirectory(it.value) } == true)) {
+            // Unchanged, and the answer still there (or "none" still recent): nothing to do.
+            val notFoundStill = prev?.configNotFound == true && clock() - prev.checkedAt < RECHECK_MS
+            if (same && (notFoundStill || prev!!.config?.let { counted.isDirectory(it.value) } == true)) {
                 reused++
                 continue
             }
@@ -105,7 +117,7 @@ class FuseIntelligence(
             val since = if (same) prev!!.since else clock()
             val rejected = next.rejected[key].orEmpty().toSet()
             val config = findConfig(e, rejected)
-            next = next.copy(emulators = next.emulators + (key to Learned(fp, since, config, configNotFound = config == null)))
+            next = next.copy(emulators = next.emulators + (key to Learned(fp, since, config, configNotFound = config == null, checkedAt = clock())))
         }
         if (next != knowledge) save(next)
         return LearnReport(reused, investigated, counted.count - before)

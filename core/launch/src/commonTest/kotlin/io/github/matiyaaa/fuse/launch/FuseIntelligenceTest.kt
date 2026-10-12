@@ -91,7 +91,7 @@ class FuseIntelligenceTest {
         val brain = brain()
         brain.learn(listOf(ppsspp))
         assertTrue(brain.known.emulators["linux.ppsspp"]!!.configNotFound)
-        // Its folder appears, but the install is the same: not looked for again.
+        // Its folder appears, but the install is the same: not looked for again for a while.
         disk.dirs += "/home/mo/.config/ppsspp"
         assertEquals(1, brain.learn(listOf(ppsspp)).reused)
         assertNull(brain.known.emulators["linux.ppsspp"]?.config)
@@ -101,6 +101,19 @@ class FuseIntelligenceTest {
         assertEquals(1, brain.learn(listOf(updated)).investigated)
         assertEquals("/home/mo/.config/ppsspp", brain.known.emulators["linux.ppsspp"]?.config?.value)
         assertEquals(5_000, brain.known.emulators["linux.ppsspp"]?.since)
+    }
+
+    @Test
+    fun noSettingsFolderIsLookedForAgainOnceTheAnswerIsOld() {
+        disk.programs["/usr/bin/PPSSPPSDL"] = 50
+        val brain = brain()
+        brain.learn(listOf(ppsspp))
+        assertTrue(brain.known.emulators["linux.ppsspp"]!!.configNotFound)
+        // First run of the emulator, the same install: found on the next look after the answer aged.
+        disk.dirs += "/home/mo/.config/ppsspp"
+        now += FuseIntelligence.RECHECK_MS
+        assertEquals(1, brain.learn(listOf(ppsspp)).investigated)
+        assertEquals("/home/mo/.config/ppsspp", brain.known.emulators["linux.ppsspp"]?.config?.value)
     }
 
     @Test

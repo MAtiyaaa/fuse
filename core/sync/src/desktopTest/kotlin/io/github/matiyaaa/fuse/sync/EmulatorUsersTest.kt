@@ -51,4 +51,19 @@ class EmulatorUsersTest {
         val pq = SaveQuery(GameKey.of("psp", "ULUS10041", null, "Game"), "psp", "C:/roms/game.iso", "ppsspp", emulatorPath = "C:/Emu/PPSSPP/PPSSPPWindows64.exe", serial = "ULUS10041")
         assertEquals("D:/PSP Stick/PSP/SAVEDATA", SaveAdapters.forEmulator("ppsspp")!!.locate(pq, psp).single().root)
     }
+
+    @Test
+    fun exAlphaKeepsTheBatterySaveBesideTheGameUnderItsOwnName() {
+        val env = Env("ANDROID", emptyMap())
+        fun spot(emu: String, platform: String, rom: String) =
+            SaveAdapters.forEmulator(emu)!!.locate(SaveQuery(GameKey.of(platform, null, null, "Game"), platform, rom, emu), env).single()
+        val gba = spot("gba-emu", "gba", "/storage/emulated/0/ROMs/gba/Minish Cap.zip")
+        assertEquals("/storage/emulated/0/ROMs/gba/Minish Cap.sav", gba.files.single().path)
+        assertEquals("sram", gba.format)
+        assertEquals("/storage/emulated/0/ROMs/snes/Zelda.srm", spot("snes9x-explus", "snes", "/storage/emulated/0/ROMs/snes/Zelda.sfc").files.single().path)
+        // A Disk System disk's changes are FCEUX's own form, never mixed with save RAM.
+        val fds = spot("nes-emu", "fds", "/storage/emulated/0/ROMs/fds/Metroid.fds")
+        assertEquals("/storage/emulated/0/ROMs/fds/Metroid.fds.sav", fds.files.single().path)
+        assertEquals("fds.fceux", fds.format)
+    }
 }

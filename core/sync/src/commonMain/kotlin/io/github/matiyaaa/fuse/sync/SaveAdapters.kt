@@ -126,7 +126,7 @@ interface SaveAdapter {
 object SaveAdapters {
     val all: List<SaveAdapter> = listOf(
         RetroArch, Lemuroid, DuckStation, Pcsx2, Ppsspp, Dolphin, MelonDs, NooDs, Mgba, SkyEmu, Mednafen, MyBoy, UnpublishedHandheld, Rpcs3, Vita3k, ShadPs4, Flycast,
-        DraStic, Mupen64, Redream, Epsxe, Fpse, PlayPs2, SaturnBackup, Mame, ScummVm,
+        DraStic, ExAlpha, Mupen64, Redream, Epsxe, Fpse, PlayPs2, SaturnBackup, Mame, ScummVm,
         ThreeDs, SwitchNand, Ryujinx, Cemu, Xenia, AnyPs5,
     )
 
@@ -151,6 +151,13 @@ object SaveAdapters {
         "steam", "steam-url", "desktop", "shortcut", "open", "script" -> "PC games keep their own saves (and Steam has its own cloud)."
         "winlator", "winlator-cmod", "winlator-frost", "winlator-glibc", "winlator-proot", "winnative", "gamehub", "gamehub-lite",
         "gamehub-lite-local", "gamenative", "bannerlator" -> "Windows games keep their own saves inside this app's Windows drive, a different place for every game."
+        "2600-emu" -> "Atari 2600 games have no saves of their own; the emulator's save states stay on this device."
+        "c64-emu", "msx-emu" -> "Games on this computer save to their own disk or tape images, which Fuse doesn't change. Keep those files in step with Syncthing."
+        "neo-emu", "ngp-emu", "swan-emu", "lynx-emu" -> "This EX+Alpha app keeps saves in a form Fuse doesn't read yet; RetroArch plays the same systems with saves Fuse keeps in step."
+        "android-app" -> "An Android game keeps its own saves inside its app."
+        "pico8" -> "PICO-8 keeps cartridge data in its own folder by cartridge; Fuse doesn't keep it in step yet."
+        "ruffle" -> "Flash games keep their saves in Ruffle's own storage by site; Fuse doesn't keep it in step yet."
+        "kytyps5" -> "This emulator is early, and where it keeps saves still changes between versions."
         "dosbox-staging", "dosbox-x" -> "DOS games save inside their own folders; keep those folders in step with Syncthing."
         "bachatas4", "sharpemu", "x1-box", "hakux" -> "This emulator is early, and where it keeps saves still changes between versions."
         "colem", "emucorec", "emucorev", "emucorex", "fmsx", "ines", "iratajaguar", "mastergear", "md-emu", "nesoid", "pce-emu",

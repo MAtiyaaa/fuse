@@ -27,6 +27,30 @@ internal object Lemuroid : SaveAdapter {
     }
 }
 
+/**
+ * EX+Alpha's GBA.emu, GBC.emu, NES.emu and Snes9x EX+ (EmuFramework/src/EmuSystem.cc,
+ * contentSaveFilePath): with the Main autosave slot, the battery save is `<game name>.sav`
+ * (`.fds.sav` for a Disk System disk, `.srm` for Snes9x EX+), in the save folder chosen in its
+ * options, else beside the game. A save folder chosen there is in its private settings, so the
+ * person chooses the same one in Fuse. A named autosave slot keeps its own copy, which Fuse leaves.
+ */
+internal object ExAlpha : SaveAdapter {
+    override val emulators = setOf("gba-emu", "gbc-emu", "nes-emu", "snes9x-explus")
+
+    override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
+        val dir = SaveAdapters.chosen(env, q) ?: SaveAdapters.parent(q.romPath)
+        val stem = SaveAdapters.stem(q.romPath)
+        val fds = q.platform == "fds" || q.romPath.endsWith(".fds", ignoreCase = true)
+        val (ext, format) = when {
+            SaveAdapters.baseId(q.emulatorId) == "snes9x-explus" -> ".srm" to SaveAdapters.sramFormat(q.platform)
+            // FCEUX keeps a disk's changes in its own form, not as save RAM another emulator reads.
+            fds -> ".fds.sav" to "fds.fceux"
+            else -> ".sav" to SaveAdapters.sramFormat(q.platform)
+        }
+        return listOf(SaveSpot(SaveKind.SAVE, format, listOf(SpotFile("save.srm", "$dir/$stem$ext"))))
+    }
+}
+
 /** DraStic: each game's save in `backup` as a `.dsv` (a raw DS save with DeSmuME's footer). */
 internal object DraStic : SaveAdapter {
     override val emulators = setOf("drastic")
