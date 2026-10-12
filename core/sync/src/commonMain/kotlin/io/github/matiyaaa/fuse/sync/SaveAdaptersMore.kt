@@ -627,6 +627,8 @@ internal object Cemu : SaveAdapter {
     }
 
     private val MLC = Regex("<mlc_path>([^<]*)</mlc_path>")
+    private val ACCOUNT = Regex("<AccountId>([0-9A-Fa-f]{8})</AccountId>")
+    private val ACCOUNT_ID = Regex("^[0-9A-Fa-f]{8}$")
 
     /**
      * Cemu's user data folder and the folder its settings.xml is in, as CemuApp.cpp sets them: a
@@ -658,7 +660,13 @@ internal object Cemu : SaveAdapter {
         val games = "$mlc/usr/save/00050000"
         val id = titleId(q, env) ?: SaveAdapters.learned(env, q, "wiiu.savedata").firstOrNull()?.let { "00050000" + it.uppercase() }
             ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "wiiu.savedata", SaveAdapters.PLAY_ONCE, learnIn = games))
-        return listOf(SaveSpot(SaveKind.SAVE, "wiiu.savedata", root = "$mlc/usr/save/${id.take(8).lowercase()}/${id.drop(8).lowercase()}/user"))
+        val user = "$mlc/usr/save/${id.take(8).lowercase()}/${id.drop(8).lowercase()}/user"
+        // The account Cemu plays as (settings.xml AccountId, its persistent id) and the data its
+        // accounts share (common): never every account's saves at once.
+        val account = found?.let { env.readText("${it.second}/settings.xml") }?.let { ACCOUNT.find(it)?.groupValues?.get(1)?.lowercase() }
+            ?: env.list(user).filter { ACCOUNT_ID.matches(it) }.singleOrNull()
+        val folders = account?.let { listOf(it, "common") }.orEmpty()
+        return listOf(SaveSpot(SaveKind.SAVE, "wiiu.savedata", root = user, folders = folders))
     }
 }
 
@@ -667,6 +675,7 @@ internal object Xenia : SaveAdapter {
     override val emulators = setOf("xenia", "xenia-canary")
     private val HEX8 = Regex("^[0-9A-Fa-f]{8}$")
     private val TAG8 = Regex("\\[([0-9A-Fa-f]{8})]")
+    private val SIGNED_IN = Regex("logged_profile_slot_0_xuid\\s*=\\s*\"([0-9A-Fa-f]{16})\"")
 
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
         // Its storage root (xenia_main.cc): beside the program when portable (Windows builds are,
@@ -682,8 +691,15 @@ internal object Xenia : SaveAdapter {
         val read = q.serial?.uppercase()?.takeIf { HEX8.matches(it) } ?: TAG8.find(q.romPath)?.groupValues?.get(1)?.uppercase()
         // Profiles by their XUID; all zeros holds what every profile shares (DLC), never a save.
         val profiles = env.list(content).filter { HEX16.matches(it) && it != "0000000000000000" }
-        val profile = profiles.firstOrNull { read != null && env.isDirectory("$content/$it/$read") } ?: profiles.firstOrNull()
-            ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "x360.savedata", "Play it once in Xenia so it makes its profile and save."))
+        // The profile Xenia signs in (its config's logged_profile_slot_0_xuid), else the only one
+        // with this game's save, else the only one: never another profile's save by accident.
+        val configDir = q.emulatorPath?.let { SaveAdapters.parent(it) }
+        val signedIn = listOfNotNull(configDir?.let { "$it/xenia-canary.config.toml" }, configDir?.let { "$it/xenia.config.toml" },
+            "$userFolder/Xenia/xenia-canary.config.toml", "$userFolder/Xenia/xenia.config.toml")
+            .firstNotNullOfOrNull { env.readText(it) }?.let { SIGNED_IN.find(it)?.groupValues?.get(1)?.uppercase() }
+        val withGame = profiles.filter { read != null && env.isDirectory("$content/$it/$read") }
+        val profile = signedIn?.let { s -> profiles.firstOrNull { it.equals(s, ignoreCase = true) } } ?: withGame.singleOrNull() ?: profiles.singleOrNull()
+            ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "x360.savedata", if (profiles.isEmpty()) "Play it once in Xenia so it makes its profile and save." else "Xenia has more than one profile, and Fuse couldn't tell which one you play as. Sign in with yours in Xenia once, then Fuse keeps its saves in step."))
         val id = read ?: SaveAdapters.learned(env, q, "x360.savedata").firstOrNull()
             ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "x360.savedata", SaveAdapters.PLAY_ONCE, learnIn = "$content/$profile"))
         return listOf(SaveSpot(SaveKind.SAVE, "x360.savedata", root = "$content/$profile/$id/00000001"))

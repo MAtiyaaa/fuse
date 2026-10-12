@@ -489,14 +489,34 @@ internal object Pcsx2 : SaveAdapter {
 internal object Ppsspp : SaveAdapter {
     override val emulators = setOf("ppsspp")
 
-    private fun memstick(env: SaveEnvironment, emuPath: String?, id: String?): String? = when (env.host) {
-        "WINDOWS" -> SaveAdapters.firstDir(env, emuPath?.let { SaveAdapters.join(SaveAdapters.parent(it), "memstick") }, "${SaveAdapters.documents(env)}/PPSSPP")
+    /**
+     * PPSSPP's memory stick (Windows/main.cpp, Core/Config.cpp): on Windows, installed.txt beside
+     * the program means an installed copy, whose memory stick is the folder that file names or
+     * Documents\PPSSPP; without it the copy is portable, with memstick beside it. A memstick_dir.txt
+     * in its folder names a memory stick chosen elsewhere.
+     */
+    private fun windows(env: SaveEnvironment, emuPath: String?): String? {
+        val dir = emuPath?.let { SaveAdapters.parent(it) }
+        val installed = dir?.let { env.readText("$it/installed.txt") }
+        if (dir != null && installed == null && env.isDirectory("$dir/memstick")) return "$dir/memstick"
+        installed?.trim()?.lineSequence()?.firstOrNull()?.trim()?.replace('\\', '/')?.trimEnd('/')?.takeIf { it.isNotEmpty() && env.isDirectory(it) }?.let { return it }
+        return SaveAdapters.firstDir(env, "${SaveAdapters.documents(env)}/PPSSPP")
+    }
+
+    private fun memstick(env: SaveEnvironment, emuPath: String?, id: String?): String? = memstickChosen(env, emuPath) ?: when (env.host) {
+        "WINDOWS" -> windows(env, emuPath)
         "MACOS" -> SaveAdapters.firstDir(env, "${env.home}/.config/ppsspp", "${SaveAdapters.macSupport(env)}/PPSSPP")
         "ANDROID" -> "/storage/emulated/0".takeIf { env.isDirectory("$it/PSP") }
             ?: DataFolders.find(env, "ppsspp", listOf("ppsspp", "psp"), holds = { r -> id != null && env.list("$r/PSP/SAVEDATA").any { it.uppercase().startsWith(id) } }) { d ->
                 d.takeIf { env.isDirectory("$it/PSP/SAVEDATA") || env.isDirectory("$it/PSP/SYSTEM") }
             }.firstOrNull()
         else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgConfig(env)}/ppsspp", "${env.home}/.var/app/org.ppsspp.PPSSPP/config/ppsspp")
+    }
+
+    /** A memory stick chosen in PPSSPP itself, named by memstick_dir.txt in its own folder. */
+    private fun memstickChosen(env: SaveEnvironment, emuPath: String?): String? {
+        val homes = listOfNotNull(emuPath?.let { SaveAdapters.parent(it) }, "${SaveAdapters.xdgConfig(env)}/ppsspp", "${env.home}/.var/app/org.ppsspp.PPSSPP/config/ppsspp")
+        return homes.firstNotNullOfOrNull { env.readText("$it/memstick_dir.txt") }?.trim()?.replace('\\', '/')?.trimEnd('/')?.takeIf { it.isNotEmpty() && env.isDirectory(it) }
     }
 
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
@@ -671,6 +691,7 @@ internal object Vita3k : SaveAdapter {
     override val emulators = setOf("vita3k")
 
     private val PREF = Regex("^pref-path:\\s*['\"]?(.*?)['\"]?\\s*$")
+    private val USER = Regex("^user-id:\\s*['\"]?(\\d+)['\"]?\\s*$")
 
     /** The folder holding the program, or a Mac app's folder, where a `portable` folder would be. */
     private fun programDir(emuPath: String?): String? = emuPath?.let { p ->
@@ -704,7 +725,13 @@ internal object Vita3k : SaveAdapter {
         val base = SaveAdapters.chosen(env, q)?.let { c -> if (env.isDirectory("$c/ux0")) "$c/ux0" else c }
             ?: (if (env.host == "ANDROID") null else ux0(env, q.emulatorPath))
             ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "vita.savedata", if (env.host == "ANDROID") SaveAdapters.androidPrivateNote("Vita3K") else "Vita3K's folder wasn't found here."))
-        val savedata = "$base/user/00/savedata"
+        // The user Vita3K plays as (config.yml user-id), else the only one there is, else its first, 00.
+        val configured = listOfNotNull(programDir(q.emulatorPath), "${SaveAdapters.xdgConfig(env)}/Vita3K", "${SaveAdapters.macSupport(env)}/Vita3K/Vita3K")
+            .firstNotNullOfOrNull { env.readText("$it/config.yml") }?.lineSequence()
+            ?.firstNotNullOfOrNull { USER.find(it.trim())?.groupValues?.get(1) }
+        val users = env.list("$base/user").filter { it.all(Char::isDigit) }
+        val user = configured?.takeIf { it in users || users.isEmpty() } ?: users.singleOrNull() ?: "00"
+        val savedata = "$base/user/$user/savedata"
         val id = q.serial?.uppercase()?.filter { it.isLetterOrDigit() } ?: run {
             val learned = SaveAdapters.learned(env, q, "vita.savedata")
             if (learned.isNotEmpty()) return listOf(SaveSpot(SaveKind.SAVE, "vita.savedata", root = savedata, folders = learned))
