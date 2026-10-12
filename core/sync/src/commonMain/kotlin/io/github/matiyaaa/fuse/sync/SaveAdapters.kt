@@ -620,8 +620,19 @@ internal object Rpcs3 : SaveAdapter {
             "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/rpcs3")
             else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgConfig(env)}/rpcs3", "${env.home}/.var/app/net.rpcs3.RPCS3/config/rpcs3")
         } ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "ps3.savedata", "RPCS3's folder wasn't found here."))
-        val savedata = "${hdd0(env, base)}/home/00000001/savedata"
-        val serial = q.serial?.uppercase()?.filter { it.isLetterOrDigit() } ?: run {
+        val home = "${hdd0(env, base)}/home"
+        val serial = q.serial?.uppercase()?.filter { it.isLetterOrDigit() }
+        // The user RPCS3 plays as (its GUI settings' active_user), else the only one with this game's
+        // save, else the only one there is: never another user's saves by accident.
+        val users = env.list(home).filter { it.length == 8 && it.all(Char::isDigit) }
+        val active = listOf("$base/GuiConfigs/CurrentSettings.ini", "$base/GuiConfigs/persistent_settings.dat").firstNotNullOfOrNull { f ->
+            env.readText(f)?.let { Regex("active_user\\s*[=:]\\s*\"?(\\d{8})").find(it)?.groupValues?.get(1) }
+        }
+        val withGame = serial?.let { s -> users.filter { u -> env.list("$home/$u/savedata").any { it.uppercase().startsWith(s) } } }.orEmpty()
+        val user = active?.takeIf { it in users || users.isEmpty() } ?: withGame.singleOrNull() ?: users.singleOrNull() ?: if (users.isEmpty()) "00000001" else null
+            ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "ps3.savedata", "RPCS3 has more than one user, and Fuse couldn't tell which one you play as. Log in as yours in RPCS3's User Manager once, then Fuse keeps that user's saves in step."))
+        val savedata = "$home/$user/savedata"
+        if (serial == null) run {
             val learned = SaveAdapters.learned(env, q, "ps3.savedata")
             if (learned.isNotEmpty()) return listOf(SaveSpot(SaveKind.SAVE, "ps3.savedata", root = savedata, folders = learned))
             return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "ps3.savedata", SaveAdapters.PLAY_ONCE, learnIn = savedata))

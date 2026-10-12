@@ -57,3 +57,33 @@ class RetroArchCoresTest {
         assertEquals("$ra/saves/Doom.pure.zip", pure.files.first().path)
     }
 }
+
+class Rpcs3UsersTest {
+    private class Env(val files: Map<String, String>) : SaveEnvironment {
+        override val host = "LINUX"
+        override val home = "/home/mo"
+        override fun exists(path: String) = path in files || files.keys.any { it.startsWith("$path/") }
+        override fun isDirectory(path: String) = files.keys.any { it.startsWith("$path/") }
+        override fun list(path: String) = files.keys.filter { it.startsWith("$path/") }.map { it.removePrefix("$path/").substringBefore('/') }.distinct().sorted()
+        override fun readText(path: String, limit: Int) = files[path]
+    }
+
+    private val base = "/home/mo/.config/rpcs3"
+    private val q = SaveQuery(GameKey.of("ps3", "BLUS30109", null, "Game"), "ps3", "/roms/ps3/Game", "rpcs3", serial = "BLUS30109", title = "Game")
+
+    @Test
+    fun theActiveUsersSavesNotTheFirstUsers() {
+        val env = Env(mapOf(
+            "$base/dev_hdd0/home/00000001/savedata/BLUS30109-A/SAVE" to "x",
+            "$base/dev_hdd0/home/00000002/savedata/" to "",
+            "$base/GuiConfigs/CurrentSettings.ini" to "[Meta]\nactive_user=00000002\n",
+        ))
+        assertEquals("$base/dev_hdd0/home/00000002/savedata", SaveAdapters.forEmulator("rpcs3")!!.locate(q, env).single().root)
+        // No active user said: the only one with this game's save.
+        val noActive = Env(env.files - "$base/GuiConfigs/CurrentSettings.ini")
+        assertEquals("$base/dev_hdd0/home/00000001/savedata", SaveAdapters.forEmulator("rpcs3")!!.locate(q, noActive).single().root)
+        // Two users, neither with it, none said: Fuse doesn't guess.
+        val unsure = Env(mapOf("$base/dev_hdd0/home/00000001/savedata/" to "", "$base/dev_hdd0/home/00000002/savedata/" to ""))
+        assertFalse(SaveAdapters.forEmulator("rpcs3")!!.locate(q, unsure).single().available)
+    }
+}
