@@ -169,8 +169,9 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   made to read on every theme; and Layout direction: Automatic follows the system's language, so
   Fuse mirrors for Arabic, Hebrew, Persian and Urdu, or always left to right or right to left.
   Mirrored, the D-pad, shoulders and touch follow the screen, Home's board mirrors with its widgets,
-  arrows and chevrons turn round, and a line that starts with a number keeps its order. Game,
-  system and app tiles tell screen readers what they are.
+  arrows and chevrons turn round, the on-screen keyboard keeps its keys in their order, and a line
+  that starts with a number keeps its order. Game, system and app tiles tell screen readers what
+  they are.
 - **What other apps may do.** The Fuse Decky plugin and Phone Link each do only what you allow,
   set where each is set up (Settings, Library, Decky; Settings, Accounts, Phone Link): see what Fuse
   shows, see or change your library, open games, type into Fuse, see captures, and, for the plugin,
