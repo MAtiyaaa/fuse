@@ -36,4 +36,10 @@ class ListNumberNamesTest {
         assertEquals("007 GoldenEye", display("007 GoldenEye.z64"))
         assertEquals("3-D WorldRunner", display("3-D WorldRunner.nes"))
     }
+
+    @Test
+    fun aSceneSwitchNameSearchesAsTheGame() {
+        // The name another device's save carries, matched to this library's game by its search title.
+        assertEquals("Red Dead Redemption", search("[ROMsNS] Red Dead Redemption v0 (01007820196A6000) (BASE).nsp"))
+    }
 }

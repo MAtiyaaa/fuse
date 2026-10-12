@@ -67,4 +67,19 @@ class StaticRenderingTest {
             assertTrue(different > 1000, "$w x $h must not repeat the old128px grain field")
         }
     }
+
+    @Test fun grainDithersEvenOverNearBlack() {
+        // A glow over a dark room: the grain must move pixels by whole 8-bit steps there too, or bands show.
+        val image = ImageBitmap(256, 64)
+        val base = Color(10 / 255f, 8 / 255f, 12 / 255f)
+        CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(image), Size(256f, 64f)) {
+            drawRect(base)
+            drawGrain()
+        }
+        val pixels = image.toPixelMap()
+        val levels = HashSet<Int>()
+        for (y in 0 until 64) for (x in 0 until 256) levels += (pixels[x, y].red * 255f + 0.5f).toInt()
+        assertTrue(levels.size >= 2, "dark pixels take at least two neighbouring levels, not one flat band: $levels")
+        assertTrue(levels.all { it in 9..14 }, "and stay within a step or two of the colour: $levels")
+    }
 }

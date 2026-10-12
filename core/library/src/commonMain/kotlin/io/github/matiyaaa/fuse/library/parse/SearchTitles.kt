@@ -71,6 +71,8 @@ object SearchTitles {
     private val discIdInFront = Regex("^[GRSDW][A-Z0-9]{2}[EJPDFISKUXYZWA]\\d[0-9A-Z](?:\\s*[-.:]\\s*|\\s+)")
     private val edges = Regex("^[\\s.,;:-]+|[\\s,;:-]+$")
     private val emptySeparators = Regex("(?<=\\s)-(?:\\s+-)+(?=\\s|$)")
+    private val titleIdAnywhere = Regex("(?<![0-9A-Fa-f])(?:0004[0-9A-Fa-f]{12}|01[0-9A-Fa-f]{14})(?![0-9A-Fa-f])")
+    private val dumpVersion = Regex("\\s+v\\d+$", RegexOption.IGNORE_CASE)
     private val bareNumber = Regex("^\\d{1,3}\\s+(?=\\p{L})")
 
     // Splits "SuperMarioWorld", "NBAJam", "3DDot", "Mario64" and "1080Snowboarding", never after "Mc"
@@ -136,6 +138,8 @@ object SearchTitles {
             t = t.without(edges)
         } while (t != previous)
 
+        // A Switch or 3DS dump names its content version ("v0", "v131072") beside the title id.
+        if (titleIdAnywhere.containsMatchIn(original)) t = t.without(dumpVersion)
         t = DisplayNameCleaner.invertArticles(t)
         t = collapse(t.replace(emptySeparators, "-")).removePrefix("- ").removeSuffix(" -").trim()
         var unsplit: String? = null

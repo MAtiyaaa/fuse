@@ -54,4 +54,16 @@ class CueTest {
         clock.close()
         assertEquals(1f, cue.progress(0, 400))
     }
+
+    @Test
+    fun aCueStoppedBeforeItsFirstFrameNeverLeavesAPartHidden() {
+        // A page composed and dropped before a frame reached it (a fast page turn on Home): its
+        // widgets must be drawn in place, not held at their first, invisible frame.
+        val cue = Cue(clock.scope)
+        cue.join(400)
+        assertEquals(0f, cue.progress(0, 400), "the one hidden frame before the entrance starts")
+        clock.close()
+        assertEquals(1f, cue.progress(0, 400))
+        assertEquals(1f, cue.progress(200, 400))
+    }
 }

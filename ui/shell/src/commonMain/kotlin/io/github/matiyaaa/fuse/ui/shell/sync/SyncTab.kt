@@ -461,7 +461,7 @@ private fun GameRow(g: GameReport, card: io.github.matiyaaa.fuse.ui.shell.store.
     val saves = g.slots.filter { it.kind != io.github.matiyaaa.fuse.sync.SaveKind.STATE }.sumOf { it.versions.size }
     val states = g.slots.filter { it.kind == io.github.matiyaaa.fuse.sync.SaveKind.STATE }.sumOf { it.versions.size }
     val bytes = g.slots.sumOf { it.bytes }
-    val title = card?.title ?: g.name
+    val title = card?.title ?: io.github.matiyaaa.fuse.library.parse.DisplayNameCleaner.clean(g.name)
     val shape = RoundedCornerShape(Fuse.geometry.control)
     val bg by fuselineColor(if (selected) c.surfaceRaised else c.surface.copy(alpha = 0.55f), Fuse.motion.tween(Durations.FAST), label = "syncGame")
     Row(
@@ -502,7 +502,16 @@ private fun GameRow(g: GameReport, card: io.github.matiyaaa.fuse.ui.shell.store.
 
 /** Each game's cover from this library, where it has the game: by its id across devices, or its name. */
 internal class SyncCovers(private val map: Map<String, io.github.matiyaaa.fuse.ui.shell.store.GameCard>) {
-    fun of(game: String, name: String) = map[game] ?: map["name:" + name.lowercase()]
+    /**
+     * By the household's id, then the name as given, then the name as the library searches it: a
+     * save made on another device carries that device's file name ("[ROMsNS] Red Dead Redemption
+     * v0 (01007820196A6000) (BASE)") while this library shows the game's own.
+     */
+    fun of(game: String, name: String) = map[game] ?: map["name:" + name.lowercase()] ?: map[searchKey(name)]
+
+    companion object {
+        fun searchKey(name: String) = "search:" + io.github.matiyaaa.fuse.library.parse.SearchTitles.clean(name).lowercase()
+    }
 }
 
 @Composable
@@ -514,6 +523,7 @@ internal fun rememberSyncCovers(app: AppState): SyncCovers {
                 for (card in cards) {
                     put(io.github.matiyaaa.fuse.sync.GameKey.of(card.platformId.value, null, null, card.title).id, card)
                     put("name:" + card.title.lowercase(), card)
+                    putIfAbsent(SyncCovers.searchKey(card.title), card)
                 }
             })
         }.flowOn(kotlinx.coroutines.Dispatchers.Default).collect { value = it }
