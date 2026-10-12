@@ -13,6 +13,9 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.withFrameNanos
 import io.github.matiyaaa.fuse.ui.designsystem.effects.UiRenderTrace
 import io.github.matiyaaa.fuse.ui.designsystem.effects.traceUiRoot
+import io.github.matiyaaa.fuse.ui.designsystem.effects.drawDither
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
@@ -73,6 +76,14 @@ fun main(args: Array<String>) {
     CrashLog(java.io.File(dirs.data, "crash")).install()
     Log.info("Fuse ${BuildInfo.VERSION} starting")
     goBackFromAFailedUpdate(dirs, args)
+    // The desktop's own scale where Java's toolkit can't follow it (fractional scaling on Linux).
+    desktopScale = runCatching {
+        val javaScale = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().defaultScreenDevice.defaultConfiguration.defaultTransform.scaleX
+        val dpi = io.github.matiyaaa.fuse.desktop.system.DesktopScale.readDpi()
+        io.github.matiyaaa.fuse.desktop.system.DesktopScale.extra(dpi, javaScale, System.getenv("FUSE_SCALE")).also {
+            Log.info("Display scale: Java ${javaScale}x, Xft.dpi ${dpi ?: "unset"}, Fuse draws ${it}x on top")
+        }
+    }.getOrDefault(1f)
     // Lives as long as the process; runs on the AWT event thread, which is Compose's UI thread.
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     application {
@@ -101,6 +112,9 @@ private fun goBackFromAFailedUpdate(dirs: FuseDirs, args: Array<String>) {
         kotlin.system.exitProcess(0)
     }
 }
+
+/** How much larger than Java's own scale Fuse draws (see DesktopScale); 1 almost everywhere. */
+private var desktopScale = 1f
 
 /**
  * What the window is really drawn with (Skiko's render info names the GL driver), where it is shown
@@ -199,11 +213,20 @@ private fun ApplicationScope.FuseWindow(session: DesktopSession) {
                     }
                 }
             }
+            val gpu = session.platform.drawing.collectAsState().value?.gpu != false
+            val outer = androidx.compose.ui.platform.LocalDensity.current
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalDensity provides if (desktopScale == 1f) outer else androidx.compose.ui.unit.Density(outer.density * desktopScale, outer.fontScale),
+            ) {
             Box(
                 Modifier
                     .traceUiRoot()
                     .fillMaxSize()
                     .background(io.github.matiyaaa.fuse.desktop.ui.FuseBrand.Ink)
+                    // Skia on a desktop draws gradients undithered, so every soft light bands in
+                    // 8-bit steps; one dither over the whole window breaks them all up, at the cost
+                    // of a single textured rectangle on the graphics card (not drawn on the processor).
+                    .then(if (gpu) Modifier.drawWithContent { drawContent(); drawDither() } else Modifier)
                     .pointerInput(Unit) {
                         awaitPointerEventScope {
                             while (true) {
@@ -230,6 +253,7 @@ private fun ApplicationScope.FuseWindow(session: DesktopSession) {
                         FuseApp(s.store, session.platform, session.router, s.phoneLink, safeMode = s.safeMode, onSettled = session::settled, startupIntro = true, keepPlace = true)
                     }
                 }
+            }
             }
         }
     }

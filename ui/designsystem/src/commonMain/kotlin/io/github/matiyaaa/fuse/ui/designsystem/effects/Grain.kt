@@ -38,6 +38,13 @@ fun DrawScope.drawGrain(strength: Float = GRAIN_STRENGTH) {
     drawRect(Grain.dither)
 }
 
+/**
+ * The dither alone, over everything already drawn (a whole window): 0 to 2 steps of light per
+ * pixel, which is what breaks the bands of every gradient under it where the graphics library
+ * doesn't dither them itself (Skia on desktops, unlike Android's).
+ */
+fun DrawScope.drawDither() = drawRect(Grain.dither)
+
 /** How much grain: enough to break up bands, never enough to be seen as texture. */
 const val GRAIN_STRENGTH = 0.07f
 

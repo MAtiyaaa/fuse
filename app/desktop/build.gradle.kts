@@ -109,6 +109,11 @@ compose.desktop {
         jvmArgs += "-Dfile.encoding=UTF-8"
         // Lets Main set the X11 WM_CLASS to "fuse" so desktops match the window to fuse.desktop.
         if (packagingOs == "linux") jvmArgs += "--add-opens=java.desktop/sun.awt.X11=ALL-UNNAMED"
+        // The default collector (G1) stops the interface thread for 6 ms typically and up to 35 ms
+        // under Fuse's drawing load: frames skipped, seen as choppy motion at 60 and 90 Hz. ZGC
+        // collects while the interface keeps drawing (its pauses measured under 0.03 ms on the same
+        // run of Home), so motion stays even. desktopPerf, home, with -Xlog:gc,gc+phases.
+        if (packagingOs == "linux") jvmArgs += "-XX:+UseZGC"
 
         buildTypes.release.proguard {
             isEnabled.set(false)
