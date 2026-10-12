@@ -178,6 +178,8 @@ data class HomeFeed(
     val mostPlayed: List<GameCard> = emptyList(),
     val systems: List<PlatformCard> = emptyList(),
     val collections: List<GameCollection> = emptyList(),
+    /** The art standing for each series: its first game's (see [CollectionTile]). */
+    val seriesArt: Map<io.github.matiyaaa.fuse.model.CollectionId, Art> = emptyMap(),
     val pinnedApps: List<AppCard> = emptyList(),
     val playtime: PlaytimeSummary = PlaytimeSummary(),
     val achievements: AchievementsFeed? = null,

@@ -189,6 +189,32 @@ class FuseIntelligence(
     }
 
     private fun executable(e: InstalledEmulator): CheckResult {
+        val ran = runs(e)
+        if (ran.state != CheckState.DONE) return ran
+        return needsVulkan(e) ?: ran
+    }
+
+    /**
+     * An emulator that draws only with Vulkan (shadPS4) can't start without a Vulkan library on the
+     * system; looked for by name where Linux distributions and Windows keep it, never opened. A
+     * Flatpak brings its own, so it isn't asked. Where none of the usual folders exists (an unusual
+     * layout), Fuse says nothing rather than guess.
+     */
+    private fun needsVulkan(e: InstalledEmulator): CheckResult? {
+        if (e.id.value.substringAfterLast('.') !in VULKAN_ONLY || flatpak(e)) return null
+        val places = when (e.host) {
+            Host.LINUX -> listOf("/usr/lib", "/usr/lib64", "/usr/lib/x86_64-linux-gnu", "/usr/lib/aarch64-linux-gnu", "/lib/x86_64-linux-gnu", "/lib64")
+                .map { it to "$it/libvulkan.so.1" }
+            Host.WINDOWS -> listOf((counted.env("SystemRoot") ?: "C:/Windows").replace('\\', '/') + "/System32").map { it to "$it/vulkan-1.dll" }
+            else -> return null
+        }
+        val looked = places.filter { counted.isDirectory(it.first) }
+        if (looked.isEmpty()) return null
+        if (looked.any { counted.exists(it.second) }) return null
+        return CheckResult(Check.EXECUTABLE, CheckState.NOT_YET, "It draws only with Vulkan, and no Vulkan library was found. Install your graphics driver's Vulkan support")
+    }
+
+    private fun runs(e: InstalledEmulator): CheckResult {
         if (e.host == Host.ANDROID) return CheckResult(Check.EXECUTABLE, CheckState.CANT_CHECK, "Android opens it; Fuse can't look inside other apps")
         if (flatpak(e)) {
             val app = flatpakApp(e)
@@ -268,3 +294,6 @@ private class CountingLook(private val look: ReadOnlyLook) : ReadOnlyLook {
     override fun modified(path: String): Long? { count++; return look.modified(path) }
     override fun names(path: String): List<String> { count++; return look.names(path) }
 }
+
+/** Emulators that draw only with Vulkan (by the end of their id): shadPS4's renderer is Vulkan's alone. */
+private val VULKAN_ONLY = setOf("shadps4")

@@ -215,6 +215,48 @@ class BrandedFacesAudit {
         }
     }
 
+    /** Series tiles wearing their first game's art (with a logo, without one, with no art) beside a collection of the person's own. */
+    @Test
+    fun seriesTiles() {
+        val dir = Audit.dir
+        assumeTrue("Only under desktopAudit", dir != null)
+        assumeTrue(Audit.sizeEnabled(AuditSize.D))
+        if (!Audit.wants("widgets", "series tiles")) return
+        val dc = platform("dc", "Dreamcast", "DC", 0xFFE0702EL)
+        val gba = platform("gba", "Game Boy Advance", "GBA", 0xFF6D4BC2L)
+        val tiles = listOf(
+            GameCollection(CollectionId(1), "Velvet Orbit", CollectionKind.SERIES, gameCount = 4) to game(1, "Velvet Orbit", dc, hero = true, logo = true).art,
+            GameCollection(CollectionId(2), "Beacon Bay", CollectionKind.SERIES, gameCount = 3) to game(2, "Beacon Bay", gba, hero = true, logo = false).art,
+            GameCollection(CollectionId(3), "Static Bloom", CollectionKind.SERIES, gameCount = 2) to null,
+            GameCollection(CollectionId(4), "Couch co-op", CollectionKind.MANUAL, gameCount = 12) to null,
+        )
+        runDesktopComposeUiTest(AuditSize.D.widthPx, AuditSize.D.heightPx) {
+            setContent {
+                CompositionLocalProvider(LocalDensity provides Density(AuditSize.D.density)) {
+                    FuseTheme {
+                        Box(Modifier.fillMaxSize().background(Fuse.colors.ink).padding(start = 40.dp, top = 120.dp)) {
+                            androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(24.dp)) {
+                                tiles.forEachIndexed { i, (c, a) ->
+                                    io.github.matiyaaa.fuse.ui.shell.library.CollectionTile(c, selected = i == 0, height = 200.dp, art = a, onClick = {}, onLongClick = {})
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            mainClock.advanceTimeBy(3_000)
+            waitForIdle()
+            mainClock.advanceTimeBy(1_000)
+            val frame = onRoot().captureToImage().toAwtImage()
+            val rgb = BufferedImage(frame.width, frame.height, BufferedImage.TYPE_INT_RGB)
+            rgb.createGraphics().apply { drawImage(frame, 0, 0, null); dispose() }
+            val file = File(dir, "D/widgets/${Audit.slug("series tiles")}.png")
+            file.parentFile.mkdirs()
+            ImageIO.write(rgb, "png", file)
+            println("Audit shot: ${file.absolutePath}")
+        }
+    }
+
     /** Setup's sync step stage: the choice, then each way chosen. */
     @Test
     fun syncChoiceStage() {

@@ -282,6 +282,15 @@ internal class DefaultLibraryOps(
         }
     }.flowOn(Dispatchers.Default)
 
+    /** Each series' first game's art, for the series' tile. */
+    private val seriesArt: Flow<Map<io.github.matiyaaa.fuse.model.CollectionId, io.github.matiyaaa.fuse.ui.shell.store.Art>> =
+        data.collections.observeSeriesLeads().flatMapLatest { leads ->
+            if (leads.isEmpty()) flowOf(emptyMap()) else ctx.cards(data.games.observeSummariesInOrder(leads.values.distinct())).map { cards ->
+                val byGame = cards.associateBy { it.id }
+                leads.mapNotNull { (series, game) -> byGame[game]?.let { series to it.art } }.toMap()
+            }
+        }.distinctUntilChanged()
+
     override val home: StateFlow<HomeFeed> = combine(
         listOf(
             continuePlaying,
@@ -297,6 +306,7 @@ internal class DefaultLibraryOps(
             achievements.feed,
             storage.onStart { emit(null) },
             picks.onStart { emit(HomePicks()) },
+            seriesArt.onStart { emit(emptyMap()) },
         ),
     ) { v ->
         val p = v[12] as HomePicks
@@ -310,6 +320,7 @@ internal class DefaultLibraryOps(
             mostPlayed = v[5] as List<GameCard>,
             systems = v[6] as List<PlatformCard>,
             collections = v[7] as List<io.github.matiyaaa.fuse.model.GameCollection>,
+            seriesArt = v[13] as Map<io.github.matiyaaa.fuse.model.CollectionId, io.github.matiyaaa.fuse.ui.shell.store.Art>,
             pinnedApps = v[8] as List<io.github.matiyaaa.fuse.ui.shell.store.AppCard>,
             playtime = v[9] as PlaytimeSummary,
             achievements = v[10] as io.github.matiyaaa.fuse.ui.shell.store.AchievementsFeed?,

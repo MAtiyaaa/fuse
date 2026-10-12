@@ -109,6 +109,8 @@ import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.LocateRequest
 import io.github.matiyaaa.fuse.ui.shell.app.Route
+import io.github.matiyaaa.fuse.ui.shell.app.openStreaming
+import io.github.matiyaaa.fuse.ui.shell.components.countText
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import io.github.matiyaaa.fuse.ui.shell.app.setSystemStream
 import io.github.matiyaaa.fuse.ui.shell.app.streamChoices
@@ -119,6 +121,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
 import io.github.matiyaaa.fuse.model.HomeLayoutConfig
 import io.github.matiyaaa.fuse.model.HomeWidget
 import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -133,7 +136,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun SystemsScreen(app: AppState) {
     val platforms by app.store.library.platforms.collectAsState()
-    val systems = platforms.filter { it.gameCount > 0 }
+    val streamPrefs by remember(app.store) { app.store.prefs.map { it.streaming } }.collectAsState(app.store.prefs.value.streaming)
+    val systems = platforms.filter { it.gameCount > 0 } + listOfNotNull(streamSystem(app, streamPrefs))
     var chosen by remember { mutableStateOf<String?>(null) }
     val current = systems.firstOrNull { it.platform.id.value == chosen } ?: systems.firstOrNull()
     // On a two-screen device the board is kept once with the menus on top and once with them below.
@@ -319,13 +323,14 @@ internal class SystemsSpace(
     override fun hero(w: HomeWidget?, at: Int): HeroSource? = card(w)?.let { HeroSource(it.platform.id, it.art.hero, it.platform.accent.toColor()) }
     override fun chosen(w: HomeWidget?) = onChosen(w)
     override fun open(w: HomeWidget, at: Int) {
-        card(w)?.let { app.go(Route.PlatformGames(it.platform.id)) }
+        val c = card(w) ?: return
+        if (c.platform.id == STREAM_SYSTEM) app.openStreaming() else app.go(Route.PlatformGames(c.platform.id))
     }
 
     /** Systems taken off the board, to put back on this page. */
     override fun addable(c: HomeLayoutConfig, page: Int): List<io.github.matiyaaa.fuse.ui.shell.home.Addable> =
         SystemsBoard.hidden(c)
-            .mapNotNull { w -> card(w)?.let { io.github.matiyaaa.fuse.ui.shell.home.Addable("add.${w.id}", it.platform.name, FuseIcons.Gamepad, w, detail = gamesText(it.gameCount)) } }
+            .mapNotNull { w -> card(w)?.let { io.github.matiyaaa.fuse.ui.shell.home.Addable("add.${w.id}", it.platform.name, FuseIcons.Gamepad, w, detail = it.countText()) } }
 
     /** Back from wherever it was kept, onto [page], shown, in the first free place. */
     override fun add(c: HomeLayoutConfig, page: Int, a: io.github.matiyaaa.fuse.ui.shell.home.Addable) = SystemsBoard.putBack(c, page, a.widget)
@@ -367,6 +372,19 @@ internal class SystemsSpace(
 
     override fun menu(w: HomeWidget?, arranging: Boolean, actions: List<MenuAction>): ContextMenuSpec {
         val c = card(w)
+        // Moonlight's tile is the computers' apps, not a system of games: its own few choices.
+        if (c != null && c.platform.id == STREAM_SYSTEM && !arranging) {
+            return ContextMenuSpec(
+                title = c.platform.name, subtitle = "Streaming", icon = FuseIcons.Cast,
+                actions = listOf(MenuAction("stream.open", "Open", FuseIcons.Cast, onSelect = { app.closeOverlays(); app.openStreaming() })) +
+                    // Taken off by its own choice below, which also turns the setting off, so it doesn't come back.
+                    actions.filter { it.id != "remove" } +
+                    MenuAction("stream.hide", "Take Off Systems", FuseIcons.EyeOff, detail = "Back on in Settings, Addons, Streaming", onSelect = {
+                        app.closeOverlays()
+                        app.store.updatePrefs { it.copy(streaming = it.streaming.copy(onSystems = false)) }
+                    }),
+            )
+        }
         if (c == null || arranging) {
             val all = if (arranging) listOf(
                 MenuAction("all.small", "Make Every System Small", FuseIcons.Grid, detail = "Each the size of a game's box art, with the system's picture", onSelect = { app.closeOverlays(); sizeAll(shownPage, SystemsBoard.SMALL) }),
@@ -762,14 +780,14 @@ internal fun SystemHeader(
                 val apart = problem != null && maxWidth < Size.touch * 8
                 Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                        FText(gamesText(s.gameCount), Fuse.type.bodyStrong.tabular(), color = c.text, maxLines = 1)
+                        FText(s.countText(), Fuse.type.bodyStrong.tabular(), color = c.text, maxLines = 1)
                         FText("·", Fuse.type.body, color = c.textFaint)
                         if (s.emulatorInstalled && s.emulatorName != null) {
                             FuseIcon(FuseIcons.Chip, size = Size.iconS, tint = c.textMuted)
                             FText(s.emulatorName, Fuse.type.body, color = c.textMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
                         } else {
                             FuseIcon(FuseIcons.Warning, size = Size.iconS, tint = c.warning)
-                            FText("No emulator installed", Fuse.type.body, color = c.warning, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                            FText(if (s.platform.id == STREAM_SYSTEM) "Moonlight isn't installed" else "No emulator installed", Fuse.type.body, color = c.warning, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
                         }
                         if (problem != null && !apart) {
                             FText("·", Fuse.type.body, color = c.textFaint)
@@ -850,7 +868,7 @@ fun AppState.systemMenu(card: PlatformCard, onMove: (() -> Unit)? = null): Conte
     val owner = MediaOwner.OfPlatform(p.id)
     return ContextMenuSpec(
         title = p.name,
-        subtitle = listOfNotNull(gamesText(card.gameCount), card.emulatorName?.takeIf { card.emulatorInstalled }).joinToString("  ·  "),
+        subtitle = listOfNotNull(card.countText(), card.emulatorName?.takeIf { card.emulatorInstalled }).joinToString("  ·  "),
         icon = FuseIcons.Gamepad,
         art = card.art.square ?: card.art.icon,
         actions = listOfNotNull(
@@ -1001,4 +1019,32 @@ internal fun AppState.undoSystemArt(u: io.github.matiyaaa.fuse.ui.shell.store.Ar
         artUndo = null
         toasts.show("The art that was there is back", io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.SUCCESS, icon = FuseIcons.Undo)
     }
+}
+
+/** The Systems page's Moonlight tile's id: not a system of the library's. */
+internal val STREAM_SYSTEM = io.github.matiyaaa.fuse.model.PlatformId("stream")
+
+/**
+ * Moonlight as a system on the Systems page, only once the person turns it on (Settings, Addons,
+ * Streaming): every app the household's computers stream, opened in the Streaming tab.
+ */
+private fun streamSystem(app: AppState, s: io.github.matiyaaa.fuse.data.settings.StreamingSettings): PlatformCard? {
+    if (!s.enabled || !s.onSystems || s.hosts.isEmpty() || !app.store.streaming.supported) return null
+    val client = app.store.streaming.client
+    return PlatformCard(
+        platform = io.github.matiyaaa.fuse.model.Platform(
+            STREAM_SYSTEM, "Moonlight", "Moonlight",
+            io.github.matiyaaa.fuse.model.PlatformKind.PC_GAMES, io.github.matiyaaa.fuse.model.PlatformFamily.PC,
+            manufacturer = "Your computers",
+            accent = 0xFF5B8DEF,
+        ),
+        gameCount = s.hosts.flatMap { it.apps }.distinct().size,
+        art = io.github.matiyaaa.fuse.ui.shell.store.Art(),
+        emulatorName = "Moonlight",
+        emulatorInstalled = client != null,
+        installedEmulators = if (client != null) 1 else 0,
+        bios = io.github.matiyaaa.fuse.model.BiosStatus(BiosState.NOT_REQUIRED),
+        layout = io.github.matiyaaa.fuse.model.LibraryLayout.ICON,
+        romFolders = emptyList(),
+    )
 }

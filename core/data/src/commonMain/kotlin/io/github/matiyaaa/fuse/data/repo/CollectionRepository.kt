@@ -88,6 +88,11 @@ class CollectionRepository(
         }
         .flowOn(dispatcher)
 
+    /** Each series' first game (the earliest released): the game whose art stands for the series. */
+    fun observeSeriesLeads(): Flow<Map<CollectionId, GameId>> = q.seriesLeads().asFlow().mapToList(dispatcher)
+        .map { rows -> rows.mapNotNull { r -> r.game_id?.let { CollectionId(r.collection_id) to GameId(it) } }.toMap() }
+        .flowOn(dispatcher)
+
     /**
      * Every collection: Favorites, Playing, Recently Added, Completed (only when [completed] is
      * given), Unplayed, then manual collections, then platforms (named by [platformName]) and genres

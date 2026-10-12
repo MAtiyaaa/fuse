@@ -25,6 +25,15 @@ SELECT c.id, c.name, c.kind, c.sort_order, c.created_at,
 FROM game_collection c
 ORDER BY c.sort_order, c.id;
 
+-- Each series' first game (the earliest released, then the first added): its art stands for the series.
+seriesLeads:
+SELECT c.id AS collection_id,
+    (SELECT g.id FROM collection_game cg JOIN game g ON g.id = cg.game_id
+     WHERE cg.collection_id = c.id AND g.missing = 0 AND g.removed_at IS NULL AND g.hidden = 0
+     ORDER BY g.release_year IS NULL, g.release_year, g.id LIMIT 1) AS game_id
+FROM game_collection c
+WHERE c.kind = 'SERIES';
+
 insert:
 INSERT INTO game_collection(name, kind, sort_order, created_at) VALUES (?, ?, ?, ?);
 

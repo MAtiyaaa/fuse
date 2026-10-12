@@ -139,7 +139,9 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
   keyboard), a **Play time** page and a guided setup.
 - **Stream from your computers**: with streaming on, the Library's All view has a shelf of the apps
   your computers offer through Sunshine or Apollo, each once, streamed through Moonlight from the
-  computer you choose.
+  computer you choose. A game or a whole system can stream from a computer instead of playing here,
+  and Moonlight can stand on the Systems page as a system of its own (Settings, Addons, Streaming).
+- **Series** on Home and in Search wear their first game's art and logo.
 - **Touch everywhere**: every screen answers a finger, and on computers' touch screens a swipe in
   from either edge goes back.
 - **A second screen with pages**: what's chosen (or the remote while a film plays), Status with the

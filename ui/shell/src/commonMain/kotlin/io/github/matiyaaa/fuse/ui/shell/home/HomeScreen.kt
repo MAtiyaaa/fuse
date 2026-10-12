@@ -588,7 +588,7 @@ private fun ShelfRow(
                     }
                     is ShelfItem.System -> SystemTile(item.card, selected, size = height, onClick = { onTap(col) }, onLongClick = if (reorderable) null else ({ onLongPress(col) }))
                     is ShelfItem.App -> AppTile(item.card, selected, size = height, onClick = { onTap(col) }, onLongClick = { onLongPress(col) })
-                    is ShelfItem.Collection -> CollectionTile(item.collection, selected, height = height, onClick = { onTap(col) }, onLongClick = { onLongPress(col) })
+                    is ShelfItem.Collection -> CollectionTile(item.collection, selected, height = height, art = feed.seriesArt[item.collection.id], onClick = { onTap(col) }, onLongClick = { onLongPress(col) })
                     // A widget's hold belongs to its shelf: let go without moving, and the shelf's options open.
                     is ShelfItem.Widget -> WidgetCard(item.kind, item.span, feed, cartridge, selected, clock24h, onClick = { onTap(col) }, modifier = Modifier.widthIn(max = widgetMax), height = height)
                 }

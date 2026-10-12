@@ -132,6 +132,25 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
         shoot("choosing which computer streams it")
         tap(PadButton.B)
     }
+    scenario("systems", "moonlight") {
+        // Turned on in Settings, Addons, Streaming: Moonlight stands last on the Systems page with the
+        // apps the computers stream, counted as apps, and its options can take it off again.
+        val hosts = listOf(
+            io.github.matiyaaa.fuse.data.settings.StreamHostSettings("pc-1", "Gaming PC", "192.168.1.20", apps = listOf("Desktop", "Steam Big Picture", "Aurora Outpost", "Hollow Pines")),
+            io.github.matiyaaa.fuse.data.settings.StreamHostSettings("pc-2", "Living Room", "192.168.1.30", apps = listOf("Steam Big Picture", "Hollow Pines")),
+        )
+        useLibrary(prefs = { it.copy(streaming = it.streaming.copy(enabled = true, hosts = hosts, onSystems = true)) })
+        tab(Destination.SYSTEMS)
+        waitFor("Arrange")
+        val count = libraryStore.library.platforms.value.count { it.gameCount > 0 } + 1
+        Grid(count).goTo(count - 1)
+        waitFor("4 apps")
+        shoot("Moonlight chosen, four apps")
+        tap(PadButton.X)
+        waitFor("Take Off Systems")
+        shoot("Moonlight's options")
+        tap(PadButton.B)
+    }
     if (!exhaustive) return
 
     scenario("library", "favourites") {

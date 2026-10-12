@@ -1397,13 +1397,41 @@ fun layoutIcon(l: LibraryLayout) = when (l) {
 
 /**
  * A collection on Home and in Search: a tile of its own, lit like the others, with its mark in a
- * small well at the top and its name and count at the bottom.
+ * small well at the top and its name and count at the bottom. A series wears its first game's
+ * [art] (the earliest released): its hero or box art behind, darkened so the words read, and its
+ * logo where the mark would be. No provider publishes a series' own logo, so the first game's
+ * stands for it.
  */
 @Composable
-fun CollectionTile(collection: GameCollection, selected: Boolean, height: Dp, onClick: () -> Unit, onLongClick: () -> Unit) {
+fun CollectionTile(collection: GameCollection, selected: Boolean, height: Dp, art: io.github.matiyaaa.fuse.ui.shell.store.Art? = null, onClick: () -> Unit, onLongClick: () -> Unit) {
     val c = Fuse.colors
     val series = collection.kind == CollectionKind.SERIES
-    Tile(selected = selected, modifier = Modifier.size(width = height * COLLECTION_ASPECT, height = height), onClick = onClick, onLongClick = onLongClick) {
+    val backdrop = art?.takeIf { series }?.let { it.hero ?: it.boxart ?: it.grid }
+    val logo = art?.takeIf { series }?.logo
+    Tile(selected = selected, modifier = Modifier.size(width = height * COLLECTION_ASPECT, height = height), onClick = onClick, onLongClick = onLongClick, label = collection.name) {
+        if (backdrop != null) {
+            io.github.matiyaaa.fuse.ui.designsystem.media.Artwork(backdrop, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+            Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.15f), androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.78f)))))
+            Box(Modifier.fillMaxSize().padding(Space.m)) {
+                if (logo != null) {
+                    io.github.matiyaaa.fuse.ui.designsystem.media.Artwork(
+                        logo, Modifier.fillMaxWidth(0.7f).height(height * 0.32f).align(Alignment.TopStart),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                    )
+                } else {
+                    Box(
+                        Modifier.size(Size.chipCompact).clip(PillShape).background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.16f)),
+                        contentAlignment = Alignment.Center,
+                    ) { FuseIcon(FuseIcons.Sparkles, size = Size.iconS, tint = androidx.compose.ui.graphics.Color.White) }
+                }
+                Column(Modifier.align(Alignment.BottomStart), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                    // The logo already names it; the name is written out only without one.
+                    if (logo == null) FText(collection.name, Fuse.type.titleSmall, color = androidx.compose.ui.graphics.Color.White, maxLines = 2)
+                    FText(gamesText(collection.gameCount), Fuse.type.caption.copy(fontFeatureSettings = "tnum"), color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.75f), maxLines = 1)
+                }
+            }
+            return@Tile
+        }
         Box(Modifier.fillMaxSize().background(c.surfaceRaised).padding(Space.m)) {
             Box(
                 Modifier.size(Size.chipCompact).clip(PillShape).background(c.text.copy(alpha = if (c.isDark) WELL_FILL else WELL_FILL_LIGHT)),
