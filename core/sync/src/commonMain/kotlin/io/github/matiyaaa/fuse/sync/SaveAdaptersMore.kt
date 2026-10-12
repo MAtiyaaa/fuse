@@ -347,37 +347,50 @@ internal object SwitchNand : SaveAdapter {
         val cap = name.replaceFirstChar { it.uppercase() }
         return when (env.host) {
             "WINDOWS" -> SaveAdapters.firstDir(env, q.emulatorPath?.let { SaveAdapters.parent(it) + "/user" }, "${SaveAdapters.appData(env)}/$name", "${SaveAdapters.appData(env)}/$cap")
-            "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/$name", "${SaveAdapters.macSupport(env)}/$cap")
+            // On macOS too they keep it in the XDG folders (common/fs/path_util.cpp has no branch of its own for it).
+            "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgData(env)}/$name", "${SaveAdapters.macSupport(env)}/$name", "${SaveAdapters.macSupport(env)}/$cap")
             "ANDROID" -> null
             else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgData(env)}/$name", "${env.home}/.var/app/org.${name}_emu.$name/data/$name", "${env.home}/.var/app/dev.${name}_emu.$name/data/$name")
         }
     }
 
     /** Its mods' folder: the one its config names (`load_directory`, as frontend_common/config.cpp writes it), else `load` in [base]. */
-    internal fun loadFolder(env: SaveEnvironment, base: String): String =
-        dataStorage(env, base)["load_directory"]?.takeIf { it.isNotEmpty() && env.isDirectory(it) } ?: "$base/load"
+    internal fun loadFolder(env: SaveEnvironment, q: SaveQuery, base: String): String =
+        dataStorage(env, q, base)["load_directory"]?.takeIf { it.isNotEmpty() && env.isDirectory(it) } ?: "$base/load"
 
     /**
      * Where a game's saves are, under [base] (the emulator's folder, or one the person chose): the
      * folder its config names first, then the layouts a chosen folder may have (Eden's folder, its
      * NAND, its save data folder, or the save folder itself).
      */
-    internal fun usersFolder(env: SaveEnvironment, base: String): String? {
-        val config = configured(env, base)
+    internal fun usersFolder(env: SaveEnvironment, q: SaveQuery, base: String): String? {
+        val config = configured(env, q, base)
         val roots = listOfNotNull(config, base)
         return roots.flatMap { r -> listOf("$r/user/save/$ZERO_ID", "$r/nand/user/save/$ZERO_ID", "$r/save/$ZERO_ID", "$r/$ZERO_ID") }
             .firstOrNull { env.isDirectory(it) }
     }
 
     /** The save (or NAND) folder the emulator's config names, when it names one of its own. */
-    internal fun configured(env: SaveEnvironment, base: String): String? {
-        val values = dataStorage(env, base)
+    internal fun configured(env: SaveEnvironment, q: SaveQuery, base: String): String? {
+        val values = dataStorage(env, q, base)
         return listOf("save_directory", "nand_directory").firstNotNullOfOrNull { k -> values[k]?.takeIf { it.isNotEmpty() && env.isDirectory(it) } }
     }
 
+    /**
+     * Where the emulator's config (`qt-config.ini`) is: in `config` of its folder on Windows, when it
+     * is portable and on Android; else in the XDG config folder, a Flatpak's own or the system's
+     * (common/fs/path_util.cpp keeps data, config and cache in separate XDG folders there).
+     */
+    internal fun configFiles(env: SaveEnvironment, q: SaveQuery, base: String): List<String> {
+        val name = folderName(SaveAdapters.baseId(q.emulatorId))
+        val flatpak = Regex("^(.*/\\.var/app/[^/]+)/data/([^/]+)$").find(base)?.let { "${it.groupValues[1]}/config/${it.groupValues[2]}/qt-config.ini" }
+        val xdg = "${SaveAdapters.xdgConfig(env)}/$name/qt-config.ini".takeIf { env.host != "WINDOWS" && env.host != "ANDROID" }
+        return listOfNotNull("$base/config/qt-config.ini", flatpak, xdg).distinct()
+    }
+
     /** The `Data Storage` group of the emulator's config (`qt-config.ini`), its folders with `/` separators. */
-    private fun dataStorage(env: SaveEnvironment, base: String): Map<String, String> {
-        val text = env.readText("$base/config/qt-config.ini") ?: return emptyMap()
+    private fun dataStorage(env: SaveEnvironment, q: SaveQuery, base: String): Map<String, String> {
+        val text = configFiles(env, q, base).firstNotNullOfOrNull { env.readText(it) } ?: return emptyMap()
         val values = HashMap<String, String>()
         var inGroup = false
         for (raw in text.lineSequence()) {
@@ -399,7 +412,7 @@ internal object SwitchNand : SaveAdapter {
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
         val base = base(env, q) ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", if (env.host == "ANDROID") SaveAdapters.androidPrivateNote("This Switch emulator", "In Eden, Settings, choose a Save Data Directory (or NAND Directory) in your storage, then choose the same folder in Fuse, Settings, Save folders. Other Switch emulators can export saves from Manage save data.") else "The Switch emulator's folder wasn't found here."))
         val read = SwitchIds.of(q, env)
-        val users = usersFolder(env, base) ?: "$base/nand/user/save/$ZERO_ID"
+        val users = usersFolder(env, q, base) ?: "$base/nand/user/save/$ZERO_ID"
         val people = env.list(users).filter { HEX32.matches(it) }
         val user = people.firstOrNull { read != null && env.isDirectory("$users/$it/$read") } ?: people.firstOrNull()
             ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", "Play a game once in the emulator so it makes its user, then Fuse keeps saves in step."))

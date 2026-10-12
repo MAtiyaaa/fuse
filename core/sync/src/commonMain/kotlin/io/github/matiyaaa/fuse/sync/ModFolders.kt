@@ -54,7 +54,7 @@ object ModFolders {
         if (env.host == "ANDROID") return fail("Switch emulators on Android keep their mod folders where other apps can't add to them. Add mods from the emulator's own Add-ons screen.")
         val base = SwitchNand.home(env, q) ?: return fail("The Switch emulator's folder wasn't found here. Start it once so it makes it.")
         val id = SwitchIds.of(q, env) ?: return fail("Fuse doesn't know this game's title id yet (a [0100…] tag in its file name tells it).")
-        val load = SwitchNand.loadFolder(env, base)
+        val load = SwitchNand.loadFolder(env, q, base)
         return Result.success(ModHome(SaveAdapters.baseId(q.emulatorId), id.uppercase(), "$load/${id.uppercase()}"))
     }
 

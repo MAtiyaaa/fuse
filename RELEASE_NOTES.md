@@ -259,7 +259,8 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   Helpers that outlive any game (a sandbox's D-Bus proxy, Wine's server) are left out.
 - Saves are found where emulators really keep them, checked against each one's own source:
   DuckStation's newer Windows folder (%LOCALAPPDATA%), portable settings.ini and its Flatpak's
-  config folder, Eden's own Save Data and NAND directories (on Android too, with the setting to use
+  config folder, Eden's own Save Data and NAND directories (read from its config in the XDG config
+  folder on Linux and macOS, a Flatpak's own included, and on Android too, with the setting to use
   named), Kenji-NX read as the Ryujinx
   it is built from, and RPCS3's dev_hdd0 where its vfs.yml moved it. Every other emulator was
   checked the same way: RetroArch's Mac default (Documents) and its by-content folders, Flycast's

@@ -50,12 +50,31 @@ class MoreAdaptersTest {
         // A save data folder of its own, named in Eden's config (as its Data Storage settings write it).
         val saves = "/mnt/games/eden-saves"
         val config = "[Data%20Storage]\nnand_directory\\default=true\nnand_directory=\nsave_directory\\default=false\nsave_directory=$saves/\n[UI]\nsave_directory=/elsewhere\n"
+        // On Linux its config is in the XDG config folder, apart from its data (common/fs/path_util.cpp).
         val desktop = FakeEnv("LINUX", "/home/mo", files = mapOf(
-            "/home/mo/.local/share/eden/config/qt-config.ini" to config,
+            "/home/mo/.config/eden/qt-config.ini" to config,
             "/home/mo/.local/share/eden/nand/user/save/0000000000000000/$user/" to "",
             "$saves/user/save/0000000000000000/$user/01007EF00011E000/" to "",
         ))
         assertEquals("$saves/user/save/0000000000000000/$user/01007EF00011E000", SaveAdapters.forEmulator("eden")!!.locate(zelda, desktop).single().root)
+        // The Flatpak keeps both in its own folder.
+        val flatpak = FakeEnv("LINUX", "/home/mo", files = mapOf(
+            "/home/mo/.var/app/dev.eden_emu.eden/config/eden/qt-config.ini" to config,
+            "/home/mo/.var/app/dev.eden_emu.eden/data/eden/nand/user/save/0000000000000000/$user/" to "",
+            "$saves/user/save/0000000000000000/$user/01007EF00011E000/" to "",
+        ))
+        assertEquals("$saves/user/save/0000000000000000/$user/01007EF00011E000", SaveAdapters.forEmulator("eden")!!.locate(zelda, flatpak).single().root)
+        // A NAND moved elsewhere, with saves left in it (an empty save_directory), on a portable Windows install.
+        val nand = "D:/Switch/nand"
+        val portable = FakeEnv("WINDOWS", "C:/Users/mo", files = mapOf(
+            "C:/Emu/Eden/user/config/qt-config.ini" to "[Data%20Storage]\nnand_directory\\default=false\nnand_directory=D:\\Switch\\nand\\\nsave_directory=\n",
+            "C:/Emu/Eden/user/nand/user/save/0000000000000000/$user/" to "",
+            "$nand/user/save/0000000000000000/$user/01007EF00011E000/" to "",
+        ))
+        assertEquals("$nand/user/save/0000000000000000/$user/01007EF00011E000", SaveAdapters.forEmulator("eden")!!.locate(zelda.copy(emulatorPath = "C:/Emu/Eden/eden.exe"), portable).single().root)
+        // On macOS it keeps the XDG folders too.
+        val mac = FakeEnv("MACOS", "/Users/mo", files = mapOf("/Users/mo/.local/share/eden/nand/user/save/0000000000000000/$user/01007EF00011E000/" to ""))
+        assertEquals("/Users/mo/.local/share/eden/nand/user/save/0000000000000000/$user/01007EF00011E000", SaveAdapters.forEmulator("eden")!!.locate(zelda, mac).single().root)
         // On Android, the folder chosen in Eden's Save Data Directory (or NAND Directory) and in Fuse.
         for (chosen in listOf("/storage/emulated/0/Eden/saves", "/storage/emulated/0/Eden/nand")) {
             val phone = FakeEnv("ANDROID", "/storage/emulated/0", files = mapOf("$chosen/user/save/0000000000000000/$user/01007EF00011E000/" to ""), chosen = mapOf("eden" to chosen))

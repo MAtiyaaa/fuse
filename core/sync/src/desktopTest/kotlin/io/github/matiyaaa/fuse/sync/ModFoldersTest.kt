@@ -30,7 +30,8 @@ class ModFoldersTest {
     @Test
     fun edensModsGoInTheLoadFolderItsConfigNames() {
         val env = FakeEnv("LINUX", "/home/mo", mapOf(
-            "/home/mo/.local/share/eden/config/qt-config.ini" to "[Data%20Storage]\nload_directory\\default=false\nload_directory=/mnt/sd/eden-load\n",
+            "/home/mo/.local/share/eden/nand/" to "",
+            "/home/mo/.config/eden/qt-config.ini" to "[Data%20Storage]\nload_directory\\default=false\nload_directory=/mnt/sd/eden-load\n",
             "/mnt/sd/eden-load/" to "",
         ))
         val h = ModFolders.locate(q("switch", "linux.eden", "0100F2C0115B6000"), env).getOrThrow()

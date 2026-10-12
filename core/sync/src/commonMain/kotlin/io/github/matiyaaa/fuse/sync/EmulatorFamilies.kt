@@ -65,7 +65,7 @@ object EmulatorFamilies {
                 val cap = id.replaceFirstChar { it.uppercase() }
                 when (env.host) {
                     "WINDOWS" -> SaveAdapters.firstDir(env, portable, "${SaveAdapters.appData(env)}/$id", "${SaveAdapters.appData(env)}/$cap")
-                    "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/$id", "${SaveAdapters.macSupport(env)}/$cap")
+                    "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgData(env)}/$id", "${SaveAdapters.macSupport(env)}/$id", "${SaveAdapters.macSupport(env)}/$cap")
                     "ANDROID" -> null
                     else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgData(env)}/$id", "${env.home}/.var/app/org.${id}_emu.$id/data/$id", "${env.home}/.var/app/dev.${id}_emu.$id/data/$id")
                 }
