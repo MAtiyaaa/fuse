@@ -236,6 +236,25 @@ class PerfHarness {
             switch("switch-systems-warm", 1)
             switch("switch-library-warm", 2)
 
+            // The Series view: every series a card of its games' art, opened and run along.
+            if (wants("series")) {
+                withTimeout(60_000) { store.collections.collections.first { list -> list.count { it.kind == io.github.matiyaaa.fuse.model.CollectionKind.SERIES } >= SERIES } }
+                driver.tab(Destination.LIBRARY)
+                driver.waitFor("All")
+                driver.nav(io.github.matiyaaa.fuse.model.NavAction.UP)
+                driver.tapText("Collections", step = PadButton.DPAD_RIGHT)
+                driver.waitFor("New collection")
+                driver.settle(1_200)
+                driver.nav(io.github.matiyaaa.fuse.model.NavAction.UP)
+                measure("series-open", frames = 60, everyFrames = 60) { press(PadButton.DPAD_RIGHT); press(PadButton.A) }
+                press(PadButton.DPAD_DOWN)
+                driver.settle(600)
+                measure("series-run", frames = 90, everyFrames = 5) { i -> press(if (i < 9) PadButton.DPAD_DOWN else PadButton.DPAD_UP) }
+                measure("series-rapid-reversal", 90, 1) { i -> press(if (i % 2 == 0) PadButton.DPAD_RIGHT else PadButton.DPAD_LEFT) }
+                driver.home()
+                driver.settle(900)
+            }
+
             if (wants("home")) {
                 val baselineHome = store.prefs.value.home
                 store.updatePrefs { it.copy(home = io.github.matiyaaa.fuse.model.HomeLayoutConfig(mode = io.github.matiyaaa.fuse.model.HomeMode.CHANNELS)) }
@@ -420,12 +439,20 @@ class PerfHarness {
             val (folder, ext) = folders[i % folders.size]
             File(root, folder).apply { mkdirs() }.let { File(it, "Generated Game ${(i + 1).toString().padStart(4, '0')}.$ext").writeBytes(ByteArray(512 + i)) }
         }
+        // Many series (60 of four games each), only for the series rows, so the other rows keep their library.
+        if (only.any { it.startsWith("series") }) {
+            val first = listOf("Vel", "Tor", "Mak", "Rin", "Sul", "Dar", "Fen", "Gol", "Hux", "Jor")
+            val second = listOf("ara", "ion", "ex", "ul", "ova", "ith")
+            val names = first.flatMap { a -> second.map { b -> "$a$b Chronicles" } }
+            File(root, "gba").mkdirs()
+            names.forEachIndexed { i, name -> (1..4).forEach { n -> File(root, "gba/$name $n.gba").writeBytes(ByteArray(600 + i * 4 + n)) } }
+        }
         val services = AuditServices.create(cache, driver.controls)
         val store = createFuseStore(services, scope)
         // -Dfuse.perf.lowPower=true measures with Low Power Mode (no blur, still backgrounds), to compare.
         store.updatePrefs { it.copy(onboardingDone = true, lowPower = System.getProperty("fuse.perf.lowPower") == "true") }
         store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
-        val total = AuditSamples.games.size + EXTRA_GAMES
+        val total = AuditSamples.games.size + EXTRA_GAMES + if (only.any { it.startsWith("series") }) SERIES * 4 else 0
         withTimeout(180_000) { store.sources.scan.first { it.phase == ScanPhase.DONE } }
         val cards = withTimeout(60_000) { store.library.games(GameQuery()).first { it.size >= total } }
         AuditSamples.applyHistory(store, services.data, cards.filter { c -> AuditSamples.games.any { it.title == c.title } }, Clock.System.now().toEpochMilliseconds())
@@ -573,6 +600,9 @@ class PerfHarness {
         const val DIR_PROPERTY = "fuse.perf.dir"
         const val ONLY_PROPERTY = "fuse.perf.only"
         private const val EXTRA_GAMES = 600
+
+        /** Series made for the series rows, of four games each. */
+        private const val SERIES = 60
         private const val DEVICE_PROPERTY = "fuse.perf.device"
         private const val SIZE_PROPERTY = "fuse.perf.size"
         private const val SAMPLE_MS = 2.0
