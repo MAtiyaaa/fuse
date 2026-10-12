@@ -48,6 +48,10 @@ and the library, and a first step toward Fuse knowing emulators for itself.
   makes this computer the host of a newer generation, so devices take it as the household's host
   and the old one is fenced should it come back. The sheet also says the other way to move the host:
   make the new computer a backup host, then make it the host.
+- **Saves in the background on Android.** When Android's battery optimization or background
+  restriction could stop Fuse while a game plays, Settings, Fuse One says so where saves are turned
+  on, with a way straight to the system screen that lifts it. A save held back that way still goes
+  once Fuse is open again; nothing is lost.
 - **Sync without a household.** A device keeping its own profiles has its Sync page: each person's
   games, play time and the saves kept for them here, with what a host would add and the two ways
   to set one up.

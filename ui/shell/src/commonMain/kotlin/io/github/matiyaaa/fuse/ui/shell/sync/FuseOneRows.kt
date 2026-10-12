@@ -87,6 +87,20 @@ internal fun syncRows(
     // What syncs -----------------------------------------------------------------------------------
     val what = "What syncs"
     add(toggleRow("saves", "Saves", FuseIcons.Save, c.saves, "Each game's saves, put in place before it starts and kept after it closes") { v -> configure { it.copy(saves = v) } }.copy(section = what))
+    // Android may stop Fuse soon after a game takes the screen: the save then goes only once Fuse is
+    // open again. Said where saves are turned on, with the way to lift it.
+    app.platform.background?.takeIf { c.saves && it.limited }?.let { limits ->
+        add(MenuAction(
+            "background", "Saves in the Background", FuseIcons.BatteryWarning,
+            detail = if (limits.restricted) {
+                "Android restricts Fuse in the background, so a save waits until Fuse is open again. Set its battery use to Unrestricted"
+            } else {
+                "Android's battery optimization can stop Fuse while a game plays, so a save may wait until Fuse is open again. Set its battery use to Unrestricted"
+            },
+            trailing = Trailing.Chevron, section = what,
+            onSelect = { app.platform.openBackgroundSettings() },
+        ))
+    }
     // Whose saves move on this device: its own choice (a child's handheld that never takes a
     // grown-up's saves, a profile kept to one device).
     if (c.saves && profiles.isNotEmpty()) {

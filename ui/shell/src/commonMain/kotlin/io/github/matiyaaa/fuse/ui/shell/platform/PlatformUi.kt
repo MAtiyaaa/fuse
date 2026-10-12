@@ -60,6 +60,16 @@ interface PlatformUi {
     fun restart()
 
     /**
+     * What the system lets Fuse do while it isn't on screen (Android's battery optimization and
+     * background restriction); null where nothing limits it. Read on every access: it changes in
+     * the system's settings.
+     */
+    val background: BackgroundLimits? get() = null
+
+    /** Opens the system's own screen where [background]'s limits are lifted. */
+    fun openBackgroundSettings() = Unit
+
+    /**
      * Keeps the device from sleeping while Fuse works in the background ([StayAwake.cpu]: art and
      * details being found, downloads, uploads), and the screen on while the standby screen shows over
      * that work ([StayAwake.screen]), so leaving Fuse alone never stops it. [StayAwake.NONE] lets go.
@@ -490,4 +500,14 @@ data class StayAwake(val cpu: Boolean, val screen: Boolean) {
             return StayAwake(cpu = working, screen = working && standby)
         }
     }
+}
+
+/**
+ * What the system does to Fuse in the background: [optimized] when battery optimization may stop it
+ * soon after it leaves the screen (Android's Doze and app standby), [restricted] when the person or
+ * the system restricted its background use outright. Either can hold a save back until Fuse is open
+ * again; nothing is lost, it just goes later.
+ */
+data class BackgroundLimits(val optimized: Boolean, val restricted: Boolean) {
+    val limited: Boolean get() = optimized || restricted
 }
