@@ -240,6 +240,10 @@ and the library, and a first step toward Fuse knowing emulators for itself.
 
 ## Fixed
 
+- A game started through a launcher that hands it on (a wrapper script, an AppImage's runtime, an
+  emulator that starts itself again) counts as playing until what the launcher started has ended
+  too, so play time, achievements and the save sent after play no longer end with the launcher.
+  Helpers that outlive any game (a sandbox's D-Bus proxy, Wine's server) are left out.
 - Saves are found where emulators really keep them, checked against each one's own source:
   DuckStation's newer Windows folder (%LOCALAPPDATA%), portable settings.ini and its Flatpak's
   config folder, Eden's own Save Data and NAND directories (on Android too, with the setting to use
