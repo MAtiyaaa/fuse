@@ -26,11 +26,23 @@ internal class DesktopDecky(
     private val staging: File,
     /** A Steam game is running: Decky isn't restarted under it (its overlay and plugins would blink out mid-game). */
     private val gameRunning: () -> Boolean = { SystemSteamProcessOps(fuseProgram = { null }, fuseGameId = { null }).gameRunning() },
+    /** The data folder the bridge's discovery file is in (XDG_DATA_HOME, else ~/.local/share). */
+    private val dataHome: File = System.getenv("XDG_DATA_HOME")?.takeIf { it.startsWith("/") }?.let(::File) ?: File(home, ".local/share"),
 ) : DeckyIntegration {
     private val lock = Mutex()
     private val homebrew get() = File(home, "homebrew")
     private val plugins get() = File(homebrew, "plugins")
     private val target get() = File(plugins, PLUGIN)
+
+    /** Beside the bridge's discovery file, where the plugin looks (main.py, _menu_off). */
+    private val menuOff get() = File(dataHome, "fuse/decky-menu-off")
+
+    override suspend fun setMenuEntries(on: Boolean): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            if (on) menuOff.delete() || !menuOff.exists()
+            else menuOff.parentFile.mkdirs().let { menuOff.writeText("Fuse's entries in Steam's game menu are off.\n"); true }
+        }.getOrDefault(false)
+    }
 
     override suspend fun state(): DeckyState = withContext(Dispatchers.IO) {
         val loader = File(homebrew, "services/PluginLoader").exists() || File("/etc/systemd/system/plugin_loader.service").exists()
@@ -41,6 +53,7 @@ internal class DesktopDecky(
             pluginVersion = if (installed) versionOf(File(target, "package.json")) else null,
             bundledVersion = BuildInfo.VERSION,
             canInstall = loader && Processes.which("pkexec") != null,
+            menuEntries = !menuOff.exists(),
         )
     }
 

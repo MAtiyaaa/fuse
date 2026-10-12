@@ -45,4 +45,22 @@ class DeckyInstallScriptTest {
             assertTrue("systemctl restart plugin_loader" in DesktopDecky.installScript(restart = true))
         } finally { root.deleteRecursively() }
     }
+
+    @Test
+    fun steamsMenuEntriesTurnOffWhereThePluginLooks() = kotlinx.coroutines.runBlocking {
+        val root = Files.createTempDirectory("decky-menu").toFile()
+        try {
+            val data = File(root, "share")
+            val decky = DesktopDecky(home = root, staging = File(root, "staging"), gameRunning = { false }, dataHome = data)
+            assertTrue(decky.state().menuEntries)
+            assertTrue(decky.setMenuEntries(false))
+            // main.py looks beside decky-bridge.json, in the fuse folder of the data folder.
+            assertTrue(File(data, "fuse/decky-menu-off").isFile)
+            assertFalse(decky.state().menuEntries)
+            assertTrue(decky.setMenuEntries(true))
+            assertTrue(decky.state().menuEntries)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
 }

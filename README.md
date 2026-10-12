@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.2.1 is the <b>Native Update</b>: Steam restarts in Game Mode, a better Store with every update in one place, checks before installing an emulator, Xenia and Vita3K achievements, PS2 packs and cheats from EmuCoreX, All counting every game of the household, and touch screens on Linux and Windows. Physical acceptance on SteamOS, the Steam Deck, the AYN Thor and macOS is still to come.</sub><br>
+<sub>0.4.2.2 is the <b>Native Update</b>: saves that stay each person's on a shared device, every emulator's saves where it really keeps them, Dolphin settings, plainer firmware checks, a Home that never goes blank, smoother Linux and a Decky plugin that can't take Steam's menu down. Physical acceptance on SteamOS, the Steam Deck, the AYN Thor and macOS is still to come.</sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -385,16 +385,18 @@ Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.4.2.1 "The Native Update"**: Steam restarts in Game Mode, the
-> Store keeps every update in one place, Fuse checks what an emulator needs before installing it, All
-> counts every game of the household, and touch screens work on Linux and Windows. 0.4.2 itself
+> **Fuse 0.4.2.2 "The Native Update"**: saves stay each person's on a shared device and a swap
+> can't half happen, every emulator's saves are found where it really keeps them, Dolphin's settings
+> change from Fuse, firmware checks say verified or not, Home never goes blank, Linux draws more
+> evenly, and the Decky plugin can't take Steam's menu down. 0.4.2.1 brought Steam restarts in Game
+> Mode, the Store with every update in one place and touch screens on Linux and Windows. 0.4.2 itself
 > made Fuse feel at home on Linux, SteamOS and Android. Steam and
 > Decky are part of setup, controllers are set up by being asked for each button, Fuse One brings
 > profiles, saves, the Fuse Library and now your keys to every device (or keeps each person's saves
 > apart on one device with no host at all), the Fuse One Host runs on its own in Docker, and Fuse
 > Intelligence shows how far each emulator has really been checked. Physical acceptance on SteamOS,
 > the Steam Deck's Decky, the AYN Thor and macOS is still to come. See
-> [the release notes](docs/releases/0.4.2.1.md); every earlier release is in [CHANGELOG.md](CHANGELOG.md).
+> [the release notes](docs/releases/0.4.2.2.md); every earlier release is in [CHANGELOG.md](CHANGELOG.md).
 
 <details>
 <summary><b>Every release so far</b></summary>
@@ -402,6 +404,7 @@ Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 
 | Version | Name | What it brought |
 |---|---|---|
+| [0.4.2.2](docs/releases/0.4.2.2.md) | The Native Update | Each person's saves kept apart on a shared device and swapped as one transaction, saves no one owned claimed from Sync, Switch account and device saves, Eden's folder through Android's picker, every emulator's saves where it keeps them, Dolphin settings, firmware verified or not, the emulator contract table, smoother Linux, a safer Decky plugin |
 | [0.4.2.1](docs/releases/0.4.2.1.md) | The Native Update | Steam restarts in Game Mode, the Store with every update in one place, checks before installing, Xenia and Vita3K achievements, EmuCoreX packs and cheats, All counting every game, touch screens on Linux and Windows |
 | [0.4.2](docs/releases/0.4.2.md) | The Native Update | Steam and Decky in setup, guided and multiple controllers, Fuse One (profiles, saves, the Fuse Library and keys) with or without a host, the Fuse One Host in Docker, Fuse Intelligence, Steam achievements per account with rarity, apps your computers stream on the Library shelf, haptics on controllers, Fuse's own files in Storage, series that wear their games' art, Moonlight on the Systems page, Fuseline 4.1 |
 | [0.4.1](docs/releases/0.4.1.md) | The Connected Update | Fuse Library, causal profile settings, strong household identity, save import and display/desktop foundations; physical acceptance in progress |
