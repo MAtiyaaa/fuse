@@ -108,7 +108,7 @@ internal fun RommChoiceStage(
                     "FUSEONE" -> ChoiceCard(
                         name = "Fuse One", tag = when { fuseOneOn -> "On"; chosen == "FUSEONE" -> "Chosen"; else -> "Recommended" },
                         tint = c.accent, mark = FuseMarks.FuseOne,
-                        lines = listOf(FuseIcons.Library to "Every device's games", FuseIcons.Download to "Fetched when you play", FuseIcons.Server to "No server to run"),
+                        lines = listOf(FuseIcons.Library to "All your devices", FuseIcons.Download to "Fetch to play", FuseIcons.Server to "No server"),
                         on = fuseOneOn, filled = true, modifier = m, width = 160.dp,
                     )
                     "FUSE" -> ChoiceCard(

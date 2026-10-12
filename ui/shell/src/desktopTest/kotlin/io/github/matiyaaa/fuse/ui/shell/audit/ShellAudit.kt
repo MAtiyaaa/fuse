@@ -677,6 +677,28 @@ internal fun AuditDriver.onboardingScreens(exhaustive: Boolean) {
         shoot("Fuse, Steam and Decky as one, checked")
     }
 
+    scenario("onboarding", "your game library") {
+        // Setup picks up where it was left: here, the step for where else games come from.
+        firstRunStore.updatePrefs { it.copy(onboardingStep = "romm") }
+        try {
+            show(firstRunStore, AuditPlatform(size))
+            waitFor("Where are your other games?")
+            settle(1_500)
+            shoot("Fuse One recommended, RomM and Cartridge")
+            // Choosing Fuse One without a household yet sets one up, then comes back here.
+            tapText("Fuse One")
+            waitFor("One computer at home keeps everything")
+            settle(800)
+            shoot("Fuse One chosen: make this the host, or connect to one")
+            tap(PadButton.B)
+            waitFor("Set up Fuse One")
+            settle(1_200)
+            shoot("Fuse One chosen, no host yet: set it up now or later")
+        } finally {
+            firstRunStore.updatePrefs { it.copy(onboardingStep = "", rommAnswer = "", sync = it.sync.copy(enabled = false, role = "")) }
+        }
+    }
+
     scenario("onboarding", "steps") {
         val platform = AuditPlatform(
             size,
@@ -758,10 +780,9 @@ internal fun AuditDriver.onboardingScreens(exhaustive: Boolean) {
         waitFor("BIOS check")
         shoot("BIOS")
         tap(PadButton.A)
-        waitFor("Get games from your RomM server")
-        shoot("Cartridge (optional)")
-        tap(PadButton.DPAD_RIGHT)
-        tap(PadButton.A)
+        waitFor("Where are your other games?")
+        shoot("your game library: Fuse One recommended, RomM and Cartridge (optional)", 1_500)
+        tapText("Neither")
         waitFor("Your films, here too")
         shoot("Jellyfin, what it is (optional)", 1_500)
         tap(PadButton.DPAD_RIGHT)

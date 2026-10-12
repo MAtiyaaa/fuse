@@ -74,12 +74,15 @@ internal fun AuditDriver.syncScreens() {
         tapText("Make This the Host")
         waitFor("Make this computer the host")
         shoot("what being the host means, its name, and keeping it running", 1_200)
-        // Name, keeping it running, where saves are kept, then the button.
-        tap(PadButton.DPAD_DOWN, 3)
+        // Fuse One already on another device: said here, and how it joins once the host is made.
+        tap(PadButton.A)
+        shoot("Fuse One already on another device")
+        // Then its name, keeping it running, where saves are kept, and the button.
+        tap(PadButton.DPAD_DOWN, 4)
         shoot("Make This the Host chosen")
         tap(PadButton.A)
         waitFor("Fuse One is ready")
-        shoot("Fuse One is ready, with the code for other devices", 1_600)
+        shoot("Fuse One is ready, with how the other device joins and the code", 1_600)
     }
 
     scenario("sync", "connecting") {
