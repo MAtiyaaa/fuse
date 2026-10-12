@@ -256,9 +256,21 @@ internal object RetroArch : SaveAdapter {
         val config = configs(env, q.emulatorPath).firstOrNull(env::exists)
             // On Android, its folder may be anywhere the person moved it.
             ?: DataFolders.find(env, "retroarch", listOf("retroarch")) { d -> "$d/retroarch.cfg".takeIf(env::exists) }.firstOrNull()
-        val cfg = config?.let { env.readText(it) }?.let(::parseCfg).orEmpty()
+        val base = config?.let { env.readText(it) }?.let(::parseCfg).orEmpty()
         val (defSaves, defStates) = defaults(env, config, q.emulatorPath, q.emulatorId)
         val content = SaveAdapters.parent(q.romPath)
+        val coreName = q.core?.let { CoreNames.libraryName(it) }
+        val stem = SaveAdapters.stem(q.romPath)
+        // The configuration in effect for this game (retroarch.cfg, then the core's, the content
+        // folder's and the game's own overrides, each over the one before, as RetroArch loads them).
+        val configDir = base["rgui_config_directory"]?.replace('\\', '/')?.takeIf { it.isNotBlank() && it != "default" }
+            ?.let { if (it.startsWith(":")) SaveAdapters.join(config?.let(SaveAdapters::parent) ?: "", it.drop(1).trimStart('/')) else it }
+            ?: config?.let { "${SaveAdapters.parent(it)}/config" }
+        val overrides = if (configDir != null && coreName != null) {
+            listOf("$coreName/$coreName.cfg", "$coreName/${content.substringAfterLast('/')}.cfg", "$coreName/$stem.cfg")
+                .mapNotNull { env.readText("$configDir/$it")?.let(::parseCfg) }
+        } else emptyList()
+        val cfg = overrides.fold(base) { acc, o -> acc + o }
         fun dir(key: String, fallback: String): String {
             val v = cfg[key]?.replace('\\', '/')?.let { if (it.startsWith("~")) env.home + it.drop(1) else it }
             return when {
@@ -271,7 +283,7 @@ internal object RetroArch : SaveAdapter {
         }
         val inContent = cfg["savefiles_in_content_dir"] == "true"
         val statesInContent = cfg["savestates_in_content_dir"] == "true"
-        val coreFolder = q.core?.let { CoreNames.libraryName(it) }
+        val coreFolder = coreName
         val contentFolder = SaveAdapters.parent(q.romPath).substringAfterLast('/')
         // RetroArch's own order (runloop_path_set_redirect): the content's folder, then the core's.
         fun sorted(dir: String, byCore: Boolean, byContent: Boolean): String = buildString {
@@ -281,13 +293,47 @@ internal object RetroArch : SaveAdapter {
         }
         val savesDir = sorted(if (inContent) content else dir("savefile_directory", defSaves), cfg["sort_savefiles_enable"] == "true", cfg["sort_savefiles_by_content_enable"] == "true")
         val statesDir = sorted(if (statesInContent) content else dir("savestate_directory", defStates), cfg["sort_savestates_enable"] == "true", cfg["sort_savestates_by_content_enable"] == "true")
-        val stem = SaveAdapters.stem(q.romPath)
         val format = SaveAdapters.sramFormat(q.platform)
-        val save = spot(env, SaveKind.SAVE, format, savesDir, listOf("save.srm" to "$stem.srm"))
+        val system = cfg["system_directory"]?.replace('\\', '/')?.takeIf { it.isNotBlank() && it != "default" }
+            ?.let { if (it.startsWith(":")) SaveAdapters.join(config?.let(SaveAdapters::parent) ?: "", it.drop(1).trimStart('/')) else it }
+            ?: "${SaveAdapters.parent(defSaves)}/system"
+        val save = when (val layout = RetroArchCoreSaves.layout(q.core)) {
+            // The frontend's save RAM (RETRO_MEMORY_SAVE_RAM) and the clock beside it (RETRO_MEMORY_RTC).
+            RetroArchCoreSaves.Layout.SRAM -> spot(env, SaveKind.SAVE, format, savesDir, listOf("save.srm" to "$stem.srm", "save.rtc" to "$stem.rtc") + RetroArchCoreSaves.extras(q.core, stem))
+            RetroArchCoreSaves.Layout.FLYCAST -> flycast(env, q, savesDir, system, configDir, cfg, stem)
+            RetroArchCoreSaves.Layout.DOSBOX_PURE -> spot(env, SaveKind.SAVE, "dosbox.pure", savesDir, listOf("save.pure.zip" to "$stem.pure.zip", "save.save.zip" to "$stem.save.zip"))
+            RetroArchCoreSaves.Layout.PPSSPP -> {
+                val savedata = "$system/PPSSPP/PSP/SAVEDATA"
+                val id = q.serial?.uppercase()?.replace("-", "")
+                val folders = id?.let { i -> env.list(savedata).filter { it.startsWith(i) } }.orEmpty()
+                if (id == null) SaveAdapters.unavailable(SaveKind.SAVE, "psp.savedata", "Fuse needs the game's serial (ULUS10041 and the like) to find its saves.")
+                else SaveSpot(SaveKind.SAVE, "psp.savedata", root = savedata, folders = folders.ifEmpty { listOf(id) })
+            }
+            is RetroArchCoreSaves.Layout.Unsupported -> SaveAdapters.unavailable(SaveKind.SAVE, format, layout.why)
+        }
         // States: slots 0 to 9 and the auto state, tied to the core.
         val stateNames = listOf("state.auto" to "$stem.state.auto", "state" to "$stem.state") + (1..9).map { "state$it" to "$stem.state$it" }
         val states = spot(env, SaveKind.STATE, "retroarch.state:${q.core ?: "core"}", statesDir, stateNames)
         return listOf(save, states)
+    }
+
+    /**
+     * Flycast's VMUs (shell/libretro/oslib.cpp getVmuPath): one shared VMU per port in the system
+     * folder's dc folder, unless the flycast_per_content_vmus option gives games their own in the
+     * save folder, named after the disc's product id (older versions: the content's name).
+     */
+    private fun flycast(env: SaveEnvironment, q: SaveQuery, saves: String, system: String, configDir: String?, cfg: Map<String, String>, stem: String): SaveSpot {
+        val options = listOfNotNull(
+            cfg["global_core_options"]?.takeIf { it == "true" }?.let { configDir?.let { d -> "${SaveAdapters.parent(d)}/retroarch-core-options.cfg" } },
+            configDir?.let { "$it/retroarch-core-options.cfg" }, configDir?.let { "$it/Flycast/Flycast.opt" }, configDir?.let { "$it/Flycast/$stem.opt" },
+        ).mapNotNull { env.readText(it)?.let(::parseCfg) }.fold(emptyMap<String, String>()) { acc, o -> acc + o }
+        val perGame = options["flycast_per_content_vmus"]?.let { it == "VMU A1" || it == "All VMUs" } == true
+        if (!perGame) return SaveSpot(SaveKind.MEMORY_CARD, "dc.vmu", listOf(SpotFile("vmu_save_A1.bin", "$system/dc/vmu_save_A1.bin")))
+        val id = q.serial?.trim()?.takeIf { it.isNotEmpty() }?.map { c -> if (c in " /\\:*?|<>") '_' else c }?.joinToString("")
+        val byId = id?.let { "$saves/$it.A1.bin" }
+        val legacy = "$saves/$stem.A1.bin"
+        val path = byId?.takeIf { env.exists(it) || !env.exists(legacy) } ?: legacy
+        return SaveSpot(SaveKind.SAVE, "dc.vmu.game", listOf(SpotFile("vmu_save_A1.bin", path)))
     }
 
     private fun spot(env: SaveEnvironment, kind: SaveKind, format: String, dir: String, names: List<Pair<String, String>>): SaveSpot {
@@ -927,5 +973,55 @@ internal object IniText {
             out["$section/${line.substring(0, i).trim()}"] = line.substring(i + 1).trim().trim('"')
         }
         return out
+    }
+}
+
+/**
+ * How each RetroArch core keeps its saves, from each core's own code, so Fuse never claims a save
+ * is in step because it built an `.srm` path a core never writes:
+ *
+ * - [Layout.SRAM]: the core hands its save RAM to RetroArch (RETRO_MEMORY_SAVE_RAM), which writes
+ *   `<content>.srm` (and `<content>.rtc` for a clock, RETRO_MEMORY_RTC). Almost every core.
+ * - [Layout.FLYCAST], [Layout.DOSBOX_PURE], [Layout.PPSSPP]: cores that write their own files,
+ *   placed as each does.
+ * - [Layout.Unsupported]: cores whose saves live inside their own emulated storage, which Fuse
+ *   doesn't read; it says so, and points to the standalone emulator Fuse does sync.
+ */
+object RetroArchCoreSaves {
+    sealed interface Layout {
+        data object SRAM : Layout
+        data object FLYCAST : Layout
+        data object DOSBOX_PURE : Layout
+        data object PPSSPP : Layout
+        data class Unsupported(val why: String) : Layout
+    }
+
+    private val own = mapOf(
+        "flycast" to Layout.FLYCAST,
+        "dosbox_pure" to Layout.DOSBOX_PURE,
+        "ppsspp" to Layout.PPSSPP,
+        "dolphin" to Layout.Unsupported("Dolphin's core keeps GameCube and Wii saves inside its own user folder. Dolphin itself syncs: play these with it."),
+        "citra" to Layout.Unsupported("Citra's core keeps 3DS saves on its own emulated SD card. Azahar syncs 3DS saves: play these with it."),
+        "citra_canary" to Layout.Unsupported("Citra's core keeps 3DS saves on its own emulated SD card. Azahar syncs 3DS saves: play these with it."),
+        "panda3ds" to Layout.Unsupported("Panda3DS keeps 3DS saves on its own emulated SD card. Azahar syncs 3DS saves: play these with it."),
+        "pcsx2" to Layout.Unsupported("LRPS2 keeps PlayStation 2 memory cards in its own folder. PCSX2 itself syncs its cards: play these with it."),
+        "pcee2" to Layout.Unsupported("This PlayStation 2 core keeps memory cards in its own folder. PCSX2 itself syncs its cards."),
+        "play" to Layout.Unsupported("Play! keeps PlayStation 2 memory cards in its own folder. PCSX2 itself syncs its cards."),
+        "scummvm" to Layout.Unsupported("ScummVM's core keeps each game's saves in its own saves folder, by engine. Fuse doesn't keep those in step yet."),
+        "dosbox_core" to Layout.Unsupported("This DOSBox core saves inside the game's own folder. DOSBox Pure keeps saves Fuse syncs."),
+        "dosbox_svn" to Layout.Unsupported("This DOSBox core saves inside the game's own folder. DOSBox Pure keeps saves Fuse syncs."),
+        "cemu" to Layout.Unsupported("Cemu's core keeps Wii U saves in its own storage. Cemu itself syncs: play these with it."),
+        "mame" to Layout.Unsupported("MAME keeps each game's NVRAM and high scores in its own folders, not as a save RetroArch writes."),
+    )
+
+    fun layout(core: String?): Layout = own[core?.removeSuffix("_libretro")?.removeSuffix("_libretro_android")] ?: Layout.SRAM
+
+    /**
+     * Files a frontend-saved core keeps beside its `.srm`: Beetle PSX's second memory card,
+     * `<content>.1.mcr`, when its option for it is on.
+     */
+    fun extras(core: String?, stem: String): List<Pair<String, String>> = when (core?.removeSuffix("_libretro")) {
+        "mednafen_psx", "mednafen_psx_hw" -> listOf("save.1.mcr" to "$stem.1.mcr")
+        else -> emptyList()
     }
 }
