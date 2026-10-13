@@ -28,6 +28,10 @@ for nothing, and a log that says where a slow frame's time went.
   for and motion stuttered. Fuse now paces itself to the screen's rate and leaves the wait to
   gamescope. Pictures never tear: gamescope shows whole frames. `FUSE_VSYNC=on` brings the old way
   back.
+- **Fuse starts faster on Linux, and its first screens don't wait.** The AppImage now carries the
+  Java classes Fuse uses, already read and checked, in an archive Java maps straight in: about
+  half the work of starting is gone, and opening Home, the Library and Systems the first time no
+  longer pauses to load their code.
 - **Video redraws only when a new picture is due.** A film or a background preview used to have
   the whole window drawn again at every screen refresh, 60 times a second for a 24 fps film. Now
   the window is drawn when the next picture is due.

@@ -426,12 +426,14 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Install FUSE 2 for AppImage tools
+      - name: Install FUSE 2 for AppImage tools, and a virtual screen
         run: |
           set -euo pipefail
           sudo apt-get update
           # Ubuntu 24.04 and later call the package libfuse2t64; older releases call it libfuse2.
           sudo apt-get install -y libfuse2t64 || sudo apt-get install -y libfuse2
+          # A virtual screen to start Fuse on while its class data sharing archive is written.
+          sudo apt-get install -y xvfb xdotool
 
       - name: Build the AppImage
         run: |
