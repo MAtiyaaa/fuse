@@ -211,6 +211,22 @@ class PerfHarness {
                 val first = results.last().second.take(3).joinToString(" ") { "%.1f".format(it) }
                 println("Perf: ${case.key}-$name first capture-inclusive frames $first ms")
             }
+            // Fuse starting: the startup animation over a freshly started app (Home building beneath
+            // it), and the first start's setup opening. Frame 0 is the one the app starts in.
+            fun opening(name: String, frames: Int, firstRun: Boolean) {
+                if (!wants(name)) return
+                if (firstRun) store.updatePrefs { it.copy(onboardingDone = false) }
+                val shown = driver.view as io.github.matiyaaa.fuse.ui.shell.audit.AuditView.App
+                measure(name, frames = frames, everyFrames = frames) {
+                    io.github.matiyaaa.fuse.ui.shell.app.StartupIntro.played = false
+                    driver.view = shown.copy(generation = shown.generation + 1, intro = true)
+                }
+                if (firstRun) store.updatePrefs { it.copy(onboardingDone = true) }
+                driver.view = shown.copy(generation = shown.generation + 2)
+                driver.settle(1_600)
+            }
+            opening("intro", frames = (io.github.matiyaaa.fuse.ui.shell.app.StartupIntro.LENGTH_MS * case.hz / 1000) + 12, firstRun = false)
+            opening("setup-opening", frames = 6 * case.hz, firstRun = true)
             // Home at rest: what a frame costs with nothing changing.
             driver.home()
             driver.settle(1_500)

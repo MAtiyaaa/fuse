@@ -69,6 +69,8 @@ fun main(args: Array<String>) {
     UiRenderTrace.enabled = "--trace-ui" in args
     // Gradients and baked pictures behind the interface are dithered, on the graphics card or not.
     io.github.matiyaaa.fuse.desktop.system.DesktopDithering.install()
+    // Skia's own messages, so a fallback to drawing on the processor has its reason.
+    io.github.matiyaaa.fuse.desktop.system.GraphicsReport.install()
     setX11WmClass()
     // Fuse Player plays on FFmpeg here.
     io.github.matiyaaa.fuse.ui.player.FusePlayer.engineFactory = { io.github.matiyaaa.fuse.ui.player.ffmpeg.FfmpegEngine() }
@@ -123,7 +125,7 @@ private var desktopScale = 1f
  * (X11, Wayland, nested gamescope or Steam's Game Mode), and whether gamescope is scaling a smaller
  * window up to the screen, which makes everything soft however sharp the art is.
  */
-private fun probeRenderer(session: DesktopSession, window: java.awt.Window) {
+private suspend fun probeRenderer(session: DesktopSession, window: java.awt.Window) {
     fun layers(c: java.awt.Component): List<org.jetbrains.skiko.SkiaLayer> =
         (if (c is org.jetbrains.skiko.SkiaLayer) listOf(c) else emptyList()) + ((c as? java.awt.Container)?.components?.flatMap(::layers) ?: emptyList())
     val layer = layers(window).firstOrNull() ?: return
@@ -142,8 +144,35 @@ private fun probeRenderer(session: DesktopSession, window: java.awt.Window) {
     if (profile.refreshHz > 0) UiRenderTrace.expectedFrameNanos = profile.budgetNanos
     val note = if (profile.upscaled) "Shown at ${w}x$h and scaled up to ${output?.first ?: mode.width}x${output?.second ?: mode.height}, which looks soft. " +
         "In Steam, Fuse's Properties, General, set Game Resolution to Native" else null
+    val report = io.github.matiyaaa.fuse.desktop.system.GraphicsReport
+    val verdict = io.github.matiyaaa.fuse.desktop.system.Renderer.classify(api, info)
+    // Asked only when drawing on the processor: whether the computer's own OpenGL uses the card.
+    val system = if (gpu) null else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { report.systemRenderer() }
+    val details = buildList {
+        add("Drawn by" to if (gpu) "The graphics card" else "The processor")
+        add("Graphics API" to api.lowercase().replaceFirstChar { it.uppercase() }.replace("Opengl", "OpenGL").replace("Direct3d", "Direct3D"))
+        report.driver(info)?.let { add("Driver" to it) }
+        add("Display" to report.sessionName(kind))
+        val ow = output?.first ?: mode.width
+        val oh = output?.second ?: mode.height
+        add("Window" to if (profile.upscaled) "${w}x$h, enlarged to ${ow}x$oh" else "${w}x$h on a ${ow}x$oh screen")
+        add("Refresh" to "${profile.refreshHz.toInt()} Hz")
+        if (!gpu) {
+            verdict.why?.let { add("Why" to it) }
+            report.skiaFailures.lastOrNull()?.let { add("Skia said" to it) }
+            for (cause in report.environmentCauses(System::getenv)) add("Environment" to cause)
+            add("This computer's OpenGL" to (system ?: "Not known (glxinfo isn't installed)"))
+            val systemGpu = system?.let { io.github.matiyaaa.fuse.desktop.system.Renderer.classify("OPENGL", it).gpu }
+            when (systemGpu) {
+                true -> add("What to try" to "This computer's OpenGL uses its graphics card, so the cause is how Fuse was started: start it from its AppImage, without launch options that change the graphics driver")
+                false -> add("What to try" to "This computer's own OpenGL draws in software too: its graphics driver isn't working. Updating the system usually fixes it")
+                null -> Unit
+            }
+        }
+        note?.let { add("Note" to it) }
+    }
     Log.info("Display: ${kind.name.lowercase()}, window ${w}x$h, output ${output?.first ?: mode.width}x${output?.second ?: mode.height} at ${profile.refreshHz} Hz, large ${profile.largeOutput}, upscaled ${profile.upscaled}")
-    session.platform.noteRenderer(api, info, note)
+    session.platform.noteRenderer(api, info, note, details)
     UiRenderTrace.renderer = api
 }
 

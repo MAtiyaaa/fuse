@@ -511,8 +511,12 @@ interface MenuMusicPlayer {
     fun onSongEnded(listener: ((String) -> Unit)?) = Unit
 }
 
-/** How the window is drawn: [name] for people, and whether the graphics card does it. */
-data class DrawingInfo(val name: String, val gpu: Boolean)
+/**
+ * How the window is drawn: [name] for people, whether the graphics card does it, and [details]
+ * (label and value: the driver, the display session, the window against the screen, and when on
+ * the processor, why), for Settings and the diagnostics report.
+ */
+data class DrawingInfo(val name: String, val gpu: Boolean, val details: List<Pair<String, String>> = emptyList())
 
 private val NoDrawingInfo: kotlinx.coroutines.flow.StateFlow<DrawingInfo?> = kotlinx.coroutines.flow.MutableStateFlow(null)
 

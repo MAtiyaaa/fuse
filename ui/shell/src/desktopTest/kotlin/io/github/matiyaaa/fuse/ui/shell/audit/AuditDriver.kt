@@ -52,7 +52,7 @@ import kotlinx.coroutines.runBlocking
 /** What the test window shows: the whole app for one store, or the companion screen. */
 internal sealed interface AuditView {
     data object Blank : AuditView
-    data class App(val store: FuseStore, val platform: PlatformUi, val generation: Int, val safeMode: io.github.matiyaaa.fuse.ui.shell.app.SafeMode? = null, val flipped: Boolean = false) : AuditView
+    data class App(val store: FuseStore, val platform: PlatformUi, val generation: Int, val safeMode: io.github.matiyaaa.fuse.ui.shell.app.SafeMode? = null, val flipped: Boolean = false, val intro: Boolean = false) : AuditView
     data class Companion(val store: FuseStore, val platform: PlatformUi, val mode: DualScreenMode, val onHide: (() -> Unit)? = null) : AuditView
     /** One piece of the interface on its own (the standby screen, which waits minutes to appear). */
     class Piece(val content: @Composable () -> Unit) : AuditView
@@ -182,7 +182,7 @@ internal class AuditDriver(
             when (val v = view) {
                 AuditView.Blank -> Unit
                 is AuditView.App -> key(v.generation) {
-                    FuseApp(v.store, v.platform, router, phoneLink, safeMode = v.safeMode, showcaseElsewhere = v.flipped)
+                    FuseApp(v.store, v.platform, router, phoneLink, safeMode = v.safeMode, showcaseElsewhere = v.flipped, startupIntro = v.intro)
                     ExtraToasts(v.store, v.platform)
                 }
                 is AuditView.Companion -> key(v.mode, v.store) { CompanionApp(v.store, v.platform, v.mode, v.onHide) }

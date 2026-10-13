@@ -65,6 +65,7 @@ fun healthRows(app: AppState): List<MenuAction> {
     LaunchedEffect(Unit) { app.store.health.check() }
     val attention = issues.count { it.problem.severity >= Severity.ATTENTION }
     val notes = issues.size - attention
+    val drawing by app.platform.drawing.collectAsState()
     return buildList {
         add(MenuAction(
             "status",
@@ -99,6 +100,7 @@ fun healthRows(app: AppState): List<MenuAction> {
                 onSelect = { app.showProblem(issue.problem) },
             ))
         }
+        app.graphicsRow(drawing, section = "This computer")?.let(::add)
         add(MenuAction(
             "report", "Diagnostics report", FuseIcons.ClipboardList,
             detail = "For a bug report: versions, systems, emulators, drives and what went wrong. You see it before it's saved",
@@ -117,7 +119,7 @@ fun AppState.showDiagnosticsReport() {
             "File access: ${platform.storage.state.value}",
             "Screens: ${platform.displays.value.size}",
             "Safe mode: ${safeMode?.reason ?: "off"}",
-        )
+        ) + (platform.drawing.value?.let { d -> listOf("Graphics: ${d.name}") + d.details.map { (label, value) -> "Graphics, $label: $value" } } ?: emptyList())
         val text = store.health.diagnostics(device, crash = platform.lastCrashReport())
         val name = "fuse-diagnostics-${store.updates.currentVersion}.txt"
         textPreview = TextPreviewSpec(
@@ -144,4 +146,36 @@ fun AppState.showDiagnosticsReport() {
             ),
         )
     }
+}
+
+/**
+ * Whether Fuse draws on the graphics card or on the processor, in one row, and everything known
+ * about it (the driver, the display, the window against the screen, and when on the processor, why
+ * and what to try) a press away. Null where the platform doesn't say (Android).
+ */
+fun AppState.graphicsRow(drawing: io.github.matiyaaa.fuse.ui.shell.platform.DrawingInfo?, section: String? = null): MenuAction? {
+    drawing ?: return null
+    val facts = drawing.details.joinToString("\n") { (label, value) -> "$label: $value" }.ifEmpty { drawing.name }
+    return MenuAction(
+        "graphics", "Graphics", if (drawing.gpu) FuseIcons.Monitor else FuseIcons.Chip,
+        detail = if (drawing.gpu) drawing.name else "Fuse is drawing on the processor, so motion is kept light. Select to see why",
+        trailing = Trailing.Value(if (drawing.gpu) "Graphics card" else "Processor"),
+        section = section,
+        onSelect = {
+            textPreview = TextPreviewSpec(
+                title = "Graphics",
+                message = if (drawing.gpu) "Fuse is drawing on the graphics card." else "Fuse is drawing on the processor. Here is what it knows about why.",
+                text = facts,
+                icon = if (drawing.gpu) FuseIcons.Monitor else FuseIcons.Chip,
+                actions = listOf(
+                    PreviewAction("Copy", FuseIcons.Copy, primary = true) {
+                        scope.launch {
+                            val ok = platform.writeClipboardText(facts)
+                            toasts.show(if (ok) "Copied" else "Copying isn't possible here", if (ok) ToastKind.SUCCESS else ToastKind.WARNING)
+                        }
+                    },
+                ),
+            )
+        },
+    )
 }
