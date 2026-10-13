@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.2.6 is the <b>Native Update</b>: one Save Sync for each device (Fuse One, RomM or Syncthing), Fuse One saves that move even from games started outside Fuse, and a setup that knows when Steam isn't there.</sub><br>
+<sub>0.4.2.6 is the <b>Native Update</b>: one Save Sync for each device (Fuse One, RomM or Syncthing), Fuse One saves that move even from games started outside Fuse, a host that keeps itself up to date, RomM Saves in Addons, games that start whichever RetroArch core you have, and art found for far more games.</sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>

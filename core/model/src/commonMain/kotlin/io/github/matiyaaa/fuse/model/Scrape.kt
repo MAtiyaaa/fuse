@@ -2,11 +2,11 @@ package io.github.matiyaaa.fuse.model
 
 import kotlinx.serialization.Serializable
 
-/** Metadata/artwork sources. The user orders them; RomM data (via Cartridge) is preferred when present. */
+/** Metadata/artwork sources. The user orders them; RomM data (from RomM itself or Cartridge) is preferred when present. */
 @Serializable
 enum class ScrapeProviderId(val displayName: String, val needsCredentials: Boolean) {
     LOCAL("Local media", false),
-    ROMM("RomM (via Cartridge)", false),
+    ROMM("RomM", false),
     STEAMGRIDDB("SteamGridDB", true),
     IGDB("IGDB", true),
     THEGAMESDB("TheGamesDB", true),

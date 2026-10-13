@@ -129,6 +129,22 @@ class JvmRommSaves(
         }
     }
 
+    override suspend fun standing(query: SaveQuery, romId: Long, newest: RommSave?): RommSaveStanding = withContext(Dispatchers.IO) {
+        val spot = spotOf(query) ?: return@withContext RommSaveStanding.UNKNOWN
+        val local = File(spot.files.single().path)
+        val here = if (local.isFile && !Slots.blank(local)) md5(local) else null
+        val agreed = state.agreed[key(romId, spot)]
+        when {
+            newest == null -> if (here != null) RommSaveStanding.NEWER_HERE else RommSaveStanding.UNKNOWN
+            here == null -> RommSaveStanding.NOT_HERE
+            here == newest.contentHash -> RommSaveStanding.IN_STEP
+            agreed == null -> RommSaveStanding.BOTH_CHANGED
+            agreed.hash == here -> RommSaveStanding.NEWER_ON_ROMM
+            agreed.saveId == newest.id || agreed.hash == newest.contentHash -> RommSaveStanding.NEWER_HERE
+            else -> RommSaveStanding.BOTH_CHANGED
+        }
+    }
+
     override suspend fun afterExit(query: SaveQuery, romId: Long) {
         withContext(Dispatchers.IO) {
             // RomM's save sync is off here (another way moves this device's saves, or none): nothing to do.

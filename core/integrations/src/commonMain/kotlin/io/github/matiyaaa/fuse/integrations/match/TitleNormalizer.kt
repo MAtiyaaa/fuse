@@ -14,6 +14,7 @@ object TitleNormalizer {
     private val brackets = Regex("\\([^)]*\\)|\\[[^\\]]*\\]|\\{[^}]*\\}")
     private val trailingArticle = Regex(",\\s*(the|a|an)(?=\\s*($|[-:;]))")
     private val apostrophes = Regex("['’`´]")
+    private val bangInWord = Regex("(?<=[a-z])!(?=[a-z])")
     private val nonAlphanumeric = Regex("[^a-z0-9]+")
     private val articles = setOf("the", "a", "an")
     private val romanDigits = mapOf('i' to 1, 'v' to 5, 'x' to 10)
@@ -44,6 +45,8 @@ object TitleNormalizer {
         t = trailingArticle.replace(t, "")
         t = t.replace("&", " and ")
         t = apostrophes.replace(t, "")
+        // A "!" inside a word stands for an "i" ("Metal Gear Ac!d").
+        t = bangInWord.replace(t, "i")
         t = nonAlphanumeric.replace(t, " ").trim()
         if (t.isEmpty()) return emptyList()
         val words = t.split(' ').filter { it.isNotEmpty() }.toMutableList()

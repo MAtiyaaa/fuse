@@ -27,6 +27,33 @@ interface RommSaveService {
 
     /** What happened to a save after a game, said to the person: sent, or not and why. */
     val notices: kotlinx.coroutines.flow.SharedFlow<RommSaveNotice> get() = NO_ROMM_NOTICES
+
+    /**
+     * How [query]'s save here stands against [newest], RomM's newest save of game [romId], by what
+     * this device last agreed with RomM. Reads only; nothing moves.
+     */
+    suspend fun standing(query: SaveQuery, romId: Long, newest: RommSave?): RommSaveStanding = RommSaveStanding.UNKNOWN
+}
+
+/** A game's save here beside RomM's, for the Sync tab. */
+enum class RommSaveStanding {
+    /** The same save here and on RomM. */
+    IN_STEP,
+
+    /** Changed here since it last matched RomM's; it goes up after the next play. */
+    NEWER_HERE,
+
+    /** RomM has a newer one; it comes down before the game next starts here. */
+    NEWER_ON_ROMM,
+
+    /** Both changed since they last matched: the person chooses when the game next starts. */
+    BOTH_CHANGED,
+
+    /** RomM has a save; this device has none of it yet. */
+    NOT_HERE,
+
+    /** Its save here can't go to RomM (made of folders, or the emulator unknown). */
+    UNKNOWN,
 }
 
 private val NO_ROMM_NOTICES = kotlinx.coroutines.flow.MutableSharedFlow<RommSaveNotice>()

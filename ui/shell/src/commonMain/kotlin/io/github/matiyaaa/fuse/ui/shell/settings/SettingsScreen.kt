@@ -224,15 +224,27 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
     val rowSel = place.rowSel
     var inRows by place::inRows
     val section = sections[sectionSel.index]
-    val rows = section.rows(app)
+    val ownRows = section.rows(app)
+    // Search as you type: what is typed in the search row lists every matching setting in place of
+    // the section's rows, updated with each key.
+    val field = remember { io.github.matiyaaa.fuse.ui.designsystem.components.EditableText() }
+    val query = field.text
+    val searching = query.isNotBlank()
+    val hits = remember(query, sections) {
+        if (!searching) emptyList()
+        else SettingsIndex.search(query, sections, limit = SEARCH_LIMIT, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen, steam = app.platform.steam != null, decky = app.platform.decky != null)
+    }
+    val rows = if (!searching) ownRows else hits.mapIndexed { i, h ->
+        MenuAction("hit.$i", h.title, h.section.icon, detail = h.path, trailing = Trailing.Chevron, onSelect = {})
+    }.ifEmpty { listOf(MenuAction("nothing", "Nothing in Settings matches \u201c${query.trim()}\u201d", FuseIcons.Search, detail = "Try another word, such as controller, text size or RomM", onSelect = {})) }
     rowSel.clamp(rows.size)
     if (!place.landed && initialRow != null) {
-        val at = rows.indexOfFirst { it.label == initialRow }
+        val at = ownRows.indexOfFirst { it.label == initialRow }
         if (at >= 0) rowSel.index = at
         place.landed = true
     }
     place.pendingRow?.let { wanted ->
-        val at = rows.indexOfFirst { it.label == wanted }
+        val at = ownRows.indexOfFirst { it.label == wanted }
         if (at >= 0) rowSel.index = at
         place.pendingRow = null
     }
@@ -243,6 +255,7 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
         topic.group?.let { app.openGroups[it] = true }
         val at = sections.indexOfFirst { it.id == topic.section }
         if (at < 0) return
+        field.replaceAll("")
         onSearch = false
         sectionSel.index = at
         rowSel.index = 0
@@ -251,32 +264,42 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
         app.focusZone = FocusZone.CONTENT
     }
 
+    /** The on-screen keys, for a controller or a touch screen: what is typed there searches the same way. */
     fun search() {
         app.textInput = TextInputSpec(
             title = "Search settings",
-            initial = "",
-            placeholder = "Text size, controller, Wi-Fi",
+            initial = query,
+            placeholder = "Text size, controller, RomM",
             capitalize = false,
             doneLabel = "Search",
-        ) { query ->
-            val hits = SettingsIndex.search(query, sections, limit = SEARCH_LIMIT, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen, steam = app.platform.steam != null, decky = app.platform.decky != null)
-            when {
-                query.isBlank() -> Unit
-                hits.isEmpty() -> app.toasts.show("Nothing in Settings matches \"${query.trim()}\"", icon = FuseIcons.Search)
-                hits.size == 1 -> land(hits.single().topic)
-                else -> app.choice = ChoiceSpec(
-                    title = "Settings for \"${query.trim()}\"",
-                    message = "${hits.size} places in Settings",
-                    icon = FuseIcons.Search,
-                    options = hits.mapIndexed { i, h ->
-                        MenuAction("hit.$i", h.title, h.section.icon, detail = h.path, onSelect = {
-                            app.choice = null
-                            land(h.topic)
-                        })
-                    },
-                )
+        ) { typed ->
+            field.replaceAll(typed.trim())
+            val found = SettingsIndex.search(typed, sections, limit = SEARCH_LIMIT, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen, steam = app.platform.steam != null, decky = app.platform.decky != null)
+            // One place: straight there. Several: they are listed, the first chosen.
+            if (found.size == 1) land(found.single().topic) else if (found.isNotEmpty()) { onSearch = false; rowSel.index = 0; inRows = true }
+        }
+    }
+
+    val router = io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter.current
+    /** A mouse or a keyboard types in the row itself; a controller or a touch screen opens the keys. */
+    fun typesInPlace(): Boolean = router.lastSource.value.let {
+        it == io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.POINTER || it == io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.KEYBOARD
+    }
+
+    // A keyboard types into the search row while it is chosen (no Enter needed to start); Enter goes
+    // to the first result, Escape clears it.
+    val typingHere = onSearch && !inRows && app.focusZone == FocusZone.CONTENT && !app.overlayOpen
+    androidx.compose.runtime.DisposableEffect(typingHere) {
+        if (typingHere) {
+            app.keyboardTarget = io.github.matiyaaa.fuse.ui.shell.app.KeyboardTarget(
+                field, title = "Search settings", placeholder = "Text size, controller, RomM", doneLabel = "Go",
+                cancel = { field.replaceAll("") },
+            ) {
+                val first = SettingsIndex.search(field.text, sections, limit = SEARCH_LIMIT, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen, steam = app.platform.steam != null, decky = app.platform.decky != null).firstOrNull()
+                if (first != null) land(first.topic) else if (field.text.isBlank()) search()
             }
         }
+        onDispose { if (typingHere) app.keyboardTarget = null }
     }
 
     LaunchedEffect(inRows, section.id, onSearch) {
@@ -289,14 +312,26 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
     }
 
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
-        if (inRows) {
+        if (inRows && searching) {
+            when (e.action) {
+                // Back in the results returns to the search row, with what was typed.
+                NavAction.LEFT, NavAction.BACK -> { inRows = false; onSearch = true; NavResult.MOVED }
+                NavAction.SELECT -> { hits.getOrNull(rowSel.index)?.let { land(it.topic) }; NavResult.ACTIVATED }
+                else -> handleMenuAction(e, rows, rowSel)
+            }
+        } else if (inRows) {
             when (e.action) {
                 NavAction.LEFT, NavAction.BACK -> { inRows = false; NavResult.MOVED }
                 else -> handleMenuAction(e, rows, rowSel)
             }
         } else if (onSearch) {
             when (e.action) {
-                NavAction.DOWN, NavAction.PAGE_DOWN -> { onSearch = false; NavResult.MOVED }
+                NavAction.BACK -> if (searching) { field.replaceAll(""); NavResult.MOVED } else NavResult.IGNORED
+                // With something typed, down goes into what it found.
+                NavAction.DOWN, NavAction.PAGE_DOWN -> {
+                    if (searching) { if (hits.isNotEmpty()) { rowSel.index = 0; inRows = true }; NavResult.MOVED }
+                    else { onSearch = false; NavResult.MOVED }
+                }
                 NavAction.SELECT -> { search(); NavResult.MOVED }
                 // Right goes across to the open section's first row, as it does from any section.
                 NavAction.RIGHT -> { onSearch = false; rowSel.index = 0; inRows = true; NavResult.MOVED }
@@ -320,7 +355,13 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
     }
 
     val focused = app.focusZone == FocusZone.CONTENT
-    val panelRows = rows.map { r -> r.copy(onSelect = { rowSel.index = rows.indexOf(r); inRows = true; r.onSelect() }) }
+    val panelRows = rows.mapIndexed { i, r ->
+        r.copy(onSelect = {
+            rowSel.index = i
+            // A result goes to its setting; a section's row does what it does.
+            if (searching) hits.getOrNull(i)?.let { land(it.topic) } else { inRows = true; r.onSelect() }
+        })
+    }
     // Appearance leads with the theme in use; selecting the card opens every theme, as the Theme row does.
     val openThemes: (() -> Unit)? = if (section.id == "appearance") ({ app.go(Route.Themes) }) else null
 
@@ -348,7 +389,7 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
                         sectionRows, sectionSel,
                         showSelection = focused && !onSearch,
                         modifier = Modifier.weight(1f).padding(bottom = Size.hintHeight).reveal(1),
-                        header = { SearchRow(focused && onSearch, compact = true) { onSearch = true; search() } },
+                        header = { SearchRow(focused && onSearch, compact = true, query, typing = typingHere, onClear = { field.replaceAll("") }) { onSearch = true; if (!typesInPlace()) search() } },
                     )
                 } else {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -357,7 +398,7 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
                             size = Size.touch - Space.xs, contentDescription = "Sections",
                         )
                         Spacer(Modifier.width(Space.m))
-                        SectionHeading(section, Modifier.weight(1f), compact = true)
+                        if (searching) SearchHeading(query, hits.size, Modifier.weight(1f), compact = true) else SectionHeading(section, Modifier.weight(1f), compact = true)
                     }
                     Spacer(Modifier.height(Space.m))
                     SectionPanel(panelRows, rowSel, focused && inRows, openThemes, short = true, Modifier.weight(1f).padding(bottom = Size.hintHeight + Space.s).reveal(1))
@@ -375,7 +416,7 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
                         modifier = Modifier.width(sidebar).alignBy(FirstBaseline),
                     )
                     Spacer(Modifier.width(Space.xl))
-                    SectionHeading(section, Modifier.weight(1f).alignBy(FirstBaseline), compact = short)
+                    if (searching) SearchHeading(query, hits.size, Modifier.weight(1f).alignBy(FirstBaseline), compact = short) else SectionHeading(section, Modifier.weight(1f).alignBy(FirstBaseline), compact = short)
                 }
                 Spacer(Modifier.height(if (short) Space.m else Space.l))
                 Row(Modifier.weight(1f).padding(bottom = Size.hintHeight + Space.s)) {
@@ -384,7 +425,7 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
                         showSelection = focused && !onSearch,
                         dimSelection = inRows,
                         modifier = Modifier.width(sidebar).fillMaxHeight().reveal(1),
-                        header = { SearchRow(focused && onSearch && !inRows, compact = short) { inRows = false; onSearch = true; search() } },
+                        header = { SearchRow(focused && onSearch && !inRows, compact = short, query, typing = typingHere, onClear = { field.replaceAll("") }) { inRows = false; onSearch = true; app.focusZone = FocusZone.CONTENT; if (!typesInPlace()) search() } },
                     )
                     Spacer(Modifier.width(Space.xl))
                     SectionPanel(panelRows, rowSel, focused && inRows, openThemes, short, Modifier.weight(1f).fillMaxHeight().reveal(2))
@@ -400,7 +441,7 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
  * keyboard; what is typed lands on the setting (or lists them when several match).
  */
 @Composable
-private fun SearchRow(selected: Boolean, compact: Boolean, onOpen: () -> Unit) {
+private fun SearchRow(selected: Boolean, compact: Boolean, query: String, typing: Boolean, onClear: () -> Unit, onOpen: () -> Unit) {
     val c = Fuse.colors
     val motion = Fuse.motion
     val shape = RoundedCornerShape(Fuse.geometry.control)
@@ -435,7 +476,56 @@ private fun SearchRow(selected: Boolean, compact: Boolean, onOpen: () -> Unit) {
     ) {
         FuseIcon(FuseIcons.Search, tint = { tint }, size = Size.iconS)
         Spacer(Modifier.width(Space.m))
-        FText("Search settings", Fuse.type.body, color = { tint }, maxLines = 1, modifier = Modifier.weight(1f))
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            if (query.isEmpty()) {
+                // The caret before the words, so it reads as a field that takes typing.
+                if (typing) Caret(query)
+                FText(if (typing) "Type to search" else "Search settings", Fuse.type.body, color = { c.textMuted }, maxLines = 1)
+            } else {
+                FText(query, Fuse.type.body, color = { c.text }, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                if (typing) Caret(query)
+            }
+        }
+        if (query.isNotEmpty()) {
+            Spacer(Modifier.width(Space.s))
+            IconButton(FuseIcons.Close, selected = false, onClick = onClear, size = Size.touch - Space.m, contentDescription = "Clear search")
+        }
+    }
+}
+
+/** A text caret that blinks while typing pauses, as the keyboard field's does; [text] restarts it. */
+@Composable
+private fun Caret(text: String) {
+    val c = Fuse.colors
+    val blink = remember { io.github.matiyaaa.fuse.ui.fuseline.FuselineValue(1f) }
+    androidx.compose.runtime.LaunchedEffect(text) {
+        blink.snapTo(1f)
+        kotlinx.coroutines.delay(650)
+        while (true) {
+            blink.animateTo(0f, io.github.matiyaaa.fuse.ui.fuseline.tween(160))
+            kotlinx.coroutines.delay(340)
+            blink.animateTo(1f, io.github.matiyaaa.fuse.ui.fuseline.tween(160))
+            kotlinx.coroutines.delay(540)
+        }
+    }
+    Box(Modifier.padding(horizontal = 1.dp).width(2.dp).height(18.dp).graphicsLayer { alpha = blink.value }.background(c.focus))
+}
+
+/** What the search row found, in the heading's place while something is typed. */
+@Composable
+private fun SearchHeading(query: String, count: Int, modifier: Modifier, compact: Boolean) {
+    val words = if (count == 0) "Nothing found" else if (count == 1) "1 place in Settings" else "$count places in Settings"
+    if (compact) {
+        Row(modifier, verticalAlignment = Alignment.Bottom) {
+            FText("\u201c${query.trim()}\u201d", Fuse.type.titleSmall, maxLines = 1, modifier = Modifier.weight(1f, fill = false).alignByBaseline())
+            Spacer(Modifier.width(Space.m))
+            FText(words, Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1, modifier = Modifier.alignByBaseline())
+        }
+    } else {
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+            FText("\u201c${query.trim()}\u201d", Fuse.type.title, maxLines = 1)
+            FText(words, Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 1)
+        }
     }
 }
 

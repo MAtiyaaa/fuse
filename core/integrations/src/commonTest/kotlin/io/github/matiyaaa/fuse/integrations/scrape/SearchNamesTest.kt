@@ -69,4 +69,18 @@ class SearchNamesTest {
         // A keyword that is one of the names is asked once, as a name.
         assertEquals(SearchNames.Plan(listOf("12 Contra", "Contra", "XII Contra"), emptyList()), SearchNames.plan(q("12 Contra", "Contra")))
     }
+
+    @Test
+    fun shortAndRunTogetherFileNamesAreSpelledOut() {
+        assertEquals(listOf("Mega Man 2"), SearchNames.spellings("MEGAMAN2"))
+        assertEquals(listOf("Mega Man"), SearchNames.spellings("MEGAMAN"))
+        assertEquals(listOf("Mario RPG"), SearchNames.spellings("mariorpg"))
+        assertEquals(listOf("Super Mario Bros. 3"), SearchNames.spellings("SMB3"))
+        assertTrue("Jet Set Radio Future" in SearchNames.spellings("JSRF - Jet Set Radio Future"))
+        // Written out already: nothing to add.
+        assertEquals(emptyList(), SearchNames.spellings("Toy Story 3"))
+        assertEquals(emptyList(), SearchNames.spellings("Pokemon Red"))
+        assertEquals(emptyList(), SearchNames.spellings("Battletoads"))
+        assertEquals(emptyList(), SearchNames.spellings("Metroid Prime 4"))
+    }
 }

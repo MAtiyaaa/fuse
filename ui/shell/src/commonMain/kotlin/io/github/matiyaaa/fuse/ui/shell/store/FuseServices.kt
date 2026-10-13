@@ -218,6 +218,12 @@ interface EmulatorDetector {
     /** Linux: absolute path of a RetroArch core for [installed]; null elsewhere or when not found. */
     fun retroArchCorePath(installed: InstalledEmulator, core: String): String? = null
 
+    /**
+     * Desktop: true when Fuse can see where [installed] keeps its cores, so a core it doesn't find
+     * there really isn't installed. False where it can't tell (a Steam copy, cores kept elsewhere).
+     */
+    fun retroArchCoresVisible(installed: InstalledEmulator): Boolean = false
+
     /** Linux: the user's home directory, for `~` in emulator paths. */
     val homeDir: String? get() = null
 

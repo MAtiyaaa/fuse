@@ -138,6 +138,7 @@ object SettingsIndex {
         SettingTopic("displays", "About this device", "processor memory ram cpu displays specs"),
         SettingTopic("accounts", "Connect RetroAchievements", "retroachievements ra cheevos login account"),
         SettingTopic("addons", "RomM", "romm server games downloads uploads pair sign in save sync", group = ADDONS_ROMM),
+        SettingTopic("addons", "Sign In to RomM", "romm sign in log in login account server address connect", group = ADDONS_ROMM),
         SettingTopic("addons", "Cartridge support", "romm downloads cartridge", group = ADDONS_CARTRIDGE, cartridge = true),
         SettingTopic("accounts", "Pair a phone", "phone link companion upload qr"),
         SettingTopic("health", "Diagnostics report", "bug report logs problems diagnostics support"),

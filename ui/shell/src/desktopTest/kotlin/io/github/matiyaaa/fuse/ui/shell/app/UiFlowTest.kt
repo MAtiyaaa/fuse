@@ -387,6 +387,36 @@ class UiFlowTest {
     private fun <T : Any> assertNotNullOf(v: T?): T = kotlin.test.assertNotNull(v)
 
     @Test
+    fun settingsSearchListsAsYouTypeAndEnterGoesToTheFirst() = runComposeUiTest(testTimeout = FLOW_TEST_TIMEOUT) {
+        val store = runBlocking { createFuseStore(newServices(), scope) }
+        val router = InputRouter(scope)
+        mainClock.autoAdvance = false
+        val app = AppState(store, TestPlatform, scope, Route.Settings(null, null))
+        setContent {
+            io.github.matiyaaa.fuse.ui.designsystem.theme.FuseTheme {
+                androidx.compose.runtime.CompositionLocalProvider(io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter provides router) {
+                    androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.size(1280.dp, 720.dp)) {
+                        io.github.matiyaaa.fuse.ui.shell.settings.SettingsScreen(app, null)
+                    }
+                }
+            }
+        }
+        fun shows(text: String) = onAllNodesWithText(text, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+        pumpUntil { shows("Search settings") }
+        // Up from the first section is the search row: a keyboard types into it straight away.
+        router.tap(PadButton.DPAD_UP)
+        pumpUntil { app.keyboardTarget != null }
+        app.keyboardTarget!!.field.insert("romm")
+        // Every key lists what matches, without Enter or a dialog.
+        pumpUntil { shows("\u201cromm\u201d") }
+        assertTrue(shows("Sign In to RomM"), "RomM's sign-in is found")
+        assertEquals(null, app.textInput, "no dialog opened")
+        // Enter goes to the first.
+        app.keyboardTarget!!.submit()
+        pumpUntil { shows("Addons") && !shows("\u201cromm\u201d") }
+    }
+
+    @Test
     fun theSyncTabShowsAtLeastFourGamesAtOnceEvenOnTheThorsUpperScreen() = runComposeUiTest(testTimeout = FLOW_TEST_TIMEOUT) {
         val data = FuseData(DesktopDatabase.open(File(cache, "fuse-${System.nanoTime()}.db").absolutePath))
         val sync = io.github.matiyaaa.fuse.ui.shell.audit.AuditSync(data.settings).also { it.household(asHost = true) }

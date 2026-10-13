@@ -72,11 +72,23 @@ internal class KnownFolders(private val home: String, private val os: DesktopOs 
             val d = path?.let(::dir) ?: return
             if (out.none { it.path == d }) out += Found(d, label)
         }
+        // Folders people make for their games by hand, on every system: ~/Games (or a ROMs folder
+        // in it) and Documents/ROMs. Each is only suggested when Fuse finds games in it.
+        fun addGames() {
+            val nested = listOf("$home/Games/ROMs", "$home/Games/roms").firstOrNull { File(it).isDirectory }
+            // The ROMs folder inside, when there is one: ~/Games itself would be the same games again.
+            if (nested != null) add(nested, "Games, ROMs") else add("$home/Games", "Games")
+            // A lower-case one is another folder only where names tell case apart.
+            if (os == DesktopOs.LINUX && nested == null && !File("$home/Games").isDirectory) add("$home/games", "games")
+            add("$home/Documents/ROMs", "Documents, ROMs")
+            add("$home/Documents/Games", "Documents, Games")
+        }
         when (os) {
             DesktopOs.WINDOWS -> {
                 // ES-DE's default is %USERPROFILE%\ROMs; EmuDeck and RetroBat keep theirs at a drive's root.
                 add("$home/ROMs", "ROMs (ES-DE)")
                 add("$home/Emulation/roms", "EmuDeck")
+                addGames()
                 for (d in drives()) {
                     val name = d.trimEnd('/')
                     add("${d}Emulation/roms", "EmuDeck on $name")
@@ -89,6 +101,7 @@ internal class KnownFolders(private val home: String, private val os: DesktopOs 
             DesktopOs.MACOS -> {
                 add("$home/ROMs", "ROMs (ES-DE)")
                 add("$home/Emulation/roms", "Emulation")
+                addGames()
                 File("/Volumes").listFiles()?.filter { it.isDirectory }?.forEach { v ->
                     add("${v.fusePath}/ROMs", "ROMs on ${v.name}")
                     add("${v.fusePath}/Emulation/roms", "Emulation on ${v.name}")
@@ -105,6 +118,7 @@ internal class KnownFolders(private val home: String, private val os: DesktopOs 
         add("$home/Emulation/roms", "EmuDeck")
         retroDeckSetting(listOf("roms_folder", "roms_path"))?.let { add(it, "RetroDECK") }
         add("$home/retrodeck/roms", "RetroDECK")
+        addGames()
         for (mount in removableMounts()) {
             add("$mount/Emulation/roms", "EmuDeck on ${File(mount).name}")
             add("$mount/retrodeck/roms", "RetroDECK on ${File(mount).name}")

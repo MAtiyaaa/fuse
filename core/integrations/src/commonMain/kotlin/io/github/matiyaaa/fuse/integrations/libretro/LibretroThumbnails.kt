@@ -4,6 +4,7 @@ import io.github.matiyaaa.fuse.integrations.ApiResult
 import io.github.matiyaaa.fuse.integrations.ProviderHttp
 import io.github.matiyaaa.fuse.integrations.RateLimiter
 import io.github.matiyaaa.fuse.integrations.UrlCoding
+import io.github.matiyaaa.fuse.integrations.match.TitleNormalizer
 import io.github.matiyaaa.fuse.model.ArtworkOption
 import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.PlatformId
@@ -11,6 +12,8 @@ import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.ktor.client.HttpClient
 import io.ktor.client.request.url
 import io.ktor.http.HttpMethod
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** The libretro-thumbnails folders and the media kind each one fills. */
 enum class LibretroThumbnailType(val folder: String, val kind: MediaKind) {
@@ -60,18 +63,44 @@ class LibretroThumbnails(
         if (systems.isEmpty() || names.isEmpty()) return ApiResult.Success(emptyList())
         val found = ArrayList<LibretroThumbnail>()
         for (type in LibretroThumbnailType.entries.filter { it in types }) {
+            var hit = false
             search@ for (system in systems) for (name in names) {
                 val url = url(system, type, name)
                 when (val exists = exists(url)) {
                     is ApiResult.Failure -> return exists
                     is ApiResult.Success -> if (exists.value) {
                         found += LibretroThumbnail(system, type, name, url)
+                        hit = true
                         break@search
                     }
                 }
             }
+            // Named another way in the repository ("Metal Gear Ac!d (USA)" for "Metal Gear Acid"):
+            // its list of names, matched as titles.
+            if (!hit) for (system in systems) {
+                val name = index(system, type)?.let { closest(it, names) } ?: continue
+                found += LibretroThumbnail(system, type, name, url(system, type, name))
+                break
+            }
         }
         return ApiResult.Success(found)
+    }
+
+    private val indexes = LinkedHashMap<String, List<String>>()
+    private val indexLock = Mutex()
+
+    /** The names in one folder of the repository, read once and kept for a few folders; null when it can't be read. */
+    private suspend fun index(system: String, type: LibretroThumbnailType): List<String>? {
+        val key = "$system/${type.folder}"
+        indexLock.withLock { indexes[key] }?.let { return it }
+        val page = api.execute { url("$baseUrl/${UrlCoding.encode(system)}/${type.folder}/") }
+        val body = (page as? ApiResult.Success)?.value?.takeIf { it.status in 200..299 }?.body ?: return null
+        val names = PNG_LINK.findAll(body).map { UrlCoding.decode(it.groupValues[1]) }.filter { '/' !in it }.toList()
+        indexLock.withLock {
+            indexes[key] = names
+            while (indexes.size > KEPT_INDEXES) indexes.remove(indexes.keys.first())
+        }
+        return names
     }
 
     /** HEAD probe: true for 2xx, false for 404/403, failure otherwise. */
@@ -200,6 +229,32 @@ class LibretroThumbnails(
             "zxs" to listOf("Sinclair - ZX Spectrum"),
             "acpc" to listOf("Amstrad - CPC"),
         )
+
+        private val PNG_LINK = Regex("""href="([^"?]+)\.png"""")
+
+        /** Folder lists kept at once. */
+        private const val KEPT_INDEXES = 12
+
+        /** A name as a title, for matching: no tags, normalised, "and" aside ("_" stands for "&" in the repository). */
+        internal fun titleKey(name: String): String =
+            TitleNormalizer.tokens(name.substringBefore(" (").substringBefore(" [")).filter { it != "and" }.joinToString(" ")
+
+        /**
+         * The entry of [index] that is [wanted] as a title, its US release first, then a worldwide,
+         * then a European one; null when none is.
+         */
+        internal fun closest(index: List<String>, wanted: List<String>): String? {
+            val keys = wanted.map(::titleKey).filter { it.isNotEmpty() }.toSet()
+            if (keys.isEmpty()) return null
+            val same = index.filter { titleKey(it) in keys }
+            fun rank(n: String) = when {
+                "(USA" in n -> 0
+                "(World" in n -> 1
+                "(Europe" in n -> 2
+                else -> 3
+            }
+            return same.minWithOrNull(compareBy<String>({ rank(it) }, { it.length }))
+        }
 
         /** Folders for [platform]; empty when libretro has none (Switch, for example). */
         fun systemsFor(platform: PlatformId): List<String> = SYSTEMS[platform.value].orEmpty()

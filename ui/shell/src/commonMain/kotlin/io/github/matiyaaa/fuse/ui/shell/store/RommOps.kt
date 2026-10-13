@@ -161,9 +161,31 @@ data class RommTest(val localOk: Boolean?, val remoteOk: Boolean?, val version: 
  * Fuse. Its games are Fuse games (the same tiles, art rules and game page), its downloads go through
  * Downloads into the library Fuse already has, and Fuse's games go back to RomM from the same place.
  */
+/** One game's saves on RomM ([RommOps.saveReport]): newest first, with how this device's stands. */
+data class RommSaveGame(
+    val romId: Long,
+    val title: String,
+    /** The game in this library, when it is here. */
+    val game: io.github.matiyaaa.fuse.model.GameId?,
+    val platform: io.github.matiyaaa.fuse.model.PlatformId?,
+    val saves: List<io.github.matiyaaa.fuse.romm.RommSave>,
+    val standing: io.github.matiyaaa.fuse.sync.romm.RommSaveStanding,
+) {
+    val newest: io.github.matiyaaa.fuse.romm.RommSave get() = saves.first()
+}
+
+/** RomM's save sync as it stands: every game with saves on the server, newest played first. */
+data class RommSaveReport(val server: String, val games: List<RommSaveGame>, val bytes: Long)
+
 interface RommOps {
     val supported: Boolean
     val state: StateFlow<RommState>
+
+    /**
+     * Every save the person keeps on RomM, by game, with how this device's save of each stands
+     * against it; null when RomM's save sync isn't on here. Throws when RomM doesn't answer.
+     */
+    suspend fun saveReport(): RommSaveReport? = null
 
     /** Short messages for the person: an upload done, new games on the server, firmware brought over. */
     val notices: Flow<String> get() = kotlinx.coroutines.flow.emptyFlow()

@@ -305,6 +305,16 @@ class JvmSyncService(
                 refreshHostView()
                 return
             }
+            // The port is held but the host didn't answer: when that is Fuse's own service (stuck, or
+            // an older Fuse that answers differently), it is started again on this Fuse.
+            if (!HostAdmin.portFree(c.hostPort) && lifetime.supported && lifetime.state().installed) {
+                restartedService(c, NOT_ANSWERING)?.let { (newer, status) ->
+                    hostAdmin = newer
+                    adminStatus = status
+                    refreshHostView()
+                    return
+                }
+            }
             // Something else holds the port (or the service went away just now): serve here if the port is free again.
             if (!HostAdmin.portFree(c.hostPort)) {
                 log("The host can't start: another program on this computer is using port ${c.hostPort}, which the host needs", kind = SyncActivity.HOST)
@@ -1608,6 +1618,9 @@ class JvmSyncService(
 
     @Volatile private var helloAt = 0L
 
+    private val _hostFuse = MutableStateFlow("")
+    override val hostFuse: StateFlow<String> = _hostFuse
+
     /**
      * The host's address from outside, as it says it, becomes this device's (unless the person
      * typed another here): set once on the host, every device can reach it from away.
@@ -1615,7 +1628,9 @@ class JvmSyncService(
     private suspend fun adoptOutside(c: SyncClient) {
         if (clock() - helloAt < HELLO_EVERY_MS) return
         helloAt = clock()
-        val outside = runCatching { c.status().hello.outside }.getOrNull()?.takeIf { it.isNotBlank() } ?: return
+        val hello = runCatching { c.status().hello }.getOrNull() ?: return
+        _hostFuse.value = hello.fuseVersion
+        val outside = hello.outside.takeIf { it.isNotBlank() } ?: return
         val cfg = cached
         if (cfg.remoteAddress.isNotBlank() && !cfg.remoteFromHost) return
         if (SyncClient.normalise(cfg.remoteAddress.ifBlank { "x" }) == SyncClient.normalise(outside)) return
@@ -1691,7 +1706,11 @@ class JvmSyncService(
      * Null when it didn't (the old one may still be running, and is used as it is).
      */
     private suspend fun restartedService(c: SyncSettings, was: String): Pair<HostAdmin, HostStatus>? = withContext(Dispatchers.IO) {
-        log("The host was running Fuse ${was.ifBlank { "from before 0.2" }}: starting it again on $fuseVersion", kind = SyncActivity.HOST)
+        log(
+            if (was == NOT_ANSWERING) "The host didn't answer: starting it again on $fuseVersion"
+            else "The host was running Fuse ${was.ifBlank { "from before 0.2" }}: starting it again on $fuseVersion",
+            kind = SyncActivity.HOST,
+        )
         if (lifetime.install().isFailure) return@withContext null
         withTimeoutOrNull(SERVICE_WAIT_MS * 2) {
             var found: Pair<HostAdmin, HostStatus>? = null
@@ -2876,6 +2895,8 @@ class JvmSyncService(
         )
 
         const val ADMIN_TRIES = 4
+        /** Said of a host on this computer that holds its port but doesn't answer. */
+        private const val NOT_ANSWERING = "?"
         const val ADMIN_RETRY_MS = 750L
 
         /** How long Fuse waits for a freshly started service to answer. */

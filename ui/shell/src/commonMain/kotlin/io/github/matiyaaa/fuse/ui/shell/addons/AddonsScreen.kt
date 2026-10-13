@@ -79,6 +79,8 @@ fun AddonsScreen(app: AppState) {
         val syncthingOn = syncthingState != null && syncthingState !is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Off
         if (app.store.sync.service != null && (prefs.sync.enabled || (people.isNotEmpty() && !syncthingOn))) add(AddonsPart.SYNC)
         else if (syncthingOn) add(AddonsPart.SYNCTHING)
+        // RomM moving this device's saves: its saves, the way Sync shows Fuse One's.
+        if (prefs.romm.enabled && prefs.romm.configured && prefs.romm.saveSync && app.store.romm.supported) add(AddonsPart.ROMM_SAVES)
         if (app.store.streaming.supported && prefs.streaming.enabled && prefs.streaming.hosts.isNotEmpty()) add(AddonsPart.STREAMING)
         if (isEmpty()) add(AddonsPart.CARTRIDGE)
     }.sortedBy { p -> prefs.addonsOrder.indexOf(p.name).let { if (it < 0) ORDER_REST + p.ordinal else it } }
@@ -170,6 +172,7 @@ fun AddonsScreen(app: AppState) {
                     AddonsPart.SYNC -> io.github.matiyaaa.fuse.ui.shell.sync.SyncTab(app, active = !inTabs, topPadding = top)
                     AddonsPart.SYNCTHING -> io.github.matiyaaa.fuse.ui.shell.sync.SyncthingTab(app, active = !inTabs, topPadding = top)
                     AddonsPart.STREAMING -> io.github.matiyaaa.fuse.ui.shell.stream.StreamTab(app, active = !inTabs, topPadding = top)
+                    AddonsPart.ROMM_SAVES -> io.github.matiyaaa.fuse.ui.shell.sync.RommSavesTab(app, active = !inTabs, topPadding = top)
                 }
             }
         }
@@ -182,6 +185,7 @@ fun AddonsScreen(app: AppState) {
                     AddonsPart.SYNC -> ViewTab("Sync", icon = FuseMarks.FuseOne)
                     AddonsPart.SYNCTHING -> ViewTab("Syncthing", icon = FuseIcons.FolderSync)
                     AddonsPart.STREAMING -> ViewTab("Streaming", icon = FuseIcons.MonitorPlay)
+                    AddonsPart.ROMM_SAVES -> ViewTab("RomM Saves", icon = FuseIcons.LibraryBig)
                 }
             }
             // Open: the named tabs, which lift away and shrink toward the top left as the page scrolls.

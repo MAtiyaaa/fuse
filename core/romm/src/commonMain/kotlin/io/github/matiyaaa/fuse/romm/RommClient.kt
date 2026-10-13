@@ -350,6 +350,14 @@ class RommClient(
         return saves.map { s -> if (s.originDeviceName == null) s.copy(originDeviceName = s.originDevice?.let(names::get)) else s }
     }
 
+    /** Every save of the signed-in person on RomM, newest first, with the device each came from. */
+    suspend fun allSaves(): List<RommSave> {
+        val saves = RommParse.saves(json(HttpMethod.Get, "/api/saves")).sortedByDescending { it.updatedAt }
+        if (saves.none { it.originDevice != null && it.originDeviceName == null }) return saves
+        val names = runCatching { RommParse.deviceNames(json(HttpMethod.Get, "/api/devices")) }.getOrDefault(emptyMap())
+        return saves.map { s -> if (s.originDeviceName == null) s.copy(originDeviceName = s.originDevice?.let(names::get)) else s }
+    }
+
     /** [save]'s file. */
     suspend fun saveContent(save: RommSave, deviceId: String?): ByteArray =
         call(HttpMethod.Get, "/api/saves/${save.id}/content", timeoutMs = SAVE_TIMEOUT_MS, extra = {

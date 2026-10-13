@@ -65,7 +65,9 @@ internal val AppState.sections: Sections get() {
     return Sections(
         addons = (store.appStore.supported && p.storeEnabled) || (store.jellyfin != null && p.jellyfin.enabled) ||
             (store.sync.service != null && (p.sync.enabled || keepsOwnPeople)) || syncthingOn ||
-            (store.streaming.supported && p.streaming.enabled && p.streaming.hosts.isNotEmpty()),
+            (store.streaming.supported && p.streaming.enabled && p.streaming.hosts.isNotEmpty()) ||
+            // RomM moving this device's saves: its RomM Saves tab.
+            (store.romm.supported && p.romm.enabled && p.romm.configured && p.romm.saveSync),
         cartridgeOn = platform.features.cartridge && p.cartridgeEnabled,
     )
 }
@@ -130,7 +132,7 @@ internal fun AppState.dropTab() {
 }
 
 /** Which part of Addons is showing. */
-enum class AddonsPart { CARTRIDGE, STORE, JELLYFIN, SYNC, SYNCTHING, STREAMING }
+enum class AddonsPart { CARTRIDGE, STORE, JELLYFIN, SYNC, SYNCTHING, STREAMING, ROMM_SAVES }
 
 /** Opens Streaming in Addons. */
 internal fun AppState.openStreaming() {

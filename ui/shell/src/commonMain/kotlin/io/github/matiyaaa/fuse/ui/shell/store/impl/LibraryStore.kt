@@ -551,12 +551,26 @@ internal class DefaultLibraryOps(
         }
         var resolved = ctx.resolver.resolve(game, platformEmulator, installed, ctx.host, choice)
         val chosen = resolved.installed
-        // Desktop RetroArch ("linux.retroarch", "windows.retroarch"): use the core file that is really there.
+        // Desktop RetroArch ("linux.retroarch", "windows.retroarch"): use a core that is really there.
+        // The chosen core first, then the system's cores in their usual order: with only Nestopia
+        // installed, NES games play in Nestopia instead of failing to find FCEUmm.
+        var usedCore = core
         if (chosen != null && ctx.host.isDesktop && chosen.id.value.substringAfter('.').startsWith("retroarch")) {
-            val coreName = core ?: RetroArchCores.defaultCore(ctx.host, game.platformId)
-            val corePath = coreName?.let { ctx.services.emulators.retroArchCorePath(chosen, it) }
-            if (corePath != null) {
-                resolved = ctx.resolver.resolve(game, platformEmulator, installed, ctx.host, choice.copy(core = coreName, corePath = corePath))
+            val cores = (listOfNotNull(core) + RetroArchCores.coresFor(ctx.host, game.platformId)).distinct()
+            val found = cores.firstNotNullOfOrNull { c -> ctx.services.emulators.retroArchCorePath(chosen, c)?.let { c to it } }
+            if (found != null) {
+                usedCore = found.first
+                resolved = ctx.resolver.resolve(game, platformEmulator, installed, ctx.host, choice.copy(core = found.first, corePath = found.second))
+            } else if (cores.isNotEmpty() && ctx.services.emulators.retroArchCoresVisible(chosen)) {
+                // None of this system's cores is in RetroArch: another emulator for it plays it
+                // (standalone mGBA for GBA), else say what to install, never RetroArch's own error.
+                val others = installed.filterNot { it.id == chosen.id }
+                val instead = ctx.resolver.resolve(game, platformEmulator?.takeIf { it != chosen.id }, others, ctx.host, choice)
+                if (instead.installed == null || instead.plan is LaunchPlan.Unsupported) {
+                    return LaunchOutcome.Problem(LaunchProblems.noCore(chosen, platform.name, platform.id, cores, id))
+                }
+                usedCore = null
+                resolved = instead
             }
         }
 
@@ -577,7 +591,7 @@ internal class DefaultLibraryOps(
             }
             is LaunchPlan.AndroidIntent, is LaunchPlan.Command -> {
                 // Fuse Sync puts the newest save in place first, or asks when both sides played.
-                val save = saveQuery(id, game, installedEmulator, core ?: RetroArchCores.defaultCore(ctx.host, game.platformId))
+                val save = saveQuery(id, game, installedEmulator, usedCore ?: RetroArchCores.defaultCore(ctx.host, game.platformId))
                 var note: String? = null
                 val link = sync
                 if (save != null && link != null && !skipSaveCheck) {
@@ -600,7 +614,7 @@ internal class DefaultLibraryOps(
                 }
                 // Syncthing, where it is the one in use: its folders brought up to date, two versions asked about.
                 val st = syncthing?.takeIf { ctx.data.settings.current().syncthing.enabled }
-                val plainSave = if (st != null) plainSaveQuery(game, installedEmulator, core ?: RetroArchCores.defaultCore(ctx.host, game.platformId)) else null
+                val plainSave = if (st != null) plainSaveQuery(game, installedEmulator, usedCore ?: RetroArchCores.defaultCore(ctx.host, game.platformId)) else null
                 if (st != null && plainSave != null && !skipSaveCheck) {
                     onStage(io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.CHECKING_SAVE)
                     when (val gate = st.beforeLaunch(plainSave)) {
@@ -609,7 +623,7 @@ internal class DefaultLibraryOps(
                     }
                 }
                 // RomM's save sync, for a game from RomM: RomM's newer save put in place, or a choice.
-                val rommSave = game.links.rommRomId?.let { romId -> rommSaves?.let { rs -> romId to plainSaveQuery(game, installedEmulator, core ?: RetroArchCores.defaultCore(ctx.host, game.platformId)) } }
+                val rommSave = game.links.rommRomId?.let { romId -> rommSaves?.let { rs -> romId to plainSaveQuery(game, installedEmulator, usedCore ?: RetroArchCores.defaultCore(ctx.host, game.platformId)) } }
                 // How this game's saves sync here (the same choice as for Fuse One, by the same id).
                 val rommMode = io.github.matiyaaa.fuse.ui.shell.sync.SaveSyncMode.of(ctx.data.settings.current().sync, (save ?: rommSave?.second)?.game?.id ?: "")
                 if (rommSave != null && !skipSaveCheck && rommMode.receives) {
@@ -645,7 +659,44 @@ internal class DefaultLibraryOps(
         val core = settings.resolve(ScopedSettings.RetroArchCore, game.platformId, id).value.takeIf { it.isNotBlank() }
         val resolved = ctx.resolver.resolve(game, platformEmulator, ctx.installed.value, ctx.host, ScopedLaunchChoice(core = core, homeDir = ctx.services.emulators.homeDir))
         val installed = resolved.installed ?: return null
-        return saveQuery(id, game, installed, core ?: RetroArchCores.defaultCore(ctx.host, game.platformId))
+        return saveQuery(id, game, installed, coreFor(installed, game, core))
+    }
+
+    /** Where [id]'s save is here, as RomM's save sync and Syncthing find it (no profile); null when nothing plays it. */
+    internal suspend fun plainSaveQueryFor(id: GameId): io.github.matiyaaa.fuse.sync.SaveQuery? {
+        val game = data.games.get(id) ?: return null
+        val (resolved, core) = startsWith(game)
+        val emulator = resolved.installed ?: return null
+        return plainSaveQuery(game, emulator, coreFor(emulator, game, core))
+    }
+
+    override suspend fun localSaves(id: GameId): io.github.matiyaaa.fuse.ui.shell.store.LocalSaves = withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val none = io.github.matiyaaa.fuse.ui.shell.store.LocalSaves(null, emptyList())
+        val game = data.games.get(id) ?: return@withContext none
+        val (resolved, core) = startsWith(game)
+        val emulator = resolved.installed
+            ?: return@withContext none.copy(note = "No emulator plays this game here yet, so it has no saves on this device.")
+        val adapter = io.github.matiyaaa.fuse.sync.SaveAdapters.forEmulator(emulator.id.value)
+            ?: return@withContext none.copy(emulator = emulator.name, note = io.github.matiyaaa.fuse.sync.SaveAdapters.whyNot(emulator.id.value))
+        val env = sync?.service?.saveEnvironment
+            ?: return@withContext none.copy(emulator = emulator.name, note = "Fuse can't look at ${emulator.name}'s saves on this device.")
+        val query = plainSaveQuery(game, emulator, coreFor(emulator, game, core))
+        val spots = runCatching { adapter.locate(query, env) }.getOrDefault(emptyList())
+        val saves = buildList {
+            for (spot in spots) {
+                if (!spot.available) continue
+                for (f in spot.files) ctx.services.fs.stat(f.path)?.takeIf { !it.isDirectory }?.let { add(io.github.matiyaaa.fuse.ui.shell.store.LocalSave(f.name, f.path, spot.kind, it.sizeBytes, it.modifiedAt)) }
+                // Saves made of folders (a PSP's SAVEDATA): each of this game's folders, with its newest file's time.
+                val root = spot.root ?: continue
+                for (folder in spot.folders) {
+                    val path = "${root.trimEnd('/')}/$folder"
+                    val files = runCatching { ctx.services.fs.list(path) }.getOrDefault(emptyList()).filterNot { it.isDirectory }
+                    if (files.isEmpty()) continue
+                    add(io.github.matiyaaa.fuse.ui.shell.store.LocalSave(folder, path, spot.kind, files.sumOf { it.sizeBytes }, files.maxOf { it.modifiedAt }))
+                }
+            }
+        }.distinctBy { it.path }.sortedByDescending { it.modifiedAt }
+        io.github.matiyaaa.fuse.ui.shell.store.LocalSaves(emulator.name, saves, note = if (saves.isEmpty()) "${emulator.name} has no save of it on this device yet." else null)
     }
 
     /** [game]'s saves for [emulator], as Syncthing looks for them: by the game's own name and system, no profile needed. */
@@ -678,10 +729,22 @@ internal class DefaultLibraryOps(
                     val core = settings.resolve(ScopedSettings.RetroArchCore, game.platformId, game.id).value.takeIf { it.isNotBlank() }
                     val resolved = ctx.resolver.resolve(game, platformEmulator, ctx.installed.value, ctx.host, ScopedLaunchChoice(core = core, homeDir = ctx.services.emulators.homeDir))
                     val installed = resolved.installed ?: return@async null
-                    plainSaveQuery(game, installed, core ?: RetroArchCores.defaultCore(ctx.host, game.platformId))
+                    plainSaveQuery(game, installed, coreFor(installed, game, core))
                 }
             }.awaitAll().filterNotNull()
         }
+    }
+
+    /**
+     * The RetroArch core [game] plays in with [emulator]: on a computer, the [chosen] one or the
+     * system's first core that is installed; elsewhere (or when Fuse can't see the cores) the chosen
+     * or usual one. Its saves are kept under that core's name.
+     */
+    private fun coreFor(emulator: InstalledEmulator, game: io.github.matiyaaa.fuse.model.Game, chosen: String?): String? {
+        val usual = chosen ?: RetroArchCores.defaultCore(ctx.host, game.platformId)
+        if (!ctx.host.isDesktop || !emulator.id.value.substringAfter('.').startsWith("retroarch")) return usual
+        val cores = (listOfNotNull(chosen) + RetroArchCores.coresFor(ctx.host, game.platformId)).distinct()
+        return cores.firstOrNull { ctx.services.emulators.retroArchCorePath(emulator, it) != null } ?: usual
     }
 
     /** What Fuse Sync needs to find [game]'s saves for [emulator] here, or null without Fuse Sync. */
@@ -952,7 +1015,7 @@ internal class DefaultLibraryOps(
         val (resolved, core) = startsWith(game)
         val installed = resolved.installed ?: return null
         if (!installed.id.value.substringAfter('.').startsWith("retroarch")) return null
-        val coreName = core ?: RetroArchCores.defaultCore(ctx.host, game.platformId) ?: return null
+        val coreName = coreFor(installed, game, core) ?: return null
         val content = when (val t = resolved.target) {
             is LaunchTarget.File -> t.path
             is LaunchTarget.Playlist -> t.path

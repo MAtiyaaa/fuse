@@ -5,7 +5,6 @@ import io.github.matiyaaa.fuse.integrations.match.MatchDecision
 import io.github.matiyaaa.fuse.integrations.match.PlatformEvidence
 import io.github.matiyaaa.fuse.integrations.match.ScoredMatch
 import io.github.matiyaaa.fuse.integrations.match.TitleMatcher
-import io.github.matiyaaa.fuse.integrations.match.TitleNormalizer
 import io.github.matiyaaa.fuse.model.ArtworkOption
 import io.github.matiyaaa.fuse.model.GameMetadata
 import io.github.matiyaaa.fuse.model.MatchStrictness
@@ -200,14 +199,10 @@ class ScrapeCoordinator(
         }
         if (guess != Guess.NONE && review.isNotEmpty()) {
             val possible = review.filter { it.platform != PlatformEvidence.MISMATCH }
-            // The game's own title, or the same name with only an edition word added ("Pokemon Red"
-            // and "Pokémon Red Version"): art for a game named that way was otherwise never found.
-            val names = listOf(request.query.title) + request.query.alsoKnownAs
-            val pick = possible.filter { it.titleExact }.maxByOrNull { it.score }
-                ?: possible.filter { m -> names.any { TitleMatcher.sameGameName(it, m.candidate.title) } }
-                    // Only when that name stands alone: two such games (two editions listed apart) are for the person.
-                    .takeIf { it.map { m -> TitleNormalizer.normalize(m.candidate.title) }.distinct().size == 1 }
-                    ?.maxByOrNull { it.score }
+            // The game's own name, or a name it is clearly known by (see TitleMatcher.guess): art
+            // for games named a little differently from the sources was otherwise never found.
+            val names = listOf(request.query.title) + request.query.alsoKnownAs + SearchNames.spellings(request.query.title)
+            val pick = TitleMatcher.guess(names, possible)
                 ?: if (guess == Guess.BEST) possible.maxByOrNull { it.score } else null
             val from = pick?.let { seen[it.candidate.provider to it.candidate.providerGameId] }
             if (pick != null && from != null) {

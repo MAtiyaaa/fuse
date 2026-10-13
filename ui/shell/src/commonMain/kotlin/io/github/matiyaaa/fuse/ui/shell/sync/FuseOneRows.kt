@@ -173,6 +173,17 @@ internal fun syncRows(
         },
     ))
     if (c.role != "HOST") {
+        // A host keeps running the Fuse it started with; said here, with how it catches up.
+        val hostFuse = svc.hostFuse.value
+        val here = app.store.updates.currentVersion
+        if (hostFuse.isNotEmpty() && here.isNotEmpty() && SyncApi.older(hostFuse, here)) {
+            val hostName = (status as? SyncStatus.Online)?.hostName ?: "The host"
+            add(infoRow(
+                "hostolder", "$hostName runs Fuse $hostFuse",
+                detail = "Older than this device's $here, so some of what's new waits for it. Open Fuse on that computer once and the host starts again on the new version; from 0.4.2.6 on it updates itself. A Fuse One Host in Docker updates with docker compose pull",
+                icon = FuseIcons.CircleArrowDown,
+            ).copy(section = connection))
+        }
         add(MenuAction(
             "pair", "Add a Device", FuseIcons.Plus,
             detail = "A code for another device to type. Or ask to join from it, and say yes here",

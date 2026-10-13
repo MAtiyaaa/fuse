@@ -183,6 +183,9 @@ internal class DefaultFuseStore private constructor(
             details = CartridgeDetails(ctx),
             fillRemote = { ids, visible -> mediaOps.fillRemote(ids, visible) },
         )
+        // The Sync tab's view of RomM's saves: how each game's save here stands.
+        romm.saveService = library.rommSaves
+        romm.plainSaveQuery = { id -> library.plainSaveQueryFor(id) }
         reach = DefaultReachOps(
             ctx, engine, transferEngine, sync.service, romm,
             householdIds = { profileData.householdIds() },

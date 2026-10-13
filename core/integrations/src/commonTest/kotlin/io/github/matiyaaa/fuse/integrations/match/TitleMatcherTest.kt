@@ -313,4 +313,37 @@ class TitleMatcherTest {
         assertEquals(PlatformEvidence.MISMATCH, PlatformNames.evidence(PlatformId("psx"), "PlayStation", listOf("PlayStation 2")))
         assertEquals(PlatformEvidence.UNKNOWN, PlatformNames.evidence(snes, "Super Nintendo", emptyList()))
     }
+
+    /** What a fill takes for [title] from SteamGridDB-like [titles] (no platform said), by [TitleMatcher.guess]. */
+    private fun guessed(title: String, vararg titles: String, names: List<String> = listOf(title)): String? {
+        val ranked = matcher.rank(query(title), titles.mapIndexed { i, t -> input("$i", t) })
+        return TitleMatcher.guess(names, ranked)?.candidate?.title
+    }
+
+    @Test
+    fun aFillTakesTheGameItsShortNameStandsFor() {
+        // Found in a real library: each was left for the person before.
+        assertEquals("Toy Story 3: The Video Game", guessed("Toy Story 3", "Toy Story 3: The Video Game", "Toy Story", "Toy Story Mania", "Toy Story Racer"))
+        assertEquals("Metroid Prime 4: Beyond", guessed("Metroid Prime 4", "Metroid Prime 4: Beyond", "Metroid Prime", "Metroid Prime 4: Beyond - Nintendo Switch 2 Edition", "Metroid Prime Demo"))
+        assertEquals("The Legend of Zelda: The Wind Waker HD", guessed("The Wind Waker HD", "The Legend of Zelda: The Wind Waker HD", "The Legend of Zelda: The Wind Waker HD (Trial)", "The Wind Waker Rewritten", "Wind and Water: Puzzle Battles"))
+        assertEquals("X-Men Origins: Wolverine", guessed("X-Men Origins - Wolverine - Uncaged Edition", "X-Men Origins: Wolverine", "X-Men (Genesis)", "X-Men (Arcade)", "Origins"))
+        assertEquals("Ratchet & Clank Future: Quest for Booty", guessed("Ratchet & Clank - Quest for Booty", "Ratchet & Clank Future: Quest for Booty", "Ratchet & Clank", "Ratchet & Clank: Into the Nexus"))
+        assertEquals("Puzzle & Dragons Z + Super Mario Bros. Edition", guessed("Puzzle & Dragons Z - Puzzle & Dragons Super Mario Bros. Edition", "Puzzle & Dragons Z + Super Mario Bros. Edition", "Puzzle", "PUZZLE: ANIMALS"))
+        assertEquals("Dr Kawashima's Brain Training for Nintendo Switch", guessed("Dr Kawashimas Brain Training", "Dr Kawashima's Brain Training for Nintendo Switch", "Dr. Kawashima's Brain Training: How Old is Your Brain?", "Dr.Green"))
+        assertEquals("Shin Megami Tensei III Nocturne", guessed("Shin Megami Tensei - Nocturne", "Shin Megami Tensei", "Shin Megami Tensei III Nocturne", "Shin Megami Tensei III: Nocturne - HD Remaster", "Shin Megami Tensei: Persona"))
+        assertEquals("Pokémon Red Version", guessed("Pokemon Red", "Pokémon Red Version", "Pokémon Anniversary Red", "Shin Pokémon Red", "Pokémon Radical Red"))
+        assertEquals("Killzone", guessed("Killzone HD", "Killzone", "The Kill Zone", "Killzone Trilogy", "Killzone: Mercenary"))
+        assertEquals("Super Mario RPG", guessed("mariorpg", "Super Mario RPG", "Super Mario RPG: Armageddon", "Mario & Luigi: Superstar Saga RPG", names = listOf("mariorpg", "Mario RPG")))
+        assertEquals("Super Mario RPG", guessed("mariorpg", "Super Mario RPG", "Super Mario RPG: Armageddon", "Super Mario RPG: the Seven Sages", "Super Mario RPG: The Starlite Worlds", names = listOf("mariorpg", "Mario RPG")))
+    }
+
+    @Test
+    fun aFillLeavesTheChoiceWhenTheNameCouldBeAnother() {
+        // Another game of the series, not this one.
+        assertNull(guessed("Metal Gear Acid", "Metal Gear", "Metal Gear Solid", "Metal Gear Survive"))
+        assertNull(guessed("Metroid Prime", "Metroid Prime 2: Echoes", "Metroid Prime 3: Corruption"))
+        assertNull(guessed("Sonic", "Sonic the Hedgehog", "Sonic Adventure", "Sonic Mania"))
+        // Two different games hold the name about as well.
+        assertNull(guessed("Dragon Quest Builders", "Dragon Quest Builders 2", "Dragon Quest Builders Demo Edition 3"))
+    }
 }

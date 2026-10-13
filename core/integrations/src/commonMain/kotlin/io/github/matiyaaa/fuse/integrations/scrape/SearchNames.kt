@@ -102,8 +102,78 @@ object SearchNames {
         }
     }
 
+    /**
+     * What a short or run-together file name stands for, as full names: an abbreviation spelled out
+     * by the words after it ("JSRF - Jet Set Radio Future" -> "Jet Set Radio Future"), well-known
+     * shorthands ("SMB3" -> "Super Mario Bros. 3"), and run-together words split
+     * ("MEGAMAN2" -> "Mega Man 2", "mariorpg" -> "Mario RPG"). Empty when the title is written out.
+     */
+    fun spellings(title: String): List<String> = buildList {
+        val t = spaces.replace(title, " ").trim()
+        subtitle.find(t)?.let { m ->
+            val head = t.substring(0, m.range.first).trim()
+            val tail = t.substring(m.range.last + 1).trim()
+            val initials = tail.split(' ').filter { it.isNotEmpty() && it[0].isLetterOrDigit() }.joinToString("") { it[0].uppercase() }
+            if (head.length in 2..6 && head.all { it.isUpperCase() || it.isDigit() } && initials.startsWith(head.filter { it.isLetter() })) add(tail)
+        }
+        // Word by word: a shorthand, or letters run together (and a number glued on).
+        val words = t.split(' ')
+        val spelled = words.map { w ->
+            val m = gluedNumber.matchEntire(w)
+            val (letters, number) = if (m != null) m.groupValues[1] to m.groupValues[2] else w to ""
+            val full = shorthands[letters.lowercase()] ?: split(letters)?.joinToString(" ") { word -> word.replaceFirstChar { it.uppercase() }.let { if (it.lowercase() in upperWords) it.uppercase() else it } }
+            when {
+                full != null -> listOf(full, number).filter { it.isNotEmpty() }.joinToString(" ")
+                number.isNotEmpty() && letters.length >= 3 -> "$letters $number"
+                else -> w
+            }
+        }
+        if (spelled != words) add(spelled.joinToString(" "))
+    }
+
+    private val gluedNumber = Regex("([A-Za-z]{2,})([0-9]{1,2})")
+
+    /** Shorthands ROM files are often named by. */
+    private val shorthands = mapOf(
+        "smb" to "Super Mario Bros.", "smw" to "Super Mario World", "smk" to "Super Mario Kart", "sm64" to "Super Mario 64",
+        "loz" to "The Legend of Zelda", "alttp" to "The Legend of Zelda: A Link to the Past", "oot" to "The Legend of Zelda: Ocarina of Time",
+        "sotn" to "Castlevania: Symphony of the Night", "dkc" to "Donkey Kong Country", "mgs" to "Metal Gear Solid",
+        "gta" to "Grand Theft Auto", "kh" to "Kingdom Hearts", "ff" to "Final Fantasy", "sf" to "Street Fighter", "mk" to "Mortal Kombat",
+        "tmnt" to "Teenage Mutant Ninja Turtles", "jsrf" to "Jet Set Radio Future", "smrpg" to "Super Mario RPG",
+    )
+
+    /** Words game names are made of, to split a name written without spaces ("megaman", "mariorpg"). */
+    private val gameWords = setOf(
+        "super", "mario", "luigi", "bros", "world", "kart", "party", "land", "rpg", "paper", "yoshi", "wario", "peach",
+        "zelda", "link", "legend", "sonic", "hedgehog", "mega", "man", "rock", "metroid", "kirby", "donkey", "kong", "country",
+        "street", "fighter", "final", "fantasy", "pokemon", "castlevania", "contra", "ninja", "gaiden", "double", "dragon",
+        "golden", "eye", "star", "fox", "wars", "duck", "tales", "punch", "out", "tetris", "pac", "dig", "dug", "galaga",
+        "metal", "gear", "solid", "crash", "bandicoot", "spyro", "tony", "hawk", "pro", "skater", "resident", "evil",
+        "silent", "hill", "chrono", "trigger", "cross", "secret", "mana", "earth", "bound", "fire", "emblem", "advance",
+        "wars", "battle", "boy", "color", "kid", "icarus", "excite", "bike", "ice", "climber", "balloon", "fight",
+    )
+
+    /** Words written in capitals when spelled out. */
+    private val upperWords = setOf("rpg")
+
+    /** [word] as known game words, or null when it isn't made of them (or is one already). */
+    private fun split(word: String): List<String>? {
+        val w = word.lowercase()
+        if (w.length < 5 || w in gameWords || w.any { !it.isLetter() }) return null
+        // Fewest words first: a split that needs many short pieces is rarely right.
+        val best = arrayOfNulls<List<String>>(w.length + 1)
+        best[0] = emptyList()
+        for (end in 1..w.length) for (start in 0 until end) {
+            val before = best[start] ?: continue
+            val piece = w.substring(start, end)
+            if (piece in gameWords && (best[end] == null || before.size + 1 < best[end]!!.size)) best[end] = before + piece
+        }
+        return best[w.length]?.takeIf { it.size >= 2 }
+    }
+
     /** Other spellings of [title], most useful first. */
     internal fun variants(title: String): List<String> = buildList {
+        addAll(spellings(title))
         val t = spaces.replace(title, " ").trim()
         // A subtitle is where searches most often go wrong ("Castlevania: Aria of Sorrow").
         subtitle.find(t)?.let { m ->

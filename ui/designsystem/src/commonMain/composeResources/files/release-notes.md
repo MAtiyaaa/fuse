@@ -18,9 +18,28 @@ still, the host screen that fits a small window and game folders before anything
 - **A game with no one chosen says so.** On a device in a household with nobody picked, a save that
   couldn't go anywhere now says to choose who's playing instead of staying behind silently.
 - **RomM tells you when a save didn't go up,** with the reason, instead of only writing it in the log.
+- **RomM Saves in Addons.** With RomM moving this device's saves, Addons shows them the way Sync
+  shows Fuse One's: every game with saves on RomM, the newest one, which device it came from and
+  when, and whether this device's save is in step, newer here or newer on RomM. Open a game for
+  every save RomM keeps of it. RomM keeps saves only; profiles stay with Fuse One.
+- **Saves on This Device,** in every game's options: the save files its emulator keeps here (a
+  RetroArch .srm, a memory card, save states), with their size, time and place, with or without
+  any save sync.
+- **The host keeps up by itself.** A computer hosting Fuse One in the background starts again on
+  the new version as soon as Fuse is updated on it, and on Linux it updates itself when your
+  devices already run a newer Fuse, so nobody has to open Fuse on that computer. Your devices say
+  when the host runs an older Fuse, and how to update it (a Docker host too).
 
 ## Changed
 
+- **Fuse One with RomM, or Fuse One with Cartridge.** After choosing Fuse One in setup, RomM (the way
+  we recommend) or Cartridge can come along too. RomM and Cartridge still never go together.
+- **Settings search works as you type.** With a keyboard, typing in the search row lists every
+  matching setting at once, Enter goes to the first, and no separate dialog opens. A controller
+  still gets the on-screen keys.
+- **RomM in Settings.** Addons, RomM starts with Sign In to RomM, and searching for RomM finds it.
+  RomM needs nothing else; Cartridge is only its separate companion app.
+- **~/Games is found by itself,** with a ROMs folder inside it, and Documents/ROMs, on every system.
 - **Setup's order.** Game folders, emulators and your games come first; Play on, Anywhere (Fuse One)
   now follows them, so making this computer the host never runs before Fuse knows your games, and
   setup no longer leaves for the host screens partway through.
@@ -56,6 +75,15 @@ still, the host screen that fits a small window and game folders before anything
   report.
 - **No sound output.** Menu music waits quietly when there is nothing to play through and starts by
   itself once there is, instead of failing three times with an error each time.
+- **Games no longer fail when Fuse's usual RetroArch core isn't installed.** On a computer Fuse
+  plays each game in a core RetroArch really has (Nestopia when FCEUmm isn't there), uses the
+  system's own emulator when RetroArch has no core for it (standalone mGBA for GBA), and otherwise
+  says which core to download instead of RetroArch's own error. A core folder set in retroarch.cfg
+  is found too.
+- **Art is found for far more games.** Short or run-together file names ("Toy Story 3",
+  "MEGAMAN2", "mariorpg", "SMB3", "JSRF - Jet Set Radio Future") and names that only add an edition
+  or a platform now find their game, and Libretro's names with a "!" ("Metal Gear Ac!d") match. On
+  a real library of 310 games, the games waiting for you to choose art went from 15 to none.
 - **Artwork for games with edition words in their names** ("Pokemon Red Version", "Game of the
   Year") is found when the name is otherwise the same.
 - **Player logs never include a server's key** in a stream's address.

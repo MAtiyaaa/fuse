@@ -384,6 +384,8 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
                 add(MenuAction("steam", "Add to Steam", FuseIcons.Gamepad, detail = "Starts through Fuse, with its art", onSelect = { closeOverlays(); addToSteam(listOf(card), card.title) }))
             }
         }
+        // The save files on this device, as its emulator keeps them: with any save sync, or none.
+        if (!card.isApp) add(MenuAction("localsaves", "Saves on This Device", FuseIcons.HardDrive, detail = "The save files its emulator keeps here", trailing = Trailing.Chevron, onSelect = { localSavesSheet(card.id, card.title) }))
         // Fuse Sync: this game's saves through time, from every device (a host keeps them).
         if (!card.isApp && syncProfile != null && store.prefs.value.sync.role.isNotEmpty()) {
             add(MenuAction("savesync", "Save Sync", FuseIcons.RefreshCcw, detail = "Everywhere, receive only here, or off", trailing = Trailing.Chevron, onSelect = {
@@ -1314,3 +1316,29 @@ private fun AppState.planBringOver(emulator: io.github.matiyaaa.fuse.model.Emula
         }
     }
 }
+
+/** [title]'s save files on this device, newest first, with where they are. */
+internal fun AppState.localSavesSheet(id: io.github.matiyaaa.fuse.model.GameId, title: String) {
+    scope.launch {
+        val found = store.library.localSaves(id)
+        choice = ChoiceSpec(
+            title = "Saves on This Device",
+            icon = FuseIcons.HardDrive,
+            message = found.note ?: "$title, as ${found.emulator ?: "its emulator"} keeps it here. Fuse only reads these; a save sync moves them.",
+            options = found.saves.map { s ->
+                MenuAction(
+                    "save.${s.path}", s.name,
+                    when (s.kind) {
+                        io.github.matiyaaa.fuse.sync.SaveKind.STATE -> FuseIcons.Layers
+                        io.github.matiyaaa.fuse.sync.SaveKind.MEMORY_CARD -> FuseIcons.Memory
+                        else -> FuseIcons.Save
+                    },
+                    detail = "${s.kind.label}, ${io.github.matiyaaa.fuse.ui.shell.sync.sizeText(s.bytes)}. ${s.path}",
+                    trailing = Trailing.Value(io.github.matiyaaa.fuse.ui.shell.components.agoText(s.modifiedAt)),
+                    onSelect = {},
+                )
+            },
+        )
+    }
+}
+

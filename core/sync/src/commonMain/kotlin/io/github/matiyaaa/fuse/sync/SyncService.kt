@@ -349,6 +349,9 @@ interface SyncService {
     /** The host answering at a typed [address], by its own name; null when nothing answers there. */
     suspend fun hostAt(address: String): NearbyHost? = null
 
+    /** The Fuse the household's host runs, as it last said ("" until it has, or before 0.2). */
+    val hostFuse: kotlinx.coroutines.flow.StateFlow<String> get() = kotlinx.coroutines.flow.MutableStateFlow("")
+
     suspend fun askToJoin(address: String, remoteAddress: String? = null): Result<JoinWaiting> = Result.failure(UnsupportedOperationException("Fuse One isn't part of this build."))
 
     /** Waits for the request [askToJoin] made: the host's name once let in, a failure when turned away or out of time. */

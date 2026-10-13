@@ -127,9 +127,14 @@ object LinuxDetector {
     fun retroArchCoreDirs(env: LinuxEnvironment, installed: InstalledEmulator): List<String> {
         val h = env.homeDir.trimEnd('/')
         val kind = LinuxInstallKind.of(installed.detectedVia)
-        if (kind == LinuxInstallKind.FLATPAK) return listOf("$h/.var/app/${installed.appId}/config/retroarch/cores")
+        // Where its own settings say cores are (RetroArch, Settings, Directory, Cores), first.
+        fun configured(cfg: String) = env.readText(cfg)?.let(::libretroDirectory)?.replace("~", h)?.takeIf { it.startsWith("/") }
+        if (kind == LinuxInstallKind.FLATPAK) {
+            val own = "$h/.var/app/${installed.appId}/config/retroarch"
+            return listOfNotNull(configured("$own/retroarch.cfg"), "$own/cores").distinct()
+        }
         val appImageHome = if (kind == LinuxInstallKind.APPIMAGE) listOf("${installed.appId}.home/.config/retroarch/cores") else emptyList()
-        return appImageHome + listOf(
+        return listOfNotNull(configured("$h/.config/retroarch/retroarch.cfg")) + appImageHome + listOf(
             "$h/.config/retroarch/cores",
             "$h/.config/retroarch/libretro",
             "$h/snap/retroarch/common/.config/retroarch/cores",
@@ -141,6 +146,13 @@ object LinuxDetector {
             "$h/.nix-profile/lib/retroarch/cores",
         )
     }
+
+    /** The `libretro_directory` a retroarch.cfg sets, or null ("default" or unset). */
+    internal fun libretroDirectory(cfg: String): String? = cfg.lineSequence()
+        .map { it.trim() }
+        .firstOrNull { it.startsWith("libretro_directory") && '=' in it }
+        ?.substringAfter('=')?.trim()?.trim('"')
+        ?.takeIf { it.isNotBlank() && it != "default" }
 
     /** Absolute path of [core]'s library for [installed], or null when it is not installed. */
     fun findRetroArchCore(env: LinuxEnvironment, installed: InstalledEmulator, core: String): String? =
