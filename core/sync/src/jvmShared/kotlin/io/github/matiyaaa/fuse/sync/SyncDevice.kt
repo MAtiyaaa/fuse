@@ -37,6 +37,8 @@ data class LocalSlot(
      * change Fuse makes is counted as done, so a failure undoes the change instead.
      */
     val sink: (() -> Unit)? = null,
+    /** The game's own folders, as [SaveSpot.learnedAs] says, to send with its saves. */
+    val learnedAs: List<String> = emptyList(),
 ) {
     val key: String get() = "${game.id}|${kind.name}"
 
@@ -233,6 +235,9 @@ class SyncDevice(
 
     fun now(): Hlc = hlc.now()
 
+    /** Told when a blank save was found where a real one was, and kept from going anywhere (see [capture]). */
+    @Volatile var onBlank: ((LocalSlot) -> Unit)? = null
+
     // ---------------------------------------------------------------- saves
 
     private fun fingerprintOf(slot: LocalSlot): Pair<SaveManifest, List<Pair<LocalFile, String>>> {
@@ -251,6 +256,14 @@ class SyncDevice(
         val (manifest, hashed) = fingerprintOf(slot)
         if (manifest.files.isEmpty()) return@withLock null
         val slotState = state.slots[keyOf(profile, slot)] ?: SlotState()
+        // A blank save over one this device already had (save memory the emulator made again, all
+        // zeros or all 0xFF): never sent as the newest, so it can't replace a real save anywhere.
+        val hadOne = slotState.base != null || slotState.fingerprint != null ||
+            state.outbox.any { o -> o.revision?.let { it.profile == profile && it.game == slot.game.id && it.kind == slot.kind } == true }
+        if (hadOne && hashed.all { (lf, _) -> Slots.blank(lf.file) }) {
+            onBlank?.invoke(slot)
+            return@withLock null
+        }
         // Saved again while the last one still waits to go (played on, offline or mid-session): the
         // newer one takes its place, made from the same base, so the host sees one step, not a fork.
         // Copies kept for safety are history only: the line goes on from the last ordinary save waiting.
@@ -262,6 +275,7 @@ class SyncDevice(
             id = SyncCrypto.token(12), profile = profile, game = slot.game.id, kind = slot.kind,
             parent = if (replaces != null) replaces.revision?.parent else waiting?.revision?.id ?: slotState.base,
             device = deviceId, deviceName = deviceName, at = hlc.now(), manifest = manifest, playSeconds = playSeconds, title = title,
+            learned = slot.learnedAs.ifEmpty { learned(slot.game.id, slot.format) },
         )
         state = state.copy(
             outbox = state.outbox.filterNot { it.id == replaces?.id } + Outgoing(revision.id, priority.rank, profile, revision),
@@ -945,6 +959,25 @@ private val REFUSED_FOR_GOOD = setOf("bad-revision", "bad-body", "too-large", "t
 
 /** Turns what a save adapter found into a slot this device can read and write. */
 object Slots {
+    /**
+     * Whether [file] holds no save at all: empty, or every byte the same 0x00 or 0xFF, as save
+     * memory is before a game writes to it. Read to the first byte that says otherwise.
+     */
+    fun blank(file: File): Boolean {
+        if (!file.isFile) return false
+        file.inputStream().buffered().use { input ->
+            val first = input.read()
+            if (first == -1) return true
+            if (first != 0x00 && first != 0xFF) return false
+            val buf = ByteArray(64 * 1024)
+            while (true) {
+                val n = input.read(buf)
+                if (n == -1) return true
+                for (i in 0 until n) if ((buf[i].toInt() and 0xFF) != first) return false
+            }
+        }
+    }
+
     fun of(game: GameKey, spot: SaveSpot): LocalSlot {
         val files = ArrayList<LocalFile>()
         val empty = ArrayList<String>()
@@ -986,7 +1019,7 @@ object Slots {
                 if (f.isFile && !f.name.startsWith(".") && !SaveNoise.file(f.name) && SavePath.isSafe(name)) files += LocalFile(name, f)
             }
         }
-        return LocalSlot(game, spot.kind, spot.format, root, files.sortedBy { it.path }, spot.available, targets, empty.sorted(), mounts)
+        return LocalSlot(game, spot.kind, spot.format, root, files.sortedBy { it.path }, spot.available, targets, empty.sorted(), mounts, learnedAs = spot.learnedAs)
     }
 }
 

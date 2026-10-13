@@ -85,6 +85,11 @@ class DesktopSession(
 
     /** Controllers: the kernel's joystick devices on Linux, SDL on Windows and macOS. */
     private val gamepads: Gamepads = Gamepads.forOs(DesktopOs.current, GamepadBridge())
+
+    /** Whose a controller press is: Fuse's with focus, or in Game Mode whenever no game is in front (see [ControllerGate]). */
+    private val gate = io.github.matiyaaa.fuse.desktop.input.ControllerGate(io.github.matiyaaa.fuse.desktop.system.GameMode.active)
+    private var steamWatch: kotlinx.coroutines.Job? = null
+    @Volatile private var reclaimedAt = 0L
     private val closed = AtomicBoolean(false)
 
     init {
@@ -145,9 +150,10 @@ class DesktopSession(
                 val safe = withContext(Dispatchers.IO) { safeMode() }
                 if (safe != null) Log.info("starting in safe mode (${safe.reason})")
                 val services = withContext(Dispatchers.IO) { DesktopFuseServices.create(dirs, scope) }
-                services.launcherHooks.onGameExited = { EventQueue.invokeLater { bringToFront() } }
+                services.launcherHooks.onGameExited = { gate.playing = false; EventQueue.invokeLater { bringToFront() } }
                 // Game Mode shows one window of the app at a time: Fuse steps aside for the game it started.
                 services.launcherHooks.onGameStarted = {
+                    gate.playing = true
                     if (io.github.matiyaaa.fuse.desktop.system.GameMode.active) EventQueue.invokeLater { stepAside() }
                 }
                 val store = createFuseStore(services, scope, safeMode = safe != null)
@@ -223,6 +229,8 @@ class DesktopSession(
 
     fun onFocusChanged(hasFocus: Boolean) {
         focused = hasFocus
+        gate.focused = hasFocus
+        if (!hasFocus) watchSteamGames()
         val store = (startState as? StartState.Ready)?.store
         if (hasFocus) {
             platform.onForeground()
@@ -234,15 +242,41 @@ class DesktopSession(
     }
 
     private fun stepAside() {
+        gate.showing = false
         val w = window ?: return
         w.extendedState = w.extendedState or java.awt.Frame.ICONIFIED
     }
 
     private fun bringToFront() {
+        gate.showing = true
         val w = window ?: return
         if (w.extendedState and java.awt.Frame.ICONIFIED != 0) w.extendedState = w.extendedState and java.awt.Frame.ICONIFIED.inv()
         w.toFront()
         w.requestFocus()
+    }
+
+    /**
+     * While Fuse is without focus in Game Mode: whether Steam runs a game of its own, every couple
+     * of seconds. Until the first answer a game is assumed, so a press never reaches Fuse mid-game.
+     */
+    private fun watchSteamGames() {
+        if (!gate.watchesSteam || steamWatch?.isActive == true) return
+        gate.steamGame = true
+        steamWatch = scope.launch(Dispatchers.IO) {
+            while (gate.watchesSteam) {
+                gate.steamGame = runCatching { platform.steam.gameRunning() }.getOrDefault(true)
+                delay(STEAM_WATCH_MS)
+            }
+        }
+    }
+
+    /** A press was taken without focus: the window asks for it back (at most once a second). */
+    private fun reclaimFocus() {
+        val now = System.currentTimeMillis()
+        if (now - reclaimedAt < 1_000L) return
+        reclaimedAt = now
+        Log.info("controller press without window focus in Game Mode; taking the focus back")
+        bringToFront()
     }
 
     // WindowActions / DialogHost
@@ -311,7 +345,8 @@ class DesktopSession(
         private val stickPosted = AtomicBoolean(false)
 
         override fun press(button: PadButton, device: String?) = EventQueue.invokeLater {
-            if (!focused) return@invokeLater
+            if (!gate.admits()) return@invokeLater
+            if (gate.reclaims()) reclaimFocus()
             // Only the chosen controller moves around Fuse, when one was chosen and is here.
             if (!router.fromController(device)) return@invokeLater
             pointerHidden = true
@@ -336,13 +371,13 @@ class DesktopSession(
             EventQueue.invokeLater {
                 stickPosted.set(false)
                 val (sx, sy) = latestStick.get()
-                if (focused || (sx == 0f && sy == 0f)) router.stick(sx, sy, InputSource.GAMEPAD)
+                if (gate.admits() || (sx == 0f && sy == 0f)) router.stick(sx, sy, InputSource.GAMEPAD)
             }
         }
 
         override fun trigger(button: PadButton, value: Float, device: String?) = EventQueue.invokeLater {
             if (!router.allows(device) && value > 0f) return@invokeLater
-            if (focused || value <= 0f) router.trigger(button, value, InputSource.GAMEPAD)
+            if (gate.admits() || value <= 0f) router.trigger(button, value, InputSource.GAMEPAD)
         }
     }
 }
@@ -370,6 +405,9 @@ internal object StartupFailure {
 
 /** The longest quitting waits for Fuse's servers and devices to close (they carry on closing as the process ends). */
 private const val CLOSE_WAIT_MS = 1_200L
+
+/** How often Steam is asked whether a game of its own runs, while Fuse is without focus in Game Mode. */
+private const val STEAM_WATCH_MS = 2_000L
 
 /** How long a newly updated Fuse stays up before it is the version kept (its trial ends). */
 private const val UPDATE_PROVEN_MS = 20_000L

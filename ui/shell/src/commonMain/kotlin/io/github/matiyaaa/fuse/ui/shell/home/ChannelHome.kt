@@ -154,6 +154,8 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
     // Reset at the top right ([ArrangeTools]) are reached by moving up past the board's top row.
     val history = remember { mutableStateListOf<KeptBoard>() }
     var onTools by remember { mutableStateOf<Int?>(null) }
+    // The bar along the bottom while arranging (Add and Done), reached by moving down past the board's last row.
+    var onBar by remember { mutableStateOf<Int?>(null) }
     // Whose arrangement this is, this device's or the profile's, where that can be chosen.
     val ownHome: Boolean? = space.own
     fun setOwnHome(own: Boolean) = space.setOwn(own)
@@ -209,11 +211,12 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
         space.chosenPage(page)
     }
     val turns = current?.let { carouselOf(it) }?.takeIf { it.count > 1 } != null
-    PageEffect(arranging, op is BoardOp.Carry, resizeLook, onTools, active, paging.count, turns, look?.editing) {
+    PageEffect(arranging, op is BoardOp.Carry, resizeLook, onTools, onBar, active, paging.count, turns, look?.editing) {
         if (!active) return@PageEffect
         val pages = (if (turns) listOf(Hint(HintButton.PAGE_PREV, ""), Hint(HintButton.PAGE_NEXT, "Browse")) else emptyList()) +
             if (paging.count > 1) listOf(Hint(HintButton.RIGHT_STICK, "Pages")) else emptyList()
         app.hints = when {
+            arranging && onBar != null -> listOfNotNull(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, if (onBar == 0) "Add a ${space.item}" else "Done"), Hint(HintButton.BACK, "Done").takeIf { onBar == 0 })
             arranging && onTools != null -> listOf(Hint(HintButton.CONFIRM, when (onTools) { 0 -> "Undo"; 1 -> space.resetLabel(page); 2 -> "New page"; else -> look?.let { "Arrange the ${it.labels[1 - it.editing]} look" } ?: if (ownHome == true) "${space.name} on all devices" else "This device's own ${space.name}" }), Hint(HintButton.BACK, "Done"))
             op is BoardOp.Carry -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Put down"), Hint(HintButton.BACK, "Cancel"))
             resizeLook -> listOf(Hint(HintButton.DPAD, "Resize"), Hint(HintButton.HOLD_OPTIONS, "Let go when done"))
@@ -300,6 +303,7 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
         space.arrangingEnded()
         history.clear()
         onTools = null
+        onBar = null
         sel.clamp(widgets.size)
     }
 
@@ -398,6 +402,21 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                 onTools = null
                 return@InputLayer if (paging.turn(if (e.action == NavAction.PAGE_NEXT) 1 else -1)) NavResult.MOVED else NavResult.BLOCKED
             }
+            val bar = onBar
+            if (arranging && bar != null && carried == null && e.modifier == null) {
+                return@InputLayer when (e.action) {
+                    NavAction.LEFT -> if (bar > 0) { onBar = 0; NavResult.MOVED } else NavResult.BLOCKED
+                    NavAction.RIGHT -> if (bar < 1) { onBar = 1; NavResult.MOVED } else NavResult.BLOCKED
+                    NavAction.UP -> { onBar = null; NavResult.MOVED }
+                    NavAction.DOWN -> NavResult.BLOCKED
+                    NavAction.SELECT -> {
+                        if (bar == 0) { onBar = null; addPicker() } else stopArranging()
+                        NavResult.ACTIVATED
+                    }
+                    NavAction.BACK -> { stopArranging(); NavResult.CONSUMED }
+                    else -> NavResult.CONSUMED
+                }
+            }
             if (arranging && tools != null && carried == null && e.modifier == null) {
                 return@InputLayer when (e.action) {
                     NavAction.LEFT -> if (tools > 0) { onTools = tools - 1; NavResult.MOVED } else NavResult.BLOCKED
@@ -480,6 +499,8 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                         when {
                             // Past the top row while arranging: Undo and Reset.
                             r != NavResult.MOVED && arranging && e.action == NavAction.UP -> { onTools = 0; NavResult.MOVED }
+                            // Past the last row while arranging: Add and Done along the bottom.
+                            r != NavResult.MOVED && arranging && e.action == NavAction.DOWN && !resizeLook -> { onBar = 0; NavResult.MOVED }
                             // Past the board's side: the page beside it, when there is one.
                             r != NavResult.MOVED && (e.action == NavAction.LEFT || e.action == NavAction.RIGHT) && !e.isRepeat &&
                                 paging.turn(if (e.action == NavAction.RIGHT) 1 else -1, fromEdge = true) -> NavResult.MOVED
@@ -613,7 +634,7 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                                 } else {
                                     geometry.rect(rect)
                                 }
-                                val selected = i == sel.index && app.focusZone == FocusZone.CONTENT
+                                val selected = i == sel.index && app.focusZone == FocusZone.CONTENT && onTools == null && onBar == null
                                 val carousel = carouselOf(w)
                                 BoardItem(
                                     carousel = carousel,
@@ -705,7 +726,7 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                         }
                         if (addRect != null) {
                             AddTile(
-                                selected = sel.index == widgets.size && app.focusZone == FocusZone.CONTENT,
+                                selected = sel.index == widgets.size && app.focusZone == FocusZone.CONTENT && onTools == null && onBar == null,
                                 shape = shape,
                                 modifier = Modifier.boardPlace(geometry.rect(addRect), animate = true),
                                 label = "Add ${space.item}",
@@ -729,8 +750,9 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                 compact = narrow || small,
                 item = space.item,
                 name = space.name,
-                onAdd = ::addPicker,
+                onAdd = { onBar = null; addPicker() },
                 onDone = ::stopArranging,
+                focused = if (app.focusZone == FocusZone.CONTENT) onBar else null,
                 ownHome = ownHome,
                 onOwnHome = { setOwnHome(it) },
                 look = look,

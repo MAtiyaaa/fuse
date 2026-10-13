@@ -90,6 +90,12 @@ data class SaveSpot(
      * are each one game's saves. The folders a play changes there are learned as this game's.
      */
     val learnIn: String? = null,
+    /**
+     * The game's own folders in the folder a [learnIn] names (a 3DS game's title id folder), when
+     * this device knows them. They travel with the save, so a device that can't read the game's id
+     * (a compressed image) puts it in place without a play to learn from.
+     */
+    val learnedAs: List<String> = emptyList(),
     /** How sure Fuse is that the save is (or goes) here; see [SaveConfidence]. */
     val confidence: SaveConfidence = SaveConfidence.KNOWN,
     /**

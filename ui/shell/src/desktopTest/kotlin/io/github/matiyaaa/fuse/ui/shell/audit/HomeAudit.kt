@@ -202,6 +202,24 @@ internal fun AuditDriver.homeChannels(exhaustive: Boolean) {
         tap(PadButton.B)
         shoot("done arranging")
     }
+    scenario("home", "board add and done with the controller") {
+        useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS)) }
+        waitFor("Continue playing")
+        tap(PadButton.DPAD_LEFT)
+        hold(PadButton.A)
+        waitFor("Put down")
+        tap(PadButton.A)
+        waitFor("Pick up")
+        // Down past the board's last row: the bar along the bottom, Add first.
+        tap(PadButton.DPAD_DOWN, 8)
+        if (!hasText("Add a widget")) gap("home", "board add and done with the controller", "down to the bar", "Moving down past the board did not reach Add widget")
+        shoot("down past the board, Add widget chosen")
+        tap(PadButton.DPAD_RIGHT)
+        shoot("right, Done chosen")
+        tap(PadButton.A)
+        waitGone("Pick up")
+        shoot("A on Done, arranging ended")
+    }
     scenario("home", "board by touch") {
         useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS)) }
         waitFor("Continue playing")

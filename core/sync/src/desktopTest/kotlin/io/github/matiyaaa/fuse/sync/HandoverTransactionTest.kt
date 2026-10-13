@@ -143,3 +143,35 @@ class HandoverTransactionTest {
         assertNull(device.unclaimed(slot(saves)))
     }
 }
+
+/** A save the emulator made blank again never goes anywhere as the newest. */
+class BlankSaveTest {
+    @Test
+    fun aBlankSaveAfterARealOneIsNeverSentAndAFirstOneIs(): Unit = runBlocking {
+        val root = Files.createTempDirectory("blank").toFile()
+        try {
+            val game = GameKey.of("gba", null, null, "Minish Cap")
+            val sav = File(root, "saves/Minish Cap.sav").apply { parentFile.mkdirs() }
+            fun slot() = Slots.of(game, SaveSpot(SaveKind.SAVE, "sram", listOf(SpotFile("save.srm", sav.path))))
+            val device = SyncDevice(File(root, "device"), "thor", "Thor")
+            var told = 0
+            device.onBlank = { told++ }
+            // A first save that happens to be blank is no one's loss: it goes.
+            sav.writeBytes(ByteArray(8192) { 0xFF.toByte() })
+            assertNotNull(device.capture("mo", slot(), 60))
+            sav.writeBytes(ByteArray(8192) { if (it < 4) 1 else 0 })
+            assertNotNull(device.capture("mo", slot(), 120))
+            // The emulator made its save memory again: all 0xFF, then all zeros, then empty.
+            for (blank in listOf(ByteArray(8192) { 0xFF.toByte() }, ByteArray(8192), ByteArray(0))) {
+                sav.writeBytes(blank)
+                assertNull(device.capture("mo", slot(), 180))
+            }
+            assertEquals(3, told)
+            assertTrue(Slots.blank(sav))
+            sav.writeBytes(byteArrayOf(0, 0, 0, 1))
+            assertFalse(Slots.blank(sav))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+}

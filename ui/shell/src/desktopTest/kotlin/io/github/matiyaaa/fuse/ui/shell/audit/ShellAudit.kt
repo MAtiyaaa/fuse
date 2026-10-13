@@ -487,8 +487,9 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         waitFor("Up a folder")
         settle()
         shoot("file picker: a folder, folders first")
+        // A tap on a file chooses it, as a finger would: the question comes at once (a further A
+        // would answer it with the first system).
         tapText("Quasar Drift (World).gba")
-        tap(PadButton.A)
         waitFor("Which system is")
         shoot("the system for a picked file")
         tap(PadButton.B)
