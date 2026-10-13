@@ -7,7 +7,9 @@
 # from docs/releases/<version>.md. Nothing is published when release v<version> already exists,
 # unless the run was started by pushing that tag. Started by hand with "desktop_only", it builds the
 # Linux, Windows and macOS packages again and adds them to the existing release (a failed or late
-# desktop build), leaving the APK alone.
+# desktop build), leaving the APK alone. Started by hand with "rename_only", it builds nothing and
+# gives the existing release of this version its title and notes again from gradle.properties and
+# docs/releases (a release renamed after it went out).
 #
 # A release created here with GITHUB_TOKEN also creates its tag; GitHub does not start new workflow
 # runs for events caused by GITHUB_TOKEN, so that tag does not trigger this workflow again.
@@ -32,6 +34,10 @@ on:
         description: "Add the Linux, Windows and macOS builds to the existing release of this version"
         type: boolean
         default: false
+      rename_only:
+        description: "Give the existing release of this version its name and notes from gradle.properties and docs/releases, building nothing"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -47,6 +53,7 @@ jobs:
       tag: ${{ steps.meta.outputs.tag }}
       publish: ${{ steps.meta.outputs.publish }}
       desktop: ${{ steps.meta.outputs.desktop }}
+      rename: ${{ steps.meta.outputs.rename }}
     steps:
       - name: Check out
         uses: actions/checkout@v7
@@ -56,6 +63,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DESKTOP_ONLY: ${{ inputs.desktop_only || false }}
+          RENAME_ONLY: ${{ inputs.rename_only || false }}
         run: |
           set -euo pipefail
           version="$(sed -n 's/^fuse\.version=//p' gradle.properties | tr -d '[:space:]')"
@@ -101,14 +109,50 @@ jobs:
             desktop=true
           fi
 
+          # Renaming touches only an existing release's title and notes, and nothing else runs.
+          rename=false
+          if [ "$RENAME_ONLY" = "true" ]; then
+            if [ "$publish" = "true" ]; then
+              echo "::error::rename_only renames an existing release, but $tag doesn't exist yet."
+              exit 1
+            fi
+            if [ "$DESKTOP_ONLY" = "true" ]; then
+              echo "::error::Choose rename_only or desktop_only, not both."
+              exit 1
+            fi
+            rename=true
+          fi
+
           {
             echo "version=$version"
             echo "release_name=$release_name"
             echo "tag=$tag"
             echo "publish=$publish"
             echo "desktop=$desktop"
+            echo "rename=$rename"
           } >> "$GITHUB_OUTPUT"
           echo "Fuse $version - $release_name ($tag), publish: $publish, desktop builds: $desktop"
+
+  rename:
+    name: Rename the release
+    needs: prepare
+    if: needs.prepare.outputs.rename == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Give the release its name and notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          RELEASE_NAME: ${{ needs.prepare.outputs.release_name }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release edit "$TAG" --title "Fuse $VERSION - $RELEASE_NAME" --notes-file "docs/releases/$VERSION.md" --repo "$GITHUB_REPOSITORY"
+          echo "Release $TAG is now titled \"Fuse $VERSION - $RELEASE_NAME\"."
 
   android:
     name: Android APK
