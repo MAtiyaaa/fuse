@@ -10,6 +10,7 @@
 #   SKIP_GRADLE=1       reuse an existing app/desktop/build/compose/binaries/main-release/app/fuse
 #   GRADLE_ARGS="..."   extra Gradle arguments (for example "--no-daemon")
 #   APPIMAGETOOL=path   use this appimagetool instead of downloading it into build/tools/
+#   SKIP_CDS=1          leave out the class data sharing archive (scripts/train-cds.sh, needs Xvfb)
 #
 # Needs network access the first time (appimagetool, and the AppImage runtime it fetches).
 set -euo pipefail
@@ -38,6 +39,12 @@ fi
 if [[ ! -x "$DIST/bin/fuse" ]]; then
   echo "error: $DIST/bin/fuse not found; run without SKIP_GRADLE=1" >&2
   exit 1
+fi
+
+if [[ "${SKIP_CDS:-0}" != "1" ]]; then
+  # Fuse starts on a virtual screen to write down the classes it loads, for an archive that makes
+  # the next starts faster; skipped with a warning where it can't run.
+  bash scripts/train-cds.sh "$DIST"
 fi
 
 echo "==> Assembling $APPDIR"

@@ -90,6 +90,9 @@ fun main(args: Array<String>) {
         kotlin.system.exitProcess(NoDisplay.EXIT_CODE)
     }
     goBackFromAFailedUpdate(dirs, args)
+    // Skia's picture cache sized for the screen, and the drawing settings asked for, before a window opens.
+    val tuning = io.github.matiyaaa.fuse.desktop.system.RenderTuning.install(io.github.matiyaaa.fuse.desktop.system.RenderTuning.screenPixels())
+    Log.info("Drawing: ${tuning.notes.joinToString("; ")}")
     // The desktop's own scale where Java's toolkit can't follow it (fractional scaling on Linux).
     desktopScale = runCatching {
         val javaScale = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().defaultScreenDevice.defaultConfiguration.defaultTransform.scaleX
@@ -139,6 +142,47 @@ private fun goBackFromAFailedUpdate(dirs: FuseDirs, args: Array<String>) {
     }
 }
 
+/** Every frame Skia draws while something moves, summed up in the log each minute (see FrameWatch). */
+private val frameWatch = io.github.matiyaaa.fuse.desktop.system.FrameWatch()
+
+/**
+ * Times each frame of [layer] as Skia draws it, around the drawing Compose gave it, and writes a
+ * minute's frames into the log when anything moved in it.
+ */
+private fun watchFrames(layer: org.jetbrains.skiko.SkiaLayer) {
+    val inner = layer.renderDelegate ?: return
+    if (inner is TimedRender) return
+    layer.renderDelegate = TimedRender(inner)
+    frameReports
+}
+
+/** The minute's line, from a thread of its own; started with the first window watched, once. */
+private val frameReports: Unit by lazy {
+    Thread({
+        while (true) {
+            try {
+                Thread.sleep(io.github.matiyaaa.fuse.desktop.system.FrameWatch.PERIOD_MS)
+            } catch (_: InterruptedException) {
+                return@Thread
+            }
+            frameWatch.report()?.let(Log::info)
+        }
+    }, "fuse-frame-watch").apply {
+        isDaemon = true
+        priority = Thread.MIN_PRIORITY
+        start()
+    }
+    Unit
+}
+
+private class TimedRender(private val inner: org.jetbrains.skiko.SkikoRenderDelegate) : org.jetbrains.skiko.SkikoRenderDelegate {
+    override fun onRender(canvas: org.jetbrains.skia.Canvas, width: Int, height: Int, nanoTime: Long) {
+        val start = System.nanoTime()
+        inner.onRender(canvas, width, height, nanoTime)
+        frameWatch.rendered(nanoTime, System.nanoTime() - start)
+    }
+}
+
 /** How much larger than Java's own scale Fuse draws (see DesktopScale); 1 almost everywhere. */
 private var desktopScale = 1f
 
@@ -164,6 +208,8 @@ private suspend fun probeRenderer(session: DesktopSession, window: java.awt.Wind
     val profile = io.github.matiyaaa.fuse.desktop.system.FramePacing.profile(kind, w, h, output?.first ?: mode.width, output?.second ?: mode.height,
         mode.refreshRate.toDouble(), gpu)
     if (profile.refreshHz > 0) UiRenderTrace.expectedFrameNanos = profile.budgetNanos
+    if (profile.refreshHz > 0) frameWatch.budgetNanos = profile.budgetNanos
+    watchFrames(layer)
     // A TV's picture processing smooths a faint dither away and leaves the bands: a stronger one there.
     io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.largeOutput = profile.largeOutput || kind == io.github.matiyaaa.fuse.desktop.system.DisplaySession.STEAM_GAME_MODE
     val note = if (profile.upscaled) "Shown at ${w}x$h and scaled up to ${output?.first ?: mode.width}x${output?.second ?: mode.height}, which looks soft. " +
@@ -181,6 +227,7 @@ private suspend fun probeRenderer(session: DesktopSession, window: java.awt.Wind
         val oh = output?.second ?: mode.height
         add("Window" to if (profile.upscaled) "${w}x$h, enlarged to ${ow}x$oh" else "${w}x$h on a ${ow}x$oh screen")
         add("Refresh" to "${profile.refreshHz.toInt()} Hz")
+        addAll(io.github.matiyaaa.fuse.desktop.system.RenderTuning.described())
         if (!gpu) {
             verdict.why?.let { add("Why" to it) }
             report.skiaFailures.lastOrNull()?.let { add("Skia said" to it) }
@@ -303,7 +350,7 @@ private fun ApplicationScope.FuseWindow(session: DesktopSession) {
                             }
                         }
                     }
-                    .then(if (session.pointerHidden) Modifier.pointerHoverIcon(BlankPointer, overrideDescendants = true) else Modifier),
+                    .then(if (session.pointerHidden && !io.github.matiyaaa.fuse.desktop.system.RenderTuning.keepCursor) Modifier.pointerHoverIcon(BlankPointer, overrideDescendants = true) else Modifier),
             ) {
                 when (val s = session.startState) {
                     StartState.Loading -> Splash()

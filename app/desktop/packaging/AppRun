@@ -23,6 +23,21 @@ if [ -n "${LD_LIBRARY_PATH:-}" ]; then
     fi
 fi
 
+# FUSE_STEAM_OVERLAY=off (a launch option): Steam's overlay library, which Steam preloads into what
+# it starts to hook its drawing, stays out of Fuse's own process. Kept in FUSE_STEAM_LD_PRELOAD, so
+# the games Fuse starts still get the overlay.
+if [ "${FUSE_STEAM_OVERLAY:-}" = "off" ] && [ -n "${LD_PRELOAD:-}" ]; then
+    kept=""
+    for part in $(printf '%s' "$LD_PRELOAD" | tr ':' ' '); do
+        case "$part" in
+            *gameoverlayrenderer*) ;;
+            *) kept="${kept:+$kept:}$part" ;;
+        esac
+    done
+    export FUSE_STEAM_LD_PRELOAD="$LD_PRELOAD"
+    if [ -n "$kept" ]; then export LD_PRELOAD="$kept"; else unset LD_PRELOAD; fi
+fi
+
 # Where Java writes a report if it ever fails hard (not an ordinary crash, which Fuse records
 # itself), so it is found beside Fuse's own crash notes instead of wherever Steam started Fuse.
 # What was set before is kept for the programs Fuse starts.

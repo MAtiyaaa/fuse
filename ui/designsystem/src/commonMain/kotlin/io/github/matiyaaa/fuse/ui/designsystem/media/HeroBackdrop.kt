@@ -3,6 +3,9 @@ package io.github.matiyaaa.fuse.ui.designsystem.media
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -108,6 +111,12 @@ private const val SOFT_BELOW_SHARE = 0.4f
 
 /** How long a new background may take before the room shows its placeholder instead of the old one. */
 private const val PLACEHOLDER_MS = 120L
+
+/** Frames a new picture is drawn at a pixel's size before its fade, so its upload is done by then. */
+private const val PRIME_FRAMES = 2
+
+/** Enough for the picture to be drawn (and so sent to the graphics card), too little to be seen. */
+private const val PRIME_ALPHA = 0.01f
 
 /** The Enhanced drift: how far the art zooms and pans (of its size) at the end of a leg. */
 private const val DRIFT_ZOOM = 0.045f
@@ -331,12 +340,38 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
     if (loaded != null) ShownArt.shown(source.model, loaded.painter)
     val painter = held ?: loader
     val imageAlpha = remember { FuselineValue(0f) }
+    // What the picture's layers read: copied from [imageAlpha] on every frame it moves. A layer that
+    // first read the picture while it was hidden is told of each change this way; reading the moving
+    // value itself, it could miss a change made while nothing drew it, and keep the picture hidden
+    // over the placeholder for good (art that took longer than [PLACEHOLDER_MS] never appeared).
+    var shownImage by remember { mutableFloatStateOf(0f) }
     var placeholder by remember { mutableStateOf(false) }
+    // A blurred room exists only once baked: until then the layer has nothing to show.
+    var frozen by remember { mutableStateOf<ImageBitmap?>(null) }
+    // Drawn for a frame or two at a single pixel before the fade, so the picture is already on the
+    // graphics card when the fade starts: its upload never lands in a frame of the fade.
+    var priming by remember { mutableStateOf(false) }
+    var boxWidth by remember { mutableStateOf(0) }
+    val canBlurNow by rememberUpdatedState(canBlur)
+    fun isSoft(): Boolean {
+        val shown = held ?: (state as? AsyncImagePainter.State.Success)?.painter ?: return false
+        val s = shown.intrinsicSize
+        return !source.blurred && boxWidth > 0 && !s.isUnspecified && s.width > 0f && s.width < boxWidth * SOFT_BELOW_SHARE
+    }
     LaunchedEffect(layer) {
-        val finished = { held != null || state is AsyncImagePainter.State.Success || state is AsyncImagePainter.State.Error }
+        val decoded = { held != null || state is AsyncImagePainter.State.Success }
+        val finished = {
+            state is AsyncImagePainter.State.Error ||
+                decoded() && (!((source.blurred || isSoft()) && canBlurNow) || frozen != null)
+        }
         val quick = withTimeoutOrNull(PLACEHOLDER_MS) { snapshotFlow { finished() }.first { it } } != null
         if (quick) {
+            // Shown at once under the room's own fade.
             imageAlpha.snapTo(1f)
+            shownImage = 1f
+            priming = true
+            repeat(PRIME_FRAMES) { androidx.compose.runtime.withFrameNanos { } }
+            priming = false
             onReady()
             if (!motion.reduced) {
                 coroutineScope {
@@ -355,17 +390,17 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
             layer.alpha.animateTo(1f, motion.tween(Durations.BASE, Curves.Fade))
             onShown()
             snapshotFlow { finished() }.first { it }
-            imageAlpha.animateTo(1f, motion.tween(Durations.HERO, Curves.Fade))
+            priming = true
+            repeat(PRIME_FRAMES) { androidx.compose.runtime.withFrameNanos { } }
+            priming = false
+            imageAlpha.animateTo(1f, motion.tween(Durations.HERO, Curves.Fade)) { shownImage = value }
+            shownImage = 1f
         }
     }
     val failed = state is AsyncImagePainter.State.Error
     // Art far smaller than the screen (an emulator's snapshot, wide art made for a list) would be
     // stretched into blocks across a TV: it is shown as a softened room instead, like box art.
-    var boxWidth by remember { mutableStateOf(0) }
-    val art = held ?: loaded?.painter
-    val soft = !source.blurred && art != null && boxWidth > 0 && art.intrinsicSize.let { s ->
-        !s.isUnspecified && s.width > 0f && s.width < boxWidth * SOFT_BELOW_SHARE
-    }
+    val soft = isSoft()
     // Enhanced motion: once shown, the art breathes, drifting and zooming very slowly.
     var drift by remember { mutableFloatStateOf(0f) }
     val drifting = motion.drift && motion.ambientOn(Fuse.quality)
@@ -381,6 +416,21 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
         }
     }
     val angle = remember(source.id) { (source.id.hashCode() and 0xFFFF) / 65_535f * 2f * PI.toFloat() }
+    if (priming) {
+        // Outside the room's layer (at no opacity a layer isn't drawn at all), a pixel's worth.
+        // The picture itself (Coil's decoded one), not the loader around it, which keeps track of
+        // the size it is drawn at.
+        val primeWith = frozen
+        val primeArt = held ?: (state as? AsyncImagePainter.State.Success)?.painter
+        Box(
+            Modifier.size(1.dp).drawBehind {
+                when {
+                    primeWith != null -> drawImage(primeWith, dstSize = IntSize(1, 1), alpha = PRIME_ALPHA)
+                    primeArt != null -> with(primeArt) { draw(Size(1f, 1f), alpha = PRIME_ALPHA) }
+                }
+            },
+        )
+    }
     Box(
         Modifier
             .fillMaxSize()
@@ -414,20 +464,22 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
         }
         if (!failed) {
             val alignment = focusAlignment(source.focusX, source.focusY)
+            // The picture's own fade is applied as it is drawn, not by a layer of its own: a layer
+            // first drawn at no opacity could keep showing nothing as its opacity came up, and the
+            // art never appeared over the placeholder.
             val shade = Modifier.drawWithContent {
                 drawContent()
                 // Box art behind the interface is a colour field, not a picture: darker, and more so unblurred.
-                if (source.blurred || soft) drawRect(veil.copy(alpha = if (canBlur) 0.35f else 0.6f))
+                if (source.blurred || soft) drawRect(veil.copy(alpha = (if (canBlur) 0.35f else 0.6f) * shownImage))
             }
             if ((source.blurred || soft) && canBlur) {
                 // Blurred once, small, then shown scaled up: the same picture for a single draw a frame.
-                FrozenBlur(painter, loaded = held != null || state is AsyncImagePainter.State.Success, alignment, Modifier.fillMaxSize().graphicsLayer { alpha = imageAlpha.value; compositingStrategy = CompositingStrategy.ModulateAlpha }.then(shade))
+                FrozenBlur(painter, source.model, loaded = held != null || state is AsyncImagePainter.State.Success, alignment, alpha = { shownImage }, onFrozen = { frozen = it }, modifier = Modifier.fillMaxSize().then(shade))
             } else {
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .graphicsLayer { alpha = imageAlpha.value; compositingStrategy = CompositingStrategy.ModulateAlpha }
-                        .paint(painter, contentScale = ContentScale.Crop, alignment = alignment)
+                        .paint(painter, contentScale = ContentScale.Crop, alignment = alignment, alpha = shownImage)
                         .then(shade),
                 )
             }
@@ -441,43 +493,61 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
  * drawn scaled up with a cubic filter: a blurred picture has no detail for the scaling to lose, and the room then costs
  * one picture a frame instead of a blur over the whole screen every frame (which held every
  * animation in front of it to the blur's pace).
+ *
+ * Where the platform blurs in full precision ([Dithering.blurs], the desktop), the small copy is
+ * drawn by the processor and everything after it runs off the interface's thread: nothing is read
+ * back from the graphics card, which waited for all its work in hand. Each baked room is kept
+ * ([FrozenRooms]), so going back to a game costs nothing. [onFrozen] gets the picture once it
+ * exists: the room fades in only then, so it never fades in empty and pops.
  */
 @Composable
-private fun FrozenBlur(painter: Painter, loaded: Boolean, alignment: Alignment, modifier: Modifier) {
+private fun FrozenBlur(painter: Painter, model: Any?, loaded: Boolean, alignment: Alignment, alpha: () -> Float, onFrozen: (ImageBitmap) -> Unit, modifier: Modifier) {
     val layer = rememberGraphicsLayer()
     val density = LocalDensity.current
     var box by remember { mutableStateOf(IntSize.Zero) }
     var frozen by remember(painter) { mutableStateOf<ImageBitmap?>(null) }
     var baked by remember(painter) { mutableStateOf(false) }
+    val frozenNow by rememberUpdatedState(onFrozen)
     LaunchedEffect(painter, loaded, box) {
         if (!loaded || box.width <= 0 || box.height <= 0) return@LaunchedEffect
+        val smooth = io.github.matiyaaa.fuse.ui.designsystem.effects.Dithering.blurs
+        val key = FrozenRooms.Key(model, box, alignment, smooth != null)
+        FrozenRooms.get(key)?.let { kept ->
+            frozen = kept
+            baked = smooth != null
+            frozenNow(kept)
+            return@LaunchedEffect
+        }
         val intrinsic = painter.intrinsicSize
         if (intrinsic.isUnspecified || intrinsic.width <= 0f || intrinsic.height <= 0f) return@LaunchedEffect
-        val smooth = io.github.matiyaaa.fuse.ui.designsystem.effects.Dithering.blurs
         val small = IntSize((box.width / FROZEN_SCALE).coerceAtLeast(1), (box.height / FROZEN_SCALE).coerceAtLeast(1))
         val radius = with(density) { BOX_ART_BLUR.toPx() } / FROZEN_SCALE
-        // Where the platform blurs in full precision, the copy is handed over sharp and blurred there.
-        layer.renderEffect = if (smooth != null) null else BlurEffect(radius, radius, TileMode.Clamp)
-        layer.record(density, LayoutDirection.Ltr, small) {
+        fun DrawScope.cover() {
             val scale = max(small.width / intrinsic.width, small.height / intrinsic.height)
             val drawn = Size(intrinsic.width * scale, intrinsic.height * scale)
             val at = alignment.align(IntSize(drawn.width.roundToInt(), drawn.height.roundToInt()), small, LayoutDirection.Ltr)
             translate(at.x.toFloat(), at.y.toFloat()) { with(painter) { draw(drawn) } }
         }
-        val copy = layer.toImageBitmap()
-        frozen = if (smooth == null) {
-            copy
+        suspend fun onCard(): ImageBitmap {
+            layer.renderEffect = BlurEffect(radius, radius, TileMode.Clamp)
+            layer.record(density, LayoutDirection.Ltr, small) { cover() }
+            return layer.toImageBitmap()
+        }
+        val made = if (smooth == null) {
+            onCard()
         } else {
             // Blurred, stretched to the screen and rounded to 8 bits once, with signed noise as it
             // is rounded: every frame after is the same picture copied as it is. A blur kept in 8
             // bits at a quarter of the size and stretched every frame shows its steps as bands and
             // its grid as squares on a large screen, worst with the processor's cheaper filter.
-            withContext(Dispatchers.Default) { runCatching { smooth(copy, radius, bakeSize(box)) }.getOrNull() } ?: run {
-                layer.renderEffect = BlurEffect(radius, radius, TileMode.Clamp)
-                layer.toImageBitmap()
-            }
+            val copy = ImageBitmap(small.width, small.height)
+            CanvasDrawScope().draw(density, LayoutDirection.Ltr, androidx.compose.ui.graphics.Canvas(copy), Size(small.width.toFloat(), small.height.toFloat())) { cover() }
+            withContext(Dispatchers.Default) { runCatching { smooth(copy, radius, bakeSize(box)) }.getOrNull() } ?: onCard()
         }
-        baked = smooth != null && frozen !== copy
+        baked = smooth != null && made.width != small.width
+        frozen = made
+        FrozenRooms.put(key, made)
+        frozenNow(made)
     }
     Box(
         modifier
@@ -487,8 +557,11 @@ private fun FrozenBlur(painter: Painter, loaded: Boolean, alignment: Alignment, 
                 // Baked at the box's size (or a little under on a very large screen) it is a plain copy.
                 // Otherwise cubic, not bilinear: stretching a small picture bilinearly shows its grid
                 // as faint squares on a large screen.
+                val shown = alpha()
+                if (shown <= 0f) return@drawBehind
                 drawImage(
                     image, dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+                    alpha = shown,
                     filterQuality = when {
                         baked -> FilterQuality.Low
                         io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.cpu -> FilterQuality.Medium
@@ -497,6 +570,25 @@ private fun FrozenBlur(painter: Painter, loaded: Boolean, alignment: Alignment, 
                 )
             },
     )
+}
+
+/**
+ * The blurred rooms baked last, so moving back to a game shows its room at once. A few are enough:
+ * at 4K each is about 33 MB.
+ */
+internal object FrozenRooms {
+    data class Key(val model: Any?, val box: IntSize, val alignment: Alignment, val smooth: Boolean)
+
+    private const val KEPT = 4
+    private val rooms = object : LinkedHashMap<Key, ImageBitmap>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Key, ImageBitmap>?) = size > KEPT
+    }
+
+    fun get(key: Key): ImageBitmap? = if (key.model == null) null else rooms[key]
+
+    fun put(key: Key, room: ImageBitmap) {
+        if (key.model != null) rooms[key] = room
+    }
 }
 
 /**

@@ -45,4 +45,12 @@ class HostEnvironmentTest {
         Processes.hostEnvironment(env)
         assertEquals(mapOf("LD_LIBRARY_PATH" to "/opt/mine/lib", "PATH" to "/usr/bin:/bin"), env)
     }
+
+    @Test
+    fun steamsOverlaySetAsideForFuseGoesBackForTheGames() {
+        val env = mutableMapOf("LD_PRELOAD" to "/opt/mine.so", "FUSE_STEAM_LD_PRELOAD" to "/opt/mine.so:/home/deck/.local/share/Steam/ubuntu12_64/gameoverlayrenderer.so")
+        Processes.hostEnvironment(env)
+        assertEquals("/opt/mine.so:/home/deck/.local/share/Steam/ubuntu12_64/gameoverlayrenderer.so", env["LD_PRELOAD"])
+        assertFalse("FUSE_STEAM_LD_PRELOAD" in env)
+    }
 }
