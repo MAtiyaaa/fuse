@@ -67,6 +67,8 @@ fun main(args: Array<String>) {
         kotlin.system.exitProcess(SyncHostMain.run(dirs))
     }
     UiRenderTrace.enabled = "--trace-ui" in args
+    // Gradients and baked pictures behind the interface are dithered, on the graphics card or not.
+    io.github.matiyaaa.fuse.desktop.system.DesktopDithering.install()
     setX11WmClass()
     // Fuse Player plays on FFmpeg here.
     io.github.matiyaaa.fuse.ui.player.FusePlayer.engineFactory = { io.github.matiyaaa.fuse.ui.player.ffmpeg.FfmpegEngine() }
@@ -223,10 +225,21 @@ private fun ApplicationScope.FuseWindow(session: DesktopSession) {
                     .traceUiRoot()
                     .fillMaxSize()
                     .background(io.github.matiyaaa.fuse.desktop.ui.FuseBrand.Ink)
-                    // Skia on a desktop draws gradients undithered, so every soft light bands in
-                    // 8-bit steps; one dither over the whole window breaks them all up, at the cost
-                    // of a single textured rectangle on the graphics card (not drawn on the processor).
-                    .then(if (gpu) Modifier.drawWithContent { drawContent(); drawDither() } else Modifier)
+                    // Skia on a desktop draws gradients undithered, so a soft light Fuse doesn't
+                    // dither at the source bands in 8-bit steps; one dither over the whole window
+                    // breaks those up, at the cost of a single textured rectangle on the graphics card
+                    // (not drawn on the processor). Not where gamescope enlarges Fuse's picture:
+                    // there each of its pixels is shown as a square of several, and they are seen.
+                    .then(
+                        if (gpu) {
+                            Modifier.drawWithContent {
+                                drawContent()
+                                if (io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.upscale <= 1.05f) drawDither()
+                            }
+                        } else {
+                            Modifier
+                        },
+                    )
                     .pointerInput(Unit) {
                         awaitPointerEventScope {
                             while (true) {
