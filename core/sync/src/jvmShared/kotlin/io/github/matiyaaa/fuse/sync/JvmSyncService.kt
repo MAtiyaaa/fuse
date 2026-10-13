@@ -2248,6 +2248,8 @@ class JvmSyncService(
     private val _probeResults = kotlinx.coroutines.flow.MutableSharedFlow<SaveProbeResult>(extraBufferCapacity = 4)
     override val probeResults: kotlinx.coroutines.flow.SharedFlow<SaveProbeResult> = _probeResults
 
+    override val saveEnvironment: SaveEnvironment get() = saveEnv
+
     override suspend fun startSaveProbe(query: SaveQuery): Result<List<String>> = withContext(Dispatchers.IO) {
         runCatching {
             device ?: error("Turn on Fuse One first: the test run teaches Fuse Sync where this game saves.")

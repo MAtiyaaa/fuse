@@ -501,6 +501,9 @@ interface SyncService {
     /** Calls off a test run that hasn't been played yet. */
     fun cancelSaveProbe(game: GameKey) {}
 
+    /** Where this device's emulators keep saves, with the folders the person chose and the ones Fuse learned (for RomM's save sync too). */
+    val saveEnvironment: SaveEnvironment? get() = null
+
     /** What each test run showed, once its game closed. */
     val probeResults: kotlinx.coroutines.flow.SharedFlow<SaveProbeResult> get() = NO_PROBE_RESULTS
 

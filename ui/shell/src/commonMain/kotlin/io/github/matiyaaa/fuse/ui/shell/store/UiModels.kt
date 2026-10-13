@@ -298,6 +298,9 @@ sealed interface LaunchOutcome {
      */
     data class SyncWaiting(val waiting: io.github.matiyaaa.fuse.sync.LaunchGate.Waiting) : LaunchOutcome
 
+    /** This device's save and RomM's both changed: ask which to keep, then play. */
+    data class RommSaveConflict(val conflict: io.github.matiyaaa.fuse.sync.romm.RommSaveConflict) : LaunchOutcome
+
     /** Syncthing kept two versions of this game's save: ask which to keep, then play. */
     data class SyncthingConflict(val conflicts: List<io.github.matiyaaa.fuse.sync.syncthing.SyncthingConflict>) : LaunchOutcome
 }

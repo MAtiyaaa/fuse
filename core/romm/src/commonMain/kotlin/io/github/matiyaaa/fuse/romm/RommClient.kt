@@ -10,6 +10,7 @@ import io.ktor.client.request.parameter
 import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -168,6 +169,7 @@ class RommClient(
                 tokenScans = "/api/tasks/scan" in paths,
                 incremental = true,
                 identifiers = "/api/roms/identifiers" in paths,
+                saveSync = "/api/devices" in paths && "/api/saves/{id}/downloaded" in paths,
             )
         } else {
             RommCapabilities(version = version, pairCodes = major >= 4, chunkedUploads = major >= 4, incremental = major >= 4, identifiers = major >= 4)
@@ -317,6 +319,74 @@ class RommClient(
     fun assetUrl(base: String, path: String): String =
         (if (path.startsWith("http")) path else base + (if (path.startsWith("/")) path else "/$path")).let(::escapeUrl)
 
+    // ------------------------------------------------------------------ saves
+
+    /**
+     * This device, registered with RomM for its save sync (RomM shows which device has which save).
+     * Registering again with the same name and kind gives the same device back.
+     */
+    suspend fun registerDevice(name: String, platform: String, clientVersion: String): String {
+        val o = json(HttpMethod.Post, "/api/devices") {
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("name", name)
+                put("platform", platform)
+                put("client", "Fuse")
+                put("client_version", clientVersion)
+                put("allow_existing", true)
+            }.toString())
+        }.jsonObject
+        return (o["device_id"] as? JsonPrimitive)?.contentOrNull ?: throw RommException("RomM didn't give this device an id.", code = "unreadable")
+    }
+
+    /**
+     * The signed-in person's saves of [romId] on RomM, newest first, each with the name of the device
+     * that made it (from RomM's list of devices, when its own answer doesn't say).
+     */
+    suspend fun saves(romId: Long): List<RommSave> {
+        val saves = RommParse.saves(json(HttpMethod.Get, "/api/saves") { parameter("rom_id", romId) }).sortedByDescending { it.updatedAt }
+        if (saves.none { it.originDevice != null && it.originDeviceName == null }) return saves
+        val names = runCatching { RommParse.deviceNames(json(HttpMethod.Get, "/api/devices")) }.getOrDefault(emptyMap())
+        return saves.map { s -> if (s.originDeviceName == null) s.copy(originDeviceName = s.originDevice?.let(names::get)) else s }
+    }
+
+    /** [save]'s file. */
+    suspend fun saveContent(save: RommSave, deviceId: String?): ByteArray =
+        call(HttpMethod.Get, "/api/saves/${save.id}/content", timeoutMs = SAVE_TIMEOUT_MS, extra = {
+            if (deviceId != null) parameter("device_id", deviceId)
+            parameter("optimistic", false)
+        }) { it.bodyAsBytes() }
+
+    /** Tells RomM [save] is now on this device (so it shows as current here). */
+    suspend fun confirmSave(save: RommSave, deviceId: String) {
+        call(HttpMethod.Post, "/api/saves/${save.id}/downloaded", extra = {
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject { put("device_id", deviceId) }.toString())
+        }) { }
+    }
+
+    /**
+     * Sends [bytes] as a new save of [romId] in [slot] (RomM keeps the earlier ones, up to
+     * [keep], as history), named [fileName], made by [emulator] on [deviceId].
+     */
+    suspend fun uploadSave(romId: Long, slot: String, emulator: String?, deviceId: String?, fileName: String, bytes: ByteArray, keep: Int = 10): RommSave {
+        val e = call(HttpMethod.Post, "/api/saves", timeoutMs = SAVE_TIMEOUT_MS, extra = {
+            parameter("rom_id", romId)
+            parameter("slot", slot)
+            if (emulator != null) parameter("emulator", emulator)
+            if (deviceId != null) parameter("device_id", deviceId)
+            parameter("autocleanup", true)
+            parameter("autocleanup_limit", keep)
+            setBody(io.ktor.client.request.forms.MultiPartFormDataContent(io.ktor.client.request.forms.formData {
+                append("saveFile", bytes, io.ktor.http.Headers.build {
+                    append(HttpHeaders.ContentType, "application/octet-stream")
+                    append(HttpHeaders.ContentDisposition, "filename=\"${fileName.replace("\"", "")}\"")
+                })
+            }))
+        }) { RommParse.element(it.bodyAsText()) }
+        return RommParse.save(e) ?: throw RommException("RomM didn't say what it kept.", code = "unreadable")
+    }
+
     // ------------------------------------------------------------------ uploads
 
     /**
@@ -395,6 +465,9 @@ class RommClient(
         private const val SLOWEST_UPLOAD_BYTES_PER_SECOND = 16 * 1024L
 
         /** Time for sending [bytes] at the slowest upload speed Fuse allows for, never under two minutes. */
+        /** How long a save's upload or download may take: saves are small. */
+        const val SAVE_TIMEOUT_MS = 60_000L
+
         fun chunkTimeout(bytes: Int): Long = maxOf(120_000L, bytes * 1000L / SLOWEST_UPLOAD_BYTES_PER_SECOND)
 
         /** The paths in an OpenAPI document, without holding the rest of it. */

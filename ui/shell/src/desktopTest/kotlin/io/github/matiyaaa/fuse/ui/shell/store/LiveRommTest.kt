@@ -5,6 +5,11 @@ import io.github.matiyaaa.fuse.data.db.DesktopDatabase
 import io.github.matiyaaa.fuse.integrations.net.RouteMode
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.request.get
+import io.ktor.http.contentType
+import io.ktor.client.statement.bodyAsText
+import io.ktor.client.request.setBody
+import io.ktor.client.request.delete
+import io.ktor.client.request.post
 import io.ktor.client.statement.bodyAsBytes
 import io.ktor.utils.io.toByteArray
 import io.ktor.http.HttpHeaders
@@ -30,6 +35,8 @@ import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
@@ -165,6 +172,102 @@ class LiveRommTest {
         assertTrue(store.transfers.rows.value.none { it.item.status == io.github.matiyaaa.fuse.transfer.TransferStatus.FAILED }, "the download didn't fail")
         assertTrue(detail.game.links.rommRomId == pick.romId)
     }
+
+    @Test
+    fun savesTravelThroughRommAndNeverOverwriteARealOne(): Unit = runBlocking {
+        val services = services()
+        val store = createFuseStore(services, scope)
+        val romm = store.romm as io.github.matiyaaa.fuse.ui.shell.store.impl.DefaultRommOps
+        romm.setEnabled(true)
+        romm.setAddresses("", url!!, RouteMode.REMOTE)
+        romm.usePassword(user!!, password!!).getOrThrow()
+        store.updatePrefs { it.copy(romm = it.romm.copy(saveSync = true)) }
+        val state = withTimeout(120_000) { romm.state.first { it.link == RommLink.ONLINE } }
+        println("RomM ${state.version}: save sync ${state.canSyncSaves}")
+        assertTrue(state.canSyncSaves, "this server has RomM's save sync")
+        val games = withTimeout(180_000) { romm.games(null).first { list -> list.any { it.card.platformId.value == "nes" } } }
+        val nes = games.filter { it.card.platformId.value == "nes" }.minBy { it.sizeBytes }
+        val romId = nes.romId
+        println("Game: ${nes.card.title} (RomM id $romId)")
+        val client = assertNotNullOrFail(romm.saveClient())
+        // Two devices, each with the game in its own folder, saving beside it (NES.emu).
+        fun device(name: String): Pair<io.github.matiyaaa.fuse.sync.romm.JvmRommSaves, File> {
+            val games = File(root, "$name/nes").apply { mkdirs() }
+            File(games, "game.nes").writeText("rom")
+            val saves = io.github.matiyaaa.fuse.sync.romm.JvmRommSaves(
+                dir = File(root, "$name/state"), env = { io.github.matiyaaa.fuse.sync.FileSaveEnvironment("LINUX", root.path, variables = { null }) },
+                client = { client }, server = { "live" }, deviceName = "Fuse live test $name", platform = "linux", clientVersion = "test",
+            )
+            return saves to File(games, "game.sav")
+        }
+        fun query(dir: File) = io.github.matiyaaa.fuse.sync.SaveQuery(
+            io.github.matiyaaa.fuse.sync.GameKey.of("nes", null, null, nes.card.title), "nes", File(dir.parentFile, "game.nes").path.replace('\\', '/'), "nes-emu", title = nes.card.title,
+        )
+        val made = mutableListOf<Long>()
+        try {
+            val (linux, linuxSave) = device("linux")
+            val (android, androidSave) = device("android")
+            val lq = query(linuxSave)
+            val aq = query(androidSave)
+            // Linux plays first and saves: it goes to RomM.
+            assertIs<io.github.matiyaaa.fuse.sync.romm.RommSaveGate.Go>(linux.beforeLaunch(lq, romId))
+            linuxSave.writeText("linux: world 1-2")
+            linux.afterExit(lq, romId)
+            println("  after Linux played: ${client.saves(romId).map { it.contentHash to it.originDeviceName }}")
+            // Android has nothing yet: Linux's save comes down before it starts.
+            val first = assertIs<io.github.matiyaaa.fuse.sync.romm.RommSaveGate.Go>(android.beforeLaunch(aq, romId))
+            println("  Android before playing: ${first.note}")
+            assertEquals("linux: world 1-2", androidSave.readText())
+            // Android plays on and saves; Linux gets it next.
+            androidSave.writeText("android: world 3-1")
+            android.afterExit(aq, romId)
+            assertIs<io.github.matiyaaa.fuse.sync.romm.RommSaveGate.Go>(linux.beforeLaunch(lq, romId))
+            assertEquals("android: world 3-1", linuxSave.readText())
+            // Both play without syncing in between: a choice, nothing overwritten.
+            linuxSave.writeText("linux: world 4-1")
+            androidSave.writeText("android: world 5-1")
+            android.afterExit(aq, romId)
+            val conflict = assertIs<io.github.matiyaaa.fuse.sync.romm.RommSaveGate.Conflict>(linux.beforeLaunch(lq, romId))
+            println("  conflict: here ${conflict.conflict.hereBytes} bytes, RomM's from ${conflict.conflict.server.originDeviceName}")
+            assertEquals("Fuse live test android", conflict.conflict.server.originDeviceName)
+            assertEquals("linux: world 4-1", linuxSave.readText(), "nothing replaced before the person chooses")
+            linux.settle(conflict.conflict, keepHere = false).getOrThrow()
+            assertEquals("android: world 5-1", linuxSave.readText())
+            assertTrue(File(root, "linux/state/kept/RomM").walkTopDown().any { it.isFile && it.readText() == "linux: world 4-1" }, "Linux's own kept aside")
+            // A new device that started the game without the save and made its own: never sent over the real one.
+            val (deck, deckSave) = device("deck")
+            val dq = query(deckSave)
+            deckSave.writeText("deck: a new game, world 1-1")
+            deckSave.setLastModified(System.currentTimeMillis() + 3_600_000)
+            deck.afterExit(dq, romId)
+            assertEquals("android: world 5-1", client.saves(romId).first().let { String(client.saveContent(it, null)) }, "RomM's newest is still the real save")
+            assertIs<io.github.matiyaaa.fuse.sync.romm.RommSaveGate.Conflict>(deck.beforeLaunch(dq, romId))
+            println("  a new device's own save was not sent; it is asked about instead")
+            // A blank save on another new device: RomM's comes down over it.
+            val (thor, thorSave) = device("thor")
+            thorSave.writeBytes(ByteArray(8192))
+            assertIs<io.github.matiyaaa.fuse.sync.romm.RommSaveGate.Go>(thor.beforeLaunch(query(thorSave), romId))
+            assertEquals("android: world 5-1", thorSave.readText())
+        } finally {
+            // Leave the server as it was: this game's saves and the test's devices go.
+            val auth = "Basic " + java.util.Base64.getEncoder().encodeToString("$user:$password".toByteArray())
+            val ids = runCatching { client.saves(romId).map { it.id } }.getOrDefault(emptyList())
+            if (ids.isNotEmpty()) {
+                services.http.post("$url/api/saves/delete") {
+                    headers.append("Authorization", auth)
+                    contentType(io.ktor.http.ContentType.Application.Json)
+                    setBody("""{"saves":${ids.joinToString(",", "[", "]")}}""")
+                }
+            }
+            val devices = services.http.get("$url/api/devices") { headers.append("Authorization", auth) }.bodyAsText()
+            Regex("\"id\":\"([^\"]+)\",[^}]*?\"name\":\"Fuse live test").findAll(devices).forEach { m ->
+                services.http.delete("$url/api/devices/${m.groupValues[1]}") { headers.append("Authorization", auth) }
+            }
+            println("  cleaned up: ${ids.size} saves; devices left ${services.http.get("$url/api/devices") { headers.append("Authorization", auth) }.bodyAsText().count { it == '{' }}")
+        }
+    }
+
+    private fun <T : Any> assertNotNullOrFail(v: T?): T = v ?: error("RomM's save client isn't available")
 
     private companion object {
         val RESTRICTED = setOf("Content-Length", "Host", "Connection", "Expect", "Upgrade", "Accept-Charset")

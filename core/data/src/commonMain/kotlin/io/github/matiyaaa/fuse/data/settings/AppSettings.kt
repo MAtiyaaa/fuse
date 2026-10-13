@@ -616,6 +616,8 @@ data class FuseRommSettings(
     val biosFolder: String = "",
     /** Put downloaded BIOS where each emulator reads it. */
     val placeBios: Boolean = true,
+    /** Keep games' saves in step with RomM's save sync (games from RomM, or matched to it). */
+    val saveSync: Boolean = false,
 )
 
 /**

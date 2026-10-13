@@ -44,6 +44,8 @@ data class RommState(
     val canUpload: Boolean = false,
     /** The sign-in may ask RomM to scan. */
     val canScan: Boolean = false,
+    /** The server has RomM's save sync (RomM 5) and the sign-in may use it. */
+    val canSyncSaves: Boolean = false,
     /** A sync of the library mirror running, with how far it came. */
     val syncing: MirrorProgress? = null,
     /** When the mirror last caught up, on this device's clock; 0 when never. */

@@ -505,9 +505,9 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                     "Fuse One's library needs a host: one computer at home that every device connects to. Set it up now and come straight back here, or carry on and add it later in Settings, Fuse One."
                 }
                 "FUSE" -> if (rommConnected) {
-                    "Your RomM games are in the Library under All, next to everything else. Games you download land in the right folders and play like any other."
+                    "Your RomM games are in the Library under All, next to everything else. Games you download land in the right folders and play like any other, and their saves stay in step with RomM's when RomM syncs saves (RomM 5)."
                 } else {
-                    "Fuse connects straight to your RomM server: your games and systems appear in the Library under All, and downloads land in your library's folders. It takes a minute."
+                    "Fuse connects straight to your RomM server: your games and systems appear in the Library under All, downloads land in your library's folders, and their saves stay in step with RomM's on RomM 5. It takes a minute."
                 }
                 "CARTRIDGE" -> when {
                     cartridge.installed && cartridge.bridge -> "Downloads from Cartridge appear in Fuse on their own. Open it anytime from the Cartridge tab."

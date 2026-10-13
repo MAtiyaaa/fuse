@@ -119,6 +119,8 @@ interface FuseStore {
 
     /** Syncthing, for people who run it: off until chosen in setup or Settings, Addons, Syncthing. */
     val syncthing: io.github.matiyaaa.fuse.sync.syncthing.SyncthingService? get() = null
+    /** RomM's save sync, when RomM is set up here. */
+    val rommSaves: io.github.matiyaaa.fuse.sync.romm.RommSaveService? get() = null
 
     /** A song that ships with Fuse ([io.github.matiyaaa.fuse.ui.shell.music.BundledMusic]) as a file the player can open. */
     suspend fun bundledTrack(id: String): String? = null

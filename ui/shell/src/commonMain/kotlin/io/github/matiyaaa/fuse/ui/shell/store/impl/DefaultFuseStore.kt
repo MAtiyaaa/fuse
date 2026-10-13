@@ -126,6 +126,8 @@ internal class DefaultFuseStore private constructor(
         applyProfileSettings = { profile, values -> writeProfileSettings(profile, values) })
     override val sync = DefaultSyncOps(ctx, profileData) { t -> writeSettings(t) }
 
+    override val rommSaves: io.github.matiyaaa.fuse.sync.romm.RommSaveService? get() = library.rommSaves
+
     override val syncthing: io.github.matiyaaa.fuse.sync.syncthing.SyncthingService? =
         runCatching { ctx.services.syncthingService(ctx.scope) }.getOrNull()
 
@@ -149,6 +151,10 @@ internal class DefaultFuseStore private constructor(
                 }
             }
         }
+        // RomM's save sync, for games from (or matched to) RomM.
+        library.rommSaves = runCatching {
+            ctx.services.rommSaves(env = { sync.service?.saveEnvironment }, client = { romm.saveClient() }, server = { romm.serverKey })
+        }.getOrNull()
         library.installedBoot = { id -> content.bootFile(id) }
         library.writeSettings = { t -> writeSettings(t) }
         library.notInstalled = { id ->
