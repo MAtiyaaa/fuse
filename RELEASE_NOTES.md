@@ -1,9 +1,12 @@
-# Fuse 0.4.2.6 - The Native Update
+# Fuse 0.4.2.5 - The Native Update
 
-RomM's save sync, one clear choice for how each game's saves sync, a game's options in four short
-tabs, and RomM covers that load on computers. RomM was tested against a real RomM 5.3 server (sign
-in, every system recognised, covers, a game brought down, and saves moving between two devices);
-nothing here has been tried on a real handheld or TV yet.
+Your newest save first, every time, now with RomM too: a game no longer starts quietly with an
+older save while the newer one is still on its way, a test run shows Fuse where any game's emulator
+really keeps its saves, RomM keeps saves in step, each game has one clear Save Sync choice, and a
+game's options are four short tabs. Fuse Sync is tested end to end with a real Fuse One host and test
+saves on a computer; RomM was tested against a real RomM 5.3 server (sign in, every system
+recognised, covers, a game brought down, and saves moving between two devices). None of it has been
+tried on a real Bazzite PC, Steam Deck, AYN Thor or phone yet.
 
 ## New
 
@@ -18,9 +21,22 @@ nothing here has been tried on a real handheld or TV yet.
 - **Save Sync for each game,** in its options and its Save History: Everywhere, Receive Only Here
   (this device gets the newest save but never sends its own), Off on This Device, or Off Everywhere
   (for all your devices, through your profile). Fuse One and RomM both follow it.
+- **Find Where It Saves.** In a game's Save History, a test run starts the game with save sync
+  paused for it. You make one save and quit, and Fuse sees where it appeared. It then keeps the
+  save in step there from now on: as that emulator's save folder (the same as choosing it in
+  Settings, Save folders), or as the game's own folders where Fuse can't read a game's id. Your
+  own save is put where the game reads it right away (or, with no save of yours anywhere yet, the
+  test save becomes your first). The test save is kept aside on the device. When the save landed
+  somewhere Fuse can't use yet, it says where and changes nothing.
 
 ## Changed
 
+- **A game waits for your newer save.** When Fuse One is slow to send your newest save, or this
+  device is offline but knows Fuse One has a newer one, the game doesn't start with the older save
+  here. You choose: keep waiting (the save keeps coming meanwhile), play with this device's save
+  (the newer one stays safe, and you pick between the two afterwards), or not now. Offline with no
+  newer save known of, games start straight away as before.
+- **A newer save that didn't finish coming down is remembered,** across restarts, until it is in place.
 - **A game's options are four short tabs** (Game, Saves, Setup, Details) instead of one long list,
   switched with the shoulder buttons or a tap, as in the quick menu.
 - **A two-finger swipe on a Mac trackpad no longer turns Home's pages,** nor does a sideways mouse
@@ -30,6 +46,9 @@ nothing here has been tried on a real handheld or TV yet.
 
 ## Fixed
 
+- **Playing anyway can't be overwritten mid-game.** A save still coming in the background is
+  stopped before the game starts, so nothing lands while it runs.
+- **A save Fuse couldn't find says what to do:** the message now points to Find Where It Saves.
 - **RomM covers load on computers.** RomM gives its pictures' addresses with a space in them, which
   the server refused (400) as Fuse sent them; they are now encoded.
 - **A RomM download no longer shows as failed when only a picture couldn't be had.** The game was in
