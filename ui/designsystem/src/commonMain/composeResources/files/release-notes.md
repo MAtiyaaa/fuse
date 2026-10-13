@@ -16,6 +16,8 @@ Smoother motion on a 4K TV, and a log that says where a slow frame's time went.
   - `FUSE_GPU_CACHE_MB=1024`: the size of the picture cache on the graphics card.
   - `FUSE_CURSOR=keep`: the pointer is never swapped for a blank one while a controller is in use,
     for gamescope's stutter when a pointer hides.
+  - `FUSE_STEAM_OVERLAY=off`: Steam's overlay library, which Steam loads into everything it starts
+    to hook its drawing, stays out of Fuse. The games Fuse starts still get the overlay.
 
 ## Changed
 

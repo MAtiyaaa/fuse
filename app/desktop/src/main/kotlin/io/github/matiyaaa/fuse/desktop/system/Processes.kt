@@ -64,6 +64,8 @@ object Processes {
         if (libraries.isNullOrBlank()) env.remove("LD_LIBRARY_PATH") else env["LD_LIBRARY_PATH"] = libraries
         env["SYSTEM_PATH"]?.takeIf { it.isNotBlank() }?.let { env["PATH"] = it }
         env.remove("STEAM_RUNTIME_LIBRARY_PATH")
+        // Steam's overlay, set aside for Fuse alone (FUSE_STEAM_OVERLAY=off), goes back for the games.
+        env.remove("FUSE_STEAM_LD_PRELOAD")?.let { if (it.isBlank()) env.remove("LD_PRELOAD") else env["LD_PRELOAD"] = it }
         // The Java options the AppImage set for Fuse alone; what was there before goes back.
         if (env.containsKey("FUSE_JAVA_TOOL_OPTIONS")) {
             val before = env.remove("FUSE_JAVA_TOOL_OPTIONS")

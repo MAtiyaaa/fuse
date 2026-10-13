@@ -17,6 +17,8 @@ package io.github.matiyaaa.fuse.desktop.system
  * - `FUSE_BUFFERING=double` or `triple`: how many frames are kept in flight.
  * - `FUSE_WAIT_VSYNC=off`: a redraw asked for at once doesn't wait for the next refresh first.
  * - `FUSE_CURSOR=keep`: the pointer is never swapped for a blank one while a controller is used.
+ * - `FUSE_STEAM_OVERLAY=off`: Steam's overlay library stays out of Fuse (the AppImage's AppRun sets it
+ *   aside; the games Fuse starts still get it).
  * A `-Dskiko...` property given to Java itself always wins.
  */
 internal object RenderTuning {
@@ -50,6 +52,7 @@ internal object RenderTuning {
         }
         val keepCursor = env("FUSE_CURSOR")?.trim()?.lowercase() == "keep"
         if (keepCursor) notes += "the pointer stays as it is (FUSE_CURSOR)"
+        if (env("FUSE_STEAM_LD_PRELOAD") != null) notes += "Steam's overlay left out of Fuse (FUSE_STEAM_OVERLAY)"
         return Choice(properties, keepCursor, notes)
     }
 
@@ -78,6 +81,7 @@ internal object RenderTuning {
         System.getProperty(BUFFERING)?.let { add("Frames in flight" to it.lowercase().replaceFirstChar(Char::uppercase)) }
         System.getProperty(WAIT_VSYNC)?.let { add("Immediate redraws wait for refresh" to if (it == "false") "No" else "Yes") }
         if (keepCursor) add("Pointer" to "Always shown")
+        if (System.getenv("FUSE_STEAM_LD_PRELOAD") != null) add("Steam's overlay" to "Left out of Fuse")
     }
 
     /** The largest screen Fuse could open on: the desktop's mode, or the output gamescope shows it on. */
