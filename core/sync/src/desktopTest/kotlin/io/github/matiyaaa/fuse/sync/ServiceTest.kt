@@ -7,6 +7,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -17,6 +18,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.File
@@ -85,6 +87,83 @@ class ServiceTest {
         val files = home?.let { FileSaveEnvironment(platform, it.path.replace('\\', '/'), variables = { null }) } ?: FileSaveEnvironment(platform)
         val svc = JvmSyncService(File(root, name), settings, Secrets(), library, platform, name, "test", NoHostLifetime("test"), scope, files = files, liveLookMs = 300)
         return svc to settings
+    }
+
+    @Test
+    fun aGameDoesntStartQuietlyWithAnOlderSaveWhileTheNewerOneIsStillComing(): Unit = runBlocking {
+        val (pc, _) = service("Gaming PC", Library())
+        val (deck, _) = service("Steam Deck", Library())
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        deck.switchTo(mo.id).getOrThrow()
+        pc.switchTo(mo.id).getOrThrow()
+        val roms = File(root, "deck-roms").apply { mkdirs() }
+        val q = SaveQuery(ct, "gba", File(roms, "ruby.gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby")
+        File(roms, "ruby.sav").writeText("8 badges")
+        deck.afterExit(q, 0, 30 * 60_000)
+        // The save's file can't be had from the host for now: the PC knows of it but can't bring it down.
+        val hash = SyncCrypto.sha256("8 badges".byteInputStream())
+        val onHost = File(root, "Gaming PC").walkTopDown().single { it.isFile && it.name == hash.substring(2) && it.parentFile.name == hash.substring(0, 2) }
+        val kept = onHost.readBytes()
+        assertTrue(onHost.delete())
+        val pcRoms = File(root, "pc-roms").apply { mkdirs() }
+        val pq = q.copy(romPath = File(pcRoms, "ruby.gba").path.replace('\\', '/'))
+        val gate = assertIs<LaunchGate.Waiting>(pc.beforeLaunch(pq))
+        assertEquals(false, gate.offline)
+        assertEquals("Steam Deck", gate.from)
+        assertFalse(File(pcRoms, "ruby.sav").exists(), "nothing half-written here")
+        // The person chose to play with this device's save (none): it starts as it is.
+        assertIs<LaunchGate.Go>(pc.beforeLaunch(pq, waitForOthers = false))
+        assertFalse(File(pcRoms, "ruby.sav").exists())
+        // Played here meanwhile, then sent: never the newest over the Deck's, a conflict to settle instead.
+        File(pcRoms, "ruby.sav").writeText("pc: 3 badges")
+        pc.afterExit(pq, 0, 60_000)
+        onHost.parentFile.mkdirs()
+        onHost.writeBytes(kept)
+        val conflict = assertIs<LaunchGate.Conflict>(pc.beforeLaunch(pq))
+        assertEquals("Steam Deck", conflict.conflict.host.device)
+        pc.settle(conflict.conflict, keepHere = false).getOrThrow()
+        assertEquals("8 badges", File(pcRoms, "ruby.sav").readText())
+        pc.stop()
+    }
+
+    @Test
+    fun aTestRunTeachesWhereAGameSavesAndPutsThePersonsOwnSaveThere(): Unit = runBlocking {
+        val (pc, pcSettings) = service("Gaming PC", Library())
+        val (deck, _) = service("Steam Deck", Library())
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        deck.switchTo(mo.id).getOrThrow()
+        pc.switchTo(mo.id).getOrThrow()
+        val deckRoms = File(root, "deck-roms").apply { mkdirs() }
+        File(deckRoms, "ruby.sav").writeText("8 badges")
+        deck.afterExit(SaveQuery(ct, "gba", File(deckRoms, "ruby.gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby"), 0, 30 * 60_000)
+        // On the PC the emulator keeps saves in a folder beside its games' folder, which Fuse didn't know.
+        val pcRoms = File(root, "pc/gba/roms").apply { mkdirs() }
+        val pq = SaveQuery(ct, "gba", File(pcRoms, "ruby.gba").path.replace('\\', '/'), "gba-emu", title = "Pokemon Ruby")
+        val watched = pc.startSaveProbe(pq).getOrThrow()
+        assertTrue(watched.any { it.endsWith("/pc/gba") }, "$watched")
+        // The test run starts with nothing swapped or brought down.
+        assertIs<LaunchGate.Go>(pc.beforeLaunch(pq))
+        val result = async { withTimeout(20_000) { pc.probeResults.first() } }
+        val saves = File(root, "pc/gba/saves")
+        File(saves, "ruby.sav").apply { parentFile.mkdirs(); writeText("test save"); setLastModified(System.currentTimeMillis() + 10_000) }
+        pc.afterExit(pq, 0, 60_000)
+        val found = assertIs<SaveProbeResult.Found>(result.await())
+        assertEquals(saves.path.replace('\\', '/'), found.where)
+        assertTrue(found.learned)
+        assertEquals("Your save from Steam Deck is in place", found.settled)
+        // Learned as the emulator's save folder, as if chosen in Settings, Save folders.
+        assertEquals(saves.path.replace('\\', '/'), pcSettings.current().sync.saveFolders["gba-emu"])
+        // The person's own save is where the game reads it; the test save is kept aside, never the newest.
+        assertEquals("8 badges", File(saves, "ruby.sav").readText())
+        assertEquals("test save", File(assertNotNull(found.keptAt)).walkTopDown().single { it.isFile }.readText())
+        assertEquals("Steam Deck", pc.versions(pq, SaveKind.SAVE).first { it.current }.device)
+        // From now on it syncs like any other game.
+        assertIs<LaunchGate.Go>(pc.beforeLaunch(pq))
+        pc.stop()
     }
 
     @Test
@@ -333,9 +412,11 @@ class ServiceTest {
         assertEquals("Pokemon Ruby", thor.nowPlaying.value)
         val started = System.currentTimeMillis()
         thor.playing(tq, started)
+        // Listening before the save is written, so a quick send is never missed; a slow machine gets time.
+        val sending = async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { withTimeout(30_000) { thor.notices.first { it is SyncNotice.Sent } } }
         File(thorRoms, "ruby.sav").writeText("thor: saved at the pokemon center")
         // The save leaves while the game still runs (the lid closes now; the game never stops there).
-        val sent = withTimeout(10_000) { thor.notices.first { it is SyncNotice.Sent } }
+        val sent = sending.await()
         assertTrue((sent as SyncNotice.Sent).live)
         // The PC sees the Thor on it, and what to expect.
         val busy = assertIs<LaunchGate.Busy>(pc.beforeLaunch(pq))
@@ -367,10 +448,13 @@ class ServiceTest {
         val q = SaveQuery(ct, "gba", File(roms, "ruby.gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby")
         val started = System.currentTimeMillis()
         deck.playing(q, started)
+        // Listening before each save is written, so a quick send is never missed; a slow machine gets time.
+        val first = async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { withTimeout(30_000) { deck.notices.first { it is SyncNotice.Sent } } }
         File(roms, "ruby.sav").writeText("one")
-        withTimeout(10_000) { deck.notices.first { it is SyncNotice.Sent } }
+        first.await()
+        val second = async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { withTimeout(30_000) { deck.notices.first { it is SyncNotice.Sent } } }
         File(roms, "ruby.sav").writeText("two")
-        withTimeout(10_000) { deck.notices.first { it is SyncNotice.Sent } }
+        second.await()
         deck.afterExit(q, started, System.currentTimeMillis())
         // On the PC: the newest, no conflict.
         val pcRoms = File(root, "pc-roms").apply { mkdirs() }

@@ -41,6 +41,34 @@ object RommParse {
         )
     }
 
+    /** `/api/devices`: each device's id and name. */
+    fun deviceNames(e: JsonElement): Map<String, String> = e.items().mapNotNull { d ->
+        val o = d.obj()
+        val id = o.str("id") ?: return@mapNotNull null
+        val name = o.str("name") ?: return@mapNotNull null
+        id to name
+    }.toMap()
+
+    /** `/api/saves`: the person's saves. */
+    fun saves(e: JsonElement): List<RommSave> = e.items().mapNotNull(::save)
+
+    fun save(e: JsonElement): RommSave? {
+        val o = e as? JsonObject ?: return null
+        val origin = o.str("origin_device_id")
+        return RommSave(
+            id = o.long("id") ?: return null,
+            romId = o.long("rom_id") ?: return null,
+            fileName = o.str("file_name") ?: return null,
+            sizeBytes = o.long("file_size_bytes") ?: 0,
+            contentHash = o.str("content_hash")?.lowercase(),
+            slot = o.str("slot"),
+            emulator = o.str("emulator"),
+            updatedAt = o.str("updated_at") ?: "",
+            originDevice = origin,
+            originDeviceName = o.arr("device_syncs").map { it.obj() }.firstOrNull { it.str("device_id") == origin }?.str("device_name"),
+        )
+    }
+
     /** A page of `/api/roms`: a list (old servers) or `{items, total}`. */
     fun page(e: JsonElement): RommPage {
         val items = e.items().mapNotNull(::rom)

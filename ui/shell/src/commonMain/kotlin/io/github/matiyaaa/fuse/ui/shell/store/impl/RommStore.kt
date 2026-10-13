@@ -271,6 +271,12 @@ internal class DefaultRommOps(
     /** The client for [server] as set up now (the one in use), or null when off or signed out. */
     internal fun clientFor(server: String): RommClient? = client?.takeIf { server == this.server && settings.enabled }
 
+    /** The signed-in client when RomM and its save sync are on. */
+    internal fun saveClient(): RommClient? = client?.takeIf { c ->
+        settings.enabled && settings.saveSync && settings.configured &&
+            c.may(RommScopes.ASSETS_WRITE) && c.may(RommScopes.DEVICES_WRITE) && c.capabilities.saveSync
+    }
+
     private suspend fun credential(): RommCredential? = ctx.services.secrets.get(SECRET)?.let {
         runCatching { json.decodeFromString(RommCredential.serializer(), it) }.getOrNull()
     }
@@ -314,7 +320,9 @@ internal class DefaultRommOps(
                 it.copy(
                     link = RommLink.ONLINE, route = c.route, version = c.capabilities.version, account = account,
                     canUpload = c.may(RommScopes.ROMS_WRITE) && c.capabilities.chunkedUploads,
-                    canScan = c.may(RommScopes.TASKS_RUN) && c.capabilities.tokenScans, problem = null,
+                    canScan = c.may(RommScopes.TASKS_RUN) && c.capabilities.tokenScans,
+                    canSyncSaves = c.may(RommScopes.ASSETS_WRITE) && c.may(RommScopes.DEVICES_WRITE) && c.capabilities.saveSync,
+                    problem = null,
                 )
             }
             if (s.account != account || s.serverVersion != c.capabilities.version || !s.configured) {
@@ -439,7 +447,7 @@ internal class DefaultRommOps(
         val c = client ?: RommClient(ctx.services.http, routes(settings), null, ctx.services.appVersion).also { client = it }
         if (c.capabilities.version.isEmpty()) c.detect()
         if (!c.capabilities.deviceAuth) throw RommException("This RomM server doesn't pair this way. Use a pairing code or a token from RomM instead.", code = "no-device-auth")
-        c.startPairing(deviceId(), ctx.services.deviceName, ctx.host.name.lowercase(), if (upload) RommScopes.UPLOAD_AND_SCAN else RommScopes.READ)
+        c.startPairing(deviceId(), ctx.services.deviceName, ctx.host.name.lowercase(), (if (upload) RommScopes.UPLOAD_AND_SCAN else RommScopes.READ) + RommScopes.SAVES)
     }
 
     override suspend fun awaitPairing(code: RommDeviceCode): Result<String> = runCatching {
@@ -905,9 +913,11 @@ internal class DefaultRommOps(
                     }
                     val lead = paths.firstOrNull()
                     val target = if (job.newFolder || r.multi) gamePath else lead ?: gamePath
-                    val cover = r.cover?.let { rommArtCache?.file(job.server, it) }
-                    val logo = r.logo?.let { rommArtCache?.file(job.server, it) }
-                    val shot = r.screenshot?.let { rommArtCache?.file(job.server, it) }
+                    // A picture that can't be had leaves the game without it, never the download failed.
+                    suspend fun picture(path: String?): String? = path?.let { p -> runCatching { rommArtCache?.file(job.server, p) }.getOrNull() }
+                    val cover = picture(r.cover)
+                    val logo = picture(r.logo)
+                    val shot = picture(r.screenshot)
                     details.sync(
                         listOf(CartridgeGame(r.id, target, r.name, r.platformSlug, r.summary, r.year, r.genres, r.developer, cover = cover, logo = logo, screenshot = shot, updatedAt = r.updatedAt)),
                         applyDetails = true,

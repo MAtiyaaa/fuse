@@ -21,6 +21,8 @@ data class RommCapabilities(
     val tokenScans: Boolean = false,
     /** `updated_after` on the list of games, for bringing in only what changed. */
     val incremental: Boolean = false,
+    /** RomM's save sync: devices and their saves (`/api/devices`, RomM 5). */
+    val saveSync: Boolean = false,
     /** Every game's id in one call (`/api/roms/identifiers`), for noticing removals cheaply. */
     val identifiers: Boolean = false,
 ) {
@@ -37,6 +39,9 @@ object RommScopes {
     const val FIRMWARE_READ = "firmware.read"
     const val COLLECTIONS_READ = "collections.read"
     const val ASSETS_READ = "assets.read"
+    const val ASSETS_WRITE = "assets.write"
+    const val DEVICES_READ = "devices.read"
+    const val DEVICES_WRITE = "devices.write"
     const val TASKS_RUN = "tasks.run"
 
     /** Browsing, downloading games and BIOS, collections. */
@@ -47,6 +52,12 @@ object RommScopes {
 
     /** Also asking RomM to scan after an upload. */
     val UPLOAD_AND_SCAN: List<String> = UPLOAD + TASKS_RUN
+
+    /**
+     * RomM's save sync: the person's saves (assets) and this device's place in RomM's list of
+     * devices. Asked for with every pairing, so save sync can be turned on without pairing again.
+     */
+    val SAVES: List<String> = listOf(ASSETS_READ, ASSETS_WRITE, DEVICES_READ, DEVICES_WRITE)
 }
 
 /** How Fuse signs in to RomM. Kept only in Fuse's secret store. */
@@ -181,3 +192,21 @@ class RommException(message: String, val status: Int = 0, val code: String = "",
     /** The server is there but this account (or token) may not do this. */
     val forbidden: Boolean get() = status == 401 || status == 403
 }
+
+/**
+ * One of the signed-in person's saves on RomM: one file for one game, in a [slot] (Fuse uses
+ * "autosave"), with RomM's MD5 of its content ([contentHash]) and when it was last changed
+ * ([updatedAt], ISO 8601, which sorts by time).
+ */
+data class RommSave(
+    val id: Long,
+    val romId: Long,
+    val fileName: String,
+    val sizeBytes: Long,
+    val contentHash: String?,
+    val slot: String?,
+    val emulator: String?,
+    val updatedAt: String,
+    val originDevice: String?,
+    val originDeviceName: String?,
+)

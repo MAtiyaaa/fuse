@@ -117,6 +117,15 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
                 launching = null
                 syncBusy(card, outcome.busy, play = { launch(card, emulator, discPath, display, playAnyway = true) }, retry = { launch(card, emulator, discPath, display) })
             }
+            is LaunchOutcome.SyncWaiting -> {
+                launching = null
+                syncWaiting(card, outcome.waiting, play = { launch(card, emulator, discPath, display, playAnyway = true) }, retry = { launch(card, emulator, discPath, display) })
+            }
+            // This device's save and RomM's both changed: which one to play with, then the game starts.
+            is LaunchOutcome.RommSaveConflict -> {
+                launching = null
+                rommSaveConflict(card, outcome.conflict) { launch(card, emulator, discPath, display) }
+            }
             // Syncthing kept two versions of the save: which one to play with, then the game starts.
             is LaunchOutcome.SyncthingConflict -> {
                 launching = null
@@ -207,9 +216,86 @@ private fun AppState.syncBusy(card: GameCard, busy: io.github.matiyaaa.fuse.sync
     )
 }
 
+/**
+ * A newer save of [card] than this device's is known of and isn't here: still coming from a slow
+ * host, or waiting on Fuse One while this device is offline. The game never starts quietly with the
+ * older save: wait (the save keeps coming meanwhile), play with this device's save (the newer one
+ * stays safe, and the person picks between them later), or not now.
+ */
+private fun AppState.syncWaiting(card: GameCard, waiting: io.github.matiyaaa.fuse.sync.LaunchGate.Waiting, play: () -> Unit, retry: () -> Unit) {
+    val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+    val made = waiting.at?.let { " It was made ${io.github.matiyaaa.fuse.ui.shell.components.agoText(it, now)}." }.orEmpty()
+    val whose = waiting.from?.let { "Your save from $it" } ?: "Your newest save"
+    choice = ChoiceSpec(
+        title = if (waiting.offline) "$whose is on Fuse One" else "$whose is still on its way",
+        icon = if (waiting.offline) FuseIcons.CloudOff else FuseIcons.CloudDownload,
+        message = if (waiting.offline) {
+            "This device is offline, so ${card.title} didn't start with the older save here.$made"
+        } else {
+            "Fuse One is taking a while to send it, so ${card.title} didn't start with the older save here.$made"
+        },
+        options = listOf(
+            MenuAction(
+                "wait", if (waiting.offline) "Try Again" else "Keep Waiting", if (waiting.offline) FuseIcons.Refresh else FuseIcons.Hourglass,
+                detail = if (waiting.offline) "Once this device is back online" else "It keeps coming meanwhile, and the game starts once it's here",
+                onSelect = { choice = null; retry() },
+            ),
+            MenuAction(
+                "here", "Play With This Device's Save", FuseIcons.Play,
+                detail = "The newer save stays safe; you'll choose between the two afterwards",
+                onSelect = { choice = null; play() },
+            ),
+            MenuAction("not", "Not Now", FuseIcons.Close, onSelect = { choice = null }),
+        ),
+    )
+}
+
 private const val BUSY_QUIET_MS = 2 * 60_000L
 private const val BUSY_WAIT_STEP_MS = 4_000L
 private const val BUSY_WAIT_TRIES = 30
+
+/**
+ * This device's save of [card] and RomM's both changed since they last agreed (or never agreed and
+ * differ): keep this device's (it goes to RomM, RomM's stays in its history), or take RomM's (this
+ * device's is kept aside first). Then [play].
+ */
+private fun AppState.rommSaveConflict(card: GameCard, conflict: io.github.matiyaaa.fuse.sync.romm.RommSaveConflict, play: () -> Unit) {
+    val service = store.rommSaves ?: return
+    val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+    val from = conflict.server.originDeviceName ?: "RomM"
+    fun settle(keepHere: Boolean) {
+        choice = null
+        scope.launch {
+            service.settle(conflict, keepHere)
+                .onSuccess {
+                    toasts.show(if (keepHere) "Kept this device's save; RomM keeps the other in its history" else "Using the save from $from", ToastKind.SUCCESS)
+                    play()
+                }
+                .onFailure { toasts.show(it.message ?: "Couldn't settle the two saves", ToastKind.ERROR) }
+        }
+    }
+    choice = ChoiceSpec(
+        title = "Two saves of ${card.title}",
+        icon = FuseIcons.GitCompare,
+        message = "This device and RomM each have a different save of it. The one you don't pick is kept, so nothing is lost.",
+        options = listOf(
+            MenuAction(
+                "here", "Keep This Device's", FuseIcons.HardDrive,
+                detail = "Changed ${io.github.matiyaaa.fuse.ui.shell.components.agoText(conflict.hereAt, now)}",
+                onSelect = { settle(true) },
+            ),
+            MenuAction(
+                "romm", "Use RomM's", FuseIcons.CloudDownload,
+                detail = "From $from" + (rommTime(conflict.server.updatedAt)?.let { ", ${io.github.matiyaaa.fuse.ui.shell.components.agoText(it, now)}" } ?: ""),
+                onSelect = { settle(false) },
+            ),
+            MenuAction("not", "Not Now", FuseIcons.Close, onSelect = { choice = null }),
+        ),
+    )
+}
+
+/** RomM's ISO 8601 time in milliseconds, or null when it can't be read. */
+private fun rommTime(text: String): Long? = runCatching { kotlin.time.Instant.parse(text).toEpochMilliseconds() }.getOrNull()
 
 /**
  * Two versions of [card]'s save, kept by Syncthing when this device and another both changed it:
@@ -300,6 +386,12 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         }
         // Fuse Sync: this game's saves through time, from every device (a host keeps them).
         if (!card.isApp && syncProfile != null && store.prefs.value.sync.role.isNotEmpty()) {
+            add(MenuAction("savesync", "Save Sync", FuseIcons.RefreshCcw, detail = "Everywhere, receive only here, or off", trailing = Trailing.Chevron, onSelect = {
+                scope.launch {
+                    val q = store.sync.saveQuery(card.id) ?: return@launch toasts.show("Fuse can't tell where ${card.title} saves yet", ToastKind.WARNING)
+                    io.github.matiyaaa.fuse.ui.shell.sync.saveSyncChoice(this@gameMenu, q, card.title)
+                }
+            }))
             add(MenuAction("saves", "Save History", FuseIcons.History, detail = "Every version of its saves, from every device", trailing = Trailing.Chevron, onSelect = {
                 closeOverlays(); go(Route.SaveHistory(card.id, card.title))
             }))
@@ -420,7 +512,15 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
             )
         }))
     }
-    return ContextMenuSpec(title = card.title, subtitle = card.platformShort, art = card.art.tile, actions = actions, accent = card.accent)
+    return ContextMenuSpec(
+        title = card.title, subtitle = card.platformShort, art = card.art.tile, actions = actions, accent = card.accent,
+        tabs = listOf(
+            MenuTab("Game", FuseIcons.Gamepad, listOf("play", "info", "fav", "collection", "pin", "steam", "reach.send", "hide", "notgame", "remove") + extra.map { it.id }),
+            MenuTab("Saves", FuseIcons.Save, listOf("savesync", "saves")),
+            MenuTab("Setup", FuseIcons.Sliders, listOf("system", "emulator", "emusettings", "patches", "parts", "packages", "screen", "compat", "folder", "patch", "move")),
+            MenuTab("Details", FuseIcons.Images, listOf("media", "rescrape", "rename", "reset", "romm.upload", "cartridge", "find", "upload")),
+        ),
+    )
 }
 
 fun AppState.collectionPicker(game: GameId, title: String) {

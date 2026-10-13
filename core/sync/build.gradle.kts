@@ -14,6 +14,8 @@ kotlin {
         commonMain.dependencies {
             // Its settings (which host, which profile, what syncs) are part of Fuse's own.
             api(projects.core.data)
+            // RomM's own save sync: its saves are kept in step with each game's save here.
+            api(projects.core.romm)
             implementation(libs.kotlinx.serialization.json)
         }
         val jvmShared by creating {

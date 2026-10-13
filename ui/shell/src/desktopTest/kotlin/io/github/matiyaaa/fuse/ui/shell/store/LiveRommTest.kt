@@ -1,0 +1,275 @@
+package io.github.matiyaaa.fuse.ui.shell.store
+
+import io.github.matiyaaa.fuse.data.FuseData
+import io.github.matiyaaa.fuse.data.db.DesktopDatabase
+import io.github.matiyaaa.fuse.integrations.net.RouteMode
+import io.ktor.client.engine.mock.respond
+import io.ktor.client.request.get
+import io.ktor.http.contentType
+import io.ktor.client.statement.bodyAsText
+import io.ktor.client.request.setBody
+import io.ktor.client.request.delete
+import io.ktor.client.request.post
+import io.ktor.client.statement.bodyAsBytes
+import io.ktor.utils.io.toByteArray
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.headersOf
+import io.ktor.http.content.OutgoingContent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import org.junit.Assume.assumeTrue
+import java.io.File
+import java.net.ProxySelector
+import java.net.URI
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
+import java.nio.file.Files
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
+
+/**
+ * Fuse's RomM side against a real RomM server: signing in, which of its systems and games Fuse
+ * recognises, their art, bringing a game down into the library, and save sync. Runs only when
+ * FUSE_ROMM_LIVE_URL, FUSE_ROMM_LIVE_USER and FUSE_ROMM_LIVE_PASSWORD are set (never in CI); what it
+ * finds is printed for a person to read.
+ */
+class LiveRommTest {
+    private val url = System.getenv("FUSE_ROMM_LIVE_URL")?.trimEnd('/')
+    private val user = System.getenv("FUSE_ROMM_LIVE_USER")
+    private val password = System.getenv("FUSE_ROMM_LIVE_PASSWORD")
+    private lateinit var root: File
+    private lateinit var cache: File
+    private lateinit var scope: CoroutineScope
+
+    private val real = java.net.http.HttpClient.newBuilder()
+        .proxy(ProxySelector.getDefault())
+        .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
+        .build()
+
+    @BeforeTest
+    fun setUp() {
+        assumeTrue("Set FUSE_ROMM_LIVE_URL, _USER and _PASSWORD to test against a RomM server", url != null && user != null && password != null)
+        root = Files.createTempDirectory("fuse-live-romm").toFile()
+        cache = Files.createTempDirectory("fuse-live-cache").toFile()
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    }
+
+    @AfterTest
+    fun tearDown() {
+        if (url == null) return
+        scope.cancel()
+        root.deleteRecursively()
+        cache.deleteRecursively()
+    }
+
+    /** The test's services, with every call to the server sent to it for real (everything else as the fake answers). */
+    private fun services(): FakeServices {
+        val host = URI(url!!).host
+        val services = FakeServices(FuseData(DesktopDatabase.open(null)), cache)
+        services.web = { request ->
+            if (request.url.host != host) {
+                null
+            } else {
+                val body = when (val b = request.body) {
+                    is OutgoingContent.ByteArrayContent -> HttpRequest.BodyPublishers.ofByteArray(b.bytes())
+                    is OutgoingContent.NoContent -> HttpRequest.BodyPublishers.noBody()
+                    is OutgoingContent.WriteChannelContent -> {
+                        val ch = io.ktor.utils.io.ByteChannel()
+                        val bytes = kotlinx.coroutines.coroutineScope {
+                            val writer = async { b.writeTo(ch); ch.flushAndClose() }
+                            ch.toByteArray().also { writer.await() }
+                        }
+                        HttpRequest.BodyPublishers.ofByteArray(bytes)
+                    }
+                    else -> HttpRequest.BodyPublishers.noBody()
+                }
+                val builder = HttpRequest.newBuilder(URI(request.url.toString())).method(request.method.value, body)
+                request.headers.forEach { name, values -> if (name !in RESTRICTED) values.forEach { builder.header(name, it) } }
+                request.body.contentType?.let { builder.header("Content-Type", it.toString()) }
+                val resp = real.send(builder.build(), HttpResponse.BodyHandlers.ofByteArray())
+                respond(
+                    resp.body(), HttpStatusCode.fromValue(resp.statusCode()),
+                    headersOf(*resp.headers().map().filterKeys { it.lowercase() != "content-encoding" && it.lowercase() != "transfer-encoding" }.map { (k, v) -> k to v }.toTypedArray()),
+                )
+            }
+        }
+        return services
+    }
+
+    @Test
+    fun aRealRommServer(): Unit = runBlocking {
+        val services = services()
+        val store = createFuseStore(services, scope)
+        // Downloads go into the first library.
+        store.sources.add(File(root, "Games").apply { mkdirs() }.absolutePath, io.github.matiyaaa.fuse.model.LibrarySourceKind.ROMS_ROOT)
+        val romm = store.romm
+        romm.setEnabled(true)
+        romm.setAddresses("", url!!, RouteMode.REMOTE)
+        val account = romm.usePassword(user!!, password!!).getOrThrow()
+        println("Signed in as $account")
+        romm.refresh(full = true)
+        val state = withTimeout(180_000) { romm.state.first { it.link == RommLink.ONLINE && it.syncing == null && it.games > 0 } }
+        println("RomM ${state.version}: ${state.games} games, upload ${state.canUpload}, scan ${state.canScan}")
+
+        // Systems: every one with games should be one Fuse knows.
+        val systems = withTimeout(60_000) { romm.systems.first { it.isNotEmpty() } }
+        val withGames = systems.filter { it.games > 0 }
+        val unknown = withGames.filter { it.platform == null }
+        println("Systems with games: ${withGames.size}; Fuse knows ${withGames.size - unknown.size}")
+        for (s in withGames.sortedBy { it.slug }) println("  ${s.slug} (${s.name}): ${s.games} games -> ${s.platform?.value ?: "NOT RECOGNISED"}")
+
+        // Games and their art.
+        val games = withTimeout(60_000) { romm.games(null).first { it.isNotEmpty() } }
+        val noArt = games.filter { it.card.art.boxart == null && it.card.art.square == null }
+        println("Games: ${games.size}; without art ${noArt.size}")
+        // The art each game shows is a real picture the server gives.
+        val auth = "Basic " + java.util.Base64.getEncoder().encodeToString("$user:$password".toByteArray())
+        val arts = games.mapNotNull { g -> (g.card.art.boxart as? io.github.matiyaaa.fuse.ui.shell.store.impl.RommArt)?.let { g.card.title to it } }
+        var good = 0
+        for ((title, art) in arts.take(40)) {
+            // As Fuse fetches it: the server's address and the path RomM gave, signed in.
+            val resp = runCatching { services.http.get((url + (if (art.path.startsWith("/")) art.path else "/" + art.path)).replace(" ", "%20")) { headers.append("Authorization", auth) } }
+            val code = resp.getOrNull()?.status?.value
+            val bytes = resp.getOrNull()?.let { r -> r.bodyAsBytes() }
+            val picture = bytes != null && bytes.size > 12 && (bytes[0] == 0x89.toByte() || (bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte()) || String(bytes.copyOfRange(8, 12)) == "WEBP")
+            if (code == 200 && picture) good++ else println("  art for $title failed: $code (${resp.exceptionOrNull()?.message})")
+        }
+        println("  art fetched: $good of ${minOf(40, arts.size)} sampled")
+        noArt.take(10).forEach { println("  no art: ${it.card.title} (${it.card.platformId.value})") }
+
+        // Bring the smallest game on a handheld down into the library.
+        val pick = games.filter { it.card.platformId.value in setOf("gb", "gbc", "gba", "nes", "snes") && it.sizeBytes in 1..64_000_000 }.minByOrNull { it.sizeBytes }
+        assertTrue(pick != null, "a small game to download")
+        println("Downloading ${pick!!.card.title} (${pick.card.platformId.value}, ${pick.sizeBytes} bytes)")
+        romm.download(pick.romId)?.let { println("  download said: $it") }
+        // What the transfer does, as it goes.
+        val watch = scope.launch {
+            var last = ""
+            store.transfers.rows.collect { rows ->
+                val now = rows.joinToString("; ") { r -> "${r.item.title}: ${r.item.status} ${r.item.phase ?: ""} ${r.item.waiting ?: ""} ${r.item.error ?: ""} ${r.item.doneBytes}/${r.item.totalBytes}" }
+                if (now != last) { println("  transfer: $now"); last = now }
+            }
+        }
+        val inLibrary = withTimeout(300_000) { romm.libraryGame(pick.romId).first { it != null } }!!
+        val detail = withTimeout(60_000) { store.library.game(inLibrary).first { it != null } }!!
+        watch.cancel()
+        println("  in the library: ${detail.game.titles.display} at ${detail.game.location.launchPath}, RomM id ${detail.game.links.rommRomId}")
+        assertTrue(File(detail.game.location.launchPath).let { it.exists() && it.length() > 0 }, "the file is on disk")
+        val withArt = withTimeout(60_000) { store.library.game(inLibrary).first { it?.media?.boxart != null } }!!
+        println("  its cover: ${withArt.media.boxart?.source} ${File(withArt.media.boxart?.model.toString()).let { if (it.isFile) "${it.length()} bytes" else it.path }}")
+        assertTrue(store.transfers.rows.value.none { it.item.status == io.github.matiyaaa.fuse.transfer.TransferStatus.FAILED }, "the download didn't fail")
+        assertTrue(detail.game.links.rommRomId == pick.romId)
+    }
+
+    @Test
+    fun savesTravelThroughRommAndNeverOverwriteARealOne(): Unit = runBlocking {
+        val services = services()
+        val store = createFuseStore(services, scope)
+        val romm = store.romm as io.github.matiyaaa.fuse.ui.shell.store.impl.DefaultRommOps
+        romm.setEnabled(true)
+        romm.setAddresses("", url!!, RouteMode.REMOTE)
+        romm.usePassword(user!!, password!!).getOrThrow()
+        store.updatePrefs { it.copy(romm = it.romm.copy(saveSync = true)) }
+        val state = withTimeout(120_000) { romm.state.first { it.link == RommLink.ONLINE } }
+        println("RomM ${state.version}: save sync ${state.canSyncSaves}")
+        assertTrue(state.canSyncSaves, "this server has RomM's save sync")
+        val games = withTimeout(180_000) { romm.games(null).first { list -> list.any { it.card.platformId.value == "nes" } } }
+        val nes = games.filter { it.card.platformId.value == "nes" }.minBy { it.sizeBytes }
+        val romId = nes.romId
+        println("Game: ${nes.card.title} (RomM id $romId)")
+        val client = assertNotNullOrFail(romm.saveClient())
+        // Two devices, each with the game in its own folder, saving beside it (NES.emu).
+        fun device(name: String): Pair<io.github.matiyaaa.fuse.sync.romm.JvmRommSaves, File> {
+            val games = File(root, "$name/nes").apply { mkdirs() }
+            File(games, "game.nes").writeText("rom")
+            val saves = io.github.matiyaaa.fuse.sync.romm.JvmRommSaves(
+                dir = File(root, "$name/state"), env = { io.github.matiyaaa.fuse.sync.FileSaveEnvironment("LINUX", root.path, variables = { null }) },
+                client = { client }, server = { "live" }, deviceName = "Fuse live test $name", platform = "linux", clientVersion = "test",
+            )
+            return saves to File(games, "game.sav")
+        }
+        fun query(dir: File) = io.github.matiyaaa.fuse.sync.SaveQuery(
+            io.github.matiyaaa.fuse.sync.GameKey.of("nes", null, null, nes.card.title), "nes", File(dir.parentFile, "game.nes").path.replace('\\', '/'), "nes-emu", title = nes.card.title,
+        )
+        val made = mutableListOf<Long>()
+        try {
+            val (linux, linuxSave) = device("linux")
+            val (android, androidSave) = device("android")
+            val lq = query(linuxSave)
+            val aq = query(androidSave)
+            // Linux plays first and saves: it goes to RomM.
+            assertIs<io.github.matiyaaa.fuse.sync.romm.RommSaveGate.Go>(linux.beforeLaunch(lq, romId))
+            linuxSave.writeText("linux: world 1-2")
+            linux.afterExit(lq, romId)
+            println("  after Linux played: ${client.saves(romId).map { it.contentHash to it.originDeviceName }}")
+            // Android has nothing yet: Linux's save comes down before it starts.
+            val first = assertIs<io.github.matiyaaa.fuse.sync.romm.RommSaveGate.Go>(android.beforeLaunch(aq, romId))
+            println("  Android before playing: ${first.note}")
+            assertEquals("linux: world 1-2", androidSave.readText())
+            // Android plays on and saves; Linux gets it next.
+            androidSave.writeText("android: world 3-1")
+            android.afterExit(aq, romId)
+            assertIs<io.github.matiyaaa.fuse.sync.romm.RommSaveGate.Go>(linux.beforeLaunch(lq, romId))
+            assertEquals("android: world 3-1", linuxSave.readText())
+            // Both play without syncing in between: a choice, nothing overwritten.
+            linuxSave.writeText("linux: world 4-1")
+            androidSave.writeText("android: world 5-1")
+            android.afterExit(aq, romId)
+            val conflict = assertIs<io.github.matiyaaa.fuse.sync.romm.RommSaveGate.Conflict>(linux.beforeLaunch(lq, romId))
+            println("  conflict: here ${conflict.conflict.hereBytes} bytes, RomM's from ${conflict.conflict.server.originDeviceName}")
+            assertEquals("Fuse live test android", conflict.conflict.server.originDeviceName)
+            assertEquals("linux: world 4-1", linuxSave.readText(), "nothing replaced before the person chooses")
+            linux.settle(conflict.conflict, keepHere = false).getOrThrow()
+            assertEquals("android: world 5-1", linuxSave.readText())
+            assertTrue(File(root, "linux/state/kept/RomM").walkTopDown().any { it.isFile && it.readText() == "linux: world 4-1" }, "Linux's own kept aside")
+            // A new device that started the game without the save and made its own: never sent over the real one.
+            val (deck, deckSave) = device("deck")
+            val dq = query(deckSave)
+            deckSave.writeText("deck: a new game, world 1-1")
+            deckSave.setLastModified(System.currentTimeMillis() + 3_600_000)
+            deck.afterExit(dq, romId)
+            assertEquals("android: world 5-1", client.saves(romId).first().let { String(client.saveContent(it, null)) }, "RomM's newest is still the real save")
+            assertIs<io.github.matiyaaa.fuse.sync.romm.RommSaveGate.Conflict>(deck.beforeLaunch(dq, romId))
+            println("  a new device's own save was not sent; it is asked about instead")
+            // A blank save on another new device: RomM's comes down over it.
+            val (thor, thorSave) = device("thor")
+            thorSave.writeBytes(ByteArray(8192))
+            assertIs<io.github.matiyaaa.fuse.sync.romm.RommSaveGate.Go>(thor.beforeLaunch(query(thorSave), romId))
+            assertEquals("android: world 5-1", thorSave.readText())
+        } finally {
+            // Leave the server as it was: this game's saves and the test's devices go.
+            val auth = "Basic " + java.util.Base64.getEncoder().encodeToString("$user:$password".toByteArray())
+            val ids = runCatching { client.saves(romId).map { it.id } }.getOrDefault(emptyList())
+            if (ids.isNotEmpty()) {
+                services.http.post("$url/api/saves/delete") {
+                    headers.append("Authorization", auth)
+                    contentType(io.ktor.http.ContentType.Application.Json)
+                    setBody("""{"saves":${ids.joinToString(",", "[", "]")}}""")
+                }
+            }
+            val devices = services.http.get("$url/api/devices") { headers.append("Authorization", auth) }.bodyAsText()
+            Regex("\"id\":\"([^\"]+)\",[^}]*?\"name\":\"Fuse live test").findAll(devices).forEach { m ->
+                services.http.delete("$url/api/devices/${m.groupValues[1]}") { headers.append("Authorization", auth) }
+            }
+            println("  cleaned up: ${ids.size} saves; devices left ${services.http.get("$url/api/devices") { headers.append("Authorization", auth) }.bodyAsText().count { it == '{' }}")
+        }
+    }
+
+    private fun <T : Any> assertNotNullOrFail(v: T?): T = v ?: error("RomM's save client isn't available")
+
+    private companion object {
+        val RESTRICTED = setOf("Content-Length", "Host", "Connection", "Expect", "Upgrade", "Accept-Charset")
+    }
+}

@@ -127,6 +127,15 @@ sealed interface LaunchGate {
      * look): the game must not start, or it would play with someone else's save. [why] says what to do.
      */
     data class Blocked(val title: String, val why: String) : LaunchGate
+
+    /**
+     * A newer save than this device's is known to be on its way and isn't here yet: the host is
+     * slow or answered with a problem ([offline] false), or this device is offline and knows the
+     * host has a newer one ([offline] true). The game doesn't start quietly with the older save:
+     * the person waits, plays with this device's save anyway, or doesn't play. [from] and [at] say
+     * whose newer save it is and when it was made, when known.
+     */
+    data class Waiting(val title: String, val offline: Boolean, val from: String? = null, val at: Long? = null) : LaunchGate
 }
 
 /** Something Fuse Sync did that the person would want to know, shown as a quiet toast. */
@@ -482,6 +491,22 @@ interface SyncService {
      */
     val unclaimed: StateFlow<List<UnclaimedSave>> get() = NO_UNCLAIMED
 
+    /**
+     * Find Where It Saves: the next play of [query] is a test run ([SaveProbe]). Save sync is paused
+     * for it until the game closes; the person makes one save in it and quits, and what was learned
+     * comes as a [SaveProbeResult] on [probeResults]. Returns the folders watched.
+     */
+    suspend fun startSaveProbe(query: SaveQuery): Result<List<String>> = Result.failure(IllegalStateException("Fuse Sync isn't set up."))
+
+    /** Calls off a test run that hasn't been played yet. */
+    fun cancelSaveProbe(game: GameKey) {}
+
+    /** Where this device's emulators keep saves, with the folders the person chose and the ones Fuse learned (for RomM's save sync too). */
+    val saveEnvironment: SaveEnvironment? get() = null
+
+    /** What each test run showed, once its game closed. */
+    val probeResults: kotlinx.coroutines.flow.SharedFlow<SaveProbeResult> get() = NO_PROBE_RESULTS
+
     /** [profile] says [save] is theirs: it becomes their save, and goes into place when they next play it. */
     suspend fun claim(save: UnclaimedSave, profile: String): Result<Unit> = Result.failure(IllegalStateException("Fuse Sync isn't set up."))
 
@@ -605,3 +630,28 @@ private val NoRounds: StateFlow<Int> = kotlinx.coroutines.flow.MutableStateFlow(
 data class UnclaimedSave(val game: GameKey, val title: String, val kind: SaveKind, val files: Int, val bytes: Long)
 
 private val NO_UNCLAIMED: StateFlow<List<UnclaimedSave>> = kotlinx.coroutines.flow.MutableStateFlow(emptyList())
+
+private val NO_PROBE_RESULTS: kotlinx.coroutines.flow.SharedFlow<SaveProbeResult> = kotlinx.coroutines.flow.MutableSharedFlow()
+
+/** What a Find Where It Saves test run showed ([SyncService.startSaveProbe]). */
+sealed interface SaveProbeResult {
+    val title: String
+
+    /** [keptAt]: where the test save was copied aside on this device, when there was one. */
+    val keptAt: String?
+
+    /**
+     * The save is in [where]. [learned] when Fuse didn't look there before and now does; [settled]
+     * says what became of the person's own save (their newest put in place, or the test save kept
+     * as their first), when anything did.
+     */
+    data class Found(override val title: String, val where: String, val learned: Boolean, val settled: String?, override val keptAt: String?) : SaveProbeResult
+
+    /** Files changed ([seen]) but in no way Fuse can keep in step yet. Nothing was changed. */
+    data class CantUse(override val title: String, val seen: List<String>, override val keptAt: String?) : SaveProbeResult
+
+    /** Nothing appeared or changed in the folders watched ([watched]): no save was made, or it went elsewhere. */
+    data class NothingSeen(override val title: String, val watched: List<String>) : SaveProbeResult {
+        override val keptAt: String? get() = null
+    }
+}

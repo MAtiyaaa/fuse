@@ -57,6 +57,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.Unavailable
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -92,6 +93,8 @@ private data class ActiveSession(
     val save: io.github.matiyaaa.fuse.sync.SaveQuery? = null,
     /** The same, for Syncthing (no profile needed). */
     val plainSave: io.github.matiyaaa.fuse.sync.SaveQuery? = null,
+    /** RomM's game and the save it keeps in step, when RomM's save sync takes part. */
+    val romm: Pair<Long, io.github.matiyaaa.fuse.sync.SaveQuery>? = null,
 )
 
 /** Fuse Sync, for the saves around a game: the service and how it knows games. */
@@ -122,6 +125,9 @@ internal class DefaultLibraryOps(
 
     /** Syncthing, set by the store where Fuse can use it (it acts only while turned on). */
     @kotlin.concurrent.Volatile var syncthing: io.github.matiyaaa.fuse.sync.syncthing.SyncthingService? = null
+
+    /** RomM's save sync, when RomM is set up here. */
+    @kotlin.concurrent.Volatile var rommSaves: io.github.matiyaaa.fuse.sync.romm.RommSaveService? = null
 
     // Platforms ------------------------------------------------------------------------------------
 
@@ -579,6 +585,7 @@ internal class DefaultLibraryOps(
                     when (val gate = link.service.beforeLaunch(save, waitForOthers = !playAnyway)) {
                         is io.github.matiyaaa.fuse.sync.LaunchGate.Conflict -> return LaunchOutcome.SaveConflict(gate.conflict)
                         is io.github.matiyaaa.fuse.sync.LaunchGate.Busy -> return LaunchOutcome.SyncBusy(gate)
+                        is io.github.matiyaaa.fuse.sync.LaunchGate.Waiting -> return LaunchOutcome.SyncWaiting(gate)
                         is io.github.matiyaaa.fuse.sync.LaunchGate.Blocked -> return LaunchOutcome.Problem(
                             io.github.matiyaaa.fuse.ui.shell.store.Problem(
                                 title = "${gate.title} wasn't started",
@@ -601,11 +608,22 @@ internal class DefaultLibraryOps(
                         is io.github.matiyaaa.fuse.sync.syncthing.SyncthingGate.Go -> note = note ?: gate.note
                     }
                 }
+                // RomM's save sync, for a game from RomM: RomM's newer save put in place, or a choice.
+                val rommSave = game.links.rommRomId?.let { romId -> rommSaves?.let { rs -> romId to plainSaveQuery(game, installedEmulator, core ?: RetroArchCores.defaultCore(ctx.host, game.platformId)) } }
+                // How this game's saves sync here (the same choice as for Fuse One, by the same id).
+                val rommMode = io.github.matiyaaa.fuse.ui.shell.sync.SaveSyncMode.of(ctx.data.settings.current().sync, (save ?: rommSave?.second)?.game?.id ?: "")
+                if (rommSave != null && !skipSaveCheck && rommMode.receives) {
+                    onStage(io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.CHECKING_SAVE)
+                    when (val gate = rommSaves!!.beforeLaunch(rommSave.second, rommSave.first)) {
+                        is io.github.matiyaaa.fuse.sync.romm.RommSaveGate.Conflict -> return LaunchOutcome.RommSaveConflict(gate.conflict)
+                        is io.github.matiyaaa.fuse.sync.romm.RommSaveGate.Go -> note = note ?: gate.note
+                    }
+                }
                 onStage(io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.STARTING)
                 // From here the emulator is starting: nothing calls it off any more.
                 when (val r = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { ctx.services.launcher.run(resolved, displayId) }) {
                     is RunResult.Started -> {
-                        startSession(id, installedEmulator.id, r.awaitExit, save?.takeIf { link != null }, plainSave)
+                        startSession(id, installedEmulator.id, r.awaitExit, save?.takeIf { link != null }, plainSave, rommSave?.takeIf { rommMode.sends })
                         if (note != null) LaunchOutcome.Synced(note) else LaunchOutcome.Started
                     }
                     // Only the app opened; which game gets played there is unknown, so no session is recorded.
@@ -704,10 +722,13 @@ internal class DefaultLibraryOps(
      * Opens an honest play session: it ends when the emulator process exits (Linux) or when Fuse
      * comes back to the front (Android). Nothing is estimated.
      */
-    private suspend fun startSession(game: GameId, emulator: EmulatorId, awaitExit: (suspend () -> Unit)?, save: io.github.matiyaaa.fuse.sync.SaveQuery? = null, plainSave: io.github.matiyaaa.fuse.sync.SaveQuery? = null) {
+    private suspend fun startSession(
+        game: GameId, emulator: EmulatorId, awaitExit: (suspend () -> Unit)?, save: io.github.matiyaaa.fuse.sync.SaveQuery? = null,
+        plainSave: io.github.matiyaaa.fuse.sync.SaveQuery? = null, romm: Pair<Long, io.github.matiyaaa.fuse.sync.SaveQuery>? = null,
+    ) {
         val startedAt = ctx.now()
         val sessionId = data.playSessions.start(game, emulator, startedAt)
-        active = ActiveSession(sessionId, game, endsOnResume = awaitExit == null, save = save, plainSave = plainSave)
+        active = ActiveSession(sessionId, game, endsOnResume = awaitExit == null, save = save, plainSave = plainSave, romm = romm)
         // Fuse Sync keeps the save moving while the game runs, and tells the other devices it is being played.
         val link = sync
         if (save != null && link != null) ctx.scope.launch { runCatching { link.service.playing(save, startedAt) } }
@@ -730,6 +751,8 @@ internal class DefaultLibraryOps(
         val save = active?.takeIf { it.id == sessionId }?.save
         // Syncthing sends the save the game just wrote.
         active?.takeIf { it.id == sessionId }?.plainSave?.let { q -> syncthing?.let { st -> ctx.scope.launch { runCatching { st.afterExit(q) } } } }
+        // RomM's save sync sends it too, when it changed and RomM's didn't.
+        active?.takeIf { it.id == sessionId }?.romm?.let { (romId, q) -> rommSaves?.let { rs -> ctx.scope.launch { delay(ROMM_SETTLE_MS); runCatching { rs.afterExit(q, romId) } } } }
         if (active?.id == sessionId) active = null
         val ended = data.playSessions.end(sessionId, ctx.now())
         // Fuse Sync counts the session and keeps the save the game just wrote.
@@ -1318,3 +1341,6 @@ private const val COMPAT_CACHE = "rpcs3.compat"
 
 /** Archives a patch never applies to: it is for the game inside. */
 private val ARCHIVES = setOf("zip", "7z", "rar", "gz", "chd", "rvz", "cso", "zso")
+
+/** Emulators finish writing a moment after they close: RomM's save sync waits that long. */
+private const val ROMM_SETTLE_MS = 1_500L

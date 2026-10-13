@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.2.4 is the <b>Native Update</b>: on Linux, Settings says whether Fuse draws on the graphics card and why not, the Fuse theme's room without rings or squares, and lighter startup and setup animations. Physical acceptance on SteamOS, Bazzite, the Steam Deck, the AYN Thor and macOS is still to come.</sub><br>
+<sub>0.4.2.5 is the <b>Native Update</b>: RomM save sync, a game that waits for your newer save, Find Where It Saves, one Save Sync choice for each game, and a game's options in four short tabs. Physical acceptance on SteamOS, Bazzite, the Steam Deck, the AYN Thor and macOS is still to come.</sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -385,9 +385,11 @@ Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.4.2.4 "The Native Update"**: on Linux, Settings says whether Fuse draws on the graphics
-> card and why not, the Fuse theme's room has no rings or squares, and the startup animation and
-> setup's opening no longer draw the whole interface under them. 0.4.2.3 brought 3DS saves between
+> **Fuse 0.4.2.5 "The Native Update"**: games from RomM keep their saves in step with RomM's, a game
+> waits for your newer save instead of starting with an older one, Find Where It Saves shows Fuse
+> where any game's emulator keeps its saves, each game has one Save Sync choice (everywhere, receive
+> only, off here, off everywhere), and a game's options are four short tabs. 0.4.2.4 made Settings say whether Fuse draws on the graphics card on Linux, took the rings
+> and squares out of the Fuse theme's room and lightened the startup animations. 0.4.2.3 brought 3DS saves between
 > Android and Linux, blank saves that never replace real ones, a controller that stays Fuse's in
 > Game Mode and Jellyfin films at their proper loudness. 0.4.2.2 kept saves each person's on a shared device so a swap
 > can't half happen, every emulator's saves are found where it really keeps them, Dolphin's settings
@@ -400,7 +402,7 @@ Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 > apart on one device with no host at all), the Fuse One Host runs on its own in Docker, and Fuse
 > Intelligence shows how far each emulator has really been checked. Physical acceptance on SteamOS,
 > the Steam Deck's Decky, the AYN Thor and macOS is still to come. See
-> [the release notes](docs/releases/0.4.2.4.md); every earlier release is in [CHANGELOG.md](CHANGELOG.md).
+> [the release notes](docs/releases/0.4.2.5.md); every earlier release is in [CHANGELOG.md](CHANGELOG.md).
 
 <details>
 <summary><b>Every release so far</b></summary>
@@ -408,6 +410,7 @@ Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 
 | Version | Name | What it brought |
 |---|---|---|
+| [0.4.2.5](docs/releases/0.4.2.5.md) | The Native Update | RomM save sync (never over a real save), a game waits for your newer save (keep waiting, play with this device's, or not now), Find Where It Saves test runs, Save Sync for each game, a game's options in tabs, RomM covers on computers, no trackpad paging on Home |
 | [0.4.2.4](docs/releases/0.4.2.4.md) | The Native Update | Linux: a Graphics row that says graphics card or processor and why, Steam's runtime libraries set aside, the Fuse theme's room blurred in full precision without rings or squares, dithered background gradients, startup and setup animations that no longer draw the interface under them |
 | [0.4.2.3](docs/releases/0.4.2.3.md) | The Native Update | 3DS saves placed before the first play on a device that can't read the game's id, blank saves never sent as the newest, the controller kept in Game Mode after Steam's keyboard, Add and Done by controller, surround folded down at its proper level |
 | [0.4.2.2](docs/releases/0.4.2.2.md) | The Native Update | Each person's saves kept apart on a shared device and swapped as one transaction, saves no one owned claimed from Sync, Switch account and device saves, Eden's folder through Android's picker, every emulator's saves where it keeps them, Dolphin settings, firmware verified or not, the emulator contract table, smoother Linux, a safer Decky plugin |

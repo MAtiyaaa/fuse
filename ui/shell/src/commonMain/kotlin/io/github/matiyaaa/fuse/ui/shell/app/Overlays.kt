@@ -104,12 +104,25 @@ private fun ContextMenuOverlay(app: AppState) {
     var shown by remember { mutableStateOf(spec) }
     if (spec != null) shown = spec
     val sel = remember(spec) { LinearSelection() }
+    // A long menu in tabs: the shoulder buttons (or a tap) move between them; it opens on the first.
+    var tab by remember(spec?.title, spec?.subtitle) { mutableStateOf(0) }
+    val tabs = remember(spec) { spec?.shownTabs().orEmpty() }
+    val current = tabs.getOrNull(tab.coerceIn(0, (tabs.size - 1).coerceAtLeast(0)))
+    val rows = current?.second ?: spec?.actions.orEmpty()
+    fun switchTo(i: Int) {
+        if (i == tab || i !in tabs.indices) return
+        tab = i
+        sel.index = 0
+        app.platform.sounds.play(SoundCue.MOVE)
+    }
     LaunchedEffect(spec != null) { if (spec != null) app.platform.sounds.play(SoundCue.OPEN) }
     if (spec != null) {
         InputLayer(priority = LayerPriority.DIALOG, modal = true) { e ->
             when (e.action) {
                 NavAction.BACK, NavAction.CONTEXT -> { app.contextMenu = null; app.platform.sounds.play(SoundCue.CLOSE); NavResult.CONSUMED }
-                else -> handleMenuAction(e, spec.actions, sel)
+                NavAction.PREVIOUS_SECTION -> if (tabs.isEmpty()) NavResult.BLOCKED else { switchTo((tab - 1).coerceAtLeast(0)); NavResult.MOVED }
+                NavAction.NEXT_SECTION -> if (tabs.isEmpty()) NavResult.BLOCKED else { switchTo((tab + 1).coerceAtMost(tabs.lastIndex)); NavResult.MOVED }
+                else -> handleMenuAction(e, rows, sel)
             }
         }
     }
@@ -135,7 +148,18 @@ private fun ContextMenuOverlay(app: AppState) {
                         else -> null
                     }
                     MenuHeader(s.title, subtitle = s.subtitle, icon = s.icon, leading = leading)
-                    MenuList(s.actions, sel)
+                    val shownTabs = if (s === spec) tabs else s.shownTabs()
+                    if (shownTabs.size > 1) {
+                        io.github.matiyaaa.fuse.ui.shell.components.ViewTabs(
+                            shownTabs.map { (t, _) -> io.github.matiyaaa.fuse.ui.shell.components.ViewTab(t.label, t.icon) },
+                            active = tab.coerceIn(0, shownTabs.lastIndex),
+                            focused = null,
+                            onSelect = ::switchTo,
+                            gutter = Space.m,
+                        )
+                        Spacer(Modifier.height(Space.s))
+                    }
+                    MenuList(shownTabs.getOrNull(tab.coerceIn(0, (shownTabs.size - 1).coerceAtLeast(0)))?.second ?: s.actions, sel)
                 }
             }
         }

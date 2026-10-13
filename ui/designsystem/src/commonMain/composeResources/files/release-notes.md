@@ -1,40 +1,55 @@
-# Fuse 0.4.2.4 - The Native Update
+# Fuse 0.4.2.5 - The Native Update
 
-A Linux release: Fuse says plainly whether it draws on the graphics card, the Fuse theme's room has
-no bands or squares, and the startup animation and setup's opening no longer draw the whole
-interface underneath them. None of it has been tried on a real Bazzite PC, Steam Deck or TV in Game
-Mode yet; the drawing fixes are measured on rendered pictures and the timings in Fuse's own
-software-drawn test harness.
+Your newest save first, every time, now with RomM too: a game no longer starts quietly with an
+older save while the newer one is still on its way, a test run shows Fuse where any game's emulator
+really keeps its saves, RomM keeps saves in step, each game has one clear Save Sync choice, and a
+game's options are four short tabs. Fuse Sync is tested end to end with a real Fuse One host and test
+saves on a computer; RomM was tested against a real RomM 5.3 server (sign in, every system
+recognised, covers, a game brought down, and saves moving between two devices). None of it has been
+tried on a real Bazzite PC, Steam Deck, AYN Thor or phone yet.
 
 ## New
 
-- **Settings says how Fuse draws.** A Graphics row in System health and in Performance (search
-  finds it as "GPU" too) says graphics card or processor. Selecting it shows the driver, the display
-  (Game Mode, X11 or Wayland), the window against the screen and whether gamescope enlarges it, and
-  the refresh rate. On the processor it also says why: what Skia said when it gave up on the graphics
-  driver, anything in Fuse's launch environment that forces software drawing, and what the
-  computer's own OpenGL uses, so a broken driver is told apart from how Fuse was started. The
-  diagnostics report carries the same.
+- **RomM save sync.** On RomM 5, games from RomM (or matched to it) keep their save in step with
+  RomM's: RomM's newer save is in place before a game starts, and this device's goes up after it
+  closes. Fuse keeps its own record of what it last agreed with RomM, so a device that started a game
+  without the save can never put its new save over the real one (RomM alone would have); when both
+  changed, you choose, and the one you don't pick is kept. A blank save is never sent, each upload is
+  a new save on RomM with the earlier ones kept, and the device a save came from is named. Saves that
+  are one file (cartridge saves, memory cards) take part, since RomM keeps one file per save. Turn it
+  on in Settings, Addons, RomM, or when connecting RomM (in setup too).
+- **Save Sync for each game,** in its options and its Save History: Everywhere, Receive Only Here
+  (this device gets the newest save but never sends its own), Off on This Device, or Off Everywhere
+  (for all your devices, through your profile). Fuse One and RomM both follow it.
+- **Find Where It Saves.** In a game's Save History, a test run starts the game with save sync
+  paused for it. You make one save and quit, and Fuse sees where it appeared. It then keeps the
+  save in step there from now on: as that emulator's save folder (the same as choosing it in
+  Settings, Save folders), or as the game's own folders where Fuse can't read a game's id. Your
+  own save is put where the game reads it right away (or, with no save of yours anywhere yet, the
+  test save becomes your first). The test save is kept aside on the device. When the save landed
+  somewhere Fuse can't use yet, it says where and changes nothing.
 
 ## Changed
 
-- **Steam's runtime libraries are set aside** when the AppImage starts. Steam puts them ahead of the
-  system's for a non-Steam game in Game Mode, and an older library among them can stop the system's
-  graphics driver from loading.
-- **The startup animation and setup's opening** no longer draw the interface under them while they
-  cover the whole screen; it is still built underneath, ready when they open out. In Fuse's
-  software-drawn harness that took the startup animation from 596 ms to 113 ms a frame at the median
-  and setup's opening from 419 ms to 114 ms (that harness is far slower than a real computer; the
-  ratio is what counts).
+- **A game waits for your newer save.** When Fuse One is slow to send your newest save, or this
+  device is offline but knows Fuse One has a newer one, the game doesn't start with the older save
+  here. You choose: keep waiting (the save keeps coming meanwhile), play with this device's save
+  (the newer one stays safe, and you pick between the two afterwards), or not now. Offline with no
+  newer save known of, games start straight away as before.
+- **A newer save that didn't finish coming down is remembered,** across restarts, until it is in place.
+- **A game's options are four short tabs** (Game, Saves, Setup, Details) instead of one long list,
+  switched with the shoulder buttons or a tap, as in the quick menu.
+- **A two-finger swipe on a Mac trackpad no longer turns Home's pages,** nor does a sideways mouse
+  wheel; touch, dragging, the controller and the page dots still do.
+- **Pairing with RomM also asks for its save permissions,** so save sync can be turned on later without
+  pairing again.
 
 ## Fixed
 
-- **No more rings and squares in the Fuse theme's room.** The blurred cover behind the interface was
-  worked out in 8 bits at a quarter of the screen's size and stretched every frame, so its steps
-  showed as rings and the stretch as squares. On a computer it is now blurred and stretched in full
-  precision once per cover and rounded with a step of noise either way: on a dark test room the share
-  of pixels equal to their neighbour went from 0.96 (flat bands) to 0.55.
-- **Background gradients are dithered as they are drawn** on Linux, Windows and macOS, on the
-  graphics card and on the processor alike: the longest flat band of a near-black ramp went from 61
-  pixels to 10. The white noise that only lightened the room is gone where that happens, and the
-  window-wide dither is left off where gamescope enlarges Fuse, since there its pixels show as squares.
+- **Playing anyway can't be overwritten mid-game.** A save still coming in the background is
+  stopped before the game starts, so nothing lands while it runs.
+- **A save Fuse couldn't find says what to do:** the message now points to Find Where It Saves.
+- **RomM covers load on computers.** RomM gives its pictures' addresses with a space in them, which
+  the server refused (400) as Fuse sent them; they are now encoded.
+- **A RomM download no longer shows as failed when only a picture couldn't be had.** The game was in
+  place, but the whole download said the connection kept dropping.

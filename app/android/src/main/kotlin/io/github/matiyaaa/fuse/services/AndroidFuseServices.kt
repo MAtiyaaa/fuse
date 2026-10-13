@@ -100,6 +100,17 @@ class AndroidFuseServices(
             scope = scope,
         )
 
+    override fun rommSaves(
+        env: () -> io.github.matiyaaa.fuse.sync.SaveEnvironment?,
+        client: suspend () -> io.github.matiyaaa.fuse.romm.RommClient?,
+        server: () -> String,
+    ): io.github.matiyaaa.fuse.sync.romm.RommSaveService = io.github.matiyaaa.fuse.sync.romm.JvmRommSaves(
+        dir = java.io.File(appContext.filesDir, "romm-saves"),
+        env = { env() ?: io.github.matiyaaa.fuse.sync.FileSaveEnvironment("ANDROID") },
+        client = client, server = server,
+        deviceName = deviceName, platform = "android", clientVersion = appVersion,
+    )
+
     override fun syncService(data: io.github.matiyaaa.fuse.sync.ProfileDataPort, scope: CoroutineScope): io.github.matiyaaa.fuse.sync.SyncService {
         // The host is reached with Android's own TLS, as Jellyfin is, so an https tunnel answers the same way.
         io.github.matiyaaa.fuse.sync.SyncHttp.factory = { block -> io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp, block) }
