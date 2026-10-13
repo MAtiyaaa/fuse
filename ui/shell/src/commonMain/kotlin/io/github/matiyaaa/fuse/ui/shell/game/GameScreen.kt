@@ -1497,6 +1497,7 @@ fun GameDetail.toCard(): GameCard = GameCard(
     missing = missing,
     unavailable = unavailable,
     customTitle = game.titles.custom != null,
+    pinned = pinned,
 )
 
 /** How many can play: "1 player", "1-4 players", or a source's own words ("Single player"). */

@@ -99,6 +99,8 @@ data class GameCard(
     val unavailable: Unavailable? = null,
     /** Shown by a name the person gave it (Rename Display Title), which Restore Original Title undoes. */
     val customTitle: Boolean = false,
+    /** Pinned to Home (in its Pinned games). */
+    val pinned: Boolean = false,
 ) {
     /** Drawn dimmed: its file is gone, or its drive can't be reached right now. */
     val dimmed: Boolean get() = missing || unavailable != null
@@ -148,6 +150,8 @@ data class GameDetail(
     val unavailable: Unavailable? = null,
     /** The last scan didn't find the game's file. */
     val missing: Boolean = false,
+    /** Pinned to Home. */
+    val pinned: Boolean = false,
 )
 
 @Immutable

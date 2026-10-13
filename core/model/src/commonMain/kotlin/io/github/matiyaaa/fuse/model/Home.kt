@@ -190,6 +190,32 @@ data class HomeLayoutConfig(
     /** [page]'s widgets as stored, for Undo: null for a first page never changed. */
     fun storedBoard(page: Int): List<HomeWidget>? = if (page <= 0) board else pages.getOrNull(page - 1)?.widgets
 
+    /**
+     * This config with [kind] on show in the Home style in use: a hidden one shown again, a missing
+     * one added at the end (of Network's rows, or of the board's first page). Pinning a game uses it,
+     * so the game it pins always appears somewhere.
+     */
+    fun showing(kind: WidgetKind): HomeLayoutConfig = when (mode) {
+        HomeMode.FLOW -> {
+            val there = widgets.firstOrNull { it.kind == kind }
+            if (there != null) copy(widgets = widgets.map { if (it.kind == kind) it.copy(visible = true) else it })
+            else copy(widgets = widgets + HomeWidget(kind.name.lowercase(), kind, widgets.size))
+        }
+        HomeMode.CHANNELS -> {
+            val all = (0 until pageCount).flatMap { boardWidgets(it) }
+            val first = boardWidgets(0)
+            when {
+                all.any { it.kind == kind && it.visible } -> this
+                all.any { it.kind == kind } -> {
+                    var c = this
+                    for (page in 0 until pageCount) c = c.withBoard(page, c.boardWidgets(page).map { if (it.kind == kind) it.copy(visible = true) else it })
+                    c
+                }
+                else -> withBoard(0, first + HomeWidget(kind.name.lowercase(), kind, first.size))
+            }
+        }
+    }
+
     /** This config with [page]'s widgets replaced by [widgets] (null puts the first page back as it came). */
     fun withBoard(page: Int, widgets: List<HomeWidget>?): HomeLayoutConfig = when {
         page <= 0 -> copy(board = widgets)

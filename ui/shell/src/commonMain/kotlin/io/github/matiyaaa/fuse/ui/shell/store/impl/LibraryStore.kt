@@ -415,6 +415,7 @@ internal class DefaultLibraryOps(
                 secondsThisWeek = week,
                 unavailable = away?.let { Unavailable(it.driveLabel, it.state) },
                 missing = record.missing,
+                pinned = record.pinned,
             )
         }
     }.flowOn(Dispatchers.Default)

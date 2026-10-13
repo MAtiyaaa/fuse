@@ -375,7 +375,18 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         if (store.prefs.value.collectionsEnabled) {
             add(MenuAction("collection", "Add to Collection", FuseIcons.ListPlus, trailing = Trailing.Chevron, onSelect = { collectionPicker(card.id, card.title) }))
         }
-        add(MenuAction("pin", "Pin to Home", FuseIcons.Pin, onSelect = { run { lib.setPinned(card.id, true); toasts.show("Pinned to Home") } }))
+        if (card.pinned) {
+            add(MenuAction("pin", "Unpin from Home", FuseIcons.PinOff, onSelect = { run { lib.setPinned(card.id, false); toasts.show("Unpinned from Home") } }))
+        } else {
+            add(MenuAction("pin", "Pin to Home", FuseIcons.Pin, detail = "In Home's Pinned games", onSelect = {
+                run {
+                    lib.setPinned(card.id, true)
+                    // Home shows its pinned games, so the one just pinned is there to find.
+                    store.updatePrefs { p -> p.copy(home = p.home.showing(io.github.matiyaaa.fuse.model.WidgetKind.PINNED_GAMES)) }
+                    toasts.show("Pinned to Home, in Pinned games")
+                }
+            }))
+        }
         // Steam's library (computers): the game starts through Fuse, with its art.
         if (platform.steam != null && !card.isApp) {
             if (card.id.value in steamGameIds) {
