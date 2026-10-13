@@ -179,6 +179,16 @@ class DesktopSession(
     @Volatile private var decky: io.github.matiyaaa.fuse.link.DeckyBridge? = null
 
     private fun followDecky(store: FuseStore) {
+        // The plugin is installed (however it got there) and nobody chose for the bridge: it is on.
+        scope.launch(Dispatchers.IO) {
+            val steam = store.prefs.value.steam
+            if (steam.decky || steam.deckyChosen) return@launch
+            val installed = runCatching { platform.decky?.state()?.plugin }.getOrNull() == true
+            if (installed) {
+                Log.info("the Fuse Decky plugin is installed: the Decky bridge is switched on for it")
+                store.updatePrefs { it.copy(steam = it.steam.copy(decky = true)) }
+            }
+        }
         scope.launch(Dispatchers.IO) {
             store.prefs.map { it.steam.decky }.distinctUntilChanged().collect { on ->
                 decky?.close()

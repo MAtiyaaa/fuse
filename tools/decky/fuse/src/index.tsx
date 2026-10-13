@@ -16,6 +16,9 @@ import {
   failure,
   hello,
   Hello,
+  library,
+  Library,
+  openFuseGame,
   menuOff,
   importGames,
   installAllEmulators,
@@ -101,10 +104,77 @@ const ThisGame: VFC = () => {
   );
 };
 
+/** "3 h 20 min", "45 min", or "" for nothing. */
+function duration(seconds: number): string {
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 1) return "";
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h > 0 ? (m > 0 ? `${h} h ${m} min` : `${h} h`) : `${m} min`;
+}
+
+/** "Today", "Yesterday", "3 days ago" for a time in milliseconds. */
+function ago(ms: number | undefined): string {
+  if (!ms) return "";
+  const days = Math.floor((Date.now() - ms) / 86_400_000);
+  if (days <= 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 30) return `${days} days ago`;
+  return new Date(ms).toLocaleDateString();
+}
+
+/** Fuse's own library: what is being played, how much there is, and the last games played, each one press from opening in Fuse. */
+const FuseLibrary: VFC<{ canOpen: boolean }> = ({ canOpen }) => {
+  const [lib] = usePoll<Library>(() => library(), 10_000);
+  if (!lib || failure(lib)) return null;
+  const recent = lib.recent ?? [];
+  const week = duration(lib.weekSeconds ?? 0);
+  return (
+    <PanelSection title="Library">
+      <PanelSectionRow>
+        <Field
+          label={lib.playing ? `Playing ${lib.playing}` : `${lib.games ?? 0} games`}
+          description={[lib.playing ? `${lib.games ?? 0} games` : null, `${lib.systems ?? 0} systems`, week ? `${week} this week` : null].filter(Boolean).join("  ·  ")}
+        />
+      </PanelSectionRow>
+      {recent.length === 0 && (
+        <PanelSectionRow>
+          <Field label="Nothing played yet" description="Games you play in Fuse show here." />
+        </PanelSectionRow>
+      )}
+      {recent.map((g) => (
+        <PanelSectionRow key={g.id}>
+          {canOpen ? (
+            <ButtonItem
+              layout="below"
+              label={g.name}
+              description={[g.system, ago(g.lastPlayed), duration(g.seconds)].filter(Boolean).join("  ·  ")}
+              onClick={async () => say(await openFuseGame(g.id), "Opened in Fuse")}
+            >
+              Open in Fuse
+            </ButtonItem>
+          ) : (
+            <Field label={g.name} description={[g.system, ago(g.lastPlayed)].filter(Boolean).join("  ·  ")} />
+          )}
+        </PanelSectionRow>
+      ))}
+    </PanelSection>
+  );
+};
+
 /** Fuse One: who is playing, how saves stand, the household's devices, and what is moving. */
 const FuseOne: VFC<{ s: Status | null }> = ({ s }) => {
   const one = s?.fuseOne;
-  if (!s || failure(s) || !one?.available) return null;
+  if (!s || failure(s)) return null;
+  if (!one?.available) {
+    return (
+      <PanelSection title="Fuse One">
+        <PanelSectionRow>
+          <Field label="Not set up" description="Saves, profiles and downloads across your devices. Set it up in Fuse: Settings, Fuse One." />
+        </PanelSectionRow>
+      </PanelSection>
+    );
+  }
   const t = s.transfers;
   const moving = t ? t.downloading + t.uploading : 0;
   return (
@@ -202,6 +272,7 @@ const Content: VFC = () => {
     <>
       <Connection hi={hi} />
       {connected && may(hi, "library") && <ThisGame />}
+      {connected && may(hi, "library") && <FuseLibrary canOpen={may(hi, "play")} />}
       {connected && may(hi, "status") && <FuseOne s={s} />}
       {connected && may(hi, "change_library") && <SteamGames />}
       {connected && (may(hi, "emulators") ? <Emulators /> : <NotAllowed title="Emulators" what="install and remove emulators" />)}

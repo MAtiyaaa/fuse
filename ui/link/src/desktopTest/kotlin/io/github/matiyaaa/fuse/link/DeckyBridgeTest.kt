@@ -99,6 +99,15 @@ class DeckyBridgeTest {
             assertEquals(400, http(port, "POST", "/v1/steam/nope/add", token).first)
             val (_, steam) = http(port, "GET", "/v1/steam/400", token)
             assertEquals("false", Json.parseToJsonElement(steam).jsonObject.getValue("inFuse").jsonPrimitive.content)
+
+            // The library at a glance for the panel; a game Fuse doesn't know isn't opened.
+            val (libOk, library) = http(port, "GET", "/v1/library", token)
+            assertEquals(200, libOk)
+            val lib = Json.parseToJsonElement(library).jsonObject
+            assertTrue("games" in lib && "recent" in lib)
+            val (_, open) = http(port, "POST", "/v1/game/987654/open", token)
+            assertEquals("false", Json.parseToJsonElement(open).jsonObject.getValue("opened").jsonPrimitive.content)
+            assertEquals(400, http(port, "POST", "/v1/game/nope/open", token).first)
         } finally {
             bridge.close()
         }

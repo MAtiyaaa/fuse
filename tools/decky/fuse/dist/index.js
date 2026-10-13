@@ -36,6 +36,8 @@ const addGame = callable("add_game");
 const removeGame = callable("remove_game");
 const openGame = callable("open_game");
 const importGames = callable("import_games");
+const library = callable("library");
+const openFuseGame = callable("open_fuse_game");
 const emulators = callable("emulators");
 const updateAllEmulators = callable("emulators_update_all");
 const installAllEmulators = callable("emulators_install_all");
@@ -270,11 +272,52 @@ const ThisGame = () => {
     return (window.SP_REACT.createElement(DFL.PanelSection, { title: running?.display_name ?? "This game" },
         window.SP_REACT.createElement(DFL.PanelSectionRow, null, known.inFuse ? (window.SP_REACT.createElement(DFL.ButtonItem, { layout: "below", onClick: async () => say(await openGame(appid), "Opened in Fuse") }, "Open in Fuse")) : (window.SP_REACT.createElement(DFL.ButtonItem, { layout: "below", onClick: async () => { say(await addGame(appid), "Added to Fuse"); refresh(); } }, "Add to Fuse")))));
 };
+/** "3 h 20 min", "45 min", or "" for nothing. */
+function duration(seconds) {
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 1)
+        return "";
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return h > 0 ? (m > 0 ? `${h} h ${m} min` : `${h} h`) : `${m} min`;
+}
+/** "Today", "Yesterday", "3 days ago" for a time in milliseconds. */
+function ago(ms) {
+    if (!ms)
+        return "";
+    const days = Math.floor((Date.now() - ms) / 86400000);
+    if (days <= 0)
+        return "Today";
+    if (days === 1)
+        return "Yesterday";
+    if (days < 30)
+        return `${days} days ago`;
+    return new Date(ms).toLocaleDateString();
+}
+/** Fuse's own library: what is being played, how much there is, and the last games played, each one press from opening in Fuse. */
+const FuseLibrary = ({ canOpen }) => {
+    const [lib] = usePoll(() => library(), 10000);
+    if (!lib || failure(lib))
+        return null;
+    const recent = lib.recent ?? [];
+    const week = duration(lib.weekSeconds ?? 0);
+    return (window.SP_REACT.createElement(DFL.PanelSection, { title: "Library" },
+        window.SP_REACT.createElement(DFL.PanelSectionRow, null,
+            window.SP_REACT.createElement(DFL.Field, { label: lib.playing ? `Playing ${lib.playing}` : `${lib.games ?? 0} games`, description: [lib.playing ? `${lib.games ?? 0} games` : null, `${lib.systems ?? 0} systems`, week ? `${week} this week` : null].filter(Boolean).join("  ·  ") })),
+        recent.length === 0 && (window.SP_REACT.createElement(DFL.PanelSectionRow, null,
+            window.SP_REACT.createElement(DFL.Field, { label: "Nothing played yet", description: "Games you play in Fuse show here." }))),
+        recent.map((g) => (window.SP_REACT.createElement(DFL.PanelSectionRow, { key: g.id }, canOpen ? (window.SP_REACT.createElement(DFL.ButtonItem, { layout: "below", label: g.name, description: [g.system, ago(g.lastPlayed), duration(g.seconds)].filter(Boolean).join("  ·  "), onClick: async () => say(await openFuseGame(g.id), "Opened in Fuse") }, "Open in Fuse")) : (window.SP_REACT.createElement(DFL.Field, { label: g.name, description: [g.system, ago(g.lastPlayed)].filter(Boolean).join("  ·  ") })))))));
+};
 /** Fuse One: who is playing, how saves stand, the household's devices, and what is moving. */
 const FuseOne = ({ s }) => {
     const one = s?.fuseOne;
-    if (!s || failure(s) || !one?.available)
+    if (!s || failure(s))
         return null;
+    if (!one?.available) {
+        return (window.SP_REACT.createElement(DFL.PanelSection, { title: "Fuse One" },
+            window.SP_REACT.createElement(DFL.PanelSectionRow, null,
+                window.SP_REACT.createElement(DFL.Field, { label: "Not set up", description: "Saves, profiles and downloads across your devices. Set it up in Fuse: Settings, Fuse One." }))));
+    }
     const t = s.transfers;
     const moving = t ? t.downloading + t.uploading : 0;
     return (window.SP_REACT.createElement(DFL.PanelSection, { title: "Fuse One" },
@@ -328,6 +371,7 @@ const Content = () => {
     return (window.SP_REACT.createElement(window.SP_REACT.Fragment, null,
         window.SP_REACT.createElement(Connection, { hi: hi }),
         connected && may(hi, "library") && window.SP_REACT.createElement(ThisGame, null),
+        connected && may(hi, "library") && window.SP_REACT.createElement(FuseLibrary, { canOpen: may(hi, "play") }),
         connected && may(hi, "status") && window.SP_REACT.createElement(FuseOne, { s: s }),
         connected && may(hi, "change_library") && window.SP_REACT.createElement(SteamGames, null),
         connected && (may(hi, "emulators") ? window.SP_REACT.createElement(Emulators, null) : window.SP_REACT.createElement(NotAllowed, { title: "Emulators", what: "install and remove emulators" }))));

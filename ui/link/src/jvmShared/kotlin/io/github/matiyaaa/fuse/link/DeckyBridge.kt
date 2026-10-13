@@ -81,6 +81,14 @@ class DeckyBridge(
                 post("/v1/steam/{appId}/add") { call.allowedTo(ExtensionScope.CHANGE_LIBRARY) { call.json(addSteam(listOf(call.appId() ?: return@allowedTo call.bad()))) } }
                 post("/v1/steam/{appId}/remove") { call.allowedTo(ExtensionScope.CHANGE_LIBRARY) { call.json(removeSteam(call.appId() ?: return@allowedTo call.bad())) } }
                 post("/v1/steam/{appId}/open") { call.allowedTo(ExtensionScope.PLAY) { call.json(openSteam(call.appId() ?: return@allowedTo call.bad())) } }
+                // Fuse's own games, as Home shows them first: what is being played and what was played last.
+                get("/v1/library") { call.allowedTo(ExtensionScope.LIBRARY) { call.json(library()) } }
+                post("/v1/game/{gameId}/open") {
+                    call.allowedTo(ExtensionScope.PLAY) {
+                        val id = call.parameters["gameId"]?.toLongOrNull() ?: return@allowedTo call.bad()
+                        call.json(openFuseGame(id))
+                    }
+                }
                 post("/v1/steam/import") {
                     call.allowedTo(ExtensionScope.CHANGE_LIBRARY) {
                         val ids = runCatching { Json.parseToJsonElement(call.receiveText()).jsonObject["appIds"]?.jsonArray?.mapNotNull { it.jsonPrimitive.longOrNull } }.getOrNull()
@@ -214,6 +222,40 @@ class DeckyBridge(
         return buildJsonObject { put("opened", posted) }
     }
 
+    /**
+     * The library at a glance: how many games and systems, the game being played, and the last few
+     * played (by name, system and when), each with the id the plugin opens it by. Nothing about files.
+     */
+    private fun library(): JsonObject {
+        val feed = store.homeFeed.value
+        val recent = (feed.continuePlaying + feed.recentlyPlayed).distinctBy { it.id }.take(RECENT_GAMES)
+        return buildJsonObject {
+            put("games", feed.systems.sumOf { it.gameCount })
+            put("systems", feed.systems.count { it.gameCount > 0 })
+            feed.playtime.currentGame?.let { put("playing", it.title) }
+            put("weekSeconds", feed.playtime.weekSeconds)
+            putJsonArray("recent") {
+                for (g in recent) add(buildJsonObject {
+                    put("id", g.id.value)
+                    put("name", g.title)
+                    put("system", g.platformShort)
+                    g.lastPlayedAt?.let { put("lastPlayed", it) }
+                    put("seconds", g.playSeconds)
+                })
+            }
+        }
+    }
+
+    private fun openFuseGame(value: Long): JsonObject {
+        val id = io.github.matiyaaa.fuse.model.GameId(value)
+        val known = store.homeFeed.value.let { f -> (f.continuePlaying + f.recentlyPlayed + f.favorites + f.pinnedGames).any { it.id == id } }
+        val posted = known && ExternalRequests.post(ExternalRequest.OpenGame(id))
+        return buildJsonObject {
+            put("opened", posted)
+            if (!posted) put("message", "Fuse couldn't find that game.")
+        }
+    }
+
     private fun emulators(): JsonObject {
         val ops = store.appStore
         val state = ops.state.value
@@ -262,6 +304,9 @@ class DeckyBridge(
 
         /** The most Steam games one import asks for. */
         const val MAX_IMPORT = 500
+
+        /** How many recently played games the plugin is shown. */
+        const val RECENT_GAMES = 5
 
         /** Where the plugin looks: `$XDG_DATA_HOME/fuse` or `~/.local/share/fuse`, never Fuse's own data folder. */
         fun discoveryFile(home: String = System.getProperty("user.home"), xdgData: String? = System.getenv("XDG_DATA_HOME")): File =

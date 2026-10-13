@@ -763,6 +763,11 @@ data class StreamHostSettings(
 data class SteamIntegrationSettings(
     val integrate: String = "",
     val decky: Boolean = false,
+    /**
+     * The person switched the bridge on or off themselves. Until then, a Fuse plugin found installed
+     * (from Decky's store, or a zip) switches it on, so the plugin never sits there saying Fuse isn't running.
+     */
+    val deckyChosen: Boolean = false,
     val fuseInSteam: Boolean = false,
     /**
      * The Steam account (its 64-bit SteamID) whose achievements Fuse shows on this device; empty

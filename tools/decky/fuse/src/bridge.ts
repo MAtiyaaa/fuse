@@ -59,6 +59,22 @@ export interface Result extends Failure {
   started?: boolean;
 }
 
+export interface RecentGame {
+  id: number;
+  name: string;
+  system: string;
+  lastPlayed?: number;
+  seconds: number;
+}
+
+export interface Library extends Failure {
+  games?: number;
+  systems?: number;
+  playing?: string;
+  weekSeconds?: number;
+  recent?: RecentGame[];
+}
+
 export interface Emulators extends Failure {
   supported?: boolean;
   installed?: number;
@@ -73,6 +89,8 @@ export const addGame = callable<[appId: number], Result>("add_game");
 export const removeGame = callable<[appId: number], Result>("remove_game");
 export const openGame = callable<[appId: number], Result>("open_game");
 export const importGames = callable<[appIds: number[]], Result>("import_games");
+export const library = callable<[], Library>("library");
+export const openFuseGame = callable<[gameId: number], Result>("open_fuse_game");
 export const emulators = callable<[], Emulators>("emulators");
 export const updateAllEmulators = callable<[], Result>("emulators_update_all");
 export const installAllEmulators = callable<[], Result>("emulators_install_all");
