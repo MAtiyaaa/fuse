@@ -73,6 +73,17 @@ class RommTest {
     // ------------------------------------------------------------------ reading RomM
 
     @Test
+    fun picturePathsWithATimeInThemAreSentEncoded() {
+        // RomM 5 gives its pictures' paths with a time in them; a literal space makes the request malformed (400).
+        assertEquals(
+            "https://romm.example/assets/romm/resources/roms/356/302/cover/big.png?ts=2026-10-04%2008:45:15",
+            RommClient.escapeUrl("https://romm.example/assets/romm/resources/roms/356/302/cover/big.png?ts=2026-10-04 08:45:15"),
+        )
+        // Already encoded stays as it is.
+        assertEquals("https://x/a%20b.png", RommClient.escapeUrl("https://x/a%20b.png"))
+    }
+
+    @Test
     fun `a game with missing and odd fields is still read`() {
         val rom = RommParse.rom(RommParse.element("""{"id":7,"name":null,"fs_name":"Tetris (World).gb","fs_name_no_ext":"Tetris (World)","files":null,"regions":null,"metadatum":null,"created_at":"2025-06-01T10:00:00"}""")!!)!!
         assertEquals("Tetris (World)", rom.name)

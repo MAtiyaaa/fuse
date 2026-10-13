@@ -314,7 +314,8 @@ class RommClient(
         "$base/api/firmware/${firmware.id}/content/${firmware.fileName.encodeURLPathPart()}"
 
     /** A picture RomM keeps ([path] as RomM gives it), at the address in use. */
-    fun assetUrl(base: String, path: String): String = if (path.startsWith("http")) path else base + (if (path.startsWith("/")) path else "/$path")
+    fun assetUrl(base: String, path: String): String =
+        (if (path.startsWith("http")) path else base + (if (path.startsWith("/")) path else "/$path")).let(::escapeUrl)
 
     // ------------------------------------------------------------------ uploads
 
@@ -397,6 +398,22 @@ class RommClient(
         fun chunkTimeout(bytes: Int): Long = maxOf(120_000L, bytes * 1000L / SLOWEST_UPLOAD_BYTES_PER_SECOND)
 
         /** The paths in an OpenAPI document, without holding the rest of it. */
+        /**
+         * [url] with the characters a request line can't carry percent-encoded. RomM gives its
+         * pictures' paths with a time in them (`big.png?ts=2026-10-04 08:45:01`); sent as they are,
+         * the space makes the request malformed and the server answers 400.
+         */
+        internal fun escapeUrl(url: String): String = buildString(url.length) {
+            for (ch in url) {
+                when {
+                    ch == ' ' -> append("%20")
+                    ch == '"' || ch == '<' || ch == '>' || ch == '`' || ch == '{' || ch == '}' || ch == '|' || ch == '\\' || ch == '^' || ch.code < 0x20 ->
+                        append('%').append(ch.code.toString(16).uppercase().padStart(2, '0'))
+                    else -> append(ch)
+                }
+            }
+        }
+
         internal fun openApiPaths(text: String): Set<String> {
             val root = RommParse.element(text) as? JsonObject ?: return emptySet()
             return (root["paths"] as? JsonObject)?.keys.orEmpty()

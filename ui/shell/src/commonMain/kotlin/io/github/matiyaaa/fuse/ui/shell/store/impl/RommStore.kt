@@ -905,9 +905,11 @@ internal class DefaultRommOps(
                     }
                     val lead = paths.firstOrNull()
                     val target = if (job.newFolder || r.multi) gamePath else lead ?: gamePath
-                    val cover = r.cover?.let { rommArtCache?.file(job.server, it) }
-                    val logo = r.logo?.let { rommArtCache?.file(job.server, it) }
-                    val shot = r.screenshot?.let { rommArtCache?.file(job.server, it) }
+                    // A picture that can't be had leaves the game without it, never the download failed.
+                    suspend fun picture(path: String?): String? = path?.let { p -> runCatching { rommArtCache?.file(job.server, p) }.getOrNull() }
+                    val cover = picture(r.cover)
+                    val logo = picture(r.logo)
+                    val shot = picture(r.screenshot)
                     details.sync(
                         listOf(CartridgeGame(r.id, target, r.name, r.platformSlug, r.summary, r.year, r.genres, r.developer, cover = cover, logo = logo, screenshot = shot, updatedAt = r.updatedAt)),
                         applyDetails = true,
