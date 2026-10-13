@@ -114,47 +114,57 @@ internal object DesktopDithering {
         return first to weights
     }
 
-    /** [plane] (sw by sh) stretched to dw by dh with a cubic B-spline, rounded with triangular noise. */
+    /**
+     * [plane] (sw by sh) stretched to dw by dh with a cubic B-spline, rounded with triangular noise.
+     * Each output row is worked out on its own, from the four source rows around it stretched across
+     * once and kept, with noise seeded by [seed] and the row: the rows run on every core at once,
+     * so a 4K room is ready in a few frames' time instead of holding the move to the next game.
+     */
     fun stretch(plane: FloatArray, sw: Int, sh: Int, dw: Int, dh: Int, seed: Int): ByteArray {
         val (xs, xw) = taps(sw, dw)
         val (ys, yw) = taps(sh, dh)
         // Each output column's four source columns, clamped at the edges, as float offsets.
         val xo = IntArray(dw * 4) { (xs[it / 4] + it % 4).coerceIn(0, sw - 1) * 4 }
-        val rows = FloatArray(sh * dw * 4)
-        for (y in 0 until sh) {
+        val span = dw * 4
+        // Each source row stretched across: needed by up to four output rows each, so worked out once.
+        val rows = arrayOfNulls<FloatArray>(sh)
+        java.util.stream.IntStream.range(0, sh).parallel().forEach { y ->
+            val row = FloatArray(span)
             val src = y * sw * 4
-            var o = y * dw * 4
+            var o = 0
             for (x in 0 until dw) {
                 val t = x * 4
                 val w0 = xw[t]; val w1 = xw[t + 1]; val w2 = xw[t + 2]; val w3 = xw[t + 3]
                 val p0 = src + xo[t]; val p1 = src + xo[t + 1]; val p2 = src + xo[t + 2]; val p3 = src + xo[t + 3]
-                for (c in 0 until 4) rows[o + c] = w0 * plane[p0 + c] + w1 * plane[p1 + c] + w2 * plane[p2 + c] + w3 * plane[p3 + c]
+                for (c in 0 until 4) row[o + c] = w0 * plane[p0 + c] + w1 * plane[p1 + c] + w2 * plane[p2 + c] + w3 * plane[p3 + c]
                 o += 4
             }
+            rows[y] = row
         }
         val out = ByteArray(dw * dh * 4)
-        val line = FloatArray(dw * 4)
-        var state = seed.toLong() xor 0x9E3779B97F4A7C15uL.toLong()
-        if (state == 0L) state = 1L
-        val span = dw * 4
-        for (y in 0 until dh) {
+        java.util.stream.IntStream.range(0, dh).parallel().forEach { y ->
             val t = y * 4
             val w0 = yw[t]; val w1 = yw[t + 1]; val w2 = yw[t + 2]; val w3 = yw[t + 3]
-            val r0 = (ys[y]).coerceIn(0, sh - 1) * span
-            val r1 = (ys[y] + 1).coerceIn(0, sh - 1) * span
-            val r2 = (ys[y] + 2).coerceIn(0, sh - 1) * span
-            val r3 = (ys[y] + 3).coerceIn(0, sh - 1) * span
-            for (i in 0 until span) line[i] = w0 * rows[r0 + i] + w1 * rows[r1 + i] + w2 * rows[r2 + i] + w3 * rows[r3 + i]
+            val r0 = rows[ys[y].coerceIn(0, sh - 1)]!!
+            val r1 = rows[(ys[y] + 1).coerceIn(0, sh - 1)]!!
+            val r2 = rows[(ys[y] + 2).coerceIn(0, sh - 1)]!!
+            val r3 = rows[(ys[y] + 3).coerceIn(0, sh - 1)]!!
+            var state = (seed.toLong() * 0x9E3779B97F4A7C15uL.toLong()) xor (y.toLong() * 0xBF58476D1CE4E5B9uL.toLong())
+            if (state == 0L) state = 1L
             var i = 0
             var o = y * span
             while (i < span) {
-                val alpha = kotlin.math.round(line[i + 3]).coerceIn(0f, 255f)
+                val a = w0 * r0[i + 3] + w1 * r1[i + 3] + w2 * r2[i + 3] + w3 * r3[i + 3]
+                val alpha = kotlin.math.round(a).coerceIn(0f, 255f)
                 // Triangular noise of one step: the difference of two even draws, the same for the three colours.
                 state = state xor (state shl 13)
                 state = state xor (state ushr 7)
                 state = state xor (state shl 17)
                 val noise = if (alpha > 0f) (((state ushr 40) and 0xFFFF) - ((state ushr 16) and 0xFFFF)).toFloat() / 65536f else 0f
-                for (c in 0 until 3) out[o + c] = kotlin.math.round(line[i + c] + noise).coerceIn(0f, alpha).toInt().toByte()
+                for (c in 0 until 3) {
+                    val v = w0 * r0[i + c] + w1 * r1[i + c] + w2 * r2[i + c] + w3 * r3[i + c]
+                    out[o + c] = kotlin.math.round(v + noise).coerceIn(0f, alpha).toInt().toByte()
+                }
                 out[o + 3] = alpha.toInt().toByte()
                 i += 4
                 o += 4

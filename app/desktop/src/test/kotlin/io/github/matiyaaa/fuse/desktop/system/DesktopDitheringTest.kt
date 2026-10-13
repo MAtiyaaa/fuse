@@ -143,12 +143,15 @@ class DesktopDitheringTest {
     /** How long baking a room takes, once per cover, off the drawing thread (printed, not held to a number). */
     @Test
     fun aRoomBakesOnceInATimeWorthPrinting() {
-        for ((small, big) in listOf(IntSize(480, 270) to IntSize(1920, 1080), IntSize(960, 540) to IntSize(2560, 1440))) {
+        for ((small, big) in listOf(IntSize(480, 270) to IntSize(1920, 1080), IntSize(960, 540) to IntSize(2560, 1440), IntSize(960, 540) to IntSize(3840, 2160))) {
             val copy = room(small.width, small.height)
-            DesktopDithering.blur(copy, radius = 12f, size = big)
-            val start = System.nanoTime()
-            DesktopDithering.blur(copy, radius = 12f, size = big)
-            println("Baking a ${big.width}x${big.height} room: ${(System.nanoTime() - start) / 1_000_000} ms")
+            // The fastest of a few, once the compiler has caught up.
+            val best = (0 until 6).minOf {
+                val start = System.nanoTime()
+                DesktopDithering.blur(copy, radius = 12f, size = big)
+                (System.nanoTime() - start) / 1_000_000
+            }
+            println("Baking a ${big.width}x${big.height} room: $best ms")
         }
     }
 }

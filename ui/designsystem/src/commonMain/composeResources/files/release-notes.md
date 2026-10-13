@@ -22,6 +22,13 @@ for nothing, and a log that says where a slow frame's time went.
 
 ## Changed
 
+- **Moving from game to game is smooth on a 4K TV.** Box art and small screenshots become a blurred
+  room behind the interface, and that room used to be made the moment you arrived: drawn on the
+  graphics card, read back to the processor while everything waited, then stretched to 4K on one
+  core. It is now drawn small by the processor, blurred and stretched on every core, away from
+  the interface, and kept for the last few games, so going back costs nothing. The crossfade waits
+  until the new room is ready and already on the graphics card, so it never fades in empty or
+  stalls halfway. The crossfade, the settle and Enhanced's slow drift look as they did.
 - **In Steam's Game Mode, gamescope paces Fuse's frames.** On Linux, Fuse draws on the same thread
   that runs every animation and button press, and waited there for each screen refresh. Under
   gamescope that wait came on top of gamescope's own, so frames could miss the refresh they waited
@@ -46,5 +53,7 @@ for nothing, and a log that says where a slow frame's time went.
 
 ## Fixed
 
+- Backgrounds that took a moment to load never appeared: the room's placeholder stayed, and the
+  art stayed hidden behind it. It now fades in over the placeholder when it arrives.
 - On a 4K screen, pictures no longer go up to the graphics card again on every frame of a
   transition, which could make motion stutter while art, glass or the background changed.
