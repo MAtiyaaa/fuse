@@ -507,8 +507,10 @@ internal class DesktopSteam(
     internal fun placeArt(grid: File, id: Long): String {
         grid.mkdirs()
         for ((resource, name) in listOf("portrait" to "${id}p", "capsule" to "$id", "hero" to "${id}_hero", "logo" to "${id}_logo", "icon" to "${id}_icon")) {
-            // Art already there for this entry (the person's own, from SteamGridDB or Steam) stays.
-            if (listOf("png", "jpg", "jpeg", "webp").any { File(grid, "$name.$it").exists() }) continue
+            // Art already there for this entry (the person's own, from SteamGridDB or Steam) stays;
+            // only a picture an earlier Fuse put there itself is brought up to date.
+            val kept = listOf("png", "jpg", "jpeg", "webp").map { File(grid, "$name.$it") }.filter { it.exists() }
+            if (kept.any { !fusesOldArt(it) }) continue
             val bytes = javaClass.getResourceAsStream("/steam/$resource.png")?.use { it.readBytes() } ?: continue
             val target = File(grid, "$name.png")
             val tmp = File(grid, ".$name.png.fuse-tmp")
@@ -520,6 +522,15 @@ internal class DesktopSteam(
         }
         return listOf("png", "jpg", "jpeg").map { File(grid, "${id}_icon.$it") }.firstOrNull { it.isFile }?.absolutePath.orEmpty()
     }
+
+    /**
+     * Whether [file] is art an earlier Fuse placed and has since redrawn: the 0.3.6.4 logo, the
+     * lockup edge to edge, which Steam's in-game menu stretched across its whole width.
+     */
+    private fun fusesOldArt(file: File): Boolean = runCatching {
+        file.length() < 1_000_000 && java.security.MessageDigest.getInstance("SHA-256").digest(file.readBytes())
+            .joinToString("") { "%02x".format(it) } in REDRAWN_ART
+    }.getOrDefault(false)
 
     /** Every Steam user's own folder (`userdata/<id>`), signed in at least once. */
     private fun userDataDirs(): List<File> = folders.steamPlaces().first
@@ -550,3 +561,9 @@ internal class DesktopSteam(
         DesktopOs.LINUX -> Processes.run(listOf("pgrep", "-x", "steam"), timeoutMs = 3_000)?.exitCode == 0
     }
 }
+
+/** SHA-256 of art earlier Fuses placed in Steam and later redrew, replaced when found unchanged. */
+private val REDRAWN_ART = setOf(
+    // logo.png, 0.3.6.4 to 0.4.2.6: 1200 by 344, the lockup with no room around it.
+    "a25fa0c34cdbee789e3ba5c99b103aabca74392aa04e647bc0c09feb64a8fb50",
+)

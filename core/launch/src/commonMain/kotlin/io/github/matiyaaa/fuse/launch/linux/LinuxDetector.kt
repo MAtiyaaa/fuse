@@ -31,6 +31,21 @@ object LinuxDetector {
         .filter { it.count { c -> c == '.' } >= 2 && it.none { c -> c == '/' } }
         .toSet()
 
+    /** Versions from `flatpak list --app --columns=application,version`: id to version, for rows that have one. */
+    fun parseFlatpakVersions(output: String): Map<String, String> = output.lineSequence()
+        .map { it.trim().split(Regex("\\s+")) }
+        .filter { it.size >= 2 && it[0].count { c -> c == '.' } >= 2 && it[0].none { c -> c == '/' } && it[1].any(Char::isDigit) }
+        .associate { it[0] to it[1] }
+
+    /**
+     * The version an AppImage's name carries ("Cemu-2.6-x86_64.AppImage" is 2.6), or null when it
+     * names none (an architecture such as x86_64 is never taken for one).
+     */
+    fun versionInName(path: String): String? {
+        val name = path.substringAfterLast('/').substringBeforeLast('.')
+        return Regex("(?<![A-Za-z0-9])v?(\\d+(?:\\.\\d+)+)(?![0-9])").findAll(name).map { it.groupValues[1] }.lastOrNull()
+    }
+
     /** Absolute path of [binary] on `$PATH`, or null. */
     fun findOnPath(env: LinuxEnvironment, binary: String): String? =
         env.pathDirectories().map { "${it.trimEnd('/')}/$binary" }.firstOrNull(env::isExecutable)
@@ -95,9 +110,20 @@ object LinuxDetector {
         extraDirs: List<String> = emptyList(),
     ): List<InstalledEmulator> {
         val flatpaks = env.flatpakApps()
+        val versions = if (flatpaks.isEmpty()) emptyMap() else env.flatpakVersions()
         val dirs = searchDirs(env, extraDirs)
         val identified = identifyAppImages(env, dirs, defs)
-        val found = defs.mapNotNull { def -> locate(env, def, flatpaks, dirs, identified)?.let { toInstalled(def, it) } }
+        val found = defs.mapNotNull { def ->
+            locate(env, def, flatpaks, dirs, identified)?.let { f ->
+                // What version is installed, where it can be told without running it: the Store compares it with the latest release.
+                val version = when (f.kind) {
+                    LinuxInstallKind.FLATPAK -> versions[f.appId]
+                    LinuxInstallKind.APPIMAGE -> versionInName(f.appId) ?: identified[f.appId]?.let(::versionInName)
+                    else -> null
+                }
+                toInstalled(def, f).copy(version = version)
+            }
+        }
         val gio = findOnPath(env, "gio")
         val desktop = InstalledEmulator(
             id = DesktopShortcutAdapter.id,

@@ -69,6 +69,8 @@ fun main(args: Array<String>) {
     UiRenderTrace.enabled = "--trace-ui" in args
     // Gradients and baked pictures behind the interface are dithered, on the graphics card or not.
     io.github.matiyaaa.fuse.desktop.system.DesktopDithering.install()
+    // Compose here draws shadows at one strength whatever their colour's alpha: they stay neutral.
+    io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.tintedShadows = false
     // Skia's own messages, so a fallback to drawing on the processor has its reason.
     io.github.matiyaaa.fuse.desktop.system.GraphicsReport.install()
     setX11WmClass()
@@ -77,8 +79,11 @@ fun main(args: Array<String>) {
     val dirs = FuseDirs.fromEnvironment()
     dirs.eraseIfAsked()
     dirs.ensure()
+    Log.toFile(java.io.File(dirs.data, "logs"))
     CrashLog(java.io.File(dirs.data, "crash")).install()
     Log.info("Fuse ${BuildInfo.VERSION} starting")
+    // A stalled interface thread writes what it was doing into the log.
+    io.github.matiyaaa.fuse.desktop.system.UiWatchdog().start()
     // Without a screen to open a window on, one plain sentence instead of the toolkit's error.
     NoDisplay.why()?.let { why ->
         System.err.println(NoDisplay.message(why))
@@ -159,6 +164,8 @@ private suspend fun probeRenderer(session: DesktopSession, window: java.awt.Wind
     val profile = io.github.matiyaaa.fuse.desktop.system.FramePacing.profile(kind, w, h, output?.first ?: mode.width, output?.second ?: mode.height,
         mode.refreshRate.toDouble(), gpu)
     if (profile.refreshHz > 0) UiRenderTrace.expectedFrameNanos = profile.budgetNanos
+    // A TV's picture processing smooths a faint dither away and leaves the bands: a stronger one there.
+    io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.largeOutput = profile.largeOutput || kind == io.github.matiyaaa.fuse.desktop.system.DisplaySession.STEAM_GAME_MODE
     val note = if (profile.upscaled) "Shown at ${w}x$h and scaled up to ${output?.first ?: mode.width}x${output?.second ?: mode.height}, which looks soft. " +
         "In Steam, Fuse's Properties, General, set Game Resolution to Native" else null
     val report = io.github.matiyaaa.fuse.desktop.system.GraphicsReport

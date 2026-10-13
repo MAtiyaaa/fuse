@@ -101,9 +101,37 @@ class FuseDirs(
     }
 }
 
-/** Minimal stderr logging. Callers never pass secrets, tokens or file contents. */
+/**
+ * Minimal logging to stderr and, once [toFile] is called, to `logs/fuse.log` in Fuse's data folder
+ * (the session before kept as `fuse.1.log`): started from Steam's Game Mode, stderr goes nowhere,
+ * and the file is what tells what happened. Callers never pass secrets, tokens or file contents.
+ */
 internal object Log {
-    fun info(message: String) = System.err.println("[fuse] $message")
+    @Volatile private var file: java.io.PrintWriter? = null
+    private val stamp = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
+
+    /** Starts writing to [dir]/fuse.log, moving the last session's aside. Never fails Fuse. */
+    fun toFile(dir: java.io.File) {
+        runCatching {
+            dir.mkdirs()
+            val log = java.io.File(dir, "fuse.log")
+            if (log.isFile) log.renameTo(java.io.File(dir, "fuse.1.log"))
+            file = java.io.PrintWriter(java.io.FileWriter(log, true), true)
+        }
+    }
+
+    fun info(message: String) = write("[fuse] $message")
+
     fun warn(message: String, error: Throwable? = null) =
-        System.err.println("[fuse] warning: $message" + (error?.let { " (${it.javaClass.simpleName}: ${it.message})" } ?: ""))
+        write("[fuse] warning: $message" + (error?.let { " (${it.javaClass.simpleName}: ${it.message})" } ?: ""))
+
+    /** A longer report (a stalled thread's stack): to the file only, so the terminal stays readable. */
+    fun detail(text: String) {
+        file?.let { synchronized(this) { it.println(text) } }
+    }
+
+    private fun write(line: String) {
+        System.err.println(line)
+        file?.let { synchronized(this) { it.println("${java.time.LocalTime.now().format(stamp)} $line") } }
+    }
 }

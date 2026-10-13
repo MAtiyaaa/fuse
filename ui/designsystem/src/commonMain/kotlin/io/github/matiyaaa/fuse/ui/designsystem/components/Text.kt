@@ -25,7 +25,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 /**
  * Text in a Fuse style. [color] defaults to the style's role colour (primary text). Long text
  * ends in an ellipsis rather than being cut. [minLines] keeps room for text that may wrap, so a
- * card's layout doesn't change between one line and two.
+ * card's layout doesn't change between one line and two. A single word is never broken across
+ * lines ("Ro" over "mM" in a narrow window): it ends in an ellipsis instead, or shrinks with [fit].
  */
 @Composable
 fun FText(
@@ -50,7 +51,7 @@ fun FText(
             maxLines = maxLines,
             minLines = minLines.coerceAtMost(maxLines),
             overflow = overflow,
-            softWrap = maxLines > 1,
+            softWrap = maxLines > 1 && !oneWord(text),
             autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(
                 minFontSize = style.fontSize * fitMin,
                 maxFontSize = style.fontSize,
@@ -66,6 +67,7 @@ fun FText(
         maxLines = maxLines,
         minLines = minLines.coerceAtMost(maxLines),
         overflow = overflow,
+        softWrap = !oneWord(text),
     )
 }
 
@@ -92,9 +94,16 @@ fun FText(
         maxLines = maxLines,
         minLines = minLines.coerceAtMost(maxLines),
         overflow = overflow,
+        softWrap = !oneWord(text),
         color = { color() },
     )
 }
+
+/** A short word with nothing to wrap at (a name, a label): wrapping it could only split it. */
+private fun oneWord(text: String): Boolean = text.length in 1..ONE_WORD_MAX && text.none { it.isWhitespace() || it == '-' || it == '/' }
+
+/** Longer runs without spaces (a sentence in Japanese, a path) still wrap, as they must. */
+private const val ONE_WORD_MAX = 20
 
 /**
  * Small uppercase section label ("CONTINUE PLAYING"). A quiet [count] may follow it in tabular

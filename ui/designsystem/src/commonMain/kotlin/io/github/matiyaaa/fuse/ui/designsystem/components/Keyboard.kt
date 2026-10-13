@@ -666,8 +666,9 @@ private fun BoxScope.KeyHighlight(state: KeyboardState, width: Int, keyHeight: D
                 shadowElevation = (2f + 10f * lift * (1f - d)) * density
                 this.shape = shape
                 clip = false
-                spotShadowColor = lerp(accent, Color.Black, 0.45f)
-                ambientShadowColor = lerp(accent, Color.Black, 0.7f).copy(alpha = 0.35f)
+                val tinted = io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.tintedShadows
+                spotShadowColor = if (tinted) lerp(accent, Color.Black, 0.45f) else Color.Black
+                ambientShadowColor = if (tinted) lerp(accent, Color.Black, 0.7f).copy(alpha = 0.35f) else Color.Black
             }
             .drawWithCache {
                 val w = size.width

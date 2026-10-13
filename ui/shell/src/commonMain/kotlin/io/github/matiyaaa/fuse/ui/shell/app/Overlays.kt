@@ -156,6 +156,8 @@ private fun ContextMenuOverlay(app: AppState) {
                             focused = null,
                             onSelect = ::switchTo,
                             gutter = Space.m,
+                            // Four or more tabs don't fit a panel by name: the others show their icons.
+                            compact = shownTabs.size >= 4,
                         )
                         Spacer(Modifier.height(Space.s))
                     }

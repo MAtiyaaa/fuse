@@ -151,6 +151,8 @@ fun ControlsScreen(app: AppState) {
     val router = LocalInputRouter.current
     // On Linux the Guide button does nothing in Fuse (Steam and the desktop answer it), so it isn't offered.
     val guideOff = app.platform.host == io.github.matiyaaa.fuse.model.Host.LINUX
+    // So nothing is ever mapped onto it there: an action left only on Guide would be out of reach.
+    val pad = if (guideOff) padButtons - PadButton.MODE else padButtons
     val sel = remember { LinearSelection() }
     var capturing by remember { mutableStateOf<Pair<NavAction, String>?>(null) }
     var testing by remember { mutableStateOf(false) }
@@ -179,8 +181,8 @@ fun ControlsScreen(app: AppState) {
             // A direction never becomes a mapping: it calls the wait off.
             if (button in directions) {
                 capturing = null
-            } else if (button in remappable) {
-                val next = prefs.input.withMapping(button, target.first, padButtons)
+            } else if (button in remappable && !(guideOff && button == PadButton.MODE)) {
+                val next = prefs.input.withMapping(button, target.first, pad)
                 if (next == null) {
                     app.toasts.show("${button.label(prefs.input.glyphs == GlyphStyle.NINTENDO)} is the only button for ${if (prefs.input.actionFor(button) == NavAction.SELECT) "Confirm" else "Back"}. Map it to another button first", ToastKind.ERROR)
                 } else {
@@ -238,7 +240,7 @@ fun ControlsScreen(app: AppState) {
             add(app.choiceRow(
                 "labels", "Button labels", FuseIcons.Gamepad, prefs.input.glyphs,
                 listOf(GlyphStyle.XBOX to "Xbox (A at the bottom)", GlyphStyle.NINTENDO to "Nintendo (A on the right)", GlyphStyle.PLAYSTATION to "PlayStation (shapes)"),
-                detail = "The letters printed on your buttons. Hints use them",
+                detail = "The letters printed on your buttons. Hints use them; what each button does stays the same",
             ) { v -> setProfile { it.copy(glyphs = v) } })
         }
         labelled("Actions") {
@@ -264,9 +266,16 @@ fun ControlsScreen(app: AppState) {
                     id = "reset",
                     label = "Reset to default",
                     icon = FuseIcons.RotateCcw,
-                    detail = if (prefs.input.remap.isEmpty()) "Using the standard layout" else "${prefs.input.remap.size} custom mappings",
-                    enabled = prefs.input.remap.isNotEmpty(),
-                    onSelect = { setProfile { it.copy(remap = emptyMap()) } },
+                    detail = when {
+                        prefs.input.remap.isNotEmpty() -> "${prefs.input.remap.size} custom mappings. Start and Select held together do this from anywhere"
+                        prefs.input.swapConfirmBack || prefs.input.swapShoulders -> "Buttons swapped. Start and Select held together do this from anywhere"
+                        else -> "Using the standard layout"
+                    },
+                    enabled = prefs.input.remap.isNotEmpty() || prefs.input.swapConfirmBack || prefs.input.swapShoulders,
+                    onSelect = {
+                        setProfile { it.copy(remap = emptyMap(), swapConfirmBack = false, swapShoulders = false) }
+                        app.toasts.show("Controls reset to default")
+                    },
                 ),
             )
         }
@@ -282,8 +291,20 @@ fun ControlsScreen(app: AppState) {
                 startRequests++
                 io.github.matiyaaa.fuse.ui.designsystem.input.NavResult.ACTIVATED
             }
+            // The D-pad always reaches Edit (and its Reset), whatever the shoulders were mapped to.
+            tab == 0 && e.action == NavAction.RIGHT -> {
+                tab = 1
+                io.github.matiyaaa.fuse.ui.designsystem.input.NavResult.MOVED
+            }
             tab == 0 -> io.github.matiyaaa.fuse.ui.designsystem.input.NavResult.IGNORED
-            else -> handleMenuAction(e, actions, sel)
+            else -> handleMenuAction(e, actions, sel).let { result ->
+                if (result == io.github.matiyaaa.fuse.ui.designsystem.input.NavResult.IGNORED && e.action == NavAction.LEFT) {
+                    tab = 0
+                    io.github.matiyaaa.fuse.ui.designsystem.input.NavResult.MOVED
+                } else {
+                    result
+                }
+            }
         }
     }
 
@@ -325,7 +346,7 @@ fun ControlsScreen(app: AppState) {
             Box(Modifier.weight(1f).padding(bottom = Size.hintHeight + Space.s)) {
                 if (tab == 0) {
                     GuidedControls(
-                        app, padButtons, { b, n -> b.label(n) }, startRequests, showPad = !narrow,
+                        app, pad, { b, n -> b.label(n) }, startRequests, showPad = !narrow,
                         onRunning = { guiding = it },
                     )
                 } else {
@@ -457,9 +478,12 @@ internal fun PadDiagram(
     modifier: Modifier = Modifier,
     sticks: io.github.matiyaaa.fuse.ui.designsystem.input.StickPositions = LocalInputRouter.current.sticks.collectAsState().value,
 ) {
-    Box(modifier, contentAlignment = Alignment.Center) {
+    // As wide as it may be, but never taller than its place: a short panel shrinks the pad instead of
+    // letting it spill over the heading above it.
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
+        val fit = if (constraints.hasBoundedHeight) minOf(maxWidth, maxHeight * io.github.matiyaaa.fuse.ui.shell.onboarding.PAD_ASPECT) else maxWidth
         io.github.matiyaaa.fuse.ui.shell.onboarding.PadArt(
-            pressed, Fuse.glyphs.style, nintendoKeys, Modifier.widthIn(max = PAD_MAX_WIDTH).fillMaxWidth(), marked = marked, sticks = sticks,
+            pressed, Fuse.glyphs.style, nintendoKeys, Modifier.widthIn(max = minOf(PAD_MAX_WIDTH, fit)).fillMaxWidth(), marked = marked, sticks = sticks,
         )
     }
 }

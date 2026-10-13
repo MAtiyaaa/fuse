@@ -26,11 +26,22 @@ class SystemLinuxEnvironment(override val homeDir: String) : LinuxEnvironment {
     override fun listFiles(dir: String): List<String> = File(dir).list()?.toList() ?: emptyList()
 
     /** Installed Flatpak apps; empty when flatpak is missing or does not answer within 8 s. */
-    override fun flatpakApps(): Set<String> {
-        val flatpak = Processes.which("flatpak") ?: return emptySet()
-        val out = Processes.run(listOf(flatpak, "list", "--app", "--columns=application"), timeoutMs = 8_000) ?: return emptySet()
-        if (out.exitCode != 0) return emptySet()
-        return LinuxDetector.parseFlatpakList(out.stdout)
+    override fun flatpakApps(): Set<String> = flatpakListing().first
+
+    override fun flatpakVersions(): Map<String, String> = flatpakListing().second
+
+    /** One `flatpak list` a moment, for both the apps and their versions (detection asks for each). */
+    @Volatile private var listing: Triple<Long, Set<String>, Map<String, String>>? = null
+
+    private fun flatpakListing(): Pair<Set<String>, Map<String, String>> {
+        listing?.takeIf { System.currentTimeMillis() - it.first < 2_000 }?.let { return it.second to it.third }
+        val flatpak = Processes.which("flatpak") ?: return emptySet<String>() to emptyMap()
+        val out = Processes.run(listOf(flatpak, "list", "--app", "--columns=application,version"), timeoutMs = 8_000)
+        if (out == null || out.exitCode != 0) return emptySet<String>() to emptyMap()
+        val apps = LinuxDetector.parseFlatpakList(out.stdout)
+        val versions = LinuxDetector.parseFlatpakVersions(out.stdout)
+        listing = Triple(System.currentTimeMillis(), apps, versions)
+        return apps to versions
     }
 
     override fun readText(path: String): String? = readSmallText(path)

@@ -176,6 +176,8 @@ class AppState(
     /** Search or Settings in the top line has controller focus (only while [focusZone] is TABS). */
     var hudButton by mutableStateOf<HudButton?>(null)
     var quickMenuOpen by mutableStateOf(false)
+    /** Counts the times Start + Select held reset the controls, so a screen part way through changing them lets go. */
+    var controlsResets by mutableStateOf(0)
     var contextMenu by mutableStateOf<ContextMenuSpec?>(null)
     var confirm by mutableStateOf<ConfirmSpec?>(null)
 
@@ -186,6 +188,9 @@ class AppState(
     var artUndo by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.store.ArtUndo?>(null)
     var textInput by mutableStateOf<TextInputSpec?>(null)
     var choice by mutableStateOf<ChoiceSpec?>(null)
+
+    /** A change of size waiting for Keep ([keepSizeOrUndo]). */
+    internal var keepSize: PendingSize? = null
 
     /** Fuse Player is open over everything (Jellyfin). */
     var playerOpen by mutableStateOf(false)

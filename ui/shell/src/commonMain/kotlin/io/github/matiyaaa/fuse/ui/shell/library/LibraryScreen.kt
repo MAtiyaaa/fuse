@@ -116,6 +116,8 @@ import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
 import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 import io.github.matiyaaa.fuse.ui.fuseline.tween
+import io.github.matiyaaa.fuse.ui.shell.app.rescanAndReport
+import io.github.matiyaaa.fuse.ui.shell.app.withRomm
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.addToSteam
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
@@ -438,7 +440,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             LibraryButton.COLLECTIONS -> app.go(Route.Collections)
             LibraryButton.ADD_GAMES -> ownCollection?.let { app.addGamesPicker(it.id, it.name) }
             LibraryButton.EMULATOR -> platformId?.let { app.go(Route.PlatformSettings(it)) }
-            LibraryButton.SYSTEM -> app.choice = systemPicker(app, state, platforms)
+            LibraryButton.SYSTEM -> app.choice = systemPicker(app, state, platforms.withRomm(store.romm.systems.value))
             LibraryButton.SORT -> app.choice = sortPicker(app, sort)
         }
     }
@@ -1398,9 +1400,8 @@ private fun viewActions(
             app.closeOverlays()
         }),
         MenuAction("rescan", if (platform != null) "Rescan this system" else "Rescan library", FuseIcons.Refresh, onSelect = {
-            app.store.sources.rescan(ScanScope.PLATFORM, platform)
             app.closeOverlays()
-            app.toasts.show("Rescanning in the background")
+            app.rescanAndReport(ScanScope.PLATFORM, platform, what = if (platform != null) "this system" else "your library")
         }),
     ) + if (platform != null) listOf(
         MenuAction("sys", "System settings", FuseIcons.Settings, trailing = Trailing.Chevron, onSelect = {

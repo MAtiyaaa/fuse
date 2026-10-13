@@ -1174,7 +1174,8 @@ private fun StartsCard(d: GameDetail, selected: Boolean, onClick: () -> Unit, mo
             FText(it, Fuse.type.caption, color = if (name == null) c.text else c.textMuted, maxLines = 3, modifier = Modifier.padding(top = Space.xs))
         }
         // The other emulators that could run it, so the chevron's promise is concrete.
-        val others = e.alternatives.map { it.name }.filter { it != name }.distinct()
+        // Runners of their own kind of file (shell scripts, desktop shortcuts) aren't emulators for it.
+        val others = e.alternatives.filter { it.id.value !in NOT_EMULATORS }.map { it.name }.filter { it != name }.distinct()
         if (others.isNotEmpty()) {
             Spacer(Modifier.weight(1f))
             FText(
@@ -1495,6 +1496,8 @@ fun GameDetail.toCard(): GameCard = GameCard(
     rommRomId = game.links.rommRomId,
     missing = missing,
     unavailable = unavailable,
+    customTitle = game.titles.custom != null,
+    pinned = pinned,
 )
 
 /** How many can play: "1 player", "1-4 players", or a source's own words ("Single player"). */
@@ -1647,3 +1650,6 @@ private fun CopyCard(copy: io.github.matiyaaa.fuse.ui.shell.store.CopyView, now:
         )
     }
 }
+
+/** Launchers Fuse lists among emulators that only run files of their own kind, never a game's ROM. */
+private val NOT_EMULATORS = setOf("linux.script", "linux.desktop")

@@ -67,4 +67,32 @@ internal object JoydevFilter {
         }
         return out
     }
+
+    /** Steam's virtual controller, which Steam Input feeds for the game it runs. */
+    private const val STEAM_VIRTUAL = "28de:11ff"
+
+    /** `vvvv:pppp` of `/dev/input/[js]`'s device, lowercase hexadecimal; null when it can't be read. */
+    fun usbId(js: String, sysfs: File = File("/sys/class/input")): String? {
+        fun read(name: String) = runCatching { File(sysfs, "$js/device/id/$name").takeIf { it.isFile }?.readText()?.trim()?.lowercase() }.getOrNull()
+        val vendor = read("vendor")?.padStart(4, '0') ?: return null
+        val product = read("product")?.padStart(4, '0') ?: return null
+        return "$vendor:$product"
+    }
+
+    fun isSteamVirtual(id: String?): Boolean = id == STEAM_VIRTUAL
+
+    /**
+     * The controllers Steam Input wraps for the program it started, from the list Steam hands that
+     * program (`SDL_GAMECONTROLLER_IGNORE_DEVICES`, `0xVVVV/0xPPPP` comma separated), as `vvvv:pppp`.
+     * Read straight, they would reach Fuse while Steam's own menus (the Quick Access Menu, the
+     * keyboard, the overlay) are open, since Steam holds back only its virtual controller then.
+     */
+    fun steamWrapped(list: String?): Set<String> = list.orEmpty().split(',').mapNotNull { entry ->
+        val parts = entry.trim().split('/')
+        if (parts.size != 2) return@mapNotNull null
+        fun hex(v: String) = v.trim().lowercase().removePrefix("0x").takeIf { it.isNotEmpty() && it.all { c -> c in "0123456789abcdef" } }?.padStart(4, '0')
+        val vendor = hex(parts[0]) ?: return@mapNotNull null
+        val product = hex(parts[1]) ?: return@mapNotNull null
+        "$vendor:$product"
+    }.toSet()
 }

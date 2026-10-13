@@ -431,8 +431,22 @@ internal fun rememberShownSystems(store: FuseStore): List<PlatformCard> {
     val romm by store.romm.systems.collectAsState()
     return remember(library, romm) {
         val here = library.mapTo(HashSet()) { it.platform.id }
-        library + romm.filter { s -> s.platform != null && s.platform !in here }.mapNotNull { io.github.matiyaaa.fuse.ui.shell.romm.systemCard(it, emptyMap()) }
+        library.withRomm(romm) + romm.filter { s -> s.platform != null && s.platform !in here }.mapNotNull { io.github.matiyaaa.fuse.ui.shell.romm.systemCard(it, emptyMap()) }
     }
+}
+
+/**
+ * These systems counting the games on the RomM server that aren't here yet too, so a system with
+ * one game downloaded of forty on RomM says forty, as its page shows them.
+ */
+internal fun List<PlatformCard>.withRomm(romm: List<io.github.matiyaaa.fuse.ui.shell.store.RommSystem>): List<PlatformCard> {
+    if (romm.isEmpty()) return this
+    val notHere = HashMap<io.github.matiyaaa.fuse.model.PlatformId, Int>()
+    for (s in romm) {
+        val id = s.platform ?: continue
+        notHere[id] = (notHere[id] ?: 0) + (s.games - s.installed).coerceAtLeast(0)
+    }
+    return map { c -> notHere[c.platform.id]?.takeIf { it > 0 }?.let { c.copy(gameCount = c.gameCount + it) } ?: c }
 }
 
 /** The backdrop for what the companion shows: the game's background art, or the system's. */

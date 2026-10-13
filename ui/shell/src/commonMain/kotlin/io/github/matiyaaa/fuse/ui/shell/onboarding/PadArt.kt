@@ -84,6 +84,9 @@ private class StickLean(val left: Offset, val right: Offset)
 private const val PAD_W = 400f
 private const val PAD_H = 262f
 
+/** Width over height of the drawn pad, for fitting it into a place of a given height. */
+internal const val PAD_ASPECT = PAD_W / PAD_H
+
 /** The buttons the drawing shows. */
 private val PadParts = listOf(
     PadButton.A, PadButton.B, PadButton.X, PadButton.Y,

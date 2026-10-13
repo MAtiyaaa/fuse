@@ -178,6 +178,8 @@ internal class StoreContext(
             missing = summary.missing,
             isApp = summary.isApp,
             unavailable = away?.let { Unavailable(it.driveLabel, it.state) },
+            customTitle = summary.titles.custom != null,
+            pinned = summary.pinned,
         )
     }
 

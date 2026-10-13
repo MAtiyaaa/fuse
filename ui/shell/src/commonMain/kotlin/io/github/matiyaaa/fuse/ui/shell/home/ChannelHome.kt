@@ -206,7 +206,9 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
     val hero = space.hero(current, shown)
     PageEffect(current?.id, shown, hero, active) {
         if (!active) return@PageEffect
-        app.hero = hero
+        // A widget without a game of its own (the clock, the weather) keeps the room that is showing:
+        // the art never fades out and back in on the way past it.
+        app.hero = hero ?: app.hero.takeIf { current != null }
         space.chosen(current)
         space.chosenPage(page)
     }

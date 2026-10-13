@@ -44,6 +44,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks
+import io.github.matiyaaa.fuse.ui.shell.app.rescanAndReport
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.checkSteamGames
 import io.github.matiyaaa.fuse.ui.shell.app.refreshSteamGames
@@ -52,6 +53,8 @@ import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ReorderSpec
 import io.github.matiyaaa.fuse.ui.shell.app.calibrateScreen
 import io.github.matiyaaa.fuse.ui.shell.app.calibration
+import io.github.matiyaaa.fuse.ui.shell.app.changeScreenCalibration
+import io.github.matiyaaa.fuse.ui.shell.app.keepSizeOrUndo
 import io.github.matiyaaa.fuse.ui.shell.app.forgetScreenCalibration
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.addGame
@@ -177,23 +180,24 @@ fun accessibilityRows(app: AppState): List<MenuAction> {
     val set = app.store::updatePrefs
     val screens by app.platform.displays.collectAsState()
     val calibrated = p.calibration(screens)
-    // While this screen has its own fit, the shared rows say so: they set every other screen.
-    val shared = if (calibrated != null) "This screen is calibrated and keeps its own. This sets the others" else null
+    // A calibrated screen keeps its own text and edges: the rows show and change those, here, so
+    // what is chosen is what is seen. Elsewhere they set what every screen shares.
+    val own = if (calibrated != null) "For this screen, which is calibrated. Other screens keep theirs" else null
     return buildList {
         labelled("Reading") {
             add(calibrateRow(app, calibrated))
             add(app.choiceRow(
-                "textsize", "Text size", FuseIcons.TextSize, p.textScale,
+                "textsize", "Text size", FuseIcons.TextSize, calibrated?.textScale ?: p.textScale,
                 listOf(1f to "Default", 1.15f to "Large", 1.3f to "Extra large"),
-                detail = shared ?: "Larger text for reading from the sofa. Titles grow a little less",
+                detail = own ?: "Larger text for reading from the sofa. Titles grow a little less",
                 aid = { ChoiceAid.TextSize(it) },
-            ) { v -> set { it.copy(textScale = v) } })
+            ) { v -> if (calibrated != null) app.changeScreenCalibration { it.copy(textScale = v) } else set { it.copy(textScale = v) } })
             add(app.choiceRow(
-                "margin", "Screen edges", FuseIcons.Maximize, p.screenMargin,
+                "margin", "Screen edges", FuseIcons.Maximize, calibrated?.margin ?: p.screenMargin,
                 listOf(0 to "Use all of it", 2 to "2% in", 4 to "4% in", 6 to "6% in"),
-                detail = shared ?: "Keeps everything clear of edges a TV cuts off. The background still fills the screen",
+                detail = own ?: "Keeps everything clear of edges a TV cuts off. The background still fills the screen",
                 aid = { ChoiceAid.ScreenEdges(it) },
-            ) { v -> set { it.copy(screenMargin = v) } })
+            ) { v -> if (calibrated != null) app.changeScreenCalibration { it.copy(margin = v) } else set { it.copy(screenMargin = v) } })
         }
         labelled("Motion and focus") {
             // Automatic is what this device's effects call for: the recommendation from setup, or the Performance choice.
@@ -506,10 +510,10 @@ fun libraryRows(app: AppState): List<MenuAction> {
         }
         labelled("Scanning") {
             add(MenuAction("scan", "Scan for changes", FuseIcons.Refresh, detail = "Only folders that changed. Also runs whenever you return to Fuse", trailing = Trailing.Value(scan.phase.name.lowercase().replaceFirstChar { it.uppercase() }), onSelect = {
-                app.store.sources.rescan(ScanScope.QUICK); app.toasts.show("Scanning")
+                app.rescanAndReport(ScanScope.QUICK, what = "changed folders")
             }))
             add(app.confirmRow("fullscan", "Full rescan", FuseIcons.RefreshDot, "Rescan everything?", "Fuse reads every folder again. It can take a while on large libraries; you can keep using Fuse meanwhile. Your edits are kept.", "Rescan", detail = "Every folder, read again. Your edits are kept") {
-                app.store.sources.rescan(ScanScope.FULL)
+                app.rescanAndReport(ScanScope.FULL, what = "every folder")
             })
             add(MenuAction("bios", "Check BIOS again", FuseIcons.Key, detail = "After adding firmware to a BIOS folder", onSelect = { app.store.sources.refreshBios(); app.toasts.show("Checking BIOS files") }))
         }
@@ -863,7 +867,10 @@ fun mediaRows(app: AppState): List<MenuAction> {
             ) { v -> set { it.copy(autoFillArt = v) } })
         }
         labelled("Previews") {
-            add(toggleRow("video", "Video previews", FuseIcons.ImagePlay, p.videoPreview, if (app.platform.features.videoPreview) "After resting on a game, its art turns into a muted gameplay clip" else "Not available on this system yet", enabled = app.platform.features.videoPreview) { v -> set { it.copy(videoPreview = v) } })
+            // Only where this system can play them: a switch that can't do anything isn't shown.
+            if (app.platform.features.videoPreview) {
+                add(toggleRow("video", "Video previews", FuseIcons.ImagePlay, p.videoPreview, "After resting on a game, its art turns into a muted gameplay clip") { v -> set { it.copy(videoPreview = v) } })
+            }
             if (p.videoPreview && app.platform.features.videoPreview) {
                 add(app.choiceRow("video.delay", "Preview delay", FuseIcons.Timer, p.videoDelaySeconds, listOf(5, 10, 15, 20, 30).map { it to "$it seconds" }) { v -> set { it.copy(videoDelaySeconds = v) } }.copy(indent = 1))
             }
@@ -1295,7 +1302,7 @@ private fun deckyRows(app: AppState, decky: io.github.matiyaaa.fuse.ui.shell.pla
             "decky.bridge", "Decky bridge", FuseIcons.Link, p.steam.decky,
             if (p.steam.decky) "The plugin can ask Fuse what it shows, on this device only. It can't touch saves or secrets" else "Off: the plugin shows that Fuse isn't answering",
             enabled = !live.busy,
-        ) { v -> app.store.updatePrefs { q -> q.copy(steam = q.steam.copy(decky = v)) } })
+        ) { v -> app.store.updatePrefs { q -> q.copy(steam = q.steam.copy(decky = v, deckyChosen = true)) } })
         if (st?.plugin == true) add(toggleRow(
             "decky.menu", "Fuse in Steam's game menu", FuseIcons.PanelTop, st.menuEntries,
             if (st.menuEntries) "The plugin adds Fuse's entries to a game's menu in Steam. Turn this off if Steam's menu misbehaves" else "Off: the plugin leaves Steam's menus alone. Takes effect the next time Decky loads",
@@ -1549,7 +1556,14 @@ fun displayRows(app: AppState): List<MenuAction> {
                 },
                 detail = if (calibratedHere != null) "This screen is calibrated and keeps its own. This sets the others" else "Automatic draws Fuse larger on a big screen with many pixels, like a 4K TV, so it looks as it does on a 1080p one",
                 optionDetail = { v -> if (v == 0) "Sized for this screen, and again when it changes" else null },
-            ) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(interfaceSize = v)) } })
+            ) { v ->
+                val before = d.interfaceSize
+                if (v == before) return@choiceRow
+                app.store.updatePrefs { it.copy(display = it.display.copy(interfaceSize = v)) }
+                // Too large for the screen, its buttons could be out of reach: unless kept, it goes back.
+                // (A calibrated screen keeps its own size, so it can't be this one.)
+                if (calibratedHere == null) app.keepSizeOrUndo { app.store.updatePrefs { it.copy(display = it.display.copy(interfaceSize = before)) } }
+            })
             if (app.platform.features.rotation) {
                 add(app.choiceRow(
                     "rotation", "Rotation", FuseIcons.RotateCw, d.rotation,

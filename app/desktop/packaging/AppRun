@@ -23,4 +23,12 @@ if [ -n "${LD_LIBRARY_PATH:-}" ]; then
     fi
 fi
 
+# Where Java writes a report if it ever fails hard (not an ordinary crash, which Fuse records
+# itself), so it is found beside Fuse's own crash notes instead of wherever Steam started Fuse.
+# What was set before is kept for the programs Fuse starts.
+data="${XDG_DATA_HOME:-$HOME/.local/share}/fuse"
+mkdir -p "$data/crash" 2>/dev/null
+export FUSE_JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:-}"
+export JAVA_TOOL_OPTIONS="-XX:ErrorFile=$data/crash/java-%p.log ${JAVA_TOOL_OPTIONS:-}"
+
 exec "$HERE/usr/lib/fuse/bin/fuse" "$@"

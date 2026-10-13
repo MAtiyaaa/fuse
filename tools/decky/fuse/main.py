@@ -144,6 +144,15 @@ class Plugin:
             return {"error": "bad-request"}
         return await _ask("POST", "/v1/steam/import", {"appIds": ids})
 
+    async def library(self):
+        return await _ask("GET", "/v1/library")
+
+    async def open_fuse_game(self, game_id):
+        game_id = _app_id(game_id)
+        if game_id is None:
+            return {"error": "bad-request"}
+        return await _ask("POST", "/v1/game/" + str(game_id) + "/open")
+
     async def emulators(self):
         return await _ask("GET", "/v1/emulators")
 

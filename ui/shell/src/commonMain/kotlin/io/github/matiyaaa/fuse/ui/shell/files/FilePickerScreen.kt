@@ -48,6 +48,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.FilePurpose
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.LocateRequest
 import io.github.matiyaaa.fuse.ui.shell.app.pickLicence
+import io.github.matiyaaa.fuse.ui.shell.app.patchWith
 import io.github.matiyaaa.fuse.ui.shell.app.addGameFile
 import io.github.matiyaaa.fuse.ui.shell.app.installApkGame
 import io.github.matiyaaa.fuse.ui.shell.app.locateEmulator
@@ -69,8 +70,17 @@ private class PickerPlace {
  * is (a macOS app is picked like a file).
  */
 @Composable
-fun FilePickerScreen(app: AppState, purpose: FilePurpose, locate: LocateRequest? = null, licence: io.github.matiyaaa.fuse.ui.shell.app.LicencePick? = null) {
-    val place = rememberRouteState(app.navigator, "pickfile.$purpose") { PickerPlace() }
+fun FilePickerScreen(
+    app: AppState,
+    purpose: FilePurpose,
+    locate: LocateRequest? = null,
+    licence: io.github.matiyaaa.fuse.ui.shell.app.LicencePick? = null,
+    patch: io.github.matiyaaa.fuse.ui.shell.app.PatchPick? = null,
+) {
+    // A patch is looked for beside its game first: a picker of its own for each game.
+    val place = rememberRouteState(app.navigator, "pickfile.$purpose" + (patch?.let { ".${it.game.id.value}" } ?: "")) {
+        PickerPlace().also { it.path = patch?.folder }
+    }
     val sel = place.selection
     var listing by androidx.compose.runtime.remember { mutableStateOf<BrowseListing?>(null) }
     // The folder just left, so going up lands on it.
@@ -102,6 +112,10 @@ fun FilePickerScreen(app: AppState, purpose: FilePurpose, locate: LocateRequest?
             purpose == FilePurpose.EMULATOR -> Unit
             purpose == FilePurpose.THEME -> app.importThemeFile(entry.path)
             purpose == FilePurpose.LICENCE -> licence?.let { app.pickLicence(it, entry.path) }
+            purpose == FilePurpose.PATCH -> patch?.let {
+                app.back()
+                app.patchWith(it.game, entry.path)
+            }
             else -> app.addGameFile(entry.path)
         }
     }
@@ -116,6 +130,7 @@ fun FilePickerScreen(app: AppState, purpose: FilePurpose, locate: LocateRequest?
             FilePurpose.EMULATOR -> e.isDirectory || isProgram(e)
             FilePurpose.THEME -> e.isDirectory || FsPath.extension(e.name) == "json"
             FilePurpose.LICENCE -> e.isDirectory || isLicenceFile(e.name, licence?.vita == true)
+            FilePurpose.PATCH -> e.isDirectory || FsPath.extension(e.name) in PATCH_EXTENSIONS
         }
     }
     val rows = buildList {
@@ -129,7 +144,7 @@ fun FilePickerScreen(app: AppState, purpose: FilePurpose, locate: LocateRequest?
                     )
                     e.isDirectory -> MenuAction("d.${e.path}", e.name, FuseIcons.Folder, trailing = Trailing.Chevron, onSelect = { open(e) })
                     else -> MenuAction(
-                        "f.${e.path}", e.name, when (purpose) { FilePurpose.APK -> FuseIcons.Package; FilePurpose.THEME -> FuseIcons.Palette; FilePurpose.LICENCE -> FuseIcons.Key; else -> FuseIcons.File },
+                        "f.${e.path}", e.name, when (purpose) { FilePurpose.APK -> FuseIcons.Package; FilePurpose.THEME -> FuseIcons.Palette; FilePurpose.LICENCE -> FuseIcons.Key; FilePurpose.PATCH -> FuseIcons.Bandage; else -> FuseIcons.File },
                         detail = fileDetail(e, purpose),
                         trailing = Trailing.Value(bytesText(e.sizeBytes)),
                         onSelect = { open(e) },
@@ -159,6 +174,7 @@ fun FilePickerScreen(app: AppState, purpose: FilePurpose, locate: LocateRequest?
                     FilePurpose.EMULATOR -> "Where is ${locate?.name ?: "the emulator"}?"
                     FilePurpose.GAME -> "Choose a game file"
                     FilePurpose.LICENCE -> if (licence?.vita == true) "Choose the licence or zRIF" else "Choose the .rap licence"
+                    FilePurpose.PATCH -> "Choose a patch for ${patch?.game?.title ?: "the game"}"
                 },
                 Fuse.type.title, maxLines = 1,
             )
@@ -181,7 +197,7 @@ fun FilePickerScreen(app: AppState, purpose: FilePurpose, locate: LocateRequest?
                         )
                     }
                 }
-                if (wide) Guide(purpose, selected, Modifier.weight(0.38f), locate)
+                if (wide) Guide(purpose, selected, Modifier.weight(0.38f), locate, patch)
             }
         }
     }
@@ -222,6 +238,7 @@ private fun fileDetail(e: BrowseEntry, purpose: FilePurpose): String? {
     if (purpose == FilePurpose.APK) return "Android app"
     if (purpose == FilePurpose.THEME) return "Theme file"
     if (purpose == FilePurpose.LICENCE) return "Licence"
+    if (purpose == FilePurpose.PATCH) return "Patch"
     val systems = PlatformCatalog.forExtension(FsPath.extension(e.name))
     return when {
         systems.isEmpty() -> null
@@ -241,6 +258,7 @@ private fun Empty(l: BrowseListing, purpose: FilePurpose) {
             purpose == FilePurpose.EMULATOR -> "No programs or folders here."
             purpose == FilePurpose.THEME -> "No theme files (.json) or folders here."
             purpose == FilePurpose.LICENCE -> "No licence files or folders here."
+            purpose == FilePurpose.PATCH -> "No patches (.ips, .ups, .bps) or folders here."
             else -> "This folder is empty."
         },
         Fuse.type.body,
@@ -251,7 +269,7 @@ private fun Empty(l: BrowseListing, purpose: FilePurpose) {
 
 /** What happens with the file, and what the selected row is. */
 @Composable
-private fun Guide(purpose: FilePurpose, selected: MenuAction?, modifier: Modifier, locate: LocateRequest?) {
+private fun Guide(purpose: FilePurpose, selected: MenuAction?, modifier: Modifier, locate: LocateRequest?, patch: io.github.matiyaaa.fuse.ui.shell.app.PatchPick? = null) {
     val c = Fuse.colors
     Panel(modifier.padding(bottom = Size.hintHeight + Space.s)) {
         Column(Modifier.padding(Space.xl), verticalArrangement = Arrangement.spacedBy(Space.m)) {
@@ -266,6 +284,7 @@ private fun Guide(purpose: FilePurpose, selected: MenuAction?, modifier: Modifie
                         FilePurpose.GAME -> FuseIcons.Gamepad
                         FilePurpose.THEME -> FuseIcons.Palette
                         FilePurpose.LICENCE -> FuseIcons.Key
+                        FilePurpose.PATCH -> FuseIcons.Bandage
                     },
                     size = 28.dp, tint = c.accent,
                 )
@@ -277,6 +296,7 @@ private fun Guide(purpose: FilePurpose, selected: MenuAction?, modifier: Modifie
                     FilePurpose.GAME -> "Add a game from anywhere"
                     FilePurpose.THEME -> "Add a theme from a file"
                     FilePurpose.LICENCE -> "The licence for this content"
+                    FilePurpose.PATCH -> "A patch for ${patch?.game?.title ?: "this game"}"
                 },
                 Fuse.type.titleSmall,
             )
@@ -292,6 +312,8 @@ private fun Guide(purpose: FilePurpose, selected: MenuAction?, modifier: Modifie
                         "Pick a theme's .json file. Fuse shows what it is before adding it, and keeps a copy, so the file can go afterwards."
                     FilePurpose.LICENCE ->
                         "Pick the licence that came with it. Fuse hands it to the emulator under the name it looks for, and keeps nothing; the file stays where it is."
+                    FilePurpose.PATCH ->
+                        "Pick an IPS, UPS or BPS file. Fuse makes a patched copy beside the game and adds it to your library; the game itself stays as it is."
                 },
                 Fuse.type.body,
                 color = c.textMuted,
@@ -304,3 +326,6 @@ private fun Guide(purpose: FilePurpose, selected: MenuAction?, modifier: Modifie
         }
     }
 }
+
+/** The patch formats Fuse applies. */
+private val PATCH_EXTENSIONS = setOf("ips", "ups", "bps")

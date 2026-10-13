@@ -320,8 +320,10 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
                 else -> handleMenuAction(e, rows, rowSel)
             }
         } else if (inRows) {
-            when (e.action) {
-                NavAction.LEFT, NavAction.BACK -> { inRows = false; NavResult.MOVED }
+            when {
+                e.action == NavAction.LEFT || e.action == NavAction.BACK -> { inRows = false; NavResult.MOVED }
+                // Above the first row is the top bar, as everywhere else in Fuse.
+                e.action == NavAction.UP && rowSel.index == 0 -> NavResult.IGNORED
                 else -> handleMenuAction(e, rows, rowSel)
             }
         } else if (onSearch) {

@@ -152,7 +152,7 @@ internal fun AuditDriver.overlayScreens(exhaustive: Boolean) {
         tap(PadButton.A)
         settle()
         shoot("Guided, after two answers")
-        // Held five seconds: guided setup ends, with what was answered kept.
+        // Held two seconds: guided setup stops and puts the controls back as they were.
         router.press(PadButton.X, InputSource.GAMEPAD)
         // The app's timers run between looks (see settleUntil): the ring fills, then it ends.
         settleUntil("Keep holding to stop", timeoutMs = 20_000)
@@ -641,6 +641,22 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         waitFor("what changed since is kept in a copy")
         settle(600)
         shoot("what going back means, before it happens")
+    }
+
+    scenario("settings", "home from the top bar") {
+        useLibrary()
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("home"))
+        tap(PadButton.DPAD_RIGHT)
+        waitFor("Style, rows or widgets")
+        shoot("the Home section open")
+        // Up to the top bar, along to its Home tab, and chosen: Fuse goes Home.
+        tap(PadButton.DPAD_UP, 12)
+        tap(PadButton.DPAD_LEFT, 12)
+        shoot("the Home tab in the top bar focused")
+        tap(PadButton.A)
+        settle(800)
+        shoot("after choosing the Home tab")
     }
 
     scenario("settings", "home arrangement") {

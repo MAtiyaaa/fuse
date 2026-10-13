@@ -80,6 +80,15 @@ fun UiPrefs.calibration(displays: List<DisplayInfo>): ScreenCalibration? = displ
 /** What the screen Fuse is on is calibrated under; a platform that names no screen has just the one. */
 private fun screenKey(displays: List<DisplayInfo>): String = displays.mainScreen()?.calibrationKey() ?: UNNAMED_SCREEN
 
+/** Changes the calibration of the screen Fuse is on, when it has one (the Text size and Screen edges rows there). */
+fun AppState.changeScreenCalibration(change: (ScreenCalibration) -> ScreenCalibration) {
+    val key = screenKey(platform.displays.value)
+    store.updatePrefs { p ->
+        val cal = p.display.calibrations[key] ?: return@updatePrefs p
+        p.copy(display = p.display.copy(calibrations = p.display.calibrations + (key to change(cal))))
+    }
+}
+
 /** Starts calibrating the screen Fuse is on. */
 fun AppState.calibrateScreen() {
     val screen = platform.displays.value.mainScreen()
@@ -130,6 +139,11 @@ fun CalibrationOverlay(app: AppState) {
         }
         app.calibrating = null
         app.toasts.show(if (save) "${session.name} is calibrated. Other screens keep their own" else "Nothing changed")
+        // A new size is kept only when Keep is chosen: one too large for the screen goes back by itself.
+        val sizeBefore = session.before?.interfaceSize ?: prefs.display.interfaceSize
+        if (save && now.interfaceSize != sizeBefore) {
+            app.keepSizeOrUndo { set { it.copy(interfaceSize = sizeBefore) } }
+        }
     }
     fun change(by: Int): Boolean = when (session.step) {
         CalibrationStep.SIZE -> {
