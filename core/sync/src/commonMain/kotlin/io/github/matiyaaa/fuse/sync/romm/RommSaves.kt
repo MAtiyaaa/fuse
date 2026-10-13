@@ -24,6 +24,19 @@ interface RommSaveService {
 
     /** The person chose: [keepHere] sends this device's save to RomM, else RomM's comes here (this one kept aside). */
     suspend fun settle(conflict: RommSaveConflict, keepHere: Boolean): Result<Unit>
+
+    /** What happened to a save after a game, said to the person: sent, or not and why. */
+    val notices: kotlinx.coroutines.flow.SharedFlow<RommSaveNotice> get() = NO_ROMM_NOTICES
+}
+
+private val NO_ROMM_NOTICES = kotlinx.coroutines.flow.MutableSharedFlow<RommSaveNotice>()
+
+sealed interface RommSaveNotice {
+    /** [title]'s save went up to RomM. */
+    data class Sent(val title: String) : RommSaveNotice
+
+    /** [title]'s save stayed here: [why] says why, and what to do. */
+    data class NotSent(val title: String, val why: String) : RommSaveNotice
 }
 
 sealed interface RommSaveGate {

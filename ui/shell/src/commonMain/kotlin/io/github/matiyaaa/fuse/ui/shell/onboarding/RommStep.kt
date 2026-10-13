@@ -114,7 +114,7 @@ internal fun RommChoiceStage(
                     "FUSE" -> ChoiceCard(
                         name = "RomM", tag = when { connected -> "Connected"; chosen == "FUSE" -> "Chosen"; hasFuseOne -> "Alongside, too"; else -> "Recommended" },
                         tint = c.accent, mark = FuseIcons.LibraryBig,
-                        lines = listOf(FuseIcons.Server to "Straight to RomM", FuseIcons.Download to "Downloads in Fuse", FuseIcons.Save to "Saves in step"),
+                        lines = listOf(FuseIcons.Server to "Straight to RomM", FuseIcons.Download to "Downloads in Fuse", FuseIcons.Save to "Its save sync, if chosen"),
                         on = connected, filled = !hasFuseOne, modifier = m, width = 160.dp,
                     )
                     else -> ChoiceCard(

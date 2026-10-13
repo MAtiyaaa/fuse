@@ -47,6 +47,18 @@ class TitleMatcherTest {
     }
 
     @Test
+    fun sameGameNameSetsEditionWordsAside() {
+        assertTrue(TitleMatcher.sameGameName("Pokemon Red", "Pokémon Red Version"))
+        assertTrue(TitleMatcher.sameGameName("Pokemon Red", "Pokemon - Red Version (USA, Europe) (SGB Enhanced)"))
+        assertTrue(TitleMatcher.sameGameName("Okami", "Okami HD"))
+        // Another game that shares the words is not the same game, nor is a sequel.
+        assertFalse(TitleMatcher.sameGameName("Pokemon Red", "Shin Pokémon Red"))
+        assertFalse(TitleMatcher.sameGameName("Pokemon Red", "Pokemon Blue Version"))
+        assertFalse(TitleMatcher.sameGameName("Sonic the Hedgehog", "Sonic the Hedgehog 2"))
+        assertFalse(TitleMatcher.sameGameName("", "Deluxe Edition"))
+    }
+
+    @Test
     fun similarityHandlesTyposAndSequels() {
         val typo = TitleMatcher.titleSimilarity("Super Metriod", "Super Metroid")
         assertTrue(typo.score > 0.9, "typo score ${typo.score}")

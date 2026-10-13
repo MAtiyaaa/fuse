@@ -574,11 +574,12 @@ class JvmSyncService(
         runCatching { resolveGames(c) }
         runCatching { adoptOutside(c) }
         if (active.isNotEmpty()) captureChanges(active)
+        if (active.isNotEmpty()) runCatching { captureOutside(c, d, active) }
         runCatching { c.sharedGames().games }.onSuccess { games ->
             if (games.toSet() != cached.sharedGames.toSet()) saveConfig { it.copy(sharedGames = games) }
             _sharedGames.value = games.toSet()
         }
-        val sent = d.flush(c)
+        val sent = d.flush(c, saves = cached.saves)
         if (active.isNotEmpty()) {
             d.pullMeta(c, active)
             data.write(canonical(d.meta(active)))
@@ -598,7 +599,7 @@ class JvmSyncService(
         if (d.pendingCount == 0) return@withLock
         val name = cached.hostName.ifBlank { c.link.hostName }
         _status.value = SyncStatus.Online(name, c.route ?: Route.LOCAL, working = true, pending = d.pendingCount)
-        val sent = d.flush(c)
+        val sent = d.flush(c, saves = cached.saves)
         if (sent > 0) log(if (sent == 1) "Sent 1 change to $name" else "Sent $sent changes to $name", kind = SyncActivity.CHANGES)
         _status.value = SyncStatus.Online(name, c.route ?: Route.LOCAL, working = false, pending = d.pendingCount)
     }
@@ -611,6 +612,46 @@ class JvmSyncService(
         d.pullMeta(c, active)
         data.write(canonical(d.meta(active)))
         log("Brought in changes from your other devices", kind = SyncActivity.CHANGES)
+    }
+
+    /** When the last look for saves made outside Fuse ran ([captureOutside]). */
+    @Volatile private var lookedOutsideAt = 0L
+
+    /**
+     * Saves made while Fuse wasn't watching: a game started from Steam, ES-DE or the emulator itself
+     * never passes through [afterExit], so its save stayed here and never went anywhere. Every
+     * [OUTSIDE_EVERY_MS], the saves of the games this person syncs (on this device, and the
+     * household's) are looked at, and one changed since it was last in step goes, once its files
+     * have been left alone for [OUTSIDE_SETTLED_MS] (never one a game is still writing).
+     */
+    internal suspend fun captureOutside(c: SyncClient, d: SyncDevice, profile: String, force: Boolean = false) {
+        if (!cached.saves) return
+        val provider = queries ?: return
+        val now = clock()
+        if (!force && now - lookedOutsideAt < OUTSIDE_EVERY_MS) return
+        lookedOutsideAt = now
+        val fromHost = if (takesFrom(profile)) runCatching { c.heads(profile).heads.map { it.game } }.getOrDefault(emptyList()) else emptyList()
+        val games = (d.gamesWithSaves(profile) + fromHost).filterNot { it in busy || probes.containsKey(it) || localOnly(it) }.toSet()
+        var kept = 0
+        for (g in games) {
+            val query = runCatching { provider(g) }.getOrNull()?.let(::canonical) ?: continue
+            val total = canonical(d.meta(profile)).game(query.game).totalSeconds
+            for (slot in slots(query)) {
+                if (slot.kind == SaveKind.STATE || !slot.available) continue
+                val owner = ownerOf(query, slot, profile)
+                if (!sendsFor(owner, query.game.id)) continue
+                // Someone else's save is in the folder (a device more than one person plays): theirs.
+                if (d.holderOf(slot).let { it != null && it != owner }) continue
+                val newest = slot.files.maxOfOrNull { it.file.lastModified() } ?: continue
+                if (now - newest < OUTSIDE_SETTLED_MS) continue
+                val r = runCatching { d.capture(owner, slot, total, title = query.title) }
+                    .onFailure { log("${query.title}: a save made outside Fuse couldn't be kept (${it.message})", query.game.id, SyncActivity.FAILED) }
+                    .getOrNull() ?: continue
+                kept++
+                log("${query.title}: found a ${r.kind.label.lowercase()} made outside Fuse, and kept it", query.game.id, "save")
+            }
+        }
+        if (kept > 0) runCatching { d.flush(c, saves = cached.saves) }.onFailure { if (it is SyncException) handle(it) }
     }
 
     /** What changed here since the profile was put in place becomes changes waiting to go. */
@@ -677,7 +718,7 @@ class JvmSyncService(
         cancelJoin()
         val c = client
         if (c != null) {
-            runCatching { withTimeoutOrNull(FORGET_WAIT_MS) { device?.flush(c) } }
+            runCatching { withTimeoutOrNull(FORGET_WAIT_MS) { device?.flush(c, saves = cached.saves) } }
             if (keepProfiles) bringDownRecords(c)
             runCatching { withTimeoutOrNull(FORGET_WAIT_MS) { c.unlinkSelf() } }
         }
@@ -1456,6 +1497,10 @@ class JvmSyncService(
     override val joinRequests: StateFlow<List<JoinAsk>> = _joins.asStateFlow()
     @Volatile private var joining: Pair<JoinSession, String?>? = null
 
+    override suspend fun hostAt(address: String): NearbyHost? = withContext(Dispatchers.IO) {
+        withTimeoutOrNull(8_000) { SyncClient.hello(address) }?.let { NearbyHost(it.name, it.hostId, address) }
+    }
+
     override suspend fun askToJoin(address: String, remoteAddress: String?): Result<JoinWaiting> = withContext(Dispatchers.IO) {
         runCatching {
             val id = ensureDeviceId()
@@ -2058,8 +2103,9 @@ class JvmSyncService(
                     "Fuse couldn't put your save for ${query.title} in place, so it didn't start, to keep from playing with someone else's save. " +
                         "Every file is kept. ${e.message ?: ""}".trim())
             }
-            // This person's saves aren't taken here: the game starts with the save this device has.
-            if (!takesFrom(owner, query.game.id)) continue
+            // This person's saves aren't taken here (or this device moves its saves another way, with
+            // RomM or Syncthing, or not at all): the game starts with the save this device has.
+            if (!cached.saves || !takesFrom(owner, query.game.id)) continue
             val awaited = d.awaited(owner, slot)
             if (c == null) {
                 // Without a host there is nothing to be offline from.
@@ -2171,7 +2217,15 @@ class JvmSyncService(
         // A test run ends with its game, whatever else happens here; one that never started is gone too.
         val probe = probes.remove(query.game.id)?.takeIf { it.snapshot != null }
         val d = device ?: return run { busy -= query.game.id; _nowPlaying.value = null }
-        val profile = cached.activeProfile.ifEmpty { return run { busy -= query.game.id; _nowPlaying.value = null } }
+        val profile = cached.activeProfile.ifEmpty {
+            // Fuse One is set up, but nobody was chosen as playing: the save has no one to go to.
+            // Said, rather than left looking as though it synced.
+            if (client != null && cached.saves && explained.add("${query.game.id}|no-one")) {
+                log("${query.title}: save not sent, nobody is chosen as playing on this device", query.game.id, SyncActivity.FAILED)
+                _notices.tryEmit(SyncNotice.NoOneChosen(query.title))
+            }
+            return run { busy -= query.game.id; _nowPlaying.value = null }
+        }
         withContext(Dispatchers.IO) {
             client?.let { c -> runCatching { c.notePresence(PresenceNote(profile, query.game.id, query.title, Presence.SENDING, startedAt)) } }
             // Emulators finish writing a moment after they close.
@@ -2191,13 +2245,14 @@ class JvmSyncService(
             learnFromPlay(d, query)
             val c = liveLock.withLock {
                 val here = slots(query)
-                val captured = here.filter { sendsFor(ownerOf(query, it, profile), query.game.id) }.mapNotNull { slot ->
+                // This device moves its saves another way (RomM, Syncthing) or not at all: none are kept to send.
+                val captured = here.filter { (cached.saves || keepsOwn) && sendsFor(ownerOf(query, it, profile), query.game.id) }.mapNotNull { slot ->
                     runCatching { d.capture(ownerOf(query, slot, profile), slot, total, title = query.title) }.getOrNull()
                         ?.also { log("${query.title}: new ${it.kind.label.lowercase()} kept", query.game.id, "save") }
                 }
                 // Never silent: a save that couldn't be kept says why, once per game while Fuse runs
                 // (only with a host: without one, nothing is sent anywhere).
-                if (!keepsOwn && here.any { sendsFor(ownerOf(query, it, profile), query.game.id) } && captured.none { it.kind != SaveKind.STATE }) whyNotKept(query, here)?.let { why ->
+                if (!keepsOwn && cached.saves && here.any { sendsFor(ownerOf(query, it, profile), query.game.id) } && captured.none { it.kind != SaveKind.STATE }) whyNotKept(query, here)?.let { why ->
                     if (explained.add("${query.game.id}|$why")) {
                         log("${query.title}: save not sent. $why", query.game.id, SyncActivity.FAILED)
                         _notices.tryEmit(SyncNotice.NotSynced(query.title, SaveKind.SAVE, why))
@@ -2208,7 +2263,7 @@ class JvmSyncService(
                     if (keepsOwn) runCatching { d.collect() }
                     return@withLock null
                 }
-                runCatching { d.flush(c) }
+                runCatching { d.flush(c, saves = cached.saves) }
                     .onSuccess { captured.firstOrNull { it.kind != SaveKind.STATE }?.let { r -> _notices.tryEmit(SyncNotice.Sent(query.title, r.kind, live = false)) } }
                     .onFailure { if (it is SyncException) handle(it) }
                 c
@@ -2340,7 +2395,7 @@ class JvmSyncService(
                 said = "Your save from ${head.deviceName} is in place"
             } else if (head == null && sendsFor(owner, q.game.id)) {
                 d.capture(owner, slot, total, title = q.title)
-                runCatching { d.flush(c) }
+                runCatching { d.flush(c, saves = cached.saves) }
                 said = said ?: "No save of yours was anywhere yet, so the test save is your first"
             }
         }
@@ -2559,13 +2614,15 @@ class JvmSyncService(
 
     private suspend fun sendLive(query: SaveQuery, profile: String, startedAt: Long) {
         val d = device ?: return
+        // Saves move another way here (RomM, Syncthing) or not at all.
+        if (!cached.saves) return
         val played = ((clock() - startedAt) / 1000).coerceAtLeast(0)
         val total = canonical(d.meta(profile)).game(query.game).totalSeconds + played
         val captured = slots(query).filter { sendsFor(ownerOf(query, it, profile), query.game.id) }.mapNotNull { slot -> runCatching { d.capture(ownerOf(query, slot, profile), slot, total, title = query.title) }.getOrNull() }
         if (captured.isEmpty()) return
         log("${query.title}: new ${captured.first().kind.label.lowercase()} kept while playing", query.game.id, "save")
         val c = client ?: return
-        runCatching { d.flush(c) }
+        runCatching { d.flush(c, saves = cached.saves) }
             .onSuccess { captured.firstOrNull { it.kind != SaveKind.STATE }?.let { r -> _notices.tryEmit(SyncNotice.Sent(query.title, r.kind, live = true)) } }
             .onFailure { if (it is SyncException) handle(it) }
     }
@@ -2632,7 +2689,7 @@ class JvmSyncService(
             val rev = c.revisions(owner, slot.game.id, kind).firstOrNull { it.id == version } ?: error("That version is gone.")
             // What is here now is kept in the history first, then the old one becomes the newest everywhere.
             d.restore(c, owner, slot, rev, title = query.title)
-            d.flush(c)
+            d.flush(c, saves = cached.saves)
             log("${query.title}: restored the save from ${rev.deviceName}", query.game.id, "restore")
         }
     }
@@ -2649,7 +2706,7 @@ class JvmSyncService(
         runCatching {
             // Sends what it can first; then forgets the host. Nothing of this device's own changes.
             client?.let { c ->
-                runCatching { device?.flush(c) }
+                runCatching { device?.flush(c, saves = cached.saves) }
                 if (keepProfiles) bringDownRecords(c)
                 runCatching { c.unlinkSelf() }
             }
@@ -2784,6 +2841,12 @@ class JvmSyncService(
 
         /** How long after the save check a game has to start before Fuse stops keeping in step for it. */
         const val READY_MS = 45_000L
+
+        /** How often saves made outside Fuse are looked for ([captureOutside]). */
+        const val OUTSIDE_EVERY_MS = 5 * 60_000L
+
+        /** How long a save's files must be left alone before one made outside Fuse is kept. */
+        const val OUTSIDE_SETTLED_MS = 60_000L
         const val PRESENCE_WAIT_MS = 3_000L
 
         /** Another device heard from this lately while playing (it may have gone to sleep mid-game). */

@@ -130,6 +130,12 @@ class OnboardingState {
     var button by mutableIntStateOf(0)
     var total by mutableIntStateOf(1)
 
+    /** The step on screen, by id: answers add and remove steps, and setup stays on this one. */
+    internal var currentId: String? = null
+
+    /** How far the fuse line has burned; it only moves forward as setup goes on, never back on a recount. */
+    internal var furthest = 0f
+
     /** Where each of the step's buttons sits (in the window), so Up and Down move between lines of them. */
     internal val buttonBounds = mutableMapOf<Int, androidx.compose.ui.geometry.Rect>()
 
@@ -174,6 +180,12 @@ fun OnboardingScreen(app: AppState) {
     val state = app.onboarding
     val steps = rememberSteps(app, state)
     state.total = steps.size
+    // An answer that adds or removes steps never moves setup off the step it is on.
+    val ids = steps.map { it.id }
+    androidx.compose.runtime.LaunchedEffect(ids) {
+        val at = state.currentId?.let { ids.indexOf(it) } ?: -1
+        if (at >= 0 && at != state.index) state.index = at
+    }
     // Setup interrupted by a restart (Steam's, Decky's or Fuse's) resumes on the step it was on.
     // Only the first time setup shows in this run of Fuse: setup opened again later starts at its beginning.
     androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -184,6 +196,7 @@ fun OnboardingScreen(app: AppState) {
         if (!prefs.onboardingDone && state.index == 0 && saved.isNotEmpty()) steps.indexOfFirst { it.id == saved }.takeIf { it > 0 }?.let { state.index = it }
     }
     val step = steps[state.index.coerceIn(0, steps.lastIndex)]
+    androidx.compose.runtime.SideEffect { state.currentId = step.id }
     androidx.compose.runtime.LaunchedEffect(step.id) {
         if (app.store.prefs.value.onboardingStep != step.id) app.store.updatePrefs { it.copy(onboardingStep = step.id) }
     }
@@ -200,7 +213,7 @@ fun OnboardingScreen(app: AppState) {
 
     // Again when a step's buttons change (back from setting up Fuse Sync, a profile just made), so the
     // selection is always one of them.
-    LaunchedEffect(step.id, step.actions.map { it.label }) {
+    LaunchedEffect(step.id, step.actions.map { it.label to it.primary }) {
         app.hero = null
         app.hints = buildList {
             add(Hint(HintButton.CONFIRM, "Choose"))
@@ -285,9 +298,18 @@ fun OnboardingScreen(app: AppState) {
                 }
             }
         }
+        // Counted by setup's chapters, which don't change with answers (steps do: a yes to Steam adds
+        // three), so the count never jumps about.
+        val chapters = steps.map { it.chapter }.distinct()
+        val chapter = chapters.indexOf(step.chapter).coerceAtLeast(0)
+        val inChapter = steps.filter { it.chapter == step.chapter }
+        val within = inChapter.indexOfFirst { it.id == step.id }.coerceAtLeast(0) / inChapter.size.coerceAtLeast(1).toFloat()
+        val burned = if (state.index >= steps.lastIndex) 1f else ((chapter + within) / chapters.size).coerceIn(0f, 1f)
+        if (state.index == 0) state.furthest = 0f
+        state.furthest = if (state.forward) maxOf(state.furthest, burned) else burned
         FuseLine(
-            progress = state.index / (steps.size - 1).coerceAtLeast(1).toFloat(),
-            label = "${state.index + 1} of ${steps.size}",
+            progress = state.furthest,
+            label = "${step.chapter}, part ${chapter + 1} of ${chapters.size}",
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .widthIn(max = MAX_WIDTH)

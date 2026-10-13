@@ -275,7 +275,9 @@ class LaunchResolver(
                 when (r.plan) {
                     is LaunchPlan.AndroidIntent, is LaunchPlan.Command -> return r.copy(notes = notes.toList())
                     is LaunchPlan.OpenAppOnly -> if (openOnly == null) openOnly = r
-                    is LaunchPlan.Unsupported -> if (firstUnsupported == null) firstUnsupported = r
+                    // A runner of its own kind of file (shell scripts, desktop shortcuts) turning a
+                    // game down isn't the game's emulator: the page said "Shell script" for a 3DS game.
+                    is LaunchPlan.Unsupported -> if (firstUnsupported == null && !c.adapter.shortcutsOnly) firstUnsupported = r
                 }
             }
             return (openOnly ?: firstUnsupported)?.copy(notes = notes.toList()) ?: ResolvedLaunch(

@@ -555,15 +555,15 @@ internal class DefaultRommOps(
             val roms = mirror.all(server)
             val result = RommMatch.match(roms, locals) { slug -> ctx.platforms.resolveFolder(slug)?.id?.value }
             val before = matches.value
-            matches.value = result.associate { it.romId to (GameId(it.gameId) to it.reason) }
-            // Newly joined: the library game keeps the art Fuse already found for the RomM game.
-            for (m in result) if (before[m.romId]?.first?.value != m.gameId) runCatching { adoptArt(GameId(m.gameId), m.romId) }
             // Linked from now on: the game page and Cartridge's Open both know it.
             val byId = rows.associateBy { it.id.value }
             for (m in result) {
                 val row = byId[m.gameId] ?: continue
                 if (row.rommRomId == null && m.reason != MatchReason.NAME_AND_TAGS) ctx.data.games.updateLinks(GameId(m.gameId)) { it.copy(rommRomId = m.romId) }
             }
+            matches.value = result.associate { it.romId to (GameId(it.gameId) to it.reason) }
+            // Newly joined (after linking, so the page never shows it unlinked): the library game keeps the art Fuse already found for the RomM game.
+            for (m in result) if (before[m.romId]?.first?.value != m.gameId) runCatching { adoptArt(GameId(m.gameId), m.romId) }
             // A scan or a download changed what the library has: what RomM hasn't got follows.
             _notOnServer.value = notOnServerNow()
         }
@@ -770,6 +770,13 @@ internal class DefaultRommOps(
         }
         val n = ctx.data.media.copyMissing(MediaOwner.OfGame(rommGameId(rom)), MediaOwner.OfGame(id))
         if (n > 0) ctx.gameArtFound.update { it + 1 }
+        // Its details too (year, genres, developer, summary, RomM's name for it): the page showed
+        // them while the game was on RomM and lost them the moment it was downloaded. Only blanks
+        // are filled; nothing the person or a source already gave the game is replaced.
+        val details = runCatching { remote.get(rommGameId(rom)) }.getOrNull()
+        if (details != null && details.metadata != io.github.matiyaaa.fuse.model.GameMetadata()) {
+            runCatching { ctx.data.games.applyMetadata(id, details.metadata, titleFromMetadata = details.titles.metadata, onlyFillEmpty = true) }
+        }
         return n > 0
     }
 

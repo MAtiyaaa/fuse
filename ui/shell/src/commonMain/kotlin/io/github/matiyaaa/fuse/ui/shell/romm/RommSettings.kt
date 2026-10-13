@@ -254,14 +254,12 @@ private fun rommRows(
     }))
 
     // Saves --------------------------------------------------------------------------------------
-    add(toggleRow(
-        "saves", "Sync saves with RomM", FuseIcons.Save, p.saveSync,
-        if (state.canSyncSaves || state.link != RommLink.ONLINE) {
-            "Games from RomM keep their save in step with RomM's, for your other devices. Saves that are one file (cartridge saves, memory cards)"
-        } else {
-            "Needs RomM 5 and a sign-in that may sync saves: pair with RomM again"
-        },
-    ) { v -> set { it.copy(saveSync = v) } }.copy(section = "Saves"))
+    // One way moves this device's saves: RomM, Fuse One or Syncthing, chosen in one place.
+    if (state.canSyncSaves || state.link != RommLink.ONLINE) {
+        add(io.github.matiyaaa.fuse.ui.shell.sync.saveProviderRow(app, section = "Saves", id = "saves"))
+    } else {
+        add(MenuAction("saves", "Save Sync", FuseIcons.Save, detail = "Needs RomM 5 and a sign-in that may sync saves: pair with RomM again", enabled = false, section = "Saves"))
+    }
 
     // Library -----------------------------------------------------------------------------------
     val library = "Library"
@@ -437,7 +435,12 @@ fun RommSetupScreen(app: AppState, pairing: Boolean) {
         }
     }
     fun signedIn(name: String) {
-        app.store.updatePrefs { it.copy(romm = it.romm.copy(saveSync = saves)) }
+        // One way moves this device's saves: choosing RomM's here turns Fuse One's and Syncthing's off.
+        val now = io.github.matiyaaa.fuse.ui.shell.sync.SaveProviders.current(app)
+        when {
+            saves && now != io.github.matiyaaa.fuse.data.settings.SaveProvider.ROMM -> app.scope.launch { app.store.setSaveProvider(io.github.matiyaaa.fuse.data.settings.SaveProvider.ROMM) }
+            !saves && now == io.github.matiyaaa.fuse.data.settings.SaveProvider.ROMM -> app.scope.launch { app.store.setSaveProvider(io.github.matiyaaa.fuse.data.settings.SaveProvider.OFF) }
+        }
         app.toasts.show("RomM is connected as $name", ToastKind.SUCCESS, icon = FuseIcons.CircleCheck)
         app.back()
     }
@@ -470,7 +473,7 @@ fun RommSetupScreen(app: AppState, pairing: Boolean) {
         val ready = p.localAddress.isNotBlank() || p.remoteAddress.isNotBlank()
         add(MenuAction("s.pair", "Pair with RomM", FuseIcons.QrCode, detail = "Shows a short code to approve in RomM. Nothing long to type", trailing = if (busy && code == null) Trailing.Value("Asking") else Trailing.Chevron, unavailableReason = if (!ready) "Add an address first" else null, onSelect = ::pair))
         add(toggleRow("s.uploads", "Allow uploads too", FuseIcons.CloudUpload, uploads, "Asks RomM for upload and scan rights. Leave off to only browse and download") { uploads = it })
-        add(toggleRow("s.saves", "Sync saves with RomM", FuseIcons.Save, saves, "Games from RomM keep their save in step with RomM's (RomM 5)") { saves = it })
+        add(toggleRow("s.saves", "Move saves with RomM", FuseIcons.Save, saves, "Games from RomM keep their save in step with RomM's (RomM 5). Fuse One's and Syncthing's save sync turn off on this device: only one moves saves") { saves = it })
         add(MenuAction("s.code", "Use a pairing code from RomM", FuseIcons.Key, detail = "Made in RomM under API tokens, Pair", unavailableReason = if (!ready) "Add an address first" else null, onSelect = {
             app.textInput = TextInputSpec("Pairing code", "", "ABCD-2345", capitalize = false, doneLabel = "Pair") { v ->
                 app.scope.launch {

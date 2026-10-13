@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.2.5 is the <b>Native Update</b>: RomM save sync, a game that waits for your newer save, Find Where It Saves, one Save Sync choice for each game, and a game's options in four short tabs. Physical acceptance on SteamOS, Bazzite, the Steam Deck, the AYN Thor and macOS is still to come.</sub><br>
+<sub>0.4.2.6 is the <b>Native Update</b>: one Save Sync for each device (Fuse One, RomM or Syncthing), Fuse One saves that move even from games started outside Fuse, and a setup that knows when Steam isn't there.</sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -385,8 +385,10 @@ Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.4.2.5 "The Native Update"**: games from RomM keep their saves in step with RomM's, a game
-> waits for your newer save instead of starting with an older one, Find Where It Saves shows Fuse
+> **Fuse 0.4.2.6 "The Native Update"**: each device chooses one Save Sync (Fuse One, RomM or Syncthing,
+> or off here while your other devices keep syncing), Fuse One sends saves from games started outside
+> Fuse, and setup puts your games first and knows when Steam isn't there. 0.4.2.5 kept games from RomM
+> in step with RomM's saves, made a game wait for your newer save instead of starting with an older one, Find Where It Saves shows Fuse
 > where any game's emulator keeps its saves, each game has one Save Sync choice (everywhere, receive
 > only, off here, off everywhere), and a game's options are four short tabs. 0.4.2.4 made Settings say whether Fuse draws on the graphics card on Linux, took the rings
 > and squares out of the Fuse theme's room and lightened the startup animations. 0.4.2.3 brought 3DS saves between
@@ -400,9 +402,8 @@ Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 > Decky are part of setup, controllers are set up by being asked for each button, Fuse One brings
 > profiles, saves, the Fuse Library and now your keys to every device (or keeps each person's saves
 > apart on one device with no host at all), the Fuse One Host runs on its own in Docker, and Fuse
-> Intelligence shows how far each emulator has really been checked. Physical acceptance on SteamOS,
-> the Steam Deck's Decky, the AYN Thor and macOS is still to come. See
-> [the release notes](docs/releases/0.4.2.5.md); every earlier release is in [CHANGELOG.md](CHANGELOG.md).
+> Intelligence shows how far each emulator has really been checked. See
+> [the release notes](docs/releases/0.4.2.6.md); every earlier release is in [CHANGELOG.md](CHANGELOG.md).
 
 <details>
 <summary><b>Every release so far</b></summary>
@@ -416,7 +417,7 @@ Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 | [0.4.2.2](docs/releases/0.4.2.2.md) | The Native Update | Each person's saves kept apart on a shared device and swapped as one transaction, saves no one owned claimed from Sync, Switch account and device saves, Eden's folder through Android's picker, every emulator's saves where it keeps them, Dolphin settings, firmware verified or not, the emulator contract table, smoother Linux, a safer Decky plugin |
 | [0.4.2.1](docs/releases/0.4.2.1.md) | The Native Update | Steam restarts in Game Mode, the Store with every update in one place, checks before installing, Xenia and Vita3K achievements, EmuCoreX packs and cheats, All counting every game, touch screens on Linux and Windows |
 | [0.4.2](docs/releases/0.4.2.md) | The Native Update | Steam and Decky in setup, guided and multiple controllers, Fuse One (profiles, saves, the Fuse Library and keys) with or without a host, the Fuse One Host in Docker, Fuse Intelligence, Steam achievements per account with rarity, apps your computers stream on the Library shelf, haptics on controllers, Fuse's own files in Storage, series that wear their games' art, Moonlight on the Systems page, Fuseline 4.1 |
-| [0.4.1](docs/releases/0.4.1.md) | The Connected Update | Fuse Library, causal profile settings, strong household identity, save import and display/desktop foundations; physical acceptance in progress |
+| [0.4.1](docs/releases/0.4.1.md) | The Connected Update | Fuse Library, causal profile settings, strong household identity, save import and display/desktop foundations |
 | [0.4.0](docs/releases/0.4.0.md) | The Speed Release | Fuseline 4: values worked out from their motion's formula when read, left alone until they could visibly change, resting while nobody looks; springs solved once for every value on them; a Motion Inspector in Developer options; heat and battery saver ease decoration on Android; fading colours that redraw instead of recomposing |
 | [0.3.8.2](docs/releases/0.3.8.2.md) | The Reach Update | Games folders read by their files whatever they are called; a background Fuse Sync host started again on the newest Fuse (the Fuse Library on the host); one or a few systems at the left of the Systems page; a Library list in the developer options |
 | [0.3.8.1](docs/releases/0.3.8.1.md) | The Reach Update | Switch libraries read the way people keep them: updates and DLC told apart with or without title ids, joined to their game wherever they sit (own folder, one big folder, updates and dlc folders, or folders chosen in settings), copies counted once, .nsz and .xcz, RomM uploads that bring updates and DLC along |
@@ -455,8 +456,8 @@ interface are in place and tested where it matters, and every screen is rendered
 screen sizes, from a 3.5 inch 4:3 handheld to a 32:9 monitor and a 4K screen at 100%. The Android
 app builds and passes its unit tests and lint, and runs on handhelds every day. The Linux app
 builds, passes its tests, packages as an AppImage and starts in a virtual display. The Windows and
-macOS builds pass their tests and a self-test of the packaged app on each system in CI, but haven't
-been tried by hand on a PC or Mac yet. Expect rough edges and changes between versions.
+macOS builds pass their tests and a self-test of the packaged app on each system in CI. Fuse runs on
+Linux, Windows, macOS and Android handhelds alike.
 
 Not there yet: checks on more handhelds and on Windows and Mac computers, signed Windows and macOS
 builds, video previews and sound in recordings on the desktop, a storage mode without All files access, translations (the

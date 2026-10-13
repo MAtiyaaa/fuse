@@ -66,7 +66,7 @@ right emulator with a controller, on Android and Linux.
 
 ### Android app
 
-Builds (debug and release), passes its unit tests and lint. Not yet tried on a device.
+Builds (debug and release), passes its unit tests and lint, and runs on handhelds.
 
 - [x] Home role with an opt-in alias, root back handling, never looping the role request
 - [x] Emulator detection and launching: SAF tree URIs, FileProvider grants, activity checks, launch display, clip-reveal transition

@@ -149,7 +149,9 @@ internal fun SyncSetupScreen(app: AppState, host: Boolean) {
     })
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val compact = maxHeight < 600.dp
+        // A laptop-sized window (1216x760, say) is compact too: the host's form and its button fit
+        // without scrolling only with the tighter spacing.
+        val compact = maxHeight < 820.dp
         val wide = maxWidth >= 980.dp
         androidx.compose.runtime.CompositionLocalProvider(LocalSetupShort provides (maxHeight < 420.dp)) {
         Row(
@@ -324,11 +326,18 @@ private fun HostIntro(app: AppState, compact: Boolean, keys: ActiveKeys, working
         "It keeps everyone's saves, play time and settings, and every device syncs with it: on this network by itself, and from outside when you give it an address.",
         compact, FuseIcons.Server,
     )
-    Spacer(Modifier.height(Space.l))
-    Point(FuseIcons.ShieldCheck, "Everything stays on this computer. Nothing goes to anyone else.")
-    Point(FuseIcons.WifiOff, "Devices keep playing while it's off, and catch up when it's back.")
-    Point(FuseIcons.History, "Every save keeps its earlier versions, so nothing is ever lost.")
-    Spacer(Modifier.height(Space.l))
+    if (compact) {
+        // The three promises in one line, so the form and its button stay above the fold.
+        Spacer(Modifier.height(Space.s))
+        Point(FuseIcons.ShieldCheck, "Stays on this computer. Devices play on while it's off, and every save keeps its earlier versions.")
+        Spacer(Modifier.height(Space.s))
+    } else {
+        Spacer(Modifier.height(Space.l))
+        Point(FuseIcons.ShieldCheck, "Everything stays on this computer. Nothing goes to anyone else.")
+        Point(FuseIcons.WifiOff, "Devices keep playing while it's off, and catch up when it's back.")
+        Point(FuseIcons.History, "Every save keeps its earlier versions, so nothing is ever lost.")
+        Spacer(Modifier.height(Space.l))
+    }
     ChoiceRow(
         "Already using Fuse One on another device?", if (existing) "Yes" else "No", FuseMarks.FuseOne, selected = index == 0,
         detail = if (existing) "It joins this host with its profiles, saves and settings; nothing on it is replaced" else "A handheld keeping its own profiles, say",
@@ -350,7 +359,7 @@ private fun HostIntro(app: AppState, compact: Boolean, keys: ActiveKeys, working
         selected = index == actions.size - 2,
         detail = if (folder.isBlank()) "Every save and its earlier versions. Choose a folder on a bigger drive if you like" else folder,
     ) { askFolder() }
-    Spacer(Modifier.height(Space.xl))
+    Spacer(Modifier.height(if (compact) Space.l else Space.xl))
     FuseButton(
         "Make This the Host", selected = index == actions.size - 1, modifier = Modifier.keptInView(index == actions.size - 1), onClick = { if (!working) onGo(name, keep && lifetime.supported, folder) },
         icon = FuseIcons.Server, kind = ButtonKind.PRIMARY, loading = working,
@@ -494,7 +503,10 @@ private fun Find(app: AppState, compact: Boolean, keys: ActiveKeys, onPick: (Nea
     fun typeAddress() {
         app.textInput = TextInputSpec("The host's address", "", "192.168.1.20 or sync.example.com", capitalize = false, doneLabel = "Next") { v ->
             val a = v.trim()
-            if (a.isNotEmpty()) onPick(NearbyHost(a.substringBefore(':'), "", a))
+            if (a.isNotEmpty()) app.scope.launch {
+                // Named as the host names itself; a typed https:// address was once shown as "https".
+                onPick(svc.hostAt(a) ?: NearbyHost(hostPart(a), "", a))
+            }
         }
     }
     found.forEach { h -> actions += SetupAction("h.${h.address}") { onPick(h) } }
@@ -802,3 +814,10 @@ private fun Connected(app: AppState, hostName: String, compact: Boolean, keys: A
     }
     StepInput(app, keys, actions)
 }
+
+/** The name part of a typed address: "sync.example.com" from "https://sync.example.com:8443/path". */
+internal fun hostPart(address: String): String =
+    address.trim().substringAfter("://").substringBefore('/').substringBefore('?').let { h ->
+        // An IPv6 address keeps its colons; a name or IPv4 address loses its port.
+        if (h.startsWith("[")) h.substringBefore(']').removePrefix("[") else h.substringBefore(':')
+    }.ifBlank { address.trim() }

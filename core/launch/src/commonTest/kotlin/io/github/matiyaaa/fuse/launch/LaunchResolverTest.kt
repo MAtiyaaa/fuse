@@ -36,6 +36,15 @@ class LaunchResolverTest {
     }
 
     @Test
+    fun aShellScriptRunnerIsNeverNamedAsAGamesEmulator() {
+        // Only bash is installed: it runs .sh shortcuts, so a 3DS game has no emulator, said as such.
+        val g = game("3ds", "$ROMS/3ds/Animal Crossing.3ds")
+        val r = resolver.resolve(g, null, listOf(linuxEmu("linux.script", "/usr/bin/bash")), Host.LINUX)
+        assertNull(r.adapter)
+        assertIs<LaunchPlan.Unsupported>(r.plan)
+    }
+
+    @Test
     fun anAppPlayedAsAGameStartsAsTheAppWhateverItsSystem() {
         val app = game("android", AppGames.path("com.blackrock.dredge/com.unity3d.player.UnityPlayerActivity"), title = "DREDGE")
         for (g in listOf(app, app.copy(platformId = PlatformId("win"), emulatorOverride = EmulatorId("winlator")))) {

@@ -160,6 +160,11 @@ class UiAudit {
 
     @Test fun onboardingH() = audit(AuditSize.H) { onboardingScreens(exhaustive = true) }
 
+    /** Setup and making this computer the host in Fuse's own first window on a desktop. */
+    @Test fun onboardingI() = audit(AuditSize.I) { onboardingScreens(exhaustive = false) }
+
+    @Test fun syncI() = audit(AuditSize.I) { syncScreens() }
+
     /** What 0.2.6 added, at 1080p and on a phone held sideways. */
     @Test fun m15Details() = audit(AuditSize.M) { detailScreens() }
 

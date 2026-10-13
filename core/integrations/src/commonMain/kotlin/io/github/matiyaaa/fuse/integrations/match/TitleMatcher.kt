@@ -229,6 +229,22 @@ class TitleMatcher(
         private const val MAX_INEXACT = 0.97
         private const val SEQUEL_FACTOR = 0.6
 
+        /**
+         * The same title once edition words and small words are set aside ("Pokemon Red" and
+         * "Pokémon Red Version", "Okami" and "Okami HD"): the same game, maybe another edition of
+         * it. Numbers must still agree, so a sequel never counts. Good enough for art, which is
+         * cosmetic; never for details.
+         */
+        fun sameGameName(a: String, b: String): Boolean {
+            fun strong(t: String): List<String> {
+                val tokens = TitleNormalizer.tokens(t)
+                val weak = TitleWords.weak(tokens)
+                return tokens.filterIndexed { i, _ -> !weak[i] }
+            }
+            val sa = strong(a)
+            return sa.isNotEmpty() && sa == strong(b)
+        }
+
         /** Title-only similarity of two raw titles (0..1, 1 only when they are equal once normalised). */
         fun titleSimilarity(a: String, b: String): TitleScore {
             val ta = TitleNormalizer.tokens(a)

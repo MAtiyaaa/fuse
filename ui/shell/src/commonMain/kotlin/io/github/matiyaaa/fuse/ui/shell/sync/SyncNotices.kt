@@ -17,6 +17,16 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
  */
 @Composable
 internal fun SyncNotices(app: AppState) {
+    // RomM's save sync says what became of each save too: sent, or not and why.
+    val rommSaves = app.store.rommSaves
+    if (rommSaves != null) LaunchedEffect(rommSaves) {
+        rommSaves.notices.collect { n ->
+            when (n) {
+                is io.github.matiyaaa.fuse.sync.romm.RommSaveNotice.Sent -> app.toasts.show("${n.title}: save sent to RomM", ToastKind.SUCCESS, icon = FuseIcons.CloudUpload)
+                is io.github.matiyaaa.fuse.sync.romm.RommSaveNotice.NotSent -> app.toasts.show("${n.title}: save not sent to RomM. ${n.why}", ToastKind.WARNING, icon = FuseIcons.CloudOff, durationMs = 9_000L)
+            }
+        }
+    }
     val svc = app.store.sync.service ?: return
     LaunchedEffect(svc) {
         svc.notices.collect { n ->
@@ -43,6 +53,12 @@ internal fun SyncNotices(app: AppState) {
                     ToastKind.INFO,
                     icon = FuseIcons.Archive,
                     durationMs = 8_000L,
+                )
+                is SyncNotice.NoOneChosen -> app.toasts.show(
+                    "${n.title}: save not sent, because nobody is chosen as playing here. Choose who's playing in Fuse One, and it goes.",
+                    ToastKind.WARNING,
+                    icon = FuseIcons.UserRound,
+                    durationMs = 9_000L,
                 )
                 is SyncNotice.CantUse -> app.toasts.show(
                     "${n.title}: the newest ${n.kind.label.lowercase()} can't be used here. ${n.why}",

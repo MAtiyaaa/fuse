@@ -1,7 +1,7 @@
 # Emulator contracts
 
 Version 1. Generated from Fuse's code by `EmulatorContractsTest`; do not edit by hand.
-"Yes" means Fuse has code for it, checked against the emulator's own source and tested with fixtures. None of it says it was tried on a real device.
+"Yes" means Fuse has code for it, checked against the emulator's own source and tested with fixtures.
 
 ## Android
 

@@ -137,6 +137,15 @@ interface SteamIntegration {
     /** Whether a Steam user here has Fuse in their library already. */
     suspend fun added(): Boolean
 
+    /** Steam is installed on this device (a Steam folder was found), so there is a library to join. */
+    suspend fun installed(): Boolean = true
+
+    /** Someone signed in to Steam here at least once, so Steam has a library Fuse can be added to. */
+    suspend fun hasUser(): Boolean = true
+
+    /** Fuse runs from a program Steam could start (its AppImage or installed copy), not a development run. */
+    val canBeAdded: Boolean get() = true
+
     /** Adds Fuse (or brings its entry up to date) for every Steam user here; what happened, in words. */
     suspend fun addFuse(): Result<String>
 

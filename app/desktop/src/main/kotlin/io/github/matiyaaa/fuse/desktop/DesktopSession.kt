@@ -295,12 +295,14 @@ class DesktopSession(
         try {
             return block()
         } finally {
-            if (wasFullscreen) {
-                withContext(NonCancellable + Dispatchers.Main) {
+            withContext(NonCancellable + Dispatchers.Main) {
+                if (wasFullscreen) {
                     fullscreen = true
                     windowState?.placement = placement
-                    bringToFront()
                 }
+                // The keyboard and the controller come back to Fuse when the dialog closes: without
+                // this, the folder just chosen was shown but Enter did nothing until a click.
+                bringToFront()
             }
         }
     }

@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.sync
 
+import io.github.matiyaaa.fuse.data.settings.SaveProvider
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -160,17 +161,17 @@ internal fun SyncthingScreen(app: AppState) {
  * turning Syncthing on while Fuse Sync is on asks first, then turns Fuse Sync off on this device.
  */
 internal fun useSyncthing(app: AppState, svc: SyncthingService, on: Boolean) {
+    val now = SaveProviders.current(app)
     when {
-        !on -> turnOffSyncthing(app)
-        app.store.prefs.value.sync.enabled -> app.confirm = ConfirmSpec(
-            title = "Use Syncthing instead of Fuse One?",
-            message = "Only one should move saves between devices. Fuse One stops syncing on this device and Syncthing takes over the save folders. Profiles, each person's saves and the save history here keep working, without a host.",
+        !on -> turnOffSyncthing(app) { app.store.setSaveProvider(SaveProvider.OFF) }
+        now == SaveProvider.FUSE_ONE || now == SaveProvider.ROMM -> app.confirm = ConfirmSpec(
+            title = "Move saves with Syncthing instead?",
+            message = "Only one moves this device's saves. ${now.label} stops moving them here and Syncthing takes over the save folders. Fuse One's profiles, play time and household games keep working, and your other devices keep their own choice.",
             confirmLabel = "Use Syncthing",
         ) {
-            // A Fuse Sync that is working asks once more before it stops.
-            turnOffFuseSync(app) { svc.setEnabled(true) }
+            app.scope.launch { app.store.setSaveProvider(SaveProvider.SYNCTHING) }
         }
-        else -> app.scope.launch { svc.setEnabled(true) }
+        else -> app.scope.launch { app.store.setSaveProvider(SaveProvider.SYNCTHING) }
     }
 }
 

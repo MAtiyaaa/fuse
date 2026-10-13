@@ -124,6 +124,9 @@ interface FuseStore {
 
     /** A song that ships with Fuse ([io.github.matiyaaa.fuse.ui.shell.music.BundledMusic]) as a file the player can open. */
     suspend fun bundledTrack(id: String): String? = null
+
+    /** What moves this device's saves (only one at a time); the others' save sync is turned off here. */
+    suspend fun setSaveProvider(provider: io.github.matiyaaa.fuse.data.settings.SaveProvider) = Unit
 }
 
 /**

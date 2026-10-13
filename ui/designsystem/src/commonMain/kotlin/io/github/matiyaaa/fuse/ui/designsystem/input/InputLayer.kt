@@ -124,9 +124,13 @@ fun InputRouter.handleKeyEvent(event: KeyEvent): Boolean {
 private fun InputRouter.typeInto(event: KeyEvent): Boolean {
     val input = textInput ?: return false
     if (event.type == KeyEventType.KeyDown && !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed) typedOnKeyboard()
-    // Ctrl+V (Cmd+V) pastes; other shortcuts are left alone.
+    // Ctrl+V (Cmd+V) pastes and Ctrl+A (Cmd+A) selects everything; other shortcuts are left alone.
     if ((event.isCtrlPressed || event.isMetaPressed) && event.key == Key.V) {
         if (event.type == KeyEventType.KeyDown) input.paste()
+        return true
+    }
+    if ((event.isCtrlPressed || event.isMetaPressed) && event.key == Key.A) {
+        if (event.type == KeyEventType.KeyDown) input.selectAll()
         return true
     }
     if (event.isCtrlPressed || event.isAltPressed || event.isMetaPressed) return false

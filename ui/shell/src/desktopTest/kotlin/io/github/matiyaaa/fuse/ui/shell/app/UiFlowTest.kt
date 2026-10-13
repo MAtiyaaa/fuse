@@ -326,7 +326,7 @@ class UiFlowTest {
                 io.github.matiyaaa.fuse.sync.NoHostLifetime("test"), sc,
             )
         })
-        val store = runBlocking { createFuseStore(services, scope) }
+        val store = runBlocking { createFuseStore(services, scope).also { s -> s.updatePrefs { it.copy(onboardingStep = "sync") } } }
         val svc = assertNotNullOf(store.sync.service)
         val router = InputRouter(scope)
         mainClock.autoAdvance = false
@@ -344,11 +344,8 @@ class UiFlowTest {
             }
         }
         fun shows(text: String) = onAllNodesWithText(text, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
-        pumpUntil { shows("Welcome to Fuse") }
-        router.tap(PadButton.A)
-        pumpUntil { shows("Tuned for this device") }
-        router.tap(PadButton.A)
-        // Fuse Sync comes before Who's playing, so a household's profiles are there to choose from.
+        // Setup resumes where it was left: here, after the games, on Fuse Sync. It comes before
+        // Who's playing, so a household's profiles are there to choose from.
         pumpUntil { shows("Play on, anywhere") }
         onAllNodesWithText("Skip", useUnmergedTree = true).onFirst().performClick()
         // Who's playing: no host needed, and skipping it is fine.

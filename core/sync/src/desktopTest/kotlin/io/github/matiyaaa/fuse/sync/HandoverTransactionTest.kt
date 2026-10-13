@@ -147,7 +147,7 @@ class HandoverTransactionTest {
 /** A save the emulator made blank again never goes anywhere as the newest. */
 class BlankSaveTest {
     @Test
-    fun aBlankSaveAfterARealOneIsNeverSentAndAFirstOneIs(): Unit = runBlocking {
+    fun aBlankSaveIsNeverSentFirstOrAfterARealOne(): Unit = runBlocking {
         val root = Files.createTempDirectory("blank").toFile()
         try {
             val game = GameKey.of("gba", null, null, "Minish Cap")
@@ -156,9 +156,11 @@ class BlankSaveTest {
             val device = SyncDevice(File(root, "device"), "thor", "Thor")
             var told = 0
             device.onBlank = { told++ }
-            // A first save that happens to be blank is no one's loss: it goes.
+            // A first save that is blank (save memory the emulator just made) holds nothing: it
+            // stays, so it can never stand as the newest over another device's real save.
             sav.writeBytes(ByteArray(8192) { 0xFF.toByte() })
-            assertNotNull(device.capture("mo", slot(), 60))
+            assertNull(device.capture("mo", slot(), 60))
+            assertEquals(0, told)
             sav.writeBytes(ByteArray(8192) { if (it < 4) 1 else 0 })
             assertNotNull(device.capture("mo", slot(), 120))
             // The emulator made its save memory again: all 0xFF, then all zeros, then empty.

@@ -79,6 +79,11 @@ fun main(args: Array<String>) {
     dirs.ensure()
     CrashLog(java.io.File(dirs.data, "crash")).install()
     Log.info("Fuse ${BuildInfo.VERSION} starting")
+    // Without a screen to open a window on, one plain sentence instead of the toolkit's error.
+    NoDisplay.why()?.let { why ->
+        System.err.println(NoDisplay.message(why))
+        kotlin.system.exitProcess(NoDisplay.EXIT_CODE)
+    }
     goBackFromAFailedUpdate(dirs, args)
     // The desktop's own scale where Java's toolkit can't follow it (fractional scaling on Linux).
     desktopScale = runCatching {
@@ -90,6 +95,18 @@ fun main(args: Array<String>) {
     }.getOrDefault(1f)
     // Lives as long as the process; runs on the AWT event thread, which is Compose's UI thread.
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    try {
+        runWindow(dirs, args, scope)
+    } catch (e: Throwable) {
+        // The display went away as the window opened (or the toolkit couldn't reach it): the same plain sentence.
+        if (!NoDisplay.isDisplayError(e)) throw e
+        Log.warn("the window couldn't open", e)
+        System.err.println(NoDisplay.message(e.message ?: e.javaClass.simpleName))
+        kotlin.system.exitProcess(NoDisplay.EXIT_CODE)
+    }
+}
+
+private fun runWindow(dirs: FuseDirs, args: Array<String>, scope: CoroutineScope) {
     application {
         val session = remember { DesktopSession(dirs, args.toList(), scope).also { it.start() } }
         session.exit = ::exitApplication

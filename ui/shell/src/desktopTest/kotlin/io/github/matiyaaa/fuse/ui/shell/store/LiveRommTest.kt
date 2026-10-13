@@ -249,9 +249,10 @@ class LiveRommTest {
             assertIs<io.github.matiyaaa.fuse.sync.romm.RommSaveGate.Go>(thor.beforeLaunch(query(thorSave), romId))
             assertEquals("android: world 5-1", thorSave.readText())
         } finally {
-            // Leave the server as it was: this game's saves and the test's devices go.
+            // Leave the server as it was: the saves the test's devices made and the devices go. A save
+            // of the person's own for this game is never touched.
             val auth = "Basic " + java.util.Base64.getEncoder().encodeToString("$user:$password".toByteArray())
-            val ids = runCatching { client.saves(romId).map { it.id } }.getOrDefault(emptyList())
+            val ids = runCatching { client.saves(romId).filter { it.originDeviceName?.startsWith("Fuse live test") == true }.map { it.id } }.getOrDefault(emptyList())
             if (ids.isNotEmpty()) {
                 services.http.post("$url/api/saves/delete") {
                     headers.append("Authorization", auth)

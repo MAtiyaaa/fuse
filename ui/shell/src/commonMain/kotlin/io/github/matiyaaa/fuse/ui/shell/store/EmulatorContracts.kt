@@ -17,7 +17,7 @@ import io.github.matiyaaa.fuse.sync.SaveAdapters
  * written out, and a test keeps the two the same.
  *
  * "Supported" means Fuse has code for it, checked against the emulator's own source and tested
- * with fixtures; none of it says it was tried on a real device.
+ * with fixtures.
  */
 object EmulatorContracts {
     const val VERSION = 1
@@ -103,7 +103,7 @@ object EmulatorContracts {
         appendLine("# Emulator contracts")
         appendLine()
         appendLine("Version $VERSION. Generated from Fuse's code by `EmulatorContractsTest`; do not edit by hand.")
-        appendLine("\"Yes\" means Fuse has code for it, checked against the emulator's own source and tested with fixtures. None of it says it was tried on a real device.")
+        appendLine("\"Yes\" means Fuse has code for it, checked against the emulator's own source and tested with fixtures.")
         for (host in listOf(Host.ANDROID, Host.LINUX, Host.WINDOWS, Host.MACOS)) {
             appendLine()
             appendLine("## ${host.name.lowercase().replaceFirstChar { it.uppercase() }}")

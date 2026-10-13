@@ -63,7 +63,7 @@ class DesktopMenuMusicTest {
                 throw IllegalStateException("device busy")
             }
             Recorder(rate, channels).also { outputs += it }
-        }, retryMs = 20)
+        }, retryMs = 20, restMs = 200, hasOutput = { true })
     }
 
     @AfterTest
@@ -122,15 +122,30 @@ class DesktopMenuMusicTest {
     }
 
     @Test
-    fun theSameStateAppliedAgainRevivesAMixerThatGaveUp() {
-        failOpens = DesktopMenuMusic.MAX_FAILURES
+    fun aMixerThatFailedManyTimesRestsAndStartsByItself() {
+        failOpens = DesktopMenuMusic.MAX_FAILURES + 1
         music.apply(MusicState(song, 0.6f, true))
-        waitUntil(5_000) { !music.running && failOpens == 0 }
-        assertFalse(outputs.isNotEmpty())
-        // Nothing changed in the settings, yet the music comes back: no off and on needed.
-        music.apply(MusicState(song, 0.6f, true))
+        // Nothing is applied again (setup's music has nothing changing it), yet the music starts.
         waitUntil(5_000) { outputs.isNotEmpty() && outputs.last().peaks.size > 80 }
         assertTrue(latestPeak() > 0)
+        assertTrue(music.running)
+    }
+
+    @Test
+    fun withoutAnySoundOutputTheMixerRestsQuietly() {
+        var opens = 0
+        val silent = DesktopMenuMusic({ _, _ -> opens++; throw IllegalStateException("no device") }, retryMs = 20, restMs = 300, hasOutput = { false })
+        try {
+            silent.apply(MusicState(song, 0.6f, true))
+            Thread.sleep(500)
+            // One try, then a rest: not a burst of retries.
+            assertTrue(opens in 1..2, "opened $opens times")
+            assertTrue(silent.running)
+            silent.apply(MusicState(null, 0.6f, true))
+            waitUntil(5_000) { !silent.running }
+        } finally {
+            silent.close()
+        }
     }
 
     @Test

@@ -54,6 +54,14 @@ internal class DesktopSteam(
         userLists().any { f -> SteamShortcuts.contains(runCatching { f.readBytes() }.getOrNull(), quote(exe)) }
     }
 
+    override suspend fun installed(): Boolean = withContext(Dispatchers.IO) {
+        folders.steamPlaces().first.any { root -> File(root, "userdata").isDirectory || File(root, "steamapps").isDirectory || File(root, "config").isDirectory }
+    }
+
+    override suspend fun hasUser(): Boolean = withContext(Dispatchers.IO) { userConfigDirs(create = false).isNotEmpty() || userDataDirs().isNotEmpty() }
+
+    override val canBeAdded: Boolean get() = program()?.let { File(it).canExecute() || (DesktopOs.isMac && File(it).isDirectory) } == true
+
     private val mutation = Mutex()
 
     override suspend fun addFuse(): Result<String> = mutate(repair = false)
@@ -512,6 +520,11 @@ internal class DesktopSteam(
         }
         return listOf("png", "jpg", "jpeg").map { File(grid, "${id}_icon.$it") }.firstOrNull { it.isFile }?.absolutePath.orEmpty()
     }
+
+    /** Every Steam user's own folder (`userdata/<id>`), signed in at least once. */
+    private fun userDataDirs(): List<File> = folders.steamPlaces().first
+        .map { File(it, "userdata") }
+        .flatMap { root -> root.listFiles()?.filter { it.isDirectory && it.name.toLongOrNull()?.let { id -> id > 0 } == true }.orEmpty() }
 
     /** Every Steam user's config folder (`userdata/<id>/config`), on every Steam install found. */
     private fun userConfigDirs(create: Boolean = true): List<File> = folders.steamPlaces().first

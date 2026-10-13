@@ -35,7 +35,7 @@ fun addonsRows(app: AppState): List<MenuAction> {
     return buildList {
         if (romm != null) {
             val st = app.store.romm.state.collectAsState().value
-            addAll(app.group(ADDONS_ROMM, "RomM", FuseIcons.LibraryBig, summary = io.github.matiyaaa.fuse.ui.shell.romm.rommStatus(st, prefs.romm).second, detail = "Your RomM server's games, downloads and uploads, inside Fuse") {
+            addAll(app.group("addons.romm", "RomM", FuseIcons.LibraryBig, summary = io.github.matiyaaa.fuse.ui.shell.romm.rommStatus(st, prefs.romm).second, detail = "Your RomM server's games, downloads and uploads, inside Fuse") {
                 romm.map { it.copy(id = "romm.${it.id}") }
             })
         }
@@ -167,7 +167,7 @@ fun fuseOneRows(app: AppState): List<MenuAction> {
             fun part(vararg from: String?, under: String) = rows.filter { it.section in from }.map { it.copy(section = under) }
             addAll(part(null, "Set up", "Connection", under = "Household"))
             addAll(part("You", under = "Fuse Profiles"))
-            addAll(part("What syncs", under = "Fuse Save Sync"))
+            addAll(part("What syncs", under = "What syncs"))
             if (prefs.sync.enabled) addAll(remoteLibraryRows(app, prefs.sync).map { it.copy(id = "reach.${it.id}", section = "Fuse Library Sync") })
             addAll(rows.filter { it.section != null && it.section !in setOf("Set up", "Connection", "You", "What syncs", "Leave") })
             if (syncthing != null) addAll(syncthingRows(app, syncthing))
@@ -187,7 +187,7 @@ private fun syncthingRows(app: AppState, syncthing: io.github.matiyaaa.fuse.sync
     val on = st !is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Off
     val words = io.github.matiyaaa.fuse.ui.shell.sync.syncthingWords(st)
     return listOf(
-        toggleRow("syncthing.enabled", "Use Syncthing", FuseIcons.Power, on, "For people who run it already. Fuse Save Sync is the one Fuse recommends; only one of them moves your saves") { v ->
+        toggleRow("syncthing.enabled", "Use Syncthing", FuseIcons.Power, on, "For people who run it already. Only one of Fuse One, RomM and Syncthing moves this device's saves") { v ->
             io.github.matiyaaa.fuse.ui.shell.sync.useSyncthing(app, syncthing, v)
         },
         MenuAction(

@@ -37,7 +37,18 @@ class JvmRommSaves(
     private val platform: String,
     private val clientVersion: String,
     private val clock: () -> Long = System::currentTimeMillis,
+    /** Where what happened is written (Fuse's log); never a sign-in or a save's contents. */
+    private val log: (String) -> Unit = {},
 ) : RommSaveService {
+    private val _notices = kotlinx.coroutines.flow.MutableSharedFlow<RommSaveNotice>(extraBufferCapacity = 8)
+    override val notices: kotlinx.coroutines.flow.SharedFlow<RommSaveNotice> = _notices
+
+    /** Said, never silent: a save that should have gone to RomM and didn't. */
+    private fun notSent(query: SaveQuery, why: String, e: Throwable? = null) {
+        log("RomM save sync: ${query.title}: not sent. $why" + (e?.let { " (${it.javaClass.simpleName}: ${it.message})" } ?: ""))
+        _notices.tryEmit(RommSaveNotice.NotSent(query.title, why))
+    }
+
     @Serializable
     private data class Agreed(val hash: String, val saveId: Long)
 
@@ -120,21 +131,30 @@ class JvmRommSaves(
 
     override suspend fun afterExit(query: SaveQuery, romId: Long) {
         withContext(Dispatchers.IO) {
+            // RomM's save sync is off here (another way moves this device's saves, or none): nothing to do.
             val c = client() ?: return@withContext
-            val spot = spotOf(query) ?: return@withContext
+            val spot = spotOf(query) ?: return@withContext notSent(query, "Its emulator keeps this save in a way RomM can't hold as one file.")
             val local = File(spot.files.single().path)
             if (!local.isFile || Slots.blank(local)) return@withContext
             val key = key(romId, spot)
             val here = md5(local)
             val agreed = state.agreed[key]
             if (agreed?.hash == here) return@withContext
-            val latest = runCatching { newest(c, romId, local, spot.format) }.getOrElse { return@withContext }
+            val latest = try {
+                newest(c, romId, local, spot.format)
+            } catch (e: Exception) {
+                return@withContext notSent(query, "RomM didn't answer. It goes after the next time you play.", e)
+            }
+            suspend fun send() = runCatching { sendUp(c, query, romId, local, spot.format, key) }
+                .onSuccess { log("RomM save sync: ${query.title}: sent"); _notices.tryEmit(RommSaveNotice.Sent(query.title)) }
+                .onFailure { notSent(query, "RomM didn't take it (${it.message ?: "no answer"}). It goes after the next time you play.", it) }
             when {
-                latest == null || latest.contentHash == here -> if (latest == null) runCatching { sendUp(c, query, romId, local, spot.format, key) } else agree(key, here, latest.id)
+                latest == null -> send()
+                latest.contentHash == here -> agree(key, here, latest.id)
                 // RomM unchanged since this device agreed: this one is the newest.
-                agreed != null && (agreed.saveId == latest.id || agreed.hash == latest.contentHash) -> runCatching { sendUp(c, query, romId, local, spot.format, key) }
+                agreed != null && (agreed.saveId == latest.id || agreed.hash == latest.contentHash) -> send()
                 // RomM changed meanwhile too: nothing is sent over it; the next launch asks.
-                else -> Unit
+                else -> log("RomM save sync: ${query.title}: RomM's save changed too; the next launch asks which to keep")
             }
         }
     }
