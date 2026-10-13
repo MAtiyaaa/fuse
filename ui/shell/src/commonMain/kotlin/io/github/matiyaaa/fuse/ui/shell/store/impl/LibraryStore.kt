@@ -610,7 +610,9 @@ internal class DefaultLibraryOps(
                 }
                 // RomM's save sync, for a game from RomM: RomM's newer save put in place, or a choice.
                 val rommSave = game.links.rommRomId?.let { romId -> rommSaves?.let { rs -> romId to plainSaveQuery(game, installedEmulator, core ?: RetroArchCores.defaultCore(ctx.host, game.platformId)) } }
-                if (rommSave != null && !skipSaveCheck) {
+                // How this game's saves sync here (the same choice as for Fuse One, by the same id).
+                val rommMode = io.github.matiyaaa.fuse.ui.shell.sync.SaveSyncMode.of(ctx.data.settings.current().sync, (save ?: rommSave?.second)?.game?.id ?: "")
+                if (rommSave != null && !skipSaveCheck && rommMode.receives) {
                     onStage(io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.CHECKING_SAVE)
                     when (val gate = rommSaves!!.beforeLaunch(rommSave.second, rommSave.first)) {
                         is io.github.matiyaaa.fuse.sync.romm.RommSaveGate.Conflict -> return LaunchOutcome.RommSaveConflict(gate.conflict)
@@ -621,7 +623,7 @@ internal class DefaultLibraryOps(
                 // From here the emulator is starting: nothing calls it off any more.
                 when (val r = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { ctx.services.launcher.run(resolved, displayId) }) {
                     is RunResult.Started -> {
-                        startSession(id, installedEmulator.id, r.awaitExit, save?.takeIf { link != null }, plainSave, rommSave)
+                        startSession(id, installedEmulator.id, r.awaitExit, save?.takeIf { link != null }, plainSave, rommSave?.takeIf { rommMode.sends })
                         if (note != null) LaunchOutcome.Synced(note) else LaunchOutcome.Started
                     }
                     // Only the app opened; which game gets played there is unknown, so no session is recorded.

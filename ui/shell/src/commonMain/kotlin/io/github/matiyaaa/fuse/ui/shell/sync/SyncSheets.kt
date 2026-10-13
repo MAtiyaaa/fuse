@@ -173,24 +173,9 @@ internal fun SaveHistoryScreen(app: AppState, game: GameId, title: String) {
             onSelect = { shareChoice(app, q, shared, hasMine = !versions.isNullOrEmpty()) { round++ } },
         )
     }
-    // Kept here alone: this device never sends or brings this game's saves (each person's still swap here).
+    // How this game's saves sync: everywhere, received only here, off here, or off everywhere.
     val config by app.store.sync.config.collectAsState()
-    val localOnly = query?.game?.id?.let { it in config.localOnlyGames } == true
-    val localRow = query?.let { q ->
-        MenuAction(
-            "local", "Keep Saves on This Device Only", FuseIcons.HardDrive,
-            detail = if (localOnly) "Never sent to or brought from other devices. Each person's save still switches here" else "Off: this game's saves go to your other devices",
-            trailing = Trailing.Switch(localOnly),
-            onSelect = {
-                app.scope.launch {
-                    app.store.sync.configure { c ->
-                        c.copy(localOnlyGames = if (localOnly) c.localOnlyGames - q.game.id else (c.localOnlyGames + q.game.id).distinct())
-                    }
-                }
-                app.toasts.show(if (localOnly) "$title's saves sync again" else "$title's saves stay on this device")
-            },
-        )
-    }
+    val localRow = query?.let { q -> saveSyncRow(app, q, title, config) }
     // A test run that shows Fuse where this game's emulator really keeps its save.
     val probeRow = query?.let { q ->
         MenuAction(

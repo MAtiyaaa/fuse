@@ -34,7 +34,27 @@ data class ContextMenuSpec(
     val actions: List<MenuAction>,
     /** ARGB colour for generated art when there is no [art]. */
     val accent: Long? = null,
-)
+    /**
+     * Tabs that split a long menu ([MenuTab]: which [actions] each holds, by id), switched with the
+     * shoulder buttons or a tap. Actions no tab holds (a screen's own, added later) get a tab of
+     * their own at the end. Empty: one list, as before.
+     */
+    val tabs: List<MenuTab> = emptyList(),
+) {
+    /** The tabs as shown: each with its actions, in the menu's order, and only those with any. */
+    fun shownTabs(): List<Pair<MenuTab, List<MenuAction>>> {
+        if (tabs.isEmpty()) return emptyList()
+        val held = tabs.flatMapTo(HashSet()) { it.ids }
+        val shown = tabs.map { t -> t to actions.filter { it.id in t.ids } }
+        val rest = actions.filter { it.id !in held }
+        return (shown + (MenuTab("View", io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons.LayoutList, rest.map { it.id }) to rest)).filter { it.second.isNotEmpty() }
+    }
+}
+
+/** One tab of a [ContextMenuSpec]: its [label], [icon], and the ids of the actions it holds. */
+data class MenuTab(val label: String, val icon: ImageVector? = null, val ids: Set<String>) {
+    constructor(label: String, icon: ImageVector?, ids: List<String>) : this(label, icon, ids.toSet())
+}
 
 data class ConfirmSpec(
     val title: String,

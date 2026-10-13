@@ -136,6 +136,10 @@ data class SyncSettings(
      * are still kept apart and swapped here, but never sent to or brought from other devices.
      */
     val localOnlyGames: List<String> = emptyList(),
+    /** Games this device takes the newest save of but never sends its own (it only receives). */
+    val receiveOnlyGames: List<String> = emptyList(),
+    /** Games whose saves the person syncs on none of their devices (travels with their profile's settings). */
+    val offEverywhereGames: List<String> = emptyList(),
     /**
      * Save folders the person chose, by emulator id ("drastic" to its folder), for emulators that
      * save where you tell them or that Fuse can't find alone. Used by Fuse Sync and Syncthing alike.

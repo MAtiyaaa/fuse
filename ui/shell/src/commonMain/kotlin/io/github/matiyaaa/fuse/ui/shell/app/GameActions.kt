@@ -386,6 +386,12 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         }
         // Fuse Sync: this game's saves through time, from every device (a host keeps them).
         if (!card.isApp && syncProfile != null && store.prefs.value.sync.role.isNotEmpty()) {
+            add(MenuAction("savesync", "Save Sync", FuseIcons.RefreshCcw, detail = "Everywhere, receive only here, or off", trailing = Trailing.Chevron, onSelect = {
+                scope.launch {
+                    val q = store.sync.saveQuery(card.id) ?: return@launch toasts.show("Fuse can't tell where ${card.title} saves yet", ToastKind.WARNING)
+                    io.github.matiyaaa.fuse.ui.shell.sync.saveSyncChoice(this@gameMenu, q, card.title)
+                }
+            }))
             add(MenuAction("saves", "Save History", FuseIcons.History, detail = "Every version of its saves, from every device", trailing = Trailing.Chevron, onSelect = {
                 closeOverlays(); go(Route.SaveHistory(card.id, card.title))
             }))
@@ -506,7 +512,15 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
             )
         }))
     }
-    return ContextMenuSpec(title = card.title, subtitle = card.platformShort, art = card.art.tile, actions = actions, accent = card.accent)
+    return ContextMenuSpec(
+        title = card.title, subtitle = card.platformShort, art = card.art.tile, actions = actions, accent = card.accent,
+        tabs = listOf(
+            MenuTab("Game", FuseIcons.Gamepad, listOf("play", "info", "fav", "collection", "pin", "steam", "reach.send", "hide", "notgame", "remove") + extra.map { it.id }),
+            MenuTab("Saves", FuseIcons.Save, listOf("savesync", "saves")),
+            MenuTab("Setup", FuseIcons.Sliders, listOf("system", "emulator", "emusettings", "patches", "parts", "packages", "screen", "compat", "folder", "patch", "move")),
+            MenuTab("Details", FuseIcons.Images, listOf("media", "rescrape", "rename", "reset", "romm.upload", "cartridge", "find", "upload")),
+        ),
+    )
 }
 
 fun AppState.collectionPicker(game: GameId, title: String) {

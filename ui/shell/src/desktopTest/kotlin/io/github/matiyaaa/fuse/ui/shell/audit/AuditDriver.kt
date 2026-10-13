@@ -291,6 +291,7 @@ internal class AuditDriver(
      * between versions): Down until that row is the selected one, then A.
      */
     fun tapText(text: String, step: PadButton = PadButton.DPAD_DOWN, substring: Boolean = false) {
+        findInMenuTabs(text, substring)
         waitFor(text.take(1))
         repeat(40) {
             settle(STEP_MS)
@@ -306,6 +307,7 @@ internal class AuditDriver(
 
     /** Moves with [step] until the item showing [text] is the selected one, without pressing it. */
     fun focusText(text: String, substring: Boolean = false, step: () -> Unit = { tap(PadButton.DPAD_DOWN) }) {
+        findInMenuTabs(text, substring)
         waitFor(text.take(1))
         repeat(40) {
             settle(STEP_MS)
@@ -314,6 +316,21 @@ internal class AuditDriver(
             step()
         }
         throw NotCovered("\"$text\" was never selected")
+    }
+
+    /**
+     * In a menu split into tabs (a game's options: Game, Saves, Setup, Details), moves to the tab
+     * holding [text] with the shoulder buttons, as a person would, when the open one doesn't.
+     */
+    private fun findInMenuTabs(text: String, substring: Boolean) {
+        fun shows() = ui.onAllNodes(androidx.compose.ui.test.hasText(text, substring = substring)).fetchSemanticsNodes().isNotEmpty()
+        settle(STEP_MS)
+        if (shows() || !(hasText("Setup") && hasText("Details"))) return
+        repeat(6) {
+            tap(PadButton.R1)
+            if (shows()) return
+        }
+        tap(PadButton.L1, 6)
     }
 
     /**

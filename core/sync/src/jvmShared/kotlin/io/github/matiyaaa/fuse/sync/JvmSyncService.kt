@@ -417,10 +417,13 @@ class JvmSyncService(
 
     /** Whether this device keeps and sends [owner]'s saves of [game] (the household's shared ones always). */
     private fun sendsFor(owner: String, game: String? = null): Boolean =
-        !localOnly(game) && (owner == SHARED_SAVES || owner !in saveOff)
+        !localOnly(game) && !(game != null && game in cached.receiveOnlyGames) && (owner == SHARED_SAVES || owner !in saveOff)
 
-    /** [game] keeps its saves on this device: never sent, never brought in (each person's still swap here). */
-    private fun localOnly(game: String?): Boolean = game != null && game in cached.localOnlyGames
+    /**
+     * [game] keeps its saves on this device (or the person syncs it on none of theirs): never sent,
+     * never brought in (each person's still swap here).
+     */
+    private fun localOnly(game: String?): Boolean = game != null && (game in cached.localOnlyGames || game in cached.offEverywhereGames)
 
     @Volatile private var queries: (suspend (String) -> SaveQuery?)? = null
 

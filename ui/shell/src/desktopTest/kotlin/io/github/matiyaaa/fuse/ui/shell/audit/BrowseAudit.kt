@@ -761,10 +761,16 @@ internal fun AuditDriver.gameScreens(exhaustive: Boolean) {
         useLibrary()
         openGame("Aurora Outpost")
         tap(PadButton.X)
-        waitFor("Manage Media")
+        waitFor("Setup")
         shoot("options menu from the game page")
         focusText("Remove from Fuse")
         shoot("options menu, last row (Remove from Fuse)")
+        tap(PadButton.R1)
+        shoot("options menu, Saves")
+        tap(PadButton.R1)
+        shoot("options menu, Setup")
+        tap(PadButton.R1)
+        shoot("options menu, Details")
     }
 
     // The pickers open from the game's options, which name them, so they are reached whatever order
