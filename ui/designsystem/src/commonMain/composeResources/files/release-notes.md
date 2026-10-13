@@ -1,4 +1,4 @@
-# Fuse 0.4.2.3 - The Sanity Update
+# Fuse 0.4.2.3 - The Native Update
 
 Saves that find their way between Android and Linux, a controller that stays Fuse's in Game Mode,
 the arrange bar's buttons within a controller's reach, and Jellyfin films at their proper loudness.
