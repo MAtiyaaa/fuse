@@ -490,7 +490,7 @@ private fun AppShelf(
             state = list,
             modifier = Modifier.dragScroll(list, Orientation.Horizontal),
             contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter * 2, top = Space.l, bottom = io.github.matiyaaa.fuse.ui.designsystem.theme.Size.sparkClearance),
-            horizontalArrangement = Arrangement.spacedBy(Space.m),
+            horizontalArrangement = Arrangement.spacedBy(STORE_CARD_GAP),
         ) {
             itemsIndexed(row.apps, key = { _, a -> a.key }) { i, a ->
                 val reason = row.featured[a.key]
@@ -516,6 +516,8 @@ internal fun AppCard(app: StoreApp, state: StoreState, selected: Boolean, compac
         modifier = Modifier.width(if (compact) 272.dp else 312.dp).height(if (compact) 124.dp else 140.dp),
         shape = shape, cornerFraction = 0.12f, glow = app.tint(),
         onClick = onClick, onLongClick = onLongClick,
+        // A wide card lifted by the usual share would cover its neighbours: it grows into half the gap.
+        maxGrow = STORE_CARD_GAP / 2 - 1.dp,
     ) {
         Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(c.surfaceRaised, c.surface))))
         Row(Modifier.fillMaxSize().padding(Space.m)) {
@@ -555,6 +557,8 @@ private fun FeaturedCard(app: StoreApp, reason: String, state: StoreState, selec
         modifier = Modifier.width(if (compact) 360.dp else 420.dp).height(if (compact) 124.dp else 140.dp),
         shape = shape, cornerFraction = 0.1f, glow = tint,
         onClick = onClick, onLongClick = onLongClick,
+        // A wide card lifted by the usual share would cover its neighbours: it grows into half the gap.
+        maxGrow = STORE_CARD_GAP / 2 - 1.dp,
     ) {
         Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(lerp(tint, Color.Black, 0.35f), lerp(tint, Color.Black, 0.78f)))))
         Box(Modifier.fillMaxSize().border(1.dp, Color.White.copy(alpha = 0.08f), shape))
@@ -708,3 +712,6 @@ private fun SpotlightCard(
         }
     }
 }
+
+/** Between the cards of a Store shelf: room for a focused card to lift without touching the next. */
+private val STORE_CARD_GAP = 20.dp

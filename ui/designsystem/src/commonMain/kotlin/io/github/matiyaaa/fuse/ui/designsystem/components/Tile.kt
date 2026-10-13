@@ -150,9 +150,11 @@ fun Tile(
     // the tile's own colour, only lightly darkened so it reads as coloured light. The ambient part
     // stays dark so the row below is never washed in colour.
     val glowing = style == FocusStyle.GLOW
-    val restSpot = if (glowing) lerp(glow, Color.Black, 0.78f) else colors.shadow
-    val liftSpot = if (glowing) lerp(glow, Color.Black, 0.22f) else colors.shadow
-    val ambient = if (glowing) lerp(glow, Color.Black, 0.75f).copy(alpha = 0.3f) else colors.shadow.copy(alpha = colors.shadow.alpha * 0.45f)
+    // Where shadows can't be tinted faintly (see Drawing.tintedShadows), the lift stays a plain shadow.
+    val tinted = glowing && io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.tintedShadows
+    val restSpot = if (tinted) lerp(glow, Color.Black, 0.78f) else colors.shadow
+    val liftSpot = if (tinted) lerp(glow, Color.Black, 0.22f) else colors.shadow
+    val ambient = if (tinted) lerp(glow, Color.Black, 0.75f).copy(alpha = 0.3f) else colors.shadow.copy(alpha = colors.shadow.alpha * 0.45f)
     val accent = colors.accent
     val focusColor = colors.focus
     val pool = glowing
@@ -183,7 +185,7 @@ fun Tile(
                 val up = Elevation.tileFocused.shadow.toPx()
                 // A pressed tile is pushed toward the surface, so its shadow tightens.
                 shadowElevation = if (!surface) 0f else (rest + (up - rest) * raised) * (1f - 0.45f * p.coerceIn(0f, 1f))
-                spotShadowColor = if (glowing) lerp(restSpot, liftSpot, raised.coerceIn(0f, 1f)) else liftSpot
+                spotShadowColor = if (tinted) lerp(restSpot, liftSpot, raised.coerceIn(0f, 1f)) else liftSpot
                 ambientShadowColor = ambient
                 this.shape = shape
                 clip = false

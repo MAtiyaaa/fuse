@@ -44,6 +44,16 @@ object Drawing {
     @Volatile
     var upscale: Float = 1f
 
+    /**
+     * Whether a shadow may take a colour of its own. Android draws a shadow's colour at the strength
+     * its alpha asks for, so a tile's tinted lift reads as a faint warm halo. Compose on a desktop
+     * draws every shadow at one fixed strength whatever its colour's alpha, so the same tint comes
+     * out as a solid coloured blob behind the tile: there shadows stay neutral (the coloured pool of
+     * light under a focused tile, drawn by Fuse itself, is the same on both).
+     */
+    @Volatile
+    var tintedShadows: Boolean = true
+
     /** Shown on a TV or another large screen (4K and up), where the window's dither is made stronger. */
     @Volatile
     var largeOutput: Boolean = false

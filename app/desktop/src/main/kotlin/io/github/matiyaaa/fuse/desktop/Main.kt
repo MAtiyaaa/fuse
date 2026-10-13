@@ -69,6 +69,8 @@ fun main(args: Array<String>) {
     UiRenderTrace.enabled = "--trace-ui" in args
     // Gradients and baked pictures behind the interface are dithered, on the graphics card or not.
     io.github.matiyaaa.fuse.desktop.system.DesktopDithering.install()
+    // Compose here draws shadows at one strength whatever their colour's alpha: they stay neutral.
+    io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.tintedShadows = false
     // Skia's own messages, so a fallback to drawing on the processor has its reason.
     io.github.matiyaaa.fuse.desktop.system.GraphicsReport.install()
     setX11WmClass()
