@@ -478,9 +478,12 @@ internal fun PadDiagram(
     modifier: Modifier = Modifier,
     sticks: io.github.matiyaaa.fuse.ui.designsystem.input.StickPositions = LocalInputRouter.current.sticks.collectAsState().value,
 ) {
-    Box(modifier, contentAlignment = Alignment.Center) {
+    // As wide as it may be, but never taller than its place: a short panel shrinks the pad instead of
+    // letting it spill over the heading above it.
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
+        val fit = if (constraints.hasBoundedHeight) minOf(maxWidth, maxHeight * io.github.matiyaaa.fuse.ui.shell.onboarding.PAD_ASPECT) else maxWidth
         io.github.matiyaaa.fuse.ui.shell.onboarding.PadArt(
-            pressed, Fuse.glyphs.style, nintendoKeys, Modifier.widthIn(max = PAD_MAX_WIDTH).fillMaxWidth(), marked = marked, sticks = sticks,
+            pressed, Fuse.glyphs.style, nintendoKeys, Modifier.widthIn(max = minOf(PAD_MAX_WIDTH, fit)).fillMaxWidth(), marked = marked, sticks = sticks,
         )
     }
 }

@@ -52,6 +52,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ReorderSpec
 import io.github.matiyaaa.fuse.ui.shell.app.calibrateScreen
 import io.github.matiyaaa.fuse.ui.shell.app.calibration
+import io.github.matiyaaa.fuse.ui.shell.app.changeScreenCalibration
 import io.github.matiyaaa.fuse.ui.shell.app.forgetScreenCalibration
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.addGame
@@ -177,23 +178,24 @@ fun accessibilityRows(app: AppState): List<MenuAction> {
     val set = app.store::updatePrefs
     val screens by app.platform.displays.collectAsState()
     val calibrated = p.calibration(screens)
-    // While this screen has its own fit, the shared rows say so: they set every other screen.
-    val shared = if (calibrated != null) "This screen is calibrated and keeps its own. This sets the others" else null
+    // A calibrated screen keeps its own text and edges: the rows show and change those, here, so
+    // what is chosen is what is seen. Elsewhere they set what every screen shares.
+    val own = if (calibrated != null) "For this screen, which is calibrated. Other screens keep theirs" else null
     return buildList {
         labelled("Reading") {
             add(calibrateRow(app, calibrated))
             add(app.choiceRow(
-                "textsize", "Text size", FuseIcons.TextSize, p.textScale,
+                "textsize", "Text size", FuseIcons.TextSize, calibrated?.textScale ?: p.textScale,
                 listOf(1f to "Default", 1.15f to "Large", 1.3f to "Extra large"),
-                detail = shared ?: "Larger text for reading from the sofa. Titles grow a little less",
+                detail = own ?: "Larger text for reading from the sofa. Titles grow a little less",
                 aid = { ChoiceAid.TextSize(it) },
-            ) { v -> set { it.copy(textScale = v) } })
+            ) { v -> if (calibrated != null) app.changeScreenCalibration { it.copy(textScale = v) } else set { it.copy(textScale = v) } })
             add(app.choiceRow(
-                "margin", "Screen edges", FuseIcons.Maximize, p.screenMargin,
+                "margin", "Screen edges", FuseIcons.Maximize, calibrated?.margin ?: p.screenMargin,
                 listOf(0 to "Use all of it", 2 to "2% in", 4 to "4% in", 6 to "6% in"),
-                detail = shared ?: "Keeps everything clear of edges a TV cuts off. The background still fills the screen",
+                detail = own ?: "Keeps everything clear of edges a TV cuts off. The background still fills the screen",
                 aid = { ChoiceAid.ScreenEdges(it) },
-            ) { v -> set { it.copy(screenMargin = v) } })
+            ) { v -> if (calibrated != null) app.changeScreenCalibration { it.copy(margin = v) } else set { it.copy(screenMargin = v) } })
         }
         labelled("Motion and focus") {
             // Automatic is what this device's effects call for: the recommendation from setup, or the Performance choice.

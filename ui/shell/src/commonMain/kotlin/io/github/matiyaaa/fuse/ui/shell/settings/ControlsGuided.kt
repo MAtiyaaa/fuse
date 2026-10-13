@@ -268,7 +268,7 @@ internal fun GuidedControls(app: AppState, buttons: List<PadButton>, label: (Pad
                         buildString {
                             append("Fuse asks for each button and you press it. ")
                             if (controllers.size > 1) append("With ${controllers.size} controllers connected, the first question is which one moves around Fuse. ")
-                            append("A direction keeps a button as it is. Hold any button for two seconds to stop at any time; stopping changes nothing.")
+                            append("A direction keeps a button as it is. Hold any button to stop; stopping changes nothing.")
                         },
                         Fuse.type.body, color = c.textMuted, maxLines = 5,
                     )

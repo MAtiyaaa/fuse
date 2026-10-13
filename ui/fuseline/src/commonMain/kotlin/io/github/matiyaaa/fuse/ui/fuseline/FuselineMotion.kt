@@ -58,8 +58,9 @@ data class MotionEnvironment(
 
 /**
  * Fuse's motion at one [level]: the motions every part of the interface uses, scaled to the
- * person's choice. Reduced keeps only short fades (no scale, slide or parallax); Enhanced adds
- * depth but keeps the same durations, so it never slows navigation down.
+ * person's choice. Reduced keeps only short fades (no scale, slide or parallax); Enhanced moves
+ * further and livelier (a bigger lift that settles with a small overshoot, deeper slides and rises,
+ * a longer cascade, the hero drifting) but keeps the same durations, so it never slows navigation down.
  *
  * Fuse asks for an intent ([focus], [selection], [follow], [settle], [enter], [exit], [dismiss],
  * [reveal], [navigation], [press], [hover], [sharedElement], [overscroll]) rather than tuning
@@ -79,7 +80,7 @@ class FuselineMotion(val level: MotionLevel, val environment: MotionEnvironment 
         MotionLevel.REDUCED -> 1f
         MotionLevel.MINIMAL -> 1.04f
         MotionLevel.STANDARD -> 1.07f
-        MotionLevel.ENHANCED -> 1.08f
+        MotionLevel.ENHANCED -> 1.1f
     }
 
     /** Light sweep across a tile when it gains focus. */
@@ -99,7 +100,7 @@ class FuselineMotion(val level: MotionLevel, val environment: MotionEnvironment 
         MotionLevel.REDUCED -> 0f
         MotionLevel.MINIMAL -> 0.03f
         MotionLevel.STANDARD -> 0.06f
-        MotionLevel.ENHANCED -> 0.08f
+        MotionLevel.ENHANCED -> 0.11f
     }
 
     /** How far content rises as it is revealed on entry (0 under Reduced, where it only fades). */
@@ -107,7 +108,7 @@ class FuselineMotion(val level: MotionLevel, val environment: MotionEnvironment 
         MotionLevel.REDUCED -> 0.dp
         MotionLevel.MINIMAL -> 6.dp
         MotionLevel.STANDARD -> 10.dp
-        MotionLevel.ENHANCED -> 12.dp
+        MotionLevel.ENHANCED -> 18.dp
     }
 
     /** Delay between neighbouring revealed items (none under Reduced). */
@@ -115,14 +116,20 @@ class FuselineMotion(val level: MotionLevel, val environment: MotionEnvironment 
         MotionLevel.REDUCED -> 0
         MotionLevel.MINIMAL -> 15
         MotionLevel.STANDARD -> Durations.STAGGER
-        MotionLevel.ENHANCED -> 30
+        MotionLevel.ENHANCED -> 40
     }
 
     /** How far a pressed item shrinks (1 = not at all, under Reduced). */
     val pressScale: Float = if (level == MotionLevel.REDUCED) 1f else 0.965f
 
     /** The scale an overlay panel grows from as it opens (1 under Reduced, where it only fades). */
-    val overlayScale: Float = if (level == MotionLevel.REDUCED) 1f else 0.96f
+    val overlayScale: Float = when (level) {
+        MotionLevel.REDUCED -> 1f
+        MotionLevel.ENHANCED -> 0.92f
+        else -> 0.96f
+    }
+
+    private val enhanced: Boolean get() = level == MotionLevel.ENHANCED
 
     fun ms(base: Int): Int = when (level) {
         MotionLevel.REDUCED -> minOf(base, 120).let { (it * 0.6f).roundToInt() }
@@ -137,11 +144,17 @@ class FuselineMotion(val level: MotionLevel, val environment: MotionEnvironment 
     fun tween(base: Int, easing: Curve = Curves.Standard): Tween = Tween(ms(base), curve = easing)
 
     /** Focus lift: a firm spring that settles without visible bounce. */
-    fun focusSpring(): Motion = if (reduced) Snap() else Spring(dampingRatio = 0.82f, stiffness = 900f)
+    fun focusSpring(): Motion = when {
+        reduced -> Snap()
+        // Enhanced: the lift overshoots a touch and settles, quick enough to keep up with a held direction.
+        enhanced -> Spring(dampingRatio = 0.62f, stiffness = 760f)
+        else -> Spring(dampingRatio = 0.82f, stiffness = 900f)
+    }
 
     /** Carousels and strips following the selection. */
     fun followSpring(): Motion =
         if (reduced) Tween(ms(Durations.FAST), curve = Curves.Standard)
+        else if (enhanced) Spring(dampingRatio = 0.86f, stiffness = 480f)
         else Spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 520f)
 
     /**
@@ -187,7 +200,7 @@ class FuselineMotion(val level: MotionLevel, val environment: MotionEnvironment 
      * The spark bar under a focused tile growing out: a lively spring with a small overshoot, so
      * the bar pops into place a beat after the lift. Snaps under Reduced motion.
      */
-    fun barSpring(): Motion = if (reduced) Snap() else Spring(dampingRatio = 0.55f, stiffness = 520f)
+    fun barSpring(): Motion = if (reduced) Snap() else Spring(dampingRatio = if (enhanced) 0.45f else 0.55f, stiffness = 520f)
 
     /** Pressing down: quick and direct, so a tap is felt at once. */
     fun pressIn(): Motion = Tween(ms(Durations.INSTANT), curve = Curves.Standard)
@@ -234,7 +247,7 @@ class FuselineMotion(val level: MotionLevel, val environment: MotionEnvironment 
     fun settle(): Motion = if (reduced) Tween(ms(Durations.FAST), curve = Curves.Standard) else Spring(1f, 500f)
 
     /** Moving between places (tabs, pages, screens): quick, and every change carries on from the last. */
-    fun navigation(): Motion = if (reduced) Tween(ms(Durations.FAST), curve = Curves.Fade) else Spring(1f, 900f)
+    fun navigation(): Motion = if (reduced) Tween(ms(Durations.FAST), curve = Curves.Fade) else Spring(if (enhanced) 0.86f else 1f, 900f)
 
     /** Something put away by the person (a sheet swiped down, a toast flicked off): carries their speed. */
     fun dismiss(): Motion = if (reduced) Tween(ms(Durations.FAST), curve = Curves.Exit) else Spring(1f, 600f)
@@ -246,7 +259,7 @@ class FuselineMotion(val level: MotionLevel, val environment: MotionEnvironment 
     fun press(down: Boolean): Motion = if (down) pressIn() else pressOut()
 
     /** An element travelling between screens: still, cross-faded, under Reduced. */
-    fun sharedElement(): Motion = if (reduced) Snap() else Spring(1f, 450f)
+    fun sharedElement(): Motion = if (reduced) Snap() else Spring(if (enhanced) 0.8f else 1f, 450f)
 
     /** Pulling past an end and springing back. */
     fun overscroll(): Motion = if (reduced) Snap() else Spring(1f, 700f)

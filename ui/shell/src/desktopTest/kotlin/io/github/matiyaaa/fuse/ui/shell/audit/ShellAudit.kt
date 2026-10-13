@@ -643,6 +643,22 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         shoot("what going back means, before it happens")
     }
 
+    scenario("settings", "home from the top bar") {
+        useLibrary()
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("home"))
+        tap(PadButton.DPAD_RIGHT)
+        waitFor("Style, rows or widgets")
+        shoot("the Home section open")
+        // Up to the top bar, along to its Home tab, and chosen: Fuse goes Home.
+        tap(PadButton.DPAD_UP, 12)
+        tap(PadButton.DPAD_LEFT, 12)
+        shoot("the Home tab in the top bar focused")
+        tap(PadButton.A)
+        settle(800)
+        shoot("after choosing the Home tab")
+    }
+
     scenario("settings", "home arrangement") {
         useLibrary()
         home()
