@@ -1,105 +1,75 @@
-# Fuse 0.4.2.6 - The Native Update
+# Fuse 0.4.2.7 - The Native Update
 
-One Save Sync for each device, Fuse One saves that really move, and a setup that never sends you
-somewhere that can't work: Steam steps that know when Steam isn't there, a step counter that holds
-still, the host screen that fits a small window and game folders before anything else.
+Fuse on a Linux TV, made right: a Home background that stays sharp and steady, Jellyfin films you
+can hear, controls that can always be put back, Steam's menus that keep the controller to
+themselves, a Decky plugin with something to show, and a long list of fixes from the 0.4.2.6 audit.
 
 ## New
 
-- **One Save Sync for each device.** Fuse One, RomM or Syncthing moves this device's saves, or none
-  does. Two of them moving the same files would fight over them, so choosing one turns the others'
-  save sync off here. It is a choice for this device only: turn it off on one device and every
-  other device in your account keeps syncing. Choose in setup, or in Settings under Save Sync
-  (also reachable from Fuse One, RomM and Syncthing). Existing setups keep what they used.
-- **Saves made outside Fuse are sent too.** A game started from Steam, the emulator's own menu or a
-  shortcut used to keep its saves on the device until Fuse launched that game itself. Fuse now
-  looks over the saves it knows about every few minutes and sends the ones that changed, once
-  they've settled for a minute.
-- **A game with no one chosen says so.** On a device in a household with nobody picked, a save that
-  couldn't go anywhere now says to choose who's playing instead of staying behind silently.
-- **RomM tells you when a save didn't go up,** with the reason, instead of only writing it in the log.
-- **RomM Saves in Addons.** With RomM moving this device's saves, Addons shows them the way Sync
-  shows Fuse One's: every game with saves on RomM, the newest one, which device it came from and
-  when, and whether this device's save is in step, newer here or newer on RomM. Open a game for
-  every save RomM keeps of it. RomM keeps saves only; profiles stay with Fuse One.
-- **Saves on This Device,** in every game's options: the save files its emulator keeps here (a
-  RetroArch .srm, a memory card, save states), with their size, time and place, with or without
-  any save sync.
-- **The host keeps up by itself.** A computer hosting Fuse One in the background starts again on
-  the new version as soon as Fuse is updated on it, and on Linux it updates itself when your
-  devices already run a newer Fuse, so nobody has to open Fuse on that computer. Your devices say
-  when the host runs an older Fuse, and how to update it (a Docker host too).
+- **Start and Select, held for three seconds, put the controls back.** From anywhere, whatever the
+  mapping: every remapped button, the swapped Confirm and Back, the swapped shoulders and the
+  controller type return to how they came, and Fuse says so.
+- **The Decky plugin shows your library.** Steam's Quick Access Menu lists your games and systems,
+  what's playing, your time this week and the last five games you played, and opens any of them in
+  Fuse. Once the plugin is installed, Fuse turns on its side of the connection by itself (unless
+  you chose otherwise), and the plugin says when Fuse One isn't set up.
+- **Restore Original Title,** in a renamed game's Details tab, gives the game back its own name.
+- **Unpin from Home,** in a pinned game's options. Pinning a game now also shows the Pinned shelf on
+  Home if it was hidden.
+- **Apply a patch from a file on Linux and Windows,** with a picker that opens in the game's folder
+  and lists only patch files.
+- **See all on RomM.** Search lists the first RomM games that match, then a row that lists the rest.
+- **A log Fuse keeps on Linux,** at ~/.local/share/fuse/logs/fuse.log (the previous session's beside
+  it), with the time of every line. When the interface stops answering for two seconds, the log
+  says what it was doing, and again when it recovers.
 
 ## Changed
 
-- **Fuse One with RomM, or Fuse One with Cartridge.** After choosing Fuse One in setup, RomM (the way
-  we recommend) or Cartridge can come along too. RomM and Cartridge still never go together.
-- **Settings search works as you type.** With a keyboard, typing in the search row lists every
-  matching setting at once, Enter goes to the first, and no separate dialog opens. A controller
-  still gets the on-screen keys.
-- **RomM in Settings.** Addons, RomM starts with Sign In to RomM, and searching for RomM finds it.
-  RomM needs nothing else; Cartridge is only its separate companion app.
-- **~/Games is found by itself,** with a ROMs folder inside it, and Documents/ROMs, on every system.
-- **Setup's order.** Game folders, emulators and your games come first; Play on, Anywhere (Fuse One)
-  now follows them, so making this computer the host never runs before Fuse knows your games, and
-  setup no longer leaves for the host screens partway through.
-- **The step counter holds still.** Setup counts its five chapters ("Your games, part 2 of 5")
-  instead of a step total that grew and shrank with each answer, and the line along the top only
-  moves forward.
-- **Play on, Anywhere shows the three ways saves can move,** Fuse One, RomM and Syncthing, with
-  Use Fuse One first and the others one press away.
-- **The emulators step says what's still missing** ("GB needs an emulator") or that you're ready to play.
-- **The artwork step checks your SteamGridDB key** and says whether it works, was turned down or
-  couldn't be reached, with a way to change it.
-- **The controller step offers Detect first only when a controller is in your hand.**
-- **Menu music starts with setup,** on the Welcome step, instead of after a profile was made.
-- **Downloaded RomM games keep RomM's details** (year, genres, developer, summary), filling only
-  what the game didn't have.
-- **Ctrl+A (Cmd+A on a Mac) selects all** in text fields.
-- **Choosing a button in Controls looks the part.** The window that waits for a press shows the
-  action's icon and name in large type, a controller with its current button marked, a countdown
-  ring and a Cancel button, instead of thin lines of text.
-- **The Guide button does nothing on Linux.** The button in the middle of the controller no longer
-  takes you Home there, so it never fights the system or Steam, and Controls no longer offers it.
+- **Home's background stays put.** Moving between Home's widgets no longer drops it to black for a
+  moment: the last game's art stays until the next is ready. The art of the shelf you're on is
+  fetched ahead, and art too small for a TV is shown softened instead of stretched into blocks.
+- **No bands in the background on a 4K TV.** Gradients and the blurred room are drawn with stronger
+  dithering on large screens and in Steam's Game Mode, and the room is baked at up to 3840 pixels.
+- **Jellyfin films are heard.** Every film's sound is evened out the way a TV does it: quiet speech
+  comes up, loud moments come down to meet it, and nothing clips.
+- **Menu music on Android sits lower.** The top of the volume slider is now as loud as the middle
+  used to be, and the middle a comfortable background level. Linux stays as it was.
+- **Text size and Screen edges change the screen they're on.** On a screen you calibrated, Settings
+  now changes that screen's own text size and edges, so Large and Extra Large show at once.
+- **Enhanced motion is enhanced:** a larger lift on focus, longer slides and a livelier spring.
+- **Guided controller setup stops sooner and leaves nothing behind.** A short hold of any button
+  stops it, and stopping puts back every control as it was before you started. A mapping that would
+  leave Confirm or Back on a button that can't reach Fuse (the Guide button on Linux) is set aside.
+- **Steam's menus keep the controller.** While Steam's Quick Access Menu or overlay is open in Game
+  Mode, Fuse ignores the controller instead of moving behind it.
+- **Choosing Xbox, PlayStation or Nintendo labels only changes the labels.** The buttons keep doing
+  what they did.
+- **Fuse's logo in Steam's side menu** sits inside its space instead of filling it; the art Fuse
+  placed before is replaced by itself.
+- **The Store knows emulators installed outside it.** Flatpak and AppImage emulators (Azahar too)
+  show their version, so the Store can offer an update.
+- **Focus on the desktop lifts with a neutral shadow,** as on Android, instead of one tinted by the
+  game's colour.
+- **The Linux AppImage runs on Java 21** with its generational collector, for fewer and shorter
+  pauses while animating.
+- **A game's options fit their tabs.** With four tabs, the tabs show their icons, and the name of
+  the one you're on.
+- **Rescanning says what it found,** in Library, Systems and Settings.
+- **The RomM page says Connected at home only for a server at home,** and Uploads shows On or Off.
+- **Page Up and Page Down move along Home three shelves at a time,** and the mouse wheel scrolls
+  Home smoothly.
 
 ## Fixed
 
-- **Setup without Steam.** When Steam isn't installed, "Not now" is chosen on the Steam steps
-  instead of "Yes, integrate with Steam", the Decky step's "Not now" comes before "Look again", and
-  "Yes, add Fuse to Steam" is only offered when Fuse can really add itself (it said nothing and did
-  nothing before). When it can't, the step says why. An error adding Fuse to Steam is shown, not
-  only logged.
-- **"Make this computer the host" fits the window.** Its button was cut off in Fuse's own first
-  window (1216 by 760).
-- **Fuse One save sync.** Computers that played games outside Fuse never sent their saves; they do
-  now. A save that met a newer one made by an older Fuse no longer leaves a conflict copy behind on
-  every play. A blank save is never sent as the first save of a game. Saves follow this device's
-  Save Sync choice everywhere they move: before a game starts, after it closes, while it runs and in
-  the background.
-- **No display.** Starting Fuse without a display says so in one line and exits, instead of a crash
-  report.
-- **No sound output.** Menu music waits quietly when there is nothing to play through and starts by
-  itself once there is, instead of failing three times with an error each time.
-- **Games no longer fail when Fuse's usual RetroArch core isn't installed.** On a computer Fuse
-  plays each game in a core RetroArch really has (Nestopia when FCEUmm isn't there), uses the
-  system's own emulator when RetroArch has no core for it (standalone mGBA for GBA), and otherwise
-  says which core to download instead of RetroArch's own error. A core folder set in retroarch.cfg
-  is found too.
-- **Art is found for far more games.** Short or run-together file names ("Toy Story 3",
-  "MEGAMAN2", "mariorpg", "SMB3", "JSRF - Jet Set Radio Future") and names that only add an edition
-  or a platform now find their game, and Libretro's names with a "!" ("Metal Gear Ac!d") match. On
-  a real library of 310 games, the games waiting for you to choose art went from 15 to none.
-- **Artwork for games with edition words in their names** ("Pokemon Red Version", "Game of the
-  Year") is found when the name is otherwise the same.
-- **Player logs never include a server's key** in a stream's address.
-- **A shell script that starts games** is no longer named as a game's missing emulator.
-- **A cancelled download** shows that it was cancelled instead of a stuck percentage.
-- **A game from RomM is linked to RomM** as soon as it is in the library, so its page never shows
-  it as unlinked for a moment.
-- **A Fuse One address typed in setup** shows the host by its name once found, and finds it by the
-  address alone when it doesn't answer to the nearby search.
-- **The controller works again after Controls.** Finishing or stopping guided setup, leaving the
-  button test, or leaving Controls by any way (touch, mouse or controller) left the controller
-  answering only to that page, so it did nothing until you went back. It now returns to Fuse at
-  once. A direction while choosing a button cancels the choice.
-- **After a file picker, the keyboard and controller reach Fuse again** without clicking the window.
+- Renaming a game no longer wipes its details and art, and Reset Name and Details undoes a rename.
+- Find Details says what it found.
+- Downloaded RomM games keep RomM's cover, logo and screenshot instead of showing initials.
+- System counts (the Systems row, Show games from) include the games on RomM.
+- Enter in Search opens the first result with a keyboard, and moves into the results otherwise.
+- The Video previews setting is hidden where previews can't play, instead of showing On.
+- Settings, Home now reaches the top line when you press Up from its first row.
+- Store cards no longer cover each other when focused.
+- Also installed on a game's page no longer lists Linux scripts and shortcuts as emulators.
+- Words are no longer broken across two lines in a narrow window ("Ro" over "mM").
+- Hiding a game says where to find it again.
+- The controller's diagram in Controls fits a short window.

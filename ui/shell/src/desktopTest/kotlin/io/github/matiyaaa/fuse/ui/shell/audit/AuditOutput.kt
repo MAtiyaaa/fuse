@@ -43,6 +43,7 @@ internal enum class AuditSize(val widthPx: Int, val heightPx: Int, val density: 
     X(5120, 1440, 1.0f, "32:9 super ultrawide"),
     R(1080, 1920, 1.0f, "monitor turned upright"),
     F(2176, 1812, 2.625f, "foldable phone, open"),
+    N(640, 420, 1.0f, "a desktop window made as small as it goes"),
     ;
 
     val widthDp: Int get() = (widthPx / density).roundToInt()
