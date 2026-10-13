@@ -68,6 +68,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.mouseHover
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
 import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
+import io.github.matiyaaa.fuse.ui.designsystem.media.heroDecodePx
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Elevation
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
@@ -192,7 +193,8 @@ fun FlowHome(app: AppState) {
     // The room and the stage follow the selection.
     val systems = rememberSystems(app)
     PageEffect(item?.key, reorder, movingSystem, systems) {
-        app.hero = item?.hero(systems)
+        // A widget, app or collection without art of its own keeps the room that is showing.
+        app.hero = item?.hero(systems) ?: app.hero.takeIf { item != null }
         app.hints = when {
             reorder != null || movingSystem -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Done"))
             item is ShelfItem.Game -> listOf(Hint(HintButton.CONFIRM, app.gameConfirmLabel), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"))
@@ -482,6 +484,18 @@ private fun ShelfRow(
         },
         focus,
         size = metrics.icon * 1.4f,
+    )
+    // The rooms of the games beside the selection, decoded as the background decodes them, so moving
+    // along a shelf shows each game's background at once instead of loading it.
+    val systems = io.github.matiyaaa.fuse.ui.shell.app.rememberSystems(app)
+    val heroDp = with(androidx.compose.ui.platform.LocalDensity.current) { Fuse.quality.heroDecodePx.toDp() }
+    PrefetchArt(
+        remember(shelf.items, systems) {
+            shelf.items.map { item -> (item as? ShelfItem.Game)?.card?.let { io.github.matiyaaa.fuse.ui.shell.app.roomArt(it.art, systems[it.platformId]) } }
+        },
+        focus,
+        size = heroDp,
+        limit = 2,
     )
     PrefetchArt(
         remember(shelf.items) {

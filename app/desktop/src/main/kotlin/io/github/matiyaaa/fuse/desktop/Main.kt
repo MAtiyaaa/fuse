@@ -159,6 +159,8 @@ private suspend fun probeRenderer(session: DesktopSession, window: java.awt.Wind
     val profile = io.github.matiyaaa.fuse.desktop.system.FramePacing.profile(kind, w, h, output?.first ?: mode.width, output?.second ?: mode.height,
         mode.refreshRate.toDouble(), gpu)
     if (profile.refreshHz > 0) UiRenderTrace.expectedFrameNanos = profile.budgetNanos
+    // A TV's picture processing smooths a faint dither away and leaves the bands: a stronger one there.
+    io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.largeOutput = profile.largeOutput || kind == io.github.matiyaaa.fuse.desktop.system.DisplaySession.STEAM_GAME_MODE
     val note = if (profile.upscaled) "Shown at ${w}x$h and scaled up to ${output?.first ?: mode.width}x${output?.second ?: mode.height}, which looks soft. " +
         "In Steam, Fuse's Properties, General, set Game Resolution to Native" else null
     val report = io.github.matiyaaa.fuse.desktop.system.GraphicsReport

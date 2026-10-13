@@ -103,6 +103,9 @@ val RenderQuality.heroDecodePx: Int get() = (heroMaxPx * HERO_DECODE_SHARE).roun
 
 private const val HERO_DECODE_SHARE = 0.85f
 
+/** Art narrower than this share of the screen is softened rather than stretched sharp (see HeroLayerView). */
+private const val SOFT_BELOW_SHARE = 0.4f
+
 /** How long a new background may take before the room shows its placeholder instead of the old one. */
 private const val PLACEHOLDER_MS = 120L
 
@@ -356,6 +359,13 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
         }
     }
     val failed = state is AsyncImagePainter.State.Error
+    // Art far smaller than the screen (an emulator's snapshot, wide art made for a list) would be
+    // stretched into blocks across a TV: it is shown as a softened room instead, like box art.
+    var boxWidth by remember { mutableStateOf(0) }
+    val art = held ?: loaded?.painter
+    val soft = !source.blurred && art != null && boxWidth > 0 && art.intrinsicSize.let { s ->
+        !s.isUnspecified && s.width > 0f && s.width < boxWidth * SOFT_BELOW_SHARE
+    }
     // Enhanced motion: once shown, the art breathes, drifting and zooming very slowly.
     var drift by remember { mutableFloatStateOf(0f) }
     val drifting = motion.drift && motion.ambientOn(Fuse.quality)
@@ -374,6 +384,7 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
     Box(
         Modifier
             .fillMaxSize()
+            .onSizeChanged { boxWidth = it.width }
             .graphicsLayer {
                 alpha = layer.alpha.value
                 // Fading rooms are drawn straight onto the one below, never through a screen-sized
@@ -406,9 +417,9 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
             val shade = Modifier.drawWithContent {
                 drawContent()
                 // Box art behind the interface is a colour field, not a picture: darker, and more so unblurred.
-                if (source.blurred) drawRect(veil.copy(alpha = if (canBlur) 0.35f else 0.6f))
+                if (source.blurred || soft) drawRect(veil.copy(alpha = if (canBlur) 0.35f else 0.6f))
             }
-            if (source.blurred && canBlur) {
+            if ((source.blurred || soft) && canBlur) {
                 // Blurred once, small, then shown scaled up: the same picture for a single draw a frame.
                 FrozenBlur(painter, loaded = held != null || state is AsyncImagePainter.State.Success, alignment, Modifier.fillMaxSize().graphicsLayer { alpha = imageAlpha.value; compositingStrategy = CompositingStrategy.ModulateAlpha }.then(shade))
             } else {
@@ -499,7 +510,7 @@ internal fun bakeSize(box: IntSize): IntSize {
 }
 
 /** The largest a baked room is kept, on its long side. */
-private const val BAKE_MAX_PX = 2560
+private const val BAKE_MAX_PX = 3840
 
 /** How strongly box art behind the interface is blurred, and how much smaller the blur is worked out. */
 private val BOX_ART_BLUR = 48.dp

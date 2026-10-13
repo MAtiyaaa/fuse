@@ -43,6 +43,10 @@ object Drawing {
      */
     @Volatile
     var upscale: Float = 1f
+
+    /** Shown on a TV or another large screen (4K and up), where the window's dither is made stronger. */
+    @Volatile
+    var largeOutput: Boolean = false
 }
 
 /**

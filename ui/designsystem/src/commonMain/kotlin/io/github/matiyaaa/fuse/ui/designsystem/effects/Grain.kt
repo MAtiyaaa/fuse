@@ -45,7 +45,7 @@ fun DrawScope.drawGrain(strength: Float = GRAIN_STRENGTH) {
  * pixel, which is what breaks the bands of every gradient under it where the graphics library
  * doesn't dither them itself (Skia on desktops, unlike Android's).
  */
-fun DrawScope.drawDither() = drawRect(Grain.dither)
+fun DrawScope.drawDither() = drawRect(if (Drawing.largeOutput) Grain.strongDither else Grain.dither)
 
 /** How much grain: enough to break up bands, never enough to be seen as texture. */
 const val GRAIN_STRENGTH = 0.07f
@@ -55,7 +55,16 @@ private object Grain {
     val second: ShaderBrush by lazy { brush(131, 0x5A17) }
 
     /** White at 0, 1 or 2 of 255 alpha per texel, triangular: ordered noise of about one 8-bit step. */
-    val dither: ShaderBrush by lazy {
+    val dither: ShaderBrush by lazy { noise(2, 1.5f) }
+
+    /**
+     * White at 0 to 4 of 255, triangular: for a TV. A TV's own picture processing (noise reduction,
+     * dark detail lifted) smooths a one-step dither away and leaves the bands it hid; two steps
+     * survive it, and from the sofa they are no more seen than one is up close.
+     */
+    val strongDither: ShaderBrush by lazy { noise(4, 2.5f) }
+
+    private fun noise(max: Int, spread: Float): ShaderBrush {
         val size = 137
         val image = ImageBitmap(size, size, ImageBitmapConfig.Argb8888)
         val canvas = androidx.compose.ui.graphics.Canvas(image)
@@ -63,12 +72,12 @@ private object Grain {
         val random = Random(0x3D17)
         for (y in 0 until size) {
             for (x in 0 until size) {
-                val steps = ((random.nextFloat() + random.nextFloat()) * 1.5f).toInt().coerceIn(0, 2)
+                val steps = ((random.nextFloat() + random.nextFloat()) * spread).toInt().coerceIn(0, max)
                 paint.color = androidx.compose.ui.graphics.Color(1f, 1f, 1f, steps / 255f)
                 canvas.drawRect(x.toFloat(), y.toFloat(), x + 1f, y + 1f, paint)
             }
         }
-        ShaderBrush(ImageShader(image, TileMode.Repeated, TileMode.Repeated))
+        return ShaderBrush(ImageShader(image, TileMode.Repeated, TileMode.Repeated))
     }
 
     /** Independent centered noise fields; their common period exceeds even an 8K display. */
