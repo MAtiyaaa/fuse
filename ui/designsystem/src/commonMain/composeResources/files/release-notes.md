@@ -1,32 +1,40 @@
-# Fuse 0.4.2.3 - The Native Update
+# Fuse 0.4.2.4 - The Native Update
 
-Saves that find their way between Android and Linux, a controller that stays Fuse's in Game Mode,
-the arrange bar's buttons within a controller's reach, and Jellyfin films at their proper loudness.
-None of it has been tried on a real Steam Deck, AYN Thor or TV yet; the save and sound fixes are
-proven by tests that failed before them, the rest by tests and a recorded controller run.
+A Linux release: Fuse says plainly whether it draws on the graphics card, the Fuse theme's room has
+no bands or squares, and the startup animation and setup's opening no longer draw the whole
+interface underneath them. None of it has been tried on a real Bazzite PC, Steam Deck or TV in Game
+Mode yet; the drawing fixes are measured on rendered pictures and the timings in Fuse's own
+software-drawn test harness.
 
 ## New
 
-- **3DS saves arrive before the first play.** A device that can't read a game's id (Azahar's
-  compressed .zcci images) now learns where the save goes from the device that made it, so
-  Tomodachi Life saved on Android is in place on Linux before it starts there, and back again.
-  Tested end to end both ways, with a save played on each side in turn.
+- **Settings says how Fuse draws.** A Graphics row in System health and in Performance (search
+  finds it as "GPU" too) says graphics card or processor. Selecting it shows the driver, the display
+  (Game Mode, X11 or Wayland), the window against the screen and whether gamescope enlarges it, and
+  the refresh rate. On the processor it also says why: what Skia said when it gave up on the graphics
+  driver, anything in Fuse's launch environment that forces software drawing, and what the
+  computer's own OpenGL uses, so a broken driver is told apart from how Fuse was started. The
+  diagnostics report carries the same.
 
 ## Changed
 
-- **A blank save never replaces a real one.** Save memory an emulator made again (empty, all zeros
-  or all 0xFF) where this device had a real save stays on the device, is never sent as the newest,
-  and Fuse One's activity says so.
-- **Arranging Home or Systems with a controller:** moving down past the board's last row reaches
-  the Add and Done buttons along the bottom, left and right move between them, and A uses them.
+- **Steam's runtime libraries are set aside** when the AppImage starts. Steam puts them ahead of the
+  system's for a non-Steam game in Game Mode, and an older library among them can stop the system's
+  graphics driver from loading.
+- **The startup animation and setup's opening** no longer draw the interface under them while they
+  cover the whole screen; it is still built underneath, ready when they open out. In Fuse's
+  software-drawn harness that took the startup animation from 596 ms to 113 ms a frame at the median
+  and setup's opening from 419 ms to 114 ms (that harness is far slower than a real computer; the
+  ratio is what counts).
 
 ## Fixed
 
-- **The controller no longer goes dead in Steam's Game Mode** after Steam's keyboard or Wi-Fi menu
-  took Fuse's focus and gamescope didn't give it back. In Game Mode a press is Fuse's whenever it is
-  on screen and no game (its own or Steam's) runs, and taking one brings the focus back. On a desktop
-  the controller still belongs to the window in front.
-- **Jellyfin films are no longer faint.** Fuse Player folded surround sound to stereo in a way that
-  scaled the whole mix down: dialogue at half scale came out at 4,799 of 32,767. It now folds down
-  at the standard levels (11,585, about 7.7 dB louder) with a peak limiter, so a full mix still
-  never clips and stereo is untouched. This is the computer's player; on Android the system mixes.
+- **No more rings and squares in the Fuse theme's room.** The blurred cover behind the interface was
+  worked out in 8 bits at a quarter of the screen's size and stretched every frame, so its steps
+  showed as rings and the stretch as squares. On a computer it is now blurred and stretched in full
+  precision once per cover and rounded with a step of noise either way: on a dark test room the share
+  of pixels equal to their neighbour went from 0.96 (flat bands) to 0.55.
+- **Background gradients are dithered as they are drawn** on Linux, Windows and macOS, on the
+  graphics card and on the processor alike: the longest flat band of a near-black ramp went from 61
+  pixels to 10. The white noise that only lightened the room is gone where that happens, and the
+  window-wide dither is left off where gamescope enlarges Fuse, since there its pixels show as squares.

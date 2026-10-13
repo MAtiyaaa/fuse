@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
+import io.github.matiyaaa.fuse.ui.designsystem.effects.drawDitheredRect
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
@@ -61,6 +62,8 @@ import io.github.matiyaaa.fuse.ui.fuseline.withInfiniteFrameMillis
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.max
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlinx.coroutines.FlowPreview
@@ -231,11 +234,11 @@ fun HeroBackdrop(
                         // A dark room dims the art; a bright one washes it toward its paper, so dark text
                         // reads on it instead of on a grey haze.
                         if (dark) drawRect(Color.Black.copy(alpha = dim)) else drawRect(ink.copy(alpha = (dim + LIGHT_WASH).coerceAtMost(0.9f)))
-                        drawRect(left)
-                        drawRect(top)
-                        drawRect(bottom)
+                        drawDitheredRect(left)
+                        drawDitheredRect(top)
+                        drawDitheredRect(bottom)
                     }
-                    drawRect(glow)
+                    drawDitheredRect(glow)
                 }
             },
         )
@@ -286,9 +289,9 @@ private fun LitRoom(accent: Color, modifier: Modifier = Modifier) {
                 radius = size.maxDimension * 0.6f,
             )
             onDrawBehind {
-                drawRect(night)
-                drawRect(key)
-                drawRect(bounce)
+                drawDitheredRect(night)
+                drawDitheredRect(key)
+                drawDitheredRect(bounce)
                 drawGrain()
             }
         },
@@ -434,36 +437,69 @@ private fun FrozenBlur(painter: Painter, loaded: Boolean, alignment: Alignment, 
     val density = LocalDensity.current
     var box by remember { mutableStateOf(IntSize.Zero) }
     var frozen by remember(painter) { mutableStateOf<ImageBitmap?>(null) }
+    var baked by remember(painter) { mutableStateOf(false) }
     LaunchedEffect(painter, loaded, box) {
         if (!loaded || box.width <= 0 || box.height <= 0) return@LaunchedEffect
         val intrinsic = painter.intrinsicSize
         if (intrinsic.isUnspecified || intrinsic.width <= 0f || intrinsic.height <= 0f) return@LaunchedEffect
+        val smooth = io.github.matiyaaa.fuse.ui.designsystem.effects.Dithering.blurs
         val small = IntSize((box.width / FROZEN_SCALE).coerceAtLeast(1), (box.height / FROZEN_SCALE).coerceAtLeast(1))
         val radius = with(density) { BOX_ART_BLUR.toPx() } / FROZEN_SCALE
-        layer.renderEffect = BlurEffect(radius, radius, TileMode.Clamp)
+        // Where the platform blurs in full precision, the copy is handed over sharp and blurred there.
+        layer.renderEffect = if (smooth != null) null else BlurEffect(radius, radius, TileMode.Clamp)
         layer.record(density, LayoutDirection.Ltr, small) {
             val scale = max(small.width / intrinsic.width, small.height / intrinsic.height)
             val drawn = Size(intrinsic.width * scale, intrinsic.height * scale)
             val at = alignment.align(IntSize(drawn.width.roundToInt(), drawn.height.roundToInt()), small, LayoutDirection.Ltr)
             translate(at.x.toFloat(), at.y.toFloat()) { with(painter) { draw(drawn) } }
         }
-        frozen = layer.toImageBitmap()
+        val copy = layer.toImageBitmap()
+        frozen = if (smooth == null) {
+            copy
+        } else {
+            // Blurred, stretched to the screen and rounded to 8 bits once, with signed noise as it
+            // is rounded: every frame after is the same picture copied as it is. A blur kept in 8
+            // bits at a quarter of the size and stretched every frame shows its steps as bands and
+            // its grid as squares on a large screen, worst with the processor's cheaper filter.
+            withContext(Dispatchers.Default) { runCatching { smooth(copy, radius, bakeSize(box)) }.getOrNull() } ?: run {
+                layer.renderEffect = BlurEffect(radius, radius, TileMode.Clamp)
+                layer.toImageBitmap()
+            }
+        }
+        baked = smooth != null && frozen !== copy
     }
     Box(
         modifier
             .onSizeChanged { box = it }
             .drawBehind {
                 val image = frozen ?: return@drawBehind
-                // Cubic, not bilinear: stretching a small picture bilinearly shows its grid as faint
-                // squares on a large screen (each cell's gradient changes slope at its edges). The
-                // graphics card does this for free; drawn without one, the cheaper filter stays.
+                // Baked at the box's size (or a little under on a very large screen) it is a plain copy.
+                // Otherwise cubic, not bilinear: stretching a small picture bilinearly shows its grid
+                // as faint squares on a large screen.
                 drawImage(
                     image, dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
-                    filterQuality = if (io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.cpu) FilterQuality.Medium else FilterQuality.High,
+                    filterQuality = when {
+                        baked -> FilterQuality.Low
+                        io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.cpu -> FilterQuality.Medium
+                        else -> FilterQuality.High
+                    },
                 )
             },
     )
 }
+
+/**
+ * The size a room is baked at: [box], or no larger than [BAKE_MAX_PX] on its long side, so a 4K room
+ * keeps its memory in check (a blurred picture has no detail for that last stretch to lose).
+ */
+internal fun bakeSize(box: IntSize): IntSize {
+    val long = max(box.width, box.height).coerceAtLeast(1)
+    val fit = if (long > BAKE_MAX_PX) BAKE_MAX_PX.toFloat() / long else 1f
+    return IntSize((box.width * fit).roundToInt().coerceAtLeast(1), (box.height * fit).roundToInt().coerceAtLeast(1))
+}
+
+/** The largest a baked room is kept, on its long side. */
+private const val BAKE_MAX_PX = 2560
 
 /** How strongly box art behind the interface is blurred, and how much smaller the blur is worked out. */
 private val BOX_ART_BLUR = 48.dp

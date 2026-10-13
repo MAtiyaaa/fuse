@@ -35,7 +35,9 @@ fun DrawScope.drawGrain(strength: Float = GRAIN_STRENGTH) {
     // backgrounds) it moves pixels by far less than one 8-bit step and can't break up bands at all.
     // The dither adds 0 to 2 steps of light per pixel whatever the colour under it, which is what
     // makes a glow over near black read as smooth on screens and drivers that don't dither for us.
-    drawRect(Grain.dither)
+    // Where the platform dithers each gradient as it is drawn ([Dithering]), the steps are already
+    // broken up, and this white noise would only lighten the room (and, enlarged, show as squares).
+    if (Dithering.gradients == null) drawRect(Grain.dither)
 }
 
 /**

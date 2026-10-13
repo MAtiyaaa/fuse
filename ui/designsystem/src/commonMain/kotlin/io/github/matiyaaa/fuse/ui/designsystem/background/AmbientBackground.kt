@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
+import io.github.matiyaaa.fuse.ui.designsystem.effects.drawDitheredCircle
 import io.github.matiyaaa.fuse.ui.designsystem.effects.drawGrain
 import io.github.matiyaaa.fuse.model.AmbientSpec
 import io.github.matiyaaa.fuse.model.BackgroundStyle
@@ -166,7 +167,7 @@ internal class Glow(color: Color) {
             if (degrees != 0f) rotate(degrees, Offset.Zero)
             scale(rx / UNIT, ry / UNIT, Offset.Zero)
         }) {
-            drawCircle(brush, radius = UNIT, center = Offset.Zero, alpha = alpha.coerceAtMost(1f))
+            scope.drawDitheredCircle(brush, radius = UNIT, center = Offset.Zero, alpha = alpha.coerceAtMost(1f))
         }
     }
 

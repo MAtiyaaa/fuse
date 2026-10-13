@@ -1654,7 +1654,7 @@ fun displayRows(app: AppState): List<MenuAction> {
 
 @Composable
 fun performanceRows(app: AppState): List<MenuAction> {
-    val drawing = app.platform.drawing.value
+    val drawing by app.platform.drawing.collectAsState()
     val p by app.store.prefs.collectAsState()
     val displays by app.platform.displays.collectAsState()
     val cap = app.platform.device
@@ -1667,6 +1667,7 @@ fun performanceRows(app: AppState): List<MenuAction> {
                     "\nAutomatic picks for this device: ${cap.tier.name.lowercase().replaceFirstChar { it.uppercase() }}",
             ) { v -> app.store.updatePrefs { it.copy(performance = v) } })
             add(toggleRow("low", "Low Power Mode", FuseIcons.Leaf, p.lowPower, "60 Hz, no video previews, blur, moving backgrounds or CRT; lighter artwork and a smaller image cache. Navigation stays quick") { v -> app.store.updatePrefs { it.copy(lowPower = v) } })
+            app.graphicsRow(drawing)?.let(::add)
             add(toggleRow("overlay", "Performance overlay", FuseIcons.ChartLine, p.performanceOverlay, "Fuse's own frame rate, memory and temperatures, only as the system reports them. Other apps' frame rates can't be read") { v -> app.store.updatePrefs { it.copy(performanceOverlay = v) } })
         }
         labelled("") {
@@ -1679,12 +1680,6 @@ fun performanceRows(app: AppState): List<MenuAction> {
                     add(infoRow("cpu", "Processor", "${cap.cpuCores} cores", icon = FuseIcons.Chip))
                     add(infoRow("ram", "Memory", "${(cap.totalRamMb / 1024.0 * 10).toInt() / 10.0} GB", icon = FuseIcons.Memory))
                     add(infoRow("screen", "Screen", "${cap.screenWidthPx}x${cap.screenHeightPx}, up to ${cap.maxRefreshRate.toInt()} Hz", icon = FuseIcons.Monitor))
-                    if (drawing != null) {
-                        add(infoRow(
-                            "drawing", "Drawn with", drawing.name, icon = FuseIcons.Gauge,
-                            detail = if (drawing.gpu) null else "Fuse couldn't use the graphics card here, so it keeps motion light and effects simple. Updating the graphics driver usually fixes this",
-                        ))
-                    }
                     for (disp in displays) {
                         add(infoRow(
                             "disp.${disp.id}", disp.name + if (disp.isPrimary) " (main)" else "",

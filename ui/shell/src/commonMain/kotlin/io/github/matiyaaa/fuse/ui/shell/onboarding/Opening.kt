@@ -52,7 +52,7 @@ import kotlin.math.sin
  * end. Under reduced motion it is the lockup fading in and out.
  */
 @Composable
-internal fun SetupOpening(onDone: () -> Unit) {
+internal fun SetupOpening(onDone: () -> Unit, onCovering: (Boolean) -> Unit = {}) {
     val c = Fuse.colors
     val reduced = Fuse.motion.reduced
     val sounds = LocalUiSounds.current
@@ -65,6 +65,11 @@ internal fun SetupOpening(onDone: () -> Unit) {
         play.skip()
         NavResult.CONSUMED
     }
+    // Opaque until it opens out: what is under it needn't be drawn until then.
+    val covering by remember { androidx.compose.runtime.derivedStateOf { play["out"] <= 0f } }
+    val cover by rememberUpdatedState(onCovering)
+    LaunchedEffect(covering) { cover(covering) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { cover(false) } }
     val embers = remember { embers() }
     val tiles = remember { tiles() }
     Canvas(

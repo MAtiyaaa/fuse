@@ -1,4 +1,26 @@
 #!/bin/sh
 # Entry point of the Fuse AppImage: runs the bundled launcher (its own Java runtime is inside).
 HERE="$(dirname "$(readlink -f "$0")")"
+
+# Steam puts its runtime's libraries ahead of the system's for what it starts (Fuse as a non-Steam
+# game in Game Mode). An older C++ library among them can stop the system's graphics driver from
+# loading, and Fuse would then draw on the processor. Fuse brings its own Java runtime and needs
+# none of them, so they are set aside (kept in FUSE_STEAM_LD_LIBRARY_PATH).
+if [ -n "${LD_LIBRARY_PATH:-}" ]; then
+    kept=""
+    saved_ifs=$IFS
+    IFS=:
+    for part in $LD_LIBRARY_PATH; do
+        case "$part" in
+            ""|*steam-runtime*|*/ubuntu12_32*|*/ubuntu12_64*|*steamrt*|*pressure-vessel*) ;;
+            *) kept="${kept:+$kept:}$part" ;;
+        esac
+    done
+    IFS=$saved_ifs
+    if [ "$kept" != "$LD_LIBRARY_PATH" ]; then
+        export FUSE_STEAM_LD_LIBRARY_PATH="$LD_LIBRARY_PATH"
+        if [ -n "$kept" ]; then export LD_LIBRARY_PATH="$kept"; else unset LD_LIBRARY_PATH; fi
+    fi
+fi
+
 exec "$HERE/usr/lib/fuse/bin/fuse" "$@"

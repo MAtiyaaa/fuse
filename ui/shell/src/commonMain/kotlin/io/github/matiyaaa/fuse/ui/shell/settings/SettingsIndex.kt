@@ -134,6 +134,7 @@ object SettingsIndex {
         SettingTopic("displays", "Performance profile", "speed battery fps"),
         SettingTopic("displays", "Low Power Mode", "battery saver"),
         SettingTopic("displays", "Performance overlay", "fps cpu temperature"),
+        SettingTopic("displays", "Graphics", "gpu graphics card processor software rendering opengl driver llvmpipe drawn with gamescope", steam = true),
         SettingTopic("displays", "About this device", "processor memory ram cpu displays specs"),
         SettingTopic("accounts", "Connect RetroAchievements", "retroachievements ra cheevos login account"),
         SettingTopic("addons", "Cartridge support", "romm downloads cartridge", group = ADDONS_CARTRIDGE, cartridge = true),

@@ -101,11 +101,12 @@ class DesktopPlatformUi(
      * a software driver (llvmpipe) from the graphics card; [note] is anything else worth showing
      * in Developer options (a window gamescope is scaling up).
      */
-    fun noteRenderer(api: String, info: String? = null, note: String? = null) {
+    fun noteRenderer(api: String, info: String? = null, note: String? = null, details: List<Pair<String, String>> = emptyList()) {
         val verdict = io.github.matiyaaa.fuse.desktop.system.Renderer.classify(api, info)
         val name = listOfNotNull(verdict.name, verdict.why, note).joinToString(". ")
         if (_drawing.value?.name != name) Log.info("Drawing with $api${info?.let { " (" + it.replace('\n', ' ') + ")" }.orEmpty()}: $name")
-        _drawing.value = io.github.matiyaaa.fuse.ui.shell.platform.DrawingInfo(name, gpu = verdict.gpu)
+        if (details.isNotEmpty()) Log.info("Graphics: " + details.joinToString("; ") { "${it.first}: ${it.second}" })
+        _drawing.value = io.github.matiyaaa.fuse.ui.shell.platform.DrawingInfo(name, gpu = verdict.gpu, details = details)
     }
 
     private val _status = MutableStateFlow(SystemStatus())
