@@ -127,6 +127,15 @@ sealed interface LaunchGate {
      * look): the game must not start, or it would play with someone else's save. [why] says what to do.
      */
     data class Blocked(val title: String, val why: String) : LaunchGate
+
+    /**
+     * A newer save than this device's is known to be on its way and isn't here yet: the host is
+     * slow or answered with a problem ([offline] false), or this device is offline and knows the
+     * host has a newer one ([offline] true). The game doesn't start quietly with the older save:
+     * the person waits, plays with this device's save anyway, or doesn't play. [from] and [at] say
+     * whose newer save it is and when it was made, when known.
+     */
+    data class Waiting(val title: String, val offline: Boolean, val from: String? = null, val at: Long? = null) : LaunchGate
 }
 
 /** Something Fuse Sync did that the person would want to know, shown as a quiet toast. */

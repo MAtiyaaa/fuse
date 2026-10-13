@@ -7,6 +7,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -85,6 +86,45 @@ class ServiceTest {
         val files = home?.let { FileSaveEnvironment(platform, it.path.replace('\\', '/'), variables = { null }) } ?: FileSaveEnvironment(platform)
         val svc = JvmSyncService(File(root, name), settings, Secrets(), library, platform, name, "test", NoHostLifetime("test"), scope, files = files, liveLookMs = 300)
         return svc to settings
+    }
+
+    @Test
+    fun aGameDoesntStartQuietlyWithAnOlderSaveWhileTheNewerOneIsStillComing(): Unit = runBlocking {
+        val (pc, _) = service("Gaming PC", Library())
+        val (deck, _) = service("Steam Deck", Library())
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        deck.switchTo(mo.id).getOrThrow()
+        pc.switchTo(mo.id).getOrThrow()
+        val roms = File(root, "deck-roms").apply { mkdirs() }
+        val q = SaveQuery(ct, "gba", File(roms, "ruby.gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby")
+        File(roms, "ruby.sav").writeText("8 badges")
+        deck.afterExit(q, 0, 30 * 60_000)
+        // The save's file can't be had from the host for now: the PC knows of it but can't bring it down.
+        val hash = SyncCrypto.sha256("8 badges".byteInputStream())
+        val onHost = File(root, "Gaming PC").walkTopDown().single { it.isFile && it.name == hash.substring(2) && it.parentFile.name == hash.substring(0, 2) }
+        val kept = onHost.readBytes()
+        assertTrue(onHost.delete())
+        val pcRoms = File(root, "pc-roms").apply { mkdirs() }
+        val pq = q.copy(romPath = File(pcRoms, "ruby.gba").path.replace('\\', '/'))
+        val gate = assertIs<LaunchGate.Waiting>(pc.beforeLaunch(pq))
+        assertEquals(false, gate.offline)
+        assertEquals("Steam Deck", gate.from)
+        assertFalse(File(pcRoms, "ruby.sav").exists(), "nothing half-written here")
+        // The person chose to play with this device's save (none): it starts as it is.
+        assertIs<LaunchGate.Go>(pc.beforeLaunch(pq, waitForOthers = false))
+        assertFalse(File(pcRoms, "ruby.sav").exists())
+        // Played here meanwhile, then sent: never the newest over the Deck's, a conflict to settle instead.
+        File(pcRoms, "ruby.sav").writeText("pc: 3 badges")
+        pc.afterExit(pq, 0, 60_000)
+        onHost.parentFile.mkdirs()
+        onHost.writeBytes(kept)
+        val conflict = assertIs<LaunchGate.Conflict>(pc.beforeLaunch(pq))
+        assertEquals("Steam Deck", conflict.conflict.host.device)
+        pc.settle(conflict.conflict, keepHere = false).getOrThrow()
+        assertEquals("8 badges", File(pcRoms, "ruby.sav").readText())
+        pc.stop()
     }
 
     @Test

@@ -171,6 +171,36 @@ class EndToEndTest {
     }
 
     @Test
+    fun aNewerSaveThatDidntComeDownIsRememberedUntilItDoes(): Unit = runBlocking {
+        val (deckClient, deck) = pairDevice("Deck")
+        val (pcClient, pc) = pairDevice("PC")
+        val p = deckClient.createProfile(NewProfile("Mo", "fox")).id
+        val game = GameKey.of("snes", null, null, "Chrono Trigger")
+        val pcSaves = File(root, "pc-saves")
+        val rev = assertNotNull(deck.capture(p, slot(File(root, "deck-saves"), game, "Chrono Trigger.srm" to "level 12"), playSeconds = 1800))
+        deck.flush(deckClient)
+        // Its file goes missing on the host: the PC sees the newer save but can't bring it down.
+        val hash = rev.manifest.files.single().hash
+        val onHost = File(File(File(File(root, "host"), "objects"), hash.substring(0, 2)), hash.substring(2))
+        val kept = onHost.readBytes()
+        assertTrue(onHost.delete())
+        runCatching { pc.prepare(pcClient, p, slotOf(pcSaves, game)) }
+        val awaited = assertNotNull(pc.awaited(p, slotOf(pcSaves, game)))
+        assertEquals(rev.id, awaited.revision)
+        assertEquals("Deck", awaited.deviceName)
+        assertFalse(File(pcSaves, "Chrono Trigger.srm").exists(), "nothing half-written")
+        // Remembered across a restart of Fuse.
+        val again = SyncDevice(File(root, "PC"), pc.deviceId, "PC")
+        assertNotNull(again.awaited(p, slotOf(pcSaves, game)))
+        // Once it comes down, it is no longer awaited.
+        onHost.parentFile.mkdirs()
+        onHost.writeBytes(kept)
+        assertIs<PrepareResult.Updated>(again.prepare(pcClient, p, slotOf(pcSaves, game)))
+        assertEquals("level 12", File(pcSaves, "Chrono Trigger.srm").readText())
+        assertEquals(null, again.awaited(p, slotOf(pcSaves, game)))
+    }
+
+    @Test
     fun twoPeopleOnOneDeviceEachKeepTheirOwnSave(): Unit = runBlocking {
         val (client, deck) = pairDevice("Deck")
         val mo = client.createProfile(NewProfile("Mo", "fox")).id

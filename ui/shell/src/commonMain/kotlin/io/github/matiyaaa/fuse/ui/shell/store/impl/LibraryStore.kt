@@ -579,6 +579,7 @@ internal class DefaultLibraryOps(
                     when (val gate = link.service.beforeLaunch(save, waitForOthers = !playAnyway)) {
                         is io.github.matiyaaa.fuse.sync.LaunchGate.Conflict -> return LaunchOutcome.SaveConflict(gate.conflict)
                         is io.github.matiyaaa.fuse.sync.LaunchGate.Busy -> return LaunchOutcome.SyncBusy(gate)
+                        is io.github.matiyaaa.fuse.sync.LaunchGate.Waiting -> return LaunchOutcome.SyncWaiting(gate)
                         is io.github.matiyaaa.fuse.sync.LaunchGate.Blocked -> return LaunchOutcome.Problem(
                             io.github.matiyaaa.fuse.ui.shell.store.Problem(
                                 title = "${gate.title} wasn't started",

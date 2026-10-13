@@ -117,6 +117,10 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
                 launching = null
                 syncBusy(card, outcome.busy, play = { launch(card, emulator, discPath, display, playAnyway = true) }, retry = { launch(card, emulator, discPath, display) })
             }
+            is LaunchOutcome.SyncWaiting -> {
+                launching = null
+                syncWaiting(card, outcome.waiting, play = { launch(card, emulator, discPath, display, playAnyway = true) }, retry = { launch(card, emulator, discPath, display) })
+            }
             // Syncthing kept two versions of the save: which one to play with, then the game starts.
             is LaunchOutcome.SyncthingConflict -> {
                 launching = null
@@ -204,6 +208,40 @@ private fun AppState.syncBusy(card: GameCard, busy: io.github.matiyaaa.fuse.sync
             else -> "${card.title} just stopped there. Its save will be here in a moment."
         },
         options = options,
+    )
+}
+
+/**
+ * A newer save of [card] than this device's is known of and isn't here: still coming from a slow
+ * host, or waiting on Fuse One while this device is offline. The game never starts quietly with the
+ * older save: wait (the save keeps coming meanwhile), play with this device's save (the newer one
+ * stays safe, and the person picks between them later), or not now.
+ */
+private fun AppState.syncWaiting(card: GameCard, waiting: io.github.matiyaaa.fuse.sync.LaunchGate.Waiting, play: () -> Unit, retry: () -> Unit) {
+    val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+    val made = waiting.at?.let { " It was made ${io.github.matiyaaa.fuse.ui.shell.components.agoText(it, now)}." }.orEmpty()
+    val whose = waiting.from?.let { "Your save from $it" } ?: "Your newest save"
+    choice = ChoiceSpec(
+        title = if (waiting.offline) "$whose is on Fuse One" else "$whose is still on its way",
+        icon = if (waiting.offline) FuseIcons.CloudOff else FuseIcons.CloudDownload,
+        message = if (waiting.offline) {
+            "This device is offline, so ${card.title} didn't start with the older save here.$made"
+        } else {
+            "Fuse One is taking a while to send it, so ${card.title} didn't start with the older save here.$made"
+        },
+        options = listOf(
+            MenuAction(
+                "wait", if (waiting.offline) "Try Again" else "Keep Waiting", if (waiting.offline) FuseIcons.Refresh else FuseIcons.Hourglass,
+                detail = if (waiting.offline) "Once this device is back online" else "It keeps coming meanwhile, and the game starts once it's here",
+                onSelect = { choice = null; retry() },
+            ),
+            MenuAction(
+                "here", "Play With This Device's Save", FuseIcons.Play,
+                detail = "The newer save stays safe; you'll choose between the two afterwards",
+                onSelect = { choice = null; play() },
+            ),
+            MenuAction("not", "Not Now", FuseIcons.Close, onSelect = { choice = null }),
+        ),
     )
 }
 

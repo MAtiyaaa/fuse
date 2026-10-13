@@ -101,6 +101,13 @@ internal data class SlotState(
 @Serializable
 internal data class Outgoing(val id: String, val priority: Int, val profile: String, val revision: SaveRevision? = null, val tries: Int = 0)
 
+/**
+ * A newer save the host has for one person's game that this device knows of but hasn't put in
+ * place yet (its download didn't finish): made on [deviceName] at [at].
+ */
+@Serializable
+data class Awaited(val revision: String, val deviceName: String, val at: Long)
+
 @Serializable
 internal data class DeviceState(
     val profile: String? = null,
@@ -120,6 +127,8 @@ internal data class DeviceState(
     val pendingMeta: Map<String, ProfileMeta> = emptyMap(),
     /** The folders a play showed hold a game's saves when its id couldn't be read: `game|format`. */
     val learned: Map<String, List<String>> = emptyMap(),
+    /** Newer saves the host has that didn't come down yet, keyed `profile|game|kind` ([Awaited]). */
+    val awaiting: Map<String, Awaited> = emptyMap(),
 )
 
 /** How urgent a transfer is: the save for a game about to start goes before everything else. */
@@ -189,6 +198,13 @@ class SyncDevice(
 
     /** The folders [game]'s saves of [format] were learned to be in, from a play here. */
     fun learned(game: String, format: String): List<String> = state.learned["$game|$format"].orEmpty()
+
+    /**
+     * The newer save the host has for [profile]'s [slot] that this device knows of but couldn't
+     * bring down yet, or null. Kept across restarts, so a launch while offline knows not to start
+     * quietly with an older save.
+     */
+    fun awaited(profile: String, slot: LocalSlot): Awaited? = state.awaiting[keyOf(profile, slot)]
 
     /** Remembers that [game]'s saves of [format] are in [folders] (a play changed exactly those). */
     suspend fun learn(game: String, format: String, folders: List<String>) = mutex.withLock {
@@ -533,6 +549,7 @@ class SyncDevice(
             outbox = state.outbox.map { o -> o.copy(profile = id(o.profile), revision = o.revision?.let { it.copy(profile = id(it.profile)) }) },
             metas = state.metas.moved { a, b -> a.merge(b) },
             pendingMeta = state.pendingMeta.moved { a, b -> a.merge(b) },
+            awaiting = state.awaiting.moved { a, b -> if (a.at >= b.at) a else b },
         )
         persist()
     }
@@ -578,6 +595,7 @@ class SyncDevice(
             parked = state.parked.filterKeys { !it.startsWith("$profile|") },
             slots = state.slots.filterKeys { !it.startsWith("$profile|") },
             holders = state.holders.mapValues { (_, v) -> if (v == profile) ORPHAN else v },
+            awaiting = state.awaiting.filterKeys { !it.startsWith("$profile|") },
         )
         persist()
         count
@@ -592,6 +610,7 @@ class SyncDevice(
         state = state.copy(
             seq = 0,
             slots = emptyMap(),
+            awaiting = emptyMap(),
             pendingMeta = (state.metas.keys + state.pendingMeta.keys).associateWith { meta(it) },
             metas = emptyMap(),
         )
@@ -674,6 +693,11 @@ class SyncDevice(
             }
             SyncDecision.Upload -> PrepareResult.Ready
             SyncDecision.Download -> {
+                // Known from here on, until it is in place: a download cut short is never forgotten.
+                mutex.withLock {
+                    state = state.copy(awaiting = state.awaiting + (keyOf(profile, slot) to Awaited(head.id, head.deviceName, head.at.millis)))
+                    persist()
+                }
                 place(client!!, slot, head)
                 PrepareResult.Updated(head)
             }
@@ -695,6 +719,8 @@ class SyncDevice(
         mutex.withLock {
             state = state.copy(
                 slots = state.slots + (keyOf(profile, slot) to SlotState(remote.id, remote.manifest.fingerprint)),
+                // The person chose this device's save over the host's: nothing is awaited any more.
+                awaiting = state.awaiting - keyOf(profile, slot),
                 // This device's save goes up as one new step; copies kept for safety still go.
                 outbox = state.outbox.filterNot { it.profile == profile && it.revision?.game == slot.game.id && it.revision.kind == slot.kind && it.revision.canBeNewest },
             )
@@ -767,6 +793,7 @@ class SyncDevice(
                 // Agreed as written here, so the converted copy isn't taken for a new save after playing.
                 slots = state.slots + (keyOf(owner, slot) to SlotState(revision.id, incoming.fingerprint)),
                 holders = state.holders + (slot.key to owner),
+                awaiting = state.awaiting - keyOf(owner, slot),
             )
             persist()
         }
@@ -833,7 +860,7 @@ class SyncDevice(
     }
 
     private suspend fun agree(key: String, revision: String, fingerprint: String) = mutex.withLock {
-        state = state.copy(slots = state.slots + (key to SlotState(revision, fingerprint)))
+        state = state.copy(slots = state.slots + (key to SlotState(revision, fingerprint)), awaiting = state.awaiting - key)
         persist()
     }
 

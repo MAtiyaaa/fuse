@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -2047,13 +2048,33 @@ class JvmSyncService(
             }
             // This person's saves aren't taken here: the game starts with the save this device has.
             if (!takesFrom(owner, query.game.id)) continue
+            val awaited = d.awaited(owner, slot)
             if (c == null) {
                 // Without a host there is nothing to be offline from.
-                if (!keepsOwn) note = note ?: "Fuse One is offline: playing with this device's save"
+                if (!keepsOwn) {
+                    // Offline, but a newer save is known to be on the host: not started quietly without it.
+                    if (awaited != null && waitForOthers) return@withContext waiting(query, offline = true, awaited)
+                    note = note ?: "Fuse One is offline: playing with this device's save"
+                }
                 continue
             }
-            // A launch never waits long on a host that isn't there.
-            val result = withTimeoutOrNull(LAUNCH_WAIT_MS) { runCatching { d.prepare(c, owner, slot) }.getOrElse { PrepareResult.Offline } } ?: PrepareResult.Offline
+            // A launch never waits long on a host that isn't there; the save keeps coming meanwhile.
+            val attempt = prepareFor(c, d, owner, slot)
+            val result = when {
+                attempt != null && attempt.isSuccess -> attempt.getOrThrow()
+                // Slow, or the host answered with a problem, with a newer save known of or the host
+                // thought reachable: never started quietly with an older save.
+                waitForOthers && (status.value !is SyncStatus.Offline || d.awaited(owner, slot) != null) ->
+                    return@withContext waiting(query, offline = false, d.awaited(owner, slot))
+                else -> {
+                    // Playing with what is here: a save still coming must not land while the game runs.
+                    stopPreparing(owner, slot)
+                    PrepareResult.Offline
+                }
+            }
+            if (result == PrepareResult.Offline && waitForOthers) {
+                d.awaited(owner, slot)?.let { return@withContext waiting(query, offline = true, it) }
+            }
             d.appliedNote(owner, slot, result, clock())?.let { n -> scope.launch(Dispatchers.IO) { runCatching { c.noteApplied(listOf(n)) } } }
             when (result) {
                 is PrepareResult.Conflict -> return@withContext LaunchGate.Conflict(
@@ -2076,6 +2097,41 @@ class JvmSyncService(
             }
         }
         LaunchGate.Go(note)
+    }
+
+    /**
+     * One preparation of each save at a time ([SyncDevice.prepare]), kept going when a launch stops
+     * waiting for it, so the save keeps coming and waiting again picks it up where it is.
+     */
+    private val preparing = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.Deferred<Result<PrepareResult>>>()
+
+    /** [SyncDevice.prepare] for [slot], waited for at most [LAUNCH_WAIT_MS]: null when it is still going. */
+    private suspend fun prepareFor(c: SyncClient, d: SyncDevice, owner: String, slot: LocalSlot): Result<PrepareResult>? {
+        val key = "$owner|${slot.key}"
+        val job = preparing.compute(key) { _, running ->
+            running?.takeIf { it.isActive } ?: scope.async(Dispatchers.IO) { runCatching { d.prepare(c, owner, slot) } }
+        }!!
+        val result = withTimeoutOrNull(LAUNCH_WAIT_MS) { job.await() }
+        if (result != null) preparing.remove(key, job)
+        return result
+    }
+
+    /**
+     * Stops [slot]'s preparation still going in the background, and waits until it has: a save it
+     * was already writing is in place before the game starts, never while it runs.
+     */
+    private suspend fun stopPreparing(owner: String, slot: LocalSlot) {
+        preparing.remove("$owner|${slot.key}")?.let { job -> runCatching { job.cancelAndJoin() } }
+    }
+
+    /** The launch of [query] waits for a newer save ([LaunchGate.Waiting]); it isn't busy meanwhile. */
+    private fun waiting(query: SaveQuery, offline: Boolean, awaited: Awaited?): LaunchGate.Waiting {
+        busy -= query.game.id
+        log(
+            if (offline) "${query.title}: not started, a newer save is on Fuse One and this device is offline" else "${query.title}: not started yet, its newest save is still coming",
+            query.game.id, "save",
+        )
+        return LaunchGate.Waiting(query.title, offline, awaited?.deviceName, awaited?.at)
     }
 
     private fun side(r: SaveRevision) = SaveSide(r.deviceName, r.at.millis, r.playSeconds, r.size, r.manifest.files.size)

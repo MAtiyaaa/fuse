@@ -292,6 +292,12 @@ sealed interface LaunchOutcome {
     /** Not started yet: another device is playing this game or still sending its save. Wait for it, or play here. */
     data class SyncBusy(val busy: io.github.matiyaaa.fuse.sync.LaunchGate.Busy) : LaunchOutcome
 
+    /**
+     * Not started yet: a newer save than this device's is on its way (the host is slow) or waits on
+     * Fuse One while this device is offline. Wait for it, play with this device's save, or not now.
+     */
+    data class SyncWaiting(val waiting: io.github.matiyaaa.fuse.sync.LaunchGate.Waiting) : LaunchOutcome
+
     /** Syncthing kept two versions of this game's save: ask which to keep, then play. */
     data class SyncthingConflict(val conflicts: List<io.github.matiyaaa.fuse.sync.syncthing.SyncthingConflict>) : LaunchOutcome
 }
