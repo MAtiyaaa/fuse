@@ -866,7 +866,10 @@ fun mediaRows(app: AppState): List<MenuAction> {
             ) { v -> set { it.copy(autoFillArt = v) } })
         }
         labelled("Previews") {
-            add(toggleRow("video", "Video previews", FuseIcons.ImagePlay, p.videoPreview, if (app.platform.features.videoPreview) "After resting on a game, its art turns into a muted gameplay clip" else "Not available on this system yet", enabled = app.platform.features.videoPreview) { v -> set { it.copy(videoPreview = v) } })
+            // Only where this system can play them: a switch that can't do anything isn't shown.
+            if (app.platform.features.videoPreview) {
+                add(toggleRow("video", "Video previews", FuseIcons.ImagePlay, p.videoPreview, "After resting on a game, its art turns into a muted gameplay clip") { v -> set { it.copy(videoPreview = v) } })
+            }
             if (p.videoPreview && app.platform.features.videoPreview) {
                 add(app.choiceRow("video.delay", "Preview delay", FuseIcons.Timer, p.videoDelaySeconds, listOf(5, 10, 15, 20, 30).map { it to "$it seconds" }) { v -> set { it.copy(videoDelaySeconds = v) } }.copy(indent = 1))
             }

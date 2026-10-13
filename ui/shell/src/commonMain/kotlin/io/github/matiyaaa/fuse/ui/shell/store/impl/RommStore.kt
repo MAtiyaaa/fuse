@@ -799,7 +799,10 @@ internal class DefaultRommOps(
             synchronized(adopted) { adopted.remove(id) }
             return false
         }
-        val n = ctx.data.media.copyMissing(MediaOwner.OfGame(rommGameId(rom)), MediaOwner.OfGame(id))
+        var n = ctx.data.media.copyMissing(MediaOwner.OfGame(rommGameId(rom)), MediaOwner.OfGame(id))
+        // RomM's own pictures, which its tile showed where Fuse's sources had found nothing: they
+        // come along as files kept here, or the game it became shows its initials instead of its cover.
+        n += runCatching { adoptServerArt(id, rom) }.getOrDefault(0)
         if (n > 0) ctx.gameArtFound.update { it + 1 }
         // Its details too (year, genres, developer, summary, RomM's name for it): the page showed
         // them while the game was on RomM and lost them the moment it was downloaded. Only blanks
@@ -809,6 +812,23 @@ internal class DefaultRommOps(
             runCatching { ctx.data.games.applyMetadata(id, details.metadata, titleFromMetadata = details.titles.metadata, onlyFillEmpty = true) }
         }
         return n > 0
+    }
+
+    /** RomM's cover, logo and screenshot for [rom], kept for library game [id] where it has none of that kind. */
+    private suspend fun adoptServerArt(id: GameId, rom: Long): Int {
+        val r = mirror.rom(server, rom) ?: return 0
+        val owner = MediaOwner.OfGame(id)
+        var added = 0
+        for ((kind, path) in listOf(io.github.matiyaaa.fuse.model.MediaKind.BOXART to r.cover, io.github.matiyaaa.fuse.model.MediaKind.LOGO to r.logo, io.github.matiyaaa.fuse.model.MediaKind.SCREENSHOT to r.screenshot)) {
+            if (path.isNullOrBlank()) continue
+            val file = rommArtCache?.file(server, path) ?: continue
+            added += ctx.data.media.putScraped(
+                owner,
+                listOf(io.github.matiyaaa.fuse.model.MediaItem(kind, io.github.matiyaaa.fuse.model.MediaSource.ROMM, localPath = file)),
+                io.github.matiyaaa.fuse.model.MediaFillMode.FILL_MISSING,
+            )
+        }
+        return added
     }
 
     override fun forRom(romId: Long): Flow<RommGameView?> = combine(matches, transfers.items, mirrorRevision) { m, _, _ -> m[romId] }

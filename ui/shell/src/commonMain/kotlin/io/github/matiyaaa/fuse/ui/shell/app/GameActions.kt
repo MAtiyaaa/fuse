@@ -1300,7 +1300,22 @@ private fun AppState.partOwnerPicker(card: GameCard, kind: io.github.matiyaaa.fu
 internal fun AppState.applyPatch(card: GameCard) {
     closeOverlays()
     scope.launch {
+        // A computer: Fuse's own picker, made for a controller, opening in the game's folder (where
+        // its patches usually are). Android: the system's picker, which document access needs.
+        if (platform.host != io.github.matiyaaa.fuse.model.Host.ANDROID) {
+            val folder = runCatching { store.library.game(card.id).first()?.game?.location?.path }.getOrNull()
+                ?.let { io.github.matiyaaa.fuse.library.FsPath.parent(it) }
+            go(Route.PickFile(FilePurpose.PATCH, patch = PatchPick(card, folder)))
+            return@launch
+        }
         val patch = platform.storage.pickPatch("Choose a patch for ${card.title}") ?: return@launch
+        patchWith(card, patch)
+    }
+}
+
+/** Makes a patched copy of [card] with the patch file at [patch], and says how it went. */
+internal fun AppState.patchWith(card: GameCard, patch: String) {
+    scope.launch {
         toasts.show("Patching ${card.title}...", icon = FuseIcons.Bandage)
         when (val r = store.library.applyPatch(card.id, patch)) {
             is io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.Made -> {

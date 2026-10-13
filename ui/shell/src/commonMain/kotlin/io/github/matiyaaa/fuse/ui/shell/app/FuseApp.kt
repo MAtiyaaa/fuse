@@ -975,7 +975,7 @@ private fun PushedPages(app: AppState, current: Route, direction: NavDirection, 
             is Route.FolderBrowser -> FolderBrowserScreen(app, route.game)
             is Route.Manual -> io.github.matiyaaa.fuse.ui.shell.game.ManualScreen(app, route)
             is Route.GameContent -> io.github.matiyaaa.fuse.ui.shell.game.GameContentScreen(app, route.game)
-            is Route.PickFile -> io.github.matiyaaa.fuse.ui.shell.files.FilePickerScreen(app, route.purpose, route.locate, route.licence)
+            is Route.PickFile -> io.github.matiyaaa.fuse.ui.shell.files.FilePickerScreen(app, route.purpose, route.locate, route.licence, route.patch)
             is Route.StoreApp -> io.github.matiyaaa.fuse.ui.shell.addons.StoreAppScreen(app, route.key)
             Route.StoreUpdates -> io.github.matiyaaa.fuse.ui.shell.addons.StoreUpdatesScreen(app)
             is Route.MediaPage -> io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaItemScreen(app, route.id)

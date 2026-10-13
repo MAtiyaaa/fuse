@@ -34,6 +34,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.animateScrollBy
+import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -69,6 +71,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
 import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
 import io.github.matiyaaa.fuse.ui.designsystem.media.heroDecodePx
+import io.github.matiyaaa.fuse.ui.shell.app.withRomm
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Elevation
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
@@ -160,8 +163,11 @@ fun FlowHome(app: AppState) {
     val feed by store.homeFeed.collectAsState()
     val cartridge by store.cartridge.status.collectAsState()
     val achievementsOn by store.achievements.configured.collectAsState()
-    val shelves = remember(prefs.home, feed, achievementsOn) {
-        buildShelves(prefs.home.widgets.filter { app.offers(it.kind) }, if (prefs.collectionsEnabled) feed else feed.copy(collections = emptyList()), achievementsOn)
+    val rommSystems by store.romm.systems.collectAsState()
+    val shelves = remember(prefs.home, feed, achievementsOn, rommSystems) {
+        // Systems count the RomM server's games that aren't here yet, as the Systems page does.
+        val counted = feed.copy(systems = feed.systems.withRomm(rommSystems))
+        buildShelves(prefs.home.widgets.filter { app.offers(it.kind) }, if (prefs.collectionsEnabled) counted else counted.copy(collections = emptyList()), achievementsOn)
     }
     val sel = rememberRouteState(app.navigator, "home.flow") { ShelfSelection() }
     val keys = shelves.map { it.key }
@@ -272,6 +278,16 @@ fun FlowHome(app: AppState) {
         when (e.action) {
             NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT ->
                 sel.move(e.action, keys) { k -> shelves.firstOrNull { it.key == k }?.items?.size ?: 0 }
+            // Page Up and Page Down (L2 and R2) go a few shelves at a time.
+            NavAction.PAGE_UP, NavAction.PAGE_DOWN -> {
+                val step = if (e.action == NavAction.PAGE_DOWN) NavAction.DOWN else NavAction.UP
+                var result = NavResult.BLOCKED
+                repeat(PAGE_SHELVES) {
+                    val r = sel.move(step, keys) { k -> shelves.firstOrNull { it.key == k }?.items?.size ?: 0 }
+                    if (r == NavResult.MOVED) result = NavResult.MOVED
+                }
+                result
+            }
             NavAction.SELECT -> { item?.let(::activate); if (item != null) NavResult.ACTIVATED else NavResult.BLOCKED }
             NavAction.CONTEXT -> { item?.let(::options); NavResult.ACTIVATED }
             NavAction.REORDER -> {
@@ -317,11 +333,27 @@ fun FlowHome(app: AppState) {
             }
             // The shelf's own top padding and title row make up the rest of the gap to the stage.
             Spacer(Modifier.height(if (compact) Space.s else Space.m))
+            val wheelScope = androidx.compose.runtime.rememberCoroutineScope()
+            val wheelStep = with(androidx.compose.ui.platform.LocalDensity.current) { WHEEL_STEP.toPx() }
             LazyColumn(
                 state = rows,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
+                    // A mouse wheel turned up or down scrolls the page, even over a shelf: a shelf
+                    // (a row) would otherwise take it and move sideways. Sideways turns still move it.
+                    .pointerInput(rows) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                                if (event.type != androidx.compose.ui.input.pointer.PointerEventType.Scroll) continue
+                                val delta = event.changes.fold(androidx.compose.ui.geometry.Offset.Zero) { acc, c -> acc + c.scrollDelta }
+                                if (kotlin.math.abs(delta.y) <= kotlin.math.abs(delta.x)) continue
+                                event.changes.forEach { it.consume() }
+                                wheelScope.launch { rows.animateScrollBy(delta.y * wheelStep) }
+                            }
+                        }
+                    }
                     // Only the shelf's own top padding fades, so the focused shelf's title stays crisp.
                     .fadingEdges(rows, top = Space.s)
                     .dragReorder(
@@ -668,3 +700,9 @@ private fun shelfMenu(app: AppState, shelf: Shelf, onArrange: () -> Unit): Conte
         }),
     ) + app.homeStyleActions(),
 )
+
+/** Shelves Page Up and Page Down move by on Home. */
+private const val PAGE_SHELVES = 3
+
+/** How far one notch of a mouse wheel scrolls Home. */
+private val WHEEL_STEP = 96.dp

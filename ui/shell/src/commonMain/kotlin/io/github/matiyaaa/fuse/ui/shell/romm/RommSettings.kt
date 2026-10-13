@@ -112,7 +112,11 @@ internal fun rommStatus(s: RommState, p: FuseRommSettings): Triple<Boolean?, Str
     s.link == RommLink.SIGNED_OUT -> Triple(false, "Signed out", "RomM no longer accepts Fuse's sign-in. Pair again")
     s.link == RommLink.OFFLINE -> Triple(false, "Can't reach the server", "Browsing what Fuse kept; it keeps trying")
     s.link == RommLink.CONNECTING -> Triple(null, "Connecting", "Asking your home and outside addresses")
-    s.route == NetRoute.LOCAL -> Triple(true, "Connected at home", listOfNotNull(s.account.ifBlank { null }, s.version.ifBlank { null }?.let { "RomM $it" }).joinToString("  ·  "))
+    // "At home" only for an address that is on this network; a public server reached by the address
+    // typed first (which lands in the home slot) is simply connected.
+    s.route == NetRoute.LOCAL && io.github.matiyaaa.fuse.ui.shell.onboarding.looksAtHome(p.localAddress) ->
+        Triple(true, "Connected at home", listOfNotNull(s.account.ifBlank { null }, s.version.ifBlank { null }?.let { "RomM $it" }).joinToString("  ·  "))
+    s.route == NetRoute.LOCAL -> Triple(true, "Connected", listOfNotNull(s.account.ifBlank { null }, s.version.ifBlank { null }?.let { "RomM $it" }).joinToString("  ·  "))
     else -> Triple(true, "Connected from outside", listOfNotNull(s.account.ifBlank { null }, s.version.ifBlank { null }?.let { "RomM $it" }).joinToString("  ·  "))
 }
 
@@ -305,7 +309,8 @@ private fun rommRows(
 
     // Upload ------------------------------------------------------------------------------------
     val upload = "Upload"
-    add(infoRow("upload.can", if (state.canUpload) "Uploads allowed" else "Read only", detail = if (state.canUpload) "Fuse can send games to RomM" else "Pair again and allow uploads to send games to RomM", icon = if (state.canUpload) FuseIcons.CloudUpload else FuseIcons.Lock).copy(section = upload))
+    // A state, not a heading: on or off, and what that means.
+    add(infoRow("upload.can", "Uploads", value = if (state.canUpload) "On" else "Off", detail = if (state.canUpload) "RomM lets Fuse send games to it" else "Read only. Pair again and allow uploads to send games to RomM", icon = if (state.canUpload) FuseIcons.CloudUpload else FuseIcons.Lock).copy(section = upload))
     add(toggleRow("upload.confirm", "Show what will be sent first", FuseIcons.ListChecks, p.confirmUploads, "Every file, its folder and the total, before anything goes") { v -> set { it.copy(confirmUploads = v) } }.copy(section = upload))
     add(toggleRow("upload.scan", "Ask RomM to add uploads", FuseIcons.ScanSearch, p.scanAfterUpload, if (state.canScan) "RomM scans the system after an upload" else "Needs scan permission when pairing") { v -> set { it.copy(scanAfterUpload = v) } }.copy(section = upload))
 }

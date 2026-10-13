@@ -188,6 +188,14 @@ private sealed interface Hit {
         override val detail = listOfNotNull(g.card.platformShort, "Not downloaded yet").joinToString("  ·  ")
     }
 
+    /** More of the server's games than the first few shown: chosen, the rest are listed here too. */
+    data class RommMore(val count: Int) : Hit {
+        override val key = "romm.more"
+        override val title = "See all $count on RomM"
+        override val kind = HitKind.ROMM
+        override val detail = "Every game on your RomM server that matches"
+    }
+
     data class App(val card: AppCard) : Hit {
         override val key = "a${card.entry.id}"
         override val title = card.entry.displayTitle
@@ -259,14 +267,18 @@ fun SearchScreen(app: AppState) {
     }
     val rommGames by rommFlow.collectAsState(initial = emptyList())
     val sections = remember { settingsSections.filter { it.available(app) } }
-    val hits = remember(results, rommGames) {
+    // The server's matches past the first few, once asked for (until the search changes).
+    var rommAll by remember(results.query) { mutableStateOf(false) }
+    val hits = remember(results, rommGames, rommAll) {
+        val remote = rommGames.filter { it.game == null && results.chips.isEmpty() }
         // Settings are found by name alone, never with filters.
         val settings = if (results.chips.isEmpty()) SettingsIndex.search(results.query, sections, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen, steam = app.platform.steam != null, decky = app.platform.decky != null).map { Hit.Setting(it) } else emptyList()
         val choosing = SearchSyntax.parse(results.query).pending != null
         results.suggestions.map { Hit.Suggestion(it, choosing) } +
             results.games.map { Hit.Game(it) } + results.platforms.map { Hit.System(it) } +
             results.apps.map { Hit.App(it) } + results.collections.filter { app.store.prefs.value.collectionsEnabled }.map { Hit.Collection(it) } +
-            rommGames.filter { it.game == null && results.chips.isEmpty() }.take(ROMM_HITS).map { Hit.RommGame(it) } +
+            (if (rommAll) remote else remote.take(ROMM_HITS)).map { Hit.RommGame(it) } +
+            listOfNotNull(Hit.RommMore(remote.size).takeIf { !rommAll && remote.size > ROMM_HITS }) +
             settings + listOfNotNull(
                 // Plain words (no filters), with Cartridge there: the same search on the RomM server.
                 results.query.trim().takeIf { !rommOn && it.length >= 2 && results.chips.isEmpty() && SearchSyntax.parse(it).pending == null && app.store.cartridge.status.value.installed }
@@ -277,8 +289,11 @@ fun SearchScreen(app: AppState) {
     // The results belong to what was typed a moment ago; until they arrive the old ones stay.
     val settledQuery = results.query
 
+    val submit = remember { mutableStateOf<() -> Unit>({}) }
+    val searchRouter = io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter.current
     DisposableEffect(Unit) {
-        app.keyboardTarget = KeyboardTarget(field, title = "Search", placeholder = "Games, systems, people", doneLabel = "Results") { if (hits.isNotEmpty()) inResults = true }
+        // Read when Enter (or Results) is pressed, not when the screen opened: the results then are the ones to go to.
+        app.keyboardTarget = KeyboardTarget(field, title = "Search", placeholder = "Games, systems, people", doneLabel = "Results") { submit.value() }
         onDispose { app.keyboardTarget = null }
     }
     val current = hits.getOrNull(sel.index)
@@ -308,11 +323,23 @@ fun SearchScreen(app: AppState) {
             is Hit.Setting -> hit.hit.topic.let { t -> app.openSettings(t.section, t.row, t.group) }
             is Hit.Romm -> app.store.cartridge.open(io.github.matiyaaa.fuse.model.CartridgeRoute.Search(hit.query, null))
             is Hit.RommGame -> app.go(Route.GameInfo(hit.g.card.id))
+            is Hit.RommMore -> rommAll = true
             // A filter goes into the search; the keys take over again for what comes next.
             is Hit.Suggestion -> {
                 field.replaceAll(hit.s.text)
                 inResults = false
             }
+        }
+    }
+
+    // Enter on a keyboard opens the first result, as Settings search does; the on-screen Results key
+    // (a controller) goes into the results to choose one.
+    submit.value = {
+        val first = hits.firstOrNull { it !is Hit.Suggestion } ?: hits.firstOrNull()
+        when {
+            first == null -> Unit
+            searchRouter.lastSource.value == io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.KEYBOARD -> open(first)
+            else -> inResults = true
         }
     }
 
@@ -611,6 +638,7 @@ private fun HitThumb(h: Hit, size: androidx.compose.ui.unit.Dp) {
         is Hit.Setting -> IconWell(h.hit.section.icon, size, shape)
         is Hit.Suggestion -> IconWell(h.s.key.icon(), size, shape)
         is Hit.Romm -> IconWell(FuseIcons.CloudDownload, size, shape)
+        is Hit.RommMore -> IconWell(FuseIcons.ChevronDown, size, shape)
         is Hit.RommGame -> SquareGameArt(h.g.card.art, Modifier.size(size).clip(shape), fallback = { GeneratedArt(h.title, h.g.card.accent.toColor(), slot = ArtSlot.ICON) })
     }
 }

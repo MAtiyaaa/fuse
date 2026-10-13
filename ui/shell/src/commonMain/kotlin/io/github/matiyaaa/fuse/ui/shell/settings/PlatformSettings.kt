@@ -194,7 +194,7 @@ fun PlatformSettingsScreen(app: AppState, platformId: PlatformId) {
         } }).copy(section = look))
         add(app.scopedRow(ScopedSettings.ShowHero, platformId, "Background art", FuseIcons.Image, on).copy(section = look))
         add(app.scopedRow(ScopedSettings.ShowLogo, platformId, "Title logos", FuseIcons.Type, on).copy(section = look))
-        add(app.scopedRow(ScopedSettings.VideoPreview, platformId, "Video previews", FuseIcons.Film, on).copy(section = look))
+        if (app.platform.features.videoPreview) add(app.scopedRow(ScopedSettings.VideoPreview, platformId, "Video previews", FuseIcons.Film, on).copy(section = look))
         add(app.scopedRow(ScopedSettings.Border, platformId, "Dynamic border", FuseIcons.Square, listOf(
             BorderStyle(mode = BorderMode.OFF) to "Off",
             BorderStyle(mode = BorderMode.PLATFORM_DEFAULT) to "System frame",

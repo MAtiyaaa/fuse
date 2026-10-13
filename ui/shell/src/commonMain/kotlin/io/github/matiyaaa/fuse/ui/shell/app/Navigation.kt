@@ -100,11 +100,14 @@ sealed interface Route {
     data class GameContent(val game: GameId) : Route
 
     /** Fuse's own file picker, for "Add a game", for locating an emulator ([locate]) and for a licence ([licence]). */
-    data class PickFile(val purpose: FilePurpose, val locate: LocateRequest? = null, val licence: LicencePick? = null) : Route
+    data class PickFile(val purpose: FilePurpose, val locate: LocateRequest? = null, val licence: LicencePick? = null, val patch: PatchPick? = null) : Route
 }
 
 /** What a file is picked for. */
-enum class FilePurpose { APK, GAME, EMULATOR, THEME, LICENCE }
+enum class FilePurpose { APK, GAME, EMULATOR, THEME, LICENCE, PATCH }
+
+/** A patch to pick for [game], starting in [folder] (the game's own) where it is known. */
+data class PatchPick(val game: io.github.matiyaaa.fuse.ui.shell.store.GameCard, val folder: String?)
 
 /** A licence to pick for [contentId] of [game] (a PS3 `.rap`, or a Vita `.rif`, `work.bin` or file with its zRIF). */
 data class LicencePick(val game: GameId, val contentId: String, val vita: Boolean)
