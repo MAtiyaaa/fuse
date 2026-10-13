@@ -62,13 +62,28 @@ class UpdateAndSteamTest {
 
         val icon = DesktopSteam(KnownFolders(root.path)).placeArt(grid, shortcut)
 
-        for ((name, w, h) in listOf(Triple("${id}p", 600, 900), Triple("$id", 920, 430), Triple("${id}_logo", 1200, 344), Triple("${id}_icon", 256, 256))) {
+        for ((name, w, h) in listOf(Triple("${id}p", 600, 900), Triple("$id", 920, 430), Triple("${id}_logo", 1280, 640), Triple("${id}_icon", 256, 256))) {
             val image = ImageIO.read(File(grid, "$name.png"))
             assertEquals(w to h, image.width to image.height, name)
         }
         assertFalse(File(grid, "${id}_hero.png").exists(), "their own hero stays")
         assertEquals("theirs", File(grid, "${id}_hero.jpg").readText())
         assertEquals(File(grid, "${id}_icon.png").absolutePath, icon)
+    }
+
+    @Test
+    fun fusesOwnOldLogoIsRedrawnAndAnotherLogoStays() {
+        val grid = File(root, "userdata/123/config/grid").apply { mkdirs() }
+        // The logo 0.4.2.6 left for one entry, and someone's own logo for another.
+        val old = javaClass.getResourceAsStream("/steam-logo-0.4.2.6.png")!!.use { it.readBytes() }
+        File(grid, "77_logo.png").writeBytes(old)
+        File(grid, "88_logo.png").writeText("theirs")
+        val steam = DesktopSteam(KnownFolders(root.path))
+        steam.placeArt(grid, 77L)
+        steam.placeArt(grid, 88L)
+        val redrawn = ImageIO.read(File(grid, "77_logo.png"))
+        assertEquals(1280 to 640, redrawn.width to redrawn.height)
+        assertEquals("theirs", File(grid, "88_logo.png").readText())
     }
 
     @Test

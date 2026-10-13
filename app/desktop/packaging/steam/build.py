@@ -6,7 +6,7 @@ by the HTML pages beside this file, drawn by headless Chromium.
     python3 app/desktop/packaging/steam/build.py [path/to/chrome]
 
 portrait.png 600x900 (library capsule), capsule.png 920x430 (wide capsule), hero.png 1920x620,
-logo.png (drawn over the hero) and icon.png 256x256.
+logo.png 1280x640 (drawn over the hero and in the in-game menu, the lockup inset with room around it) and icon.png 256x256.
 """
 import os, re, shutil, sys, tempfile
 from PIL import Image
@@ -34,7 +34,7 @@ scene = re.sub(r"<title>.*?</title>", "", scene.replace('clip-path="url(#bdc37)"
 open(os.path.join(work, "scene.svg"), "w").write(scene)
 
 os.makedirs(OUT, exist_ok=True)
-for name, w, h, clear in [("portrait", 600, 900, False), ("capsule", 920, 430, False), ("hero", 1920, 620, False), ("logo", 1200, 344, True), ("icon", 256, 256, True)]:
+for name, w, h, clear in [("portrait", 600, 900, False), ("capsule", 920, 430, False), ("hero", 1920, 620, False), ("logo", 1280, 640, True), ("icon", 256, 256, True)]:
     out = os.path.join(work, name + ".png")
     render.render(os.path.join(work, name + ".html"), w, h, out, clear)
     Image.open(out).convert("RGBA" if clear else "RGB").save(os.path.join(OUT, name + ".png"), optimize=True)
