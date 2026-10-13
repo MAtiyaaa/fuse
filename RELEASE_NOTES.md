@@ -1,6 +1,7 @@
 # Fuse 0.4.2.8 - The Native Update
 
-Smoother motion on a 4K TV, and a log that says where a slow frame's time went.
+Smoother motion on a 4K TV and in Steam's Game Mode, video that no longer redraws the whole screen
+for nothing, and a log that says where a slow frame's time went.
 
 ## New
 
@@ -21,6 +22,18 @@ Smoother motion on a 4K TV, and a log that says where a slow frame's time went.
 
 ## Changed
 
+- **In Steam's Game Mode, gamescope paces Fuse's frames.** On Linux, Fuse draws on the same thread
+  that runs every animation and button press, and waited there for each screen refresh. Under
+  gamescope that wait came on top of gamescope's own, so frames could miss the refresh they waited
+  for and motion stuttered. Fuse now paces itself to the screen's rate and leaves the wait to
+  gamescope. Pictures never tear: gamescope shows whole frames. `FUSE_VSYNC=on` brings the old way
+  back.
+- **Video redraws only when a new picture is due.** A film or a background preview used to have
+  the whole window drawn again at every screen refresh, 60 times a second for a 24 fps film. Now
+  the window is drawn when the next picture is due.
+- **Video pictures are scaled with a cubic filter.** Each picture had mipmaps built for it on the
+  processor before it went to the graphics card. It now goes straight there, and looks sharper
+  enlarged to a 4K screen.
 - **Room for 4K on the graphics card.** Fuse keeps the pictures it draws with (art, the blurred room,
   glass and every layer drawn offscreen) in a cache on the graphics card that held only 96 MB, about
   three full-screen layers at 4K. Moving between screens then uploaded the same pictures again on

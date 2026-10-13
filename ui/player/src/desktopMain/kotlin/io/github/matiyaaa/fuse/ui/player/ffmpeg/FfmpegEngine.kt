@@ -21,6 +21,7 @@ import io.github.matiyaaa.fuse.playback.PlaySource
 import io.github.matiyaaa.fuse.ui.player.EngineState
 import io.github.matiyaaa.fuse.ui.player.EngineStatus
 import io.github.matiyaaa.fuse.ui.player.PlayerEngine
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -258,6 +259,27 @@ class FfmpegEngine : PlayerEngine {
         private set
 
     /** For tests: takes the picture due now as the screen would, and gives it straight back. */
+    /**
+     * How long until the next picture is due, in milliseconds: 0 when one is due now (as [takeFrame]
+     * would take it), null when none is waiting.
+     */
+    private fun untilDueMs(): Long? {
+        val p = playback ?: return null
+        val clock = positionMs()
+        val head = p.ready.peek() ?: return null
+        // A stale picture from before a seek, or the first after one: taken at once.
+        if (head.serial != p.currentSerial || shownSerial != head.serial) return 0
+        val wait = head.ptsMs - PRESENT_EARLY_MS - clock
+        return when {
+            wait <= 0 -> 0
+            // Paused, the clock stands still: a picture ahead of it waits for play.
+            !playing -> null
+            else -> wait
+        }
+    }
+
+    internal fun untilDueMsForTest(): Long? = untilDueMs()
+
     internal fun takeFrameForTest(): VideoFrame? {
         val f = takeFrame() ?: return null
         lastFrameBytes = f.bytes.size
@@ -284,6 +306,14 @@ class FfmpegEngine : PlayerEngine {
         val held = remember { arrayOfNulls<Image>(1) }
         LaunchedEffect(this) {
             while (true) {
+                // Asked for a frame of the window only when a picture is due: waiting on every refresh
+                // redrew the whole window 60 times a second for a 24 fps film, and all the time behind
+                // a video preview, whatever else was on screen.
+                val wait = untilDueMs()
+                if (wait == null || wait > 0) {
+                    delay((wait ?: IDLE_WAIT_MS).coerceIn(1L, IDLE_WAIT_MS))
+                    continue
+                }
                 withFrameNanos { }
                 val frame = takeFrame() ?: continue
                 val info = ImageInfo(frame.width, frame.height, ColorType.BGRA_8888, ColorAlphaType.OPAQUE)
@@ -306,7 +336,9 @@ class FfmpegEngine : PlayerEngine {
                 img,
                 dstOffset = IntOffset.Zero,
                 dstSize = IntSize(size.width.toInt(), size.height.toInt()),
-                filterQuality = FilterQuality.Medium,
+                // Cubic, not Medium: Medium samples with mipmaps, which Skia builds on the processor
+                // for every new picture before it goes to the graphics card, on the interface's thread.
+                filterQuality = FilterQuality.High,
             )
         }
     }
@@ -314,5 +346,7 @@ class FfmpegEngine : PlayerEngine {
     companion object {
         private const val TICK_MS = 100L
         private const val PRESENT_EARLY_MS = 8L
+        /** How often to look again when no picture is waiting (decoding, paused, or the end). */
+        private const val IDLE_WAIT_MS = 10L
     }
 }

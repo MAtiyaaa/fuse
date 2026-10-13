@@ -101,6 +101,40 @@ class FfmpegEngineTest {
     }
 
     @Test
+    fun theWindowIsAskedToDrawOnlyWhenAPictureIsDue() {
+        val file = File(dir, "clip.mkv")
+        SampleMedia.write(file, seconds = 3, cues = emptyList(), audioTracks = 1)
+        val engine = FfmpegEngine().also { watched = it }
+        engine.capabilities(hardwareDecoding = false)
+        engine.load(PlaySource(url = file.absolutePath, method = PlayMethod.DIRECT_PLAY), startMs = 0, audioOrder = 0, subtitleOrder = 0, play = true)
+        waitUntil("the clip to open") { engine.state.value.status == EngineStatus.READY }
+        // While playing: a picture due now is there to take, and one ahead is waited for, never
+        // longer than a picture lasts.
+        var due = 0
+        var ahead = 0
+        waitUntil("pictures due and ahead") {
+            when (val wait = engine.untilDueMsForTest()) {
+                null -> Unit
+                0L -> if (engine.takeFrameForTest() != null) due++
+                else -> {
+                    assertTrue(wait in 1..120, "waits $wait ms for the next picture")
+                    ahead++
+                }
+            }
+            due >= 5 && ahead >= 5
+        }
+        // Paused, with what was due shown, nothing is due: the window rests.
+        engine.pause()
+        waitUntil("the pause to settle") {
+            while (engine.untilDueMsForTest() == 0L) engine.takeFrameForTest()
+            engine.untilDueMsForTest() == null
+        }
+        Thread.sleep(200)
+        assertEquals(null, engine.untilDueMsForTest())
+        engine.release()
+    }
+
+    @Test
     fun theClipsSizeAndLengthSurviveTheClock() {
         // The clock thread updates the state while the stream opens; what the stream says it is
         // must never be written over, however the two line up. Loading again and again tries many.

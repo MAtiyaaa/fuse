@@ -10,6 +10,13 @@ package io.github.matiyaaa.fuse.desktop.system
  * full-screen layers, at least [MIN_CACHE_MB] and at most [MAX_CACHE_MB]. It is a budget, not memory
  * taken up front.
  *
+ * Under gamescope (Steam's Game Mode, or gamescope in a desktop) Skia doesn't wait for the screen's
+ * refresh itself. On Linux it draws on the interface's own thread and, waiting, swaps buffers there:
+ * every animation and button press waited with it, and under gamescope the wait is a second one,
+ * since gamescope composes and paces the frames it shows (an X11 app that waits hands its picture
+ * over too late for the refresh it waited for). Skia then paces itself on a timer at the screen's
+ * rate instead, and the thread stays free. Pictures still never tear: gamescope shows whole ones.
+ *
  * Settings for trying how frames reach the screen, without a new build, read from the environment
  * (in Steam, a game's Launch Options: `FUSE_VSYNC=off %command%`):
  * - `FUSE_GPU_CACHE_MB`: the cache's size in megabytes.
@@ -25,7 +32,7 @@ internal object RenderTuning {
     data class Choice(val properties: Map<String, String>, val keepCursor: Boolean, val notes: List<String>)
 
     /** What to set for a screen of [screenPixels], given the environment ([env]) and properties already set ([given]). */
-    fun choose(screenPixels: Long, env: (String) -> String?, given: (String) -> String?): Choice {
+    fun choose(screenPixels: Long, env: (String) -> String?, given: (String) -> String?, session: DisplaySession = DisplaySession.UNKNOWN): Choice {
         val properties = LinkedHashMap<String, String>()
         val notes = ArrayList<String>()
         fun put(key: String, value: String, why: String) {
@@ -41,6 +48,9 @@ internal object RenderTuning {
         when (env("FUSE_VSYNC")?.trim()?.lowercase()) {
             "off", "0", "false", "no" -> put(VSYNC, "false", "FUSE_VSYNC")
             "on", "1", "true", "yes" -> put(VSYNC, "true", "FUSE_VSYNC")
+            else -> if (session == DisplaySession.STEAM_GAME_MODE || session == DisplaySession.GAMESCOPE_NESTED) {
+                put(VSYNC, "false", "gamescope paces the frames")
+            }
         }
         when (env("FUSE_BUFFERING")?.trim()?.lowercase()) {
             "double", "2" -> put(BUFFERING, "DOUBLE", "FUSE_BUFFERING")
@@ -68,7 +78,7 @@ internal object RenderTuning {
 
     /** Sets Skia's properties for this screen; call before any window opens. Returns what was chosen, for the log. */
     fun install(screenPixels: Long): Choice {
-        val choice = choose(screenPixels, System::getenv, System::getProperty)
+        val choice = choose(screenPixels, System::getenv, System::getProperty, FramePacing.session(System::getenv))
         for ((key, value) in choice.properties) System.setProperty(key, value)
         keepCursor = choice.keepCursor
         return choice

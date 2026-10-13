@@ -45,4 +45,17 @@ class RenderTuningTest {
         assertTrue(choice.properties.isEmpty(), "${choice.properties}")
         assertTrue(choice.notes.any { "given to Java" in it })
     }
+
+    @Test
+    fun underGamescopeSkiaLeavesTheWaitToIt() {
+        for (session in listOf(DisplaySession.STEAM_GAME_MODE, DisplaySession.GAMESCOPE_NESTED)) {
+            assertEquals("false", RenderTuning.choose(3840L * 2160, none, none, session).properties["skiko.vsync.enabled"], "$session")
+        }
+        for (session in listOf(DisplaySession.X11, DisplaySession.WAYLAND, DisplaySession.UNKNOWN)) {
+            assertEquals(null, RenderTuning.choose(1920L * 1080, none, none, session).properties["skiko.vsync.enabled"], "$session")
+        }
+        // Asked for, the wait comes back in Game Mode too.
+        val on = mapOf("FUSE_VSYNC" to "on")
+        assertEquals("true", RenderTuning.choose(3840L * 2160, on::get, none, DisplaySession.STEAM_GAME_MODE).properties["skiko.vsync.enabled"])
+    }
 }
