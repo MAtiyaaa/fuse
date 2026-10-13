@@ -224,8 +224,11 @@ class AndroidMenuMusic : MenuMusicPlayer {
     }
 
     private fun applyVolumes() {
-        // Perceived loudness follows the square of the level, so low settings stay usable.
-        val base = wanted.volume * wanted.volume * gate
+        // Perceived loudness follows the square of the level, so low settings stay usable. Android plays
+        // at the device's media volume, far louder than a computer's mixer: the whole slider spans what
+        // its lower half used to, so 50% sounds as 25% did and 100% as 50% did.
+        val level = wanted.volume * ANDROID_RANGE
+        val base = level * level * gate
         for (v in listOfNotNull(current) + leaving) {
             if (!v.prepared || v.dead) continue
             val level = base * v.mix
@@ -254,3 +257,6 @@ class AndroidMenuMusic : MenuMusicPlayer {
         const val RETRY_MS = 800L
     }
 }
+
+/** The share of the full output the music slider reaches on Android (see applyVolumes). */
+private const val ANDROID_RANGE = 0.5f

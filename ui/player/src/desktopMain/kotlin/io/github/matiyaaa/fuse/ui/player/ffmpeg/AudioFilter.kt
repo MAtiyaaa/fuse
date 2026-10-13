@@ -29,7 +29,7 @@ import org.bytedeco.javacpp.BytePointer
  * about 8 dB quieter, its dialogue in the centre channel quieter still, which is what made Jellyfin
  * films faint on a TV. In floating point the mix keeps the standard levels (centre and surrounds at
  * -3 dB), and a peak limiter (alimiter, auto level off) catches the rare peak a full mix would push
- * past full scale, so nothing clips and nothing quiet is raised. Stereo is untouched.
+ * past full scale, so nothing clips. Every stream, stereo too, is then evened out (see [LEVEL]).
  */
 internal class AudioFilter {
     private var graph: AVFilterGraph? = null
@@ -78,13 +78,22 @@ internal class AudioFilter {
     }
 
     companion object {
+        /**
+         * Films are mixed for a cinema: dialogue sits near -27 LUFS with loud moments 20 dB above it,
+         * and a TV's speakers turned all the way up still left it hard to hear. A TV or an Android box
+         * evens that out as it decodes; here a gentle compressor does (3:1 above -20 dBFS, quick enough
+         * for speech, slow enough not to pump) and raises the whole by about 9.5 dB, so quiet speech
+         * comes up and the loud moments come down to meet it. The limiter after it keeps every peak
+         * under full scale.
+         */
+        internal const val LEVEL = "threshold=0.1:ratio=3:attack=15:release=250:makeup=3:knee=4"
+
         /** The filters from the decoder's [channels] to 48 kHz 16-bit stereo, by name, filter and arguments. */
         fun steps(channels: Int): List<Triple<String, String, String>> = buildList {
             add(Triple("rate", "aresample", "${AudioOut.RATE}"))
-            if (channels > 2) {
-                add(Triple("mix", "aformat", "sample_fmts=dbl:channel_layouts=stereo"))
-                add(Triple("limit", "alimiter", "limit=0.98:attack=5:release=50:level=0"))
-            }
+            add(Triple("mix", "aformat", "sample_fmts=dbl:channel_layouts=stereo"))
+            add(Triple("level", "acompressor", LEVEL))
+            add(Triple("limit", "alimiter", "limit=0.98:attack=5:release=50:level=0"))
             add(Triple("fmt", "aformat", "sample_fmts=s16:channel_layouts=stereo"))
         }
     }
