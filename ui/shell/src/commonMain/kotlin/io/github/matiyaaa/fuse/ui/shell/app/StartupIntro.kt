@@ -69,7 +69,7 @@ internal object StartupIntro {
  * and sound, Startup animation is on; Settings, Developer can play it again.
  */
 @Composable
-internal fun StartupIntroOverlay(onDone: () -> Unit) {
+internal fun StartupIntroOverlay(onDone: () -> Unit, onCovering: (Boolean) -> Unit = {}) {
     val c = Fuse.colors
     val motion = Fuse.motion
     val sounds = io.github.matiyaaa.fuse.ui.designsystem.sound.LocalUiSounds.current
@@ -92,6 +92,13 @@ internal fun StartupIntroOverlay(onDone: () -> Unit) {
             sounds.play(SoundCue.LAUNCH)
         }
     }
+
+    // Opaque until it fades: what is under it needn't be drawn until then.
+    val fadeFrom = if (reduced) length * 0.6f else EXIT_FADE_FROM
+    val covering by remember { androidx.compose.runtime.derivedStateOf { clock.value < fadeFrom } }
+    val cover by androidx.compose.runtime.rememberUpdatedState(onCovering)
+    LaunchedEffect(covering) { cover(covering) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { cover(false) } }
 
     // Any button skips straight to the opening out.
     fun skip() {

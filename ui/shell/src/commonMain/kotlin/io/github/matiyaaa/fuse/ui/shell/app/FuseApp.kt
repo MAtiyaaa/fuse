@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.blur
 import io.github.matiyaaa.fuse.ui.designsystem.effects.glassBackdropSource
 import androidx.compose.ui.graphics.Brush
@@ -486,7 +487,9 @@ private fun FuseAppContent(
                     ),
             ) {
                 // The room fills the whole screen; everything on it keeps clear of edges a TV cuts off.
-                Room(app, prefs.showHero, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds, spec.ambient, spec.wallpaper)
+                Box(Modifier.fillMaxSize().unseenUnderOpening(app)) {
+                    Room(app, prefs.showHero, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds, spec.ambient, spec.wallpaper)
+                }
                 val margin = (calibration?.margin ?: prefs.screenMargin).coerceIn(0, 10) / 100f
                 // On an ultrawide screen (wider than about 21:9) the interface keeps a 21:9-like frame
                 // in the middle, so the top line, the pages and the hints stay together; the room
@@ -506,7 +509,7 @@ private fun FuseAppContent(
                         if (root != null && root !in tabs && app.navigator.stack.size == 1) app.selectTab(Destination.HOME)
                     }
                     Pages(app, tabs)
-                    TopLine(app, platform, tabs, prefs)
+                    Box(Modifier.fillMaxSize().unseenUnderOpening(app)) { TopLine(app, platform, tabs, prefs) }
                     if (prefs.performanceOverlay) {
                         val metrics by platform.performance.collectAsState()
                         // Under the status it extends, where it covers the least of any page.
@@ -537,13 +540,13 @@ private fun FuseAppContent(
                         if (opening) OpeningVeil.showing.value = true
                         onDispose { if (opening) OpeningVeil.showing.value = false }
                     }
-                    if (app.intro) StartupIntroOverlay(onDone = {
+                    if (app.intro) StartupIntroOverlay(onCovering = { app.openingCovers = it }, onDone = {
                         app.intro = false
                         StartupIntro.lastPlayedAt = kotlin.time.Clock.System.now().toEpochMilliseconds()
                         // Fuse is up: one pulse as the intro gives way.
                         platform.haptics.success()
                     })
-                    if (app.setupOpening) SetupOpening(onDone = { app.setupOpening = false })
+                    if (app.setupOpening) SetupOpening(onCovering = { app.openingCovers = it }, onDone = { app.setupOpening = false })
                 }
                 }
                 // Fuse Player takes the whole screen, outside the margins and the ultrawide frame.
@@ -703,6 +706,9 @@ private val MENU_HINTS = listOf(Hint(HintButton.CONFIRM, "Select"), Hint(HintBut
 private val LIFTED_TAB_HINTS = listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Done"))
 
 /** The background: theme renderer, then the selected item's art with video after it rests. */
+/** Not drawn while an opening covers the whole screen ([AppState.openingCovers]); read while drawing, so it never recomposes. */
+private fun Modifier.unseenUnderOpening(app: AppState): Modifier = drawWithContent { if (!app.openingCovers) drawContent() }
+
 @Composable
 private fun Room(
     app: AppState,
@@ -787,7 +793,7 @@ private fun Pages(app: AppState, tabs: List<Destination>) {
     val current = nav.current
     // Tabs follow the order the top line shows them in, which the user may have changed.
     fun place(d: Destination): Int = tabs.indexOf(d).takeIf { it >= 0 } ?: (tabs.size + d.ordinal)
-    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().unseenUnderOpening(app)) {
         RootPages(app, current, nav.direction, ::place, tabs)
         PushedPages(app, current, nav.direction, motion)
     }

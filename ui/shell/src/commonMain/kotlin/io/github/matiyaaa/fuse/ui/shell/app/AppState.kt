@@ -190,6 +190,13 @@ class AppState(
     var setupOpening by mutableStateOf(false)
 
     /**
+     * An opening ([intro] or [setupOpening]) covers the whole screen right now: the interface under
+     * it is still composed and laid out, so it is ready when the opening gives way, but not drawn.
+     * Drawn under an opaque opening, Home cost every frame of the opening as much again.
+     */
+    var openingCovers by mutableStateOf(false)
+
+    /**
      * Licence files picked and zRIFs pasted for installs, by "gameId|contentId". Kept in memory for
      * this run of Fuse only, never written down, so a key goes no further than the emulator.
      */
