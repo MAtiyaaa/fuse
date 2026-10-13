@@ -766,8 +766,6 @@ class JvmSyncService(
     }
 
     /** [text] as a safe folder name. */
-    private fun safeName(text: String) = text.replace(Regex("[^A-Za-z0-9 ._()-]+"), "_").trim('.', ' ').take(80).ifEmpty { "_" }
-
     /** A folder name for saves kept when the host was forgotten: when it happened, sortable. */
     private fun keptFolderName(): String = java.text.SimpleDateFormat("yyyy-MM-dd HH-mm-ss", java.util.Locale.ROOT).format(java.util.Date(clock()))
 
@@ -2013,6 +2011,17 @@ class JvmSyncService(
         val c = client
         val d = device
         val profile = cached.activeProfile
+        // A test run (Find Where It Saves): this person's save swapped in as ever, nothing brought down,
+        // and the folders noted only then, so the save the game makes is the one seen.
+        probes[query.game.id]?.let { probe ->
+            if (clock() - probe.armedAt > PROBE_START_MS || d == null) {
+                probes.remove(query.game.id)
+            } else {
+                swapIn(d, query, profile.ifEmpty { null })?.let { blocked -> return@withContext blocked }
+                probes[query.game.id] = probe.copy(snapshot = SaveProbe.snapshot(probe.roots, saveEnv))
+                return@withContext LaunchGate.Go("A test run: save sync is paused for ${query.title} until it closes")
+            }
+        }
         // Profiles work without a host too: each person's save is put in place here all the same.
         if (d == null || profile.isEmpty() || !(cached.enabled || keepsOwn)) return@withContext LaunchGate.Go()
         // Another device playing it, or still sending what it just saved: the person decides whether to wait.
@@ -2156,6 +2165,8 @@ class JvmSyncService(
     override suspend fun afterExit(asked: SaveQuery, startedAt: Long, endedAt: Long) {
         val query = canonical(asked)
         stopWatching(query)
+        // A test run ends with its game, whatever else happens here; one that never started is gone too.
+        val probe = probes.remove(query.game.id)?.takeIf { it.snapshot != null }
         val d = device ?: return run { busy -= query.game.id; _nowPlaying.value = null }
         val profile = cached.activeProfile.ifEmpty { return run { busy -= query.game.id; _nowPlaying.value = null } }
         withContext(Dispatchers.IO) {
@@ -2166,6 +2177,14 @@ class JvmSyncService(
             val session = SessionEntry(SessionEntry.idOf(startedAt, endedAt), d.deviceId, startedAt, endedAt, query.emulatorId)
             if (cached.records) d.played(profile, query.game, session, ::canonical)
             val total = canonical(d.meta(profile)).game(query.game).totalSeconds
+            // A test run (Find Where It Saves): where its save landed is learned, and nothing of it is sent as the person's.
+            if (probe != null) {
+                runCatching { finishProbe(d, profile, probe, total) }.onFailure { e ->
+                    log("${query.title}: the test run couldn't finish (${e.message})", query.game.id, SyncActivity.FAILED)
+                    _probeResults.tryEmit(SaveProbeResult.NothingSeen(query.title, probe.roots))
+                }
+                return@withContext
+            }
             learnFromPlay(d, query)
             val c = liveLock.withLock {
                 val here = slots(query)
@@ -2196,6 +2215,131 @@ class JvmSyncService(
         }
         busy -= query.game.id
         if (watch == null) _nowPlaying.value = null
+    }
+
+    // ---------------------------------------------------------------- Find Where It Saves
+
+    /**
+     * A test run: armed at [armedAt] for its game's next start within [PROBE_START_MS], with the
+     * folders it watches ([roots]) as they were when the game started ([snapshot]).
+     */
+    private data class Probe(val query: SaveQuery, val roots: List<String>, val armedAt: Long, val snapshot: SaveProbe.Snapshot? = null)
+
+    /**
+     * Before a test run starts: on a device more than one person plays, the folder holds this
+     * person's save first, as before any game. A [LaunchGate.Blocked] when it couldn't be swapped in.
+     */
+    private suspend fun swapIn(d: SyncDevice, query: SaveQuery, profile: String?): LaunchGate.Blocked? {
+        profile ?: return null
+        for (slot in slots(query)) {
+            val owner = ownerOf(query, slot, profile)
+            val swapped = runCatching {
+                d.handover(owner, slot, { who -> if (who == SHARED_SAVES) 0L else canonical(d.meta(who)).game(query.game).totalSeconds },
+                    File(File(dir, KEPT_DIR), REMOVED_DIR), othersHere = d.saveKeepers().any { it != owner && it != SHARED_SAVES })
+            }
+            swapped.exceptionOrNull()?.let { e ->
+                return LaunchGate.Blocked(query.title, "Fuse couldn't put your save for ${query.title} in place, so the test run didn't start. Every file is kept. ${e.message ?: ""}".trim())
+            }
+        }
+        return null
+    }
+
+    private val probes = java.util.concurrent.ConcurrentHashMap<String, Probe>()
+    private val _probeResults = kotlinx.coroutines.flow.MutableSharedFlow<SaveProbeResult>(extraBufferCapacity = 4)
+    override val probeResults: kotlinx.coroutines.flow.SharedFlow<SaveProbeResult> = _probeResults
+
+    override suspend fun startSaveProbe(query: SaveQuery): Result<List<String>> = withContext(Dispatchers.IO) {
+        runCatching {
+            device ?: error("Turn on Fuse One first: the test run teaches Fuse Sync where this game saves.")
+            val q = canonical(query)
+            val roots = SaveProbe.roots(q, saveEnv)
+            require(roots.isNotEmpty()) { "Fuse found no folder to watch for this game's emulator. Choose its save folder in Settings, Save folders." }
+            probes[q.game.id] = Probe(q, roots, clock())
+            log("${q.title}: a test run is ready; save sync is paused for it until it closes", q.game.id, "save")
+            roots
+        }
+    }
+
+    override fun cancelSaveProbe(game: GameKey) {
+        probes.remove(game.id)
+    }
+
+    /**
+     * After a test run of [probe]'s game: where its save appeared, learned when Fuse didn't look
+     * there; the test save copied aside first; then the person's own save settled: their newest
+     * from the host put in place over the test save, or, with no save of theirs anywhere yet, the
+     * test save kept as their first.
+     */
+    private suspend fun finishProbe(d: SyncDevice, profile: String, probe: Probe, total: Long) {
+        val q = probe.query
+        val changed = SaveProbe.changed(probe.snapshot ?: return, saveEnv)
+        val finding = SaveProbe.conclude(q, saveEnv, changed)
+        val keptAt = if (changed.isEmpty()) null else keepTestSave(q, changed)
+        val result = when (finding) {
+            SaveProbe.Finding.Nothing -> SaveProbeResult.NothingSeen(q.title, probe.roots)
+            is SaveProbe.Finding.Unusable -> SaveProbeResult.CantUse(q.title, finding.seen, keptAt)
+            is SaveProbe.Finding.Known -> SaveProbeResult.Found(q.title, finding.paths.first().substringBeforeLast('/'), learned = false, settledAfterProbe(d, profile, q, total), keptAt)
+            is SaveProbe.Finding.Learned -> {
+                d.learn(q.game.id, finding.format, finding.folders)
+                SaveProbeResult.Found(q.title, finding.folders.joinToString(", ") { "${finding.inFolder}/$it" }, learned = true, settledAfterProbe(d, profile, q, total), keptAt)
+            }
+            is SaveProbe.Finding.Folder -> {
+                saveConfig { it.copy(saveFolders = it.saveFolders + (SaveAdapters.baseId(q.emulatorId) to finding.folder)) }
+                SaveProbeResult.Found(q.title, finding.folder, learned = true, settledAfterProbe(d, profile, q, total), keptAt)
+            }
+        }
+        log(
+            when (result) {
+                is SaveProbeResult.Found -> "${q.title}: the test run found its save in ${result.where}"
+                is SaveProbeResult.CantUse -> "${q.title}: the test run saw ${result.seen.size} changed files, in no way Fuse can keep in step yet"
+                is SaveProbeResult.NothingSeen -> "${q.title}: the test run saw no new save"
+            },
+            q.game.id, if (result is SaveProbeResult.Found) "save" else SyncActivity.FAILED,
+        )
+        _probeResults.tryEmit(result)
+    }
+
+    /** The test run's files ([changed]) copied aside on this device, in Fuse's kept folder; where they went. */
+    private fun keepTestSave(q: SaveQuery, changed: List<String>): String? {
+        val to = File(File(File(File(dir, KEPT_DIR), TEST_SAVES_DIR), safeName(q.title.ifBlank { q.game.id })), keptFolderName())
+        var copied = 0
+        for (path in changed) {
+            val bytes = File(path).takeIf { it.isFile }?.readBytes() ?: saveEnv.readBytes(path, 0, TEST_SAVE_MAX) ?: continue
+            val target = File(to, path.trimStart('/').replace(':', '_'))
+            target.parentFile.mkdirs()
+            target.writeBytes(bytes)
+            copied++
+        }
+        return if (copied == 0) null else to.path
+    }
+
+    private fun safeName(text: String) = text.replace(Regex("[^A-Za-z0-9 ._()-]+"), "_").trim('.', ' ').take(80).ifEmpty { "_" }
+
+    /**
+     * The person's own save after a test run, now that Fuse knows where it goes: their newest from
+     * the host put in place (the test save stays in the history, never as theirs), or, when there is
+     * no save of theirs anywhere, the test save kept as their first. Offline, nothing changes now: the
+     * next launch brings theirs and asks which to keep. Says what happened, or null.
+     */
+    private suspend fun settledAfterProbe(d: SyncDevice, profile: String, q: SaveQuery, total: Long): String? {
+        val c = client
+        var said: String? = null
+        for (slot in slots(q).filter { it.available && it.kind != SaveKind.STATE }) {
+            val owner = ownerOf(q, slot, profile)
+            if (!takesFrom(owner, q.game.id)) continue
+            if (c == null) return "Fuse One is offline: your own save comes at the next launch, and Fuse asks which to keep"
+            val head = runCatching { c.revisions(owner, slot.game.id, slot.kind).firstOrNull { it.canBeNewest } }
+                .getOrElse { return "Fuse One didn't answer: your own save comes at the next launch, and Fuse asks which to keep" }
+            if (head != null && SaveSlotFormats.compatible(head.manifest.format, slot.format)) {
+                d.place(c, slot, head, owner)
+                said = "Your save from ${head.deviceName} is in place"
+            } else if (head == null && sendsFor(owner, q.game.id)) {
+                d.capture(owner, slot, total, title = q.title)
+                runCatching { d.flush(c) }
+                said = said ?: "No save of yours was anywhere yet, so the test save is your first"
+            }
+        }
+        return said
     }
 
     /** This device's sync state, telling the person when a blank save was kept from replacing a real one. */
@@ -2276,7 +2420,8 @@ class JvmSyncService(
         if (saves.isNotEmpty() && saves.all { it.files.isEmpty() }) {
             val where = saves.first().let { s -> s.targets.values.firstOrNull()?.parentFile ?: s.root }.path.replace('\\', '/')
             // The emulator's own words on where it saves, when its adapter knows them (melonDS's ROM folders, Eden's users).
-            val advice = spots.firstNotNullOfOrNull { it.note } ?: "If you saved, choose the emulator's save folder in Fuse, Settings, Save folders."
+            val advice = spots.firstNotNullOfOrNull { it.note }
+                ?: "If you saved, use Find Where It Saves in the game's Save History, or choose the emulator's save folder in Settings, Save folders."
             return "Fuse found no save for it in $where. $advice"
         }
         return null
@@ -2336,6 +2481,8 @@ class JvmSyncService(
 
     override suspend fun playing(asked: SaveQuery, startedAt: Long) {
         val query = canonical(asked)
+        // A test run's save is watched for where it lands, never sent while it runs.
+        if (probes.containsKey(query.game.id)) return
         val profile = cached.activeProfile.ifEmpty { return }
         if (device == null || !cached.enabled) return
         watch?.job?.cancel()
@@ -2588,6 +2735,15 @@ class JvmSyncService(
 
         /** Where saves that never reached a forgotten host are kept, inside Fuse Sync's folder. */
         const val KEPT_DIR = "kept"
+
+        /** How long an armed test run waits for its game to start before it is called off. */
+        const val PROBE_START_MS = 10 * 60_000L
+
+        /** Where test runs' saves are copied aside, inside [KEPT_DIR]. */
+        const val TEST_SAVES_DIR = "Test saves"
+
+        /** The largest file a test run copies aside when it can only be read through the save environment. */
+        const val TEST_SAVE_MAX = 256 * 1024 * 1024
 
         /** The longest a launch waits for the host to settle game ids. */
         const val RESOLVE_WAIT_MS = 3_000L

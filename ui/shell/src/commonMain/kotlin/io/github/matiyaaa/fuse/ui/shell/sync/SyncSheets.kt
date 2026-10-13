@@ -31,6 +31,9 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.GameId
+import io.github.matiyaaa.fuse.ui.shell.app.play
+import io.github.matiyaaa.fuse.ui.shell.game.toCard
+import kotlinx.coroutines.flow.first
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.sync.RevisionReason
 import io.github.matiyaaa.fuse.sync.SaveKind
@@ -188,7 +191,16 @@ internal fun SaveHistoryScreen(app: AppState, game: GameId, title: String) {
             },
         )
     }
-    val rows = listOfNotNull(shareRow, localRow) + versions.orEmpty().map { v ->
+    // A test run that shows Fuse where this game's emulator really keeps its save.
+    val probeRow = query?.let { q ->
+        MenuAction(
+            "probe", "Find Where It Saves", FuseIcons.FolderSearch,
+            detail = "A test run: play, save once and quit, and Fuse learns where this game's save goes",
+            trailing = Trailing.Chevron,
+            onSelect = { probeChoice(app, q, game, title) },
+        )
+    }
+    val rows = listOfNotNull(shareRow, localRow, probeRow) + versions.orEmpty().map { v ->
         MenuAction(
             v.id,
             TimeWords.relative(v.at, now, offset).replaceFirstChar { it.uppercase() },
@@ -296,6 +308,41 @@ private fun versionMenu(app: AppState, query: SaveQuery, kind: SaveKind, v: Save
                     app.scope.launch { svc.keepVersion(v.id, !kept).onSuccess { changed() } }
                 },
             ),
+        ),
+    )
+}
+
+/**
+ * Find Where It Saves, explained before it starts: the game plays with save sync paused for it, the
+ * person saves once and quits, and Fuse learns where the save landed. Their synced save isn't
+ * touched, and the test save is kept aside on this device.
+ */
+private fun probeChoice(app: AppState, query: SaveQuery, game: GameId, title: String) {
+    val svc = app.store.sync.service ?: return
+    app.choice = ChoiceSpec(
+        title = "Find where $title saves",
+        icon = FuseIcons.FolderSearch,
+        message = "Fuse starts $title with save sync paused for it. Make one save in the game, then quit. " +
+            "Fuse watches where the save appears and keeps it in step there from now on. " +
+            "Your synced save isn't touched, and the test save is kept aside on this device.",
+        options = listOf(
+            MenuAction("start", "Start the Test Run", FuseIcons.Play, onSelect = {
+                app.choice = null
+                app.scope.launch {
+                    svc.startSaveProbe(query)
+                        .onFailure { app.toasts.show(it.message ?: "The test run couldn't start", ToastKind.ERROR) }
+                        .onSuccess {
+                            val card = app.store.library.game(game).first()?.toCard()
+                            if (card == null) {
+                                svc.cancelSaveProbe(query.game)
+                                app.toasts.show("$title isn't in the library any more", ToastKind.ERROR)
+                            } else {
+                                app.play(card)
+                            }
+                        }
+                }
+            }),
+            MenuAction("not", "Not Now", FuseIcons.Close, onSelect = { app.choice = null }),
         ),
     )
 }

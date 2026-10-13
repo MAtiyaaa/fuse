@@ -18,6 +18,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.File
@@ -124,6 +125,44 @@ class ServiceTest {
         assertEquals("Steam Deck", conflict.conflict.host.device)
         pc.settle(conflict.conflict, keepHere = false).getOrThrow()
         assertEquals("8 badges", File(pcRoms, "ruby.sav").readText())
+        pc.stop()
+    }
+
+    @Test
+    fun aTestRunTeachesWhereAGameSavesAndPutsThePersonsOwnSaveThere(): Unit = runBlocking {
+        val (pc, pcSettings) = service("Gaming PC", Library())
+        val (deck, _) = service("Steam Deck", Library())
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        deck.switchTo(mo.id).getOrThrow()
+        pc.switchTo(mo.id).getOrThrow()
+        val deckRoms = File(root, "deck-roms").apply { mkdirs() }
+        File(deckRoms, "ruby.sav").writeText("8 badges")
+        deck.afterExit(SaveQuery(ct, "gba", File(deckRoms, "ruby.gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby"), 0, 30 * 60_000)
+        // On the PC the emulator keeps saves in a folder beside its games' folder, which Fuse didn't know.
+        val pcRoms = File(root, "pc/gba/roms").apply { mkdirs() }
+        val pq = SaveQuery(ct, "gba", File(pcRoms, "ruby.gba").path.replace('\\', '/'), "gba-emu", title = "Pokemon Ruby")
+        val watched = pc.startSaveProbe(pq).getOrThrow()
+        assertTrue(watched.any { it.endsWith("/pc/gba") }, "$watched")
+        // The test run starts with nothing swapped or brought down.
+        assertIs<LaunchGate.Go>(pc.beforeLaunch(pq))
+        val result = async { withTimeout(20_000) { pc.probeResults.first() } }
+        val saves = File(root, "pc/gba/saves")
+        File(saves, "ruby.sav").apply { parentFile.mkdirs(); writeText("test save"); setLastModified(System.currentTimeMillis() + 10_000) }
+        pc.afterExit(pq, 0, 60_000)
+        val found = assertIs<SaveProbeResult.Found>(result.await())
+        assertEquals(saves.path.replace('\\', '/'), found.where)
+        assertTrue(found.learned)
+        assertEquals("Your save from Steam Deck is in place", found.settled)
+        // Learned as the emulator's save folder, as if chosen in Settings, Save folders.
+        assertEquals(saves.path.replace('\\', '/'), pcSettings.current().sync.saveFolders["gba-emu"])
+        // The person's own save is where the game reads it; the test save is kept aside, never the newest.
+        assertEquals("8 badges", File(saves, "ruby.sav").readText())
+        assertEquals("test save", File(assertNotNull(found.keptAt)).walkTopDown().single { it.isFile }.readText())
+        assertEquals("Steam Deck", pc.versions(pq, SaveKind.SAVE).first { it.current }.device)
+        // From now on it syncs like any other game.
+        assertIs<LaunchGate.Go>(pc.beforeLaunch(pq))
         pc.stop()
     }
 

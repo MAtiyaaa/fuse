@@ -2,7 +2,10 @@ package io.github.matiyaaa.fuse.ui.shell.sync
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import io.github.matiyaaa.fuse.sync.SaveProbeResult
 import io.github.matiyaaa.fuse.sync.SyncNotice
+import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
+import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
@@ -49,5 +52,38 @@ internal fun SyncNotices(app: AppState) {
                 )
             }
         }
+    }
+    // What a Find Where It Saves test run showed, as soon as its game closes.
+    LaunchedEffect(svc) {
+        svc.probeResults.collect { r -> app.choice = probeResultSheet(app, r) }
+    }
+}
+
+/** A test run's result, said plainly: where the save is, or what was seen and why it can't be used. */
+private fun probeResultSheet(app: AppState, r: SaveProbeResult): ChoiceSpec {
+    val kept = r.keptAt?.let { "\n\nThe test save is kept aside in $it." }.orEmpty()
+    val close = listOf(MenuAction("ok", "Done", FuseIcons.Check, onSelect = { app.choice = null }))
+    return when (r) {
+        is SaveProbeResult.Found -> ChoiceSpec(
+            title = "Found where ${r.title} saves",
+            icon = FuseIcons.CircleCheck,
+            message = (if (r.learned) "Its save goes in ${r.where}. Fuse keeps it in step there from now on." else "Its save goes in ${r.where}, where Fuse already looks.") +
+                (r.settled?.let { " $it." } ?: "") + kept,
+            options = close,
+        )
+        is SaveProbeResult.CantUse -> ChoiceSpec(
+            title = "${r.title}'s save is somewhere Fuse can't use yet",
+            icon = FuseIcons.Alert,
+            message = "These changed while it ran:\n" + r.seen.joinToString("\n") +
+                "\n\nFuse doesn't know how to keep them in step yet, so nothing was changed. It's also listed in Fuse One's activity." + kept,
+            options = close,
+        )
+        is SaveProbeResult.NothingSeen -> ChoiceSpec(
+            title = "No save appeared",
+            icon = FuseIcons.FolderSearch,
+            message = "Nothing new appeared in the folders Fuse watched:\n" + r.watched.joinToString("\n") +
+                "\n\nIf you saved in the game, its emulator keeps saves elsewhere: choose that folder in Settings, Save folders.",
+            options = close,
+        )
     }
 }
