@@ -144,10 +144,15 @@ internal class DefaultFuseStore private constructor(
         syncthing?.let { st ->
             library.syncthing = st
             st.useLibrary { library.saveSamples() }
-            // Fuse Sync and Syncthing would move the same saves: turning Fuse Sync on turns Syncthing off.
-            ctx.scope.launch {
-                sync.config.collect { c ->
-                    if (c.enabled && runCatching { ctx.data.settings.current().syncthing.enabled }.getOrDefault(false)) runCatching { st.setEnabled(false) }
+        }
+        // Only one way moves this device's saves (Fuse One, RomM or Syncthing): settings from before
+        // the choice existed, or something switched on since, are settled to one as they change.
+        ctx.scope.launch {
+            ctx.data.settings.settings.collect { s ->
+                val settled = io.github.matiyaaa.fuse.data.settings.SaveProvider.settle(s)
+                if (settled != s) {
+                    writeSettings { io.github.matiyaaa.fuse.data.settings.SaveProvider.settle(it) }
+                    if (s.syncthing.enabled && !settled.syncthing.enabled) syncthing?.let { st -> runCatching { st.setEnabled(false) } }
                 }
             }
         }
@@ -178,6 +183,9 @@ internal class DefaultFuseStore private constructor(
             details = CartridgeDetails(ctx),
             fillRemote = { ids, visible -> mediaOps.fillRemote(ids, visible) },
         )
+        // The Sync tab's view of RomM's saves: how each game's save here stands.
+        romm.saveService = library.rommSaves
+        romm.plainSaveQuery = { id -> library.plainSaveQueryFor(id) }
         reach = DefaultReachOps(
             ctx, engine, transferEngine, sync.service, romm,
             householdIds = { profileData.householdIds() },
@@ -279,6 +287,14 @@ internal class DefaultFuseStore private constructor(
 
         override fun export(spec: ThemeSpec): String =
             ctx.settings.value.appearance.customThemes.firstOrNull { it.id == spec.id }?.json ?: ThemeCodec.encode(spec)
+    }
+
+    override suspend fun setSaveProvider(provider: io.github.matiyaaa.fuse.data.settings.SaveProvider) {
+        val Syncthing = io.github.matiyaaa.fuse.data.settings.SaveProvider.SYNCTHING
+        writeSettings { io.github.matiyaaa.fuse.data.settings.SaveProvider.choose(it, provider) }
+        // Syncthing's own service follows its switch: started (found) or stopped.
+        syncthing?.let { st -> runCatching { st.setEnabled(provider == Syncthing) } }
+        sync.service?.changed()
     }
 
     override suspend fun bundledTrack(id: String): String? {

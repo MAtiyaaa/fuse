@@ -22,7 +22,7 @@ object HeadlessHost {
         keepEveryMs: Long = KEEP_EVERY_MS,
         /** Where whole copies of the household go, every day, week and month; null for none. */
         backupsDir: File? = File(hostDir, "household-backups"),
-    ): AutoCloseable? {
+    ): Served? {
         if (!HostAdmin.portFree(port)) return null
         if (fuseAppVersion.isEmpty()) fuseAppVersion = version
         val link = readLink(hostDir)
@@ -45,12 +45,27 @@ object HeadlessHost {
                 }
             }
         }
-        return AutoCloseable {
+        return Served(store, version) {
             schedule?.cancel()
             keeper?.cancel()
             responder?.stop()
             server.stop()
         }
+    }
+
+    /** A host serving on its own, until closed. */
+    class Served internal constructor(private val store: HostStore, private val version: String, private val stop: () -> Unit) : AutoCloseable {
+        /**
+         * The newest Fuse one of the household's devices runs, when it is newer than this host's own;
+         * null otherwise. Devices say which Fuse they run with every call (from 0.4.2 on).
+         */
+        fun newerFuse(): String? = store.devices().asSequence()
+            .filterNot { it.revoked }
+            .map { it.fuseVersion }
+            .filter { it.isNotBlank() && version.isNotBlank() && SyncApi.older(version, it) }
+            .reduceOrNull { a, b -> if (SyncApi.older(a, b)) b else a }
+
+        override fun close() = stop()
     }
 
     /**

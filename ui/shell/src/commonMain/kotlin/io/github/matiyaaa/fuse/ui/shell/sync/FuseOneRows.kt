@@ -86,7 +86,8 @@ internal fun syncRows(
 
     // What syncs -----------------------------------------------------------------------------------
     val what = "What syncs"
-    add(toggleRow("saves", "Saves", FuseIcons.Save, c.saves, "Each game's saves, put in place before it starts and kept after it closes") { v -> configure { it.copy(saves = v) } }.copy(section = what))
+    // Saves move with one of Fuse One, RomM or Syncthing on this device (or none): chosen here.
+    add(saveProviderRow(app, section = what, id = "saves"))
     // Android may stop Fuse soon after a game takes the screen: the save then goes only once Fuse is
     // open again. Said where saves are turned on, with the way to lift it.
     app.platform.background?.takeIf { c.saves && it.limited }?.let { limits ->
@@ -126,7 +127,8 @@ internal fun syncRows(
         onSelect = { app.go(Route.SaveFolders) },
     ))
     add(MenuAction("import", "Import Saves", FuseIcons.FileUp, detail = "Copy a file, folder or save archive, with a preview and safety history", section = what, onSelect = { openSaveImporter(app) }))
-    add(toggleRow("states", "Save States", FuseIcons.Layers, c.states, "Snapshots from the emulator's own menu, for the same emulator elsewhere") { v -> configure { it.copy(states = v) } }.copy(section = what))
+    // Save states go with Fuse One's saves: with RomM or Syncthing moving them, there is nothing to turn on here.
+    if (c.saves) add(toggleRow("states", "Save States", FuseIcons.Layers, c.states, "Snapshots from the emulator's own menu, for the same emulator elsewhere") { v -> configure { it.copy(states = v) } }.copy(section = what))
     add(toggleRow("records", "Play Time and Library", FuseIcons.Clock, c.records, "Play time, Last Played, favourites, hidden and pinned games, names and collections") { v -> configure { it.copy(records = v) } }.copy(section = what))
     add(toggleRow("settings", "Settings", FuseIcons.Palette, c.settings, "Your theme, Home, tabs, quick menu, sounds and music. Controllers, screens and drives stay this device's own") { v -> configure { it.copy(settings = v) } }.copy(section = what))
     add(toggleRow(
@@ -171,6 +173,17 @@ internal fun syncRows(
         },
     ))
     if (c.role != "HOST") {
+        // A host keeps running the Fuse it started with; said here, with how it catches up.
+        val hostFuse = svc.hostFuse.value
+        val here = app.store.updates.currentVersion
+        if (hostFuse.isNotEmpty() && here.isNotEmpty() && SyncApi.older(hostFuse, here)) {
+            val hostName = (status as? SyncStatus.Online)?.hostName ?: "The host"
+            add(infoRow(
+                "hostolder", "$hostName runs Fuse $hostFuse",
+                detail = "Older than this device's $here, so some of what's new waits for it. Open Fuse on that computer once and the host starts again on the new version; from 0.4.2.6 on it updates itself. A Fuse One Host in Docker updates with docker compose pull",
+                icon = FuseIcons.CircleArrowDown,
+            ).copy(section = connection))
+        }
         add(MenuAction(
             "pair", "Add a Device", FuseIcons.Plus,
             detail = "A code for another device to type. Or ask to join from it, and say yes here",
@@ -201,9 +214,10 @@ internal fun syncRows(
     add(MenuAction(
         "name", "This Device's Name", FuseIcons.MonitorSmartphone,
         detail = "How it shows on the host and in save history",
-        trailing = Trailing.Value(c.deviceName.ifBlank { "This device" }), section = connection,
+        // The name the host really shows (the computer's own, until one is given), never a stand-in.
+        trailing = Trailing.Value(c.deviceName.ifBlank { svc.defaultName.ifBlank { "This device" } }), section = connection,
         onSelect = {
-            app.textInput = TextInputSpec("This device's name", c.deviceName, "Steam Deck") { v ->
+            app.textInput = TextInputSpec("This device's name", c.deviceName.ifBlank { svc.defaultName }, "Steam Deck") { v ->
                 val name = v.trim().take(32)
                 if (name.isEmpty()) return@TextInputSpec
                 app.scope.launch {

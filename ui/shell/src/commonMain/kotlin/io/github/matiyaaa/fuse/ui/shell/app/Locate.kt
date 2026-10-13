@@ -19,7 +19,8 @@ import kotlinx.coroutines.launch
  */
 internal fun AppState.offers(d: Destination): Boolean = when (d) {
     Destination.APPS -> store.apps.supported
-    Destination.CARTRIDGE -> platform.features.cartridge || store.appStore.supported || (store.jellyfin != null && store.prefs.value.jellyfin.enabled)
+    Destination.CARTRIDGE -> platform.features.cartridge || store.appStore.supported || (store.jellyfin != null && store.prefs.value.jellyfin.enabled) ||
+        store.prefs.value.romm.let { store.romm.supported && it.enabled && it.configured && it.saveSync }
     else -> true
 }
 

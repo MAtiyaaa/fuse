@@ -35,7 +35,7 @@ fun addonsRows(app: AppState): List<MenuAction> {
     return buildList {
         if (romm != null) {
             val st = app.store.romm.state.collectAsState().value
-            addAll(app.group(ADDONS_ROMM, "RomM", FuseIcons.LibraryBig, summary = io.github.matiyaaa.fuse.ui.shell.romm.rommStatus(st, prefs.romm).second, detail = "Your RomM server's games, downloads and uploads, inside Fuse") {
+            addAll(app.group("addons.romm", "RomM", FuseIcons.LibraryBig, summary = io.github.matiyaaa.fuse.ui.shell.romm.rommStatus(st, prefs.romm).second, detail = "Your RomM server's games, downloads and uploads, inside Fuse") {
                 romm.map { it.copy(id = "romm.${it.id}") }
             })
         }
@@ -122,12 +122,25 @@ private fun rommRowsFor(app: AppState, r: io.github.matiyaaa.fuse.data.settings.
         add(toggleRow("enabled", "Use RomM", FuseIcons.Power, r.enabled, "The RomM native integration. Turning it on turns Cartridge off in Fuse; both keep their setup") { v ->
             app.scope.launch { app.store.romm.setEnabled(v) }
         })
-        add(MenuAction(
-            "page", if (r.enabled && !r.configured) "Set Up RomM" else "Server, Library, Transfers and BIOS", FuseIcons.Server,
-            detail = detail,
-            trailing = Trailing.Value(title),
-            onSelect = { if (r.enabled && !r.configured) app.go(Route.RommSetup()) else app.go(Route.RommSettings) },
-        ))
+        if (!r.configured) {
+            // Signing in is RomM itself: no Cartridge or other app needed.
+            add(MenuAction(
+                "signin", "Sign In to RomM", FuseIcons.LogIn,
+                detail = "Your RomM server's address and account. Its games, downloads and saves come straight into Fuse",
+                trailing = Trailing.Chevron,
+                onSelect = {
+                    app.scope.launch { if (!r.enabled) app.store.romm.setEnabled(true) }
+                    app.go(Route.RommSetup())
+                },
+            ))
+        } else {
+            add(MenuAction(
+                "page", "Server, Library, Transfers and BIOS", FuseIcons.Server,
+                detail = detail,
+                trailing = Trailing.Value(title),
+                onSelect = { app.go(Route.RommSettings) },
+            ))
+        }
     }
 }
 
@@ -163,11 +176,13 @@ fun fuseOneRows(app: AppState): List<MenuAction> {
             val devices = svc.devices.collectAsState().value
             val hostsView = svc.hosts.collectAsState().value
             val backups = svc.householdBackups.collectAsState().value
+            // Read by the rows; collected so a host that turns out older is said at once.
+            svc.hostFuse.collectAsState().value
             val rows = io.github.matiyaaa.fuse.ui.shell.sync.syncRows(app, svc, prefs.sync, status, profiles, active, host, devices, hostsView, backups)
             fun part(vararg from: String?, under: String) = rows.filter { it.section in from }.map { it.copy(section = under) }
             addAll(part(null, "Set up", "Connection", under = "Household"))
             addAll(part("You", under = "Fuse Profiles"))
-            addAll(part("What syncs", under = "Fuse Save Sync"))
+            addAll(part("What syncs", under = "What syncs"))
             if (prefs.sync.enabled) addAll(remoteLibraryRows(app, prefs.sync).map { it.copy(id = "reach.${it.id}", section = "Fuse Library Sync") })
             addAll(rows.filter { it.section != null && it.section !in setOf("Set up", "Connection", "You", "What syncs", "Leave") })
             if (syncthing != null) addAll(syncthingRows(app, syncthing))
@@ -187,7 +202,7 @@ private fun syncthingRows(app: AppState, syncthing: io.github.matiyaaa.fuse.sync
     val on = st !is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Off
     val words = io.github.matiyaaa.fuse.ui.shell.sync.syncthingWords(st)
     return listOf(
-        toggleRow("syncthing.enabled", "Use Syncthing", FuseIcons.Power, on, "For people who run it already. Fuse Save Sync is the one Fuse recommends; only one of them moves your saves") { v ->
+        toggleRow("syncthing.enabled", "Use Syncthing", FuseIcons.Power, on, "For people who run it already. Only one of Fuse One, RomM and Syncthing moves this device's saves") { v ->
             io.github.matiyaaa.fuse.ui.shell.sync.useSyncthing(app, syncthing, v)
         },
         MenuAction(

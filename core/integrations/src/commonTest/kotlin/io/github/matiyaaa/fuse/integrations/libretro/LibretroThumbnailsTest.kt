@@ -60,7 +60,8 @@ class LibretroThumbnailsTest {
         }
         val thumbs = LibretroThumbnails(http.client, RateLimiter.unlimited())
         val found = (thumbs.find(PlatformId("snes"), "Super Metroid", "Super Metroid (Japan, USA) (En,Ja).sfc") as ApiResult.Success).value
-        assertTrue(http.requests.all { it.method == HttpMethod.Head })
+        // Pictures are probed; only a folder's list of names is read whole (when no name answered).
+        assertTrue(http.requests.filter { it.url.encodedPath.endsWith(".png") }.all { it.method == HttpMethod.Head })
         assertEquals(listOf(LibretroThumbnailType.BOXART, LibretroThumbnailType.TITLE), found.map { it.type })
         assertEquals("Super Metroid (Japan, USA) (En,Ja)", found[0].name)
         val options = found.map { it.toArtworkOption() }

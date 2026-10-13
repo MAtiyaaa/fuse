@@ -152,6 +152,9 @@ sealed interface SyncNotice {
     /** A save already in the emulator's folder that no profile owned was kept aside, for someone to claim in Sync. */
     data class KeptAside(val title: String) : SyncNotice
 
+    /** Nobody is chosen as playing here, so [title]'s save stayed on this device: it goes once someone is. */
+    data class NoOneChosen(val title: String) : SyncNotice
+
     /** This device's profiles went to [hostName] as they were ([count] of them), joining it. */
     data class Brought(val count: Int, val hostName: String) : SyncNotice
 }
@@ -343,6 +346,12 @@ interface SyncService {
      * The answer is the number this device shows; someone lets it in on the host, or on any
      * device already connected, after checking theirs shows the same.
      */
+    /** The host answering at a typed [address], by its own name; null when nothing answers there. */
+    suspend fun hostAt(address: String): NearbyHost? = null
+
+    /** The Fuse the household's host runs, as it last said ("" until it has, or before 0.2). */
+    val hostFuse: kotlinx.coroutines.flow.StateFlow<String> get() = kotlinx.coroutines.flow.MutableStateFlow("")
+
     suspend fun askToJoin(address: String, remoteAddress: String? = null): Result<JoinWaiting> = Result.failure(UnsupportedOperationException("Fuse One isn't part of this build."))
 
     /** Waits for the request [askToJoin] made: the host's name once let in, a failure when turned away or out of time. */

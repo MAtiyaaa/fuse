@@ -109,6 +109,7 @@ class AndroidFuseServices(
         env = { env() ?: io.github.matiyaaa.fuse.sync.FileSaveEnvironment("ANDROID") },
         client = client, server = server,
         deviceName = deviceName, platform = "android", clientVersion = appVersion,
+        log = { android.util.Log.i("Fuse", it) },
     )
 
     override fun syncService(data: io.github.matiyaaa.fuse.sync.ProfileDataPort, scope: CoroutineScope): io.github.matiyaaa.fuse.sync.SyncService {

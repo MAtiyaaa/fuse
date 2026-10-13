@@ -92,7 +92,15 @@ internal class FakeServices(
     })
     override val cacheDir: String = cache.absolutePath
 
+    /** RetroArch's installed cores, when a test gives it a cores folder Fuse can see; null when it can't. */
+    @Volatile var retroArchCores: Set<String>? = null
+
     override val emulators = object : EmulatorDetector {
+        override fun retroArchCorePath(installed: InstalledEmulator, core: String): String? =
+            retroArchCores?.takeIf { core in it }?.let { "/usr/lib/libretro/${core}_libretro.so" }
+
+        override fun retroArchCoresVisible(installed: InstalledEmulator): Boolean = retroArchCores != null
+
         override suspend fun detect() = installedEmulators ?: listOf(
             InstalledEmulator(EmulatorId("linux.mgba"), "mGBA", Host.LINUX, "/usr/bin/mgba-qt", platforms = setOf(PlatformId("gba")), detectedVia = "PATH"),
             InstalledEmulator(EmulatorId("linux.duckstation"), "DuckStation", Host.LINUX, "/usr/bin/duckstation-qt", platforms = setOf(PlatformId("psx")), detectedVia = "PATH"),

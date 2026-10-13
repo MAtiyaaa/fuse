@@ -34,6 +34,7 @@ internal enum class AuditSize(val widthPx: Int, val heightPx: Int, val density: 
     G(2560, 1600, 1.5f, "8.8 inch handheld at 150% (Legion Go)"),
     E(1920, 1080, 2.0f, "Android TV, 1080p"),
     K(1366, 768, 1.0f, "budget laptop"),
+    I(1216, 760, 1.0f, "Fuse's own first window on a desktop"),
     A(1920, 1080, 1.25f, "laptop at 125% (Windows default, ROG Ally)"),
     B(3024, 1964, 2.0f, "MacBook Pro 14"),
     Y(2880, 1920, 2.0f, "3:2 tablet laptop (Surface)"),

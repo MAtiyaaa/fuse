@@ -46,6 +46,10 @@ internal interface MusicOutput : AutoCloseable {
 class DesktopMenuMusic internal constructor(
     private val openOutput: (rate: Int, channels: Int) -> MusicOutput,
     private val retryMs: Long,
+    /** How long the mixer rests after [MAX_FAILURES] in a row before it tries again (an [apply] wakes it sooner). */
+    private val restMs: Long = REST_MS,
+    /** Whether this computer has any sound output at all; none means rest quietly, not fail loudly. */
+    private val hasOutput: () -> Boolean = ::soundOutputPresent,
 ) : MenuMusicPlayer, AutoCloseable {
     constructor() : this(::SharedLineOutput, RETRY_MS)
 
@@ -95,9 +99,15 @@ class DesktopMenuMusic internal constructor(
         var reported = false
     }
 
+    /** Said once while Fuse runs: there is no sound output, so the music stays silent. */
+    @Volatile private var saidSilent = false
+
     /**
      * Mixes until Fuse closes or nothing is left to play. A failing output is opened again after a
-     * wait that grows with each failure in a row, up to [MAX_FAILURES]; a later [apply] starts over.
+     * wait that grows with each failure in a row; after [MAX_FAILURES] the mixer rests for [restMs]
+     * (or until the next [apply]) and tries again, so music that couldn't start at first (the device
+     * still busy with setup's opening sound, say) starts by itself, without any setting changing.
+     * Without any sound output it says so once and rests, never logging every try.
      */
     private fun run() {
         val me = Thread.currentThread()
@@ -106,20 +116,45 @@ class DesktopMenuMusic internal constructor(
             while (!me.isInterrupted && !closed) {
                 try {
                     if (mix()) return
+                    if (failures > 0) Log.info("menu music: sound output is back")
                     failures = 0
                 } catch (e: InterruptedException) {
                     return
                 } catch (e: Exception) {
+                    if (!hasOutput()) {
+                        if (!saidSilent) Log.info("menu music: this computer has no sound output, so the music is silent until one appears")
+                        saidSilent = true
+                        failures = 0
+                        if (!rest()) return
+                        continue
+                    }
                     failures++
-                    Log.warn("menu music stopped ($failures)", e)
-                    if (failures >= MAX_FAILURES) return
-                    Thread.sleep(retryMs * failures)
+                    // One line for a run of failures, not one per try.
+                    if (failures == 1) Log.warn("menu music: the sound output failed; trying again", e)
+                    if (failures >= MAX_FAILURES) {
+                        failures = 0
+                        if (!rest()) return
+                    } else {
+                        Thread.sleep(retryMs * failures)
+                    }
                 }
             }
         } catch (e: InterruptedException) {
             // Fuse is closing.
         } finally {
             synchronized(lock) { if (thread === me) thread = null }
+        }
+    }
+
+    /**
+     * Waits [restMs] before the next try, waking early when [apply] hands over a new state. False
+     * when there is nothing left to try for (Fuse closing, or the music turned off meanwhile).
+     */
+    private fun rest(): Boolean {
+        synchronized(lock) {
+            if (closed || song == null) return false
+            lock.wait(restMs)
+            return !closed && song != null
         }
     }
 
@@ -349,6 +384,12 @@ class DesktopMenuMusic internal constructor(
         const val BLOCK_FRAMES = 1024
         const val MAX_FAILURES = 5
         const val RETRY_MS = 1_000L
+        const val REST_MS = 30_000L
+
+        /** Any mixer on this computer can play sound (a sound server or a device). */
+        fun soundOutputPresent(): Boolean = runCatching {
+            AudioSystem.getMixerInfo().any { m -> AudioSystem.getMixer(m).sourceLineInfo.any { SourceDataLine::class.java.isAssignableFrom(it.lineClass) } }
+        }.getOrDefault(false)
         const val FADE_IN_MS = 1_200f
         const val FADE_OUT_MS = 500f
         const val CROSSFADE_MS = 2_500f

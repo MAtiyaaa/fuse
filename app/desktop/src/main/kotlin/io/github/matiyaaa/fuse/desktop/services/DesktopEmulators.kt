@@ -141,6 +141,12 @@ internal class DesktopEmulatorDetector(
         DesktopOs.MACOS -> MacDetector.findRetroArchCore(files, installed, core)
     }
 
+    override fun retroArchCoresVisible(installed: InstalledEmulator): Boolean = when (os) {
+        DesktopOs.LINUX -> LinuxDetector.retroArchCoreDirs(env, installed).any { File(it).isDirectory }
+        DesktopOs.WINDOWS -> WindowsDetector.retroArchCoreDirs(files, installed).any(files::isDirectory)
+        DesktopOs.MACOS -> MacDetector.retroArchCoreDirs(files, installed).any(files::isDirectory)
+    }
+
     override val homeDir: String get() = env.homeDir
 
     override val canLocate: Boolean get() = os != DesktopOs.LINUX

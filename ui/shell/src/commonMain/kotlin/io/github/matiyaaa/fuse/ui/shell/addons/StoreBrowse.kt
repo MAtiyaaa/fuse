@@ -184,7 +184,7 @@ private fun StoreShelves(app: AppState, state: StoreState, active: Boolean, topP
     }
 
     val updates = state.updates
-    val cartridgeChosen = app.store.prefs.value.rommAnswer == "CARTRIDGE"
+    val cartridgeChosen = app.store.prefs.value.rommAnswer.endsWith("CARTRIDGE")
     val rows: List<StoreRow> = remember(state, platforms, page.query, cartridgeChosen) {
         buildList {
             add(

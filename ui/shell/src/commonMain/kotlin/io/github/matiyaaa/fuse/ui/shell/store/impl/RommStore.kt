@@ -271,6 +271,36 @@ internal class DefaultRommOps(
     /** The client for [server] as set up now (the one in use), or null when off or signed out. */
     internal fun clientFor(server: String): RommClient? = client?.takeIf { server == this.server && settings.enabled }
 
+    /** How a game's save is found here, without a profile (set by the store from the library). */
+    @kotlin.concurrent.Volatile internal var plainSaveQuery: suspend (GameId) -> io.github.matiyaaa.fuse.sync.SaveQuery? = { null }
+
+    /** RomM's save sync on this device, when it runs (set by the store). */
+    @kotlin.concurrent.Volatile internal var saveService: io.github.matiyaaa.fuse.sync.romm.RommSaveService? = null
+
+    override suspend fun saveReport(): io.github.matiyaaa.fuse.ui.shell.store.RommSaveReport? = withContext(Dispatchers.Default) {
+        val c = saveClient() ?: return@withContext null
+        val saves = c.allSaves()
+        val roms = mirror.all(server).associateBy { it.id }
+        val linked = matches.value
+        val games = saves.groupBy { it.romId }.map { (romId, list) ->
+            val rom = roms[romId]
+            val game = linked[romId]?.first
+            val newest = list.first()
+            val standing = game?.let { id -> plainSaveQuery(id) }?.let { q -> runCatching { saveService?.standing(q, romId, newest) }.getOrNull() }
+                ?: io.github.matiyaaa.fuse.sync.romm.RommSaveStanding.NOT_HERE.takeIf { game == null }
+                ?: io.github.matiyaaa.fuse.sync.romm.RommSaveStanding.UNKNOWN
+            io.github.matiyaaa.fuse.ui.shell.store.RommSaveGame(
+                romId = romId,
+                title = rom?.name?.ifBlank { null } ?: newest.fileName.substringBeforeLast('.').substringBefore(" ["),
+                game = game,
+                platform = rom?.let { ctx.platforms.resolveFolder(it.platformSlug)?.id },
+                saves = list,
+                standing = standing,
+            )
+        }.sortedByDescending { it.newest.updatedAt }
+        io.github.matiyaaa.fuse.ui.shell.store.RommSaveReport(server, games, saves.sumOf { it.sizeBytes })
+    }
+
     /** The signed-in client when RomM and its save sync are on. */
     internal fun saveClient(): RommClient? = client?.takeIf { c ->
         settings.enabled && settings.saveSync && settings.configured &&
@@ -555,15 +585,15 @@ internal class DefaultRommOps(
             val roms = mirror.all(server)
             val result = RommMatch.match(roms, locals) { slug -> ctx.platforms.resolveFolder(slug)?.id?.value }
             val before = matches.value
-            matches.value = result.associate { it.romId to (GameId(it.gameId) to it.reason) }
-            // Newly joined: the library game keeps the art Fuse already found for the RomM game.
-            for (m in result) if (before[m.romId]?.first?.value != m.gameId) runCatching { adoptArt(GameId(m.gameId), m.romId) }
             // Linked from now on: the game page and Cartridge's Open both know it.
             val byId = rows.associateBy { it.id.value }
             for (m in result) {
                 val row = byId[m.gameId] ?: continue
                 if (row.rommRomId == null && m.reason != MatchReason.NAME_AND_TAGS) ctx.data.games.updateLinks(GameId(m.gameId)) { it.copy(rommRomId = m.romId) }
             }
+            matches.value = result.associate { it.romId to (GameId(it.gameId) to it.reason) }
+            // Newly joined (after linking, so the page never shows it unlinked): the library game keeps the art Fuse already found for the RomM game.
+            for (m in result) if (before[m.romId]?.first?.value != m.gameId) runCatching { adoptArt(GameId(m.gameId), m.romId) }
             // A scan or a download changed what the library has: what RomM hasn't got follows.
             _notOnServer.value = notOnServerNow()
         }
@@ -770,6 +800,13 @@ internal class DefaultRommOps(
         }
         val n = ctx.data.media.copyMissing(MediaOwner.OfGame(rommGameId(rom)), MediaOwner.OfGame(id))
         if (n > 0) ctx.gameArtFound.update { it + 1 }
+        // Its details too (year, genres, developer, summary, RomM's name for it): the page showed
+        // them while the game was on RomM and lost them the moment it was downloaded. Only blanks
+        // are filled; nothing the person or a source already gave the game is replaced.
+        val details = runCatching { remote.get(rommGameId(rom)) }.getOrNull()
+        if (details != null && details.metadata != io.github.matiyaaa.fuse.model.GameMetadata()) {
+            runCatching { ctx.data.games.applyMetadata(id, details.metadata, titleFromMetadata = details.titles.metadata, onlyFillEmpty = true) }
+        }
         return n > 0
     }
 

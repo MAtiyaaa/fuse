@@ -124,6 +124,9 @@ interface FuseStore {
 
     /** A song that ships with Fuse ([io.github.matiyaaa.fuse.ui.shell.music.BundledMusic]) as a file the player can open. */
     suspend fun bundledTrack(id: String): String? = null
+
+    /** What moves this device's saves (only one at a time); the others' save sync is turned off here. */
+    suspend fun setSaveProvider(provider: io.github.matiyaaa.fuse.data.settings.SaveProvider) = Unit
 }
 
 /**
@@ -400,8 +403,26 @@ data class GameQuery(
 /** Which games a [GameQuery] lists: the library, or games whose files are gone, hidden or removed. */
 enum class GameSet { LIBRARY, MISSING, HIDDEN, REMOVED }
 
+/** One file of a game's saves on this device, as its emulator keeps it. */
+data class LocalSave(
+    val name: String,
+    val path: String,
+    val kind: io.github.matiyaaa.fuse.sync.SaveKind,
+    val bytes: Long,
+    val modifiedAt: Long,
+)
+
+/**
+ * A game's saves on this device ([LibraryOps.localSaves]): the files where [emulator] keeps them,
+ * newest first, and [note] when Fuse can't look (no emulator plays it here, or one Fuse can't read).
+ */
+data class LocalSaves(val emulator: String?, val saves: List<LocalSave>, val note: String? = null)
+
 interface LibraryOps {
     val home: StateFlow<HomeFeed>
+
+    /** [id]'s saves on this device, with or without any save sync. */
+    suspend fun localSaves(id: GameId): LocalSaves = LocalSaves(null, emptyList())
 
     /** Today's game in [platform]'s spotlight, and why; null while the system has no games. */
     fun spotlight(platform: PlatformId): Flow<Suggestion?> = kotlinx.coroutines.flow.flowOf(null)

@@ -122,77 +122,97 @@ private fun Device(icon: ImageVector, name: String, spot: Offset, size: Dp = 64.
 }
 
 /**
- * The stage when there is a choice: Fuse Sync and Syncthing side by side. Fuse Sync stands in front,
- * lit in the accent and marked as the one Fuse recommends, with what only it does; Syncthing sits
- * beside it, smaller, in its own teal. Both float gently. Once one is on, it comes forward with a
- * check and the other steps back.
+ * The stage when there is a choice: the ways this device's saves can move, side by side. Fuse One
+ * stands in front, lit in the accent and marked as the one Fuse recommends; RomM and Syncthing sit
+ * beside it, smaller, each in its own colour. All float gently. Once one is on, it comes forward
+ * with a check and the others step back.
  */
 @Composable
-internal fun SyncChoiceStage(fuseSync: Boolean, syncthing: Boolean, hasFuseSync: Boolean) {
+internal fun SyncChoiceStage(fuseSync: Boolean, syncthing: Boolean, hasFuseSync: Boolean, romm: Boolean = false, hasRomm: Boolean = false) {
     val c = Fuse.colors
     val still = Fuse.motion.reduced
     val clock = rememberLoopClock("sync choice stage")
     val drift by clock.animateFloat(-1f, 1f, infiniteRepeatable(tween(4600), RepeatMode.Reverse), "drift")
     val drift2 by clock.animateFloat(1f, -1f, infiniteRepeatable(tween(5300), RepeatMode.Reverse), "drift2")
     val breathe by clock.animateFloat(0f, 1f, infiniteRepeatable(tween(2800), RepeatMode.Reverse), "breathe")
-    // Which card leads: Fuse Sync, unless Syncthing is the one on.
-    val lead by fuselineFloat(if (syncthing) 0f else 1f, spring(dampingRatio = 0.8f, stiffness = 260f), label = "lead")
     val teal = io.github.matiyaaa.fuse.ui.shell.sync.SYNCTHING_TINT
+    val rommTint = Color(0xFF8B7CF6)
+    // Which card leads: the one that is on, else Fuse One (Syncthing when it is the only one here).
+    val leader = when {
+        syncthing -> 2
+        romm && hasRomm -> 1
+        hasFuseSync -> 0
+        else -> 2
+    }
+    val leadFuse by fuselineFloat(if (leader == 0) 1f else 0f, spring(dampingRatio = 0.8f, stiffness = 260f), label = "leadFuse")
+    val leadRomm by fuselineFloat(if (leader == 1) 1f else 0f, spring(dampingRatio = 0.8f, stiffness = 260f), label = "leadRomm")
+    val leadThing by fuselineFloat(if (leader == 2) 1f else 0f, spring(dampingRatio = 0.8f, stiffness = 260f), label = "leadThing")
+    // Where each card sits: three across, or two when one isn't here.
+    val three = hasFuseSync && hasRomm
+    val xFuse = if (three) (-96).dp else (-76).dp
+    val xRomm = if (three) 0.dp else if (hasFuseSync) 92.dp else (-76).dp
+    val xThing = if (three) 96.dp else if (hasFuseSync || hasRomm) 92.dp else 0.dp
+    fun Modifier.card(lead: Float, x: androidx.compose.ui.unit.Dp, y: androidx.compose.ui.unit.Dp, wobble: Float, tilt: Float) =
+        offset(x, y).zIndex(lead).graphicsLayer {
+            val s = 0.82f + 0.18f * lead
+            scaleX = s; scaleY = s
+            alpha = 0.55f + 0.45f * lead
+            translationY = if (still) 0f else wobble * 4.dp.toPx()
+            rotationZ = tilt * (1f - lead)
+            shadowElevation = (6f + 18f * lead).dp.toPx()
+            shape = RoundedCornerShape(22.dp)
+        }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(340.dp, 250.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(if (three) 380.dp else 340.dp, 250.dp), contentAlignment = Alignment.Center) {
             // The glow behind whichever leads.
             Canvas(Modifier.matchParentSize()) {
-                val centre = Offset(size.width * (0.30f + 0.40f * (1f - lead)), size.height / 2f)
-                val tint = lerp(teal, c.accent, lead)
+                val xs = listOf(xFuse, xRomm, xThing).map { size.width / 2f + it.toPx() }
+                val leads = listOf(leadFuse, leadRomm, leadThing)
+                val total = leads.sum().coerceAtLeast(0.001f)
+                val centre = Offset(xs.indices.sumOf { (xs[it] * leads[it]).toDouble() }.toFloat() / total, size.height / 2f)
+                val tint = lerp(lerp(teal, rommTint, leadRomm / (leadRomm + leadThing).coerceAtLeast(0.001f)), c.accent, leadFuse)
                 drawCircle(
                     Brush.radialGradient(listOf(tint.copy(alpha = 0.22f + 0.08f * breathe), Color.Transparent), centre, 150.dp.toPx()),
                     150.dp.toPx(), centre,
                 )
             }
-            if (hasFuseSync) {
+            if (hasRomm) {
                 ChoiceCard(
-                    name = "Fuse One", tag = if (fuseSync) "On" else "Recommended", tint = c.accent, mark = FuseIcons.RefreshCcw,
-                    lines = listOf(FuseIcons.Save to "Saves, by game", FuseIcons.Clock to "Play time", FuseIcons.Users to "Saves per person"),
-                    on = fuseSync, filled = true,
-                    modifier = Modifier.offset((-76).dp, 0.dp).zIndex(lead).graphicsLayer {
-                        val s = 0.86f + 0.14f * lead
-                        scaleX = s; scaleY = s
-                        alpha = 0.55f + 0.45f * lead
-                        translationY = if (still) 0f else drift * 4.dp.toPx()
-                        rotationZ = -3f * lead
-                        shadowElevation = (6f + 18f * lead).dp.toPx()
-                        shape = RoundedCornerShape(22.dp)
-                    },
+                    name = "RomM", tag = if (romm) "On" else "Your server", tint = rommTint, mark = FuseIcons.Server,
+                    lines = listOf(FuseIcons.Save to "Saves, by game", FuseIcons.LibraryBig to "Games from RomM", FuseIcons.Server to "Your RomM"),
+                    on = romm, filled = false,
+                    modifier = Modifier.card(leadRomm, xRomm, (-10).dp, drift2, 0f),
                 )
             }
             ChoiceCard(
                 name = "Syncthing", tag = if (syncthing) "On" else "Bring your own", tint = teal, mark = FuseIcons.FolderSync,
                 lines = listOf(FuseIcons.FolderOpen to "Save folders", FuseIcons.Users to "One save for all", FuseIcons.Link2 to "Your Syncthing"),
                 on = syncthing, filled = false,
-                modifier = Modifier.offset(if (hasFuseSync) 92.dp else 0.dp, 8.dp).zIndex(1f - lead).graphicsLayer {
-                    val s = 0.86f + 0.14f * (1f - lead)
-                    scaleX = s; scaleY = s
-                    alpha = 0.62f + 0.38f * (1f - lead)
-                    translationY = if (still) 0f else drift2 * 4.dp.toPx()
-                    rotationZ = 4f * lead
-                    shadowElevation = (6f + 18f * (1f - lead)).dp.toPx()
-                    shape = RoundedCornerShape(22.dp)
-                },
+                modifier = Modifier.card(leadThing, xThing, 8.dp, drift2, 4f),
             )
+            if (hasFuseSync) {
+                ChoiceCard(
+                    name = "Fuse One", tag = if (fuseSync) "On" else "Recommended", tint = c.accent, mark = FuseIcons.RefreshCcw,
+                    lines = listOf(FuseIcons.Save to "Saves, by game", FuseIcons.Clock to "Play time", FuseIcons.Users to "Saves per person"),
+                    on = fuseSync, filled = true,
+                    modifier = Modifier.card(leadFuse, xFuse, 0.dp, drift, -3f),
+                )
+            }
         }
         Spacer(Modifier.height(Space.m))
         FText(
             when {
                 fuseSync -> "Fuse One is on"
+                romm && hasRomm -> "RomM is on"
                 syncthing -> "Syncthing is on"
-                else -> "Two ways to stay in step"
+                else -> "One moves your saves"
             },
             Fuse.type.bodyStrong, maxLines = 1,
         )
     }
 }
 
-/** One of the two on the stage: its mark, name and tag, then what it keeps in step, one line each. */
+/** One of the ways on the stage: its mark, name and tag, then what it keeps in step, one line each. */
 @Composable
 internal fun ChoiceCard(
     name: String,

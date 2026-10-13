@@ -229,6 +229,113 @@ class TitleMatcher(
         private const val MAX_INEXACT = 0.97
         private const val SEQUEL_FACTOR = 0.6
 
+        /**
+         * The same title once edition words and small words are set aside ("Pokemon Red" and
+         * "Pokémon Red Version", "Okami" and "Okami HD"): the same game, maybe another edition of
+         * it. Numbers must still agree, so a sequel never counts. Good enough for art, which is
+         * cosmetic; never for details.
+         */
+        /**
+         * [title] without what only tells one release of a game from another: bracketed notes
+         * ("(Trial)"), a closing "for Nintendo Switch", and a last part that names an edition or
+         * version (" - Uncaged Edition", ": Beyond - Nintendo Switch 2 Edition", " - HD Remaster").
+         */
+        fun baseTitle(title: String): String {
+            var t = BRACKETED.replace(title, " ")
+            t = FOR_PLATFORM.replace(t, "")
+            t = EDITION_PART.replace(t, "")
+            return t.trim().ifEmpty { title }
+        }
+
+        private fun strongWords(title: String): List<String> {
+            val tokens = TitleNormalizer.tokens(title)
+            val weak = TitleWords.weak(tokens)
+            return tokens.filterIndexed { i, _ -> !weak[i] }
+        }
+
+        /** The same game by name: [sameGameName], on the titles or their [baseTitle]s, or the same words in another order. */
+        private fun sameGame(name: String, candidate: String): Boolean {
+            for ((a, b) in listOf(name to candidate, baseTitle(name) to baseTitle(candidate))) {
+                if (sameGameName(a, b)) return true
+                val sa = strongWords(a)
+                val sb = strongWords(b)
+                if (sa.isEmpty() || sb.isEmpty()) continue
+                if (sa.joinToString("") == sb.joinToString("")) return true
+                if (sa.size >= 2 && sa.toSet() == sb.toSet()) return true
+            }
+            return false
+        }
+
+        /**
+         * [candidate] is [name] with more to it: a series name or a subtitle ("Toy Story 3" in "Toy
+         * Story 3: The Video Game", "The Wind Waker HD" in "The Legend of Zelda: The Wind Waker HD").
+         * Every main word of [name], at least two, makes up at least half of the candidate's; a number
+         * the name doesn't have only counts for a name of three main words or more, so "Metroid
+         * Prime" never takes "Metroid Prime 2".
+         */
+        private fun holds(candidate: String, name: String): Boolean {
+            val q = strongWords(baseTitle(name)).toSet()
+            val c = strongWords(baseTitle(candidate)).toSet()
+            if (q.size < 2 || !c.containsAll(q) || q.size * 2 < c.size) return false
+            val added = c - q
+            return added.none { w -> w.all { it.isDigit() } } || q.size >= 3
+        }
+
+        /**
+         * The candidate a fill may take on its own when none was sure, or null when the choice is the
+         * person's. In order: an equal title; the same name ([sameGame]) when only one game has it,
+         * only one has the same main words, or only one has the words in the same order ("Pokémon
+         * Red Version" before "Pokémon Anniversary Red"); a candidate that [holds] the name, when it
+         * is the only game that does, when the others are it with a subtitle (a game before its fan
+         * versions), or when it leads every other game by [GUESS_LEAD]. [names] are the game's own
+         * names and spellings.
+         */
+        fun guess(names: List<String>, possible: List<ScoredMatch>): ScoredMatch? {
+            possible.filter { it.titleExact }.maxByOrNull { it.score }?.let { return it }
+            fun game(m: ScoredMatch) = TitleNormalizer.normalize(baseTitle(m.candidate.title))
+            val same = possible.filter { m -> names.any { sameGame(it, m.candidate.title) } }
+            if (same.isNotEmpty()) {
+                if (same.map(::game).distinct().size == 1) return same.maxBy { it.score }
+                // The same words before the same letters run together ("Killzone" before "The Kill Zone").
+                val words = same.filter { m -> names.any { sameGameName(it, m.candidate.title) || sameGameName(baseTitle(it), baseTitle(m.candidate.title)) } }
+                if (words.isNotEmpty() && words.map(::game).distinct().size == 1) return words.maxBy { it.score }
+                val inOrder = same.filter { m ->
+                    val c = TitleNormalizer.tokens(m.candidate.title)
+                    names.any { n -> TitleNormalizer.tokens(n).let { it.isNotEmpty() && c.take(it.size) == it } }
+                }
+                return inOrder.takeIf { it.isNotEmpty() && it.map(::game).distinct().size == 1 }?.maxBy { it.score }
+            }
+            val held = possible.filter { m -> names.any { holds(m.candidate.title, it) } }
+                .groupBy(::game).values.map { g -> g.maxBy { it.score } }.sortedByDescending { it.score }
+            if (held.isEmpty()) return null
+            if (held.size == 1) return held[0]
+            val words = held.map { strongWords(baseTitle(it.candidate.title)) }
+            held.indices.firstOrNull { i -> words.indices.all { j -> j == i || words[j].take(words[i].size) == words[i] } }?.let { return held[it] }
+            // The best, when it leads every other game; its own versions with more to their name don't count.
+            val rivals = held.indices.drop(1).filter { j -> words[j].take(words[0].size) != words[0] }
+            return held[0].takeIf { top -> rivals.isEmpty() || top.score - held[rivals[0]].score >= GUESS_LEAD }
+        }
+
+        /** How far a held candidate must lead the next for a fill to take it ([guess]). */
+        private const val GUESS_LEAD = 0.1
+
+        private val BRACKETED = Regex("\\s*(\\([^)]*\\)|\\[[^\\]]*\\])")
+        private val FOR_PLATFORM = Regex(
+            """\s+for\s+(nintendo|sony|playstation|xbox|sega|microsoft|pc|windows|switch|wii|ds|3ds|ps[1-5p]|psp|vita)\b.*$""",
+            RegexOption.IGNORE_CASE,
+        )
+        private val EDITION_PART = Regex("""\s+[-–:]\s+[^-–:]*\b(edition|version|remaster|remastered|trial|demo)\s*$""", RegexOption.IGNORE_CASE)
+
+        fun sameGameName(a: String, b: String): Boolean {
+            fun strong(t: String): List<String> {
+                val tokens = TitleNormalizer.tokens(t)
+                val weak = TitleWords.weak(tokens)
+                return tokens.filterIndexed { i, _ -> !weak[i] }
+            }
+            val sa = strong(a)
+            return sa.isNotEmpty() && sa == strong(b)
+        }
+
         /** Title-only similarity of two raw titles (0..1, 1 only when they are equal once normalised). */
         fun titleSimilarity(a: String, b: String): TitleScore {
             val ta = TitleNormalizer.tokens(a)

@@ -184,6 +184,10 @@ class SyncDevice(
 
     private fun keyOf(profile: String, slot: LocalSlot) = "$profile|${slot.key}"
 
+    /** The games [profile] has a save agreed with the host for on this device. */
+    fun gamesWithSaves(profile: String): Set<String> =
+        state.slots.keys.mapNotNull { k -> k.split('|').takeIf { it.size == 3 && it[0] == profile }?.get(1) }.toSet()
+
     /** Whose save is in [slot]'s folder now (null before anyone played it here with Fuse Sync). */
     fun holderOf(slot: LocalSlot): String? = state.holders[slot.key]
 
@@ -276,8 +280,11 @@ class SyncDevice(
         // zeros or all 0xFF): never sent as the newest, so it can't replace a real save anywhere.
         val hadOne = slotState.base != null || slotState.fingerprint != null ||
             state.outbox.any { o -> o.revision?.let { it.profile == profile && it.game == slot.game.id && it.kind == slot.kind } == true }
-        if (hadOne && hashed.all { (lf, _) -> Slots.blank(lf.file) }) {
-            onBlank?.invoke(slot)
+        // A blank save never goes anywhere: save memory an emulator just made (all zeros or all
+        // 0xFF) holds no progress, and sent as the first save it stood as the newest, so a real
+        // save from another device then came back as a conflict with nothing.
+        if (hashed.all { (lf, _) -> Slots.blank(lf.file) }) {
+            if (hadOne) onBlank?.invoke(slot)
             return@withLock null
         }
         // Saved again while the last one still waits to go (played on, offline or mid-session): the
@@ -678,9 +685,31 @@ class SyncDevice(
         } catch (e: SyncException) {
             if (e.code == "offline") return PrepareResult.Offline else throw e
         } ?: return if (client == null) PrepareResult.Offline else PrepareResult.Ready
-        if (!SaveSlotFormats.compatible(head.manifest.format, slot.format)) return PrepareResult.Incompatible(head)
         val (manifest, _) = fingerprintOf(slot)
         val slotState = state.slots[keyOf(profile, slot)] ?: SlotState()
+        if (!SaveSlotFormats.compatible(head.manifest.format, slot.format)) {
+            // Seen, though it can't be used here: this device's save stays as it is, and the next
+            // one made here follows the host's newest, as the newest. Without this, every save
+            // made here went up as a conflict copy that no device ever took.
+            if (slotState.base != head.id) {
+                val old = slotState.base
+                mutex.withLock {
+                    state = state.copy(
+                        // The files as they were stay the comparison: a change made here and not yet
+                        // kept is still found and sent.
+                        slots = state.slots + (keyOf(profile, slot) to SlotState(head.id, slotState.fingerprint)),
+                        awaiting = state.awaiting - keyOf(profile, slot),
+                        // Saves of this one still waiting to go now follow the host's newest too.
+                        outbox = state.outbox.map { o ->
+                            val r = o.revision
+                            if (r != null && o.profile == profile && r.game == slot.game.id && r.kind == slot.kind && r.canBeNewest && r.parent == old) o.copy(revision = r.copy(parent = head.id)) else o
+                        },
+                    )
+                    persist()
+                }
+            }
+            return PrepareResult.Incompatible(head)
+        }
         val localChanged = manifest.files.isNotEmpty() && manifest.fingerprint != slotState.fingerprint
         // This person's saves queued from here and not yet sent are their newest (never anyone else's).
         val queued = state.outbox.lastOrNull { it.profile == profile && it.revision?.game == slot.game.id && it.revision.kind == slot.kind && it.revision.canBeNewest }?.revision

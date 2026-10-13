@@ -199,7 +199,10 @@ class ScrapeCoordinator(
         }
         if (guess != Guess.NONE && review.isNotEmpty()) {
             val possible = review.filter { it.platform != PlatformEvidence.MISMATCH }
-            val pick = possible.filter { it.titleExact }.maxByOrNull { it.score }
+            // The game's own name, or a name it is clearly known by (see TitleMatcher.guess): art
+            // for games named a little differently from the sources was otherwise never found.
+            val names = listOf(request.query.title) + request.query.alsoKnownAs + SearchNames.spellings(request.query.title)
+            val pick = TitleMatcher.guess(names, possible)
                 ?: if (guess == Guess.BEST) possible.maxByOrNull { it.score } else null
             val from = pick?.let { seen[it.candidate.provider to it.candidate.providerGameId] }
             if (pick != null && from != null) {

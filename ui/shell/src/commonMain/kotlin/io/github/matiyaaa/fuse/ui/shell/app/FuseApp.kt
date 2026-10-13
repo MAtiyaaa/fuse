@@ -264,11 +264,11 @@ private fun FuseAppContent(
     val sessionStandby by store.displaySession.standby.collectAsState()
     val homeFeed by store.homeFeed.collectAsState()
     StandbyWatch(app, router, prefs.standbyMinutes) {
-        app.intro || app.launching != null || homeFeed.playtime.currentGame != null || app.navigator.current == Route.Onboarding
+        app.intro || app.launching != null || homeFeed.playtime.currentGame != null || app.navigator.inSetup
     }
     StayAwakeWatch(app)
     DriveWatch(app) {
-        app.intro || app.standby || app.launching != null || homeFeed.playtime.currentGame != null || app.navigator.current == Route.Onboarding
+        app.intro || app.standby || app.launching != null || homeFeed.playtime.currentGame != null || app.navigator.inSetup
     }
     val spec = prefs.theme
     // This screen's own text size and edges, when it is calibrated.
@@ -335,6 +335,7 @@ private fun FuseAppContent(
                 override fun deleteWordBack() = target.field.deleteWordBack()
                 override fun submit() = target.submit()
                 override fun paste() = app.pasteInto(target.field)
+                override fun selectAll() = target.field.selectAll()
                 override fun deleteForward() = target.field.deleteForward()
                 override fun home() = target.field.setCaret(0)
                 override fun end() = target.field.setCaret(target.field.text.length)
@@ -647,7 +648,8 @@ private fun SpotlightFollows(app: AppState) {
  */
 @Composable
 private fun BoxScope.TopLine(app: AppState, platform: PlatformUi, tabs: List<Destination>, prefs: UiPrefs) {
-    if (app.navigator.current == Route.Onboarding) return
+    // Setup, and the pages it opens on the way, keep the top line hidden: setup is still going on.
+    if (app.navigator.inSetup) return
     val status by platform.status.collectAsState()
     // Settings or Search open is where you are, not the tab underneath them.
     val page = hudPage(app.navigator.stack)
@@ -1010,12 +1012,20 @@ private fun ShellInput(app: AppState) {
     val prefs by app.store.prefs.collectAsState()
     val tabs = rememberTabs(app, prefs)
     val onboarding = app.navigator.current == Route.Onboarding
+    // A page setup opened on the way (Fuse One, Syncthing, RomM): Back returns to setup, and the
+    // tabs, Search and the quick menu stay out of reach until setup is done.
+    val setupDetour = !onboarding && app.navigator.inSetup
     val downloads = rememberHudDownloads(app) != null
     // Leaving the top line (or a page opening over it) puts down whatever tab was picked up.
     LaunchedEffect(app.focusZone, app.overlayOpen) { if (app.focusZone != FocusZone.TABS || app.overlayOpen) app.dropTab() }
     // On the top line, holding confirm on a tab picks it up to move it along the line.
     InputLayer(priority = LayerPriority.SHELL, longPress = app.focusZone == FocusZone.TABS && app.hudButton == null) { e ->
         if (onboarding) return@InputLayer NavResult.IGNORED
+        if (setupDetour) return@InputLayer when (e.action) {
+            NavAction.BACK -> if (app.back()) NavResult.CONSUMED else NavResult.BLOCKED
+            NavAction.NEXT_SECTION, NavAction.PREVIOUS_SECTION, NavAction.SEARCH, NavAction.QUICK_MENU, NavAction.HOME -> NavResult.BLOCKED
+            else -> NavResult.IGNORED
+        }
         val active = app.navigator.root?.destination
         fun cycle(delta: Int): NavResult {
             val i = tabs.indexOf(active).coerceAtLeast(0)
@@ -1195,7 +1205,7 @@ private fun MenuMusic(app: AppState, player: MenuMusicPlayer?) {
         onDispose { player.onSongEnded(null) }
     }
     LaunchedEffect(Unit) { for (path in ended) if (app.store.prefs.value.music.shuffle) shuffleOn() }
-    val track = MenuMusicPlan.track(music, safeMode = app.safeMode != null, onboarding = app.navigator.current == Route.Onboarding, shuffled = shuffled)
+    val track = MenuMusicPlan.track(music, safeMode = app.safeMode != null, onboarding = app.navigator.inSetup, shuffled = shuffled)
     // The quick menu's Now playing: a skip moves shuffle on (or back through what it played), and
     // without shuffle steps through the songs in album order, keeping the one it lands on.
     val remote = io.github.matiyaaa.fuse.ui.shell.music.MenuMusicRemote

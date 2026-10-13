@@ -77,6 +77,30 @@ internal object LaunchProblems {
         actions = listOf(ProblemAction.PickEmulator(game = game)),
     )
 
+    /**
+     * RetroArch would run the game, but none of the cores that play [platformName] is installed in
+     * it here ([cores] are the ones that would, the usual first), and no other emulator is.
+     */
+    fun noCore(emulator: InstalledEmulator, platformName: String, platform: PlatformId, cores: List<String>, game: GameId): Problem = Problem(
+        title = "${emulator.name} has no $platformName core",
+        message = "${emulator.name} needs a core to play $platformName games, and none is installed in it yet. In ${emulator.name}, open " +
+            "Main Menu, Load Core, Download a Core, and get ${cores.take(2).joinToString(" or ") { coreName(it) }}. Or install a $platformName emulator of its own; Fuse notices either by itself.",
+        kind = ProblemKind.EMULATOR,
+        reassurance = "Nothing was started, so nothing changed.",
+        actions = listOf(ProblemAction.Retry(), ProblemAction.PickEmulator(game = game), ProblemAction.OpenSystem(platform, "$platformName settings")),
+        details = "Cores looked for: ${cores.joinToString { "${it}_libretro" }}",
+    )
+
+    /** How RetroArch's core list names [core] ("mgba" -> "mGBA"). */
+    private fun coreName(core: String): String = CORE_NAMES[core] ?: core.replace('_', ' ').replaceFirstChar { it.uppercase() }
+
+    private val CORE_NAMES = mapOf(
+        "fceumm" to "FCEUmm", "nestopia" to "Nestopia", "mesen" to "Mesen", "mgba" to "mGBA", "gpsp" to "gpSP", "vbam" to "VBA-M",
+        "gambatte" to "Gambatte", "sameboy" to "SameBoy", "snes9x" to "Snes9x", "bsnes" to "bsnes", "genesis_plus_gx" to "Genesis Plus GX",
+        "picodrive" to "PicoDrive", "swanstation" to "SwanStation", "pcsx_rearmed" to "PCSX ReARMed", "mupen64plus_next" to "Mupen64Plus-Next",
+        "melonds" to "melonDS", "desmume" to "DeSmuME", "ppsspp" to "PPSSPP", "flycast" to "Flycast", "dolphin" to "Dolphin",
+    )
+
     fun unsupported(reason: String, game: GameId): Problem = Problem(
         title = "This game can't be started from Fuse",
         message = reason,

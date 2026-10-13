@@ -295,12 +295,14 @@ class DesktopSession(
         try {
             return block()
         } finally {
-            if (wasFullscreen) {
-                withContext(NonCancellable + Dispatchers.Main) {
+            withContext(NonCancellable + Dispatchers.Main) {
+                if (wasFullscreen) {
                     fullscreen = true
                     windowState?.placement = placement
-                    bringToFront()
                 }
+                // The keyboard and the controller come back to Fuse when the dialog closes: without
+                // this, the folder just chosen was shown but Enter did nothing until a click.
+                bringToFront()
             }
         }
     }
@@ -344,7 +346,14 @@ class DesktopSession(
         private val latestStick = AtomicReference(0f to 0f)
         private val stickPosted = AtomicBoolean(false)
 
+        /**
+         * The Guide button (the one in the middle) does nothing in Fuse on Linux: Steam and the
+         * desktop already answer it, and Fuse going Home underneath them only got in the way.
+         */
+        private val guideIgnored = io.github.matiyaaa.fuse.desktop.system.DesktopOs.current == io.github.matiyaaa.fuse.desktop.system.DesktopOs.LINUX
+
         override fun press(button: PadButton, device: String?) = EventQueue.invokeLater {
+            if (guideIgnored && button == PadButton.MODE) return@invokeLater
             if (!gate.admits()) return@invokeLater
             if (gate.reclaims()) reclaimFocus()
             // Only the chosen controller moves around Fuse, when one was chosen and is here.
@@ -353,7 +362,10 @@ class DesktopSession(
             router.press(button, InputSource.GAMEPAD)
         }
 
-        override fun release(button: PadButton, device: String?) = EventQueue.invokeLater { router.release(button, InputSource.GAMEPAD) }
+        override fun release(button: PadButton, device: String?) = EventQueue.invokeLater {
+            if (guideIgnored && button == PadButton.MODE) return@invokeLater
+            router.release(button, InputSource.GAMEPAD)
+        }
 
         override fun identified(name: String?) {
             val family = io.github.matiyaaa.fuse.model.PadFamily.of(name)

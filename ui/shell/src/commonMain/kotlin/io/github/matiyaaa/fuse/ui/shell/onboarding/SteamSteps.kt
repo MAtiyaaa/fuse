@@ -65,6 +65,10 @@ internal class SteamFlow(val app: AppState) {
     val decky = app.platform.decky
 
     var inSteam by mutableStateOf<Boolean?>(null)
+    /** Steam is on this device; null until Fuse has looked. */
+    var installed by mutableStateOf<Boolean?>(null)
+    /** Someone signed in to Steam here once, so it has a library. */
+    var hasUser by mutableStateOf(false)
     var steamOpen by mutableStateOf(false)
     var deckyState by mutableStateOf<DeckyState?>(null)
     var busy by mutableStateOf<String?>(null)
@@ -75,6 +79,8 @@ internal class SteamFlow(val app: AppState) {
     var added by mutableStateOf(false)
 
     suspend fun look() {
+        installed = steam?.let { runCatching { it.installed() }.getOrDefault(false) }
+        hasUser = steam?.let { runCatching { it.hasUser() }.getOrDefault(false) } ?: false
         inSteam = steam?.let { runCatching { it.added() }.getOrDefault(false) }
         steamOpen = steam?.let { runCatching { it.steamRunning() }.getOrDefault(false) } ?: false
         queued = steam?.waitingForSteam == true
@@ -95,15 +101,23 @@ internal fun SteamFlow.steps(next: () -> Unit): List<Step> {
     val prefs = app.store.prefs.value
     fun set(change: (io.github.matiyaaa.fuse.data.settings.SteamIntegrationSettings) -> io.github.matiyaaa.fuse.data.settings.SteamIntegrationSettings) =
         app.store.updatePrefs { it.copy(steam = change(it.steam)) }
-    val yes = prefs.steam.integrate == "YES"
+    // Steam's steps only follow a yes on a device that has Steam: without it there is nothing to join.
+    val here = installed == true
+    val yes = prefs.steam.integrate == "YES" && here
     return buildList {
         add(Step(
-            "steam.integrate", "Steam", "Integrate Fuse with Steam?",
-            "Fuse and Steam work as one: Fuse starts from your Steam library, and Steam's games can live in Fuse too. Every part is optional, nothing is installed twice, and all of it can be changed later in Settings.",
+            "steam.integrate", "Steam",
+            if (installed == false) "Steam isn't on this device" else "Integrate Fuse with Steam?",
+            if (installed == false) "Fuse and Steam can work as one, but Fuse didn't find Steam here. Install Steam and sign in once, then choose Look again. Or carry on: it waits in Settings, Library, Steam."
+            else "Fuse and Steam work as one: Fuse starts from your Steam library, and Steam's games can live in Fuse too. Every part is optional, nothing is installed twice, and all of it can be changed later in Settings.",
             optional = true, icon = FuseIcons.Gamepad, chapter = Chapters.START,
-            actions = listOf(
+            actions = if (here) listOf(
                 StepAction("Yes, integrate with Steam", primary = true) { set { it.copy(integrate = "YES") }; next() },
                 StepAction("Not now") { set { it.copy(integrate = "NO") }; next() },
+            ) else listOf(
+                // Not now is the one selected while Fuse looks, and stays so when Steam isn't here.
+                StepAction("Not now", primary = true) { set { it.copy(integrate = "NO") }; next() },
+                StepAction(if (installed == null) "Looking for Steam" else "Look again", enabled = installed != null) { app.scope.launch { look() } },
             ),
             content = { SteamBenefits(decky != null) },
         ))
@@ -159,8 +173,8 @@ private fun SteamFlow.deckyStep(
         busy == "decky" -> listOf(StepAction("Installing", enabled = false) {})
         st == null -> listOf(StepAction("Not now", run = next))
         !st.loader -> listOf(
-            StepAction("Look again", primary = true) { app.scope.launch { deckyState = d.state() } },
-            StepAction("Not now") { set { it.copy(decky = false) }; next() },
+            StepAction("Not now", primary = true) { set { it.copy(decky = false) }; next() },
+            StepAction("Look again") { app.scope.launch { deckyState = d.state() } },
         )
         st.upToDate -> listOf(StepAction("Continue", primary = true) { set { it.copy(decky = true) }; next() })
         zip != null -> listOf(
@@ -196,7 +210,11 @@ private fun SteamFlow.addStep(steam: io.github.matiyaaa.fuse.ui.shell.platform.S
             // Done and checked: straight on to the parts joining, which says what is in place.
             next()
         }
-            .onFailure { error = it.message ?: "Steam's library couldn't be updated. Nothing was lost." }
+            .onFailure {
+                error = it.message ?: "Steam's library couldn't be updated. Nothing was lost."
+                // Said where it can't be missed, not only in the line under the buttons.
+                app.toasts.show(error!!, io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.ERROR)
+            }
     }
     fun add() {
         busy = "steam"
@@ -238,15 +256,24 @@ private fun SteamFlow.addStep(steam: io.github.matiyaaa.fuse.ui.shell.platform.S
         }
     }
     val inIt = inSteam == true || added
+    // What keeps Fuse from being added here, said before anything is pressed.
+    val blocked = when {
+        inIt || queued || busy == "steam" -> null
+        !hasUser -> "Sign in to Steam once, close it, then choose Check again. Fuse adds itself to the library of everyone signed in here."
+        !steam.canBeAdded -> "This copy of Fuse isn't running from its AppImage or installed program, so Steam would have nothing to start. Add it later from Settings, Library, Steam."
+        else -> null
+    }
     return Step(
         "steam.add", "Fuse in Steam",
         when {
             busy == "steam" -> "Adding Fuse to Steam"
             inIt -> "Fuse is in your Steam library"
             queued -> "Fuse joins Steam when it closes"
+            blocked != null -> "Fuse can't join Steam's library yet"
             else -> "Add Fuse to your Steam library?"
         },
         when {
+            blocked != null -> blocked
             busy == "steam" -> "Fuse writes its entry with its capsule, banner, hero, logo and icon. Your other shortcuts and any art you chose stay as they are."
             inIt -> "Start Fuse from Steam and Gaming Mode, with its own art. Repair it from Settings, Library, Steam whenever you like."
             queued -> "Fuse doesn't close Steam for this. The next time Steam closes while Fuse is open, Fuse puts itself in Steam's library."
@@ -258,6 +285,10 @@ private fun SteamFlow.addStep(steam: io.github.matiyaaa.fuse.ui.shell.platform.S
         actions = when {
             busy == "steam" -> listOf(StepAction("Adding", enabled = false) {})
             inIt || queued -> listOf(StepAction("Continue", primary = true, run = next))
+            blocked != null -> listOf(
+                StepAction("Continue", primary = true, run = next),
+                StepAction("Check again") { app.scope.launch { look() } },
+            )
             steamOpen -> listOf(
                 StepAction("Yes, add Fuse to Steam", primary = true) { add() },
                 StepAction("Add when Steam closes") { wait() },

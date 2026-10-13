@@ -129,6 +129,9 @@ class Navigator(start: Route) {
         private set
 
     val current: Route get() = stack.last()
+
+    /** Setup is open, here or under a page it opened (setting up Fuse One, Syncthing or RomM). */
+    val inSetup: Boolean get() = stack.any { it == Route.Onboarding }
     val root: Route.Root? get() = stack.first() as? Route.Root
 
     private val memory = LinkedHashMap<String, Any>()

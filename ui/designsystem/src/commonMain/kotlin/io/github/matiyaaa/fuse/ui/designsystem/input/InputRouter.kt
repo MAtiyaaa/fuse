@@ -706,6 +706,9 @@ interface TextInput {
     /** Inserts the clipboard's text (Ctrl+V). */
     fun paste() {}
 
+    /** Selects everything typed (Ctrl+A), so what is typed next replaces it. */
+    fun selectAll() {}
+
     /** The Delete key: removes the character after the caret. */
     fun deleteForward() {}
 

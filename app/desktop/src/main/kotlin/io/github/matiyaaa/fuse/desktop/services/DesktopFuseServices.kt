@@ -148,6 +148,7 @@ class DesktopFuseServices private constructor(
         env = { env() ?: io.github.matiyaaa.fuse.sync.FileSaveEnvironment(os.name) },
         client = client, server = server,
         deviceName = deviceName, platform = os.name.lowercase(), clientVersion = appVersion,
+        log = { io.github.matiyaaa.fuse.desktop.Log.info(it) },
     )
 
     override fun writeCacheFile(relativePath: String, content: String): String? = writeBelow(cacheDir, relativePath, content)

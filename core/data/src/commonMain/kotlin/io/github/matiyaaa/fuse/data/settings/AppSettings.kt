@@ -88,6 +88,12 @@ data class SyncthingSettings(
 @Serializable
 data class SyncSettings(
     val enabled: Boolean = false,
+    /**
+     * What moves this device's saves: one of [SaveProvider]'s names, or "" until someone chooses
+     * (then it follows what is switched on, see [SaveProvider.of]). This device's own choice: never
+     * synced, so one device can keep its saves to itself while the others sync.
+     */
+    val saveProvider: String = "",
     /** "CLIENT", "HOST", or "" while not set up. */
     val role: String = "",
     /** This device's id with its host: made once, kept for the life of the install. */

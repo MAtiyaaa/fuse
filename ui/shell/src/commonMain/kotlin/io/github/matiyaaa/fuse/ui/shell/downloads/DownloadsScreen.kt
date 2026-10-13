@@ -502,6 +502,8 @@ private fun TransferRowView(
                     done -> FuseIcon(FuseIcons.CircleCheck, size = Size.iconM, tint = c.success)
                     failed -> FuseIcon(FuseIcons.Warning, size = Size.iconM, tint = c.danger)
                     t.status == TransferStatus.PAUSED -> FuseIcon(FuseIcons.Pause, size = Size.iconM, tint = c.textMuted)
+                    // Stopped for good: how far it got isn't news ("99%" read as nearly done).
+                    t.status == TransferStatus.CANCELLED -> FuseIcon(FuseIcons.CircleSlash, size = Size.iconM, tint = c.textMuted)
                     t.status == TransferStatus.ACTIVE && live.progress == null -> Spinner(size = 18.dp, color = c.textMuted)
                     else -> live.progress?.let { FText("${(it * 100).toInt()}%", Fuse.type.numeric, maxLines = 1) }
                 }

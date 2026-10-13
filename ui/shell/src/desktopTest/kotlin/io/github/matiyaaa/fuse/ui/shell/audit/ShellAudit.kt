@@ -610,7 +610,7 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         // Past "Button labels", the first action.
         focusText("Confirm")
         tap(PadButton.A)
-        waitFor("Press a button for")
+        waitFor("Press the button for")
         shoot("waiting for a button (capture mode)", 900)
         settle(5_500)
     }
@@ -741,8 +741,46 @@ internal fun AuditDriver.onboardingScreens(exhaustive: Boolean) {
         if (exhaustive) shoot("Home screen role (optional)")
         tap(PadButton.DPAD_RIGHT)
         tap(PadButton.A)
+        waitFor("Let Fuse see your games")
+        if (exhaustive) shoot("storage access")
+        tap(PadButton.A)
+        waitFor("SD card (RomM)")
+        shoot("libraries, two folders found")
+        if (exhaustive) {
+            tap(PadButton.DPAD_DOWN)
+            tap(PadButton.X)
+            shoot("libraries, second folder unticked")
+            tap(PadButton.X)
+            controls.pauseListingAfter(5)
+            try {
+                tap(PadButton.A)
+                waitFor("No Steam games found")
+                tap(PadButton.B)
+                waitFor("Finding your games")
+                shoot("libraries, while the first scan runs")
+            } finally {
+                controls.resumeListing()
+            }
+            pumpUntil("the scan to finish", 60_000) { firstRunStore.sources.scan.value.phase == ScanPhase.DONE && firstRunStore.library.platforms.value.isNotEmpty() }
+            tap(PadButton.A)
+        } else {
+            // Use these 2 starts the scan and moves on; the steps after it count what it found.
+            tap(PadButton.A)
+            pumpUntil("the scan to finish", 60_000) { firstRunStore.sources.scan.value.phase == ScanPhase.DONE && firstRunStore.library.platforms.value.isNotEmpty() }
+        }
+        waitFor("No Steam games found")
+        shoot("Steam, none found (optional)")
+        tapText("Skip")
+        // The emulators step's title counts what is missing, so its own button says it is showing.
+        waitFor("Look again")
+        shoot("emulators")
+        tap(PadButton.A)
+        waitFor("BIOS check")
+        shoot("BIOS")
+        tap(PadButton.A)
+        // Play on, anywhere and Who's playing follow the games, so a host never comes before them.
         waitFor("Play on, anywhere")
-        shoot("every device: Fuse One, Syncthing or skip (optional)", 1_500)
+        shoot("every device: Fuse One, RomM or Syncthing (optional)", 1_500)
         tap(PadButton.DPAD_RIGHT, 2)
         tap(PadButton.A)
         waitFor("Make your profile")
@@ -772,38 +810,6 @@ internal fun AuditDriver.onboardingScreens(exhaustive: Boolean) {
             tap(PadButton.DPAD_RIGHT)
             tap(PadButton.A)
         }
-        waitFor("Let Fuse see your games")
-        if (exhaustive) shoot("storage access")
-        tap(PadButton.A)
-        waitFor("SD card (RomM)")
-        shoot("libraries, two folders found")
-        if (!exhaustive) return@scenario
-        tap(PadButton.DPAD_DOWN)
-        tap(PadButton.X)
-        shoot("libraries, second folder unticked")
-        tap(PadButton.X)
-        controls.pauseListingAfter(5)
-        try {
-            tap(PadButton.A)
-            waitFor("No Steam games found")
-            tap(PadButton.B)
-            waitFor("Finding your games")
-            shoot("libraries, while the first scan runs")
-        } finally {
-            controls.resumeListing()
-        }
-        pumpUntil("the scan to finish", 60_000) { firstRunStore.sources.scan.value.phase == ScanPhase.DONE && firstRunStore.library.platforms.value.isNotEmpty() }
-        tap(PadButton.A)
-        waitFor("No Steam games found")
-        shoot("Steam, none found (optional)")
-        tap(PadButton.DPAD_RIGHT)
-        tap(PadButton.A)
-        waitFor("emulators found")
-        shoot("emulators")
-        tap(PadButton.A)
-        waitFor("BIOS check")
-        shoot("BIOS")
-        tap(PadButton.A)
         waitFor("Where are your other games?")
         shoot("your game library: Fuse One recommended, RomM and Cartridge (optional)", 1_500)
         tapText("Neither")

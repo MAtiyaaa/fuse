@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.onboarding
 
+import io.github.matiyaaa.fuse.data.settings.SaveProvider
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -102,6 +103,10 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
     val jellyfinState = store.jellyfin?.state?.collectAsState()?.value
     val syncthingState = store.syncthing?.state?.collectAsState()?.value
     val secrets by store.credentials.stored.collectAsState()
+    val keyChecks by store.media.keyChecks.collectAsState()
+    val lastInput by io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter.current.lastSource.collectAsState()
+    val padInHand = lastInput == io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.GAMEPAD
+    val sgdbCheck = keyChecks[io.github.matiyaaa.fuse.model.ScrapeProviderId.STEAMGRIDDB]
     val displays by platform.displays.collectAsState()
     val people = store.sync.service
     val profiles = people?.profiles?.collectAsState()?.value.orEmpty()
@@ -171,99 +176,6 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             optional = true, icon = FuseIcons.Home, chapter = Chapters.START,
             actions = if (isHome) listOf(StepAction("Continue", primary = true, run = next))
             else listOf(StepAction("Use Fuse as Home", primary = true) { role.request() }, StepAction("Not now", run = next)),
-        ))
-
-        // Keeping saves in step: Fuse Sync (the one Fuse recommends), Syncthing for people who run it, or
-        // neither. Before Who's playing: signing in to a household brings its profiles, so the next step
-        // shows them to choose from, and its RomM and Jellyfin come along for the steps after.
-        val syncthing = store.syncthing
-        val sync = store.sync.service
-        if (sync != null || syncthing != null) {
-            val syncOn = prefs.sync.enabled && prefs.sync.role.isNotEmpty()
-            val syncthingOn = syncthingState != null && syncthingState !is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Off
-            fun setUp(host: Boolean) {
-                app.scope.launch { store.sync.setEnabled(true) }
-                app.go(Route.SyncSetup(host))
-            }
-            fun useFuseSync() {
-                if (sync == null) return
-                if (!sync.canHost) { setUp(host = false); return }
-                app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
-                    title = "Fuse One", icon = FuseMarks.FuseOne,
-                    message = "One computer at home keeps everything; every other device connects to it.",
-                    options = listOf(
-                        MenuAction("host", "Make This the Host", FuseIcons.Server, detail = "This device keeps everyone's saves and settings", onSelect = { app.choice = null; setUp(host = true) }),
-                        MenuAction("connect", "Connect to a Host", FuseIcons.Link2, detail = "Another device already keeps them", onSelect = { app.choice = null; setUp(host = false) }),
-                    ),
-                )
-            }
-            fun useSyncthing() {
-                if (syncthing == null) return
-                io.github.matiyaaa.fuse.ui.shell.sync.useSyncthing(app, syncthing, true)
-                app.go(Route.SyncthingSettings)
-            }
-            add(Step(
-                "sync", "Every device",
-                when {
-                    syncOn -> "Fuse One is on"
-                    syncthingOn -> "Syncthing is on"
-                    else -> "Play on, anywhere"
-                },
-                when {
-                    syncOn -> "Your saves, play time, favourites and settings stay the same on every device, kept by ${prefs.sync.hostName.ifBlank { "your host" }}. RomM and Jellyfin come along when your household shares them."
-                    syncthingOn -> "Fuse shares your emulators' save folders through Syncthing, brings in the newest save before a game, and asks when two devices both played."
-                    syncthing == null -> "Fuse One keeps your saves, play time, favourites and settings the same on every device you play on, from a computer of your own at home. Stop on the PC, carry on on the handheld, and joining brings your household's RomM and Jellyfin too. One device? Skip this; it waits in Settings, Fuse One."
-                    else -> "Stop on the PC, carry on on the handheld. Choose one to move your saves: Fuse One is Fuse's own and the one we recommend (it knows each game, adds up play time, gives each person their own saves, and brings your household's games, RomM and Jellyfin along). Already run Syncthing? It can move your save folders instead: Fuse One's save sync then stays off, and the rest of Fuse One (profiles, each person's saves on this device, the household's games) still works. One device? Skip; both wait in Settings, Fuse One."
-                },
-                optional = true, icon = FuseIcons.RefreshCcw, chapter = Chapters.START,
-                actions = if (syncOn || syncthingOn) {
-                    listOf(StepAction("Continue", primary = true, run = next))
-                } else if (syncthing == null) {
-                    listOfNotNull(
-                        StepAction("Make This the Host", primary = true) { setUp(host = true) }.takeIf { sync?.canHost == true },
-                        StepAction("Connect to a Host", primary = sync?.canHost != true) { setUp(host = false) },
-                        StepAction("Skip", run = next),
-                    )
-                } else {
-                    listOfNotNull(
-                        StepAction("Use Fuse One", primary = true) { useFuseSync() }.takeIf { sync != null },
-                        StepAction("Use Syncthing", primary = sync == null) { useSyncthing() },
-                        StepAction("Skip", run = next),
-                    )
-                },
-                content = {
-                    if (syncthing == null) SyncStage(on = syncOn) else SyncChoiceStage(fuseSync = syncOn, syncthing = syncthingOn, hasFuseSync = sync != null)
-                },
-            ))
-        }
-        // Who's playing: the household's profiles when Fuse Sync is on (signed in just before), or a
-        // profile of your own from the start. No host needed; Fuse Sync, set up any time after, takes
-        // everyone along.
-        if (people != null) add(Step(
-            "profile", "Who's playing",
-            when {
-                profiles.isEmpty() -> "Make your profile"
-                playing != null -> "Hi, ${playing.name}"
-                else -> "Who's playing?"
-            },
-            if (profiles.isEmpty()) {
-                "Your saves, play time, favourites and theme stay yours, even when someone else plays here. Only you? Skip it, and make profiles any time in Settings, Profiles."
-            } else {
-                "Everyone who plays here gets their own saves, play time, favourites and theme. Add someone now, or any time in Settings, Profiles."
-            },
-            optional = true, icon = FuseIcons.UserRound, chapter = Chapters.START,
-            actions = if (profiles.isEmpty()) {
-                listOf(
-                    StepAction("Create Your Profile", primary = true) { app.whoAreYou = io.github.matiyaaa.fuse.ui.shell.sync.WhoMode.ADD },
-                    StepAction("Skip", run = next),
-                )
-            } else {
-                listOf(
-                    StepAction("Continue", primary = true, run = next),
-                    StepAction("Add Another") { app.whoAreYou = io.github.matiyaaa.fuse.ui.shell.sync.WhoMode.ADD },
-                )
-            },
-            content = { ProfilesStage(profiles, playing) },
         ))
 
         // ------------------------------------------------------------------------------- games
@@ -371,6 +283,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                 when {
                     steamAdded != null -> "${steamAdded} games are in your library under Steam. They start through Steam, and their art fills in like everything else."
                     !steamLoaded -> "Fuse is reading Steam's library folders on every drive."
+                    steamGames.isEmpty() && steamFlow.installed == false -> "Steam isn't installed here, so there are no Steam games to bring in. If you keep a Steam library on another drive, choose its folder, or skip this."
                     steamGames.isEmpty() -> "Fuse looked where Steam keeps its games, on every drive. If yours live somewhere else, choose that Steam library folder, or skip this."
                     else -> "Fuse found ${steamGames.size} installed games${if (drives > 1) " across $drives drives" else ""}. Add them and they sit next to everything else, each one starting through Steam. Fuse never changes Steam's files."
                 },
@@ -388,6 +301,8 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                 },
                 actions = when {
                     steamAdded != null -> listOf(StepAction("Continue", primary = true, run = next))
+                    // Without Steam on this device, skipping is the likely answer, so it is the one selected.
+                    steamGames.isEmpty() && steamFlow.installed != true -> listOf(StepAction("Skip", primary = true, run = noSteam), StepAction("Choose a Steam folder", run = pickSteam))
                     steamGames.isEmpty() -> listOf(StepAction("Choose a Steam folder", primary = true, run = pickSteam), StepAction("Skip", run = noSteam))
                     else -> listOf(
                         StepAction(if (picked.size == 1) "Add 1 game" else "Add ${picked.size} games", primary = true, enabled = picked.isNotEmpty(), note = "Tick at least one game to add") {
@@ -410,10 +325,21 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                 },
             ))
         }
+        val uncovered = withGames.filter { !it.emulatorInstalled }
         add(Step(
-            "emulators", "Emulators", if (installed.isEmpty()) "No emulators yet" else "${installed.size} emulators found",
-            if (installed.isEmpty()) "Install emulators for your systems whenever you like. Fuse notices them automatically and picks the best one for each system."
-            else "Fuse picked one for each system. You can choose another per system, or per game, from their options.",
+            "emulators", "Emulators",
+            // Counted by the systems your games are for: an emulator for something you have no games of doesn't help.
+            when {
+                uncovered.isNotEmpty() -> if (uncovered.size == 1) "${uncovered.single().platform.shortName} needs an emulator" else "${uncovered.size} systems need an emulator"
+                installed.isEmpty() -> "No emulators yet"
+                withGames.isNotEmpty() -> if (withGames.size == 1) "Ready to play" else "Ready for all ${withGames.size} systems"
+                else -> if (installed.size == 1) "1 emulator found" else "${installed.size} emulators found"
+            },
+            when {
+                uncovered.isNotEmpty() -> "Fuse found no emulator for ${uncovered.joinToString { it.platform.shortName }} on this device. Install one whenever you like, from the Store or on your own, and Fuse notices it and picks it automatically."
+                installed.isEmpty() -> "Install emulators for your systems whenever you like. Fuse notices them automatically and picks the best one for each system."
+                else -> "Fuse picked one for each system. You can choose another per system, or per game, from their options."
+            },
             icon = FuseIcons.Chip, chapter = Chapters.GAMES,
             actions = listOf(StepAction("Continue", primary = true, run = next), StepAction("Look again") { store.emulators.refresh() }),
             content = {
@@ -449,6 +375,113 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
         ))
 
         // ----------------------------------------------------------------------------- connect
+        // Keeping saves in step: Fuse Sync (the one Fuse recommends), Syncthing for people who run it, or
+        // neither. After the games chapter, so a host made here starts with the game folders already
+        // chosen, and setting it up never leaves setup before they are. Before Who's playing: signing in to a household brings its profiles, so the next step
+        // shows them to choose from, and its RomM and Jellyfin come along for the steps after.
+        val syncthing = store.syncthing
+        val sync = store.sync.service
+        if (sync != null || syncthing != null) {
+            val syncOn = prefs.sync.enabled && prefs.sync.role.isNotEmpty()
+            val syncthingOn = syncthingState != null && syncthingState !is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Off
+            fun setUp(host: Boolean) {
+                app.scope.launch { store.sync.setEnabled(true) }
+                app.go(Route.SyncSetup(host))
+            }
+            fun useFuseSync() {
+                if (sync == null) return
+                if (!sync.canHost) { setUp(host = false); return }
+                app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+                    title = "Fuse One", icon = FuseMarks.FuseOne,
+                    message = "One computer at home keeps everything; every other device connects to it.",
+                    options = listOf(
+                        MenuAction("host", "Make This the Host", FuseIcons.Server, detail = "This device keeps everyone's saves and settings", onSelect = { app.choice = null; setUp(host = true) }),
+                        MenuAction("connect", "Connect to a Host", FuseIcons.Link2, detail = "Another device already keeps them", onSelect = { app.choice = null; setUp(host = false) }),
+                    ),
+                )
+            }
+            // How this device's saves move: one of Fuse One, RomM and Syncthing, or none.
+            val provider = io.github.matiyaaa.fuse.ui.shell.sync.SaveProviders.current(app)
+            val decided = prefs.sync.saveProvider.isNotEmpty() || syncOn || syncthingOn
+            fun otherWays() = io.github.matiyaaa.fuse.ui.shell.sync.chooseSaveProvider(app) { p ->
+                when {
+                    p == SaveProvider.FUSE_ONE && !syncOn -> useFuseSync()
+                    else -> io.github.matiyaaa.fuse.ui.shell.sync.setUpRoute(app, p)?.let { app.go(it) } ?: next()
+                }
+            }
+            add(Step(
+                "sync", "Every device",
+                when {
+                    !decided -> "Play on, anywhere"
+                    provider == SaveProvider.OFF -> "Saves stay on this device"
+                    else -> "Saves move with ${provider.label}"
+                },
+                when {
+                    decided && provider == SaveProvider.FUSE_ONE && syncOn -> "Your saves, play time, favourites and settings stay the same on every device, kept by ${prefs.sync.hostName.ifBlank { "your host" }}. RomM and Jellyfin come along when your household shares them."
+                    decided && provider == SaveProvider.FUSE_ONE -> "Fuse One moves this device's saves once it's set up: make this the host, or connect to the one you have."
+                    decided && provider == SaveProvider.SYNCTHING -> "Fuse shares your emulators' save folders through Syncthing, brings in the newest save before a game, and asks when two devices both played. Fuse One's profiles and household games still work."
+                    decided && provider == SaveProvider.ROMM -> "Games from RomM keep their save in step with RomM's, on every device that chose RomM. Fuse One's profiles and household games still work."
+                    decided -> "Nothing moves this device's saves. Your other devices keep their own choice, and this one can join in later from Settings, Fuse One."
+                    else -> "Stop on the PC, carry on on the handheld. One way moves this device's saves: Fuse One (the one we recommend), RomM, or Syncthing if you run it. Each device chooses its own. One device? Skip; it waits in Settings, Fuse One."
+                },
+                optional = true, icon = FuseIcons.RefreshCcw, chapter = Chapters.CONNECT,
+                actions = when {
+                    decided && (provider != SaveProvider.FUSE_ONE || syncOn) -> listOf(
+                        StepAction("Continue", primary = true, run = next),
+                        StepAction("Change Save Sync") { otherWays() },
+                    )
+                    sync != null -> listOf(
+                        StepAction("Use Fuse One", primary = true) {
+                            app.scope.launch { store.setSaveProvider(SaveProvider.FUSE_ONE) }
+                            if (syncOn) next() else useFuseSync()
+                        },
+                        StepAction("Other Ways") { otherWays() },
+                        StepAction("Skip", run = next),
+                    )
+                    else -> listOf(
+                        StepAction("Choose Save Sync", primary = true) { otherWays() },
+                        StepAction("Skip", run = next),
+                    )
+                },
+                content = {
+                    if (syncthing == null && !store.romm.supported) SyncStage(on = syncOn)
+                    else SyncChoiceStage(
+                        fuseSync = syncOn && provider == SaveProvider.FUSE_ONE, syncthing = provider == SaveProvider.SYNCTHING && syncthingOn,
+                        hasFuseSync = sync != null, romm = provider == SaveProvider.ROMM, hasRomm = store.romm.supported,
+                    )
+                },
+            ))
+        }
+        // Who's playing: the household's profiles when Fuse Sync is on (signed in just before), or a
+        // profile of your own from the start. No host needed; Fuse Sync, set up any time after, takes
+        // everyone along.
+        if (people != null) add(Step(
+            "profile", "Who's playing",
+            when {
+                profiles.isEmpty() -> "Make your profile"
+                playing != null -> "Hi, ${playing.name}"
+                else -> "Who's playing?"
+            },
+            if (profiles.isEmpty()) {
+                "Your saves, play time, favourites and theme stay yours, even when someone else plays here. Only you? Skip it, and make profiles any time in Settings, Profiles."
+            } else {
+                "Everyone who plays here gets their own saves, play time, favourites and theme. Add someone now, or any time in Settings, Profiles."
+            },
+            optional = true, icon = FuseIcons.UserRound, chapter = Chapters.CONNECT,
+            actions = if (profiles.isEmpty()) {
+                listOf(
+                    StepAction("Create Your Profile", primary = true) { app.whoAreYou = io.github.matiyaaa.fuse.ui.shell.sync.WhoMode.ADD },
+                    StepAction("Skip", run = next),
+                )
+            } else {
+                listOf(
+                    StepAction("Continue", primary = true, run = next),
+                    StepAction("Add Another") { app.whoAreYou = io.github.matiyaaa.fuse.ui.shell.sync.WhoMode.ADD },
+                )
+            },
+            content = { ProfilesStage(profiles, playing) },
+        ))
+
         val cartridgeHere = platform.features.cartridge
         val rommHere = store.romm.supported
         val rommConnected = prefs.romm.enabled && prefs.romm.configured
@@ -457,10 +490,15 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
         val fuseOneHere = store.sync.service != null
         val fuseOneOn = prefs.sync.enabled && prefs.sync.role.isNotEmpty()
         // What the person answered; RomM counts as chosen once it is on, however it got there.
+        // Fuse One can take RomM or Cartridge along ("FUSEONE+FUSE", "FUSEONE+CARTRIDGE"); RomM and
+        // Cartridge never go together.
         val answer = when {
-            rommConnected -> "FUSE"
+            rommConnected -> if (prefs.rommAnswer.startsWith("FUSEONE")) "FUSEONE+FUSE" else "FUSE"
             else -> prefs.rommAnswer
         }
+        val withFuseOne = answer.startsWith("FUSEONE+")
+        // RomM or Cartridge, alone or beside Fuse One.
+        val second = answer.substringAfter('+')
         fun setUpFuseOne() {
             val sync = store.sync.service ?: return
             fun go(host: Boolean) {
@@ -481,51 +519,61 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             store.updatePrefs { p ->
                 when (choice) {
                     // Turning one on turns the other off; neither forgets how it was set up.
-                    "FUSE" -> p.copy(rommAnswer = choice, cartridgeEnabled = false, romm = p.romm.copy(enabled = true))
-                    "CARTRIDGE" -> p.copy(rommAnswer = choice, cartridgeEnabled = true, romm = p.romm.copy(enabled = false))
+                    "FUSE", "FUSEONE+FUSE" -> p.copy(rommAnswer = choice, cartridgeEnabled = false, romm = p.romm.copy(enabled = true))
+                    "CARTRIDGE", "FUSEONE+CARTRIDGE" -> p.copy(rommAnswer = choice, cartridgeEnabled = true, romm = p.romm.copy(enabled = false))
                     else -> p.copy(rommAnswer = choice)
                 }
             }
         }
         if (rommHere || cartridgeHere || fuseOneHere) add(Step(
-            "romm", "Your game library", when (answer) {
+            "romm", "Your game library", when (second) {
                 "FUSEONE" -> if (fuseOneOn) "Fuse One brings your games" else "Set up Fuse One"
-                "FUSE" -> if (rommConnected) "RomM is connected" else "Connect RomM"
+                "FUSE" -> if (rommConnected) (if (withFuseOne) "Fuse One and RomM" else "RomM is connected") else "Connect RomM"
                 "CARTRIDGE" -> when {
+                    cartridge.installed && withFuseOne -> "Fuse One and Cartridge"
                     cartridge.installed && cartridge.bridge -> "Cartridge is linked"
                     cartridge.installed -> "Cartridge found"
                     else -> "Install Cartridge"
                 }
                 else -> if (fuseOneOn) "Fuse One is recommended" else "Where are your other games?"
             },
-            when (answer) {
+            when (second) {
                 "FUSEONE" -> if (fuseOneOn) {
-                    "Fuse Library is part of Fuse One: the games on every device in your household are in the Library under All, ready to play or fetch, with nothing else to run. RomM can come along too, if you keep one."
+                    "Fuse Library is part of Fuse One: the games on every device in your household are in the Library under All, ready to play or fetch, with nothing else to run. " +
+                        when {
+                            rommHere -> "Keep a RomM server? Add it too: Fuse One with RomM is the way we recommend. Or add Cartridge instead."
+                            cartridgeHere -> "Keep a RomM server? Add Cartridge too, its companion app."
+                            else -> ""
+                        }
                 } else {
                     "Fuse One's library needs a host: one computer at home that every device connects to. Set it up now and come straight back here, or carry on and add it later in Settings, Fuse One."
                 }
                 "FUSE" -> if (rommConnected) {
-                    "Your RomM games are in the Library under All, next to everything else. Games you download land in the right folders and play like any other, and their saves stay in step with RomM's when RomM syncs saves (RomM 5)."
+                    (if (withFuseOne) "Fuse One brings the games on your household's devices, and RomM your server's. " else "") +
+                        "Your RomM games are in the Library under All, next to everything else. Games you download land in the right folders and play like any other. " +
+                        if (io.github.matiyaaa.fuse.ui.shell.sync.SaveProviders.current(app) == SaveProvider.ROMM) "Their saves stay in step with RomM's (RomM 5)."
+                        else "Their saves move with ${io.github.matiyaaa.fuse.ui.shell.sync.SaveProviders.current(app).label.let { if (it == "Off") "nothing on this device" else it }}, this device's Save Sync."
                 } else {
                     "Fuse connects straight to your RomM server: your games and systems appear in the Library under All, downloads land in your library's folders, and their saves stay in step with RomM's on RomM 5. It takes a minute."
                 }
-                "CARTRIDGE" -> when {
+                "CARTRIDGE" -> (if (withFuseOne && cartridge.installed) "Fuse One brings the games on your household's devices, and Cartridge your RomM server's. " else "") + when {
                     cartridge.installed && cartridge.bridge -> "Downloads from Cartridge appear in Fuse on their own. Open it anytime from the Cartridge tab."
                     cartridge.installed -> "This Cartridge opens from Fuse. Version 0.9.10 or newer adds live download status and direct links."
                     else -> "Cartridge is a companion app that downloads games from your RomM server into the right folders. Install it now, or later from the Cartridge tab."
                 }
                 else -> when {
                     fuseOneOn -> "You chose Fuse One, so your household's games are already in the Library under All: Fuse Library is included. Keep a RomM server too? Connect it as well, or use Cartridge."
-                    fuseOneHere -> "Three ways in: Fuse One (recommended) brings in the games on every device you own, RomM connects to a game server you run at home, and Cartridge is a companion app for RomM. Or carry on: Fuse plays what is on this device."
+                    fuseOneHere -> "Three ways in: Fuse One brings in the games on every device you own, RomM connects to a game server you run at home, and Cartridge is a companion app for RomM. Fuse One can take RomM or Cartridge along; Fuse One with RomM is what we recommend. Or carry on: Fuse plays what is on this device."
                     else -> "RomM is a game library server you run at home. If you keep your games on one, Fuse can connect to it directly, or work with Cartridge. If not, carry on: Fuse plays what is on this device."
                 }
             },
             optional = true, icon = FuseIcons.LibraryBig, chapter = Chapters.CONNECT,
-            actions = when (answer) {
+            actions = when (second) {
                 "FUSEONE" -> if (fuseOneOn) {
                     listOfNotNull(
-                        StepAction("Continue", primary = true, run = next),
-                        StepAction("Also Connect RomM") { answerRomm("FUSE"); app.go(Route.RommSetup()) }.takeIf { rommHere },
+                        StepAction("Add RomM", primary = true, note = "Recommended") { answerRomm("FUSEONE+FUSE"); app.go(Route.RommSetup()) }.takeIf { rommHere },
+                        StepAction("Add Cartridge", enabled = cartridgeHere, note = "Cartridge runs on Android and Linux") { answerRomm("FUSEONE+CARTRIDGE") }.takeIf { rommHere || cartridgeHere },
+                        StepAction("Just Fuse One", primary = !rommHere, run = next),
                         StepAction("Choose again") { answerRomm("") },
                     )
                 } else {
@@ -538,8 +586,9 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                 "FUSE" -> if (rommConnected) {
                     listOf(StepAction("Continue", primary = true, run = next), StepAction("Choose again") { answerRomm("") })
                 } else {
-                    listOf(
+                    listOfNotNull(
                         StepAction("Connect", primary = true) { app.go(Route.RommSetup()) },
+                        StepAction("Just Fuse One") { answerRomm("FUSEONE") }.takeIf { withFuseOne },
                         StepAction("Choose again") { answerRomm("") },
                     )
                 }
@@ -560,9 +609,10 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                                 }
                             }
                         },
-                        StepAction("Later", run = next),
+                        StepAction("Just Fuse One") { answerRomm("FUSEONE") }.takeIf { withFuseOne },
+                        StepAction("Later", run = next).takeIf { !withFuseOne },
                         StepAction("Choose again") { answerRomm("") },
-                    )
+                    ).filterNotNull()
                 }
                 else -> listOfNotNull(
                     StepAction("Fuse One", primary = true) {
@@ -579,7 +629,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             },
             content = {
                 RommChoiceStage(
-                    chosen = answer,
+                    chosen = second,
                     connected = rommConnected,
                     cartridgeReady = cartridge.installed,
                     hasRomm = rommHere,
@@ -612,8 +662,8 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             content = { JellyfinStage(connected = jellyfinAccount != null, server = jellyfinAccount?.serverName) },
         ))
         add(Step(
-            "ra", "Achievements", if (raConfigured) "RetroAchievements connected" else "Show your achievements?",
-            if (raConfigured) "Recent unlocks and progress appear on Home and on each game's page."
+            "ra", "Achievements", if (raConfigured) "Achievements are on" else "Show your achievements?",
+            if (raConfigured) "RetroAchievements is connected. Recent unlocks and progress appear on Home and on each game's page."
             else "Connect RetroAchievements with your username and Web API key (retroachievements.org, Settings, Keys) to see progress in Fuse. The key is stored encrypted on this device.",
             optional = true, icon = FuseIcons.Trophy, chapter = Chapters.CONNECT,
             actions = if (raConfigured) listOf(StepAction("Continue", primary = true, run = next)) else listOf(
@@ -632,17 +682,30 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             ),
         ))
         add(Step(
-            "art", "Artwork", if ("sgdb.apikey" in secrets) "SteamGridDB is ready" else "Better artwork",
-            "Fuse uses art from RomM (through Cartridge) and your folders first. A free SteamGridDB key adds box art, covers, backgrounds, logos and icons for everything else. More sources are in Settings, Art and details.",
+            "art", "Artwork",
+            // Said only once SteamGridDB has answered: a key it turns down isn't "ready".
+            when {
+                "sgdb.apikey" !in secrets -> "Better artwork"
+                sgdbCheck is io.github.matiyaaa.fuse.integrations.KeyCheck.Working -> "SteamGridDB is ready"
+                sgdbCheck is io.github.matiyaaa.fuse.integrations.KeyCheck.Rejected -> "SteamGridDB turned that key down"
+                sgdbCheck is io.github.matiyaaa.fuse.integrations.KeyCheck.Unreachable -> "SteamGridDB didn't answer"
+                else -> "Checking your key"
+            },
+            (if (platform.features.cartridge) "Fuse uses art from RomM (through Cartridge, or straight from RomM) and your folders first. " else "Fuse uses art from RomM and your folders first. ") +
+                "A free SteamGridDB key adds box art, covers, backgrounds, logos and icons for everything else. More sources are in Settings, Art and details.",
             optional = true, icon = FuseIcons.Images, chapter = Chapters.CONNECT,
-            actions = listOf(
-                StepAction(if ("sgdb.apikey" in secrets) "Continue" else "Add SteamGridDB key", primary = true) {
-                    if ("sgdb.apikey" in secrets) next() else app.textInput = TextInputSpec("SteamGridDB API key", "", "From steamgriddb.com, Preferences, API") { key ->
-                        if (key.isNotBlank()) app.scope.launch { store.credentials.put("sgdb.apikey", key.trim()) }
+            actions = run {
+                fun askKey() {
+                    app.textInput = TextInputSpec("SteamGridDB API key", "", "From steamgriddb.com, Preferences, API") { key ->
+                        if (key.isNotBlank()) app.scope.launch { store.credentials.put("sgdb.apikey", key.trim()); store.media.checkKeys() }
                     }
-                },
-                StepAction("Skip", run = next),
-            ),
+                }
+                when {
+                    "sgdb.apikey" !in secrets -> listOf(StepAction("Add SteamGridDB key", primary = true) { askKey() }, StepAction("Skip", run = next))
+                    sgdbCheck is io.github.matiyaaa.fuse.integrations.KeyCheck.Rejected -> listOf(StepAction("Try another key", primary = true) { askKey() }, StepAction("Skip", run = next))
+                    else -> listOf(StepAction("Continue", primary = true, run = next), StepAction("Change key") { askKey() })
+                }
+            },
         ))
 
         // ------------------------------------------------------------------------- make it yours
@@ -671,9 +734,10 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             "controller", "Controller", "Which button confirms?",
             "Detect your buttons so Fuse knows how your pad is labelled and which button confirms. It takes two presses.",
             icon = FuseIcons.Gamepad, chapter = Chapters.YOURS,
+            // Detecting takes presses on a pad: offered first only when a pad is what is being used.
             actions = listOf(
-                StepAction("Detect my buttons", primary = true) { app.buttonDetect = true },
-                StepAction("Continue", run = next),
+                StepAction("Detect my buttons", primary = padInHand) { app.buttonDetect = true },
+                StepAction("Continue", primary = !padInHand, run = next),
             ),
             content = { ControllerTest(prefs.input.glyphs == io.github.matiyaaa.fuse.model.GlyphStyle.NINTENDO) },
         ))

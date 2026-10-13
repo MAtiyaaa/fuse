@@ -48,6 +48,25 @@ internal class AuditRomm(base: FuseStore) : RommOps by RommOps.None {
         MutableStateFlow(io.github.matiyaaa.fuse.ui.shell.store.RommNotOnServer(cards.drop(24).take(8), 31))
     override fun games(slug: String?): Flow<List<RommGame>> = flowOf(games)
     override fun markNewSeen() = Unit
+
+    /** Saves on the server: a few games, each with its newest from one of the household's devices. */
+    override suspend fun saveReport(): io.github.matiyaaa.fuse.ui.shell.store.RommSaveReport {
+        val devices = listOf("Steam Deck", "Living Room PC", "AYN Thor")
+        val standings = io.github.matiyaaa.fuse.sync.romm.RommSaveStanding.entries
+        val now = java.time.Instant.now()
+        val games = cards.take(7).mapIndexed { i, c ->
+            val saves = (0 until (3 - i % 3)).map { k ->
+                io.github.matiyaaa.fuse.romm.RommSave(
+                    id = 500L + i * 10 + k, romId = 1_000L + i, fileName = "${c.title}.srm", sizeBytes = 8_192L * (i + 1),
+                    contentHash = null, slot = null, emulator = "mgba",
+                    updatedAt = now.minusSeconds(60L * (5 + i * 47 + k * 300)).toString(),
+                    originDevice = null, originDeviceName = devices[(i + k) % devices.size],
+                )
+            }
+            io.github.matiyaaa.fuse.ui.shell.store.RommSaveGame(1_000L + i, c.title, c.id.takeIf { i % 4 != 3 }, c.platformId, saves, standings[i % standings.size])
+        }
+        return io.github.matiyaaa.fuse.ui.shell.store.RommSaveReport("https://romm.home.arpa", games, games.sumOf { g -> g.saves.sumOf { it.sizeBytes } })
+    }
 }
 
 /** The RomM tab: its line, the shelves with a game chosen, the systems and the options of a game not here. */
@@ -77,5 +96,20 @@ internal fun AuditDriver.rommScreens() {
         tap(PadButton.X)
         waitFor("Find Details and Art")
         shoot("a game's options")
+    }
+
+    scenario("romm", "saves tab") {
+        useLibrary { it.copy(romm = it.romm.copy(enabled = true, configured = true, saveSync = true)) }
+        val base = libraryStore
+        show(object : FuseStore by base { override val romm: RommOps = AuditRomm(base) })
+        tab(Destination.CARTRIDGE)
+        settle(900)
+        // RomM's saves are Addons' only part here, so the page opens on them.
+        waitFor("Your saves on RomM")
+        shoot("RomM's saves: every game, the newest of each and how this device's stands", 1_500)
+        tap(PadButton.DPAD_DOWN)
+        tap(PadButton.A)
+        waitFor("Open the Game")
+        shoot("a game's saves on RomM, newest first", 900)
     }
 }
