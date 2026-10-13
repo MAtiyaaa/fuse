@@ -64,6 +64,11 @@ object Processes {
         if (libraries.isNullOrBlank()) env.remove("LD_LIBRARY_PATH") else env["LD_LIBRARY_PATH"] = libraries
         env["SYSTEM_PATH"]?.takeIf { it.isNotBlank() }?.let { env["PATH"] = it }
         env.remove("STEAM_RUNTIME_LIBRARY_PATH")
+        // The Java options the AppImage set for Fuse alone; what was there before goes back.
+        if (env.containsKey("FUSE_JAVA_TOOL_OPTIONS")) {
+            val before = env.remove("FUSE_JAVA_TOOL_OPTIONS")
+            if (before.isNullOrBlank()) env.remove("JAVA_TOOL_OPTIONS") else env["JAVA_TOOL_OPTIONS"] = before
+        }
     }
 
     /** A folder of Steam's runtime libraries ("…/steam-runtime/…", "…/ubuntu12_32/…"). */

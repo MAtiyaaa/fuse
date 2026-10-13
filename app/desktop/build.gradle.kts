@@ -114,6 +114,12 @@ compose.desktop {
         // collects while the interface keeps drawing (its pauses measured under 0.03 ms on the same
         // run of Home), so motion stays even. desktopPerf, home, with -Xlog:gc,gc+phases.
         if (packagingOs == "linux") jvmArgs += "-XX:+UseZGC"
+        // Java 21's generational ZGC (the only kind from 23 on) collects short-lived garbage, such as
+        // decoded art and each frame's drawing, without the allocation stalls the single-generation
+        // collector of 17 hits under a 4K screen's load: those held the interface thread for frames.
+        // The AppImage is built on 21 (release.yml); a build on 17 runs as before.
+        val packagingJava = JavaVersion.current()
+        if (packagingOs == "linux" && packagingJava >= JavaVersion.VERSION_21 && packagingJava < JavaVersion.VERSION_23) jvmArgs += "-XX:+ZGenerational"
 
         buildTypes.release.proguard {
             isEnabled.set(false)

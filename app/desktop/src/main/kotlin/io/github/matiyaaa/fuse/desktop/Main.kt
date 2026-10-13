@@ -79,8 +79,11 @@ fun main(args: Array<String>) {
     val dirs = FuseDirs.fromEnvironment()
     dirs.eraseIfAsked()
     dirs.ensure()
+    Log.toFile(java.io.File(dirs.data, "logs"))
     CrashLog(java.io.File(dirs.data, "crash")).install()
     Log.info("Fuse ${BuildInfo.VERSION} starting")
+    // A stalled interface thread writes what it was doing into the log.
+    io.github.matiyaaa.fuse.desktop.system.UiWatchdog().start()
     // Without a screen to open a window on, one plain sentence instead of the toolkit's error.
     NoDisplay.why()?.let { why ->
         System.err.println(NoDisplay.message(why))
