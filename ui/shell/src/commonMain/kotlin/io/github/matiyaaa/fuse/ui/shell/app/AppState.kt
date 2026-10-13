@@ -176,6 +176,8 @@ class AppState(
     /** Search or Settings in the top line has controller focus (only while [focusZone] is TABS). */
     var hudButton by mutableStateOf<HudButton?>(null)
     var quickMenuOpen by mutableStateOf(false)
+    /** Counts the times Start + Select held reset the controls, so a screen part way through changing them lets go. */
+    var controlsResets by mutableStateOf(0)
     var contextMenu by mutableStateOf<ContextMenuSpec?>(null)
     var confirm by mutableStateOf<ConfirmSpec?>(null)
 

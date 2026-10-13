@@ -134,9 +134,10 @@ internal fun guideAnswer(step: GuideStep, profile: InputProfile, button: PadButt
 
 /**
  * Guided controller setup: one question at a time (which controller, the right face button, the
- * confirm button, then each action), every answer saved as it is given. While it runs every press
+ * confirm button, then each action), every answer tried out as it is given. While it runs every press
  * comes only here; holding any button for [LEAVE_MS] leaves, so nobody is ever stuck in it, and the
- * buttons under the pad do the same for a mouse or a finger.
+ * buttons under the pad do the same for a mouse or a finger. Only finishing keeps the answers:
+ * stopping, or leaving the page halfway, puts the controls back exactly as they were before it began.
  */
 @Composable
 internal fun GuidedControls(app: AppState, buttons: List<PadButton>, label: (PadButton, Boolean) -> String, startRequests: Int, showPad: Boolean = true, onRunning: (Boolean) -> Unit) {
@@ -157,6 +158,14 @@ internal fun GuidedControls(app: AppState, buttons: List<PadButton>, label: (Pad
     val step = steps.getOrNull(stepIndex)
     val latestStep by rememberUpdatedState(step)
     val nintendo = prefs.input.glyphs == GlyphStyle.NINTENDO
+    // The controls as they were when it began: put back unless it finishes.
+    var before by remember { mutableStateOf<InputProfile?>(null) }
+
+    fun restore() {
+        val b = before ?: return
+        before = null
+        app.store.updatePrefs { it.copy(input = b) }
+    }
 
     fun setRunning(on: Boolean) {
         running = on
@@ -164,6 +173,7 @@ internal fun GuidedControls(app: AppState, buttons: List<PadButton>, label: (Pad
     }
 
     fun start() {
+        before = app.store.prefs.value.input
         steps = guideSteps(controllers.size)
         stepIndex = 0
         right = null
@@ -172,9 +182,10 @@ internal fun GuidedControls(app: AppState, buttons: List<PadButton>, label: (Pad
     }
 
     fun stop(finished: Boolean) {
+        if (finished) before = null else restore()
         setRunning(false)
         held = null
-        app.toasts.show(if (finished) "Your controller is set up" else "Guided setup stopped. Every answer you gave is kept")
+        app.toasts.show(if (finished) "Your controller is set up" else "Guided setup stopped. Your controls are as they were")
         if (finished) app.platform.haptics.confirm()
     }
 
@@ -216,7 +227,7 @@ internal fun GuidedControls(app: AppState, buttons: List<PadButton>, label: (Pad
         if (mine != null) router.exclusive = mine
         onDispose { if (mine != null && router.exclusive === mine) router.exclusive = null }
     }
-    // Holding any button fills the ring; full, guided setup ends with every answer so far kept.
+    // Holding any button fills the ring; full, guided setup stops (or finishes, on the last step).
     LaunchedEffect(held, running) {
         holdProgress.floatValue = 0f
         if (!running || held == null) return@LaunchedEffect
@@ -229,7 +240,17 @@ internal fun GuidedControls(app: AppState, buttons: List<PadButton>, label: (Pad
         held = null
         stop(finished = latestStep == GuideStep.Try)
     }
-    DisposableEffect(Unit) { onDispose { onRunning(false) } }
+    // Leaving the page halfway is a stop: nothing half answered stays behind.
+    DisposableEffect(Unit) { onDispose { restore(); onRunning(false) } }
+    // Start + Select held reset the controls: that reset stands, and nothing is put back over it.
+    LaunchedEffect(app.controlsResets) {
+        if (app.controlsResets == 0) return@LaunchedEffect
+        before = null
+        if (running) {
+            setRunning(false)
+            held = null
+        }
+    }
     // Confirm on the page (or Start under it) begins.
     LaunchedEffect(startRequests) { if (startRequests > 0 && !running) start() }
 
@@ -247,7 +268,7 @@ internal fun GuidedControls(app: AppState, buttons: List<PadButton>, label: (Pad
                         buildString {
                             append("Fuse asks for each button and you press it. ")
                             if (controllers.size > 1) append("With ${controllers.size} controllers connected, the first question is which one moves around Fuse. ")
-                            append("A direction keeps a button as it is. Hold any button for five seconds to stop at any time.")
+                            append("A direction keeps a button as it is. Hold any button for two seconds to stop at any time; stopping changes nothing.")
                         },
                         Fuse.type.body, color = c.textMuted, maxLines = 5,
                     )
@@ -359,6 +380,6 @@ private fun HoldRing(progress: Float) {
 private val GLYPH = 18.dp
 
 /** A press held this long starts to show the ring; held [LEAVE_MS], guided setup ends. */
-private const val HOLD_SHOWS_MS = 600L
-internal const val LEAVE_MS = 5_000L
+private const val HOLD_SHOWS_MS = 300L
+internal const val LEAVE_MS = 1_800L
 

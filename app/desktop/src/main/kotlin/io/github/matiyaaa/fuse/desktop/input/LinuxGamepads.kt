@@ -36,7 +36,11 @@ interface GamepadSink {
  * Reading needs permission on the device node, which desktop sessions normally grant to the logged-in
  * user. When no device can be read, controllers simply don't work in Fuse; the keyboard still does.
  */
-class LinuxGamepads(private val sink: GamepadSink) : AutoCloseable {
+class LinuxGamepads(
+    private val sink: GamepadSink,
+    /** The pads Steam Input wraps for Fuse (see [JoydevFilter.steamWrapped]). */
+    private val steamWrapped: Set<String> = JoydevFilter.steamWrapped(System.getenv("SDL_GAMECONTROLLER_IGNORE_DEVICES")),
+) : AutoCloseable {
     private val open = ConcurrentHashMap<String, Device>()
     private val warnedUnreadable = ConcurrentHashMap.newKeySet<String>()
     private val skipped = ConcurrentHashMap.newKeySet<String>()
@@ -69,6 +73,20 @@ class LinuxGamepads(private val sink: GamepadSink) : AutoCloseable {
 
     private fun scan() {
         val nodes = File("/dev/input").listFiles { f -> f.name.matches(JS_NAME) }?.toList() ?: emptyList()
+        // Started by Steam with Steam Input on, the controller comes through Steam's virtual one, which
+        // Steam holds back while its own menus are open; the real pads it wraps are then set aside, so
+        // the Quick Access Menu has the controller to itself. Without the virtual one they are read.
+        val ids = if (steamWrapped.isEmpty()) emptyMap() else nodes.associate { it.name to JoydevFilter.usbId(it.name) }
+        val viaSteam = ids.values.any(JoydevFilter::isSteamVirtual)
+        fun wrapped(js: String) = viaSteam && ids[js] in steamWrapped
+        for (device in open.values) {
+            val mute = wrapped(device.node)
+            if (device.muted != mute) {
+                device.muted = mute
+                if (mute) device.releaseAll()
+                Log.info("${device.label}: ${if (mute) "read through Steam Input instead" else "read directly again"}")
+            }
+        }
         for (node in nodes) {
             if (open.containsKey(node.name)) continue
             // A mouse, tablet, touchpad or motion sensor that joydev also exposes is not a controller.
@@ -89,6 +107,8 @@ class LinuxGamepads(private val sink: GamepadSink) : AutoCloseable {
             warnedUnreadable.remove(node.name)
             val name = readName(node.name)
             val device = Device(node.name, name, stream, JoystickMapping.forDevice(node.name, name))
+            device.muted = wrapped(node.name)
+            if (device.muted) Log.info("${device.label} is wrapped by Steam Input; read through Steam's virtual controller instead")
             open[node.name] = device
             Log.info("controller connected: ${device.label}")
             device.start()
@@ -118,6 +138,9 @@ class LinuxGamepads(private val sink: GamepadSink) : AutoCloseable {
         private val mapping: JoystickMapping,
     ) {
         val label: String = name ?: node
+
+        /** Set aside while Steam Input carries this pad (see [scan]): read, but nothing is passed on. */
+        @Volatile var muted = false
         private val held = HashSet<PadButton>()
         private var hatX: PadButton? = null
         private var hatY: PadButton? = null
@@ -160,9 +183,12 @@ class LinuxGamepads(private val sink: GamepadSink) : AutoCloseable {
                     val type = event[6].toInt() and 0xFF
                     val number = event[7].toInt() and 0xFF
                     val initial = type and JS_EVENT_INIT != 0
-                    when (type and JS_EVENT_INIT.inv()) {
-                        JS_EVENT_BUTTON -> if (!initial) onButton(number, value != 0)
-                        JS_EVENT_AXIS -> onAxis(number, value, initial)
+                    if (muted) continue
+                    synchronized(this) {
+                        when (type and JS_EVENT_INIT.inv()) {
+                            JS_EVENT_BUTTON -> if (!initial) onButton(number, value != 0)
+                            JS_EVENT_AXIS -> onAxis(number, value, initial)
+                        }
                     }
                 }
             } catch (e: IOException) {
@@ -259,7 +285,8 @@ class LinuxGamepads(private val sink: GamepadSink) : AutoCloseable {
         }
 
         /** Lets go of everything this device held, so nothing stays pressed after an unplug. */
-        private fun releaseAll() {
+        @Synchronized
+        fun releaseAll() {
             held.forEach { sink.release(it, label) }
             held.clear()
             hatX?.let { sink.release(it, label) }

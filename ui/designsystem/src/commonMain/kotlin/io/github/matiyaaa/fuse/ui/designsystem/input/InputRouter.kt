@@ -349,6 +349,35 @@ class InputRouter(
     private val sticksDown = mutableSetOf<PadButton>()
     private var comboHold: Job? = null
 
+    /**
+     * Called when Start and Select are held together for [RESET_HOLD_MS] on a controller: the way
+     * back from any mapping, however broken. It is read from the physical buttons, before the remap,
+     * a capture or a screen that has the controller to itself, so it works whatever they do.
+     */
+    var onResetCombo: (() -> Unit)? = null
+    private val resetDown = mutableSetOf<PadButton>()
+    private var resetHold: Job? = null
+
+    private fun resetPress(button: PadButton, source: InputSource) {
+        if (source != InputSource.GAMEPAD || button !in RESET_BUTTONS) return
+        resetDown += button
+        if (resetDown.containsAll(RESET_BUTTONS) && resetHold == null && onResetCombo != null) {
+            resetHold = scope.launch {
+                delay(RESET_HOLD_MS)
+                exclusive = null
+                capture = null
+                releaseAll()
+                onResetCombo?.invoke()
+            }
+        }
+    }
+
+    private fun resetRelease(button: PadButton) {
+        if (!resetDown.remove(button)) return
+        resetHold?.cancel()
+        resetHold = null
+    }
+
     /** Sticks pressed on their own, waiting for release to act (unless the combo forms first). */
     private val stickPending = mutableSetOf<PadButton>()
 
@@ -361,6 +390,7 @@ class InputRouter(
         redirectTo?.let { it.press(button, source); return }
         io.github.matiyaaa.fuse.ui.fuseline.FramePacing.input()
         touched()
+        resetPress(button, source)
         if (!fromStick) rawListener?.invoke(button, true)
         exclusive?.let {
             _lastSource.value = source
@@ -422,6 +452,7 @@ class InputRouter(
 
     fun release(button: PadButton, source: InputSource) {
         redirectTo?.let { it.release(button, source); return }
+        resetRelease(button)
         actionFor(button)?.let { consumedUntilRelease.remove(it) }
         if (!fromStick) rawListener?.invoke(button, false)
         exclusive?.let {
@@ -466,6 +497,8 @@ class InputRouter(
         held.clear()
         longPressConsumed.clear()
         stickDirection = null
+        rightDirection = null
+        triggers.clear()
         sticksDown.clear()
         stickPending.clear()
         comboHold?.cancel()
@@ -624,6 +657,10 @@ class InputRouter(
         /** How long both sticks stay pressed in before the combo counts as a hold. */
         const val COMBO_HOLD_MS = 600L
 
+        /** Start and Select held this long together reset the controls (see [onResetCombo]). */
+        const val RESET_HOLD_MS = 3_000L
+        private val RESET_BUTTONS = setOf(PadButton.START, PadButton.SELECT)
+
         /** How far the right stick goes over before it counts as pushed (a deliberate flick, not a drift). */
         const val RIGHT_STICK_PRESS = 0.6f
     }
@@ -655,6 +692,20 @@ fun InputProfile.withMapping(button: PadButton, action: NavAction, pad: List<Pad
 
 /** Actions a controller can never be left without: choosing and going back. */
 private val ESSENTIAL = listOf(NavAction.SELECT, NavAction.BACK)
+
+/**
+ * This profile, or without its remaps when they leave Confirm or Back on no button of [pad] (the
+ * buttons that really reach Fuse here: on Linux the Guide button never does). A mapping saved that
+ * way by an older Fuse, or in a way nobody foresaw, can never leave the controller unable to choose.
+ */
+fun InputProfile.usable(pad: Collection<PadButton>): InputProfile =
+    if (remap.isNotEmpty() && ESSENTIAL.any { need -> pad.none { actionFor(it) == need } }) copy(remap = emptyMap()) else this
+
+/** The buttons of a pad that can carry an action: the face buttons, shoulders, triggers, stick presses, Start, Select and, where it reaches Fuse, Guide. */
+fun padButtons(guide: Boolean): List<PadButton> = listOf(
+    PadButton.A, PadButton.B, PadButton.X, PadButton.Y, PadButton.L1, PadButton.R1, PadButton.L2, PadButton.R2,
+    PadButton.L3, PadButton.R3, PadButton.START, PadButton.SELECT,
+) + if (guide) listOf(PadButton.MODE) else emptyList()
 
 /** What [button] does with no remaps: the standard layout, with the confirm/back and shoulder swaps. */
 fun InputProfile.defaultActionFor(button: PadButton): NavAction? {

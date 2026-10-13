@@ -152,7 +152,7 @@ internal fun AuditDriver.overlayScreens(exhaustive: Boolean) {
         tap(PadButton.A)
         settle()
         shoot("Guided, after two answers")
-        // Held five seconds: guided setup ends, with what was answered kept.
+        // Held two seconds: guided setup stops and puts the controls back as they were.
         router.press(PadButton.X, InputSource.GAMEPAD)
         // The app's timers run between looks (see settleUntil): the ring fills, then it ends.
         settleUntil("Keep holding to stop", timeoutMs = 20_000)

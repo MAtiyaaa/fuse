@@ -60,6 +60,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.LayerPriority
 import io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.input.TextInput
+import io.github.matiyaaa.fuse.ui.designsystem.input.usable
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroBackdrop
 import io.github.matiyaaa.fuse.ui.designsystem.sound.LocalUiSounds
 import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
@@ -299,7 +300,23 @@ private fun FuseAppContent(
     }
 
     // Input settings, sounds and haptics follow preferences.
-    LaunchedEffect(prefs.input) { router.profile = prefs.input }
+    // On Linux the Guide button never reaches Fuse, so a mapping that left Confirm or Back only there is set aside.
+    val guideReaches = platform.host != io.github.matiyaaa.fuse.model.Host.LINUX
+    LaunchedEffect(prefs.input) {
+        val usable = prefs.input.usable(io.github.matiyaaa.fuse.ui.designsystem.input.padButtons(guideReaches))
+        router.profile = usable
+        if (usable != prefs.input) store.updatePrefs { it.copy(input = usable) }
+    }
+    // Start + Select held: the controls as they come, from anywhere, whatever the mapping.
+    DisposableEffect(router) {
+        router.onResetCombo = {
+            app.controlsResets++
+            store.updatePrefs { it.copy(input = it.input.copy(remap = emptyMap(), swapConfirmBack = false, swapShoulders = false, controller = "")) }
+            app.toasts.show("Controls reset to default")
+            platform.haptics.confirm()
+        }
+        onDispose { router.onResetCombo = null }
+    }
     LaunchedEffect(prefs.input.vibration) { platform.haptics.setStrength(prefs.input.vibration) }
     // Transfers kept to a charger or above a battery level follow the battery.
     LaunchedEffect(store) { platform.status.collect { s -> store.transfers.power(s.batteryPercent, s.charging || s.batteryFull) } }
