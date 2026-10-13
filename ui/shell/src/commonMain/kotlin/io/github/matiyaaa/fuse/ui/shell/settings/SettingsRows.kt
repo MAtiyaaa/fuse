@@ -87,8 +87,9 @@ fun <T> AppState.choiceRow(
             icon = icon,
             options = options.map { (value, name) ->
                 MenuAction("$id.$name", name, null, detail = optionDetail(value), trailing = Trailing.Check(value == current), onSelect = {
-                    set(value)
+                    // Closed first, so a choice that asks something next (Keep this size?) is seen.
                     choice = null
+                    set(value)
                 })
             },
             aids = aid?.let { a -> options.map { a(it.first) } },

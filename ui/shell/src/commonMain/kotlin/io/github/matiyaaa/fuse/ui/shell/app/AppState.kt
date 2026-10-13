@@ -189,6 +189,9 @@ class AppState(
     var textInput by mutableStateOf<TextInputSpec?>(null)
     var choice by mutableStateOf<ChoiceSpec?>(null)
 
+    /** A change of size waiting for Keep ([keepSizeOrUndo]). */
+    internal var keepSize: PendingSize? = null
+
     /** Fuse Player is open over everything (Jellyfin). */
     var playerOpen by mutableStateOf(false)
 

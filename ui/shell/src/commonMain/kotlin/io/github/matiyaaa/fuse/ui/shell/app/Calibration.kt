@@ -139,6 +139,11 @@ fun CalibrationOverlay(app: AppState) {
         }
         app.calibrating = null
         app.toasts.show(if (save) "${session.name} is calibrated. Other screens keep their own" else "Nothing changed")
+        // A new size is kept only when Keep is chosen: one too large for the screen goes back by itself.
+        val sizeBefore = session.before?.interfaceSize ?: prefs.display.interfaceSize
+        if (save && now.interfaceSize != sizeBefore) {
+            app.keepSizeOrUndo { set { it.copy(interfaceSize = sizeBefore) } }
+        }
     }
     fun change(by: Int): Boolean = when (session.step) {
         CalibrationStep.SIZE -> {

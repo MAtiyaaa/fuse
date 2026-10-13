@@ -54,6 +54,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.ReorderSpec
 import io.github.matiyaaa.fuse.ui.shell.app.calibrateScreen
 import io.github.matiyaaa.fuse.ui.shell.app.calibration
 import io.github.matiyaaa.fuse.ui.shell.app.changeScreenCalibration
+import io.github.matiyaaa.fuse.ui.shell.app.keepSizeOrUndo
 import io.github.matiyaaa.fuse.ui.shell.app.forgetScreenCalibration
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.addGame
@@ -1555,7 +1556,14 @@ fun displayRows(app: AppState): List<MenuAction> {
                 },
                 detail = if (calibratedHere != null) "This screen is calibrated and keeps its own. This sets the others" else "Automatic draws Fuse larger on a big screen with many pixels, like a 4K TV, so it looks as it does on a 1080p one",
                 optionDetail = { v -> if (v == 0) "Sized for this screen, and again when it changes" else null },
-            ) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(interfaceSize = v)) } })
+            ) { v ->
+                val before = d.interfaceSize
+                if (v == before) return@choiceRow
+                app.store.updatePrefs { it.copy(display = it.display.copy(interfaceSize = v)) }
+                // Too large for the screen, its buttons could be out of reach: unless kept, it goes back.
+                // (A calibrated screen keeps its own size, so it can't be this one.)
+                if (calibratedHere == null) app.keepSizeOrUndo { app.store.updatePrefs { it.copy(display = it.display.copy(interfaceSize = before)) } }
+            })
             if (app.platform.features.rotation) {
                 add(app.choiceRow(
                     "rotation", "Rotation", FuseIcons.RotateCw, d.rotation,

@@ -13,6 +13,9 @@ themselves, a Decky plugin with something to show, and a long list of fixes from
   what's playing, your time this week and the last five games you played, and opens any of them in
   Fuse. Once the plugin is installed, Fuse turns on its side of the connection by itself (unless
   you chose otherwise), and the plugin says when Fuse One isn't set up.
+- **Keep this size?** After changing the interface size, or calibrating a screen to a new size,
+  Fuse asks whether to keep it, and goes back to the size before by itself after five seconds. A
+  size too large for the screen can no longer leave you stuck with every button out of reach.
 - **Restore Original Title,** in a renamed game's Details tab, gives the game back its own name.
 - **Unpin from Home,** in a pinned game's options. Pinning a game now also shows the Pinned shelf on
   Home if it was hidden.
