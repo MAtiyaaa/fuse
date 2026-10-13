@@ -26,6 +26,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.geometry.CornerRadius
@@ -109,6 +111,9 @@ private val remappable = listOf(
 /** The buttons on the pad itself: the system Back key is left out, since not every pad has one. */
 private val padButtons = remappable - PadButton.KEY_ESCAPE
 
+/** The D-pad: it always moves, so during a wait it calls the wait off. */
+private val directions = setOf(PadButton.DPAD_UP, PadButton.DPAD_DOWN, PadButton.DPAD_LEFT, PadButton.DPAD_RIGHT)
+
 /** [nintendoKeys]: the pad sends Nintendo keycodes, so A is the right button. */
 private fun PadButton.label(nintendoKeys: Boolean): String = when (this) {
     PadButton.A -> if (nintendoKeys) "A (right)" else "A (bottom)"
@@ -129,8 +134,8 @@ private fun PadButton.label(nintendoKeys: Boolean): String = when (this) {
 }
 
 /** Which controller buttons trigger [action] with the current layout and remaps. */
-private fun buttonsFor(router: InputRouter, action: NavAction): List<PadButton> =
-    remappable.filter { router.actionFor(it) == action }
+private fun buttonsFor(router: InputRouter, guideOff: Boolean, action: NavAction): List<PadButton> =
+    remappable.filter { (!guideOff || it != PadButton.MODE) && router.actionFor(it) == action }
 
 /**
  * Button mapping with a live controller test. Choosing an action waits for the next button press
@@ -144,6 +149,8 @@ private fun buttonsFor(router: InputRouter, action: NavAction): List<PadButton> 
 fun ControlsScreen(app: AppState) {
     val prefs by app.store.prefs.collectAsState()
     val router = LocalInputRouter.current
+    // On Linux the Guide button does nothing in Fuse (Steam and the desktop answer it), so it isn't offered.
+    val guideOff = app.platform.host == io.github.matiyaaa.fuse.model.Host.LINUX
     val sel = remember { LinearSelection() }
     var capturing by remember { mutableStateOf<Pair<NavAction, String>?>(null) }
     var testing by remember { mutableStateOf(false) }
@@ -169,7 +176,10 @@ fun ControlsScreen(app: AppState) {
     DisposableEffect(capturing) {
         val target = capturing
         router.capture = if (target == null) null else { button ->
-            if (button in remappable) {
+            // A direction never becomes a mapping: it calls the wait off.
+            if (button in directions) {
+                capturing = null
+            } else if (button in remappable) {
                 val next = prefs.input.withMapping(button, target.first, padButtons)
                 if (next == null) {
                     app.toasts.show("${button.label(prefs.input.glyphs == GlyphStyle.NINTENDO)} is the only button for ${if (prefs.input.actionFor(button) == NavAction.SELECT) "Confirm" else "Back"}. Map it to another button first", ToastKind.ERROR)
@@ -188,11 +198,18 @@ fun ControlsScreen(app: AppState) {
         }
     }
     // While testing, every button only lights up the test. Holding one for a moment ends the test.
+    // Taken away by what it installed: `testing` is already false when the test ends.
     DisposableEffect(testing) {
-        if (testing) {
-            router.exclusive = { button, down -> testHeld = if (down) button else if (testHeld == button) null else testHeld }
+        val mine: ((PadButton, Boolean) -> Unit)? = if (!testing) null else { button, down -> testHeld = if (down) button else if (testHeld == button) null else testHeld }
+        if (mine != null) router.exclusive = mine
+        onDispose { if (mine != null && router.exclusive === mine) router.exclusive = null }
+    }
+    // Leaving the page, however it is left (Back, touch, another screen), gives the controller back.
+    DisposableEffect(router) {
+        onDispose {
+            router.exclusive = null
+            router.capture = null
         }
-        onDispose { if (testing) router.exclusive = null }
     }
     LaunchedEffect(testHeld) {
         if (testing && testHeld != null) {
@@ -226,7 +243,7 @@ fun ControlsScreen(app: AppState) {
         }
         labelled("Actions") {
             for ((action, label, icon) in mappable) {
-                val buttons = buttonsFor(router, action)
+                val buttons = buttonsFor(router, guideOff, action)
                 add(
                     MenuAction(
                         id = action.name,
@@ -272,7 +289,7 @@ fun ControlsScreen(app: AppState) {
 
     // The action on the selected row, and the buttons it is on, for the picture of the pad.
     val selectedAction = mappable.firstOrNull { it.first.name == actions.getOrNull(sel.index)?.id }
-    val marked = selectedAction?.let { buttonsFor(router, it.first).toSet() }.orEmpty()
+    val marked = selectedAction?.let { buttonsFor(router, guideOff, it.first).toSet() }.orEmpty()
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val narrow = maxWidth < NARROW_BELOW
@@ -358,17 +375,34 @@ fun ControlsScreen(app: AppState) {
         }
         Overlay(visible = capturing != null, onDismiss = { capturing = null }, edge = OverlayEdge.CENTER) {
             val target = capturing
+            val icon = mappable.firstOrNull { it.first == target?.first }?.third ?: FuseIcons.Gamepad
+            // What it is on now, so the press that replaces it is a choice, not a guess.
+            val now = target?.let { buttonsFor(router, guideOff, it.first) }.orEmpty()
             Panel(Modifier.padding(horizontal = Space.gutterCompact).widthIn(max = CAPTURE_MAX)) {
-                Column(Modifier.padding(Space.xl), horizontalAlignment = Alignment.CenterHorizontally) {
-                    FText("Press a button for", Fuse.type.label, color = Fuse.colors.textMuted, maxLines = 1)
+                Column(Modifier.padding(horizontal = Space.xl, vertical = Space.xl), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
+                        Modifier.size(56.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(Fuse.geometry.control))
+                            .background(Fuse.colors.accent.copy(alpha = 0.16f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon(icon, size = 28.dp, tint = Fuse.colors.accent)
+                    }
+                    Spacer(Modifier.height(Space.m))
+                    FText("Press the button for", Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 1)
                     Spacer(Modifier.height(Space.xxs))
-                    FText(target?.second.orEmpty(), Fuse.type.title, maxLines = 1)
+                    FText(target?.second.orEmpty(), Fuse.type.display, maxLines = 1)
                     Spacer(Modifier.height(Space.l))
-                    // What it is on now, so the press that replaces it is a choice, not a guess.
-                    val now = target?.let { buttonsFor(router, it.first) }.orEmpty()
-                    GlyphLine(if (now.isEmpty()) "Not mapped yet" else "Now on", now, Alignment.CenterHorizontally)
+                    // The pad, with where it is now marked and every press lit as it comes.
+                    PadDiagram(pressed.toSet(), now.toSet(), nintendo, Modifier.widthIn(max = 360.dp).fillMaxWidth())
+                    Spacer(Modifier.height(Space.m))
+                    GlyphLine(if (now.isEmpty()) "Not on any button yet" else "Now on", now, Alignment.CenterHorizontally)
                     Spacer(Modifier.height(Space.l))
-                    CaptureCountdown(target)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        CaptureCountdown(target)
+                        Spacer(Modifier.width(Space.m))
+                        FText("A direction cancels", Fuse.type.caption, color = Fuse.colors.textFaint, maxLines = 1, modifier = Modifier.weight(1f))
+                        FuseButton("Cancel", selected = false, onClick = { capturing = null }, icon = FuseIcons.Close)
+                    }
                 }
             }
         }
@@ -430,6 +464,7 @@ internal fun PadDiagram(
     }
 }
 
+/** The time left to press, as a ring that empties with the seconds inside it. */
 @Composable
 private fun CaptureCountdown(key: Any?) {
     var left by remember(key) { mutableStateOf(1f) }
@@ -441,10 +476,20 @@ private fun CaptureCountdown(key: Any?) {
         }
     }
     val seconds = kotlin.math.ceil(left * CAPTURE_MS / 1000f).toInt()
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        ProgressBar(left, Modifier.weight(1f))
-        Spacer(Modifier.width(Space.m))
-        FText("$seconds s", Fuse.type.numericSmall, color = Fuse.colors.textMuted, maxLines = 1)
+    val c = Fuse.colors
+    Box(
+        Modifier.size(44.dp).drawWithCache {
+            val w = 3.dp.toPx()
+            val arc = androidx.compose.ui.geometry.Size(size.width - w, size.height - w)
+            val at = Offset(w / 2, w / 2)
+            onDrawBehind {
+                drawArc(c.textFaint.copy(alpha = 0.25f), 0f, 360f, false, at, arc, style = Stroke(w))
+                drawArc(c.accent, -90f, 360f * left, false, at, arc, style = Stroke(w, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+            }
+        },
+        contentAlignment = Alignment.Center,
+    ) {
+        FText("$seconds", Fuse.type.label, maxLines = 1)
     }
 }
 
@@ -459,4 +504,4 @@ private val PAD_MAX_WIDTH = 520.dp
 
 /** The test and capture dialogs' widest; on narrow screens they keep a margin instead. */
 private val TEST_MAX = 560.dp
-private val CAPTURE_MAX = 420.dp
+private val CAPTURE_MAX = 520.dp

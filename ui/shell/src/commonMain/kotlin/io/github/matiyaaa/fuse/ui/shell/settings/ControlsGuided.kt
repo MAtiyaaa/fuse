@@ -196,23 +196,25 @@ internal fun GuidedControls(app: AppState, buttons: List<PadButton>, label: (Pad
         if (a.advance) advance()
     }
 
+    // The controller is the guide's only while it runs. What this installs is taken away again
+    // however it ends (Stop, Finish, holding a button, leaving the page): reading `running` when it
+    // ends would say false already and leave every press caught here.
     DisposableEffect(running) {
-        if (running) {
-            router.exclusive = { button, down ->
-                if (down) {
-                    if (button !in pressed) pressed.add(button)
-                    if (held == null) held = button
-                } else {
-                    pressed.remove(button)
-                    if (held == button) {
-                        // A press let go before the time that leaves is an answer.
-                        if (holdProgress.floatValue < 1f) answer(button)
-                        held = null
-                    }
+        val mine: ((PadButton, Boolean) -> Unit)? = if (!running) null else { button, down ->
+            if (down) {
+                if (button !in pressed) pressed.add(button)
+                if (held == null) held = button
+            } else {
+                pressed.remove(button)
+                if (held == button) {
+                    // A press let go before the time that leaves is an answer.
+                    if (holdProgress.floatValue < 1f) answer(button)
+                    held = null
                 }
             }
         }
-        onDispose { if (running) router.exclusive = null }
+        if (mine != null) router.exclusive = mine
+        onDispose { if (mine != null && router.exclusive === mine) router.exclusive = null }
     }
     // Holding any button fills the ring; full, guided setup ends with every answer so far kept.
     LaunchedEffect(held, running) {
@@ -227,7 +229,7 @@ internal fun GuidedControls(app: AppState, buttons: List<PadButton>, label: (Pad
         held = null
         stop(finished = latestStep == GuideStep.Try)
     }
-    DisposableEffect(Unit) { onDispose { if (running) onRunning(false) } }
+    DisposableEffect(Unit) { onDispose { onRunning(false) } }
     // Confirm on the page (or Start under it) begins.
     LaunchedEffect(startRequests) { if (startRequests > 0 && !running) start() }
 

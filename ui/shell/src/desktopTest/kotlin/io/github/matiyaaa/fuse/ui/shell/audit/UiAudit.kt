@@ -165,6 +165,8 @@ class UiAudit {
 
     @Test fun syncI() = audit(AuditSize.I) { syncScreens() }
 
+    @Test fun settingsI() = audit(AuditSize.I) { settingsScreens(exhaustive = true) }
+
     /** What 0.2.6 added, at 1080p and on a phone held sideways. */
     @Test fun m15Details() = audit(AuditSize.M) { detailScreens() }
 

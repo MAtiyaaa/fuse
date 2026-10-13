@@ -610,7 +610,7 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         // Past "Button labels", the first action.
         focusText("Confirm")
         tap(PadButton.A)
-        waitFor("Press a button for")
+        waitFor("Press the button for")
         shoot("waiting for a button (capture mode)", 900)
         settle(5_500)
     }

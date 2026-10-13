@@ -56,6 +56,11 @@ still, the host screen that fits a small window and game folders before anything
 - **Downloaded RomM games keep RomM's details** (year, genres, developer, summary), filling only
   what the game didn't have.
 - **Ctrl+A (Cmd+A on a Mac) selects all** in text fields.
+- **Choosing a button in Controls looks the part.** The window that waits for a press shows the
+  action's icon and name in large type, a controller with its current button marked, a countdown
+  ring and a Cancel button, instead of thin lines of text.
+- **The Guide button does nothing on Linux.** The button in the middle of the controller no longer
+  takes you Home there, so it never fights the system or Steam, and Controls no longer offers it.
 
 ## Fixed
 
@@ -93,4 +98,8 @@ still, the host screen that fits a small window and game folders before anything
   it as unlinked for a moment.
 - **A Fuse One address typed in setup** shows the host by its name once found, and finds it by the
   address alone when it doesn't answer to the nearby search.
+- **The controller works again after Controls.** Finishing or stopping guided setup, leaving the
+  button test, or leaving Controls by any way (touch, mouse or controller) left the controller
+  answering only to that page, so it did nothing until you went back. It now returns to Fuse at
+  once. A direction while choosing a button cancels the choice.
 - **After a file picker, the keyboard and controller reach Fuse again** without clicking the window.

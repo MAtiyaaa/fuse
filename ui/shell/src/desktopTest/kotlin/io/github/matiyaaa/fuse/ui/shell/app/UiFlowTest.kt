@@ -387,6 +387,40 @@ class UiFlowTest {
     private fun <T : Any> assertNotNullOf(v: T?): T = kotlin.test.assertNotNull(v)
 
     @Test
+    fun theControllerIsFuseAgainOnceGuidedSetupEndsOrThePageIsLeft() = runComposeUiTest(testTimeout = FLOW_TEST_TIMEOUT) {
+        val store = runBlocking { createFuseStore(newServices(), scope) }
+        val router = InputRouter(scope)
+        mainClock.autoAdvance = false
+        val app = AppState(store, TestPlatform, scope, Route.Controls)
+        var shown by androidx.compose.runtime.mutableStateOf(true)
+        setContent {
+            io.github.matiyaaa.fuse.ui.designsystem.theme.FuseTheme {
+                androidx.compose.runtime.CompositionLocalProvider(io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter provides router) {
+                    androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.size(1280.dp, 720.dp)) {
+                        if (shown) io.github.matiyaaa.fuse.ui.shell.settings.ControlsScreen(app)
+                    }
+                }
+            }
+        }
+        fun shows(text: String) = onAllNodesWithText(text, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+        pumpUntil { shows("Set up your controller one button at a time") }
+        // Guided, then stopped from its Stop button: every press is Fuse's again.
+        router.tap(PadButton.A)
+        pumpUntil { router.exclusive != null && shows("Stop") }
+        onAllNodesWithText("Stop", useUnmergedTree = true).onFirst().performClick()
+        pumpUntil { shows("Set up your controller one button at a time") }
+        mainClock.advanceTimeBy(300)
+        assertEquals(null, router.exclusive, "the guide let the controller go")
+        // Guided again, and the page left by touch while it runs.
+        router.tap(PadButton.A)
+        pumpUntil { router.exclusive != null }
+        shown = false
+        mainClock.advanceTimeBy(300)
+        assertEquals(null, router.exclusive, "leaving the page let the controller go")
+        assertEquals(null, router.capture)
+    }
+
+    @Test
     fun settingsSearchListsAsYouTypeAndEnterGoesToTheFirst() = runComposeUiTest(testTimeout = FLOW_TEST_TIMEOUT) {
         val store = runBlocking { createFuseStore(newServices(), scope) }
         val router = InputRouter(scope)
