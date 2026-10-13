@@ -771,20 +771,16 @@ internal class DefaultMediaOps(
         return true
     }
 
+    /**
+     * A display name is only what Fuse shows ("The file keeps its name"), often a nickname, so a
+     * rename never takes a game's details or art away: a game that has them keeps them (Find Details
+     * and Art, or Reset, are there to change them). A game without any is looked up under its new name.
+     */
     override suspend fun followRename(game: GameId, previous: String): Boolean {
         val g = gameOf(game) ?: return false
-        val name = g.titles.custom ?: return false
-        val theirs = g.titles.metadata
-        val hasDetails = theirs != null || g.metadata != GameMetadata()
-        val fits = { a: String, b: String -> TitleMatcher.titleSimilarity(a, b).score >= RommGuard.MIN_TITLE }
-        val stale = when {
-            !hasDetails -> false
-            // Details carry the name they were found under: they stay while it reads like the new one.
-            theirs != null -> !fits(name, theirs)
-            // Without one, a new name that isn't the old one says they were another game's.
-            else -> !fits(name, previous)
-        }
-        if (stale) resetDetails(game) else if (hasDetails) return false
+        if (g.titles.custom == null) return false
+        val hasDetails = g.titles.metadata != null || g.metadata != GameMetadata()
+        if (hasDetails) return false
         ctx.data.cache.remove(FILL_TRIED, game.value.toString())
         fill(MediaFillMode.FILL_MISSING, MediaKind.Fillable, game = game)
         return true

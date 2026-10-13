@@ -56,6 +56,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
+import io.github.matiyaaa.fuse.ui.shell.app.rescanAndReport
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
@@ -245,7 +246,7 @@ fun PlatformSettingsScreen(app: AppState, platformId: PlatformId) {
             app.store.media.fill(MediaFillMode.FILL_MISSING, MediaKind.Fillable, platform = platformId)
             app.toasts.show("Finding missing art for ${p.shortName}")
         }))
-        add(MenuAction("rescan", "Rescan ${p.shortName}", FuseIcons.Refresh, detail = "Looks through its folders again for new and moved games", section = tools, onSelect = { app.store.sources.rescan(ScanScope.PLATFORM, platformId); app.toasts.show("Rescanning") }))
+        add(MenuAction("rescan", "Rescan ${p.shortName}", FuseIcons.Refresh, detail = "Looks through its folders again for new and moved games", section = tools, onSelect = { app.rescanAndReport(ScanScope.PLATFORM, platformId, what = p.shortName) }))
     }
     sel.keepOn(rows.map { it.id })
     sel.clamp(rows.size)

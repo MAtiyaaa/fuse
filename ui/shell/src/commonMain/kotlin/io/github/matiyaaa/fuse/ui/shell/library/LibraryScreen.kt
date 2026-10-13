@@ -116,6 +116,7 @@ import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
 import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 import io.github.matiyaaa.fuse.ui.fuseline.tween
+import io.github.matiyaaa.fuse.ui.shell.app.rescanAndReport
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.addToSteam
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
@@ -1398,9 +1399,8 @@ private fun viewActions(
             app.closeOverlays()
         }),
         MenuAction("rescan", if (platform != null) "Rescan this system" else "Rescan library", FuseIcons.Refresh, onSelect = {
-            app.store.sources.rescan(ScanScope.PLATFORM, platform)
             app.closeOverlays()
-            app.toasts.show("Rescanning in the background")
+            app.rescanAndReport(ScanScope.PLATFORM, platform, what = if (platform != null) "this system" else "your library")
         }),
     ) + if (platform != null) listOf(
         MenuAction("sys", "System settings", FuseIcons.Settings, trailing = Trailing.Chevron, onSelect = {

@@ -103,6 +103,7 @@ import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 import io.github.matiyaaa.fuse.ui.fuseline.spring
 import io.github.matiyaaa.fuse.ui.fuseline.togetherWith
+import io.github.matiyaaa.fuse.ui.shell.app.rescanAndReport
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
@@ -901,7 +902,7 @@ fun AppState.systemMenu(card: PlatformCard, onMove: (() -> Unit)? = null): Conte
             MenuAction("folder", "ROM Folders", FuseIcons.Folder, detail = card.romFolders.joinToString("\n").ifBlank { "None found" }, onSelect = {}),
             MenuAction("bios", "BIOS and Firmware", FuseIcons.Key, trailing = Trailing.Chevron, onSelect = { closeOverlays(); go(Route.PlatformSettings(p.id)) }),
             MenuAction("rescan", "Rescan", FuseIcons.Refresh, onSelect = {
-                closeOverlays(); store.sources.rescan(ScanScope.PLATFORM, p.id); toasts.show("Rescanning ${p.shortName}")
+                closeOverlays(); rescanAndReport(ScanScope.PLATFORM, p.id, what = p.shortName)
             }),
             if (!store.cartridge.status.value.installed) null else MenuAction("cartridge", "Browse in Cartridge", FuseIcons.CloudDownload, onSelect = {
                 closeOverlays(); store.cartridge.open(CartridgeRoute.Platform(p.id.value))

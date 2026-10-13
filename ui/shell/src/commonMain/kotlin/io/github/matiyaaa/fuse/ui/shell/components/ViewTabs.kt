@@ -45,6 +45,7 @@ import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
@@ -112,6 +113,11 @@ fun ViewTabs(
     modifier: Modifier = Modifier,
     gutter: Dp = Space.gutter,
     reorder: TabReorder? = null,
+    /**
+     * For a narrow place (an options panel): tabs other than the active one show only their icon,
+     * so every tab fits the row instead of the last ones running off its edge.
+     */
+    compact: Boolean = false,
 ) {
     val c = Fuse.colors
     val motion = Fuse.motion
@@ -187,6 +193,7 @@ fun ViewTabs(
                     item,
                     active = i == active,
                     focused = i == focused || held,
+                    iconOnly = compact && i != active && item.icon != null,
                     modifier = Modifier
                         .bringIntoViewRequester(requester)
                         .onPlaced {
@@ -269,6 +276,7 @@ private fun TabLabel(
     tab: ViewTab,
     active: Boolean,
     focused: Boolean,
+    iconOnly: Boolean = false,
     modifier: Modifier = Modifier,
     onName: (Float) -> Unit,
     onClick: () -> Unit,
@@ -292,7 +300,7 @@ private fun TabLabel(
         modifier
             .fuseClickable(shape = shape, role = Role.Tab, onClick = onClick)
             .lineFocus(shape, { focus }, lineFocusFill(), c.focus)
-            .semantics { this.selected = focused }
+            .semantics { this.selected = focused; contentDescription = tab.label }
             .padding(horizontal = TAB_PAD, vertical = Space.s),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -300,11 +308,18 @@ private fun TabLabel(
             Modifier.onPlaced { onName(pad + it.positionInParent().x + it.size.width / 2f) },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (tab.icon != null) {
-                FuseIcon(tab.icon, tint = { tint }, size = Size.iconS)
-                Spacer(Modifier.width(Space.s - Space.xxs))
+            if (tab.icon != null) FuseIcon(tab.icon, tint = { tint }, size = Size.iconS)
+            // A compact row names only the active tab; the name opens out beside its icon as it is chosen.
+            Appear(
+                visible = !iconOnly,
+                enter = expandHorizontally(motion.enter(Durations.BASE)) + fadeIn(motion.fade(Durations.BASE)),
+                exit = shrinkHorizontally(motion.exit(Durations.FAST)) + fadeOut(motion.fade(Durations.INSTANT)),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (tab.icon != null) Spacer(Modifier.width(Space.s - Space.xxs))
+                    FText(tab.label, Fuse.type.titleSmall, color = { tint }, maxLines = 1)
+                }
             }
-            FText(tab.label, Fuse.type.titleSmall, color = { tint }, maxLines = 1)
         }
         Appear(
             visible = tab.badge != null,

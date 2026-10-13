@@ -742,6 +742,7 @@ internal class DefaultRommOps(
             year = record?.metadata?.releaseYear ?: r.year,
             discs = RommContent.parts(r).count { it.disc != null },
             rommRomId = r.id,
+            customTitle = record?.titleCustom != null,
         )
     }
 

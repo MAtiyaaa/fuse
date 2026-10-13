@@ -44,6 +44,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks
+import io.github.matiyaaa.fuse.ui.shell.app.rescanAndReport
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.checkSteamGames
 import io.github.matiyaaa.fuse.ui.shell.app.refreshSteamGames
@@ -508,10 +509,10 @@ fun libraryRows(app: AppState): List<MenuAction> {
         }
         labelled("Scanning") {
             add(MenuAction("scan", "Scan for changes", FuseIcons.Refresh, detail = "Only folders that changed. Also runs whenever you return to Fuse", trailing = Trailing.Value(scan.phase.name.lowercase().replaceFirstChar { it.uppercase() }), onSelect = {
-                app.store.sources.rescan(ScanScope.QUICK); app.toasts.show("Scanning")
+                app.rescanAndReport(ScanScope.QUICK, what = "changed folders")
             }))
             add(app.confirmRow("fullscan", "Full rescan", FuseIcons.RefreshDot, "Rescan everything?", "Fuse reads every folder again. It can take a while on large libraries; you can keep using Fuse meanwhile. Your edits are kept.", "Rescan", detail = "Every folder, read again. Your edits are kept") {
-                app.store.sources.rescan(ScanScope.FULL)
+                app.rescanAndReport(ScanScope.FULL, what = "every folder")
             })
             add(MenuAction("bios", "Check BIOS again", FuseIcons.Key, detail = "After adding firmware to a BIOS folder", onSelect = { app.store.sources.refreshBios(); app.toasts.show("Checking BIOS files") }))
         }

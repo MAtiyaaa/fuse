@@ -409,7 +409,7 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
                 "ps2" -> add(MenuAction("patches", "Patches, Cheats and Textures", FuseIcons.Bandage, detail = "Widescreen, 60 FPS and other fixes, cheats, and texture packs of your own, in its emulator's own folders", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
                 "psx" -> add(MenuAction("patches", "Patches, Cheats and Textures", FuseIcons.Bandage, detail = "Widescreen and other fixes, cheats, and texture packs of your own, in its emulator's own folders", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
                 "psp" -> add(MenuAction("patches", "Cheats and Textures", FuseIcons.Wand, detail = "This game's cheats, and texture packs of your own, in its emulator's own folders", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
-                else -> if (retroArch) add(MenuAction("patches", "Cheats", FuseIcons.Wand, detail = "This game's cheats in RetroArch, for its next start", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
+                else -> if (retroArch) add(MenuAction("patches", "Cheats", FuseIcons.Wand, detail = "This game's cheats, used when it starts in RetroArch", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
             }
             // The emulator's own settings for this game, where Fuse can change them.
             if (card.platformId.value in setOf("ps2", "psx", "psp")) {
@@ -428,8 +428,7 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         }
         add(MenuAction("rescrape", "Find Details and Art", FuseIcons.Wand, detail = "Fills what's missing, including a proper title. Your own art and names stay", onSelect = {
             closeOverlays()
-            store.media.fill(MediaFillMode.FILL_MISSING, MediaKind.Fillable, game = card.id)
-            toasts.show("Looking for details and art for ${card.title}")
+            findDetailsAndReport(card)
         }))
         add(MenuAction("rename", "Rename Display Title", FuseIcons.TextCursor, detail = "The file keeps its name", onSelect = {
             closeOverlays()
@@ -443,15 +442,26 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
                 }
             }
         }))
+        // A name of the person's own: one press puts back the one it had.
+        if (card.customTitle) {
+            add(MenuAction("restoretitle", "Restore Original Title", FuseIcons.Undo, detail = "Shows the name its details or file give it again", onSelect = {
+                closeOverlays()
+                scope.launch {
+                    lib.rename(card.id, null)
+                    toasts.show("Its original title is back")
+                }
+            }))
+        }
         if (!card.isApp) {
-            add(MenuAction("reset", "Reset Name and Details", FuseIcons.RotateCcw, detail = "For a game mixed up with another. Your own name and art stay", onSelect = {
+            add(MenuAction("reset", "Reset Name and Details", FuseIcons.RotateCcw, detail = "For a game mixed up with another. The art you chose stays", onSelect = {
                 closeOverlays()
                 confirm = ConfirmSpec(
                     "Reset ${card.title}?",
-                    "Fuse forgets the name, details and art sources gave this game and goes back to its file name. Your own name and the art you chose stay. Find Details and Art looks again.",
+                    "Fuse forgets the names (yours too) and the details and art sources gave this game, and it goes back to its file name. The art you chose stays. Find Details and Art looks again.",
                     "Reset",
                 ) {
                     scope.launch {
+                        lib.rename(card.id, null)
                         if (store.media.resetDetails(card.id)) toasts.show("Reset. It goes by its file name again")
                     }
                 }
@@ -498,7 +508,7 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
                 if (!card.isApp) add(MenuAction("upload", "Upload to RomM", FuseIcons.Upload, detail = "Through Cartridge, with its other discs, DLC and updates", onSelect = { uploadToRomm(card) }))
             }
         }
-        add(MenuAction("hide", "Hide", FuseIcons.EyeOff, onSelect = { run { lib.setHidden(card.id, true); toasts.show("Hidden. Show hidden games from Library options.") } }))
+        add(MenuAction("hide", "Hide", FuseIcons.EyeOff, onSelect = { run { lib.setHidden(card.id, true); toasts.show("Hidden. It's in the Library's Hidden tab") } }))
         if (card.isApp) {
             add(MenuAction("notgame", "Not a game", FuseIcons.AppWindow, detail = "Leaves your games and stays in Apps", onSelect = {
                 run { lib.removeFromFuse(card.id); toasts.show("${card.title} is an app again. It's in Apps") }
@@ -520,7 +530,7 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
             MenuTab("Game", FuseIcons.Gamepad, listOf("play", "info", "fav", "collection", "pin", "steam", "reach.send", "hide", "notgame", "remove") + extra.map { it.id }),
             MenuTab("Saves", FuseIcons.Save, listOf("savesync", "saves")),
             MenuTab("Setup", FuseIcons.Sliders, listOf("system", "emulator", "emusettings", "patches", "parts", "packages", "screen", "compat", "folder", "patch", "move")),
-            MenuTab("Details", FuseIcons.Images, listOf("media", "rescrape", "rename", "reset", "romm.upload", "cartridge", "find", "upload")),
+            MenuTab("Details", FuseIcons.Images, listOf("media", "rescrape", "rename", "restoretitle", "reset", "romm.upload", "cartridge", "find", "upload")),
         ),
     )
 }
@@ -753,6 +763,33 @@ private val PACKAGE_SYSTEMS = setOf("ps3", "psvita", "3ds", "new-nintendo-3ds")
  * check for each that is on. Fuse turns on any that are off and turns off only those it turned on;
  * ones set in the emulator say so and stay as they are.
  */
+/**
+ * Find Details and Art for one game, and once it ends what it found: art and details added, a choice
+ * waiting in Identify game, sources resting, or that nothing more was out there.
+ */
+fun AppState.findDetailsAndReport(card: GameCard) {
+    val media = store.media
+    media.fill(MediaFillMode.FILL_MISSING, MediaKind.Fillable, game = card.id)
+    toasts.show("Looking for details and art for ${card.title}")
+    scope.launch {
+        // This fill: started (not finished), then finished.
+        kotlinx.coroutines.withTimeoutOrNull(5_000) { media.fillProgress.first { it != null && !it.finished } } ?: return@launch
+        val end = kotlinx.coroutines.withTimeoutOrNull(10 * 60_000L) { media.fillProgress.first { it == null || it.finished } } ?: return@launch
+        toasts.show(
+            when {
+                end == null || end.cancelled -> return@launch
+                end.needsYou.isNotEmpty() -> "Several games match ${card.title}. Choose it in Identify game"
+                end.added > 0 || end.details > 0 -> listOfNotNull(
+                    if (end.added > 0) "${end.added} ${if (end.added == 1) "image" else "images"}" else null,
+                    if (end.details > 0) "its details" else null,
+                ).joinToString(" and ").replaceFirstChar { it.uppercase() } + " found for ${card.title}"
+                end.paused.isNotEmpty() -> "Nothing new for now: ${end.paused.joinToString(", ")} ${if (end.paused.size == 1) "is" else "are"} resting. Try again later"
+                else -> "${card.title} already has everything the sources offer"
+            },
+        )
+    }
+}
+
 fun AppState.gamePatchPicker(card: GameCard) {
     contextMenu = null
     scope.launch {
