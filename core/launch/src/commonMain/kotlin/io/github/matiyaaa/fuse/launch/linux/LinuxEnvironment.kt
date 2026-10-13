@@ -26,6 +26,9 @@ interface LinuxEnvironment {
      */
     fun flatpakApps(): Set<String>
 
+    /** Installed Flatpak apps' versions, by id (those that report one); empty where not known. */
+    fun flatpakVersions(): Map<String, String> = emptyMap()
+
     /** Text of a small file (a `.desktop` shortcut or id file), or null. */
     fun readText(path: String): String?
 
