@@ -412,9 +412,11 @@ class ServiceTest {
         assertEquals("Pokemon Ruby", thor.nowPlaying.value)
         val started = System.currentTimeMillis()
         thor.playing(tq, started)
+        // Listening before the save is written, so a quick send is never missed; a slow machine gets time.
+        val sending = async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { withTimeout(30_000) { thor.notices.first { it is SyncNotice.Sent } } }
         File(thorRoms, "ruby.sav").writeText("thor: saved at the pokemon center")
         // The save leaves while the game still runs (the lid closes now; the game never stops there).
-        val sent = withTimeout(10_000) { thor.notices.first { it is SyncNotice.Sent } }
+        val sent = sending.await()
         assertTrue((sent as SyncNotice.Sent).live)
         // The PC sees the Thor on it, and what to expect.
         val busy = assertIs<LaunchGate.Busy>(pc.beforeLaunch(pq))
@@ -446,10 +448,13 @@ class ServiceTest {
         val q = SaveQuery(ct, "gba", File(roms, "ruby.gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby")
         val started = System.currentTimeMillis()
         deck.playing(q, started)
+        // Listening before each save is written, so a quick send is never missed; a slow machine gets time.
+        val first = async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { withTimeout(30_000) { deck.notices.first { it is SyncNotice.Sent } } }
         File(roms, "ruby.sav").writeText("one")
-        withTimeout(10_000) { deck.notices.first { it is SyncNotice.Sent } }
+        first.await()
+        val second = async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { withTimeout(30_000) { deck.notices.first { it is SyncNotice.Sent } } }
         File(roms, "ruby.sav").writeText("two")
-        withTimeout(10_000) { deck.notices.first { it is SyncNotice.Sent } }
+        second.await()
         deck.afterExit(q, started, System.currentTimeMillis())
         // On the PC: the newest, no conflict.
         val pcRoms = File(root, "pc-roms").apply { mkdirs() }
