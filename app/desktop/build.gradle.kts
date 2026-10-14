@@ -194,3 +194,8 @@ compose.desktop {
         }
     }
 }
+
+// Tests reach the X11 toolkit as the packaged Fuse does (GamescopeComposite, the window class).
+tasks.withType<Test>().configureEach {
+    jvmArgs("--add-opens=java.desktop/sun.awt.X11=ALL-UNNAMED")
+}

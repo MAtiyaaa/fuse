@@ -147,6 +147,79 @@ internal class DesktopEmulatorDetector(
         DesktopOs.MACOS -> MacDetector.retroArchCoreDirs(files, installed).any(files::isDirectory)
     }
 
+    /** RetroArch's core folders for [installed], in the order it reads them. */
+    private fun coreDirs(installed: InstalledEmulator): List<String> = when (os) {
+        DesktopOs.LINUX -> LinuxDetector.retroArchCoreDirs(env, installed)
+        DesktopOs.WINDOWS -> WindowsDetector.retroArchCoreDirs(files, installed)
+        DesktopOs.MACOS -> MacDetector.retroArchCoreDirs(files, installed)
+    }
+
+    private val host: io.github.matiyaaa.fuse.model.Host get() = when (os) {
+        DesktopOs.LINUX -> io.github.matiyaaa.fuse.model.Host.LINUX
+        DesktopOs.WINDOWS -> io.github.matiyaaa.fuse.model.Host.WINDOWS
+        DesktopOs.MACOS -> io.github.matiyaaa.fuse.model.Host.MACOS
+    }
+
+    /** The folder a downloaded core goes in: the person's own cores folder that RetroArch reads (see RetroArchBuildbot). */
+    private fun coreInstallFolder(installed: InstalledEmulator): String? {
+        if (!installed.id.value.substringAfter('.').startsWith("retroarch")) return null
+        // A Steam copy keeps its cores as Steam's own downloads: Steam installs them, not Fuse.
+        if (installed.detectedVia.contains("Steam", ignoreCase = true)) return null
+        return io.github.matiyaaa.fuse.launch.RetroArchBuildbot.installFolder(coreDirs(installed), env.homeDir) { File(it).isDirectory }
+    }
+
+    override fun canInstallRetroArchCore(installed: InstalledEmulator): Boolean =
+        coreInstallFolder(installed) != null && io.github.matiyaaa.fuse.launch.RetroArchBuildbot.folder(host, System.getProperty("os.arch").orEmpty()) != null
+
+    override suspend fun installRetroArchCore(installed: InstalledEmulator, core: String): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            val folder = coreInstallFolder(installed) ?: error("Fuse can't put cores where ${installed.name} reads them.")
+            val url = io.github.matiyaaa.fuse.launch.RetroArchBuildbot.url(host, System.getProperty("os.arch").orEmpty(), core)
+                ?: error("libretro has no build of this core for this computer.")
+            val name = io.github.matiyaaa.fuse.launch.RetroArchCores.coreFile(host, core)
+            val client = java.net.http.HttpClient.newBuilder()
+                .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
+                .connectTimeout(java.time.Duration.ofSeconds(20))
+                .build()
+            val request = java.net.http.HttpRequest.newBuilder(java.net.URI(url)).timeout(java.time.Duration.ofMinutes(5)).GET().build()
+            val response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofInputStream())
+            if (response.statusCode() != 200) {
+                response.body().close()
+                error("libretro didn't have it (HTTP ${response.statusCode()}).")
+            }
+            val dir = File(folder).apply { mkdirs() }
+            val target = File(dir, name)
+            val tmp = File(dir, ".$name.fuse-download")
+            var found = false
+            java.util.zip.ZipInputStream(response.body().buffered()).use { zip ->
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    // The library itself, never a path out of the folder.
+                    if (entry.isDirectory || entry.name.substringAfterLast('/') != name) continue
+                    tmp.outputStream().use { out -> zip.copyTo(out) }
+                    found = true
+                    break
+                }
+            }
+            if (!found) {
+                tmp.delete()
+                error("libretro's download held no $name.")
+            }
+            val head = tmp.inputStream().use { it.readNBytes(8) }
+            if (!io.github.matiyaaa.fuse.launch.RetroArchBuildbot.looksLikeLibrary(host, head)) {
+                tmp.delete()
+                error("What libretro sent isn't a core.")
+            }
+            try {
+                java.nio.file.Files.move(tmp.toPath(), target.toPath(), java.nio.file.StandardCopyOption.ATOMIC_MOVE, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            } catch (e: java.nio.file.AtomicMoveNotSupportedException) {
+                java.nio.file.Files.move(tmp.toPath(), target.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            }
+            Log.info("RetroArch core $core installed into $folder")
+            target.absoluteFile.fusePath
+        }.onFailure { Log.warn("RetroArch core $core: not installed", it) }
+    }
+
     override val homeDir: String get() = env.homeDir
 
     override val canLocate: Boolean get() = os != DesktopOs.LINUX

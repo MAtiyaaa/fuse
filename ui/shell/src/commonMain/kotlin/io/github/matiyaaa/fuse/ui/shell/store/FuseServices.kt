@@ -224,6 +224,16 @@ interface EmulatorDetector {
      */
     fun retroArchCoresVisible(installed: InstalledEmulator): Boolean = false
 
+    /** Desktop: whether Fuse can download a core into [installed]'s own cores folder (see RetroArchBuildbot). */
+    fun canInstallRetroArchCore(installed: InstalledEmulator): Boolean = false
+
+    /**
+     * Downloads [core] from libretro's buildbot into [installed]'s cores folder, as RetroArch's own
+     * Core Downloader would. The core's path when it worked, else why not.
+     */
+    suspend fun installRetroArchCore(installed: InstalledEmulator, core: String): Result<String> =
+        Result.failure(IllegalStateException("Cores can't be downloaded here."))
+
     /** Linux: the user's home directory, for `~` in emulator paths. */
     val homeDir: String? get() = null
 

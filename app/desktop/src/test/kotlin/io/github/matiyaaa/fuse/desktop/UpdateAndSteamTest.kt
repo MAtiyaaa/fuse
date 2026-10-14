@@ -106,8 +106,15 @@ class UpdateAndSteamTest {
             assertTrue(File(grid, "$name.png").isFile, name)
         }
         assertFalse(File(grid, "${otherId}p.png").exists(), "another program's entry is left alone")
-        // The list itself is never written: safe while Steam runs.
-        assertTrue(File(config, "shortcuts.vdf").readBytes().contentEquals(vdf))
+        // With Steam closed, the entry Steam made without an icon is given Fuse's; nothing else changes.
+        val list = io.github.matiyaaa.fuse.library.steam.BinaryVdf.parse(File(config, "shortcuts.vdf").readBytes())!!["shortcuts"] as io.github.matiyaaa.fuse.library.steam.BinaryVdf.Block
+        fun icon(i: String) = ((list[i] as io.github.matiyaaa.fuse.library.steam.BinaryVdf.Block)["icon"] as io.github.matiyaaa.fuse.library.steam.BinaryVdf.Str).value
+        assertEquals(File(grid, "${fuseId}_icon.png").absolutePath, icon("1"))
+        assertEquals("", icon("0"))
+        // Once given, starting again writes nothing.
+        val after = File(config, "shortcuts.vdf").readBytes()
+        DesktopSteam(KnownFolders(root.path, io.github.matiyaaa.fuse.desktop.system.DesktopOs.LINUX)).dressEntries()
+        assertTrue(File(config, "shortcuts.vdf").readBytes().contentEquals(after))
     }
 
     @Test

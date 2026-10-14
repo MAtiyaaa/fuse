@@ -920,7 +920,7 @@ private fun RootPage(app: AppState, d: Destination) {
         Destination.LIBRARY -> LibraryScreen(app, LibraryScope.All)
         Destination.SYSTEMS -> SystemsScreen(app)
         Destination.ACHIEVEMENTS -> io.github.matiyaaa.fuse.ui.shell.achievements.AchievementsScreen(app)
-        Destination.APPS -> AppsScreen(app)
+        Destination.APPS -> if (app.emulatorsSection) io.github.matiyaaa.fuse.ui.shell.apps.EmulatorsScreen(app) else AppsScreen(app)
         Destination.CARTRIDGE -> if (app.sections.addons) io.github.matiyaaa.fuse.ui.shell.addons.AddonsScreen(app) else CartridgeScreen(app)
     }
 }

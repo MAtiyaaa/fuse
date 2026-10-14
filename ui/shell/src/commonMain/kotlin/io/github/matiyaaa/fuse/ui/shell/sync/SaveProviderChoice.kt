@@ -36,7 +36,7 @@ internal object SaveProviders {
 
     fun detail(p: SaveProvider): String = when (p) {
         SaveProvider.FUSE_ONE -> "Fuse's own: each person's saves, play time and save history, from your host"
-        SaveProvider.ROMM -> "Games from RomM keep their save in step with RomM's"
+        SaveProvider.ROMM -> "Games from RomM keep their save and save states in step with RomM's"
         SaveProvider.SYNCTHING -> "Your emulators' save folders, through the Syncthing you run"
         SaveProvider.OFF -> "Saves stay on this device. Your other devices keep syncing"
     }
@@ -91,7 +91,7 @@ private fun chosenWords(app: AppState, p: SaveProvider): String {
     val prefs = app.store.prefs.value
     return when (p) {
         SaveProvider.FUSE_ONE -> if (prefs.sync.enabled && prefs.sync.role.isNotEmpty()) "Fuse One moves this device's saves" else "Fuse One moves this device's saves once it's set up"
-        SaveProvider.ROMM -> if (prefs.romm.enabled && prefs.romm.configured) "RomM moves this device's saves for games from RomM" else "RomM moves this device's saves once you sign in"
+        SaveProvider.ROMM -> if (prefs.romm.enabled && prefs.romm.configured) "RomM moves this device's saves and save states for games from RomM" else "RomM moves this device's saves and save states once you sign in"
         SaveProvider.SYNCTHING -> "Syncthing moves this device's save folders"
         SaveProvider.OFF -> "Save Sync is off on this device. Your other devices keep syncing"
     }

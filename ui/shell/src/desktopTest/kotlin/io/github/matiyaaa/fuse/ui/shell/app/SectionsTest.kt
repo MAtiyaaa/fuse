@@ -56,4 +56,12 @@ class SectionsTest {
         assertFalse(android.offersTab(Destination.HOME, offers = true, prefs = UiPrefs()))
         assertFalse(android.showsTab(Destination.APPS, offers = false, status = installed))
     }
+
+    @Test
+    fun onAComputerAppsIsEmulators() {
+        val computer = Sections(addons = false, emulators = true)
+        assertEquals("Emulators", computer.label(Destination.APPS))
+        assertEquals(FuseIcons.Joystick, computer.icon(Destination.APPS))
+        assertEquals("Apps", android.label(Destination.APPS))
+    }
 }

@@ -361,6 +361,8 @@ sealed interface ProblemAction {
     data class OpenGame(val game: GameId, override val label: String) : ProblemAction
     /** A system's missing firmware from the person's own RomM server, through RomM. */
     data class BiosFromRomm(val platform: io.github.matiyaaa.fuse.model.PlatformId, val name: String, override val label: String = "Download from RomM") : ProblemAction
+    /** Downloads a RetroArch core into it (from libretro's buildbot), then tries the game again. */
+    data class InstallCore(val emulator: EmulatorId, val core: String, override val label: String) : ProblemAction
     /** The game's Installed Content page, to install it into its emulator. */
     data class InstallContent(val game: GameId, override val label: String = "Install it") : ProblemAction
     data class AdoptDrive(val source: io.github.matiyaaa.fuse.model.LibrarySourceId, override val label: String = "It's the same library") : ProblemAction

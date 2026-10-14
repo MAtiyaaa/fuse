@@ -77,11 +77,23 @@ fun main(args: Array<String>) {
     // Fuse Player plays on FFmpeg here.
     io.github.matiyaaa.fuse.ui.player.FusePlayer.engineFactory = { io.github.matiyaaa.fuse.ui.player.ffmpeg.FfmpegEngine() }
     val dirs = FuseDirs.fromEnvironment()
+    // One Fuse at a time: a second start brings the first to the front, or takes its place (see
+    // SingleInstance); a start that plays a game (--play) takes its place. Before the log, so a
+    // start that leaves doesn't turn the running one's log over.
+    val guard = io.github.matiyaaa.fuse.desktop.system.SingleInstance(instanceFolder(dirs))
+    val claim = guard.claim(System.getenv("SteamGameId")?.takeIf { it.isNotBlank() }, replace = io.github.matiyaaa.fuse.desktop.system.SingleInstance.REPLACE in args || "--play" in args)
+    if (claim is io.github.matiyaaa.fuse.desktop.system.SingleInstance.Decision.Handed) kotlin.system.exitProcess(0)
+    instance = guard
     dirs.eraseIfAsked()
     dirs.ensure()
     Log.toFile(java.io.File(dirs.data, "logs"))
     CrashLog(java.io.File(dirs.data, "crash")).install()
     Log.info("Fuse ${BuildInfo.VERSION} starting")
+    when (claim) {
+        is io.github.matiyaaa.fuse.desktop.system.SingleInstance.Decision.Replaced -> Log.info("took the place of the Fuse already running" + if (claim.ended) " (it had to be ended)" else "")
+        is io.github.matiyaaa.fuse.desktop.system.SingleInstance.Decision.Unguarded -> Log.warn("not guarded against a second Fuse: ${claim.why}")
+        else -> Unit
+    }
     // A stalled interface thread writes what it was doing into the log.
     io.github.matiyaaa.fuse.desktop.system.UiWatchdog().start()
     // Without a screen to open a window on, one plain sentence instead of the toolkit's error.
@@ -105,6 +117,11 @@ fun main(args: Array<String>) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     try {
         runWindow(dirs, args, scope)
+        // The window is closed: Fuse is done, whatever thread something left running, so no Fuse
+        // stays behind without a window (Steam would think it still runs).
+        guard.release()
+        Log.info("Fuse closed")
+        kotlin.system.exitProcess(0)
     } catch (e: Throwable) {
         // The display went away as the window opened (or the toolkit couldn't reach it): the same plain sentence.
         if (!NoDisplay.isDisplayError(e)) throw e
@@ -114,10 +131,33 @@ fun main(args: Array<String>) {
     }
 }
 
+/** The single-instance guard this Fuse holds, once it holds it. */
+private var instance: io.github.matiyaaa.fuse.desktop.system.SingleInstance? = null
+
+/**
+ * Where the single-instance lock lives: outside Fuse's own folders (Erase Everything deletes those
+ * while the Fuse before it may still hold the lock), one for each person and data folder.
+ */
+private fun instanceFolder(dirs: FuseDirs): java.io.File {
+    val base = System.getenv("XDG_RUNTIME_DIR")?.takeIf { it.isNotBlank() && java.io.File(it).isDirectory } ?: System.getProperty("java.io.tmpdir")
+    val user = System.getProperty("user.name").orEmpty().filter { it.isLetterOrDigit() }.ifEmpty { "user" }
+    val key = Integer.toHexString(java.io.File(dirs.data).absolutePath.hashCode())
+    return java.io.File(base, "fuse-$user-$key")
+}
+
 private fun runWindow(dirs: FuseDirs, args: Array<String>, scope: CoroutineScope) {
     application {
-        val session = remember { DesktopSession(dirs, args.toList(), scope).also { it.start() } }
+        val session = remember { DesktopSession(dirs, args.filter { it != io.github.matiyaaa.fuse.desktop.system.SingleInstance.REPLACE }, scope).also { it.start() } }
         session.exit = ::exitApplication
+        DisposableEffect(session) {
+            instance?.onShow = { java.awt.EventQueue.invokeLater { session.raise() } }
+            instance?.onQuit = {
+                java.awt.EventQueue.invokeLater { session.exit() }
+                // A Fuse that can't close in time is ended, so the one taking its place isn't kept waiting.
+                Thread({ Thread.sleep(4_000); Runtime.getRuntime().halt(0) }, "fuse-quit").apply { isDaemon = true; start() }
+            }
+            onDispose { instance?.onShow = {}; instance?.onQuit = {} }
+        }
         DisposableEffect(session) { onDispose { session.close() } }
         FuseWindow(session)
     }
@@ -137,7 +177,8 @@ private fun goBackFromAFailedUpdate(dirs: FuseDirs, args: Array<String>) {
         java.io.File(dirs.data, io.github.matiyaaa.fuse.desktop.services.UpdateTrial.NOTE)
             .writeText("Fuse ${start.version} didn't start properly, so Fuse went back to $before.")
     }
-    if (io.github.matiyaaa.fuse.desktop.system.Processes.spawn(listOf(start.target) + args.filter { it.startsWith("--") }) != null) {
+    val pass = args.filter { it.startsWith("--") && it != io.github.matiyaaa.fuse.desktop.system.SingleInstance.REPLACE }
+    if (io.github.matiyaaa.fuse.desktop.system.Processes.spawn(listOf(start.target) + pass + io.github.matiyaaa.fuse.desktop.system.SingleInstance.REPLACE) != null) {
         kotlin.system.exitProcess(0)
     }
 }
@@ -212,9 +253,14 @@ private suspend fun probeRenderer(session: DesktopSession, window: java.awt.Wind
     watchFrames(layer)
     // A TV's picture processing smooths a faint dither away and leaves the bands: a stronger one there.
     io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.largeOutput = profile.largeOutput || kind == io.github.matiyaaa.fuse.desktop.system.DisplaySession.STEAM_GAME_MODE
-    val note = if (profile.upscaled) "Shown at ${w}x$h and scaled up to ${output?.first ?: mode.width}x${output?.second ?: mode.height}, which looks soft. " +
-        "In Steam, Fuse's Properties, General, set Game Resolution to Native" else null
+    // In Game Mode gamescope composes Fuse in 10 bits instead of scanning its 8-bit picture out as is (see GamescopeComposite).
+    io.github.matiyaaa.fuse.desktop.system.GamescopeComposite.enable(kind)
     val report = io.github.matiyaaa.fuse.desktop.system.GraphicsReport
+    // A 4K screen at 120 Hz over HDMI on Linux gets reduced colour, whose bands nothing in Fuse can hide.
+    val screen = io.github.matiyaaa.fuse.desktop.system.RenderScale.outputs().singleOrNull()
+    val colour = io.github.matiyaaa.fuse.desktop.system.HdmiColour.note(screen?.connector, screen?.width ?: 0, screen?.height ?: 0, profile.refreshHz, report.driver(info))
+    val note = if (profile.upscaled) "Shown at ${w}x$h and scaled up to ${output?.first ?: mode.width}x${output?.second ?: mode.height}, which looks soft. " +
+        "In Steam, Fuse's Properties, General, set Game Resolution to Native" else colour
     val verdict = io.github.matiyaaa.fuse.desktop.system.Renderer.classify(api, info)
     // Asked only when drawing on the processor: whether the computer's own OpenGL uses the card.
     val system = if (gpu) null else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { report.systemRenderer() }
@@ -241,8 +287,9 @@ private suspend fun probeRenderer(session: DesktopSession, window: java.awt.Wind
             }
         }
         note?.let { add("Note" to it) }
+        if (colour != null && colour != note) add("Colour" to colour)
     }
-    Log.info("Display: ${kind.name.lowercase()}, window ${w}x$h, output ${output?.first ?: mode.width}x${output?.second ?: mode.height} at ${profile.refreshHz} Hz, large ${profile.largeOutput}, upscaled ${profile.upscaled}")
+    Log.info("Display: ${kind.name.lowercase()}, window ${w}x$h, output ${output?.first ?: mode.width}x${output?.second ?: mode.height} at ${profile.refreshHz} Hz, large ${profile.largeOutput}, upscaled ${profile.upscaled}, connector ${screen?.connector ?: "unknown"}" + if (colour != null) ", reduced colour likely" else "")
     session.platform.noteRenderer(api, info, note, details)
     UiRenderTrace.renderer = api
 }

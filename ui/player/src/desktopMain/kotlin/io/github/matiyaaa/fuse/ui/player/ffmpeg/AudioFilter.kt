@@ -27,9 +27,11 @@ import org.bytedeco.javacpp.BytePointer
  * Surround folds down in floating point. Straight to 16-bit, FFmpeg's resampler scales the whole
  * mix down so no channel sum can pass full scale (swresample's rematrix_maxval): a 5.1 film came out
  * about 8 dB quieter, its dialogue in the centre channel quieter still, which is what made Jellyfin
- * films faint on a TV. In floating point the mix keeps the standard levels (centre and surrounds at
- * -3 dB), and a peak limiter (alimiter, auto level off) catches the rare peak a full mix would push
- * past full scale, so nothing clips. Every stream, stereo too, is then evened out (see [LEVEL]).
+ * films faint on a TV. In floating point the mix keeps its levels, with the centre channel (where
+ * films put the dialogue) at full level in each side instead of the textbook -3 dB, the way a TV's
+ * clear-voice setting folds it down. A peak limiter (alimiter, auto level off) catches the rare peak
+ * a full mix would push past full scale, so nothing clips. Every stream, stereo too, is then evened
+ * out (see [LEVEL]).
  */
 internal class AudioFilter {
     private var graph: AVFilterGraph? = null
@@ -37,18 +39,27 @@ internal class AudioFilter {
     private var sink: AVFilterContext? = null
     private var key: String? = null
     private val out: AVFrame = av_frame_alloc()
+    private val layoutName = BytePointer(LAYOUT_BYTES.toLong())
+
+    /** For tests: how many times the graph has been built. */
+    internal var builds = 0
+        private set
 
     /** Makes sure the graph fits frames like [frame] at [speed]; false when it can't be built. */
     fun prepare(frame: AVFrame, speed: Float): Boolean {
-        val layout = BytePointer(256L)
-        av_channel_layout_describe(frame.ch_layout(), layout, 256)
+        val described = av_channel_layout_describe(frame.ch_layout(), layoutName, LAYOUT_BYTES.toLong())
+        if (described < 0) return false
+        // Up to its end only: what follows in the buffer is whatever was there before. Read whole,
+        // it made every frame's key new, and the graph was built again for every frame of sound,
+        // which threw away what the limiter held back and started the leveller over each time.
+        val layout = layoutName.getString(Charsets.US_ASCII).substringBefore('\u0000')
         val fmt = av_get_sample_fmt_name(frame.format())?.string ?: return false
-        val k = "${frame.sample_rate()}|$fmt|${layout.string}|$speed"
+        val k = "${frame.sample_rate()}|$fmt|$layout|$speed"
         if (k == key && graph != null) return true
         close()
         val g = avfilter_graph_alloc() ?: return false
         val src = AVFilterContext()
-        val args = "time_base=1/${frame.sample_rate()}:sample_rate=${frame.sample_rate()}:sample_fmt=$fmt:channel_layout=${layout.string}"
+        val args = "time_base=1/${frame.sample_rate()}:sample_rate=${frame.sample_rate()}:sample_fmt=$fmt:channel_layout=$layout"
         if (avfilter_graph_create_filter(src, avfilter_get_by_name("abuffer"), "in", args, null, g) < 0) return fail(g)
         val chain = ArrayList<AVFilterContext>()
         chain += src
@@ -71,6 +82,7 @@ internal class AudioFilter {
         }
         if (avfilter_graph_config(g, null) < 0) return fail(g)
         graph = g
+        builds++
         source = src
         sink = snk
         key = k
@@ -78,22 +90,31 @@ internal class AudioFilter {
     }
 
     companion object {
+        private const val LAYOUT_BYTES = 256
+
         /**
          * Films are mixed for a cinema: dialogue sits near -27 LUFS with loud moments 20 dB above it,
          * and a TV's speakers turned all the way up still left it hard to hear. A TV or an Android box
-         * evens that out as it decodes; here a gentle compressor does (3:1 above -20 dBFS, quick enough
-         * for speech, slow enough not to pump) and raises the whole by about 9.5 dB, so quiet speech
-         * comes up and the loud moments come down to meet it. The limiter after it keeps every peak
-         * under full scale.
+         * evens that out as it decodes; here a gentle compressor does: 2:1 above -24 dBFS, raised by
+         * about 8 dB, so quiet speech comes up and the loud moments come down to meet it.
+         *
+         * Its attack is slow on purpose. 0.4.2.7's evened sound out within 15 ms, which caught the
+         * start of every consonant and every hit and pressed it down: speech lost its edges and the
+         * whole sounded muffled. At 40 ms the first instant of each sound passes as it was mixed and
+         * only what follows is evened, so it stays clear. The limiter after it keeps every peak under
+         * full scale, letting go smoothly instead of within 50 ms (which roughened loud scenes).
          */
-        internal const val LEVEL = "threshold=0.1:ratio=3:attack=15:release=250:makeup=3:knee=4"
+        internal const val LEVEL = "threshold=0.063:ratio=2:attack=40:release=300:makeup=2.5:knee=6"
+
+        /** The fold-down to stereo: the centre at full level, the surrounds at the standard -3 dB. */
+        internal const val MIX = "${AudioOut.RATE}:ochl=stereo:osf=dbl:clev=1.0:slev=0.707"
 
         /** The filters from the decoder's [channels] to 48 kHz 16-bit stereo, by name, filter and arguments. */
         fun steps(channels: Int): List<Triple<String, String, String>> = buildList {
-            add(Triple("rate", "aresample", "${AudioOut.RATE}"))
+            add(Triple("rate", "aresample", MIX))
             add(Triple("mix", "aformat", "sample_fmts=dbl:channel_layouts=stereo"))
             add(Triple("level", "acompressor", LEVEL))
-            add(Triple("limit", "alimiter", "limit=0.98:attack=5:release=50:level=0"))
+            add(Triple("limit", "alimiter", "limit=0.98:attack=5:release=150:level=0"))
             add(Triple("fmt", "aformat", "sample_fmts=s16:channel_layouts=stereo"))
         }
     }
@@ -128,5 +149,6 @@ internal class AudioFilter {
     fun release() {
         close()
         av_frame_free(out)
+        layoutName.deallocate()
     }
 }

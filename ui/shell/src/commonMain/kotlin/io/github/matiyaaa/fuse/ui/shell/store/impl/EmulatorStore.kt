@@ -311,6 +311,11 @@ internal class DefaultEmulatorOps(private val ctx: StoreContext) : EmulatorOps {
         ).replaceFirst("Fuse diagnostics report", "Fuse emulator support report")
     }
 
+    override suspend fun installCore(emulator: EmulatorId, core: String): String? {
+        val e = installed.value.firstOrNull { it.id == emulator } ?: return "It isn't installed any more."
+        return ctx.services.emulators.installRetroArchCore(e, core).fold({ null }, { it.message ?: "The core couldn't be downloaded." })
+    }
+
     override fun known(): List<EmulatorOption> {
         val found = installed.value.associateBy { it.id }
         return ctx.registry.forHost(ctx.host).filterNot { it.builtIn }

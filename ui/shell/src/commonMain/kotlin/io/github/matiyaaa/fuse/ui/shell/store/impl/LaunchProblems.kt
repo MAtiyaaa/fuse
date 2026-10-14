@@ -81,13 +81,21 @@ internal object LaunchProblems {
      * RetroArch would run the game, but none of the cores that play [platformName] is installed in
      * it here ([cores] are the ones that would, the usual first), and no other emulator is.
      */
-    fun noCore(emulator: InstalledEmulator, platformName: String, platform: PlatformId, cores: List<String>, game: GameId): Problem = Problem(
+    fun noCore(emulator: InstalledEmulator, platformName: String, platform: PlatformId, cores: List<String>, game: GameId, canInstall: Boolean = false): Problem = Problem(
         title = "${emulator.name} has no $platformName core",
-        message = "${emulator.name} needs a core to play $platformName games, and none is installed in it yet. In ${emulator.name}, open " +
-            "Main Menu, Load Core, Download a Core, and get ${cores.take(2).joinToString(" or ") { coreName(it) }}. Or install a $platformName emulator of its own; Fuse notices either by itself.",
+        message = if (canInstall) {
+            "${emulator.name} needs a core to play $platformName games, and none is installed in it yet. Fuse can download ${coreName(cores.first())} " +
+                "into it from libretro, where ${emulator.name}'s own Core Downloader gets it, and start the game."
+        } else {
+            "${emulator.name} needs a core to play $platformName games, and none is installed in it yet. In ${emulator.name}, open " +
+                "Main Menu, Load Core, Download a Core, and get ${cores.take(2).joinToString(" or ") { coreName(it) }}. Or install a $platformName emulator of its own; Fuse notices either by itself."
+        },
         kind = ProblemKind.EMULATOR,
         reassurance = "Nothing was started, so nothing changed.",
-        actions = listOf(ProblemAction.Retry(), ProblemAction.PickEmulator(game = game), ProblemAction.OpenSystem(platform, "$platformName settings")),
+        actions = listOfNotNull(
+            if (canInstall) ProblemAction.InstallCore(emulator.id, cores.first(), "Install ${coreName(cores.first())}") else null,
+            ProblemAction.Retry(), ProblemAction.PickEmulator(game = game), ProblemAction.OpenSystem(platform, "$platformName settings"),
+        ),
         details = "Cores looked for: ${cores.joinToString { "${it}_libretro" }}",
     )
 

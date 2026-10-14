@@ -24,13 +24,18 @@ class Sections(
     val addons: Boolean,
     /** Cartridge runs here and is turned on in Fuse. With nothing else on, it is the section alone. */
     val cartridgeOn: Boolean = true,
+    /**
+     * A computer, where the Apps section is **Emulators**: every emulator Fuse can start, found here
+     * or not, and never any other program. It keeps its saved identity ([Destination.APPS]).
+     */
+    val emulators: Boolean = false,
 ) {
     fun label(d: Destination): String = when (d) {
         Destination.HOME -> "Home"
         Destination.LIBRARY -> "Library"
         Destination.SYSTEMS -> "Systems"
         Destination.ACHIEVEMENTS -> "Achievements"
-        Destination.APPS -> "Apps"
+        Destination.APPS -> if (emulators) "Emulators" else "Apps"
         Destination.CARTRIDGE -> if (addons) "Addons" else "Cartridge"
     }
 
@@ -39,7 +44,7 @@ class Sections(
         Destination.LIBRARY -> FuseIcons.Library
         Destination.SYSTEMS -> FuseIcons.Chip
         Destination.ACHIEVEMENTS -> FuseIcons.Trophy
-        Destination.APPS -> FuseIcons.Smartphone
+        Destination.APPS -> if (emulators) FuseIcons.Joystick else FuseIcons.Smartphone
         Destination.CARTRIDGE -> if (addons) FuseIcons.Blocks else FuseMarks.Cartridge
     }
 
@@ -69,8 +74,13 @@ internal val AppState.sections: Sections get() {
             // RomM moving this device's saves: its RomM Saves tab.
             (store.romm.supported && p.romm.enabled && p.romm.configured && p.romm.saveSync),
         cartridgeOn = platform.features.cartridge && p.cartridgeEnabled,
+        emulators = emulatorsSection,
     )
 }
+
+/** A computer: the Apps section lists emulators instead of apps (see [Sections.emulators]). */
+internal val AppState.emulatorsSection: Boolean
+    get() = !store.apps.supported && platform.host != io.github.matiyaaa.fuse.model.Host.ANDROID
 
 /**
  * People kept on this device without a household (profiles made here, Fuse One's household not

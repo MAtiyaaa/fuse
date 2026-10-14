@@ -9,22 +9,28 @@ import kotlin.test.assertTrue
 
 /** Light over near black, on the 8-bit screen Skia draws to on a computer: no bands. */
 class DesktopDitheringTest {
-    /** The longest run of one green value along a row of a near-black ramp drawn the way Fuse draws one. */
-    private fun longestRun(dither: Boolean): Int {
-        val w = 1024
-        val image = androidx.compose.ui.graphics.ImageBitmap(w, 8)
+    /** A near-black ramp, green 5 to 22 across [w] pixels and [h] rows, drawn the way Fuse draws one; its pixels. */
+    private fun ramp(dither: Boolean, w: Int = 1024, h: Int = 8, alpha: Float = 1f): IntArray {
+        val image = androidx.compose.ui.graphics.ImageBitmap(w, h)
         val canvas = androidx.compose.ui.graphics.Canvas(image)
         val paint = androidx.compose.ui.graphics.Paint()
         androidx.compose.ui.graphics.Brush.horizontalGradient(
-            listOf(androidx.compose.ui.graphics.Color(4, 5, 8), androidx.compose.ui.graphics.Color(20, 22, 30)), 0f, w.toFloat(),
-        ).applyTo(androidx.compose.ui.geometry.Size(w.toFloat(), 8f), paint, 1f)
+            listOf(androidx.compose.ui.graphics.Color(4, 5, 8, (alpha * 255).toInt()), androidx.compose.ui.graphics.Color(20, 22, 30, (alpha * 255).toInt())), 0f, w.toFloat(),
+        ).applyTo(androidx.compose.ui.geometry.Size(w.toFloat(), h.toFloat()), paint, 1f)
         if (dither) {
             DesktopDithering.install()
             io.github.matiyaaa.fuse.ui.designsystem.effects.Dithering.gradients!!(paint)
         }
-        canvas.drawRect(0f, 0f, w.toFloat(), 8f, paint)
-        val pixels = IntArray(w * 8)
+        canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), paint)
+        val pixels = IntArray(w * h)
         image.readPixels(pixels)
+        return pixels
+    }
+
+    /** The longest run of one green value along a row of a near-black ramp drawn the way Fuse draws one. */
+    private fun longestRun(dither: Boolean): Int {
+        val w = 1024
+        val pixels = ramp(dither, w)
         var longest = 0
         var run = 0
         var last = -1
@@ -38,13 +44,57 @@ class DesktopDitheringTest {
     }
 
     @Test
-    fun skiasOwnDitherBreaksTheBandsOfAGlowOverNearBlack() {
+    fun ditherBreaksTheBandsOfAGlowOverNearBlack() {
         val banded = longestRun(dither = false)
         val smooth = longestRun(dither = true)
         println("Near-black ramp, longest flat band: undithered $banded px, dithered $smooth px")
         // 17 steps over 1024 pixels: undithered, each step is a flat band about 60 pixels wide.
         assertTrue(banded >= 40, "undithered bands $banded px wide")
         assertTrue(smooth <= 12, "dithered runs at most $smooth px")
+    }
+
+    @Test
+    fun theNoiseGoesInBeforeRoundingAndKeepsTheLevel() {
+        val w = 1024
+        val h = 64
+        val plain = ramp(dither = false, w = w, h = h)
+        val noisy = ramp(dither = true, w = w, h = h)
+        fun green(p: IntArray, i: Int) = (p[i] shr 8) and 0xFF
+        // Neither lighter nor darker on the whole (a dither drawn over the top adds light).
+        val mean = noisy.indices.map { green(noisy, it) }.average() - plain.indices.map { green(plain, it) }.average()
+        assertTrue(abs(mean) < 0.1, "the level moved by $mean steps")
+        // Seen the way a TV's own smoothing sees it, 16 by 16 pixels at a time, it follows the ramp
+        // itself between the steps: what reaches the eye is the gradient, not its bands.
+        var worst = 0.0
+        for (bx in 0 until w / 16) for (by in 0 until h / 16) {
+            var sum = 0.0
+            for (x in 0 until 16) for (y in 0 until 16) sum += green(noisy, (by * 16 + y) * w + bx * 16 + x)
+            val ideal = 5.0 + 17.0 * (bx * 16 + 7.5) / w
+            worst = maxOf(worst, abs(sum / 256 - ideal))
+        }
+        assertTrue(worst < 0.3, "a 16 by 16 patch was ${"%.2f".format(worst)} steps off the ramp")
+    }
+
+    @Test
+    fun theNoiseIsStrongerOnATvAndNeverMoreThanAsked() {
+        fun spread(large: Boolean): Int {
+            io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.largeOutput = large
+            try {
+                val plain = ramp(dither = false, w = 256, h = 64)
+                val noisy = ramp(dither = true, w = 256, h = 64)
+                return noisy.indices.maxOf { abs(((noisy[it] shr 8) and 0xFF) - ((plain[it] shr 8) and 0xFF)) }
+            } finally {
+                io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.largeOutput = false
+            }
+        }
+        assertTrue(spread(large = false) in 1..2, "monitor ${spread(false)}")
+        assertTrue(spread(large = true) in 2..3, "TV ${spread(true)}")
+    }
+
+    @Test
+    fun transparentStaysTransparent() {
+        val pixels = ramp(dither = true, w = 256, h = 16, alpha = 0f)
+        assertTrue(pixels.all { it == 0 }, "noise in a transparent gradient")
     }
 
     @Test

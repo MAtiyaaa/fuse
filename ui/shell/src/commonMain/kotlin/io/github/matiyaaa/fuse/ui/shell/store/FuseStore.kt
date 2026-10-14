@@ -743,6 +743,9 @@ interface EmulatorOps {
 
     /** Takes back what was brought over as [move]: the files it copied go, and nothing else changes. */
     suspend fun takeBackFamilyMove(emulator: EmulatorId, move: String): Boolean = false
+
+    /** Downloads the RetroArch [core] into [emulator] (a desktop RetroArch). Null when it worked, else why not. */
+    suspend fun installCore(emulator: EmulatorId, core: String): String? = "Cores can't be downloaded here."
 }
 
 interface MediaOps {

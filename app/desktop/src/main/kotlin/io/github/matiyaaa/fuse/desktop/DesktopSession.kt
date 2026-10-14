@@ -253,12 +253,17 @@ class DesktopSession(
 
     private fun stepAside() {
         gate.showing = false
+        io.github.matiyaaa.fuse.desktop.system.GamescopeComposite.hidden()
         val w = window ?: return
         w.extendedState = w.extendedState or java.awt.Frame.ICONIFIED
     }
 
+    /** Another start of Fuse asked for this one: it comes to the front. */
+    fun raise() = bringToFront()
+
     private fun bringToFront() {
         gate.showing = true
+        io.github.matiyaaa.fuse.desktop.system.GamescopeComposite.shown()
         val w = window ?: return
         if (w.extendedState and java.awt.Frame.ICONIFIED != 0) w.extendedState = w.extendedState and java.awt.Frame.ICONIFIED.inv()
         w.toFront()
@@ -335,6 +340,7 @@ class DesktopSession(
     /** Releases devices, the database and the HTTP client. Safe to call twice. */
     fun close() {
         if (!closed.compareAndSet(false, true)) return
+        io.github.matiyaaa.fuse.desktop.system.GamescopeComposite.hidden()
         window?.isVisible = false
         // Each part closes on its own at once (servers give their open calls a moment each), and
         // Fuse waits for them together, never longer than [CLOSE_WAIT_MS]: quitting is quick.

@@ -10,17 +10,69 @@ import org.jetbrains.skia.Bitmap
 import org.jetbrains.skia.ImageInfo
 
 /**
- * Smooth light on a computer's 8-bit screen ([Dithering]). Skia here doesn't dither gradients
- * unless asked, so every gradient Fuse draws behind the interface asks (Skia's ordered dither, the
- * same on the graphics card and on the processor); a blurred room is worked out in floating point
- * and rounded to 8 bits once, with a triangular step of signed noise, darker and lighter alike, so
- * it has neither bands nor squares; and any other picture baked once gets that noise too.
+ * Smooth light on a computer's 8-bit screen ([Dithering]). Every gradient Fuse draws behind the
+ * interface is wrapped in a small shader ([NOISE]) that adds triangular noise to its colour while it
+ * is still in floating point, before the graphics card rounds it to 8 bits: the steps of a dark
+ * gradient become an even, fine grain instead of bands. A blurred room is worked out in floating
+ * point and rounded to 8 bits once, with a triangular step of signed noise, darker and lighter
+ * alike, so it has neither bands nor squares; and any other picture baked once gets that noise too.
+ *
+ * Skia's own dither (what 0.4.2.7 asked for) is an ordered pattern of half a step: a TV's own picture
+ * processing (noise reduction, its sharpening, a picture sent as YCbCr 4:2:0 at 4K and 120 Hz) evens
+ * that pattern out and the bands come back. On a TV ([Drawing.largeOutput]) the noise is two steps
+ * each way; on a monitor, one. Without the shader (a driver that can't build it) Skia's dither stays.
  */
 internal object DesktopDithering {
     fun install() {
-        Dithering.gradients = { paint -> paint.skiaPaint.isDither = true }
+        Dithering.gradients = ::ditherGradient
         Dithering.pictures = ::dither
         Dithering.blurs = ::blur
+    }
+
+    /**
+     * Triangular noise of [amp] (in 8-bit steps, each way) added to [content] before it is rounded.
+     * Interleaved gradient noise (Jimenez) by pixel (Compose draws in pixels, so the shader's own
+     * coordinates are the screen's), two samples apart, for an even grain with no pattern; a premultiplied colour stays within its alpha, and transparent stays transparent.
+     */
+    internal const val NOISE = """
+        uniform shader content;
+        uniform float amp;
+        float ign(float2 p) { return fract(52.9829189 * fract(dot(p, float2(0.06711056, 0.00583715)))); }
+        half4 main(float2 coords) {
+            half4 c = content.eval(coords);
+            float2 p = floor(coords);
+            float n = ign(p) + ign(p + float2(47.0, 113.0)) - 1.0;
+            c.rgb = clamp(c.rgb + half(n * amp / 255.0), 0.0, c.a);
+            return c;
+        }
+    """
+
+    private val noise: org.jetbrains.skia.RuntimeEffect? by lazy {
+        runCatching { org.jetbrains.skia.RuntimeEffect.makeForShader(NOISE) }
+            .onFailure { io.github.matiyaaa.fuse.desktop.Log.warn("gradients keep Skia's own dither: the noise shader couldn't be built", it) }
+            .getOrNull()
+    }
+
+    /** Steps of noise each way: two on a TV, one on a monitor. */
+    internal fun amplitude(): Float = if (io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.largeOutput) 2f else 1f
+
+    /** [paint]'s gradient with noise in it before rounding (see [NOISE]); Skia's ordered dither where that can't be. */
+    fun ditherGradient(paint: androidx.compose.ui.graphics.Paint) {
+        val skia = paint.skiaPaint
+        val shader = skia.shader
+        val effect = noise
+        if (shader == null || effect == null) {
+            skia.isDither = true
+            return
+        }
+        val wrapped = runCatching {
+            org.jetbrains.skia.RuntimeShaderBuilder(effect).run {
+                child("content", shader)
+                uniform("amp", amplitude())
+                makeShader()
+            }
+        }.getOrNull()
+        if (wrapped == null) skia.isDither = true else skia.shader = wrapped
     }
 
     /**
@@ -115,12 +167,13 @@ internal object DesktopDithering {
     }
 
     /**
-     * [plane] (sw by sh) stretched to dw by dh with a cubic B-spline, rounded with triangular noise.
+     * [plane] (sw by sh) stretched to dw by dh with a cubic B-spline, rounded with triangular noise
+     * of [steps] each way (two on a TV, whose own processing smooths away one).
      * Each output row is worked out on its own, from the four source rows around it stretched across
      * once and kept, with noise seeded by [seed] and the row: the rows run on every core at once,
      * so a 4K room is ready in a few frames' time instead of holding the move to the next game.
      */
-    fun stretch(plane: FloatArray, sw: Int, sh: Int, dw: Int, dh: Int, seed: Int): ByteArray {
+    fun stretch(plane: FloatArray, sw: Int, sh: Int, dw: Int, dh: Int, seed: Int, steps: Float = amplitude()): ByteArray {
         val (xs, xw) = taps(sw, dw)
         val (ys, yw) = taps(sh, dh)
         // Each output column's four source columns, clamped at the edges, as float offsets.
@@ -156,11 +209,11 @@ internal object DesktopDithering {
             while (i < span) {
                 val a = w0 * r0[i + 3] + w1 * r1[i + 3] + w2 * r2[i + 3] + w3 * r3[i + 3]
                 val alpha = kotlin.math.round(a).coerceIn(0f, 255f)
-                // Triangular noise of one step: the difference of two even draws, the same for the three colours.
+                // Triangular noise of [steps] (one, two on a TV): the difference of two even draws, the same for the three colours.
                 state = state xor (state shl 13)
                 state = state xor (state ushr 7)
                 state = state xor (state shl 17)
-                val noise = if (alpha > 0f) (((state ushr 40) and 0xFFFF) - ((state ushr 16) and 0xFFFF)).toFloat() / 65536f else 0f
+                val noise = if (alpha > 0f) (((state ushr 40) and 0xFFFF) - ((state ushr 16) and 0xFFFF)).toFloat() / 65536f * steps else 0f
                 for (c in 0 until 3) {
                     val v = w0 * r0[i + c] + w1 * r1[i + c] + w2 * r2[i + c] + w3 * r3[i + c]
                     out[o + c] = kotlin.math.round(v + noise).coerceIn(0f, alpha).toInt().toByte()

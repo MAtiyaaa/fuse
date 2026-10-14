@@ -600,12 +600,31 @@ fun AppState.emulatorPicker(card: GameCard) {
                 toasts.show("${card.title} streams with Moonlight from now on")
             } + options.sortedBy { it.unavailable != null }.map { o ->
                 val locate = !o.installed && store.emulators.canLocate
+                // One that isn't here, where nothing else keeps it from this game, is a step from installing.
+                val missing = !o.installed && !locate && (o.unavailable == null || "install" in o.unavailable.lowercase())
+                val storeKey = if (missing && store.appStore.supported) {
+                    io.github.matiyaaa.fuse.ui.shell.apps.storeAppFor(o.name, store.appStore.state.value.catalogue?.apps.orEmpty())?.key
+                } else {
+                    null
+                }
+                val site = if (missing && storeKey == null) store.emulators.homepage(o.id) else null
                 MenuAction(
-                    "e${o.id}", o.name, FuseIcons.Chip,
-                    detail = if (locate) "Not found. Show Fuse where it is" else o.note ?: if (o.installed) null else "Not installed",
-                    unavailableReason = if (locate) null else o.unavailable ?: if (o.installed) null else "Not installed on this device",
+                    "e${o.id}", o.name, if (storeKey != null || site != null) FuseIcons.Download else FuseIcons.Chip,
+                    detail = when {
+                        locate -> "Not found. Show Fuse where it is"
+                        storeKey != null -> "Not installed. Install it from the Store"
+                        site != null -> "Not installed. Get it from its website"
+                        else -> o.note ?: if (o.installed) null else "Not installed"
+                    },
+                    unavailableReason = if (locate || storeKey != null || site != null) null else o.unavailable ?: if (o.installed) null else "Not installed on this device",
                     onSelect = {
-                        if (locate) {
+                        if (storeKey != null) {
+                            choice = null
+                            openStore(storeKey)
+                        } else if (site != null) {
+                            choice = null
+                            platform.openUrl(site)
+                        } else if (locate) {
                             startLocate(LocateRequest(o.id, o.name, game = card.id))
                         } else {
                             scope.launch { store.library.setEmulator(card.id, o.id) }

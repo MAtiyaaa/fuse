@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.desktop.platform
 
+import io.github.matiyaaa.fuse.desktop.system.SingleInstance
 import io.github.matiyaaa.fuse.desktop.BuildInfo
 import io.github.matiyaaa.fuse.desktop.FuseDirs
 import io.github.matiyaaa.fuse.desktop.Log
@@ -212,14 +213,15 @@ class DesktopPlatformUi(
     }
 
     private fun restartCommand(): List<String>? {
-        val passArgs = args.filter { it.startsWith("--") }
+        // The new Fuse takes this one's place instead of handing back to it as it closes.
+        val passArgs = args.filter { it.startsWith("--") && it != SingleInstance.REPLACE } + SingleInstance.REPLACE
         UpdateHandoff.installedFuseAppImage?.takeIf { Processes.isExecutable(it) }?.let { return listOf(it) + passArgs }
         System.getenv("APPIMAGE")?.takeIf { Processes.isExecutable(it) }?.let { return listOf(it) + passArgs }
         System.getProperty("jpackage.app-path")?.takeIf { Processes.isExecutable(it) }?.let { return listOf(it) + passArgs }
         val java = ProcessHandle.current().info().command().orElse(null) ?: return null
         val classPath = System.getProperty("java.class.path")?.takeIf { it.isNotBlank() } ?: return null
         val jvmArgs = ManagementFactory.getRuntimeMXBean().inputArguments
-        return listOf(java) + jvmArgs + listOf("-cp", classPath, MAIN_CLASS) + args
+        return listOf(java) + jvmArgs + listOf("-cp", classPath, MAIN_CLASS) + args.filter { it != SingleInstance.REPLACE } + SingleInstance.REPLACE
     }
 
     override fun exit() = window.exitApplication()
