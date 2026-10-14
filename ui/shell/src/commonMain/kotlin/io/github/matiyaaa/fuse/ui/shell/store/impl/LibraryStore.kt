@@ -568,7 +568,7 @@ internal class DefaultLibraryOps(
                 val others = installed.filterNot { it.id == chosen.id }
                 val instead = ctx.resolver.resolve(game, platformEmulator?.takeIf { it != chosen.id }, others, ctx.host, choice)
                 if (instead.installed == null || instead.plan is LaunchPlan.Unsupported) {
-                    return LaunchOutcome.Problem(LaunchProblems.noCore(chosen, platform.name, platform.id, cores, id))
+                    return LaunchOutcome.Problem(LaunchProblems.noCore(chosen, platform.name, platform.id, cores, id, canInstall = ctx.services.emulators.canInstallRetroArchCore(chosen)))
                 }
                 usedCore = null
                 resolved = instead

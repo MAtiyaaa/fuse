@@ -52,6 +52,21 @@ object RommParse {
     /** `/api/saves`: the person's saves. */
     fun saves(e: JsonElement): List<RommSave> = e.items().mapNotNull(::save)
 
+    fun states(e: JsonElement): List<RommState> = e.items().mapNotNull(::state)
+
+    fun state(e: JsonElement): RommState? {
+        val o = e as? JsonObject ?: return null
+        return RommState(
+            id = o.long("id") ?: return null,
+            romId = o.long("rom_id") ?: return null,
+            fileName = o.str("file_name") ?: return null,
+            sizeBytes = o.long("file_size_bytes") ?: 0,
+            contentHash = o.str("content_hash")?.lowercase(),
+            emulator = o.str("emulator"),
+            updatedAt = o.str("updated_at") ?: "",
+        )
+    }
+
     fun save(e: JsonElement): RommSave? {
         val o = e as? JsonObject ?: return null
         val origin = o.str("origin_device_id")

@@ -135,6 +135,16 @@ fun AppState.runProblemAction(action: ProblemAction, spec: ProblemSpec?) {
         is ProblemAction.OpenGame -> go(Route.GameInfo(action.game))
         is ProblemAction.BiosFromRomm -> rommBios(action.platform, action.name)
         is ProblemAction.InstallContent -> go(Route.GameContent(action.game))
+        is ProblemAction.InstallCore -> scope.launch {
+            toasts.show("Downloading the core", ToastKind.INFO, icon = FuseIcons.Download)
+            val why = store.emulators.installCore(action.emulator, action.core)
+            if (why == null) {
+                toasts.show("Core installed", ToastKind.SUCCESS)
+                spec?.retry?.invoke()
+            } else {
+                toasts.show(why, ToastKind.WARNING)
+            }
+        }
         is ProblemAction.AdoptDrive -> scope.launch {
             val ok = store.sources.adoptDrive(action.source)
             toasts.show(if (ok) "Fuse will use this drive for the library" else "That folder can't be read on this drive", if (ok) ToastKind.SUCCESS else ToastKind.WARNING)
@@ -308,6 +318,7 @@ private fun ProblemAction.icon(): ImageVector = when (this) {
     is ProblemAction.OpenGame -> FuseIcons.Gamepad
     is ProblemAction.BiosFromRomm -> FuseIcons.Download
     is ProblemAction.InstallContent -> FuseIcons.Download
+    is ProblemAction.InstallCore -> FuseIcons.Download
     is ProblemAction.AdoptDrive -> FuseIcons.FolderSync
     is ProblemAction.RemoveSource -> FuseIcons.FolderX
     is ProblemAction.Rescan -> FuseIcons.ScanSearch

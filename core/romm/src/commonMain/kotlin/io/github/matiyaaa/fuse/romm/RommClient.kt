@@ -395,6 +395,40 @@ class RommClient(
         return RommParse.save(e) ?: throw RommException("RomM didn't say what it kept.", code = "unreadable")
     }
 
+    // ------------------------------------------------------------------ save states
+
+    /** The signed-in person's save states of [romId] on RomM, newest first. */
+    suspend fun states(romId: Long): List<RommState> =
+        RommParse.states(json(HttpMethod.Get, "/api/states") { parameter("rom_id", romId) }).sortedWith(compareByDescending<RommState> { it.updatedAt }.thenByDescending { it.id })
+
+    /** [state]'s file. */
+    suspend fun stateContent(state: RommState): ByteArray =
+        call(HttpMethod.Get, "/api/states/${state.id}/content", timeoutMs = SAVE_TIMEOUT_MS) { it.bodyAsBytes() }
+
+    /** Sends [bytes] as a save state of [romId], named [fileName], made by [emulator]. */
+    suspend fun uploadState(romId: Long, emulator: String?, fileName: String, bytes: ByteArray): RommState {
+        val e = call(HttpMethod.Post, "/api/states", timeoutMs = SAVE_TIMEOUT_MS, extra = {
+            parameter("rom_id", romId)
+            if (emulator != null) parameter("emulator", emulator)
+            setBody(io.ktor.client.request.forms.MultiPartFormDataContent(io.ktor.client.request.forms.formData {
+                append("stateFile", bytes, io.ktor.http.Headers.build {
+                    append(HttpHeaders.ContentType, "application/octet-stream")
+                    append(HttpHeaders.ContentDisposition, "filename=\"${fileName.replace("\"", "")}\"")
+                })
+            }))
+        }) { RommParse.element(it.bodyAsText()) }
+        return RommParse.state(e) ?: throw RommException("RomM didn't say what it kept.", code = "unreadable")
+    }
+
+    /** Takes the save states [ids] off RomM (a slot's older copy, once a newer one is there). */
+    suspend fun deleteStates(ids: List<Long>) {
+        if (ids.isEmpty()) return
+        call(HttpMethod.Post, "/api/states/delete", extra = {
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject { put("states", kotlinx.serialization.json.JsonArray(ids.map { kotlinx.serialization.json.JsonPrimitive(it) })) }.toString())
+        }) { }
+    }
+
     // ------------------------------------------------------------------ uploads
 
     /**

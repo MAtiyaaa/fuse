@@ -193,6 +193,21 @@ class RommException(message: String, val status: Int = 0, val code: String = "",
     val forbidden: Boolean get() = status == 401 || status == 403
 }
 
+/** A save state on RomM: one state file of a game, made by an emulator (and, for RetroArch, a core). */
+@Serializable
+data class RommState(
+    val id: Long,
+    val romId: Long,
+    val fileName: String,
+    val sizeBytes: Long,
+    val contentHash: String?,
+    val emulator: String?,
+    val updatedAt: String,
+) {
+    /** Its file name without the " [date]" RomM may add to it, to match a slot's file here. */
+    val baseName: String get() = fileName.replace(Regex(" \\[[^\\]]*\\](?=\\.[^.]*$|$)"), "")
+}
+
 /**
  * One of the signed-in person's saves on RomM: one file for one game, in a [slot] (Fuse uses
  * "autosave"), with RomM's MD5 of its content ([contentHash]) and when it was last changed
