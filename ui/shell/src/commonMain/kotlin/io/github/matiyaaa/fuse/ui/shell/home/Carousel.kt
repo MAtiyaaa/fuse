@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.home
 
 import androidx.compose.foundation.Canvas
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
@@ -392,7 +393,7 @@ internal fun BoxScope.CarouselHeader(icon: ImageVector, label: String, dots: @Co
     val c = Fuse.colors
     Box(
         Modifier.fillMaxWidth().height(if (compact) CAROUSEL_HEADER_COMPACT else CAROUSEL_HEADER)
-            .background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.34f), 1f to Color.Transparent)),
+            .ditheredBackground(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.34f), 1f to Color.Transparent)),
     )
     // The name on the left, always whole (set smaller when the card is narrow, never cut short), the
     // dots pinned to the right, so neither runs into the other or off the card on a small screen.

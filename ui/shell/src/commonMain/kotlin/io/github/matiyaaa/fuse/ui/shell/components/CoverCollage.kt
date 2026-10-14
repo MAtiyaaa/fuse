@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.components
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -53,7 +54,7 @@ fun CoverCollage(games: List<GameCard>, height: Dp, background: Any? = null) {
             // card) cost about a third of every frame of a screen of these for nothing seen.
             fallback = {
                 val accent = first.accent.toColor()
-                Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(lerp(c.ink, accent, 0.5f), lerp(c.ink, accent, 0.08f)))))
+                Box(Modifier.fillMaxSize().ditheredBackground(Brush.linearGradient(listOf(lerp(c.ink, accent, 0.5f), lerp(c.ink, accent, 0.08f)))))
             },
         )
         // Dimmed toward the bottom, where the covers stand, so they lift off the background.

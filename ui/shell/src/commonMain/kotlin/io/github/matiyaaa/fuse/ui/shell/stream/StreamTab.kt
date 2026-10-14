@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.stream
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -204,7 +205,7 @@ private fun AppTile(name: String, icon: ImageVector, selected: Boolean, size: Dp
     Column(
         Modifier.width(size).height(size * 0.72f).clip(shape)
             .background(if (quiet) c.text.copy(alpha = 0.05f) else c.surfaceRaised)
-            .background(Brush.verticalGradient(listOf(c.accent.copy(alpha = if (quiet) 0f else 0.14f), Color.Transparent)))
+            .ditheredBackground(Brush.verticalGradient(listOf(c.accent.copy(alpha = if (quiet) 0f else 0.14f), Color.Transparent)))
             .border(2.dp, border, shape)
             .combinedClickable(remember { MutableInteractionSource() }, indication = null, onClick = onClick)
             .padding(Space.m),

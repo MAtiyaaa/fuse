@@ -1,55 +1,66 @@
-# Fuse 0.4.2.12 - The Native Update
+# Fuse 0.4.2.13 - The Native Update
 
-Fuseline 4.2: Fuse starts fast and stays smooth with thousands of games, art and details on every
-one, on every system. And Fii, a new theme in light and dark with a Home of its own.
+Profiles switch at once, the second screen lets go of what you left, Jellyfin shows its logos, Fii's
+Home is reachable end to end, and the Library's All view is rebuilt.
 
 ## New
 
-- **Fii and Fii Night.** Two new themes: soft white and brushed silver (or deep slate at night), a
-  clear sky cyan, slate text, round glossy tiles and glassy bubbles rising slowly behind everything.
-  Game and system tiles sit in rounded white (or silver) frames with a gloss across the top, the
-  focus ring breathes while it rests, and the interface sounds are round, airy notes that rise a
-  little as they start.
-- **Fii's Home.** Choosing Fii or Fii Night the first time unlocks a Home of its own and asks
-  whether to use it: your board as glossy channels, with the time and date along a bar at the
-  bottom, between two round buttons (Fuse's sections on the left, the quick menu on the right).
-  Your tiles stay where they are. Fii's Home then sits in Settings, Home, Home style beside Fused
-  and Network, marked Unlocked until you look, and works with every theme in that theme's colours.
-  Fused keeps Fuse's own look with Fii's colours. Every switch of Home style is asked first, and
-  leaving the Fii themes while on Fii's Home asks whether to go back to the Home you had.
-- Community themes can use the new pieces: the `fii` background, the `bubble` sounds and
-  `"tiles": "gloss"` (docs/THEMES.md).
+- **Jellyfin on the second screen.** Focusing a film, show or episode shows a card like a game's:
+  the logo, the episode and its name, the year, length and rating, where you're up to with a bar and
+  the minutes left, and the overview.
+- **Ignition sounds.** Fuse's start-up animation now plays a match strike, the flare as it catches,
+  then the ignition. The first-start opening has its own strike and flare, and a warm swell when the
+  view pulls back and expands. Every sound is made by Fuse's own synthesizer, like the others.
+- **The game's options are tabs like the quick menu's.** The sections expand as you move between
+  them, with liquid glass where it's on, and L1 and R1 step through them while L2 and R2 jump to the
+  first and last.
 
 ## Changed
 
-- **Fuse opens fast with a big library (Fuseline 4.2).** Measured with 2,348 games, each with five
-  pieces of art and a description, on a 4-core computer drawing without a graphics card: Home
-  showed its games after 10.1 seconds before and after about 4.6 seconds now. With the class data
-  sharing archive the AppImage carries (and now the Windows and Mac builds too, below), the first
-  frame comes at 1.6 seconds, Home at 3.0 and the first art at 3.9. The parts that changed:
-  - Finding series no longer slows down as the library grows (it took 70% of the start at this
-    size), and it waits until Home has settled.
-  - The library's work happens away from the thread that draws the screen, on every system.
-  - When art arrives or changes, only the games it belongs to are read again, never the whole
-    library (before, each piece of art filled re-read the art of every game).
-  - "For you" picks read only the details they use, never every game's description.
-  - Series, suggestions, the RomM refresh and the automatic scan start once Home has settled, so
-    they never compete with the first screen.
-  - The opening animation is decided before the first frame, so Home no longer shows for a moment
-    before it.
-- **Faster starts on Windows and macOS too.** The installer, the portable zip and the Mac app now
-  carry the same class data sharing archive the Linux AppImage has: the classes Fuse needs to start
-  are ready to map in instead of being read out of its files. Java checks it at every start and
-  goes on without it if anything doesn't match.
-- Fuse writes one line to its log at every start saying where the time went (the window, the
-  library, the first frame, Home, the first art), so a slow start on any device says why.
+- **Switching profiles is instant.** Someone this device already knows switches straight away from
+  what is kept on the device (their saves, settings and play time, as last synced), online or not.
+  Fuse One is asked afterwards, in the background, and anything newer is brought in then. A profile
+  removed on another device, or a PIN changed there, takes you back to the profile you came from,
+  with the reason. Before, a switch waited behind any sync that was running and then for the host,
+  which could take minutes. Fuse One's activity log now says how long each switch took.
+- **Jellyfin widgets show the title's logo** instead of its name (an episode shows its show's logo),
+  falling back to the name where there is no logo. Network's stage shows it too. Albums keep their
+  names.
+- **The Library's All view, rebuilt.** A stage above the shelves names whatever you're on (its logo,
+  where it is, its system and year, or a system's count), always in the same place so the page never
+  jumps. Every shelf has a title, a count and its own See all, the shelves only scroll when the one
+  you're on isn't wholly in view, and L2 and R2 jump six games along a shelf.
+- **Smoother first scroll through the Library.** Tile art is decoded from a small copy kept on disk
+  (made once, off the screen's thread) instead of the full picture every time, and the Library
+  prefetches a whole row ahead, so a fling through a freshly updated library no longer stutters while
+  art loads.
+- **Sharper text on a TV.** On Linux, Windows and macOS letters are hinted fully, so their stems land
+  on whole pixels and text reads as crisply as on Android. Steam's Game Mode still needs Fuse's Game
+  Resolution set to Native for a sharp picture (Settings says so when it isn't).
+- **Fewer bands in gradients.** The dark scrims over art on Home, tiles, the player, the Store and the
+  setup pages, and the soft light at the top and bottom of the scenes behind everything, now get
+  the same fine noise before rounding that the backgrounds have had since 0.4.2.9.
 
 ## Fixed
 
-- Scrolling the Library while art was still arriving re-read the art of every game on each new
-  picture, which held the scroll back on large libraries.
-- With 2,000 games, the series pass ran for seconds on the screen's own thread on a computer,
-  freezing Home while it opened.
+- The second screen kept a game long after you'd left it: back on Home on a widget without a game
+  (the clock, the weather), or on a page that sets no game, it showed the last game's art. It now
+  follows what's on the main screen and goes back to its idle page.
+- **Fii's Home:**
+  - Cards and carousels slid under the bar; the board now stops above it.
+  - The bar's two buttons couldn't be reached with a controller. Down past the board's last row now
+    lands on them (Sections, then the quick menu, Left and Right between them, Up or Back to return).
+    The focused button lights its ring, with hints for each.
+  - Tiles took two taps to open with touch or a mouse; one does.
+  - The bar is compact on short screens and when the screens are flipped, so the board keeps its room.
+  - The round menu's liquid glass looked muddy over Fii's white; on bright themes it is now a near
+    solid gloss with its shadow.
+- **On a game's page,** Down from Play didn't reach the More button when it had wrapped under Play
+  (it acted as Right). The button row now moves by where buttons actually are.
 
-Android: the same library, start-up and drawing code runs there, and Fuse's own code is still
-compiled ahead of time at install. It wasn't measured on a device for this release.
+## Not in this release
+
+- Native patches on Android. ARMSX2 can keep its data in a folder you choose in shared storage, with
+  PCSX2's own layout, so its patches can be reached there. AetherSX2 and NetherSX2 keep theirs in
+  Android/data, which Android 11 and later close to other apps. Fuse has no Android side for emulator
+  files yet; it is planned, starting with ARMSX2 and PPSSPP.

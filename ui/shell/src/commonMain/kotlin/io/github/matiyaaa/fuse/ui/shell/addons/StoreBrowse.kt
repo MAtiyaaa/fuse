@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.addons
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -519,7 +520,7 @@ internal fun AppCard(app: StoreApp, state: StoreState, selected: Boolean, compac
         // A wide card lifted by the usual share would cover its neighbours: it grows into half the gap.
         maxGrow = STORE_CARD_GAP / 2 - 1.dp,
     ) {
-        Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(c.surfaceRaised, c.surface))))
+        Box(Modifier.fillMaxSize().ditheredBackground(Brush.linearGradient(listOf(c.surfaceRaised, c.surface))))
         Row(Modifier.fillMaxSize().padding(Space.m)) {
             AppMark(app, icon, if (compact) 52.dp else 60.dp)
             Spacer(Modifier.width(Space.m))
@@ -560,7 +561,7 @@ private fun FeaturedCard(app: StoreApp, reason: String, state: StoreState, selec
         // A wide card lifted by the usual share would cover its neighbours: it grows into half the gap.
         maxGrow = STORE_CARD_GAP / 2 - 1.dp,
     ) {
-        Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(lerp(tint, Color.Black, 0.35f), lerp(tint, Color.Black, 0.78f)))))
+        Box(Modifier.fillMaxSize().ditheredBackground(Brush.linearGradient(listOf(lerp(tint, Color.Black, 0.35f), lerp(tint, Color.Black, 0.78f)))))
         Box(Modifier.fillMaxSize().border(1.dp, Color.White.copy(alpha = 0.08f), shape))
         Row(Modifier.fillMaxSize().padding(Space.l), verticalAlignment = Alignment.CenterVertically) {
             AppMark(app, icon, if (compact) 64.dp else 76.dp)
@@ -685,9 +686,9 @@ private fun SpotlightCard(
             // As wide as a page: lifting by the usual share would push it into the margin.
             maxGrow = Space.s,
         ) {
-            Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(lerp(tint, Color.Black, 0.25f), lerp(tint, Color.Black, 0.82f)))))
+            Box(Modifier.fillMaxSize().ditheredBackground(Brush.linearGradient(listOf(lerp(tint, Color.Black, 0.25f), lerp(tint, Color.Black, 0.82f)))))
             // A soft light from the mark's side, so the card reads as one piece, not a flat panel.
-            Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.10f), Color.Transparent), radius = 900f)))
+            Box(Modifier.fillMaxSize().ditheredBackground(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.10f), Color.Transparent), radius = 900f)))
             Box(Modifier.fillMaxSize().border(1.dp, Color.White.copy(alpha = 0.08f), shape))
             Row(Modifier.fillMaxSize().padding(if (compact) Space.l else Space.xl), verticalAlignment = Alignment.CenterVertically) {
                 AppMark(item, icon, if (compact) 96.dp else 124.dp)

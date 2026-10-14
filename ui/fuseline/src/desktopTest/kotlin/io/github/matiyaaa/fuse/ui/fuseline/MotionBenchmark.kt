@@ -190,7 +190,7 @@ class MotionBenchmark {
         }
         rows += Row(c, results)
         val v41 = results[0]
-        println("${c.name} [${c.mode.label}]: " + results.filterNotNull().joinToString { "${it.e.name} ${"%.2f".format(it.nanos / 1000)} µs" } + "  (Fuseline 4.1 ${v41?.let { "%.0f".format(it.bytes) }} B)")
+        println("${c.name} [${c.mode.label}]: " + results.filterNotNull().joinToString { "${it.e.name} ${"%.2f".format(it.nanos / 1000)} µs" } + "  (Fuseline 4.2 ${v41?.let { "%.0f".format(it.bytes) }} B)")
     }
 
     private fun median(xs: List<Double>): Double = xs.sorted().let { s -> if (s.size % 2 == 1) s[s.size / 2] else (s[s.size / 2 - 1] + s[s.size / 2]) / 2 }
@@ -507,7 +507,7 @@ class MotionBenchmark {
             appendLine("|---|${names.joinToString("") { "---|" }}---|")
             for (r in rows) appendLine("| ${r.case.name} | ${r.results.joinToString(" | ") { bytes(it) }} | ${memoryWinner(r)} |")
             appendLine()
-            appendLine("## Frame distribution, Fuseline 4.1 and Fuseline 4 (µs per frame, harness included)")
+            appendLine("## Frame distribution, Fuseline 4.2 and Fuseline 4 (µs per frame, harness included)")
             appendLine()
             appendLine("| Test | 4.1 mean | 4.1 p50 | 4.1 p90 | 4.1 p95 | 4.1 p99 | 4.1 worst | 4 mean | 4 p50 | 4 p90 | 4 p95 | 4 p99 | 4 worst |")
             appendLine("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
@@ -523,7 +523,7 @@ class MotionBenchmark {
             val v41first = rows.count { winner(it) == Fuseline4.name }
             val unresolved = rows.filter { winner(it).startsWith("unresolved") }
             val lost = rows.filter { w -> val x = winner(w); x != Fuseline4.name && !x.startsWith("unresolved") && !x.startsWith("no work") && !x.startsWith("only") }
-            appendLine("Rows: ${rows.size}. Fuseline 4.1 first: $v41first. Unresolved: ${unresolved.size}${if (unresolved.isEmpty()) "" else " (" + unresolved.joinToString { it.case.name } + ")"}. Another engine first: ${lost.size}${if (lost.isEmpty()) "" else " (" + lost.joinToString { "${it.case.name}: ${winner(it)}" } + ")"}.")
+            appendLine("Rows: ${rows.size}. Fuseline 4.2 first: $v41first. Unresolved: ${unresolved.size}${if (unresolved.isEmpty()) "" else " (" + unresolved.joinToString { it.case.name } + ")"}. Another engine first: ${lost.size}${if (lost.isEmpty()) "" else " (" + lost.joinToString { "${it.case.name}: ${winner(it)}" } + ")"}.")
             appendLine()
             appendLine("""
                 Method: one thread; a fresh manual frame clock and an inline scope for every round, so
@@ -545,7 +545,7 @@ class MotionBenchmark {
         println(text)
         File("build/motion-bench.md").apply { parentFile.mkdirs() }.writeText(text)
         val notFirst = rows.filter { winner(it) != Fuseline4.name && !winner(it).startsWith("no work") && !winner(it).startsWith("only") }
-        assertTrue(notFirst.isEmpty() || System.getProperty("fuse.bench.lenient").toBoolean(), "Fuseline 4.1 is not clearly first in: ${notFirst.map { it.case.name }}")
+        assertTrue(notFirst.isEmpty() || System.getProperty("fuse.bench.lenient").toBoolean(), "Fuseline 4.2 is not clearly first in: ${notFirst.map { it.case.name }}")
     }
 
     private companion object {

@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -568,7 +569,7 @@ private fun GameLogo(logo: Any?, title: String, tint: Color? = null, below: @Com
                 .align(Alignment.Center)
                 .fillMaxWidth()
                 .fillMaxHeight(0.7f)
-                .background(Brush.radialGradient(listOf((if (Fuse.colors.isDark) Color.Black else Fuse.colors.ink).copy(alpha = if (Fuse.colors.isDark) 0.38f else 0.55f), Color.Transparent))),
+                .ditheredBackground(Brush.radialGradient(listOf((if (Fuse.colors.isDark) Color.Black else Fuse.colors.ink).copy(alpha = if (Fuse.colors.isDark) 0.38f else 0.55f), Color.Transparent))),
         )
         Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
             val name: @Composable () -> Unit = {

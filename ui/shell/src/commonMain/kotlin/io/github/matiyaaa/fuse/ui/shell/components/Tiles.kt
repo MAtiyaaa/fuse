@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.components
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
@@ -254,7 +255,7 @@ fun GameWideTile(
             fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.WIDE, showText = false) },
         )
         // The art darkens toward the bottom, where the title sits, so it reads on any picture.
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to c.artScrim)))
+        Box(Modifier.fillMaxSize().ditheredBackground(Brush.verticalGradient(0.45f to Color.Transparent, 1f to c.artScrim)))
         Column(Modifier.align(Alignment.BottomStart).padding(Space.m).fillMaxWidth(0.8f)) {
             if (card.art.logo != null) {
                 Artwork(
@@ -515,7 +516,7 @@ private fun PackCard(card: PlatformCard, accent: Color, large: Boolean) {
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
-            .background(Brush.linearGradient(listOf(lerp(accent, Color.Black, 0.1f), deep))),
+            .ditheredBackground(Brush.linearGradient(listOf(lerp(accent, Color.Black, 0.1f), deep))),
     ) {
         val cardHeight = maxHeight
         // Pack artwork is a tall panel (about 454 x 1080); it fills the height on the right.
@@ -525,12 +526,12 @@ private fun PackCard(card: PlatformCard, accent: Color, large: Boolean) {
             // Blend the panel's left edge into the card colour.
             Box(
                 Modifier.align(Alignment.CenterEnd).width(artWidth).fillMaxHeight()
-                    .background(Brush.horizontalGradient(listOf(lerp(accent, Color.Black, 0.3f), Color.Transparent), endX = with(LocalDensity.current) { (artWidth * 0.45f).toPx() })),
+                    .ditheredBackground(Brush.horizontalGradient(listOf(lerp(accent, Color.Black, 0.3f), Color.Transparent), endX = with(LocalDensity.current) { (artWidth * 0.45f).toPx() })),
             )
         }
         // A soft floor so the logo reads on light brand colours too.
         Box(
-            Modifier.fillMaxSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to c.artScrim.copy(alpha = c.artScrim.alpha * PACK_FLOOR))),
+            Modifier.fillMaxSize().ditheredBackground(Brush.verticalGradient(0.45f to Color.Transparent, 1f to c.artScrim.copy(alpha = c.artScrim.alpha * PACK_FLOOR))),
         )
         Column(
             Modifier.align(Alignment.BottomStart).padding(if (large) Space.xl else Space.m).fillMaxWidth(0.62f),

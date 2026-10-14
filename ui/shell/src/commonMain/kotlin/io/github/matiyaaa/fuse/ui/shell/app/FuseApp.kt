@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -735,7 +736,7 @@ private fun BoxScope.HintLine(app: AppState, hintFlash: HintFlash) {
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .height(Size.hintHeight + Space.xxl)
-                .background(Brush.verticalGradient(0f to Color.Transparent, 0.55f to Fuse.colors.ink.copy(alpha = 0.78f), 1f to Fuse.colors.ink.copy(alpha = 0.94f))),
+                .ditheredBackground(Brush.verticalGradient(0f to Color.Transparent, 0.55f to Fuse.colors.ink.copy(alpha = 0.78f), 1f to Fuse.colors.ink.copy(alpha = 0.94f))),
         )
     }
     HintBar(hints, Modifier.align(Alignment.BottomEnd).padding(horizontal = Space.gutter, vertical = Space.s), flash = hintFlash)

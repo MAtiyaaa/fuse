@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.addons
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -70,7 +71,7 @@ internal fun AppMark(app: StoreApp, icon: Any?, size: Dp, modifier: Modifier = M
     val letters: @Composable () -> Unit = {
         Box(
             Modifier.size(size).clip(shape)
-                .background(Brush.linearGradient(listOf(lerp(tint, Color.White, 0.12f), lerp(tint, Color.Black, 0.42f))))
+                .ditheredBackground(Brush.linearGradient(listOf(lerp(tint, Color.White, 0.12f), lerp(tint, Color.Black, 0.42f))))
                 .border(1.dp, Color.White.copy(alpha = 0.14f), shape),
             contentAlignment = Alignment.Center,
         ) {

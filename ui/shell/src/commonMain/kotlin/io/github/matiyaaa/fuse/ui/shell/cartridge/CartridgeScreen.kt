@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.cartridge
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -644,7 +645,7 @@ internal fun TransferCard(
     val minHeight = if (compact) 104.dp else 132.dp
     val artWidth = minHeight * Aspect.SYSTEM_CARD
     Tile(selected = selected, modifier = modifier.fillMaxWidth().heightIn(min = minHeight), shape = shape, cornerFraction = 0.1f, glow = tint, maxGrow = 6.dp, onClick = onClick) {
-        Box(Modifier.matchParentSize().background(Brush.horizontalGradient(listOf(lerp(tint, Color.Black, 0.55f), lerp(tint, Color.Black, 0.82f)))))
+        Box(Modifier.matchParentSize().ditheredBackground(Brush.horizontalGradient(listOf(lerp(tint, Color.Black, 0.55f), lerp(tint, Color.Black, 0.82f)))))
         // The art, fading into the card on its right edge.
         Box(Modifier.matchParentSize()) {
             Box(
@@ -781,8 +782,8 @@ private fun Pitch(
         Box(
             Modifier.fillMaxWidth().clip(shape)
                 // Cartridge's own surface: its near-black, warmed by its orange where its mark is.
-                .background(Brush.linearGradient(listOf(lerp(CartridgeBrand.INK.toColor(), brand, 0.2f), CartridgeBrand.INK.toColor(), CartridgeBrand.DEEP.toColor())))
-                .background(Brush.radialGradient(listOf(brand.copy(alpha = 0.22f), Color.Transparent), radius = 900f, center = androidx.compose.ui.geometry.Offset(160f, 160f)))
+                .ditheredBackground(Brush.linearGradient(listOf(lerp(CartridgeBrand.INK.toColor(), brand, 0.2f), CartridgeBrand.INK.toColor(), CartridgeBrand.DEEP.toColor())))
+                .ditheredBackground(Brush.radialGradient(listOf(brand.copy(alpha = 0.22f), Color.Transparent), radius = 900f, center = androidx.compose.ui.geometry.Offset(160f, 160f)))
                 .border(1.dp, brand.copy(alpha = 0.22f), shape)
                 .padding(if (compact) Space.l else Space.xl),
         ) {

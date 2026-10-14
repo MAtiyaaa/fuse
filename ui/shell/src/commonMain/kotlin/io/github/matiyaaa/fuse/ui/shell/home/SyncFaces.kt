@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.home
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -202,7 +203,7 @@ private fun StateMark(tone: Color, working: Boolean, size: Dp) {
     }
     Box(
         Modifier.size(size).clip(CircleShape)
-            .background(Brush.radialGradient(listOf(tone.copy(alpha = 0.32f), tone.copy(alpha = 0.1f)))),
+            .ditheredBackground(Brush.radialGradient(listOf(tone.copy(alpha = 0.32f), tone.copy(alpha = 0.1f)))),
         contentAlignment = Alignment.Center,
     ) {
         FuseIcon(

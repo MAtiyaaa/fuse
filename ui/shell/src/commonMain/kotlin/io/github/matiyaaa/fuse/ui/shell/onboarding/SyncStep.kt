@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.onboarding
 
 import androidx.compose.foundation.Canvas
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -86,7 +87,7 @@ internal fun SyncStage(on: Boolean) {
             // The host.
             Box(
                 Modifier.size(76.dp).graphicsLayer { shadowElevation = 20.dp.toPx(); shape = RoundedCornerShape(24.dp); clip = true }
-                    .background(Brush.linearGradient(listOf(c.accent, c.accent.copy(alpha = 0.72f)))),
+                    .ditheredBackground(Brush.linearGradient(listOf(c.accent, c.accent.copy(alpha = 0.72f)))),
                 contentAlignment = Alignment.Center,
             ) {
                 FuseIcon(if (on) FuseIcons.Check else FuseIcons.RefreshCcw, size = 34.dp, tint = c.onAccent)
@@ -112,7 +113,7 @@ private fun Device(icon: ImageVector, name: String, spot: Offset, size: Dp = 64.
     ) {
         Box(
             Modifier.size(size).clip(RoundedCornerShape(18.dp)).background(c.surfaceOverlay)
-                .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.08f), Color.Transparent))),
+                .ditheredBackground(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.08f), Color.Transparent))),
             contentAlignment = Alignment.Center,
         ) {
             FuseIcon(icon, size = 26.dp, tint = c.text)
@@ -228,7 +229,7 @@ internal fun ChoiceCard(
     val c = Fuse.colors
     Column(
         modifier.width(width).clip(RoundedCornerShape(22.dp)).background(c.surfaceOverlay)
-            .background(Brush.verticalGradient(listOf(tint.copy(alpha = 0.16f), Color.Transparent)))
+            .ditheredBackground(Brush.verticalGradient(listOf(tint.copy(alpha = 0.16f), Color.Transparent)))
             .padding(Space.m),
         verticalArrangement = Arrangement.spacedBy(Space.s),
     ) {

@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.sync
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -612,7 +613,7 @@ internal fun AddonHero(
     val shape = RoundedCornerShape(Fuse.geometry.panel)
     Column(
         modifier.fillMaxWidth().clip(shape)
-            .background(Brush.horizontalGradient(listOf(tint.copy(alpha = 0.16f), c.surface.copy(alpha = 0.78f), c.surface.copy(alpha = 0.78f))))
+            .ditheredBackground(Brush.horizontalGradient(listOf(tint.copy(alpha = 0.16f), c.surface.copy(alpha = 0.78f), c.surface.copy(alpha = 0.78f))))
             .border(1.dp, c.hairline, shape)
             .padding(horizontal = Space.l, vertical = if (compact) Space.s else Space.m),
         verticalArrangement = Arrangement.spacedBy(Space.s),
@@ -741,7 +742,7 @@ internal fun PlayBars(play: Map<String, Long>, names: Map<String, String>) {
                 Box(Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(c.text.copy(alpha = 0.08f))) {
                     Box(
                         Modifier.fillMaxWidth((sec.toFloat() / max).coerceIn(0.02f, 1f)).height(6.dp).clip(CircleShape)
-                            .background(Brush.horizontalGradient(listOf(c.accent.copy(alpha = 0.7f), c.accent))),
+                            .ditheredBackground(Brush.horizontalGradient(listOf(c.accent.copy(alpha = 0.7f), c.accent))),
                     )
                 }
             }

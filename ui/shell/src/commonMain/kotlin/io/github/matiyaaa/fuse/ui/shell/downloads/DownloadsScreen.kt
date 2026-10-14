@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.downloads
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -484,7 +485,7 @@ private fun TransferRowView(
                         FuseIcon(kindIcon(t.kind), size = Size.iconM, tint = c.text.copy(alpha = 0.8f))
                     }
                 }
-                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color.Transparent, bg))))
+                Box(Modifier.fillMaxSize().ditheredBackground(Brush.horizontalGradient(listOf(Color.Transparent, bg))))
             }
             Spacer(Modifier.width(Space.s))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {

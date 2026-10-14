@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.sync
 
 import androidx.compose.foundation.layout.heightIn
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.relocation.BringIntoViewRequester
@@ -178,7 +179,7 @@ private fun WhoAreYou(app: AppState, mode: WhoMode) {
         Modifier.fillMaxSize()
             // Its own room: the page underneath stays out of sight, so nothing reads through the cards.
             .background(c.surfaceDim)
-            .background(Brush.verticalGradient(listOf(c.accent.copy(alpha = 0.14f), Color.Transparent, Color.Transparent)))
+            .ditheredBackground(Brush.verticalGradient(listOf(c.accent.copy(alpha = 0.14f), Color.Transparent, Color.Transparent)))
             .clickable(remember { MutableInteractionSource() }, indication = null) { },
     ) {
         BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = Space.gutter), contentAlignment = Alignment.Center) {

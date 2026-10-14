@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.home
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -118,8 +119,8 @@ private fun GameSlide(game: GameCard, line: String, system: PlatformCard?, face:
                 else -> AccentField(accent)
             }
         }
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to deep.copy(alpha = 0.94f))))
-        if (w > h * 1.4f) Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to deep.copy(alpha = 0.7f), 0.6f to Color.Transparent)))
+        Box(Modifier.fillMaxSize().ditheredBackground(Brush.verticalGradient(0.35f to Color.Transparent, 1f to deep.copy(alpha = 0.94f))))
+        if (w > h * 1.4f) Box(Modifier.fillMaxSize().ditheredBackground(Brush.horizontalGradient(0f to deep.copy(alpha = 0.7f), 0.6f to Color.Transparent)))
         // A cover stands beside the words where there is room, like a box on a shelf.
         val coverBeside = cover != null && backdrop != null && room != Room.TINY && face != FaceSize.SMALL && w >= 300.dp
         // A card waiting at the edge shows its picture only: its words come in as it comes forward.
@@ -223,7 +224,7 @@ private fun SystemSlide(s: PlatformCard, face: FaceSize, depth: CarouselDepth) {
             (s.art.square ?: s.art.icon) != null -> {
                 Box(Modifier.fillMaxSize().carouselParallax(depth)) { SystemCardArt(s, large = room == Room.BIG, maker = false) }
                 if (face != FaceSize.SMALL) {
-                    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to c.artScrim)))
+                    Box(Modifier.fillMaxSize().ditheredBackground(Brush.verticalGradient(0.5f to Color.Transparent, 1f to c.artScrim)))
                     Column(Modifier.align(Alignment.BottomStart).padding(if (room == Room.TINY) Space.m else Space.l).graphicsLayer { alpha = frontness(depth) }) {
                         FText(s.platform.name, if (room == Room.BIG) Fuse.type.title else Fuse.type.bodyStrong, color = c.onArt, maxLines = 1, fit = true)
                         FText(gamesText(s.gameCount), Fuse.type.caption.tabular(), color = c.onArtMuted, maxLines = 1, fit = true)
@@ -254,9 +255,9 @@ private fun BoxWithConstraintsScope.SystemPackSlide(s: PlatformCard, room: Room,
     val w = maxWidth
     val h = maxHeight
     val pad = if (room == Room.TINY || w < 220.dp) Space.m else Space.l
-    Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(lerp(accent, Color.Black, 0.12f), deep))))
+    Box(Modifier.fillMaxSize().ditheredBackground(Brush.linearGradient(listOf(lerp(accent, Color.Black, 0.12f), deep))))
     // A soft sheen from the top left, so a flat brand colour has some depth.
-    Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.10f), Color.Transparent), center = Offset.Zero, radius = with(LocalDensity.current) { (h * 1.6f).toPx() })))
+    Box(Modifier.fillMaxSize().ditheredBackground(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.10f), Color.Transparent), center = Offset.Zero, radius = with(LocalDensity.current) { (h * 1.6f).toPx() })))
     if (s.art.boxart != null) {
         val panel = (h * 0.9f).coerceAtLeast(w * 0.3f).coerceAtMost(w * 0.46f)
         // Clipped to its panel: the parallax zoom never lets the art spill past the fade.
@@ -268,10 +269,10 @@ private fun BoxWithConstraintsScope.SystemPackSlide(s: PlatformCard, room: Room,
         // The panel's left edge melts into the card's colour.
         Box(
             Modifier.align(Alignment.CenterEnd).width(panel).fillMaxHeight()
-                .background(Brush.horizontalGradient(0f to lerp(accent, Color.Black, 0.35f), 0.55f to Color.Transparent)),
+                .ditheredBackground(Brush.horizontalGradient(0f to lerp(accent, Color.Black, 0.35f), 0.55f to Color.Transparent)),
         )
     }
-    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.55f to Color.Transparent, 1f to deep.copy(alpha = 0.55f))))
+    Box(Modifier.fillMaxSize().ditheredBackground(Brush.verticalGradient(0.55f to Color.Transparent, 1f to deep.copy(alpha = 0.55f))))
     val logoHeight = when (room) {
         Room.BIG -> (h * 0.16f).coerceIn(36.dp, 56.dp)
         Room.TALL -> (h * 0.17f).coerceIn(28.dp, 44.dp)
@@ -405,8 +406,8 @@ private fun MediaSlide(m: MediaItem, face: FaceSize, depth: CarouselDepth) {
                 else -> AccentField(accent)
             }
         }
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.3f to Color.Transparent, 1f to deep.copy(alpha = 0.94f))))
-        if (w > h * 1.4f) Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to deep.copy(alpha = 0.72f), 0.6f to Color.Transparent)))
+        Box(Modifier.fillMaxSize().ditheredBackground(Brush.verticalGradient(0.3f to Color.Transparent, 1f to deep.copy(alpha = 0.94f))))
+        if (w > h * 1.4f) Box(Modifier.fillMaxSize().ditheredBackground(Brush.horizontalGradient(0f to deep.copy(alpha = 0.72f), 0.6f to Color.Transparent)))
         val coverBeside = poster != null && room != Room.TINY && face != FaceSize.SMALL && (w >= 300.dp || album || wide == null)
         // A card waiting at the edge shows its picture only: its words come in as it comes forward.
         Row(Modifier.fillMaxSize().padding(pad).graphicsLayer { alpha = frontness(depth) }, verticalAlignment = Alignment.Bottom) {

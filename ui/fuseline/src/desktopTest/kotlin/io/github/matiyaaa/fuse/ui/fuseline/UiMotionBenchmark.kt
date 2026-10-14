@@ -409,7 +409,7 @@ class UiMotionBenchmark {
 
     private fun report() {
         val losses = ArrayList<String>()
-        val names = listOf("Fuseline 4.1", "Fuseline 3.1", "Fuseline 3", "Fuseline 2", "Fuseline 1", "Compose")
+        val names = listOf("Fuseline 4.2", "Fuseline 3.1", "Fuseline 3", "Fuseline 2", "Fuseline 1", "Compose")
         fun us(x: Measured?) = x?.let { "%.0f µs".format(it.nanos / 1000) } ?: "n/a"
         fun kb(x: Measured?) = x?.let { "%.1f KB".format(it.bytes / 1024) } ?: "n/a"
         val table = buildString {
@@ -420,7 +420,7 @@ class UiMotionBenchmark {
                 val best = ms.minBy { it.value!!.nanos }
                 val clear = ms.filter { it.index != best.index }.all { best.value!!.high < it.value!!.low }
                 val winner = if (clear) names[best.index] else "unresolved (${names[best.index]} ahead, intervals overlap)"
-                if (winner != "Fuseline 4.1") losses += "${r.case}: $winner"
+                if (winner != "Fuseline 4.2") losses += "${r.case}: $winner"
                 val v4 = r.results[0]!!
                 val v31 = r.results[1]
                 val reduction = v31?.let { "%.1f%%".format(100 * (1 - v4.nanos / it.nanos)) } ?: "n/a"

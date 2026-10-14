@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.home
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -130,8 +131,8 @@ private fun ContinueSlide(game: GameCard, feed: HomeFeed, face: FaceSize, depth:
             }
         }
         // Deep colour under the words: up from the bottom, and in from the left on a wide face.
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to deep.copy(alpha = 0.42f), 0.22f to deep.copy(alpha = 0.08f), 0.45f to Color.Transparent, 1f to deep.copy(alpha = 0.94f))))
-        if (w > h) Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to deep.copy(alpha = 0.72f), 0.55f to Color.Transparent)))
+        Box(Modifier.fillMaxSize().ditheredBackground(Brush.verticalGradient(0f to deep.copy(alpha = 0.42f), 0.22f to deep.copy(alpha = 0.08f), 0.45f to Color.Transparent, 1f to deep.copy(alpha = 0.94f))))
+        if (w > h) Box(Modifier.fillMaxSize().ditheredBackground(Brush.horizontalGradient(0f to deep.copy(alpha = 0.72f), 0.55f to Color.Transparent)))
         val coverBeside = cover != null && (face == FaceSize.LARGE || (face == FaceSize.SQUARE && backdrop == null)) && w >= 320.dp
         when (face) {
             FaceSize.SMALL -> Column(Modifier.fillMaxSize().padding(pad)) {
@@ -325,7 +326,7 @@ private const val CONTINUE_PAGES = 10
 @Composable
 internal fun Emblem(icon: ImageVector, tint: Color, size: Dp, stacked: Boolean = false) {
     Box(Modifier.size(size), contentAlignment = Alignment.Center) {
-        Box(Modifier.size(size * 1.5f).background(Brush.radialGradient(0f to tint.copy(alpha = 0.32f), 0.65f to tint.copy(alpha = 0.06f), 1f to Color.Transparent)))
+        Box(Modifier.size(size * 1.5f).ditheredBackground(Brush.radialGradient(0f to tint.copy(alpha = 0.32f), 0.65f to tint.copy(alpha = 0.06f), 1f to Color.Transparent)))
         if (stacked) {
             Box(Modifier.size(size * 0.86f).offset(x = size * 0.1f, y = -size * 0.08f).clip(SquircleShape.fraction(0.32f)).background(tint.copy(alpha = 0.22f)))
         }
@@ -337,7 +338,7 @@ internal fun Emblem(icon: ImageVector, tint: Color, size: Dp, stacked: Boolean =
                     shadowElevation = 8.dp.toPx()
                     spotShadowColor = tint
                 }
-                .background(Brush.linearGradient(listOf(lerp(tint, Color.White, 0.12f), lerp(tint, Color.Black, 0.28f)))),
+                .ditheredBackground(Brush.linearGradient(listOf(lerp(tint, Color.White, 0.12f), lerp(tint, Color.Black, 0.28f)))),
             contentAlignment = Alignment.Center,
         ) {
             FuseIcon(icon, size = size * 0.44f, tint = Color.White)
@@ -368,7 +369,7 @@ internal fun CartridgeIcon(size: Dp) {
     val orange = CartridgeBrand.ORANGE.toColor()
     val shape = remember { SquircleShape.fraction(0.3f) }
     Box(Modifier.size(size), contentAlignment = Alignment.Center) {
-        Box(Modifier.size(size * 1.4f).background(Brush.radialGradient(0f to orange.copy(alpha = 0.26f), 0.6f to orange.copy(alpha = 0.05f), 1f to Color.Transparent)))
+        Box(Modifier.size(size * 1.4f).ditheredBackground(Brush.radialGradient(0f to orange.copy(alpha = 0.26f), 0.6f to orange.copy(alpha = 0.05f), 1f to Color.Transparent)))
         Box(
             Modifier.size(size * 0.86f)
                 .graphicsLayer {

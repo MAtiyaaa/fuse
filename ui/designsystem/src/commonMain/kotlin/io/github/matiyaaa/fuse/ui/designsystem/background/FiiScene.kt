@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.designsystem.background
 
+import io.github.matiyaaa.fuse.ui.designsystem.effects.drawDitheredRect
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -63,7 +64,7 @@ internal class FiiScene(look: SceneLook) : Scene(look) {
     override fun DrawScope.paint(t: Float) {
         val w = size.width
         val h = size.height
-        drawRect(top)
+        drawDitheredRect(top)
         // Pinstripes: a thin shadowed line with a lit line under it, as on brushed silver.
         val gap = 6f * density
         var y = gap
@@ -72,7 +73,7 @@ internal class FiiScene(look: SceneLook) : Scene(look) {
             if (!night) drawLine(stripeLight, Offset(0f, y + density), Offset(w, y + density), strokeWidth = density * 0.75f)
             y += gap
         }
-        drawRect(bottom)
+        drawDitheredRect(bottom)
         sheen.draw(this, w * 0.5f, -h * 0.12f, w * 0.7f, h * 0.38f, alpha = (if (night) 0.05f else 0.5f) * k)
         corner.draw(this, w * 0.1f, h * 1.02f, size.maxDimension * 0.42f, alpha = (if (night) 0.12f else 0.1f) * k)
 
