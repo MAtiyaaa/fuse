@@ -10,11 +10,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.toComposeImageBitmap
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import io.github.matiyaaa.fuse.playback.Capabilities
 import io.github.matiyaaa.fuse.playback.Cue
 import io.github.matiyaaa.fuse.playback.PlaySource
@@ -25,16 +22,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
-import org.jetbrains.skia.ColorAlphaType
-import org.jetbrains.skia.ColorType
 import org.jetbrains.skia.Image
-import org.jetbrains.skia.ImageInfo
+import org.jetbrains.skia.Rect
+import org.jetbrains.skia.SamplingMode
 
 /**
  * The desktop's player engine, on FFmpeg (bytedeco's build, through JavaCPP): files, HTTP and HLS
  * streams, hardware decoding where the system has it, sound through `javax.sound` as the clock,
- * and subtitles inside the stream decoded to cues. Pictures are converted to BGRA once, at most
- * 1080p, and drawn by Compose. It never claims HDR: HDR video is tone mapped by the server.
+ * and subtitles inside the stream decoded to cues. Pictures are converted once, at most the
+ * screen's size (see VideoScaler), and drawn by Compose. It never claims HDR: HDR video is tone mapped by the server.
  */
 class FfmpegEngine : PlayerEngine {
     private val audio = AudioOut()
@@ -282,8 +278,8 @@ class FfmpegEngine : PlayerEngine {
 
     internal fun takeFrameForTest(): VideoFrame? {
         val f = takeFrame() ?: return null
-        lastFrameBytes = f.bytes.size
-        val copy = VideoFrame(f.width, f.height, ByteArray(0), f.ptsMs, f.serial)
+        lastFrameBytes = (f.image?.let { it.width * it.height * 4 }) ?: 0
+        val copy = VideoFrame(f.width, f.height, null, f.ptsMs, f.serial)
         playback?.recycle(f)
         return copy
     }
@@ -302,7 +298,7 @@ class FfmpegEngine : PlayerEngine {
 
     @Composable
     override fun Video(modifier: Modifier) {
-        var image by remember { mutableStateOf<ImageBitmap?>(null) }
+        var image by remember { mutableStateOf<Image?>(null) }
         val held = remember { arrayOfNulls<Image>(1) }
         LaunchedEffect(this) {
             while (true) {
@@ -316,12 +312,14 @@ class FfmpegEngine : PlayerEngine {
                 }
                 withFrameNanos { }
                 val frame = takeFrame() ?: continue
-                val info = ImageInfo(frame.width, frame.height, ColorType.BGRA_8888, ColorAlphaType.OPAQUE)
-                val next = Image.makeRaster(info, frame.bytes, frame.width * 4)
+                // Made on the decoding thread: here it is only handed over.
+                val next = frame.image
+                frame.image = null
                 playback?.recycle(frame)
+                if (next == null) continue
                 held[0]?.close()
                 held[0] = next
-                image = next.toComposeImageBitmap()
+                image = next
             }
         }
         DisposableEffect(this) {
@@ -332,14 +330,19 @@ class FfmpegEngine : PlayerEngine {
         }
         Canvas(modifier) {
             val img = image ?: return@Canvas
-            drawImage(
-                img,
-                dstOffset = IntOffset.Zero,
-                dstSize = IntSize(size.width.toInt(), size.height.toInt()),
-                // Cubic, not Medium: Medium samples with mipmaps, which Skia builds on the processor
-                // for every new picture before it goes to the graphics card, on the interface's thread.
-                filterQuality = FilterQuality.High,
-            )
+            drawIntoCanvas { canvas ->
+                // Catmull-Rom: a picture smaller than the screen is enlarged crisply. Compose's High
+                // is Mitchell's cubic, which softens as it enlarges; a film looked blurred on a TV.
+                // (No mipmaps either: Skia would build those on the processor for every picture.)
+                canvas.nativeCanvas.drawImageRect(
+                    img,
+                    Rect.makeWH(img.width.toFloat(), img.height.toFloat()),
+                    Rect.makeWH(size.width, size.height),
+                    SamplingMode.CATMULL_ROM,
+                    null,
+                    true,
+                )
+            }
         }
     }
 

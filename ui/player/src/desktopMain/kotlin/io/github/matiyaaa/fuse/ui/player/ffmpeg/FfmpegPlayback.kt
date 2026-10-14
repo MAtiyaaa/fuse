@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.player.ffmpeg
 
+import kotlin.math.roundToLong
 import io.github.matiyaaa.fuse.playback.BitmapCue
 import io.github.matiyaaa.fuse.playback.Cue
 import io.github.matiyaaa.fuse.playback.PlaySource
@@ -39,7 +40,6 @@ import org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_AUDIO
 import org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_SUBTITLE
 import org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_VIDEO
 import org.bytedeco.ffmpeg.global.avutil.AV_NOPTS_VALUE
-import org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_BGRA
 import org.bytedeco.ffmpeg.global.avutil.av_buffer_ref
 import org.bytedeco.ffmpeg.global.avutil.av_buffer_unref
 import org.bytedeco.ffmpeg.global.avutil.av_dict_free
@@ -52,11 +52,6 @@ import org.bytedeco.ffmpeg.global.avutil.av_hwdevice_find_type_by_name
 import org.bytedeco.ffmpeg.global.avutil.av_hwframe_transfer_data
 import org.bytedeco.ffmpeg.global.avutil.av_q2d
 import org.bytedeco.ffmpeg.global.avutil.av_strerror
-import org.bytedeco.ffmpeg.global.swscale.SWS_BILINEAR
-import org.bytedeco.ffmpeg.global.swscale.sws_freeContext
-import org.bytedeco.ffmpeg.global.swscale.sws_getCachedContext
-import org.bytedeco.ffmpeg.global.swscale.sws_scale
-import org.bytedeco.ffmpeg.swscale.SwsContext
 import org.bytedeco.javacpp.BytePointer
 import org.bytedeco.javacpp.IntPointer
 import org.bytedeco.javacpp.Pointer
@@ -66,8 +61,11 @@ import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
-/** One decoded picture, BGRA, [width] by [height], shown at [ptsMs]. Pooled: never kept by the screen. */
-internal class VideoFrame(var width: Int = 0, var height: Int = 0, var bytes: ByteArray = ByteArray(0), var ptsMs: Long = 0, var serial: Int = 0)
+/**
+ * One decoded picture, [width] by [height], shown at [ptsMs], ready as a Skia [image]. Pooled: the
+ * screen takes the image (setting it to null) and gives the frame back; one not taken is closed.
+ */
+internal class VideoFrame(var width: Int = 0, var height: Int = 0, var image: org.jetbrains.skia.Image? = null, var ptsMs: Long = 0, var serial: Int = 0)
 
 /** What one load of the engine reports back. */
 internal interface PlaybackListener {
@@ -165,6 +163,8 @@ internal class FfmpegPlayback(
 
     /** Gives a shown frame back to the pool. */
     fun recycle(frame: VideoFrame) {
+        frame.image?.close()
+        frame.image = null
         free.offer(frame)
     }
 
@@ -172,8 +172,12 @@ internal class FfmpegPlayback(
         closing = true
         videoPackets.offer(Queued(null, -1, end = true))
         audioPackets.offer(Queued(null, -1, end = true))
-        // Unblocks a decoder waiting for a free frame.
-        ready.clear()
+        // Unblocks a decoder waiting for a free frame; the pictures waiting are let go.
+        while (true) {
+            val f = ready.poll() ?: break
+            f.image?.close()
+            f.image = null
+        }
         repeat(FRAME_POOL) { free.offer(VideoFrame()) }
         threads.forEach { it.interrupt() }
     }
@@ -431,12 +435,7 @@ internal class FfmpegPlayback(
         val frame = av_frame_alloc()
         val software = av_frame_alloc()
         val timeBase = av_q2d(fmt.streams(stream).time_base())
-        var sws: SwsContext? = null
-        var out: BytePointer? = null
-        var outSize = 0L
-        // The scaler reads four planes' pointers and strides; BGRA uses the first.
-        val planes = PointerPointer<BytePointer>(4L)
-        val strides = IntPointer(4L)
+        val scaler = VideoScaler()
         var first = true
         var current = serial.get()
         try {
@@ -450,7 +449,7 @@ internal class FfmpegPlayback(
                     avcodec_flush_buffers(ctx)
                     current = q.serial
                     // Pictures decoded before the seek are of no use now.
-                    while (true) free.offer(ready.poll() ?: break)
+                    while (true) recycle(ready.poll() ?: break)
                     continue
                 }
                 if (q.end && q.serial >= 0) {
@@ -481,30 +480,29 @@ internal class FfmpegPlayback(
                         av_frame_unref(software)
                         continue
                     }
-                    // Scaled once, to at most the size a screen shows, with the pixel shape baked in.
+                    // Scaled once, to at most the size of the screen, with the pixel shape baked in.
                     val (w, h) = outputSize(decoded.width(), decoded.height(), ctx)
-                    sws = sws_getCachedContext(sws, decoded.width(), decoded.height(), decoded.format(), w, h, AV_PIX_FMT_BGRA, SWS_BILINEAR, null, null, null as org.bytedeco.javacpp.DoublePointer?)
-                    val need = w.toLong() * h * 4
-                    if (out == null || outSize != need) {
-                        out?.deallocate()
-                        out = BytePointer(need)
-                        outSize = need
-                        planes.put(0L, out)
-                        for (p in 1L..3L) planes.put(p, null as Pointer?)
-                        strides.put(0L, w * 4).put(1L, 0).put(2L, 0).put(3L, 0)
-                    }
+                    val image = scaler.scale(decoded, w, h)
+                    av_frame_unref(frame)
+                    av_frame_unref(software)
+                    if (image == null) continue
                     val target = free.take()
-                    sws_scale(sws, decoded.data(), decoded.linesize(), 0, decoded.height(), planes, strides)
-                    if (target.bytes.size != need.toInt()) target.bytes = ByteArray(need.toInt())
-                    out!!.position(0).get(target.bytes, 0, need.toInt())
+                    target.image?.close()
+                    target.image = image
                     target.width = w
                     target.height = h
                     target.ptsMs = ptsMs
                     target.serial = current
-                    av_frame_unref(frame)
-                    av_frame_unref(software)
-                    while (!closing && !ready.offer(target, 50, TimeUnit.MILLISECONDS)) {
-                        if (current != serial.get()) break
+                    var queued = false
+                    while (!closing && !queued) {
+                        queued = ready.offer(target, 50, TimeUnit.MILLISECONDS)
+                        if (!queued && current != serial.get()) break
+                    }
+                    // A seek came while it waited: back to the pool. Lost, four seeks like that left
+                    // none, and the picture stopped for good.
+                    if (!queued) {
+                        recycle(target)
+                        continue
                     }
                     if (first) {
                         first = false
@@ -517,10 +515,7 @@ internal class FfmpegPlayback(
         } finally {
             av_frame_free(frame)
             av_frame_free(software)
-            sws?.let { sws_freeContext(it) }
-            out?.deallocate()
-            planes.deallocate()
-            strides.deallocate()
+            scaler.close()
         }
     }
 
@@ -529,7 +524,7 @@ internal class FfmpegPlayback(
         var w = width.toDouble()
         val h = height.toDouble()
         if (sar.num() > 0 && sar.den() > 0) w = w * sar.num() / sar.den()
-        val scale = minOf(1.0, MAX_OUT_WIDTH / w, MAX_OUT_HEIGHT / h)
+        val scale = minOf(1.0, maxOut.first / w, maxOut.second / h)
         // Even sizes keep the scaler on its fast paths.
         return ((w * scale).toInt() and 1.inv()).coerceAtLeast(2) to ((h * scale).toInt() and 1.inv()).coerceAtLeast(2)
     }
@@ -543,8 +538,13 @@ internal class FfmpegPlayback(
         var stream = -1
         var current = serial.get()
         var timeBase = 0.0
-        /** Stream time of the next sample handed to the card. */
-        var nextMs = -1L
+        /**
+         * Stream time of the next sample handed to the card, to a fraction of a millisecond. Counted
+         * in whole milliseconds a block, it lost a third of one every block (1024 samples are 21.33 ms):
+         * the clock ran 1.6% slow, the picture fell further behind the sound every minute, and the
+         * pictures waiting to be shown filled the read-ahead until the sound ran dry.
+         */
+        var nextMs = -1.0
         var buffer = ByteArray(0)
         try {
             while (!closing) {
@@ -556,7 +556,7 @@ internal class FfmpegPlayback(
                     stream = want
                     timeBase = av_q2d(fmt.streams(want).time_base())
                     filter.reset()
-                    if (current == serial.get() && nextMs >= 0) seekRequest = audio.clockMs()
+                    if (current == serial.get() && nextMs >= 0.0) seekRequest = audio.clockMs()
                 }
                 // Paused, the sound waits; a seek's flush still goes through, so the clock moves to it.
                 if (paused && audioPackets.peekFirst()?.flush != true) {
@@ -569,7 +569,7 @@ internal class FfmpegPlayback(
                     avcodec_flush_buffers(c)
                     filter.reset()
                     current = q.serial
-                    nextMs = -1
+                    nextMs = -1.0
                     audio.reset(seekTarget)
                     continue
                 }
@@ -586,22 +586,22 @@ internal class FfmpegPlayback(
                 while (!closing) {
                     if (avcodec_receive_frame(c, frame) < 0) break
                     val pts = frame.best_effort_timestamp()
-                    val ptsMs = if (pts == AV_NOPTS_VALUE) nextMs.coerceAtLeast(0) else (pts * timeBase * 1000).toLong() - startOffsetMs
+                    val ptsMs = if (pts == AV_NOPTS_VALUE) nextMs.toLong().coerceAtLeast(0) else (pts * timeBase * 1000).toLong() - startOffsetMs
                     val frameMs = frame.nb_samples() * 1000L / frame.sample_rate().coerceAtLeast(1)
                     // Sound from before the seek's target is skipped.
                     if (ptsMs + frameMs < seekTarget) {
                         av_frame_unref(frame)
                         continue
                     }
-                    if (nextMs < 0) nextMs = ptsMs
+                    if (nextMs < 0.0) nextMs = ptsMs.toDouble()
                     val s = speed
                     if (filter.prepare(frame, s)) {
                         filter.push(frame) { data, length ->
                             if (buffer.size < length) buffer = ByteArray(length)
                             data.position(0).get(buffer, 0, length)
                             applyVolume(buffer, length, volume)
-                            val at = nextMs
-                            nextMs += (length / AudioOut.FRAME_BYTES * 1000L / AudioOut.RATE * s).toLong()
+                            val at = nextMs.roundToLong()
+                            nextMs += AudioOut.durationMs(length / AudioOut.FRAME_BYTES, s)
                             if (current == serial.get() && !closing) audio.write(buffer, length, at)
                         }
                     }
@@ -677,8 +677,19 @@ internal class FfmpegPlayback(
         private const val PROBE_MICROS = "3000000"
         private const val FRAME_SLACK_MS = 20L
         private const val CUE_KEEP_MS = 30_000L
-        private const val MAX_OUT_WIDTH = 1920.0
-        private const val MAX_OUT_HEIGHT = 1080.0
+
+        /**
+         * The largest picture worth making: the largest screen's own size, 4K at most. It was 1080p
+         * whatever the screen, so a 4K TV stretched every film to twice its width and it looked soft.
+         */
+        private val maxOut: Pair<Double, Double> by lazy {
+            val screen = runCatching {
+                java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().screenDevices.maxByOrNull { it.displayMode.width.toLong() * it.displayMode.height }
+                    ?.displayMode?.let { maxOf(it.width, it.height).toDouble() to minOf(it.width, it.height).toDouble() }
+            }.getOrNull()
+            val (w, h) = screen?.takeIf { it.first > 0 && it.second > 0 } ?: (1920.0 to 1080.0)
+            minOf(maxOf(w, 1920.0), 3840.0) to minOf(maxOf(h, 1080.0), 2160.0)
+        }
         private const val ATTACHED_PIC = 0x0400
     }
 }

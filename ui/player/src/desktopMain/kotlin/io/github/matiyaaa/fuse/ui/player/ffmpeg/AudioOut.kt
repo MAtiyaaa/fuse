@@ -116,7 +116,7 @@ internal class AudioOut {
             if (x.frame <= played) m = x else break
         }
         if (played < m.frame) return resetAt
-        return m.ptsMs + ((played - m.frame) * 1000L / RATE * m.speed).toLong()
+        return m.ptsMs + durationMs(played - m.frame, m.speed).toLong()
     }
 
     /** True once every frame written has been heard (the end of a stream). */
@@ -144,6 +144,11 @@ internal class AudioOut {
     }
 
     companion object {
+        /** How much stream time [frames] played at [speed] cover, in milliseconds, unrounded. */
+        fun durationMs(frames: Long, speed: Float): Double = frames * 1000.0 / RATE * speed
+
+        fun durationMs(frames: Int, speed: Float): Double = durationMs(frames.toLong(), speed)
+
         const val RATE = 48_000
         const val CHANNELS = 2
         const val FRAME_BYTES = 4
