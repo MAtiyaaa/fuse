@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.2.10 is the <b>Native Update</b>: a cooler, longer-lasting Fuse on Android, updates that arrive ready to run fast, and a startup animation that plays smoothly from its first frame</sub><br>
+<sub>0.4.2.11 is the <b>Native Update</b>: one game known as the same game everywhere in Fuse, how long it takes to beat on its page, achievements for many more discs, RPCS3 and shadPS4 patches, sound in recordings, and updates in place on Windows and macOS</sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -385,8 +385,13 @@ Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.4.2.10 "The Native Update"**: a cooler, longer-lasting Fuse on Android, updates that
-> arrive ready to run fast, and a startup animation that plays smoothly from its first frame. 0.4.2.9
+> **Fuse 0.4.2.11 "The Native Update"**: one game known as the same game everywhere in Fuse (library,
+> Fuse One and Fuse Sync, RomM, Syncthing, Reach and RetroAchievements), how long a game takes to
+> beat on its page, achievements for Saturn, Dreamcast, 3DS, GameCube, the other CD systems and
+> compressed discs (CHD, CSO, RVZ), RPCS3 and shadPS4 patches, sound in recordings on a computer, and
+> Fuse updating itself on Windows and macOS. 0.4.2.10 brought a cooler, longer-lasting Fuse on
+> Android, updates that arrive ready to run fast, and a startup animation that plays smoothly from
+> its first frame. 0.4.2.9
 > brought Jellyfin films that play smoothly, sound clear and look sharp on a 4K TV, gradients without bands, an Emulators section on every computer, missing RetroArch
 > cores installed for you, save states through RomM, one Fuse at a time and Fuse's icon back in
 > Steam. 0.4.2.8

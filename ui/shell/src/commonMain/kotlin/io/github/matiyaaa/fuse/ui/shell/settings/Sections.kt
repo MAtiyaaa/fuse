@@ -1828,7 +1828,8 @@ fun updateRows(app: AppState): List<MenuAction> {
             // Windows and macOS install Fuse themselves: the release page has the installer.
             add(MenuAction(
                 "get", "Get ${r.name}", FuseIcons.External,
-                detail = "Opens its release page. Install it over this one; your library and settings stay",
+                detail = app.store.updates.manualReason?.let { "$it Opens its release page" }
+                    ?: "Opens its release page. Install it over this one; your library and settings stay",
                 trailing = Trailing.Chevron,
                 onSelect = { app.platform.openUrl(r.htmlUrl.ifBlank { FUSE_RELEASES }) },
             ))

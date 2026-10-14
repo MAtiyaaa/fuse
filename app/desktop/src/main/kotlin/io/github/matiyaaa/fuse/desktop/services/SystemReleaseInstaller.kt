@@ -67,7 +67,7 @@ internal class SystemReleaseInstaller(
     val layout: Layout? by lazy { detect().first }
 
     /** Why Fuse can't update itself here, said beside the release page. */
-    val manualReason: String? by lazy { detect().second }
+    override val manualReason: String? by lazy { detect().second }
 
     private val detected: Pair<Layout?, String?> by lazy { detectLayout(os, appPath(), env) }
     private fun detect() = detected

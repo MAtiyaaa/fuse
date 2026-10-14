@@ -259,6 +259,7 @@ internal class DefaultCartridgeOps(
 internal class DefaultUpdateOps(private val ctx: StoreContext) : UpdateOps {
     override val currentVersion: String = ctx.services.appVersion
     override val inPlace: Boolean get() = ctx.services.installer.inPlace
+    override val manualReason: String? get() = ctx.services.installer.manualReason
 
     override fun previous(): PreviousRelease? = ctx.services.installer.previous()
 

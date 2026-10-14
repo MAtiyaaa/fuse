@@ -25,7 +25,7 @@ import kotlinx.coroutines.CancellationException
 
 /**
  * A game's patches and cheats in its emulator's own files: RetroArch's for a game that starts there,
- * else PCSX2 for PS2 games, DuckStation for PlayStation games and PPSSPP for PSP games. Each is read the way the emulator reads it and changed the
+ * else PCSX2 for PS2 games, DuckStation for PlayStation games, PPSSPP for PSP games, RPCS3 for PS3 games and shadPS4 for PS4 games. Each is read the way the emulator reads it and changed the
  * way the emulator changes it, and Fuse only ever turns off what it turned on itself (recorded per
  * file in [io.github.matiyaaa.fuse.data.repo.OwnedChangesRepository]); anything set in the emulator
  * stays exactly as it is.
@@ -52,6 +52,8 @@ internal class NativePatches(
     suspend fun set(id: GameId, name: String, on: Boolean, cheat: Boolean): Boolean {
         val context = context(id).first ?: return false
         context.ppsspp?.let { return setPpsspp(context, it, name, on) }
+        context.rpcs3?.let { return setRpcs3(context, it, name, on) }
+        context.shadPs4?.let { return setShadPs4(context, it, name, on) }
         context.retroArch?.let { return setRetroArch(context, it, name, on) }
         val statuses = if (cheat) context.cheats else context.statuses
         val status = statuses.firstOrNull { it.patch.name == name } ?: return false
@@ -104,6 +106,8 @@ internal class NativePatches(
         val cheatsSwitch: Pair<String, String> = "EmuCore" to Pcsx2PatchRules.CHEATS_SWITCH,
         val ppsspp: PpssppContext? = null,
         val retroArch: RetroArchContext? = null,
+        val rpcs3: Rpcs3Context? = null,
+        val shadPs4: Shadps4Context? = null,
     )
 
     /** PPSSPP's cheats are switched in the cheat file itself; its cheats switch is in the game's own settings file, when it has one. */
@@ -142,7 +146,9 @@ internal class NativePatches(
             "ps2" -> pcsx2(id, files)
             "psx" -> duckstation(id, files)
             "psp" -> ppsspp(game, files)
-            else -> no("No cheats here", "Fuse changes cheats for games that start in RetroArch, and patches and cheats in PCSX2, DuckStation and PPSSPP. This game's emulator keeps its own; change them there.")
+            "ps3" -> rpcs3(game, files)
+            "ps4" -> shadPs4(game, files)
+            else -> no("No cheats here", "Fuse changes cheats for games that start in RetroArch, and patches and cheats in PCSX2, DuckStation, PPSSPP, RPCS3 and shadPS4. This game's emulator keeps its own; change them there.")
         }
     }
 
@@ -381,6 +387,186 @@ internal class NativePatches(
         return true
     }
 
+    // RPCS3 --------------------------------------------------------------------------------------
+
+    /** RPCS3's patches for a game: every patch its patch files list for this game's serial and version, switched in patch_config.yml. */
+    private class Rpcs3Context(
+        val entries: Map<String, List<io.github.matiyaaa.fuse.launch.patches.Rpcs3PatchEntry>>,
+        val configText: String?,
+    )
+
+    private suspend fun rpcs3(game: Game, files: EmulatorFiles): Pair<Context?, GamePatchList.Unavailable?> {
+        val rpcs3 = installed("rpcs3") ?: return no("RPCS3 isn't installed", "Install RPCS3, start it once so it sets up its folders, and its patches show here.")
+        val config = files.rpcs3Config(rpcs3) ?: return no("RPCS3 isn't set up yet", "Start RPCS3 once so it makes its settings folder, then come back.")
+        val sfo = sfoNear(game.location.launchPath)
+        val serial = (game.tags.serial?.uppercase()?.filter { it.isLetterOrDigit() }?.takeIf { PS3_ID.matches(it) }
+            ?: sfo?.get("TITLE_ID")?.trim()?.uppercase()?.takeIf { PS3_ID.matches(it) })
+            ?: return no("Fuse can't tell which game this is", "RPCS3 files patches under the game's serial (like BLUS30443), which Fuse reads from a game folder's PARAM.SFO or from the game's name.")
+        // An update installed in RPCS3 is the version it runs.
+        val updated = files.rpcs3Storage(rpcs3).firstNotNullOfOrNull { sfoAt("$it/game/$serial/PARAM.SFO") }
+        val version = (updated ?: sfo)?.get("APP_VER")?.trim()?.takeIf { APP_VER.matches(it) }
+        val entries = LinkedHashMap<String, MutableList<io.github.matiyaaa.fuse.launch.patches.Rpcs3PatchEntry>>()
+        var read = false
+        for (name in io.github.matiyaaa.fuse.launch.patches.Rpcs3Patches.files(serial)) {
+            val text = fs.readText("$config/patches/$name", MAX_YAML) ?: continue
+            read = true
+            io.github.matiyaaa.fuse.launch.patches.Rpcs3Patches.forGame(text, serial, version).forEach { e ->
+                entries.getOrPut(e.description) { ArrayList() }.add(e)
+            }
+        }
+        val configPath = io.github.matiyaaa.fuse.launch.patches.Rpcs3Patches.configPath(config, ctx.host == io.github.matiyaaa.fuse.model.Host.WINDOWS)
+        val configText = fs.readText(configPath, MAX_YAML)
+        val patchConfig = io.github.matiyaaa.fuse.launch.patches.Rpcs3PatchConfig(configText)
+        val onNow = entries.filterValues { list -> list.any(patchConfig::enabled) }.keys
+        val owned = owned(RPCS3_KIND, configPath, onNow)
+        val statuses = entries.map { (description, list) ->
+            val first = list.first()
+            PatchStatus(
+                PnachPatch(description, description = first.notes, author = first.author),
+                when {
+                    description in onNow && description in owned -> PatchState.ON_BY_FUSE
+                    description in onNow -> PatchState.ON_IN_EMULATOR
+                    else -> PatchState.OFF
+                },
+            )
+        }
+        val view = GamePatchList.Ready(
+            serial = serial,
+            crc = version.orEmpty(),
+            patches = statuses,
+            bundledRead = true,
+            emulator = "RPCS3",
+            whereFrom = if (read) {
+                "RPCS3 has none for $serial${version?.let { " version $it" }.orEmpty()} in its patch files. Download the newest in RPCS3's Patch Manager, then come back."
+            } else {
+                "RPCS3 has no patch files yet. Open its Patch Manager and download them, then come back."
+            },
+            warning = "Fuse doesn't know this game's version, so patches for every version of $serial are listed; RPCS3 applies only the one made for the game you run.".takeIf { version == null && entries.isNotEmpty() },
+            cheatsNote = "",
+        )
+        return Context(
+            files, RPCS3_KIND, configPath, IniText(""), owned, statuses, view,
+            rpcs3 = Rpcs3Context(entries, configText),
+        ) to null
+    }
+
+    /** An RPCS3 patch on or off: `Enabled` for every hash the patch lists for this game, as its Patch Manager does. */
+    private suspend fun setRpcs3(context: Context, r: Rpcs3Context, name: String, on: Boolean): Boolean {
+        val status = context.statuses.firstOrNull { it.patch.name == name } ?: return false
+        if (!(on && status.state == PatchState.OFF) && !(!on && status.state == PatchState.ON_BY_FUSE)) return false
+        val entries = r.entries[name] ?: return false
+        val config = io.github.matiyaaa.fuse.launch.patches.Rpcs3PatchConfig(r.configText)
+        entries.forEach { config.set(it, on) }
+        val made = data.owned.get(RPCS3_KIND, "${context.settingsPath}#made").isNotEmpty()
+        val owned = if (on) context.owned + name else context.owned - name
+        if (!on && made && config.isEmpty) {
+            if (!context.files.remove(context.settingsPath)) return false
+            data.owned.set(RPCS3_KIND, "${context.settingsPath}#made", emptySet())
+        } else {
+            if (!context.files.write(context.settingsPath, config.toString())) return false
+            if (r.configText == null) data.owned.set(RPCS3_KIND, "${context.settingsPath}#made", setOf("file"))
+        }
+        data.owned.set(RPCS3_KIND, context.settingsPath, owned)
+        return true
+    }
+
+    // shadPS4 ------------------------------------------------------------------------------------
+
+    /** shadPS4's patches for a game: the file each patch repository names for its serial, switched by `isEnabled`. */
+    private class Shadps4Context(
+        /** Patch key (`repo/file#index`) to the file it is in and its place there. */
+        val where: Map<String, Pair<String, Int>>,
+        val texts: Map<String, String>,
+    )
+
+    private suspend fun shadPs4(game: Game, files: EmulatorFiles): Pair<Context?, GamePatchList.Unavailable?> {
+        val shad = installed("shadps4") ?: return no("shadPS4 isn't installed", "Install shadPS4, start it once so it sets up its folders, and its patches show here.")
+        val user = files.shadPs4User(shad) ?: return no("shadPS4 isn't set up yet", "Start shadPS4 once so it makes its user folder, then come back.")
+        val launch = game.location.launchPath
+        val sfo = sfoNear(launch)
+        val serial = (game.tags.serial?.uppercase()?.filter { it.isLetterOrDigit() }?.takeIf { PS4_ID.matches(it) }
+            ?: sfo?.get("TITLE_ID")?.trim()?.uppercase()?.takeIf { PS4_ID.matches(it) })
+            ?: return no("Fuse can't tell which game this is", "shadPS4 files patches under the game's id (like CUSA00900), which Fuse reads from the game folder's sce_sys/param.sfo or from the game's name.")
+        // shadPS4 runs an update kept beside the game (GAME-UPDATE or GAME-patch) over it.
+        val folder = (if (fs.stat(launch)?.isDirectory == true) launch else io.github.matiyaaa.fuse.library.FsPath.parent(launch))?.trimEnd('/', '\\')
+        val update = folder?.let { f -> listOf("-UPDATE", "-patch").firstNotNullOfOrNull { sfoAt("$f$it/sce_sys/param.sfo") } }
+        val version = (update ?: sfo)?.get("APP_VER")?.trim()?.takeIf { it.isNotEmpty() }
+        val patchesDir = "$user/patches"
+        val where = LinkedHashMap<String, Pair<String, Int>>()
+        val texts = HashMap<String, String>()
+        val statuses = ArrayList<PatchStatus>()
+        val onNow = HashSet<String>()
+        val found = ArrayList<Pair<String, io.github.matiyaaa.fuse.launch.patches.Shadps4Patch>>()
+        for (repo in list(patchesDir).filter { it.isDirectory }.sortedBy { it.name }) {
+            val index = fs.readText("${repo.path}/files.json", MAX_TEXT) ?: continue
+            val name = io.github.matiyaaa.fuse.launch.patches.Shadps4Patches.fileFor(index, serial) ?: continue
+            val path = "${repo.path}/$name"
+            val xml = fs.readText(path, MAX_TEXT) ?: continue
+            texts[path] = xml
+            for (p in io.github.matiyaaa.fuse.launch.patches.Shadps4Patches.parse(xml)) {
+                if (!io.github.matiyaaa.fuse.launch.patches.Shadps4Patches.applies(p, version)) continue
+                val key = "${repo.name}/$name#${p.index}"
+                where[key] = path to p.index
+                if (p.enabled) onNow += key
+                found += key to p
+            }
+        }
+        // What Fuse turned on is recorded per patch, across the game's files.
+        val record = "$patchesDir#$serial"
+        val owned = owned(SHADPS4_KIND, record, onNow)
+        val repos = found.map { it.first.substringBefore('/') }.distinct().size
+        for ((key, p) in found) {
+            statuses += PatchStatus(
+                PnachPatch(key, description = p.note, author = p.author, label = if (repos > 1) "${p.name} (${key.substringBefore('/')})" else p.name),
+                when {
+                    key in onNow && key in owned -> PatchState.ON_BY_FUSE
+                    key in onNow -> PatchState.ON_IN_EMULATOR
+                    else -> PatchState.OFF
+                },
+            )
+        }
+        val view = GamePatchList.Ready(
+            serial = serial,
+            crc = version.orEmpty(),
+            patches = statuses,
+            bundledRead = true,
+            emulator = "shadPS4",
+            whereFrom = "shadPS4 has none for $serial${version?.let { " version $it" }.orEmpty()}. Download patches in shadPS4's Patch Manager, then come back.",
+            cheatsNote = "",
+        )
+        return Context(
+            files, SHADPS4_KIND, record, IniText(""), owned, statuses, view,
+            shadPs4 = Shadps4Context(where, texts),
+        ) to null
+    }
+
+    /** A shadPS4 patch on or off: its `isEnabled`, nothing else in the file changed. */
+    private suspend fun setShadPs4(context: Context, s: Shadps4Context, name: String, on: Boolean): Boolean {
+        val status = context.statuses.firstOrNull { it.patch.name == name } ?: return false
+        if (!(on && status.state == PatchState.OFF) && !(!on && status.state == PatchState.ON_BY_FUSE)) return false
+        val (path, index) = s.where[name] ?: return false
+        val xml = s.texts[path] ?: return false
+        val changed = io.github.matiyaaa.fuse.launch.patches.Shadps4Patches.setEnabled(xml, index, on) ?: return false
+        if (!context.files.write(path, changed)) return false
+        data.owned.set(SHADPS4_KIND, context.settingsPath, if (on) context.owned + name else context.owned - name)
+        return true
+    }
+
+    /** PARAM.SFO's strings for the game at [path]: beside it, in a PS3_GAME folder, or in sce_sys (PS4), up to three folders up. */
+    private suspend fun sfoNear(path: String): Map<String, String>? {
+        var dir: String? = if (fs.stat(path)?.isDirectory == true) path else io.github.matiyaaa.fuse.library.FsPath.parent(path)
+        repeat(3) {
+            val d = dir ?: return null
+            for (rel in listOf("PARAM.SFO", "PS3_GAME/PARAM.SFO", "sce_sys/param.sfo")) sfoAt("$d/$rel")?.let { return it }
+            dir = io.github.matiyaaa.fuse.library.FsPath.parent(d)
+        }
+        return null
+    }
+
+    private suspend fun sfoAt(path: String): Map<String, String>? =
+        runCatching { fs.readBytes(path, 0, 64 * 1024) }.getOrNull()?.takeIf { it.size >= 20 }
+            ?.let { runCatching { io.github.matiyaaa.fuse.library.disc.ParamSfo.strings(it) }.getOrNull() }?.takeIf { it.isNotEmpty() }
+
     // RetroArch -----------------------------------------------------------------------------------
 
     private suspend fun retroArch(game: Game, files: EmulatorFiles, run: RetroArchRun): Pair<Context?, GamePatchList.Unavailable?> {
@@ -496,5 +682,13 @@ internal class NativePatches(
         const val DUCKSTATION_KIND = "duckstation.patches"
         const val PPSSPP_KIND = "ppsspp.cheats"
         const val RETROARCH_KIND = "retroarch.cheats"
+        const val RPCS3_KIND = "rpcs3.patches"
+        const val SHADPS4_KIND = "shadps4.patches"
+
+        /** RPCS3's patch.yml runs to a few megabytes. */
+        const val MAX_YAML = 32 * 1024 * 1024
+        val PS3_ID = Regex("^[A-Z]{4}\\d{5}$")
+        val PS4_ID = Regex("^(CUSA|PLAS|PCAS|PCJS|PLJM|PLJS|PCKS|PLKS)\\d{5}$")
+        val APP_VER = Regex("^\\d{2}\\.\\d{2}$")
     }
 }

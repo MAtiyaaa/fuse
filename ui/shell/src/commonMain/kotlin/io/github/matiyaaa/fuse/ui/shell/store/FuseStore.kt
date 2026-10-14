@@ -1002,6 +1002,9 @@ interface UpdateOps {
     /** False where an update is got from its release page instead (Windows and macOS). */
     val inPlace: Boolean get() = true
 
+    /** Why Fuse can't update itself here, when it knows. */
+    val manualReason: String? get() = null
+
     /** The version Fuse can go back to, while it is kept. */
     fun previous(): PreviousRelease? = null
 

@@ -379,6 +379,60 @@ class DesktopEmulatorFiles(
         }.distinct()
     }
 
+    /**
+     * RPCS3's config folder, as fs::get_config_dir finds it: a `portable` folder beside the program,
+     * else the program's own folder on Windows (or `RPCS3_CONFIG_DIR`), ~/Library/Application
+     * Support/rpcs3 on macOS, $XDG_CONFIG_HOME/rpcs3 or ~/.config/rpcs3 on Linux (inside ~/.var/app
+     * for the Flatpak). Its patches and patch_config.yml may be changed once it is returned.
+     */
+    override suspend fun rpcs3Config(installed: InstalledEmulator): String? = withContext(Dispatchers.IO) {
+        val flatpak = installed.detectedVia == "Flatpak"
+        val program = if (flatpak) null else File(installed.appId).takeIf { it.isAbsolute }
+        val candidates = buildList {
+            program?.parentFile?.let { add(File(it, "portable")) }
+            when (os) {
+                DesktopOs.WINDOWS -> {
+                    env["RPCS3_CONFIG_DIR"]?.takeIf { it.isNotBlank() }?.let { add(File(it)) }
+                    program?.parentFile?.let(::add)
+                }
+                DesktopOs.MACOS -> add(File(home, "Library/Application Support/rpcs3"))
+                DesktopOs.LINUX -> {
+                    if (flatpak) add(File(home, ".var/app/net.rpcs3.RPCS3/config/rpcs3"))
+                    add(env["XDG_CONFIG_HOME"]?.takeIf { it.startsWith("/") }?.let { File(it, "rpcs3") } ?: File(home, ".config/rpcs3"))
+                    if (!flatpak) add(File(home, ".var/app/net.rpcs3.RPCS3/config/rpcs3"))
+                }
+            }
+        }
+        // The folder RPCS3 actually uses has its settings in it.
+        val config = candidates.firstOrNull { it.isDirectory && (File(it, "patches").isDirectory || File(it, "config.yml").isFile || File(it, "config/config.yml").isFile || File(it, "GuiConfigs").isDirectory) }
+            ?: return@withContext null
+        roots += config.absolutePath
+        config.absolutePath.replace('\\', '/').trimEnd('/')
+    }
+
+    /**
+     * shadPS4's user folder (common/path_util.cpp): `user` beside the program when it is there, else
+     * $XDG_DATA_HOME/shadPS4 or ~/.local/share/shadPS4 on Linux (inside ~/.var/app for the Flatpak),
+     * ~/Library/Application Support/shadPS4 on macOS and %APPDATA%\shadPS4 on Windows.
+     */
+    override suspend fun shadPs4User(installed: InstalledEmulator): String? = withContext(Dispatchers.IO) {
+        val program = File(installed.appId).takeIf { it.isAbsolute }
+        val candidates = buildList {
+            program?.parentFile?.let { add(File(it, "user")) }
+            when (os) {
+                DesktopOs.LINUX -> {
+                    add(File(env["XDG_DATA_HOME"]?.takeIf { it.isNotBlank() } ?: "$home/.local/share", "shadPS4"))
+                    add(File(home, ".var/app/net.shadps4.shadPS4/data/shadPS4"))
+                }
+                DesktopOs.MACOS -> add(File(home, "Library/Application Support/shadPS4"))
+                DesktopOs.WINDOWS -> env["APPDATA"]?.let { add(File(it, "shadPS4")) }
+            }
+        }
+        val user = candidates.firstOrNull { it.isDirectory } ?: return@withContext null
+        roots += user.absolutePath
+        user.absolutePath.replace('\\', '/').trimEnd('/')
+    }
+
     override suspend fun modHome(query: io.github.matiyaaa.fuse.sync.SaveQuery): Result<io.github.matiyaaa.fuse.sync.ModHome> = withContext(Dispatchers.IO) {
         val host = when (os) { DesktopOs.WINDOWS -> "WINDOWS"; DesktopOs.MACOS -> "MACOS"; DesktopOs.LINUX -> "LINUX" }
         val found = io.github.matiyaaa.fuse.sync.ModFolders.locate(query, io.github.matiyaaa.fuse.sync.FileSaveEnvironment(host, home) { env[it] })
