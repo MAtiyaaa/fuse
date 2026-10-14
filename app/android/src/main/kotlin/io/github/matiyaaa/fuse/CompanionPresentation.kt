@@ -163,6 +163,7 @@ internal class CompanionPresentation(
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         SecondScreenTouch.touched()
+        RefreshHold.active(window)
         return super.dispatchTouchEvent(ev)
     }
 
@@ -172,14 +173,17 @@ internal class CompanionPresentation(
      */
     @SuppressLint("RestrictedApi") // Lint false positive: Dialog.dispatchKeyEvent is public API.
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        RefreshHold.active(window)
         val controller = event.isFromSource(InputDevice.SOURCE_GAMEPAD) || event.isFromSource(InputDevice.SOURCE_JOYSTICK)
         if (event.keyCode == KeyEvent.KEYCODE_BACK && !controller) return true
         if (controller) SecondScreenFocus.arrived()
         return app.activities.main?.forwardKey(event) == true || super.dispatchKeyEvent(event)
     }
 
-    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
-        app.activities.main?.forwardMotion(event) == true || super.dispatchGenericMotionEvent(event)
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        RefreshHold.active(window)
+        return app.activities.main?.forwardMotion(event) == true || super.dispatchGenericMotionEvent(event)
+    }
 }
 
 /**

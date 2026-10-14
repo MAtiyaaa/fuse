@@ -340,6 +340,7 @@ class MainActivity : ComponentActivity(), ActivityRequests {
 
     @SuppressLint("RestrictedApi") // Lint false positive: Activity.dispatchKeyEvent is public API.
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        RefreshHold.active(window)
         if (dreaming && (event.isFromSource(InputDevice.SOURCE_GAMEPAD) || event.isFromSource(InputDevice.SOURCE_JOYSTICK))) return true
         // The second screen's own Back key (its navigation bar) reaches this window too; it is not Fuse's.
         val controller = event.isFromSource(InputDevice.SOURCE_GAMEPAD) || event.isFromSource(InputDevice.SOURCE_JOYSTICK)
@@ -347,13 +348,26 @@ class MainActivity : ComponentActivity(), ActivityRequests {
         return gamepad.onKey(event) || super.dispatchKeyEvent(event)
     }
 
-    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
-        if (dreaming) true else gamepad.onMotion(event) || super.dispatchGenericMotionEvent(event)
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        RefreshHold.active(window)
+        return if (dreaming) true else gamepad.onMotion(event) || super.dispatchGenericMotionEvent(event)
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        RefreshHold.active(window)
+        return super.dispatchTouchEvent(ev)
+    }
 
     /** Controller input that reached the companion screen by mistake is handled as if it came here. */
-    fun forwardKey(event: KeyEvent): Boolean = gamepad.onKey(event)
+    fun forwardKey(event: KeyEvent): Boolean {
+        RefreshHold.active(window)
+        return gamepad.onKey(event)
+    }
 
-    fun forwardMotion(event: MotionEvent): Boolean = gamepad.onMotion(event)
+    fun forwardMotion(event: MotionEvent): Boolean {
+        RefreshHold.active(window)
+        return gamepad.onMotion(event)
+    }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
