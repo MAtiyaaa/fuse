@@ -10,7 +10,18 @@ import kotlin.math.pow
 import kotlin.math.sin
 
 /** Interface sounds. All are synthesised by [ToneSynth]; no recorded or console sounds are shipped. */
-enum class SoundCue { MOVE, MOVE_UP, MOVE_DOWN, SELECT, BACK, OPEN, CLOSE, ERROR, BUMP, TOGGLE, ACHIEVEMENT, LAUNCH }
+enum class SoundCue {
+    MOVE, MOVE_UP, MOVE_DOWN, SELECT, BACK, OPEN, CLOSE, ERROR, BUMP, TOGGLE, ACHIEVEMENT, LAUNCH,
+
+    /** A match struck: a dry scrape with a crackle, as the startup animation's spark catches. */
+    STRIKE,
+
+    /** The flare after it: a breath of fire that rises and opens out as the spark runs. */
+    FLARE,
+
+    /** A slow, warm swell under a soft chord, as setup's opening pulls back and opens out. */
+    BLOOM,
+}
 
 /** Plays cues. Platforms implement it (Android AudioTrack, Linux javax.sound). */
 interface UiSounds {
@@ -53,6 +64,13 @@ object ToneSynth {
 
     fun render(cue: SoundCue, profile: SoundProfile): ShortArray {
         if (profile == SoundProfile.OFF) return ShortArray(0)
+        // The fire cues are noise shaped like fire, the same for every profile (only Off silences them).
+        when (cue) {
+            SoundCue.STRIKE -> return finish(strike())
+            SoundCue.FLARE -> return finish(flare())
+            SoundCue.BLOOM -> return finish(bloom(profile))
+            else -> Unit
+        }
         val parts: List<Tone> = when (cue) {
             SoundCue.MOVE -> listOf(Tone(note(7), 0.038, 0.20))
             SoundCue.MOVE_UP -> listOf(Tone(note(10), 0.038, 0.20))
@@ -69,10 +87,16 @@ object ToneSynth {
                 Tone(note(19), 0.14, 0.18, delay = 0.18), Tone(note(24), 0.4, 0.2, delay = 0.27),
             )
             SoundCue.LAUNCH -> listOf(Tone(note(7), 0.08, 0.2), Tone(note(14), 0.08, 0.2, delay = 0.06), Tone(note(19), 0.25, 0.18, delay = 0.12))
+            SoundCue.STRIKE, SoundCue.FLARE, SoundCue.BLOOM -> emptyList()
         }
         val length = parts.maxOf { it.delay + it.duration } + 0.02
         val out = DoubleArray((length * SAMPLE_RATE).toInt())
         for (tone in parts) addTone(out, tone, profile)
+        return finish(out)
+    }
+
+    /** The shared last step: the gentle low-pass, then 16-bit samples with headroom. */
+    private fun finish(out: DoubleArray): ShortArray {
         // One-pole low-pass: takes the edge off the top overtones without dulling the note.
         val a = 1.0 - exp(-2.0 * PI * LOW_PASS / SAMPLE_RATE)
         var y = 0.0
@@ -82,6 +106,96 @@ object ToneSynth {
         }
         return ShortArray(out.size) { i -> (out[i].coerceIn(-1.0, 1.0) * Short.MAX_VALUE * 0.9).toInt().toShort() }
     }
+
+    /** Repeatable white noise (the same sound every time), -1 to 1. */
+    private class Noise(seed: Long) {
+        private var s = seed
+        fun next(): Double {
+            s = s * 6364136223846793005L + 1442695040888963407L
+            return ((s ushr 11).toDouble() / (1L shl 53).toDouble()) * 2.0 - 1.0
+        }
+    }
+
+    /** A rise from 0 to 1 over [n] samples and a fall back over the last [m]: no click at either end. */
+    private fun edges(i: Int, total: Int, n: Int, m: Int): Double = rise(i, n) * rise(total - 1 - i, m)
+
+    /**
+    * A match: two quick scrapes of bright noise (the head dragged on the box), a pop as it catches,
+    * and a few crackles dying away.
+    */
+    private fun strike(): DoubleArray {
+        val total = (0.34 * SAMPLE_RATE).toInt()
+        val out = DoubleArray(total + (0.02 * SAMPLE_RATE).toInt())
+        val noise = Noise(0x5741)
+        var hp = 0.0
+        var last = 0.0
+        for (i in 0 until total) {
+            val t = i.toDouble() / SAMPLE_RATE
+            val n = noise.next()
+            // High-passed: the dry scrape is all top.
+            hp = 0.86 * (hp + n - last)
+            last = n
+            val scrape = gate(t, 0.0, 0.045) * 0.9 + gate(t, 0.055, 0.11) * 0.75
+            val catchPop = if (t in 0.11..0.135) exp(-(t - 0.11) * 160) else 0.0
+            val crackle = if (t > 0.13 && noise.next() > 0.9965) 0.8 * exp(-(t - 0.13) * 9) else 0.0
+            out[i] = (hp * 0.32 * scrape + catchPop * 0.35 * n + crackle * n.coerceAtLeast(0.3)) * edges(i, total, 60, 400)
+        }
+        return out
+    }
+
+    /**
+     * The flare: noise through a low-pass that opens as the flame takes (a breath rising from a low
+     * roar to a bright hiss), over a faint warm hum, swelling then settling.
+     */
+    private fun flare(): DoubleArray {
+        val total = (0.9 * SAMPLE_RATE).toInt()
+        val out = DoubleArray(total + (0.02 * SAMPLE_RATE).toInt())
+        val noise = Noise(0xF1A4E)
+        var lp = 0.0
+        var lp2 = 0.0
+        for (i in 0 until total) {
+            val t = i.toDouble() / SAMPLE_RATE
+            val k = t / 0.9
+            // The filter opens from about 300 Hz to 3.5 kHz, quickly then slowly.
+            val cutoff = 300.0 + 3_200.0 * (1 - exp(-k * 5))
+            val a = 1.0 - exp(-2.0 * PI * cutoff / SAMPLE_RATE)
+            lp += a * (noise.next() - lp)
+            lp2 += a * (lp - lp2)
+            val swell = sin(PI * k.coerceAtMost(1.0)).let { it * it } * (1 - 0.35 * k)
+            val hum = sin(2 * PI * 110.0 * t) * 0.08 + sin(2 * PI * 165.0 * t) * 0.04
+            out[i] = (lp2 * 1.5 + hum) * 0.42 * swell * edges(i, total, 200, 1_200)
+        }
+        return out
+    }
+
+    /** The bloom: a soft airy rush under a warm open chord that swells in and fades out slowly. */
+    private fun bloom(profile: SoundProfile): DoubleArray {
+        val total = (1.6 * SAMPLE_RATE).toInt()
+        val out = DoubleArray(total + (0.02 * SAMPLE_RATE).toInt())
+        val noise = Noise(0xB100)
+        var lp = 0.0
+        val chord = doubleArrayOf(note(-9), note(-2), note(3), note(7))
+        for (i in 0 until total) {
+            val t = i.toDouble() / SAMPLE_RATE
+            val k = t / 1.6
+            val env = (1 - exp(-t * 4)) * exp(-k * 2.2)
+            var tone = 0.0
+            for ((j, f) in chord.withIndex()) {
+                // A slow shimmer: each voice drifts a hair, so the chord breathes.
+                val drift = 1 + 0.0015 * sin(2 * PI * (0.7 + j * 0.3) * t)
+                tone += sin(2 * PI * f * drift * t) * (if (j == 0) 0.32 else 0.2)
+            }
+            if (profile == SoundProfile.CHIME || profile == SoundProfile.BUBBLE) tone += 0.08 * sin(2 * PI * note(15) * t) * exp(-t * 3)
+            lp += 0.03 * (noise.next() - lp)
+            val air = lp * 1.6 * sin(PI * k).coerceAtLeast(0.0)
+            out[i] = (tone * 0.42 + air * 0.5) * env * edges(i, total, 400, 2_000)
+        }
+        return out
+    }
+
+    /** 1 between [from] and [to] seconds with soft edges, 0 outside. */
+    private fun gate(t: Double, from: Double, to: Double): Double =
+        if (t < from || t > to) 0.0 else sin(PI * (t - from) / (to - from))
 
     private data class Tone(val freq: Double, val duration: Double, val gain: Double, val delay: Double = 0.0)
 

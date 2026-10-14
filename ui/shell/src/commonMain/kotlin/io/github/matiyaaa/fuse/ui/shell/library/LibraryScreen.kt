@@ -344,7 +344,11 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             }
         }
     }
-    PrefetchArt(tileArt, state.grid.index, size = LocalTileMetrics.current.icon * 1.4f)
+    // How many tiles a row of the grid holds, as last laid out.
+    var columns by remember { mutableIntStateOf(6) }
+    // By rows: a grid's next rows are ready as it scrolls.
+    val span = if (layout == LibraryLayout.COMPACT_LIST) 1 else columns
+    PrefetchArt(tileArt, state.grid.index, size = LocalTileMetrics.current.icon * 1.4f, span = span)
     PrefetchArt(remember(list) { list.orEmpty().map { it.art.logo } }, state.grid.index, size = LOGO_PREFETCH)
     val special = scope == LibraryScope.All && segment.set != GameSet.LIBRARY
     // A game with its own background image shows it; any other game shows its system's background,
@@ -413,7 +417,6 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         }
     }
 
-    var columns by remember { mutableIntStateOf(6) }
 
     fun options(card: GameCard) {
         if (special) {

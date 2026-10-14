@@ -55,6 +55,8 @@ fun fuseImageLoader(
         // RomM's pictures: fetched with Fuse's sign-in, kept for offline (RommImages).
         add(RommImages.Key())
         add(RommImages.Fetch())
+        // Fuseline 4.2: tiles read small copies of local art once they exist (ThumbnailInterceptor).
+        add(ThumbnailInterceptor(cacheDir))
         // System logos from the system art pack are SVG.
         add(SvgDecoder.Factory(density = { svgDensity }))
         components()
