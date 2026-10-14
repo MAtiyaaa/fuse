@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,6 +65,26 @@ internal const val FII_UNLOCK = "fii"
 
 /** How tall Fii's bar is, above the hints. */
 internal val FII_BAR = 92.dp
+
+/** Fii's bar on a small screen (a handheld's lower screen with the menus on it, a phone). */
+internal val FII_BAR_COMPACT = 66.dp
+
+/**
+ * Fii's board as Home shows it: how tall its bar is, and which of the bar's buttons the controller
+ * is on (0 Sections, 1 Quick menu; null on the board). Down from the board's last row reaches the
+ * bar, as the arranging bar is reached.
+ */
+@androidx.compose.runtime.Stable
+internal class FiiBoard(val bar: Dp) {
+    var focus by androidx.compose.runtime.mutableStateOf<Int?>(null)
+}
+
+/** What the bar's button [at] does: Fuse's sections, or the quick menu. */
+internal fun AppState.fiiAction(at: Int) {
+    if (at == 0) openSections() else quickMenuOpen = true
+}
+
+internal fun fiiLabel(at: Int) = if (at == 0) "Sections" else "Quick menu"
 
 /** Where the band's flat top runs, as a share of the bar's height (the humps rise above it). */
 private const val BAND_TOP = 0.3f
@@ -185,7 +206,7 @@ fun AppState.useTheme(spec: ThemeSpec) {
  * bar adds nothing to learn; touch, the mouse and a click use the buttons.
  */
 @Composable
-internal fun FiiBar(app: AppState, modifier: Modifier = Modifier) {
+internal fun FiiBar(app: AppState, board: FiiBoard, modifier: Modifier = Modifier) {
     val prefs by app.store.prefs.collectAsState()
     val c = Fuse.colors
     val night = c.isDark
@@ -195,9 +216,11 @@ internal fun FiiBar(app: AppState, modifier: Modifier = Modifier) {
     val bandLow = if (night) Color(0xFF161B22) else Color(0xFFE3E8EE)
     val edge = c.accent.copy(alpha = if (night) 0.55f else 0.5f)
     val shade = Color.Black.copy(alpha = if (night) 0.4f else 0.1f)
-    BoxWithConstraints(modifier.fillMaxWidth().height(FII_BAR)) {
+    val compact = board.bar < FII_BAR
+    BoxWithConstraints(modifier.fillMaxWidth().height(board.bar)) {
+        val wide = maxWidth > 420.dp
         val button = (maxHeight * 0.78f).coerceAtMost(76.dp)
-        val inset = 18.dp
+        val inset = if (compact) 12.dp else 18.dp
         Box(
             Modifier.matchParentSize().drawBehind {
                 val w = size.width
@@ -223,20 +246,21 @@ internal fun FiiBar(app: AppState, modifier: Modifier = Modifier) {
         )
         Column(
             // The time and date sit inside the band, under its flat top.
-            Modifier.align(Alignment.TopCenter).padding(top = FII_BAR * BAND_TOP + 2.dp),
+            Modifier.align(Alignment.TopCenter).padding(top = board.bar * BAND_TOP + 2.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            FText(time, Fuse.type.display.copy(fontWeight = FontWeight.Light, fontSize = 30.sp, lineHeight = 34.sp), color = c.textMuted, maxLines = 1, align = TextAlign.Center)
-            FText(date, Fuse.type.caption, color = c.textMuted, maxLines = 1, align = TextAlign.Center)
+            val size = if (compact) 22.sp else 30.sp
+            FText(time, Fuse.type.display.copy(fontWeight = FontWeight.Light, fontSize = size, lineHeight = size * 1.15f), color = c.textMuted, maxLines = 1, align = TextAlign.Center)
+            if (!compact || wide) FText(date, Fuse.type.caption, color = c.textMuted, maxLines = 1, align = TextAlign.Center)
         }
         FiiRoundButton(
-            FuseIcons.Grid, "Sections", button,
-            Modifier.align(Alignment.CenterStart).padding(start = inset),
-        ) { app.openSections() }
+            FuseIcons.Grid, fiiLabel(0), button, focused = board.focus == 0,
+            modifier = Modifier.align(Alignment.CenterStart).padding(start = inset),
+        ) { board.focus = null; app.fiiAction(0) }
         FiiRoundButton(
-            FuseIcons.Sliders, "Quick menu", button,
-            Modifier.align(Alignment.CenterEnd).padding(end = inset),
-        ) { app.quickMenuOpen = true }
+            FuseIcons.Sliders, fiiLabel(1), button, focused = board.focus == 1,
+            modifier = Modifier.align(Alignment.CenterEnd).padding(end = inset),
+        ) { board.focus = null; app.fiiAction(1) }
     }
 }
 
@@ -257,13 +281,13 @@ private fun AppState.openSections() {
 
 /** One of Fii's round buttons: glossy white (or silver), a ring of the accent when pointed at or pressed. */
 @Composable
-private fun FiiRoundButton(icon: ImageVector, label: String, size: Dp, modifier: Modifier, onClick: () -> Unit) {
+private fun FiiRoundButton(icon: ImageVector, label: String, size: Dp, focused: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val c = Fuse.colors
     val night = c.isDark
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     val pressed by interaction.collectIsPressedAsState()
-    val lit by fuselineFloat(if (hovered || pressed) 1f else 0f, Fuse.motion.tween(Durations.FAST), label = "fiiButton")
+    val lit by fuselineFloat(if (hovered || pressed || focused) 1f else 0f, Fuse.motion.tween(Durations.FAST), label = "fiiButton")
     val face = if (night) listOf(Color(0xFF39434F), Color(0xFF232A33)) else listOf(Color.White, Color(0xFFDCE2E8))
     Box(
         modifier
@@ -299,5 +323,3 @@ private fun FiiRoundButton(icon: ImageVector, label: String, size: Dp, modifier:
     }
 }
 
-/** The room [FiiBar] takes over the board's foot, for the board to keep clear. */
-internal val FiiBarRoom: Dp get() = FII_BAR + Size.hintHeight

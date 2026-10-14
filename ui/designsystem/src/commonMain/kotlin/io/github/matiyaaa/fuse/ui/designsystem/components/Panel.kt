@@ -52,6 +52,8 @@ fun Panel(
     }
     val liquid = liquidGlassOn(glass)
     val fill = when {
+        // A bright theme's glass is frosted white: thinner, the art behind turns the white muddy.
+        liquid && !c.isDark -> base.copy(alpha = maxOf(glass.surfaceOpacity, LIQUID_BRIGHT_MIN))
         liquid -> base.copy(alpha = (glass.surfaceOpacity - LIQUID_CLEARER).coerceIn(LIQUID_MIN, 1f))
         glass.enabled -> base.copy(alpha = glass.surfaceOpacity)
         else -> base
@@ -63,7 +65,8 @@ fun Panel(
         raised -> Elevation.raised
         else -> Elevation.panel
     }
-    val elevation = if (!shadow || glass.enabled) 0.dp else level.shadow
+    // Glass floats on its own light in a dark room; on a bright one it keeps a soft shadow to lift it.
+    val elevation = if (!shadow || (glass.enabled && c.isDark)) 0.dp else level.shadow
     // Glass keeps a brighter edge: it is what makes a frosted panel read as glass.
     val edge = if (glass.enabled && c.isDark) GLASS_EDGE else level.edgeAlpha(c.isDark)
     val sheen = when {
@@ -109,6 +112,9 @@ val LocalPanelFill = staticCompositionLocalOf<Color?> { null }
 
 /** How much clearer liquid glass's tint is than flat glass's: the frosted screen does the rest. */
 private const val LIQUID_CLEARER = 0.2f
+
+/** The least white a bright theme's liquid glass keeps. */
+private const val LIQUID_BRIGHT_MIN = 0.84f
 
 /** The least tint liquid glass keeps, so words on it always read. */
 private const val LIQUID_MIN = 0.36f

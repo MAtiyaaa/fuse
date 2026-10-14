@@ -221,6 +221,9 @@ class SyncDevice(
         persist()
     }
 
+    /** True once this device has had [profile]'s records from the host (it can switch to them offline). */
+    fun knows(profile: String): Boolean = state.metas.containsKey(profile)
+
     /** The profile's records as this device has them: the host's last word plus what changed here since. */
     fun meta(profile: String): ProfileMeta = (state.metas[profile] ?: ProfileMeta()).merge(state.pendingMeta[profile] ?: ProfileMeta())
 

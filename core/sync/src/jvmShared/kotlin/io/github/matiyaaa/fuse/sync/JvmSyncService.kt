@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -90,6 +91,9 @@ class JvmSyncService(
     private var loop: Job? = null
     private var nudge: Job? = null
     private val work = Mutex()
+
+    /** Held only while the person in use changes or their records are laid in place: never across the network. */
+    private val profileLock = Mutex()
     private val listsLock = Mutex()
     private val hlc by lazy { HlcClock(deviceId(), clock) }
     @Volatile private var cached: SyncSettings = SyncSettings()
@@ -583,7 +587,7 @@ class JvmSyncService(
         val active = cached.activeProfile
         runCatching { resolveGames(c) }
         runCatching { adoptOutside(c) }
-        if (active.isNotEmpty()) captureChanges(active)
+        if (active.isNotEmpty()) asActive(active) { captureChanges(active) }
         if (active.isNotEmpty()) runCatching { captureOutside(c, d, active) }
         runCatching { c.sharedGames().games }.onSuccess { games ->
             if (games.toSet() != cached.sharedGames.toSet()) saveConfig { it.copy(sharedGames = games) }
@@ -592,7 +596,8 @@ class JvmSyncService(
         val sent = d.flush(c, saves = cached.saves)
         if (active.isNotEmpty()) {
             d.pullMeta(c, active)
-            data.write(canonical(d.meta(active)))
+            // Laid in place only if they are still the one playing (a switch may have happened meanwhile).
+            asActive(active) { data.write(canonical(d.meta(active))) }
         }
         if (sent > 0) log(if (sent == 1) "Sent 1 change to $name" else "Sent $sent changes to $name", kind = SyncActivity.CHANGES)
         _status.value = SyncStatus.Online(name, c.route ?: Route.LOCAL, working = false, pending = d.pendingCount)
@@ -618,9 +623,9 @@ class JvmSyncService(
         val c = client ?: return@withLock
         val d = device ?: return@withLock
         val active = cached.activeProfile.ifEmpty { return@withLock }
-        captureChanges(active)
+        asActive(active) { captureChanges(active) }
         d.pullMeta(c, active)
-        data.write(canonical(d.meta(active)))
+        asActive(active) { data.write(canonical(d.meta(active))) }
         log("Brought in changes from your other devices", kind = SyncActivity.CHANGES)
     }
 
@@ -1901,8 +1906,22 @@ class JvmSyncService(
         runCatching {
             val d = device ?: error("Fuse One isn't set up.")
             val c = client
-            work.withLock {
-                val before = cached.activeProfile
+            val began = clock()
+            val before = cached.activeProfile
+            val known = id?.let { want -> _profiles.value.firstOrNull { it.id == want } }
+            // A person this device already has (their records came from the host before, their PIN
+            // was entered here before): they arrive at once, from what is here, and the host is
+            // asked afterwards. Nothing waits on the network or on a sync round in progress.
+            if (id != null && c != null && id != before && known != null && d.knows(id) && adopted() &&
+                (!known.protected || people.pins[id] != null)
+            ) {
+                if (known.protected) checkOfflinePin(id, known.name, pin)
+                arrive(d, before, id)
+                log("Switched to ${known.name} in ${clock() - began} ms", kind = SyncActivity.PROFILE)
+                scope.launch(Dispatchers.IO) { catchUp(c, d, id, pin, before, check = true) }
+                return@runCatching
+            }
+            profileLock.withLock {
                 // What changed under the profile in use stays with it, sent now or later (its
                 // records go up with the next person's below; its saves straight after the switch).
                 if (before.isNotEmpty()) captureChanges(before)
@@ -1916,13 +1935,15 @@ class JvmSyncService(
                     if (id != before) checkPin(own, pin)
                 } else if (c != null) {
                     try {
-                        c.openProfile(id, pin)
+                        withTimeout(HOST_SWITCH_MS) { c.openProfile(id, pin) }
                         rememberPin(id, pin)
+                    } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                        if (known == null) throw SyncException("${cached.hostName.ifBlank { "The host" }} didn't answer. Try again in a moment.", "offline", 0)
+                        if (known.protected && id != before) checkOfflinePin(id, known.name, pin)
                     } catch (e: SyncException) {
                         // The host is away: a profile without a PIN is switched to here and catches up
                         // later; one with a PIN is checked against the PIN entered here before
                         // (kept only as a salted hash), with the same lockout as any other PIN.
-                        val known = _profiles.value.firstOrNull { it.id == id }
                         if (e.code != "offline" || known == null) throw e
                         if (known.protected && id != before) checkOfflinePin(id, known.name, pin)
                     }
@@ -1934,7 +1955,7 @@ class JvmSyncService(
                     // fill what it doesn't (stamped older than anything real), and its play time
                     // and sessions join. Only a new, empty profile takes this device's as they are,
                     // and only the host can say it is new: offline, nothing here is taken as newer.
-                    val reached = c != null && runCatching { d.pullMeta(c, id) }.isSuccess
+                    val reached = c != null && runCatching { withTimeout(HOST_SWITCH_MS) { d.pullMeta(c, id) } }.isSuccess
                     // A profile made here is new by definition: it takes what this device has as it is.
                     val fresh = own != null || (reached && d.meta(id) == ProfileMeta())
                     val local = data.read(d.deviceId, hlc)
@@ -1943,25 +1964,81 @@ class JvmSyncService(
                     d.changeMeta(id) { pending, _ -> pending.merge(adopt) }
                     saveConfig { it.copy(activeProfile = id) }
                     markAdopted()
-                }
-                // One round for the records (everyone's waiting, then this person's newest); saves,
-                // which can be large, never hold a switch up.
-                if (c != null) runCatching {
-                    d.flush(c, saves = false)
-                    d.pullMeta(c, id)
+                } else if (c != null && !d.knows(id)) {
+                    // Someone new to this device: their records are needed before they arrive, so
+                    // they are brought in now (once; from then on they are kept here).
+                    runCatching { withTimeout(HOST_SWITCH_MS) { d.pullMeta(c, id) } }
                 }
                 saveConfig { it.copy(activeProfile = id) }
                 data.write(canonical(d.meta(id)))
                 d.useProfile(id)
                 _active.value = _profiles.value.firstOrNull { it.id == id }
-                log("Switched to ${_active.value?.name ?: "a profile"}", kind = SyncActivity.PROFILE)
+                log("Switched to ${_active.value?.name ?: "a profile"} in ${clock() - began} ms", kind = SyncActivity.PROFILE)
             }
-            // Saves waiting to go (the last person's, anyone's) go up now, behind the switch. Only
-            // the saves: the records were just brought in, so nothing here rewrites the library
-            // while the person starts using it.
-            if (c != null) scope.launch(Dispatchers.IO) { runCatching { sendWaiting() }.onFailure { if (it is SyncException) handle(it) } }
+            // The newest records and the saves waiting to go follow, behind the switch.
+            if (c != null && id != null) scope.launch(Dispatchers.IO) { catchUp(c, d, id, null, before, check = false) }
         }
     }
+
+    /**
+     * Puts [id] in place from what this device keeps of them: what changed under [before] stays
+     * with [before], then [id]'s records, settings and Home become the library's. Local only.
+     */
+    private suspend fun arrive(d: SyncDevice, before: String, id: String) = profileLock.withLock {
+        if (before.isNotEmpty()) captureChanges(before)
+        saveConfig { it.copy(activeProfile = id) }
+        data.write(canonical(d.meta(id)))
+        d.useProfile(id)
+        _active.value = _profiles.value.firstOrNull { it.id == id }
+    }
+
+    /**
+     * After a switch: the host checks the person (a PIN changed elsewhere, a profile deleted
+     * elsewhere sends this device back to who was here, or to "Who's playing?"), then what waits
+     * goes up and their newest records come in, laid in place only while they are still the one
+     * playing. Offline, it simply waits for the next round.
+     */
+    private suspend fun catchUp(c: SyncClient, d: SyncDevice, id: String, pin: String?, before: String, check: Boolean) {
+        val began = clock()
+        // [check]: the switch was made from what is kept here, so the host hasn't seen it yet.
+        if (check) {
+            try {
+                c.openProfile(id, pin)
+                rememberPin(id, pin)
+            } catch (e: SyncException) {
+                if (e.code == "offline" || e.code == "rate") return
+                if (cached.activeProfile != id) return
+                val back = before.takeIf { b -> b.isNotEmpty() && _profiles.value.any { it.id == b } }
+                if (back != null) arrive(d, id, back) else runCatching { switchTo(null) }
+                log(
+                    (e.message ?: "The host didn't accept that profile.") + if (back != null) " Switched back." else " Choose who's playing.",
+                    kind = SyncActivity.PROFILE,
+                )
+                return
+            }
+        }
+        work.withLock {
+            // What the person changed since arriving is theirs first, then the host's newest joins it.
+            asActive(id) { captureChanges(id) }
+            runCatching { d.flush(c, saves = false) }
+            val pulled = runCatching { d.pullMeta(c, id) }.isSuccess
+            if (pulled) asActive(id) {
+                captureChanges(id)
+                data.write(canonical(d.meta(id)))
+            }
+        }
+        log("Brought in ${_profiles.value.firstOrNull { it.id == id }?.name ?: "the profile"}'s newest in ${clock() - began} ms", kind = SyncActivity.PROFILE)
+        // Saves waiting to go (the last person's, anyone's) go up now. Only the saves: the records
+        // were just brought in, so nothing here rewrites the library while the person plays.
+        runCatching { sendWaiting() }.onFailure { if (it is SyncException) handle(it) }
+    }
+
+    /**
+     * Runs [block] while [profile] is still the one in use, under the switch lock: work for someone
+     * who was just switched away from never touches the next person's library.
+     */
+    private suspend fun <T> asActive(profile: String, block: suspend () -> T): T? =
+        profileLock.withLock { if (cached.activeProfile == profile) block() else null }
 
     private fun adopted(): Boolean = File(dir, ADOPTED_FILE).isFile
     private fun markAdopted() {
@@ -2879,6 +2956,9 @@ class JvmSyncService(
 
         /** When a device's records joining a profile already in use count as made: before anything real. */
         const val ADOPTED_AT = 1L
+
+        /** The longest a switch waits on the host, when it has to ask (someone new to this device). */
+        const val HOST_SWITCH_MS = 8_000L
 
         /** Tries, a moment apart, for a background service holding the host's port to answer. */
         /** The most game folders one play may change and still be learned as one game's. */

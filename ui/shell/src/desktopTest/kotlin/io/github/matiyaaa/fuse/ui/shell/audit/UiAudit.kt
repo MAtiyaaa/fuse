@@ -100,6 +100,10 @@ class UiAudit {
 
     @Test fun m11Looks() = audit(AuditSize.M) { lookScreens() }
 
+    @Test fun fiiBoard() = listOf(AuditSize.M, AuditSize.D, AuditSize.S).forEach { size -> audit(size) { homeFii() } }
+
+    @Test fun fiiBoardFlipped() = audit(AuditSize.L) { homeFii(flipped = true) }
+
     @Test fun m12Companion() = audit(AuditSize.M) { companionScreens() }
 
     @Test fun m13Everything() = audit(AuditSize.M) { everythingScreens() }

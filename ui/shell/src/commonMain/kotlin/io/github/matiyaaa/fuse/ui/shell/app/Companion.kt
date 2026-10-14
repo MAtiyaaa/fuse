@@ -520,16 +520,31 @@ private fun FocusedGame(store: FuseStore, id: GameId, onAchievements: (GameId) -
 private fun FocusedMedia(item: io.github.matiyaaa.fuse.jellyfin.MediaItem, minimal: Boolean) {
     val logo = item.logo?.sized(640)
     val title = if (item.type == io.github.matiyaaa.fuse.jellyfin.MediaType.EPISODE) item.seriesName ?: item.name else item.name
+    val episode = item.type == io.github.matiyaaa.fuse.jellyfin.MediaType.EPISODE
     GameLogo(logo, title) {
+        // Which episode, as the main screen's widget says it (the show's logo is above).
+        if (episode) {
+            Spacer(Modifier.height(Space.m))
+            FText(listOfNotNull(item.episodeLabel, item.name.takeIf { it != item.seriesName }).joinToString("  ·  "), Fuse.type.titleSmall, maxLines = 1, align = TextAlign.Center)
+        }
         if (!minimal) {
-            Spacer(Modifier.height(Space.l))
-            FText(io.github.matiyaaa.fuse.ui.shell.jellyfin.mediaFacts(item), Fuse.type.label, color = Fuse.colors.text.copy(alpha = 0.85f), maxLines = 1, align = TextAlign.Center)
-            item.progress?.let { p ->
-                Spacer(Modifier.height(Space.s))
-                Box(Modifier.width(160.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Fuse.colors.text.copy(alpha = 0.22f))) {
+            Spacer(Modifier.height(if (episode) Space.s else Space.l))
+            // An episode's show and number are already above: its length and rating are left to say.
+            val facts = if (episode) listOfNotNull(item.runtimeMs?.let { io.github.matiyaaa.fuse.ui.shell.jellyfin.minutes(it) }, item.officialRating).joinToString("  ·  ")
+            else io.github.matiyaaa.fuse.ui.shell.jellyfin.mediaFacts(item)
+            if (facts.isNotEmpty()) FText(facts, Fuse.type.label, color = Fuse.colors.text.copy(alpha = 0.85f), maxLines = 1, align = TextAlign.Center)
+        }
+        // Where you're up to: how far in, and how long is left.
+        item.progress?.let { p ->
+            Spacer(Modifier.height(Space.m))
+            androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(Space.s)) {
+                Box(Modifier.width(180.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Fuse.colors.text.copy(alpha = 0.22f))) {
                     Box(Modifier.fillMaxWidth(p).height(4.dp).background(Fuse.colors.accent))
                 }
+                item.leftMs?.let { FText("${io.github.matiyaaa.fuse.ui.shell.jellyfin.minutes(it)} left", Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1) }
             }
+        }
+        if (!minimal) {
             item.overview?.let {
                 Spacer(Modifier.height(Space.m))
                 FText(it, Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 3, align = TextAlign.Center, modifier = Modifier.widthIn(max = 520.dp))

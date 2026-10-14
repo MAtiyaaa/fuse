@@ -527,3 +527,25 @@ internal fun AuditDriver.cheatScreens() {
         tap(PadButton.B)
     }
 }
+
+/** Fii's board: Home as glossy channels over its bar, the bar reached by the controller, and the quick menu over it. */
+internal fun AuditDriver.homeFii(flipped: Boolean = false) {
+    scenario("home", "fii") {
+        useLibrary {
+            it.copy(
+                themeId = "fii",
+                home = HomeLayoutConfig(mode = HomeMode.CHANNELS).withStyle(io.github.matiyaaa.fuse.model.HomeStyle.FII),
+                unlocked = setOf("fii"),
+                display = it.display.copy(flipped = flipped),
+            )
+        }
+        waitFor("Continue playing")
+        shoot("the board as it comes", 2_000)
+        tap(PadButton.DPAD_DOWN, 6)
+        shoot("down past the last row, on the bar's Sections button")
+        tap(PadButton.DPAD_RIGHT)
+        shoot("on the bar's Quick menu button")
+        tap(PadButton.A)
+        shoot("the quick menu over Fii's board", 1_200)
+    }
+}

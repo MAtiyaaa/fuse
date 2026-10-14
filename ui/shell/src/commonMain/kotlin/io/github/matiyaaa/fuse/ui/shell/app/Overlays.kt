@@ -120,8 +120,11 @@ private fun ContextMenuOverlay(app: AppState) {
         InputLayer(priority = LayerPriority.DIALOG, modal = true) { e ->
             when (e.action) {
                 NavAction.BACK, NavAction.CONTEXT -> { app.contextMenu = null; app.platform.sounds.play(SoundCue.CLOSE); NavResult.CONSUMED }
-                NavAction.PREVIOUS_SECTION -> if (tabs.isEmpty()) NavResult.BLOCKED else { switchTo((tab - 1).coerceAtLeast(0)); NavResult.MOVED }
-                NavAction.NEXT_SECTION -> if (tabs.isEmpty()) NavResult.BLOCKED else { switchTo((tab + 1).coerceAtMost(tabs.lastIndex)); NavResult.MOVED }
+                // The bumpers step through the tabs, as in the quick menu; the triggers go to the first or the last.
+                NavAction.PREVIOUS_SECTION -> if (tabs.isEmpty() || tab == 0) NavResult.BLOCKED else { switchTo(tab - 1); NavResult.MOVED }
+                NavAction.NEXT_SECTION -> if (tabs.isEmpty() || tab >= tabs.lastIndex) NavResult.BLOCKED else { switchTo(tab + 1); NavResult.MOVED }
+                NavAction.PAGE_UP -> if (tabs.size < 2) handleMenuAction(e, rows, sel) else if (tab == 0) NavResult.BLOCKED else { switchTo(0); NavResult.MOVED }
+                NavAction.PAGE_DOWN -> if (tabs.size < 2) handleMenuAction(e, rows, sel) else if (tab >= tabs.lastIndex) NavResult.BLOCKED else { switchTo(tabs.lastIndex); NavResult.MOVED }
                 else -> handleMenuAction(e, rows, sel)
             }
         }
@@ -150,16 +153,13 @@ private fun ContextMenuOverlay(app: AppState) {
                     MenuHeader(s.title, subtitle = s.subtitle, icon = s.icon, leading = leading)
                     val shownTabs = if (s === spec) tabs else s.shownTabs()
                     if (shownTabs.size > 1) {
-                        io.github.matiyaaa.fuse.ui.shell.components.ViewTabs(
-                            shownTabs.map { (t, _) -> io.github.matiyaaa.fuse.ui.shell.components.ViewTab(t.label, t.icon) },
+                        // The quick menu's strip: the open tab widens to its name, the others keep their icons.
+                        io.github.matiyaaa.fuse.ui.shell.components.SectionStrip(
+                            shownTabs.map { (t, _) -> io.github.matiyaaa.fuse.ui.shell.components.StripSection(t.label, t.icon) },
                             active = tab.coerceIn(0, shownTabs.lastIndex),
-                            focused = null,
-                            onSelect = ::switchTo,
-                            gutter = Space.m,
-                            // Four or more tabs don't fit a panel by name: the others show their icons.
-                            compact = shownTabs.size >= 4,
+                            onPick = ::switchTo,
                         )
-                        Spacer(Modifier.height(Space.s))
+                        Spacer(Modifier.height(Space.m))
                     }
                     MenuList(shownTabs.getOrNull(tab.coerceIn(0, (shownTabs.size - 1).coerceAtLeast(0)))?.second ?: s.actions, sel)
                 }

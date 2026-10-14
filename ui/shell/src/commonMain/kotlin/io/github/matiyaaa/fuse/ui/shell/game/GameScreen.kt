@@ -67,6 +67,8 @@ import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.LocationKind
 import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.NavAction
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import io.github.matiyaaa.fuse.ui.designsystem.components.ButtonKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.EmptyState
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
@@ -479,6 +481,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val section = if (row.startsWith("details:")) "details" else row
     // Where the time played ends, so the stick brings all of it above the hint line, not half.
     var timeBottom by remember(game.id) { mutableIntStateOf(0) }
+    val actionRects = remember(game.id) { mutableMapOf<Int, androidx.compose.ui.geometry.Rect>() }
     var topOfPage by remember { mutableIntStateOf(0) }
     val clearBelow = with(LocalDensity.current) { (Size.hintHeight + Space.xxl).roundToPx() }
     // Where each line of detail cards ends: on a small screen they stack, and each must come fully into view.
@@ -506,6 +509,13 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
             NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT -> {
                 val from = row
                 val fromCol = col
+                // The buttons wrap on a narrow screen: Up and Down reach the one above or below first.
+                if (row == "actions") {
+                    spatialStep(actionRects, col, e.action)?.let { to ->
+                        sel.setColumn("actions", to)
+                        return@InputLayer NavResult.MOVED
+                    }
+                }
                 sel.move(e.action, rows, ::sizeOf).also {
                     // Between lines of detail cards the column carries over, as in a grid.
                     val to = rows.getOrNull(sel.row)
@@ -595,7 +605,10 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                     }
                     Spacer(Modifier.height(Space.xl))
                     // One button, drawn the same in either arrangement below.
-                    val button: @Composable (Int, Modifier) -> Unit = { i, m ->
+                    val button: @Composable (Int, Modifier) -> Unit = { i, mod ->
+                        // Where each button is, so Up and Down go to the one that is above or below
+                        // when the row wraps (More under Play on a narrow screen).
+                        val m = mod.onGloballyPositioned { actionRects[i] = it.boundsInRoot() }
                         val a = actions[i]
                         val selected = row == "actions" && col == i && focused
                         val tap = { sel.row = 0; sel.setColumn("actions", i); a.run() }
@@ -1794,3 +1807,29 @@ private fun CopyCard(copy: io.github.matiyaaa.fuse.ui.shell.store.CopyView, now:
 
 /** Launchers Fuse lists among emulators that only run files of their own kind, never a game's ROM. */
 private val NOT_EMULATORS = setOf("linux.script", "linux.desktop")
+
+/**
+ * The button [from] moves to in [direction] by where the buttons are, when they wrap onto more than
+ * one line: Up or Down to the nearest one on the line above or below, Left or Right only along its
+ * own line. Null leaves the move to the row's own order (one line, or nothing there).
+ */
+internal fun spatialStep(rects: Map<Int, androidx.compose.ui.geometry.Rect>, from: Int, direction: NavAction): Int? {
+    val here = rects[from] ?: return null
+    if (rects.values.map { it.center.y.toInt() / 4 }.distinct().size < 2) return null
+    fun sameLine(r: androidx.compose.ui.geometry.Rect) = r.center.y in here.top..here.bottom
+    val candidates = rects.filter { (i, r) ->
+        i != from && when (direction) {
+            NavAction.DOWN -> r.top >= here.bottom - 1f
+            NavAction.UP -> r.bottom <= here.top + 1f
+            NavAction.RIGHT -> sameLine(r) && r.left >= here.right - 1f
+            NavAction.LEFT -> sameLine(r) && r.right <= here.left + 1f
+            else -> false
+        }
+    }
+    if (candidates.isEmpty()) return null
+    return candidates.minByOrNull { (_, r) ->
+        val dy = kotlin.math.abs(r.center.y - here.center.y)
+        val dx = kotlin.math.abs(r.center.x - here.center.x)
+        if (direction == NavAction.UP || direction == NavAction.DOWN) dy * 4 + dx else dx + dy * 4
+    }?.key
+}

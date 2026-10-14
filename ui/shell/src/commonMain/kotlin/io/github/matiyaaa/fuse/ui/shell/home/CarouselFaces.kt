@@ -415,15 +415,32 @@ private fun MediaSlide(m: MediaItem, face: FaceSize, depth: CarouselDepth) {
                 Spacer(Modifier.width(Space.l))
             }
             Column(Modifier.weight(1f)) {
-                FText(
-                    mediaTitle(m),
-                    when (room) {
-                        Room.BIG -> Fuse.type.title
-                        Room.TALL -> Fuse.type.titleSmall
-                        else -> Fuse.type.bodyStrong
-                    },
-                    color = c.onArt, maxLines = 2,
-                )
+                val style = when (room) {
+                    Room.BIG -> Fuse.type.title
+                    Room.TALL -> Fuse.type.titleSmall
+                    else -> Fuse.type.bodyStrong
+                }
+                // The film's or show's logo, as a game's is shown; albums (no logos) keep their name.
+                val logo = m.logo.takeIf { !album }
+                if (logo != null) {
+                    val logoHeight = when (room) {
+                        Room.BIG -> (h * 0.24f).coerceIn(48.dp, 140.dp)
+                        Room.TALL -> (h * 0.26f).coerceIn(40.dp, 84.dp)
+                        Room.SHORT -> (h * 0.3f).coerceIn(30.dp, 56.dp)
+                        Room.TINY -> (h * 0.3f).coerceIn(22.dp, 40.dp)
+                    }
+                    Artwork(
+                        logo.sized(LOGO_WIDTH),
+                        Modifier.widthIn(max = if (coverBeside) w * 0.56f else w * 0.8f).fillMaxWidth().height(logoHeight),
+                        contentScale = ContentScale.Fit,
+                        focusX = 0f,
+                        focusY = 1f,
+                        loading = false,
+                        fallback = { FText(mediaTitle(m), style, color = c.onArt, maxLines = 2) },
+                    )
+                } else {
+                    FText(mediaTitle(m), style, color = c.onArt, maxLines = 2)
+                }
                 val line = if (album) m.albumArtist ?: m.artists.firstOrNull() ?: m.year?.toString() else mediaCaption(m)
                 if (room != Room.TINY && line != null) {
                     Spacer(Modifier.height(Space.xxs))
@@ -462,6 +479,9 @@ private fun emptyMediaText(kind: WidgetKind): String = when (kind) {
     WidgetKind.JELLYFIN_MUSIC -> "New albums on your server show here"
     else -> "What's new on your Jellyfin server shows here"
 }
+
+/** Logos are asked of the server at this width: sharp on a big widget, small to fetch. */
+private const val LOGO_WIDTH = 640
 
 /** At most this many items in a catalogue. */
 private const val CATALOGUE_ITEMS = 16

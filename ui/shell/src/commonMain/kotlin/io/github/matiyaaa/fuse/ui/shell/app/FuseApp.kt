@@ -666,13 +666,18 @@ private fun FuseAppContent(
 
 /**
  * Keeps the second screen on what the main screen has in focus. Its own scope, so a page setting
- * its art never recomposes the shell around it.
+ * its art never recomposes the shell around it. Only the page showing speaks for it, and a room
+ * kept only as a backdrop says nothing: the second screen never stays on a game left behind.
  */
 @Composable
 private fun SpotlightFollows(app: AppState) {
-    val id = app.hero?.id
+    val id = spotlightKey(app.hero?.id, app.heroRoute, app.navigator.current, app.heroHeld)
     LaunchedEffect(id) { Spotlight.set(id) }
 }
+
+/** What the second screen shows for the room [hero] set by [setBy], with [showing] on screen. */
+internal fun spotlightKey(hero: Any?, setBy: Route?, showing: Route, held: Boolean): Any? =
+    hero.takeIf { !held && setBy == showing }
 
 /**
  * The top line: the scrim under it and the HUD with the tabs, buttons and status. Its own scope,
