@@ -88,6 +88,7 @@ class UiAudit {
     @Test fun m06Search() = audit(AuditSize.M) { searchScreens(exhaustive = true) }
 
     @Test fun m07AppsAndCartridge() = audit(AuditSize.M) { appsScreens(exhaustive = true); cartridgeScreens(exhaustive = true) }
+    @Test fun emulatorsMandH() = listOf(AuditSize.M, AuditSize.H).forEach { size -> audit(size) { emulatorsScreens() } }
 
     @Test fun m08Overlays() = audit(AuditSize.M) { overlayScreens(exhaustive = true) }
 
