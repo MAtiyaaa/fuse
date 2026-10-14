@@ -183,8 +183,23 @@ class AndroidReleaseInstaller(
                     file.inputStream().use { it.copyTo(out, 64 * 1024) }
                     session.fsync(out)
                 }
+                // Fuse's own APK goes in with its profile, so Android compiles it as it installs.
+                val profile = File(appContext.cacheDir, "base.dm")
+                var profiled = false
+                try {
+                    if (InstallProfile.write(appContext, file, profile)) {
+                        session.openWrite("base.dm", 0, profile.length()).use { out ->
+                            profile.inputStream().use { it.copyTo(out) }
+                            session.fsync(out)
+                        }
+                        profiled = true
+                    }
+                } finally {
+                    profile.delete()
+                }
                 val callback = Intent(appContext, InstallResultReceiver::class.java).setPackage(appContext.packageName)
                     .putExtra(InstallResultReceiver.EXTRA_SELF_UPDATE, selfUpdate)
+                    .putExtra(InstallResultReceiver.EXTRA_PROFILED, profiled)
                 val flags = PendingIntent.FLAG_UPDATE_CURRENT or
                     (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
                 val pending = PendingIntent.getBroadcast(appContext, sessionId, callback, flags)

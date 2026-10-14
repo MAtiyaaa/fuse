@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.2.9 is the <b>Native Update</b>: Jellyfin films that play smoothly, sound clear and look sharp on a 4K TV, gradients without bands, an Emulators section on every computer, and missing RetroArch cores installed for you</sub><br>
+<sub>0.4.2.10 is the <b>Native Update</b>: a cooler, longer-lasting Fuse on Android, updates that arrive ready to run fast, and a startup animation that plays smoothly from its first frame</sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -385,8 +385,9 @@ Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.4.2.9 "The Native Update"**: Jellyfin films that play smoothly, sound clear and look sharp
-> on a 4K TV, gradients without bands, an Emulators section on every computer, missing RetroArch
+> **Fuse 0.4.2.10 "The Native Update"**: a cooler, longer-lasting Fuse on Android, updates that
+> arrive ready to run fast, and a startup animation that plays smoothly from its first frame. 0.4.2.9
+> brought Jellyfin films that play smoothly, sound clear and look sharp on a 4K TV, gradients without bands, an Emulators section on every computer, missing RetroArch
 > cores installed for you, save states through RomM, one Fuse at a time and Fuse's icon back in
 > Steam. 0.4.2.8
 > brought smoother motion on a 4K TV, and a log that says where a slow frame's time went. In 0.4.2.7 Home's background stays sharp and steady on a 4K TV, Jellyfin

@@ -41,6 +41,8 @@ class InstallResultReceiver : BroadcastReceiver() {
             PackageInstaller.STATUS_FAILURE_ABORTED -> UpdateRelaunch.disarm(context) // The user cancelled.
             else -> {
                 UpdateRelaunch.disarm(context)
+                // Should this phone refuse the profile that went with it, the next try goes without.
+                if (intent.getBooleanExtra(EXTRA_PROFILED, false)) InstallProfile.leaveOut(context)
                 Toast.makeText(context, failureMessage(status), Toast.LENGTH_LONG).show()
             }
         }
@@ -89,6 +91,9 @@ class InstallResultReceiver : BroadcastReceiver() {
     companion object {
         /** Set on Fuse's own update, so the new version knows to open itself. */
         const val EXTRA_SELF_UPDATE = "io.github.matiyaaa.fuse.SELF_UPDATE"
+
+        /** Set when the APK went in with its profile ([InstallProfile]). */
+        const val EXTRA_PROFILED = "io.github.matiyaaa.fuse.PROFILED"
 
         /** Set on the Store's installs and uninstalls, whose outcome goes to [InstallResults]. */
         const val EXTRA_STORE = "io.github.matiyaaa.fuse.STORE"

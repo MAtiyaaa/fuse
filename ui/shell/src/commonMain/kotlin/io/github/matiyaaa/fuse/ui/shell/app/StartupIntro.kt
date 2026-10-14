@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -80,6 +81,9 @@ internal fun StartupIntroOverlay(onDone: () -> Unit, onCovering: (Boolean) -> Un
     var burstPlayed by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
+        awaitSteadyFrames()
+        // Skipped while waiting: the skip plays the rest.
+        if (clock.value > 0f) return@LaunchedEffect
         clock.animateTo(length.toFloat(), tween(length, easing = Curves.Linear))
         onDone()
     }
@@ -118,6 +122,7 @@ internal fun StartupIntroOverlay(onDone: () -> Unit, onCovering: (Boolean) -> Un
 
     val markEmbers = remember { markEmbers() }
     val wordEmbers = remember { wordEmbers() }
+    val geometry = remember { IntroGeometry(markEmbers) }
     val colors = IntroColors(ink = c.ink, text = c.text, accent = c.accent)
 
     BoxWithConstraints(
@@ -149,12 +154,35 @@ internal fun StartupIntroOverlay(onDone: () -> Unit, onCovering: (Boolean) -> Un
                     drawBrandMark(lockup.markAt, lockup.mark, colors.text, colors.accent)
                     drawWordmark(lockup.wordAt, lockup.cap, colors.text)
                 } else {
-                    drawIntro(t, lockup, colors, markEmbers, wordEmbers)
+                    drawIntro(t, lockup, colors, geometry, markEmbers, wordEmbers)
                 }
             }
         }
     }
 }
+
+/**
+ * Waits on the intro's first picture until frames come at a steady pace, at most [STEADY_WAIT_NS].
+ *
+ * The first frames carry the whole interface being built under the intro, and right after an update
+ * (before Android has compiled Fuse) they can take a quarter of a second each. Started at once, the
+ * animation's clock ran on through them and the spark jumped ahead in steps; started once frames
+ * flow, it plays every beat smoothly from the start. Normally this is three frames, unnoticed.
+ */
+private suspend fun awaitSteadyFrames() {
+    val first = withFrameNanos { it }
+    var last = first
+    var steady = 0
+    while (steady < STEADY_FRAMES && last - first < STEADY_WAIT_NS) {
+        val now = withFrameNanos { it }
+        steady = if (now - last <= STEADY_GAP_NS) steady + 1 else 0
+        last = now
+    }
+}
+
+private const val STEADY_FRAMES = 3
+private const val STEADY_GAP_NS = 34_000_000L
+private const val STEADY_WAIT_NS = 1_500_000_000L
 
 /** The intro's beats, in milliseconds. */
 private const val CATCH_TO = 320f
@@ -192,16 +220,38 @@ private class Lockup(center: Offset, val cap: Float) {
     val soloAt = Offset(center.x - soloMark / 2, center.y - soloMark / 2)
 }
 
-private fun DrawScope.drawIntro(t: Float, lockup: Lockup, colors: IntroColors, markEmbers: List<Ember>, wordEmbers: List<Ember>) {
+/**
+ * What the intro's frames share, worked out once: the fuse's and the frame's measured paths, where
+ * each ember of the fuse leaves it, and the paths each frame fills again. Measuring the brand's paths
+ * on every frame, and walking the fuse once more for every ember, made the intro stutter right after
+ * an update, when Android hadn't compiled Fuse yet and every step ran slowly.
+ */
+private class IntroGeometry(markEmbers: List<Ember>) {
+    val fuse = PathMeasure().apply { setPath(BrandArt.fuse, false) }
+    val fuseLength = fuse.length
+    val frame = PathMeasure().apply { setPath(BrandArt.frame, true) }
+    val frameLength = frame.length
+
+    /** Where each of the fuse's embers is shed: fixed for each ember, so found once. */
+    val emberFrom: List<Offset> = markEmbers.map { e ->
+        val born = RUN_FROM + (RUN_TO - RUN_FROM) * e.at
+        fuse.getPosition(fuseLength * phase(born, RUN_FROM, RUN_TO).easeInOut())
+    }
+
+    /** Filled again on each frame instead of made new. */
+    val burnt = Path()
+    val lit = Path()
+}
+
+private fun DrawScope.drawIntro(t: Float, lockup: Lockup, colors: IntroColors, geometry: IntroGeometry, markEmbers: List<Ember>, wordEmbers: List<Ember>) {
     // The mark lights in the middle, then glides aside into the lockup as the word begins.
     val glide = phase(t, GLIDE_FROM, GLIDE_TO).easeInOut()
     val markSize = lockup.soloMark + (lockup.mark - lockup.soloMark) * glide
     val markAt = lockup.soloAt + (lockup.markAt - lockup.soloAt) * glide
     val k = markSize / BrandArt.MARK
 
-    val fuse = PathMeasure().apply { setPath(BrandArt.fuse, false) }
     val run = phase(t, RUN_FROM, RUN_TO).easeInOut()
-    val head = if (t < BURST_AT) fuse.getPosition(fuse.length * run) else BrandArt.SPARK
+    val head = if (t < BURST_AT) geometry.fuse.getPosition(geometry.fuseLength * run) else BrandArt.SPARK
     val burst = phase(t, BURST_AT, BURST_AT + 650f)
 
     // The room's glow: the spark lights everything, brightest as it bursts, settling as the word burns.
@@ -220,7 +270,7 @@ private fun DrawScope.drawIntro(t: Float, lockup: Lockup, colors: IntroColors, m
         translate(markAt.x, markAt.y)
         scale(k, k, pivot = Offset.Zero)
     }) {
-        drawIgnitingMark(t, fuse, run, head, burst, colors, markEmbers)
+        drawIgnitingMark(t, geometry, run, head, burst, colors, markEmbers)
     }
 
     // The flash as the frame ignites, over everything.
@@ -239,26 +289,27 @@ private fun DrawScope.drawIntro(t: Float, lockup: Lockup, colors: IntroColors, m
 }
 
 /** The mark, in its own 100 units: the fuse burning in, the frame igniting, the spark and its burst. */
-private fun DrawScope.drawIgnitingMark(t: Float, fuse: PathMeasure, run: Float, head: Offset, burst: Float, colors: IntroColors, embers: List<Ember>) {
+private fun DrawScope.drawIgnitingMark(t: Float, geometry: IntroGeometry, run: Float, head: Offset, burst: Float, colors: IntroColors, embers: List<Ember>) {
     val stroke = BrandArt.MARK_STROKE
-    val length = fuse.length
+    val length = geometry.fuseLength
     // The lit glow round the line and frame cools away as the lockup settles, leaving the brand's clean mark.
     val cool = 1f - phase(t, GLIDE_FROM, BURN_TO)
 
     // The burnt line behind the spark: a lit core over a soft glow.
     if (run > 0f) {
-        val burnt = Path()
-        fuse.getSegment(0f, length * run, burnt, true)
+        val burnt = geometry.burnt
+        burnt.reset()
+        geometry.fuse.getSegment(0f, length * run, burnt, true)
         drawPath(burnt, colors.accent.copy(alpha = 0.35f * cool), style = Stroke(stroke * 2.4f, cap = StrokeCap.Round))
         drawPath(burnt, colors.text, style = Stroke(stroke, cap = StrokeCap.Round))
     }
 
     // Embers shed along the way, falling and fading.
-    for (e in embers) {
+    embers.forEachIndexed { i, e ->
         val born = RUN_FROM + (RUN_TO - RUN_FROM) * e.at
         val age = (t - born) / e.life
-        if (age !in 0f..1f) continue
-        val from = fuse.getPosition(length * phase(born, RUN_FROM, RUN_TO).easeInOut())
+        if (age !in 0f..1f) return@forEachIndexed
+        val from = geometry.emberFrom[i]
         val p = from + Offset(cos(e.angle) * e.speed * 100f * age, sin(e.angle) * e.speed * 100f * age + 35f * age * age)
         drawCircle(mix(colors.warm, colors.accent, age), radius = 100f * e.size * (1f - age * 0.6f), center = p, alpha = (1f - age) * 0.9f)
     }
@@ -266,11 +317,12 @@ private fun DrawScope.drawIgnitingMark(t: Float, fuse: PathMeasure, run: Float, 
     // The frame ignites from its top, beside the spark, running both ways round to meet at the bottom.
     val frameRun = phase(t, BURST_AT - 60f, FRAME_TO).easeOut()
     if (frameRun > 0f) {
-        val fm = PathMeasure().apply { setPath(BrandArt.frame, true) }
-        val half = fm.length * frameRun / 2
-        val lit = Path()
+        val fm = geometry.frame
+        val half = geometry.frameLength * frameRun / 2
+        val lit = geometry.lit
+        lit.reset()
         fm.getSegment(0f, half, lit, true)
-        fm.getSegment(fm.length - half, fm.length, lit, true)
+        fm.getSegment(geometry.frameLength - half, geometry.frameLength, lit, true)
         drawPath(lit, colors.accent.copy(alpha = 0.3f * (1f - burst * 0.5f) * cool), style = Stroke(stroke * 2.2f, cap = StrokeCap.Round))
         drawPath(lit, colors.text, style = Stroke(stroke, cap = StrokeCap.Round))
     }
