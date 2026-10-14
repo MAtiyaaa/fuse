@@ -257,6 +257,9 @@ class DesktopSession(
         w.extendedState = w.extendedState or java.awt.Frame.ICONIFIED
     }
 
+    /** Another start of Fuse asked for this one: it comes to the front. */
+    fun raise() = bringToFront()
+
     private fun bringToFront() {
         gate.showing = true
         val w = window ?: return
