@@ -97,6 +97,7 @@ import io.github.matiyaaa.fuse.ui.fuseline.slideInHorizontally
 import io.github.matiyaaa.fuse.ui.fuseline.slideOutHorizontally
 import io.github.matiyaaa.fuse.ui.fuseline.spring
 import io.github.matiyaaa.fuse.ui.fuseline.togetherWith
+import io.github.matiyaaa.fuse.ui.shell.home.useTheme
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
@@ -198,7 +199,8 @@ fun ThemesScreen(app: AppState) {
 
     fun use(spec: ThemeSpec) {
         if (spec.id == app.store.prefs.value.themeId) return
-        app.store.updatePrefs { it.withTheme(spec) }
+        // Fii's themes may ask about Fii's Home (useTheme).
+        app.useTheme(spec)
         view.flourish++
         app.toasts.show("Now using ${spec.name}", ToastKind.SUCCESS)
     }

@@ -1,0 +1,48 @@
+{
+  "fuseTheme": 1,
+  "name": "Fii",
+  "id": "fii",
+  "tagline": "Bright, glossy and calm, with bubbles",
+  "extends": "fii",
+  "dark": false,
+  "colors": {
+    "background": "#F1F4F7",
+    "surface": "#FFFFFF",
+    "surfaceRaised": "#F8FAFC",
+    "accent": "#0A7DB3",
+    "accentSoft": "#34BEED26",
+    "onAccent": "#FFFFFF",
+    "text": "#343E49",
+    "textMuted": "#505C69",
+    "focus": "#0B8FC8",
+    "success": "#1C8350",
+    "warning": "#9A5B00",
+    "danger": "#C62837"
+  },
+  "background": {
+    "style": "fii",
+    "intensity": 1.0,
+    "speed": 1.0,
+    "secondary": "#34BEED"
+  },
+  "corners": "pill",
+  "focus": "ring",
+  "motion": "standard",
+  "sound": "bubble",
+  "quickMenu": "solid",
+  "widgets": "glass",
+  "tiles": "gloss",
+  "glass": {
+    "enabled": false,
+    "blur": 24.0,
+    "opacity": 0.72
+  },
+  "crt": {
+    "enabled": false,
+    "scanlines": 0.35,
+    "bloom": 0.15,
+    "curvature": 0.08,
+    "chromatic": 0.1,
+    "vignette": 0.3
+  }
+}

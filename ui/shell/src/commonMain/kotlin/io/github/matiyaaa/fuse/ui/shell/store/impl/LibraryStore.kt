@@ -254,7 +254,7 @@ internal class DefaultLibraryOps(
      * counts as "a while ago" moves.
      */
     @OptIn(kotlinx.coroutines.FlowPreview::class)
-    private val recGames: Flow<List<RecGame<GameId>>> = data.games.observeRecommendationInputs()
+    private val recGames: Flow<List<RecGame<GameId>>> = flow { io.github.matiyaaa.fuse.ui.designsystem.effects.StartupGate.settled(); emitAll(data.games.observeRecommendationInputs()) }
         .debounce(RECOMMEND_SETTLE_MS)
         .map { rows -> rows.map { it.toRecGame() } }
         .flowOn(Dispatchers.Default)

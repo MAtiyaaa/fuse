@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -101,6 +102,8 @@ internal class DefaultFuseStore private constructor(
     private val mediaFeed = MutableStateFlow(io.github.matiyaaa.fuse.jellyfin.MediaFeed())
     override val homeFeed: StateFlow<io.github.matiyaaa.fuse.ui.shell.store.HomeFeed> by lazy {
         kotlinx.coroutines.flow.combine(library.home, mediaFeed) { h, m -> if (m == h.media) h else h.copy(media = m) }
+            // Fuseline 4.2: the moment Home first has games to show, for the start's report.
+            .onEach { h -> if (h.recentlyAdded.isNotEmpty() || h.continuePlaying.isNotEmpty() || h.systems.isNotEmpty()) io.github.matiyaaa.fuse.ui.designsystem.effects.StartupTrace.mark(io.github.matiyaaa.fuse.ui.designsystem.effects.StartupTrace.HOME) }
             .stateIn(ctx.scope, kotlinx.coroutines.flow.SharingStarted.Eagerly, library.home.value)
     }
     override val content = DefaultContentOps(ctx, emulators) { engine.drives.volumes.value }
@@ -614,6 +617,9 @@ internal class DefaultFuseStore private constructor(
     private suspend fun startAutomatic() {
         if (automaticStarted) return
         automaticStarted = true
+        // Fuseline 4.2: none of this feeds the first screen, so it waits for it to settle.
+        io.github.matiyaaa.fuse.ui.designsystem.effects.StartupGate.settled()
+        runCatching { data.media.pruneChanges() }
         // Games a scan found (downloads included) are identified and filled first, once Cartridge's
         // RomM details, read right after the scan, have had a moment to land.
         ctx.scope.launch {

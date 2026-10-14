@@ -140,6 +140,23 @@ fun Tile(
         if (selected) bar.animateTo(1f, motion.barSpring()) else bar.animateTo(0f, motion.exit(Durations.FAST))
     }
 
+    // GLOSS: the art sits in a rounded frame with a gloss across its top, and the ring breathes.
+    val gloss = (LocalTileLook.current ?: look.spec.tiles) == io.github.matiyaaa.fuse.model.TileLook.GLOSS
+    val breathe = remember { FuselineValue(0f) }
+    val breathing = gloss && selected && motion.ambient
+    LaunchedEffect(breathing) {
+        if (!breathing) {
+            breathe.snapTo(0f)
+            return@LaunchedEffect
+        }
+        while (true) {
+            breathe.animateTo(1f, tween(BREATHE_MS, easing = BREATHE_CURVE))
+            breathe.animateTo(0f, tween(BREATHE_MS, easing = BREATHE_CURVE))
+        }
+    }
+    val frameColor = if (colors.isDark) GLOSS_FRAME_NIGHT else Color.White
+    val bevelColor = if (colors.isDark) Color.Black.copy(alpha = 0.35f) else GLOSS_BEVEL
+
     val style = look.focusStyle
     val ring = style == FocusStyle.RING || look.highContrastFocus
     val spark = showSpark && style != FocusStyle.RING
@@ -258,6 +275,22 @@ fun Tile(
                     radius = poolRadius,
                 )
                 val poolSquash = (h / w * 0.6f).coerceIn(0.4f, 1.1f)
+                // GLOSS: the frame, a thin bevel just inside it, and the curved gloss over the top.
+                val frameStroke = Stroke(minOf(w, h) * GLOSS_FRAME_SHARE)
+                val bevelStroke = Stroke(Size.stroke.toPx())
+                val bevelInset = frameStroke.width / 2 + bevelStroke.width / 2
+                val bevelPath = squirclePath(w - bevelInset * 2, h - bevelInset * 2, (corner - bevelInset).coerceAtLeast(0f), SMOOTHING)
+                val bevelBrush = Brush.verticalGradient(
+                    0f to Color.Transparent,
+                    0.55f to Color.Transparent,
+                    1f to bevelColor,
+                )
+                val glossBrush = Brush.verticalGradient(
+                    0f to Color.White.copy(alpha = if (colors.isDark) 0.16f else 0.42f),
+                    1f to Color.White.copy(alpha = if (colors.isDark) 0.02f else 0.06f),
+                    startY = -h * 0.6f,
+                    endY = h * 0.42f,
+                )
 
                 onDrawWithContent {
                     val l = lift
@@ -272,6 +305,13 @@ fun Tile(
                     val hv = hover
                     val p = press.coerceIn(0f, 1f)
                     val lit = maxOf(l, hv * 0.5f)
+                    if (surface && gloss) {
+                        clipPath(outline) {
+                            drawOval(glossBrush, topLeft = Offset(-w * 0.35f, -h * 0.6f), size = PxSize(w * 1.7f, h * 1.02f))
+                        }
+                        translate(bevelInset, bevelInset) { drawPath(bevelPath, bevelBrush, style = bevelStroke) }
+                        drawPath(outline, frameColor, alpha = 0.92f, style = frameStroke)
+                    }
                     if (surface) {
                         drawPath(outline, sheen, alpha = 0.35f + 0.65f * lit)
                         if (hv > 0.005f) drawPath(outline, Color.White, alpha = HOVER_TINT * hv)
@@ -298,7 +338,9 @@ fun Tile(
                                 scaleY = ringRestY + (1f - ringRestY) * l,
                                 pivot = Offset(w / 2 + gap, h / 2 + gap),
                             ) {
-                                drawPath(ringPath, focusColor, alpha = l.coerceIn(0f, 1f), style = ringStroke)
+                                // GLOSS: the ring breathes between full and a soft two thirds while focus rests.
+                                val breath = if (gloss) 1f - BREATHE_DEPTH * breathe.value else 1f
+                                drawPath(ringPath, focusColor, alpha = (l * breath).coerceIn(0f, 1f), style = ringStroke)
                             }
                         }
                     }
@@ -327,6 +369,12 @@ fun Tile(
     )
 }
 
+/**
+ * How tiles inside are framed, over the theme's own: Fii's board frames its channels in gloss on any
+ * theme, and the Fused board keeps Fuse's plain tiles on Fii's. Null follows the theme.
+ */
+val LocalTileLook = androidx.compose.runtime.compositionLocalOf<io.github.matiyaaa.fuse.model.TileLook?> { null }
+
 /** Corner smoothing of every tile (the Fuse squircle). */
 private const val SMOOTHING = 0.6f
 
@@ -344,6 +392,18 @@ private const val HOVER_TINT = 0.06f
 
 /** Black laid over a fully pressed tile. */
 private const val PRESS_SHADE = 0.1f
+
+/** GLOSS: the frame's width as a share of the tile's short side. */
+private const val GLOSS_FRAME_SHARE = 0.045f
+
+/** GLOSS: the frame in a dark theme (brushed silver), and the bevel's shade in a bright one. */
+private val GLOSS_FRAME_NIGHT = Color(0xFFAEB8C4)
+private val GLOSS_BEVEL = Color(0x2E3A4A5C)
+
+/** GLOSS: one breath of the focus ring, in, and how far it fades at the bottom of it. */
+private const val BREATHE_MS = 1_300
+private const val BREATHE_DEPTH = 0.35f
+private val BREATHE_CURVE = io.github.matiyaaa.fuse.ui.fuseline.CubicCurve(0.45f, 0f, 0.55f, 1f)
 
 /** Strength of the GLOW style's pool of coloured light under a focused tile. */
 private const val POOL_ALPHA = 0.3f

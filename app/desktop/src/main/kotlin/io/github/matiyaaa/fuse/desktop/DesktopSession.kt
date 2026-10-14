@@ -147,16 +147,21 @@ class DesktopSession(
         platform.haptics.rumble = gamepads::rumble
         scope.launch {
             try {
+                io.github.matiyaaa.fuse.ui.designsystem.effects.StartupTrace.mark(io.github.matiyaaa.fuse.ui.designsystem.effects.StartupTrace.WINDOW)
                 val safe = withContext(Dispatchers.IO) { safeMode() }
                 if (safe != null) Log.info("starting in safe mode (${safe.reason})")
                 val services = withContext(Dispatchers.IO) { DesktopFuseServices.create(dirs, scope) }
+                io.github.matiyaaa.fuse.ui.designsystem.effects.StartupTrace.mark("services")
                 services.launcherHooks.onGameExited = { gate.playing = false; EventQueue.invokeLater { bringToFront() } }
                 // Game Mode shows one window of the app at a time: Fuse steps aside for the game it started.
                 services.launcherHooks.onGameStarted = {
                     gate.playing = true
                     if (io.github.matiyaaa.fuse.desktop.system.GameMode.active) EventQueue.invokeLater { stepAside() }
                 }
+                // Fuseline 4.2: work the first screen doesn't need waits until it has settled.
+                io.github.matiyaaa.fuse.ui.designsystem.effects.StartupGate.hold()
                 val store = createFuseStore(services, scope, safeMode = safe != null)
+                io.github.matiyaaa.fuse.ui.designsystem.effects.StartupTrace.mark(io.github.matiyaaa.fuse.ui.designsystem.effects.StartupTrace.STORE)
                 // Phone Link waits for a normal start: safe mode runs nothing that listens on the network.
                 startState = StartState.Ready(store, services, if (safe == null) startPhoneLink(store, services) else null, safe)
                 // An update on trial has come up: once it has stayed up a while, it is the one kept.

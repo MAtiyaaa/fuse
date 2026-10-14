@@ -454,12 +454,65 @@ object ThemePresets {
     )
 
     /**
+     * Fii: soft white and brushed silver, a clear sky cyan, slate text, round glossy tiles and
+     * bubbles rising behind everything. Its own Home (Fii's board) is offered when it is chosen.
+     * Slate text reads at 9.8:1 on the white, white on the accent at 4.5:1, and the focus ring at 3.3:1.
+     */
+    val Fii = ThemeSpec(
+        id = "fii",
+        name = "Fii",
+        tagline = "Bright, glossy and calm, with bubbles",
+        palette = ThemePalette(
+            dark = false,
+            background = 0xFFF1F4F7, surface = 0xFFFFFFFF, surfaceRaised = 0xFFF8FAFC,
+            accent = 0xFF0A7DB3, accentSoft = 0x2634BEED, onAccent = 0xFFFFFFFF,
+            textPrimary = 0xFF343E49, textSecondary = 0xFF505C69, focusRing = 0xFF0B8FC8,
+            success = 0xFF1C8350, warning = 0xFF9A5B00, danger = 0xFFC62837,
+        ),
+        background = BackgroundStyle.FII,
+        geometry = CornerFamily.PILL,
+        quickMenu = QuickMenuLook.SOLID,
+        widgets = io.github.matiyaaa.fuse.model.WidgetLook.GLASS,
+        focus = FocusStyle.RING,
+        motion = MotionProfile.STANDARD,
+        sound = SoundProfile.BUBBLE,
+        ambient = AmbientSpec(secondary = 0xFF34BEED),
+        tiles = io.github.matiyaaa.fuse.model.TileLook.GLOSS,
+    )
+
+    /** Fii at night: deep slate with faint blue lines, the same cyan glowing, silver text. */
+    val FiiNight = ThemeSpec(
+        id = "fii-night",
+        name = "Fii Night",
+        tagline = "Fii after dark, the bubbles glowing",
+        palette = ThemePalette(
+            dark = true,
+            background = 0xFF12161C, surface = 0xFF1A2028, surfaceRaised = 0xFF232A34,
+            accent = 0xFF4CC9F5, accentSoft = 0x334CC9F5, onAccent = 0xFF04202C,
+            textPrimary = 0xFFE6ECF2, textSecondary = 0xFFA0ADBA, focusRing = 0xFF7AD9FA,
+            success = 0xFF5FD69A, warning = 0xFFFFC46B, danger = 0xFFFF7A7A,
+        ),
+        background = BackgroundStyle.FII,
+        geometry = CornerFamily.PILL,
+        quickMenu = QuickMenuLook.SOLID,
+        widgets = io.github.matiyaaa.fuse.model.WidgetLook.GLASS,
+        focus = FocusStyle.RING,
+        motion = MotionProfile.STANDARD,
+        sound = SoundProfile.BUBBLE,
+        ambient = AmbientSpec(secondary = 0xFF34BEED),
+        tiles = io.github.matiyaaa.fuse.model.TileLook.GLOSS,
+    )
+
+    /** The ids of the themes that come with Fii's own Home. */
+    val fiiFamily: Set<String> = setOf("fii", "fii-night")
+
+    /**
      * Every built-in theme in the order the gallery shows them: Fuse first (the default), then the
      * dark rooms from the plainest to the most decorated, then the bright ones.
      */
     val all: List<ThemeSpec> = listOf(
-        Fuse, Glass, Pitch, Starlight, Orbital, Crossbar, Wave, Blossom, Lagoon, Canopy, Blades, Sundown, Crt,
-        Daylight, PaperMint, Channels, Opal, Noon, Ridge, Olive, Fusi,
+        Fuse, Glass, Pitch, Starlight, Orbital, Crossbar, Wave, Blossom, Lagoon, Canopy, Blades, Sundown, Crt, FiiNight,
+        Daylight, PaperMint, Channels, Opal, Noon, Ridge, Olive, Fusi, Fii,
     )
 
     /** The dark rooms, in gallery order, for a gallery that shows them as a group. */

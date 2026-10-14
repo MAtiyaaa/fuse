@@ -71,6 +71,8 @@ import io.github.matiyaaa.fuse.ui.shell.app.screenName
 import io.github.matiyaaa.fuse.ui.shell.app.sections
 import io.github.matiyaaa.fuse.ui.shell.app.showEmulator
 import io.github.matiyaaa.fuse.ui.shell.home.bytesText
+import io.github.matiyaaa.fuse.ui.shell.home.chooseHomeStyle
+import io.github.matiyaaa.fuse.ui.shell.home.label
 import io.github.matiyaaa.fuse.ui.shell.home.title
 import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
 import io.github.matiyaaa.fuse.ui.shell.notes.openInstalledNotes
@@ -297,11 +299,13 @@ fun homeRows(app: AppState): List<MenuAction> {
                     onSelect = { if (isHome) homeRole.openHomeSettings() else homeRole.request() },
                 ))
             }
-            add(app.choiceRow(
-                "mode", "Home style", FuseIcons.Dashboard, p.home.mode, listOf(HomeMode.CHANNELS to "Fused (recommended)", HomeMode.FLOW to "Network"),
-                optionDetail = { if (it == HomeMode.FLOW) "A continuous dashboard of shelves" else "A board of tiles you arrange yourself" },
-                aid = { ChoiceAid.HomeStyle(it) },
-            ) { v -> set { it.copy(home = it.home.copy(mode = v)) } })
+            // Fused, Network, and Fii's once a Fii theme has unlocked it; every switch is asked.
+            add(MenuAction(
+                "mode", "Home style", FuseIcons.Dashboard,
+                trailing = if (io.github.matiyaaa.fuse.ui.shell.home.FII_UNLOCK in p.unlockedNew) Trailing.Badge("Unlocked")
+                else Trailing.Value(p.home.style.label() + if (p.home.style == io.github.matiyaaa.fuse.model.HomeStyle.FUSED) " (recommended)" else ""),
+                onSelect = { app.chooseHomeStyle() },
+            ))
             add(toggleRow(
                 "rememberplace", "Remember where you were", FuseIcons.Bookmark, p.rememberPlace,
                 if (p.rememberPlace) "Each tab opens on the game or row you left it on" else "Each tab opens at its start",
@@ -1363,7 +1367,7 @@ fun soundRows(app: AppState): List<MenuAction> {
             }
         }
         labelled("Interface sounds") {
-            add(app.choiceRow("sound", "Interface sounds", FuseIcons.AudioLines, p.sound, listOf(SoundProfile.OFF to "Off", SoundProfile.SOFT to "Soft", SoundProfile.CLICK to "Crisp", SoundProfile.CHIME to "Chime")) { v -> app.store.updatePrefs { it.copy(sound = v) } })
+            add(app.choiceRow("sound", "Interface sounds", FuseIcons.AudioLines, p.sound, listOf(SoundProfile.OFF to "Off", SoundProfile.SOFT to "Soft", SoundProfile.CLICK to "Crisp", SoundProfile.CHIME to "Chime", SoundProfile.BUBBLE to "Bubble")) { v -> app.store.updatePrefs { it.copy(sound = v) } })
             add(app.percentRow("volume", "Sound effects volume", FuseIcons.Volume, p.soundVolume, "Moving, confirming and going back") { v -> app.store.updatePrefs { it.copy(soundVolume = v) } })
         }
     }

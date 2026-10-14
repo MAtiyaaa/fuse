@@ -82,7 +82,8 @@ object SeriesDetector {
             val shared = sharedStart(members.map { words.getValue(it.key) }, prefix.split(' ').size)
             val name = displayName(shared, members.map { it.title })
             // A title group named like a details series joins it.
-            val match = out.indexOfFirst { normalizeName(it.name) == normalizeName(name) }
+            val key = normalizeName(name)
+            val match = out.indexOfFirst { normalizeName(it.name) == key }
             if (match >= 0) {
                 out[match] = out[match].copy(members = out[match].members + members.map { it.key })
             } else {
@@ -91,11 +92,14 @@ object SeriesDetector {
         }
         // 3. Games left over join a series their title starts with ("Metroid Zero Mission" joins Metroid).
         val placed = out.flatMap { it.members }.toHashSet()
+        // Fuseline 4.2: each series' name in words once, not once for every game left over (with
+        // 2,000 games and hundreds of series that was most of a large library's start).
+        val named = out.map { words(it.name) }
         for (g in rest) {
             if (g.key in placed) continue
             val w = words.getValue(g.key)
-            val target = out.withIndex()
-                .map { (i, s) -> i to words(s.name) }
+            val target = named.withIndex()
+                .map { (i, name) -> i to name }
                 .filter { (_, name) -> name.isNotEmpty() && w.size > name.size && w.take(name.size) == name && !(name.size == 1 && name[0] in common) }
                 .maxByOrNull { it.second.size }?.first ?: continue
             out[target] = out[target].copy(members = out[target].members + g.key)
@@ -116,10 +120,10 @@ object SeriesDetector {
     /** Lower-case words of a title, without "the" in front, punctuation or bracketed tags. */
     internal fun words(title: String): List<String> {
         val plain = fold(title)
-            .replace(Regex("""\([^)]*\)|\[[^\]]*\]"""), " ")
+            .replace(TAGS, " ")
             .lowercase()
-            .replace(Regex("""[:\-\u2013\u2014_/.,!?'\u2019"]"""), " ")
-        val w = plain.split(Regex("""\s+""")).filter { it.isNotEmpty() }
+            .replace(PUNCTUATION, " ")
+        val w = plain.split(SPACES).filter { it.isNotEmpty() }
         return if (w.firstOrNull() == "the") w.drop(1) else w
     }
 
@@ -128,8 +132,8 @@ object SeriesDetector {
         val count = prefix.split(' ').size
         val first = titles.first()
         val original = first
-            .replace(Regex("""[:\-\u2013\u2014_/.,!?"]"""), " ")
-            .split(Regex("""\s+"""))
+            .replace(NAME_PUNCTUATION, " ")
+            .split(SPACES)
             .filter { it.isNotEmpty() }
         val the = titles.all { it.trimStart().startsWith("The ", ignoreCase = true) }
         val body = (if (original.firstOrNull()?.equals("the", ignoreCase = true) == true) original.drop(1) else original).take(count)
@@ -142,6 +146,12 @@ object SeriesDetector {
     private fun fold(s: String): String = buildString(s.length) {
         for (ch in s) append(ACCENTS[ch] ?: ch)
     }
+
+    // Fuseline 4.2: made once. A pattern made inside words() was compiled again for every title.
+    private val TAGS = Regex("""\([^)]*\)|\[[^\]]*\]""")
+    private val PUNCTUATION = Regex("""[:\-\u2013\u2014_/.,!?'\u2019"]""")
+    private val NAME_PUNCTUATION = Regex("""[:\-\u2013\u2014_/.,!?"]""")
+    private val SPACES = Regex("""\s+""")
 
     private val ACCENTS: Map<Char, Char> = buildMap {
         fun put(base: Char, all: String) = all.forEach { put(it, base) }

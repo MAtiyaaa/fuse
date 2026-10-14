@@ -89,6 +89,11 @@ fun main(args: Array<String>) {
     Log.toFile(java.io.File(dirs.data, "logs"))
     CrashLog(java.io.File(dirs.data, "crash")).install()
     Log.info("Fuse ${BuildInfo.VERSION} starting")
+    // Fuseline 4.2: the start's steps, timed from when the process began, written to the log once Home has its art.
+    io.github.matiyaaa.fuse.ui.designsystem.effects.StartupTrace.origin =
+        (System.currentTimeMillis() - java.lang.management.ManagementFactory.getRuntimeMXBean().startTime).coerceAtLeast(0)
+    io.github.matiyaaa.fuse.ui.designsystem.effects.StartupTrace.onComplete = { Log.info(it) }
+    io.github.matiyaaa.fuse.ui.designsystem.effects.StartupTrace.mark("Fuse's code")
     when (claim) {
         is io.github.matiyaaa.fuse.desktop.system.SingleInstance.Decision.Replaced -> Log.info("took the place of the Fuse already running" + if (claim.ended) " (it had to be ended)" else "")
         is io.github.matiyaaa.fuse.desktop.system.SingleInstance.Decision.Unguarded -> Log.warn("not guarded against a second Fuse: ${claim.why}")

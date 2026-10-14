@@ -56,6 +56,9 @@ data class UiPrefs(
     /** Room kept clear at every edge, in percent, for TVs that cut the picture's edges off. */
     val screenMargin: Int = 0,
     val home: HomeLayoutConfig = HomeLayoutConfig(),
+    /** Extras a theme has unlocked (Fii's Home: "fii"), and the ones not looked at yet. */
+    val unlocked: Set<String> = emptySet(),
+    val unlockedNew: Set<String> = emptySet(),
     /** The Systems page as arranged (see HomeSettings.systemsBoard). */
     val systemsBoard: HomeLayoutConfig = HomeLayoutConfig(),
     /** The Systems page with the menus on the lower screen (see HomeSettings.systemsBoardFlipped). */

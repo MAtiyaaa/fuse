@@ -48,8 +48,14 @@ internal class StoreContext(
      * let go quietly instead of reaching the platform's crash handler, unless the app gave a
      * handler of its own. Each caller already reports the failures a person needs to see.
      */
-    val scope: CoroutineScope = if (scope.coroutineContext[CoroutineExceptionHandler] != null) scope
-    else CoroutineScope(scope.coroutineContext + CoroutineExceptionHandler { _, _ -> })
+    val scope: CoroutineScope = CoroutineScope(
+        // Fuseline 4.2: the store's work runs on worker threads wherever it is started from. A
+        // computer's app hands over its window's scope, so every collector (series, picks, the
+        // library's cards) used to run on the thread that draws, and a large library stalled it
+        // for seconds; Android always gave a worker scope, and the same code runs there.
+        scope.coroutineContext + Dispatchers.Default +
+            (scope.coroutineContext[CoroutineExceptionHandler] ?: CoroutineExceptionHandler { _, _ -> }),
+    )
 
     val data = services.data
     val host = services.host

@@ -1,0 +1,48 @@
+{
+  "fuseTheme": 1,
+  "name": "Fii Night",
+  "id": "fii-night",
+  "tagline": "Fii after dark, the bubbles glowing",
+  "extends": "fii-night",
+  "dark": true,
+  "colors": {
+    "background": "#12161C",
+    "surface": "#1A2028",
+    "surfaceRaised": "#232A34",
+    "accent": "#4CC9F5",
+    "accentSoft": "#4CC9F533",
+    "onAccent": "#04202C",
+    "text": "#E6ECF2",
+    "textMuted": "#A0ADBA",
+    "focus": "#7AD9FA",
+    "success": "#5FD69A",
+    "warning": "#FFC46B",
+    "danger": "#FF7A7A"
+  },
+  "background": {
+    "style": "fii",
+    "intensity": 1.0,
+    "speed": 1.0,
+    "secondary": "#34BEED"
+  },
+  "corners": "pill",
+  "focus": "ring",
+  "motion": "standard",
+  "sound": "bubble",
+  "quickMenu": "solid",
+  "widgets": "glass",
+  "tiles": "gloss",
+  "glass": {
+    "enabled": false,
+    "blur": 24.0,
+    "opacity": 0.72
+  },
+  "crt": {
+    "enabled": false,
+    "scanlines": 0.35,
+    "bloom": 0.15,
+    "curvature": 0.08,
+    "chromatic": 0.1,
+    "vignette": 0.3
+  }
+}

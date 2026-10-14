@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.2.11 is the <b>Native Update</b>: one game known as the same game everywhere in Fuse, how long it takes to beat on its page, achievements for many more discs, RPCS3 and shadPS4 patches, sound in recordings, and updates in place on Windows and macOS</sub><br>
+<sub>0.4.2.12 is the <b>Native Update</b>: Fuse opens fast and scrolls smoothly with thousands of games on every system (Fuseline 4.2), and Fii, a new theme in light and dark with a Home of its own</sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -385,7 +385,11 @@ Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.4.2.11 "The Native Update"**: one game known as the same game everywhere in Fuse (library,
+> **Fuse 0.4.2.12 "The Native Update"**: Fuseline 4.2, a Fuse that opens fast and stays smooth
+> with thousands of games, art and details on every one, on every system (Home with 2,348 games
+> went from 10.1 seconds to about 4.6, and 3.0 with the class archive every build now carries, on a
+> computer without a graphics card), and Fii and Fii Night, a
+> new theme with glossy tiles, rising bubbles and a Home of its own. 0.4.2.11 brought one game known as the same game everywhere in Fuse (library,
 > Fuse One and Fuse Sync, RomM, Syncthing, Reach and RetroAchievements), how long a game takes to
 > beat on its page, achievements for Saturn, Dreamcast, 3DS, GameCube, the other CD systems and
 > compressed discs (CHD, CSO, RVZ), RPCS3 and shadPS4 patches, sound in recordings on a computer, and

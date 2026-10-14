@@ -58,7 +58,7 @@ import org.junit.Assume.assumeTrue
 /**
  * How much each frame costs on the interactions people reported as laggy: scrolling Settings and
  * Storage, scrolling the Library, running along Systems, switching tabs quickly and scrolling a
- * game's options. The real app runs headless over a library of [EXTRA_GAMES] generated games plus
+ * game's options. The real app runs headless over a library of [EXTRA_GAMES] generated games (or -Pfuse.perf.games) plus
  * the audit's samples, driven by controller presses and touch, and every frame's CPU time (compose,
  * layout and Skia drawing) is recorded while the interaction runs. A JFR recording samples the test
  * thread, so the summary also says where the time went.
@@ -71,6 +71,8 @@ import org.junit.Assume.assumeTrue
 @OptIn(ExperimentalTestApi::class, DelicateCoilApi::class)
 class PerfHarness {
     private val outDir: File? = System.getProperty(DIR_PROPERTY)?.takeIf { it.isNotBlank() }?.let(::File)
+    /** How many generated games join the audit's samples: -Pfuse.perf.games (2000 for a household's library). */
+    private val extraGames: Int = System.getProperty(GAMES_PROPERTY)?.toIntOrNull()?.coerceIn(0, 20_000) ?: EXTRA_GAMES
     private val only: List<String> = System.getProperty(ONLY_PROPERTY).orEmpty().split(',').map(String::trim).filter(String::isNotEmpty)
     private lateinit var root: File
     private lateinit var cache: File
@@ -451,7 +453,7 @@ class PerfHarness {
     private suspend fun perfStore(driver: AuditDriver): FuseStore {
         AuditSamples.writeTo(root)
         val folders = AuditSamples.games.groupBy { it.folder }.mapValues { (_, g) -> g.first().ext }.entries.toList()
-        for (i in 0 until EXTRA_GAMES) {
+        for (i in 0 until extraGames) {
             val (folder, ext) = folders[i % folders.size]
             File(root, folder).apply { mkdirs() }.let { File(it, "Generated Game ${(i + 1).toString().padStart(4, '0')}.$ext").writeBytes(ByteArray(512 + i)) }
         }
@@ -468,9 +470,9 @@ class PerfHarness {
         // -Dfuse.perf.lowPower=true measures with Low Power Mode (no blur, still backgrounds), to compare.
         store.updatePrefs { it.copy(onboardingDone = true, lowPower = System.getProperty("fuse.perf.lowPower") == "true") }
         store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
-        val total = AuditSamples.games.size + EXTRA_GAMES + if (only.any { it.startsWith("series") }) SERIES * 4 else 0
-        withTimeout(180_000) { store.sources.scan.first { it.phase == ScanPhase.DONE } }
-        val cards = withTimeout(60_000) { store.library.games(GameQuery()).first { it.size >= total } }
+        val total = AuditSamples.games.size + extraGames + if (only.any { it.startsWith("series") }) SERIES * 4 else 0
+        withTimeout(600_000) { store.sources.scan.first { it.phase == ScanPhase.DONE } }
+        val cards = withTimeout(180_000) { store.library.games(GameQuery()).first { it.size >= total } }
         AuditSamples.applyHistory(store, services.data, cards.filter { c -> AuditSamples.games.any { it.title == c.title } }, Clock.System.now().toEpochMilliseconds())
         return store
     }
@@ -615,6 +617,7 @@ class PerfHarness {
     companion object {
         const val DIR_PROPERTY = "fuse.perf.dir"
         const val ONLY_PROPERTY = "fuse.perf.only"
+        const val GAMES_PROPERTY = "fuse.perf.games"
         private const val EXTRA_GAMES = 600
 
         /** Series made for the series rows, of four games each. */

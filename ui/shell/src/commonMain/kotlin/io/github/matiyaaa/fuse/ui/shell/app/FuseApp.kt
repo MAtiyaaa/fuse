@@ -173,6 +173,7 @@ fun FuseApp(
     session: FuseAppSession? = null,
 ) {
     val owner = session ?: remember(store, platform) { FuseAppSession(platform.host, store.displaySession) }
+    androidx.compose.runtime.SideEffect { io.github.matiyaaa.fuse.ui.designsystem.effects.StartupTrace.mark(io.github.matiyaaa.fuse.ui.designsystem.effects.StartupTrace.FRAME) }
     // Choose the environment before a preference flow, theme or interface scale is read.
     if (owner.displaySession.rehearsalOpen) {
         RehearsalApp(owner.displaySession.rehearsalHost ?: owner.host, router) { owner.displaySession.rehearsalOpen = false }
@@ -216,6 +217,15 @@ private fun FuseAppContent(
         val kept = owner.kept ?: (if (keepPlace) KeptPlaces.current ?: KeptPlace(start).also { KeptPlaces.current = it } else KeptPlace(start)).also { owner.kept = it }
         state = AppState(store, platform, scope, start, phoneLink, kept, owner.dev, owner.playerSession, owner.shareWindowFocus)
         state.safeMode = safeMode
+        // The startup animation, once per start of Fuse (a window made again doesn't replay it).
+        // The very first start opens setup with its own, longer opening instead.
+        // Started from a game's entry in Steam: straight to the game, without the animation.
+        // Decided here, before the first frame (Fuseline 4.2), so Home never shows for a frame
+        // before the opening covers it.
+        if (startupIntro && !StartupIntro.played && safeMode == null && stored.startupAnimation && !(platform.startupPlay != null && stored.onboardingDone)) {
+            if (stored.onboardingDone) state.intro = true else state.setupOpening = true
+        }
+        StartupIntro.played = true
         state
     }
     app.finishRehearsal = onRehearsalFinished
@@ -227,16 +237,21 @@ private fun FuseAppContent(
     app.menusOnSecondScreen = LocalShowcaseElsewhere.current
     PlayerScreens(app, prefs)
     LaunchedEffect(Unit) {
-        // The startup animation, once per start of Fuse (a window made again doesn't replay it).
-        // The very first start opens setup with its own, longer opening instead.
-        // Started from a game's entry in Steam: straight to the game, without the animation.
-        if (startupIntro && !StartupIntro.played && app.safeMode == null && stored.startupAnimation && !(platform.startupPlay != null && stored.onboardingDone)) {
-            if (stored.onboardingDone) app.intro = true else app.setupOpening = true
-        }
-        StartupIntro.played = true
         if (app.safeMode != null) app.showSafeMode()
         delay(StartupGuard.SETTLE_MS)
         onSettled()
+    }
+    // Fuseline 4.2: once the opening has given way and Home shows its games, the work held back
+    // for the first screen (series, suggestions, the RomM refresh, the automatic scan) starts.
+    LaunchedEffect(Unit) {
+        if (io.github.matiyaaa.fuse.ui.designsystem.effects.StartupGate.isOpen) return@LaunchedEffect
+        androidx.compose.runtime.snapshotFlow { app.intro || app.setupOpening }.first { !it }
+        // An empty library never shows Home's games: the gate's own limit opens it then.
+        kotlinx.coroutines.withTimeoutOrNull(io.github.matiyaaa.fuse.ui.designsystem.effects.StartupGate.LIMIT_MS) {
+            while (io.github.matiyaaa.fuse.ui.designsystem.effects.StartupTrace.at(io.github.matiyaaa.fuse.ui.designsystem.effects.StartupTrace.HOME) == null) delay(100)
+        }
+        delay(START_SETTLE_MS)
+        io.github.matiyaaa.fuse.ui.designsystem.effects.StartupGate.open()
     }
     // A game's entry in Steam started Fuse to play it, and which games are in Steam already.
     LaunchedEffect(Unit) {
@@ -1416,6 +1431,9 @@ private fun StandbyHost(app: AppState, clock24h: Boolean, intro: Boolean) {
 
 /** Waking from Standby within this long of the animation playing doesn't play it again. */
 private const val INTRO_AGAIN_AFTER_MS = 5 * 60_000L
+
+/** How long Home settles after it first shows its games before held-back work starts (Fuseline 4.2). */
+private const val START_SETTLE_MS = 1_200L
 
 /**
  * The glyphs for the controller in hand: a PlayStation pad shows shapes and an Xbox pad letters,
