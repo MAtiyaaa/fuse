@@ -1,0 +1,48 @@
+{
+  "fuseTheme": 1,
+  "name": "Trio",
+  "id": "trio",
+  "tagline": "Glossy icons over a dotted light",
+  "extends": "trio",
+  "dark": false,
+  "colors": {
+    "background": "#F2F3F5",
+    "surface": "#FFFFFF",
+    "surfaceRaised": "#F7F8FA",
+    "accent": "#0B7AC0",
+    "accentSoft": "#41B4EA26",
+    "onAccent": "#FFFFFF",
+    "text": "#323840",
+    "textMuted": "#59616B",
+    "focus": "#1C9BE0",
+    "success": "#1C8350",
+    "warning": "#9A5B00",
+    "danger": "#C62837"
+  },
+  "background": {
+    "style": "trio",
+    "intensity": 1.0,
+    "speed": 1.0,
+    "secondary": "#41B4EA"
+  },
+  "corners": "round",
+  "focus": "ring",
+  "motion": "standard",
+  "sound": "tap",
+  "quickMenu": "solid",
+  "widgets": "glass",
+  "tiles": "gloss",
+  "glass": {
+    "enabled": false,
+    "blur": 24.0,
+    "opacity": 0.72
+  },
+  "crt": {
+    "enabled": false,
+    "scanlines": 0.35,
+    "bloom": 0.15,
+    "curvature": 0.08,
+    "chromatic": 0.1,
+    "vignette": 0.3
+  }
+}

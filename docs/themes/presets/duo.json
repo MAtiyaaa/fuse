@@ -1,0 +1,48 @@
+{
+  "fuseTheme": 1,
+  "name": "Duo",
+  "id": "duo",
+  "tagline": "Graph paper, flat cards and bright blips",
+  "extends": "duo",
+  "dark": false,
+  "colors": {
+    "background": "#ECEEF1",
+    "surface": "#FAFBFC",
+    "surfaceRaised": "#FFFFFF",
+    "accent": "#1A6FCB",
+    "accentSoft": "#1A6FCB26",
+    "onAccent": "#FFFFFF",
+    "text": "#2B2F35",
+    "textMuted": "#555C66",
+    "focus": "#1F7FE6",
+    "success": "#1C8350",
+    "warning": "#9A5B00",
+    "danger": "#C62837"
+  },
+  "background": {
+    "style": "duo",
+    "intensity": 1.0,
+    "speed": 1.0,
+    "secondary": "#8FC3F5"
+  },
+  "corners": "soft",
+  "focus": "ring",
+  "motion": "standard",
+  "sound": "pip",
+  "quickMenu": "solid",
+  "widgets": "lit",
+  "tiles": "panel",
+  "glass": {
+    "enabled": false,
+    "blur": 24.0,
+    "opacity": 0.72
+  },
+  "crt": {
+    "enabled": false,
+    "scanlines": 0.35,
+    "bloom": 0.15,
+    "curvature": 0.08,
+    "chromatic": 0.1,
+    "vignette": 0.3
+  }
+}

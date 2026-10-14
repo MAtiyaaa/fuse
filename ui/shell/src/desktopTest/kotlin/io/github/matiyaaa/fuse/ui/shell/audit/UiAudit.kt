@@ -104,6 +104,8 @@ class UiAudit {
 
     @Test fun fiiBoardFlipped() = audit(AuditSize.L) { homeFii(flipped = true) }
 
+    @Test fun handheldBoards() = listOf(AuditSize.M, AuditSize.S).forEach { size -> audit(size) { homeHandhelds() } }
+
     @Test fun m12Companion() = audit(AuditSize.M) { companionScreens() }
 
     @Test fun m13Everything() = audit(AuditSize.M) { everythingScreens() }

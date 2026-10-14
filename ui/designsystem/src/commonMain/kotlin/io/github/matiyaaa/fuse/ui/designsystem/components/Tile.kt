@@ -141,7 +141,11 @@ fun Tile(
     }
 
     // GLOSS: the art sits in a rounded frame with a gloss across its top, and the ring breathes.
-    val gloss = (LocalTileLook.current ?: look.spec.tiles) == io.github.matiyaaa.fuse.model.TileLook.GLOSS
+    val tileLook = LocalTileLook.current ?: look.spec.tiles
+    val gloss = tileLook == io.github.matiyaaa.fuse.model.TileLook.GLOSS
+    // PANEL: a flat card with a thin grey frame, as on a handheld's menu.
+    val panel = tileLook == io.github.matiyaaa.fuse.model.TileLook.PANEL
+    val panelColor = if (colors.isDark) PANEL_FRAME_NIGHT else PANEL_FRAME
     val breathe = remember { FuselineValue(0f) }
     val breathing = gloss && selected && motion.ambient
     LaunchedEffect(breathing) {
@@ -277,6 +281,7 @@ fun Tile(
                 val poolSquash = (h / w * 0.6f).coerceIn(0.4f, 1.1f)
                 // GLOSS: the frame, a thin bevel just inside it, and the curved gloss over the top.
                 val frameStroke = Stroke(minOf(w, h) * GLOSS_FRAME_SHARE)
+                val panelStroke = Stroke(maxOf(minOf(w, h) * PANEL_FRAME_SHARE, 2f))
                 val bevelStroke = Stroke(Size.stroke.toPx())
                 val bevelInset = frameStroke.width / 2 + bevelStroke.width / 2
                 val bevelPath = squirclePath(w - bevelInset * 2, h - bevelInset * 2, (corner - bevelInset).coerceAtLeast(0f), SMOOTHING)
@@ -312,6 +317,7 @@ fun Tile(
                         translate(bevelInset, bevelInset) { drawPath(bevelPath, bevelBrush, style = bevelStroke) }
                         drawPath(outline, frameColor, alpha = 0.92f, style = frameStroke)
                     }
+                    if (surface && panel) drawPath(outline, panelColor, style = panelStroke)
                     if (surface) {
                         drawPath(outline, sheen, alpha = 0.35f + 0.65f * lit)
                         if (hv > 0.005f) drawPath(outline, Color.White, alpha = HOVER_TINT * hv)
@@ -395,6 +401,9 @@ private const val PRESS_SHADE = 0.1f
 
 /** GLOSS: the frame's width as a share of the tile's short side. */
 private const val GLOSS_FRAME_SHARE = 0.045f
+private const val PANEL_FRAME_SHARE = 0.022f
+private val PANEL_FRAME = Color(0xFFB4BCC6)
+private val PANEL_FRAME_NIGHT = Color(0xFF5E6772)
 
 /** GLOSS: the frame in a dark theme (brushed silver), and the bevel's shade in a bright one. */
 private val GLOSS_FRAME_NIGHT = Color(0xFFAEB8C4)

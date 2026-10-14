@@ -140,7 +140,7 @@ fun AppState.homeStyleActions(): List<MenuAction> {
             "style", "Home style",
             FuseIcons.Dashboard,
             detail = "Now ${prefs.home.style.label()}. " + prefs.homeStyles().filter { it != prefs.home.style }.joinToString(" or ") { it.label() } + " instead",
-            trailing = if (FII_UNLOCK in prefs.unlockedNew) io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Badge("Unlocked") else io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Chevron,
+            trailing = if (prefs.newHomeUnlocked()) io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Badge("Unlocked") else io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Chevron,
             onSelect = { closeOverlays(); chooseHomeStyle() },
         ),
         MenuAction("home", "Home settings", FuseIcons.Dashboard, trailing = Trailing.Chevron, onSelect = { closeOverlays(); go(Route.Settings("home")) }),

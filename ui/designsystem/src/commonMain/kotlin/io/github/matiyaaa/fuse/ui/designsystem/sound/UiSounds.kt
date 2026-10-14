@@ -224,6 +224,10 @@ object ToneSynth {
                     val rising = 2 * PI * tone.freq * (t - BUBBLE_DIP * (1 - exp(-t * BUBBLE_RISE)) / BUBBLE_RISE)
                     sin(rising) + 0.1 * sin(2 * rising)
                 }
+                // Pip: a soft-edged square (odd harmonics, the upper ones gone quickly), hollow and bright.
+                SoundProfile.PIP -> sin(phase) + 0.3 * sin(3 * phase) + 0.14 * sin(5 * phase) * exp(-t * 40) + 0.07 * sin(7 * phase) * exp(-t * 70)
+                // Tap: a woody knock (inharmonic partials that die at once) over a short, round ring.
+                SoundProfile.TAP -> sin(phase) + 0.45 * sin(2.02 * phase) * exp(-t * 45) + 0.22 * sin(4.13 * phase) * exp(-t * 90)
                 SoundProfile.OFF -> 0.0
             }
             out[idx] += wave * env * tone.gain
@@ -237,6 +241,8 @@ object ToneSynth {
         SoundProfile.CLICK -> 7.0
         SoundProfile.CHIME -> 3.2
         SoundProfile.BUBBLE -> 5.5
+        SoundProfile.PIP -> 9.0
+        SoundProfile.TAP -> 8.0
         else -> 4.5
     }
 }

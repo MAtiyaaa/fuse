@@ -549,3 +549,27 @@ internal fun AuditDriver.homeFii(flipped: Boolean = false) {
         shoot("the quick menu over Fii's board", 1_200)
     }
 }
+
+/** Duo's and Trio's boards, light and night: Home as each dresses it, and the bar reached by the controller. */
+internal fun AuditDriver.homeHandhelds() {
+    for ((theme, style) in listOf(
+        "duo" to io.github.matiyaaa.fuse.model.HomeStyle.DUO, "duo-night" to io.github.matiyaaa.fuse.model.HomeStyle.DUO,
+        "trio" to io.github.matiyaaa.fuse.model.HomeStyle.TRIO, "trio-night" to io.github.matiyaaa.fuse.model.HomeStyle.TRIO,
+    )) {
+        scenario("home", theme) {
+            useLibrary {
+                it.copy(
+                    themeId = theme,
+                    home = HomeLayoutConfig(mode = HomeMode.CHANNELS).withStyle(style),
+                    unlocked = setOf(style.name.lowercase()),
+                )
+            }
+            waitFor("Continue playing")
+            shoot("the board as it comes", 2_000)
+            tap(PadButton.DPAD_RIGHT)
+            shoot("the next tile focused", 900)
+            tap(PadButton.DPAD_DOWN, 6)
+            shoot("on the bar's Sections button")
+        }
+    }
+}

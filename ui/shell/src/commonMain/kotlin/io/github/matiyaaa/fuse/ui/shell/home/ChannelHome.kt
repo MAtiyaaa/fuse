@@ -223,7 +223,7 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
             if (paging.count > 1) listOf(Hint(HintButton.RIGHT_STICK, "Pages")) else emptyList()
         val fiiAt = fii?.focus
         app.hints = when {
-            fiiAt != null && !arranging -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, fiiLabel(fiiAt)), Hint(HintButton.BACK, "Back to the board"))
+            fiiAt != null && !arranging -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, fiiLabel(fiiAt)), Hint(HintButton.BACK, "Board"))
             arranging && onBar != null -> listOfNotNull(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, if (onBar == 0) "Add a ${space.item}" else "Done"), Hint(HintButton.BACK, "Done").takeIf { onBar == 0 })
             arranging && onTools != null -> listOf(Hint(HintButton.CONFIRM, when (onTools) { 0 -> "Undo"; 1 -> space.resetLabel(page); 2 -> "New page"; else -> look?.let { "Arrange the ${it.labels[1 - it.editing]} look" } ?: if (ownHome == true) "${space.name} on all devices" else "This device's own ${space.name}" }), Hint(HintButton.BACK, "Done"))
             op is BoardOp.Carry -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Put down"), Hint(HintButton.BACK, "Cancel"))

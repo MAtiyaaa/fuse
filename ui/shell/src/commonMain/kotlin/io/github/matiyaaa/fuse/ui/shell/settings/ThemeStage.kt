@@ -625,6 +625,8 @@ internal fun BackgroundStyle.label(): String = when (this) {
     BackgroundStyle.DUNES -> "Dunes"
     BackgroundStyle.FUSI -> "Fusi"
     BackgroundStyle.FII -> "Bubbles"
+    BackgroundStyle.DUO -> "Graph paper"
+    BackgroundStyle.TRIO -> "Dotted light"
 }
 
 internal fun BackgroundStyle.icon(): ImageVector = when (this) {
@@ -646,6 +648,8 @@ internal fun BackgroundStyle.icon(): ImageVector = when (this) {
     BackgroundStyle.DUNES -> FuseIcons.SunDim
     BackgroundStyle.FUSI -> FuseIcons.PawPrint
     BackgroundStyle.FII -> FuseIcons.CircleDot
+    BackgroundStyle.DUO -> FuseIcons.Grid
+    BackgroundStyle.TRIO -> FuseIcons.Sparkles
 }
 
 internal fun CornerFamily.label(): String = when (this) {
@@ -682,6 +686,8 @@ internal fun SoundProfile.label(): String = when (this) {
     SoundProfile.CLICK -> "Crisp"
     SoundProfile.CHIME -> "Chime"
     SoundProfile.BUBBLE -> "Bubble"
+    SoundProfile.PIP -> "Pip"
+    SoundProfile.TAP -> "Tap"
 }
 
 internal fun io.github.matiyaaa.fuse.model.QuickMenuLook.label(): String = when (this) {

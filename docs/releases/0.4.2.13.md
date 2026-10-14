@@ -5,6 +5,20 @@ Home is reachable end to end, and the Library's All view is rebuilt.
 
 ## New
 
+- **Duo and Trio, each in light and at night.** Two new theme families, each with a Home of its
+  own that the theme unlocks and asks about, as Fii's does:
+  - **Duo** and **Duo Night**, after a dual-screen handheld's menu. Faint graph paper drifts slowly
+    behind everything, with squares of blue lighting in turn. Tiles are flat cards in thin grey
+    frames, and the sounds are short, bright blips. Duo's Home puts the time and date in a lit
+    panel on a bevelled grey strip, between two squared buttons.
+  - **Trio** and **Trio Night**, after a 3D handheld's home. A soft light falls over a fine grid of
+    dots, with wide sheens crossing it now and then. Tiles are glossy, rounded icons, and the sounds
+    are soft wooden taps. Trio's Home has a rounded white toolbar along the bottom, with glossy
+    buttons at each end.
+  - Duo's and Trio's Homes stay in Settings, Home, Home style once unlocked, and work with every
+    theme in its colours. Moving between a theme's light and night asks nothing.
+  - Community themes can use the new pieces too: the `duo` and `trio` backgrounds, the `pip` and
+    `tap` sounds, and `"tiles": "panel"` (docs/THEMES.md).
 - **Jellyfin on the second screen.** Focusing a film, show or episode shows a card like a game's:
   the logo, the episode and its name, the year, length and rating, where you're up to with a bar and
   the minutes left, and the overview.
@@ -46,7 +60,7 @@ Home is reachable end to end, and the Library's All view is rebuilt.
 - The second screen kept a game long after you'd left it: back on Home on a widget without a game
   (the clock, the weather), or on a page that sets no game, it showed the last game's art. It now
   follows what's on the main screen and goes back to its idle page.
-- **Fii's Home:**
+- **Fii's Home (and now Duo's and Trio's):**
   - Cards and carousels slid under the bar; the board now stops above it.
   - The bar's two buttons couldn't be reached with a controller. Down past the board's last row now
     lands on them (Sections, then the quick menu, Left and Right between them, Up or Back to return).

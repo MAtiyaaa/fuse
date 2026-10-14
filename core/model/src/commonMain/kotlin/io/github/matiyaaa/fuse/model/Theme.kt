@@ -41,7 +41,11 @@ data class ThemeSpec(
  * across its top, and the focus ring breathes slowly.
  */
 @Serializable
-enum class TileLook { PLAIN, GLOSS }
+enum class TileLook {
+    PLAIN, GLOSS,
+    /** A flat panel with a thin grey frame and a soft drop under it, like a handheld's menu cards. */
+    PANEL,
+}
 
 /**
  * How Home's widgets are drawn: [LIT] is the raised panel with a soft light of the widget's own
@@ -143,7 +147,11 @@ enum class BackgroundStyle {
     /** Fusi's room: a pink cartoon sky over a mint hill, where Fusi the pixel dog plays. */
     FUSI,
     /** Fine silver pinstripes under a soft light, with glassy bubbles rising slowly through. */
-    FII;
+    FII,
+    /** Faint graph paper with a band of light along the top and bottom, as on a dual-screen handheld's menu. */
+    DUO,
+    /** A soft light over a fine grid of dots, with slow sheens crossing it, as on a 3D handheld's home. */
+    TRIO;
 
     /** False for the backgrounds that never move (flat colour, and the room behind game art). */
     val moves: Boolean get() = this != SOLID && this != HERO
@@ -178,6 +186,10 @@ enum class SoundProfile {
     OFF, SOFT, CLICK, CHIME,
     /** Round, airy notes that rise a little as they start, like a bubble. */
     BUBBLE,
+    /** Short bright blips with a hollow, square edge, like a handheld's menu. */
+    PIP,
+    /** Soft wooden taps with a little ring, like a 3D handheld's home. */
+    TAP,
 }
 
 @Serializable
