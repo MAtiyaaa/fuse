@@ -189,7 +189,7 @@ private fun goBackFromAFailedUpdate(dirs: FuseDirs, args: Array<String>) {
 /** The Fuse.app this Fuse runs from on a Mac, or null. */
 private fun macBundle(): String? {
     if (io.github.matiyaaa.fuse.desktop.system.DesktopOs.current != io.github.matiyaaa.fuse.desktop.system.DesktopOs.MACOS) return null
-    val launcher = System.getProperty("jpackage.app-path")?.let(java.io.File::new) ?: return null
+    val launcher = System.getProperty("jpackage.app-path")?.let { java.io.File(it) } ?: return null
     return generateSequence(launcher.absoluteFile) { it.parentFile }.firstOrNull { it.name.endsWith(".app") }?.path
 }
 
