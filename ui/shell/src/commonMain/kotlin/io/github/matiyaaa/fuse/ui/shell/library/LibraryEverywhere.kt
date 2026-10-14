@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.semantics.Role
-import androidx.compose.animation.togetherWith
+import io.github.matiyaaa.fuse.ui.fuseline.togetherWith
 import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
 import io.github.matiyaaa.fuse.ui.shell.components.gamesText
 import androidx.compose.foundation.layout.height
@@ -601,12 +601,14 @@ private fun ShelfHeader(title: String, icon: ImageVector, count: String, onSeeAl
 private fun AllStage(chosen: EverywhereGame?, system: EverywhereSystem?, seeAllOf: String?, modifier: Modifier) {
     val c = Fuse.colors
     Box(modifier.padding(horizontal = Space.gutter).padding(top = Space.m, bottom = Space.m), contentAlignment = Alignment.BottomStart) {
-        androidx.compose.animation.AnimatedContent(
+        val motion = Fuse.motion
+        io.github.matiyaaa.fuse.ui.fuseline.Swap(
             targetState = Triple(chosen?.let { it::class.simpleName + it.card.id.value }, system?.card?.platform?.id?.value, seeAllOf),
             transitionSpec = {
-                androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(160)) togetherWith
-                    androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120))
+                io.github.matiyaaa.fuse.ui.fuseline.fadeIn(motion.fade(io.github.matiyaaa.fuse.ui.fuseline.Durations.FAST)) togetherWith
+                    io.github.matiyaaa.fuse.ui.fuseline.fadeOut(motion.fade(io.github.matiyaaa.fuse.ui.fuseline.Durations.INSTANT))
             },
+            contentAlignment = Alignment.BottomStart,
             label = "allStage",
         ) { _ ->
             Column(verticalArrangement = Arrangement.Bottom) {
