@@ -14,12 +14,15 @@ import io.github.matiyaaa.fuse.integrations.retroachievements.RaDiscFiles
 import io.github.matiyaaa.fuse.integrations.retroachievements.RaGameListEntry
 import io.github.matiyaaa.fuse.integrations.retroachievements.RaGameMatcher
 import io.github.matiyaaa.fuse.integrations.retroachievements.RaHasher
+import io.github.matiyaaa.fuse.integrations.retroachievements.RaFileHasher
+import io.github.matiyaaa.fuse.integrations.disc.DiscFiles
 import io.github.matiyaaa.fuse.integrations.retroachievements.RaMedia
 import io.github.matiyaaa.fuse.integrations.retroachievements.RetroAchievementsClient
 import io.github.matiyaaa.fuse.library.parse.DisplayNameCleaner
 import io.github.matiyaaa.fuse.model.AchievementState
 import io.github.matiyaaa.fuse.model.AchievementUser
 import io.github.matiyaaa.fuse.model.Game
+import io.github.matiyaaa.fuse.model.Host
 import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.RecentAchievement
 import io.github.matiyaaa.fuse.ui.shell.store.AchievementOps
@@ -309,19 +312,89 @@ internal class DefaultAchievementOps(
         return raId
     }
 
-    /** The rcheevos hash of [game]'s ROM, or null when it can't be hashed. */
+    /**
+     * The rcheevos hash of [game]'s ROM, or null when it can't be hashed. Kept with the file's size
+     * and change time (Fuse Identity), so it is worked out once; for consoles whose hash is the whole
+     * file's MD5, that MD5 is kept too, for RomM and the rest of Fuse.
+     */
     private suspend fun hashOf(consoleId: Int, game: Game): String? {
         val path = RaDiscFiles.dataFile(game.location.launchPath) { ctx.services.fs.readText(it) }
-        val source = openZippedRom(path) ?: openByteSource(path)
+        val stat = runCatching { ctx.services.fs.stat(path) }.getOrNull()
+        val stamp = stat?.let { "file:${it.sizeBytes}:${it.modifiedAt}" }
+        val identity = ctx.data.identity
+        if (stamp != null) {
+            runCatching { identity.forGame(game.id) }.getOrNull()
+                ?.firstOrNull { it.kind == io.github.matiyaaa.fuse.data.repo.IdentityRepository.RA && it.source == stamp }
+                ?.let { return it.value }
+        }
+        val launch = game.location.launchPath
+        val zipped = launch.endsWith(".zip", ignoreCase = true)
+        val result = if (consoleId in RaFileHasher.discConsoles && !zipped) {
+            discHash(consoleId, launch)
+        } else {
+            val source = openZippedRom(path) ?: openByteSource(path)
+            try {
+                RaHasher.hash(consoleId, path, source)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            } finally {
+                source?.close()
+            }
+        }
+        val hashed = result as? io.github.matiyaaa.fuse.integrations.retroachievements.RaHashResult.Hashed ?: return null
+        if (stamp != null) runCatching {
+            identity.replace(game.id, io.github.matiyaaa.fuse.data.repo.IdentityRepository.RA, listOf(hashed.md5), stamp)
+            val wholeFile = hashed.method == io.github.matiyaaa.fuse.integrations.retroachievements.RaHashMethod.WHOLE_FILE && !RaHasher.isCompressed(path) &&
+                !path.endsWith(".zip", ignoreCase = true) && (stat?.sizeBytes ?: Long.MAX_VALUE) <= RaHasher.MAX_BUFFER_BYTES
+            if (wholeFile) identity.replace(game.id, io.github.matiyaaa.fuse.data.repo.IdentityRepository.MD5, listOf(hashed.md5), "ra")
+        }
+        return hashed.md5
+    }
+
+    /**
+     * A disc game's hash through [RaFileHasher]: cue sheets, .gdi, CHD, CSO and ZSO, GameCube GCZ, WIA
+     * and RVZ, 3DS dumps. Every file it opens is closed again; a 3DS dump that is still encrypted is
+     * read with the person's own Azahar or Citra keys when they have them.
+     */
+    private suspend fun discHash(consoleId: Int, launch: String): io.github.matiyaaa.fuse.integrations.retroachievements.RaHashResult? {
+        val opened = ArrayList<ClosableByteSource>()
+        val files = object : DiscFiles {
+            override suspend fun open(path: String): io.github.matiyaaa.fuse.integrations.ByteSource? =
+                openByteSource(path)?.also { opened += it }
+
+            override suspend fun readText(path: String): String? =
+                runCatching { ctx.services.fs.readText(path) }.getOrNull()
+        }
         return try {
-            RaHasher.hash(consoleId, path, source).md5OrNull
+            RaFileHasher.hash(consoleId, launch, files) { threeDsKeys() }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             null
         } finally {
-            source?.close()
+            opened.forEach { runCatching { it.close() } }
         }
+    }
+
+    /** The person's own 3DS keys from Azahar or Citra (sysdata/aes_keys.txt), or null. */
+    private suspend fun threeDsKeys(): String? {
+        val home = ctx.services.emulators.homeDir?.replace('\\', '/')?.trimEnd('/') ?: return null
+        val roots = when (ctx.host) {
+            Host.LINUX -> listOf(
+                "$home/.local/share/azahar-emu", "$home/.var/app/org.azahar_emu.Azahar/data/azahar-emu",
+                "$home/.local/share/citra-emu", "$home/.var/app/org.citra_emu.citra/data/citra-emu",
+            )
+            Host.WINDOWS -> listOf("$home/AppData/Roaming/Azahar", "$home/AppData/Roaming/Citra")
+            Host.MACOS -> listOf("$home/Library/Application Support/Azahar", "$home/Library/Application Support/Citra")
+            Host.ANDROID -> emptyList()
+        }
+        for (root in roots) {
+            runCatching { ctx.services.fs.readText("$root/sysdata/aes_keys.txt") }.getOrNull()
+                ?.takeIf { it.isNotBlank() }?.let { return it }
+        }
+        return null
     }
 
     /**

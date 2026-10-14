@@ -575,15 +575,87 @@ internal class DefaultRommOps(
 
     // ------------------------------------------------------------------ matching
 
+    /** [r] for RomM's matching, with every serial and hash Fuse Identity knows for it. */
+    private fun localGame(r: io.github.matiyaaa.fuse.data.repo.GameMatchRow, facts: List<io.github.matiyaaa.fuse.data.repo.IdentityFact>): LocalGame {
+        val ids = io.github.matiyaaa.fuse.library.identity.Ids
+        val serials = facts.filter { it.kind == io.github.matiyaaa.fuse.data.repo.IdentityRepository.SERIAL_CONTENT }.mapNotNull { ids.serialOrNull(it.value) }
+            .map { io.github.matiyaaa.fuse.library.identity.SerialId(it, fromContent = true) } +
+            listOfNotNull(ids.serialOrNull(r.serial)?.let { io.github.matiyaaa.fuse.library.identity.SerialId(it) })
+        val hashes = facts.mapNotNull { f ->
+            val kind = when (f.kind) {
+                io.github.matiyaaa.fuse.data.repo.IdentityRepository.MD5 -> io.github.matiyaaa.fuse.library.identity.HashKind.MD5
+                io.github.matiyaaa.fuse.data.repo.IdentityRepository.SHA1 -> io.github.matiyaaa.fuse.library.identity.HashKind.SHA1
+                io.github.matiyaaa.fuse.data.repo.IdentityRepository.CRC32 -> io.github.matiyaaa.fuse.library.identity.HashKind.CRC32
+                else -> null
+            }
+            kind?.let { io.github.matiyaaa.fuse.library.identity.ContentHash.of(it, f.value) }
+        }.toSet()
+        return LocalGame(r.id.value, r.platform, r.title, FsPath.name(r.path), r.serial, null, r.rommRomId, r.missing, serials = serials, hashes = hashes)
+    }
+
+    /**
+     * Hashes the library files left unmatched whose size is exactly that of an unmatched RomM file
+     * with an MD5 on the same system, and keeps the hashes. Nothing else is ever read: a library is
+     * never hashed as a whole. True when a hash was added.
+     */
+    private suspend fun hashSameSize(
+        rows: List<io.github.matiyaaa.fuse.data.repo.GameMatchRow>,
+        roms: List<RommRom>,
+        result: List<io.github.matiyaaa.fuse.romm.RommMatchResult>,
+        platformOf: (String) -> String?,
+    ): Boolean {
+        val matchedRoms = result.map { it.romId }.toSet()
+        val matchedGames = result.map { it.gameId }.toSet()
+        val wanted = roms.filter { it.id !in matchedRoms }.flatMap { r ->
+            val platform = platformOf(r.platformSlug) ?: return@flatMap emptyList()
+            r.files.filter { !it.md5.isNullOrBlank() && it.sizeBytes in 1..MAX_HASHED_BYTES }.map { platform to it.sizeBytes }
+        }.toSet()
+        if (wanted.isEmpty()) return false
+        val known = runCatching { ctx.data.identity.all() }.getOrDefault(emptyMap())
+        var added = false
+        for (r in rows) {
+            if (r.missing || r.id.value in matchedGames) continue
+            if (known[r.id.value].orEmpty().any { it.kind == io.github.matiyaaa.fuse.data.repo.IdentityRepository.MD5 }) continue
+            val stat = runCatching { ctx.services.fs.stat(r.path) }.getOrNull() ?: continue
+            if ((r.platform to stat.sizeBytes) !in wanted) continue
+            val md5 = md5Of(r.path, stat.sizeBytes) ?: continue
+            runCatching { ctx.data.identity.record(r.id, io.github.matiyaaa.fuse.data.repo.IdentityRepository.MD5, md5, "romm") }
+            added = true
+        }
+        return added
+    }
+
+    /** The MD5 of the file at [path], read in blocks. */
+    private suspend fun md5Of(path: String, size: Long): String? = runCatching {
+        val md5 = io.github.matiyaaa.fuse.integrations.Md5()
+        var at = 0L
+        while (at < size) {
+            kotlinx.coroutines.yield()
+            val block = ctx.services.fs.readBytes(path, at, minOf(HASH_BLOCK, size - at).toInt()) ?: return null
+            if (block.isEmpty()) break
+            md5.update(block)
+            at += block.size
+        }
+        if (at != size) null else md5.digestHex()
+    }.getOrNull()
+
     private val matchLock = Mutex()
 
     /** Joins the mirror's games to the library's, and links strong matches so they stay joined. */
     private suspend fun rematch() = matchLock.withLock {
         withContext(Dispatchers.Default) {
             val rows = ctx.data.games.matchRows()
-            val locals = rows.map { r -> LocalGame(r.id.value, r.platform, r.title, FsPath.name(r.path), r.serial, null, r.rommRomId, r.missing) }
             val roms = mirror.all(server)
-            val result = RommMatch.match(roms, locals) { slug -> ctx.platforms.resolveFolder(slug)?.id?.value }
+            val platformOf: (String) -> String? = { slug -> ctx.platforms.resolveFolder(slug)?.id?.value }
+            val vetoed = runCatching { ctx.data.identity.vetoes(VETO_KIND) }.getOrDefault(emptySet())
+                .mapNotNull { (rom, game) -> rom.toLongOrNull()?.let { it to game } }.toSet()
+            suspend fun locals(): List<LocalGame> {
+                val facts = runCatching { ctx.data.identity.all() }.getOrDefault(emptyMap())
+                return rows.map { r -> localGame(r, facts[r.id.value].orEmpty()) }
+            }
+            var result = RommMatch.match(roms, locals(), vetoed, platformOf)
+            // Same-size files: hash them once (only those), so a renamed copy is still found by its content.
+            if (hashSameSize(rows, roms, result, platformOf)) result = RommMatch.match(roms, locals(), vetoed, platformOf)
             val before = matches.value
             // Linked from now on: the game page and Cartridge's Open both know it.
             val byId = rows.associateBy { it.id.value }
@@ -1092,6 +1164,13 @@ internal class DefaultRommOps(
 
     companion object {
         const val SECRET = "romm.credential"
+
+        /** Fuse Identity's kind for "Not this game" on RomM. */
+        const val VETO_KIND = "romm"
+
+        /** Files above this size are never hashed for matching (a disc image is found by its serial). */
+        private const val MAX_HASHED_BYTES = 512L * 1024 * 1024
+        private const val HASH_BLOCK = 4L * 1024 * 1024
 
         /** Library games not on RomM shown on the tab's shelf (the rest are counted). */
         private const val NOT_ON_SERVER_SHOWN = 60

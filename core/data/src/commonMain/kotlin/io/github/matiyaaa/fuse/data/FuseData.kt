@@ -7,6 +7,7 @@ import io.github.matiyaaa.fuse.data.repo.CacheRepository
 import io.github.matiyaaa.fuse.data.repo.CollectionRepository
 import io.github.matiyaaa.fuse.data.repo.FolderStateRepository
 import io.github.matiyaaa.fuse.data.repo.GameRepository
+import io.github.matiyaaa.fuse.data.repo.IdentityRepository
 import io.github.matiyaaa.fuse.data.repo.LibraryIndexer
 import io.github.matiyaaa.fuse.data.repo.LibrarySourceRepository
 import io.github.matiyaaa.fuse.data.repo.MediaRepository
@@ -44,4 +45,5 @@ class FuseData(
     val search by lazy { SearchRepository(database, dispatcher) }
     val owned by lazy { OwnedChangesRepository(database, dispatcher, clock) }
     val profileState by lazy { ProfileStateRepository(database, dispatcher, clock) }
+    val identity by lazy { IdentityRepository(database, dispatcher, clock) }
 }

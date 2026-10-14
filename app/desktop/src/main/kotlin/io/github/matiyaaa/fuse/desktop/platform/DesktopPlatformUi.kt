@@ -203,6 +203,11 @@ class DesktopPlatformUi(
     override fun stayAwake(awake: io.github.matiyaaa.fuse.ui.shell.platform.StayAwake) = this.awake.apply(awake)
 
     override fun restart() {
+        if (UpdateHandoff.helperRestarts) {
+            // The update's helper is waiting for Fuse to close; it starts Fuse again itself.
+            window.exitApplication()
+            return
+        }
         val command = restartCommand()
         if (command == null) {
             Log.warn("restart is not possible from this environment")

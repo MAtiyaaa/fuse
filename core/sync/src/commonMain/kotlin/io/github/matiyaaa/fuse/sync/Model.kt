@@ -1,5 +1,7 @@
 package io.github.matiyaaa.fuse.sync
 
+import io.github.matiyaaa.fuse.library.identity.GameEvidence
+import io.github.matiyaaa.fuse.library.identity.HouseholdKeys
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
@@ -73,22 +75,17 @@ data class GameKey(val platform: String, val identity: String) {
     val id: String get() = "$platform:$identity"
 
     companion object {
-        private val SAFE = Regex("[^a-z0-9._-]+")
-        private val TAGS = Regex("\\(.*?\\)|\\[.*?]")
-
-        /** The key for a game known by [serial], [contentHash] or [title], in that order of trust. */
+        /** The key for a game known by [serial], [contentHash] or [title], in that order of trust ([HouseholdKeys]). */
         fun of(platform: String, serial: String?, contentHash: String?, title: String): GameKey {
-            val normalizedSerial = serial?.lowercase()?.filter { it.isLetterOrDigit() }?.takeIf { it.isNotEmpty() }
-            val normalizedHash = contentHash?.lowercase()?.replace(SAFE, "")?.takeIf { it.isNotEmpty() }
-            val identity = when {
-                // Serials are written many ways (SLUS-00067, slus_000.67, SLUS00067): letters and digits only.
-                normalizedSerial != null -> "s." + normalizedSerial
-                normalizedHash != null -> "h." + normalizedHash
-                // Region and version tags differ between copies of one game: "Pokemon Ruby (USA)" is "pokemon-ruby".
-                else -> "t." + title.lowercase().replace(TAGS, "").replace(SAFE, "-").trim('-')
-            }
-            return GameKey(platform.lowercase().replace(SAFE, "-"), identity)
+            val (p, identity) = HouseholdKeys.of(platform, serial, contentHash, title)
+            return GameKey(p, identity)
         }
+
+        /** [e]'s key ([HouseholdKeys.primary]). */
+        fun of(e: GameEvidence): GameKey = parse(HouseholdKeys.primary(e))!!
+
+        /** Every key [e] may have been known by, its own first ([HouseholdKeys.all]). */
+        fun allOf(e: GameEvidence): List<GameKey> = HouseholdKeys.all(e).mapNotNull(::parse)
 
         fun parse(id: String): GameKey? {
             val i = id.indexOf(':')

@@ -10,6 +10,7 @@ import javax.sound.sampled.AudioFormat
 import javax.sound.sampled.AudioSystem
 import javax.sound.sampled.SourceDataLine
 import io.github.matiyaaa.fuse.ui.designsystem.sound.UiSounds
+import io.github.matiyaaa.fuse.ui.designsystem.sound.AudioTap
 
 /**
  * Interface sounds through javax.sound. Every cue is rendered once by [ToneSynth] per profile and
@@ -129,6 +130,8 @@ internal class DesktopSounds : UiSounds, AutoCloseable {
                     out[i * 2 + 1] = (s shr 8 and 0xFF).toByte()
                 }
                 line.write(out, 0, out.size)
+                // A recording of Fuse hears what was just played.
+                AudioTap.feed("sounds", out, 0, out.size, ToneSynth.SAMPLE_RATE, 1)
                 if (voices.isEmpty() && queue.isEmpty()) {
                     line.drain()
                     idleSince = System.nanoTime()

@@ -169,7 +169,7 @@ private fun runWindow(dirs: FuseDirs, args: Array<String>, scope: CoroutineScope
  */
 private fun goBackFromAFailedUpdate(dirs: FuseDirs, args: Array<String>) {
     val trial = io.github.matiyaaa.fuse.desktop.services.UpdateTrial(java.io.File(dirs.data, io.github.matiyaaa.fuse.desktop.services.UpdateTrial.FILE))
-    val start = trial.onStart(System.getenv("APPIMAGE"), BuildInfo.VERSION)
+    val start = trial.onStart(System.getenv("APPIMAGE") ?: macBundle(), BuildInfo.VERSION)
     if (start !is io.github.matiyaaa.fuse.desktop.services.UpdateTrial.Start.WentBack) return
     Log.warn("Fuse ${start.version} didn't come up in its first starts; going back to ${start.from}")
     val before = start.from.ifEmpty { null }?.let { "Fuse $it" } ?: "the version before it"
@@ -178,9 +178,19 @@ private fun goBackFromAFailedUpdate(dirs: FuseDirs, args: Array<String>) {
             .writeText("Fuse ${start.version} didn't start properly, so Fuse went back to $before.")
     }
     val pass = args.filter { it.startsWith("--") && it != io.github.matiyaaa.fuse.desktop.system.SingleInstance.REPLACE }
-    if (io.github.matiyaaa.fuse.desktop.system.Processes.spawn(listOf(start.target) + pass + io.github.matiyaaa.fuse.desktop.system.SingleInstance.REPLACE) != null) {
+    // A Mac's Fuse.app starts from the launcher inside it.
+    val program = java.io.File(start.target).takeIf { it.isDirectory }
+        ?.let { java.io.File(it, "Contents/MacOS").listFiles()?.firstOrNull { f -> f.isFile && f.canExecute() }?.path } ?: start.target
+    if (io.github.matiyaaa.fuse.desktop.system.Processes.spawn(listOf(program) + pass + io.github.matiyaaa.fuse.desktop.system.SingleInstance.REPLACE) != null) {
         kotlin.system.exitProcess(0)
     }
+}
+
+/** The Fuse.app this Fuse runs from on a Mac, or null. */
+private fun macBundle(): String? {
+    if (io.github.matiyaaa.fuse.desktop.system.DesktopOs.current != io.github.matiyaaa.fuse.desktop.system.DesktopOs.MACOS) return null
+    val launcher = System.getProperty("jpackage.app-path")?.let(java.io.File::new) ?: return null
+    return generateSequence(launcher.absoluteFile) { it.parentFile }.firstOrNull { it.name.endsWith(".app") }?.path
 }
 
 /** Every frame Skia draws while something moves, summed up in the log each minute (see FrameWatch). */

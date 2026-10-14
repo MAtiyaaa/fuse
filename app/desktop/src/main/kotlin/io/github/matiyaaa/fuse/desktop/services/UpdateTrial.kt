@@ -26,7 +26,7 @@ internal data class PreviousFuse(val version: String, val schema: Long, val repl
 }
 
 /**
- * A Fuse update on trial. After an update replaces the AppImage, the new version has to show it
+ * A Fuse update on trial. After an update replaces the AppImage (or a Mac's Fuse.app), the new version has to show it
  * works before the one it replaced stops being the safe one: each start of the new version is
  * counted ([onStart]), and once its window has been up a while it is [healthy] and the trial ends.
  * When it has started [MAX_STARTS] times without getting that far (it crashed, or closed at once),
@@ -81,7 +81,8 @@ internal class UpdateTrial(private val file: File) {
         }
         val target = File(trial.target)
         val previous = previousOf(target)
-        if (!previous.isFile) {
+        // A file (an AppImage) or a folder (a Mac's Fuse.app).
+        if (!previous.exists()) {
             // Nothing to go back to: carry on with this one, and stop counting.
             end()
             return Start.Normal

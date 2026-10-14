@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.desktop.platform
 
 import io.github.matiyaaa.fuse.desktop.Log
+import io.github.matiyaaa.fuse.ui.designsystem.sound.AudioTap
 import io.github.matiyaaa.fuse.ui.shell.platform.MenuMusicPlayer
 import io.github.matiyaaa.fuse.ui.shell.platform.MusicState
 import javazoom.jl.decoder.Bitstream
@@ -416,6 +417,7 @@ private class SharedLineOutput(override val rate: Int, override val channels: In
 
     override fun write(bytes: ByteArray) {
         line.write(bytes, 0, bytes.size)
+        AudioTap.feed("music", bytes, 0, bytes.size, rate, channels)
     }
 
     override fun pause() {

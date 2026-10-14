@@ -25,6 +25,10 @@ import java.util.Locale
 internal object UpdateHandoff {
     @Volatile
     var installedFuseAppImage: String? = null
+
+    /** A helper installs the update once Fuse closes and starts it again (Windows): a restart only closes Fuse. */
+    @Volatile
+    var helperRestarts: Boolean = false
 }
 
 /**

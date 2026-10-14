@@ -865,6 +865,10 @@ fun mediaRows(app: AppState): List<MenuAction> {
                 "fill.auto", "Find art by itself", FuseIcons.ScanSearch, p.autoFillArt,
                 "After a scan or a new key, games missing art or details get them. When a source runs out of requests, the others take over",
             ) { v -> set { it.copy(autoFillArt = v) } })
+            add(toggleRow(
+                "hltb", "How long to beat", FuseIcons.Hourglass, p.howLongToBeat,
+                "Each game's page shows how long it takes to beat, from HowLongToBeat. Only the game's name is sent",
+            ) { v -> set { it.copy(howLongToBeat = v) } })
         }
         labelled("Previews") {
             // Only where this system can play them: a switch that can't do anything isn't shown.

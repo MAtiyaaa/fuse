@@ -143,6 +143,7 @@ internal class AuditServices(
         io.ktor.client.HttpClient(io.ktor.client.engine.mock.MockEngine { request ->
             AuditJellyfin.answer(this, request)
                 ?: AuditGameBanana.answer(this, request)
+                ?: AuditHowLongToBeat.answer(this, request)
                 ?: AuditEmuCoreX.answer(this, request)
                 ?: (if (host == Host.ANDROID || desktop) AuditStore.answer(this, request) else null)
                 ?: respondError(io.ktor.http.HttpStatusCode.NotFound)
@@ -705,6 +706,25 @@ internal object AuditGameBanana {
             path.endsWith("/Util/Search/Results") -> GAMES
             path.endsWith("/Mod/Index") -> MODS
             path.endsWith("/Mod/9101/ProfilePage") -> MOD
+            else -> return null
+        }
+        return with(scope) {
+            respond(body, io.ktor.http.HttpStatusCode.OK, io.ktor.http.headersOf(io.ktor.http.HttpHeaders.ContentType, "application/json"))
+        }
+    }
+}
+
+/** HowLongToBeat as Fuse asks it: a token, then a search that knows the library's made-up games. */
+internal object AuditHowLongToBeat {
+    private const val GAMES = """{"count":2,"data":[
+        {"game_id":90001,"game_name":"Emberline Saga","game_alias":"","comp_main":81000,"comp_plus":118800,"comp_100":171000,"release_world":2004,"profile_platform":"PlayStation 2"},
+        {"game_id":90002,"game_name":"Emberline Saga II","game_alias":"","comp_main":97200,"comp_plus":133200,"comp_100":190800,"release_world":2006,"profile_platform":"PlayStation 2"}]}"""
+
+    fun answer(scope: io.ktor.client.engine.mock.MockRequestHandleScope, request: io.ktor.client.request.HttpRequestData): io.ktor.client.request.HttpResponseData? {
+        if (request.url.host != "howlongtobeat.com") return null
+        val body = when {
+            request.url.encodedPath.endsWith("/init") -> """{"token":"audit"}"""
+            request.url.encodedPath.startsWith("/api/search") -> GAMES
             else -> return null
         }
         return with(scope) {

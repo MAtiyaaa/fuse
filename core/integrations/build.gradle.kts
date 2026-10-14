@@ -17,6 +17,10 @@ kotlin {
         }
         val jvmShared by creating {
             dependsOn(commonMain.get())
+            dependencies {
+                implementation(libs.xz)
+                implementation(libs.aircompressor)
+            }
         }
         androidMain.get().dependsOn(jvmShared)
         getByName("desktopMain").dependsOn(jvmShared)

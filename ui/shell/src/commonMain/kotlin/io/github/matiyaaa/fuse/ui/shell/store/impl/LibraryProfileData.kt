@@ -239,10 +239,29 @@ internal class LibraryProfileData(
         const val HOME_REJOIN = "REJOIN"
         const val HOME_LAYOUT = "home.layout"
 
-        fun keyOf(r: UserGameRow): GameKey = GameKey.of(r.platform, r.serial, null, r.title)
+        /** [r] as Fuse Identity sees it: the serial read from the game itself first, then its name's. */
+        fun evidenceOf(r: UserGameRow) = io.github.matiyaaa.fuse.library.identity.GameEvidence(
+            id = r.id,
+            platform = r.platform,
+            title = r.title,
+            serials = listOfNotNull(
+                io.github.matiyaaa.fuse.library.identity.Ids.serialOrNull(r.contentSerial)?.let { io.github.matiyaaa.fuse.library.identity.SerialId(it, fromContent = true) },
+                io.github.matiyaaa.fuse.library.identity.Ids.serialOrNull(r.serial)?.let { io.github.matiyaaa.fuse.library.identity.SerialId(it) },
+            ),
+            scannedPlatform = r.scannedPlatform,
+        )
 
-        /** A title is a fallback, never a bridge between strongly identified games. */
-        fun candidatesOf(r: UserGameRow): List<GameKey> = listOf(keyOf(r))
+        /** The game's household key ([io.github.matiyaaa.fuse.library.identity.HouseholdKeys.primary]). */
+        fun keyOf(r: UserGameRow): GameKey = GameKey.of(evidenceOf(r))
+
+        /**
+         * The keys the game is known by: its own, and the one Fuse knew it by before it read the
+         * game's serial from the game itself (from its file name's serial, else its title), so what
+         * was recorded under that one stays the game's. A title is otherwise never a bridge between
+         * strongly identified games.
+         */
+        fun candidatesOf(r: UserGameRow): List<GameKey> =
+            listOf(keyOf(r), GameKey.of(r.platform, r.serial, null, r.title)).distinct()
 
         /** A collection's id everywhere: when it was made, which every device keeps as it is. */
         fun collectionId(createdAt: Long) = "c$createdAt"

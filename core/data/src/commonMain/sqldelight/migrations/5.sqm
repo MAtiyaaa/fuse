@@ -1,0 +1,27 @@
+-- 0.4.2.11: Fuse Identity. What Fuse knows each game by (serials, hashes, chosen links), what a
+-- person said is a different game, and HowLongToBeat's times.
+CREATE TABLE game_identity (
+    game_id INTEGER NOT NULL REFERENCES game(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    value TEXT NOT NULL,
+    source TEXT NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (game_id, kind, value)
+);
+
+CREATE INDEX game_identity_value ON game_identity(kind, value);
+
+CREATE TABLE identity_veto (
+    kind TEXT NOT NULL,
+    remote_id TEXT NOT NULL,
+    game_id INTEGER NOT NULL REFERENCES game(id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (kind, remote_id, game_id)
+);
+
+CREATE TABLE hltb_cache (
+    work_key TEXT NOT NULL PRIMARY KEY,
+    hltb_id INTEGER NOT NULL,
+    json TEXT NOT NULL,
+    fetched_at INTEGER NOT NULL
+);

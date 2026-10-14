@@ -489,6 +489,18 @@ interface LibraryOps {
      */
     suspend fun discIdentity(id: GameId): io.github.matiyaaa.fuse.library.disc.DiscIdentity? = null
 
+    /** How long [id] takes to beat (HowLongToBeat), or null when it's off, unknown or can't be asked now. */
+    suspend fun howLongToBeat(id: GameId): HltbView? = null
+
+    /** HowLongToBeat's games named like [id], for choosing the right one. */
+    suspend fun howLongToBeatChoices(id: GameId): List<io.github.matiyaaa.fuse.integrations.hltb.HltbGame> = emptyList()
+
+    /** The person's choice for [id]: [game], or none of them (null), kept from now on. */
+    suspend fun chooseHowLongToBeat(id: GameId, game: io.github.matiyaaa.fuse.integrations.hltb.HltbGame?) {}
+
+    /** Every library game's household keys (Fuse Identity), its own first: what saves and play time from other devices are filed under. */
+    suspend fun householdKeys(): Map<GameId, List<String>> = emptyMap()
+
     /**
      * What RPCS3's public compatibility list says about the PS3 game [id], by its title id. Asks
      * rpcs3.net only when called (the user asked), sending only the title id; answers are kept a week.
@@ -1061,3 +1073,6 @@ sealed interface PatchApplied {
     /** It couldn't be done; [reason] says why, in words for the person. */
     data class Failed(val reason: String) : PatchApplied
 }
+
+/** How long a game takes to beat, and whether the person chose that game themselves. */
+data class HltbView(val game: io.github.matiyaaa.fuse.integrations.hltb.HltbGame, val chosen: Boolean)

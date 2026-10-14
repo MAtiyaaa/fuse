@@ -2,7 +2,7 @@
 -- switching profiles. The library itself (which games, their files) is never touched here.
 
 userGames:
-SELECT id, platform_id, title_original, title_custom, tags_json, favorite, hidden, pinned, last_played_at, tracked_seconds, session_count, emulator_override
+SELECT id, platform_id, title_original, title_custom, tags_json, favorite, hidden, pinned, last_played_at, tracked_seconds, session_count, emulator_override, platform_scanned
 FROM game WHERE removed_at IS NULL;
 
 setUserState:

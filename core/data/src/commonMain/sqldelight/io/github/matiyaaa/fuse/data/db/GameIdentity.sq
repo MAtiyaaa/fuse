@@ -1,0 +1,67 @@
+-- Fuse Identity: what Fuse knows a game by, beyond its row in game (serials read from the game or
+-- its name, content hashes, the RetroAchievements hash, a HowLongToBeat game chosen for it). Kept on
+-- this device; rebuilt by scans when lost.
+CREATE TABLE game_identity (
+    game_id INTEGER NOT NULL REFERENCES game(id) ON DELETE CASCADE,
+    -- serial, serial.content, md5, sha1, crc32, ra, hltb, package
+    kind TEXT NOT NULL,
+    value TEXT NOT NULL,
+    -- Where it came from (scan, disc, romm, person).
+    source TEXT NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (game_id, kind, value)
+);
+
+CREATE INDEX game_identity_value ON game_identity(kind, value);
+
+-- A person said these are different games ("Not this game"): never matched again.
+CREATE TABLE identity_veto (
+    -- romm, hltb, ra
+    kind TEXT NOT NULL,
+    remote_id TEXT NOT NULL,
+    game_id INTEGER NOT NULL REFERENCES game(id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (kind, remote_id, game_id)
+);
+
+-- HowLongToBeat's times for a game, by its title whatever the copy (Ids.workTitle with the platform).
+CREATE TABLE hltb_cache (
+    work_key TEXT NOT NULL PRIMARY KEY,
+    -- 0 when HowLongToBeat has no such game (asked, not found).
+    hltb_id INTEGER NOT NULL,
+    json TEXT NOT NULL,
+    fetched_at INTEGER NOT NULL
+);
+
+forGame:
+SELECT kind, value, source FROM game_identity WHERE game_id = ?;
+
+all:
+SELECT game_id, kind, value, source FROM game_identity;
+
+gamesWith:
+SELECT game_id FROM game_identity WHERE kind = ? AND value = ?;
+
+put:
+INSERT OR REPLACE INTO game_identity(game_id, kind, value, source, updated_at) VALUES (?, ?, ?, ?, ?);
+
+clearKind:
+DELETE FROM game_identity WHERE game_id = ? AND kind = ?;
+
+veto:
+INSERT OR IGNORE INTO identity_veto(kind, remote_id, game_id, created_at) VALUES (?, ?, ?, ?);
+
+vetoes:
+SELECT remote_id, game_id FROM identity_veto WHERE kind = ?;
+
+unveto:
+DELETE FROM identity_veto WHERE kind = ? AND game_id = ?;
+
+hltbGet:
+SELECT hltb_id, json, fetched_at FROM hltb_cache WHERE work_key = ?;
+
+hltbPut:
+INSERT OR REPLACE INTO hltb_cache(work_key, hltb_id, json, fetched_at) VALUES (?, ?, ?, ?);
+
+hltbForget:
+DELETE FROM hltb_cache WHERE work_key = ?;

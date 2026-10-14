@@ -110,6 +110,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         scraperRegion = scraping.preferredRegion ?: ANY_REGION,
         matching = scraping.matching,
         autoFillArt = scraping.autoFill,
+        howLongToBeat = scraping.howLongToBeat,
         autoRefreshFromCartridge = cartridge.autoRefreshOnReturn,
         cartridgeRommDetails = cartridge.rommDetails,
         cartridgeEnabled = cartridge.enabled,
@@ -170,6 +171,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             preferredRegion = prefs.scraperRegion.takeIf { it != ANY_REGION && it.isNotBlank() },
             matching = prefs.matching,
             autoFill = prefs.autoFillArt,
+            howLongToBeat = prefs.howLongToBeat,
         ),
         videoPreview = videoPreview.copy(enabled = prefs.videoPreview, delaySeconds = prefs.videoDelaySeconds.coerceIn(0, 60)),
         library = library.copy(

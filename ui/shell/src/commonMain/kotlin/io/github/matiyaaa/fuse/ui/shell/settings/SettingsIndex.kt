@@ -108,6 +108,7 @@ object SettingsIndex {
         SettingTopic("systems", "Download system art", "art book logos", group = "systems.art"),
         SettingTopic("media", "Fill missing art", "scrape download art covers"),
         SettingTopic("media", "Fill everything", "art details fuse library romm other devices scrape all"),
+        SettingTopic("media", "How long to beat", "howlongtobeat hltb time length hours completion main story completionist"),
         SettingTopic("media", "Video previews", "trailers videos"),
         SettingTopic("media", "Preferred region", "region", group = "media.matching"),
         SettingTopic("media", "Preferred language", "language", group = "media.matching"),

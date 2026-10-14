@@ -28,6 +28,9 @@ android-targetSdk = "36"
 android-minSdk = "28"
 
 [libraries]
+# Disc images: LZMA (CHD, RVZ) and Zstandard (RVZ, CHD), for RetroAchievements hashing.
+xz = { module = "org.tukaani:xz", version = "1.10" }
+aircompressor = { module = "io.airlift:aircompressor", version = "0.27" }
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 compose-compiler-gradle-plugin = { module = "org.jetbrains.kotlin:compose-compiler-gradle-plugin", version.ref = "kotlin" }
 compose-gradle-plugin = { module = "org.jetbrains.compose:compose-gradle-plugin", version.ref = "compose-multiplatform" }

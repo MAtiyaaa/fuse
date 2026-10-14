@@ -429,6 +429,8 @@ data class ScrapingSettings(
     val matching: MatchStrictness = MatchStrictness.NORMAL,
     /** Look for missing art and details by itself after scans and when a source is added. */
     val autoFill: Boolean = true,
+    /** Show how long a game takes to beat (HowLongToBeat) on its page. */
+    val howLongToBeat: Boolean = true,
 ) {
     /** Enabled providers in effective order. */
     fun effectiveOrder(): List<ScrapeProviderId> =
