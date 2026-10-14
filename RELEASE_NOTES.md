@@ -1,59 +1,47 @@
-# Fuse 0.4.2.8 - The Native Update
+# Fuse 0.4.2.9 - The Native Update
 
-Smoother motion on a 4K TV and in Steam's Game Mode, video that no longer redraws the whole screen
-for nothing, and a log that says where a slow frame's time went.
+Jellyfin films that play smoothly, sound clear and look sharp on a 4K TV, gradients without bands,
+one Fuse at a time, and Fuse's icon back in Steam.
 
 ## New
 
-- **Fuse's log says how frames went.** Each minute in which anything moved ends in one line in
-  ~/.local/share/fuse/logs/fuse.log: how many frames were late, the longest gap, how long drawing
-  took, and whether the time went to drawing or to the graphics card and the way to the screen.
-- **Settings for trying how frames reach the screen,** set as a Steam game's Launch Options (for
-  example `FUSE_VSYNC=off %command%`), with no new build:
-  - `FUSE_VSYNC=off`: Fuse doesn't wait for the screen's refresh itself, where gamescope or Wayland
-    already waits.
-  - `FUSE_BUFFERING=double` or `triple`: how many frames are kept in flight.
-  - `FUSE_WAIT_VSYNC=off`: a redraw asked for at once doesn't wait for the next refresh first.
-  - `FUSE_GPU_CACHE_MB=1024`: the size of the picture cache on the graphics card.
-  - `FUSE_CURSOR=keep`: the pointer is never swapped for a blank one while a controller is in use,
-    for gamescope's stutter when a pointer hides.
-  - `FUSE_STEAM_OVERLAY=off`: Steam's overlay library, which Steam loads into everything it starts
-    to hook its drawing, stays out of Fuse. The games Fuse starts still get the overlay.
+- **One Fuse at a time.** Starting Fuse while it is already open brings the open one to the front
+  instead of opening a second. Started from Steam, the new one takes the old one's place, so Steam
+  and Game Mode follow the Fuse on screen. Restarting Fuse (after an update or a change that needs
+  it) hands over cleanly too.
+- **Settings, Display, Graphics says when a TV gets reduced colour.** On Linux, a 4K screen at 100 Hz
+  or more over HDMI is sent YCbCr 4:2:0 (AMD's and Intel's open drivers can't use HDMI 2.1's faster
+  link), which shows every soft gradient as bands whatever an app does. Fuse now says so, and that
+  60 Hz, or a DisplayPort to HDMI 2.1 adapter, sends full colour.
 
 ## Changed
 
-- **Moving from game to game is smooth on a 4K TV.** Box art and small screenshots become a blurred
-  room behind the interface, and that room used to be made the moment you arrived: drawn on the
-  graphics card, read back to the processor while everything waited, then stretched to 4K on one
-  core. It is now drawn small by the processor, blurred and stretched on every core, away from
-  the interface, and kept for the last few games, so going back costs nothing. The crossfade waits
-  until the new room is ready and already on the graphics card, so it never fades in empty or
-  stalls halfway. The crossfade, the settle and Enhanced's slow drift look as they did.
-- **In Steam's Game Mode, gamescope paces Fuse's frames.** On Linux, Fuse draws on the same thread
-  that runs every animation and button press, and waited there for each screen refresh. Under
-  gamescope that wait came on top of gamescope's own, so frames could miss the refresh they waited
-  for and motion stuttered. Fuse now paces itself to the screen's rate and leaves the wait to
-  gamescope. Pictures never tear: gamescope shows whole frames. `FUSE_VSYNC=on` brings the old way
-  back.
-- **Fuse starts faster on Linux, and its first screens don't wait.** The AppImage now carries the
-  Java classes Fuse uses, already read and checked, in an archive Java maps straight in: about
-  half the work of starting is gone, and opening Home, the Library and Systems the first time no
-  longer pauses to load their code.
-- **Video redraws only when a new picture is due.** A film or a background preview used to have
-  the whole window drawn again at every screen refresh, 60 times a second for a 24 fps film. Now
-  the window is drawn when the next picture is due.
-- **Video pictures are scaled with a cubic filter.** Each picture had mipmaps built for it on the
-  processor before it went to the graphics card. It now goes straight there, and looks sharper
-  enlarged to a 4K screen.
-- **Room for 4K on the graphics card.** Fuse keeps the pictures it draws with (art, the blurred room,
-  glass and every layer drawn offscreen) in a cache on the graphics card that held only 96 MB, about
-  three full-screen layers at 4K. Moving between screens then uploaded the same pictures again on
-  every frame. The cache is now sized for the screen: 760 MB at 4K, 256 MB at 1080p and below.
-- **Settings, Display, Graphics** lists the picture cache's size and every setting asked for.
+- **Gradients are dithered before they are rounded.** Every gradient behind the interface gets a fine
+  grain of noise while its colour is still exact, before the graphics card rounds it to 8 bits, so
+  its steps become an even grain instead of lines. Skia's own dither, used until now, is an ordered
+  half step that a TV's picture processing evens out, which brought the bands back. On a TV the
+  grain is two steps each way, and the blurred room behind Home gets the same.
+- **Jellyfin films sound clear.** Surround sound folds down with the centre channel, where films put
+  the dialogue, at full level, and the evening out of loud and quiet moments lets the start of each
+  sound through before it acts, so speech keeps its edges instead of sounding muffled.
+- **Jellyfin films are sharp on a 4K TV.** Pictures are made at the screen's own size, up to 4K,
+  instead of 1080p and then stretched, with a sharper filter when a film is smaller than the screen.
+- **Video is converted on every core, off the interface's thread,** so 4K films keep up and the
+  interface stays responsive while one plays.
 
 ## Fixed
 
-- Backgrounds that took a moment to load never appeared: the room's placeholder stayed, and the
-  art stayed hidden behind it. It now fades in over the placeholder when it arrives.
-- On a 4K screen, pictures no longer go up to the graphics card again on every frame of a
-  transition, which could make motion stutter while art, glass or the background changed.
+- Jellyfin video and sound got choppy. The sound's clock lost a third of a millisecond with every
+  block, so the picture fell further behind the sound every minute until the pictures waiting to be
+  shown filled the read-ahead and the sound ran dry. The clock is now exact.
+- Sound had small gaps and clicks: the filters that fold surround down and even it out were built
+  again for every frame of sound, throwing away what they held each time.
+- HD films' colours were off (dull reds, greens a little wrong): every film was read with SD's
+  colours. Films now use the colours they say they have, and HD ones that say nothing are read as HD.
+- Video could stop for good after a few seeks in a row.
+- Opening Fuse once from Steam could start two of it.
+- Fuse's icon could go missing in Steam. Fuse took its own Steam entry for one of the games it added
+  to Steam (they start Fuse too), which could leave its icon pointing at a game's picture that was
+  later removed. Games are now never taken for Fuse, and an icon whose picture is gone is put back
+  the next time Fuse starts with Steam closed.
+- Fuse no longer stays running without a window after it closes.
