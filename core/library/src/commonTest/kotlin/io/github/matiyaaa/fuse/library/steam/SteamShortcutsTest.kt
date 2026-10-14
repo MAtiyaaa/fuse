@@ -124,4 +124,54 @@ class SteamShortcutsTest {
         kotlin.test.assertNull(SteamShortcuts.rebuild(bytes, shortcut) { _, _ -> true })
     }
 
+    /** Steam's list with a game Fuse put there first (it runs Fuse too, with --play), then Fuse itself. */
+    private fun gameThenFuse(fuseIcon: String): ByteArray {
+        val game = SteamShortcut("Metroid Fusion", fuse.exe, fuse.startDir, icon = "/grid/111_icon.png", launchOptions = "--play 42")
+        val first = SteamShortcuts.add(null, game)!!
+        // Fuse's own entry after it, as Steam would have written it.
+        val root = BinaryVdf.parse(first)!!
+        val list = root["shortcuts"] as BinaryVdf.Block
+        val own = BinaryVdf.parse(SteamShortcuts.add(null, fuse.copy(icon = fuseIcon))!!)!!["shortcuts"] as BinaryVdf.Block
+        list.entries += "1" to own.entries.single().second
+        return BinaryVdf.write(root)
+    }
+
+    private fun entry(bytes: ByteArray, index: String) = (BinaryVdf.parse(bytes)!!["shortcuts"] as BinaryVdf.Block)[index] as BinaryVdf.Block
+
+    @Test
+    fun aGameThatStartsFuseIsNeverTakenForFuse() {
+        val owned = { exe: String, _: String -> exe.endsWith("Fuse.AppImage") }
+        val bytes = gameThenFuse("/grid/fuse_icon.png")
+        // Its id isn't Fuse's, adding Fuse leaves it alone, and so do a repair and a removal.
+        assertEquals(listOf(SteamShortcuts.appId(fuse.exe, "Fuse").toLong() and 0xFFFFFFFFL), SteamShortcuts.idsOf(bytes, owned))
+        val added = SteamShortcuts.add(bytes, fuse.copy(icon = "/grid/new_icon.png"), owned)!!
+        assertEquals("Metroid Fusion", (entry(added, "0")["AppName"] as BinaryVdf.Str).value)
+        assertEquals("--play 42", (entry(added, "0")["LaunchOptions"] as BinaryVdf.Str).value)
+        assertEquals("/grid/111_icon.png", (entry(added, "0")["icon"] as BinaryVdf.Str).value)
+        val rebuilt = SteamShortcuts.rebuild(bytes, fuse, owned)!!
+        assertEquals(2, (BinaryVdf.parse(rebuilt)!!["shortcuts"] as BinaryVdf.Block).entries.size)
+        val removed = SteamShortcuts.remove(bytes, owned)!!
+        assertEquals("Metroid Fusion", (entry(removed, "0")["AppName"] as BinaryVdf.Str).value)
+        assertEquals(1, (BinaryVdf.parse(removed)!!["shortcuts"] as BinaryVdf.Block).entries.size)
+    }
+
+    @Test
+    fun anIconWhosePictureIsGoneIsPutBack() {
+        val owned = { exe: String, _: String -> exe.endsWith("Fuse.AppImage") }
+        val bytes = gameThenFuse("/grid/removed_icon.png")
+        val exists = { path: String -> path != "/grid/removed_icon.png" }
+        val repaired = assertNotNull(SteamShortcuts.repairIcons(bytes, owned, exists) { "/grid/${it}_icon.png" })
+        val id = SteamShortcuts.appId(fuse.exe, "Fuse").toLong() and 0xFFFFFFFFL
+        assertEquals("/grid/${id}_icon.png", (entry(repaired, "1")["icon"] as BinaryVdf.Str).value)
+        // The game's own icon is the game's business.
+        assertEquals("/grid/111_icon.png", (entry(repaired, "0")["icon"] as BinaryVdf.Str).value)
+        // Nothing to do once it is there.
+        kotlin.test.assertNull(SteamShortcuts.repairIcons(repaired, owned, { true }) { "/grid/${it}_icon.png" })
+        // Adding Fuse again gives it the new icon too, where the old one is gone.
+        val added = SteamShortcuts.add(bytes, fuse.copy(icon = "/grid/new_icon.png"), owned, exists)!!
+        assertEquals("/grid/new_icon.png", (entry(added, "1")["icon"] as BinaryVdf.Str).value)
+        // But a picture of the person's own choosing stays.
+        val kept = SteamShortcuts.add(gameThenFuse("/home/deck/mine.png"), fuse.copy(icon = "/grid/new_icon.png"), owned, exists)!!
+        assertEquals("/home/deck/mine.png", (entry(kept, "1")["icon"] as BinaryVdf.Str).value)
+    }
 }

@@ -157,6 +157,8 @@ internal class DesktopSteam(
             job.fuse?.let { add(mutateUnlocked(repair = it == "repair")) }
             if (job.games.isNotEmpty()) add(writeGames(job.games.map { it.entry }, job.games.associate { it.id to it.art }, job.collections))
         }
+        // Steam is closed: the moment to give Fuse's entries their icon back if it went missing.
+        runCatching { dressEntries() }
         parts.firstOrNull { it.isFailure }?.let { return it }
         return Result.success(parts.mapNotNull { it.getOrNull() }.joinToString(" ").ifEmpty { "Nothing needed changing." })
     }
@@ -199,7 +201,9 @@ internal class DesktopSteam(
                 val icon = runCatching { placeArt(File(dir, "grid"), artId) }.onFailure { Log.warn("could not give Steam Fuse's art in $dir", it) }.getOrNull()
                 val shortcut = base.copy(icon = icon ?: "")
                 val before = if (file.isFile) file.readBytes() else null
-                val after = (if (repair) SteamShortcuts.rebuild(before, shortcut) { path, name -> isFuse(path, name, exe) } else SteamShortcuts.add(before, shortcut) { path, name -> isFuse(path, name, exe) }) ?: continue
+                val owned = { path: String, name: String -> isFuse(path, name, exe) }
+                val iconExists = { path: String -> File(path).isFile }
+                val after = (if (repair) SteamShortcuts.rebuild(before, shortcut, owned, iconExists) else SteamShortcuts.add(before, shortcut, owned, iconExists)) ?: continue
                 if (before != null) {
                     val backup = File(dir, "shortcuts.vdf.before-fuse")
                     if (!backup.exists()) backup.writeBytes(before)
@@ -220,15 +224,28 @@ internal class DesktopSteam(
      * Steam's own Add a Non-Steam Game (which names it after the AppImage, often with a version).
      * Only art files are written, never Steam's list, so this is safe while Steam runs; Steam shows
      * them the next time it draws its library. Art already there stays. Returns how many entries.
+     *
+     * With Steam closed, an entry whose icon is missing (none, or a picture since removed) is also
+     * pointed at Fuse's icon; Steam reads its list as it starts. While Steam runs it would write its
+     * own copy over that, so the list waits for a start with Steam closed, or Add Fuse to Steam.
      */
     fun dressEntries(): Int {
         val exe = program()
+        val steamClosed = !steamRunningNow()
         var n = 0
         for (dir in userConfigDirs(create = false)) {
-            val bytes = File(dir, "shortcuts.vdf").takeIf { it.isFile }?.let { runCatching { it.readBytes() }.getOrNull() } ?: continue
-            for (id in SteamShortcuts.idsOf(bytes) { path, name -> isFuse(path, name, exe) }) {
-                runCatching { placeArt(File(dir, "grid"), id) }.onSuccess { n++ }.onFailure { Log.warn("could not give Steam Fuse's art in $dir", it) }
+            val file = File(dir, "shortcuts.vdf")
+            val bytes = file.takeIf { it.isFile }?.let { runCatching { it.readBytes() }.getOrNull() } ?: continue
+            val owned = { path: String, name: String -> isFuse(path, name, exe) }
+            val icons = HashMap<Long, String>()
+            for (id in SteamShortcuts.idsOf(bytes, owned)) {
+                runCatching { placeArt(File(dir, "grid"), id) }.onSuccess { icons[id] = it; n++ }.onFailure { Log.warn("could not give Steam Fuse's art in $dir", it) }
             }
+            if (!steamClosed) continue
+            val repaired = SteamShortcuts.repairIcons(bytes, owned, iconExists = { File(it).isFile }) { icons[it].orEmpty() } ?: continue
+            runCatching { replaceAtomically(file, repaired) }
+                .onSuccess { Log.info("Steam: Fuse's icon put back in $dir") }
+                .onFailure { Log.warn("could not put Fuse's icon back in $dir", it) }
         }
         return n
     }

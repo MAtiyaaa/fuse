@@ -128,15 +128,16 @@ object SteamShortcuts {
      * [existing] (the file's bytes, or null for a new file) with [shortcut] in it; null when the file
      * can't be read. Idempotent: an entry already there for the same program, or one [owned] says is
      * Fuse's (its program moved, a new AppImage), is brought up to date in place rather than added
-     * again. What the person changed on it stays theirs: its name, launch options, icon and the
-     * Steam collections it is in. Other entries are never touched.
+     * again. What the person changed on it stays theirs: its name, launch options, icon (while
+     * [iconExists] finds its picture) and the Steam collections it is in. Other entries are never
+     * touched, a game Fuse put in Steam (one that starts Fuse with `--play`) among them.
      */
-    fun add(existing: ByteArray?, shortcut: SteamShortcut, owned: ((exe: String, name: String) -> Boolean)? = null): ByteArray? {
+    fun add(existing: ByteArray?, shortcut: SteamShortcut, owned: ((exe: String, name: String) -> Boolean)? = null, iconExists: (String) -> Boolean = { true }): ByteArray? {
         val root = if (existing == null || existing.isEmpty()) BinaryVdf.Block() else BinaryVdf.parse(existing) ?: return null
         val value = root["shortcuts"]
         if (value != null && value !is BinaryVdf.Block) return null
         val list = value as? BinaryVdf.Block ?: BinaryVdf.Block().also { root["shortcuts"] = it }
-        val blocks = list.entries.map { it.second }.filterIsInstance<BinaryVdf.Block>()
+        val blocks = list.entries.map { it.second }.filterIsInstance<BinaryVdf.Block>().filterNot(::isGame)
         val same = blocks.firstOrNull { e -> (e["Exe"] as? BinaryVdf.Str)?.value == shortcut.exe }
             ?: owned?.let { o ->
                 blocks.firstOrNull { e ->
@@ -156,6 +157,8 @@ object SteamShortcuts {
         keep("AppName", shortcut.name)
         entry["Exe"] = BinaryVdf.Str(shortcut.exe)
         entry["StartDir"] = BinaryVdf.Str(shortcut.startDir)
+        // An icon whose picture is gone (it named another entry's art, since removed) is no icon.
+        if ((entry["icon"] as? BinaryVdf.Str)?.value?.takeIf { it.isNotEmpty() }?.let(iconExists) == false) entry["icon"] = BinaryVdf.Str("")
         keep("icon", shortcut.icon)
         entry["ShortcutPath"] = entry["ShortcutPath"] ?: BinaryVdf.Str("")
         if (fresh || entry["LaunchOptions"] == null) entry["LaunchOptions"] = BinaryVdf.Str(shortcut.launchOptions)
@@ -187,6 +190,7 @@ object SteamShortcuts {
         val list = root["shortcuts"] as? BinaryVdf.Block ?: return existing
         val kept = list.entries.filterNot { (_, v) ->
             val e = v as? BinaryVdf.Block ?: return@filterNot false
+            if (isGame(e)) return@filterNot false
             owned((e["Exe"] as? BinaryVdf.Str)?.value.orEmpty().trim('"'), (e["AppName"] as? BinaryVdf.Str)?.value.orEmpty())
         }
         if (kept.size == list.entries.size) return existing
@@ -196,7 +200,10 @@ object SteamShortcuts {
     }
 
     /** Rebuild only entries positively owned by Fuse. A name match alone never establishes ownership. */
-    fun rebuild(existing: ByteArray?, shortcut: SteamShortcut, owned: (String, String) -> Boolean): ByteArray? {
+    fun rebuild(existing: ByteArray?, shortcut: SteamShortcut, owned: (String, String) -> Boolean): ByteArray? = rebuild(existing, shortcut, owned, iconExists = { true })
+
+    /** [rebuild], keeping the entry's icon only while [iconExists] finds its picture. */
+    fun rebuild(existing: ByteArray?, shortcut: SteamShortcut, owned: (String, String) -> Boolean, iconExists: (String) -> Boolean): ByteArray? {
         val root = if (existing == null || existing.isEmpty()) BinaryVdf.Block() else BinaryVdf.parse(existing) ?: return null
         val value = root["shortcuts"]
         if (value != null && value !is BinaryVdf.Block) return null
@@ -204,6 +211,7 @@ object SteamShortcuts {
         var retained: BinaryVdf.Block? = null
         list.entries.removeAll { (_, value) ->
             val e = value as? BinaryVdf.Block ?: return@removeAll false
+            if (isGame(e)) return@removeAll false
             val exe = (e["Exe"] as? BinaryVdf.Str)?.value.orEmpty().trim('"')
             val name = (e["AppName"] as? BinaryVdf.Str)?.value.orEmpty()
             if (!owned(exe, name)) false else {
@@ -216,7 +224,7 @@ object SteamShortcuts {
             val index = (list.entries.mapNotNull { it.first.toIntOrNull() }.maxOrNull() ?: -1) + 1
             list.entries += index.toString() to e
         }
-        return add(BinaryVdf.write(root), shortcut)
+        return add(BinaryVdf.write(root), shortcut, iconExists = iconExists)
     }
 
     /**
@@ -229,6 +237,7 @@ object SteamShortcuts {
         val list = root["shortcuts"] as? BinaryVdf.Block ?: return emptyList()
         return list.entries.mapNotNull { (_, v) ->
             val e = v as? BinaryVdf.Block ?: return@mapNotNull null
+            if (isGame(e)) return@mapNotNull null
             val exe = (e["Exe"] as? BinaryVdf.Str)?.value ?: return@mapNotNull null
             val name = (e["AppName"] as? BinaryVdf.Str)?.value.orEmpty()
             if (!match(exe.trim('"'), name)) return@mapNotNull null
@@ -236,6 +245,34 @@ object SteamShortcuts {
             id.toLong() and 0xFFFFFFFFL
         }.distinct()
     }
+
+    /**
+     * [bytes] with every entry [match] picks given [icon] (by its id, as [idsOf] gives it) where its
+     * own is empty or [iconExists] no longer finds it. Null when nothing needed it, or the file
+     * can't be read.
+     */
+    fun repairIcons(bytes: ByteArray?, match: (exe: String, name: String) -> Boolean, iconExists: (String) -> Boolean, icon: (Long) -> String): ByteArray? {
+        val root = bytes?.let(BinaryVdf::parse) ?: return null
+        val list = root["shortcuts"] as? BinaryVdf.Block ?: return null
+        var changed = false
+        for ((_, v) in list.entries) {
+            val e = v as? BinaryVdf.Block ?: continue
+            if (isGame(e)) continue
+            val exe = (e["Exe"] as? BinaryVdf.Str)?.value ?: continue
+            val name = (e["AppName"] as? BinaryVdf.Str)?.value.orEmpty()
+            if (!match(exe.trim('"'), name)) continue
+            val now = (e["icon"] as? BinaryVdf.Str)?.value.orEmpty()
+            if (now.isNotEmpty() && iconExists(now)) continue
+            val id = ((e["appid"] as? BinaryVdf.Int32)?.value ?: appId(exe, name)).toLong() and 0xFFFFFFFFL
+            val fresh = icon(id).takeIf { it.isNotEmpty() && it != now } ?: continue
+            e["icon"] = BinaryVdf.Str(fresh)
+            changed = true
+        }
+        return if (changed) BinaryVdf.write(root) else null
+    }
+
+    /** A game Fuse put in Steam: it starts Fuse with `--play <id>`, so it is never Fuse's own entry. */
+    private fun isGame(e: BinaryVdf.Block): Boolean = SteamGames.playId((e["LaunchOptions"] as? BinaryVdf.Str)?.value.orEmpty()) != null
 
     /** Whether [bytes] already hold a shortcut that runs [exe]. */
     fun contains(bytes: ByteArray?, exe: String): Boolean {
