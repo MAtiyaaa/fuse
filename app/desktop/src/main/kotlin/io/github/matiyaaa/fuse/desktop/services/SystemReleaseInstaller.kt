@@ -260,9 +260,10 @@ internal class SystemReleaseInstaller(
                 DesktopOs.MACOS -> {
                     val bundle = generateSequence(launcher) { it.parentFile }.firstOrNull { it.name.endsWith(".app") }
                         ?: return null to "This Fuse isn't running from its app, so it can't replace itself."
+                    val where = bundle.path.replace('\\', '/')
                     when {
-                        "/AppTranslocation/" in bundle.path -> null to "macOS runs this Fuse from a read-only copy. Move Fuse to Applications (or any folder), open it from there, and it updates itself from then on."
-                        bundle.path.startsWith("/Volumes/") -> null to "This Fuse runs from its disk image. Copy it to Applications, open it from there, and it updates itself from then on."
+                        "/AppTranslocation/" in where -> null to "macOS runs this Fuse from a read-only copy. Move Fuse to Applications (or any folder), open it from there, and it updates itself from then on."
+                        where.startsWith("/Volumes/") -> null to "This Fuse runs from its disk image. Copy it to Applications, open it from there, and it updates itself from then on."
                         !bundle.parentFile.canWrite() -> null to "Fuse can't write to ${bundle.parentFile.path}, so it can't replace itself there."
                         else -> Layout.MacBundle(bundle) to null
                     }
