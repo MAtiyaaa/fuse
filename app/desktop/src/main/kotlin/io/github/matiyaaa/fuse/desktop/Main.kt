@@ -253,6 +253,8 @@ private suspend fun probeRenderer(session: DesktopSession, window: java.awt.Wind
     watchFrames(layer)
     // A TV's picture processing smooths a faint dither away and leaves the bands: a stronger one there.
     io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.largeOutput = profile.largeOutput || kind == io.github.matiyaaa.fuse.desktop.system.DisplaySession.STEAM_GAME_MODE
+    // In Game Mode gamescope composes Fuse in 10 bits instead of scanning its 8-bit picture out as is (see GamescopeComposite).
+    io.github.matiyaaa.fuse.desktop.system.GamescopeComposite.enable(kind)
     val report = io.github.matiyaaa.fuse.desktop.system.GraphicsReport
     // A 4K screen at 120 Hz over HDMI on Linux gets reduced colour, whose bands nothing in Fuse can hide.
     val screen = io.github.matiyaaa.fuse.desktop.system.RenderScale.outputs().singleOrNull()
