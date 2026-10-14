@@ -7,6 +7,7 @@ import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.MediaSource
 import io.github.matiyaaa.fuse.model.PlatformId
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -27,6 +28,41 @@ class MediaRepositoryTest {
     }
 
     private fun sgdb(kind: MediaKind, url: String) = MediaItem(kind, MediaSource.STEAMGRIDDB, remoteUrl = url)
+
+    @Test
+    fun aListSeesEveryChangeToItsArtAndOnlyReadsWhatChanged() = runBlocking {
+        TestDb().use { t ->
+            val media = t.data.media
+            val a = MediaOwner.OfPlatform(PlatformId("a"))
+            val b = MediaOwner.OfPlatform(PlatformId("b"))
+            val elsewhere = MediaOwner.OfPlatform(PlatformId("elsewhere"))
+            media.putScraped(a, listOf(sgdb(MediaKind.BOXART, "a1")), MediaFillMode.FILL_MISSING)
+            val seen = java.util.concurrent.LinkedBlockingQueue<Map<MediaOwner, io.github.matiyaaa.fuse.model.MediaSet>>()
+            val job = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch { media.observeFor(listOf(a, b)).collect { seen.put(it) } }
+            fun next() = seen.poll(5, java.util.concurrent.TimeUnit.SECONDS)!!
+            assertEquals("a1", next()[a]?.boxart?.remoteUrl)
+            // Another owner's art changing says nothing new to this list.
+            media.putScraped(elsewhere, listOf(sgdb(MediaKind.BOXART, "x")), MediaFillMode.FILL_MISSING)
+            // An insert, a replacement, a change made by the user, and a delete, each seen.
+            media.putScraped(b, listOf(sgdb(MediaKind.HERO, "b1")), MediaFillMode.FILL_MISSING)
+            assertEquals("b1", next()[b]?.hero?.remoteUrl)
+            media.putScraped(a, listOf(sgdb(MediaKind.BOXART, "a2")), MediaFillMode.REPLACE_ALL)
+            assertEquals("a2", next()[a]?.boxart?.remoteUrl)
+            media.adjust(a, MediaKind.BOXART, 0.2f, 0.8f, 1.5f)
+            assertEquals(0.2f, next()[a]?.boxart?.focusX)
+            media.clearOwner(b)
+            assertNull(next()[b]?.hero)
+            kotlin.test.assertTrue(seen.isEmpty())
+            // A list far behind the pruned log reads everything again and stays right.
+            repeat(30) { media.putScraped(elsewhere, listOf(sgdb(MediaKind.BOXART, "x$it")), MediaFillMode.REPLACE_ALL) }
+            media.pruneChanges(keep = 1)
+            media.putScraped(b, listOf(sgdb(MediaKind.LOGO, "b2")), MediaFillMode.FILL_MISSING)
+            var last = next()
+            while (last[b]?.logo == null) last = next()
+            assertEquals("b2", last[b]?.logo?.remoteUrl)
+            job.cancel()
+        }
+    }
 
     @Test
     fun systemArtGoesBackToFusesOwnAndComesBackExactlyOnUndo() = runBlocking {

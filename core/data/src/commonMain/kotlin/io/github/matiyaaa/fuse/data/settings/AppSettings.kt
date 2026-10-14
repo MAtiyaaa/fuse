@@ -379,6 +379,10 @@ data class AppearanceSettings(
     val screenMargin: Int = 0,
     /** Themes added from a link, a file or pasted text, kept as they were written. */
     val customThemes: List<StoredTheme> = emptyList(),
+    /** Extras a theme has unlocked (Fii's Home: "fii"), kept when the theme changes. */
+    val unlocked: List<String> = emptyList(),
+    /** Of [unlocked], the ones not looked at yet, marked new where they are offered. */
+    val unlockedNew: List<String> = emptyList(),
     /** Fuse's mark lights up when Fuse starts. */
     val startupAnimation: Boolean = true,
     /** Colours picked last in the theme studio, newest first (ARGB), to pick again in one move. */

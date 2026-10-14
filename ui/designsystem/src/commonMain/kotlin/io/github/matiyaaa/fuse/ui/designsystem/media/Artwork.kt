@@ -134,7 +134,12 @@ fun Artwork(
     // every first network result bypass its fade. Keep the decision stable across fade frames.
     val alreadyShown = remember(model) { ShownArt.wasShown(model) }
     val fromMemory = success?.result?.dataSource == DataSource.MEMORY_CACHE || held != null || alreadyShown
-    SideEffect { if (success != null) ShownArt.shown(model, if (pin) success.painter else null) }
+    SideEffect {
+        if (success != null) {
+            ShownArt.shown(model, if (pin) success.painter else null)
+            io.github.matiyaaa.fuse.ui.designsystem.effects.StartupTrace.mark(io.github.matiyaaa.fuse.ui.designsystem.effects.StartupTrace.ART)
+        }
+    }
     val alpha = remember(model) { FuselineValue(0f) }
     val fade = Fuse.motion.fade(Durations.BASE)
     // Read through a derived state so the fade itself never recomposes this.

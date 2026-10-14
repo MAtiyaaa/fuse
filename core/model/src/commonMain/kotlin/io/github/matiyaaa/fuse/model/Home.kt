@@ -17,6 +17,17 @@ enum class HomeMode {
     CHANNELS,
 }
 
+/** How the board is dressed: [FUSE] is Fuse's own; [FII] sets glossy channels over a bar with the clock. */
+@Serializable
+enum class BoardLook { FUSE, FII }
+
+/**
+ * The Home styles a person picks from: the board in Fuse's look ([FUSED]), the rows ([NETWORK]), and
+ * the board in Fii's look ([FII]), offered once Fii has unlocked it.
+ */
+@Serializable
+enum class HomeStyle { FUSED, NETWORK, FII }
+
 /** Everything that can sit on Home: Flow's rows (the [isRow] kinds), and every kind on the Channels board. */
 @Serializable
 enum class WidgetKind(val defaultSpan: WidgetSpan) {
@@ -180,7 +191,29 @@ data class HomeLayoutConfig(
      * whole cards (1).
      */
     val grain: Int = 1,
+    /**
+     * How the board is dressed: Fuse's own, or Fii's (glossy channels over a bar with the clock).
+     * Only the look: the board's widgets and pages are the same either way, and a Fuse that doesn't
+     * know the field shows the board in Fuse's look.
+     */
+    val look: BoardLook = BoardLook.FUSE,
+    /** The Home style used before Fii's was chosen, to go back to; null when none was kept. */
+    val beforeFii: HomeStyle? = null,
 ) {
+    /** The Home style this config shows. */
+    val style: HomeStyle get() = when {
+        mode == HomeMode.FLOW -> HomeStyle.NETWORK
+        look == BoardLook.FII -> HomeStyle.FII
+        else -> HomeStyle.FUSED
+    }
+
+    /** This config showing [next]; choosing Fii's keeps the style it came from in [beforeFii]. */
+    fun withStyle(next: HomeStyle): HomeLayoutConfig = when (next) {
+        HomeStyle.FUSED -> copy(mode = HomeMode.CHANNELS, look = BoardLook.FUSE)
+        HomeStyle.NETWORK -> copy(mode = HomeMode.FLOW, look = BoardLook.FUSE)
+        HomeStyle.FII -> copy(mode = HomeMode.CHANNELS, look = BoardLook.FII, beforeFii = if (style == HomeStyle.FII) beforeFii else style)
+    }
+
     /** How many pages the board has: the first, and [pages]. */
     val pageCount: Int get() = 1 + pages.size
 

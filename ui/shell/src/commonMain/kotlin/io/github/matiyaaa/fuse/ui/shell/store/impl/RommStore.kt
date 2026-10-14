@@ -382,6 +382,8 @@ internal class DefaultRommOps(
         loopJob?.cancel()
         loopJob = ctx.scope.launch {
             var first = true
+            // Fuseline 4.2: the first refresh waits for the first screen to settle.
+            io.github.matiyaaa.fuse.ui.designsystem.effects.StartupGate.settled()
             while (true) {
                 val link = _state.value.link
                 if (link == RommLink.ONLINE) {

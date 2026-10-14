@@ -21,6 +21,44 @@ CREATE TABLE media (
 
 CREATE INDEX media_owner ON media(owner_type, owner_id, kind);
 
+-- 0.4.2.12 (Fuseline 4.2): which owners' art changed, in order, written by the database itself on
+-- every change to media, whoever makes it. A list of games re-reads only the art that changed
+-- instead of every game's on every change. Old entries are pruned (see MediaRepository).
+CREATE TABLE media_change (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_type TEXT NOT NULL,
+    owner_id TEXT NOT NULL
+);
+
+CREATE TRIGGER media_change_insert AFTER INSERT ON media BEGIN
+    INSERT INTO media_change(owner_type, owner_id) VALUES (new.owner_type, new.owner_id);
+END;
+
+CREATE TRIGGER media_change_update AFTER UPDATE ON media BEGIN
+    INSERT INTO media_change(owner_type, owner_id) VALUES (new.owner_type, new.owner_id);
+    INSERT INTO media_change(owner_type, owner_id) SELECT old.owner_type, old.owner_id WHERE old.owner_type <> new.owner_type OR old.owner_id <> new.owner_id;
+END;
+
+CREATE TRIGGER media_change_delete AFTER DELETE ON media BEGIN
+    INSERT INTO media_change(owner_type, owner_id) VALUES (old.owner_type, old.owner_id);
+END;
+
+-- Fires for every change to media (SQLDelight tells listeners of the media table): a cheap tick.
+mediaTick:
+SELECT 0 FROM media LIMIT 1;
+
+lastChange:
+SELECT COALESCE(MAX(seq), 0) FROM media_change;
+
+firstChange:
+SELECT COALESCE(MIN(seq), 0) FROM media_change;
+
+changesSince:
+SELECT seq, owner_type, owner_id FROM media_change WHERE seq > ? ORDER BY seq;
+
+pruneChanges:
+DELETE FROM media_change WHERE seq <= ?;
+
 -- USER rows first within a kind, so they win when the UI picks one.
 selectByOwner:
 SELECT * FROM media WHERE owner_type = ? AND owner_id = ?

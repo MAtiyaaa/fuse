@@ -50,7 +50,7 @@ val auditTests = "io.github.matiyaaa.fuse.ui.shell.audit.*"
 
 // Frame cost of the interactions that must stay smooth (scrolling, tab and system runs), with a JFR
 // profile. Never part of desktopTest, check or CI; run it on purpose and compare runs:
-//     ./gradlew :ui:shell:desktopPerf -Pfuse.perf.dir=/tmp/fuse-perf [-Pfuse.perf.only=settings,storage]
+//     ./gradlew :ui:shell:desktopPerf -Pfuse.perf.dir=/tmp/fuse-perf [-Pfuse.perf.only=settings,storage] [-Pfuse.perf.games=2000]
 val perfTests = "io.github.matiyaaa.fuse.ui.shell.perf.*"
 
 tasks.named<Test>("desktopTest") {
@@ -115,6 +115,7 @@ tasks.register<Test>("desktopPerf") {
     doFirst { check(dir != null) { "Pass the output folder: -Pfuse.perf.dir=<folder>" } }
     systemProperty("fuse.perf.dir", dir.orEmpty())
     systemProperty("fuse.perf.only", providers.gradleProperty("fuse.perf.only").getOrElse(""))
+    systemProperty("fuse.perf.games", providers.gradleProperty("fuse.perf.games").getOrElse(""))
     systemProperty("fuse.perf.lowPower", providers.gradleProperty("fuse.perf.lowPower").getOrElse(""))
     systemProperty("fuse.perf.device", providers.gradleProperty("fuse.perf.device").getOrElse(""))
     systemProperty("fuse.perf.size", providers.gradleProperty("fuse.perf.size").getOrElse(""))

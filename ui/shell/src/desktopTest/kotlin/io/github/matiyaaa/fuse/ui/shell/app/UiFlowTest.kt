@@ -597,7 +597,7 @@ private fun InputRouter.tap(button: PadButton) {
 }
 
 /** A plain Linux desktop with nothing optional available. */
-private object TestPlatform : PlatformUi {
+internal object TestPlatform : PlatformUi {
     override val host = Host.LINUX
     override val features = PlatformFeatures(windowModes = true)
     override val device = CapabilityProfile(

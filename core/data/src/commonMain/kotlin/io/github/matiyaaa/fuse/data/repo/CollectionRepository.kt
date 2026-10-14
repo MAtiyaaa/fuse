@@ -173,7 +173,7 @@ class CollectionRepository(
     suspend fun seriesInputs(): List<SeriesRow> = withContext(dispatcher) {
         db.gameQueries.seriesInputs().executeAsList().map { row ->
             val titles = io.github.matiyaaa.fuse.model.GameTitles(row.title_original, row.title_cleaned, row.title_custom, row.title_metadata, row.use_cleaned != 0L)
-            val franchise = row.metadata_json?.let { decodeOrNull(io.github.matiyaaa.fuse.model.GameMetadata.serializer(), it) }?.franchise
+            val franchise = row.metadata_json?.let { decodeOrNull(PickDetails.serializer(), it) }?.franchise
             SeriesRow(GameId(row.id), titles.display, franchise?.trim()?.ifEmpty { null })
         }
     }

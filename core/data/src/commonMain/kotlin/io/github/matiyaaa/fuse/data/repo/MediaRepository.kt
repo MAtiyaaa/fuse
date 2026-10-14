@@ -20,6 +20,7 @@ import io.github.matiyaaa.fuse.model.PlatformId
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -51,12 +52,50 @@ class MediaRepository(
         batches(owners).flatMap { (type, keys) -> q.selectByOwners(type, keys).executeAsList() }.groupedByOwner(owners)
     }
 
-    /** Live version of [mediaFor], for a visible page of a list. */
+    /**
+     * Live version of [mediaFor], for a list of games. Fuseline 4.2: read whole once, then only the
+     * owners whose art changed, as the database's own log of changes ([media_change], kept by
+     * triggers on every write, whoever makes it) names them. Before, every change to any art read
+     * every owner's again: a library of 2,000 games re-read all its art for each picture filled.
+     */
     fun observeFor(owners: Collection<MediaOwner>): Flow<Map<MediaOwner, MediaSet>> {
-        val batches = batches(owners)
-        if (batches.isEmpty()) return flowOf(emptyMap())
-        val flows = batches.map { (type, keys) -> q.selectByOwners(type, keys).asFlow().mapToList(dispatcher) }
-        return combine(flows) { parts -> parts.flatMap { it }.groupedByOwner(owners) }.flowOn(dispatcher)
+        if (owners.isEmpty()) return flowOf(emptyMap())
+        val wanted = owners.toList()
+        val byKey = wanted.associateBy { it.type() + ":" + it.key() }
+        return flow {
+            var since = q.lastChange().executeAsOne()
+            var current = readAll(wanted)
+            emit(current)
+            // The tick fires once on collecting (catching anything written since the read above) and
+            // after every change to media.
+            q.mediaTick().asFlow().collect {
+                val first = q.firstChange().executeAsOne()
+                // Pruned past where this list read up to: read it all again.
+                if (since > 0 && first > since + 1) {
+                    since = q.lastChange().executeAsOne()
+                    val all = readAll(wanted)
+                    if (all != current) { current = all; emit(current) }
+                    return@collect
+                }
+                val changes = q.changesSince(since).executeAsList()
+                if (changes.isEmpty()) return@collect
+                since = changes.last().seq
+                val hit = changes.mapNotNullTo(HashSet()) { byKey[it.owner_type + ":" + it.owner_id] }
+                if (hit.isEmpty()) return@collect
+                val fresh = readAll(hit)
+                val next = HashMap(current).apply { putAll(fresh) }
+                if (next != current) { current = next; emit(current) }
+            }
+        }.flowOn(dispatcher)
+    }
+
+    private fun readAll(owners: Collection<MediaOwner>): Map<MediaOwner, MediaSet> =
+        batches(owners).flatMap { (type, keys) -> q.selectByOwners(type, keys).executeAsList() }.groupedByOwner(owners)
+
+    /** Forgets the change log older than the last [keep] changes (lists far behind read everything again). */
+    suspend fun pruneChanges(keep: Long = 20_000) = withContext(dispatcher) {
+        val last = q.lastChange().executeAsOne()
+        if (last > keep) q.pruneChanges(last - keep)
     }
 
     /** Every stored row of [owner]'s art, exactly as kept, for putting back with [putBack]. */

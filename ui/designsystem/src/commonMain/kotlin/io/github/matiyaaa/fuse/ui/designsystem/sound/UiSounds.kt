@@ -45,6 +45,10 @@ object ToneSynth {
     /** Where the final low-pass starts to soften, in hertz. */
     private const val LOW_PASS = 9_000.0
 
+    /** How far below its note a bubble note starts (a fraction), and how fast it rises into place. */
+    private const val BUBBLE_DIP = 0.2
+    private const val BUBBLE_RISE = 55.0
+
     private fun note(semitonesFromA4: Int): Double = 440.0 * 2.0.pow(semitonesFromA4 / 12.0)
 
     fun render(cue: SoundCue, profile: SoundProfile): ShortArray {
@@ -101,6 +105,11 @@ object ToneSynth {
                 SoundProfile.CLICK -> sin(phase) + 0.35 * sin(3 * phase) * exp(-t * 30) + 0.08 * sin(5 * phase) * exp(-t * 60)
                 // Chime: bell-like inharmonic partial.
                 SoundProfile.CHIME -> sin(phase) + bell * sin(2.76 * phase) * exp(-t * 18)
+                // Bubble: the note starts a little low and rises into place, round and airy.
+                SoundProfile.BUBBLE -> {
+                    val rising = 2 * PI * tone.freq * (t - BUBBLE_DIP * (1 - exp(-t * BUBBLE_RISE)) / BUBBLE_RISE)
+                    sin(rising) + 0.1 * sin(2 * rising)
+                }
                 SoundProfile.OFF -> 0.0
             }
             out[idx] += wave * env * tone.gain
@@ -113,6 +122,7 @@ object ToneSynth {
     private fun decay(profile: SoundProfile) = when (profile) {
         SoundProfile.CLICK -> 7.0
         SoundProfile.CHIME -> 3.2
+        SoundProfile.BUBBLE -> 5.5
         else -> 4.5
     }
 }

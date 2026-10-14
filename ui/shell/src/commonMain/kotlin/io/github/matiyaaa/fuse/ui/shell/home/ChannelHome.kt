@@ -370,8 +370,10 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
         val gutterPx = with(density) { gutter.toPx() }
         val motion = Fuse.motion
         // What covers the board's bottom: the hints, and while arranging the toolbar above them.
+        // Fii's board keeps its bar's room clear too (arranging, the bar gives way to the tools).
+        val fiiBar = if (LocalFiiBoard.current && !arranging) FII_BAR else 0.dp
         val bottomCover by fuselineDp(
-            Size.hintHeight + Space.l + if (arranging) ARRANGE_BAR else 0.dp,
+            Size.hintHeight + Space.l + fiiBar + if (arranging) ARRANGE_BAR else 0.dp,
             motion.tween(Durations.BASE),
             label = "boardBottom",
         )
@@ -612,7 +614,7 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                     Box(
                         Modifier
                             .fillMaxWidth()
-                            .padding(start = gutter, end = gutter, top = Space.l, bottom = Size.hintHeight + Space.xxl + if (arranging) ARRANGE_BAR else 0.dp)
+                            .padding(start = gutter, end = gutter, top = Space.l, bottom = Size.hintHeight + Space.xxl + fiiBar + if (arranging) ARRANGE_BAR else 0.dp)
                             .height(boardHeight),
                     ) {
                         val fraction = Fuse.geometry.tileCornerFraction * WIDGET_CORNER

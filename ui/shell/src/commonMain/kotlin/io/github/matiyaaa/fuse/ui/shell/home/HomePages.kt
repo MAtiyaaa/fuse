@@ -172,8 +172,20 @@ internal fun BoardPages(app: AppState, space: BoardSpace) {
     // slide the pages by the amount, and a carousel under the pointer still takes its own
     // ([ScrollClaim]). Touch, drags, the controller and the page dots still move the pages.
     val claim = remember { ScrollClaim() }
+    // Fii's board (Home's, dressed as Fii): glossy channels on any theme, and its bar along the
+    // bottom. The Fused board keeps Fuse's plain tiles, also on a Fii theme.
+    val fii = space.key == "home" && home.look == io.github.matiyaaa.fuse.model.BoardLook.FII
+    val tiles = when {
+        space.key != "home" -> null
+        fii -> io.github.matiyaaa.fuse.model.TileLook.GLOSS
+        else -> io.github.matiyaaa.fuse.model.TileLook.PLAIN
+    }
     Box(Modifier.fillMaxSize()) {
-        androidx.compose.runtime.CompositionLocalProvider(LocalScrollClaim provides claim) {
+        androidx.compose.runtime.CompositionLocalProvider(
+            LocalScrollClaim provides claim,
+            io.github.matiyaaa.fuse.ui.designsystem.components.LocalTileLook provides tiles,
+            LocalFiiBoard provides fii,
+        ) {
         HorizontalPager(
             state = pager,
             modifier = Modifier.fillMaxSize().pointerInput(Unit) {
@@ -214,11 +226,16 @@ internal fun BoardPages(app: AppState, space: BoardSpace) {
                 current = pager.currentPage,
                 onSelect = { app.focusZone = FocusZone.CONTENT; go(it) },
                 labels = List(count) { "Page ${it + 1} of $count" },
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Size.hintHeight + Space.xs + lift),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Size.hintHeight + Space.xs + lift + if (fii) FII_BAR else 0.dp),
             )
         }
+        // Fii's bar sits on the hints; arranging, the board's own tools take the foot instead.
+        if (fii && !arranging) FiiBar(app, Modifier.align(Alignment.BottomCenter).padding(bottom = Size.hintHeight))
     }
 }
+
+/** True inside Fii's board, which keeps [FII_BAR] clear at its foot. */
+internal val LocalFiiBoard = androidx.compose.runtime.staticCompositionLocalOf { false }
 
 /** A page with nothing on it yet: what it is for, and how to fill it or take it away. */
 @Composable

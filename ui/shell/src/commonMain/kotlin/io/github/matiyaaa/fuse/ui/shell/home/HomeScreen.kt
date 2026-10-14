@@ -129,22 +129,19 @@ fun HomeScreen(app: AppState) {
     if (prefs.home.mode == HomeMode.CHANNELS) ChannelHome(app) else FlowHome(app)
 }
 
-/** Flips Home between Network and Fused, and says which one it is now. */
-fun AppState.switchHomeStyle() {
-    val next = if (store.prefs.value.home.mode == HomeMode.CHANNELS) HomeMode.FLOW else HomeMode.CHANNELS
-    store.updatePrefs { it.copy(home = it.home.copy(mode = next)) }
-    toasts.show(if (next == HomeMode.CHANNELS) "Home is now Fused" else "Home is now Network")
-}
+/** Asks which Home style to use (Fused, Network, and Fii's once unlocked); see [chooseHomeStyle]. */
+fun AppState.switchHomeStyle() = chooseHomeStyle()
 
-/** "Switch to Fused" (or Network) and "Home settings", for Home's option menus. */
+/** "Home style" and "Home settings", for Home's option menus. */
 fun AppState.homeStyleActions(): List<MenuAction> {
-    val channels = store.prefs.value.home.mode == HomeMode.CHANNELS
+    val prefs = store.prefs.value
     return listOf(
         MenuAction(
-            "style", if (channels) "Switch to Network" else "Switch to Fused",
-            if (channels) FuseIcons.Rows else FuseIcons.Grid,
-            detail = if (channels) "Rows of games under a big title" else "A board of tiles you arrange",
-            onSelect = { closeOverlays(); switchHomeStyle() },
+            "style", "Home style",
+            FuseIcons.Dashboard,
+            detail = "Now ${prefs.home.style.label()}. " + prefs.homeStyles().filter { it != prefs.home.style }.joinToString(" or ") { it.label() } + " instead",
+            trailing = if (FII_UNLOCK in prefs.unlockedNew) io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Badge("Unlocked") else io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Chevron,
+            onSelect = { closeOverlays(); chooseHomeStyle() },
         ),
         MenuAction("home", "Home settings", FuseIcons.Dashboard, trailing = Trailing.Chevron, onSelect = { closeOverlays(); go(Route.Settings("home")) }),
     )

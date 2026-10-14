@@ -66,6 +66,8 @@ internal class DefaultCollectionOps(private val ctx: StoreContext) : CollectionO
     fun start() {
         val settings = ctx.settings.map { Triple(it.library.collectionsEnabled, it.library.autoSeries, it.library.hiddenSeries.toSet()) }.distinctUntilChanged()
         ctx.scope.launch {
+            // Fuseline 4.2: series are found once the first screen has settled.
+            io.github.matiyaaa.fuse.ui.designsystem.effects.StartupGate.settled()
             combine(repo.observeGameChanges().debounce(1_500), settings) { _, s -> s }
                 .collectLatest { (enabled, auto, hidden) ->
                     if (!enabled) return@collectLatest

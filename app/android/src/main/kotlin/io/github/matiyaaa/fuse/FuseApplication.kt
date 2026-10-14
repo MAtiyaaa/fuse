@@ -145,6 +145,8 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
         }
         appScope.launch {
             _startup.value = try {
+                // Fuseline 4.2: work the first screen doesn't need waits until it has settled.
+                io.github.matiyaaa.fuse.ui.designsystem.effects.StartupGate.hold()
                 val store = createFuseStore(services, appScope, safeMode = safe != null)
                 // Safe mode runs nothing that listens on the network.
                 Startup.Ready(store, if (safe == null) startPhoneLink(store) else null, safe)

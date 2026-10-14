@@ -13,6 +13,7 @@
 # Environment:
 #   GRADLE_ARGS="..."   extra Gradle arguments (for example "--no-daemon")
 #   SKIP_SELF_TEST=1    don't run --self-test
+#   SKIP_CDS=1          leave out the class data sharing archive (scripts/train-cds.sh)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -30,11 +31,20 @@ NAME="Fuse-$VERSION-windows-x64"
 
 echo "==> Building the Windows installer and app (Fuse $VERSION)"
 # shellcheck disable=SC2086
-./gradlew :app:desktop:createReleaseDistributable :app:desktop:packageReleaseMsi --console=plain ${GRADLE_ARGS:-}
+./gradlew :app:desktop:createReleaseDistributable --console=plain ${GRADLE_ARGS:-}
 if [[ ! -f "$DIST/Fuse.exe" ]]; then
   echo "error: $DIST/Fuse.exe not found" >&2
   exit 1
 fi
+
+if [[ "${SKIP_CDS:-0}" != "1" ]]; then
+  # Fuse starts faster with its classes ready to map in (it skips this itself if anything fails).
+  bash scripts/train-cds.sh "$DIST"
+fi
+
+# The installer is made from the app above, archive and all, so it isn't built again.
+# shellcheck disable=SC2086
+./gradlew :app:desktop:packageReleaseMsi -x :app:desktop:createReleaseDistributable --console=plain ${GRADLE_ARGS:-}
 
 if [[ "${SKIP_SELF_TEST:-0}" != "1" ]]; then
   # Fuse.exe is a windowed program with no console, so a console Java prints the report first. The

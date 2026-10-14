@@ -50,7 +50,7 @@ sealed interface ChoiceAid {
     data class SelectGame(val opensPage: Boolean) : ChoiceAid
 
     /** Home as a board of tiles, or shelves that run on. */
-    data class HomeStyle(val mode: HomeMode) : ChoiceAid
+    data class HomeStyle(val style: io.github.matiyaaa.fuse.model.HomeStyle) : ChoiceAid
 
     /** How large text is. */
     data class TextSize(val scale: Float) : ChoiceAid
@@ -90,7 +90,7 @@ fun ChoiceAidView(aid: ChoiceAid, description: String, modifier: Modifier = Modi
                     is ChoiceAid.GameArt -> gameArt(aid.style, area, t, colors)
                     is ChoiceAid.OpensOn -> opensOn(aid.installed, area, t, colors)
                     is ChoiceAid.SelectGame -> selectGame(aid.opensPage, area, t, colors)
-                    is ChoiceAid.HomeStyle -> homeStyle(aid.mode, area, t, colors)
+                    is ChoiceAid.HomeStyle -> homeStyle(aid.style, area, t, colors)
                     is ChoiceAid.TextSize -> textSize(aid.scale, area, colors)
                     is ChoiceAid.ScreenEdges -> screenEdges(aid.percent, area, colors)
                     is ChoiceAid.Motion -> motion(aid.profile ?: MotionProfile.STANDARD, area, t, colors)
@@ -285,8 +285,32 @@ private fun DrawScope.selectGame(opensPage: Boolean, area: Size, t: Float, c: Ai
     }
 }
 
-private fun DrawScope.homeStyle(mode: HomeMode, area: Size, t: Float, c: AidColors) {
-    if (mode == HomeMode.CHANNELS) {
+private fun DrawScope.homeStyle(style: io.github.matiyaaa.fuse.model.HomeStyle, area: Size, t: Float, c: AidColors) {
+    if (style == io.github.matiyaaa.fuse.model.HomeStyle.FII) {
+        // Even channels in white frames, over a bar with the clock between two round buttons.
+        val bar = area.height * 0.24f
+        val cols = 4
+        val rows = 3
+        val gap = 6.px(this)
+        val w = (area.width - gap * (cols - 1)) / cols
+        val h = (area.height - bar - gap * rows) / rows
+        val focus = step(t, cols * rows)
+        for (i in 0 until cols * rows) {
+            val x = (i % cols) * (w + gap)
+            val y = (i / cols) * (h + gap)
+            tile(if (i == focus) c.accent.copy(alpha = 0.45f) else c.tile, x, y, w, h, h * 0.3f)
+            drawRoundRect(Color.White.copy(alpha = 0.85f), Offset(x, y), Size(w, h), CornerRadius(h * 0.3f), style = Stroke(2.px(this)))
+            if (i == focus) ring(c.focus, x, y, w, h, h * 0.3f)
+        }
+        val top = area.height - bar + gap
+        drawRoundRect(c.tile, Offset(0f, top), Size(area.width, bar - gap), CornerRadius(bar * 0.4f))
+        val r = (bar - gap) * 0.36f
+        drawCircle(Color.White.copy(alpha = 0.9f), r, Offset(r * 1.6f, top + (bar - gap) / 2))
+        drawCircle(Color.White.copy(alpha = 0.9f), r, Offset(area.width - r * 1.6f, top + (bar - gap) / 2))
+        textLine(c.text.copy(alpha = 0.6f), area.width * 0.4f, top + (bar - gap) * 0.3f, area.width * 0.2f, 8.px(this))
+        return
+    }
+    if (style == io.github.matiyaaa.fuse.model.HomeStyle.FUSED) {
         // A board of tiles of different sizes, arranged by hand.
         val u = minOf(area.width / 6f, area.height / 3.4f)
         val gap = 6.px(this)

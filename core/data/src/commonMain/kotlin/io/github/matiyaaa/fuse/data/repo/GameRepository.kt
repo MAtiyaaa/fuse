@@ -89,7 +89,9 @@ class GameRepository(
     /** Every game suggestions may choose from, with its details and play, kept current. */
     fun observeRecommendationInputs(): Flow<List<RecommendationRow>> = q.recommendationInputs().asFlow().mapToList(dispatcher).map { rows ->
         rows.map { r ->
-            val meta = decodeOrNull(GameMetadata.serializer(), r.metadata_json)
+            // Fuseline 4.2: only the details suggestions use; a description of a few thousand
+            // characters on each of 2,000 games is skipped, not made into strings.
+            val meta = decodeOrNull(PickDetails.serializer(), r.metadata_json)
             RecommendationRow(
                 id = GameId(r.id),
                 platformId = PlatformId(r.platform_id),
@@ -546,3 +548,13 @@ data class GameMatchRow(
 
 /** How a content attachment the person made is marked in game_absorption.reason (then the kind). */
 internal const val USER_REASON = "USER:"
+
+/** The parts of a game's details suggestions read ([GameRepository.observeRecommendationInputs]). */
+@kotlinx.serialization.Serializable
+internal data class PickDetails(
+    val releaseYear: Int? = null,
+    val developer: String? = null,
+    val genres: List<String> = emptyList(),
+    val franchise: String? = null,
+    val rating: Int? = null,
+)

@@ -17,6 +17,7 @@
 # Environment:
 #   GRADLE_ARGS="..."              extra Gradle arguments (for example "--no-daemon")
 #   SKIP_SELF_TEST=1               don't run --self-test
+#   SKIP_CDS=1                     leave out the class data sharing archive (scripts/train-cds.sh)
 #   MACOS_SIGNING_IDENTITY=...     "Developer ID Application: Name (TEAMID)", to sign with it
 #   MACOS_SIGNING_KEYCHAIN=...     the keychain holding it, when not the default one
 #   MACOS_NOTARY_APPLE_ID=...      with MACOS_NOTARY_PASSWORD (an app-specific password) and
@@ -55,6 +56,33 @@ echo "==> Building the app (Fuse $VERSION, $ARCH)"
 if [[ ! -x "$APP/Contents/MacOS/Fuse" ]]; then
   echo "error: $APP/Contents/MacOS/Fuse not found" >&2
   exit 1
+fi
+if [[ "${SKIP_CDS:-0}" != "1" ]]; then
+  # Fuse starts faster with its classes ready to map in (it skips this itself if anything fails).
+  # The archive is a new file in the app, so the app is signed again around it below.
+  bash scripts/train-cds.sh "$APP"
+  if [[ -f "$APP/Contents/app/fuse.jsa" && -n "${MACOS_SIGNING_IDENTITY:-}" ]]; then
+    echo "==> Signing the app again with the archive in it"
+    KEYCHAIN_ARGS=()
+    if [[ -n "${MACOS_SIGNING_KEYCHAIN:-}" ]]; then KEYCHAIN_ARGS=(--keychain "$MACOS_SIGNING_KEYCHAIN"); fi
+    ENTITLEMENTS="$(mktemp)"
+    # Only the app itself is signed again (its parts inside are unchanged), with the entitlements
+    # Compose gave it.
+    codesign --display --entitlements :- "$APP" >"$ENTITLEMENTS" 2>/dev/null || true
+    ENT_ARGS=()
+    if [[ -s "$ENTITLEMENTS" ]]; then ENT_ARGS=(--entitlements "$ENTITLEMENTS"); fi
+    if ! codesign --force --timestamp --options runtime ${ENT_ARGS[@]+"${ENT_ARGS[@]}"} --sign "$MACOS_SIGNING_IDENTITY" \
+      ${KEYCHAIN_ARGS[@]+"${KEYCHAIN_ARGS[@]}"} "$APP" || ! codesign --verify --deep --strict "$APP"; then
+      # Back to the app as Compose signed it, without the archive.
+      echo "warning: the app couldn't be signed again with the archive; leaving it out" >&2
+      rm -f "$APP/Contents/app/fuse.jsa"
+      grep -v 'fuse\.jsa\|-Xshare:auto' "$APP/Contents/app/Fuse.cfg" >"$APP/Contents/app/Fuse.cfg.tmp"
+      mv "$APP/Contents/app/Fuse.cfg.tmp" "$APP/Contents/app/Fuse.cfg"
+      codesign --force --timestamp --options runtime ${ENT_ARGS[@]+"${ENT_ARGS[@]}"} --sign "$MACOS_SIGNING_IDENTITY" \
+        ${KEYCHAIN_ARGS[@]+"${KEYCHAIN_ARGS[@]}"} "$APP"
+    fi
+    rm -f "$ENTITLEMENTS"
+  fi
 fi
 if [[ -n "${MACOS_SIGNING_IDENTITY:-}" ]]; then
   echo "==> Signed with the Developer ID"
