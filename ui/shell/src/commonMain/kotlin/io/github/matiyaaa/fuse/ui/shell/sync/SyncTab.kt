@@ -559,9 +559,12 @@ internal fun rememberSyncCovers(app: AppState): SyncCovers {
     val covers by androidx.compose.runtime.produceState(SyncCovers(emptyMap()), app.store) {
         // Built off the interface's thread: a big library is thousands of keys.
         app.store.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).map { cards ->
+            // Each game under every key Fuse Identity knows it by (its serial, its own title), as saves are filed.
+            val keys = runCatching { app.store.library.householdKeys() }.getOrDefault(emptyMap())
             SyncCovers(buildMap {
                 for (card in cards) {
-                    put(io.github.matiyaaa.fuse.sync.GameKey.of(card.platformId.value, null, null, card.title).id, card)
+                    keys[card.id].orEmpty().forEach { putIfAbsent(it, card) }
+                    putIfAbsent(io.github.matiyaaa.fuse.sync.GameKey.of(card.platformId.value, null, null, card.title).id, card)
                     put("name:" + card.title.lowercase(), card)
                     putIfAbsent(SyncCovers.searchKey(card.title), card)
                 }

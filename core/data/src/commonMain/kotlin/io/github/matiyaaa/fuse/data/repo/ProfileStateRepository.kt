@@ -21,6 +21,10 @@ data class UserGameRow(
     val trackedSeconds: Long,
     val sessionCount: Long,
     val emulator: String?,
+    /** The serial read from the game itself (a disc's), which identity trusts over [serial] from its name. */
+    val contentSerial: String? = null,
+    /** The system the game's folder says, when a person moved it to another. */
+    val scannedPlatform: String? = null,
 )
 
 data class SessionRow(val gameId: Long, val emulator: String?, val startedAt: Long, val endedAt: Long)
@@ -47,11 +51,13 @@ class ProfileStateRepository(
     suspend fun read(): UserState = withContext(dispatcher) { readNow() }
 
     private fun readNow(): UserState {
+        val content = contentSerials()
         val games = q.userGames().executeAsList().map { r ->
             val serial = r.tags_json?.let { t -> runCatching { json.decodeFromString(FilenameTags.serializer(), t).serial }.getOrNull() }
             UserGameRow(
                 r.id, r.platform_id, r.title_original, r.title_custom, serial,
                 r.favorite != 0L, r.hidden != 0L, r.pinned != 0L, r.last_played_at, r.tracked_seconds, r.session_count, r.emulator_override,
+                contentSerial = content[r.id], scannedPlatform = r.platform_scanned,
             )
         }
         val sessions = q.endedSessions().executeAsList().mapNotNull { s -> s.ended_at?.let { SessionRow(s.game_id, s.emulator_id, s.started_at, it) } }
@@ -59,6 +65,10 @@ class ProfileStateRepository(
         val collections = q.manualCollections().executeAsList().map { c -> CollectionRow(c.id, c.name, c.sort_order, c.created_at, members[c.id].orEmpty()) }
         return UserState(games, sessions, collections)
     }
+
+    /** The serial read from each game itself (Fuse Identity's `serial.content`), by game. */
+    private fun contentSerials(): Map<Long, String> =
+        db.gameIdentityQueries.all().executeAsList().filter { it.kind == IdentityRepository.SERIAL_CONTENT }.associate { it.game_id to it.value_ }
 
     /**
      * Original identities retained by a semantic migration. Sync can use these aliases without

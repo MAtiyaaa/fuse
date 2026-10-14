@@ -299,6 +299,13 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val facts = remember(d) { factsOf(d) }
     val moreFacts = facts.size > SHOWN_FACTS
     val description = game.metadata.description?.takeIf { it.isNotBlank() }
+    // How long it takes to beat, from HowLongToBeat: asked when the page opens, kept a month.
+    val hltbOn by remember(app.store) { app.store.prefs.map { it.howLongToBeat } }.collectAsState(app.store.prefs.value.howLongToBeat)
+    var beatVersion by remember(game.id) { mutableIntStateOf(0) }
+    val beatScope = androidx.compose.runtime.rememberCoroutineScope()
+    val beat by produceState<io.github.matiyaaa.fuse.ui.shell.store.HltbView?>(null, game.id, hltbOn, beatVersion) {
+        value = if (hltbOn) app.store.library.howLongToBeat(game.id) else null
+    }
     val rows = buildList {
         if (moreFacts) add("facts")
         add("actions")
@@ -313,7 +320,8 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
         lines.indices.forEach { add("details:$it") }
     }
     fun sizeOf(key: String) = when (key) {
-        "facts", "about", "playtime" -> 1
+        "facts", "about" -> 1
+        "playtime" -> if (beat != null) 2 else 1
         "actions" -> actions.size
         "available" -> shownCopies.size
         "romm" -> rommButtons.size.coerceAtLeast(1)
@@ -344,6 +352,28 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
             },
         )
     }
+    /** HowLongToBeat's games named like this one, to choose the right one, or none of them. */
+    fun chooseBeat() {
+        beatScope.launch {
+            val found = app.store.library.howLongToBeatChoices(game.id)
+            app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+                title = "Which game is it?",
+                icon = FuseIcons.Hourglass,
+                message = if (found.isEmpty()) "HowLongToBeat found nothing by this name" else "From HowLongToBeat, by ${game.displayTitle}",
+                options = found.take(12).map { h ->
+                    io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction(
+                        "pick.${h.id}", h.name, FuseIcons.Gamepad,
+                        detail = listOfNotNull(h.year?.toString(), h.platforms.takeIf { it.isNotBlank() }).joinToString("  ·  ").ifEmpty { null },
+                        trailing = if (h.mainSeconds > 0) io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Value(beatText(h.mainSeconds)) else io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.None,
+                        onSelect = { app.choice = null; beatScope.launch { app.store.library.chooseHowLongToBeat(game.id, h); beatVersion++ } },
+                    )
+                } + io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction(
+                    "pick.none", "None of these", FuseIcons.EyeOff, detail = "Don't show how long it takes to beat for this game",
+                    onSelect = { app.choice = null; beatScope.launch { app.store.library.chooseHowLongToBeat(game.id, null); beatVersion++ } },
+                ),
+            )
+        }
+    }
     fun readAbout() {
         val text = description ?: return
         app.textPreview = io.github.matiyaaa.fuse.ui.shell.app.TextPreviewSpec(
@@ -356,6 +386,39 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     }
     val col = sel.column(row)
     val focused = app.focusZone == FocusZone.CONTENT
+
+    /** HowLongToBeat's times for the game, with your progress, and the way to say it's another game. */
+    fun showBeat(view: io.github.matiyaaa.fuse.ui.shell.store.HltbView) {
+        val g = view.game
+        val played = game.play.totalSeconds
+        fun progress(seconds: Long) = if (played > 0 && seconds > 0) "${((played.toFloat() / seconds).coerceAtMost(1f) * 100).toInt()}% played" else null
+        val times = listOf(
+            Triple("main", "Main story", g.mainSeconds),
+            Triple("plus", "Main story and extras", g.plusSeconds),
+            Triple("all", "Completionist", g.completionistSeconds),
+        ).filter { it.third > 0 }
+        app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+            title = g.name,
+            icon = FuseIcons.Hourglass,
+            message = listOfNotNull(g.year?.toString(), g.platforms.takeIf { it.isNotBlank() }, "HowLongToBeat").joinToString("  ·  "),
+            options = times.map { (id, label, seconds) ->
+                io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction(
+                    "beat.$id", label, FuseIcons.Clock3, detail = progress(seconds),
+                    trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Value(beatText(seconds)),
+                    section = "Times", onSelect = { app.choice = null },
+                )
+            } + listOf(
+                io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction(
+                    "beat.other", "Not this game", FuseIcons.Search, detail = "Choose the right one from HowLongToBeat",
+                    section = "Game", onSelect = { app.choice = null; chooseBeat() },
+                ),
+                io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction(
+                    "beat.site", "Open on HowLongToBeat", FuseIcons.ArrowUpRight, detail = "See it on howlongtobeat.com",
+                    section = "Game", onSelect = { app.choice = null; app.platform.openUrl(g.url) },
+                ),
+            ),
+        )
+    }
 
     fun openCard(info: InfoCard) {
         when (info) {
@@ -377,7 +440,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val confirm = when (row) {
         "facts" -> "See every detail"
         "about" -> "Read it all"
-        "playtime" -> "All play time"
+        "playtime" -> if (col == 1) "How long to beat" else "All play time"
         "shots" -> "View full screen"
         "romm" -> rommButtons.getOrNull(col)?.label ?: "Downloads"
         "available" -> "This copy"
@@ -455,7 +518,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                 when (row) {
                     "facts" -> showFacts()
                     "about" -> readAbout()
-                    "playtime" -> app.go(Route.PlayTime)
+                    "playtime" -> if (col == 1) beat?.let { showBeat(it) } else app.go(Route.PlayTime)
                     "shots" -> viewing = col
                     "romm" -> rommButtons.getOrNull(col)?.let { b -> romm?.let { v -> app.rommDownload(v.romId, game.displayTitle, b.what) } } ?: app.go(Route.Downloads)
                     "available" -> shownCopies.getOrNull(col)?.let { cp -> app.copyMenu(game.id, game.displayTitle, cp, hereAlready = !notHere, canUpload = canUploadHere, rommHasIt = rommHasIt) }
@@ -586,9 +649,11 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                     Spacer(Modifier.height(Space.l))
                     TimeTogether(
                         d,
+                        beat,
                         Modifier.reveal(reveal, 3).onPlaced { timeBottom = (it.positionInRoot().y + it.size.height).toInt() - topOfPage + scroll.value },
-                        selected = row == "playtime" && focused,
-                        onClick = { sel.row = rows.indexOf("playtime"); app.go(Route.PlayTime) },
+                        focusedPart = if (row == "playtime" && focused) col else null,
+                        onPlayTime = { sel.row = rows.indexOf("playtime"); sel.setColumn("playtime", 0); app.go(Route.PlayTime) },
+                        onBeat = { sel.row = rows.indexOf("playtime"); sel.setColumn("playtime", 1); beat?.let { showBeat(it) } },
                     )
                 }
                 layout.cover?.let { cover ->
@@ -950,67 +1015,143 @@ private fun AboutBlock(text: String, selected: Boolean, reading: Dp, onClick: ()
 /**
  * The time you and this game have spent together, front and centre under Play: the total large,
  * in a ring of light whose arc fills with this week's share, then sessions, this week and when you
- * last played. Before the first session it says so, simply.
+ * last played. Before the first session it says so, simply. Beside it, when HowLongToBeat knows the
+ * game, how long it takes to beat, in a smaller ring that fills with how much of that you've played.
+ *
+ * The two parts are separate stops ([focusedPart] 0 and 1) for the controller and the keyboard,
+ * and separate buttons for touch and the mouse.
  */
 @Composable
-private fun TimeTogether(d: GameDetail, modifier: Modifier, selected: Boolean, onClick: () -> Unit) {
+private fun TimeTogether(
+    d: GameDetail,
+    beat: io.github.matiyaaa.fuse.ui.shell.store.HltbView?,
+    modifier: Modifier,
+    focusedPart: Int?,
+    onPlayTime: () -> Unit,
+    onBeat: () -> Unit,
+) {
     val c = Fuse.colors
-    val play = d.game.play
     val shape = RoundedCornerShape(Fuse.geometry.panel)
-    val lit by fuselineFloat(if (selected) 1f else 0f, Fuse.motion.tween(io.github.matiyaaa.fuse.ui.fuseline.Durations.FAST), label = "timeTogether")
-    val accent = d.platform.accent.toColor()
-    val share = if (play.totalSeconds > 0) (d.secondsThisWeek.toFloat() / play.totalSeconds).coerceIn(0f, 1f) else 0f
-    val arc by fuselineFloat(share, Fuse.motion.tween(io.github.matiyaaa.fuse.ui.fuseline.Durations.DELIBERATE), label = "weekArc")
-    Row(
+    FlowRow(
         modifier
             .clip(shape)
             .background(c.surfaceDim.copy(alpha = if (c.isDark) 0.55f else 0.7f))
-            .background(c.text.copy(alpha = 0.06f * lit))
             .border(Size.stroke, c.hairline, shape)
-            .border(Size.focusStroke, c.focus.copy(alpha = lit), shape)
-            .fuseClickable(shape = shape, scale = false, role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "All play time", onClick = onClick)
-            .padding(horizontal = Space.l, vertical = Space.m),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(Space.xs),
+        verticalArrangement = Arrangement.Center,
     ) {
-        Box(Modifier.size(Size.thumbL), contentAlignment = Alignment.Center) {
-            androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-                val stroke = 3.dp.toPx()
-                val inset = stroke / 2
-                val box = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke)
-                drawArc(c.text.copy(alpha = 0.12f), 0f, 360f, false, androidx.compose.ui.geometry.Offset(inset, inset), box, style = androidx.compose.ui.graphics.drawscope.Stroke(stroke))
-                if (arc > 0f) {
-                    drawArc(accent, -90f, 360f * arc.coerceAtLeast(0.02f), false, androidx.compose.ui.geometry.Offset(inset, inset), box, style = androidx.compose.ui.graphics.drawscope.Stroke(stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round))
-                }
-            }
-            FuseIcon(if (play.totalSeconds > 0) FuseIcons.Clock3 else FuseIcons.Sparkle, size = Size.iconM, tint = if (play.totalSeconds > 0) c.text else c.textMuted)
-        }
-        Spacer(Modifier.width(Space.l))
-        if (play.totalSeconds <= 0) {
-            Column {
-                FText("Not played yet", Fuse.type.titleSmall, maxLines = 1)
-                FText("Your time together starts with Play", Fuse.type.caption, color = c.textMuted, maxLines = 1)
-            }
-            return@Row
-        }
-        Column {
-            FText(playtimeText(play.totalSeconds), Fuse.type.numericLarge, maxLines = 1)
-            FText("played in all", Fuse.type.caption, color = c.textMuted, maxLines = 1)
-        }
-        val stats = listOfNotNull(
-            play.sessions.takeIf { it > 0 }?.let { (if (it == 1) "1" else it.toString()) to (if (it == 1) "session" else "sessions") },
-            d.secondsThisWeek.takeIf { it > 0 }?.let { playtimeText(it) to "this week" },
-            play.lastPlayedAt?.let { agoText(it).replaceFirstChar(Char::uppercase) to "last played" },
-        )
-        for ((value, label) in stats) {
-            Spacer(Modifier.width(Space.l))
-            Box(Modifier.width(Size.divider).height(Size.thumb).background(c.hairline))
-            Spacer(Modifier.width(Space.l))
-            Column {
-                FText(value, Fuse.type.bodyStrong.tabular(), maxLines = 1)
-                FText(label, Fuse.type.caption, color = c.textMuted, maxLines = 1)
+        TimePart(focusedPart == 0, "All play time", onPlayTime) { PlayedPart(d) }
+        if (beat != null) {
+            // A hairline between the two while they share a line; none when the beat part wraps under.
+            var beside by remember { mutableStateOf(true) }
+            Row(
+                Modifier.align(Alignment.CenterVertically).onPlaced { beside = it.positionInParent().x > 0f },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (beside) Box(Modifier.width(Size.divider).height(Size.thumb).background(c.hairline))
+                TimePart(focusedPart == 1, "How long to beat", onBeat) { BeatPart(d, beat) }
             }
         }
     }
+}
+
+/** One stop of [TimeTogether]: lit when it has the focus, a button for touch and the mouse. */
+@Composable
+private fun TimePart(selected: Boolean, label: String, onClick: () -> Unit, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+    val c = Fuse.colors
+    val shape = RoundedCornerShape((Fuse.geometry.panel - Space.xs).coerceAtLeast(0.dp))
+    val lit by fuselineFloat(if (selected) 1f else 0f, Fuse.motion.tween(io.github.matiyaaa.fuse.ui.fuseline.Durations.FAST), label = "timePart")
+    Row(
+        Modifier
+            .clip(shape)
+            .background(c.text.copy(alpha = 0.06f * lit))
+            .border(Size.focusStroke, c.focus.copy(alpha = lit), shape)
+            .fuseClickable(shape = shape, scale = false, role = androidx.compose.ui.semantics.Role.Button, onClickLabel = label, onClick = onClick)
+            .padding(horizontal = Space.l - Space.xs, vertical = Space.m - Space.xs),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content,
+    )
+}
+
+/** A ring of light around an icon, its arc filled to [fill] (0 to 1). */
+@Composable
+private fun TimeRing(fill: Float, accent: Color, icon: androidx.compose.ui.graphics.vector.ImageVector, iconTint: Color, size: androidx.compose.ui.unit.Dp, label: String) {
+    val c = Fuse.colors
+    val arc by fuselineFloat(fill, Fuse.motion.tween(io.github.matiyaaa.fuse.ui.fuseline.Durations.DELIBERATE), label = label)
+    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+            val stroke = 3.dp.toPx()
+            val inset = stroke / 2
+            val box = androidx.compose.ui.geometry.Size(this.size.width - stroke, this.size.height - stroke)
+            drawArc(c.text.copy(alpha = 0.12f), 0f, 360f, false, androidx.compose.ui.geometry.Offset(inset, inset), box, style = androidx.compose.ui.graphics.drawscope.Stroke(stroke))
+            if (arc > 0f) {
+                drawArc(accent, -90f, 360f * arc.coerceAtLeast(0.02f), false, androidx.compose.ui.geometry.Offset(inset, inset), box, style = androidx.compose.ui.graphics.drawscope.Stroke(stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+            }
+        }
+        FuseIcon(icon, size = if (size == Size.thumbL) Size.iconM else Size.iconS, tint = iconTint)
+    }
+}
+
+/** The total played, then sessions, this week and when you last played. */
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.PlayedPart(d: GameDetail) {
+    val c = Fuse.colors
+    val play = d.game.play
+    val share = if (play.totalSeconds > 0) (d.secondsThisWeek.toFloat() / play.totalSeconds).coerceIn(0f, 1f) else 0f
+    TimeRing(share, d.platform.accent.toColor(), if (play.totalSeconds > 0) FuseIcons.Clock3 else FuseIcons.Sparkle, if (play.totalSeconds > 0) c.text else c.textMuted, Size.thumbL, "weekArc")
+    Spacer(Modifier.width(Space.l))
+    if (play.totalSeconds <= 0) {
+        Column {
+            FText("Not played yet", Fuse.type.titleSmall, maxLines = 1)
+            FText("Your time together starts with Play", Fuse.type.caption, color = c.textMuted, maxLines = 1)
+        }
+        return
+    }
+    Column {
+        FText(playtimeText(play.totalSeconds), Fuse.type.numericLarge, maxLines = 1)
+        FText("played in all", Fuse.type.caption, color = c.textMuted, maxLines = 1)
+    }
+    val stats = listOfNotNull(
+        play.sessions.takeIf { it > 0 }?.let { (if (it == 1) "1" else it.toString()) to (if (it == 1) "session" else "sessions") },
+        d.secondsThisWeek.takeIf { it > 0 }?.let { playtimeText(it) to "this week" },
+        play.lastPlayedAt?.let { agoText(it).replaceFirstChar(Char::uppercase) to "last played" },
+    )
+    for ((value, label) in stats) {
+        Spacer(Modifier.width(Space.l))
+        Box(Modifier.width(Size.divider).height(Size.thumb).background(c.hairline))
+        Spacer(Modifier.width(Space.l))
+        Column {
+            FText(value, Fuse.type.bodyStrong.tabular(), maxLines = 1)
+            FText(label, Fuse.type.caption, color = c.textMuted, maxLines = 1)
+        }
+    }
+}
+
+/** How long the game takes to beat (its main story, else the longer runs), in a ring of how much you've played of it. */
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.BeatPart(d: GameDetail, beat: io.github.matiyaaa.fuse.ui.shell.store.HltbView) {
+    val c = Fuse.colors
+    val g = beat.game
+    val (seconds, what) = when {
+        g.mainSeconds > 0 -> g.mainSeconds to "to beat"
+        g.plusSeconds > 0 -> g.plusSeconds to "with extras"
+        else -> g.completionistSeconds to "to finish it all"
+    }
+    val played = d.game.play.totalSeconds
+    val fill = if (seconds > 0) (played.toFloat() / seconds).coerceIn(0f, 1f) else 0f
+    TimeRing(fill, d.platform.accent.toColor(), FuseIcons.Hourglass, c.text, Size.thumb, "beatArc")
+    Spacer(Modifier.width(Space.m))
+    Column {
+        FText(beatText(seconds), Fuse.type.bodyStrong.tabular(), maxLines = 1)
+        FText(if (played > 0 && seconds > 0) "$what  ·  ${(fill * 100).toInt()}% played" else what, Fuse.type.caption, color = c.textMuted, maxLines = 1)
+    }
+}
+
+/** A HowLongToBeat time as play time is written ("22 h", "1 h 30 min"), to the nearest five minutes, or the hour past ten hours. */
+internal fun beatText(seconds: Long): String {
+    val minutes = (seconds + 30) / 60
+    val rounded = if (minutes >= 600) ((minutes + 30) / 60) * 60 else ((minutes + 2) / 5) * 5
+    return playtimeText(rounded.coerceAtLeast(1) * 60)
 }
 
 /**

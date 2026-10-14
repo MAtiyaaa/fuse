@@ -13,6 +13,9 @@ kotlin {
         // the file system and Fuse's own file for what it learns.
         val jvmShared by creating {
             dependsOn(commonMain.get())
+            dependencies {
+                implementation(libs.snakeyaml.engine)
+            }
         }
         androidMain.get().dependsOn(jvmShared)
         getByName("desktopMain").dependsOn(jvmShared)

@@ -1,6 +1,15 @@
 package io.github.matiyaaa.fuse.romm
 
 import io.github.matiyaaa.fuse.library.FsPath
+import io.github.matiyaaa.fuse.library.identity.ContentHash
+import io.github.matiyaaa.fuse.library.identity.Evidence
+import io.github.matiyaaa.fuse.library.identity.GameEvidence
+import io.github.matiyaaa.fuse.library.identity.GameMatcher
+import io.github.matiyaaa.fuse.library.identity.HashKind
+import io.github.matiyaaa.fuse.library.identity.Ids
+import io.github.matiyaaa.fuse.library.identity.LinkKind
+import io.github.matiyaaa.fuse.library.identity.MatchLevel
+import io.github.matiyaaa.fuse.library.identity.SerialId
 import io.github.matiyaaa.fuse.library.parse.FilenameParser
 import io.github.matiyaaa.fuse.model.BiosFile
 import io.github.matiyaaa.fuse.model.BiosState
@@ -20,6 +29,10 @@ data class LocalGame(
     val md5: String? = null,
     val rommRomId: Long? = null,
     val missing: Boolean = false,
+    /** Every serial Fuse knows for the game (read from it, or from its name), when more than [serial]. */
+    val serials: List<SerialId> = emptyList(),
+    /** Every content hash Fuse knows for the game. */
+    val hashes: Set<ContentHash> = emptySet(),
 )
 
 /** How sure a match is, strongest first; only these ever join a RomM game to a Fuse game. */
@@ -30,100 +43,64 @@ data class RommMatchResult(val romId: Long, val gameId: Long, val reason: MatchR
 /**
  * Which Fuse game each RomM game is, so one game is never two: the RomM link Fuse keeps, else a hash,
  * a console's own title id, the exact file name, or the same name with the same region and revision
- * when it is the only one on either side. A name that only looks alike is never enough.
+ * when it is the only one on either side. A name that only looks alike is never enough. The rules
+ * are Fuse Identity's ([GameMatcher] at the release level), the same everywhere in Fuse.
  */
 object RommMatch {
     /**
      * Matches [roms] to [games]. [platformOf] turns RomM's platform slug into Fuse's platform id. A
-     * Fuse game is matched at most once, to the strongest candidate.
+     * Fuse game is matched at most once, to the strongest candidate. [vetoed] are pairs (rom id to
+     * game id) a person said are different games.
      */
-    fun match(roms: List<RommRom>, games: List<LocalGame>, platformOf: (String) -> String?): List<RommMatchResult> {
-        val live = games.filter { !it.missing }
-        val byLink = live.filter { it.rommRomId != null }.associateBy { it.rommRomId!! }
-        val byMd5 = live.filter { !it.md5.isNullOrBlank() }.groupBy { it.md5!!.lowercase() }
-        val bySerial = live.filter { !it.serial.isNullOrBlank() }.groupBy { it.platform to idKey(it.serial!!) }
-        val byFile = live.groupBy { it.platform to it.fileName.lowercase() }
-        val byName = live.groupBy { it.platform to nameKey(it.fileName.ifBlank { it.title }) }
-        // PS4 and PS5 games are zips on RomM but played from the folder they unpack to, named for the
-        // zip or carrying the game's own id (CUSA12345, PPSA12345), as Cartridge matches them.
-        val byPsId = live.filter { it.platform in FOLDER_SYSTEMS }
-            .mapNotNull { g -> (listOfNotNull(g.serial, g.fileName, g.title).firstNotNullOfOrNull(::playStationId))?.let { (g.platform to it) to g } }
-            .groupBy({ it.first }, { it.second })
-        val romsByName = roms.groupBy { (platformOf(it.platformSlug) ?: it.platformSlug) to nameKey(it.fsName.ifBlank { it.name }) }
-
-        val taken = HashSet<Long>()
-        val out = ArrayList<RommMatchResult>()
-        // Strongest reasons first across every game, so a weak guess never takes a game another
-        // RomM game is linked to by a stronger one.
-        val candidates = ArrayList<RommMatchResult>()
-        for (r in roms) {
-            val platform = platformOf(r.platformSlug) ?: continue
-            byLink[r.id]?.let { candidates += RommMatchResult(r.id, it.id, MatchReason.LINKED) }
-            val hashes = listOfNotNull(r.md5) + r.files.mapNotNull { it.md5 }
-            hashes.firstNotNullOfOrNull { h -> byMd5[h.lowercase()]?.singleOrNull { it.platform == platform } }?.let { candidates += RommMatchResult(r.id, it.id, MatchReason.HASH) }
-            r.titleId?.let { t -> bySerial[platform to idKey(t)]?.singleOrNull() }?.let { candidates += RommMatchResult(r.id, it.id, MatchReason.TITLE_ID) }
-            byFile[platform to r.fsName.lowercase()]?.singleOrNull()?.takeIf { weakCompatible(r, it) }?.let { candidates += RommMatchResult(r.id, it.id, MatchReason.FILE_NAME) }
-            if (platform in FOLDER_SYSTEMS) {
-                val unpacked = r.fsName.replace(ARCHIVE, "").lowercase()
-                if (unpacked != r.fsName.lowercase()) byFile[platform to unpacked]?.singleOrNull()?.takeIf { weakCompatible(r, it) }?.let { candidates += RommMatchResult(r.id, it.id, MatchReason.FILE_NAME) }
-                (listOfNotNull(r.titleId, r.fsName, r.name).firstNotNullOfOrNull(::playStationId))
-                    ?.let { byPsId[platform to it]?.singleOrNull() }
-                    ?.let { candidates += RommMatchResult(r.id, it.id, MatchReason.TITLE_ID) }
-            }
-            val key = platform to nameKey(r.fsName.ifBlank { r.name })
-            val locals = byName[key]
-            if (locals != null && locals.size == 1 && romsByName[key]?.size == 1 && key.second.isNotEmpty()) {
-                if (weakCompatible(r, locals.single())) candidates += RommMatchResult(r.id, locals.single().id, MatchReason.NAME_AND_TAGS)
-            }
-        }
-        val claimedRoms = HashSet<Long>()
-        for (c in candidates.sortedBy { it.reason.ordinal }) {
-            if (c.romId in claimedRoms || c.gameId in taken) continue
-            claimedRoms += c.romId
-            taken += c.gameId
-            out += c
-        }
-        return out
+    fun match(roms: List<RommRom>, games: List<LocalGame>, vetoed: Set<Pair<Long, Long>>, platformOf: (String) -> String?): List<RommMatchResult> {
+        val remotes = roms.mapNotNull { r -> platformOf(r.platformSlug)?.let { evidenceOf(r, it) } }
+        val locals = games.map(::evidenceOf)
+        return GameMatcher.match(remotes, locals, MatchLevel.RELEASE, vetoed).map { RommMatchResult(it.remote, it.local, reasonOf(it.evidence)) }
     }
 
-    /** Names never overrule incompatible explicit identities, even when both sides are unique. */
-    private fun weakCompatible(rom: RommRom, game: LocalGame): Boolean {
-        if (game.rommRomId != null && game.rommRomId != rom.id) return false
-        val remoteId = rom.titleId?.takeIf { it.isNotBlank() } ?: if (game.platform in FOLDER_SYSTEMS) {
-            listOf(rom.fsName, rom.name).firstNotNullOfOrNull(::playStationId)
-        } else null
-        val localId = game.serial?.takeIf { it.isNotBlank() } ?: if (game.platform in FOLDER_SYSTEMS) {
-            listOf(game.fileName, game.title).firstNotNullOfOrNull(::playStationId)
-        } else null
-        if (remoteId != null && localId != null && idKey(remoteId) != idKey(localId)) return false
-        val hashes = (listOfNotNull(rom.md5) + rom.files.mapNotNull { it.md5 }).filter { it.isNotBlank() }
-        if (!game.md5.isNullOrBlank() && hashes.isNotEmpty() && hashes.none { it.equals(game.md5, ignoreCase = true) }) return false
-        return true
-    }
+    fun match(roms: List<RommRom>, games: List<LocalGame>, platformOf: (String) -> String?): List<RommMatchResult> =
+        match(roms, games, emptySet(), platformOf)
 
-    /** Systems whose games RomM keeps as archives but that are played from the folder they unpack to. */
-    private val FOLDER_SYSTEMS = setOf("ps4", "ps5")
-    private val ARCHIVE = Regex("\\.(zip|7z|rar)$", RegexOption.IGNORE_CASE)
-    private val PS_ID = Regex("\\b(CUSA|PPSA)[-_ ]?(\\d{5})\\b", RegexOption.IGNORE_CASE)
+    /** A RomM game as identity sees it. */
+    fun evidenceOf(r: RommRom, platform: String): GameEvidence = GameEvidence(
+        id = r.id,
+        platform = platform,
+        fileName = r.fsName,
+        title = r.name,
+        serials = listOfNotNull(Ids.serialOrNull(r.titleId)?.let { SerialId(it, fromContent = true) }),
+        hashes = ((listOfNotNull(r.md5) + r.files.mapNotNull { it.md5 }).mapNotNull { ContentHash.of(HashKind.MD5, it) } +
+            r.files.mapNotNull { ContentHash.of(HashKind.SHA1, it.sha1) } + r.files.mapNotNull { ContentHash.of(HashKind.CRC32, it.crc) }).toSet(),
+        links = mapOf(LinkKind.ROMM_ROM to r.id.toString()),
+    )
+
+    /** A Fuse game as identity sees it. */
+    fun evidenceOf(g: LocalGame): GameEvidence = GameEvidence(
+        id = g.id,
+        platform = g.platform,
+        fileName = g.fileName,
+        title = g.title,
+        serials = g.serials.ifEmpty { listOfNotNull(Ids.serialOrNull(g.serial)?.let { SerialId(it) }) },
+        hashes = g.hashes + listOfNotNull(ContentHash.of(HashKind.MD5, g.md5)),
+        links = listOfNotNull(g.rommRomId?.let { LinkKind.ROMM_ROM to it.toString() }).toMap(),
+        missing = g.missing,
+    )
+
+    private fun reasonOf(e: Evidence): MatchReason = when (e) {
+        Evidence.LINKED -> MatchReason.LINKED
+        Evidence.HASH -> MatchReason.HASH
+        Evidence.SERIAL -> MatchReason.TITLE_ID
+        Evidence.FILE_NAME -> MatchReason.FILE_NAME
+        Evidence.RELEASE_NAME, Evidence.WORK_TITLE -> MatchReason.NAME_AND_TAGS
+    }
 
     /** A PS4 or PS5 game's own id in [text] (CUSA12345, PPSA12345), however it is written. */
-    internal fun playStationId(text: String): String? = PS_ID.find(text)?.let { it.groupValues[1].uppercase() + it.groupValues[2] }
+    internal fun playStationId(text: String): String? = Ids.psId(text)
 
     /** A console id written any way ("SLUS-00067", "slus_000.67", "0100ABCD...") the same. */
-    fun idKey(id: String): String = id.lowercase().filter { it.isLetterOrDigit() }
+    fun idKey(id: String): String = Ids.serial(id)
 
-    /**
-     * A name with what tells copies apart kept (region, revision, version, disc), and what doesn't
-     * (case, punctuation, dump flags) dropped: "Metroid Fusion (USA) (Rev 1)" is never "Metroid
-     * Fusion (Europe)".
-     */
-    fun nameKey(name: String): String {
-        val p = FilenameParser.parse(name, hasExtension = name.contains('.'))
-        val title = p.baseTitle.lowercase().filter { it.isLetterOrDigit() }
-        if (title.isEmpty()) return ""
-        val t = p.tags
-        return listOf(title, t.regions.sorted().joinToString(",").lowercase(), t.revision.orEmpty().lowercase(), t.version.orEmpty().lowercase(), t.discNumber?.toString().orEmpty()).joinToString("|")
-    }
+    /** A name with what tells copies apart kept and what doesn't dropped ([Ids.releaseTitle]). */
+    fun nameKey(name: String): String = Ids.releaseTitle(name)
 }
 
 /** One part of a RomM game as Fuse shows it: the base game, a disc, an update, DLC... */

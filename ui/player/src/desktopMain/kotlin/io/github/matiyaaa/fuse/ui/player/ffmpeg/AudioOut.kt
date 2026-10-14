@@ -60,6 +60,8 @@ internal class AudioOut {
             written += length / FRAME_BYTES
             line
         } ?: return
+        // A recording of Fuse hears Fuse Player too.
+        io.github.matiyaaa.fuse.ui.designsystem.sound.AudioTap.feed("player", bytes, 0, length, RATE, CHANNELS)
         var off = 0
         while (off < length) {
             val n = l.write(bytes, off, length - off)

@@ -622,12 +622,14 @@ internal class DefaultFuseStore private constructor(
                 mediaOps.fillNew(ids)
             }
         }
-        // The rest of the library finds missing art by itself after scans.
+        // The rest of the library finds missing art by itself after scans, and each disc's own serial
+        // is read once (Fuse Identity), so every part of Fuse knows the game by the game itself.
         ctx.scope.launch {
             engine.scan.map { it.phase }.distinctUntilChanged().collect { phase ->
                 if (phase == ScanPhase.DONE) {
                     delay(AUTO_FILL_DELAY_MS)
                     mediaOps.autoFill()
+                    runCatching { library.identifyLibrary() }
                 }
             }
         }

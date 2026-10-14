@@ -41,19 +41,49 @@ enum class RaHashMethod {
 
     /** PSP: PSP_GAME/PARAM.SFO followed by PSP_GAME/SYSDIR/EBOOT.BIN. */
     PSP,
+
+    /** Sega CD and Saturn: the first 512 bytes of the data track (its boot header). */
+    SEGA_CD,
+
+    /** Dreamcast: IP.BIN from the high-density area, then the boot file it names. */
+    DREAMCAST,
+
+    /** PC Engine CD: the boot sector's title and the boot program it loads. */
+    PC_ENGINE_CD,
+
+    /** PC-FX: the boot program named on the disc. */
+    PC_FX,
+
+    /** Neo Geo CD: the boot program named in IPL.TXT. */
+    NEO_GEO_CD,
+
+    /** 3DO: the Opera volume's LaunchMe program. */
+    THREE_DO,
+
+    /** Atari Jaguar CD: the boot program on the second session. */
+    JAGUAR_CD,
+
+    /** GameCube: the disc header, the apploader and the main program. */
+    GAMECUBE,
+
+    /** Wii: the header and the game partition's main program. */
+    WII,
+
+    /** Nintendo 3DS: the executable content of the dump, decrypted. */
+    NINTENDO_3DS,
 }
 
 /** Why Fuse did not produce a hash. Never guess: an unsupported hash is reported, not faked. */
 enum class RaHashUnsupportedReason(val message: String) {
-    DISC_IMAGE("This system's discs use rcheevos' per-system disc hashing, which Fuse does not implement yet"),
+    DISC_IMAGE("Fuse can't read this kind of disc image yet"),
     NINTENDO_DS("The file does not look like a Nintendo DS cartridge"),
-    NINTENDO_3DS("Nintendo 3DS hashing needs decrypted content; not implemented"),
+    NINTENDO_3DS("This 3DS dump is encrypted and no Azahar or Citra keys (sysdata/aes_keys.txt) were found"),
     UNKNOWN_CONSOLE("Fuse does not know how RetroAchievements hashes this console"),
     NOT_N64_ROM("The file does not start like a Nintendo 64 ROM (.z64/.v64/.n64/.ndd)"),
     EMPTY_FILE("The file is empty"),
-    NOT_A_DISC("The image has no readable ISO 9660 data track"),
+    NOT_A_DISC("The image has no readable data track"),
     NO_EXECUTABLE("The disc's boot executable could not be found"),
-    COMPRESSED("Compressed images (CHD, CSO, RVZ, PBP) cannot be hashed; Fuse matches them by name"),
+    COMPRESSED("This compressed image (7z, RAR, ECM, WBFS, NKit, or a Wii RVZ) can't be read; Fuse matches it by name"),
 }
 
 /** Result of [RaHasher.hash]. */
@@ -68,7 +98,8 @@ sealed interface RaHashResult {
 /**
  * RetroAchievements ROM hashing, following rcheevos' rc_hash (MIT licensed): the cartridge systems
  * (the "simple cases"), Nintendo DS and DSi, and the PlayStation, PlayStation 2 and PSP discs
- * ([RaDisc]) from uncompressed images. Other disc systems and 3DS are reported as unsupported.
+ * ([RaDisc]) from uncompressed images. Every other disc system, compressed images and the 3DS go
+ * through [RaFileHasher].
  *
  * Like rcheevos, at most the first [MAX_BUFFER_BYTES] of a file are read before header handling.
  */

@@ -85,24 +85,14 @@ import kotlinx.serialization.json.Json
 @Serializable
 internal data class Arrival(val from: String, val at: Long)
 
-/** A title alias cannot bridge two games once a serial or content identity is known. */
+/** A title alias cannot bridge two games once a serial or content identity is known ([GameMatcher.strongest]). */
 internal fun householdIdentityKeys(keys: Collection<String>, platform: String? = null, serial: String? = null): List<String> {
     val serialKey = serial?.takeIf { it.isNotBlank() }?.let { GameKey.of(platform.orEmpty(), it, null, "").id }
-    val strong = keys.filter { key ->
-        val identity = GameKey.parse(key)?.identity.orEmpty()
-        identity.startsWith("h.") || (identity.startsWith("s.") && (serialKey == null || key == serialKey))
-    }
-    return (listOfNotNull(serialKey) + strong).distinct().ifEmpty { keys.distinct() }
+    return io.github.matiyaaa.fuse.library.identity.GameMatcher.strongest(keys, serialKey)
 }
 
-internal fun householdIdentitiesMatch(left: Collection<String>, right: Collection<String>): Boolean {
-    val a = householdIdentityKeys(left)
-    val b = householdIdentityKeys(right)
-    val serialsA = a.filter { GameKey.parse(it)?.identity?.startsWith("s.") == true }
-    val serialsB = b.filter { GameKey.parse(it)?.identity?.startsWith("s.") == true }
-    if (serialsA.isNotEmpty() && serialsB.isNotEmpty() && serialsA.none { it in serialsB }) return false
-    return a.any { it in b }
-}
+internal fun householdIdentitiesMatch(left: Collection<String>, right: Collection<String>): Boolean =
+    io.github.matiyaaa.fuse.library.identity.GameMatcher.sameHousehold(left, right)
 
 private fun LibraryEntry.identityKeys(): List<String> = householdIdentityKeys(listOf(game) + ids, platform, serial)
 

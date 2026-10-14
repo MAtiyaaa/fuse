@@ -139,6 +139,8 @@ data class UiPrefs(
     val matching: MatchStrictness = MatchStrictness.NORMAL,
     /** Missing art and details are looked for by themselves after scans. */
     val autoFillArt: Boolean = true,
+    /** How long each game takes to beat, from HowLongToBeat, on its page. */
+    val howLongToBeat: Boolean = true,
     val autoRefreshFromCartridge: Boolean = true,
     /** Cartridge support as a whole; off hides every Cartridge feature. */
     val cartridgeEnabled: Boolean = true,

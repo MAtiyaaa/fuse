@@ -82,6 +82,7 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /** A play session Fuse started and has not closed yet. */
@@ -701,9 +702,9 @@ internal class DefaultLibraryOps(
     }
 
     /** [game]'s saves for [emulator], as Syncthing looks for them: by the game's own name and system, no profile needed. */
-    private fun plainSaveQuery(game: io.github.matiyaaa.fuse.model.Game, emulator: InstalledEmulator, core: String?): io.github.matiyaaa.fuse.sync.SaveQuery =
+    private suspend fun plainSaveQuery(game: io.github.matiyaaa.fuse.model.Game, emulator: InstalledEmulator, core: String?): io.github.matiyaaa.fuse.sync.SaveQuery =
         io.github.matiyaaa.fuse.sync.SaveQuery(
-            game = io.github.matiyaaa.fuse.sync.GameKey.of(game.platformId.value, game.tags.serial, null, game.titles.original),
+            game = householdKeyOf(game),
             platform = game.platformId.value,
             romPath = game.location.launchPath,
             emulatorId = emulator.id.value,
@@ -1132,7 +1133,7 @@ internal class DefaultLibraryOps(
         val stat = ctx.services.fs.stat(path) ?: return null
         val key = "$path|${stat.sizeBytes}|${stat.modifiedAt}"
         val serializer = io.github.matiyaaa.fuse.library.disc.DiscIdentity.serializer()
-        data.cache.get(DISC_CACHE, key, serializer, ctx.now())?.let { return it }
+        data.cache.get(DISC_CACHE, key, serializer, ctx.now())?.let { return it.also { d -> recordContentSerial(id, d.serial) } }
         val found = try {
             withContext(Dispatchers.Default) { discs.identify(path) }
         } catch (e: CancellationException) {
@@ -1141,8 +1142,71 @@ internal class DefaultLibraryOps(
             null
         } ?: return null
         data.cache.put(DISC_CACHE, key, found, serializer, ctx.now(), ttlMs = null)
+        recordContentSerial(id, found.serial)
         return found
     }
+
+    /** [game] as Fuse Identity sees it, with every serial and hash known for it. */
+    internal suspend fun evidenceOf(game: io.github.matiyaaa.fuse.model.Game): io.github.matiyaaa.fuse.library.identity.GameEvidence {
+        val facts = runCatching { data.identity.forGame(game.id) }.getOrDefault(emptyList())
+        return GameIdentities.evidence(game, facts)
+    }
+
+    /** The key Fuse Sync, Syncthing and the household know [game] by. */
+    private suspend fun householdKeyOf(game: io.github.matiyaaa.fuse.model.Game): io.github.matiyaaa.fuse.sync.GameKey =
+        io.github.matiyaaa.fuse.sync.GameKey.of(evidenceOf(game))
+
+    private val hltb by lazy { HltbStore(ctx) }
+
+    override suspend fun howLongToBeat(id: GameId) = runCatching { hltb.forGame(id) }.getOrNull()
+
+    override suspend fun howLongToBeatChoices(id: GameId) = runCatching { hltb.choices(id) }.getOrDefault(emptyList())
+
+    override suspend fun chooseHowLongToBeat(id: GameId, game: io.github.matiyaaa.fuse.integrations.hltb.HltbGame?) {
+        runCatching { hltb.choose(id, game) }
+    }
+
+    override suspend fun householdKeys(): Map<GameId, List<String>> {
+        return data.profileState.read().games.associate { r -> GameId(r.id) to LibraryProfileData.candidatesOf(r).map { it.id } }
+    }
+
+    /** Remembers the serial read from a game itself, which Fuse Identity trusts over its name's. */
+    private suspend fun recordContentSerial(id: GameId, serial: String?) {
+        val value = io.github.matiyaaa.fuse.library.identity.Ids.serialOrNull(serial) ?: return
+        val known = runCatching { data.identity.forGame(id) }.getOrDefault(emptyList())
+            .filter { it.kind == io.github.matiyaaa.fuse.data.repo.IdentityRepository.SERIAL_CONTENT }.map { it.value }
+        if (known == listOf(value)) return
+        runCatching { data.identity.replace(id, io.github.matiyaaa.fuse.data.repo.IdentityRepository.SERIAL_CONTENT, listOf(value), "disc") }
+    }
+
+    /**
+     * Reads the serial of every disc and folder game that hasn't had it read yet (only a few
+     * kilobytes from each: a disc's header, a PARAM.SFO), so Fuse Identity knows each by the game
+     * itself. Runs after scans; what was read is kept, so later runs only read new games.
+     */
+    internal suspend fun identifyLibrary(): Unit = identifyLock.withLock {
+        val known = runCatching { data.identity.all() }.getOrDefault(emptyMap())
+        val done = known.filterValues { facts -> facts.any { it.kind == io.github.matiyaaa.fuse.data.repo.IdentityRepository.SERIAL_CONTENT } }.keys
+        for (platform in IDENTIFIED_PLATFORMS) {
+            val ids = runCatching { data.games.inPlatform(PlatformId(platform)).map { it.first } }.getOrDefault(emptyList())
+            for (id in ids) {
+                if (id.value in done) continue
+                kotlinx.coroutines.yield()
+                val game = data.games.get(id) ?: continue
+                if (game.appId != null) continue
+                runCatching {
+                    when (platform) {
+                        "psx", "ps2" -> discIdentity(id)
+                        "ps3" -> ps3TitleId(game)?.let { recordContentSerial(id, it) }
+                        "ngc", "wii" -> nintendoGameId(game)?.takeIf { game.tags.serial == null }?.let { recordContentSerial(id, it) }
+                        else -> null
+                    }
+                }
+            }
+        }
+    }
+
+    private val identifyLock = kotlinx.coroutines.sync.Mutex()
 
     /** The image to read: the first disc, and for a cue sheet the track file it names first. */
     private suspend fun discImage(game: io.github.matiyaaa.fuse.model.Game): String? {
@@ -1393,6 +1457,9 @@ private fun io.github.matiyaaa.fuse.data.repo.RecommendationRow.toRecGame() = Re
 
 /** Systems whose disc images say their serial in SYSTEM.CNF. */
 private val DISC_PLATFORMS = setOf("ps2", "psx")
+
+/** Systems whose games carry their own id, read by [DefaultLibraryOps.identifyLibrary]. */
+private val IDENTIFIED_PLATFORMS = listOf("psx", "ps2", "ps3", "ngc", "wii")
 
 /** Cache namespace for [io.github.matiyaaa.fuse.library.disc.DiscIdentity], keyed by path, size and change time. */
 private const val DISC_CACHE = "disc.identity"

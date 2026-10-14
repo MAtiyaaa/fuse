@@ -737,6 +737,8 @@ internal fun AuditDriver.gameScreens(exhaustive: Boolean) {
         shoot("at the very end", 1_500)
     }
 
+    beatScreens()
+
     scenario("game", "dlc and updates") {
         useLibrary()
         openGame("Aurora Outpost")
@@ -1254,5 +1256,23 @@ private fun AuditDriver.withSnesRows(block: () -> Unit) {
             val missing = withTimeout(10_000) { libraryStore.library.games(GameQuery(set = GameSet.MISSING)).first { list -> list.count { it.title.startsWith("Folding Test") } == extra.size } }
             missing.filter { it.title.startsWith("Folding Test") }.forEach { libraryStore.library.forgetMissing(it.id) }
         }
+    }
+}
+
+/** How long a game takes to beat, beside its play time, and its sheet: on every kind of screen. */
+internal fun AuditDriver.beatScreens() {
+    scenario("game", "how long to beat") {
+        useLibrary()
+        openGame("Emberline Saga")
+        settle(1_500)
+        tap(PadButton.DPAD_DOWN)
+        shoot("play time focused, how long to beat beside it")
+        tap(PadButton.DPAD_RIGHT)
+        shoot("how long to beat focused")
+        tap(PadButton.A)
+        settle(600)
+        shoot("its times and the way to change the game")
+        tap(PadButton.B)
+        settle(400)
     }
 }

@@ -332,6 +332,9 @@ interface ReleaseInstaller {
      */
     val inPlace: Boolean get() = true
 
+    /** Why Fuse can't update itself here, when [inPlace] is false and it knows; said beside the release page. */
+    val manualReason: String? get() = null
+
     /**
      * Downloads [asset] into the cache, verifies its `sha256:` digest when GitHub published one, and
      * opens the system installer (Android) or places the new AppImage next to the running one and
@@ -456,6 +459,12 @@ interface EmulatorFiles {
      * folder its `vfs.yml` moved `/dev_hdd0/` to). Not checked to exist; empty where unknown.
      */
     suspend fun rpcs3Storage(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): List<String> = emptyList()
+
+    /** RPCS3's config folder for [installed] (where `patches/` and its settings are); null until it has one. */
+    suspend fun rpcs3Config(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
+
+    /** shadPS4's user folder for [installed] (where `patches/` is); null until it has one. */
+    suspend fun shadPs4User(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
 
     /** Vita3K's pref paths for [installed] (where its `ux0` lives): `config.yml`'s `pref-path`, else its defaults. */
     suspend fun vita3kStorage(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): List<String> = emptyList()

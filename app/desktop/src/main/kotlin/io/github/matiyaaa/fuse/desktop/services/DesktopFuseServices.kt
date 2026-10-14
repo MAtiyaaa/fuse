@@ -88,7 +88,7 @@ class DesktopFuseServices private constructor(
     override val launcher: GameLauncher = desktopLauncher
     override val cartridge: CartridgeBridge = if (os == DesktopOs.LINUX) DesktopCartridgeBridge(dirs) else NoCartridgeBridge
     override val installer: ReleaseInstaller =
-        if (os == DesktopOs.LINUX) DesktopReleaseInstaller(dirs, http) else PageReleaseInstaller(PageReleaseInstaller.platformFor(os))
+        if (os == DesktopOs.LINUX) DesktopReleaseInstaller(dirs, http) else SystemReleaseInstaller(dirs, http, os)
 
     /** The Store's programs: fetched from their releases and put where Fuse finds emulators. */
     override val desktopApps: io.github.matiyaaa.fuse.ui.shell.store.DesktopInstaller =
