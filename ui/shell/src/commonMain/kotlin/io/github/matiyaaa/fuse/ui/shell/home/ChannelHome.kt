@@ -590,7 +590,7 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                         .weight(1f)
                         .fillMaxWidth()
                         // Fii's board ends at its bar: nothing scrolls under it or shows through it.
-                        .padding(bottom = if (fiiBar > 0.dp) fiiBar + Size.hintHeight else 0.dp)
+                        .padding(bottom = if (fiiBar > 0.dp) fiiBar + Size.hintHeight + Space.l else 0.dp)
                         .clipToBounds()
                         .onGloballyPositioned {
                             containerTopLeft = it.positionInRoot()

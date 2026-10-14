@@ -69,6 +69,11 @@ Home is reachable end to end, and the Library's All view is rebuilt.
   - The bar is compact on short screens and when the screens are flipped, so the board keeps its room.
   - The round menu's liquid glass looked muddy over Fii's white; on bright themes it is now a near
     solid gloss with its shadow.
+- **The Library's Installed grid:** once the stage folded, the game's logo shrank to a speck under
+  the system's name. The name now tucks away with it, and the logo stays readable.
+- The quick menu's Home tile said Fused whatever Home you used; it names the Home in use.
+- On Fii's Home, the page dots sat on top of the board's last cards; they have their own room above
+  the bar.
 - **On a game's page,** Down from Play didn't reach the More button when it had wrapped under Play
   (it acted as Right). The button row now moves by where buttons actually are.
 
@@ -78,3 +83,24 @@ Home is reachable end to end, and the Library's All view is rebuilt.
   PCSX2's own layout, so its patches can be reached there. AetherSX2 and NetherSX2 keep theirs in
   Android/data, which Android 11 and later close to other apps. Fuse has no Android side for emulator
   files yet; it is planned, starting with ARMSX2 and PPSSPP.
+
+## Fuseline
+
+Fuseline 4.2 measured against Fuseline 4, 3.1, 3, 2 and 1 (kept in the tests exactly as they
+shipped) and Compose, on 111 cases with OpenJDK on Linux: clearly first in 33, level with the best
+within run-to-run noise in the other 78, and behind in none. The one case where another engine
+came out ahead in a short run (100 colours read every frame, Fuseline 3.1 at 19.7 µs against
+22.1 µs) measured level over 21 rounds (17.0 µs against 17.7 µs). Some of the clear wins:
+
+| Each frame | Fuseline 4.2 | Fuseline 4 | Fuseline 3.1 | Compose |
+|---|--:|--:|--:|--:|
+| 1,000 springs given a new target every frame | 316 µs | 748 µs | 1,341 µs | 28,264 µs |
+| 1,000 values in mixed motions | 196 µs | 398 µs | 413 µs | 3,136 µs |
+| Tabs changed every 3 frames | 3.6 µs | 5.0 µs | 6.4 µs | 86.7 µs |
+
+## README
+
+The README is rewritten: new screenshots and a short tour taken from Fuse 0.4.2.13 with a real
+household library, RomM and Jellyfin, everything Fuse can do in one list, and a shorter Fuseline
+section.
+

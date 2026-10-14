@@ -569,7 +569,7 @@ object ThemePresets {
             dark = false,
             background = 0xFFF2F3F5, surface = 0xFFFFFFFF, surfaceRaised = 0xFFF7F8FA,
             accent = 0xFF0B7AC0, accentSoft = 0x2641B4EA, onAccent = 0xFFFFFFFF,
-            textPrimary = 0xFF323840, textSecondary = 0xFF59616B, focusRing = 0xFF1C9BE0,
+            textPrimary = 0xFF323840, textSecondary = 0xFF59616B, focusRing = 0xFF0A85BF,
             success = 0xFF1C8350, warning = 0xFF9A5B00, danger = 0xFFC62837,
         ),
         background = BackgroundStyle.TRIO,

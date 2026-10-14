@@ -15,8 +15,8 @@ import kotlin.math.sin
  */
 internal class DuoScene(look: SceneLook) : Scene(look) {
     private val night = look.dark
-    private val line = if (night) Color.White.copy(alpha = 0.045f * k) else Color(0xFF8E98A4).copy(alpha = 0.2f * k)
-    private val major = if (night) Color.White.copy(alpha = 0.075f * k) else Color(0xFF8E98A4).copy(alpha = 0.32f * k)
+    private val line = if (night) Color.White.copy(alpha = 0.08f * k) else Color(0xFF8E98A4).copy(alpha = 0.2f * k)
+    private val major = if (night) Color.White.copy(alpha = 0.13f * k) else Color(0xFF8E98A4).copy(alpha = 0.32f * k)
     private val lit = look.accent.copy(alpha = (if (night) 0.16f else 0.13f) * k)
     private var top: Brush = Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent))
     private var bottom: Brush = Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent))

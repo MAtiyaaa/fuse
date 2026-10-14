@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.quick
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.shell.home.label
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -400,7 +401,7 @@ fun QuickMenu(app: AppState) {
             }
         }
         QuickId.CARTRIDGE -> QuickTile(sections.label(Destination.CARTRIDGE), sections.icon(Destination.CARTRIDGE)) { close(); app.selectTab(Destination.CARTRIDGE) }
-        QuickId.HOME_STYLE -> QuickTile("Home", if (prefs.home.mode == HomeMode.CHANNELS) FuseIcons.Grid else FuseIcons.Rows, detail = if (prefs.home.mode == HomeMode.CHANNELS) "Fused" else "Network") {
+        QuickId.HOME_STYLE -> QuickTile("Home", if (prefs.home.mode == HomeMode.CHANNELS) FuseIcons.Grid else FuseIcons.Rows, detail = prefs.home.style.label()) {
             app.switchHomeStyle()
         }
         QuickId.SOUND -> {
