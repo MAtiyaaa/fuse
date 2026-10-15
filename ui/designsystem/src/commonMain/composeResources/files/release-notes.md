@@ -16,6 +16,14 @@ updates and DLC from your other devices, and a sharper, steadier picture on Linu
 - **Updates and DLC from another device.** When another of your devices has updates or DLC for a
   game that this copy doesn't, the game's page offers **Get 2 updates and 1 DLC** (or whatever it
   has). Only those files come over, beside the game, which stays as it is.
+- **Switch saves from your phone.** Import Saves has **From Your Phone**: in Phone Link on your
+  phone, Tools, **Send Switch Saves**, choose a ZIP of the JKSV folder (or, from a computer's
+  browser, the whole folder), and the Switch import opens here with them. Send them again any
+  time, for saves you already imported too: the newest backup of each game is chosen first.
+- **Fuse looks after your Switch card's emuMMC.** Each time Fuse sees a Switch SD card whose emuMMC
+  is on, it keeps a copy of the small files that tell Hekate where the emuMMC is. If the card loses
+  them later (Hekate then says "emuMMC is forced but not enabled"), From a Switch offers **Put Back
+  emuMMC Settings**, which restores exactly those files and nothing else.
 - **Identify Game for games on your other devices.** A game on Fuse One that isn't here has
   Identify Game in its menu, to choose the right game for its art and details.
 
@@ -25,6 +33,9 @@ updates and DLC from your other devices, and a sharper, steadier picture on Linu
   save instead of being a second card, and a game Fuse found twice is shown once.
 - The Switch import's buttons stay on screen, however long the list: **Import** is always in reach
   with a controller.
+- On Android, **From a Switch** first explains that Android checks and "repairs" every SD card put
+  in it, which can delete the files a Switch needs to start its emuMMC, and offers safer ways:
+  sending the saves from your phone, or choosing a copy of the JKSV folder.
 - Importing straight off a Switch's SD card plugged into this device ends with a reminder to eject
   the card before taking it out. A card pulled out while Android still writes to it can lose the
   files the Switch's boot loader needs to find its emuMMC.
@@ -36,7 +47,10 @@ updates and DLC from your other devices, and a sharper, steadier picture on Linu
   them in your library (nothing on disk changes).
 - In Library, All, **Left** from a shelf's first game goes straight to its **See all**.
 - On Android, a game tile at rest no longer casts a shadow; a selected tile still lifts with one.
-  Scrolling a grid no longer works out a shadow for every tile on every frame.
+  Scrolling a grid no longer works out a shadow for every tile on every frame, and a tile that has
+  never been selected starts no animation work, so a fast scroll composes new tiles faster.
+- On computers, game art is drawn with a smoother filter, so it stays sharp when a selected tile
+  grows or the desktop is scaled.
 
 ## Fixed
 

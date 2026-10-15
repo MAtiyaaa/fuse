@@ -120,7 +120,10 @@ fun Artwork(
             .size(decodeSizer).scale(if (fit) Scale.FIT else Scale.FILL)
             .build()
     }
-    val loader = rememberAsyncImagePainter(request, contentScale = if (backdrop) ContentScale.Fit else contentScale)
+    // On a computer, art is drawn with mipmaps: sharper where it is scaled (a tile lifting, a
+    // fractional desktop scale) instead of the plainest filter. Android keeps the plainest, for speed.
+    val filter = if (io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.cachedLayers) androidx.compose.ui.graphics.FilterQuality.Low else androidx.compose.ui.graphics.FilterQuality.Medium
+    val loader = rememberAsyncImagePainter(request, contentScale = if (backdrop) ContentScale.Fit else contentScale, filterQuality = filter)
     val state by loader.state.collectAsStateCompat()
     val success = state as? AsyncImagePainter.State.Success
     val failed = state is AsyncImagePainter.State.Error
