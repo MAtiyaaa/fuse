@@ -21,7 +21,9 @@ updates and DLC from your other devices, and a sharper, steadier picture on Linu
   browser, the whole folder), and the Switch import opens here with them. Send them again any
   time, for saves you already imported too: the newest backup of each game is chosen first.
 - **Fuse looks after your Switch card's emuMMC.** Each time Fuse sees a Switch SD card whose emuMMC
-  is on, it keeps a copy of the small files that tell Hekate where the emuMMC is. If the card loses
+  is on, it keeps a copy of the few hundred bytes that tell Hekate where the emuMMC is
+  (`emuMMC/emummc.ini` and the emuMMC folder's `raw_based` or `file_based`), never the emuMMC
+  itself. If the card loses
   them later (Hekate then says "emuMMC is forced but not enabled"), From a Switch offers **Put Back
   emuMMC Settings**, which restores exactly those files and nothing else.
 - **Identify Game for games on your other devices.** A game on Fuse One that isn't here has
