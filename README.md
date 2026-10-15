@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.2.17 is the <b>Native Update</b>: saves from a modded Switch, and every emulator in the Linux Store</sub><br>
+<sub>0.4.2.18 is the <b>Native Update</b>: saves from a modded Switch, and every emulator in the Linux Store</sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -430,11 +430,11 @@ Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.4.2.17 "The Native Update"**: saves backed up on a modded Switch with JKSV or
-> Checkpoint come in one game at a time (is this the game, whose save is it, then into Eden), and
-> every emulator Fuse knows on Linux is in the Store, installed by Fuse: Eden from its own server,
-> AppImages and archives as each project publishes them, and Flathub for the rest. 0.4.2.17 fixes
-> JKSV backups that list a file twice. See [the release notes](docs/releases/0.4.2.17.md); every earlier
+> **Fuse 0.4.2.18 "The Native Update"**: saves backed up on a modded Switch with JKSV or
+> Checkpoint come in one game at a time (is this the game, whose save is it, then into Eden), for
+> the games here or every game in your library, and every emulator Fuse knows on Linux is in the
+> Store, installed by Fuse. Each profile can have its own RetroAchievements account, and a game's
+> updates and DLC come from your other devices. See [the release notes](docs/releases/0.4.2.18.md); every earlier
 > release is in [CHANGELOG.md](CHANGELOG.md).
 
 Fuse runs on Android handhelds and phones, Linux (including SteamOS and its Game Mode), Windows and
