@@ -181,7 +181,7 @@ fun Tile(
                 val scale = 1f + minOf(focusScale - 1f, cap) * lift + minOf(hoverScale, cap) * hover * (1f - lift) - minOf(pressDepth, cap) * p
                 scaleX = scale
                 scaleY = scale
-                val rest = Elevation.tile.shadow.toPx()
+                val rest = if (io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.restingShadows) Elevation.tile.shadow.toPx() else 0f
                 val up = Elevation.tileFocused.shadow.toPx()
                 // A pressed tile is pushed toward the surface, so its shadow tightens.
                 shadowElevation = if (!surface) 0f else (rest + (up - rest) * raised) * (1f - 0.45f * p.coerceIn(0f, 1f))

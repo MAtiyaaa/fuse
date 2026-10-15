@@ -54,6 +54,14 @@ object Drawing {
     @Volatile
     var tintedShadows: Boolean = true
 
+    /**
+     * Whether a tile at rest casts its small shadow. Android works a shadow out again each frame its
+     * tile moves on screen, so a scrolling grid of shadowed tiles cost the render thread a shadow per
+     * tile per frame: there only a lifted tile casts one, and a tile at rest keeps its light edge.
+     */
+    @Volatile
+    var restingShadows: Boolean = true
+
     /** Shown on a TV or another large screen (4K and up), where the window's dither is made stronger. */
     @Volatile
     var largeOutput: Boolean = false

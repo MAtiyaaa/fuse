@@ -92,6 +92,8 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
         io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.cachedLayers = true
         // RenderEffect blur arrived in Android 12.
         io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.backdropBlur = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+        // A shadow is worked out again each frame its tile moves: only a lifted tile casts one.
+        io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.restingShadows = false
         super.onCreate()
         crashLog.install()
         // Heat and battery saver reach Fuseline: decoration eases off, interaction never does.
