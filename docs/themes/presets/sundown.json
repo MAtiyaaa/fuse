@@ -28,7 +28,6 @@
   "sound": "click",
   "quickMenu": "solid",
   "widgets": "tinted",
-  "tiles": "plain",
   "glass": {
     "enabled": false,
     "blur": 24.0,

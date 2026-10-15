@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.sync
 
+import io.github.matiyaaa.fuse.ui.designsystem.focus.glideTo
 import androidx.compose.foundation.background
 import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.border
@@ -261,12 +262,12 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
         // line and the tabs away; back up at the actions, everything is in view again.
         LaunchedEffect(inList, sel.index, games.size) {
             if (!inList) {
-                if (!inRest) list.animateScrollToItem(0)
+                if (!inRest) list.glideTo(0)
                 return@LaunchedEffect
             }
             // In the games, they have the whole height: the first one goes to the top, then the one
             // before the chosen one stays above it.
-            list.animateScrollToItem(firstGame + maxOf(0, sel.index - 1))
+            list.glideTo(firstGame + maxOf(0, sel.index - 1))
         }
         // Short screens (the AYN Thor's upper one) get slimmer rows: four or more always in view.
         val rowHeight = when {

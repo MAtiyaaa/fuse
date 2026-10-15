@@ -67,10 +67,9 @@ out).
 | `corners` | How round tiles and panels are | `soft`, `round`, `sharp`, `pill` |
 | `focus` | How the chosen tile is shown | `glow` (a halo in its colour), `ring` (an outline), `bar` (a bar under it) |
 | `motion` | How much moves | `reduced`, `minimal`, `standard`, `enhanced` |
-| `sound` | Navigation sounds | `off`, `soft`, `click`, `chime`, `bubble` (round notes that rise a little as they start), `pip` (short bright blips with a hollow, square edge), `tap` (soft wooden taps with a little ring) |
+| `sound` | Navigation sounds | `off`, `soft`, `click`, `chime` |
 | `quickMenu` | How the quick menu's tiles and widgets are drawn | `soft` (faint tint), `solid` (raised panel colour), `outlined` (edges only), `glass` (a light across the top) |
 | `widgets` | How Home's widgets are drawn | `lit` (the panel lit from a corner in the widget's colour), `tinted` (washed in its own colour), `glass` (frosted over the room, a light across the top) |
-| `tiles` | How game and system tiles are framed | `plain` (the art edge to edge), `gloss` (a rounded white frame, silver in a dark theme, with a gloss across the top and a focus ring that breathes), `panel` (a flat card with a thin grey frame) |
 | `glass` | Frosted panels | `true`, `false`, or `{ "enabled", "blur" (0 to 48), "opacity" (0.3 to 1) }` |
 | `crt` | The CRT effect | `true`, `false`, or `{ "enabled", "scanlines" (0 to 0.6), "bloom", "curvature", "chromatic", "vignette" (0 to 1) }` |
 
@@ -125,9 +124,6 @@ lights the room instead.
 | `mesh` | Pastel lights blending like mother of pearl | One of the lights |
 | `contours` | The contour lines of a quiet landscape, drawn in the text colour | Not used |
 | `dunes` | Warm dunes under a high sun | The sand |
-| `fii` | Fine silver pinstripes under a soft light, with glassy bubbles rising slowly through | Not used |
-| `duo` | Faint graph paper drifting slowly, a band of grey light along the top and bottom, and squares of the accent lighting in turn | Not used |
-| `trio` | A soft light over a fine grid of dots, with wide sheens crossing it on the diagonal | Not used |
 
 ## Built-in themes
 
@@ -148,9 +144,6 @@ Each built-in theme can be named in `extends`. They are listed as the gallery sh
 | `blades` | Blades | Bold panels, sharp edges, green light | `aurora` |
 | `sundown` | Sundown | A neon sun over an endless grid | `horizon` |
 | `crt` | CRT | Scanlines and phosphor glow | `grid` |
-| `fii-night` | Fii Night | Fii after dark, the bubbles glowing | `fii` |
-| `duo-night` | Duo Night | Duo with the lights down | `duo` |
-| `trio-night` | Trio Night | Trio after dark, the dots glowing | `trio` |
 | `daylight` | Daylight (bright) | Fuse in a bright room | `hero` |
 | `paper-mint` | Paper Mint (bright) | A bright desk with a cool green accent | `stripes` |
 | `channels` | Fused (bright) | Bright tiles you arrange yourself | `stripes` |
@@ -159,19 +152,6 @@ Each built-in theme can be named in `extends`. They are listed as the gallery sh
 | `ridge` | Ridge (bright) | Contour lines on a quiet map | `contours` |
 | `olive` | Olive (bright) | Four shades on a dot-matrix screen | `lcd` |
 | `fusi` | Fusi (bright) | Pink, cute, and Fusi the dog at play | `fusi` |
-| `fii` | Fii (bright) | Bright, glossy and calm, with bubbles | `fii` |
-| `duo` | Duo (bright) | Graph paper, flat cards and bright blips | `duo` |
-| `trio` | Trio (bright) | Glossy icons over a dotted light | `trio` |
-
-Fii and Fii Night come with a Home of their own. Choosing one of them the first time unlocks Fii's
-Home and asks whether to use it: your board as glossy channels, with the clock and date along a bar
-at the bottom. It then stays in Settings, Home, Home style, beside Fused and Network, and works with
-every theme, in that theme's colours.
-
-Duo and Trio (and their nights) do the same with Homes of their own. Duo's is your board as flat
-cards on graph paper, with the time and date in a lit panel on a bevelled grey strip between two
-squared buttons, like a dual-screen handheld's menu. Trio's is your board as glossy icons over a
-dotted light, with a rounded toolbar along the bottom, like a 3D handheld's home.
 
 ## Readable by design
 

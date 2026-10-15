@@ -199,7 +199,6 @@ fun ThemesScreen(app: AppState) {
 
     fun use(spec: ThemeSpec) {
         if (spec.id == app.store.prefs.value.themeId) return
-        // Fii's themes may ask about Fii's Home (useTheme).
         app.useTheme(spec)
         view.flourish++
         app.toasts.show("Now using ${spec.name}", ToastKind.SUCCESS)

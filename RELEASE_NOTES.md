@@ -1,106 +1,52 @@
-# Fuse 0.4.2.13 - The Native Update
+# Fuse 0.4.2.14 - The Native Update
 
-Profiles switch at once, the second screen lets go of what you left, Jellyfin shows its logos, Fii's
-Home is reachable end to end, and the Library's All view is rebuilt.
-
-## New
-
-- **Duo and Trio, each in light and at night.** Two new theme families, each with a Home of its
-  own that the theme unlocks and asks about, as Fii's does:
-  - **Duo** and **Duo Night**, after a dual-screen handheld's menu. Faint graph paper drifts slowly
-    behind everything, with squares of blue lighting in turn. Tiles are flat cards in thin grey
-    frames, and the sounds are short, bright blips. Duo's Home puts the time and date in a lit
-    panel on a bevelled grey strip, between two squared buttons.
-  - **Trio** and **Trio Night**, after a 3D handheld's home. A soft light falls over a fine grid of
-    dots, with wide sheens crossing it now and then. Tiles are glossy, rounded icons, and the sounds
-    are soft wooden taps. Trio's Home has a rounded white toolbar along the bottom, with glossy
-    buttons at each end.
-  - Duo's and Trio's Homes stay in Settings, Home, Home style once unlocked, and work with every
-    theme in its colours. Moving between a theme's light and night asks nothing.
-  - Community themes can use the new pieces too: the `duo` and `trio` backgrounds, the `pip` and
-    `tap` sounds, and `"tiles": "panel"` (docs/THEMES.md).
-- **Jellyfin on the second screen.** Focusing a film, show or episode shows a card like a game's:
-  the logo, the episode and its name, the year, length and rating, where you're up to with a bar and
-  the minutes left, and the overview.
-- **Ignition sounds.** Fuse's start-up animation now plays a match strike, the flare as it catches,
-  then the ignition. The first-start opening has its own strike and flare, and a warm swell when the
-  view pulls back and expands. Every sound is made by Fuse's own synthesizer, like the others.
-- **The game's options are tabs like the quick menu's.** The sections expand as you move between
-  them, with liquid glass where it's on, and L1 and R1 step through them while L2 and R2 jump to the
-  first and last.
+Lists glide instead of jumping, tile art is ready before it scrolls in, every part of a game's page
+is in reach, the start-up keeps one sound, and Fii, Duo and Trio are gone.
 
 ## Changed
 
-- **Switching profiles is instant.** Someone this device already knows switches straight away from
-  what is kept on the device (their saves, settings and play time, as last synced), online or not.
-  Fuse One is asked afterwards, in the background, and anything newer is brought in then. A profile
-  removed on another device, or a PIN changed there, takes you back to the profile you came from,
-  with the reason. Before, a switch waited behind any sync that was running and then for the host,
-  which could take minutes. Fuse One's activity log now says how long each switch took.
-- **Jellyfin widgets show the title's logo** instead of its name (an episode shows its show's logo),
-  falling back to the name where there is no logo. Network's stage shows it too. Albums keep their
-  names.
-- **The Library's All view, rebuilt.** A stage above the shelves names whatever you're on (its logo,
-  where it is, its system and year, or a system's count), always in the same place so the page never
-  jumps. Every shelf has a title, a count and its own See all, the shelves only scroll when the one
-  you're on isn't wholly in view, and L2 and R2 jump six games along a shelf.
-- **Smoother first scroll through the Library.** Tile art is decoded from a small copy kept on disk
-  (made once, off the screen's thread) instead of the full picture every time, and the Library
-  prefetches a whole row ahead, so a fling through a freshly updated library no longer stutters while
-  art loads.
-- **Sharper text on a TV.** On Linux, Windows and macOS letters are hinted fully, so their stems land
-  on whole pixels and text reads as crisply as on Android. Steam's Game Mode still needs Fuse's Game
-  Resolution set to Native for a sharp picture (Settings says so when it isn't).
-- **Fewer bands in gradients.** The dark scrims over art on Home, tiles, the player, the Store and the
-  setup pages, and the soft light at the top and bottom of the scenes behind everything, now get
-  the same fine noise before rounding that the backgrounds have had since 0.4.2.9.
+- **Shelves and lists glide.** Moving down the Library's All view, the shelves now glide to the
+  next one with Fuseline's follow spring, measured on every frame. Before, the page snapped across
+  in a couple of frames while the shelf you left closed its name line above, so it jumped and
+  sometimes went past. A shelf that already shows whole still doesn't scroll. The same glide now
+  moves:
+  - the rows of every shelf, from RomM, other devices and streaming;
+  - the household and streaming pages;
+  - Downloads, offline Jellyfin and the sync pages;
+  - the sectioned game grids.
+- **Tile art is ready as you scroll.** The art of the next rows was being decoded ahead of time,
+  but at a slightly different size, and fitted where the tile crops it. The memory cache only hands
+  an image to a request of the same size, so every tile was decoded again from disk as it scrolled
+  in and showed an empty frame first. Art is now decoded ahead exactly as each tile asks for it, in
+  the Library's grids and on Home's shelves, so a quick scroll down Installed shows art straight
+  away.
+- **One sound at the start.** The start-up animation no longer plays the match strike and the flare
+  as the spark runs. It plays one sound at its climax, as the spark bursts. The first-start opening
+  is the same: its strike, flare and swell are gone, and its one sound comes as the mark lights.
+
+## Removed
+
+- **Fii, Duo and Trio**, light and night, with their Homes, backgrounds, glossy and panel tiles, and
+  the Bubble, Pip and Tap sounds. Anyone using one of them is moved over the first time this
+  version starts:
+  - a removed theme becomes Fuse;
+  - a removed Home becomes the Fused board, with every tile where it was;
+  - a removed sound becomes Soft.
+- Community themes that name the `fii`, `duo` or `trio` background, a removed sound or `tiles` still
+  load. The parts Fuse no longer has fall back to the theme they start from, and the note says so.
 
 ## Fixed
 
-- The second screen kept a game long after you'd left it: back on Home on a widget without a game
-  (the clock, the weather), or on a page that sets no game, it showed the last game's art. It now
-  follows what's on the main screen and goes back to its idle page.
-- **Fii's Home (and now Duo's and Trio's):**
-  - Cards and carousels slid under the bar; the board now stops above it.
-  - The bar's two buttons couldn't be reached with a controller. Down past the board's last row now
-    lands on them (Sections, then the quick menu, Left and Right between them, Up or Back to return).
-    The focused button lights its ring, with hints for each.
-  - Tiles took two taps to open with touch or a mouse; one does.
-  - The bar is compact on short screens and when the screens are flipped, so the board keeps its room.
-  - The round menu's liquid glass looked muddy over Fii's white; on bright themes it is now a near
-    solid gloss with its shadow.
-- **The Library's Installed grid:** once the stage folded, the game's logo shrank to a speck under
-  the system's name. The name now tucks away with it, and the logo stays readable.
-- The quick menu's Home tile said Fused whatever Home you used; it names the Home in use.
-- On Fii's Home, the page dots sat on top of the board's last cards; they have their own room above
-  the bar.
-- **On a game's page,** Down from Play didn't reach the More button when it had wrapped under Play
-  (it acted as Right). The button row now moves by where buttons actually are.
-
-## Not in this release
-
-- Native patches on Android. ARMSX2 can keep its data in a folder you choose in shared storage, with
-  PCSX2's own layout, so its patches can be reached there. AetherSX2 and NetherSX2 keep theirs in
-  Android/data, which Android 11 and later close to other apps. Fuse has no Android side for emulator
-  files yet; it is planned, starting with ARMSX2 and PPSSPP.
-
-## Fuseline
-
-Fuseline 4.2 measured against Fuseline 4, 3.1, 3, 2 and 1 (kept in the tests exactly as they
-shipped) and Compose, on 111 cases with OpenJDK on Linux: clearly first in 33, level with the best
-within run-to-run noise in the other 78, and behind in none. The one case where another engine
-came out ahead in a short run (100 colours read every frame, Fuseline 3.1 at 19.7 µs against
-22.1 µs) measured level over 21 rounds (17.0 µs against 17.7 µs). Some of the clear wins:
-
-| Each frame | Fuseline 4.2 | Fuseline 4 | Fuseline 3.1 | Compose |
-|---|--:|--:|--:|--:|
-| 1,000 springs given a new target every frame | 316 µs | 748 µs | 1,341 µs | 28,264 µs |
-| 1,000 values in mixed motions | 196 µs | 398 µs | 413 µs | 3,136 µs |
-| Tabs changed every 3 frames | 3.6 µs | 5.0 µs | 6.4 µs | 86.7 µs |
-
-## README
-
-The README is rewritten: new screenshots and a short tour taken from Fuse 0.4.2.13 with a real
-household library, RomM and Jellyfin, everything Fuse can do in one list, and a shorter Fuseline
-section.
-
+- **On a game's page, How long to beat couldn't be reached** when it wrapped under play time on a
+  narrower screen. Down acted as if it were beside play time and left the row. Play time and How
+  long to beat now move by where they actually are, as the buttons above them have since 0.4.2.13.
+  The same goes for the disc buttons and RomM's download buttons when they wrap.
+- **On a game's page, coming back up to play time left it off screen.** The page only ever scrolled
+  down to it, so Up from Available on stopped on play time with the page still showing what was
+  below. It now scrolls back up until play time's top is in view.
+- **The theme filters overlapped.** Choosing Dark or Bright opened the count beside it while the
+  next filter slid back to where it had been, so for a moment the pill ran into the word after it
+  ("Dark 16Bright"). The filters now make room as the count opens. Tabs still slide aside when they
+  are put in another order.
+- The README's pictures and tour showed the removed themes. They are left out, and the tour is cut
+  again from the Library, a game's page, Systems and Jellyfin.

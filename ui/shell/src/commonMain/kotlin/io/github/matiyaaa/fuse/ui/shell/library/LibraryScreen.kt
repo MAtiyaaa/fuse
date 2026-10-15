@@ -348,7 +348,14 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     var columns by remember { mutableIntStateOf(6) }
     // By rows: a grid's next rows are ready as it scrolls.
     val span = if (layout == LibraryLayout.COMPACT_LIST) 1 else columns
-    PrefetchArt(tileArt, state.grid.index, size = LocalTileMetrics.current.icon * 1.4f, span = span)
+    // The size the tiles are laid out at (a selected tile only scales up as it draws): a square tile
+    // crops its art, except box art shown whole over its own blur.
+    val squareFill = remember(list) { list.orEmpty().map { a -> a.art.square != null || a.art.icon != null || a.art.boxart == null } }
+    PrefetchArt(
+        tileArt, state.grid.index, size = LocalTileMetrics.current.icon, span = span,
+        fillAt = { i -> layout != LibraryLayout.ICON || squareFill.getOrElse(i) { true } },
+        asTiles = true,
+    )
     PrefetchArt(remember(list) { list.orEmpty().map { it.art.logo } }, state.grid.index, size = LOGO_PREFETCH)
     val special = scope == LibraryScope.All && segment.set != GameSet.LIBRARY
     // A game with its own background image shows it; any other game shows its system's background,

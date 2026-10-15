@@ -31,21 +31,7 @@ data class ThemeSpec(
     val quickMenu: QuickMenuLook = QuickMenuLook.SOFT,
     /** How Home's widgets are drawn. */
     val widgets: WidgetLook = WidgetLook.LIT,
-    /** How game and system tiles are framed. */
-    val tiles: TileLook = TileLook.PLAIN,
 )
-
-/**
- * How game and system tiles are framed: [PLAIN] is the art edge to edge (Fuse's own); [GLOSS] sets
- * it in a rounded frame of white (or, in a dark theme, silver), with a bevel inside and a gloss
- * across its top, and the focus ring breathes slowly.
- */
-@Serializable
-enum class TileLook {
-    PLAIN, GLOSS,
-    /** A flat panel with a thin grey frame and a soft drop under it, like a handheld's menu cards. */
-    PANEL,
-}
 
 /**
  * How Home's widgets are drawn: [LIT] is the raised panel with a soft light of the widget's own
@@ -145,13 +131,7 @@ enum class BackgroundStyle {
     /** Warm dunes under a high sun, each crest casting a thin shadow. */
     DUNES,
     /** Fusi's room: a pink cartoon sky over a mint hill, where Fusi the pixel dog plays. */
-    FUSI,
-    /** Fine silver pinstripes under a soft light, with glassy bubbles rising slowly through. */
-    FII,
-    /** Faint graph paper with a band of light along the top and bottom, as on a dual-screen handheld's menu. */
-    DUO,
-    /** A soft light over a fine grid of dots, with slow sheens crossing it, as on a 3D handheld's home. */
-    TRIO;
+    FUSI;
 
     /** False for the backgrounds that never move (flat colour, and the room behind game art). */
     val moves: Boolean get() = this != SOLID && this != HERO
@@ -182,15 +162,7 @@ enum class NavigationStyle {
 enum class MotionProfile { REDUCED, MINIMAL, STANDARD, ENHANCED }
 
 @Serializable
-enum class SoundProfile {
-    OFF, SOFT, CLICK, CHIME,
-    /** Round, airy notes that rise a little as they start, like a bubble. */
-    BUBBLE,
-    /** Short bright blips with a hollow, square edge, like a handheld's menu. */
-    PIP,
-    /** Soft wooden taps with a little ring, like a 3D handheld's home. */
-    TAP,
-}
+enum class SoundProfile { OFF, SOFT, CLICK, CHIME }
 
 @Serializable
 data class GlassSettings(

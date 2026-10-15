@@ -88,7 +88,7 @@ fun HouseholdShelf(
     onOptions: (HouseholdGame) -> Unit,
 ) {
     val state = rememberLazyListState()
-    LaunchedEffect(selected) { if (selected >= 0) state.animateScrollToItem(maxOf(0, selected - 1)) }
+    io.github.matiyaaa.fuse.ui.designsystem.focus.GlideTo(state, if (selected >= 0) maxOf(0, selected - 1) else -1)
     Column {
         ShelfTitle(title, icon, trailing)
         LazyRow(
@@ -125,7 +125,7 @@ fun HouseholdLine(g: HouseholdGame, modifier: Modifier = Modifier) {
 @Composable
 fun HouseholdSystemShelf(systems: List<HouseholdSystem>, library: Map<PlatformId, PlatformCard>, selected: Int, tile: Dp, onOpen: (HouseholdSystem) -> Unit) {
     val state = rememberLazyListState()
-    LaunchedEffect(selected) { if (selected >= 0) state.animateScrollToItem(maxOf(0, selected - 1)) }
+    io.github.matiyaaa.fuse.ui.designsystem.focus.GlideTo(state, if (selected >= 0) maxOf(0, selected - 1) else -1)
     Column {
         ShelfTitle("Systems", FuseIcons.Chip, "${systems.size}")
         LazyRow(state = state, modifier = Modifier.dragScroll(state, Orientation.Horizontal), contentPadding = PaddingValues(horizontal = Space.gutter, vertical = liftRoom(tile)), horizontalArrangement = Arrangement.spacedBy(LocalTileMetrics.current.gap)) {

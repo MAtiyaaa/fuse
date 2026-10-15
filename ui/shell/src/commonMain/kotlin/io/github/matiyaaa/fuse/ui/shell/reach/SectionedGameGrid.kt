@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.reach
 
+import io.github.matiyaaa.fuse.ui.designsystem.focus.glideTo
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -114,7 +115,7 @@ fun SectionedGameGrid(
             val first = shown.getOrNull(sel.section)?.let { sel.index < columns } ?: true
             // The chosen row keeps the line above in view: its heading, on the first row of a section.
             val target = if (sel.section == 0 && first) 0 else if (first) position - sel.index - 1 else position - (sel.index % columns) - columns
-            grid.animateScrollToItem(target.coerceAtLeast(0))
+            grid.glideTo(target.coerceAtLeast(0))
         }
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),

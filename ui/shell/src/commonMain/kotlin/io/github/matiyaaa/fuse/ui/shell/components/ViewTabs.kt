@@ -185,10 +185,13 @@ fun ViewTabs(
                 val label = item.label
                 val held = reorder != null && (dragged == label || (dragged == null && reorder.lifted == i))
                 val lift by fuselineFloat(if (held) 1f else 0f, motion.focusSpring(), label = "tab lift")
-                // A tab that changes place slides there from where it was, so a move reads as the
-                // others making room, never as a jump.
+                // A tab that changes place in the order slides there from where it was, so a move
+                // reads as the others making room, never as a jump. A neighbour growing (a count
+                // opening beside the chosen tab) only pushes it along, in step: sliding it back
+                // to where it was, frame after frame of the growth, left the two overlapping.
                 val slide = remember { FuselineValue(0f) }
                 val lastX = remember { floatArrayOf(Float.NaN) }
+                val lastAt = remember { intArrayOf(i) }
                 TabLabel(
                     item,
                     active = i == active,
@@ -201,7 +204,9 @@ fun ViewTabs(
                             bounds[i] = x to it.size.width.toFloat()
                             val before = lastX[0]
                             lastX[0] = x
-                            if (!before.isNaN() && before != x) {
+                            val reordered = lastAt[0] != i
+                            lastAt[0] = i
+                            if (!before.isNaN() && before != x && (reordered || dragged == label)) {
                                 if (dragged == label) {
                                     // Its place moved under the finger: the finger stays where it is.
                                     dragOffset.floatValue -= x - before

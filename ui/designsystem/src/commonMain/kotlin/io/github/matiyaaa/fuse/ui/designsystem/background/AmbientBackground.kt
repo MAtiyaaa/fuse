@@ -99,9 +99,6 @@ private fun sceneFor(style: BackgroundStyle, look: SceneLook, fusi: FusiScreen):
     BackgroundStyle.CONTOURS -> ContoursScene(look)
     BackgroundStyle.DUNES -> DunesScene(look)
     BackgroundStyle.FUSI -> FusiScene(look, fusi)
-    BackgroundStyle.FII -> FiiScene(look)
-    BackgroundStyle.DUO -> DuoScene(look)
-    BackgroundStyle.TRIO -> TrioScene(look)
 }
 
 /**

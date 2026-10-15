@@ -164,10 +164,10 @@ yet tried by hand on a PC or a Mac.
 - [x] HowLongToBeat times on a game's page (0.4.2.11)
 - [x] Fuseline 4.2: a fast first start and smooth screens with 2,000 games, art and details on every one (0.4.2.12)
 - [x] A class data sharing archive in the Windows and Mac builds, as in the AppImage (0.4.2.12)
-- [x] Fii and Fii Night, with a Home style of their own that a theme unlocks (0.4.2.12)
+- [x] Fii and Fii Night, with a Home style of their own that a theme unlocks (0.4.2.12; retired in 0.4.2.14)
 - [x] Instant profile switching from what the device keeps, checked with Fuse One afterwards (0.4.2.13)
 - [x] Jellyfin on the second screen and Jellyfin logos on Home (0.4.2.13)
-- [x] Duo and Trio, in light and dark, with Homes of their own (0.4.2.13)
+- [x] Duo and Trio, in light and dark, with Homes of their own (0.4.2.13; retired in 0.4.2.14)
 - [ ] Native patches on Android (ARMSX2 and PPSSPP in shared storage)
 - [ ] Measuring the first start and the Library on Android devices with a library of 2,000 games
 

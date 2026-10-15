@@ -52,8 +52,6 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         textScale = appearance.textScale.coerceIn(1f, 1.5f),
         screenMargin = appearance.screenMargin.coerceIn(0, 10),
         home = home.layout,
-        unlocked = appearance.unlocked.toSet(),
-        unlockedNew = appearance.unlockedNew.toSet(),
         systemsBoard = home.systemsBoard,
         systemsBoardFlipped = home.systemsBoardFlipped,
         systemTileStep = home.systemTileStep.coerceIn(0, 2),
@@ -149,8 +147,6 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
         home = home.copy(layout = prefs.home, systemsBoard = prefs.systemsBoard, systemsBoardFlipped = prefs.systemsBoardFlipped, systemTileStep = prefs.systemTileStep, systemTileStepFlipped = prefs.systemTileStepFlipped, systemsCardsSeen = prefs.systemsCardsSeen, destinations = destinations, continueDismissed = prefs.continueDismissed, addonsOrder = prefs.addonsOrder, quickMenu = prefs.quickMenu),
         appearance = appearance.copy(
             themeId = theme.id,
-            unlocked = prefs.unlocked.sorted(),
-            unlockedNew = prefs.unlockedNew.filter { it in prefs.unlocked }.sorted(),
             motion = prefs.motion,
             glass = prefs.glass.takeIf { it != theme.glass },
             crt = prefs.crt.takeIf { it != theme.crt },

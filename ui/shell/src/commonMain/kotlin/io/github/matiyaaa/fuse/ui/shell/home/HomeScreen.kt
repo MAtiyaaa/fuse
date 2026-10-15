@@ -129,7 +129,7 @@ fun HomeScreen(app: AppState) {
     if (prefs.home.mode == HomeMode.CHANNELS) ChannelHome(app) else FlowHome(app)
 }
 
-/** Asks which Home style to use (Fused, Network, and Fii's once unlocked); see [chooseHomeStyle]. */
+/** Asks which Home style to use (Fused or Network); see [chooseHomeStyle]. */
 fun AppState.switchHomeStyle() = chooseHomeStyle()
 
 /** "Home style" and "Home settings", for Home's option menus. */
@@ -139,8 +139,8 @@ fun AppState.homeStyleActions(): List<MenuAction> {
         MenuAction(
             "style", "Home style",
             FuseIcons.Dashboard,
-            detail = "Now ${prefs.home.style.label()}. " + prefs.homeStyles().filter { it != prefs.home.style }.joinToString(" or ") { it.label() } + " instead",
-            trailing = if (prefs.newHomeUnlocked()) io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Badge("Unlocked") else io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Chevron,
+            detail = "Now ${prefs.home.style.label()}. " + io.github.matiyaaa.fuse.model.HomeStyle.entries.filter { it != prefs.home.style }.joinToString(" or ") { it.label() } + " instead",
+            trailing = Trailing.Chevron,
             onSelect = { closeOverlays(); chooseHomeStyle() },
         ),
         MenuAction("home", "Home settings", FuseIcons.Dashboard, trailing = Trailing.Chevron, onSelect = { closeOverlays(); go(Route.Settings("home")) }),
@@ -514,7 +514,9 @@ private fun ShelfRow(
             }
         },
         focus,
-        size = metrics.icon * 1.4f,
+        size = metrics.icon,
+        fill = true,
+        asTiles = true,
     )
     // The rooms of the games beside the selection, decoded as the background decodes them, so moving
     // along a shelf shows each game's background at once instead of loading it.

@@ -57,6 +57,58 @@ suspend fun LazyListState.follow(index: Int, anchor: Float = 0.12f, animate: Boo
 }
 
 /**
+ * Glides [index]'s leading edge to [targetPx] past the leading content padding, measuring where the
+ * item is on every frame rather than once at the start. Items before it that grow or shrink while it
+ * glides (a shelf's name closing as the next one's opens) can't leave it short or carry it past, and
+ * for [settleMs] after the glide it is held there while such changes finish. An item that isn't laid
+ * out yet is jumped to.
+ */
+suspend fun LazyListState.glideTo(index: Int, targetPx: Int = 0, spec: Motion = followSpec, settleMs: Int = Durations.SLOW) {
+    if (layoutInfo.viewportSize == IntSize.Zero) snapshotFlow { layoutInfo.viewportSize }.first { it != IntSize.Zero }
+    fun offset() = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }?.offset
+    val start = offset() ?: run { scrollToItem(index, -targetPx); return }
+    scroll {
+        if (start != targetPx) {
+            animate(0f, 1f, animationSpec = spec) { v, _ ->
+                val now = offset() ?: return@animate
+                scrollBy(now - (start + (targetPx - start) * v))
+            }
+        }
+        var began = -1L
+        while (true) {
+            val t = withFrameNanos { it }
+            if (began < 0) began = t
+            if ((t - began) / 1_000_000 > settleMs) break
+            val now = offset() ?: break
+            if (now != targetPx) scrollBy((now - targetPx).toFloat())
+        }
+    }
+}
+
+/** Grid version of [glideTo]: brings the row holding [index] to [targetPx] from the top. */
+suspend fun LazyGridState.glideTo(index: Int, targetPx: Int = 0, spec: Motion = followSpec, settleMs: Int = 0) {
+    if (layoutInfo.viewportSize == IntSize.Zero) snapshotFlow { layoutInfo.viewportSize }.first { it != IntSize.Zero }
+    fun offset() = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }?.offset?.y
+    val start = offset() ?: run { scrollToItem(index, -targetPx); return }
+    scroll {
+        if (start != targetPx) {
+            animate(0f, 1f, animationSpec = spec) { v, _ ->
+                val now = offset() ?: return@animate
+                scrollBy(now - (start + (targetPx - start) * v))
+            }
+        }
+        var began = -1L
+        while (true) {
+            val t = withFrameNanos { it }
+            if (began < 0) began = t
+            if ((t - began) / 1_000_000 > settleMs) break
+            val now = offset() ?: break
+            if (now != targetPx) scrollBy((now - targetPx).toFloat())
+        }
+    }
+}
+
+/**
  * Scrolls only as far as it takes to show [index] whole, with [marginPx] to spare, the way a menu
  * or a list of settings is expected to scroll: moving inside what is already on screen moves
  * nothing, and the list steps along as the selection reaches its edge. An item that isn't laid out
@@ -144,6 +196,16 @@ fun KeepSelectionInView(state: LazyListState, selected: () -> Int, marginPx: Int
     LaunchedEffect(state) {
         followEach(snapshotFlow { if (on()) current() else null }, pointing) { state.keepInView(it, marginPx, spec = spec) }
     }
+}
+
+/**
+ * Glides [state] to [index] (see [glideTo]) each time it changes, with the motion profile's follow
+ * spring; a negative [index] (nothing chosen on this list) leaves it where it is.
+ */
+@Composable
+fun GlideTo(state: LazyListState, index: Int, targetPx: Int = 0, settleMs: Int = 0) {
+    val spec by rememberUpdatedState(Fuse.motion.followScroll())
+    LaunchedEffect(state, index, targetPx) { if (index >= 0) state.glideTo(index, targetPx, spec, settleMs) }
 }
 
 @Composable

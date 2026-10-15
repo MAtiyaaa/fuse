@@ -157,8 +157,6 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
     var onTools by remember { mutableStateOf<Int?>(null) }
     // The bar along the bottom while arranging (Add and Done), reached by moving down past the board's last row.
     var onBar by remember { mutableStateOf<Int?>(null) }
-    // Fii's board (its bar is below the board, reached by moving down past the last row).
-    val fii = LocalFiiBoard.current
     // Whose arrangement this is, this device's or the profile's, where that can be chosen.
     val ownHome: Boolean? = space.own
     fun setOwnHome(own: Boolean) = space.setOwn(own)
@@ -217,13 +215,11 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
         space.chosenPage(page)
     }
     val turns = current?.let { carouselOf(it) }?.takeIf { it.count > 1 } != null
-    PageEffect(arranging, op is BoardOp.Carry, resizeLook, onTools, onBar, active, paging.count, turns, look?.editing, fii?.focus) {
+    PageEffect(arranging, op is BoardOp.Carry, resizeLook, onTools, onBar, active, paging.count, turns, look?.editing) {
         if (!active) return@PageEffect
         val pages = (if (turns) listOf(Hint(HintButton.PAGE_PREV, ""), Hint(HintButton.PAGE_NEXT, "Browse")) else emptyList()) +
             if (paging.count > 1) listOf(Hint(HintButton.RIGHT_STICK, "Pages")) else emptyList()
-        val fiiAt = fii?.focus
         app.hints = when {
-            fiiAt != null && !arranging -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, fiiLabel(fiiAt)), Hint(HintButton.BACK, "Board"))
             arranging && onBar != null -> listOfNotNull(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, if (onBar == 0) "Add a ${space.item}" else "Done"), Hint(HintButton.BACK, "Done").takeIf { onBar == 0 })
             arranging && onTools != null -> listOf(Hint(HintButton.CONFIRM, when (onTools) { 0 -> "Undo"; 1 -> space.resetLabel(page); 2 -> "New page"; else -> look?.let { "Arrange the ${it.labels[1 - it.editing]} look" } ?: if (ownHome == true) "${space.name} on all devices" else "This device's own ${space.name}" }), Hint(HintButton.BACK, "Done"))
             op is BoardOp.Carry -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Put down"), Hint(HintButton.BACK, "Cancel"))
@@ -376,11 +372,8 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
         val gutterPx = with(density) { gutter.toPx() }
         val motion = Fuse.motion
         // What covers the board's bottom: the hints, and while arranging the toolbar above them.
-        // Fii's board ends above its bar, which sits on the hints (arranging, the bar gives way to the tools).
-        val fiiBar = if (fii != null && !arranging) fii.bar else 0.dp
-        val underBoard = if (fiiBar > 0.dp) 0.dp else Size.hintHeight
         val bottomCover by fuselineDp(
-            underBoard + Space.l + if (arranging) ARRANGE_BAR else 0.dp,
+            Size.hintHeight + Space.l + if (arranging) ARRANGE_BAR else 0.dp,
             motion.tween(Durations.BASE),
             label = "boardBottom",
         )
@@ -412,18 +405,6 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
             if ((e.action == NavAction.PAGE_PREVIOUS || e.action == NavAction.PAGE_NEXT) && carried == null) {
                 onTools = null
                 return@InputLayer if (paging.turn(if (e.action == NavAction.PAGE_NEXT) 1 else -1)) NavResult.MOVED else NavResult.BLOCKED
-            }
-            // Fii's bar, reached down from the board's last row: Sections and Quick menu.
-            val fiiAt = fii?.focus
-            if (fiiAt != null && !arranging) {
-                return@InputLayer when (e.action) {
-                    NavAction.LEFT -> if (fiiAt > 0) { fii.focus = 0; NavResult.MOVED } else NavResult.BLOCKED
-                    NavAction.RIGHT -> if (fiiAt < 1) { fii.focus = 1; NavResult.MOVED } else NavResult.BLOCKED
-                    NavAction.UP, NavAction.BACK -> { fii.focus = null; NavResult.MOVED }
-                    NavAction.DOWN -> NavResult.BLOCKED
-                    NavAction.SELECT -> { fii.focus = null; app.fiiAction(fiiAt); NavResult.ACTIVATED }
-                    else -> NavResult.IGNORED
-                }
             }
             val bar = onBar
             if (arranging && bar != null && carried == null && e.modifier == null) {
@@ -524,8 +505,6 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                             r != NavResult.MOVED && arranging && e.action == NavAction.UP -> { onTools = 0; NavResult.MOVED }
                             // Past the last row while arranging: Add and Done along the bottom.
                             r != NavResult.MOVED && arranging && e.action == NavAction.DOWN && !resizeLook -> { onBar = 0; NavResult.MOVED }
-                            // Past the last row on Fii's board: its bar.
-                            r != NavResult.MOVED && !arranging && e.action == NavAction.DOWN && fii != null -> { fii.focus = 0; NavResult.MOVED }
                             // Past the board's side: the page beside it, when there is one.
                             r != NavResult.MOVED && (e.action == NavAction.LEFT || e.action == NavAction.RIGHT) && !e.isRepeat &&
                                 paging.turn(if (e.action == NavAction.RIGHT) 1 else -1, fromEdge = true) -> NavResult.MOVED
@@ -589,8 +568,6 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                     Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        // Fii's board ends at its bar: nothing scrolls under it or shows through it.
-                        .padding(bottom = if (fiiBar > 0.dp) fiiBar + Size.hintHeight + Space.l else 0.dp)
                         .clipToBounds()
                         .onGloballyPositioned {
                             containerTopLeft = it.positionInRoot()
@@ -638,7 +615,7 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                     Box(
                         Modifier
                             .fillMaxWidth()
-                            .padding(start = gutter, end = gutter, top = Space.l, bottom = underBoard + Space.xxl + if (arranging) ARRANGE_BAR else 0.dp)
+                            .padding(start = gutter, end = gutter, top = Space.l, bottom = Size.hintHeight + Space.xxl + if (arranging) ARRANGE_BAR else 0.dp)
                             .height(boardHeight),
                     ) {
                         val fraction = Fuse.geometry.tileCornerFraction * WIDGET_CORNER
@@ -662,7 +639,7 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                                 } else {
                                     geometry.rect(rect)
                                 }
-                                val selected = i == sel.index && app.focusZone == FocusZone.CONTENT && onTools == null && onBar == null && fii?.focus == null
+                                val selected = i == sel.index && app.focusZone == FocusZone.CONTENT && onTools == null && onBar == null
                                 val carousel = carouselOf(w)
                                 BoardItem(
                                     carousel = carousel,
@@ -686,8 +663,7 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                                             arranging -> sel.index = i
                                             // A tap on a widget that plays a game shows it first; the rest open
                                             // at once, and so does anything clicked with a mouse.
-                                            // Fii's channels open on the first tap, as channels do.
-                                            sel.index == i || !space.firstTapChooses(w) || router.mouse || fii != null -> { sel.index = i; fii?.focus = null; open(w) }
+                                            sel.index == i || !space.firstTapChooses(w) || router.mouse -> { sel.index = i; open(w) }
                                             else -> sel.index = i
                                         }
                                     },

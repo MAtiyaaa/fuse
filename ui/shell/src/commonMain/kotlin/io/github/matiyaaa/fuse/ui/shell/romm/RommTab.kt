@@ -135,7 +135,7 @@ internal fun GameShelf(
     onOptions: (RommGame) -> Unit,
 ) {
     val state = rememberLazyListState()
-    LaunchedEffect(selected) { if (selected >= 0) state.animateScrollToItem(maxOf(0, selected - 1)) }
+    io.github.matiyaaa.fuse.ui.designsystem.focus.GlideTo(state, if (selected >= 0) maxOf(0, selected - 1) else -1)
     val room = liftRoom(tile)
     Column {
         ShelfTitle(title, icon, trailing)
