@@ -61,6 +61,9 @@ internal fun SetupOpening(onDone: () -> Unit, onCovering: (Boolean) -> Unit = {}
     // The mark catching light is the moment the sound comes.
     val lit = play.timeMs >= IGNITE_AT
     LaunchedEffect(lit) { if (lit && !reduced) sounds.play(SoundCue.LAUNCH) }
+    // The climax: the tiles in full flight out from the lit mark.
+    val flying = play.timeMs >= CLIMAX_AT
+    LaunchedEffect(flying) { if (flying && !reduced && play.timeMs < WORD_DONE_AT) sounds.play(SoundCue.CLIMAX) }
     InputLayer(priority = LayerPriority.DIALOG + 60, modal = true) { _ ->
         play.skip()
         NavResult.CONSUMED
@@ -228,6 +231,12 @@ private fun lerp(a: Color, b: Color, f: Float) = Color(
 
 /** When the spark reaches its place and the mark lights. */
 private const val IGNITE_AT = 4_100f
+
+/** The tiles in full flight, just after the ignition's sound has rung: the climax's sound. */
+private const val CLIMAX_AT = 4_500f
+
+/** The wordmark has burned in: a skip past here plays no climax. */
+private const val WORD_DONE_AT = 6_400f
 
 
 /** The opening's choreography, in milliseconds. */

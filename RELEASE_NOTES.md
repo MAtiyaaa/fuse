@@ -1,7 +1,7 @@
 # Fuse 0.4.2.14 - The Native Update
 
 Lists glide instead of jumping, tile art is ready before it scrolls in, every part of a game's page
-is in reach, the start-up keeps one sound, and Fii, Duo and Trio are gone.
+is in reach, the start-up sounds as it should, and Fii, Duo and Trio are gone.
 
 ## Changed
 
@@ -20,9 +20,11 @@ is in reach, the start-up keeps one sound, and Fii, Duo and Trio are gone.
   in and showed an empty frame first. Art is now decoded ahead exactly as each tile asks for it, in
   the Library's grids and on Home's shelves, so a quick scroll down Installed shows art straight
   away.
-- **One sound at the start.** The start-up animation no longer plays the match strike and the flare
-  as the spark runs. It plays one sound at its climax, as the spark bursts. The first-start opening
-  is the same: its strike, flare and swell are gone, and its one sound comes as the mark lights.
+- **The start-up's sounds.** The match strike, the flare and the swell from 0.4.2.13 are gone.
+  The start-up plays its launch sound as the spark bursts, as it did before them, then a new sound at
+  its climax as the wordmark burns in: a quick run up into a wide chord that rings out. The
+  first-start opening does the same: the launch sound as the mark lights, and the climax as the
+  tiles fly out from it. Both are made by Fuse's own synthesizer, in your interface sound.
 
 ## Removed
 

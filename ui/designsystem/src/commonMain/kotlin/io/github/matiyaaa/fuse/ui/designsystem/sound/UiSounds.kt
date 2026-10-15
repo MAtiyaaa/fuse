@@ -10,7 +10,15 @@ import kotlin.math.pow
 import kotlin.math.sin
 
 /** Interface sounds. All are synthesised by [ToneSynth]; no recorded or console sounds are shipped. */
-enum class SoundCue { MOVE, MOVE_UP, MOVE_DOWN, SELECT, BACK, OPEN, CLOSE, ERROR, BUMP, TOGGLE, ACHIEVEMENT, LAUNCH }
+enum class SoundCue {
+    MOVE, MOVE_UP, MOVE_DOWN, SELECT, BACK, OPEN, CLOSE, ERROR, BUMP, TOGGLE, ACHIEVEMENT, LAUNCH,
+
+    /**
+     * The start-up's climax, after [LAUNCH]: a quick run up into a wide chord that rings out, as the
+     * wordmark burns in (and, on first start, as the tiles fly out from the lit mark).
+     */
+    CLIMAX,
+}
 
 /** Plays cues. Platforms implement it (Android AudioTrack, Linux javax.sound). */
 interface UiSounds {
@@ -65,6 +73,13 @@ object ToneSynth {
                 Tone(note(19), 0.14, 0.18, delay = 0.18), Tone(note(24), 0.4, 0.2, delay = 0.27),
             )
             SoundCue.LAUNCH -> listOf(Tone(note(7), 0.08, 0.2), Tone(note(14), 0.08, 0.2, delay = 0.06), Tone(note(19), 0.25, 0.18, delay = 0.12))
+            SoundCue.CLIMAX -> listOf(
+                Tone(note(7), 0.1, 0.14), Tone(note(12), 0.1, 0.14, delay = 0.05),
+                Tone(note(16), 0.12, 0.14, delay = 0.1), Tone(note(19), 0.14, 0.14, delay = 0.15),
+                // The chord it lands on: the root an octave down for weight, the fifth and the octave above.
+                Tone(note(0), 0.95, 0.11, delay = 0.22), Tone(note(12), 0.95, 0.1, delay = 0.22),
+                Tone(note(19), 0.95, 0.09, delay = 0.22), Tone(note(24), 0.95, 0.13, delay = 0.22),
+            )
         }
         val length = parts.maxOf { it.delay + it.duration } + 0.02
         val out = DoubleArray((length * SAMPLE_RATE).toInt())

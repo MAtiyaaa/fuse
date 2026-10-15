@@ -96,6 +96,11 @@ internal fun StartupIntroOverlay(onDone: () -> Unit, onCovering: (Boolean) -> Un
             sounds.play(SoundCue.LAUNCH)
         }
     }
+    // The climax: the wordmark burning in beside the lit mark.
+    val wordReached by remember { androidx.compose.runtime.derivedStateOf { clock.value >= BURN_FROM } }
+    LaunchedEffect(wordReached && !reduced) {
+        if (wordReached && !reduced && clock.value < BURN_TO) sounds.play(SoundCue.CLIMAX)
+    }
 
     // Opaque until it fades: what is under it needn't be drawn until then.
     val fadeFrom = if (reduced) length * 0.6f else EXIT_FADE_FROM

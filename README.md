@@ -432,7 +432,7 @@ Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 > **Fuse 0.4.2.14 "The Native Update"**: the Library's shelves and every list glide instead of
 > jumping, tile art is ready in memory before it scrolls in, How long to beat and play time are in
 > reach on a game's page at any width, the theme filters stop overlapping, the start-up animation
-> keeps one sound at its climax, and the Fii, Duo and Trio themes are retired. See
+> plays its launch sound and then one at its climax, and the Fii, Duo and Trio themes are retired. See
 > [the release notes](docs/releases/0.4.2.14.md); every earlier
 > release is in [CHANGELOG.md](CHANGELOG.md).
 
