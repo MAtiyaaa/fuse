@@ -61,6 +61,5 @@ Saves from a modded Switch, one game at a time, and every emulator in the Linux 
 - Backgrounds no longer show bands of colour on Linux. The soft lights behind Fuse now get their
   full dither however faint they are, and the skies, floors and hills of Horizon, Dunes, Caustics,
   Forest, Fusi and Grid are dithered too.
-
 - Fuse didn't find Mandarine or Citron when their AppImage wasn't named exactly `mandarine-qt…` or
   `citron…`, as their newer builds aren't. Any AppImage with the emulator's name in it is found now.

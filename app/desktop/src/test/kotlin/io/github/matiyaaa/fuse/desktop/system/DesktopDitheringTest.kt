@@ -220,7 +220,8 @@ class DesktopDitheringTest {
         ).applyTo(androidx.compose.ui.geometry.Size(w / scale, h / scale), paint, 0.125f)
         if (dither) {
             DesktopDithering.install()
-            io.github.matiyaaa.fuse.ui.designsystem.effects.Dithering.gradients!!(paint)
+            // As a glow is drawn: told the scale it is drawn under.
+            io.github.matiyaaa.fuse.ui.designsystem.effects.Dithering.scaledGradients!!(paint, scale, scale)
         }
         canvas.save()
         canvas.scale(scale, scale)
@@ -250,7 +251,8 @@ class DesktopDitheringTest {
         val smooth = longest(faintScaledRamp(dither = true))
         println("Faint light scaled up, longest flat band: undithered $banded px, dithered $smooth px")
         // 32 steps over 1024 pixels: about 32 pixels each undithered. The noise must survive the
-        // paint's alpha and be laid out per screen pixel, not per scaled-up unit.
+        // paint's alpha and be laid out per screen pixel, not per scaled-up unit (the scale it is
+        // told, as Skia here has no sk_FragCoord for runtime shaders).
         assertTrue(banded >= 24, "undithered bands $banded px wide")
         assertTrue(smooth <= 10, "dithered runs at most $smooth px")
     }

@@ -20,6 +20,12 @@ object Dithering {
     /** Asks the platform to dither what [Paint] draws (its gradients), where it can. */
     @Volatile var gradients: ((Paint) -> Unit)? = null
 
+    /**
+     * As [gradients], for a drawing made under a scale (screen pixels per unit, each way), so its
+     * noise is still one screen pixel fine: a glow drawn as a small circle and scaled up.
+     */
+    @Volatile var scaledGradients: ((Paint, Float, Float) -> Unit)? = null
+
     /** A copy of a picture with about one 8-bit step of signed noise in it, or the picture itself. */
     @Volatile var pictures: ((ImageBitmap) -> ImageBitmap)? = null
 
@@ -65,8 +71,13 @@ fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDitheredCircle(
     radius: Float,
     center: androidx.compose.ui.geometry.Offset,
     alpha: Float = 1f,
+    /** Screen pixels per unit of this drawing, each way, when it is drawn under a scale. */
+    scaleX: Float = 1f,
+    scaleY: Float = 1f,
 ) {
-    val dither = Dithering.gradients ?: return drawCircle(brush, radius = radius, center = center, alpha = alpha)
+    val scaled = Dithering.scaledGradients.takeIf { scaleX != 1f || scaleY != 1f }
+    val dither: (Paint) -> Unit = scaled?.let { s -> { p: Paint -> s(p, scaleX, scaleY) } }
+        ?: Dithering.gradients ?: return drawCircle(brush, radius = radius, center = center, alpha = alpha)
     drawIntoCanvas { canvas ->
         val paint = Paint()
         brush.applyTo(androidx.compose.ui.geometry.Size(radius * 2, radius * 2), paint, alpha)

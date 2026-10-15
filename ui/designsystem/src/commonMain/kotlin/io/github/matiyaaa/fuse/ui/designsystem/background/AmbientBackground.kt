@@ -167,7 +167,8 @@ internal class Glow(color: Color) {
             if (degrees != 0f) rotate(degrees, Offset.Zero)
             scale(rx / UNIT, ry / UNIT, Offset.Zero)
         }) {
-            scope.drawDitheredCircle(brush, radius = UNIT, center = Offset.Zero, alpha = alpha.coerceAtMost(1f))
+            // Drawn small and scaled up: the noise is told the scale, so it stays one screen pixel fine.
+            scope.drawDitheredCircle(brush, radius = UNIT, center = Offset.Zero, alpha = alpha.coerceAtMost(1f), scaleX = rx / UNIT, scaleY = ry / UNIT)
         }
     }
 
