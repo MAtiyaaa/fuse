@@ -72,7 +72,7 @@ internal class DefaultFuseStore private constructor(
     override val apps = DefaultAppOps(ctx)
     private val mediaOps: DefaultMediaOps
     override val credentials = DefaultCredentialOps(ctx) { key, removed ->
-        if (key != SecretKeys.RA_USERNAME && key != SecretKeys.RA_API_KEY) mediaOps.invalidate()
+        if (!key.startsWith("ra.")) mediaOps.invalidate()
         // A key removed here stays off this device; adding it again lets the household's follow.
         if (key in SecretKeys.all) ctx.scope.launch {
             sync.configure { c ->
@@ -596,6 +596,8 @@ internal class DefaultFuseStore private constructor(
             sync.config.collect { c ->
                 if (prefsProfile != c.activeProfile) {
                     writeLock.withLock { reloadLocked() }
+                    // Each profile has its own RetroAchievements account (or the device's).
+                    achievements.profileChanged()
                 } else if (prefsState.value.sync != c) {
                     prefsState.value = prefsState.value.copy(sync = c)
                     writes.trySend(prefsState.value)

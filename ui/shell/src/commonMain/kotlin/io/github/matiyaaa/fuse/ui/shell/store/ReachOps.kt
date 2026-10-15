@@ -185,6 +185,12 @@ interface ReachOps {
     /** Brings [id] here from wherever is best; null when it was queued, else why not. */
     suspend fun download(id: GameId): String?
 
+    /** The updates and DLC another device's copy of [id] (a game here) has and this copy hasn't; null when none. */
+    suspend fun extras(id: GameId): GameExtras? = null
+
+    /** Brings [id]'s missing updates and DLC ([extras]) here, beside the game, which stays as it is. Null when queued, else why not. */
+    suspend fun getExtras(id: GameId): String? = "Fuse One isn't set up."
+
     suspend fun sendTargets(id: GameId): List<SendTarget>
 
     /** Has [device] bring [id] (now, or when it is back); null when asked, else why not. */
@@ -226,4 +232,15 @@ interface ReachOps {
         override fun actRemote(row: RemoteTransferRow, action: TransferAction) = Unit
         override suspend fun cancelRequest(id: String) = Unit
     }
+}
+
+/** Updates, DLC and other add-ons ([other]) a device has for a game this one hasn't, [bytes] in all, from [from]. */
+@Immutable
+data class GameExtras(val updates: Int, val dlc: Int, val other: Int, val bytes: Long, val from: String) {
+    /** "2 updates and 1 DLC". */
+    val words: String get() = listOfNotNull(
+        updates.takeIf { it > 0 }?.let { if (it == 1) "1 update" else "$it updates" },
+        dlc.takeIf { it > 0 }?.let { "$it DLC" },
+        other.takeIf { it > 0 }?.let { if (it == 1) "1 add-on" else "$it add-ons" },
+    ).let { if (it.size <= 1) it.joinToString() else it.dropLast(1).joinToString(", ") + " and " + it.last() }
 }

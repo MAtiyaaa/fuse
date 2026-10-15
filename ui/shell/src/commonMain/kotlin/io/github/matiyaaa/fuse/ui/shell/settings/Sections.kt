@@ -1029,7 +1029,7 @@ fun achievementRows(app: AppState): List<MenuAction> {
             val u = feed?.user
             add(infoRow("user", u?.username ?: "Connected", u?.let { "${it.points} points" }, detail = u?.motto, icon = FuseIcons.User))
             add(MenuAction("refresh", "Refresh now", FuseIcons.Refresh, detail = "Fuse refreshes on its own and caches results", onSelect = { app.store.achievements.refresh(force = true) }))
-            add(app.confirmRow("disconnect", "Disconnect", FuseIcons.Unplug, "Disconnect RetroAchievements?", "Your username and key are deleted from this device.", "Disconnect", destructive = true) {
+            add(app.confirmRow("disconnect", "Disconnect", FuseIcons.Unplug, "Disconnect RetroAchievements?", "This profile's username and key are deleted from this device. Other profiles keep theirs.", "Disconnect", destructive = true) {
                 app.scope.launch { app.store.achievements.disconnect() }
             })
         } else {
@@ -1045,6 +1045,7 @@ fun achievementRows(app: AppState): List<MenuAction> {
                 }
             }))
         }
+        add(infoRow("profiles", "Each profile has its own account", detail = "Switch profiles to connect another person's. A profile without one shows the first account connected on this device", icon = FuseIcons.Users))
         add(infoRow("note", "Fuse shows achievements; emulators unlock them", detail = "Sign in to RetroAchievements inside your emulator (RetroArch, DuckStation, PPSSPP and others) for unlocks to count"))
     }
 }

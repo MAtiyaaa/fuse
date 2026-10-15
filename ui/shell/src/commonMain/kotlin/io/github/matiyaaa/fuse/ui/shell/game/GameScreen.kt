@@ -230,6 +230,11 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val canSend = reachState.supported && !card.isApp
     val canUploadHere by produceState(false, game.id, reachState.supported) { value = app.store.reach.canUploadToRomm(game.id) }
     val rommHasIt = copies?.romm != null || romm != null
+    // Updates and DLC another device has for this game and this copy hasn't (Fuse One).
+    var extrasAsked by remember(game.id) { mutableIntStateOf(0) }
+    val extras by produceState<io.github.matiyaaa.fuse.ui.shell.store.GameExtras?>(null, game.id, copies, extrasAsked) {
+        value = if (notHere || !reachState.supported) null else runCatching { app.store.reach.extras(game.id) }.getOrNull()
+    }
     val shownCopies = copies?.copies.orEmpty().takeIf { list -> reachState.supported || list.any { it.place == io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.DEVICE } }.orEmpty()
 
     // Play first, then the emulator it starts in, then the quick actions, then everything else.
@@ -269,6 +274,15 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
             val install = io.github.matiyaaa.fuse.library.content.ContentState.NEEDS_INSTALL in contentStates && v.mode != io.github.matiyaaa.fuse.ui.shell.store.InstallMode.UNAVAILABLE
             DetailAction("content", if (install) "Install" else null, if (install) FuseIcons.Download else FuseIcons.PackageOpen, "Installed content") {
                 app.go(Route.GameContent(game.id))
+            }
+        },
+        extras?.let { x ->
+            DetailAction("extras", "Get ${x.words}", FuseIcons.CloudDownload, "Get ${x.words} from ${x.from}") {
+                app.scope.launch {
+                    val why = app.store.reach.getExtras(game.id)
+                    if (why == null) app.toasts.show("Bringing ${x.words} from ${x.from}. The game stays as it is", icon = FuseIcons.Download) else app.toasts.show(why)
+                    extrasAsked++
+                }
             }
         },
         issues.firstOrNull()?.let { issue ->
