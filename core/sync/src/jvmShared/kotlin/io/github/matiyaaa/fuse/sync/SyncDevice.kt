@@ -319,13 +319,7 @@ class SyncDevice(
     suspend fun importSave(profile: String, slot: LocalSlot, format: String, files: Map<String, File>, title: String = ""): SaveRevision = mutex.withLock {
         SaveImportTransaction.recover(importJournal) { id -> state.outbox.any { it.revision?.id == id } }
         require(profile.isNotBlank() && slot.available) { "Choose a profile and an available save destination" }
-        require(SaveSlotFormats.compatible(format, slot.format)) { "This save format is not compatible with the selected emulator" }
-        require(files.isNotEmpty() && files.keys.all(SavePath::isSafe)) { "This save has no safe files" }
-        val source = SaveManifest(format, files.map { (name, f) ->
-            require(f.isFile) { "The imported save is no longer available" }
-            SaveFile(name, f.inputStream().use { store.put(it) }, f.length())
-        }.sortedBy { it.path })
-        val incoming = inSlotFormat(slot, source)
+        val incoming = imported(slot, format, files)
         val (current, hashed) = fingerprintOf(slot)
         val holder = state.holders[slot.key] ?: profile
         val waiting = state.outbox.lastOrNull { it.revision?.let { r -> r.profile == profile && r.game == slot.game.id && r.kind == slot.kind && r.canBeNewest } == true }?.revision
@@ -354,6 +348,43 @@ class SyncDevice(
                 throw e
             }
         })
+        revision
+    }
+
+    /** An imported save's files, put in the store, in [slot]'s own format. */
+    private fun imported(slot: LocalSlot, format: String, files: Map<String, File>): SaveManifest {
+        require(SaveSlotFormats.compatible(format, slot.format)) { "This save format is not compatible with the selected emulator" }
+        require(files.isNotEmpty() && files.keys.all(SavePath::isSafe)) { "This save has no safe files" }
+        val source = SaveManifest(format, files.map { (name, f) ->
+            require(f.isFile) { "The imported save is no longer available" }
+            SaveFile(name, f.inputStream().use { store.put(it) }, f.length())
+        }.sortedBy { it.path })
+        return inSlotFormat(slot, source)
+    }
+
+    /**
+     * The same imported save for [profile] too, while [slot]'s folder holds someone else's (after
+     * [importSave] put it there for them): an Imported revision of [profile]'s, and the save parked
+     * for them on this device, so it is in the folder when they play here, even offline. What they
+     * had parked is kept in their history first.
+     */
+    suspend fun importSaveParked(profile: String, slot: LocalSlot, format: String, files: Map<String, File>, title: String = ""): SaveRevision = mutex.withLock {
+        require(profile.isNotBlank() && slot.available) { "Choose a profile and an available save destination" }
+        require(state.holders[slot.key] != profile) { "This save's folder is already this profile's" }
+        val incoming = imported(slot, format, files)
+        var outbox = state.outbox
+        state.parked[keyOf(profile, slot)]?.takeIf { it.files.isNotEmpty() && it.fingerprint != incoming.fingerprint }?.let { theirs ->
+            val kept = SaveRevision(SyncCrypto.token(12), profile, slot.game.id, slot.kind, state.slots[keyOf(profile, slot)]?.base, deviceId, deviceName, hlc.now(), theirs,
+                reason = RevisionReason.BEFORE_RESTORE, title = title, provenance = "Before import")
+            outbox = outbox + Outgoing(kept.id, Priority.SAVE.rank, profile, kept)
+        }
+        val waiting = outbox.lastOrNull { it.revision?.let { r -> r.profile == profile && r.game == slot.game.id && r.kind == slot.kind && r.canBeNewest } == true }?.revision
+        val revision = SaveRevision(SyncCrypto.token(12), profile, slot.game.id, slot.kind,
+            waiting?.id ?: state.slots[keyOf(profile, slot)]?.base, deviceId, deviceName, hlc.now(), incoming,
+            playSeconds = meta(profile).game(slot.game).totalSeconds, title = title, provenance = "Imported")
+        state = state.copy(outbox = outbox + Outgoing(revision.id, Priority.SAVE.rank, profile, revision),
+            parked = state.parked + (keyOf(profile, slot) to incoming))
+        persist()
         revision
     }
 

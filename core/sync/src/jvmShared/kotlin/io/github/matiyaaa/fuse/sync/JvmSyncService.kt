@@ -2118,21 +2118,31 @@ class JvmSyncService(
                 val d = device ?: newDevice(ensureDeviceId(), cached.deviceName.ifBlank { defaultDeviceName }).also { device = it }
                 require(resolved.map { (_, _, slot) -> slot.key }.distinct().size == resolved.size) { "Choose one import for each shared memory card" }
                 val failures = ArrayList<SaveImportFailure>()
-                val revisions = resolved.mapIndexedNotNull { index, (binding, query, slot) ->
+                val everyone = choices.flatMap { it.profiles.ifEmpty { listOf(profile) } }.toSet()
+                require(everyone.all { p -> profiles.value.any { it.id == p } }) { "Choose whose saves these are before importing" }
+                var imported = 0
+                val revisions = resolved.flatMapIndexed { index, (binding, query, slot) ->
                     val entry = plan.entries.first { e -> e.id == choices[index].entry }
+                    // Each chosen person gets their own copy. The folder ends up holding the one
+                    // playing here now (else the last chosen); the others' is parked for them.
+                    val owners = choices[index].profiles.ifEmpty { listOf(profile) }.map { ownerOf(query, slot, it) }.distinct()
+                    val here = owners.firstOrNull { it == cached.activeProfile } ?: owners.last()
                     try {
-                        d.importSave(ownerOf(query, slot, profile), slot, entry.sourceFormat, binding.files, query.title).id
+                        val first = d.importSave(here, slot, entry.sourceFormat, binding.files, query.title).id
+                        val rest = (owners - here).map { d.importSaveParked(it, slot, entry.sourceFormat, binding.files, query.title).id }
+                        imported++
+                        listOf(first) + rest
                     } catch (e: kotlinx.coroutines.CancellationException) { throw e }
                     catch (e: Exception) {
                         failures += SaveImportFailure(entry.id, entry.name, e.message ?: "The save could not be imported")
-                        null
+                        emptyList()
                     }
                 }
                 // Never pull before capture: the explicit import must enter history before reconnect.
                 // Normal flush owns parent/conflict handling and leaves offline saves queued.
-                val sent = if (cached.enabled && profile !in cached.noSyncProfiles) client?.let { c -> runCatching { d.flush(c) }.isSuccess } == true else false
+                val sent = if (cached.enabled && everyone.any { it !in cached.noSyncProfiles }) client?.let { c -> runCatching { d.flush(c) }.isSuccess } == true else false
                 if (failures.isEmpty()) saveImporter.discard(plan)
-                SaveImportResult(revisions.size, revisions, queued = revisions.isNotEmpty() && cached.enabled && !sent, failures = failures)
+                SaveImportResult(imported, revisions, queued = revisions.isNotEmpty() && cached.enabled && !sent, failures = failures)
             }
         }
     }

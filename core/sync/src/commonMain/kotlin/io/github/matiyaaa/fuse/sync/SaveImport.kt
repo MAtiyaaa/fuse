@@ -30,10 +30,28 @@ data class SaveImportEntry(
     val bytes: Long,
     val targets: List<SaveImportTarget>,
     val selectedTarget: String? = null,
+    /** Set for a backup copied off a Switch by its save manager. */
+    val switch: SwitchSource? = null,
 )
 
-/** The person's selection, made after inspecting the plan; missing entries are not imported. */
-data class SaveImportChoice(val entry: String, val target: String)
+/** Where a Switch backup came from: [tool] (JKSV, Checkpoint), its name, the Switch user and when it was made. */
+data class SwitchSource(
+    val tool: String,
+    val backup: String,
+    val user: String?,
+    /** Seconds since 1970, when known. */
+    val savedAt: Long?,
+    val titleId: String?,
+    val game: String?,
+    /** The game's device save (one for everyone on the console), not an account's. */
+    val device: Boolean = false,
+)
+
+/**
+ * The person's selection, made after inspecting the plan; missing entries are not imported. [profiles]
+ * are whose save it becomes (each gets their own copy); empty: the one the import is made for.
+ */
+data class SaveImportChoice(val entry: String, val target: String, val profiles: List<String> = emptyList())
 
 /** Revisions are durable locally even while the host is away. No source file is moved or deleted. */
 data class SaveImportResult(val imported: Int, val revisions: List<String>, val queued: Boolean,
