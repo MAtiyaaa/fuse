@@ -56,7 +56,7 @@ class LinuxArchivesTest {
             "dosbox-staging-linux-x86_64-v0.83.0/install-icons.sh" to ("script" to true),
         )) { XZCompressorOutputStream(it) }
         val path = installer.install("DOSBox Staging", archive.absolutePath, archive.name, DesktopAssetKind.TAR, null)
-        assertEquals(File(apps, "DOSBox Staging/dosbox").absolutePath, path)
+        assertEquals(File(apps, "DOSBox Staging/dosbox").absoluteFile, File(path).absoluteFile)
         assertTrue(File(path).canExecute())
         assertTrue(File(apps, "DOSBox Staging/resources/a.txt").isFile)
         assertFalse(File(apps, ".DOSBox Staging.part").exists())
@@ -70,7 +70,7 @@ class LinuxArchivesTest {
             "mandarine-linux-appimage/README.md" to ("read me" to false),
         )) { GzipCompressorOutputStream(it) }
         val path = installer.install("Mandarine", archive.absolutePath, archive.name, DesktopAssetKind.TAR, null)
-        assertEquals(File(apps, "mandarine-qt.AppImage").absolutePath, path)
+        assertEquals(File(apps, "mandarine-qt.AppImage").absoluteFile, File(path).absoluteFile)
         assertTrue(File(path).canExecute())
     }
 
@@ -87,7 +87,7 @@ class LinuxArchivesTest {
             z.closeArchiveEntry()
         }
         val path = installer.install("RetroArch", archive.absolutePath, archive.name, DesktopAssetKind.SEVEN_ZIP, null)
-        assertEquals(File(apps, "RetroArch-Linux-x86_64.AppImage").absolutePath, path)
+        assertEquals(File(apps, "RetroArch-Linux-x86_64.AppImage").absoluteFile, File(path).absoluteFile)
         assertEquals("appimage", File(path).readText())
         assertTrue(File(path).canExecute())
     }
