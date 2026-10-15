@@ -2105,7 +2105,8 @@ class JvmSyncService(
                 require(choices.isNotEmpty() && choices.map { it.entry }.distinct().size == choices.size) { "Choose each save destination once" }
                 val resolved = resolveImport(plan, choices)
                 val d = device ?: newDevice(ensureDeviceId(), cached.deviceName.ifBlank { defaultDeviceName }).also { device = it }
-                require(resolved.map { (_, _, slot) -> slot.key }.distinct().size == resolved.size) { "Choose one import for each shared memory card" }
+                // A Switch game's account save and its device save are two parts of one slot, each imported in turn.
+                require(resolved.map { (binding, _, slot) -> slot.key + "|" + binding.part }.distinct().size == resolved.size) { "Choose one import for each shared memory card" }
                 val failures = ArrayList<SaveImportFailure>()
                 val everyone = choices.flatMap { it.profiles.ifEmpty { listOf(profile) } }.toSet()
                 require(everyone.all { p -> profiles.value.any { it.id == p } }) { "Choose whose saves these are before importing" }
@@ -2143,7 +2144,7 @@ class JvmSyncService(
      */
     private fun resolveImport(plan: SaveImportPlan, choices: List<SaveImportChoice>): List<Triple<JvmSaveImporter.Binding, SaveQuery, LocalSlot>> {
         val bindings = choices.map { saveImporter.binding(plan, it) }
-        require(bindings.map { it.query.game.id + "|" + it.spot.kind }.distinct().size == bindings.size) { "Choose only one source save for each game at a time" }
+        require(bindings.map { it.query.game.id + "|" + it.spot.kind + "|" + it.part }.distinct().size == bindings.size) { "Choose only one source save for each game at a time" }
         return bindings.map { binding ->
             val query = canonical(binding.query)
             val fresh = SaveAdapters.forEmulator(query.emulatorId)?.locate(query, saveEnv)

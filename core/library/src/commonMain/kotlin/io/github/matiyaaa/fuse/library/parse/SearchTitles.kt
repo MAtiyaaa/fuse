@@ -115,8 +115,14 @@ object SearchTitles {
             else -> parsed.unknownTags.firstOrNull()?.text ?: return fallback(original)
         }
 
+        // One list number at most: what follows may start with a number of its own ("29. 999 - 9 Hours").
+        var numbered = false
+        fun unnumbered(x: String): String {
+            if (numbered) return x
+            return LeadingNumbers.strip(x).also { if (it != x) numbered = true }
+        }
         // The list number first, while its bracket ("12) Title") still marks it as one.
-        t = LeadingNumbers.strip(collapse(LeadingNumbers.strip(collapse(t)).replace(strayBrackets, " ")))
+        t = unnumbered(collapse(unnumbered(collapse(t)).replace(strayBrackets, " ")))
         val scene = ' ' !in t && ('.' in t || '_' in t)
         t = collapse(t.replace('_', ' '))
         group.find(t)?.takeIf { it.range.first > 0 }?.let { m ->
@@ -134,7 +140,7 @@ object SearchTitles {
             t = t.without(bareVersion)
             for (r in trailing) t = t.without(r)
             t = t.without(titleIdInFront).without(discIdInFront)
-            t = LeadingNumbers.strip(t)
+            t = unnumbered(t)
             t = t.without(edges)
         } while (t != previous)
 

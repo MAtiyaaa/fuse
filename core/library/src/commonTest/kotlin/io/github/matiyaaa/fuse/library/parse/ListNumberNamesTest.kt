@@ -38,6 +38,20 @@ class ListNumberNamesTest {
     }
 
     @Test
+    fun aNumberedNameThatStartsWithANumberKeepsItsOwn() {
+        for ((file, name) in listOf(
+            "27. 7th Dragon.nds" to "7th Dragon",
+            "29. 999 - 9 Hours, 9 Persons, 9 Doors (USA).nds" to "999 - 9 Hours, 9 Persons, 9 Doors",
+            "60. 007 - The World Is Not Enough (USA).z64" to "007 - The World Is Not Enough",
+            "47. 1080 Snowboarding.z64" to "1080 Snowboarding",
+        )) {
+            assertEquals(name, display(file), file)
+            assertEquals(name, search(file), file)
+        }
+        assertEquals("1.5 Life", display("1.5 Life.gba"))
+    }
+
+    @Test
     fun aSceneSwitchNameSearchesAsTheGame() {
         // The name another device's save carries, matched to this library's game by its search title.
         assertEquals("Red Dead Redemption", search("[ROMsNS] Red Dead Redemption v0 (01007820196A6000) (BASE).nsp"))

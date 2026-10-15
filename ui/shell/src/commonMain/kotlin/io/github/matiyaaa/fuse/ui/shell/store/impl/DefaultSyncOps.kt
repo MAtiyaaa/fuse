@@ -29,6 +29,8 @@ internal class DefaultSyncOps(
     /** Set by the store: one game for each system in the library, with the emulator it plays in here. */
     var samples: suspend () -> List<io.github.matiyaaa.fuse.sync.SaveQuery> = { emptyList() }
 
+    override suspend fun saveSamples() = runCatching { samples() }.getOrDefault(emptyList())
+
     override suspend fun saveFolders() = service?.saveFolders(runCatching { samples() }.getOrDefault(emptyList())).orEmpty()
 
     /** The question for a device that updated; set and answered by [HouseholdSignIns]. */

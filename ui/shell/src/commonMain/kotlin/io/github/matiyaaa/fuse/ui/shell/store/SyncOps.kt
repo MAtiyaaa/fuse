@@ -34,6 +34,9 @@ interface SyncOps {
     /** What Fuse Sync knows [game]'s saves by here (its emulator, files and names), or null. */
     suspend fun saveQuery(game: io.github.matiyaaa.fuse.model.GameId): io.github.matiyaaa.fuse.sync.SaveQuery? = null
 
+    /** One game of each system in the library, with the emulator it plays in here: how that system's saves are found. */
+    suspend fun saveSamples(): List<io.github.matiyaaa.fuse.sync.SaveQuery> = emptyList()
+
     /** Where each emulator in the library keeps its saves here (Settings, Save folders), for Fuse Sync and Syncthing alike. */
     suspend fun saveFolders(): List<io.github.matiyaaa.fuse.sync.EmulatorSaves> = emptyList()
 

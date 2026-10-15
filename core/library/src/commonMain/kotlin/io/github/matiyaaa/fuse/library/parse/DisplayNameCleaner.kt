@@ -180,8 +180,9 @@ object LeadingNumbers {
     private val spaced = Regex("^#?(\\d{1,6})\\s+[-\u2013\u2014:_]\\s+(?=\\S)")
     // A dash spaced on one side only, as people type it: "3- Title", "3 -Title", "3–Title" stays for [tight].
     private val halfSpaced = Regex("^#?(\\d{1,6})(?:[-\u2013\u2014]\\s+|\\s+[-\u2013\u2014])\\s*(?=\\p{L})")
-    // Dot or bracket, spaces optional: "12. Title", "12.Title", "12) Title".
-    private val dotted = Regex("^#?(\\d{1,6})\\s*[.)]\\s*(?=\\p{L})")
+    // Dot or bracket, spaces optional: "12. Title", "12.Title", "12) Title"; with a space, the name may
+    // start with a number of its own ("27. 7th Dragon", "60. 007 - The World Is Not Enough"), never "1.5".
+    private val dotted = Regex("^#?(\\d{1,6})\\s*[.)](?:\\s*(?=\\p{L})|\\s+(?=\\d))")
     // Tight dash or underscore: only three digits or more, so "10-Yard Fight" keeps its number.
     private val tight = Regex("^#?(\\d{3,6})[-_]\\s*(?=\\p{L})")
     // Leading zero and a tight dash or underscore: "01_Title", "05-Title".
