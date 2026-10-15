@@ -1,10 +1,11 @@
 package io.github.matiyaaa.fuse.sync
 
 import java.io.File
+import java.io.FilterInputStream
 import java.io.InputStream
 import java.nio.file.Files
-import java.util.zip.ZipFile
 import java.util.zip.CRC32
+import java.util.zip.ZipInputStream
 
 /**
  * Read-only source inspection, backed by a private copy. Adapter destinations and canonical save
@@ -233,13 +234,13 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
                 if (f.isFile && f.extension.equals("zip", true) && jksvZip(f)) {
                     // A JKSV backup kept as a ZIP beside others: its files, in a folder of its name.
                     // The same backup also kept unzipped beside it is one backup, read from the folder.
-                    if (!File(f.parentFile, f.nameWithoutExtension).isDirectory) ZipFile(f).use { zip ->
-                        unzip(zip, rel.removeSuffix(".zip").removeSuffix(".ZIP") + "/", names, ::copy, strip = wrapperOf(zip))
+                    if (!File(f.parentFile, f.nameWithoutExtension).isDirectory) {
+                        unzip(f, rel.removeSuffix(".zip").removeSuffix(".ZIP") + "/", names, ::copy, strip = wrapperOf(zipNames(f)))
                     }
                 } else if (f.isFile && (f.name == SwitchDumps.META || !SaveNoise.file(f.name))) copy(rel, f.length(), input = f::inputStream)
             }
         } else if (source.extension.equals("zip", true)) {
-            ZipFile(source).use { zip -> unzip(zip, "", names, ::copy) }
+            unzip(source, "", names, ::copy)
         } else {
             require(source.isFile) { "Choose a save file, folder or ZIP" }
             copy(source.name, source.length(), input = source::inputStream)
@@ -248,31 +249,55 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
         return out
     }
 
-    /** Unzips [zip] under [under], leaving out [strip], a folder every entry is in. */
-    private fun unzip(zip: ZipFile, under: String, names: MutableSet<String>, copy: (String, Long, Long?, () -> InputStream) -> Unit, strip: String = "") {
-        val entries = zip.entries()
-        var allEntries = 0
-        while (entries.hasMoreElements()) {
-            require(++allEntries <= limits.files) { "The archive has too many entries" }
-            val entry = entries.nextElement()
-            val inside = entry.name.removePrefix(strip)
-            if (inside.isEmpty() || inside == "/") continue
-            val name = under + inside.removeSuffix("/")
-            require(SavePath.isSafe(name)) { "The archive contains an unsafe path" }
-            if (entry.isDirectory) {
-                require(names.add(name.lowercase())) { "The archive contains duplicate paths" }
-            } else copy(under + inside, entry.size, entry.crc) { zip.getInputStream(entry) }
+    /**
+     * The entries of [zip] in order, each name with whether it is a folder. Read entry by entry, as
+     * JKSV can list a file twice (a backup written over in place) and java.util.zip.ZipFile refuses
+     * such a ZIP outright ("invalid CEN header (duplicate entry)").
+     */
+    private fun zipNames(zip: File): List<Pair<String, Boolean>> = ZipInputStream(zip.inputStream().buffered()).use { z ->
+        val out = ArrayList<Pair<String, Boolean>>()
+        while (true) {
+            val entry = z.nextEntry ?: break
+            require(out.size < limits.files) { "The archive has too many entries" }
+            out += entry.name to entry.isDirectory
+        }
+        out
+    }
+
+    /**
+     * Unzips [zip] under [under], leaving out [strip], a folder every entry is in. A name listed
+     * twice is one file: the last copy, the one written most recently.
+     */
+    private fun unzip(zip: File, under: String, names: MutableSet<String>, copy: (String, Long, Long?, () -> InputStream) -> Unit, strip: String = "") {
+        val listed = zipNames(zip)
+        val last = HashMap<String, Int>()
+        listed.forEachIndexed { i, (name, _) -> last[name] = i }
+        ZipInputStream(zip.inputStream().buffered()).use { z ->
+            var i = -1
+            while (true) {
+                val entry = z.nextEntry ?: break
+                i++
+                if (last[entry.name] != i) continue
+                val inside = entry.name.removePrefix(strip)
+                if (inside.isEmpty() || inside == "/") continue
+                val name = under + inside.removeSuffix("/")
+                require(SavePath.isSafe(name)) { "The archive contains an unsafe path" }
+                if (entry.isDirectory) {
+                    require(names.add(name.lowercase())) { "The archive contains duplicate paths" }
+                } else copy(under + inside, entry.size, entry.crc) { object : FilterInputStream(z) { override fun close() {} } }
+            }
         }
     }
 
     /**
-     * The one folder (with its `/`) that holds a backup zipped with its folder: everything in [zip] is
-     * in it, JKSV's meta file too. Else "" (a save's own single folder is never taken for one).
+     * The one folder (with its `/`) that holds a backup zipped with its folder: everything in the
+     * ZIP is in it, JKSV's meta file too. Else "" (a save's own single folder is never taken for one).
      */
-    private fun wrapperOf(zip: ZipFile): String {
-        if (zip.getEntry(SwitchDumps.META) != null) return ""
-        val top = zip.entries().asSequence().map { it.name.substringBefore('/', "") }.toSet().singleOrNull()?.takeIf { it.isNotEmpty() } ?: return ""
-        return if (zip.getEntry("$top/${SwitchDumps.META}") != null) "$top/" else ""
+    private fun wrapperOf(listed: List<Pair<String, Boolean>>): String {
+        val all = listed.map { it.first }.toSet()
+        if (SwitchDumps.META in all) return ""
+        val top = all.map { it.substringBefore('/', "") }.toSet().singleOrNull()?.takeIf { it.isNotEmpty() } ?: return ""
+        return if ("$top/${SwitchDumps.META}" in all) "$top/" else ""
     }
 
     /**
@@ -280,7 +305,7 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
      * in a game's folder of JKSV's (`JKSV/<game>/<backup>.zip`, older versions wrote no meta file).
      */
     private fun jksvZip(f: File): Boolean = runCatching {
-        ZipFile(f).use { it.getEntry(SwitchDumps.META) != null || wrapperOf(it).isNotEmpty() }
+        zipNames(f).let { listed -> listed.any { it.first == SwitchDumps.META } || wrapperOf(listed).isNotEmpty() }
     }.getOrDefault(false) || underJksv(f)
 
     private fun underJksv(f: File): Boolean {
