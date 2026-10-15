@@ -127,7 +127,7 @@ private class ValueTabs(private val e: Engine, private val scope: CoroutineScope
 // ------------------------------------------------------------------------------------- Fuseline 4.1
 
 object Fuseline4 : Engine {
-    override val name = "Fuseline 4.1"
+    override val name = "Fuseline 4.2"
     private val standard = io.github.matiyaaa.fuse.ui.fuseline.CubicCurve(0.2f, 0f, 0f, 1f)
     private val enter = io.github.matiyaaa.fuse.ui.fuseline.CubicCurve(0.05f, 0.7f, 0.1f, 1f)
 

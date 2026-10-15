@@ -140,7 +140,7 @@ fun AppState.homeStyleActions(): List<MenuAction> {
             "style", "Home style",
             FuseIcons.Dashboard,
             detail = "Now ${prefs.home.style.label()}. " + prefs.homeStyles().filter { it != prefs.home.style }.joinToString(" or ") { it.label() } + " instead",
-            trailing = if (FII_UNLOCK in prefs.unlockedNew) io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Badge("Unlocked") else io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Chevron,
+            trailing = if (prefs.newHomeUnlocked()) io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Badge("Unlocked") else io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Chevron,
             onSelect = { closeOverlays(); chooseHomeStyle() },
         ),
         MenuAction("home", "Home settings", FuseIcons.Dashboard, trailing = Trailing.Chevron, onSelect = { closeOverlays(); go(Route.Settings("home")) }),
@@ -197,7 +197,9 @@ fun FlowHome(app: AppState) {
     val systems = rememberSystems(app)
     PageEffect(item?.key, reorder, movingSystem, systems) {
         // A widget, app or collection without art of its own keeps the room that is showing.
-        app.hero = item?.hero(systems) ?: app.hero.takeIf { item != null }
+        val own = item?.hero(systems)
+        app.hero = own ?: app.hero.takeIf { item != null }
+        app.heroHeld = own == null
         app.hints = when {
             reorder != null || movingSystem -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Done"))
             item is ShelfItem.Game -> listOf(Hint(HintButton.CONFIRM, app.gameConfirmLabel), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"))

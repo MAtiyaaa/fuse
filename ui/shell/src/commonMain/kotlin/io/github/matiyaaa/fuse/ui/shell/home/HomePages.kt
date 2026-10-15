@@ -174,9 +174,16 @@ internal fun BoardPages(app: AppState, space: BoardSpace) {
     val claim = remember { ScrollClaim() }
     // Fii's board (Home's, dressed as Fii): glossy channels on any theme, and its bar along the
     // bottom. The Fused board keeps Fuse's plain tiles, also on a Fii theme.
-    val fii = space.key == "home" && home.look == io.github.matiyaaa.fuse.model.BoardLook.FII
+    // Duo's and Trio's boards are dressed the same way, each with its own bar and tiles.
+    val fii = space.key == "home" && home.look != io.github.matiyaaa.fuse.model.BoardLook.FUSE
+    // A small screen (a handheld's lower screen with the menus on it, a phone) gets the compact bar.
+    val window = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
+    val windowHeight = with(androidx.compose.ui.platform.LocalDensity.current) { window.height.toDp() }
+    val compactBar = prefs.display.flipped || (window.height > 0 && windowHeight < FII_COMPACT_BELOW)
+    val fiiBoard = remember(fii, compactBar, home.look) { if (fii) FiiBoard(if (compactBar) FII_BAR_COMPACT else FII_BAR, home.look) else null }
     val tiles = when {
         space.key != "home" -> null
+        home.look == io.github.matiyaaa.fuse.model.BoardLook.DUO -> io.github.matiyaaa.fuse.model.TileLook.PANEL
         fii -> io.github.matiyaaa.fuse.model.TileLook.GLOSS
         else -> io.github.matiyaaa.fuse.model.TileLook.PLAIN
     }
@@ -184,7 +191,7 @@ internal fun BoardPages(app: AppState, space: BoardSpace) {
         androidx.compose.runtime.CompositionLocalProvider(
             LocalScrollClaim provides claim,
             io.github.matiyaaa.fuse.ui.designsystem.components.LocalTileLook provides tiles,
-            LocalFiiBoard provides fii,
+            LocalFiiBoard provides fiiBoard,
         ) {
         HorizontalPager(
             state = pager,
@@ -226,16 +233,19 @@ internal fun BoardPages(app: AppState, space: BoardSpace) {
                 current = pager.currentPage,
                 onSelect = { app.focusZone = FocusZone.CONTENT; go(it) },
                 labels = List(count) { "Page ${it + 1} of $count" },
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Size.hintHeight + Space.xs + lift + if (fii) FII_BAR else 0.dp),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Size.hintHeight + Space.xs + lift + (fiiBoard?.bar ?: 0.dp)),
             )
         }
         // Fii's bar sits on the hints; arranging, the board's own tools take the foot instead.
-        if (fii && !arranging) FiiBar(app, Modifier.align(Alignment.BottomCenter).padding(bottom = Size.hintHeight))
+        if (fiiBoard != null && !arranging) FiiBar(app, fiiBoard, Modifier.align(Alignment.BottomCenter).padding(bottom = Size.hintHeight))
     }
 }
 
-/** True inside Fii's board, which keeps [FII_BAR] clear at its foot. */
-internal val LocalFiiBoard = androidx.compose.runtime.staticCompositionLocalOf { false }
+/** Fii's board, inside it (its bar's height and the controller on the bar); null on any other board. */
+internal val LocalFiiBoard = androidx.compose.runtime.staticCompositionLocalOf<FiiBoard?> { null }
+
+/** Shorter windows than this get Fii's compact bar. */
+private val FII_COMPACT_BELOW = 600.dp
 
 /** A page with nothing on it yet: what it is for, and how to fill it or take it away. */
 @Composable

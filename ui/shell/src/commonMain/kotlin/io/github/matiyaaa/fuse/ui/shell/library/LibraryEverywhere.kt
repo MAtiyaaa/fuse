@@ -9,6 +9,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.semantics.Role
+import io.github.matiyaaa.fuse.ui.fuseline.togetherWith
+import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
+import io.github.matiyaaa.fuse.ui.shell.components.gamesText
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.unit.dp
@@ -357,13 +363,29 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
                 chosen?.let(::options)
                 if (chosen != null) NavResult.ACTIVATED else NavResult.BLOCKED
             }
+            // The triggers jump along a shelf a screenful at a time, to its See all at the end and back.
+            NavAction.PAGE_DOWN, NavAction.PAGE_UP -> {
+                val key = row ?: return@InputLayer NavResult.BLOCKED
+                val last = sizeOf(key) - 1
+                val step = if (e.action == NavAction.PAGE_DOWN) PAGE_STEP else -PAGE_STEP
+                val to = (col + step).coerceIn(0, last)
+                if (to == col) NavResult.BLOCKED else { sel.setColumn(key, to); NavResult.MOVED }
+            }
             else -> NavResult.IGNORED
         }
     }
 
     io.github.matiyaaa.fuse.ui.shell.app.CompanionShowsCopies(true)
     val list = rememberLazyListState()
-    LaunchedEffect(sel.row) { if (rows.isNotEmpty()) list.animateScrollToItem(sel.row.coerceIn(0, rows.lastIndex)) }
+    // Only scrolls when the chosen shelf isn't wholly on screen, so shelves that fit keep their titles.
+    LaunchedEffect(sel.row) {
+        if (rows.isEmpty()) return@LaunchedEffect
+        val to = sel.row.coerceIn(0, rows.lastIndex)
+        val info = list.layoutInfo
+        val seen = info.visibleItemsInfo.firstOrNull { it.index == to }
+        val whole = seen != null && seen.offset >= info.viewportStartOffset && seen.offset + seen.size <= info.viewportEndOffset
+        if (!whole) list.animateScrollToItem(to)
+    }
     BoxWithConstraints(modifier.testTag("library.all")) {
         val tile = LocalTileMetrics.current.icon
         if (rows.isEmpty()) {
@@ -372,9 +394,13 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
             }
             return@BoxWithConstraints
         }
+        // What you're on, and where it is, always in the same place above the shelves (as Installed's
+        // stage does), so moving along a shelf never makes the page jump. Small screens skip it.
+        val stage = maxHeight >= STAGE_FROM
+        if (stage) AllStage(chosen, chosenSystem, if (row != null && chosen == null && chosenSystem == null) row else null, Modifier.fillMaxWidth().height(stageHeight(maxHeight)))
         LazyColumn(
             state = list,
-            modifier = Modifier.fillMaxSize().fadingEdges(list, top = Space.l, bottom = Space.xl).dragScroll(list),
+            modifier = Modifier.fillMaxSize().padding(top = if (stage) stageHeight(maxHeight) else 0.dp).fadingEdges(list, top = Space.l, bottom = Space.xl).dragScroll(list),
             contentPadding = PaddingValues(top = Space.s, bottom = Size.hintHeight + Space.l),
             verticalArrangement = Arrangement.spacedBy(Space.m),
         ) {
@@ -396,6 +422,7 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
                             onOptions = { i -> sel.row = r; sel.setColumn(key, i); options(games[i]) },
                             onSeeAll = { sel.row = r; sel.setColumn(key, games.size); seeAll(key) },
                             noun = if (key == ROW_STREAM) "app" else "game",
+                            named = !stage,
                         )
                     }
                 }
@@ -459,11 +486,13 @@ private fun EverywhereShelf(
     onSeeAll: () -> Unit,
     /** What the shelf holds, for its count ("game", or "app" for what computers stream). */
     noun: String = "game",
+    /** The chosen one is named under the shelf (no stage above to name it). */
+    named: Boolean = true,
 ) {
     val state = rememberLazyListState()
     LaunchedEffect(selected) { if (selected >= 0) state.animateScrollToItem(maxOf(0, selected - 1)) }
     Column {
-        ShelfTitle(title, icon, if (games.size == 1) "1 $noun" else "${games.size} ${noun}s")
+        ShelfHeader(title, icon, if (games.size == 1) "1 $noun" else "${games.size} ${noun}s", onSeeAll)
         LazyRow(
             state = state,
             modifier = Modifier.dragScroll(state, Orientation.Horizontal),
@@ -482,6 +511,7 @@ private fun EverywhereShelf(
             }
             item("seeall") { SeeAllTile(selected == games.size, tile, onSeeAll) }
         }
+        if (!named) return@Column
         val chosen = games.getOrNull(selected)
         // Room for both lines only under the shelf the selection is on, opening as it arrives: the
         // other shelves sit at the same rhythm as Home's and the systems shelf, with no empty band.
@@ -506,7 +536,7 @@ private fun SystemsShelf(systems: List<EverywhereSystem>, selected: Int, tile: D
     val state = rememberLazyListState()
     LaunchedEffect(selected) { if (selected >= 0) state.animateScrollToItem(maxOf(0, selected - 1)) }
     Column {
-        ShelfTitle("Systems", FuseIcons.Chip, "${systems.size}")
+        ShelfHeader("Systems", FuseIcons.Chip, if (systems.size == 1) "1 system" else "${systems.size} systems", null)
         LazyRow(state = state, modifier = Modifier.dragScroll(state, Orientation.Horizontal), contentPadding = PaddingValues(horizontal = Space.gutter, vertical = liftRoom(tile)), horizontalArrangement = Arrangement.spacedBy(LocalTileMetrics.current.gap)) {
             itemsIndexed(systems, key = { _, s -> s.card.platform.id.value }) { i, s ->
                 SystemTile(s.card, selected == i, size = tile, onClick = { onOpen(i) })
@@ -532,3 +562,121 @@ private fun SeeAllTile(selected: Boolean, size: Dp, onClick: () -> Unit) {
     }
 }
 
+
+/**
+ * A shelf's title, with how many it holds and, at the far end, See all as a button (the triggers
+ * reach it from the shelf too).
+ */
+@Composable
+private fun ShelfHeader(title: String, icon: ImageVector, count: String, onSeeAll: (() -> Unit)?) {
+    val c = Fuse.colors
+    Row(Modifier.fillMaxWidth().padding(horizontal = Space.gutter), verticalAlignment = Alignment.CenterVertically) {
+        FuseIcon(icon, size = Size.iconS, tint = c.accent)
+        Spacer(Modifier.width(Space.s))
+        FText(title, Fuse.type.titleSmall, maxLines = 1)
+        Spacer(Modifier.width(Space.s))
+        FText(count, Fuse.type.caption, color = c.textFaint, maxLines = 1)
+        Spacer(Modifier.weight(1f))
+        if (onSeeAll != null) {
+            Row(
+                Modifier
+                    .clip(io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape)
+                    .fuseClickable(shape = io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape, role = Role.Button, onClick = onSeeAll)
+                    .padding(horizontal = Space.m, vertical = Space.xs),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FText("See all", Fuse.type.label, color = c.textMuted, maxLines = 1)
+                Spacer(Modifier.width(Space.xxs))
+                FuseIcon(FuseIcons.ChevronRight, size = Size.iconS, tint = c.textMuted)
+            }
+        }
+    }
+}
+
+/**
+ * The All page's stage: the chosen game's logo (or its name), and under it where it is (here, on
+ * RomM, on another device, streamed), its system and year; a system says how many games it has.
+ */
+@Composable
+private fun AllStage(chosen: EverywhereGame?, system: EverywhereSystem?, seeAllOf: String?, modifier: Modifier) {
+    val c = Fuse.colors
+    Box(modifier.padding(horizontal = Space.gutter).padding(top = Space.m, bottom = Space.m), contentAlignment = Alignment.BottomStart) {
+        val motion = Fuse.motion
+        io.github.matiyaaa.fuse.ui.fuseline.Swap(
+            targetState = Triple(chosen?.let { it::class.simpleName + it.card.id.value }, system?.card?.platform?.id?.value, seeAllOf),
+            transitionSpec = {
+                io.github.matiyaaa.fuse.ui.fuseline.fadeIn(motion.fade(io.github.matiyaaa.fuse.ui.fuseline.Durations.FAST)) togetherWith
+                    io.github.matiyaaa.fuse.ui.fuseline.fadeOut(motion.fade(io.github.matiyaaa.fuse.ui.fuseline.Durations.INSTANT))
+            },
+            contentAlignment = Alignment.BottomStart,
+            label = "allStage",
+        ) { _ ->
+            Column(verticalArrangement = Arrangement.Bottom) {
+                when {
+                    chosen != null -> {
+                        val card = chosen.card
+                        val logo = card.art.logo
+                        val name: @Composable () -> Unit = { FText(card.title, Fuse.type.display, maxLines = 2) }
+                        if (logo != null) {
+                            io.github.matiyaaa.fuse.ui.designsystem.media.Artwork(
+                                logo, Modifier.height(STAGE_LOGO).widthIn(max = 520.dp).fillMaxWidth(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Fit, focusX = 0f, focusY = 1f, loading = false, fallback = name,
+                            )
+                        } else name()
+                        Spacer(Modifier.height(Space.s))
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                            WhereChip(chosen)
+                            FText(listOfNotNull(card.platformShort, card.year?.toString()).joinToString("  ·  "), Fuse.type.label, color = c.textMuted, maxLines = 1)
+                        }
+                    }
+                    system != null -> {
+                        FText(system.card.platform.name, Fuse.type.display, maxLines = 1)
+                        Spacer(Modifier.height(Space.s))
+                        FText(listOfNotNull(gamesText(system.card.gameCount).takeIf { system.local }, if (system.local) "on this device" else "on RomM or your other devices").joinToString(" "), Fuse.type.label, color = c.textMuted, maxLines = 1)
+                    }
+                    seeAllOf != null -> {
+                        FText("See all", Fuse.type.display, maxLines = 1)
+                        Spacer(Modifier.height(Space.s))
+                        FText("Every one, in a list of its own", Fuse.type.label, color = c.textMuted, maxLines = 1)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Where a game is, as a small chip: its icon and a word or two, in the accent when it is here. */
+@Composable
+private fun WhereChip(g: EverywhereGame) {
+    val c = Fuse.colors
+    val here = g is EverywhereGame.Here
+    val icon = when (g) {
+        is EverywhereGame.Here -> FuseIcons.HardDrive
+        is EverywhereGame.OnRomm -> FuseIcons.Cloud
+        is EverywhereGame.Elsewhere -> FuseIcons.MonitorSmartphone
+        is EverywhereGame.Streamed -> FuseIcons.Cast
+    }
+    Row(
+        Modifier
+            .clip(io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape)
+            .background(if (here) c.accentSoft else c.text.copy(alpha = if (c.isDark) 0.08f else 0.06f))
+            .padding(horizontal = Space.m, vertical = Space.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FuseIcon(icon, size = Size.iconS, tint = if (here) c.accent else c.textMuted)
+        Spacer(Modifier.width(Space.xs))
+        FText(g.where, Fuse.type.label, color = if (here) c.text else c.textMuted, maxLines = 1)
+    }
+}
+
+/** The stage's height: a third of the page, within reason. */
+private fun stageHeight(page: Dp): Dp = (page * 0.26f).coerceIn(140.dp, 230.dp)
+
+/** Shorter pages than this have no stage: the chosen game is named under its shelf instead. */
+private val STAGE_FROM = 520.dp
+
+/** The logo's height on the stage. */
+private val STAGE_LOGO = 96.dp
+
+/** How far the triggers jump along a shelf. */
+private const val PAGE_STEP = 6

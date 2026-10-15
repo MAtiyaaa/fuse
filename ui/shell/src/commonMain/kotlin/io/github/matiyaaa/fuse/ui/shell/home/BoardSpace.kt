@@ -223,6 +223,13 @@ internal class HomeSpace(
             val system = shown.getOrNull(at) ?: shown.firstOrNull() ?: return null
             return HeroSource(system.platform.id, system.art.hero, system.platform.accent.toColor())
         }
+        // A Jellyfin widget's film or episode lights the room, and the second screen shows it as it
+        // shows a game: what it is and where you're up to.
+        if (w != null && w.kind in MediaKinds) {
+            val items = mediaItems(w.kind, feed)
+            val item = items.getOrNull(at) ?: items.firstOrNull() ?: return null
+            return io.github.matiyaaa.fuse.ui.shell.jellyfin.heroOf(item)
+        }
         val game = w?.let { shownGame(it.kind, at) } ?: return null
         return game.room(systems[game.platformId])
     }

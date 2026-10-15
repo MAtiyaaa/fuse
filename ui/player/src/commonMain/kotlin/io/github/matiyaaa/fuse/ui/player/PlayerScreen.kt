@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.player
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -430,8 +431,8 @@ private fun Controls(
     val pad = if (narrow) Space.l else Space.xxl
     Box(Modifier.fillMaxSize()) {
         // Shade at the top and bottom so white controls read over any picture.
-        Box(Modifier.fillMaxWidth().height(160.dp).align(Alignment.TopCenter).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.72f), Color.Transparent))))
-        Box(Modifier.fillMaxWidth().height(if (short) 170.dp else 240.dp).align(Alignment.BottomCenter).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.82f)))))
+        Box(Modifier.fillMaxWidth().height(160.dp).align(Alignment.TopCenter).ditheredBackground(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.72f), Color.Transparent))))
+        Box(Modifier.fillMaxWidth().height(if (short) 170.dp else 240.dp).align(Alignment.BottomCenter).ditheredBackground(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.82f)))))
 
         // Title, what it is, and how it plays.
         Row(Modifier.fillMaxWidth().align(Alignment.TopStart).padding(horizontal = pad, vertical = if (short) Space.m else Space.xl), verticalAlignment = Alignment.CenterVertically) {
@@ -668,7 +669,7 @@ private fun NowPlaying(session: PlayerSession, narrow: Boolean, short: Boolean, 
     val upcoming = session.queue.drop(session.queueIndex + 1).take(if (short) 2 else 4)
     Box(Modifier.fillMaxSize()) {
         Artwork(item.backdrop ?: item.artwork, Modifier.fillMaxSize().blur(56.dp).graphicsLayer { alpha = 0.32f })
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.35f), Color.Black.copy(alpha = 0.7f)))))
+        Box(Modifier.fillMaxSize().ditheredBackground(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.35f), Color.Black.copy(alpha = 0.7f)))))
         BoxWithConstraints(Modifier.fillMaxSize().padding(top = if (short) 72.dp else 104.dp, bottom = maxOf(controls, Space.xl)).padding(horizontal = if (narrow) Space.l else Space.xxl)) {
             val side = !narrow && maxWidth > maxHeight * 1.2f
             val art = if (side) minOf(maxHeight, maxWidth * 0.4f, 440.dp) else minOf(maxWidth * 0.7f, maxHeight * 0.55f, 320.dp)

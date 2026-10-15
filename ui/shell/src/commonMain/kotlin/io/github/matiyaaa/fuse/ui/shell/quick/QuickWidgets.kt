@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.quick
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitVerticalTouchSlopOrCancellation
@@ -261,7 +262,7 @@ private fun MusicArt(now: NowPlaying, modifier: Modifier) {
                 this.shape = shape
                 clip = true
             }
-            .background(Brush.linearGradient(listOf(accent.copy(alpha = 0.95f), accent.copy(alpha = 0.55f)))),
+            .ditheredBackground(Brush.linearGradient(listOf(accent.copy(alpha = 0.95f), accent.copy(alpha = 0.55f)))),
         contentAlignment = Alignment.Center,
     ) {
         FuseIcon(if (now.media) FuseIcons.Film else FuseIcons.Music, size = Size.iconS, tint = c.onAccent, modifier = Modifier.padding(bottom = 6.dp))

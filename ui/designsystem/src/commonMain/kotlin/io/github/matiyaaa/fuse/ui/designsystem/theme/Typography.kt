@@ -86,11 +86,11 @@ private fun fuseTypography(sora: FontFamily, manrope: FontFamily, scale: Float):
     val direction = TextDirection.ContentOrLtr
     fun display(size: Int, line: Int, weight: FontWeight, tracking: Double, k: Float = titleScale) = TextStyle(
         fontFamily = sora, fontWeight = weight, fontSize = (size * k).sp, lineHeight = (line * k).sp,
-        letterSpacing = tracking.em, lineHeightStyle = trim, lineBreak = LineBreak.Heading, textDirection = direction,
+        letterSpacing = tracking.em, lineHeightStyle = trim, lineBreak = LineBreak.Heading, textDirection = direction, platformStyle = sharpText,
     )
     fun text(size: Int, line: Int, weight: FontWeight, tracking: Double = 0.0) = TextStyle(
         fontFamily = manrope, fontWeight = weight, fontSize = (size * scale).sp, lineHeight = (line * scale).sp,
-        letterSpacing = tracking.em, lineHeightStyle = trim, textDirection = direction,
+        letterSpacing = tracking.em, lineHeightStyle = trim, textDirection = direction, platformStyle = sharpText,
     )
     return FuseTypography(
         hero = display(46, 52, FontWeight.Bold, -0.025),

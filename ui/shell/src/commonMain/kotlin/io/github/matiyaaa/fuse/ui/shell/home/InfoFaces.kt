@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.home
 
 import androidx.compose.foundation.Canvas
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -147,7 +148,7 @@ private fun CalendarLeaf(now: Today, size: Dp) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
-            Modifier.fillMaxWidth().height(size * 0.32f).background(Brush.verticalGradient(listOf(lerp(c.accent, Color.White, 0.1f), c.accent))),
+            Modifier.fillMaxWidth().height(size * 0.32f).ditheredBackground(Brush.verticalGradient(listOf(lerp(c.accent, Color.White, 0.1f), c.accent))),
             contentAlignment = Alignment.Center,
         ) {
             FText(now.month.uppercase(), Fuse.type.overline.copy(fontSize = Fuse.type.overline.fontSize * (size / 60.dp).coerceIn(0.8f, 1.2f)), color = Color.White, maxLines = 1)

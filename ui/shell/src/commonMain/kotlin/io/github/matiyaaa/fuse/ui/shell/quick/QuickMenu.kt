@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.quick
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.shell.home.label
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -400,7 +401,7 @@ fun QuickMenu(app: AppState) {
             }
         }
         QuickId.CARTRIDGE -> QuickTile(sections.label(Destination.CARTRIDGE), sections.icon(Destination.CARTRIDGE)) { close(); app.selectTab(Destination.CARTRIDGE) }
-        QuickId.HOME_STYLE -> QuickTile("Home", if (prefs.home.mode == HomeMode.CHANNELS) FuseIcons.Grid else FuseIcons.Rows, detail = if (prefs.home.mode == HomeMode.CHANNELS) "Fused" else "Network") {
+        QuickId.HOME_STYLE -> QuickTile("Home", if (prefs.home.mode == HomeMode.CHANNELS) FuseIcons.Grid else FuseIcons.Rows, detail = prefs.home.style.label()) {
             app.switchHomeStyle()
         }
         QuickId.SOUND -> {
@@ -1242,76 +1243,13 @@ private fun EditHeader(adding: Boolean, onDone: () -> Unit) {
  */
 @Composable
 private fun QuickSections(page: QuickPage, badges: Map<QuickPage, Int>, modifier: Modifier = Modifier, onPick: (QuickPage) -> Unit) {
-    val c = Fuse.colors
-    val motion = Fuse.motion
     val pages = QuickPage.entries
-    Row(modifier.fillMaxWidth().height(SECTION_HEIGHT), verticalAlignment = Alignment.CenterVertically) {
-        ButtonGlyph(HintButton.PREV, size = ButtonGlyphDefaults.SmallSize, color = c.textFaint)
-        Spacer(Modifier.width(Space.s))
-        BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
-            val density = LocalDensity.current
-            val gap = Space.xxs
-            val closed = SECTION_HEIGHT
-            // The open section takes what the closed ones leave.
-            val open = (maxWidth - closed * (pages.size - 1) - gap * (pages.size - 1)).coerceAtLeast(closed)
-            val shares = pages.map { p -> fuselineFloat(if (p == page) 1f else 0f, motion.focusSpring(), label = "quick section ${p.name}") }
-            val tray = c.text.copy(alpha = if (c.isDark) 0.05f else 0.04f)
-            Box(Modifier.fillMaxSize().clip(PillShape).background(tray))
-            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.CenterVertically) {
-                pages.forEachIndexed { i, p ->
-                    val t = shares[i].value.coerceIn(0f, 1f)
-                    val on = p == page
-                    val width = with(density) { (closed.toPx() + (open - closed).toPx() * t).toDp() }
-                    val fill = c.text.copy(alpha = (if (c.isDark) 0.13f else 0.09f) * t)
-                    val tint = androidx.compose.ui.graphics.lerp(c.textMuted, c.text, t)
-                    Box(
-                        Modifier
-                            .width(width)
-                            .fillMaxHeight()
-                            .clip(PillShape)
-                            .background(fill)
-                            .fuseClickable(shape = PillShape, role = Role.Tab, onClick = { onPick(p) })
-                            .semantics { contentDescription = p.label; selected = on },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(contentAlignment = Alignment.Center) {
-                                val icon = p.icon
-                                if (icon != null) {
-                                    FuseIcon(icon, size = Size.iconS, tint = tint)
-                                } else {
-                                    io.github.matiyaaa.fuse.ui.shell.app.FuseMark(Modifier.size(Size.iconS), color = tint, spark = c.accent.copy(alpha = 0.5f + 0.5f * t))
-                                }
-                                val count = badges[p] ?: 0
-                                if (count > 0 && !on) {
-                                    Box(
-                                        Modifier.align(Alignment.TopEnd).offset(x = 5.dp, y = (-4).dp).size(8.dp).clip(CircleShape).background(c.accent),
-                                    )
-                                }
-                            }
-                            // The name widens in with its section and narrows away with it.
-                            FText(
-                                p.label,
-                                Fuse.type.label,
-                                color = tint,
-                                maxLines = 1,
-                                modifier = Modifier
-                                    .layout { m, cons ->
-                                        val placeable = m.measure(Constraints())
-                                        val room = (placeable.width + Space.s.roundToPx())
-                                        val w = (room * t).roundToInt().coerceAtMost(cons.maxWidth)
-                                        layout(w, placeable.height) { placeable.place(Space.s.roundToPx(), 0) }
-                                    }
-                                    .graphicsLayer { alpha = t; clip = true },
-                            )
-                        }
-                    }
-                }
-            }
-        }
-        Spacer(Modifier.width(Space.s))
-        ButtonGlyph(HintButton.NEXT, size = ButtonGlyphDefaults.SmallSize, color = c.textFaint)
-    }
+    io.github.matiyaaa.fuse.ui.shell.components.SectionStrip(
+        sections = pages.map { io.github.matiyaaa.fuse.ui.shell.components.StripSection(it.label, it.icon, badge = (badges[it] ?: 0) > 0) },
+        active = page.ordinal,
+        modifier = modifier,
+        onPick = { onPick(pages[it]) },
+    )
 }
 
 /** A row of the Downloads section: its transfer's own words and progress, as they move. */

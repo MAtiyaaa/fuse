@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.settings
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -382,7 +383,7 @@ private fun MiniHome(spec: ThemeSpec, scene: StageScene, spotlight: Spotlight? =
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .height(Size.hintHeight + Space.xxl)
-                .background(Brush.verticalGradient(0f to Color.Transparent, 0.55f to c.ink.copy(alpha = 0.78f), 1f to c.ink.copy(alpha = 0.94f))),
+                .ditheredBackground(Brush.verticalGradient(0f to Color.Transparent, 0.55f to c.ink.copy(alpha = 0.78f), 1f to c.ink.copy(alpha = 0.94f))),
         )
         HintBar(MINI_HINTS, Modifier.align(Alignment.BottomEnd).padding(horizontal = Space.gutter, vertical = Space.s).spot(targets, SpotPart.HINTS))
         // In the studio a panel stands on Home too, so panels, buttons and signals can be seen at work.
@@ -624,6 +625,8 @@ internal fun BackgroundStyle.label(): String = when (this) {
     BackgroundStyle.DUNES -> "Dunes"
     BackgroundStyle.FUSI -> "Fusi"
     BackgroundStyle.FII -> "Bubbles"
+    BackgroundStyle.DUO -> "Graph paper"
+    BackgroundStyle.TRIO -> "Dotted light"
 }
 
 internal fun BackgroundStyle.icon(): ImageVector = when (this) {
@@ -645,6 +648,8 @@ internal fun BackgroundStyle.icon(): ImageVector = when (this) {
     BackgroundStyle.DUNES -> FuseIcons.SunDim
     BackgroundStyle.FUSI -> FuseIcons.PawPrint
     BackgroundStyle.FII -> FuseIcons.CircleDot
+    BackgroundStyle.DUO -> FuseIcons.Grid
+    BackgroundStyle.TRIO -> FuseIcons.Sparkles
 }
 
 internal fun CornerFamily.label(): String = when (this) {
@@ -681,6 +686,8 @@ internal fun SoundProfile.label(): String = when (this) {
     SoundProfile.CLICK -> "Crisp"
     SoundProfile.CHIME -> "Chime"
     SoundProfile.BUBBLE -> "Bubble"
+    SoundProfile.PIP -> "Pip"
+    SoundProfile.TAP -> "Tap"
 }
 
 internal fun io.github.matiyaaa.fuse.model.QuickMenuLook.label(): String = when (this) {

@@ -135,8 +135,10 @@ fun Stage(
             return@Swap
         }
         Column {
-            if (s.eyebrow != null && !inlineEyebrow) {
-                Row(Modifier.padding(bottom = Space.s), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            // Folded to one line, the eyebrow tucks away with the meta line: left in, it took the
+            // logo's height and squeezed it to a speck.
+            if (s.eyebrow != null && !inlineEyebrow && fold < 1f) {
+                Row(Modifier.foldDown(fold).padding(bottom = Space.s), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                     Box(Modifier.size(Size.dot).background(s.accent.toColor(), CircleShape))
                     FText(s.eyebrow.uppercase(), Fuse.type.overline, color = c.textMuted, maxLines = 1)
                 }

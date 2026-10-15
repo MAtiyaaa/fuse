@@ -507,12 +507,116 @@ object ThemePresets {
     val fiiFamily: Set<String> = setOf("fii", "fii-night")
 
     /**
+     * Duo: a dual-screen handheld's menu. Light grey graph paper, flat cards in thin grey frames, a
+     * clean blue, charcoal text and short bright blips. Its own Home (Duo's board) is offered when
+     * it is chosen. Charcoal text reads at 11:1 on the paper, white on the accent at 4.9:1.
+     */
+    val Duo = ThemeSpec(
+        id = "duo",
+        name = "Duo",
+        tagline = "Graph paper, flat cards and bright blips",
+        palette = ThemePalette(
+            dark = false,
+            background = 0xFFECEEF1, surface = 0xFFFAFBFC, surfaceRaised = 0xFFFFFFFF,
+            accent = 0xFF1A6FCB, accentSoft = 0x261A6FCB, onAccent = 0xFFFFFFFF,
+            textPrimary = 0xFF2B2F35, textSecondary = 0xFF555C66, focusRing = 0xFF1F7FE6,
+            success = 0xFF1C8350, warning = 0xFF9A5B00, danger = 0xFFC62837,
+        ),
+        background = BackgroundStyle.DUO,
+        geometry = CornerFamily.SOFT,
+        quickMenu = QuickMenuLook.SOLID,
+        widgets = io.github.matiyaaa.fuse.model.WidgetLook.LIT,
+        focus = FocusStyle.RING,
+        motion = MotionProfile.STANDARD,
+        sound = SoundProfile.PIP,
+        ambient = AmbientSpec(secondary = 0xFF8FC3F5),
+        tiles = io.github.matiyaaa.fuse.model.TileLook.PANEL,
+    )
+
+    /** Duo at night: dark slate paper with the lines barely there, the same blue brighter, pale text. */
+    val DuoNight = ThemeSpec(
+        id = "duo-night",
+        name = "Duo Night",
+        tagline = "Duo with the lights down",
+        palette = ThemePalette(
+            dark = true,
+            background = 0xFF17191D, surface = 0xFF1F2227, surfaceRaised = 0xFF282C32,
+            accent = 0xFF5AA6F2, accentSoft = 0x335AA6F2, onAccent = 0xFF061A2E,
+            textPrimary = 0xFFE8EBEF, textSecondary = 0xFFA4ABB5, focusRing = 0xFF7DBAF7,
+            success = 0xFF5FD69A, warning = 0xFFFFC46B, danger = 0xFFFF7A7A,
+        ),
+        background = BackgroundStyle.DUO,
+        geometry = CornerFamily.SOFT,
+        quickMenu = QuickMenuLook.SOLID,
+        widgets = io.github.matiyaaa.fuse.model.WidgetLook.LIT,
+        focus = FocusStyle.RING,
+        motion = MotionProfile.STANDARD,
+        sound = SoundProfile.PIP,
+        ambient = AmbientSpec(secondary = 0xFF2E5F94),
+        tiles = io.github.matiyaaa.fuse.model.TileLook.PANEL,
+    )
+
+    /**
+     * Trio: a 3D handheld's home. A soft white light over a fine grid of dots, rounded glossy icons,
+     * a bright sky blue, slate text and soft wooden taps. Its own Home (Trio's board) is offered when
+     * it is chosen. Slate text reads at 10:1 on the white, white on the accent at 4.6:1.
+     */
+    val Trio = ThemeSpec(
+        id = "trio",
+        name = "Trio",
+        tagline = "Glossy icons over a dotted light",
+        palette = ThemePalette(
+            dark = false,
+            background = 0xFFF2F3F5, surface = 0xFFFFFFFF, surfaceRaised = 0xFFF7F8FA,
+            accent = 0xFF0B7AC0, accentSoft = 0x2641B4EA, onAccent = 0xFFFFFFFF,
+            textPrimary = 0xFF323840, textSecondary = 0xFF59616B, focusRing = 0xFF0A85BF,
+            success = 0xFF1C8350, warning = 0xFF9A5B00, danger = 0xFFC62837,
+        ),
+        background = BackgroundStyle.TRIO,
+        geometry = CornerFamily.ROUND,
+        quickMenu = QuickMenuLook.SOLID,
+        widgets = io.github.matiyaaa.fuse.model.WidgetLook.GLASS,
+        focus = FocusStyle.RING,
+        motion = MotionProfile.STANDARD,
+        sound = SoundProfile.TAP,
+        ambient = AmbientSpec(secondary = 0xFF41B4EA),
+        tiles = io.github.matiyaaa.fuse.model.TileLook.GLOSS,
+    )
+
+    /** Trio at night: deep charcoal, the dots glowing faintly, the blue bright, silver text. */
+    val TrioNight = ThemeSpec(
+        id = "trio-night",
+        name = "Trio Night",
+        tagline = "Trio after dark, the dots glowing",
+        palette = ThemePalette(
+            dark = true,
+            background = 0xFF141619, surface = 0xFF1C1F24, surfaceRaised = 0xFF25292F,
+            accent = 0xFF4FBDF2, accentSoft = 0x334FBDF2, onAccent = 0xFF04202C,
+            textPrimary = 0xFFE6EAEE, textSecondary = 0xFFA2AAB4, focusRing = 0xFF7ACEF7,
+            success = 0xFF5FD69A, warning = 0xFFFFC46B, danger = 0xFFFF7A7A,
+        ),
+        background = BackgroundStyle.TRIO,
+        geometry = CornerFamily.ROUND,
+        quickMenu = QuickMenuLook.SOLID,
+        widgets = io.github.matiyaaa.fuse.model.WidgetLook.GLASS,
+        focus = FocusStyle.RING,
+        motion = MotionProfile.STANDARD,
+        sound = SoundProfile.TAP,
+        ambient = AmbientSpec(secondary = 0xFF2A7FB0),
+        tiles = io.github.matiyaaa.fuse.model.TileLook.GLOSS,
+    )
+
+    /** The ids of the themes that come with Duo's and Trio's own Homes. */
+    val duoFamily: Set<String> = setOf("duo", "duo-night")
+    val trioFamily: Set<String> = setOf("trio", "trio-night")
+
+    /**
      * Every built-in theme in the order the gallery shows them: Fuse first (the default), then the
      * dark rooms from the plainest to the most decorated, then the bright ones.
      */
     val all: List<ThemeSpec> = listOf(
-        Fuse, Glass, Pitch, Starlight, Orbital, Crossbar, Wave, Blossom, Lagoon, Canopy, Blades, Sundown, Crt, FiiNight,
-        Daylight, PaperMint, Channels, Opal, Noon, Ridge, Olive, Fusi, Fii,
+        Fuse, Glass, Pitch, Starlight, Orbital, Crossbar, Wave, Blossom, Lagoon, Canopy, Blades, Sundown, Crt, FiiNight, DuoNight, TrioNight,
+        Daylight, PaperMint, Channels, Opal, Noon, Ridge, Olive, Fusi, Fii, Duo, Trio,
     )
 
     /** The dark rooms, in gallery order, for a gallery that shows them as a group. */

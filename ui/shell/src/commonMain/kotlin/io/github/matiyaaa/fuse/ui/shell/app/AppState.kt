@@ -317,7 +317,27 @@ class AppState(
     val openGroups = kept.openGroups
 
     /** What the room is lit by. Screens set it from their selection. */
-    var hero by mutableStateOf<HeroSource?>(null)
+    var hero: HeroSource?
+        get() = heroState
+        set(value) {
+            heroState = value
+            heroRoute = navigator.current
+            heroHeld = false
+        }
+    private var heroState by mutableStateOf<HeroSource?>(null)
+
+    /**
+     * The page that last set [hero]. The second screen follows the room only while that page is the
+     * one showing: a page that sets no room of its own never leaves it on the game seen before.
+     */
+    var heroRoute by mutableStateOf<Route?>(null)
+        private set
+
+    /**
+     * The room is only kept as a backdrop (the focused widget has no game of its own, so the art
+     * doesn't fade out and back in on the way past): the second screen shows nothing in particular.
+     */
+    var heroHeld by mutableStateOf(false)
 
     /** Hints for the current selection; screens set them. */
     var hints by mutableStateOf<List<Hint>>(emptyList())

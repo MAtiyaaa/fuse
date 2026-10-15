@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.sync
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -246,7 +247,7 @@ private fun SaveFoldersMark(size: Dp, modifier: Modifier = Modifier) {
     val accent = Fuse.colors.accent
     Box(
         modifier.size(size).clip(RoundedCornerShape(size * 0.28f))
-            .background(Brush.linearGradient(listOf(accent.copy(alpha = 0.3f), accent.copy(alpha = 0.1f)))),
+            .ditheredBackground(Brush.linearGradient(listOf(accent.copy(alpha = 0.3f), accent.copy(alpha = 0.1f)))),
         contentAlignment = Alignment.Center,
     ) {
         FuseIcon(FuseIcons.FolderOpen, size = size * 0.48f, tint = accent)

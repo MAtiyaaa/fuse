@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.addons
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -169,7 +170,7 @@ private fun StorePage(app: AppState, state: StoreState, item: StoreApp) {
             val shape = RoundedCornerShape(Fuse.geometry.panel)
             Box(
                 Modifier.fillMaxWidth().widthIn(max = 1180.dp).clip(shape)
-                    .background(Brush.linearGradient(listOf(lerp(tint, Color.Black, 0.38f), lerp(tint, Color.Black, 0.82f))))
+                    .ditheredBackground(Brush.linearGradient(listOf(lerp(tint, Color.Black, 0.38f), lerp(tint, Color.Black, 0.82f))))
                     .border(1.dp, Color.White.copy(alpha = 0.08f), shape)
                     .padding(if (compact) Space.l else Space.xl),
             ) {

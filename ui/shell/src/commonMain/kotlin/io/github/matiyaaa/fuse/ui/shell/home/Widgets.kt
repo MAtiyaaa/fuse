@@ -842,7 +842,7 @@ internal fun widgetStage(kind: WidgetKind, key: Any, feed: HomeFeed, cartridge: 
             info(time, "Today", "$day $date")
         }
         in MediaKinds -> mediaItems(kind, feed).firstOrNull()?.let {
-            info(mediaTitle(it), kind.title(), mediaCaption(it), "Jellyfin")
+            info(mediaTitle(it), kind.title(), mediaCaption(it), "Jellyfin").copy(logo = it.logo?.takeIf { _ -> it.type != io.github.matiyaaa.fuse.jellyfin.MediaType.ALBUM }?.sized(640))
         } ?: info(kind.title(), "Jellyfin", "Nothing here yet")
         WidgetKind.SYNC_STATUS, WidgetKind.SYNC_DEVICES -> info(kind.title(), "Fuse One", "Your saves, play time and settings on every device")
         WidgetKind.FOR_YOU, WidgetKind.SPOTLIGHT -> boardGames(kind, feed).firstOrNull()?.let {

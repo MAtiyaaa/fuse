@@ -19,14 +19,19 @@ enum class HomeMode {
 
 /** How the board is dressed: [FUSE] is Fuse's own; [FII] sets glossy channels over a bar with the clock. */
 @Serializable
-enum class BoardLook { FUSE, FII }
+enum class BoardLook { FUSE, FII, DUO, TRIO }
 
 /**
  * The Home styles a person picks from: the board in Fuse's look ([FUSED]), the rows ([NETWORK]), and
  * the board in Fii's look ([FII]), offered once Fii has unlocked it.
  */
 @Serializable
-enum class HomeStyle { FUSED, NETWORK, FII }
+enum class HomeStyle {
+    FUSED, NETWORK, FII, DUO, TRIO;
+
+    /** The styles a theme unlocks (Fii's, Duo's, Trio's), dressed boards with a bar at the bottom. */
+    val themed: Boolean get() = this == FII || this == DUO || this == TRIO
+}
 
 /** Everything that can sit on Home: Flow's rows (the [isRow] kinds), and every kind on the Channels board. */
 @Serializable
@@ -204,15 +209,23 @@ data class HomeLayoutConfig(
     val style: HomeStyle get() = when {
         mode == HomeMode.FLOW -> HomeStyle.NETWORK
         look == BoardLook.FII -> HomeStyle.FII
+        look == BoardLook.DUO -> HomeStyle.DUO
+        look == BoardLook.TRIO -> HomeStyle.TRIO
         else -> HomeStyle.FUSED
     }
 
-    /** This config showing [next]; choosing Fii's keeps the style it came from in [beforeFii]. */
+    /** This config showing [next]; choosing a themed style (Fii's, Duo's, Trio's) keeps the plain one it came from in [beforeFii]. */
     fun withStyle(next: HomeStyle): HomeLayoutConfig = when (next) {
         HomeStyle.FUSED -> copy(mode = HomeMode.CHANNELS, look = BoardLook.FUSE)
         HomeStyle.NETWORK -> copy(mode = HomeMode.FLOW, look = BoardLook.FUSE)
-        HomeStyle.FII -> copy(mode = HomeMode.CHANNELS, look = BoardLook.FII, beforeFii = if (style == HomeStyle.FII) beforeFii else style)
+        HomeStyle.FII -> themed(BoardLook.FII)
+        HomeStyle.DUO -> themed(BoardLook.DUO)
+        HomeStyle.TRIO -> themed(BoardLook.TRIO)
     }
+
+    /** A themed board ([look]), keeping the plain style it came from to go back to. */
+    private fun themed(look: BoardLook): HomeLayoutConfig =
+        copy(mode = HomeMode.CHANNELS, look = look, beforeFii = if (style.themed) beforeFii else style)
 
     /** How many pages the board has: the first, and [pages]. */
     val pageCount: Int get() = 1 + pages.size

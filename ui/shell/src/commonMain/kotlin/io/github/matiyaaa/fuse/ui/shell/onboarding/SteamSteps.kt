@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.onboarding
 
 import androidx.compose.foundation.Canvas
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -425,7 +426,7 @@ private fun SteamArtPreview() {
 private fun ArtCard(modifier: Modifier, label: String?, markScale: Float) {
     val c = Fuse.colors
     Box(
-        modifier.clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(listOf(Color(0xFF1B1E26), Color(0xFF0E1015)))),
+        modifier.clip(RoundedCornerShape(12.dp)).ditheredBackground(Brush.linearGradient(listOf(Color(0xFF1B1E26), Color(0xFF0E1015)))),
         contentAlignment = Alignment.Center,
     ) {
         Canvas(Modifier.fillMaxSize()) {

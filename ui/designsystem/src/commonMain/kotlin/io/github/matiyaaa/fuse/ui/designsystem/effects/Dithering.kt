@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse.ui.designsystem.effects
 
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 
 /**
@@ -57,3 +58,23 @@ fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDitheredCircle(
         canvas.drawCircle(center, radius, paint)
     }
 }
+
+/**
+ * [brush] behind the content, as `background(brush)`, dithered where the platform can
+ * ([Dithering.gradients]): for the dark scrims over art and other wide gradients that band on a TV.
+ * The dithered paint is made once per size, never per frame.
+ */
+fun androidx.compose.ui.Modifier.ditheredBackground(brush: androidx.compose.ui.graphics.Brush): androidx.compose.ui.Modifier =
+    this.then(
+        androidx.compose.ui.Modifier.drawWithCache {
+            val dither = Dithering.gradients
+            if (dither == null) {
+                onDrawBehind { drawRect(brush) }
+            } else {
+                val paint = Paint()
+                brush.applyTo(size, paint, 1f)
+                dither(paint)
+                onDrawBehind { drawIntoCanvas { it.drawRect(0f, 0f, size.width, size.height, paint) } }
+            }
+        },
+    )

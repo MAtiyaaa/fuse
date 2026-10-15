@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -338,7 +339,7 @@ private fun Screen(on: Boolean, art: Any?, fitArt: Boolean, accent: Color, modif
             .clip(glass)
             .then(
                 if (on) {
-                    Modifier.background(Brush.linearGradient(listOf(accent, accent.copy(alpha = 0.45f), c.surfaceDim)))
+                    Modifier.ditheredBackground(Brush.linearGradient(listOf(accent, accent.copy(alpha = 0.45f), c.surfaceDim)))
                 } else {
                     Modifier.background(c.surfaceDim).border(Size.stroke, c.hairline, glass)
                 },

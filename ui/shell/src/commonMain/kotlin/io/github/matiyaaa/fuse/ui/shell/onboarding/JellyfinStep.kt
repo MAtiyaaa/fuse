@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.onboarding
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -192,8 +193,8 @@ private fun Poster(colors: List<Color>, icon: androidx.compose.ui.graphics.vecto
         modifier
             .size(w, w * 1.45f)
             .clip(RoundedCornerShape(14.dp))
-            .background(Brush.linearGradient(colors))
-            .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.18f), Color.Transparent, Color.Black.copy(alpha = 0.28f)))),
+            .ditheredBackground(Brush.linearGradient(colors))
+            .ditheredBackground(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.18f), Color.Transparent, Color.Black.copy(alpha = 0.28f)))),
         contentAlignment = Alignment.TopStart,
     ) {
         FuseIcon(icon, size = if (big) 26.dp else 22.dp, tint = Color.White.copy(alpha = 0.92f), modifier = Modifier.padding(12.dp))

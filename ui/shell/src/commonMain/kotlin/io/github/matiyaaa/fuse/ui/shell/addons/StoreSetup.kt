@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.addons
 
 import androidx.compose.foundation.Canvas
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -161,7 +162,7 @@ private fun EditionCard(variant: StoreVariant, recommended: Boolean, selected: B
     val shape = remember { SquircleShape.fraction(0.08f) }
     val lit by io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat(if (selected) 1f else 0f, Fuse.motion.focusSpring(), label = "edition")
     Tile(selected = selected, modifier = modifier, shape = shape, cornerFraction = 0.08f, glow = accent, maxGrow = 8.dp, onClick = onClick) {
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(c.surfaceRaised, c.surface))))
+        Box(Modifier.fillMaxSize().ditheredBackground(Brush.verticalGradient(listOf(c.surfaceRaised, c.surface))))
         Column(Modifier.fillMaxSize().padding(if (compact) Space.m else Space.l)) {
             Box(
                 Modifier.fillMaxWidth().weight(1f).background(

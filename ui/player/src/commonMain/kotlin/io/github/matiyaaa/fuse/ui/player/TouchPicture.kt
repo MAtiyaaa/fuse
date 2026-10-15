@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.player
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -86,8 +87,8 @@ fun PlayerTouchPicture(
         if (reveal <= 0.01f) return@BoxWithConstraints
         Box(Modifier.fillMaxSize().graphicsLayer { alpha = reveal }) {
             // Shade top and bottom, so white controls read over any picture.
-            Box(Modifier.fillMaxWidth().height(120.dp).align(Alignment.TopCenter).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.7f), Color.Transparent))))
-            Box(Modifier.fillMaxWidth().height(150.dp).align(Alignment.BottomCenter).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f)))))
+            Box(Modifier.fillMaxWidth().height(120.dp).align(Alignment.TopCenter).ditheredBackground(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.7f), Color.Transparent))))
+            Box(Modifier.fillMaxWidth().height(150.dp).align(Alignment.BottomCenter).ditheredBackground(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f)))))
             // What is playing, and where it can go.
             Row(
                 Modifier.fillMaxWidth().align(Alignment.TopStart).padding(horizontal = if (narrow) Space.m else Space.l, vertical = Space.m),

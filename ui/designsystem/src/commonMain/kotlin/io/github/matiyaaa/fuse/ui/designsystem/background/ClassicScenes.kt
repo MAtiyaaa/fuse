@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.designsystem.background
 
+import io.github.matiyaaa.fuse.ui.designsystem.effects.drawDitheredRect
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -58,7 +59,7 @@ internal class WaveScene(look: SceneLook) : Scene(look) {
     override fun DrawScope.paint(t: Float) {
         val w = size.width
         val h = size.height
-        drawRect(top)
+        drawDitheredRect(top)
         bloom.draw(this, w * 0.62f, h * 0.64f, w * 0.55f, h * 0.2f, alpha = (if (look.dark) 0.16f else 0.08f) * k)
         for (layer in 0 until LAYERS) {
             val path = paths[layer]
@@ -205,7 +206,7 @@ internal class StripesScene(look: SceneLook) : Scene(look) {
     override fun DrawScope.paint(t: Float) {
         val w = size.width
         val h = size.height
-        drawRect(top)
+        drawDitheredRect(top)
         val gap = 22f * density
         var x = -h + (t * 4f * density) % gap
         while (x < w) {

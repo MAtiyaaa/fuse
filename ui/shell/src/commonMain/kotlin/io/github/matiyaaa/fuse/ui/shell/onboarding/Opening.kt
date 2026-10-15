@@ -61,6 +61,14 @@ internal fun SetupOpening(onDone: () -> Unit, onCovering: (Boolean) -> Unit = {}
     // The mark catching light is the moment the sound comes.
     val lit = play.timeMs >= IGNITE_AT
     LaunchedEffect(lit) { if (lit && !reduced) sounds.play(SoundCue.LAUNCH) }
+    // The match struck as the spark sets off, its flare as it runs, and a bloom as the camera pulls
+    // back and everything opens out around the mark.
+    val struck = play.timeMs >= STRIKE_AT
+    val running = play.timeMs >= FLARE_AT
+    val opening = play.timeMs >= BLOOM_AT
+    LaunchedEffect(struck) { if (struck && !reduced && play.timeMs < FLARE_AT) sounds.play(SoundCue.STRIKE) }
+    LaunchedEffect(running) { if (running && !reduced && play.timeMs < BLOOM_AT) sounds.play(SoundCue.FLARE) }
+    LaunchedEffect(opening) { if (opening && !reduced && play.timeMs < IGNITE_AT) sounds.play(SoundCue.BLOOM) }
     InputLayer(priority = LayerPriority.DIALOG + 60, modal = true) { _ ->
         play.skip()
         NavResult.CONSUMED
@@ -228,6 +236,11 @@ private fun lerp(a: Color, b: Color, f: Float) = Color(
 
 /** When the spark reaches its place and the mark lights. */
 private const val IGNITE_AT = 4_100f
+
+/** The match struck as the spark appears, its flare as the spark runs, the bloom as the camera pulls back. */
+private const val STRIKE_AT = 420f
+private const val FLARE_AT = 600f
+private const val BLOOM_AT = 2_200f
 
 /** The opening's choreography, in milliseconds. */
 private val OpeningTimeline = Timeline(7_400) {

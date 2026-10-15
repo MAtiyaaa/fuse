@@ -33,13 +33,19 @@ fun PrefetchArt(
     limit: Int = Int.MAX_VALUE,
     /** The art fills (crops to) its space, like a background, instead of fitting in it. */
     fill: Boolean = false,
+    /**
+     * Items in a row of a grid: the depth counts rows then (Fuseline 4.2), so a fling down a grid
+     * finds the next rows' art ready, not just the next few tiles of the row it is on.
+     */
+    span: Int = 1,
 ) {
-    val depth = Fuse.quality.prefetchDepth.coerceAtMost(limit)
+    val depth = (Fuse.quality.prefetchDepth * span.coerceIn(1, 12)).coerceAtMost(limit)
     val context = LocalPlatformContext.current
     val px = size?.let { with(LocalDensity.current) { it.roundToPx() } }
     val scope = rememberCoroutineScope()
     val asked = remember(px) { HashSet<Any>() }
     LaunchedEffect(index, models, depth, px) {
+        // Rows below first: a list is mostly read downwards.
         if (depth <= 0 || index < 0) return@LaunchedEffect
         val loader = SingletonImageLoader.get(context)
         if (asked.size > MAX_REMEMBERED) asked.clear()

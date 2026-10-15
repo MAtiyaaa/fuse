@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.jellyfin
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -74,7 +75,7 @@ internal fun WideCard(item: MediaItem, selected: Boolean, width: Dp, onClick: ()
         Tile(selected = selected, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f), glow = accentOf(item.name), onClick = onClick, onLongClick = onLongClick) {
             Artwork(art.at(WIDE_WIDTH), Modifier.fillMaxSize(), fallback = { GeneratedArt(item.seriesName ?: item.name, accentOf(item.name), Modifier.fillMaxSize(), slot = ArtSlot.WIDE) })
             // A logo or the name over the lower part, for art without words in it.
-            Box(Modifier.fillMaxWidth().height(56.dp).align(Alignment.BottomCenter).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f)))))
+            Box(Modifier.fillMaxWidth().height(56.dp).align(Alignment.BottomCenter).ditheredBackground(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f)))))
             Badges(item, Modifier.align(Alignment.TopEnd).padding(Space.s))
             item.progress?.let { Progress(it, Modifier.align(Alignment.BottomCenter)) }
         }
@@ -93,7 +94,7 @@ internal fun WideCard(item: MediaItem, selected: Boolean, width: Dp, onClick: ()
 internal fun LibraryCard(item: MediaItem, selected: Boolean, width: Dp, onClick: () -> Unit) {
     Tile(selected = selected, modifier = Modifier.width(width).aspectRatio(16f / 9f), glow = accentOf(item.name), onClick = onClick) {
         Artwork(item.poster.at(WIDE_WIDTH), Modifier.fillMaxSize(), fallback = { GeneratedArt(item.name, accentOf(item.name), Modifier.fillMaxSize(), slot = ArtSlot.WIDE, showText = false) })
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.62f)))))
+        Box(Modifier.fillMaxSize().ditheredBackground(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.62f)))))
         Row(Modifier.align(Alignment.BottomStart).padding(Space.m), verticalAlignment = Alignment.CenterVertically) {
             FuseIcon(libraryIcon(item), size = 18.dp, tint = Color.White)
             Spacer(Modifier.width(Space.s))

@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -112,7 +113,7 @@ internal fun AchievementsSheet(store: FuseStore, id: GameId) {
         Modifier
             .fillMaxSize()
             .background(c.ink)
-            .background(Brush.verticalGradient(listOf(c.surfaceRaised.copy(alpha = 0.55f), Color.Transparent), endY = 600f))
+            .ditheredBackground(Brush.verticalGradient(listOf(c.surfaceRaised.copy(alpha = 0.55f), Color.Transparent), endY = 600f))
             // Touches land here, never on the page beneath.
             .pointerInput(Unit) { detectTapGestures { } },
     ) {

@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.async
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.File
 import java.net.ServerSocket
@@ -260,6 +261,56 @@ class ServiceTest {
         deck.switchTo(mo.id).getOrThrow()
         assertEquals(mo.id, deckSettings.current().sync.activeProfile)
         assertEquals(600L, deckLib.gamesNow()[ct.id]?.totalSeconds)
+    }
+
+    @Test
+    fun someoneThisDeviceKnowsArrivesAtOnceAndTheHostIsAskedAfter(): Unit = runBlocking {
+        val (pc, _) = service("Gaming PC", Library())
+        val (deck, deckSettings) = service("Steam Deck", Library())
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        val sam = pc.createProfile("Sam", "owl", "2468").getOrThrow()
+        deck.syncNow().getOrThrow()
+        // Each plays here once, so the Deck keeps both their records and Sam's PIN (hashed).
+        deck.switchTo(sam.id, "2468").getOrThrow()
+        deck.switchTo(mo.id).getOrThrow()
+        // From then on a switch is the Deck's own work: quick, whatever the host is doing.
+        pc.stop()
+        val started = System.nanoTime()
+        deck.switchTo(sam.id, "2468").getOrThrow()
+        val ms = (System.nanoTime() - started) / 1_000_000
+        assertEquals(sam.id, deckSettings.current().sync.activeProfile)
+        assertTrue(ms < 1_000, "switching to someone known here took $ms ms")
+        // A wrong PIN is still refused here, and the Deck stays with Sam.
+        deck.switchTo(mo.id).getOrThrow()
+        assertTrue(deck.switchTo(sam.id, "1111").exceptionOrNull()?.message.orEmpty().contains("PIN"))
+        assertEquals(mo.id, deckSettings.current().sync.activeProfile)
+    }
+
+    @Test
+    fun aProfileDeletedElsewhereSendsTheDeviceBackAfterTheSwitch(): Unit = runBlocking {
+        val (pc, _) = service("Gaming PC", Library())
+        val (deck, deckSettings) = service("Steam Deck", Library())
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        val sam = pc.createProfile("Sam", "owl", null).getOrThrow()
+        deck.syncNow().getOrThrow()
+        deck.switchTo(sam.id).getOrThrow()
+        deck.switchTo(mo.id).getOrThrow()
+        // Sam is deleted on the PC. If the Deck has heard, it refuses; if it hasn't, it switches from
+        // what it keeps, the host then says no, and the Deck goes back to Mo.
+        pc.deleteProfile(sam.id).getOrThrow()
+        val r = deck.switchTo(sam.id)
+        if (r.isFailure) {
+            assertEquals(mo.id, deckSettings.current().sync.activeProfile)
+            pc.stop()
+            return@runBlocking
+        }
+        val back = withTimeoutOrNull(10_000) { while (deckSettings.current().sync.activeProfile != mo.id) kotlinx.coroutines.delay(50) }
+        assertNotNull(back, "still on ${deckSettings.current().sync.activeProfile}: ${deck.activity.value.take(6).joinToString { it.text }}")
+        pc.stop()
     }
 
     @Test

@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.collections
 
 import androidx.compose.ui.unit.dp
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.layout.Row
 import io.github.matiyaaa.fuse.ui.designsystem.components.FuseButton
 import androidx.compose.foundation.background
@@ -358,7 +359,7 @@ private fun SlotFace(shape: androidx.compose.ui.graphics.Shape, dashed: Boolean 
         Modifier
             .fillMaxSize()
             .background(fill)
-            .background(Brush.verticalGradient(listOf(light, Color.Transparent)))
+            .ditheredBackground(Brush.verticalGradient(listOf(light, Color.Transparent)))
             .drawWithCache {
                 val stroke = Size.focusStroke.toPx()
                 val inset = stroke / 2 + 1f

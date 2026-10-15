@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.2.12 is the <b>Native Update</b>: Fuse opens fast and scrolls smoothly with thousands of games on every system (Fuseline 4.2), and Fii, a new theme in light and dark with a Home of its own</sub><br>
+<sub>0.4.2.13 is the <b>Native Update</b>: Duo and Trio themes with Homes of their own, profiles that switch at once, a second screen that follows you, and a rebuilt Library</sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -54,56 +54,75 @@ Home screen.
 
 ## A dark room, lit by the game you're on
 
-The game you are on sets the mood. Its art fills the room, its colour tints the glow, and the tile
-under your thumb lifts toward you with a single sweep of light.
+Every game, everywhere it lives: on this device, on your RomM server and on your other devices, in
+one Library, with its art, its logo and where it is. The game you are on sets the mood, and the
+tile under your thumb lifts toward you with a single sweep of light.
 
-<a href="docs/assets/screenshots/library.webp"><img src="docs/assets/screenshots/library.webp" width="100%" alt="Fuse's Library on an AYN Thor: 2010 FIFA World Cup South Africa is in focus, its logo large over a stadium full of fans that fills the whole screen. Below, rows of square box art: 2014 FIFA World Cup Brazil, Animal Crossing, Assassin's Creed, Balatro, Cooking Mama and Crazy Taxi."></a>
+<a href="docs/assets/screenshots/library.webp"><img src="docs/assets/screenshots/library.webp" width="100%" alt="Fuse's Library, All: Zombies Ate My Neighbors in focus, its logo above the shelves with Installed, SNES and 1993. Below, Recently Added (Zombies Ate My Neighbors, A Link to the Past, Terranigma, Super Metroid, Yoshi's Island, Super Mario World, Street Fighter II Turbo), Systems (DS, Game Boy Advance, Nintendo 64, Super Nintendo, NES, Game Boy, Dreamcast, 3DS) and On RomM (Tomodachi Life, 2010 FIFA World Cup, Crafting Mama, X-Men Origins: Wolverine, Spider-Man)."></a>
 
-<sub><b>Library.</b> The game you're on fills the room.</sub>
+<sub><b>Library, All.</b> 348 games from this device, RomM and the household, in shelves you reach with a press.</sub>
+
+<br><br>
+
+<a href="docs/assets/screenshots/tour.mp4"><img src="docs/assets/screenshots/tour.webp" width="100%" alt="A tour of Fuse: the Library, Trio's Home, the Installed grid, a game's page, Jellyfin, the themes and Duo's Home."></a>
+
+<sub><b>A short tour.</b> <a href="docs/assets/screenshots/tour.mp4">Watch it as a video</a>.</sub>
 
 </div>
 
 <table>
   <tr>
     <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/home-channels.webp"><img src="docs/assets/screenshots/home-channels.webp" width="100%" alt="Home as a board of tiles: 14 systems and 49 games, a wide Continue playing tile with Geometry Dash and Cooking Mama, a Systems tile with Steam, PlayStation, PS2 and PS3, New in your library, and Recent achievements."></a>
+      <a href="docs/assets/screenshots/home-trio.webp"><img src="docs/assets/screenshots/home-trio.webp" width="100%" alt="Home in the Trio theme: a board of rounded glossy widgets over a dotted light, Favourites, For You with Chrono Trigger, and a Spotlight on Chrono Trigger, with a white toolbar along the bottom holding the time and two rounded buttons."></a>
       <br><b>Home, a board you arrange</b>
-      <br><sub>Continue playing, your systems, what's new and your achievements, as tiles you place and resize yourself, or as a flowing Home if you like.</sub>
+      <br><sub>Continue playing, your systems, what's new, picks for you, achievements, Jellyfin and more, as tiles you place and resize. Here in Trio, with the Home it unlocks.</sub>
     </td>
     <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/systems.webp"><img src="docs/assets/screenshots/systems.webp" width="100%" alt="The Systems screen: Steam in focus with 10 games that start in GameNative, then PlayStation, PS2, PS3, PSP, Nintendo 64, DS, 3DS, Game Boy, Game Boy Advance, Switch, Dreamcast, Xbox 360 and Android, each with its own logo and artwork."></a>
+      <a href="docs/assets/screenshots/library-installed.webp"><img src="docs/assets/screenshots/library-installed.webp" width="100%" alt="The Library's Installed grid in the Trio theme: 43 games in glossy rounded frames, Mega Man X in focus, from A Link to the Past and Ocarina of Time to Super Mario RPG and Zombies Ate My Neighbors."></a>
+      <br><b>What's on this device</b>
+      <br><sub>Installed, Favourites and Recently played, as box art, icons, capsules or a list, sorted and filtered your way.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/assets/screenshots/game-page.webp"><img src="docs/assets/screenshots/game-page.webp" width="100%" alt="The page of The Legend of Zelda: A Link to the Past: its logo, Super Nintendo, 1991, Adventure and Puzzle, Play and Choose emulator, 15 hours to beat, the description, and 109 achievements."></a>
+      <br><b>A page for every game</b>
+      <br><sub>Its details, how long it takes to beat, its achievements, where it is, its saves, patches and cheats, and which emulator starts it.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/assets/screenshots/systems.webp"><img src="docs/assets/screenshots/systems.webp" width="100%" alt="The Systems screen: Nintendo DS in focus over its own art, next to Game Boy Advance, Nintendo 64, Super Nintendo, NES and Game Boy, each with its logo."></a>
       <br><b>Systems, with art of their own</b>
-      <br><sub>Logos, artwork and colours for every system, with its game count and the emulator behind it.</sub>
+      <br><sub>Logos, art and colours for 157 systems, each with its game count, its emulator and its own page.</sub>
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/system-page.webp"><img src="docs/assets/screenshots/system-page.webp" width="100%" alt="The Nintendo Switch page: Animal Crossing: New Horizons in focus, its island art filling the screen, next to Mario Kart 8 Deluxe, Red Dead Redemption, Story of Seasons and Super Mario Odyssey."></a>
-      <br><b>A page for every system</b>
-      <br><sub>Its games over the art of the one you're on, sorted and laid out the way you like for that system.</sub>
+      <a href="docs/assets/screenshots/jellyfin.webp"><img src="docs/assets/screenshots/jellyfin.webp" width="100%" alt="Jellyfin in Fuse: Continue watching with Barry, Lanterns, Spider-Man: Brand New Day and Captain America: Civil War, the Movies and Shows libraries, and New in Movies."></a>
+      <br><b>Films, shows and music</b>
+      <br><sub>Your Jellyfin server, played by Fuse Player: continue watching, next up, seasons, music and search.</sub>
     </td>
     <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/apps.webp"><img src="docs/assets/screenshots/apps.webp" width="100%" alt="Apps, Emulators: 15 found on the device, from ARMSX1, ARMSX2, ARMSX3, AzaharPlus, Cemu, Dolphin, DuckStation and Eden to Flycast, GameNative, melonDS, PPSSPP, RetroArch, Vita3K and XenDroid."></a>
-      <br><b>Your emulators, found for you</b>
-      <br><sub>On Android, every emulator on the device in one place, next to your pinned apps and an app drawer.</sub>
+      <a href="docs/assets/screenshots/themes.webp"><img src="docs/assets/screenshots/themes.webp" width="100%" alt="The theme gallery in Trio: a live preview of the Library, and themes from Trio Night, Daylight and Paper Mint to Fii, Duo and Trio, with Make your own and Add a theme."></a>
+      <br><b>27 themes, and yours</b>
+      <br><sub>Each with its own room, corners, focus, motion and sounds. Fii, Duo and Trio come with Homes of their own.</sub>
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/quick-menu.webp"><img src="docs/assets/screenshots/quick-menu.webp" width="100%" alt="The quick menu over Home: the time and date, battery at 80 percent with 4 hours left, and tiles for Wi-Fi, Bluetooth, Screenshot, Display, Controller, Performance, Low Power, Find games and Cartridge."></a>
+      <a href="docs/assets/screenshots/home-duo.webp"><img src="docs/assets/screenshots/home-duo.webp" width="100%" alt="Home in the Duo theme: flat cards on graph paper, the Nintendo DS in Systems, Zombies Ate My Neighbors new in the library and Chrono Trigger for you, with a bevelled grey strip along the bottom holding the time in a lit panel between two squared buttons."></a>
+      <br><b>Duo's Home</b>
+      <br><sub>Flat cards on graph paper, with the time in a lit panel, after a dual-screen handheld's menu.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/assets/screenshots/quick-menu.webp"><img src="docs/assets/screenshots/quick-menu.webp" width="100%" alt="The quick menu over Duo's Home: the time and date, tiles for Screenshot, Display, Controller, Performance, Low Power, Find games, Addons, Home and Sound, and the menu music playing."></a>
       <br><b>Everything at a press</b>
-      <br><sub>The quick menu: time, battery left, Wi-Fi, screenshots, what is playing and more, from any screen, arranged the way you like.</sub>
-    </td>
-    <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/keyboard.webp"><img src="docs/assets/screenshots/keyboard.webp" width="100%" alt="Search with Fuse's controller keyboard: a field for games, systems and apps above a full keyboard, with hints for type, delete, space, cursor and results on the controller's buttons."></a>
-      <br><b>Type with a controller</b>
-      <br><sub>A keyboard made for buttons and sticks, with a cursor, shortcuts on every face button, and paste.</sub>
+      <br><sub>The quick menu: time, screenshots, display, controller, performance, what's playing and more, from any screen, arranged your way.</sub>
     </td>
   </tr>
 </table>
 
-<p align="center"><sub>Screenshots taken with Fuse on an AYN Thor (1920 x 1080), with a real library and the art Fuse filled
-in for it; system art from <a href="https://github.com/anthonycaccese/art-book-next-es-de">Art Book Next</a>. The games, their names and their art belong to their owners.
+<p align="center"><sub>Captured from Fuse 0.4.2.13 on Linux at 1920 x 1080, with a real household library, RomM and Jellyfin, and the art Fuse filled
+in for them. The games, films, their names and their art belong to their owners.
 Fuse comes with no games and is not affiliated with them.</sub></p>
 
 <picture>
@@ -186,39 +205,20 @@ They behave the same on every device, answer to one design, and get better with 
       <img src="docs/assets/icons/fuseline.svg" width="56" height="56" alt=""><br>
       <h3>Fuseline <sub>by Fuse</sub></h3>
       Fuse's own animation engine, named after the line in Fuse's logo that carries the spark. Every
-      movement in Fuse runs on it, from a tile's lift to the setup's opening. Fuse 0.3.7 brought
-      <b>Fuseline 3</b>, where motion never breaks, 0.3.7.5 <b>Fuseline 3.1</b>, which took work off
-      every frame around it, and 0.4.0 brings <b>Fuseline 4</b>, which no longer runs motion just
-      because time passes.
+      movement in Fuse runs on it, from a tile's lift to the startup's ignition. Fuseline 4.2 is
+      the one in Fuse today.
       <ul>
-        <li><b>Fuseline 4: worked out when it is read.</b> Every motion is solved in closed form, so
-        a value is worked out from its formula for the frame being shown, exactly where stepping it
-        every frame would have left it, without the frames.</li>
-        <li><b>Fuseline 4: left alone until it could be seen to change.</b> A value proves the first
-        moment it could move far enough to be seen and isn't touched before then; a value nobody is
-        looking at rests until it arrives, and comes back exactly where it would have been.</li>
-        <li><b>Fuseline 4: shared motion, solved once.</b> Every value on the same spring shares one
-        solution a frame, and a colour's four numbers solve their curve once.</li>
-        <li><b>Fuseline 3.1: values without coroutines.</b> A tile's lift, a button's colour and a
-        panel's size follow their targets with no coroutine of their own, so a page of tiles
-        composes faster and in a third of the memory.</li>
-        <li><b>Fuseline 3.1: no invisible frames, and decoration that waits for you.</b> A frame that
-        would move something less than anyone could see isn't drawn again, and the theme's room
-        holds still while you press buttons, then carries on as before.</li>
-        <li><b>Fuseline 3: motion never breaks.</b> Whatever interrupts something moving, it carries
-        on from where it is, at the speed it has.</li>
-        <li><b>One frame for every move.</b> A hundred values moving cost one frame wait, not a
-        hundred: a screen full of motion takes about a tenth of Compose's time and memory.</li>
-        <li><b>Exact curves and springs.</b> Béziers solved with Newton steps, springs in closed
-        form, retargeted mid-flight without a jolt.</li>
-        <li><b>Fuseline 2 follows in place.</b> A spring following a finger or a scroll takes each
-        new target without a new move: about 16 times faster than before when every value is
-        retargeted every frame, measured.</li>
-        <li><b>Colours blend through Oklab</b>, so a fade stays even instead of dipping grey.</li>
-        <li><b>Your motion choice everywhere</b>: Enhanced, Standard, Minimal, Reduced and Low Power apply to every
-        animation at once.</li>
-        <li><b>Guarded by tests:</b> nothing in Fuse may import Compose's animation, and Fuseline 3,
-        2 and 1 are kept in the tests, as they shipped, to measure every new Fuseline against.</li>
+        <li><b>Worked out when it is read.</b> Every motion is solved in closed form, so a value is
+        exact for the frame being shown, without stepping through the frames before it.</li>
+        <li><b>Left alone until it could be seen to change.</b> A value nobody is looking at rests,
+        and comes back exactly where it would have been.</li>
+        <li><b>Motion never breaks.</b> Interrupt anything moving and it carries on from where it is,
+        at the speed it has.</li>
+        <li><b>One frame for every move</b>, springs and curves shared and solved once, colours
+        blended through Oklab.</li>
+        <li><b>A fast first start (4.2).</b> Home with 2,348 games went from 10.1 seconds to about
+        4.6 on a computer without a graphics card, and art is read from small copies kept on disk.</li>
+        <li><b>Your motion choice everywhere</b>: Enhanced, Standard, Minimal, Reduced and Low Power.</li>
       </ul>
       <a href="docs/fuseline.md"><b>How Fuseline works</b></a>
     </td>
@@ -227,20 +227,16 @@ They behave the same on every device, answer to one design, and get better with 
 
 <div align="center">
 
-| Each frame | Fuseline 4 | Fuseline 3.1 | Fuseline 3 | Fuseline 2 | Fuseline 1 | Compose |
-|---|--:|--:|--:|--:|--:|--:|
-| 1,000 springs nobody is looking at | **1.33 µs** | 173.36 µs | 183.38 µs | 214.38 µs | 217.47 µs | 2057.55 µs |
-| 1,000 tweens nobody is looking at | **5.85 µs** | 89.68 µs | 175.89 µs | 211.89 µs | 206.46 µs | 2054.35 µs |
-| 1,000 two-number springs, read every frame | **135.94 µs** | 194.70 µs | 199.13 µs | 251.51 µs | 256.86 µs | 2022.47 µs |
-| 1,000 springs given a new target every frame, drawn | **444.43 µs** | 826.75 µs | 844.07 µs | 688.97 µs | 5960.13 µs | 16388.75 µs |
-| 100 values following a finger, drawn | **25.14 µs** | 51.79 µs | 52.70 µs | n/a | n/a | 200.14 µs |
-| Tabs changed every 3 frames, drawn | **4.07 µs** | 4.87 µs | 5.08 µs | 7.14 µs | 21.25 µs | 50.80 µs |
-| A busy screen for 10 seconds | **85.80 µs** | 95.02 µs | 98.92 µs | 105.90 µs | 146.57 µs | 714.77 µs |
-| A page of 120 tiles with 3 animated values each, composed | 2240 µs | 2237 µs | 3482 µs | n/a | n/a | 3952 µs |
-| The selection moving across 120 tiles | 1718 µs | 1672 µs | 1844 µs | n/a | n/a | 1912 µs |
-| A theme's room, redrawn per second while you press buttons | 3 | 3 | 44 | n/a | n/a | 130 |
+| Each frame | Fuseline 4.2 | Fuseline 4 | Fuseline 3.1 | Fuseline 3 | Fuseline 2 | Fuseline 1 | Compose |
+|---|--:|--:|--:|--:|--:|--:|--:|
+| 1,000 springs given a new target every frame | **316 µs** | 748 µs | 1,341 µs | 1,363 µs | 1,287 µs | 8,762 µs | 28,264 µs |
+| 1,000 values in mixed motions | **196 µs** | 398 µs | 413 µs | 373 µs | 445 µs | 430 µs | 3,136 µs |
+| Tabs changed every 3 frames | **3.6 µs** | 5.0 µs | 6.4 µs | 6.1 µs | 9.5 µs | 27.4 µs | 86.7 µs |
+| 1,000 two-number springs, read | 153 µs | 184 µs | 308 µs | 302 µs | 432 µs | 427 µs | 3,500 µs |
+| 100 values following a finger | 31 µs | 32 µs | 61 µs | 64 µs | n/a | n/a | 288 µs |
+| 1,000 tweens nobody is looking at | 9.0 µs | 9.2 µs | 159 µs | 260 µs | 279 µs | 300 µs | 3,487 µs |
 
-<sub>Measured on one computer (OpenJDK on Linux), every engine warmed up and given the same work; Fuseline 3.1, 3, 2 and 1 are kept in Fuse's tests exactly as they shipped. Bold: clearly first. Of 111 cases Fuseline 4 is clearly first on 52, 57 are within run-to-run noise, and another engine is clearly first on 2 (<a href="docs/fuseline.md#speed">method and every case</a>).</sub>
+<sub>Measured with OpenJDK on Linux, every engine warmed up and given the same work; the older Fuselines are kept in Fuse's tests exactly as they shipped. Bold: clearly first. Of 111 cases, Fuseline 4.2 is clearly first in 33, level with the best within run-to-run noise in the other 78, and behind in none (<a href="docs/fuseline.md#speed">method and every case</a>).</sub>
 
 </div>
 
@@ -307,7 +303,7 @@ Play.
     <td width="33%" valign="top">
       <img src="docs/assets/icons/second-screen.svg" width="44" height="44" alt=""><br>
       <b>A second screen that helps</b><br>
-      <sub>On two-screen devices (Android 10 and later) the companion shows the focused game or system, or the game you are playing and its session time, and stays beside games and apps you open.</sub>
+      <sub>On two-screen devices the companion shows the game, system or film you're on (where you're up to in an episode, how long is left), or the game you're playing and its session time, and lets go the moment you move on.</sub>
     </td>
   </tr>
   <tr>
@@ -330,8 +326,8 @@ Play.
   <tr>
     <td width="33%" valign="top">
       <img src="docs/assets/icons/themes.svg" width="44" height="44" alt=""><br>
-      <b>Twenty themes, and yours</b><br>
-      <sub>Fuse, Glass, Starlight, Crossbar, Orbital, Wave, Blades, Fused, CRT, Daylight and ten more, each with its own background, corners, focus, motion and sound. Make one in the Theme Studio, add one from a link or a file, or <a href="docs/THEMES.md">write your own</a>.</sub>
+      <b>27 themes, and yours</b><br>
+      <sub>Fuse, Glass, Starlight, Crossbar, Wave, Blades, CRT, Fusi, Fii, Duo, Trio and more, in light and dark, each with its own room, corners, focus, motion and sounds; Fii, Duo and Trio unlock Homes of their own. Make one in the Theme Studio, add one from a link or a file, or <a href="docs/THEMES.md">write your own</a>.</sub>
     </td>
     <td width="33%" valign="top">
       <img src="docs/assets/icons/accessibility.svg" width="44" height="44" alt=""><br>
@@ -380,106 +376,99 @@ Play.
   </tr>
 </table>
 
+<div align="center">
+
+## Everything Fuse can do
+
+</div>
+
+<details open>
+<summary><b>Your games</b></summary>
+
+- Scans your folders by system (every ES-DE folder name, 157 systems by RomM slug), multi-disc sets, M3U playlists, Switch updates and DLC, PS3, PS4, Vita and 3DS installs, and games on SD cards and drives that come and go.
+- One Library for everything: All (this device, RomM, other devices and streamed games, in shelves), Installed, Favourites, Recently played, Collections and the series Fuse finds by itself.
+- Fuse Identity: one game is the same game everywhere in Fuse (library, Fuse One, RomM, Syncthing, Reach and RetroAchievements), whatever its file is called.
+- A page for every game: details, how long it takes to beat (HowLongToBeat), achievements, where it is, its saves and their versions, patches and cheats, and the emulator it starts in.
+- Search with filters as chips (`platform:snes`, `year:1990s`, `played:week`), typos forgiven, values offered as you type, and every setting findable.
+- Art from where it already is (ES-DE and Batocera media), then SteamGridDB, IGDB, TheGamesDB and libretro thumbnails; logos instead of titles; art you choose is never replaced.
+
+</details>
+
+<details>
+<summary><b>Playing</b></summary>
+
+- More than 100 emulator and launcher definitions on Android and 35 on Linux, each with its source; per-system and per-game emulator choices.
+- RetroArch cores installed for you; Dolphin, PCSX2, DuckStation, PPSSPP, RPCS3 and shadPS4 settings, patches and cheats changed from Fuse, and only what Fuse turned on is ever turned off again.
+- An emulator Store on every computer and on Android: installs, updates in one place, checks before installing.
+- Steam: Fuse in your Steam library and Game Mode with its own art, Steam games in Fuse, a Decky plugin, and restarts that bring you back.
+- Moonlight streaming from your computers at home, waking them when they sleep.
+- BIOS and firmware checked and verified, with what's missing and where it goes.
+
+</details>
+
+<details>
+<summary><b>Saves, profiles and your household</b></summary>
+
+- Fuse One: profiles, saves, play time, favourites, settings and keys on every device, from a host at home (or the Fuse One Host in Docker), or kept apart per person on one device with no host.
+- Profiles switch at once from what the device keeps, online or not, and catch up with the host afterwards.
+- Saves matched by game in over 60 emulators, put in place before a game and kept after it, with versions to go back to; it asks when two devices both played.
+- RomM save sync, or Syncthing if you already run it; one Save Sync choice per device and per game.
+- RomM built in: browse, download games and BIOS into the right folders, upload yours, and an offline copy of the library. Or through Cartridge.
+- Phone Link: manage your library from a phone on your Wi-Fi, use it as a keyboard or a controller.
+
+</details>
+
+<details>
+<summary><b>Films, music and achievements</b></summary>
+
+- Jellyfin in Fuse, played by Fuse Player: continue watching, next up, seasons, music, subtitles drawn by Fuse, downloads for offline, and the film on one screen with a remote on the other.
+- Jellyfin on Home: widgets with each title's logo, and a second-screen card that shows where you're up to.
+- RetroAchievements on Home and each game's page, with hashing for cartridges, CD systems and compressed discs (CHD, CSO, RVZ).
+
+</details>
+
+<details>
+<summary><b>Look, feel and comfort</b></summary>
+
+- 27 themes in light and dark, a Theme Studio, community themes from a link or a file, glass panels, a CRT effect and wallpapers.
+- Home styles: Fused (a board you arrange), Network (shelves), and the Homes Fii, Duo and Trio unlock.
+- A quick menu you arrange, widgets for what's playing, brightness and volume, and an interface sound set for every theme.
+- Fuseline motion with Enhanced, Standard, Minimal, Reduced and Low Power; focus you can always see; High contrast focus, three text sizes and TV margins.
+- Made for a controller (Xbox, Nintendo, PlayStation and keyboard hints, guided button setup), touch everywhere and a mouse.
+- Sharp on a TV: Interface size for 4K, crisp text, dithered gradients, and Game Mode composited without bands.
+
+</details>
+
+<details>
+<summary><b>Looking after itself</b></summary>
+
+- Updates itself on Windows and macOS; System health lists what needs attention, most serious first, with the fix.
+- Storage by drive and by system, backups that merge and never delete, and a diagnostics report with anything personal taken out.
+- No telemetry, analytics, ads or crash reporting. Online services are used only after you set them up.
+
+</details>
+
 Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.4.2.12 "The Native Update"**: Fuseline 4.2, a Fuse that opens fast and stays smooth
-> with thousands of games, art and details on every one, on every system (Home with 2,348 games
-> went from 10.1 seconds to about 4.6, and 3.0 with the class archive every build now carries, on a
-> computer without a graphics card), and Fii and Fii Night, a
-> new theme with glossy tiles, rising bubbles and a Home of its own. 0.4.2.11 brought one game known as the same game everywhere in Fuse (library,
-> Fuse One and Fuse Sync, RomM, Syncthing, Reach and RetroAchievements), how long a game takes to
-> beat on its page, achievements for Saturn, Dreamcast, 3DS, GameCube, the other CD systems and
-> compressed discs (CHD, CSO, RVZ), RPCS3 and shadPS4 patches, sound in recordings on a computer, and
-> Fuse updating itself on Windows and macOS. 0.4.2.10 brought a cooler, longer-lasting Fuse on
-> Android, updates that arrive ready to run fast, and a startup animation that plays smoothly from
-> its first frame. 0.4.2.9
-> brought Jellyfin films that play smoothly, sound clear and look sharp on a 4K TV, gradients without bands, an Emulators section on every computer, missing RetroArch
-> cores installed for you, save states through RomM, one Fuse at a time and Fuse's icon back in
-> Steam. 0.4.2.8
-> brought smoother motion on a 4K TV, and a log that says where a slow frame's time went. In 0.4.2.7 Home's background stays sharp and steady on a 4K TV, Jellyfin
-> films are heard, Start and Select held put the controls back, Steam's menus keep the controller,
-> the Decky plugin shows your library, and renaming a game keeps its details. 0.4.2.6 let each device choose one Save Sync (Fuse One, RomM or Syncthing,
-> or off here while your other devices keep syncing), Fuse One sends saves from games started outside
-> Fuse, and setup puts your games first and knows when Steam isn't there. 0.4.2.5 kept games from RomM
-> in step with RomM's saves, made a game wait for your newer save instead of starting with an older one, Find Where It Saves shows Fuse
-> where any game's emulator keeps its saves, each game has one Save Sync choice (everywhere, receive
-> only, off here, off everywhere), and a game's options are four short tabs. 0.4.2.4 made Settings say whether Fuse draws on the graphics card on Linux, took the rings
-> and squares out of the Fuse theme's room and lightened the startup animations. 0.4.2.3 brought 3DS saves between
-> Android and Linux, blank saves that never replace real ones, a controller that stays Fuse's in
-> Game Mode and Jellyfin films at their proper loudness. 0.4.2.2 kept saves each person's on a shared device so a swap
-> can't half happen, every emulator's saves are found where it really keeps them, Dolphin's settings
-> change from Fuse, firmware checks say verified or not, Home never goes blank, Linux draws more
-> evenly, and the Decky plugin can't take Steam's menu down. 0.4.2.1 brought Steam restarts in Game
-> Mode, the Store with every update in one place and touch screens on Linux and Windows. 0.4.2 itself
-> made Fuse feel at home on Linux, SteamOS and Android. Steam and
-> Decky are part of setup, controllers are set up by being asked for each button, Fuse One brings
-> profiles, saves, the Fuse Library and now your keys to every device (or keeps each person's saves
-> apart on one device with no host at all), the Fuse One Host runs on its own in Docker, and Fuse
-> Intelligence shows how far each emulator has really been checked. See
-> [the release notes](docs/releases/0.4.2.6.md); every earlier release is in [CHANGELOG.md](CHANGELOG.md).
+> **Fuse 0.4.2.13 "The Native Update"**: Duo and Trio, two new theme families in light and dark
+> with Homes of their own, profiles that switch at once from what the device keeps (online or not),
+> a second screen that follows what you're on (Jellyfin films and episodes included), Jellyfin
+> logos on Home, a rebuilt All view in the Library, a smoother first scroll, sharper text on a TV
+> and ignition sounds at start. See [the release notes](docs/releases/0.4.2.13.md); every earlier
+> release is in [CHANGELOG.md](CHANGELOG.md).
 
-<details>
-<summary><b>Every release so far</b></summary>
-<br>
+Fuse runs on Android handhelds and phones, Linux (including SteamOS and its Game Mode), Windows and
+macOS. Every screen is rendered and checked at 23 screen sizes, from a 3.5 inch 4:3 handheld to a
+32:9 monitor and a 4K TV; the Android app passes its tests and lint and runs on handhelds every day;
+the Linux, Windows and macOS builds pass their tests and a self-test of the packaged app in CI.
 
-| Version | Name | What it brought |
-|---|---|---|
-| [0.4.2.5](docs/releases/0.4.2.5.md) | The Native Update | RomM save sync (never over a real save), a game waits for your newer save (keep waiting, play with this device's, or not now), Find Where It Saves test runs, Save Sync for each game, a game's options in tabs, RomM covers on computers, no trackpad paging on Home |
-| [0.4.2.4](docs/releases/0.4.2.4.md) | The Native Update | Linux: a Graphics row that says graphics card or processor and why, Steam's runtime libraries set aside, the Fuse theme's room blurred in full precision without rings or squares, dithered background gradients, startup and setup animations that no longer draw the interface under them |
-| [0.4.2.3](docs/releases/0.4.2.3.md) | The Native Update | 3DS saves placed before the first play on a device that can't read the game's id, blank saves never sent as the newest, the controller kept in Game Mode after Steam's keyboard, Add and Done by controller, surround folded down at its proper level |
-| [0.4.2.2](docs/releases/0.4.2.2.md) | The Native Update | Each person's saves kept apart on a shared device and swapped as one transaction, saves no one owned claimed from Sync, Switch account and device saves, Eden's folder through Android's picker, every emulator's saves where it keeps them, Dolphin settings, firmware verified or not, the emulator contract table, smoother Linux, a safer Decky plugin |
-| [0.4.2.1](docs/releases/0.4.2.1.md) | The Native Update | Steam restarts in Game Mode, the Store with every update in one place, checks before installing, Xenia and Vita3K achievements, EmuCoreX packs and cheats, All counting every game, touch screens on Linux and Windows |
-| [0.4.2](docs/releases/0.4.2.md) | The Native Update | Steam and Decky in setup, guided and multiple controllers, Fuse One (profiles, saves, the Fuse Library and keys) with or without a host, the Fuse One Host in Docker, Fuse Intelligence, Steam achievements per account with rarity, apps your computers stream on the Library shelf, haptics on controllers, Fuse's own files in Storage, series that wear their games' art, Moonlight on the Systems page, Fuseline 4.1 |
-| [0.4.1](docs/releases/0.4.1.md) | The Connected Update | Fuse Library, causal profile settings, strong household identity, save import and display/desktop foundations |
-| [0.4.0](docs/releases/0.4.0.md) | The Speed Release | Fuseline 4: values worked out from their motion's formula when read, left alone until they could visibly change, resting while nobody looks; springs solved once for every value on them; a Motion Inspector in Developer options; heat and battery saver ease decoration on Android; fading colours that redraw instead of recomposing |
-| [0.3.8.2](docs/releases/0.3.8.2.md) | The Reach Update | Games folders read by their files whatever they are called; a background Fuse Sync host started again on the newest Fuse (the Fuse Library on the host); one or a few systems at the left of the Systems page; a Library list in the developer options |
-| [0.3.8.1](docs/releases/0.3.8.1.md) | The Reach Update | Switch libraries read the way people keep them: updates and DLC told apart with or without title ids, joined to their game wherever they sit (own folder, one big folder, updates and dlc folders, or folders chosen in settings), copies counted once, .nsz and .xcz, RomM uploads that bring updates and DLC along |
-| [0.3.8](docs/releases/0.3.8.md) | The Reach Update | Every game in the household within reach: other devices' games in the RomM tab and a Fuse Library in the Sync tab, Available On for every game, Send to Another Device (queued while it is away), uploads to RomM asked from any device, the best source chosen by itself, every device's downloads, all remembered offline; Library touch scrolling that stays where you leave it |
-| [0.3.7.5](docs/releases/0.3.7.5.md) | The Motion Update | Fuseline 3.1 (values without coroutines, no invisible frames, decoration that waits for you, paced decoration), measured against Fuseline 3, 2, 1 and Compose; an optimised Android build compiled ahead of time; 0.3.7.4's slowdown on Android undone; selection moves that redraw two items |
-| [0.3.7.4](docs/releases/0.3.7.4.md) | The Motion Update | Each device keeps its own Systems page; systems made too large through Fuse Sync are put back; arranging on a short screen; far less drawn every frame; the slowest frame shown on the device |
-| [0.3.7.3](docs/releases/0.3.7.3.md) | The Motion Update | Systems as small as a game's box art, with a picture of each console you can change; a System size setting; arranging that moves systems along in order; a Systems look for each screen of a two-screen device; RomM uploads that finish; the second screen following Downloads |
-| [0.3.7.2](docs/releases/0.3.7.2.md) | The Motion Update | Fuse Sync before Who's playing in setup, so your household's profiles are there to choose; a new, solid controller picture with Fuse's mark in the middle |
-| [0.3.7.1](docs/releases/0.3.7.1.md) | The Motion Update | System cards on a handheld, such as the AYN Thor, back to the size they were before 0.3.6.5; TVs keep theirs |
-| [0.3.7](docs/releases/0.3.7.md) | The Motion Update | Fuseline 3: motion that never jumps or stops dead when interrupted, tabs that slide and reverse mid-change, layout motion and shared elements, every input moving things the same way, motion levels for accessibility, a motion inspector, and an engine faster than Fuseline 2 and Compose on every benchmark |
-| [0.3.6.6](docs/releases/0.3.6.6.md) | The Unity Update | Uploads to RomM, and every other transfer, no longer freeze Fuse on a computer; scraping, downloads and uploads carry on under the standby screen |
-| [0.3.6.5](docs/releases/0.3.6.5.md) | The Unity Update | Fuse sized for a 4K TV by itself, with an Interface size setting; the Systems page arranged like Home, with sizes and pages; logos that fit every card and a PS5 logo; Downloads that open their game; RomM art kept on download; RomM found on the network; emulators that start in Game Mode; Store uninstalls with a password prompt, Install All and Uninstall All; one delete per press and a full stop key on the on-screen keyboard; Steam art on any Fuse entry; sharper backgrounds; subtitles outlined in black again; no to Steam kept |
-| [0.3.6.4](docs/releases/0.3.6.4.md) | The Unity Update | RomM games' box art shown as soon as it is found, without reopening Fuse; system panels from your games' screenshots, cut like Art Book Next's, by themselves for the PS5 and as a style or your pick for any system; RomM on the second screen; Fuse's art in Steam; Linux updates in place |
-| [0.3.6.3](docs/releases/0.3.6.3.md) | The Unity Update | RomM and Jellyfin that come with Fuse Sync, sealed for each device and asked once when you update; each person's own Jellyfin account; whose saves move on each device; Fuse Sync first in setup; the grand welcome the first time anyone plays here; motion that follows the device |
-| [0.3.6.2](docs/releases/0.3.6.2.md) | The Unity Update | RomM games with your own art and details, kept and editable; the library's games not on RomM; box art instead of RomM's posters; system art for RomM-only systems; a nicer RomM tab |
-| [0.3.6.1](docs/releases/0.3.6.1.md) | The Unity Update | Fuse RomM libraries with large PS4 and PS5 games read quickly, resumed and kept; Test Connection; PS4 and PS5 folders matched to their RomM zips |
-| [0.3.6](docs/releases/0.3.6.md) | The Unity Update | Fuse RomM, one Downloads page, Jellyfin downloads for offline, streaming through Moonlight, saves that reach every device by themselves, each handheld emulator's saves from its own code, Restore Fuse Default Art, Syncthing-Fork in the Store, Fuseline 2, screenshots and recordings on computers, Fusi's friend Bo |
-| [0.3.5](docs/releases/0.3.5.md) | The Swift Update | Fuse Sync from outside home without waiting on home, saves sent several files at a time, quick profile switches, tabs that change in the next frame, a Sync tab with games first and a timeline of saves, folder saves with their whole structure, a Hub that opens at once, a new update viewer on the website |
-| [0.3.4](docs/releases/0.3.4.md) | The Household Update | Profiles without a host, saves from every system reaching it, Fuse Sync and Syncthing that never lose a save or touch what you set up, hints that follow your button mapping, Nintendo pads that confirm with A everywhere, PICO-8 and Flash on the computer, small screens that fit |
-| [0.3.3](docs/releases/0.3.3.md) | The Together Update | Saves sent while you play, who is playing what, one game across devices, joining without a code, a host account and shared outside address, Erase Fuse, a mouse that works first click, redesigned Sync and Syncthing tabs |
-| [0.3.2](docs/releases/0.3.2.md) | The Corner Update | Menus that travel between screens, a hello when switching profile, each person's own saves, saves in 3DS, Switch, Wii U and Xbox 360 emulators, Jellyfin widgets on every page, round corners |
-| [0.3.1](docs/releases/0.3.1.md) | The Glide Update | Home widgets that turn like a catalogue, Jellyfin that answers quickly, Syncthing beside Fuse Sync, the Thor's two screens with the controller |
-| [0.3.0](docs/releases/0.3.0.md) | The Sync & Clean Update | Fuse Sync by Fuse, profiles, a quick menu you arrange, 157 systems, Jellyfin in setup, swipe-back on touch screens, the second screen's pages redesigned |
-| [0.2.9](docs/releases/0.2.9.md) | The Organized Update | Films on the screen you choose with a live swap, Addons in your order and in Settings, Jellyfin at home |
-| [0.2.8](docs/releases/0.2.8.md) | The Media & Connectivity Update | Jellyfin and Fuse Player by Fuse, a phone as keyboard and controller, Storage redesigned |
-| [0.2.7](docs/releases/0.2.7.md) | The Swap & Clean Update | Fuse's menus on a dual-screen handheld's touch screen, like a 3DS, and Fuseline by Fuse |
-| [0.2.6](docs/releases/0.2.6.md) | The Detail Update | A Store on computers, games moved between drives, Steam achievements and RPCS3 trophies, setup rebuilt |
-| [0.2.5](docs/releases/0.2.5.md) and before | The Ignition Update and earlier | The startup mark, PS3, Vita and 3DS installs, the Theme Studio, the Store and Addons, SD cards and drives, System health, backups, PCSX2 patches, the widget board, Windows and macOS |
-
-The full history is in [CHANGELOG.md](CHANGELOG.md).
-
-</details>
-
-The shared core (library scanning, launch resolution, integrations and the database) and the
-interface are in place and tested where it matters, and every screen is rendered and checked at 23
-screen sizes, from a 3.5 inch 4:3 handheld to a 32:9 monitor and a 4K screen at 100%. The Android
-app builds and passes its unit tests and lint, and runs on handhelds every day. The Linux app
-builds, passes its tests, packages as an AppImage and starts in a virtual display. The Windows and
-macOS builds pass their tests and a self-test of the packaged app on each system in CI. Fuse runs on
-Linux, Windows, macOS and Android handhelds alike.
-
-Not there yet: checks on more handhelds and on Windows and Mac computers, signed Windows and macOS
-builds, video previews and sound in recordings on the desktop, a storage mode without All files access, translations (the
-interface is English only), RetroAchievements hashing for 3DS, Saturn, Dreamcast and compressed disc
-images, and ScreenScraper credentials. [ROADMAP.md](ROADMAP.md) ticks a box only when the
-code is in this repository.
+Not there yet: checks on more handhelds and on more Windows and Mac computers, signed Windows and
+macOS builds, a storage mode on Android without All files access, translations (the interface is
+English only), native patches for Android emulators, and ScreenScraper. [ROADMAP.md](ROADMAP.md)
+ticks a box only when the code is in this repository.
 
 **Tried it on your device?** A short report ("this emulator launches on my handheld") helps more than
 anything right now. [Open an issue](https://github.com/MAtiyaaa/fuse/issues) or see

@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.sync
 
 import io.github.matiyaaa.fuse.data.settings.SaveProvider
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -486,7 +487,7 @@ private fun SyncthingSide(app: AppState, state: SyncthingState, modifier: Modifi
 internal fun SyncthingMark(size: Dp, modifier: Modifier = Modifier) {
     Box(
         modifier.size(size).clip(RoundedCornerShape(size * 0.28f))
-            .background(Brush.linearGradient(listOf(SYNCTHING_TINT.copy(alpha = 0.3f), SYNCTHING_TINT.copy(alpha = 0.1f)))),
+            .ditheredBackground(Brush.linearGradient(listOf(SYNCTHING_TINT.copy(alpha = 0.3f), SYNCTHING_TINT.copy(alpha = 0.1f)))),
         contentAlignment = Alignment.Center,
     ) {
         FuseIcon(FuseIcons.FolderSync, size = size * 0.48f, tint = SYNCTHING_TINT)

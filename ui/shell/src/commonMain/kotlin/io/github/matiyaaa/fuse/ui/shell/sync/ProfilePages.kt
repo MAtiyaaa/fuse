@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.sync
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -87,7 +88,7 @@ internal fun ProfileRoom(content: @Composable BoxScope.() -> Unit) {
     Box(
         Modifier.fillMaxSize()
             .background(c.surfaceDim)
-            .background(Brush.verticalGradient(listOf(c.accent.copy(alpha = 0.14f), Color.Transparent, Color.Transparent)))
+            .ditheredBackground(Brush.verticalGradient(listOf(c.accent.copy(alpha = 0.14f), Color.Transparent, Color.Transparent)))
             .clickable(remember { MutableInteractionSource() }, indication = null) { },
         content = content,
     )

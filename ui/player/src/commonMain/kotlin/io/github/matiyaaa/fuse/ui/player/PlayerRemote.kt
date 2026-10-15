@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.player
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -119,8 +120,8 @@ fun PlayerNowShowing(session: PlayerSession, modifier: Modifier = Modifier, wher
     val state = session.engine?.state?.collectAsState()?.value ?: EngineState()
     Box(modifier.fillMaxSize().background(Color(0xFF07080B))) {
         Artwork(item.backdrop ?: coverArt, Modifier.fillMaxSize().graphicsLayer { alpha = 0.55f })
-        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color.Black.copy(alpha = 0.85f), Color.Black.copy(alpha = 0.35f), Color.Transparent))))
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)))))
+        Box(Modifier.fillMaxSize().ditheredBackground(Brush.horizontalGradient(listOf(Color.Black.copy(alpha = 0.85f), Color.Black.copy(alpha = 0.35f), Color.Transparent))))
+        Box(Modifier.fillMaxSize().ditheredBackground(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)))))
         BoxWithConstraints(Modifier.fillMaxSize().padding(Space.xl)) {
             val art = minOf(maxHeight * 0.62f / (if (video) 1.5f else 1f), maxWidth * 0.26f)
             val logoHeight = minOf(96.dp, maxHeight * 0.18f)
@@ -236,8 +237,8 @@ fun PlayerRemote(
     Box(modifier.fillMaxSize().background(REMOTE_INK)) {
         // The film's backdrop, softened, with a cinema's vignette: dark at the edges and the foot.
         Artwork(item.backdrop ?: coverArt, Modifier.fillMaxSize().blur(18.dp).graphicsLayer { alpha = 0.5f })
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.55f), Color.Black.copy(alpha = 0.15f), Color.Black.copy(alpha = 0.88f)))))
-        Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.45f)), radius = 1600f)))
+        Box(Modifier.fillMaxSize().ditheredBackground(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.55f), Color.Black.copy(alpha = 0.15f), Color.Black.copy(alpha = 0.88f)))))
+        Box(Modifier.fillMaxSize().ditheredBackground(Brush.radialGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.45f)), radius = 1600f)))
         BoxWithConstraints(Modifier.fillMaxSize().padding(top = topInset, bottom = bottomInset).padding(horizontal = Space.l, vertical = Space.m)) {
             val wide = maxWidth > maxHeight * 1.15f
             val compact = maxHeight < 380.dp || (!wide && maxHeight < 560.dp)

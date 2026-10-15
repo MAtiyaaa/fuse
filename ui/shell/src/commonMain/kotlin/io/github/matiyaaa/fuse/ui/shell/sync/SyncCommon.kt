@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.sync
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -55,7 +56,7 @@ internal val AppState.syncInUse: Boolean
 internal fun SyncMark(size: Dp, modifier: Modifier = Modifier, tint: Color = Fuse.colors.accent) {
     Box(
         modifier.size(size).clip(RoundedCornerShape(size * 0.28f))
-            .background(Brush.linearGradient(listOf(tint.copy(alpha = 0.26f), tint.copy(alpha = 0.10f)))),
+            .ditheredBackground(Brush.linearGradient(listOf(tint.copy(alpha = 0.26f), tint.copy(alpha = 0.10f)))),
         contentAlignment = Alignment.Center,
     ) {
         FuseIcon(FuseIcons.RefreshCcw, size = size * 0.48f, tint = tint)

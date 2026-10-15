@@ -1,0 +1,48 @@
+{
+  "fuseTheme": 1,
+  "name": "Duo Night",
+  "id": "duo-night",
+  "tagline": "Duo with the lights down",
+  "extends": "duo-night",
+  "dark": true,
+  "colors": {
+    "background": "#17191D",
+    "surface": "#1F2227",
+    "surfaceRaised": "#282C32",
+    "accent": "#5AA6F2",
+    "accentSoft": "#5AA6F233",
+    "onAccent": "#061A2E",
+    "text": "#E8EBEF",
+    "textMuted": "#A4ABB5",
+    "focus": "#7DBAF7",
+    "success": "#5FD69A",
+    "warning": "#FFC46B",
+    "danger": "#FF7A7A"
+  },
+  "background": {
+    "style": "duo",
+    "intensity": 1.0,
+    "speed": 1.0,
+    "secondary": "#2E5F94"
+  },
+  "corners": "soft",
+  "focus": "ring",
+  "motion": "standard",
+  "sound": "pip",
+  "quickMenu": "solid",
+  "widgets": "lit",
+  "tiles": "panel",
+  "glass": {
+    "enabled": false,
+    "blur": 24.0,
+    "opacity": 0.72
+  },
+  "crt": {
+    "enabled": false,
+    "scanlines": 0.35,
+    "bloom": 0.15,
+    "curvature": 0.08,
+    "chromatic": 0.1,
+    "vignette": 0.3
+  }
+}

@@ -65,7 +65,7 @@ class FiiHomeTest {
         assertTrue(FII_UNLOCK in prefs.unlocked && FII_UNLOCK in prefs.unlockedNew)
         assertEquals(HomeStyle.FUSED, prefs.home.style, "nothing changes before the answer")
         assertEquals("Fii has its own Home", app.choice?.title)
-        pick("fii.use")
+        pick("themehome.use")
         assertNull(app.choice)
         assertEquals(HomeStyle.FII, prefs.home.style)
         assertEquals(HomeMode.CHANNELS, prefs.home.mode, "a Fuse without Fii's look still shows the board")
@@ -76,7 +76,7 @@ class FiiHomeTest {
     @Test
     fun keepingMyHomeStillOffersFiisMarkedNew() {
         app.useTheme(ThemePresets.Fii)
-        pick("fii.keep")
+        pick("themehome.keep")
         assertEquals(HomeStyle.FUSED, prefs.home.style)
         app.chooseHomeStyle()
         val fii = app.choice!!.options.first { it.id == "homestyle.fii" }
@@ -89,7 +89,7 @@ class FiiHomeTest {
     @Test
     fun fiiAndFiiNightAskNothingBetweenThem() {
         app.useTheme(ThemePresets.Fii)
-        pick("fii.use")
+        pick("themehome.use")
         app.useTheme(ThemePresets.FiiNight)
         assertNull(app.choice)
         assertEquals(HomeStyle.FII, prefs.home.style)
@@ -99,10 +99,10 @@ class FiiHomeTest {
     fun leavingFiiOnItsHomeAsksToGoBack() {
         app.store.updatePrefs { it.copy(home = it.home.withStyle(HomeStyle.NETWORK)) }
         app.useTheme(ThemePresets.Fii)
-        pick("fii.use")
+        pick("themehome.use")
         app.useTheme(ThemePresets.Fuse)
         assertEquals("Go back to the Home you had?", app.choice?.title)
-        pick("fii.back")
+        pick("themehome.back")
         assertEquals(HomeStyle.NETWORK, prefs.home.style)
         assertTrue(FII_UNLOCK in prefs.unlocked, "Fii's Home stays unlocked")
         assertTrue(HomeStyle.FII in prefs.homeStyles())
@@ -111,9 +111,9 @@ class FiiHomeTest {
     @Test
     fun keepingFiisHomeOnAnotherThemeIsAllowed() {
         app.useTheme(ThemePresets.Fii)
-        pick("fii.use")
+        pick("themehome.use")
         app.useTheme(ThemePresets.Fuse)
-        pick("fii.stay")
+        pick("themehome.stay")
         assertEquals("fuse", prefs.themeId)
         assertEquals(HomeStyle.FII, prefs.home.style)
     }
@@ -128,5 +128,36 @@ class FiiHomeTest {
         assertEquals(HomeStyle.FUSED, older.style)
         assertEquals(HomeStyle.NETWORK, fii.withStyle(HomeStyle.NETWORK).style)
         assertEquals(BoardLook.FUSE, fii.withStyle(HomeStyle.NETWORK).look)
+    }
+
+    @Test
+    fun duoAndTrioEachUnlockTheirOwnHome() {
+        app.useTheme(ThemePresets.Duo)
+        assertEquals("Duo has its own Home", app.choice?.title)
+        pick("themehome.use")
+        assertEquals(HomeStyle.DUO, prefs.home.style)
+        assertEquals(BoardLook.DUO, prefs.home.look)
+        assertTrue(DUO_UNLOCK in prefs.unlocked)
+        // Duo Night asks nothing; Trio offers its own Home, and keeps Duo's plain Home to go back to.
+        app.useTheme(ThemePresets.DuoNight)
+        assertNull(app.choice)
+        app.useTheme(ThemePresets.TrioNight)
+        assertEquals("Trio has its own Home", app.choice?.title)
+        pick("themehome.use")
+        assertEquals(HomeStyle.TRIO, prefs.home.style)
+        assertEquals(HomeStyle.FUSED, prefs.home.beforeFii, "the plain Home from before the themed ones")
+        assertEquals(listOf(HomeStyle.FUSED, HomeStyle.NETWORK, HomeStyle.DUO, HomeStyle.TRIO), prefs.homeStyles())
+        app.useTheme(ThemePresets.Fuse)
+        pick("themehome.back")
+        assertEquals(HomeStyle.FUSED, prefs.home.style)
+    }
+
+    @Test
+    fun everyThemedHomeRoundTrips() {
+        val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+        for (style in listOf(HomeStyle.DUO, HomeStyle.TRIO)) {
+            val config = HomeLayoutConfig(mode = HomeMode.CHANNELS).withStyle(style)
+            assertEquals(style, json.decodeFromString<HomeLayoutConfig>(json.encodeToString(HomeLayoutConfig.serializer(), config)).style)
+        }
     }
 }

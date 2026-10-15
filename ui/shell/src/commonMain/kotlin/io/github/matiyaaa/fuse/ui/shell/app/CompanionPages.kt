@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -140,7 +141,7 @@ internal fun CompanionCard(modifier: Modifier = Modifier, padding: Dp = Space.m,
     Box(
         modifier
             .clip(shape)
-            .background(Brush.verticalGradient(listOf(c.surfaceRaised.copy(alpha = 0.82f), c.surfaceRaised.copy(alpha = 0.64f))))
+            .ditheredBackground(Brush.verticalGradient(listOf(c.surfaceRaised.copy(alpha = 0.82f), c.surfaceRaised.copy(alpha = 0.64f))))
             .border(1.dp, c.text.copy(alpha = 0.07f), shape)
             .padding(padding),
         content = content,
