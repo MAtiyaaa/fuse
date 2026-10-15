@@ -13,8 +13,6 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.withFrameNanos
 import io.github.matiyaaa.fuse.ui.designsystem.effects.UiRenderTrace
 import io.github.matiyaaa.fuse.ui.designsystem.effects.traceUiRoot
-import io.github.matiyaaa.fuse.ui.designsystem.effects.drawDither
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -273,7 +271,9 @@ private suspend fun probeRenderer(session: DesktopSession, window: java.awt.Wind
     if (profile.refreshHz > 0) frameWatch.budgetNanos = profile.budgetNanos
     watchFrames(layer)
     // A TV's picture processing smooths a faint dither away and leaves the bands: a stronger one there.
-    io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.largeOutput = profile.largeOutput || kind == io.github.matiyaaa.fuse.desktop.system.DisplaySession.STEAM_GAME_MODE
+    // Game Mode alone isn't a TV (a handheld's own screen is in Game Mode too), and gamescope composes
+    // Fuse in 10 bits there, so a TV-strength grain on it only showed as grain.
+    io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.largeOutput = profile.largeOutput
     // In Game Mode gamescope composes Fuse in 10 bits instead of scanning its 8-bit picture out as is (see GamescopeComposite).
     io.github.matiyaaa.fuse.desktop.system.GamescopeComposite.enable(kind)
     val report = io.github.matiyaaa.fuse.desktop.system.GraphicsReport
@@ -393,21 +393,9 @@ private fun ApplicationScope.FuseWindow(session: DesktopSession) {
                     .traceUiRoot()
                     .fillMaxSize()
                     .background(io.github.matiyaaa.fuse.desktop.ui.FuseBrand.Ink)
-                    // Skia on a desktop draws gradients undithered, so a soft light Fuse doesn't
-                    // dither at the source bands in 8-bit steps; one dither over the whole window
-                    // breaks those up, at the cost of a single textured rectangle on the graphics card
-                    // (not drawn on the processor). Not where gamescope enlarges Fuse's picture:
-                    // there each of its pixels is shown as a square of several, and they are seen.
-                    .then(
-                        if (gpu) {
-                            Modifier.drawWithContent {
-                                drawContent()
-                                if (io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.upscale <= 1.05f) drawDither()
-                            }
-                        } else {
-                            Modifier
-                        },
-                    )
+                    // No grain over the whole window: every gradient behind the interface carries its own,
+                    // added where it is drawn ([DesktopDithering]). A grain laid over everything sat on the
+                    // text and every edge too, lighter than what was under it, and made it all look rough.
                     .pointerInput(Unit) {
                         awaitPointerEventScope {
                             while (true) {
