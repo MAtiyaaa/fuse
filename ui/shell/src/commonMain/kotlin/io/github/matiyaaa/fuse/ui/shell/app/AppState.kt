@@ -189,6 +189,9 @@ class AppState(
     var textInput by mutableStateOf<TextInputSpec?>(null)
     var choice by mutableStateOf<ChoiceSpec?>(null)
 
+    /** Saves from a Switch being brought in, one game at a time ([io.github.matiyaaa.fuse.ui.shell.sync.SwitchImportOverlay]). */
+    internal var switchImport by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.sync.SwitchImport?>(null)
+
     /** A change of size waiting for Keep ([keepSizeOrUndo]). */
     internal var keepSize: PendingSize? = null
 

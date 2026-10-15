@@ -10,8 +10,6 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
-import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** Import is available locally too: the preview uses configured emulators, not an online host. */
@@ -23,15 +21,21 @@ internal fun openSaveImporter(app: AppState) {
             val source = if (folder) app.platform.storage.pickFolder("Import a save folder") else app.platform.storage.pickSave("Import a save file or ZIP")
             if (source == null) return@launch
             app.toasts.show("Inspecting saves", icon = FuseIcons.Search)
-            val games = app.store.library.games(GameQuery(includeHidden = true)).first()
-            val queries = games.mapNotNull { app.store.sync.saveQuery(it.id) }
-            service.previewSaveImport(source, queries).onSuccess { plan -> SaveImportPreview(app, plan).show() }
+            val (cards, queries) = cardsByGame(app)
+            service.previewSaveImport(source, queries).onSuccess { plan ->
+                // Saves copied off a Switch go through its own import, one game at a time.
+                if (plan.entries.any { it.switch != null }) showSwitchImport(app, plan, cards) else SaveImportPreview(app, plan).show()
+            }
                 .onFailure { app.toasts.show(it.message ?: "Couldn't inspect that save source", ToastKind.ERROR) }
         }
     }
     app.choice = ChoiceSpec("Import Saves", "Copy saves from another device or emulator. Fuse shows the destinations first and keeps existing saves in history. Sources are never moved or deleted.", listOf(
         MenuAction("file", "File or ZIP", FuseIcons.FileUp, detail = "One save or an archive containing many saves", onSelect = { choose(false) }),
         MenuAction("folder", "Folder", FuseIcons.FolderOpen, detail = "One game's saves or an entire emulator save hierarchy", onSelect = { choose(true) }),
+        MenuAction("switch", "From a Switch", FuseIcons.SdCard, detail = "Saves backed up with JKSV or Checkpoint: choose the JKSV folder, Checkpoint's saves folder, or one game's", onSelect = {
+            app.choice = null
+            app.scope.launch { app.platform.storage.pickFolder("Choose your Switch's save backups")?.let { startSwitchImport(app, it) } }
+        }),
     ), FuseIcons.Save)
 }
 

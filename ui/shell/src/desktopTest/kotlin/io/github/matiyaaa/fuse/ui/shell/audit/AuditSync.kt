@@ -57,6 +57,34 @@ internal class AuditSync(private val settings: SettingsStore) : SyncService {
             note = "Windows games keep their own saves inside this app's Windows drive, a different place for every game.", canChoose = false),
     )
 
+    /** A Switch's card read with JKSV and Checkpoint: three of the library's Switch games, one with two backups. */
+    override suspend fun previewSaveImport(source: String, games: List<SaveQuery>): Result<io.github.matiyaaa.fuse.sync.SaveImportPlan> {
+        delay(400)
+        val switch = games.filter { it.platform == "switch" }.sortedBy { it.title }.take(3)
+        fun target(q: SaveQuery, id: String, sure: Boolean) = io.github.matiyaaa.fuse.sync.SaveImportTarget(id, q, SaveKind.SAVE, "switch.savedata",
+            "~/.local/share/eden/nand/user/save/account/00112233445566778899aabbccddeeff/0100A3D008C5C000/0", false,
+            if (sure) io.github.matiyaaa.fuse.sync.SaveImportConfidence.TITLE_ID else io.github.matiyaaa.fuse.sync.SaveImportConfidence.EXACT_NAME)
+        fun entry(q: SaveQuery, name: String, tool: String, user: String, at: Long, sure: Boolean = true): io.github.matiyaaa.fuse.sync.SaveImportEntry {
+            val id = "$name|switch.savedata"
+            val t = target(q, "$id|t", sure)
+            return io.github.matiyaaa.fuse.sync.SaveImportEntry(id, name, "switch.savedata", 1_400_000, listOf(t), t.id,
+                io.github.matiyaaa.fuse.sync.SwitchSource(tool, name, user, at, if (sure) "0100A3D008C5C000" else null, q.title))
+        }
+        val entries = switch.mapIndexed { i, q ->
+            when (i) {
+                0 -> listOf(entry(q, "Matt - 2026.10.12 @ 21.14.03", "JKSV", "Matt", 1_791_839_643), entry(q, "Matt - 2026.08.02 @ 10.02.44", "JKSV", "Matt", 1_785_664_964))
+                1 -> listOf(entry(q, "2026-09-28 18-40-12 Matt", "CHECKPOINT", "Matt", 1_790_620_812))
+                else -> listOf(entry(q, "Sam - 2026.07.19 @ 08.00.00", "JKSV", "Sam", 1_784_448_000, sure = false))
+            }
+        }.flatten()
+        return Result.success(io.github.matiyaaa.fuse.sync.SaveImportPlan("audit", source.substringAfterLast('/'), entries, emptyList(), 4_200_000))
+    }
+
+    override suspend fun importSaves(plan: io.github.matiyaaa.fuse.sync.SaveImportPlan, choices: List<io.github.matiyaaa.fuse.sync.SaveImportChoice>, profile: String): Result<io.github.matiyaaa.fuse.sync.SaveImportResult> {
+        delay(700)
+        return Result.success(io.github.matiyaaa.fuse.sync.SaveImportResult(choices.size, choices.map { it.entry }, queued = false))
+    }
+
     /** Joining a host while this device has profiles of its own, for "Your profiles and the host's". */
     override val merge = MutableStateFlow<io.github.matiyaaa.fuse.sync.ProfileMerge?>(null)
 
