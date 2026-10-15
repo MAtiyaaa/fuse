@@ -1,5 +1,8 @@
 package io.github.matiyaaa.fuse.ui.designsystem.background
 
+import io.github.matiyaaa.fuse.ui.designsystem.effects.drawDitheredRect
+import io.github.matiyaaa.fuse.ui.designsystem.effects.drawDitheredPath
+import io.github.matiyaaa.fuse.ui.designsystem.effects.drawDitheredCircle
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -135,8 +138,8 @@ internal class FusiScene(look: SceneLook, private val screen: FusiScreen) : Scen
         val w = size.width
         val h = size.height
         val f = fit
-        drawRect(sky)
-        drawCircle(glow, glowR, glowAt, alpha = k.coerceAtMost(1f))
+        drawDitheredRect(sky)
+        drawDitheredCircle(glow, radius = glowR, center = glowAt, alpha = k.coerceAtMost(1f))
 
         // Polka dots drifting slowly down and across, a 2000s wallpaper above the hill.
         val gap = 46f * density * f
@@ -181,7 +184,7 @@ internal class FusiScene(look: SceneLook, private val screen: FusiScreen) : Scen
         }
 
         drawPath(farHill, farHillColor)
-        drawPath(hill, hillBrush)
+        drawDitheredPath(hill, hillBrush)
         drawPath(hillEdge, edge, style = Stroke(2.2f * density * f))
 
         // Pixel flowers along the hill, nodding a little in the breeze.

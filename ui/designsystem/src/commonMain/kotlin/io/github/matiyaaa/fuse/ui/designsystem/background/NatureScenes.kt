@@ -1,5 +1,7 @@
 package io.github.matiyaaa.fuse.ui.designsystem.background
 
+import io.github.matiyaaa.fuse.ui.designsystem.effects.drawDitheredRect
+import io.github.matiyaaa.fuse.ui.designsystem.effects.drawDitheredPath
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -85,7 +87,7 @@ internal class PetalsScene(look: SceneLook) : Scene(look) {
         val w = size.width
         val h = size.height
         val d = density * fit
-        drawRect(sky)
+        drawDitheredRect(sky)
         stars.draw(this, t * 0.3f, k * 0.5f)
         // A wide, low glow reads as the horizon after sunset rather than a dome of light.
         sun.draw(this, w * 0.66f, h * 1.08f, size.maxDimension * 0.85f, size.maxDimension * 0.25f, alpha = 0.6f * k)
@@ -108,7 +110,7 @@ internal class PetalsScene(look: SceneLook) : Scene(look) {
                 rotate(angle, Offset.Zero)
                 scale(s * flip, s, Offset.Zero)
             }) {
-                drawPath(shape, tint, alpha = alpha)
+                drawDitheredPath(shape, tint, alpha = alpha)
             }
         }
     }
@@ -240,7 +242,7 @@ internal class FirefliesScene(look: SceneLook) : Scene(look) {
             }
         }
         mist.draw(this, w * 0.5f, h * 0.9f, w * 0.9f, h * 0.12f, alpha = 0.12f * k)
-        drawRect(canopy)
+        drawDitheredRect(canopy)
         fireflies(t, near = false)
         drawPath(mid, midTone)
         drawPath(floor, nearTone)
@@ -402,7 +404,7 @@ internal class CausticsScene(look: SceneLook) : Scene(look) {
             val alpha = (0.07f + 0.04f * sin(t * 0.21f + i * 1.9f)) * k
             ray.draw(this, px, py, RAY_W[i] * density * fit, len, alpha = alpha, degrees = tilt)
         }
-        drawRect(deep)
+        drawDitheredRect(deep)
         // The net: every vertex moves with smooth fields (neighbours move together, like water, and
         // a slower, larger one stretches some cells and squeezes others), and every edge bows a
         // little. Edges are sorted into a few brightness levels by a slow field of bright patches.
@@ -515,7 +517,7 @@ internal class DunesScene(look: SceneLook) : Scene(look) {
     override fun DrawScope.paint(t: Float) {
         val w = size.width
         val h = size.height
-        drawRect(sky)
+        drawDitheredRect(sky)
         sunHalo.draw(this, w * 0.83f, h * 0.2f, h * 0.55f, alpha = (if (bright) 0.4f else 0.14f) * k)
         sunCore.draw(this, w * 0.83f, h * 0.2f, h * 0.13f, alpha = (if (bright) 0.95f else 0.4f) * k.coerceAtMost(1f))
         haze.draw(this, w * 0.5f, h * 0.6f, w * 0.75f, h * 0.08f, alpha = (if (bright) 0.4f else 0.12f) * k)

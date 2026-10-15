@@ -32,14 +32,30 @@ object Dithering {
     fun picture(image: ImageBitmap): ImageBitmap = pictures?.let { runCatching { it(image) }.getOrNull() } ?: image
 }
 
-/** [brush] over the whole scope, dithered where the platform can ([Dithering.gradients]). */
-fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDitheredRect(brush: androidx.compose.ui.graphics.Brush, alpha: Float = 1f) {
-    val dither = Dithering.gradients ?: return drawRect(brush, alpha = alpha)
+/** [brush] over the whole scope (or [size] at [topLeft], as `drawRect`), dithered where the platform can ([Dithering.gradients]). */
+fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDitheredRect(
+    brush: androidx.compose.ui.graphics.Brush,
+    alpha: Float = 1f,
+    topLeft: androidx.compose.ui.geometry.Offset = androidx.compose.ui.geometry.Offset.Zero,
+    size: androidx.compose.ui.geometry.Size = this.size.let { androidx.compose.ui.geometry.Size(it.width - topLeft.x, it.height - topLeft.y) },
+) {
+    val dither = Dithering.gradients ?: return drawRect(brush, topLeft = topLeft, size = size, alpha = alpha)
     drawIntoCanvas { canvas ->
         val paint = Paint()
         brush.applyTo(size, paint, alpha)
         dither(paint)
-        canvas.drawRect(0f, 0f, size.width, size.height, paint)
+        canvas.drawRect(topLeft.x, topLeft.y, topLeft.x + size.width, topLeft.y + size.height, paint)
+    }
+}
+
+/** [path] filled with [brush], as `drawPath`, dithered where the platform can ([Dithering.gradients]). */
+fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDitheredPath(path: androidx.compose.ui.graphics.Path, brush: androidx.compose.ui.graphics.Brush, alpha: Float = 1f) {
+    val dither = Dithering.gradients ?: return drawPath(path, brush, alpha = alpha)
+    drawIntoCanvas { canvas ->
+        val paint = Paint()
+        brush.applyTo(size, paint, alpha)
+        dither(paint)
+        canvas.drawPath(path, paint)
     }
 }
 

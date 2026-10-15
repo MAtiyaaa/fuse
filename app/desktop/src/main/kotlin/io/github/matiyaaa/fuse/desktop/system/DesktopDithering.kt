@@ -31,24 +31,41 @@ internal object DesktopDithering {
 
     /**
      * Triangular noise of [amp] (in 8-bit steps, each way) added to [content] before it is rounded.
-     * Interleaved gradient noise (Jimenez) by pixel (Compose draws in pixels, so the shader's own
-     * coordinates are the screen's), two samples apart, for an even grain with no pattern; a premultiplied colour stays within its alpha, and transparent stays transparent.
+     * Interleaved gradient noise (Jimenez) by screen pixel ([PIXEL]), two samples apart, for an even
+     * grain with no pattern; a premultiplied colour stays within its alpha, and transparent stays
+     * transparent. The paint's own [alpha] is applied here, before the noise: left to the paint, it
+     * scaled the noise down with the colour, so a soft light drawn at a tenth (every glow of the
+     * room behind Fuse) got a tenth of a step of noise, and banded as if there were none.
      */
-    internal const val NOISE = """
+    private fun noiseShader(pixel: String) = """
         uniform shader content;
         uniform float amp;
+        uniform float alpha;
         float ign(float2 p) { return fract(52.9829189 * fract(dot(p, float2(0.06711056, 0.00583715)))); }
         half4 main(float2 coords) {
-            half4 c = content.eval(coords);
-            float2 p = floor(coords);
+            half4 c = content.eval(coords) * half(alpha);
+            float2 p = floor($pixel);
             float n = ign(p) + ign(p + float2(47.0, 113.0)) - 1.0;
             c.rgb = clamp(c.rgb + half(n * amp / 255.0), 0.0, c.a);
             return c;
         }
     """
 
+    /**
+     * Where the noise is laid out: the screen's own pixels (`sk_FragCoord`). The shader's
+     * coordinates are the drawing's, which a transform stretches: a glow drawn as a unit circle
+     * scaled up had noise in blocks of 25 pixels, too coarse to break a band. [LOCAL] is the
+     * fallback for a Skia that can't read the screen position.
+     */
+    internal val PIXEL = noiseShader("sk_FragCoord.xy")
+    internal val LOCAL = noiseShader("coords")
+
     private val noise: org.jetbrains.skia.RuntimeEffect? by lazy {
-        runCatching { org.jetbrains.skia.RuntimeEffect.makeForShader(NOISE) }
+        runCatching { org.jetbrains.skia.RuntimeEffect.makeForShader(PIXEL) }
+            .recoverCatching {
+                io.github.matiyaaa.fuse.desktop.Log.info("the noise shader lays its grain out by the drawing's coordinates: ${it.message}")
+                org.jetbrains.skia.RuntimeEffect.makeForShader(LOCAL)
+            }
             .onFailure { io.github.matiyaaa.fuse.desktop.Log.warn("gradients keep Skia's own dither: the noise shader couldn't be built", it) }
             .getOrNull()
     }
@@ -65,14 +82,22 @@ internal object DesktopDithering {
             skia.isDither = true
             return
         }
+        val alpha = paint.alpha
         val wrapped = runCatching {
             org.jetbrains.skia.RuntimeShaderBuilder(effect).run {
                 child("content", shader)
                 uniform("amp", amplitude())
+                uniform("alpha", alpha)
                 makeShader()
             }
         }.getOrNull()
-        if (wrapped == null) skia.isDither = true else skia.shader = wrapped
+        if (wrapped == null) {
+            skia.isDither = true
+        } else {
+            skia.shader = wrapped
+            // The shader applies it (see [noiseShader]).
+            paint.alpha = 1f
+        }
     }
 
     /**

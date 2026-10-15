@@ -204,4 +204,54 @@ class DesktopDitheringTest {
             println("Baking a ${big.width}x${big.height} room: $best ms")
         }
     }
+
+    /**
+     * A soft light drawn faint (a glow at an eighth, as the room behind Fuse draws its lights) over
+     * black, under a transform that scales a small drawing up (as a glow is drawn): its pixels.
+     */
+    private fun faintScaledRamp(dither: Boolean, w: Int = 1024, h: Int = 8): IntArray {
+        val image = androidx.compose.ui.graphics.ImageBitmap(w, h)
+        val canvas = androidx.compose.ui.graphics.Canvas(image)
+        canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), androidx.compose.ui.graphics.Paint().apply { color = androidx.compose.ui.graphics.Color.Black })
+        val scale = 32f
+        val paint = androidx.compose.ui.graphics.Paint()
+        androidx.compose.ui.graphics.Brush.horizontalGradient(
+            listOf(androidx.compose.ui.graphics.Color(0, 0, 0), androidx.compose.ui.graphics.Color(255, 255, 255)), 0f, w / scale,
+        ).applyTo(androidx.compose.ui.geometry.Size(w / scale, h / scale), paint, 0.125f)
+        if (dither) {
+            DesktopDithering.install()
+            io.github.matiyaaa.fuse.ui.designsystem.effects.Dithering.gradients!!(paint)
+        }
+        canvas.save()
+        canvas.scale(scale, scale)
+        canvas.drawRect(0f, 0f, w / scale, h / scale, paint)
+        canvas.restore()
+        val pixels = IntArray(w * h)
+        image.readPixels(pixels)
+        return pixels
+    }
+
+    @Test
+    fun aFaintLightDrawnScaledUpGetsAFullStepOfFineNoise() {
+        val w = 1024
+        fun longest(p: IntArray): Int {
+            var longest = 0
+            var run = 0
+            var last = -1
+            for (x in 0 until w) {
+                val g = (p[4 * w + x] shr 8) and 0xFF
+                run = if (g == last) run + 1 else 1
+                last = g
+                longest = maxOf(longest, run)
+            }
+            return longest
+        }
+        val banded = longest(faintScaledRamp(dither = false))
+        val smooth = longest(faintScaledRamp(dither = true))
+        println("Faint light scaled up, longest flat band: undithered $banded px, dithered $smooth px")
+        // 32 steps over 1024 pixels: about 32 pixels each undithered. The noise must survive the
+        // paint's alpha and be laid out per screen pixel, not per scaled-up unit.
+        assertTrue(banded >= 24, "undithered bands $banded px wide")
+        assertTrue(smooth <= 10, "dithered runs at most $smooth px")
+    }
 }

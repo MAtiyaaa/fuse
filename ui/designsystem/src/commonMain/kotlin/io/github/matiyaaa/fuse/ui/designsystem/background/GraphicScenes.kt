@@ -1,5 +1,7 @@
 package io.github.matiyaaa.fuse.ui.designsystem.background
 
+import io.github.matiyaaa.fuse.ui.designsystem.effects.drawDitheredRect
+import io.github.matiyaaa.fuse.ui.designsystem.effects.drawDitheredCircle
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -139,7 +141,7 @@ internal class HorizonScene(look: SceneLook) : Scene(look) {
         val sunX = w * SUN_X
         val sunY = hy - sunR * 0.3f
         // The sky gradient ends at the horizon; below it the floor takes over.
-        drawRect(sky, size = Size(w, hy))
+        drawDitheredRect(sky, size = Size(w, hy))
         for (i in 0 until stars) {
             val x = w * starX[i]
             val y = hy * starY[i]
@@ -158,15 +160,15 @@ internal class HorizonScene(look: SceneLook) : Scene(look) {
             val gap = sunR * (0.012f + 0.085f * ((centre - bandTop) / (hy - bandTop)).coerceIn(0f, 1f))
             val bottom = minOf(centre - gap / 2f, hy)
             if (bottom > top) {
-                clipRect(0f, top, w, bottom) { drawCircle(sun, radius = sunR, center = Offset(sunX, sunY), alpha = sunAlpha) }
+                clipRect(0f, top, w, bottom) { drawDitheredCircle(sun, radius = sunR, center = Offset(sunX, sunY), alpha = sunAlpha) }
             }
             top = maxOf(top, centre + gap / 2f)
         }
-        if (top < hy) clipRect(0f, top, w, hy) { drawCircle(sun, radius = sunR, center = Offset(sunX, sunY), alpha = sunAlpha) }
+        if (top < hy) clipRect(0f, top, w, hy) { drawDitheredCircle(sun, radius = sunR, center = Offset(sunX, sunY), alpha = sunAlpha) }
         drawPath(mountains, hill)
         drawPath(rim, line, alpha = 0.32f * k.coerceAtMost(1f), style = edge)
         bloom.draw(this, sunX, hy, w * 0.6f, h * 0.07f, alpha = 0.5f * k)
-        drawRect(floor, topLeft = Offset(0f, hy), size = Size(w, h - hy))
+        drawDitheredRect(floor, topLeft = Offset(0f, hy), size = Size(w, h - hy))
         // The floor grid: lines from the vanishing point under the sun, and rows coming closer.
         val vp = Offset(sunX, hy)
         for (i in -16..16) {
@@ -182,7 +184,7 @@ internal class HorizonScene(look: SceneLook) : Scene(look) {
             drawLine(line, Offset(0f, y), Offset(w, y), strokeWidth = glow.width, alpha = 0.07f * k * fade)
             drawLine(line, Offset(0f, y), Offset(w, y), strokeWidth = thin.width, alpha = (0.46f * k * fade).coerceAtMost(1f))
         }
-        drawRect(haze, topLeft = Offset(0f, hy), size = Size(w, h * 0.1f))
+        drawDitheredRect(haze, topLeft = Offset(0f, hy), size = Size(w, h * 0.1f))
         drawLine(rimLine, Offset(0f, hy), Offset(w, hy), strokeWidth = 1.4f * d)
     }
 
