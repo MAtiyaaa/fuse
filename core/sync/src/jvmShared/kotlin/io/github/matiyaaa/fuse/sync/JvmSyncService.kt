@@ -2103,35 +2103,25 @@ class JvmSyncService(
                 require(_nowPlaying.value == null) { "Close the running game before importing saves" }
                 require(profile.isNotBlank() && profiles.value.any { it.id == profile }) { "Choose whose saves these are before importing" }
                 require(choices.isNotEmpty() && choices.map { it.entry }.distinct().size == choices.size) { "Choose each save destination once" }
-                val bindings = choices.map { saveImporter.binding(plan, it) }
-                require(bindings.map { it.query.game.id + "|" + it.spot.kind }.distinct().size == bindings.size) { "Choose only one source save for each game at a time" }
-                // Re-resolve every destination before writing, including changed emulator settings.
-                val resolved = bindings.map { binding ->
-                    val query = canonical(binding.query)
-                    val fresh = SaveAdapters.forEmulator(query.emulatorId)?.locate(query, saveEnv)
-                        ?.firstOrNull { it.kind == binding.spot.kind && it.format == binding.spot.format && it.root == binding.spot.root && it.files == binding.spot.files }
-                        ?: error("A save destination changed. Inspect a new import preview")
-                    require(fresh.available) { "The save destination is no longer available" }
-                    val key = if (fresh.kind == SaveKind.MEMORY_CARD) GameKey(query.platform, "card." + fresh.format) else query.game
-                    Triple(binding, query, Slots.of(key, fresh))
-                }
+                val resolved = resolveImport(plan, choices)
                 val d = device ?: newDevice(ensureDeviceId(), cached.deviceName.ifBlank { defaultDeviceName }).also { device = it }
                 require(resolved.map { (_, _, slot) -> slot.key }.distinct().size == resolved.size) { "Choose one import for each shared memory card" }
                 val failures = ArrayList<SaveImportFailure>()
                 val everyone = choices.flatMap { it.profiles.ifEmpty { listOf(profile) } }.toSet()
                 require(everyone.all { p -> profiles.value.any { it.id == p } }) { "Choose whose saves these are before importing" }
                 var imported = 0
+                val replaced = ArrayList<ReplacedSave>()
                 val revisions = resolved.flatMapIndexed { index, (binding, query, slot) ->
                     val entry = plan.entries.first { e -> e.id == choices[index].entry }
-                    // Each chosen person gets their own copy. The folder ends up holding the one
-                    // playing here now (else the last chosen); the others' is parked for them.
+                    // Each chosen person gets their own copy, and no one else's save is touched: the
+                    // folder is written only for whoever's save is in it (see SyncDevice.importFor).
                     val owners = choices[index].profiles.ifEmpty { listOf(profile) }.map { ownerOf(query, slot, it) }.distinct()
-                    val here = owners.firstOrNull { it == cached.activeProfile } ?: owners.last()
+                    val before = owners.associateWith { o -> d.importBackups(o, slot).map { it.id }.toSet() }
                     try {
-                        val first = d.importSave(here, slot, entry.sourceFormat, binding.files, query.title).id
-                        val rest = (owners - here).map { d.importSaveParked(it, slot, entry.sourceFormat, binding.files, query.title).id }
+                        val ids = d.importFor(owners, cached.activeProfile.ifEmpty { null }, slot, entry.sourceFormat, binding.files, query.title, binding.part).map { it.id }
                         imported++
-                        listOf(first) + rest
+                        for (o in owners) d.importBackups(o, slot).firstOrNull { it.id !in before.getValue(o) }?.let { replaced += ReplacedSave(entry.id, o, query, slot.kind, it.id) }
+                        ids
                     } catch (e: kotlinx.coroutines.CancellationException) { throw e }
                     catch (e: Exception) {
                         failures += SaveImportFailure(entry.id, entry.name, e.message ?: "The save could not be imported")
@@ -2142,7 +2132,80 @@ class JvmSyncService(
                 // Normal flush owns parent/conflict handling and leaves offline saves queued.
                 val sent = if (cached.enabled && everyone.any { it !in cached.noSyncProfiles }) client?.let { c -> runCatching { d.flush(c) }.isSuccess } == true else false
                 if (failures.isEmpty()) saveImporter.discard(plan)
-                SaveImportResult(imported, revisions, queued = revisions.isNotEmpty() && cached.enabled && !sent, failures = failures)
+                SaveImportResult(imported, revisions, queued = revisions.isNotEmpty() && cached.enabled && !sent, failures = failures, replaced = replaced)
+            }
+        }
+    }
+
+    /**
+     * Each choice's binding, its game by the household's id and the save slot it goes to, looked up
+     * again now (emulator settings may have changed since the preview).
+     */
+    private fun resolveImport(plan: SaveImportPlan, choices: List<SaveImportChoice>): List<Triple<JvmSaveImporter.Binding, SaveQuery, LocalSlot>> {
+        val bindings = choices.map { saveImporter.binding(plan, it) }
+        require(bindings.map { it.query.game.id + "|" + it.spot.kind }.distinct().size == bindings.size) { "Choose only one source save for each game at a time" }
+        return bindings.map { binding ->
+            val query = canonical(binding.query)
+            val fresh = SaveAdapters.forEmulator(query.emulatorId)?.locate(query, saveEnv)
+                ?.firstOrNull { it.kind == binding.spot.kind && it.format == binding.spot.format && it.root == binding.spot.root && it.files == binding.spot.files }
+                ?: error("A save destination changed. Inspect a new import preview")
+            require(fresh.available) { "The save destination is no longer available" }
+            val key = if (fresh.kind == SaveKind.MEMORY_CARD) GameKey(query.platform, "card." + fresh.format) else query.game
+            Triple(binding, query, Slots.of(key, fresh))
+        }
+    }
+
+    override suspend fun existingSaves(plan: SaveImportPlan, choices: List<SaveImportChoice>, profile: String): Map<String, Map<String, ExistingSave>> = withContext(Dispatchers.IO) {
+        work.withLock {
+            runCatching {
+                config()
+                val d = device ?: return@runCatching emptyMap<String, Map<String, ExistingSave>>()
+                resolveImport(plan, choices).mapIndexedNotNull { index, (_, query, slot) ->
+                    val choice = choices[index]
+                    val found = choice.profiles.ifEmpty { listOf(profile) }.mapNotNull { p -> d.existingSave(ownerOf(query, slot, p), slot)?.let { p to it } }.toMap()
+                    found.takeIf { it.isNotEmpty() }?.let { choice.entry to it }
+                }.toMap()
+            }.getOrDefault(emptyMap())
+        }
+    }
+
+    override suspend fun switchCards(): List<SwitchCard> = withContext(Dispatchers.IO) {
+        val user = System.getProperty("user.name").orEmpty()
+        // Where cards and readers mount: macOS, Linux desktops (udisks), Windows drive letters, Android's storage.
+        val roots = (listOf("/Volumes", "/media/$user", "/run/media/$user", "/media", "/mnt", "/storage").flatMap { d ->
+            File(d).listFiles()?.filter { it.isDirectory && it.name != "emulated" && it.name != "self" }.orEmpty()
+        } + File.listRoots().filter { it.path.length <= 3 && it.path != "/" }).distinctBy { it.absolutePath }
+        roots.mapNotNull { root ->
+            runCatching {
+                val names = root.listFiles()?.filter { it.isDirectory }.orEmpty()
+                val jksv = names.firstOrNull { it.name.equals("JKSV", true) }
+                val checkpoint = names.firstOrNull { it.name.equals("switch", true) }?.let { File(it, "Checkpoint/saves") }?.takeIf { it.isDirectory }
+                val folder = jksv ?: checkpoint ?: return@runCatching null
+                val games = folder.listFiles()?.count { g -> g.isDirectory && g.listFiles()?.isNotEmpty() == true } ?: 0
+                if (games == 0) return@runCatching null
+                SwitchCard(folder.absolutePath, root.name.ifEmpty { root.path }, "${if (jksv != null) "JKSV" else "Checkpoint"}, $games ${if (games == 1) "game" else "games"}")
+            }.getOrNull()
+        }
+    }
+
+    override suspend fun importBackups(asked: SaveQuery, kind: SaveKind, profile: String): List<ImportBackupInfo> = withContext(Dispatchers.IO) {
+        val query = canonical(asked)
+        val d = device ?: return@withContext emptyList()
+        val slot = slots(query).firstOrNull { it.kind == kind } ?: return@withContext emptyList()
+        d.importBackups(ownerOf(query, slot, profile), slot).map { ImportBackupInfo(it.id, it.at, it.manifest.size, it.title) }
+    }
+
+    override suspend fun restoreImportBackup(asked: SaveQuery, kind: SaveKind, profile: String, backup: String): Result<Unit> = withContext(Dispatchers.IO) {
+        work.withLock {
+            runCatching {
+                require(_nowPlaying.value == null) { "Close the running game before putting a save back" }
+                val query = canonical(asked)
+                val d = device ?: error("This device has no saves kept from before an import.")
+                val slot = slots(query).firstOrNull { it.kind == kind } ?: error("That save isn't here.")
+                val owner = ownerOf(query, slot, profile)
+                d.restoreImportBackup(owner, slot, backup)
+                if (cached.enabled && owner !in cached.noSyncProfiles) client?.let { c -> runCatching { d.flush(c) } }
+                log("${query.title}: put back the save from before an import", query.game.id, "restore")
             }
         }
     }
@@ -2775,8 +2838,11 @@ class JvmSyncService(
 
     override suspend fun versions(asked: SaveQuery, kind: SaveKind): List<SaveVersion> = withContext(Dispatchers.IO) {
         val query = canonical(asked)
-        val c = client ?: return@withContext emptyList()
         val profile = cached.activeProfile.ifEmpty { return@withContext emptyList() }
+        // Without a host: the saves this device kept from before imports, which it can put back itself.
+        val c = client ?: return@withContext importBackups(query, kind, profile).map {
+            SaveVersion(LOCAL_BACKUP + it.id, cached.deviceName.ifBlank { defaultDeviceName }, it.at, 0, it.bytes, RevisionReason.BEFORE_RESTORE, false, provenance = "Before import (this device)")
+        }
         val slot = slots(query).firstOrNull { it.kind == kind }
         val key = slot?.game ?: query.game
         val owner = slot?.let { ownerOf(query, it, profile) } ?: profile
@@ -2787,6 +2853,7 @@ class JvmSyncService(
 
     override suspend fun restore(asked: SaveQuery, kind: SaveKind, version: String): Result<Unit> = withContext(Dispatchers.IO) {
         val query = canonical(asked)
+        if (version.startsWith(LOCAL_BACKUP)) return@withContext restoreImportBackup(query, kind, cached.activeProfile, version.removePrefix(LOCAL_BACKUP))
         runCatching {
             val c = client ?: error("Fuse One isn't connected.")
             val d = device ?: error("Fuse One isn't set up.")
@@ -2869,6 +2936,9 @@ class JvmSyncService(
     private fun lanAddresses(): List<String> = LanAddresses.list()
 
     companion object {
+        /** The id a save kept on this device from before an import has in [versions], beside the host's. */
+        const val LOCAL_BACKUP = "local:"
+
         /** At most this many artwork calls a minute go to the host; the rest go to the providers. */
         const val ART_PER_MINUTE = 300
 

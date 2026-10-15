@@ -42,6 +42,9 @@ object SwitchDumps {
     )
 
     private const val MAGIC = 0x56534B4A
+    private const val AUTO = "AUTO - "
+    /** The name JKSV gives a device save's backups, in place of a user's. */
+    private const val DEVICE_USER = "Device"
     private val HEX16 = Regex("[0-9A-Fa-f]{16}")
     private val CHECKPOINT_GAME = Regex("^0x([0-9A-Fa-f]{16}) (.*)$")
 
@@ -100,16 +103,21 @@ object SwitchDumps {
             meta != null -> Backup(root, Tool.JKSV, meta.titleId, game?.takeUnless { HEX16.matches(it) }, name, userOf(name, Tool.JKSV), meta.kind, meta.savedAt, files)
             checkpoint != null -> Backup(root, Tool.CHECKPOINT, checkpoint.groupValues[1].uppercase(), checkpoint.groupValues[2].trim().ifEmpty { null }, name,
                 userOf(name, Tool.CHECKPOINT), Kind.ACCOUNT, null, files)
-            underJksv && game != null -> Backup(root, Tool.JKSV, game.takeIf { HEX16.matches(it) }?.uppercase(), game.takeUnless { HEX16.matches(it) }, name,
-                userOf(name, Tool.JKSV), Kind.ACCOUNT, null, files)
+            // Without a meta file, JKSV's name says whose it is: "Device - <date>" is the device save.
+            underJksv && game != null -> userOf(name, Tool.JKSV).let { user ->
+                val device = user.equals(DEVICE_USER, true)
+                Backup(root, Tool.JKSV, game.takeIf { HEX16.matches(it) }?.uppercase(), game.takeUnless { HEX16.matches(it) }, name,
+                    user.takeUnless { device }, if (device) Kind.DEVICE else Kind.ACCOUNT, null, files)
+            }
             else -> null
         }
     }
 
     /** The Switch user a backup's default name carries. */
     fun userOf(name: String, tool: Tool): String? = when (tool) {
-        // "<nickname> - YYYY.MM.DD @ HH.MM.SS"
-        Tool.JKSV -> name.substringBeforeLast(" - ", "").trim().ifEmpty { null }
+        // "<nickname> - YYYY.MM.DD @ HH.MM.SS" (or "YYYY-MM-DD_HH-MM-SS"); "AUTO - <nickname> - ..." for
+        // the copy JKSV makes by itself before a restore.
+        Tool.JKSV -> name.substringBeforeLast(" - ", "").trim().let { if (it.startsWith(AUTO, true)) it.substring(AUTO.length).trim() else it }.ifEmpty { null }
         // "YYYY-MM-DD HH-MM-SS <user>"
         Tool.CHECKPOINT -> Regex("^\\d{4}-?\\d{2}-?\\d{2}[ _]\\d{2}-?\\d{2}-?\\d{2} (.+)$").find(name)?.groupValues?.get(1)?.trim()
     }

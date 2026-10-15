@@ -55,7 +55,32 @@ data class SaveImportChoice(val entry: String, val target: String, val profiles:
 
 /** Revisions are durable locally even while the host is away. No source file is moved or deleted. */
 data class SaveImportResult(val imported: Int, val revisions: List<String>, val queued: Boolean,
-    val failures: List<SaveImportFailure> = emptyList())
+    val failures: List<SaveImportFailure> = emptyList(),
+    /** Each save the import replaced, kept on this device first (see [SyncService.restoreImportBackup]). */
+    val replaced: List<ReplacedSave> = emptyList())
 
 /** A batch can finish some independent destinations while another destination becomes unavailable. */
 data class SaveImportFailure(val entry: String, val name: String, val message: String)
+
+/** A save a person already has of a game, which an import would replace: where it is, and when it was made (ms), when known. */
+data class ExistingSave(val where: Where, val at: Long?) {
+    enum class Where {
+        /** In the emulator's folder now. */
+        IN_FOLDER,
+        /** Set aside on this device while someone else's is in the folder. */
+        SET_ASIDE,
+        /** Saved here and waiting to go to the host. */
+        WAITING,
+        /** Agreed with the host. */
+        SYNCED,
+    }
+}
+
+/** A save an import replaced for [profile], kept on this device as [backup] so the import can be undone. */
+data class ReplacedSave(val entry: String, val profile: String, val query: SaveQuery, val kind: SaveKind, val backup: String)
+
+/** A save kept on this device from before an import replaced it: [at] in milliseconds. */
+data class ImportBackupInfo(val id: String, val at: Long, val bytes: Long, val title: String)
+
+/** A Switch SD card (or a copy of one) Fuse found: [path] is its save backups folder, [name] the card's, [what] what is on it. */
+data class SwitchCard(val path: String, val name: String, val what: String)

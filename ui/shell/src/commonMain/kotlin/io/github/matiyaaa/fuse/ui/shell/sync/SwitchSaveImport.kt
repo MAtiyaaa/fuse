@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.NavAction
+import io.github.matiyaaa.fuse.sync.ExistingSave
 import io.github.matiyaaa.fuse.sync.ProfileInfo
 import io.github.matiyaaa.fuse.sync.SaveImportChoice
 import io.github.matiyaaa.fuse.sync.SaveImportConfidence
@@ -97,16 +98,23 @@ import kotlinx.datetime.toLocalDateTime
 /**
  * Saves copied off a Switch (JKSV, Checkpoint), brought in one game at a time: Fuse reads the dump,
  * then for each game asks whether it is that game, then whose save it becomes (one person, several,
- * or everyone: each gets their own copy), then shows it all once more before writing anything.
+ * or everyone: each gets their own copy), then, when any of them already has a save of it, whether
+ * to replace theirs or leave it, then shows it all once more before writing anything.
  */
 internal class SwitchImport(val source: String) {
-    enum class Step { READING, GAME, PEOPLE, REVIEW, IMPORTING, DONE }
+    enum class Step { READING, GAME, PEOPLE, CHECKING, CONFLICT, REVIEW, IMPORTING, DONE }
 
     /** One game's backups from the dump, newest first, and what the person chose for it. */
     class Game(val key: String, val title: String, val card: GameCard?, val backups: List<Pair<SaveImportEntry, SaveImportTarget>>) {
         var chosen by mutableIntStateOf(0)
         var included by mutableStateOf(true)
         var people by mutableStateOf<Set<String>>(emptySet())
+        /** The chosen people who already have a save of this game, and where it is. */
+        var existing by mutableStateOf<Map<String, ExistingSave>>(emptyMap())
+        /** True: their saves are replaced (each kept as a backup first); false: they keep theirs and get no copy. */
+        var replace by mutableStateOf<Boolean?>(null)
+        /** The people left out because they chose to keep their own save. */
+        var kept by mutableStateOf<Set<String>>(emptySet())
         val entry get() = backups[chosen].first
         val target get() = backups[chosen].second
     }
@@ -116,6 +124,8 @@ internal class SwitchImport(val source: String) {
     var games by mutableStateOf<List<Game>>(emptyList())
     var index by mutableIntStateOf(0)
     var result by mutableStateOf<SaveImportResult?>(null)
+    /** Null before an undo; then how it went (the saves the import replaced put back, or why not). */
+    var undone by mutableStateOf<String?>(null)
     var problem by mutableStateOf<String?>(null)
     val game: Game? get() = games.getOrNull(index)
 
@@ -197,6 +207,36 @@ internal fun SwitchImportOverlay(app: AppState) {
         if (f.step != SwitchImport.Step.DONE || f.result?.failures?.isNotEmpty() == true) f.plan?.let { p -> app.scope.launch { service?.discardSaveImport(p) } }
     }
 
+    /** After choosing people: when any of them already has a save of this game, asks first; else on to the next. */
+    fun check(f: SwitchImport) {
+        val g = f.game ?: return
+        val plan = f.plan
+        if (plan == null || service == null || me == null) { next(f); return }
+        // Coming back to a game already settled asks again, from its people as they are now.
+        g.people = g.people + g.kept
+        g.kept = emptySet()
+        g.replace = null
+        f.step = SwitchImport.Step.CHECKING
+        app.scope.launch {
+            val found = service.existingSaves(plan, listOf(SaveImportChoice(g.entry.id, g.target.id, g.people.toList())), me)[g.entry.id].orEmpty()
+            g.existing = found.filterKeys { it in g.people }
+            if (f.step != SwitchImport.Step.CHECKING) return@launch
+            if (g.existing.isEmpty()) next(f) else f.step = SwitchImport.Step.CONFLICT
+        }
+    }
+
+    /** Puts back every save the import replaced, from the backups made just before. */
+    fun undo(f: SwitchImport) {
+        val replaced = f.result?.replaced.orEmpty()
+        if (replaced.isEmpty() || service == null || f.undone != null) return
+        f.undone = ""
+        app.scope.launch {
+            val failed = replaced.mapNotNull { r -> service.restoreImportBackup(r.query, r.kind, r.profile, r.backup).exceptionOrNull()?.message }
+            f.undone = if (failed.isEmpty()) "The saves that were replaced are back." else failed.first()
+            app.platform.sounds.play(if (failed.isEmpty()) SoundCue.SELECT else SoundCue.ERROR)
+        }
+    }
+
     fun import(f: SwitchImport) {
         val plan = f.plan ?: return
         val chosen = f.games.filter { it.included && it.people.isNotEmpty() }
@@ -223,7 +263,7 @@ internal fun SwitchImportOverlay(app: AppState) {
         InputLayer(priority = LayerPriority.DIALOG + 1, modal = true) { e ->
             val f = flow
             val g = f.game
-            val actions = actionsOf(f, profiles, me, ::import, ::close)
+            val actions = actionsOf(f, profiles, me, ::check, ::import, ::undo, ::close)
             val people = if (f.step == SwitchImport.Step.PEOPLE) profiles.size + 1 else 0
             val count = people + actions.size
             if (focus < 0) focus = people + actions.indexOfFirst { it.primary }.coerceAtLeast(0)
@@ -261,11 +301,12 @@ internal fun SwitchImportOverlay(app: AppState) {
                     when (f.step) {
                         SwitchImport.Step.READING -> Reading(f.source)
                         SwitchImport.Step.GAME -> f.game?.let { GameStep(it, compact) }
-                        SwitchImport.Step.PEOPLE -> f.game?.let { g -> PeopleStep(g, profiles, me, focus.takeIf { it in 0..profiles.size }) { i -> togglePerson(g, profiles, i) } }
+                        SwitchImport.Step.PEOPLE, SwitchImport.Step.CHECKING -> f.game?.let { g -> PeopleStep(g, profiles, me, focus.takeIf { it in 0..profiles.size }) { i -> togglePerson(g, profiles, i) } }
+                        SwitchImport.Step.CONFLICT -> f.game?.let { g -> ConflictStep(g, profiles) }
                         SwitchImport.Step.REVIEW, SwitchImport.Step.IMPORTING -> Review(f, profiles)
-                        SwitchImport.Step.DONE -> Done(f)
+                        SwitchImport.Step.DONE -> Done(f, profiles)
                     }
-                    val actions = actionsOf(f, profiles, me, ::import, ::close)
+                    val actions = actionsOf(f, profiles, me, ::check, ::import, ::undo, ::close)
                     if (actions.isNotEmpty()) {
                         Spacer(Modifier.height(if (compact) Space.l else Space.xl))
                         val people = if (f.step == SwitchImport.Step.PEOPLE) profiles.size + 1 else 0
@@ -287,7 +328,7 @@ internal fun SwitchImportOverlay(app: AppState) {
 
 private class Action(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector? = null, val primary: Boolean = false, val enabled: Boolean = true, val run: () -> Unit)
 
-private fun actionsOf(f: SwitchImport, profiles: List<ProfileInfo>, me: String?, import: (SwitchImport) -> Unit, close: () -> Unit): List<Action> {
+private fun actionsOf(f: SwitchImport, profiles: List<ProfileInfo>, me: String?, check: (SwitchImport) -> Unit, import: (SwitchImport) -> Unit, undo: (SwitchImport) -> Unit, close: () -> Unit): List<Action> {
     val g = f.game
     return when (f.step) {
         SwitchImport.Step.READING -> listOf(Action("Cancel", run = close))
@@ -299,8 +340,21 @@ private fun actionsOf(f: SwitchImport, profiles: List<ProfileInfo>, me: String?,
         }
         SwitchImport.Step.PEOPLE -> listOf(
             Action("Back", FuseIcons.ArrowLeft) { f.step = SwitchImport.Step.GAME },
-            Action("Continue", FuseIcons.ArrowRight, primary = true, enabled = g?.people?.isNotEmpty() == true) { next(f) },
+            Action("Continue", FuseIcons.ArrowRight, primary = true, enabled = g?.people?.isNotEmpty() == true) { check(f) },
         )
+        SwitchImport.Step.CHECKING -> listOf(Action("Continue", FuseIcons.ArrowRight, primary = true, enabled = false) {})
+        // Leaving theirs is the first choice: nothing is replaced without a yes.
+        SwitchImport.Step.CONFLICT -> buildList {
+            if (g == null) return@buildList
+            add(Action("Back", FuseIcons.ArrowLeft) { f.step = SwitchImport.Step.PEOPLE })
+            add(Action("Override", FuseIcons.Save) { g.replace = true; next(f) })
+            add(Action("Skip", FuseIcons.CircleSlash, primary = true) {
+                g.replace = false
+                g.kept = g.existing.keys
+                g.people = g.people - g.existing.keys
+                next(f)
+            })
+        }
         SwitchImport.Step.REVIEW -> {
             val count = f.games.count { it.included && it.people.isNotEmpty() }
             listOf(
@@ -309,7 +363,10 @@ private fun actionsOf(f: SwitchImport, profiles: List<ProfileInfo>, me: String?,
             )
         }
         SwitchImport.Step.IMPORTING -> listOf(Action("Importing", FuseIcons.Save, primary = true, enabled = false) {})
-        SwitchImport.Step.DONE -> listOf(Action("Done", FuseIcons.Check, primary = true, run = close))
+        SwitchImport.Step.DONE -> buildList {
+            if (f.result?.replaced?.isNotEmpty() == true && f.undone == null) add(Action("Undo Replacements", FuseIcons.Undo) { undo(f) })
+            add(Action("Done", FuseIcons.Check, primary = true, run = close))
+        }
     }
 }
 
@@ -322,6 +379,7 @@ private fun next(f: SwitchImport) {
 
 private fun back(f: SwitchImport, close: () -> Unit) = when (f.step) {
     SwitchImport.Step.PEOPLE -> f.step = SwitchImport.Step.GAME
+    SwitchImport.Step.CHECKING, SwitchImport.Step.CONFLICT -> f.step = SwitchImport.Step.PEOPLE
     SwitchImport.Step.GAME -> if (f.index > 0) { f.index--; f.step = SwitchImport.Step.PEOPLE } else close()
     SwitchImport.Step.REVIEW -> { f.index = f.games.lastIndex; f.step = SwitchImport.Step.PEOPLE }
     SwitchImport.Step.IMPORTING -> Unit
@@ -350,7 +408,7 @@ private fun Header(f: SwitchImport) {
             FText(f.source, Fuse.type.bodyStrong, maxLines = 1)
         }
         val n = f.games.size
-        if (n > 1 && (f.step == SwitchImport.Step.GAME || f.step == SwitchImport.Step.PEOPLE)) {
+        if (n > 1 && f.step in setOf(SwitchImport.Step.GAME, SwitchImport.Step.PEOPLE, SwitchImport.Step.CHECKING, SwitchImport.Step.CONFLICT)) {
             Steps(n, f.index)
         }
     }
@@ -617,7 +675,12 @@ private fun Review(f: SwitchImport, profiles: List<ProfileInfo>) {
     Column {
         FText(if (chosen.isEmpty()) "Nothing to import" else "Ready to import", Fuse.type.title, maxLines = 1)
         Spacer(Modifier.height(Space.xs))
-        FText("Saves already here are kept in their owner's history first. Your Switch's files stay as they are.", Fuse.type.body, color = c.textMuted, maxLines = 3)
+        val replacing = chosen.sumOf { g -> if (g.replace == true) g.existing.keys.count { it in g.people } else 0 }
+        FText(
+            (if (replacing > 0) "Replaces $replacing ${if (replacing == 1) "save" else "saves"} already here; each is backed up on this device first, and Undo puts it back. " else "") +
+                "No one else's save is touched. Your Switch's files stay as they are.",
+            Fuse.type.body, color = c.textMuted, maxLines = 4,
+        )
         Spacer(Modifier.height(Space.l))
         Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
             for (g in f.games) ReviewRow(g, profiles, done = null)
@@ -637,7 +700,14 @@ private fun ReviewRow(g: SwitchImport.Game, profiles: List<ProfileInfo>, done: B
         Spacer(Modifier.width(Space.m))
         Column(Modifier.weight(1f)) {
             FText(g.title, Fuse.type.bodyStrong, color = if (skipped) c.textMuted else c.text, maxLines = 1)
-            FText(if (skipped) "Left out" else where(g.target), Fuse.type.caption, color = c.textMuted, maxLines = 1)
+            val note = when {
+                skipped && g.kept.isNotEmpty() -> "Skipped: they keep their own save"
+                skipped -> "Left out"
+                g.replace == true && g.existing.isNotEmpty() -> "Replaces ${names(profiles, g.existing.keys)}'s save  ·  ${where(g.target)}"
+                g.kept.isNotEmpty() -> "${names(profiles, g.kept)} keeps their own  ·  ${where(g.target)}"
+                else -> where(g.target)
+            }
+            FText(note, Fuse.type.caption, color = c.textMuted, maxLines = 1)
         }
         if (!skipped) {
             Spacer(Modifier.width(Space.m))
@@ -653,7 +723,7 @@ private fun ReviewRow(g: SwitchImport.Game, profiles: List<ProfileInfo>, done: B
 }
 
 @Composable
-private fun Done(f: SwitchImport) {
+private fun Done(f: SwitchImport, profiles: List<ProfileInfo>) {
     val c = Fuse.colors
     val r = f.result
     Appear(visible = true, enter = fadeIn(Fuse.motion.tween(Durations.BASE, Curves.Fade))) {
@@ -675,14 +745,77 @@ private fun Done(f: SwitchImport) {
                     Spacer(Modifier.height(Space.l))
                     Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
                         for (g in f.games.filter { it.included && it.people.isNotEmpty() }) {
-                            ReviewRow(g, emptyList(), done = g.entry.id !in failed)
+                            ReviewRow(g, profiles, done = g.entry.id !in failed)
                             r.failures.firstOrNull { it.entry == g.entry.id }?.let { FText(it.message, Fuse.type.caption, color = c.danger, maxLines = 3) }
                         }
+                    }
+                    if (r.replaced.isNotEmpty()) {
+                        Spacer(Modifier.height(Space.m))
+                        FText(
+                            f.undone?.ifEmpty { "Putting them back..." }
+                                ?: "${r.replaced.size} ${if (r.replaced.size == 1) "save was" else "saves were"} replaced and backed up on this device. Undo Replacements puts them back; so does the game's save history later.",
+                            Fuse.type.caption, color = c.textMuted, maxLines = 3,
+                        )
                     }
                 }
             }
         }
     }
+}
+
+/** "Mo already has a save of this game": Override replaces it (backed up first), Skip leaves it and gives them no copy. */
+@Composable
+private fun ConflictStep(g: SwitchImport.Game, profiles: List<ProfileInfo>) {
+    val c = Fuse.colors
+    Column {
+        FText("${g.title} already has a save", Fuse.type.title, maxLines = 2)
+        Spacer(Modifier.height(Space.xs))
+        FText(
+            "Override puts this backup in its place; the save there now is backed up on this device first, so it can be put back. Skip leaves it exactly as it is.",
+            Fuse.type.body, color = c.textMuted, maxLines = 4,
+        )
+        Spacer(Modifier.height(Space.l))
+        Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
+            for ((id, e) in g.existing) {
+                val p = profiles.firstOrNull { it.id == id }
+                Row(
+                    Modifier.fillMaxWidth().clip(SquircleShape.fraction(0.18f)).background(c.surfaceRaised.copy(alpha = 0.7f)).padding(Space.m),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (p != null) ProfileAvatar(p.avatar, 32.dp)
+                    Spacer(Modifier.width(Space.m))
+                    Column(Modifier.weight(1f)) {
+                        FText(p?.name ?: "Someone", Fuse.type.bodyStrong, maxLines = 1)
+                        FText(existingText(e), Fuse.type.caption, color = c.textMuted, maxLines = 1)
+                    }
+                }
+            }
+        }
+        val others = g.people - g.existing.keys
+        Spacer(Modifier.height(Space.m))
+        FText(
+            (if (others.isNotEmpty()) "${names(profiles, others)} ${if (others.size == 1) "has" else "have"} no save of it yet and ${if (others.size == 1) "gets" else "get"} this one either way. " else "") +
+                "No one else's save is touched.",
+            Fuse.type.caption, color = c.textMuted, maxLines = 3,
+        )
+    }
+}
+
+/** Where a person's save of a game is now, and when it was made, for [ConflictStep]. */
+private fun existingText(e: ExistingSave): String {
+    val at = e.at?.let { "  ·  " + whenText(it / 1000) }.orEmpty()
+    return when (e.where) {
+        ExistingSave.Where.IN_FOLDER -> "In the emulator now$at"
+        ExistingSave.Where.SET_ASIDE -> "Kept on this device for their next play$at"
+        ExistingSave.Where.WAITING -> "Saved here, waiting to go to Fuse One$at"
+        ExistingSave.Where.SYNCED -> "In Fuse One$at"
+    }
+}
+
+/** "Mo", "Mo and Sam", "Mo, Sam and Ali": the names of [ids] among [profiles]. */
+private fun names(profiles: List<ProfileInfo>, ids: Collection<String>): String {
+    val list = ids.map { id -> profiles.firstOrNull { it.id == id }?.name ?: "Someone" }
+    return if (list.size <= 1) list.firstOrNull().orEmpty() else list.dropLast(1).joinToString(", ") + " and " + list.last()
 }
 
 /** Where a save goes, short enough for one line: the emulator, then the end of its folder. */

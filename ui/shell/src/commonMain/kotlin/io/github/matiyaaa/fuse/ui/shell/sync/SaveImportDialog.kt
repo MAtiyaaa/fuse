@@ -32,11 +32,45 @@ internal fun openSaveImporter(app: AppState) {
     app.choice = ChoiceSpec("Import Saves", "Copy saves from another device or emulator. Fuse shows the destinations first and keeps existing saves in history. Sources are never moved or deleted.", listOf(
         MenuAction("file", "File or ZIP", FuseIcons.FileUp, detail = "One save or an archive containing many saves", onSelect = { choose(false) }),
         MenuAction("folder", "Folder", FuseIcons.FolderOpen, detail = "One game's saves or an entire emulator save hierarchy", onSelect = { choose(true) }),
-        MenuAction("switch", "From a Switch", FuseIcons.SdCard, detail = "Saves backed up with JKSV or Checkpoint: choose the JKSV folder, Checkpoint's saves folder, or one game's", onSelect = {
+        MenuAction("switch", "From a Switch", FuseIcons.SdCard, detail = "Saves backed up with JKSV or Checkpoint, from the SD card or a copy of its folders", onSelect = {
             app.choice = null
-            app.scope.launch { app.platform.storage.pickFolder("Choose your Switch's save backups")?.let { startSwitchImport(app, it) } }
+            app.scope.launch { chooseSwitchSource(app) }
         }),
     ), FuseIcons.Save)
+}
+
+/**
+ * Where a Switch's backups are: a Switch SD card Fuse sees plugged in (straight in, through an
+ * adapter or a reader), else a folder or one ZIP the person picks (the card's JKSV folder copied
+ * anywhere, a phone's storage, a USB drive). JKSV keeps each backup as a folder or a ZIP; both are read.
+ */
+private suspend fun chooseSwitchSource(app: AppState) {
+    val service = app.store.sync.service ?: return
+    val cards = service.switchCards()
+    fun pick(zip: Boolean) {
+        app.choice = null
+        app.scope.launch {
+            val path = if (zip) app.platform.storage.pickSave("Choose a JKSV or Checkpoint backup ZIP")
+            else app.platform.storage.pickFolder("Choose your Switch's save backups (the JKSV folder, or one game's)")
+            path?.let { startSwitchImport(app, it) }
+        }
+    }
+    val found = cards.map { c ->
+        MenuAction("card:${c.path}", c.name, FuseIcons.SdCard, detail = "Plugged in: ${c.what}", onSelect = {
+            app.choice = null
+            startSwitchImport(app, c.path)
+        })
+    }
+    app.choice = ChoiceSpec(
+        "From a Switch",
+        if (cards.isEmpty()) "Plug the Switch's SD card in (an adapter or card reader works), or copy its JKSV folder anywhere, then choose it. Backups can be folders or ZIPs."
+        else "Fuse found your Switch's SD card. Or choose a copy of its JKSV folder, or one backup ZIP.",
+        found + listOf(
+            MenuAction("switch-folder", "Folder", FuseIcons.FolderOpen, detail = "The JKSV folder, Checkpoint's saves folder, or one game's folder", onSelect = { pick(false) }),
+            MenuAction("switch-zip", "One ZIP", FuseIcons.FileUp, detail = "A single JKSV backup ZIP, from the card or wherever you copied it", onSelect = { pick(true) }),
+        ),
+        FuseIcons.SdCard,
+    )
 }
 
 /** The same dialog/menu primitives support controller, keyboard, touch and mouse correction. */
