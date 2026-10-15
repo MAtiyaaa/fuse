@@ -8,6 +8,7 @@ import io.github.matiyaaa.fuse.model.PadButton
 import io.github.matiyaaa.fuse.sync.SyncStatus
 import io.github.matiyaaa.fuse.ui.shell.store.RunResult
 import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
 /** Fuse Sync as the library store made it. */
@@ -151,6 +152,20 @@ internal fun AuditDriver.syncScreens() {
 
     scenario("sync", "saves from a switch") {
         useSync(asHost = false)
+        // Two of the Switch games with their poster, hero and logo; the third with none, as a game Fuse has no art for.
+        val switch = runBlocking { libraryStore.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).first().filter { it.platformId.value == "switch" }.sortedBy { it.title } }
+        val art = java.io.File(cache, "switch-art").apply { mkdirs() }
+        runBlocking {
+            for (g in switch.take(2)) {
+                val owner = io.github.matiyaaa.fuse.model.MediaOwner.OfGame(g.id)
+                val cover = java.io.File(art, "${g.id.value}-cover.png").also { AuditCovers.cover(it, g.title, g.accent) }
+                val hero = java.io.File(art, "${g.id.value}-hero.png").also { AuditCovers.hero(it, g.accent) }
+                val logo = java.io.File(art, "${g.id.value}-logo.png").also { AuditSystemArt.logo(it, g.title) }
+                libraryStore.media.setFromFile(owner, io.github.matiyaaa.fuse.model.MediaKind.BOXART, cover.absolutePath)
+                libraryStore.media.setFromFile(owner, io.github.matiyaaa.fuse.model.MediaKind.HERO, hero.absolutePath)
+                libraryStore.media.setFromFile(owner, io.github.matiyaaa.fuse.model.MediaKind.LOGO, logo.absolutePath)
+            }
+        }
         openSyncPage()
         tapText("Import Saves")
         waitFor("From a Switch")

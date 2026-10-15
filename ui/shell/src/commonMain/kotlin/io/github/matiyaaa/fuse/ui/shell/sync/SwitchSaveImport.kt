@@ -25,6 +25,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
+import androidx.compose.ui.draw.shadow
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -248,6 +251,13 @@ internal fun SwitchImportOverlay(app: AppState) {
                 Column(Modifier.verticalScroll(rememberScrollState()).padding(if (compact) Space.l else Space.xl)) {
                     Header(f)
                     Spacer(Modifier.height(if (compact) Space.l else Space.xl))
+                    // The next games' pictures load while this one is asked about, so each arrives ready.
+                    if (f.step == SwitchImport.Step.GAME || f.step == SwitchImport.Step.PEOPLE) {
+                        val arts = f.games.map { it.card?.art }
+                        PrefetchArt(arts.map { it?.hero ?: it?.screenshot ?: it?.boxart }, f.index, limit = 2, fill = true)
+                        PrefetchArt(arts.map { it?.boxart ?: it?.grid }, f.index, limit = 2, fill = true)
+                        PrefetchArt(arts.map { it?.logo }, f.index, limit = 2)
+                    }
                     when (f.step) {
                         SwitchImport.Step.READING -> Reading(f.source)
                         SwitchImport.Step.GAME -> f.game?.let { GameStep(it, compact) }
@@ -394,44 +404,137 @@ private fun Reading(source: String) {
     }
 }
 
-/** "Is this the game?": its art and name beside what the backup is. */
+/**
+ * "Is this the game?", as its own poster: the game's hero art across the top (its box art, blurred,
+ * where it has none), its logo set into it (its name where it has no logo), and its box art lifted
+ * onto the banner's edge. Each picture fades in once it has loaded, over the game's own colour, so
+ * nothing ever pops; moving to the next game slides the new one in.
+ */
 @Composable
 private fun GameStep(g: SwitchImport.Game, compact: Boolean) {
     val c = Fuse.colors
     val sw = g.entry.switch
-    Appear(visible = true, enter = slideInHorizontally(Fuse.motion.tween(Durations.BASE, Curves.Enter)) { it / 12 } + fadeIn(Fuse.motion.tween(Durations.BASE, Curves.Fade))) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Cover(g, if (compact) 96.dp else 128.dp)
-            Spacer(Modifier.width(Space.xl))
-            Column(Modifier.weight(1f)) {
-                FText(if (sw?.device == true) "A save for everyone on the console. Is it for" else "Is this your save for", Fuse.type.body, color = c.textMuted, maxLines = 2)
-                Spacer(Modifier.height(Space.xs))
-                FText(g.title, Fuse.type.title, maxLines = 3)
-                Spacer(Modifier.height(Space.m))
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                    sw?.tool?.let { Chip(if (it == "CHECKPOINT") "Checkpoint" else "JKSV", icon = FuseIcons.SdCard) }
-                    sw?.user?.let { Chip(it, icon = FuseIcons.UserRound) }
+    val art = g.card?.art
+    val accent = g.card?.accent?.toColor() ?: c.accent
+    val banner = if (compact) 136.dp else 176.dp
+    val posterWidth = if (compact) 92.dp else 116.dp
+    val posterHeight = posterWidth / POSTER_ASPECT
+    // How far the poster reaches up into the banner.
+    val rise = posterHeight * 0.62f
+    val inset = Space.l
+    val beside = inset + posterWidth + Space.l
+    key(g.key) {
+        Appear(visible = true, enter = slideInHorizontally(Fuse.motion.tween(Durations.SLOW, Curves.Enter)) { it / 14 } + fadeIn(Fuse.motion.tween(Durations.BASE, Curves.Fade))) {
+            Box(Modifier.fillMaxWidth()) {
+                // The banner: the game's own colour first, its art fading in over it.
+                val bannerShape = remember { SquircleShape.fraction(0.06f) }
+                Box(Modifier.fillMaxWidth().height(banner).clip(bannerShape).background(Brush.linearGradient(listOf(accent.copy(alpha = 0.55f), accent.copy(alpha = 0.18f))))) {
+                    val wide = art?.hero ?: art?.screenshot
+                    Artwork(
+                        model = wide ?: art?.boxart ?: art?.grid,
+                        modifier = Modifier.matchParentSize(),
+                        contentScale = ContentScale.Crop,
+                        focusX = if (wide != null) art?.heroFocusX ?: 0.5f else 0.5f,
+                        focusY = if (wide != null) art?.heroFocusY ?: 0.35f else 0.3f,
+                        backdrop = wide == null,
+                        backdropBlur = if (wide == null) 28.dp else 0.dp,
+                        fallback = {},
+                    )
+                    // A shade from below, so the logo always reads.
+                    Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Transparent, 0.45f to Color.Black.copy(alpha = 0.15f), 1f to Color.Black.copy(alpha = 0.72f))))
+                    Column(Modifier.align(Alignment.BottomStart).padding(start = beside, end = inset, bottom = Space.m)) {
+                        FText(
+                            if (sw?.device == true) "A save for everyone on the console. Is it for" else "Is this your save for",
+                            Fuse.type.label, color = Color.White.copy(alpha = 0.82f), maxLines = 1,
+                        )
+                        Spacer(Modifier.height(Space.xs))
+                        val title: @Composable () -> Unit = { FText(g.title, Fuse.type.title, color = Color.White, maxLines = 2) }
+                        if (art?.logo != null) {
+                            Artwork(
+                                art.logo,
+                                Modifier.height(if (compact) 44.dp else 58.dp).fillMaxWidth(),
+                                contentScale = ContentScale.Fit,
+                                focusX = 0f,
+                                focusY = 1f,
+                                loading = false,
+                                fallback = title,
+                            )
+                        } else {
+                            title()
+                        }
+                    }
                 }
-                Spacer(Modifier.height(Space.s))
-                FText(listOfNotNull(sw?.savedAt?.let(::whenText), sw?.titleId).joinToString("  ·  ").ifEmpty { g.entry.name }, Fuse.type.caption, color = c.textMuted, maxLines = 2)
-                if (g.target.confidence != SaveImportConfidence.TITLE_ID) {
+                // The poster, lifted onto the banner's edge.
+                Poster(g, posterWidth, accent, Modifier.padding(start = inset, top = banner - rise))
+                // What the backup is, beside the poster and under the banner.
+                Column(Modifier.padding(start = beside, top = banner + Space.m).fillMaxWidth()) {
+                    if (art?.logo != null) {
+                        FText(g.title, Fuse.type.bodyStrong, maxLines = 2)
+                        Spacer(Modifier.height(Space.s))
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                        sw?.tool?.let { Chip(if (it == "CHECKPOINT") "Checkpoint" else "JKSV", icon = FuseIcons.SdCard) }
+                        sw?.user?.let { Chip(it, icon = FuseIcons.UserRound) }
+                    }
                     Spacer(Modifier.height(Space.s))
-                    FText("Matched by its name, so check it is the right game.", Fuse.type.caption, color = c.warning, maxLines = 2)
+                    FText(listOfNotNull(sw?.savedAt?.let(::whenText), sw?.titleId).joinToString("  ·  ").ifEmpty { g.entry.name }, Fuse.type.caption, color = c.textMuted, maxLines = 2)
+                    if (g.target.confidence != SaveImportConfidence.TITLE_ID) {
+                        Spacer(Modifier.height(Space.s))
+                        FText("Matched by its name, so check it is the right game.", Fuse.type.caption, color = c.warning, maxLines = 2)
+                    }
+                    if (g.backups.size > 1) {
+                        Spacer(Modifier.height(Space.s))
+                        FText("Backup ${g.chosen + 1} of ${g.backups.size}${if (g.chosen == 0) ", the newest" else ""}", Fuse.type.caption, color = c.accent, maxLines = 1)
+                    }
                 }
-                if (g.backups.size > 1) {
-                    Spacer(Modifier.height(Space.s))
-                    FText("Backup ${g.chosen + 1} of ${g.backups.size}${if (g.chosen == 0) ", the newest" else ""}", Fuse.type.caption, color = c.accent, maxLines = 1)
-                }
+                // Room for the poster where the details are shorter than it.
+                Spacer(Modifier.height(banner - rise + posterHeight))
             }
         }
     }
 }
 
+/** The game's box art as a poster: a soft shadow under it, rising a little as it arrives. */
+@Composable
+private fun Poster(g: SwitchImport.Game, width: Dp, accent: Color, modifier: Modifier = Modifier) {
+    val shape = remember { SquircleShape.fraction(0.07f) }
+    val reduced = Fuse.motion.reduced
+    var shown by remember(g.key) { mutableStateOf(false) }
+    LaunchedEffect(g.key) { shown = true }
+    val lift by fuselineFloat(if (shown) 1f else 0f, Fuse.motion.tween(Durations.SLOW, Curves.Enter), label = "posterLift")
+    Box(
+        modifier.width(width).aspectRatio(POSTER_ASPECT)
+            .graphicsLayer {
+                if (!reduced) {
+                    translationY = (1f - lift) * 18.dp.toPx()
+                    val s = 0.94f + 0.06f * lift
+                    scaleX = s
+                    scaleY = s
+                }
+            }
+            .shadow(18.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
+            .clip(shape)
+            .background(accent.copy(alpha = 0.35f))
+            .border(1.dp, Color.White.copy(alpha = 0.14f), shape),
+    ) {
+        val art = g.card?.art
+        Artwork(
+            model = art?.boxart ?: art?.grid ?: art?.square ?: art?.icon,
+            modifier = Modifier.matchParentSize(),
+            contentScale = ContentScale.Crop,
+            // Its name is right beside it: a made-up poster carries only its monogram.
+            fallback = { GeneratedArt(g.title, accent, slot = ArtSlot.ICON) },
+        )
+    }
+}
+
+private const val POSTER_ASPECT = 0.72f
+
 @Composable
 private fun Cover(g: SwitchImport.Game, width: Dp) {
     val accent = g.card?.accent?.toColor() ?: Fuse.colors.accent
     val shape = remember { SquircleShape.fraction(0.08f) }
-    Box(Modifier.width(width).aspectRatio(0.72f).clip(shape).background(accent.copy(alpha = 0.2f))) {
+    Box(Modifier.width(width).aspectRatio(POSTER_ASPECT).clip(shape).background(accent.copy(alpha = 0.2f))) {
         val art = g.card?.art
         Artwork(
             model = art?.boxart ?: art?.grid ?: art?.square ?: art?.icon,
