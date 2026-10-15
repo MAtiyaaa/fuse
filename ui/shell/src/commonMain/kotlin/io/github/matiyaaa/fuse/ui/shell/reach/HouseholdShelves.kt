@@ -177,5 +177,9 @@ fun householdMenu(app: AppState, g: HouseholdGame, romm: Boolean): ContextMenuSp
         else MenuAction("h.dl", "Download Here", FuseIcons.Download, detail = "From wherever is best", onSelect = { app.closeOverlays(); app.reachDownload(g.id, g.card.title) }),
         MenuAction("h.send", "Send to Another Device", FuseIcons.Share, trailing = Trailing.Chevron, onSelect = { app.sendPicker(g.id, g.card.title) }),
         if (romm) MenuAction("h.romm", "Upload to RomM", FuseIcons.CloudUpload, detail = "Sent by the device that has it", onSelect = { app.reachUploadToRomm(g.id, g.card.title) }) else null,
+        // Wrong art or details: choose the right game here, though the game isn't on this device.
+        MenuAction("h.identify", "Identify Game", FuseIcons.Search, detail = "Choose the right game for its art and details", onSelect = {
+            app.closeOverlays(); app.go(Route.Media(io.github.matiyaaa.fuse.model.MediaOwner.OfGame(g.id), g.card.title, identify = true))
+        }),
     ),
 )

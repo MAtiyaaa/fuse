@@ -16,6 +16,8 @@ updates and DLC from your other devices, and a sharper, steadier picture on Linu
 - **Updates and DLC from another device.** When another of your devices has updates or DLC for a
   game that this copy doesn't, the game's page offers **Get 2 updates and 1 DLC** (or whatever it
   has). Only those files come over, beside the game, which stays as it is.
+- **Identify Game for games on your other devices.** A game on Fuse One that isn't here has
+  Identify Game in its menu, to choose the right game for its art and details.
 
 ## Changed
 
@@ -23,6 +25,9 @@ updates and DLC from your other devices, and a sharper, steadier picture on Linu
   save instead of being a second card, and a game Fuse found twice is shown once.
 - The Switch import's buttons stay on screen, however long the list: **Import** is always in reach
   with a controller.
+- Importing straight off a Switch's SD card plugged into this device ends with a reminder to eject
+  the card before taking it out. A card pulled out while Android still writes to it can lose the
+  files the Switch's boot loader needs to find its emuMMC.
 - **This copy** on a game's page (the card at the end, formerly On this device) shows where the
   game is, with Choose What to Launch and Folder Behaviour for a game that is a folder. It no longer
   lists every other file in the game's folder, and it no longer repeats the developer, publisher,

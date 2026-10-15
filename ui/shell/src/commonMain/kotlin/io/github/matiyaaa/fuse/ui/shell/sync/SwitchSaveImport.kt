@@ -101,7 +101,17 @@ import kotlinx.datetime.toLocalDateTime
  * or everyone: each gets their own copy), then, when any of them already has a save of it, whether
  * to replace theirs or leave it, then shows it all once more before writing anything.
  */
-internal class SwitchImport(val source: String) {
+internal class SwitchImport(val source: String, val path: String = "") {
+    /**
+     * Read straight off a card plugged into this device (Android's storage, a desktop's mounted
+     * drives): it should be ejected before it comes out, or the card's own files can be left
+     * half-written, the files that tell the Switch's boot loader where its emuMMC is among them.
+     */
+    val onCard: Boolean get() = path.replace('\\', '/').let { p ->
+        (p.startsWith("/storage/") && !p.startsWith("/storage/emulated/")) || p.startsWith("/Volumes/") || p.startsWith("/media/") || p.startsWith("/run/media/") ||
+            Regex("^[A-Za-z]:/").containsMatchIn(p) && !p.startsWith("C:", ignoreCase = true)
+    }
+
     enum class Step { SCOPE, READING, GAME, PEOPLE, CHECKING, CONFLICT, REVIEW, IMPORTING, DONE }
 
     /**
@@ -165,7 +175,7 @@ internal class SwitchImport(val source: String) {
                 ?: e.targets.firstOrNull()
             t?.let { e to it }
         }
-        games = picks.groupBy { (e, t) -> e.switch?.titleId?.uppercase()?.let(SwitchIdsUi::program) ?: t.query.game.id }.mapNotNull { (key, list) ->
+        games = picks.groupBy { (e, t) -> e.switch?.titleId?.uppercase()?.takeIf(SwitchIdsUi::real)?.let(SwitchIdsUi::program) ?: t.query.game.id }.mapNotNull { (key, list) ->
             val newest = list.sortedByDescending { it.first.switch?.savedAt ?: 0L }
             val accounts = newest.filter { it.first.switch?.device != true }
             val device = newest.firstOrNull { it.first.switch?.device == true }
@@ -184,6 +194,9 @@ internal class SwitchImport(val source: String) {
 /** A Switch game's own id for an update's (ending in 800): its saves are kept under the game's. */
 private object SwitchIdsUi {
     fun program(id: String): String = if (id.endsWith("800")) id.dropLast(3) + "000" else id
+
+    /** A whole title id (sixteen hex digits, a game's starting 01): only that says two cards are one game. */
+    fun real(id: String): Boolean = id.length == 16 && id.startsWith("01") && id.all { it in '0'..'9' || it in 'A'..'F' }
 }
 
 /**
@@ -193,7 +206,7 @@ private object SwitchIdsUi {
  */
 internal fun startSwitchImport(app: AppState, path: String) {
     val service = app.store.sync.service ?: return
-    val flow = SwitchImport(path.substringAfterLast('/').substringAfterLast('\\'))
+    val flow = SwitchImport(path.substringAfterLast('/').substringAfterLast('\\'), path)
     app.switchImport = flow
     app.scope.launch {
         val (cards, queries) = cardsByGame(app, platform = "switch")
@@ -855,6 +868,22 @@ private fun Done(f: SwitchImport, profiles: List<ProfileInfo>) {
     val r = f.result
     Appear(visible = true, enter = fadeIn(Fuse.motion.tween(Durations.BASE, Curves.Fade))) {
         Column(Modifier.fillMaxWidth()) {
+            if (f.onCard && f.step == SwitchImport.Step.DONE) {
+                // Before anything else on this screen is read: a card pulled out without ejecting
+                // can leave the Switch unable to find its emuMMC.
+                Row(
+                    Modifier.fillMaxWidth().clip(SquircleShape.fraction(0.18f)).background(c.warning.copy(alpha = 0.14f)).padding(Space.m),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FuseIcon(FuseIcons.SdCard, size = 20.dp, tint = c.warning)
+                    Spacer(Modifier.width(Space.m))
+                    FText(
+                        "Eject the card before you take it out. Pulled out while this device still writes to it, the card can lose the files your Switch needs to start its emuMMC.",
+                        Fuse.type.caption, color = c.text, maxLines = 4,
+                    )
+                }
+                Spacer(Modifier.height(Space.l))
+            }
             when {
                 f.problem != null -> {
                     FText("Nothing imported", Fuse.type.title, maxLines = 1)
