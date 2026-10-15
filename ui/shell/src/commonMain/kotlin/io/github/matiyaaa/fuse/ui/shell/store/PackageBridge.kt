@@ -100,6 +100,12 @@ interface DesktopInstaller {
     /** Where programs go, shown on the Store's page. */
     val folder: String
 
+    /** The handheld this is, where an emulator builds for it ("steamdeck", "rog-ally"); null elsewhere. */
+    val handheld: String? get() = null
+
+    /** Installs Flathub's [appId] for this account with Flatpak (Linux), or throws saying why it couldn't. */
+    suspend fun installFlatpak(appId: String, name: String): Unit = throw UnsupportedOperationException("Flatpak isn't available here.")
+
     /** A new file to download into, below Fuse's own cache. */
     suspend fun newDownload(fileName: String): DownloadSink?
 

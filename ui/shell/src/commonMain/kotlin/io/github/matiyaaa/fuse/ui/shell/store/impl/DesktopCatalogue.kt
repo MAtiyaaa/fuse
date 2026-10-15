@@ -25,9 +25,34 @@ internal data class DesktopEntry(
     val inFuse: InFuse = InFuse.LAUNCHES_GAMES,
     /** The systems it is offered on, where its builds exist for only some; null: every computer. */
     val hosts: Set<Host>? = null,
+    /** Its repository on a Forgejo or Gitea server of its own (Eden's), where GitHub isn't used. */
+    val forge: String? = null,
+    /** Builds on a plain download listing, per system, where there are no releases to read. */
+    val listings: Map<Host, Listing> = emptyMap(),
+    /** On Linux, its Flathub id, for a program that publishes no build of its own to fetch. */
+    val flathub: String? = null,
+    /** Which of a release's files is for this computer, where the plain rules can't tell. */
+    val pick: ((Host, arm: Boolean, handheld: String?) -> Regex?)? = null,
 ) {
     fun repoFor(host: Host): String? = repos[host] ?: repo
+
+    /** How [host] gets it: its own build (GitHub, its forge or a listing), Flathub, or not at all (its page). */
+    fun sourceFor(host: Host): Source? = when {
+        repoFor(host) != null -> Source.GITHUB
+        forge != null -> Source.FORGE
+        host in listings -> Source.LISTING
+        flathub != null && host == Host.LINUX -> Source.FLATHUB
+        else -> null
+    }
+
+    enum class Source { GITHUB, FORGE, LISTING, FLATHUB }
 }
+
+/**
+ * A download listing: [page], the links on it whose last part [pattern] matches (its first group
+ * the version), the newest version taken, and [then], the file below a version's folder.
+ */
+internal data class Listing(val page: String, val pattern: Regex, val then: String? = null)
 
 /**
  * The computer's Store: emulators and companions that publish builds for Linux (AppImages),
@@ -100,23 +125,109 @@ internal object DesktopCatalogue {
             EMULATORS, listOf("xbox"), repo = "https://github.com/xemu-project/xemu", emulator = "xemu",
         ),
         DesktopEntry(
-            // Its releases carry a Windows build Fuse can install (xenia_canary_windows_.zip); the
-            // Linux one is a tarball, not an AppImage, so it is left to its page there.
+            // Windows takes xenia_canary_windows.zip, Linux xenia_canary_linux.tar.xz; there is no macOS build.
             "xenia", "Xenia Canary", "Xenia Canary team", "Xbox 360, the Canary branch that runs most games.",
             EMULATORS, listOf("xbox360"), repo = "https://github.com/xenia-canary/xenia-canary-releases", emulator = "xenia",
-            prereleases = true, hosts = setOf(Host.WINDOWS),
+            prereleases = true, hosts = setOf(Host.WINDOWS, Host.LINUX),
         ),
         DesktopEntry(
-            "ppsspp", "PPSSPP", "Henrik Rydgård", "PlayStation Portable. Its builds are on its own site.",
-            EMULATORS, listOf("psp"), emulator = "ppsspp", page = "https://www.ppsspp.org/download/",
+            // Linux: the AppImage its releases carry (PPSSPP-v…-anylinux-x86_64.AppImage).
+            "ppsspp", "PPSSPP", "Henrik Rydgård", "PlayStation Portable, with upscaling and its own save states.",
+            EMULATORS, listOf("psp"), repos = mapOf(Host.LINUX to "https://github.com/hrydgard/ppsspp"), emulator = "ppsspp",
+            page = "https://www.ppsspp.org/download/",
         ),
         DesktopEntry(
-            "dolphin", "Dolphin", "Dolphin team", "GameCube and Wii. Its builds are on its own site.",
-            EMULATORS, listOf("gc", "wii"), emulator = "dolphin", page = "https://dolphin-emu.org/download/",
+            // Linux: the official build as an AppImage, made weekly by pkgforge-dev (Dolphin_Emulator-…-anylinux-x86_64.AppImage).
+            "dolphin", "Dolphin", "Dolphin team", "GameCube and Wii, in high resolution, with its own netplay.",
+            EMULATORS, listOf("gc", "wii"), repos = mapOf(Host.LINUX to "https://github.com/pkgforge-dev/Dolphin-emu-AppImage"), emulator = "dolphin",
+            page = "https://dolphin-emu.org/download/",
         ),
         DesktopEntry(
-            "retroarch", "RetroArch", "Libretro", "Many systems through its cores. Its builds are on its own site.",
+            // Linux: the newest stable build on Libretro's build server, a 7-Zip archive holding the AppImage.
+            "retroarch", "RetroArch", "Libretro", "Many systems through its cores.",
             EMULATORS, emptyList(), emulator = "retroarch", page = "https://www.retroarch.com/?page=platforms",
+            listings = mapOf(Host.LINUX to Listing("https://buildbot.libretro.com/stable/", Regex("^(\\d+(?:\\.\\d+)+)$"), then = "linux/x86_64/RetroArch.7z")),
+        ),
+        DesktopEntry(
+            // Eden keeps its own Forgejo (its GitHub was taken down), with builds of its own for the Steam
+            // Deck and the ROG Ally.
+            "eden", "Eden", "Eden team", "Nintendo Switch, carrying on yuzu, with its own builds for the Steam Deck and the ROG Ally.",
+            EMULATORS, listOf("switch"), emulator = "eden", forge = "https://git.eden-emu.dev/eden-emu/eden",
+            pick = { host, arm, handheld ->
+                // Its files carry the version: Eden-Linux-v0.2.1-amd64-clang-pgo.AppImage, Eden-Windows-v0.2.1-amd64-clang-pgo.zip.
+                val build = when {
+                    handheld == "steamdeck" && host == Host.LINUX -> "steamdeck"
+                    handheld == "rog-ally" -> "rog-ally"
+                    arm -> if (host == Host.WINDOWS) "arm64" else "aarch64"
+                    else -> "amd64"
+                }
+                when (host) {
+                    Host.LINUX -> Regex("^Eden-Linux-(v[^-]+-)?$build-clang-pgo\\.AppImage$")
+                    Host.WINDOWS -> Regex("^Eden-Windows-(v[^-]+-)?$build-clang-pgo\\.zip$")
+                    else -> null
+                }
+            },
+        ),
+        DesktopEntry(
+            "ryujinx", "Ryujinx", "Ryubing", "Nintendo Switch, the Ryubing continuation of Ryujinx.",
+            EMULATORS, listOf("switch"), emulator = "ryujinx", flathub = "io.github.ryubing.Ryujinx", hosts = setOf(Host.LINUX),
+        ),
+        DesktopEntry(
+            "citron", "Citron", "Citron Neo team", "Nintendo Switch, a yuzu fork. Nightly builds.",
+            EMULATORS, listOf("switch"), repo = "https://github.com/citron-neo/CI", emulator = "citron", prereleases = true, hosts = setOf(Host.LINUX),
+        ),
+        DesktopEntry(
+            "azaharplus", "AzaharPlus", "AzaharPlus team", "Nintendo 3DS, Azahar with extra features.",
+            EMULATORS, listOf("3ds"), repo = "https://github.com/AzaharPlus/AzaharPlus", emulator = "azaharplus", hosts = setOf(Host.LINUX),
+        ),
+        DesktopEntry(
+            // Its Linux build is a tarball holding the AppImage (mandarine-linux-appimage-….tar.gz).
+            "mandarine", "Mandarine", "Mandarine team", "Nintendo 3DS, a Citra fork.",
+            EMULATORS, listOf("3ds"), repo = "https://github.com/mandarine3ds/mandarine", emulator = "mandarine", hosts = setOf(Host.LINUX),
+        ),
+        DesktopEntry(
+            // Linux-Qt.zip holds the Qt AppImage.
+            "panda3ds", "Panda3DS", "wheremyfoodat", "Nintendo 3DS, a young emulator built from scratch.",
+            EMULATORS, listOf("3ds"), repo = "https://github.com/wheremyfoodat/Panda3DS", emulator = "panda3ds", hosts = setOf(Host.LINUX),
+            pick = { host, _, _ -> if (host == Host.LINUX) Regex("Linux-Qt") else null },
+        ),
+        DesktopEntry(
+            "play", "Play!", "Jean-Philip Desjardins", "PlayStation 2, a lighter emulator than PCSX2.",
+            EMULATORS, listOf("ps2"), emulator = "play", flathub = "org.purei.Play", hosts = setOf(Host.LINUX),
+        ),
+        DesktopEntry(
+            // A tarball of the program's folder (redream.x86_64-linux-v….tar.gz) on its own download page.
+            "redream", "Redream", "Redream", "Dreamcast, simple and fast.",
+            EMULATORS, listOf("dreamcast"), emulator = "redream", page = "https://redream.io/download", hosts = setOf(Host.LINUX),
+            listings = mapOf(Host.LINUX to Listing("https://redream.io/download", Regex("^redream\\.x86_64-linux-v(\\d+(?:\\.\\d+)+)\\.tar\\.gz$"))),
+        ),
+        DesktopEntry(
+            "sharpemu", "SharpEmu", "SharpEmu team", "PlayStation 5, experimental: a handful of games start.",
+            EMULATORS, listOf("ps5"), repo = "https://github.com/sharpemu/sharpemu", emulator = "sharpemu", prereleases = true, hosts = setOf(Host.LINUX),
+        ),
+        DesktopEntry(
+            "mame", "MAME", "MAMEdev", "Arcade machines, thousands of them.",
+            EMULATORS, listOf("arcade"), emulator = "mame", flathub = "org.mamedev.MAME", hosts = setOf(Host.LINUX),
+        ),
+        DesktopEntry(
+            "mednafen", "Mednafen", "Mednafen team", "Many older systems, accurately: PlayStation, Saturn, PC Engine and more.",
+            EMULATORS, listOf("psx", "saturn", "tg16"), emulator = "mednafen", flathub = "com.github.AmatCoder.mednaffe", hosts = setOf(Host.LINUX),
+        ),
+        DesktopEntry(
+            "scummvm", "ScummVM", "ScummVM team", "Classic point-and-click adventures.",
+            EMULATORS, listOf("scummvm"), emulator = "scummvm", flathub = "org.scummvm.ScummVM", hosts = setOf(Host.LINUX),
+        ),
+        DesktopEntry(
+            "dosbox-staging", "DOSBox Staging", "DOSBox Staging team", "DOS games, with modern sound and video.",
+            EMULATORS, listOf("dos"), repo = "https://github.com/dosbox-staging/dosbox-staging", emulator = "dosbox-staging", hosts = setOf(Host.LINUX),
+        ),
+        DesktopEntry(
+            "dosbox-x", "DOSBox-X", "joncampbell123", "DOS and Windows 9x games, the most complete DOSBox.",
+            EMULATORS, listOf("dos"), emulator = "dosbox-x", flathub = "com.dosbox_x.DOSBox-X", hosts = setOf(Host.LINUX),
+        ),
+        DesktopEntry(
+            "ruffle", "Ruffle", "Ruffle team", "Flash games, safely.",
+            EMULATORS, listOf("flash"), repo = "https://github.com/ruffle-rs/ruffle", emulator = "ruffle", prereleases = true, hosts = setOf(Host.LINUX),
         ),
         DesktopEntry(
             "moonlight", "Moonlight", "Moonlight team", "Streams games from your PC, from Sunshine or GeForce Experience.",

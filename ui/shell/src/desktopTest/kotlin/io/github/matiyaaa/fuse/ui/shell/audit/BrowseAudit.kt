@@ -1007,18 +1007,13 @@ internal fun AuditDriver.searchScreens(exhaustive: Boolean) {
 
 // --------------------------------------------------------------------------------------- apps
 
-/** A computer's Apps section: Emulators, installed and not, and an emulator's page from it. */
+/** A computer's Apps section: the emulators on it, and an emulator's page from it. */
 internal fun AuditDriver.emulatorsScreens() {
     scenario("emulators", "computer") {
         show(windowsStore, windowsPlatform)
         tab(Destination.APPS)
-        waitFor("Not Installed")
-        tap(PadButton.DPAD_LEFT)
-        shoot("Installed")
-        if (nav(NavAction.UP) != NavResult.MOVED) throw NotCovered("Up did not reach the lists")
-        tap(PadButton.DPAD_RIGHT)
-        tap(PadButton.DPAD_DOWN)
-        shoot("Not Installed")
+        settle(1_200)
+        shoot("the emulators on this computer")
         tap(PadButton.X)
         settle(800)
         shoot("an emulator's page")

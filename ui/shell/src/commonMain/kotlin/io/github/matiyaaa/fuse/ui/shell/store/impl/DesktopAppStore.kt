@@ -158,7 +158,8 @@ internal class DesktopAppStoreOps(
 
     private fun storeApp(e: DesktopEntry): StoreApp {
         val repo = e.repoFor(installer.host)
-        val url = repo ?: e.page ?: ""
+        val source = e.sourceFor(installer.host)
+        val url = repo ?: e.forge ?: e.listings[installer.host]?.page ?: e.flathub?.takeIf { source == DesktopEntry.Source.FLATHUB }?.let { "https://flathub.org/apps/$it" } ?: e.page ?: ""
         return StoreApp(
             key = e.key,
             id = e.key,
@@ -171,7 +172,7 @@ internal class DesktopAppStoreOps(
             sourceUrl = url,
             sourceHost = HtmlLinks.hostOf(url)?.removePrefix("www.") ?: url,
             sourceKind = if (repo != null) SourceKind.GITHUB else SourceKind.WEB,
-            availability = if (repo != null) Availability.INSTALLABLE else Availability.MANUAL,
+            availability = if (source != null) Availability.INSTALLABLE else Availability.MANUAL,
             allowIdChange = false,
             systems = e.systems.map(::PlatformId),
             color = DesktopCatalogue.colors[e.category] ?: DesktopCatalogue.colors[AppStoreOps.OTHER],
@@ -301,7 +302,8 @@ internal class DesktopAppStoreOps(
     private suspend fun checkNow(key: String, force: Boolean, freshFor: Long = DefaultAppStoreOps.RELEASE_FRESH_MS): StoreRelease? {
         val e = entries[key] ?: return null
         val repo = e.repoFor(installer.host)
-        if (repo == null) {
+        val source = e.sourceFor(installer.host)
+        if (source == null) {
             // Built elsewhere: the release is the program's page.
             val r = StoreRelease(null, null, null, e.page ?: "", null, "${e.name} publishes its builds on its own site. Download it there, and Fuse finds it.")
             mutable.update { s -> s.copy(releases = s.releases + (key to ReleaseCheck.Ready(r, ctx.now()))) }
@@ -309,9 +311,19 @@ internal class DesktopAppStoreOps(
         }
         val known = mutable.value.releases[key]
         if (!force && known is ReleaseCheck.Ready && !known.stale && ctx.now() - known.checkedAt < freshFor) return known.release
-        if (ctx.now() < gitHubLimitedUntil) return failed(key, "GitHub's limit for checks is used up for now.", gitHubLimitedUntil)
+        if (source == DesktopEntry.Source.GITHUB && ctx.now() < gitHubLimitedUntil) return failed(key, "GitHub's limit for checks is used up for now.", gitHubLimitedUntil)
         if (known !is ReleaseCheck.Ready) mutable.update { s -> s.copy(releases = s.releases + (key to ReleaseCheck.Checking)) }
-        return when (val result = checks.withPermit { resolver.desktop(repo, e.name, installer.host, installer.arch, prereleases = e.prereleases || key in ctx.settings.value.store.prerelease) }) {
+        val pre = e.prereleases || key in ctx.settings.value.store.prerelease
+        val pattern = e.pick?.invoke(installer.host, installer.arch == "arm64", installer.handheld)
+        val found = checks.withPermit {
+            when (source) {
+                DesktopEntry.Source.GITHUB -> resolver.desktop(repo!!, e.name, installer.host, installer.arch, pattern, prereleases = pre)
+                DesktopEntry.Source.FORGE -> resolver.desktopForgejo(e.forge!!, e.name, installer.host, installer.arch, pattern, prereleases = pre)
+                DesktopEntry.Source.LISTING -> e.listings.getValue(installer.host).let { l -> resolver.desktopListing(l.page, e.name, installer.host, l.pattern, l.then) }
+                DesktopEntry.Source.FLATHUB -> resolver.flathub(e.flathub!!, e.name)
+            }
+        }
+        return when (val result = found) {
             is ApiResult.Success -> {
                 val r = release(e, result.value)
                 mutable.update { s -> s.copy(releases = s.releases + (key to ReleaseCheck.Ready(r, ctx.now()))) }
@@ -331,7 +343,8 @@ internal class DesktopAppStoreOps(
         notes = r.notes?.take(MAX_NOTES),
         pageUrl = r.pageUrl,
         file = r.file?.let { StoreFile(it.name, it.url, it.sizeBytes, it.digest) },
-        manual = if (r.file == null) "${e.name}'s newest release has no ${systemWord()} build Fuse can use as published. Its page has every download." else null,
+        // A Flathub program has no file: Flatpak installs it.
+        manual = if (r.file == null && e.sourceFor(installer.host) != DesktopEntry.Source.FLATHUB) "${e.name}'s newest release has no ${systemWord()} build Fuse can use as published. Its page has every download." else null,
     )
 
     private fun systemWord() = when (installer.host) {
@@ -398,6 +411,22 @@ internal class DesktopAppStoreOps(
                 setJob(key, StoreJob.Resolving)
                 val release = checkNow(key, force = false, freshFor = INSTALL_FRESH_MS)
                     ?: throw Failure((mutable.value.releases[key] as? ReleaseCheck.Failed)?.message ?: "Fuse couldn't find ${e.name}'s newest release.", retry = true)
+                if (e.sourceFor(installer.host) == DesktopEntry.Source.FLATHUB) {
+                    // Flatpak fetches and keeps it; Fuse then finds it, and updates and removes it as a Flatpak.
+                    setJob(key, StoreJob.Installing(waitingTurn = false))
+                    try {
+                        installer.installFlatpak(e.flathub!!, e.name)
+                    } catch (x: CancellationException) {
+                        throw x
+                    } catch (x: Exception) {
+                        throw Failure(x.message ?: "Flatpak couldn't install ${e.name}.", retry = true)
+                    }
+                    gone.remove(key)
+                    clearJob(key)
+                    redetect()
+                    noticesFlow.tryEmit("${e.name} is installed.")
+                    return@withPermit
+                }
                 val file = release.file ?: throw Failure(release.manual ?: "${e.name} has nothing Fuse can install here.", retry = false)
                 val kind = DesktopAssets.kindOf(file.name, installer.host) ?: throw Failure("${e.name}'s download isn't something Fuse can put in place.", retry = false)
                 val sink = installer.newDownload(file.name) ?: throw Failure("Fuse couldn't prepare its download folder.", retry = true)
@@ -488,7 +517,7 @@ internal class DesktopAppStoreOps(
     override fun installAll() {
         val installed = mutable.value.installed.keys
         entries.values
-            .filter { it.key !in installed && it.repoFor(installer.host) != null && it.page == null }
+            .filter { it.key !in installed && it.sourceFor(installer.host) != null }
             .forEach { install(it.key) }
     }
 
@@ -643,6 +672,8 @@ internal fun DesktopAssetKind.word(): String = when (this) {
     DesktopAssetKind.APPIMAGE -> "AppImage"
     DesktopAssetKind.ZIP -> "zip"
     DesktopAssetKind.DMG -> "disk image"
+    DesktopAssetKind.TAR -> "tarball"
+    DesktopAssetKind.SEVEN_ZIP -> "7-Zip archive"
 }
 
 /**
