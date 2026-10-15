@@ -1,35 +1,35 @@
 package io.github.matiyaaa.fuse.desktop.platform
 
-import javazoom.jl.decoder.Bitstream
-import javazoom.jl.decoder.Decoder
-import javazoom.jl.decoder.SampleBuffer
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-/** The songs Fuse ships decode with the MP3 decoder the Linux app uses, at one shared format for crossfades. */
+/**
+ * The songs Fuse ships decode with the Opus decoder the desktop app uses, at one shared format
+ * (48 kHz stereo) for crossfades between them. The songs fetched later are made the same way
+ * (tools/music/encode.sh).
+ */
 class BundledMusicDecodeTest {
     @Test
-    fun everyBundledSongDecodesAt44kStereo() {
+    fun everyBundledSongDecodesAt48kStereo() {
         val dir = File("../../ui/designsystem/src/commonMain/composeResources/files/music")
-        val songs = dir.listFiles { f -> f.name.endsWith(".mp3") }.orEmpty()
-        assertEquals(24, songs.size, "songs in ${dir.absolutePath}")
+        val songs = dir.listFiles { f -> f.name.endsWith(".webm") }.orEmpty()
+        // The menu's song and setup's song; the rest are fetched the first time they are wanted.
+        assertEquals(2, songs.size, "songs in ${dir.absolutePath}")
         for (song in songs) {
-            song.inputStream().buffered().use { input ->
-                val bitstream = Bitstream(input)
-                val decoder = Decoder()
-                var frames = 0
-                while (frames < 200) {
-                    val header = bitstream.readFrame() ?: break
-                    val out = decoder.decodeFrame(header, bitstream) as SampleBuffer
-                    assertEquals(44_100, out.sampleFrequency, song.name)
-                    assertEquals(2, out.channelCount, song.name)
-                    bitstream.closeFrame()
-                    frames++
-                }
-                assertTrue(frames == 200, "${song.name} decoded $frames frames")
+            val webm = assertNotNull(WebmOpus.read(song.readBytes()), song.name)
+            assertEquals(2, webm.channels, song.name)
+            val pcm = OpusPcm(webm)
+            var blocks = 0
+            while (blocks < 200) {
+                val block = pcm.next() ?: break
+                assertEquals(0, block.size % 2, "${song.name} is interleaved stereo")
+                blocks++
             }
+            assertTrue(blocks == 200, "${song.name} decoded $blocks blocks")
         }
+        assertEquals(48_000, OpusPcm.RATE)
     }
 }

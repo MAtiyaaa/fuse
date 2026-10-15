@@ -317,7 +317,11 @@ class DesktopMenuMusic internal constructor(
             return false
         }
 
-        private fun open(): Source = if (path.endsWith(".mp3", ignoreCase = true)) Mp3Source(path) else PcmSource(path)
+        private fun open(): Source = when {
+            path.endsWith(".webm", ignoreCase = true) -> OpusSource(path)
+            path.endsWith(".mp3", ignoreCase = true) -> Mp3Source(path)
+            else -> PcmSource(path)
+        }
 
         override fun close() {
             source?.close()
@@ -351,6 +355,15 @@ class DesktopMenuMusic internal constructor(
             runCatching { bitstream.close() }
             runCatching { input.close() }
         }
+    }
+
+    /** Fuse's own songs: Opus in WebM (see [WebmOpus]). */
+    private class OpusSource(path: String) : Source {
+        private val pcm = OpusPcm(WebmOpus.read(File(path).readBytes()) ?: throw java.io.IOException("Not a song Fuse can play: $path"))
+
+        override fun next(): Chunk? = pcm.next()?.let { Chunk(it, OpusPcm.RATE, pcm.channels) }
+
+        override fun close() = Unit
     }
 
     private class PcmSource(path: String) : Source {

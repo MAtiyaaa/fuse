@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.2.14 is the <b>Native Update</b>: smoother scrolling, every part of a game's page in reach, and art that is ready as you scroll</sub><br>
+<sub>0.4.2.15 is the <b>Native Update</b>: a download two-thirds smaller, and every achievement on one page</sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -268,8 +268,8 @@ Play.
   <tr>
     <td width="33%" valign="top">
       <img src="docs/assets/icons/achievements.svg" width="44" height="44" alt=""><br>
-      <b>RetroAchievements</b><br>
-      <sub>Your profile, recent unlocks and per-game progress on Home and on each game's page, cached so the service is asked no more than needed.</sub>
+      <b>Every achievement, one page</b><br>
+      <sub>RetroAchievements beside the trophies RPCS3, shadPS4, Vita3K and Xenia keep and Steam's achievements: recent unlocks, games in progress and completed, mixed by time, on Home and each game's page.</sub>
     </td>
     <td width="33%" valign="top">
       <img src="docs/assets/icons/cartridge.svg" width="44" height="44" alt=""><br>
@@ -399,7 +399,8 @@ Play.
 
 - Jellyfin in Fuse, played by Fuse Player: continue watching, next up, seasons, music, subtitles drawn by Fuse, downloads for offline, and the film on one screen with a remote on the other.
 - Jellyfin on Home: widgets with each title's logo, and a second-screen card that shows where you're up to.
-- RetroAchievements on Home and each game's page, with hashing for cartridges, CD systems and compressed discs (CHD, CSO, RVZ).
+- Every achievement on one page: RetroAchievements (with hashing for cartridges, CD systems and compressed discs: CHD, CSO, RVZ), PS3, PS4 and Vita trophies from RPCS3, shadPS4 and Vita3K, Xbox 360 achievements from Xenia, and Steam's, no account needed for any but RetroAchievements.
+- Menu music by boipurple: two songs come with Fuse, the other 22 download the first time they play and stay for offline.
 
 </details>
 
@@ -429,11 +430,11 @@ Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.4.2.14 "The Native Update"**: the Library's shelves and every list glide instead of
-> jumping, tile art is ready in memory before it scrolls in, How long to beat and play time are in
-> reach on a game's page at any width, the theme filters stop overlapping, the start-up animation
-> plays its launch sound and then one at its climax, and the Fii, Duo and Trio themes are retired. See
-> [the release notes](docs/releases/0.4.2.14.md); every earlier
+> **Fuse 0.4.2.15 "The Native Update"**: the Android download falls from 104 MB to about 38 MB,
+> with the menu music re-encoded and only two songs inside Fuse (the rest download the first time
+> they play and stay), and the Achievements page now holds everything: RetroAchievements, PS3, PS4
+> and Vita trophies, Xbox 360 and Steam achievements, mixed by time on one page. See
+> [the release notes](docs/releases/0.4.2.15.md); every earlier
 > release is in [CHANGELOG.md](CHANGELOG.md).
 
 Fuse runs on Android handhelds and phones, Linux (including SteamOS and its Game Mode), Windows and

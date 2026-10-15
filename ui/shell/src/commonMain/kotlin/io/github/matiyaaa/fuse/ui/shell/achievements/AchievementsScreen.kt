@@ -30,10 +30,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import io.github.matiyaaa.fuse.model.AchievementState
 import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.NavAction
-import io.github.matiyaaa.fuse.model.RecentAchievement
 import io.github.matiyaaa.fuse.ui.designsystem.components.Badge
 import io.github.matiyaaa.fuse.ui.designsystem.components.EmptyState
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
@@ -69,7 +67,6 @@ import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import io.github.matiyaaa.fuse.ui.shell.components.agoText
-import io.github.matiyaaa.fuse.ui.shell.store.AchievementsFeed
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
@@ -77,99 +74,43 @@ import androidx.compose.foundation.gestures.Orientation
 
 private const val RECENT = "recent"
 private const val PROGRESS = "progress"
-private const val MASTERED = "mastered"
+private const val COMPLETED = "completed"
+private const val CONNECT = "connect"
 
 /**
- * RetroAchievements at a glance: your profile, what you unlocked lately, games in progress and games
- * you mastered. Anything Fuse matched to a game in your library opens that game.
+ * Every achievement in one place: RetroAchievements when it is set up, and what this device keeps
+ * for the library's games (PS3, PS4, Vita and Xbox 360 trophies, Steam achievements). One row of
+ * recent unlocks and one shelf each of games in progress and completed, mixed by time, each item
+ * marked with where it is from. Anything Fuse knows in the library opens that game.
  */
 @Composable
 fun AchievementsScreen(app: AppState) {
     val store = app.store
     val configured by store.achievements.configured.collectAsState()
     val feed by store.achievements.feed.collectAsState()
+    val local by store.achievements.local.collectAsState()
     PageEffect(Unit) {
         app.hero = null
         store.achievements.refresh()
     }
-    val f = feed
-    if (!configured || f == null) {
-        NotConnected(app, configured)
-        return
-    }
-    Connected(app, f)
-}
-
-@Composable
-private fun NotConnected(app: AppState, configured: Boolean) {
-    // Connected but nothing has arrived yet: the page holds its shape. If the profile still hasn't
-    // come after a while, say so and offer to ask again rather than shimmer forever.
-    var slow by remember(configured) { mutableStateOf(false) }
+    // RetroAchievements set up but its profile not here yet: it is waited for a while, then left out.
+    var waited by remember(configured) { mutableStateOf(false) }
     PageEffect(configured) {
         if (configured) {
             delay(SLOW_MS)
-            slow = true
+            waited = true
         }
     }
-    PageEffect(configured, slow) {
-        app.hints = when {
-            !configured -> listOf(Hint(HintButton.CONFIRM, "Connect"))
-            slow -> listOf(Hint(HintButton.CONFIRM, "Try again"))
-            else -> emptyList()
-        }
-    }
-    fun retry() {
-        slow = false
-        app.store.achievements.refresh(force = true)
-    }
-    InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
-        when (e.action) {
-            NavAction.SELECT -> when {
-                !configured -> { app.go(Route.Settings("accounts")); NavResult.ACTIVATED }
-                slow -> { retry(); NavResult.ACTIVATED }
-                else -> NavResult.BLOCKED
-            }
-            NavAction.LEFT, NavAction.RIGHT, NavAction.DOWN -> NavResult.BLOCKED
-            else -> NavResult.IGNORED
-        }
-    }
-    val c = Fuse.colors
-    if (configured && !slow) {
+    val unified = remember(feed, local) { UnifiedAchievements.of(feed, local.orEmpty()) }
+    val loading = local == null || (configured && feed == null && !waited && unified.empty)
+    if (loading) {
         AchievementsLoading()
         return
     }
-    val focused = app.focusZone == FocusZone.CONTENT
-    Box(
-        Modifier.fillMaxSize().padding(horizontal = Space.gutter).padding(top = Size.hudHeight, bottom = Size.hintHeight),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (configured) {
-            EmptyState(
-                FuseIcons.CloudOff,
-                "RetroAchievements hasn't answered",
-                message = "Your profile hasn't arrived yet. Check that this device is online, then try again.",
-                actionLabel = "Try again",
-                actionSelected = focused,
-                actionIcon = FuseIcons.Refresh,
-                onAction = ::retry,
-            )
-        } else {
-            EmptyState(
-                FuseIcons.Trophy,
-                "Connect RetroAchievements",
-                message = "See your recent unlocks, games in progress and mastered sets here and on each game's page. " +
-                    "You need your username and web API key from retroachievements.org, Settings.",
-                tint = c.accent,
-                actionLabel = "Connect",
-                actionSelected = focused,
-                actionIcon = FuseIcons.Link,
-                onAction = { app.go(Route.Settings("accounts")) },
-            )
-        }
-    }
+    Achievements(app, unified, configured, raAnswered = feed != null)
 }
 
-/** The page's shape while the profile loads: the profile line and a row of cards, shimmering. */
+/** The page's shape while the sets load: the header and a row of cards, shimmering. */
 @Composable
 private fun AchievementsLoading() {
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -206,16 +147,19 @@ private fun AchievementsLoading() {
 }
 
 @Composable
-private fun Connected(app: AppState, feed: AchievementsFeed) {
+private fun Achievements(app: AppState, all: UnifiedAchievements, configured: Boolean, raAnswered: Boolean) {
     val rows = buildList {
-        if (feed.recent.isNotEmpty()) add(RECENT)
-        if (feed.inProgress.isNotEmpty()) add(PROGRESS)
-        if (feed.recentlyMastered.isNotEmpty()) add(MASTERED)
+        if (all.recent.isNotEmpty()) add(RECENT)
+        if (all.inProgress.isNotEmpty()) add(PROGRESS)
+        if (all.completed.isNotEmpty()) add(COMPLETED)
+        // RetroAchievements is offered, never a gate: a quiet row at the end.
+        if (!configured || !raAnswered) add(CONNECT)
     }
     fun sizeOf(key: String) = when (key) {
-        RECENT -> feed.recent.size
-        PROGRESS -> feed.inProgress.size
-        MASTERED -> feed.recentlyMastered.size
+        RECENT -> all.recent.size
+        PROGRESS -> all.inProgress.size
+        COMPLETED -> all.completed.size
+        CONNECT -> 1
         else -> 0
     }
     val sel = rememberRouteState(app.navigator, "achievements") { ShelfSelection() }
@@ -223,26 +167,35 @@ private fun Connected(app: AppState, feed: AchievementsFeed) {
     val rowKey = rows.getOrNull(sel.row)
     val col = rowKey?.let(sel::column) ?: 0
 
-    // Games Fuse matched to the library, by RetroAchievements game id.
-    val local: Map<Long, GameId> = feed.recent.mapNotNull { r -> r.localGameId?.let { r.achievement.gameId to it } }.toMap()
-
-    fun open(raGameId: Long, title: String) {
-        val id = local[raGameId]
-        if (id != null) app.go(Route.GameInfo(id)) else app.toasts.show("$title isn't matched to a game in your library")
+    fun open(gameId: GameId?, title: String) {
+        if (gameId != null) app.go(Route.GameInfo(gameId)) else app.toasts.show("$title isn't matched to a game in your library")
     }
-
+    fun connect() {
+        if (configured) {
+            app.store.achievements.refresh(force = true)
+            app.toasts.show("Asking RetroAchievements again")
+        } else {
+            app.go(Route.Settings("accounts"))
+        }
+    }
     fun activate() {
         when (rowKey) {
-            RECENT -> feed.recent.getOrNull(col)?.let { open(it.achievement.gameId, it.gameTitle) }
-            PROGRESS -> feed.inProgress.getOrNull(col)?.let { open(it.raGameId, it.title) }
-            MASTERED -> feed.recentlyMastered.getOrNull(col)?.let { open(it.raGameId, it.title) }
+            RECENT -> all.recent.getOrNull(col)?.let { open(it.gameId, it.game) }
+            PROGRESS -> all.inProgress.getOrNull(col)?.let { open(it.gameId, it.state.title) }
+            COMPLETED -> all.completed.getOrNull(col)?.let { open(it.gameId, it.state.title) }
+            CONNECT -> connect()
         }
     }
 
-    // Open game only while there is something to open.
-    val any = rows.isNotEmpty()
-    PageEffect(any) {
-        app.hints = listOfNotNull(Hint(HintButton.CONFIRM, "Open game").takeIf { any }, Hint(HintButton.OPTIONS, "Refresh"))
+    PageEffect(rowKey) {
+        app.hints = listOfNotNull(
+            when (rowKey) {
+                null -> null
+                CONNECT -> Hint(HintButton.CONFIRM, if (configured) "Try again" else "Connect")
+                else -> Hint(HintButton.CONFIRM, "Open game")
+            },
+            Hint(HintButton.OPTIONS, "Refresh"),
+        )
     }
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
         when (e.action) {
@@ -260,15 +213,24 @@ private fun Connected(app: AppState, feed: AchievementsFeed) {
         FollowSelection(list, { sel.row }, anchor = 0f)
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight + Space.m))
-            Profile(feed, Modifier.padding(horizontal = Space.gutter).reveal(reveal, 0))
+            Header(all, Modifier.padding(horizontal = Space.gutter).reveal(reveal, 0))
             Spacer(Modifier.height(Space.l))
-            if (rows.isEmpty()) {
+            if (all.empty) {
                 Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = Space.gutter).padding(bottom = Size.hintHeight + Space.xl), contentAlignment = Alignment.Center) {
                     EmptyState(
                         FuseIcons.Trophy,
-                        "No unlocks yet",
-                        message = "Play a game with RetroAchievements turned on in your emulator, and your unlocks show up here.",
+                        "No achievements yet",
+                        message = "Fuse gathers them here from RetroAchievements and from the trophies RPCS3, shadPS4, Vita3K and Xenia keep, " +
+                            "and Steam's achievements. Play a game, and what you unlock shows up here.",
                         modifier = Modifier.reveal(reveal, 1),
+                        actionLabel = when {
+                            !configured -> "Connect RetroAchievements"
+                            !raAnswered -> "Ask RetroAchievements again"
+                            else -> null
+                        },
+                        actionSelected = app.focusZone == FocusZone.CONTENT && rowKey == CONNECT,
+                        actionIcon = if (configured) FuseIcons.Refresh else FuseIcons.Link,
+                        onAction = ::connect,
                     )
                 }
                 return@Column
@@ -284,15 +246,16 @@ private fun Connected(app: AppState, feed: AchievementsFeed) {
                     val selectedCol = if (active) sel.column(key) else -1
                     val m = Modifier.reveal(reveal, index + 1)
                     when (key) {
-                        RECENT -> Section("Recent unlocks", sel.column(key), feed.recent, m) { i, r ->
-                            UnlockCard(r, i == selectedCol, badge) { sel.row = index; sel.setColumn(key, i); open(r.achievement.gameId, r.gameTitle) }
+                        RECENT -> Section("Recently unlocked", sel.column(key), all.recent, m) { i, r ->
+                            UnlockCard(r, i == selectedCol, badge) { sel.row = index; sel.setColumn(key, i); open(r.gameId, r.game) }
                         }
-                        PROGRESS -> Section("In progress", sel.column(key), feed.inProgress, m) { i, s ->
-                            GameProgressCard(s, i == selectedCol, badge) { sel.row = index; sel.setColumn(key, i); open(s.raGameId, s.title) }
+                        PROGRESS -> Section("In progress", sel.column(key), all.inProgress, m) { i, g ->
+                            GameProgressCard(g, i == selectedCol, badge) { sel.row = index; sel.setColumn(key, i); open(g.gameId, g.state.title) }
                         }
-                        MASTERED -> Section("Mastered", sel.column(key), feed.recentlyMastered, m) { i, s ->
-                            GameProgressCard(s, i == selectedCol, badge) { sel.row = index; sel.setColumn(key, i); open(s.raGameId, s.title) }
+                        COMPLETED -> Section("Completed", sel.column(key), all.completed, m) { i, g ->
+                            GameProgressCard(g, i == selectedCol, badge) { sel.row = index; sel.setColumn(key, i); open(g.gameId, g.state.title) }
                         }
+                        CONNECT -> ConnectRow(configured, selected = active, modifier = m.padding(horizontal = Space.gutter), onClick = { sel.row = index; connect() })
                     }
                 }
             }
@@ -323,35 +286,47 @@ private fun <T> Section(title: String, column: Int, items: List<T>, modifier: Mo
 }
 
 /**
- * Who is signed in: the avatar, the name with rank and motto, and the totals that matter (points,
- * recent unlocks and mastered sets) set large in tabular figures, divided by hairlines.
+ * Who you are and what you've earned everywhere: the RetroAchievements profile when it is set up,
+ * then the totals across every source set large, and under them what each source adds.
  */
 @Composable
-private fun Profile(feed: AchievementsFeed, modifier: Modifier) {
+private fun Header(all: UnifiedAchievements, modifier: Modifier) {
     val c = Fuse.colors
-    val user = feed.user
+    val user = all.user
+    val t = all.totals
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(
             Modifier.size(AVATAR).elevated(Elevation.raised, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            if (user.avatarUrl != null) Artwork(user.avatarUrl, Modifier.fillMaxSize()) else FuseIcon(FuseIcons.CircleUser, size = Size.iconXL, tint = c.textMuted)
-        }
-        Spacer(Modifier.width(Space.l))
-        Column(Modifier.weight(1f)) {
-            FText(user.username, Fuse.type.title, maxLines = 1)
-            val line = listOfNotNull(user.rank?.let { "Rank ${grouped(it)}" }, user.motto?.takeIf { it.isNotBlank() }).joinToString("  ·  ")
-            if (line.isNotEmpty()) {
-                Spacer(Modifier.height(Space.xxs))
-                FText(line, Fuse.type.body, color = c.textMuted, maxLines = 1)
+            when {
+                user?.avatarUrl != null -> Artwork(user.avatarUrl, Modifier.fillMaxSize())
+                user != null -> FuseIcon(FuseIcons.CircleUser, size = Size.iconXL, tint = c.textMuted)
+                else -> FuseIcon(FuseIcons.Trophy, size = Size.iconL, tint = c.accent)
             }
         }
         Spacer(Modifier.width(Space.l))
-        Stat(grouped(user.points), "points")
+        Column(Modifier.weight(1f)) {
+            FText(user?.username ?: "Achievements", Fuse.type.title, maxLines = 1)
+            val parts = listOfNotNull(
+                t.raPoints?.let { "${grouped(it)} RetroAchievements points" },
+                if (t.trophies > 0) listOfNotNull(
+                    t.platinum.takeIf { it > 0 }?.let { "$it platinum" },
+                    t.gold.takeIf { it > 0 }?.let { "$it gold" },
+                    t.silver.takeIf { it > 0 }?.let { "$it silver" },
+                    t.bronze.takeIf { it > 0 }?.let { "$it bronze" },
+                ).joinToString(", ") else null,
+                t.gamerscore.takeIf { it > 0 }?.let { "${grouped(it.toLong())} gamerscore" },
+                t.steam.takeIf { it > 0 }?.let { "$it on Steam" },
+            )
+            val line = parts.ifEmpty { listOf("Everything you unlock, wherever it's from") }.joinToString("  ·  ")
+            Spacer(Modifier.height(Space.xxs))
+            FText(line, Fuse.type.body, color = c.textMuted, maxLines = 1)
+        }
+        Spacer(Modifier.width(Space.l))
+        Stat(grouped(t.unlocked.toLong()), "unlocked")
         StatDivider()
-        Stat("${feed.recent.size}", "recent")
-        StatDivider()
-        Stat("${feed.recentlyMastered.size}", "mastered")
+        Stat("${t.completed}", "completed")
     }
 }
 
@@ -370,53 +345,72 @@ private fun Stat(value: String, label: String) {
     }
 }
 
-/** "12,480": thousands grouped, so large point totals read at a glance. */
+/** "12,480": thousands grouped, so large totals read at a glance. */
 private fun grouped(n: Long): String {
     val digits = n.toString().trimStart('-')
     val sign = if (n < 0) "-" else ""
     return sign + digits.reversed().chunked(3).joinToString(",").reversed()
 }
 
+/** Where an item is from, small and quiet beside what it's worth. */
+@Composable
+private fun OriginMark(origin: AchievementOrigin) {
+    Badge(origin.mark, color = Fuse.colors.textMuted, filled = false)
+}
+
 /**
- * A recent unlock: its badge as a tile, the achievement's name, its game, and what it was worth
- * (with a Hardcore mark when it was earned that way).
+ * A recent unlock: its badge as a tile, the achievement's name, its game and when, and what it was
+ * worth (points, a trophy's grade, gamerscore), marked with where it is from.
  */
 @Composable
-private fun UnlockCard(r: RecentAchievement, selected: Boolean, size: Dp, onClick: () -> Unit) {
+private fun UnlockCard(r: UnlockEntry, selected: Boolean, size: Dp, onClick: () -> Unit) {
     val c = Fuse.colors
     Row(Modifier.width(size * CARD_WIDTH), verticalAlignment = Alignment.CenterVertically) {
         Tile(selected = selected, modifier = Modifier.size(size), onClick = onClick) {
             Box(Modifier.fillMaxSize().background(c.surfaceRaised), contentAlignment = Alignment.Center) {
-                Artwork(r.achievement.badgeUrl.ifBlank { null }, Modifier.fillMaxSize(), fallback = {
+                Artwork(r.badge, Modifier.fillMaxSize(), fallback = {
                     FuseIcon(FuseIcons.Trophy, size = Size.iconXL, tint = c.accent)
                 })
             }
         }
         Spacer(Modifier.width(Space.m))
         Column(Modifier.weight(1f)) {
-            FText(r.achievement.title, Fuse.type.bodyStrong, color = if (selected) c.text else c.text.copy(alpha = 0.88f), maxLines = 2)
+            FText(r.title, Fuse.type.bodyStrong, color = if (selected) c.text else c.text.copy(alpha = 0.88f), maxLines = 2)
             // The game gives way before the time does.
             Row {
-                FText(r.gameTitle, Fuse.type.caption, color = c.textMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                FText(r.game, Fuse.type.caption, color = c.textMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
                 FText("  ·  ${agoText(r.earnedAt)}", Fuse.type.caption, color = c.textMuted, maxLines = 1)
             }
             Spacer(Modifier.height(Space.s))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                Badge("${r.achievement.points} pts", color = c.accent, filled = false)
+                OriginMark(r.origin)
+                r.worth?.let { Badge(it, color = gradeColor(it) ?: c.accent, filled = false) }
                 if (r.hardcore) Badge("Hardcore", color = c.warning, filled = false)
             }
         }
     }
 }
 
+/** A trophy's grade in its own colour; null for anything else (points, gamerscore). */
+@Composable
+private fun gradeColor(worth: String): androidx.compose.ui.graphics.Color? = when (worth) {
+    "Platinum" -> PLATINUM
+    "Gold" -> Fuse.colors.warning
+    "Silver" -> SILVER
+    "Bronze" -> BRONZE
+    else -> null
+}
+
 /**
  * A game's set: its icon as a tile and how far along it is as a ring with the percentage inside, the
- * count beside it. A mastered set closes its ring in gold, with a crown.
+ * count beside it and where it is from. A completed set closes its ring in gold, with a crown.
  */
 @Composable
-private fun GameProgressCard(s: AchievementState, selected: Boolean, size: Dp, onClick: () -> Unit) {
+private fun GameProgressCard(g: GameEntry, selected: Boolean, size: Dp, onClick: () -> Unit) {
     val c = Fuse.colors
-    val ring = if (s.mastered) c.warning else c.accent
+    val s = g.state
+    val done = g.completed
+    val ring = if (done) c.warning else c.accent
     Row(Modifier.width(size * CARD_WIDTH), verticalAlignment = Alignment.CenterVertically) {
         Tile(selected = selected, modifier = Modifier.size(size), onClick = onClick) {
             Box(Modifier.fillMaxSize().background(c.surfaceRaised), contentAlignment = Alignment.Center) {
@@ -429,20 +423,44 @@ private fun GameProgressCard(s: AchievementState, selected: Boolean, size: Dp, o
         Spacer(Modifier.width(Space.m))
         Column(Modifier.weight(1f)) {
             FText(s.title, Fuse.type.bodyStrong, color = if (selected) c.text else c.text.copy(alpha = 0.88f), maxLines = 2)
-            s.consoleName?.let { FText(it, Fuse.type.caption, color = c.textMuted, maxLines = 1) }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                OriginMark(g.origin)
+                s.consoleName?.let { FText(it, Fuse.type.caption, color = c.textMuted, maxLines = 1) }
+            }
             Spacer(Modifier.height(Space.s))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ProgressRing(s.progress, size = Size.thumb, stroke = Size.track, color = ring) {
-                    if (s.mastered) FuseIcon(FuseIcons.Crown, size = Size.iconS, tint = ring)
+                    if (done) FuseIcon(FuseIcons.Crown, size = Size.iconS, tint = ring)
                     else FText("${(s.progress * 100).roundToInt()}", Fuse.type.numericSmall, color = c.text, maxLines = 1)
                 }
                 Spacer(Modifier.width(Space.s))
                 Column {
-                    FText(if (s.mastered) "Mastered" else "${s.earned} of ${s.total}", Fuse.type.label, color = if (s.mastered) ring else c.text, maxLines = 1)
-                    FText(if (s.mastered) "${s.total} of ${s.total}" else "achievements", Fuse.type.caption, color = c.textMuted, maxLines = 1)
+                    val noun = if (s.source.noun == "Trophies") "trophies" else "achievements"
+                    FText(if (done) (if (g.origin == AchievementOrigin.RETRO) "Mastered" else "Completed") else "${s.earned} of ${s.total}", Fuse.type.label, color = if (done) ring else c.text, maxLines = 1)
+                    FText(if (done) "${s.total} of ${s.total}" else noun, Fuse.type.caption, color = c.textMuted, maxLines = 1)
                 }
             }
         }
+    }
+}
+
+/** RetroAchievements, offered quietly at the end: connect it, or ask it again when it hasn't answered. */
+@Composable
+private fun ConnectRow(configured: Boolean, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val c = Fuse.colors
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        io.github.matiyaaa.fuse.ui.designsystem.components.FuseButton(
+            if (configured) "Ask RetroAchievements again" else "Connect RetroAchievements",
+            selected = selected,
+            icon = if (configured) FuseIcons.Refresh else FuseIcons.Link,
+            onClick = onClick,
+        )
+        Spacer(Modifier.width(Space.l))
+        FText(
+            if (configured) "Your RetroAchievements profile hasn't arrived. Check this device is online."
+            else "Add your RetroAchievements unlocks here too, with your username and web API key.",
+            Fuse.type.caption, color = c.textMuted, maxLines = 2, modifier = Modifier.weight(1f),
+        )
     }
 }
 
@@ -451,5 +469,9 @@ private const val CARD_WIDTH = 2.4f
 
 private val AVATAR = Space.x4
 
-/** How long the page waits for a first profile before offering to ask again. */
+/** How long the page waits for a first RetroAchievements profile before showing what it has without it. */
 private const val SLOW_MS = 10_000L
+
+private val PLATINUM = androidx.compose.ui.graphics.Color(0xFF9FB8D6)
+private val SILVER = androidx.compose.ui.graphics.Color(0xFFA9B0B8)
+private val BRONZE = androidx.compose.ui.graphics.Color(0xFFC0814E)

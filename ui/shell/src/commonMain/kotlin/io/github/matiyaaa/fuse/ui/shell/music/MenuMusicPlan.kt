@@ -25,11 +25,12 @@ object MenuMusicPlan {
     }
 
     /**
-     * The next song for shuffle: any bundled song but the one that just played, and none of the
+     * The next song for shuffle: any of Fuse's songs but the one that just played, and none of the
      * [recent] ones while others are left, so a song comes back only after most of the rest.
      */
-    fun nextShuffled(current: String?, recent: List<String> = emptyList(), random: Random = Random.Default): String {
-        val all = BundledMusic.tracks.map { it.id }
+    fun nextShuffled(current: String?, recent: List<String> = emptyList(), random: Random = Random.Default, among: Collection<String>? = null): String {
+        // [among]: only these (the songs already on this device, when the others can't be fetched).
+        val all = BundledMusic.tracks.map { it.id }.filter { among == null || it in among }.ifEmpty { listOf(BundledMusic.MENU_DEFAULT) }
         val fresh = all.filter { it != current && it !in recent }
         val pool = fresh.ifEmpty { all.filter { it != current } }.ifEmpty { all }
         return pool[random.nextInt(pool.size)]

@@ -1,58 +1,49 @@
-# Fuse 0.4.2.14 - The Native Update
+# Fuse 0.4.2.15 - The Native Update
 
-Lists glide instead of jumping, tile art is ready before it scrolls in, every part of a game's page
-is in reach, the start-up sounds as it should, and Fii, Duo and Trio are gone.
+A download two-thirds smaller, and every achievement in one place.
 
 ## New
 
-- **A sound at the start-up's climax.** After the launch sound, the start-up now plays a second
-  sound as the wordmark burns in: a quick run up into a wide chord that rings out. The first-start
-  opening does the same: the launch sound as the mark lights, and the climax as the tiles fly out
-  from it. Both are made by Fuse's own synthesizer, in your interface sound.
+- **Every achievement on one page.** The Achievements page now shows everything, wherever it was
+  earned, with no tabs by source:
+  - RetroAchievements;
+  - PS3, PS4 and Vita trophies, as RPCS3, shadPS4 and Vita3K keep them;
+  - Xbox 360 achievements, as Xenia keeps them;
+  - Steam's achievements.
+
+  It has one row of recent unlocks and one shelf each of games in progress and completed, mixed by
+  time. Each item has a small mark saying where it is from, and a trophy's grade in its own colour.
+  The header adds it all up: everything you've unlocked, the games you've completed, and under that
+  your RetroAchievements points, trophies by grade, gamerscore and Steam achievements.
+
+  The page needs no account: RetroAchievements is offered as a quiet row at the end of it, never a
+  gate.
+- **Songs for offline.** Settings, Sound has "Songs on this device": download every song at once
+  (about 40 MB) for playing offline, or remove the downloaded ones to free the space.
 
 ## Changed
 
-- **Shelves and lists glide.** Moving down the Library's All view, the shelves now glide to the
-  next one with Fuseline's follow spring, measured on every frame. Before, the page snapped across
-  in a couple of frames while the shelf you left closed its name line above, so it jumped and
-  sometimes went past. A shelf that already shows whole still doesn't scroll. The same glide now
-  moves:
-  - the rows of every shelf, from RomM, other devices and streaming;
-  - the household and streaming pages;
-  - Downloads, offline Jellyfin and the sync pages;
-  - the sectioned game grids.
-- **Tile art is ready as you scroll.** The art of the next rows was being decoded ahead of time,
-  but at a slightly different size, and fitted where the tile crops it. The memory cache only hands
-  an image to a request of the same size, so every tile was decoded again from disk as it scrolled
-  in and showed an empty frame first. Art is now decoded ahead exactly as each tile asks for it, in
-  the Library's grids and on Home's shelves, so a quick scroll down Installed shows art straight
-  away.
-- **The start-up's sounds.** The match strike, the flare and the swell from 0.4.2.13 are gone.
-  The start-up plays its launch sound as the spark bursts again, as it did before them.
+- **A much smaller download.** The menu music was 69 MB of the 104 MB Android app, and as much
+  again in every desktop package. Now:
+  - The songs are re-encoded to Opus (in WebM), which sounds the same at about two-thirds the size.
+  - Only two ship inside Fuse: puddleworld (the menu's song) and alright apothecary (setup's).
+    That's 4 MB, so there is music from the first start with no network.
+  - The other 22 download the first time they are wanted, from Fuse's own repository, and stay,
+    so after that they play offline. Each is checked against its size and sha256 before it is
+    kept.
+  - Shuffle picks and fetches the next song while the current one plays, so there is never a gap.
+  - Offline, shuffle picks only songs already on the device, and a chosen song that can't be
+    fetched leaves the menu's song playing rather than silence.
 
-## Removed
-
-- **Fii, Duo and Trio**, light and night, with their Homes, backgrounds, glossy and panel tiles, and
-  the Bubble, Pip and Tap sounds. Anyone using one of them is moved over the first time this
-  version starts:
-  - a removed theme becomes Fuse;
-  - a removed Home becomes the Fused board, with every tile where it was;
-  - a removed sound becomes Soft.
-- Community themes that name the `fii`, `duo` or `trio` background, a removed sound or `tiles` still
-  load. The parts Fuse no longer has fall back to the theme they start from, and the note says so.
+  The Android app goes from 104 MB to under 40 MB, and each desktop package is about 65 MB smaller.
+  On Windows, macOS and Linux the songs are decoded by Concentus, a Java version of the Opus
+  decoder. Your own menu song still plays as before, MP3 included.
+- **PS4, Vita and Xbox 360 unlocks travel with you.** Like PS3's, they join the
+  game's history, which Fuse One carries to your other devices. A trophy earned on another device
+  says where it was earned.
 
 ## Fixed
 
-- **On a game's page, How long to beat couldn't be reached** when it wrapped under play time on a
-  narrower screen. Down acted as if it were beside play time and left the row. Play time and How
-  long to beat now move by where they actually are, as the buttons above them have since 0.4.2.13.
-  The same goes for the disc buttons and RomM's download buttons when they wrap.
-- **On a game's page, coming back up to play time left it off screen.** The page only ever scrolled
-  down to it, so Up from Available on stopped on play time with the page still showing what was
-  below. It now scrolls back up until play time's top is in view.
-- **The theme filters overlapped.** Choosing Dark or Bright opened the count beside it while the
-  next filter slid back to where it had been, so for a moment the pill ran into the word after it
-  ("Dark 16Bright"). The filters now make room as the count opens. Tabs still slide aside when they
-  are put in another order.
-- The README's pictures and tour showed the removed themes. They are left out, and the tour is cut
-  again from the Library, a game's page, Systems and Jellyfin.
+- The Achievements page said "No unlocks yet" whenever RetroAchievements had nothing, even with a
+  shelf of trophies in RPCS3 or another emulator, and without a RetroAchievements account it showed
+  only a button to connect one. It now shows what is there from every source.

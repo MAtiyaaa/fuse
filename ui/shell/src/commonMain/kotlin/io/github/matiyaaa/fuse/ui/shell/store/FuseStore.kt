@@ -122,8 +122,21 @@ interface FuseStore {
     /** RomM's save sync, when RomM is set up here. */
     val rommSaves: io.github.matiyaaa.fuse.sync.romm.RommSaveService? get() = null
 
-    /** A song that ships with Fuse ([io.github.matiyaaa.fuse.ui.shell.music.BundledMusic]) as a file the player can open. */
+    /**
+     * One of Fuse's songs ([io.github.matiyaaa.fuse.ui.shell.music.BundledMusic]) as a file the player
+     * can open: unpacked when it ships inside Fuse, fetched and kept the first time otherwise. Null
+     * when it isn't one, or it can't be fetched now (offline).
+     */
     suspend fun bundledTrack(id: String): String? = null
+
+    /** Whether the song [id] can play now without the network. */
+    suspend fun musicHere(id: String): Boolean = false
+
+    /** Fetches every song not kept yet, saying how far it has got; returns how many couldn't be fetched. */
+    suspend fun downloadAllMusic(onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }): Int = 0
+
+    /** Forgets the songs that were fetched (the two inside Fuse stay). */
+    suspend fun removeDownloadedMusic() = Unit
 
     /** What moves this device's saves (only one at a time); the others' save sync is turned off here. */
     suspend fun setSaveProvider(provider: io.github.matiyaaa.fuse.data.settings.SaveProvider) = Unit
@@ -893,6 +906,12 @@ interface AchievementOps {
     /** Null when RetroAchievements isn't set up. */
     val feed: StateFlow<AchievementsFeed?>
     val configured: StateFlow<Boolean>
+
+    /**
+     * The sets this device keeps for the library's games (PS3, PS4, Vita and Xbox 360 trophies,
+     * Steam's achievements), whether or not RetroAchievements is set up; null until first read.
+     */
+    val local: StateFlow<List<LocalGameAchievements>?> get() = kotlinx.coroutines.flow.MutableStateFlow(emptyList())
     fun refresh(force: Boolean = false)
     suspend fun forGame(game: GameId): AchievementState?
     /** Checks a username + key against RetroAchievements and stores them securely on success. */

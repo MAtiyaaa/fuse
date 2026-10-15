@@ -63,7 +63,8 @@ private val docs = listOf(
     LicenceDoc("LICENSE-lucide.txt", "Lucide icons", "ISC License (and MIT for icons derived from Feather)"),
     LicenceDoc("LICENSE-qrcodegen.txt", "QR codes", "MIT License: Project Nayuki's QR Code generator library, for Phone Link pairing"),
     LicenceDoc("LICENSE-slf4j.txt", "SLF4J", "MIT License: the logging interface Phone Link's web server (Ktor) is built on"),
-    LicenceDoc("LGPL-2.1.txt", "JLayer", "GNU Lesser General Public License 2.1 or later: the MP3 decoder for menu music in the Linux app"),
+    LicenceDoc("LGPL-2.1.txt", "JLayer", "GNU Lesser General Public License 2.1 or later: the MP3 decoder for your own menu song on Windows, macOS and Linux"),
+    LicenceDoc("LICENSE-concentus.txt", "Concentus", "BSD 3-Clause License: the Opus decoder for Fuse's menu music on Windows, macOS and Linux"),
     LicenceDoc("LICENSE-sdl.txt", "SDL", "zlib License: SDL 2, which reads controllers in the Windows and macOS apps (through libGDX Jamepad)"),
     LicenceDoc(
         "LICENSE-cartridge.txt", "Cartridge",
