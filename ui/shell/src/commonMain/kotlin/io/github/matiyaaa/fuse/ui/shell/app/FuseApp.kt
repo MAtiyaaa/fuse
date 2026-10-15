@@ -1230,11 +1230,23 @@ private fun MenuMusic(app: AppState, player: MenuMusicPlayer?) {
     // that ends picks the next; the player reports it from its own thread.
     var shuffled by remember { mutableStateOf<String?>(null) }
     val recent = remember { ArrayDeque<String>() }
+    // The song shuffle plays next, picked and fetched while this one plays, so a song that has to
+    // be fetched never leaves a gap. When it can't be fetched (offline), one already here is picked.
+    var upcoming by remember { mutableStateOf<String?>(null) }
     fun shuffleOn() {
-        val next = MenuMusicPlan.nextShuffled(shuffled, recent.toList())
+        val next = upcoming ?: MenuMusicPlan.nextShuffled(shuffled, recent.toList(), among = BundledMusic.tracks.filter { it.inside }.map { it.id })
+        upcoming = null
         recent.addLast(next)
         while (recent.size > BundledMusic.tracks.size / 2) recent.removeFirst()
         shuffled = next
+    }
+    LaunchedEffect(shuffled, music.shuffle) {
+        if (!music.shuffle || shuffled == null) return@LaunchedEffect
+        val pick = MenuMusicPlan.nextShuffled(shuffled, recent.toList())
+        upcoming = if (app.store.bundledTrack(pick) != null) pick else {
+            val here = BundledMusic.tracks.map { it.id }.filter { app.store.musicHere(it) }
+            MenuMusicPlan.nextShuffled(shuffled, recent.toList(), among = here)
+        }
     }
     LaunchedEffect(music.shuffle) { if (music.shuffle && shuffled == null) shuffleOn() }
     val ended = remember { kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.CONFLATED) }
@@ -1275,7 +1287,8 @@ private fun MenuMusic(app: AppState, player: MenuMusicPlayer?) {
         song = when (track) {
             null -> null
             BundledMusic.OWN_SONG -> music.songPath
-            else -> app.store.bundledTrack(track)
+            // A song that can't be fetched now (offline) leaves the menu song playing, never silence.
+            else -> app.store.bundledTrack(track) ?: app.store.bundledTrack(BundledMusic.MENU_DEFAULT)
         }
     }
     val state = MenuMusicPlan.state(song, music, quiet)

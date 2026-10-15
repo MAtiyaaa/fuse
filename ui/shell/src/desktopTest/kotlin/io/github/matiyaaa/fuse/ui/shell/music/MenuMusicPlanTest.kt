@@ -97,4 +97,15 @@ class MenuMusicPlanTest {
         assertEquals(BundledMusic.MENU_DEFAULT, MenuMusicPlan.track(own, safeMode = false, onboarding = false))
         assertEquals(BundledMusic.OWN_SONG, MenuMusicPlan.track(own.copy(songPath = "/x.mp3"), safeMode = false, onboarding = false))
     }
+
+    @Test
+    fun offlineShufflePicksOnlySongsAlreadyHere() {
+        val here = listOf(BundledMusic.MENU_DEFAULT, BundledMusic.ONBOARDING, "sighonara")
+        repeat(50) { i ->
+            val next = MenuMusicPlan.nextShuffled("sighonara", random = kotlin.random.Random(i), among = here)
+            kotlin.test.assertTrue(next in here && next != "sighonara", next)
+        }
+        // Nothing here at all: the menu's own song, which ships inside Fuse.
+        kotlin.test.assertEquals(BundledMusic.MENU_DEFAULT, MenuMusicPlan.nextShuffled(null, among = emptyList()))
+    }
 }

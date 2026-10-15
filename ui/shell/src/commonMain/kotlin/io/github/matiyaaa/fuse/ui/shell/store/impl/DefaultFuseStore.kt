@@ -19,6 +19,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.store.ThemeOps
 import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
 import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readRemaining
@@ -301,8 +302,68 @@ internal class DefaultFuseStore private constructor(
     }
 
     override suspend fun bundledTrack(id: String): String? {
-        if (BundledMusic.byId(id) == null) return null
-        return ctx.services.cacheFile(BundledMusic.cachePath(id)) { Res.readBytes(BundledMusic.resource(id)) }
+        val track = BundledMusic.byId(id) ?: return null
+        clearOldMusic()
+        val path = BundledMusic.cachePath(id)
+        if (track.inside) return ctx.services.cacheFile(path) { Res.readBytes(BundledMusic.resource(id)) }
+        // One fetch at a time: the menu asking for the song "Download all" is fetching waits for it.
+        return musicFetch.withLock {
+            try {
+                ctx.services.cacheFile(path) { fetchSong(track) }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+
+    override suspend fun musicHere(id: String): Boolean {
+        val track = BundledMusic.byId(id) ?: return false
+        if (track.inside) return true
+        val file = io.github.matiyaaa.fuse.library.FsPath.join(ctx.services.cacheDir, BundledMusic.cachePath(id))
+        return runCatching { ctx.services.fs.stat(file) }.getOrNull()?.let { !it.isDirectory && it.sizeBytes == track.bytes } == true
+    }
+
+    override suspend fun downloadAllMusic(onProgress: (done: Int, total: Int) -> Unit): Int {
+        val wanted = BundledMusic.remote
+        var failed = 0
+        for ((i, t) in wanted.withIndex()) {
+            onProgress(i, wanted.size)
+            if (!musicHere(t.id) && bundledTrack(t.id) == null) failed++
+        }
+        onProgress(wanted.size, wanted.size)
+        return failed
+    }
+
+    override suspend fun removeDownloadedMusic() {
+        musicFetch.withLock {
+            for (t in BundledMusic.remote) {
+                runCatching { ctx.services.fs.delete(io.github.matiyaaa.fuse.library.FsPath.join(ctx.services.cacheDir, BundledMusic.cachePath(t.id))) }
+            }
+        }
+    }
+
+    private val musicFetch = kotlinx.coroutines.sync.Mutex()
+    private var oldMusicCleared = false
+
+    /** A song fetched from where Fuse publishes them, checked against its size and sha256 before it is kept. */
+    private suspend fun fetchSong(track: io.github.matiyaaa.fuse.ui.shell.music.MusicTrack): ByteArray {
+        for (url in BundledMusic.remoteUrls(track.id)) {
+            val bytes = runCatching {
+                val resp = ctx.services.http.get(url)
+                if (!resp.status.isSuccess()) null else resp.bodyAsBytes()
+            }.getOrNull() ?: continue
+            if (bytes.size.toLong() == track.bytes && okio.ByteString.Companion.run { bytes.toByteString() }.sha256().hex() == track.sha256) return bytes
+        }
+        throw java.io.IOException("${track.id} couldn't be fetched")
+    }
+
+    /** The MP3 copies 0.4.2.14 and earlier unpacked: replaced by the Opus songs, removed once. */
+    private suspend fun clearOldMusic() {
+        if (oldMusicCleared) return
+        oldMusicCleared = true
+        runCatching { ctx.services.fs.delete(io.github.matiyaaa.fuse.library.FsPath.join(ctx.services.cacheDir, BundledMusic.OLD_CACHE)) }
     }
 
     override fun resetHome(reset: (io.github.matiyaaa.fuse.model.HomeLayoutConfig) -> io.github.matiyaaa.fuse.model.HomeLayoutConfig) {

@@ -20,6 +20,7 @@ ffmpeg = "8.1.2-1.5.14"
 javacpp = "1.5.14"
 junit = "4.13.2"
 jlayer = "1.0.1"
+concentus = "1.0.2"
 pdfbox = "3.0.4"
 jamepad = "2.30.0.0"
 
@@ -87,6 +88,7 @@ ffmpeg = { module = "org.bytedeco:ffmpeg", version.ref = "ffmpeg" }
 javacpp = { module = "org.bytedeco:javacpp", version.ref = "javacpp" }
 junit = { module = "junit:junit", version.ref = "junit" }
 jlayer = { module = "javazoom:jlayer", version.ref = "jlayer" }
+concentus = { module = "io.github.jaredmdobson:concentus", version.ref = "concentus" }
 pdfbox = { module = "org.apache.pdfbox:pdfbox", version.ref = "pdfbox" }
 jamepad = { module = "com.badlogicgames.jamepad:jamepad", version.ref = "jamepad" }
 

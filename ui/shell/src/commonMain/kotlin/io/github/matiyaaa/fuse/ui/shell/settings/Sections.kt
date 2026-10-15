@@ -1362,6 +1362,7 @@ fun soundRows(app: AppState): List<MenuAction> {
                 add(app.percentRow("musicvolume", "Music volume", FuseIcons.Volume, music.volume, "Low sits nicely under the interface") { v -> setMusic { it.copy(volume = v) } })
                 add(songRow(app, music, ::setMusic))
                 add(toggleRow("shuffle", "Shuffle", FuseIcons.Shuffle, music.shuffle, if (music.shuffle) "A different song each time one ends, from both albums" else "Plays every song in a random order instead of repeating one") { v -> setMusic { it.copy(enabled = true, shuffle = v) } })
+                add(offlineSongsRow(app))
                 add(infoRow("credit", "Music by ${BundledMusic.ARTIST}", detail = "Fuse's songs are from the albums ${BundledMusic.ALBUM} and ${BundledMusic.ALBUM_TWO}. First-time setup plays ${BundledMusic.byId(BundledMusic.ONBOARDING)?.title}", icon = FuseIcons.Heart))
             }
         }
@@ -1370,6 +1371,73 @@ fun soundRows(app: AppState): List<MenuAction> {
             add(app.percentRow("volume", "Sound effects volume", FuseIcons.Volume, p.soundVolume, "Moving, confirming and going back") { v -> app.store.updatePrefs { it.copy(soundVolume = v) } })
         }
     }
+}
+
+/**
+ * Fuse's songs on this device: two ship inside Fuse, the rest are fetched the first time they play
+ * and kept. All of them can be fetched at once for playing offline, and the fetched ones removed.
+ */
+@Composable
+private fun offlineSongsRow(app: AppState): MenuAction {
+    var fetching by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Pair<Int, Int>?>(null) }
+    var changed by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val total = BundledMusic.remote.size
+    val here by androidx.compose.runtime.produceState(-1, changed, fetching == null) {
+        value = BundledMusic.remote.count { app.store.musicHere(it.id) }
+    }
+    val megabytes = (BundledMusic.remoteBytes + 500_000) / 1_000_000
+    val shipped = BundledMusic.tracks.count { it.inside }
+    fun fetchAll() {
+        app.choice = null
+        if (fetching != null) return
+        app.scope.launch {
+            fetching = 0 to total
+            val failed = app.store.downloadAllMusic { done, all -> fetching = done to all }
+            fetching = null
+            changed++
+            app.toasts.show(if (failed == 0) "Every song is on this device" else "$failed songs couldn't be downloaded. Check the connection and try again")
+        }
+    }
+    fun removeAll() {
+        app.choice = null
+        app.scope.launch {
+            app.store.removeDownloadedMusic()
+            changed++
+            app.toasts.show("Downloaded songs removed. They download again the first time they play")
+        }
+    }
+    val progress = fetching
+    return MenuAction(
+        "offlinesongs", "Songs on this device", FuseIcons.Download,
+        detail = when {
+            progress != null -> "Downloading ${minOf(progress.first + 1, progress.second)} of ${progress.second}"
+            here == total -> "Every song plays offline"
+            here >= 0 -> "$shipped come with Fuse, $here of $total more kept here. The rest download the first time they play"
+            else -> "Checking"
+        },
+        trailing = if (progress != null) Trailing.Value("${progress.first} of ${progress.second}") else Trailing.Chevron,
+        onSelect = {
+            app.choice = ChoiceSpec(
+                title = "Songs on this device",
+                icon = FuseIcons.Music,
+                message = "$shipped songs come with Fuse. The other $total download the first time they play and stay, so they play offline after that.",
+                options = listOfNotNull(
+                    MenuAction(
+                        "fetchall", "Download every song", FuseIcons.Download,
+                        detail = if (here == total) "They're all here" else "About $megabytes MB, for playing offline",
+                        onSelect = ::fetchAll,
+                    ).takeIf { here != total },
+                    MenuAction(
+                        "removeall", "Remove downloaded songs", FuseIcons.Trash,
+                        detail = "The $shipped that come with Fuse stay",
+                        onSelect = ::removeAll,
+                    ).takeIf { here > 0 },
+                ).ifEmpty {
+                    listOf(MenuAction("none", "Nothing to do", FuseIcons.Check, detail = "Checking what's here", onSelect = { app.choice = null }))
+                },
+            )
+        },
+    )
 }
 
 /** The menu song: one of the album's songs, or the user's own. Picking one plays it straight away. */
