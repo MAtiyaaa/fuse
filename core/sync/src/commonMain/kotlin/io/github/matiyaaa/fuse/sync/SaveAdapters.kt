@@ -876,7 +876,10 @@ internal object DreamcastDisc {
 internal object TitleMatch {
     private fun norm(s: String) = s.lowercase().replace(Regex("\\(.*?\\)|\\[.*?]"), "").filter { it.isLetterOrDigit() }
 
-    fun same(a: String, b: String): Boolean = norm(a).isNotEmpty() && norm(a) == norm(b)
+    /** Letters and digits of English only: a save manager on the Switch may drop the rest ("Pokmon"). */
+    private fun ascii(s: String) = norm(s).filter { it in 'a'..'z' || it in '0'..'9' }
+
+    fun same(a: String, b: String): Boolean = norm(a).isNotEmpty() && (norm(a) == norm(b) || ascii(a).length >= 4 && ascii(a) == ascii(b))
 
     /** [title] begins with [cut], a name an emulator shortened (Mupen64Plus keeps 32 characters). */
     fun startsWith(title: String, cut: String): Boolean = norm(cut).length >= 8 && norm(title).startsWith(norm(cut))

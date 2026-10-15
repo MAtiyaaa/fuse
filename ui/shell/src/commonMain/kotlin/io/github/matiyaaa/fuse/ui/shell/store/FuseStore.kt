@@ -1061,6 +1061,9 @@ interface PhoneLinkControl {
      * (the first when null). Null while Phone Link isn't running or there is no network.
      */
     suspend fun pairingLink(address: String? = null): String? = null
+
+    /** Switch save backups a phone sent through Phone Link, each ready to read: a folder or a ZIP here. */
+    val switchSaves: kotlinx.coroutines.flow.Flow<String> get() = kotlinx.coroutines.flow.emptyFlow()
 }
 
 data class PhoneLinkState(

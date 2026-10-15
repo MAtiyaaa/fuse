@@ -20,6 +20,11 @@ data class ReachFile(
     val sha1: String? = null,
     val md5: String? = null,
     val romm: RommFile? = null,
+    /**
+     * Where it goes here, when not at [path] (the file's place in the copy it comes from): an update
+     * kept in its own folder on another device lands beside a game that is a single file here.
+     */
+    val placeAs: String? = null,
 )
 
 /** Somewhere a game can come from: another device of the household, or a RomM server. */

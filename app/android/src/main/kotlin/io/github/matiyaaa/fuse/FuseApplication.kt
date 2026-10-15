@@ -92,6 +92,8 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
         io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.cachedLayers = true
         // RenderEffect blur arrived in Android 12.
         io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.backdropBlur = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+        // A shadow is worked out again each frame its tile moves: only a lifted tile casts one.
+        io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.restingShadows = false
         super.onCreate()
         crashLog.install()
         // Heat and battery saver reach Fuseline: decoration eases off, interaction never does.
@@ -173,7 +175,10 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
      */
     private fun startPhoneLink(store: FuseStore): PhoneLinkControl? = try {
         val name = Settings.Global.getString(contentResolver, Settings.Global.DEVICE_NAME)?.takeIf { it.isNotBlank() } ?: Build.MODEL
-        PhoneLinkServer(store, services.secrets, appScope, name, BuildConfig.VERSION_NAME, readUri = ::readContent, captures = AndroidCaptureLibrary(this)).also { it.start() }
+        PhoneLinkServer(
+            store, services.secrets, appScope, name, BuildConfig.VERSION_NAME, readUri = ::readContent, captures = AndroidCaptureLibrary(this),
+            inbox = io.github.matiyaaa.fuse.link.FileLinkInbox(java.io.File(filesDir, "phone-inbox")),
+        ).also { it.start() }
     } catch (e: CancellationException) {
         throw e
     } catch (t: Throwable) {

@@ -32,7 +32,7 @@ class SwitchImportTest {
         assertEquals(SwitchImport.Step.GAME, f.step)
     }
 
-    @Test fun aDeviceSaveIsItsOwnStepAndEdenIsPreferred() {
+    @Test fun aDeviceSaveGoesWithItsGameAndEdenIsPreferred() {
         val zelda = query("Zelda")
         val ryujinx = query("Zelda", "linux.ryujinx")
         val plan = SaveImportPlan("p", "JKSV", listOf(
@@ -40,8 +40,28 @@ class SwitchImportTest {
             entry(zelda, "device", 100, device = true),
         ), emptyList(), 0)
         val f = SwitchImport("JKSV").apply { take(plan, emptyMap(), null) }
-        assertEquals(2, f.games.size)
-        assertEquals("linux.eden", f.games.first { it.entry.id == "account" }.target.query.emulatorId)
+        // One card: the account save, with the game's device save imported alongside it.
+        assertEquals(1, f.games.size)
+        val g = f.games.single()
+        assertEquals("account", g.entry.id)
+        assertEquals("device", g.device?.first?.id)
+        assertEquals("linux.eden", g.target.query.emulatorId)
+        g.people = setOf("mo")
+        assertEquals(listOf("account", "device"), g.choices().map { it.entry })
+    }
+
+    @Test fun theSameGameFoundTwiceIsOneCard() {
+        // Two library entries of one game (by its title id): one card, the one on this device first.
+        val a = query("Mario Wonder")
+        val b = query("Super Mario Bros. Wonder")
+        val id = "010015100B514000"
+        fun e(q: SaveQuery, name: String, at: Long) = SaveImportEntry(name, name, "switch.savedata", 10,
+            listOf(SaveImportTarget("$name|t", q, SaveKind.SAVE, "switch.savedata", "/eden/$name", false, SaveImportConfidence.TITLE_ID)), "$name|t",
+            SwitchSource("JKSV", name, "Matt", at, id, "Super Mario Bros. Wonder", false))
+        val plan = SaveImportPlan("p", "JKSV", listOf(e(a, "one", 100), e(b, "two", 200)), emptyList(), 0)
+        val f = SwitchImport("JKSV").apply { take(plan, emptyMap(), "mo") }
+        assertEquals(1, f.games.size)
+        assertEquals(listOf("two", "one"), f.games.single().backups.map { it.first.id })
     }
 
     @Test fun nothingForTheLibraryEndsAtOnce() {

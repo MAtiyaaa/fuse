@@ -36,7 +36,8 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
             val used = HashSet<String>()
             // The adapter understands its own target hierarchy. This also works for an archive of
             // an entire emulator folder, independent of the source machine's absolute data path.
-            for (q in games.distinctBy { it.game.id + "|" + it.emulatorId }) {
+            for (asked in games.distinctBy { it.game.id + "|" + it.emulatorId }) {
+                val q = withSwitchId(asked, switch, env)
                 val spots = SaveAdapters.forEmulator(q.emulatorId)?.locate(q, env).orEmpty()
                     .filter { it.available && it.kind != SaveKind.STATE }
                 for ((spotIndex, spot) in spots.withIndex()) {
@@ -311,6 +312,18 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
     private fun underJksv(f: File): Boolean {
         val home = f.absoluteFile.parentFile?.parentFile ?: return false
         return home.name.equals("JKSV", true) || home.name.equals("Saves", true) && home.parentFile?.name.equals("JKSV", true)
+    }
+
+    /**
+     * A Switch game Fuse knows no title id for (an XCI or NSZ with no `[0100…]` tag in its name, or a
+     * game on another device) takes the id of a backup made of it, recognised by the game's name:
+     * the save goes where the emulator looks for that id, ready when the game is played.
+     */
+    private fun withSwitchId(q: SaveQuery, backups: List<SwitchDumps.Backup>, env: SaveEnvironment): SaveQuery {
+        if (backups.isEmpty() || q.platform != "switch" || SwitchIds.of(q, env) != null) return q
+        val stem = q.romPath.takeIf { it.isNotBlank() }?.let(SaveAdapters::stem)
+        val id = backups.firstOrNull { b -> b.titleId != null && b.game != null && (TitleMatch.same(b.game, q.title) || stem != null && TitleMatch.same(b.game, stem)) }?.titleId
+        return if (id != null) q.copy(serial = id.uppercase()) else q
     }
 
     /** The Switch backups among [files], with where the source was so a game or backup folder chosen on its own is recognised. */

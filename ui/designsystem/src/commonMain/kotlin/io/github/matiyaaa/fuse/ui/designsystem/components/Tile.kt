@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
@@ -125,19 +127,25 @@ fun Tile(
 
     val sweep = remember { FuselineValue(1f) }
     val sweepOn = motion.sweep && quality.animatedBackground
-    LaunchedEffect(selected, sweepOn) {
-        if (selected && sweepOn) {
-            sweep.snapTo(0f)
-            // Let the lift get under way first, so the light crosses a tile that is already rising.
-            delay(SWEEP_DELAY_MS)
-            sweep.animateTo(1f, tween(Durations.SWEEP, easing = Curves.Sweep))
-        } else {
-            sweep.snapTo(1f)
-        }
-    }
     val bar = remember { FuselineValue(if (selected) 1f else 0f) }
-    LaunchedEffect(selected) {
-        if (selected) bar.animateTo(1f, motion.barSpring()) else bar.animateTo(0f, motion.exit(Durations.FAST))
+    // A tile that has never been selected has nothing to animate: no work starts for it. A grid
+    // flung fast composes dozens of tiles a frame, and each started two of these before.
+    var everSelected by remember { mutableStateOf(selected) }
+    if (selected) everSelected = true
+    if (everSelected) {
+        LaunchedEffect(selected, sweepOn) {
+            if (selected && sweepOn) {
+                sweep.snapTo(0f)
+                // Let the lift get under way first, so the light crosses a tile that is already rising.
+                delay(SWEEP_DELAY_MS)
+                sweep.animateTo(1f, tween(Durations.SWEEP, easing = Curves.Sweep))
+            } else {
+                sweep.snapTo(1f)
+            }
+        }
+        LaunchedEffect(selected) {
+            if (selected) bar.animateTo(1f, motion.barSpring()) else bar.animateTo(0f, motion.exit(Durations.FAST))
+        }
     }
 
     val style = look.focusStyle
@@ -181,7 +189,7 @@ fun Tile(
                 val scale = 1f + minOf(focusScale - 1f, cap) * lift + minOf(hoverScale, cap) * hover * (1f - lift) - minOf(pressDepth, cap) * p
                 scaleX = scale
                 scaleY = scale
-                val rest = Elevation.tile.shadow.toPx()
+                val rest = if (io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.restingShadows) Elevation.tile.shadow.toPx() else 0f
                 val up = Elevation.tileFocused.shadow.toPx()
                 // A pressed tile is pushed toward the surface, so its shadow tightens.
                 shadowElevation = if (!surface) 0f else (rest + (up - rest) * raised) * (1f - 0.45f * p.coerceIn(0f, 1f))

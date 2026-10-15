@@ -5,6 +5,7 @@ import io.github.matiyaaa.fuse.desktop.system.DesktopOs
 import io.github.matiyaaa.fuse.ui.shell.platform.CaptureResult
 import io.github.matiyaaa.fuse.ui.shell.platform.RecordingReady
 import io.github.matiyaaa.fuse.ui.shell.platform.ScreenCapture
+import org.jetbrains.skiko.toBufferedImage
 import java.awt.Rectangle
 import java.awt.RenderingHints
 import java.awt.Robot
@@ -59,7 +60,9 @@ class DesktopScreenCapture(private val window: () -> Window?) : ScreenCapture {
     override fun freeBytes(): Long? = runCatching { pictures.apply { mkdirs() }.usableSpace }.getOrNull()
 
     override suspend fun screenshot(name: String): CaptureResult = withContext(Dispatchers.IO) {
-        val image = grab() ?: return@withContext CaptureResult(picturesPlace, failure = "The screenshot couldn't be taken: Fuse's window isn't on screen")
+        // Fuse's own picture first, as it drew it: under Game Mode's compositor (and some Wayland
+        // desktops) reading the screen gives black. The screen as it is, where that can't be had.
+        val image = drawn()?.takeUnless(::looksBlank) ?: grab() ?: return@withContext CaptureResult(picturesPlace, failure = "The screenshot couldn't be taken: Fuse's window isn't on screen")
         if (os == DesktopOs.MACOS && looksBlank(image)) {
             return@withContext CaptureResult(picturesPlace, failure = "macOS hasn't allowed Fuse to record the screen. Allow it in System Settings, Privacy & Security, Screen Recording, then try again")
         }
@@ -208,6 +211,25 @@ class DesktopScreenCapture(private val window: () -> Window?) : ScreenCapture {
         val copy = BufferedImage(best.getWidth(null), best.getHeight(null), BufferedImage.TYPE_INT_RGB)
         copy.createGraphics().apply { drawImage(best, 0, 0, null); dispose() }
         return copy
+    }
+
+    /** The picture Fuse's window last drew, read back from its drawing surface; null where it can't be. */
+    private fun drawn(w: Window? = window()): BufferedImage? {
+        if (w == null || !w.isShowing) return null
+        val layer = layerOf(w) ?: return null
+        val bitmap = runCatching {
+            val done = java.util.concurrent.CompletableFuture<org.jetbrains.skia.Bitmap?>()
+            java.awt.EventQueue.invokeLater { done.complete(runCatching { layer.screenshot() }.getOrNull()) }
+            done.get(2, java.util.concurrent.TimeUnit.SECONDS)
+        }.getOrNull() ?: return null
+        return runCatching { bitmap.toBufferedImage() }.getOrNull().also { bitmap.close() }
+    }
+
+    /** The window's Skia surface, wherever it sits in the window's components. */
+    private fun layerOf(c: java.awt.Component): org.jetbrains.skiko.SkiaLayer? {
+        if (c is org.jetbrains.skiko.SkiaLayer) return c
+        if (c is java.awt.Container) for (child in c.components) layerOf(child)?.let { return it }
+        return null
     }
 
     /** All one colour: what macOS returns without Screen Recording permission (the desktop's own fill). */

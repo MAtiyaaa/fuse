@@ -35,10 +35,20 @@ class SingleInstanceTest {
     fun aSecondStartBringsTheFirstToTheFront() {
         val (first, _) = start()
         val shown = CountDownLatch(1)
-        first.onShow = { shown.countDown() }
+        first.onShow = { shown.countDown(); true }
         first.onQuit = { error("the first Fuse was asked to close") }
         assertEquals(SingleInstance.Decision.Handed, start().second)
         assertTrue(shown.await(2, TimeUnit.SECONDS))
+    }
+
+    @Test
+    fun aFuseWhoseWindowIsGoneOrStuckIsReplacedRatherThanAskedToShow() {
+        // Steam's Exit Game left it running with no window that answers: the next start from the
+        // same entry must not leave the screen empty.
+        val (first, _) = start(steam = "12345")
+        first.onShow = { false }
+        first.onQuit = { first.release() }
+        assertIs<SingleInstance.Decision.Replaced>(start(steam = "12345").second)
     }
 
     @Test
@@ -60,6 +70,7 @@ class SingleInstanceTest {
     @Test
     fun steamStartingTheSameEntryTwiceKeepsTheFirst() {
         val (first, _) = start(steam = "12345")
+        first.onShow = { true }
         first.onQuit = { error("the first Fuse was asked to close") }
         assertEquals(SingleInstance.Decision.Handed, start(steam = "12345").second)
     }
@@ -84,7 +95,7 @@ class SingleInstanceTest {
     fun aWrongSecretIsIgnored() {
         val (first, _) = start()
         var asked = false
-        first.onShow = { asked = true }
+        first.onShow = { asked = true; true }
         val holder = SingleInstance.Holder.read(java.io.File(folder, "instance.info"))!!
         assertFalse(SingleInstance.ask(holder.copy(secret = "not-it"), SingleInstance.SHOW))
         assertFalse(asked)

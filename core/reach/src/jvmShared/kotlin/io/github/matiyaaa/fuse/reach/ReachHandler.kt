@@ -260,7 +260,7 @@ class ReachHandler(private val host: ReachTransferHost, private val clock: () ->
 
     /** Where [f] goes under [base]: its place inside the game, each part made safe, never outside [base]. */
     private fun destOf(base: File, f: ReachFile): File {
-        val parts = f.path.split('/', '\\').filter { it.isNotEmpty() && it != "." && it != ".." }.map(RommPlacement::safeName)
+        val parts = (f.placeAs ?: f.path).split('/', '\\').filter { it.isNotEmpty() && it != "." && it != ".." }.map(RommPlacement::safeName)
         if (parts.isEmpty()) throw TransferFailure("A file of this game has no name.", retryable = false)
         return parts.fold(base) { dir, p -> File(dir, p) }
     }

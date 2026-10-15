@@ -101,11 +101,29 @@ import kotlinx.datetime.toLocalDateTime
  * or everyone: each gets their own copy), then, when any of them already has a save of it, whether
  * to replace theirs or leave it, then shows it all once more before writing anything.
  */
-internal class SwitchImport(val source: String) {
-    enum class Step { READING, GAME, PEOPLE, CHECKING, CONFLICT, REVIEW, IMPORTING, DONE }
+internal class SwitchImport(val source: String, val path: String = "") {
+    /**
+     * Read straight off a card plugged into this device (Android's storage, a desktop's mounted
+     * drives): it should be ejected before it comes out, or the card's own files can be left
+     * half-written, the files that tell the Switch's boot loader where its emuMMC is among them.
+     */
+    val onCard: Boolean get() = path.replace('\\', '/').let { p ->
+        (p.startsWith("/storage/") && !p.startsWith("/storage/emulated/")) || p.startsWith("/Volumes/") || p.startsWith("/media/") || p.startsWith("/run/media/") ||
+            Regex("^[A-Za-z]:/").containsMatchIn(p) && !p.startsWith("C:", ignoreCase = true)
+    }
 
-    /** One game's backups from the dump, newest first, and what the person chose for it. */
-    class Game(val key: String, val title: String, val card: GameCard?, val backups: List<Pair<SaveImportEntry, SaveImportTarget>>) {
+    enum class Step { SCOPE, READING, GAME, PEOPLE, CHECKING, CONFLICT, REVIEW, IMPORTING, DONE }
+
+    /**
+     * One game's backups from the dump, newest first, and what the person chose for it. A game's
+     * device save (one for everyone on the console) goes with it, never as a game of its own.
+     */
+    class Game(
+        val key: String, val title: String, val card: GameCard?, val backups: List<Pair<SaveImportEntry, SaveImportTarget>>,
+        val device: Pair<SaveImportEntry, SaveImportTarget>? = null,
+        /** False: the game is on Fuse One but not on this device; its save is ready when it is played here. */
+        val here: Boolean = true,
+    ) {
         var chosen by mutableIntStateOf(0)
         var included by mutableStateOf(true)
         var people by mutableStateOf<Set<String>>(emptySet())
@@ -115,8 +133,15 @@ internal class SwitchImport(val source: String) {
         var replace by mutableStateOf<Boolean?>(null)
         /** The people left out because they chose to keep their own save. */
         var kept by mutableStateOf<Set<String>>(emptySet())
+        /** The person using Fuse's own save of this game, when they have one (null until known, or none). */
+        var mine by mutableStateOf<ExistingSave?>(null)
         val entry get() = backups[chosen].first
         val target get() = backups[chosen].second
+        /** What importing this game writes: its chosen backup, and its device save when there is one. */
+        fun choices(): List<SaveImportChoice> = listOfNotNull(
+            SaveImportChoice(entry.id, target.id, people.toList()),
+            device?.takeIf { it.first.id != entry.id }?.let { (e, t) -> SaveImportChoice(e.id, t.id, people.toList()) },
+        )
     }
 
     var step by mutableStateOf(Step.READING)
@@ -127,59 +152,125 @@ internal class SwitchImport(val source: String) {
     /** Null before an undo; then how it went (the saves the import replaced put back, or why not). */
     var undone by mutableStateOf<String?>(null)
     var problem by mutableStateOf<String?>(null)
+    /** True: every game in the library, here or on Fuse One; false: only the games on this device. */
+    var everywhere by mutableStateOf(false)
+    /** How many Switch games are on Fuse One but not here, for the choice of which games to look at. */
+    var elsewhere by mutableIntStateOf(0)
+    /** Starts reading once the choice of games is made; set by [startSwitchImport]. */
+    var read: (Boolean) -> Unit = {}
     val game: Game? get() = games.getOrNull(index)
 
-    /** The games of a plan, from its Switch backups: for each game its backups, newest first. */
-    fun take(plan: SaveImportPlan, cards: Map<String, GameCard>, me: String?) {
+    /**
+     * The games of a plan, from its Switch backups: for each game its backups, newest first. A game is
+     * one card however it was found (by its title id, or the same game known twice), with its device
+     * save beside its account save. [elsewhere]: the keys of games not on this device.
+     */
+    fun take(plan: SaveImportPlan, cards: Map<String, GameCard>, me: String?, elsewhere: Set<String> = emptySet()) {
         this.plan = plan
         val picks = plan.entries.filter { it.switch != null }.mapNotNull { e ->
             val t = e.targets.firstOrNull { it.id == e.selectedTarget }
-                ?: e.targets.firstOrNull { "eden" in it.query.emulatorId }
-                ?: e.targets.firstOrNull { it.confidence == SaveImportConfidence.TITLE_ID }
+                ?: e.targets.firstOrNull { it.query.game.id !in elsewhere && "eden" in it.query.emulatorId }
+                ?: e.targets.firstOrNull { it.query.game.id !in elsewhere && it.confidence == SaveImportConfidence.TITLE_ID }
+                ?: e.targets.firstOrNull { it.query.game.id !in elsewhere }
                 ?: e.targets.firstOrNull()
             t?.let { e to it }
         }
-        games = picks.groupBy { (e, t) -> t.query.game.id + if (e.switch?.device == true) "|device" else "" }.map { (key, list) ->
-            val (_, t) = list.first()
-            Game(key, t.query.title, cards[t.query.game.id], list.sortedByDescending { it.first.switch?.savedAt ?: 0L }).also { g ->
+        games = picks.groupBy { (e, t) -> e.switch?.titleId?.uppercase()?.takeIf(SwitchIdsUi::real)?.let(SwitchIdsUi::program) ?: t.query.game.id }.mapNotNull { (key, list) ->
+            val newest = list.sortedByDescending { it.first.switch?.savedAt ?: 0L }
+            val accounts = newest.filter { it.first.switch?.device != true }
+            val device = newest.firstOrNull { it.first.switch?.device == true }
+            val shown = accounts.ifEmpty { listOfNotNull(device) }
+            // The game this device has, when it is here as well as on Fuse One.
+            val t = shown.firstOrNull { it.second.query.game.id !in elsewhere }?.second ?: shown.firstOrNull()?.second ?: return@mapNotNull null
+            Game(key, t.query.title, cards[t.query.game.id], shown, device.takeIf { accounts.isNotEmpty() }, here = t.query.game.id !in elsewhere).also { g ->
                 g.people = setOfNotNull(me)
             }
-        }.sortedBy { it.title.lowercase() }
+        }.sortedWith(compareBy<Game> { !it.here }.thenBy { it.title.lowercase() })
         index = 0
         step = if (games.isEmpty()) Step.DONE else Step.GAME
     }
 }
 
-/** Starts reading a Switch dump at [path] and shows the import as it goes. */
-internal fun startSwitchImport(app: AppState, path: String) {
+/** A Switch game's own id for an update's (ending in 800): its saves are kept under the game's. */
+private object SwitchIdsUi {
+    fun program(id: String): String = if (id.endsWith("800")) id.dropLast(3) + "000" else id
+
+    /** A whole title id (sixteen hex digits, a game's starting 01): only that says two cards are one game. */
+    fun real(id: String): Boolean = id.length == 16 && id.startsWith("01") && id.all { it in '0'..'9' || it in 'A'..'F' }
+}
+
+/**
+ * Starts the import of a Switch dump at [path]. With Switch games on Fuse One that aren't here, it
+ * first asks which games to look at: those on this device, or every game (a save for a game not here
+ * yet goes where the emulator keeps it, ready when the game is played). Then it reads the dump.
+ */
+internal fun startSwitchImport(app: AppState, path: String, fromPhone: Boolean = false) {
     val service = app.store.sync.service ?: return
-    val flow = SwitchImport(path.substringAfterLast('/').substringAfterLast('\\'))
+    // A delivery from a phone already open is dropped for the newer one, not stacked on it.
+    app.switchImport?.takeIf { it.step == SwitchImport.Step.READING || it.step == SwitchImport.Step.SCOPE }?.let { app.switchImport = null }
+    val flow = SwitchImport(if (fromPhone) "From your phone" else path.substringAfterLast('/').substringAfterLast('\\'), path)
     app.switchImport = flow
     app.scope.launch {
-        val cards = cardsByGame(app, platform = "switch")
-        val started = kotlin.time.Clock.System.now().toEpochMilliseconds()
-        service.previewSaveImport(path, cards.second)
-            .onSuccess { plan ->
-                // The reading card stays long enough to be read, however quick the dump was.
-                val left = MIN_READING_MS - (kotlin.time.Clock.System.now().toEpochMilliseconds() - started)
-                if (left > 0) delay(left)
-                if (plan.entries.none { it.switch != null }) {
-                    service.discardSaveImport(plan)
-                    flow.problem = "No Switch saves were found here. Choose the JKSV folder, Checkpoint's saves folder, or one game's folder from your Switch's SD card."
-                    flow.step = SwitchImport.Step.DONE
-                } else flow.take(plan, cards.first, service.activeProfile.value?.id)
+        val (cards, queries) = cardsByGame(app, platform = "switch")
+        val here = queries.map { it.game.id }.toSet()
+        val remote = runCatching { app.store.reach.games(io.github.matiyaaa.fuse.model.PlatformId("switch")).first() }.getOrDefault(emptyList())
+            .filter { hg -> io.github.matiyaaa.fuse.sync.GameKey.parse(hg.key)?.id?.let { it !in here } == true }
+        // How a Switch game's saves are found here: any Switch game's query, or the library's sample of the system.
+        val template = queries.firstOrNull() ?: app.store.sync.saveSamples().firstOrNull { it.platform == "switch" }
+        val extra = if (template == null) emptyList() else remote.mapNotNull { hg ->
+            io.github.matiyaaa.fuse.sync.GameKey.parse(hg.key)?.let { key -> template.copy(game = key, romPath = "", serial = null, title = hg.card.title) to hg.card }
+        }
+        flow.elsewhere = extra.size
+        flow.read = { everywhere ->
+            flow.everywhere = everywhere
+            flow.step = SwitchImport.Step.READING
+            app.scope.launch {
+                val started = kotlin.time.Clock.System.now().toEpochMilliseconds()
+                val asked = if (everywhere) queries + extra.map { it.first } else queries
+                val allCards = if (everywhere) cards + extra.associate { (q, c) -> q.game.id to c } else cards
+                service.previewSaveImport(path, asked)
+                    .onSuccess { plan ->
+                        // The reading card stays long enough to be read, however quick the dump was.
+                        val left = MIN_READING_MS - (kotlin.time.Clock.System.now().toEpochMilliseconds() - started)
+                        if (left > 0) delay(left)
+                        if (plan.entries.none { it.switch != null }) {
+                            service.discardSaveImport(plan)
+                            flow.problem = if (everywhere) "None of these saves are of a Switch game in your library. Choose the JKSV folder, Checkpoint's saves folder, or one game's folder from your Switch's SD card."
+                            else "None of these saves are of a Switch game on this device. Choose Every Game to bring in saves for games on Fuse One too."
+                            flow.step = SwitchImport.Step.DONE
+                        } else {
+                            flow.take(plan, allCards, service.activeProfile.value?.id, elsewhere = if (everywhere) extra.map { it.first.game.id }.toSet() else emptySet())
+                            mineFor(app, flow)
+                        }
+                    }
+                    .onFailure { e ->
+                        flow.problem = e.message ?: "Couldn't read those saves"
+                        flow.step = SwitchImport.Step.DONE
+                    }
             }
-            .onFailure { e ->
-                flow.problem = e.message ?: "Couldn't read those saves"
-                flow.step = SwitchImport.Step.DONE
-            }
+        }
+        if (extra.isEmpty()) flow.read(false) else flow.step = SwitchImport.Step.SCOPE
     }
 }
 
 /** Shows a plan already read (from Import Saves' file or folder) as the Switch import. */
 internal fun showSwitchImport(app: AppState, plan: SaveImportPlan, cards: Map<String, GameCard>) {
     val service = app.store.sync.service ?: return
-    app.switchImport = SwitchImport(plan.sourceName).also { it.take(plan, cards, service.activeProfile.value?.id) }
+    app.switchImport = SwitchImport(plan.sourceName).also { it.take(plan, cards, service.activeProfile.value?.id); mineFor(app, it) }
+}
+
+/** Finds, game by game, whether the person using Fuse already has a save of it, so each card can say. */
+private fun mineFor(app: AppState, flow: SwitchImport) {
+    val service = app.store.sync.service ?: return
+    val me = service.activeProfile.value?.id ?: return
+    val plan = flow.plan ?: return
+    app.scope.launch {
+        for (g in flow.games) {
+            if (app.switchImport !== flow) return@launch
+            val found = runCatching { service.existingSaves(plan, listOf(SaveImportChoice(g.entry.id, g.target.id, listOf(me))), me)[g.entry.id]?.get(me) }.getOrNull()
+            g.mine = found
+        }
+    }
 }
 
 /** The library's games (of one [platform], when given) by their save key, and the save queries to look for them with. */
@@ -243,7 +334,7 @@ internal fun SwitchImportOverlay(app: AppState) {
         if (chosen.isEmpty() || me == null) return
         f.step = SwitchImport.Step.IMPORTING
         app.scope.launch {
-            service?.importSaves(plan, chosen.map { g -> SaveImportChoice(g.entry.id, g.target.id, g.people.toList()) }, me)
+            service?.importSaves(plan, chosen.flatMap { it.choices() }, me)
                 ?.onSuccess { r ->
                     f.result = r
                     f.step = SwitchImport.Step.DONE
@@ -288,7 +379,9 @@ internal fun SwitchImportOverlay(app: AppState) {
             val room = maxWidth - Space.l * 2
             val compact = maxHeight < 560.dp
             Panel(Modifier.widthIn(min = minOf(420.dp, room), max = minOf(620.dp, room)).heightIn(max = maxHeight - Space.l * 2)) {
-                Column(Modifier.verticalScroll(rememberScrollState()).padding(if (compact) Space.l else Space.xl)) {
+                // The buttons stay in view under the content, however long it is (a long Ready to Import list scrolls by itself).
+                Column(Modifier.padding(if (compact) Space.l else Space.xl)) {
+                Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
                     Header(f)
                     Spacer(Modifier.height(if (compact) Space.l else Space.xl))
                     // The next games' pictures load while this one is asked about, so each arrives ready.
@@ -299,6 +392,7 @@ internal fun SwitchImportOverlay(app: AppState) {
                         PrefetchArt(arts.map { it?.logo }, f.index, limit = 2)
                     }
                     when (f.step) {
+                        SwitchImport.Step.SCOPE -> Scope(f)
                         SwitchImport.Step.READING -> Reading(f.source)
                         SwitchImport.Step.GAME -> f.game?.let { GameStep(it, compact) }
                         SwitchImport.Step.PEOPLE, SwitchImport.Step.CHECKING -> f.game?.let { g -> PeopleStep(g, profiles, me, focus.takeIf { it in 0..profiles.size }) { i -> togglePerson(g, profiles, i) } }
@@ -306,6 +400,7 @@ internal fun SwitchImportOverlay(app: AppState) {
                         SwitchImport.Step.REVIEW, SwitchImport.Step.IMPORTING -> Review(f, profiles)
                         SwitchImport.Step.DONE -> Done(f, profiles)
                     }
+                }
                     val actions = actionsOf(f, profiles, me, ::check, ::import, ::undo, ::close)
                     if (actions.isNotEmpty()) {
                         Spacer(Modifier.height(if (compact) Space.l else Space.xl))
@@ -331,6 +426,11 @@ private class Action(val label: String, val icon: androidx.compose.ui.graphics.v
 private fun actionsOf(f: SwitchImport, profiles: List<ProfileInfo>, me: String?, check: (SwitchImport) -> Unit, import: (SwitchImport) -> Unit, undo: (SwitchImport) -> Unit, close: () -> Unit): List<Action> {
     val g = f.game
     return when (f.step) {
+        SwitchImport.Step.SCOPE -> listOf(
+            Action("Cancel", run = close),
+            Action("This Device", FuseIcons.Gamepad) { f.read(false) },
+            Action("Every Game", FuseIcons.Library, primary = true) { f.read(true) },
+        )
         SwitchImport.Step.READING -> listOf(Action("Cancel", run = close))
         SwitchImport.Step.GAME -> buildList {
             if (g == null) return@buildList
@@ -426,6 +526,39 @@ private fun Steps(count: Int, at: Int) {
             Box(Modifier.height(6.dp).width(6.dp + 12.dp * wide).clip(CircleShape)
                 .background(if (i <= at) c.accent.copy(alpha = 0.55f + 0.45f * wide) else c.textMuted.copy(alpha = 0.3f)))
         }
+    }
+}
+
+/** Which games to bring saves in for: the ones on this device, or every game in the library, Fuse One's too. */
+@Composable
+private fun Scope(f: SwitchImport) {
+    val c = Fuse.colors
+    Column {
+        FText("Which games?", Fuse.type.title, maxLines = 1)
+        Spacer(Modifier.height(Space.xs))
+        FText(
+            "Fuse can look for saves of the games on this device only, or of every game in your library. " +
+                "${f.elsewhere} Switch ${if (f.elsewhere == 1) "game is" else "games are"} on Fuse One but not here: their saves are put where the emulator looks for them, ready when you install and play them.",
+            Fuse.type.body, color = c.textMuted, maxLines = 5,
+        )
+        Spacer(Modifier.height(Space.l))
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+            ScopeOption(FuseIcons.Gamepad, "This Device", "Installed games only", Modifier.weight(1f))
+            ScopeOption(FuseIcons.Library, "Every Game", "Installed and on Fuse One", Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun ScopeOption(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, detail: String, modifier: Modifier) {
+    val c = Fuse.colors
+    Column(modifier.clip(SquircleShape.fraction(0.16f)).background(c.surfaceRaised.copy(alpha = 0.7f)).padding(Space.l)) {
+        Box(Modifier.size(36.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+            FuseIcon(icon, size = 18.dp, tint = c.accent)
+        }
+        Spacer(Modifier.height(Space.m))
+        FText(title, Fuse.type.bodyStrong, maxLines = 1)
+        FText(detail, Fuse.type.caption, color = c.textMuted, maxLines = 2)
     }
 }
 
@@ -527,11 +660,20 @@ private fun GameStep(g: SwitchImport.Game, compact: Boolean) {
                 // What the backup is, beside the poster and under the banner.
                 Column(Modifier.padding(start = beside, top = banner + Space.m).fillMaxWidth()) {
                     Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                        if (!g.here) Chip("Fuse One", icon = FuseIcons.Cloud)
                         sw?.tool?.let { Chip(if (it == "CHECKPOINT") "Checkpoint" else "JKSV", icon = FuseIcons.SdCard) }
                         sw?.user?.let { Chip(it, icon = FuseIcons.UserRound) }
                     }
                     Spacer(Modifier.height(Space.s))
                     FText(listOfNotNull(sw?.savedAt?.let(::whenText), sw?.titleId).joinToString("  ·  ").ifEmpty { g.entry.name }, Fuse.type.caption, color = c.textMuted, maxLines = 2)
+                    if (!g.here) {
+                        Spacer(Modifier.height(Space.s))
+                        FText("On Fuse One, not on this device yet. The save is put where ${emulatorName(g.target.query.emulatorId)} looks for it, ready when you play it here.", Fuse.type.caption, color = c.accent, maxLines = 3)
+                    }
+                    g.mine?.let { e ->
+                        Spacer(Modifier.height(Space.s))
+                        FText("You already have a save of this${e.at?.let { "  ·  " + whenText(it / 1000) }.orEmpty()}", Fuse.type.caption, color = c.warning, maxLines = 2)
+                    }
                     if (g.target.confidence != SaveImportConfidence.TITLE_ID) {
                         Spacer(Modifier.height(Space.s))
                         FText("Matched by its name, so check it is the right game.", Fuse.type.caption, color = c.warning, maxLines = 2)
@@ -728,6 +870,22 @@ private fun Done(f: SwitchImport, profiles: List<ProfileInfo>) {
     val r = f.result
     Appear(visible = true, enter = fadeIn(Fuse.motion.tween(Durations.BASE, Curves.Fade))) {
         Column(Modifier.fillMaxWidth()) {
+            if (f.onCard && f.step == SwitchImport.Step.DONE) {
+                // Before anything else on this screen is read: a card pulled out without ejecting
+                // can leave the Switch unable to find its emuMMC.
+                Row(
+                    Modifier.fillMaxWidth().clip(SquircleShape.fraction(0.18f)).background(c.warning.copy(alpha = 0.14f)).padding(Space.m),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FuseIcon(FuseIcons.SdCard, size = 20.dp, tint = c.warning)
+                    Spacer(Modifier.width(Space.m))
+                    FText(
+                        "Eject the card before you take it out. Pulled out while this device still writes to it, the card can lose the files your Switch needs to start its emuMMC.",
+                        Fuse.type.caption, color = c.text, maxLines = 4,
+                    )
+                }
+                Spacer(Modifier.height(Space.l))
+            }
             when {
                 f.problem != null -> {
                     FText("Nothing imported", Fuse.type.title, maxLines = 1)

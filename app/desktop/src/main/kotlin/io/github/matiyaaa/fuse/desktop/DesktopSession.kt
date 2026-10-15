@@ -210,7 +210,10 @@ class DesktopSession(
     private fun startPhoneLink(store: FuseStore, services: DesktopFuseServices): PhoneLinkServer? = try {
         val name = runCatching { java.net.InetAddress.getLocalHost().hostName }.getOrNull()?.takeIf { it.isNotBlank() } ?: "Fuse"
         // Off the UI thread: requests and address checks never wait on the window.
-        PhoneLinkServer(store, services.secrets, scope + Dispatchers.Default, name, BuildInfo.VERSION).also { it.start() }
+        PhoneLinkServer(
+            store, services.secrets, scope + Dispatchers.Default, name, BuildInfo.VERSION,
+            inbox = io.github.matiyaaa.fuse.link.FileLinkInbox(File(dirs.data, "phone-inbox")),
+        ).also { it.start() }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Throwable) {

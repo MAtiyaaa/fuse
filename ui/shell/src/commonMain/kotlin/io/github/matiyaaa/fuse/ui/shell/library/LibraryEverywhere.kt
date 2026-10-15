@@ -334,6 +334,7 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
         app.hints = when {
             row == ROW_SYSTEMS -> listOf(Hint(HintButton.CONFIRM, "Open"))
             chosen == null && row != null -> listOf(Hint(HintButton.CONFIRM, "See all"))
+            col == 0 && row != null && chosen != null && chosen !is EverywhereGame.Streamed -> listOf(Hint(HintButton.CONFIRM, if (chosen is EverywhereGame.Here) app.gameConfirmLabel else "Open"), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.DPAD, "Left: See all"))
             chosen is EverywhereGame.Here -> listOf(Hint(HintButton.CONFIRM, app.gameConfirmLabel), Hint(HintButton.OPTIONS, "Options"))
             chosen is EverywhereGame.Streamed -> listOf(Hint(HintButton.CONFIRM, "Stream"), Hint(HintButton.OPTIONS, "Choose computer"))
             chosen != null -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.OPTIONS, "Options"))
@@ -343,6 +344,12 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
     InputLayer(enabled = focused) { e ->
         when (e.action) {
             NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT -> {
+                // Left from a shelf's first game reaches its See all, at the far end, in one press.
+                val key = row
+                if (e.action == NavAction.LEFT && key != null && key != ROW_SYSTEMS && col == 0 && sizeOf(key) > 1) {
+                    sel.setColumn(key, sizeOf(key) - 1)
+                    return@InputLayer NavResult.MOVED
+                }
                 val r = if (rows.isEmpty()) NavResult.IGNORED else sel.move(e.action, rows, ::sizeOf)
                 when {
                     // Up from the first shelf goes to the Library's tabs.

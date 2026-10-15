@@ -134,7 +134,9 @@ class DesktopMenuMusicTest {
     @Test
     fun withoutAnySoundOutputTheMixerRestsQuietly() {
         var opens = 0
-        val silent = DesktopMenuMusic({ _, _ -> opens++; throw IllegalStateException("no device") }, retryMs = 20, restMs = 300, hasOutput = { false })
+        // A rest far longer than the wait below, so a slow machine never fits a second rest's try in
+        // by chance; a burst of retries (every 20 ms) would still show as many opens.
+        val silent = DesktopMenuMusic({ _, _ -> opens++; throw IllegalStateException("no device") }, retryMs = 20, restMs = 2_000, hasOutput = { false })
         try {
             silent.apply(MusicState(song, 0.6f, true))
             Thread.sleep(500)

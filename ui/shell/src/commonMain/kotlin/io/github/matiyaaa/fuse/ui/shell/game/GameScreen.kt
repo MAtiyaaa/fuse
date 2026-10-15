@@ -52,6 +52,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.layout.positionInRoot
@@ -109,6 +110,7 @@ import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineScrollTo
 import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.folderPolicyPicker
 import io.github.matiyaaa.fuse.ui.shell.romm.rommDownload
 import io.github.matiyaaa.fuse.ui.shell.store.rommOnly
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
@@ -228,6 +230,11 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val canSend = reachState.supported && !card.isApp
     val canUploadHere by produceState(false, game.id, reachState.supported) { value = app.store.reach.canUploadToRomm(game.id) }
     val rommHasIt = copies?.romm != null || romm != null
+    // Updates and DLC another device has for this game and this copy hasn't (Fuse One).
+    var extrasAsked by remember(game.id) { mutableIntStateOf(0) }
+    val extras by produceState<io.github.matiyaaa.fuse.ui.shell.store.GameExtras?>(null, game.id, copies, extrasAsked) {
+        value = if (notHere || !reachState.supported) null else runCatching { app.store.reach.extras(game.id) }.getOrNull()
+    }
     val shownCopies = copies?.copies.orEmpty().takeIf { list -> reachState.supported || list.any { it.place == io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.DEVICE } }.orEmpty()
 
     // Play first, then the emulator it starts in, then the quick actions, then everything else.
@@ -267,6 +274,15 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
             val install = io.github.matiyaaa.fuse.library.content.ContentState.NEEDS_INSTALL in contentStates && v.mode != io.github.matiyaaa.fuse.ui.shell.store.InstallMode.UNAVAILABLE
             DetailAction("content", if (install) "Install" else null, if (install) FuseIcons.Download else FuseIcons.PackageOpen, "Installed content") {
                 app.go(Route.GameContent(game.id))
+            }
+        },
+        extras?.let { x ->
+            DetailAction("extras", "Get ${x.words}", FuseIcons.CloudDownload, "Get ${x.words} from ${x.from}") {
+                app.scope.launch {
+                    val why = app.store.reach.getExtras(game.id)
+                    if (why == null) app.toasts.show("Bringing ${x.words} from ${x.from}. The game stays as it is", icon = FuseIcons.Download) else app.toasts.show(why)
+                    extrasAsked++
+                }
             }
         },
         issues.firstOrNull()?.let { issue ->
@@ -354,6 +370,33 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
             },
         )
     }
+    /**
+     * This copy of the game: where it is, and for a game that is a folder, choosing the file to
+     * start and how the folder is read. A single file has nothing to choose from, so no list of the
+     * other files beside it.
+     */
+    fun showCopy() {
+        val loc = game.location
+        val folderGame = loc.kind == LocationKind.FOLDER
+        app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+            title = "This copy",
+            icon = FuseIcons.HardDrive,
+            message = loc.path,
+            options = buildList {
+                if (folderGame) {
+                    add(io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction("launch", "Choose What to Launch", FuseIcons.FolderOpen,
+                        detail = "Pick the file inside the folder to start", onSelect = { app.choice = null; app.go(Route.FolderBrowser(game.id)) }))
+                    add(io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction("policy", "Folder Behaviour", FuseIcons.Layers,
+                        detail = "Read the folder as one game, or each file as its own", onSelect = { app.folderPolicyPicker(card) }))
+                }
+                if (loc.launchPath != loc.path) add(io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction("starts", splitPath(loc.launchPath).second, FuseIcons.Play,
+                    detail = "The file the emulator is given", onSelect = { app.choice = null }))
+                if (game.titles.original != game.displayTitle) add(io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction("name", game.titles.original, FuseIcons.File,
+                    detail = "Its name in the folder", onSelect = { app.choice = null }))
+                add(io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction("close", "Done", FuseIcons.Check, onSelect = { app.choice = null }))
+            },
+        )
+    }
     /** HowLongToBeat's games named like this one, to choose the right one, or none of them. */
     fun chooseBeat() {
         beatScope.launch {
@@ -425,7 +468,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     fun openCard(info: InfoCard) {
         when (info) {
             InfoCard.STARTS -> app.emulatorPicker(card)
-            InfoCard.FILE -> app.go(Route.FolderBrowser(game.id))
+            InfoCard.FILE -> showCopy()
             InfoCard.PLAY -> app.go(Route.PlayTime)
             InfoCard.EXTRAS -> app.readManual(game.displayTitle, game.content)
         }
@@ -450,7 +493,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
         "discs" -> "Play this disc"
         else -> when (cardAt(row, col)) {
             InfoCard.STARTS -> "Choose emulator"
-            InfoCard.FILE -> "Open its folder"
+            InfoCard.FILE -> "This copy"
             InfoCard.PLAY -> "All play time"
             else -> null
         }
@@ -752,9 +795,9 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                         // Room above and below for a badge's lift and its spark.
                         LazyRow(
                             state = list,
-                            modifier = Modifier.dragScroll(list, Orientation.Horizontal),
+                            modifier = Modifier.bleedStart(Space.m).dragScroll(list, Orientation.Horizontal),
                             horizontalArrangement = Arrangement.spacedBy(Space.l),
-                            contentPadding = PaddingValues(top = Space.s, end = Space.gutter, bottom = Space.xs),
+                            contentPadding = PaddingValues(start = Space.m, top = Space.s, end = Space.gutter, bottom = Space.xs),
                         ) {
                             itemsIndexed(badges, key = { _, b -> b.id }) { i, b ->
                                 val selected = row == "achievements" && col == i && focused
@@ -808,9 +851,9 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                     FollowSelection(list, { sel.column("shots") }, anchor = 0.1f)
                     LazyRow(
                         state = list,
-                        modifier = Modifier.dragScroll(list, Orientation.Horizontal),
+                        modifier = Modifier.bleedStart(Space.m).dragScroll(list, Orientation.Horizontal),
                         horizontalArrangement = Arrangement.spacedBy(Space.m),
-                        contentPadding = PaddingValues(top = Space.s, end = Space.gutter, bottom = Size.sparkClearance),
+                        contentPadding = PaddingValues(start = Space.m, top = Space.s, end = Space.gutter, bottom = Size.sparkClearance),
                     ) {
                         itemsIndexed(shots) { i, s ->
                             Tile(
@@ -1443,11 +1486,7 @@ private fun FileCard(d: GameDetail, size: Long, disc: io.github.matiyaaa.fuse.li
         }, lines = 2)
         (disc?.serial ?: game.tags.serial)?.let { Fact("Serial", it, numeric = true) }
         disc?.crcText?.let { Fact("PCSX2 CRC", it, numeric = true) }
-        game.tags.regions.takeIf { it.isNotEmpty() }?.let { Fact("Region", it.joinToString(", ")) }
-        game.metadata.developer?.let { Fact("Developer", it) }
-        game.metadata.publisher?.takeIf { it != game.metadata.developer }?.let { Fact("Publisher", it) }
-        game.metadata.franchise?.takeIf { it.isNotBlank() }?.let { Fact("Series", it) }
-        if (game.titles.original != game.displayTitle) Fact("File title", game.titles.original, lines = 2)
+        // The game's makers, series and region are among its facts at the top; this card is the copy.
     }
 }
 
@@ -1867,4 +1906,15 @@ internal fun spatialStep(rects: Map<Int, androidx.compose.ui.geometry.Rect>, fro
         val dx = kotlin.math.abs(r.center.x - here.center.x)
         if (direction == NavAction.UP || direction == NavAction.DOWN) dy * 4 + dx else dx + dy * 4
     }?.key
+}
+
+/**
+ * A row reaching [x] past its left edge, with that much padding inside: its first item sits where it
+ * did, and has room to grow when selected instead of being cut off at the edge.
+ */
+private fun Modifier.bleedStart(x: Dp): Modifier = layout { measurable, constraints ->
+    val px = x.roundToPx()
+    val wide = if (constraints.hasBoundedWidth) constraints.copy(minWidth = constraints.minWidth + px, maxWidth = constraints.maxWidth + px) else constraints
+    val p = measurable.measure(wide)
+    layout((p.width - px).coerceAtLeast(0), p.height) { p.place(-px, 0) }
 }

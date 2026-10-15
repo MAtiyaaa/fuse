@@ -564,7 +564,8 @@ internal object SwitchIds {
 
     /** An NSP is a PFS0: a plain list of names, where a ticket is named by its rights id (title id first). */
     internal fun fromNsp(env: SaveEnvironment, path: String): String? {
-        if (!path.lowercase().endsWith(".nsp")) return null
+        // An NSZ is an NSP with its contents compressed: the same PFS0 list of names.
+        if (!path.lowercase().let { it.endsWith(".nsp") || it.endsWith(".nsz") }) return null
         val head = env.readBytes(path, 0, 0x10) ?: return null
         if (head.size < 0x10 || head.decodeToString(0, 4) != "PFS0") return null
         val count = le32(head, 4)

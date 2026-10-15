@@ -2102,3 +2102,7 @@ a.btn { text-decoration: none; }
 .type-box > .i { margin-left: 14px; color: var(--muted); flex: none; }
 .type-input { flex: 1; min-width: 0; height: 100%; padding: 0 var(--s-s) 0 var(--s-m); background: none; border: 0; outline: none; font: 500 17px/24px var(--sans); color: var(--text); }
 .type-note { font: 500 13px/18px var(--sans); color: var(--muted); margin: 0 var(--s-xxs); text-wrap: pretty; }
+
+/* Switch saves sent from the phone */
+.send-bar { margin-top: var(--s-m); }
+.send-status { margin-top: var(--s-s); }

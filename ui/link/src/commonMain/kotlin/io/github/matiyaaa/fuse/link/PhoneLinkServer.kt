@@ -23,6 +23,7 @@ import io.ktor.server.plugins.origin
 import io.ktor.server.request.contentLength
 import io.ktor.server.request.httpMethod
 import io.ktor.server.request.path
+import io.ktor.server.request.receiveChannel
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.header
 import io.ktor.server.response.respondBytes
@@ -32,10 +33,12 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
+import io.ktor.utils.io.readAvailable
 import io.ktor.utils.io.writeFully
 import io.ktor.utils.io.writeStringUtf8
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -78,7 +81,12 @@ class PhoneLinkServer(
     private val clock: () -> Long = { kotlin.time.Clock.System.now().toEpochMilliseconds() },
     /** The port tried first; the next nine follow when it is taken. */
     private val basePort: Int = PORT,
+    /** Where Switch save backups sent from a phone are gathered; null where a phone can't send them. */
+    private val inbox: LinkInbox? = null,
 ) : PhoneLinkControl {
+    private val incoming = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 4)
+    override val switchSaves: kotlinx.coroutines.flow.Flow<String> = incoming
+
     internal val auth = LinkAuth(secrets, clock)
     internal val api = LinkApi(store, auth, deviceName, version, readUri, capturesAvailable = captures != null)
     private val share = captures?.let { CaptureShare(it, clock) }
@@ -219,7 +227,8 @@ class PhoneLinkServer(
                     finish()
                     return@intercept
                 }
-                if ((call.request.contentLength() ?: 0) > MAX_BODY) {
+                // A file of Switch saves a phone sends is streamed to disk, bounded by the inbox, not read into memory.
+                if ((call.request.contentLength() ?: 0) > MAX_BODY && !UPLOAD.matches(call.request.path())) {
                     call.respondText("{\"error\":\"Too large.\"}", ContentType.Application.Json, HttpStatusCode.PayloadTooLarge)
                     finish()
                     return@intercept
@@ -359,6 +368,51 @@ class PhoneLinkServer(
                             }
                         }
                     }
+                }
+            }
+            // Switch save backups from the phone: a delivery begun, its files sent one by one
+            // (streamed straight to disk), then finished, when Fuse opens its Switch import with them.
+            post("/api/switch-saves") {
+                call.signedIn(ExtensionScope.CHANGE_LIBRARY) {
+                    val box = inbox ?: return@signedIn call.json(buildJsonObject { put("error", "$deviceName can't take saves from a phone.") }, HttpStatusCode.NotFound)
+                    val id = withContext(ioDispatcher) { box.begin() }
+                    call.json(buildJsonObject { put("id", id) })
+                }
+            }
+            post("/api/switch-saves/{id}/file") {
+                call.signedIn(ExtensionScope.CHANGE_LIBRARY) {
+                    val box = inbox ?: return@signedIn call.json(buildJsonObject { put("error", "$deviceName can't take saves from a phone.") }, HttpStatusCode.NotFound)
+                    val path = call.request.queryParameters["path"].orEmpty()
+                    val size = call.request.queryParameters["size"]?.toLongOrNull() ?: -1L
+                    val sink = withContext(ioDispatcher) { box.open(call.parameters["id"].orEmpty(), path, size) }
+                        ?: return@signedIn call.json(buildJsonObject { put("error", "$path can't be taken: too large, already sent, or not a file Fuse keeps.") }, HttpStatusCode.BadRequest)
+                    val channel = call.receiveChannel()
+                    val buffer = ByteArray(COPY_BUFFER)
+                    val whole = try {
+                        while (true) {
+                            val n = channel.readAvailable(buffer, 0, buffer.size)
+                            if (n < 0) break
+                            if (n > 0) withContext(ioDispatcher) { sink.write(buffer, n) }
+                        }
+                        withContext(ioDispatcher) { sink.close() }
+                    } catch (e: CancellationException) {
+                        withContext(NonCancellable) { withContext(ioDispatcher) { sink.close() } }
+                        throw e
+                    } catch (e: Exception) {
+                        withContext(ioDispatcher) { sink.close() }
+                        false
+                    }
+                    if (whole) call.json(buildJsonObject { put("ok", true) })
+                    else call.json(buildJsonObject { put("error", "$path didn't arrive whole. Send it again.") }, HttpStatusCode.BadRequest)
+                }
+            }
+            post("/api/switch-saves/{id}/done") {
+                call.signedIn(ExtensionScope.CHANGE_LIBRARY) {
+                    val box = inbox ?: return@signedIn call.json(buildJsonObject { put("error", "$deviceName can't take saves from a phone.") }, HttpStatusCode.NotFound)
+                    val at = withContext(ioDispatcher) { box.finish(call.parameters["id"].orEmpty()) }
+                        ?: return@signedIn call.json(buildJsonObject { put("error", "Nothing arrived. Choose the JKSV folder or a backup ZIP and send it again.") }, HttpStatusCode.BadRequest)
+                    incoming.tryEmit(at)
+                    call.json(buildJsonObject { put("message", "On $deviceName now: choose the games and whose saves they are there.") })
                 }
             }
             // A link a signed-in phone just asked for: the browser may hand it to a download manager
@@ -544,6 +598,7 @@ class PhoneLinkServer(
         const val BIND_WAIT_MS = 5_000L
         private const val COOKIE = "fuse_session"
         private const val MAX_BODY = 64 * 1024L
+        private val UPLOAD = Regex("^/api/switch-saves/[0-9a-f]{18}/file$")
         private const val COPY_BUFFER = 256 * 1024
     }
 }

@@ -59,15 +59,49 @@ internal class DefaultAchievementOps(
     private val configuredState = MutableStateFlow(false)
     override val configured: StateFlow<Boolean> = configuredState
 
-    private suspend fun client(): RetroAchievementsClient? {
+    /** The Fuse profile in use, whose RetroAchievements account is shown; null without profiles. */
+    private fun profile(): String? = ctx.settings.value.sync.activeProfile.takeIf { it.isNotBlank() }
+
+    /** [key] as one profile's own ("ra.username@<profile>"). */
+    private fun own(key: String, profile: String) = "$key@$profile"
+
+    /**
+     * The account shown now: the profile's own when it connected one, none when it disconnected
+     * its own, else the device's (the one connected before profiles had their own, shared by them).
+     */
+    private suspend fun account(): Pair<String, String>? {
+        profile()?.let { p ->
+            val user = credentials.get(own(SecretKeys.RA_USERNAME, p))
+            if (user != null) {
+                if (user == NONE) return null
+                return credentials.get(own(SecretKeys.RA_API_KEY, p))?.let { user to it }
+            }
+        }
         val user = credentials.get(SecretKeys.RA_USERNAME) ?: return null
         val key = credentials.get(SecretKeys.RA_API_KEY) ?: return null
+        return user to key
+    }
+
+    /** Where this account's own answers are cached: apart for each account, so a switch never shows another person's. */
+    private suspend fun userNs(): String = account()?.first?.lowercase()?.let { "$NS.user.$it" } ?: NS
+
+    private suspend fun client(): RetroAchievementsClient? {
+        val (user, key) = account() ?: return null
         return RetroAchievementsClient(ctx.services.http, RaCredentials(user, key))
+    }
+
+    /** The profile in use changed: its own account (or the device's), from the cache, then refreshed. */
+    fun profileChanged() {
+        feedState.value = null
+        ctx.scope.launch {
+            load()
+            if (configuredState.value) refresh(force = false)
+        }
     }
 
     /** Loads cached data (no network) and whether an account is connected. */
     suspend fun load() {
-        configuredState.value = credentials.get(SecretKeys.RA_USERNAME) != null && credentials.get(SecretKeys.RA_API_KEY) != null
+        configuredState.value = account() != null
         if (!configuredState.value) return
         val user = cachedAny(KEY_USER, AchievementUser.serializer())
         if (user != null) feedState.value = buildFeed(user, cachedAny(KEY_RECENT, RecentList).orEmpty(), cachedAny(KEY_COMPLETION, CompletionList).orEmpty())
@@ -467,10 +501,20 @@ internal class DefaultAchievementOps(
         if (user.isEmpty() || key.isEmpty()) return Result.failure(IllegalArgumentException("Enter your username and web API key."))
         return when (val r = RetroAchievementsClient(ctx.services.http, RaCredentials(user, key)).verifyCredentials()) {
             is ApiResult.Success -> {
-                credentials.put(SecretKeys.RA_USERNAME, user)
-                credentials.put(SecretKeys.RA_API_KEY, key)
-                cache.clear(NS)
-                cache.put(NS, KEY_USER, r.value, AchievementUser.serializer(), ctx.now(), RaCachePolicy.SUMMARY.inWholeMilliseconds)
+                // The profile in use gets it as its own; the first account on a device is the
+                // device's too, for profiles that haven't one of their own.
+                val p = profile()
+                if (p != null) {
+                    credentials.put(own(SecretKeys.RA_USERNAME, p), user)
+                    credentials.put(own(SecretKeys.RA_API_KEY, p), key)
+                }
+                if (p == null || credentials.get(SecretKeys.RA_USERNAME) == null) {
+                    credentials.put(SecretKeys.RA_USERNAME, user)
+                    credentials.put(SecretKeys.RA_API_KEY, key)
+                }
+                val ns = userNs()
+                cache.clear(ns)
+                cache.put(ns, KEY_USER, r.value, AchievementUser.serializer(), ctx.now(), RaCachePolicy.SUMMARY.inWholeMilliseconds)
                 configuredState.value = true
                 refresh(force = true)
                 Result.success(Unit)
@@ -481,9 +525,17 @@ internal class DefaultAchievementOps(
     }
 
     override suspend fun disconnect() {
-        credentials.remove(SecretKeys.RA_USERNAME)
-        credentials.remove(SecretKeys.RA_API_KEY)
-        cache.clear(NS)
+        runCatching { cache.clear(userNs()) }
+        val p = profile()
+        if (p != null) {
+            // This profile only: it has no account from now on, and the others keep theirs.
+            credentials.put(own(SecretKeys.RA_USERNAME, p), NONE)
+            credentials.remove(own(SecretKeys.RA_API_KEY, p))
+        } else {
+            credentials.remove(SecretKeys.RA_USERNAME)
+            credentials.remove(SecretKeys.RA_API_KEY)
+            cache.clear(NS)
+        }
         configuredState.value = false
         feedState.value = null
     }
@@ -497,10 +549,11 @@ internal class DefaultAchievementOps(
         load: suspend () -> ApiResult<T>,
     ): T? {
         val now = ctx.now()
-        if (!force) cache.get(NS, key, serializer, now)?.let { return it }
+        val ns = userNs()
+        if (!force) cache.get(ns, key, serializer, now)?.let { return it }
         return when (val r = load()) {
             is ApiResult.Success -> {
-                cache.put(NS, key, r.value, serializer, now, ttl.inWholeMilliseconds)
+                cache.put(ns, key, r.value, serializer, now, ttl.inWholeMilliseconds)
                 r.value
             }
             is ApiResult.Failure -> cachedAny(key, serializer)
@@ -509,7 +562,7 @@ internal class DefaultAchievementOps(
 
     /** Cached value regardless of age (shown while offline or rate limited). */
     private suspend fun <T> cachedAny(key: String, serializer: KSerializer<T>): T? =
-        runCatching { cache.get(NS, key, serializer, now = 0L) }.getOrNull()
+        runCatching { cache.get(userNs(), key, serializer, now = 0L) }.getOrNull()
 
     /** RetroAchievements' times ("2024-05-01T12:34:56+00:00", or with a space and no zone) as epoch millis. */
     private fun raTime(text: String): Long? {
@@ -541,6 +594,8 @@ internal class DefaultAchievementOps(
         private val X360_TITLE = Regex("[0-9A-Fa-f]{8}")
         private val X360_TAG = Regex("\\[([0-9A-Fa-f]{8})]")
         const val NS = "retroachievements"
+        /** A profile's own account, disconnected: it shows none, not the device's. */
+        const val NONE = "-"
         const val KEY_USER = "user"
         const val KEY_RECENT = "recent"
         const val KEY_COMPLETION = "completion"

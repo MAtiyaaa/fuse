@@ -2105,7 +2105,8 @@ class JvmSyncService(
                 require(choices.isNotEmpty() && choices.map { it.entry }.distinct().size == choices.size) { "Choose each save destination once" }
                 val resolved = resolveImport(plan, choices)
                 val d = device ?: newDevice(ensureDeviceId(), cached.deviceName.ifBlank { defaultDeviceName }).also { device = it }
-                require(resolved.map { (_, _, slot) -> slot.key }.distinct().size == resolved.size) { "Choose one import for each shared memory card" }
+                // A Switch game's account save and its device save are two parts of one slot, each imported in turn.
+                require(resolved.map { (binding, _, slot) -> slot.key + "|" + binding.part }.distinct().size == resolved.size) { "Choose one import for each shared memory card" }
                 val failures = ArrayList<SaveImportFailure>()
                 val everyone = choices.flatMap { it.profiles.ifEmpty { listOf(profile) } }.toSet()
                 require(everyone.all { p -> profiles.value.any { it.id == p } }) { "Choose whose saves these are before importing" }
@@ -2143,7 +2144,7 @@ class JvmSyncService(
      */
     private fun resolveImport(plan: SaveImportPlan, choices: List<SaveImportChoice>): List<Triple<JvmSaveImporter.Binding, SaveQuery, LocalSlot>> {
         val bindings = choices.map { saveImporter.binding(plan, it) }
-        require(bindings.map { it.query.game.id + "|" + it.spot.kind }.distinct().size == bindings.size) { "Choose only one source save for each game at a time" }
+        require(bindings.map { it.query.game.id + "|" + it.spot.kind + "|" + it.part }.distinct().size == bindings.size) { "Choose only one source save for each game at a time" }
         return bindings.map { binding ->
             val query = canonical(binding.query)
             val fresh = SaveAdapters.forEmulator(query.emulatorId)?.locate(query, saveEnv)
@@ -2178,15 +2179,33 @@ class JvmSyncService(
         roots.mapNotNull { root ->
             runCatching {
                 val names = root.listFiles()?.filter { it.isDirectory }.orEmpty()
+                // A card whose emuMMC is set up and on: its small settings files are kept, so a card
+                // that loses them later (a phone's storage check, pulled out unejected) can have them back.
+                runCatching { emuMmcGuard.snapshot(root) }
+                val lost = runCatching { emuMmcGuard.lost(root) }.getOrDefault(emptyList())
                 val jksv = names.firstOrNull { it.name.equals("JKSV", true) }
                 val checkpoint = names.firstOrNull { it.name.equals("switch", true) }?.let { File(it, "Checkpoint/saves") }?.takeIf { it.isDirectory }
-                val folder = jksv ?: checkpoint ?: return@runCatching null
-                val games = folder.listFiles()?.count { g -> g.isDirectory && g.listFiles()?.isNotEmpty() == true } ?: 0
-                if (games == 0) return@runCatching null
-                SwitchCard(folder.absolutePath, root.name.ifEmpty { root.path }, "${if (jksv != null) "JKSV" else "Checkpoint"}, $games ${if (games == 1) "game" else "games"}")
+                val folder = jksv ?: checkpoint
+                val games = folder?.listFiles()?.count { g -> g.isDirectory && g.listFiles()?.isNotEmpty() == true } ?: 0
+                val name = root.name.ifEmpty { root.path }
+                when {
+                    folder != null && games > 0 -> SwitchCard(folder.absolutePath, name, "${if (jksv != null) "JKSV" else "Checkpoint"}, $games ${if (games == 1) "game" else "games"}", lost, root.absolutePath)
+                    lost.isNotEmpty() -> SwitchCard("", name, "emuMMC settings missing", lost, root.absolutePath)
+                    else -> null
+                }
             }.getOrNull()
         }
     }
+
+    override suspend fun restoreEmuMmc(card: SwitchCard): Result<Int> = withContext(Dispatchers.IO) {
+        runCatching {
+            val root = File(card.root).takeIf { card.root.isNotBlank() && it.isDirectory } ?: error("The card isn't plugged in any more.")
+            emuMmcGuard.restore(root).also { n -> log("Put back $n emuMMC settings ${if (n == 1) "file" else "files"} on ${card.name}", kind = "restore") }
+        }
+    }
+
+    /** The Switch cards' emuMMC settings files, kept as last seen healthy ([EmuMmcGuard]). */
+    private val emuMmcGuard by lazy { EmuMmcGuard(File(dir, "emummc-guard").apply { mkdirs() }) }
 
     override suspend fun importBackups(asked: SaveQuery, kind: SaveKind, profile: String): List<ImportBackupInfo> = withContext(Dispatchers.IO) {
         val query = canonical(asked)

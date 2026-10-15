@@ -256,4 +256,35 @@ class DesktopDitheringTest {
         assertTrue(banded >= 24, "undithered bands $banded px wide")
         assertTrue(smooth <= 10, "dithered runs at most $smooth px")
     }
+
+    /** A flat grey drawn through the noise on a canvas moved by [dx] (a fraction of a pixel): its pixels. */
+    private fun greyMovedBy(dx: Float, w: Int = 256, h: Int = 4): IntArray {
+        val image = androidx.compose.ui.graphics.ImageBitmap(w, h)
+        val canvas = androidx.compose.ui.graphics.Canvas(image)
+        val grey = androidx.compose.ui.graphics.Color(60, 60, 60)
+        val paint = androidx.compose.ui.graphics.Paint()
+        androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(grey, grey), 0f, w.toFloat()).applyTo(androidx.compose.ui.geometry.Size(w.toFloat(), h.toFloat()), paint, 1f)
+        DesktopDithering.install()
+        canvas.save()
+        canvas.translate(dx, 0f)
+        io.github.matiyaaa.fuse.ui.designsystem.effects.Dithering.placedGradients!!(paint, canvas)
+        canvas.drawRect(-8f, 0f, w + 8f, h.toFloat(), paint)
+        canvas.restore()
+        val pixels = IntArray(w * h)
+        image.readPixels(pixels)
+        return pixels
+    }
+
+    @Test
+    fun theGrainStaysOnTheScreenAsALightMoves() {
+        // A soft light drifting behind the interface moves by fractions of a pixel each frame: its
+        // grain must stay where it is on the screen, or it shimmers.
+        val still = greyMovedBy(0f)
+        val moved = greyMovedBy(3.4f)
+        val same = still.indices.count { still[it] == moved[it] }
+        println("Grain unchanged after the light moved: $same of ${still.size} pixels")
+        assertTrue(same >= still.size * 95 / 100, "only $same of ${still.size} pixels kept their grain")
+        // And there is grain at all.
+        assertTrue(still.distinct().size > 1)
+    }
 }

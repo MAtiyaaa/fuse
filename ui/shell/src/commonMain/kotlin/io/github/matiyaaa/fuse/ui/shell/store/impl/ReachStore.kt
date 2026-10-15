@@ -555,6 +555,79 @@ internal class DefaultReachOps(
         return null
     }
 
+    // ------------------------------------------------------------------ a game's updates and DLC from another device
+
+    /** An add-on's kind by the folder it is kept in on another device ("update/…", "dlc/…"); null for the game's own files. */
+    private fun extraKind(path: String): io.github.matiyaaa.fuse.model.ContentKind? =
+        path.substringBefore('/', "").takeIf { it.isNotEmpty() }?.let { io.github.matiyaaa.fuse.model.ContentKind.ofFolder(it) }
+            ?.takeIf { it != io.github.matiyaaa.fuse.model.ContentKind.GAME && it.holdsGameData }
+
+    /**
+     * The copy on another device with the most add-ons (updates, DLC) this game here hasn't, and those
+     * files; an online device first among equals. Null when no device has any more than this one.
+     */
+    private suspend fun extrasPlan(id: GameId): Triple<Pair<DeviceLibrary, LibraryEntry>, List<PeerFile>, io.github.matiyaaa.fuse.model.Game>? {
+        if (id.value <= 0) return null
+        val g = ctx.data.games.get(id) ?: return null
+        val keys = keysOf(id).ifEmpty { return null }
+        val local = runCatching { UploadFiles.collect(ctx.services.fs, g.location, g.discs, g.content) }.getOrDefault(emptyList())
+        if (local.isEmpty()) return null
+        val have = local.map { (if (it.folder.isEmpty()) it.name else it.folder + "/" + it.name).lowercase() }.toSet()
+        val haveNames = local.map { it.name.lowercase() }.toSet()
+        val devs = devices.value
+        val best = copiesOf(keys).map { c ->
+            c to c.second.files.filter { f -> extraKind(f.path) != null && f.path.lowercase() !in have && f.path.substringAfterLast('/').lowercase() !in haveNames }
+        }.filter { it.second.isNotEmpty() }
+            .maxWithOrNull(compareBy<Pair<Pair<DeviceLibrary, LibraryEntry>, List<PeerFile>>> { it.second.size }.thenBy { online(it.first.first.device, devs) })
+            ?: return null
+        return Triple(best.first, best.second, g)
+    }
+
+    override suspend fun extras(id: GameId): io.github.matiyaaa.fuse.ui.shell.store.GameExtras? = withContext(Dispatchers.Default) {
+        val (copy, files, _) = extrasPlan(id) ?: return@withContext null
+        val kinds = files.map { extraKind(it.path) }
+        val name = devices.value.firstOrNull { it.id == copy.first.device }?.name ?: copy.first.name
+        io.github.matiyaaa.fuse.ui.shell.store.GameExtras(
+            updates = kinds.count { it == io.github.matiyaaa.fuse.model.ContentKind.UPDATE },
+            dlc = kinds.count { it == io.github.matiyaaa.fuse.model.ContentKind.DLC },
+            other = kinds.count { it != io.github.matiyaaa.fuse.model.ContentKind.UPDATE && it != io.github.matiyaaa.fuse.model.ContentKind.DLC },
+            bytes = files.sumOf { it.size }, from = name,
+        )
+    }
+
+    /**
+     * Queues the add-ons [extrasPlan] found to come here: inside the game's folder where the game is
+     * one (as the other device keeps them), else beside its file, where the library finds them as
+     * the game's. The game itself is never touched.
+     */
+    override suspend fun getExtras(id: GameId): String? = withContext(Dispatchers.Default) {
+        val (copy, files, g) = extrasPlan(id) ?: return@withContext "No other device has updates or DLC for this game that this one hasn't."
+        val folderGame = g.location.kind == LocationKind.FOLDER
+        val base = if (folderGame) g.location.path else FsPath.parent(g.location.path) ?: return@withContext "Fuse can't tell which folder this game is in."
+        val place = { f: PeerFile -> if (folderGame) f.path else f.path.substringAfterLast('/') }
+        for (f in files) if (fileExists(FsPath.join(base, *place(f).split('/').filter { it.isNotEmpty() }.toTypedArray()))) {
+            return@withContext "Something named ${place(f)} is already beside the game, so it was left alone."
+        }
+        val devs = devices.value
+        val name = devs.firstOrNull { it.id == copy.first.device }?.name ?: copy.first.name
+        val job = ReachJob(
+            game = copy.second.game, title = g.displayTitle, platform = g.platformId.value, folder = false,
+            files = files.map { f -> ReachFile(f.path, f.size, f.sha1, f.md5, placeAs = place(f).takeIf { it != f.path }) },
+            sources = listOf(ReachSource(ReachSource.PEER, copy.first.device, name)),
+        )
+        val drive = TransferPlaces.of(base, engine.drives.volumes.value, ctx.now())
+        transfers.enqueue(
+            TransferItem(
+                id = "", key = "$REACH_SOURCE:${copy.second.game}:extras", source = REACH_SOURCE, direction = TransferDirection.DOWNLOAD, kind = TransferKind.GAME,
+                title = "${g.displayTitle}: updates and DLC", detail = "From $name",
+                platform = g.platformId.value, art = TransferArt(), place = drive,
+                target = "${drive.volume?.label ?: ctx.services.deviceName}  ·  ${shortPath(base)}",
+                totalBytes = files.sumOf { it.size }, payload = job.encode(),
+            ),
+        )
+        null
+    }
+
     /** Where a game for [platform] goes here: the folder the person chose for games sent here, else RomM's choice. */
     private suspend fun folderFor(platform: io.github.matiyaaa.fuse.model.Platform, slug: String): String? {
         settings.receiveFolder.takeIf { it.isNotBlank() }?.let { base ->

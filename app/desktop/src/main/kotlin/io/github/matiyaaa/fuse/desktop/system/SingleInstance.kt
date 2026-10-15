@@ -39,8 +39,12 @@ class SingleInstance(private val folder: File) {
         data class Unguarded(val why: String) : Decision
     }
 
-    /** What this Fuse does when a later start asks it to come to the front, or to close. */
-    @Volatile var onShow: () -> Unit = {}
+    /**
+     * What this Fuse does when a later start asks it to come to the front, or to close. [onShow]
+     * says whether it could: false (no window, or a window that doesn't answer) has the later start
+     * take its place instead of leaving with nothing on screen.
+     */
+    @Volatile var onShow: () -> Boolean = { false }
     @Volatile var onQuit: () -> Unit = {}
 
     private var channel: FileChannel? = null
@@ -123,12 +127,12 @@ class SingleInstance(private val folder: File) {
                         val line = BufferedReader(InputStreamReader(c.getInputStream(), Charsets.UTF_8)).readLine().orEmpty()
                         val (key, command) = line.substringBefore(' ') to line.substringAfter(' ', "")
                         if (key != secret) return@use
+                        // Coming to the front is promised only once done: a Fuse whose window is
+                        // gone or stuck says nothing, and the start that asked takes its place.
+                        if (command == SHOW && !onShow()) return@use
                         c.getOutputStream().write("ok\n".toByteArray())
                         c.getOutputStream().flush()
-                        when (command) {
-                            SHOW -> onShow()
-                            QUIT -> onQuit()
-                        }
+                        if (command == QUIT) onQuit()
                     }
                 }
             }

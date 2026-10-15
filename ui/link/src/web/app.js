@@ -3076,6 +3076,7 @@ function buildTools() {
         h('div.tools-actions', fillMissing, fillAll),
         hint),
       fillCard.el),
+    switchSendSection(),
     h('section.section',
       sectionHead('Systems'),
       h('div.card',
@@ -3094,6 +3095,75 @@ function buildTools() {
   tools = { sysSelect, fillMissing, fillAll, hint, fillCard, devTitle, devText };
   updateTools();
   updateFillViews();
+}
+
+// ---- Switch saves: a JKSV folder or backup ZIPs from this phone, for the device's Switch import.
+
+function switchSendSection() {
+  const status = h('p.card-text.send-status', { role: 'status' });
+  const bar = h('div.bar.send-bar', h('i'));
+  bar.hidden = true;
+  const folderIn = h('input', { type: 'file', multiple: true, hidden: true });
+  folderIn.setAttribute('webkitdirectory', '');
+  const zipIn = h('input', { type: 'file', multiple: true, accept: '.zip,application/zip,application/x-zip-compressed', hidden: true });
+  const folderBtn = btn('Choose folder', { icon: 'folder-open', kind: 'secondary', onClick: () => folderIn.click() });
+  const zipBtn = btn('Choose ZIP', { icon: 'file-up', kind: 'primary', onClick: () => zipIn.click() });
+  const run = async (input) => {
+    const files = Array.from(input.files || []).filter((f) => {
+      const name = (f.webkitRelativePath || f.name).split('/').pop();
+      return name && !name.startsWith('.') && name !== 'Thumbs.db' && name !== 'desktop.ini';
+    });
+    input.value = '';
+    if (!files.length) return;
+    const total = files.reduce((a, f) => a + f.size, 0);
+    let sent = 0;
+    [folderBtn, zipBtn].forEach((b) => (b.disabled = true));
+    setBusy(zipBtn, true);
+    bar.hidden = false;
+    const fill = bar.querySelector('i');
+    const show = () => {
+      fill.style.width = `${Math.round(clamp01(total ? sent / total : 1) * 100)}%`;
+      status.textContent = `Sending ${fmtBytes(sent)} of ${fmtBytes(total)}`;
+    };
+    show();
+    try {
+      const { id } = await api('/api/switch-saves', { method: 'POST', body: {} });
+      for (const f of files) {
+        const path = f.webkitRelativePath || f.name;
+        const res = await fetch(`/api/switch-saves/${encodeURIComponent(id)}/file?path=${encodeURIComponent(path)}&size=${f.size}`, {
+          method: 'POST', body: f, credentials: 'same-origin', cache: 'no-store',
+          headers: { 'Content-Type': 'application/octet-stream', Accept: 'application/json' },
+        });
+        if (res.status === 401) { handleUnauthorized(); throw new ApiError('Your session ended. Sign in again to continue.', 401); }
+        if (!res.ok) {
+          let data = null;
+          try { data = await res.json(); } catch (e) { data = null; }
+          throw new ApiError(errorText(data, res.status), res.status, data);
+        }
+        sent += f.size;
+        show();
+      }
+      const done = await api(`/api/switch-saves/${encodeURIComponent(id)}/done`, { method: 'POST', body: {} });
+      status.textContent = (done && done.message) || 'Sent.';
+      toast('Saves sent. Choose the games on the device.', 'success');
+    } catch (e) {
+      status.textContent = (e && e.message) || 'The saves couldn\'t be sent.';
+      toast(status.textContent, 'error');
+    } finally {
+      setBusy(zipBtn, false);
+      [folderBtn, zipBtn].forEach((b) => (b.disabled = false));
+      setTimeout(() => { bar.hidden = true; }, 1200);
+    }
+  };
+  folderIn.addEventListener('change', () => run(folderIn));
+  zipIn.addEventListener('change', () => run(zipIn));
+  status.textContent = 'A ZIP of the JKSV folder works on any phone; a computer\'s browser can send the whole folder. Saves you already imported can be sent again: newer backups are picked first.';
+  return h('section.section',
+    sectionHead('Switch saves'),
+    h('div.card',
+      cardHead('send', 'Send Switch saves', `Your JKSV or Checkpoint backups, straight to ${deviceName()}. Its Switch import opens with them, and nothing on your Switch's card is touched.`),
+      h('div.tools-actions', zipBtn, folderBtn),
+      folderIn, zipIn, bar, status));
 }
 
 function updateTools() {

@@ -562,6 +562,9 @@ interface SyncService {
     /** Switch SD cards plugged in now, with JKSV or Checkpoint backups on them. */
     suspend fun switchCards(): List<SwitchCard> = emptyList()
 
+    /** Puts back the emuMMC settings files [card] lost ([SwitchCard.emuMmcLost]): how many were written. */
+    suspend fun restoreEmuMmc(card: SwitchCard): Result<Int> = Result.failure(UnsupportedOperationException("Not on this device"))
+
     /** [profile]'s saves of a game kept on this device from before imports replaced them, newest first. */
     suspend fun importBackups(query: SaveQuery, kind: SaveKind, profile: String): List<ImportBackupInfo> = emptyList()
 
