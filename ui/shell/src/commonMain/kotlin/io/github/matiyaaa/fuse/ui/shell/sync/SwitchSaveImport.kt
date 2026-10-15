@@ -468,10 +468,6 @@ private fun GameStep(g: SwitchImport.Game, compact: Boolean) {
                 Poster(g, posterWidth, accent, Modifier.padding(start = inset, top = banner - rise))
                 // What the backup is, beside the poster and under the banner.
                 Column(Modifier.padding(start = beside, top = banner + Space.m).fillMaxWidth()) {
-                    if (art?.logo != null) {
-                        FText(g.title, Fuse.type.bodyStrong, maxLines = 2)
-                        Spacer(Modifier.height(Space.s))
-                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                         sw?.tool?.let { Chip(if (it == "CHECKPOINT") "Checkpoint" else "JKSV", icon = FuseIcons.SdCard) }
                         sw?.user?.let { Chip(it, icon = FuseIcons.UserRound) }
