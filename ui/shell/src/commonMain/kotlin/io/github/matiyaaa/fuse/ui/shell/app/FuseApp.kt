@@ -236,6 +236,10 @@ private fun FuseAppContent(
     // Safe mode draws with Fuse's own look and no effects; what is saved never changes.
     val prefs = if (app.safeMode != null) stored.inSafeMode() else stored
     app.menusOnSecondScreen = LocalShowcaseElsewhere.current
+    // Switch saves a phone sent through Phone Link open the Switch import, as a card plugged in would.
+    LaunchedEffect(app, phoneLink) {
+        phoneLink?.switchSaves?.collect { path -> io.github.matiyaaa.fuse.ui.shell.sync.startSwitchImport(app, path, fromPhone = true) }
+    }
     PlayerScreens(app, prefs)
     LaunchedEffect(Unit) {
         if (app.safeMode != null) app.showSafeMode()

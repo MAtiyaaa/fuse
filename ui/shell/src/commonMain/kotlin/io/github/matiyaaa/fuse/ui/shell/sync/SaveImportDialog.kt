@@ -34,9 +34,51 @@ internal fun openSaveImporter(app: AppState) {
         MenuAction("folder", "Folder", FuseIcons.FolderOpen, detail = "One game's saves or an entire emulator save hierarchy", onSelect = { choose(true) }),
         MenuAction("switch", "From a Switch", FuseIcons.SdCard, detail = "Saves backed up with JKSV or Checkpoint, from the SD card or a copy of its folders", onSelect = {
             app.choice = null
-            app.scope.launch { chooseSwitchSource(app) }
+            if (app.platform.host == io.github.matiyaaa.fuse.model.Host.ANDROID) warnAboutTheCard(app) else app.scope.launch { chooseSwitchSource(app) }
+        }),
+        MenuAction("phone", "From Your Phone", FuseIcons.Smartphone, detail = "Share a JKSV folder or backup ZIP from your phone through Phone Link", onSelect = {
+            app.choice = null
+            fromPhone(app)
         }),
     ), FuseIcons.Save)
+}
+
+/**
+ * Android's own warning, before a Switch's SD card is used here: Android checks and "repairs" a card
+ * it mounts, and a Switch card's emuMMC settings files are what it tends to break, leaving the Switch
+ * unable to start its emuMMC ("emuMMC is forced but not enabled"). The safer ways come first.
+ */
+private fun warnAboutTheCard(app: AppState) {
+    app.choice = ChoiceSpec(
+        "Before you use your Switch's card here",
+        "Android checks every SD card put in it and \"repairs\" what it doesn't understand, and a Switch card is one it doesn't. " +
+            "It can delete the small files your Switch needs to start its emuMMC, and then Hekate says \"emuMMC is forced but not enabled\". " +
+            "Sending the saves from your phone, or a copy of the JKSV folder, never touches the card. If you use the card anyway, Fuse keeps a copy of those files and can put them back, and eject it before you take it out.",
+        listOf(
+            MenuAction("phone", "Send From Your Phone", FuseIcons.Smartphone, detail = "Recommended: share the JKSV folder or a ZIP through Phone Link", onSelect = {
+                app.choice = null
+                fromPhone(app)
+            }),
+            MenuAction("copy", "Choose a Copied Folder", FuseIcons.FolderOpen, detail = "The JKSV folder copied off the card, anywhere on this device", onSelect = {
+                app.choice = null
+                app.scope.launch { app.platform.storage.pickFolder("Choose your Switch's save backups (the JKSV folder, or one game's)")?.let { startSwitchImport(app, it) } }
+            }),
+            MenuAction("card", "Use the Card Anyway", FuseIcons.SdCard, detail = "Fuse only reads it. Eject it in Android before taking it out", onSelect = {
+                app.choice = null
+                app.scope.launch { chooseSwitchSource(app) }
+            }),
+        ),
+        FuseIcons.Warning,
+    )
+}
+
+/** Switch saves from a phone: Phone Link on, and its page shows how; the import opens by itself once they arrive. */
+private fun fromPhone(app: AppState) {
+    app.scope.launch {
+        if (!app.store.prefs.value.phoneLinkEnabled) app.store.updatePrefs { it.copy(phoneLinkEnabled = true) }
+        app.go(io.github.matiyaaa.fuse.ui.shell.app.Route.PhoneLink)
+        app.toasts.show("On your phone, open Phone Link, then Tools, Send Switch Saves. The import opens here when they arrive", icon = FuseIcons.Smartphone)
+    }
 }
 
 /**
@@ -55,7 +97,19 @@ private suspend fun chooseSwitchSource(app: AppState) {
             path?.let { startSwitchImport(app, it) }
         }
     }
-    val found = cards.map { c ->
+    // A card that lost its emuMMC settings since Fuse last saw it: putting them back comes first.
+    val repairs = cards.filter { it.emuMmcLost.isNotEmpty() }.map { c ->
+        MenuAction("repair:${c.root}", "Put Back ${c.name}'s emuMMC Settings", FuseIcons.Wrench,
+            detail = "${c.emuMmcLost.size} ${if (c.emuMmcLost.size == 1) "file" else "files"} your Switch needs to start its emuMMC went missing. Fuse kept a copy", onSelect = {
+                app.choice = null
+                app.scope.launch {
+                    service.restoreEmuMmc(c)
+                        .onSuccess { n -> app.toasts.show("Put back $n emuMMC ${if (n == 1) "file" else "files"}. Eject the card before taking it out", ToastKind.SUCCESS) }
+                        .onFailure { app.toasts.show(it.message ?: "Couldn't put the emuMMC settings back", ToastKind.ERROR) }
+                }
+            })
+    }
+    val found = repairs + cards.filter { it.path.isNotEmpty() }.map { c ->
         MenuAction("card:${c.path}", c.name, FuseIcons.SdCard, detail = "Plugged in: ${c.what}", onSelect = {
             app.choice = null
             startSwitchImport(app, c.path)
@@ -68,6 +122,10 @@ private suspend fun chooseSwitchSource(app: AppState) {
         found + listOf(
             MenuAction("switch-folder", "Folder", FuseIcons.FolderOpen, detail = "The JKSV folder, Checkpoint's saves folder, or one game's folder", onSelect = { pick(false) }),
             MenuAction("switch-zip", "One ZIP", FuseIcons.FileUp, detail = "A single JKSV backup ZIP, from the card or wherever you copied it", onSelect = { pick(true) }),
+            MenuAction("switch-phone", "From Your Phone", FuseIcons.Smartphone, detail = "Share the JKSV folder or a ZIP through Phone Link", onSelect = {
+                app.choice = null
+                fromPhone(app)
+            }),
         ),
         FuseIcons.SdCard,
     )

@@ -175,7 +175,10 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
      */
     private fun startPhoneLink(store: FuseStore): PhoneLinkControl? = try {
         val name = Settings.Global.getString(contentResolver, Settings.Global.DEVICE_NAME)?.takeIf { it.isNotBlank() } ?: Build.MODEL
-        PhoneLinkServer(store, services.secrets, appScope, name, BuildConfig.VERSION_NAME, readUri = ::readContent, captures = AndroidCaptureLibrary(this)).also { it.start() }
+        PhoneLinkServer(
+            store, services.secrets, appScope, name, BuildConfig.VERSION_NAME, readUri = ::readContent, captures = AndroidCaptureLibrary(this),
+            inbox = io.github.matiyaaa.fuse.link.FileLinkInbox(java.io.File(filesDir, "phone-inbox")),
+        ).also { it.start() }
     } catch (e: CancellationException) {
         throw e
     } catch (t: Throwable) {

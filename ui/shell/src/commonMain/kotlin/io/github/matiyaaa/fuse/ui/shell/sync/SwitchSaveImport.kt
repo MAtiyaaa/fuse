@@ -204,9 +204,11 @@ private object SwitchIdsUi {
  * first asks which games to look at: those on this device, or every game (a save for a game not here
  * yet goes where the emulator keeps it, ready when the game is played). Then it reads the dump.
  */
-internal fun startSwitchImport(app: AppState, path: String) {
+internal fun startSwitchImport(app: AppState, path: String, fromPhone: Boolean = false) {
     val service = app.store.sync.service ?: return
-    val flow = SwitchImport(path.substringAfterLast('/').substringAfterLast('\\'), path)
+    // A delivery from a phone already open is dropped for the newer one, not stacked on it.
+    app.switchImport?.takeIf { it.step == SwitchImport.Step.READING || it.step == SwitchImport.Step.SCOPE }?.let { app.switchImport = null }
+    val flow = SwitchImport(if (fromPhone) "From your phone" else path.substringAfterLast('/').substringAfterLast('\\'), path)
     app.switchImport = flow
     app.scope.launch {
         val (cards, queries) = cardsByGame(app, platform = "switch")

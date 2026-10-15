@@ -82,5 +82,10 @@ data class ReplacedSave(val entry: String, val profile: String, val query: SaveQ
 /** A save kept on this device from before an import replaced it: [at] in milliseconds. */
 data class ImportBackupInfo(val id: String, val at: Long, val bytes: Long, val title: String)
 
-/** A Switch SD card (or a copy of one) Fuse found: [path] is its save backups folder, [name] the card's, [what] what is on it. */
-data class SwitchCard(val path: String, val name: String, val what: String)
+/**
+ * A Switch SD card (or a copy of one) Fuse found: [path] is its save backups folder ("" when it has
+ * none), [name] the card's, [what] what is on it. [emuMmcLost]: the emuMMC settings files the card
+ * had when Fuse last saw it and has lost since ([EmuMmcGuard]), which Fuse can put back; [root] is
+ * the card itself.
+ */
+data class SwitchCard(val path: String, val name: String, val what: String, val emuMmcLost: List<String> = emptyList(), val root: String = "")

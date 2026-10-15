@@ -2179,15 +2179,33 @@ class JvmSyncService(
         roots.mapNotNull { root ->
             runCatching {
                 val names = root.listFiles()?.filter { it.isDirectory }.orEmpty()
+                // A card whose emuMMC is set up and on: its small settings files are kept, so a card
+                // that loses them later (a phone's storage check, pulled out unejected) can have them back.
+                runCatching { emuMmcGuard.snapshot(root) }
+                val lost = runCatching { emuMmcGuard.lost(root) }.getOrDefault(emptyList())
                 val jksv = names.firstOrNull { it.name.equals("JKSV", true) }
                 val checkpoint = names.firstOrNull { it.name.equals("switch", true) }?.let { File(it, "Checkpoint/saves") }?.takeIf { it.isDirectory }
-                val folder = jksv ?: checkpoint ?: return@runCatching null
-                val games = folder.listFiles()?.count { g -> g.isDirectory && g.listFiles()?.isNotEmpty() == true } ?: 0
-                if (games == 0) return@runCatching null
-                SwitchCard(folder.absolutePath, root.name.ifEmpty { root.path }, "${if (jksv != null) "JKSV" else "Checkpoint"}, $games ${if (games == 1) "game" else "games"}")
+                val folder = jksv ?: checkpoint
+                val games = folder?.listFiles()?.count { g -> g.isDirectory && g.listFiles()?.isNotEmpty() == true } ?: 0
+                val name = root.name.ifEmpty { root.path }
+                when {
+                    folder != null && games > 0 -> SwitchCard(folder.absolutePath, name, "${if (jksv != null) "JKSV" else "Checkpoint"}, $games ${if (games == 1) "game" else "games"}", lost, root.absolutePath)
+                    lost.isNotEmpty() -> SwitchCard("", name, "emuMMC settings missing", lost, root.absolutePath)
+                    else -> null
+                }
             }.getOrNull()
         }
     }
+
+    override suspend fun restoreEmuMmc(card: SwitchCard): Result<Int> = withContext(Dispatchers.IO) {
+        runCatching {
+            val root = File(card.root).takeIf { card.root.isNotBlank() && it.isDirectory } ?: error("The card isn't plugged in any more.")
+            emuMmcGuard.restore(root).also { n -> log("Put back $n emuMMC settings ${if (n == 1) "file" else "files"} on ${card.name}", kind = "restore") }
+        }
+    }
+
+    /** The Switch cards' emuMMC settings files, kept as last seen healthy ([EmuMmcGuard]). */
+    private val emuMmcGuard by lazy { EmuMmcGuard(File(dir, "emummc-guard").apply { mkdirs() }) }
 
     override suspend fun importBackups(asked: SaveQuery, kind: SaveKind, profile: String): List<ImportBackupInfo> = withContext(Dispatchers.IO) {
         val query = canonical(asked)
