@@ -257,7 +257,7 @@ const Connection = ({ hi }) => {
     const problem = failure(hi);
     return (window.SP_REACT.createElement(DFL.PanelSection, { title: "Fuse" },
         window.SP_REACT.createElement(DFL.PanelSectionRow, null,
-            window.SP_REACT.createElement(DFL.Field, { label: problem ? "Not connected" : `Fuse ${hi?.version ?? ""}`, description: problem ?? (hi?.profile ? `Playing: ${hi.profile}` : "Connected") })),
+            window.SP_REACT.createElement(DFL.Field, { focusable: true, label: problem ? "Not connected" : `Fuse ${hi?.version ?? ""}`, description: problem ?? (hi?.profile ? `Playing: ${hi.profile}` : "Connected") })),
         problem && (window.SP_REACT.createElement(DFL.PanelSectionRow, null,
             window.SP_REACT.createElement(DFL.ButtonItem, { layout: "below", onClick: () => { if (!startFuse())
                     toaster.toast({ title: "Fuse", body: "Add Fuse to Steam from Fuse's settings to start it from here." }); } }, "Open Fuse")))));
@@ -303,10 +303,10 @@ const FuseLibrary = ({ canOpen }) => {
     const week = duration(lib.weekSeconds ?? 0);
     return (window.SP_REACT.createElement(DFL.PanelSection, { title: "Library" },
         window.SP_REACT.createElement(DFL.PanelSectionRow, null,
-            window.SP_REACT.createElement(DFL.Field, { label: lib.playing ? `Playing ${lib.playing}` : `${lib.games ?? 0} games`, description: [lib.playing ? `${lib.games ?? 0} games` : null, `${lib.systems ?? 0} systems`, week ? `${week} this week` : null].filter(Boolean).join("  ·  ") })),
+            window.SP_REACT.createElement(DFL.Field, { focusable: true, label: lib.playing ? `Playing ${lib.playing}` : `${lib.games ?? 0} games`, description: [lib.playing ? `${lib.games ?? 0} games` : null, `${lib.systems ?? 0} systems`, week ? `${week} this week` : null].filter(Boolean).join("  ·  ") })),
         recent.length === 0 && (window.SP_REACT.createElement(DFL.PanelSectionRow, null,
-            window.SP_REACT.createElement(DFL.Field, { label: "Nothing played yet", description: "Games you play in Fuse show here." }))),
-        recent.map((g) => (window.SP_REACT.createElement(DFL.PanelSectionRow, { key: g.id }, canOpen ? (window.SP_REACT.createElement(DFL.ButtonItem, { layout: "below", label: g.name, description: [g.system, ago(g.lastPlayed), duration(g.seconds)].filter(Boolean).join("  ·  "), onClick: async () => say(await openFuseGame(g.id), "Opened in Fuse") }, "Open in Fuse")) : (window.SP_REACT.createElement(DFL.Field, { label: g.name, description: [g.system, ago(g.lastPlayed)].filter(Boolean).join("  ·  ") })))))));
+            window.SP_REACT.createElement(DFL.Field, { focusable: true, label: "Nothing played yet", description: "Games you play in Fuse show here." }))),
+        recent.map((g) => (window.SP_REACT.createElement(DFL.PanelSectionRow, { key: g.id }, canOpen ? (window.SP_REACT.createElement(DFL.ButtonItem, { layout: "below", label: g.name, description: [g.system, ago(g.lastPlayed), duration(g.seconds)].filter(Boolean).join("  ·  "), onClick: async () => say(await openFuseGame(g.id), "Opened in Fuse") }, "Open in Fuse")) : (window.SP_REACT.createElement(DFL.Field, { focusable: true, label: g.name, description: [g.system, ago(g.lastPlayed)].filter(Boolean).join("  ·  ") })))))));
 };
 /** Fuse One: who is playing, how saves stand, the household's devices, and what is moving. */
 const FuseOne = ({ s }) => {
@@ -316,17 +316,17 @@ const FuseOne = ({ s }) => {
     if (!one?.available) {
         return (window.SP_REACT.createElement(DFL.PanelSection, { title: "Fuse One" },
             window.SP_REACT.createElement(DFL.PanelSectionRow, null,
-                window.SP_REACT.createElement(DFL.Field, { label: "Not set up", description: "Saves, profiles and downloads across your devices. Set it up in Fuse: Settings, Fuse One." }))));
+                window.SP_REACT.createElement(DFL.Field, { focusable: true, label: "Not set up", description: "Saves, profiles and downloads across your devices. Set it up in Fuse: Settings, Fuse One." }))));
     }
     const t = s.transfers;
     const moving = t ? t.downloading + t.uploading : 0;
     return (window.SP_REACT.createElement(DFL.PanelSection, { title: "Fuse One" },
         window.SP_REACT.createElement(DFL.PanelSectionRow, null,
-            window.SP_REACT.createElement(DFL.Field, { label: one.state ?? "Fuse One", description: one.detail })),
+            window.SP_REACT.createElement(DFL.Field, { focusable: true, label: one.state ?? "Fuse One", description: one.detail })),
         (one.devices ?? []).slice(0, 6).map((d) => (window.SP_REACT.createElement(DFL.PanelSectionRow, { key: d.name },
-            window.SP_REACT.createElement(DFL.Field, { label: d.name, description: d.platform })))),
+            window.SP_REACT.createElement(DFL.Field, { focusable: true, label: d.name, description: d.platform })))),
         t && (moving > 0 || t.queued > 0 || t.failed > 0) && (window.SP_REACT.createElement(DFL.PanelSectionRow, null,
-            window.SP_REACT.createElement(DFL.Field, { label: moving > 0 ? `${moving} moving` : t.queued > 0 ? `${t.queued} waiting` : "Transfers", description: [t.progress != null ? `${Math.round(t.progress * 100)}%` : null, t.failed > 0 ? `${t.failed} failed` : null].filter(Boolean).join("  ·  ") || undefined })))));
+            window.SP_REACT.createElement(DFL.Field, { focusable: true, label: moving > 0 ? `${moving} moving` : t.queued > 0 ? `${t.queued} waiting` : "Transfers", description: [t.progress != null ? `${Math.round(t.progress * 100)}%` : null, t.failed > 0 ? `${t.failed} failed` : null].filter(Boolean).join("  ·  ") || undefined })))));
 };
 function confirm(title, body, run) {
     DFL.showModal(window.SP_REACT.createElement(DFL.ConfirmModal, { strTitle: title, strDescription: body, strOKButtonText: "Continue", onOK: () => { run(); } }));
@@ -352,7 +352,7 @@ const Emulators = () => {
     const updates = e.updates ?? [];
     return (window.SP_REACT.createElement(DFL.PanelSection, { title: "Emulators" },
         window.SP_REACT.createElement(DFL.PanelSectionRow, null,
-            window.SP_REACT.createElement(DFL.Field, { label: updates.length > 0 ? `${updates.length} ${updates.length === 1 ? "update" : "updates"}` : "Up to date", description: updates.slice(0, 3).map((u) => u.name).join(", ") || `${e.installed ?? 0} installed` })),
+            window.SP_REACT.createElement(DFL.Field, { focusable: true, label: updates.length > 0 ? `${updates.length} ${updates.length === 1 ? "update" : "updates"}` : "Up to date", description: updates.slice(0, 3).map((u) => u.name).join(", ") || `${e.installed ?? 0} installed` })),
         window.SP_REACT.createElement(DFL.PanelSectionRow, null,
             window.SP_REACT.createElement(DFL.ButtonItem, { layout: "below", disabled: updates.length === 0, onClick: async () => { say(await updateAllEmulators(), "Updating in Fuse"); refresh(); } }, "Update all")),
         window.SP_REACT.createElement(DFL.PanelSectionRow, null,
@@ -363,7 +363,7 @@ const Emulators = () => {
 /** A part of the plugin Fuse doesn't let it use, and where the person can allow it. */
 const NotAllowed = ({ title, what }) => (window.SP_REACT.createElement(DFL.PanelSection, { title: title },
     window.SP_REACT.createElement(DFL.PanelSectionRow, null,
-        window.SP_REACT.createElement(DFL.Field, { label: "Not allowed", description: `Fuse doesn't let this plugin ${what}. Allow it in Fuse: Settings, Library, Decky.` }))));
+        window.SP_REACT.createElement(DFL.Field, { focusable: true, label: "Not allowed", description: `Fuse doesn't let this plugin ${what}. Allow it in Fuse: Settings, Library, Decky.` }))));
 const Content = () => {
     const [hi] = usePoll(() => hello());
     const [s] = usePoll(() => status());

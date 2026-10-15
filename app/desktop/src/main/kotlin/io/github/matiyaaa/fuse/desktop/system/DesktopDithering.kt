@@ -3,6 +3,7 @@ package io.github.matiyaaa.fuse.desktop.system
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asComposeImageBitmap
 import androidx.compose.ui.graphics.asSkiaBitmap
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.skiaPaint
 import androidx.compose.ui.unit.IntSize
 import io.github.matiyaaa.fuse.ui.designsystem.effects.Dithering
@@ -25,7 +26,11 @@ import org.jetbrains.skia.ImageInfo
 internal object DesktopDithering {
     fun install() {
         Dithering.gradients = { ditherGradient(it) }
-        Dithering.scaledGradients = ::ditherGradient
+        Dithering.scaledGradients = { paint, sx, sy -> ditherGradient(paint, floatArrayOf(sx, 0f, 0f, 0f, sy, 0f)) }
+        Dithering.placedGradients = { paint, canvas ->
+            val m = runCatching { canvas.nativeCanvas.localToDeviceAsMatrix33.mat }.getOrNull()
+            ditherGradient(paint, m ?: IDENTITY)
+        }
         Dithering.pictures = ::dither
         Dithering.blurs = ::blur
     }
@@ -38,25 +43,29 @@ internal object DesktopDithering {
      * scaled the noise down with the colour, so a soft light drawn at a tenth (every glow of the
      * room behind Fuse) got a tenth of a step of noise, and banded as if there were none.
      *
-     * The shader's coordinates are the drawing's, which a transform stretches: a glow drawn as a
-     * small circle scaled up would have its noise in blocks as large as the scale. [scale] (screen
-     * pixels per unit of the drawing, each way) lays the grain out per screen pixel again. Skia here
-     * has no `sk_FragCoord` for runtime shaders, so the drawing says its own scale.
+     * The shader's coordinates are the drawing's, which a transform moves and stretches. Skia here
+     * has no `sk_FragCoord` for runtime shaders, so the drawing gives its own transform to the
+     * screen ([lin], its 2 by 2 part row by row, and [off]): the grain is laid out per screen pixel,
+     * and stays put on the screen as the drawing moves. Tied to the drawing instead, a soft light
+     * drifting behind the interface carried its grain with it, and the grain shimmered.
      */
     internal const val NOISE = """
         uniform shader content;
         uniform float amp;
         uniform float alpha;
-        uniform float2 scale;
+        uniform float4 lin;
+        uniform float2 off;
         float ign(float2 p) { return fract(52.9829189 * fract(dot(p, float2(0.06711056, 0.00583715)))); }
         half4 main(float2 coords) {
             half4 c = content.eval(coords) * half(alpha);
-            float2 p = floor(coords * scale);
+            float2 p = floor(float2(lin.x * coords.x + lin.y * coords.y + off.x, lin.z * coords.x + lin.w * coords.y + off.y));
             float n = ign(p) + ign(p + float2(47.0, 113.0)) - 1.0;
             c.rgb = clamp(c.rgb + half(n * amp / 255.0), 0.0, c.a);
             return c;
         }
     """
+
+    private val IDENTITY = floatArrayOf(1f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f)
 
     private val noise: org.jetbrains.skia.RuntimeEffect? by lazy {
         runCatching { org.jetbrains.skia.RuntimeEffect.makeForShader(NOISE) }
@@ -68,10 +77,11 @@ internal object DesktopDithering {
     internal fun amplitude(): Float = if (io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.largeOutput) 2f else 1f
 
     /**
-     * [paint]'s gradient with noise in it before rounding (see [NOISE]), for a drawing at [scaleX] by
-     * [scaleY] screen pixels per unit; Skia's ordered dither where that can't be.
+     * [paint]'s gradient with noise in it before rounding (see [NOISE]), for a drawing whose
+     * transform to the screen is [toScreen] (Skia's 3 by 3, row by row; its first two rows are
+     * used); Skia's ordered dither where that can't be.
      */
-    fun ditherGradient(paint: androidx.compose.ui.graphics.Paint, scaleX: Float = 1f, scaleY: Float = 1f) {
+    fun ditherGradient(paint: androidx.compose.ui.graphics.Paint, toScreen: FloatArray = IDENTITY) {
         val skia = paint.skiaPaint
         val shader = skia.shader
         val effect = noise
@@ -85,7 +95,8 @@ internal object DesktopDithering {
                 child("content", shader)
                 uniform("amp", amplitude())
                 uniform("alpha", alpha)
-                uniform("scale", scaleX.coerceAtLeast(0.001f), scaleY.coerceAtLeast(0.001f))
+                uniform("lin", toScreen[0], toScreen[1], toScreen[3], toScreen[4])
+                uniform("off", toScreen[2], toScreen[5])
                 makeShader()
             }
         }.getOrNull()

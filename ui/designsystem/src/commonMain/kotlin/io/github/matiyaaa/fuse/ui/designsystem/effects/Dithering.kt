@@ -26,6 +26,12 @@ object Dithering {
      */
     @Volatile var scaledGradients: ((Paint, Float, Float) -> Unit)? = null
 
+    /**
+     * As [gradients], for a paint about to be drawn on [Canvas] as it is now: its noise is laid out
+     * by screen pixel and stays put on the screen however the drawing moves or is scaled.
+     */
+    @Volatile var placedGradients: ((Paint, androidx.compose.ui.graphics.Canvas) -> Unit)? = null
+
     /** A copy of a picture with about one 8-bit step of signed noise in it, or the picture itself. */
     @Volatile var pictures: ((ImageBitmap) -> ImageBitmap)? = null
 
@@ -49,7 +55,7 @@ fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDitheredRect(
     drawIntoCanvas { canvas ->
         val paint = Paint()
         brush.applyTo(size, paint, alpha)
-        dither(paint)
+        Dithering.placedGradients?.invoke(paint, canvas) ?: dither(paint)
         canvas.drawRect(topLeft.x, topLeft.y, topLeft.x + size.width, topLeft.y + size.height, paint)
     }
 }
@@ -60,7 +66,7 @@ fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDitheredPath(path: andr
     drawIntoCanvas { canvas ->
         val paint = Paint()
         brush.applyTo(size, paint, alpha)
-        dither(paint)
+        Dithering.placedGradients?.invoke(paint, canvas) ?: dither(paint)
         canvas.drawPath(path, paint)
     }
 }
@@ -81,7 +87,7 @@ fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDitheredCircle(
     drawIntoCanvas { canvas ->
         val paint = Paint()
         brush.applyTo(androidx.compose.ui.geometry.Size(radius * 2, radius * 2), paint, alpha)
-        dither(paint)
+        Dithering.placedGradients?.invoke(paint, canvas) ?: dither(paint)
         canvas.drawCircle(center, radius, paint)
     }
 }

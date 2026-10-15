@@ -66,7 +66,24 @@ fun FolderBrowserScreen(app: AppState, id: GameId) {
     LaunchedEffect(id) { files = app.store.library.launchCandidates(id) }
     LaunchedEffect(Unit) { app.hints = listOf(Hint(HintButton.CONFIRM, "Play"), Hint(HintButton.BACK, "Back")) }
     val folder = detail?.game?.location?.path.orEmpty()
-    val actions = files.orEmpty().map { path ->
+    // Files of different games (not one game's discs or parts): the folder was read as one game, and
+    // each can be listed as its own instead.
+    val several = remember(files) {
+        files.orEmpty().map { io.github.matiyaaa.fuse.library.parse.SearchTitles.clean(it.substringAfterLast('/').substringAfterLast('\\').substringBeforeLast('.')).lowercase() }
+            .distinct().size > 1
+    }
+    val split = if (several) listOf(MenuAction(
+        "split", "List Each as Its Own Game", FuseIcons.Layers,
+        detail = "These are different games, kept in one folder. Fuse shows each in your library; nothing on disk changes",
+        onSelect = {
+            app.scope.launch {
+                app.store.library.setFolderPolicy(id, io.github.matiyaaa.fuse.model.FolderPolicy.FILE)
+                app.toasts.show("Each game in the folder is listed on its own once Fuse rescans this system")
+                app.navigator.pop()
+            }
+        },
+    )) else emptyList()
+    val actions = split + files.orEmpty().map { path ->
         val inside = path.removePrefix(folder).trimStart('/', '\\')
         val cut = inside.lastIndexOfAny(charArrayOf('/', '\\'))
         MenuAction(
@@ -99,7 +116,7 @@ fun FolderBrowserScreen(app: AppState, id: GameId) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     FuseIcon(FuseIcons.FolderOpen, size = Size.iconS, tint = Fuse.colors.textMuted)
                     Spacer(Modifier.width(Space.s))
-                    FText("Choose what to launch", Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 1)
+                    FText(if (several) "This folder holds several games. Choose one to play" else "This game is a folder. Choose the file to start", Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 1)
                     if (folder.isNotEmpty()) {
                         FText("  ·  ", Fuse.type.body, color = Fuse.colors.textFaint, maxLines = 1)
                         FText(shortFolder(folder), Fuse.type.body, color = Fuse.colors.textFaint, maxLines = 1, modifier = Modifier.weight(1f, fill = false))

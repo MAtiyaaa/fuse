@@ -72,7 +72,7 @@ const Connection: VFC<{ hi: Hello | null }> = ({ hi }) => {
   return (
     <PanelSection title="Fuse">
       <PanelSectionRow>
-        <Field label={problem ? "Not connected" : `Fuse ${hi?.version ?? ""}`} description={problem ?? (hi?.profile ? `Playing: ${hi.profile}` : "Connected")} />
+        <Field focusable label={problem ? "Not connected" : `Fuse ${hi?.version ?? ""}`} description={problem ?? (hi?.profile ? `Playing: ${hi.profile}` : "Connected")} />
       </PanelSectionRow>
       {problem && (
         <PanelSectionRow>
@@ -133,13 +133,14 @@ const FuseLibrary: VFC<{ canOpen: boolean }> = ({ canOpen }) => {
     <PanelSection title="Library">
       <PanelSectionRow>
         <Field
+          focusable
           label={lib.playing ? `Playing ${lib.playing}` : `${lib.games ?? 0} games`}
           description={[lib.playing ? `${lib.games ?? 0} games` : null, `${lib.systems ?? 0} systems`, week ? `${week} this week` : null].filter(Boolean).join("  ·  ")}
         />
       </PanelSectionRow>
       {recent.length === 0 && (
         <PanelSectionRow>
-          <Field label="Nothing played yet" description="Games you play in Fuse show here." />
+          <Field focusable label="Nothing played yet" description="Games you play in Fuse show here." />
         </PanelSectionRow>
       )}
       {recent.map((g) => (
@@ -154,7 +155,7 @@ const FuseLibrary: VFC<{ canOpen: boolean }> = ({ canOpen }) => {
               Open in Fuse
             </ButtonItem>
           ) : (
-            <Field label={g.name} description={[g.system, ago(g.lastPlayed)].filter(Boolean).join("  ·  ")} />
+            <Field focusable label={g.name} description={[g.system, ago(g.lastPlayed)].filter(Boolean).join("  ·  ")} />
           )}
         </PanelSectionRow>
       ))}
@@ -170,7 +171,7 @@ const FuseOne: VFC<{ s: Status | null }> = ({ s }) => {
     return (
       <PanelSection title="Fuse One">
         <PanelSectionRow>
-          <Field label="Not set up" description="Saves, profiles and downloads across your devices. Set it up in Fuse: Settings, Fuse One." />
+          <Field focusable label="Not set up" description="Saves, profiles and downloads across your devices. Set it up in Fuse: Settings, Fuse One." />
         </PanelSectionRow>
       </PanelSection>
     );
@@ -180,16 +181,17 @@ const FuseOne: VFC<{ s: Status | null }> = ({ s }) => {
   return (
     <PanelSection title="Fuse One">
       <PanelSectionRow>
-        <Field label={one.state ?? "Fuse One"} description={one.detail} />
+        <Field focusable label={one.state ?? "Fuse One"} description={one.detail} />
       </PanelSectionRow>
       {(one.devices ?? []).slice(0, 6).map((d) => (
         <PanelSectionRow key={d.name}>
-          <Field label={d.name} description={d.platform} />
+          <Field focusable label={d.name} description={d.platform} />
         </PanelSectionRow>
       ))}
       {t && (moving > 0 || t.queued > 0 || t.failed > 0) && (
         <PanelSectionRow>
           <Field
+            focusable
             label={moving > 0 ? `${moving} moving` : t.queued > 0 ? `${t.queued} waiting` : "Transfers"}
             description={[t.progress != null ? `${Math.round(t.progress * 100)}%` : null, t.failed > 0 ? `${t.failed} failed` : null].filter(Boolean).join("  ·  ") || undefined}
           />
@@ -234,7 +236,7 @@ const Emulators: VFC = () => {
   return (
     <PanelSection title="Emulators">
       <PanelSectionRow>
-        <Field label={updates.length > 0 ? `${updates.length} ${updates.length === 1 ? "update" : "updates"}` : "Up to date"} description={updates.slice(0, 3).map((u) => u.name).join(", ") || `${e.installed ?? 0} installed`} />
+        <Field focusable label={updates.length > 0 ? `${updates.length} ${updates.length === 1 ? "update" : "updates"}` : "Up to date"} description={updates.slice(0, 3).map((u) => u.name).join(", ") || `${e.installed ?? 0} installed`} />
       </PanelSectionRow>
       <PanelSectionRow>
         <ButtonItem layout="below" disabled={updates.length === 0} onClick={async () => { say(await updateAllEmulators(), "Updating in Fuse"); refresh(); }}>
@@ -259,7 +261,7 @@ const Emulators: VFC = () => {
 const NotAllowed: VFC<{ title: string; what: string }> = ({ title, what }) => (
   <PanelSection title={title}>
     <PanelSectionRow>
-      <Field label="Not allowed" description={`Fuse doesn't let this plugin ${what}. Allow it in Fuse: Settings, Library, Decky.`} />
+      <Field focusable label="Not allowed" description={`Fuse doesn't let this plugin ${what}. Allow it in Fuse: Settings, Library, Decky.`} />
     </PanelSectionRow>
   </PanelSection>
 );

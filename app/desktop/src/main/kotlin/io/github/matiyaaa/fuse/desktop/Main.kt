@@ -155,13 +155,19 @@ private fun runWindow(dirs: FuseDirs, args: Array<String>, scope: CoroutineScope
         val session = remember { DesktopSession(dirs, args.filter { it != io.github.matiyaaa.fuse.desktop.system.SingleInstance.REPLACE }, scope).also { it.start() } }
         session.exit = ::exitApplication
         DisposableEffect(session) {
-            instance?.onShow = { java.awt.EventQueue.invokeLater { session.raise() } }
+            // Raised on the window's own thread, and only promised once it was: a stuck window
+            // (after Steam's Exit Game, say) lets the next start replace this Fuse.
+            instance?.onShow = {
+                val raised = java.util.concurrent.CountDownLatch(1)
+                java.awt.EventQueue.invokeLater { runCatching { session.raise() }; raised.countDown() }
+                raised.await(SHOW_ANSWER_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+            }
             instance?.onQuit = {
                 java.awt.EventQueue.invokeLater { session.exit() }
                 // A Fuse that can't close in time is ended, so the one taking its place isn't kept waiting.
                 Thread({ Thread.sleep(4_000); Runtime.getRuntime().halt(0) }, "fuse-quit").apply { isDaemon = true; start() }
             }
-            onDispose { instance?.onShow = {}; instance?.onQuit = {} }
+            onDispose { instance?.onShow = { false }; instance?.onQuit = {} }
         }
         DisposableEffect(session) { onDispose { session.close() } }
         FuseWindow(session)
@@ -477,3 +483,6 @@ private fun setX11WmClass() {
         // Not X11 or not opened to us: the default class name stays.
     }
 }
+
+/** How long a running Fuse's window has to come to the front before a new start takes its place. */
+private const val SHOW_ANSWER_MS = 1_500L
