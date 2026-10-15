@@ -51,6 +51,10 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
   and Steam libraries, and **32 on macOS**, found as apps or Homebrew programs. Anything Fuse misses on Windows or macOS
   can be located from Settings. An AppImage is known by the release it updates from, so a renamed
   one is still found.
+- **Every Linux emulator in the Store**, installed by Fuse: AppImages, tarballs and 7-Zip
+  archives as each project publishes them (Eden from its own server, with its Steam Deck and ROG
+  Ally builds), and Flathub for the few that publish nothing of their own. The Emulators tab shows
+  the ones on the computer.
 - **RetroArch for every system it runs**, with ES-DE's cores in ES-DE's order, on Android, Linux,
   Windows and macOS.
 - **Pick an emulator** per system or per game. Forks and renamed builds are recognised by family, and

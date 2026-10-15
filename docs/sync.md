@@ -358,6 +358,19 @@ with its whole structure: every nested folder, empty ones included. Putting a sa
 folder exactly that save: files of the save it replaces that it doesn't have are removed (they are
 kept first, as that save's own version in the history), along with the folders that leaves empty.
 
+**Saves from a Switch.** Settings, Fuse One, Import Saves, From a Switch reads what a modded
+Switch's save managers copy to its SD card: JKSV's `JKSV/<game>/<backup>` folders and ZIPs (each
+with its `.nx_save_meta.bin`, which names the game's title id, whose save it is and when it was
+made) and Checkpoint's `switch/Checkpoint/saves/0x<title id> <game>/<backup>` folders. Each backup
+is matched to a game by its title id, or by its folder's name when an old JKSV backup has no meta
+file (then the import asks to check it). Fuse then asks, one game at a time, whether it is that
+game and whose save it is: one person, several or everyone, each getting their own copy (the
+emulator's folder holds the copy of whoever plays here; the others' is kept for them on this
+device until they play). The backup's files are the save as the game wrote it, so they go into the
+emulator's NAND as they are, an account save in the user's folder and a device save in the
+game's device folder; the part of the save the backup doesn't hold is kept. The SD card is only
+read.
+
 **Never silent.** When a played game's save can't be kept to send (its folder isn't reachable, or
 Fuse found no save where it looked), a message says why and what to do, once per game while Fuse
 runs. A save that simply didn't change says nothing. A save is only put where the
