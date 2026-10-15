@@ -23,7 +23,6 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -63,13 +62,8 @@ import io.github.matiyaaa.fuse.ui.shell.app.openStore
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import io.github.matiyaaa.fuse.ui.shell.app.showEmulator
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
-import io.github.matiyaaa.fuse.ui.shell.components.ViewTab
-import io.github.matiyaaa.fuse.ui.shell.components.ViewTabs
 import io.github.matiyaaa.fuse.ui.shell.store.StoreApp
 import kotlinx.coroutines.launch
-
-/** The Emulators section's two lists. */
-enum class EmulatorList(val label: String) { INSTALLED("Installed"), NOT_INSTALLED("Not Installed") }
 
 /** One emulator as the Emulators section shows it: what it is, whether it is here, and the Store's app for it. */
 data class EmulatorTile(
@@ -86,17 +80,13 @@ data class EmulatorTile(
 
 @Stable
 class EmulatorsViewState {
-    var list by mutableStateOf(EmulatorList.INSTALLED)
-    var inTabs by mutableStateOf(false)
-    private val selections = mutableMapOf<EmulatorList, GridSelection>()
-    fun selection(l: EmulatorList): GridSelection = selections.getOrPut(l) { GridSelection() }
+    val selection = GridSelection()
 }
 
 /**
- * The Apps section on a computer: every emulator Fuse can start here and nothing else. Installed
- * ones open with Confirm; those not installed lead to the Store's page to install them (or their
- * website where the Store doesn't offer them). Options shows an emulator's own page: the systems it
- * runs, how Fuse starts it, and what Fuse has checked.
+ * The Apps section on a computer: the emulators on it, and nothing else. Confirm opens one; Options
+ * shows its own page (the systems it runs, how Fuse starts it, what Fuse has checked). Getting one
+ * is the Store's: with none here, this says so and leads there.
  */
 @Composable
 fun EmulatorsScreen(app: AppState) {
@@ -121,46 +111,33 @@ fun EmulatorsScreen(app: AppState) {
         }
     }
     val view = rememberRouteState(app.navigator, "emulators") { EmulatorsViewState() }
-    val lists = EmulatorList.entries
-    val listIndex = lists.indexOf(view.list)
-    val shown = all.filter { it.installed == (view.list == EmulatorList.INSTALLED) }
-    val sel = view.selection(view.list)
+    val shown = all.filter { it.installed }.sortedBy { it.name.lowercase() }
+    val sel = view.selection
     sel.clamp(shown.size)
     var columns by remember { mutableIntStateOf(7) }
 
     PageEffect(Unit) { app.hero = null }
     val current = shown.getOrNull(sel.index)
-    PageEffect(current?.installed, current?.storeKey) {
+    PageEffect(current != null, shown.isEmpty()) {
         app.hints = when {
-            current == null -> emptyList()
-            current.installed -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.OPTIONS, "Details"))
-            else -> listOf(Hint(HintButton.CONFIRM, if (current.storeKey != null) "Install" else "Get It"), Hint(HintButton.OPTIONS, "Details"))
+            current != null -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.OPTIONS, "Details"))
+            shown.isEmpty() && store.appStore.supported -> listOf(Hint(HintButton.CONFIRM, "Open the Store"))
+            else -> emptyList()
         }
     }
 
     fun activate(e: EmulatorTile) {
-        when {
-            e.installed -> app.scope.launch { store.emulators.openEmulator(e.id) }
-            e.storeKey != null -> app.openStore(e.storeKey)
-            else -> store.emulators.homepage(e.id)?.let { app.platform.openUrl(it) } ?: app.showEmulator(e.id)
-        }
+        app.scope.launch { store.emulators.openEmulator(e.id) }
     }
 
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
-        if (view.inTabs) {
-            return@InputLayer when (e.action) {
-                NavAction.LEFT -> if (listIndex > 0) { view.list = lists[listIndex - 1]; NavResult.MOVED } else NavResult.BLOCKED
-                NavAction.RIGHT -> if (listIndex < lists.lastIndex) { view.list = lists[listIndex + 1]; NavResult.MOVED } else NavResult.BLOCKED
-                NavAction.DOWN, NavAction.SELECT -> { view.inTabs = false; NavResult.MOVED }
-                else -> NavResult.IGNORED
-            }
-        }
         when (e.action) {
-            NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT, NavAction.PAGE_UP, NavAction.PAGE_DOWN -> {
-                val r = sel.move(e.action, shown.size, columns)
-                if (r == NavResult.IGNORED && e.action == NavAction.UP) { view.inTabs = true; NavResult.MOVED } else r
+            NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT, NavAction.PAGE_UP, NavAction.PAGE_DOWN -> sel.move(e.action, shown.size, columns)
+            NavAction.SELECT -> {
+                val pick = shown.getOrNull(sel.index)
+                if (pick != null) activate(pick) else if (store.appStore.supported) app.openStore()
+                NavResult.ACTIVATED
             }
-            NavAction.SELECT -> { shown.getOrNull(sel.index)?.let(::activate); NavResult.ACTIVATED }
             NavAction.CONTEXT -> { shown.getOrNull(sel.index)?.let { app.showEmulator(it.id) }; NavResult.ACTIVATED }
             else -> NavResult.IGNORED
         }
@@ -169,33 +146,27 @@ fun EmulatorsScreen(app: AppState) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val size = LocalTileMetrics.current.icon * 0.82f
         columns = ((maxWidth - Space.gutter * 2 + Space.xl) / (size + Space.xl)).toInt().coerceAtLeast(3)
-        val reveal = rememberReveal(view.list)
+        val reveal = rememberReveal(Unit)
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight + Space.m))
-            ViewTabs(
-                items = lists.map { l -> ViewTab(l.label, badge = all.count { it.installed == (l == EmulatorList.INSTALLED) }.toString()) },
-                active = listIndex,
-                focused = listIndex.takeIf { view.inTabs && app.focusZone == FocusZone.CONTENT },
-                onSelect = { i ->
-                    app.focusZone = FocusZone.CONTENT
-                    view.list = lists[i]
-                    view.inTabs = false
-                },
-                modifier = Modifier.reveal(reveal, 0),
-            )
-            Spacer(Modifier.height(Space.xs))
             if (shown.isEmpty()) {
                 Box(
                     Modifier.fillMaxWidth().weight(1f).padding(horizontal = Space.gutter).padding(bottom = Size.hintHeight + Space.xl),
                     contentAlignment = Alignment.Center,
                 ) {
-                    when (view.list) {
-                        EmulatorList.INSTALLED -> EmptyState(FuseIcons.Joystick, "No emulators found", message = "Install one from Not Installed, or show Fuse where one is in Settings, Systems.")
-                        EmulatorList.NOT_INSTALLED -> EmptyState(FuseIcons.CircleCheck, "Every emulator is installed")
-                    }
+                    val canInstall = store.appStore.supported
+                    EmptyState(
+                        FuseIcons.Joystick, "No emulators yet",
+                        message = if (canInstall) "Every emulator Fuse knows is in the Store, ready to install. Fuse also finds ones you install yourself."
+                        else "Install one, and Fuse finds it. Or show Fuse where one is in Settings, Systems.",
+                        actionLabel = if (canInstall) "Open the Store" else null,
+                        actionSelected = canInstall && app.focusZone == FocusZone.CONTENT,
+                        actionIcon = FuseIcons.Package,
+                        onAction = if (canInstall) ({ app.openStore() }) else null,
+                    )
                 }
             } else {
-                val grid = remember(view.list) { LazyGridState() }
+                val grid = remember { LazyGridState() }
                 FollowSelection(grid, { sel.index }, anchor = 0.1f)
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(columns),
@@ -206,13 +177,12 @@ fun EmulatorsScreen(app: AppState) {
                     verticalArrangement = Arrangement.spacedBy(Space.xl),
                 ) {
                     itemsIndexed(shown, key = { _, e -> e.id.value }) { i, e ->
-                        val selected = io.github.matiyaaa.fuse.ui.designsystem.components.isSelected { !view.inTabs && i == sel.index && app.focusZone == FocusZone.CONTENT }
+                        val selected = io.github.matiyaaa.fuse.ui.designsystem.components.isSelected { i == sel.index && app.focusZone == FocusZone.CONTENT }
                         EmulatorItem(
                             e, selected, size,
-                            modifier = Modifier.reveal(reveal, 1 + i / columns + i % columns),
+                            modifier = Modifier.reveal(reveal, i / columns + i % columns),
                             onClick = {
                                 app.focusZone = FocusZone.CONTENT
-                                view.inTabs = false
                                 sel.index = i
                                 activate(e)
                             },
@@ -257,11 +227,7 @@ private fun EmulatorItem(
             modifier = Modifier.width(size + Space.l + Space.xs),
             align = TextAlign.Center,
         )
-        val note = when {
-            tile.installed -> tile.version
-            tile.storeKey != null -> "In the Store"
-            else -> null
-        }
+        val note = tile.version
         if (note != null) {
             FText(
                 note, Fuse.type.caption,

@@ -15,11 +15,17 @@ enum class DesktopAssetKind {
 
     /** A macOS disk image: its app is copied out. */
     DMG,
+
+    /** A Linux tarball (.tar.gz, .tar.xz): the AppImage inside it, else the program's folder as it is. */
+    TAR,
+
+    /** A Linux 7-Zip archive (RetroArch's): the same as [TAR]. */
+    SEVEN_ZIP,
 }
 
 /**
  * Picks the file of a release meant for this computer, as an emulator's own developers publish it:
- * on Linux only AppImages (or a zip holding one), on Windows a portable zip, on macOS a disk image
+ * on Linux an AppImage first, else a zip, tarball or 7-Zip archive of the program, on Windows a portable zip, on macOS a disk image
  * or a zipped app. Installers, debug symbols, source archives and other processors' builds are
  * never picked, and nothing is ever repackaged: Fuse only fetches what upstream publishes.
  */
@@ -44,8 +50,10 @@ object DesktopAssets {
         return when (host) {
             Host.LINUX -> when {
                 n.endsWith(".appimage") -> DesktopAssetKind.APPIMAGE
-                // A zip is only taken on Linux when it says it holds an AppImage.
-                n.endsWith(".zip") && "appimage" in n -> DesktopAssetKind.ZIP
+                // A zip is only taken on Linux when it says it is for Linux or holds an AppImage.
+                n.endsWith(".zip") && ("appimage" in n || "linux" in n) -> DesktopAssetKind.ZIP
+                n.endsWith(".tar.gz") || n.endsWith(".tgz") || n.endsWith(".tar.xz") -> DesktopAssetKind.TAR
+                n.endsWith(".7z") -> DesktopAssetKind.SEVEN_ZIP
                 else -> null
             }
             Host.WINDOWS -> if (n.endsWith(".zip")) DesktopAssetKind.ZIP else null
@@ -66,6 +74,8 @@ object DesktopAssets {
     }
 
     private fun archFits(n: String, arm: Boolean): Boolean {
+        // A 32-bit build ("i686") is never the one for a 64-bit computer.
+        if (BITS_32.any { it in n }) return false
         val saysArm = ARM.any { it in n }
         val saysIntel = INTEL.any { it in n }
         val universal = "universal" in n
@@ -82,6 +92,7 @@ object DesktopAssets {
         DesktopAssetKind.APPIMAGE -> 0
         DesktopAssetKind.DMG -> 0
         DesktopAssetKind.ZIP -> 1
+        DesktopAssetKind.TAR, DesktopAssetKind.SEVEN_ZIP -> 2
         null -> 9
     }
 
@@ -90,5 +101,6 @@ object DesktopAssets {
     private val WINDOWS = listOf("win", "windows", "msvc", "mingw")
     private val MACOS = listOf("mac", "macos", "osx", "darwin", "apple")
     private val ARM = listOf("arm64", "aarch64", "armv8", "-arm")
+    private val BITS_32 = listOf("i686", "i386", "x86_32", "-x86.", "_x86.")
     private val INTEL = listOf("x86_64", "x64", "amd64", "x86-64", "intel")
 }

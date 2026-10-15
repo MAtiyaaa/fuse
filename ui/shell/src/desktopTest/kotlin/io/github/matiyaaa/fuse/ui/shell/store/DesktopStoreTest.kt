@@ -68,6 +68,10 @@ class DesktopStoreTest {
 
         override fun freeBytes(): Long = 1L shl 34
 
+        override var handheld: String? = null
+        val flatpaks = mutableListOf<String>()
+        override suspend fun installFlatpak(appId: String, name: String) { flatpaks += appId }
+
         /** The next install fails, as one whose download turns out broken would. */
         @Volatile var failNext = false
         private val kept = File(dir, "kept").apply { mkdirs() }
@@ -129,6 +133,15 @@ class DesktopStoreTest {
                     respond(release("stenzek/duckstation", "DuckStation-x64.AppImage", "duckstation-windows-x64-release.zip", "duckstation-mac-release.zip"), HttpStatusCode.OK, json)
                 url.startsWith("https://api.github.com/repos/someone/handy/releases") ->
                     respond(release("someone/handy", "Handy-x86_64.AppImage"), HttpStatusCode.OK, json)
+                url.startsWith("https://git.eden-emu.dev/api/v1/repos/eden-emu/eden/releases") -> respond(
+                    """[{"tag_name":"v0.2.1","name":"v0.2.1","published_at":"2026-07-01T00:00:00Z","html_url":"https://git.eden-emu.dev/eden-emu/eden/releases/tag/v0.2.1","draft":false,"prerelease":false,"assets":[""" +
+                        listOf("Eden-Linux-amd64-clang-pgo.AppImage.zsync", "Eden-Linux-v0.2.1-amd64-clang-pgo.AppImage", "Eden-Linux-v0.2.1-amd64-gcc-standard.AppImage", "Eden-Linux-v0.2.1-steamdeck-clang-pgo.AppImage", "Eden-Linux-v0.2.1-legacy-clang-pgo.AppImage")
+                            .joinToString(",") { """{"name":"$it","browser_download_url":"https://stable.eden-emu.dev/v0.2.1/$it","size":0}""" } + "]}]",
+                    HttpStatusCode.OK, json,
+                )
+                request.url.host == "stable.eden-emu.dev" -> respond("binary of ${url.substringAfterLast('/')}", HttpStatusCode.OK)
+                url.startsWith("https://flathub.org/api/v2/appstream/org.mamedev.MAME") ->
+                    respond("""{"name":"MAME","releases":[{"version":"0.289","type":"stable"}]}""", HttpStatusCode.OK, json)
                 url.startsWith("https://api.github.com/repos/someone/library/releases") ->
                     respond(release("someone/library", "library-src.tar.gz", "library_2.0_amd64.deb"), HttpStatusCode.OK, json)
                 request.url.host == "github.com" && "/releases/download/" in url -> respond("binary of ${url.substringAfterLast('/')}", HttpStatusCode.OK)
@@ -158,7 +171,10 @@ class DesktopStoreTest {
         assertTrue(ops.state.value.desktop)
         val duck = catalogue.apps.single { it.key == "duckstation" }
         assertEquals(Availability.INSTALLABLE, duck.availability)
-        assertEquals(Availability.MANUAL, catalogue.apps.single { it.key == "dolphin" }.availability, "builds on its own site are only linked")
+        // On Linux every emulator is installed by Fuse: Dolphin's AppImage, Eden from its own server, MAME from Flathub.
+        assertEquals(Availability.INSTALLABLE, catalogue.apps.single { it.key == "dolphin" }.availability)
+        assertEquals(Availability.INSTALLABLE, catalogue.apps.single { it.key == "eden" }.availability)
+        assertEquals(Availability.INSTALLABLE, catalogue.apps.single { it.key == "mame" }.availability)
 
         ops.install("duckstation")
         // DuckStation is already on this computer's PATH, so it can show as installed (found, with no
@@ -175,6 +191,34 @@ class DesktopStoreTest {
         // Gone as Fuse's install; the copy on PATH may still be listed as found.
         eventually("removed") { true.takeIf { ops.state.value.installed["duckstation"]?.record == null } }
         assertFalse(placed.exists())
+    }
+
+    @Test
+    fun edenComesFromItsOwnServerInItsBuildForThisComputer(): Unit = runBlocking {
+        val (services, installer) = services()
+        installer.handheld = "steamdeck"
+        val store = createFuseStore(services, scope)
+        val ops = store.appStore
+        ops.open()
+        eventually("catalogue") { ops.state.value.catalogue }
+        ops.install("eden")
+        val installed = eventually("installed") { ops.state.value.installed["eden"]?.takeIf { it.record != null } }
+        assertEquals("v0.2.1", installed.versionName)
+        // A Steam Deck takes Eden's build for the Deck.
+        assertTrue(File(installer.apps, "Eden-Linux-v0.2.1-steamdeck-clang-pgo.AppImage").isFile)
+    }
+
+    @Test
+    fun aProgramWithNoBuildOfItsOwnComesFromFlathub(): Unit = runBlocking {
+        val (services, installer) = services()
+        val store = createFuseStore(services, scope)
+        val ops = store.appStore
+        ops.open()
+        eventually("catalogue") { ops.state.value.catalogue }
+        ops.install("mame")
+        eventually("flatpak") { installer.flatpaks.takeIf { "org.mamedev.MAME" in it } }
+        eventually("done") { true.takeIf { ops.state.value.jobs["mame"] == null } }
+        Unit
     }
 
     @Test

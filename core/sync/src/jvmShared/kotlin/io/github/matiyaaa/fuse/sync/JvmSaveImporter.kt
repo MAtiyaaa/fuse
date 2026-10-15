@@ -13,7 +13,8 @@ import java.util.zip.CRC32
  */
 class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits()) {
     data class Limits(val files: Int = 32_000, val bytes: Long = 1024L * 1024 * 1024, val fileBytes: Long = 256L * 1024 * 1024)
-    internal data class Binding(val query: SaveQuery, val spot: SaveSpot, val files: Map<String, File>)
+    /** [part]: the part of a Switch save the files are; the rest stays as the owner has it (see [SyncDevice.importSave]). */
+    internal data class Binding(val query: SaveQuery, val spot: SaveSpot, val files: Map<String, File>, val part: SavePart = SavePart.WHOLE)
     private data class Session(val plan: SaveImportPlan, val folder: File, val bindings: Map<String, Binding>)
     private val sessions = LinkedHashMap<String, Session>()
 
@@ -28,6 +29,7 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
         val stage = File(dir, id).apply { mkdirs() }
         try {
             val files = stage(source, stage)
+            val switch = switchBackups(source, files)
             val bindings = LinkedHashMap<String, Binding>()
             val entries = LinkedHashMap<String, SaveImportEntry>()
             val used = HashSet<String>()
@@ -37,6 +39,10 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
                 val spots = SaveAdapters.forEmulator(q.emulatorId)?.locate(q, env).orEmpty()
                     .filter { it.available && it.kind != SaveKind.STATE }
                 for ((spotIndex, spot) in spots.withIndex()) {
+                    if (spot.format == "switch.savedata" && switch.isNotEmpty()) {
+                        addSwitch(entries, bindings, used, q, spot, spotIndex, switch, files, env)
+                        continue
+                    }
                     if (spot.root != null) {
                         val serial = q.serial?.filter { it.isLetterOrDigit() }?.lowercase()
                         val roots = files.keys.flatMap { path ->
@@ -121,7 +127,7 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
                     }
                 }
             }
-            val plan = SaveImportPlan(id, source.name, entries.values.toList(), files.keys.filterNot { it in used }, files.values.sumOf { it.length() })
+            val plan = SaveImportPlan(id, source.name, newestFirst(entries.values.toList()), files.keys.filterNot { it in used }, files.values.sumOf { it.length() })
             sessions[id] = Session(plan, stage, bindings)
             return plan
         } catch (e: Exception) {
@@ -131,7 +137,8 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
     }
 
     private fun add(entries: MutableMap<String, SaveImportEntry>, bindings: MutableMap<String, Binding>, used: MutableSet<String>, source: String,
-        format: String, query: SaveQuery, spot: SaveSpot, mapped: Map<String, File>, original: Set<String>, confidence: SaveImportConfidence, index: Int) {
+        format: String, query: SaveQuery, spot: SaveSpot, mapped: Map<String, File>, original: Set<String>, confidence: SaveImportConfidence, index: Int,
+        switch: SwitchSource? = null, part: SavePart = SavePart.WHOLE) {
         if (mapped.isEmpty() || mapped.keys.any { !SavePath.isSafe(it) }) return
         val key = "$source|$format"
         val targetId = "$key|${query.game.id}|${query.emulatorId}|$index"
@@ -139,9 +146,9 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
         val old = entries[key]
         val targets = old?.targets.orEmpty() + target
         val confident = targets.filter { it.confidence != SaveImportConfidence.MANUAL }
-        entries[key] = SaveImportEntry(key, source.ifEmpty { "Selected save folder" }, format, mapped.values.sumOf { it.length() }, targets,
-            selectedTarget = confident.singleOrNull()?.id)
-        bindings[targetId] = Binding(query, spot, mapped)
+        entries[key] = SaveImportEntry(key, switch?.backup ?: source.ifEmpty { "Selected save folder" }, format, mapped.values.sumOf { it.length() }, targets,
+            selectedTarget = confident.singleOrNull()?.id, switch = switch ?: old?.switch)
+        bindings[targetId] = Binding(query, spot, mapped, part)
         // Unknown names remain visible for manual selection, but are still understood save bytes.
         used += original
     }
@@ -222,28 +229,104 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
                 d == source || !SaveNoise.folder(d.name)
             }.forEach { f ->
                 require(!Files.isSymbolicLink(f.toPath())) { "Symbolic links are not imported" }
-                if (f.isFile && !SaveNoise.file(f.name)) copy(f.relativeTo(source).path.replace(File.separatorChar, '/'), f.length(), input = f::inputStream)
+                val rel = f.relativeTo(source).path.replace(File.separatorChar, '/')
+                if (f.isFile && f.extension.equals("zip", true) && jksvZip(f)) {
+                    // A JKSV backup kept as a ZIP beside others: its files, in a folder of its name.
+                    // The same backup also kept unzipped beside it is one backup, read from the folder.
+                    if (!File(f.parentFile, f.nameWithoutExtension).isDirectory) ZipFile(f).use { zip ->
+                        unzip(zip, rel.removeSuffix(".zip").removeSuffix(".ZIP") + "/", names, ::copy, strip = wrapperOf(zip))
+                    }
+                } else if (f.isFile && (f.name == SwitchDumps.META || !SaveNoise.file(f.name))) copy(rel, f.length(), input = f::inputStream)
             }
         } else if (source.extension.equals("zip", true)) {
-            ZipFile(source).use { zip ->
-                val entries = zip.entries()
-                var allEntries = 0
-                while (entries.hasMoreElements()) {
-                    require(++allEntries <= limits.files) { "The archive has too many entries" }
-                    val entry = entries.nextElement()
-                    val name = entry.name.removeSuffix("/")
-                    require(SavePath.isSafe(name)) { "The archive contains an unsafe path" }
-                    if (entry.isDirectory) {
-                        require(names.add(name.lowercase())) { "The archive contains duplicate paths" }
-                    } else copy(entry.name, entry.size, entry.crc) { zip.getInputStream(entry) }
-                }
-            }
+            ZipFile(source).use { zip -> unzip(zip, "", names, ::copy) }
         } else {
             require(source.isFile) { "Choose a save file, folder or ZIP" }
             copy(source.name, source.length(), input = source::inputStream)
         }
         require(out.isNotEmpty()) { "This source contains no readable save files" }
         return out
+    }
+
+    /** Unzips [zip] under [under], leaving out [strip], a folder every entry is in. */
+    private fun unzip(zip: ZipFile, under: String, names: MutableSet<String>, copy: (String, Long, Long?, () -> InputStream) -> Unit, strip: String = "") {
+        val entries = zip.entries()
+        var allEntries = 0
+        while (entries.hasMoreElements()) {
+            require(++allEntries <= limits.files) { "The archive has too many entries" }
+            val entry = entries.nextElement()
+            val inside = entry.name.removePrefix(strip)
+            if (inside.isEmpty() || inside == "/") continue
+            val name = under + inside.removeSuffix("/")
+            require(SavePath.isSafe(name)) { "The archive contains an unsafe path" }
+            if (entry.isDirectory) {
+                require(names.add(name.lowercase())) { "The archive contains duplicate paths" }
+            } else copy(under + inside, entry.size, entry.crc) { zip.getInputStream(entry) }
+        }
+    }
+
+    /**
+     * The one folder (with its `/`) that holds a backup zipped with its folder: everything in [zip] is
+     * in it, JKSV's meta file too. Else "" (a save's own single folder is never taken for one).
+     */
+    private fun wrapperOf(zip: ZipFile): String {
+        if (zip.getEntry(SwitchDumps.META) != null) return ""
+        val top = zip.entries().asSequence().map { it.name.substringBefore('/', "") }.toSet().singleOrNull()?.takeIf { it.isNotEmpty() } ?: return ""
+        return if (zip.getEntry("$top/${SwitchDumps.META}") != null) "$top/" else ""
+    }
+
+    /**
+     * A ZIP of a Switch backup: JKSV's meta file at its top or in the one folder it holds, or any ZIP
+     * in a game's folder of JKSV's (`JKSV/<game>/<backup>.zip`, older versions wrote no meta file).
+     */
+    private fun jksvZip(f: File): Boolean = runCatching {
+        ZipFile(f).use { it.getEntry(SwitchDumps.META) != null || wrapperOf(it).isNotEmpty() }
+    }.getOrDefault(false) || underJksv(f)
+
+    private fun underJksv(f: File): Boolean {
+        val home = f.absoluteFile.parentFile?.parentFile ?: return false
+        return home.name.equals("JKSV", true) || home.name.equals("Saves", true) && home.parentFile?.name.equals("JKSV", true)
+    }
+
+    /** The Switch backups among [files], with where the source was so a game or backup folder chosen on its own is recognised. */
+    private fun switchBackups(source: File, files: Map<String, File>): List<SwitchDumps.Backup> {
+        val above = generateSequence(source.absoluteFile.parentFile) { it.parentFile }.take(3).mapNotNull { it.name.ifEmpty { null } }.toList().reversed() +
+            (if (source.isFile) source.nameWithoutExtension else source.name)
+        return SwitchDumps.backups(files.keys, above) { p -> files[p]?.takeIf { it.length() <= 4096 }?.readBytes() }
+    }
+
+    /**
+     * One entry per Switch backup of this game. A backup holds one part of a save (the account's,
+     * or the device's); the game's other part is the owner's own, added when the import knows whose
+     * it is ([SavePart]), never read here from whoever's save is in the folder now.
+     */
+    private fun addSwitch(entries: MutableMap<String, SaveImportEntry>, bindings: MutableMap<String, Binding>, used: MutableSet<String>,
+        q: SaveQuery, spot: SaveSpot, index: Int, backups: List<SwitchDumps.Backup>, files: Map<String, File>, env: SaveEnvironment) {
+        val id = SwitchIds.of(q, env)
+        for (b in backups) {
+            if (b.kind == SwitchDumps.Kind.OTHER) continue
+            val confidence = when {
+                b.titleId != null -> if (id != null && SwitchIds.program(b.titleId.uppercase()) == id.uppercase()) SaveImportConfidence.TITLE_ID else continue
+                b.game != null && (TitleMatch.same(b.game, q.title) || TitleMatch.same(b.game, SaveAdapters.stem(q.romPath))) -> SaveImportConfidence.EXACT_NAME
+                else -> continue
+            }
+            val prefix = if (b.root.isEmpty()) "" else b.root + "/"
+            val device = b.kind == SwitchDumps.Kind.DEVICE
+            if (device && SwitchNand.DEVICE !in spot.mounts) continue
+            val own = b.files.associate { f -> (if (device) "${SwitchNand.DEVICE}/$f" else f) to files.getValue(prefix + f) }
+            add(entries, bindings, used, b.root, "switch.savedata", q, spot, own, b.files.map { prefix + it }.toSet() + (prefix + SwitchDumps.META), confidence, index,
+                SwitchSource(b.tool.name, b.name, b.user, SwitchDumps.order(b).takeIf { it > 0 }, b.titleId, b.game, device),
+                if (device) SavePart.SWITCH_DEVICE else SavePart.SWITCH_ACCOUNT)
+        }
+    }
+
+    /** Of several backups of one game's save by one Switch user, the newest is chosen; the others wait to be picked. */
+    private fun newestFirst(list: List<SaveImportEntry>): List<SaveImportEntry> {
+        val switch = list.filter { it.switch != null && it.selectedTarget != null }
+        val newest = switch.groupBy { e -> e.targets.first { it.id == e.selectedTarget }.query.game.id + "|" + e.switch!!.device + "|" + e.switch!!.user.orEmpty().lowercase() }
+            .values.map { group -> group.maxBy { it.switch!!.savedAt ?: 0L }.id }.toSet()
+        return list.map { e -> if (e in switch && e.id !in newest) e.copy(selectedTarget = null) else e }
+            .sortedWith(compareBy<SaveImportEntry> { it.switch == null }.thenByDescending { it.switch?.savedAt ?: 0L })
     }
 
     private companion object {

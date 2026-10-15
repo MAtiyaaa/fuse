@@ -129,7 +129,22 @@ internal data class DeviceState(
     val learned: Map<String, List<String>> = emptyMap(),
     /** Newer saves the host has that didn't come down yet, keyed `profile|game|kind` ([Awaited]). */
     val awaiting: Map<String, Awaited> = emptyMap(),
+    /** Each person's saves from before imports replaced them, newest last, keyed `profile|game|kind` ([ImportBackup]). */
+    val importBackups: Map<String, List<ImportBackup>> = emptyMap(),
 )
+
+/**
+ * A save as it was before an import (or an undo) replaced it, kept on this device by content, so it
+ * can be put back without a host: [at] in milliseconds, [title] the game's.
+ */
+@Serializable
+data class ImportBackup(val id: String, val at: Long, val manifest: SaveManifest, val title: String = "")
+
+/** The part of a save an import brings: all of it, or one part of a Switch save (the other stays the owner's). */
+enum class SavePart { WHOLE, SWITCH_ACCOUNT, SWITCH_DEVICE }
+
+/** How many backups from before imports each save keeps on a device. */
+internal const val KEEP_IMPORT_BACKUPS = 5
 
 /** How urgent a transfer is: the save for a game about to start goes before everything else. */
 enum class Priority(val rank: Int) { LAUNCH(0), PROFILE(1), SAVE(2), RECORDS(3), ARTWORK(4), GAME_FILES(5) }
@@ -312,40 +327,86 @@ class SyncDevice(
     }
 
     /**
-     * An explicit import is a normal child revision, with Imported provenance. Existing bytes are
-     * kept under their actual holder before replacement. Both safety history and the new revision
-     * survive restart in the existing outbox, and conflicts still use parent revisions.
+     * Imports one save for [owners] (each gets their own copy), touching no one else's. The
+     * emulator's folder is written only for the person whose save is in it now, or when no one's
+     * is; then [active] (else the last owner) gets it there. While someone else's save is in the
+     * folder, the import is set aside for each owner ([importSaveParked]) and goes into place at
+     * their next launch ([handover]), so the person whose save is in the folder keeps it exactly.
      */
-    suspend fun importSave(profile: String, slot: LocalSlot, format: String, files: Map<String, File>, title: String = ""): SaveRevision = mutex.withLock {
+    suspend fun importFor(owners: List<String>, active: String?, slot: LocalSlot, format: String, files: Map<String, File>, title: String = "", part: SavePart = SavePart.WHOLE): List<SaveRevision> {
+        require(owners.isNotEmpty()) { "Choose whose saves these are before importing" }
+        val holder = mutex.withLock { state.holders[slot.key] }
+        val here = if (holder != null) owners.firstOrNull { it == holder } else owners.firstOrNull { it == active } ?: owners.last()
+        val first = here?.let { importSave(it, slot, format, files, title, part) }
+        return listOfNotNull(first) + owners.filter { it != here }.map { importSaveParked(it, slot, format, files, title, part) }
+    }
+
+    /**
+     * An explicit import is a normal child revision, with Imported provenance, written into the
+     * folder for [profile], whose save is in it (or no one's is). What it replaces is kept first:
+     * as a "Before import" revision in their history and as a backup on this device
+     * ([importBackups]) that can be put back without a host. A save in the folder that no one owns,
+     * on a device others keep saves on, is never taken for [profile]'s: it is set aside as unowned
+     * ([UNCLAIMED]), as [handover] does. [part] is the part of a Switch save [files] are; the
+     * other part stays as [profile] has it.
+     */
+    suspend fun importSave(profile: String, slot: LocalSlot, format: String, files: Map<String, File>, title: String = "", part: SavePart = SavePart.WHOLE): SaveRevision = mutex.withLock {
         SaveImportTransaction.recover(importJournal) { id -> state.outbox.any { it.revision?.id == id } }
         require(profile.isNotBlank() && slot.available) { "Choose a profile and an available save destination" }
-        require(SaveSlotFormats.compatible(format, slot.format)) { "This save format is not compatible with the selected emulator" }
-        require(files.isNotEmpty() && files.keys.all(SavePath::isSafe)) { "This save has no safe files" }
-        val source = SaveManifest(format, files.map { (name, f) ->
-            require(f.isFile) { "The imported save is no longer available" }
-            SaveFile(name, f.inputStream().use { store.put(it) }, f.length())
-        }.sortedBy { it.path })
-        val incoming = inSlotFormat(slot, source)
+        val holder = state.holders[slot.key]
+        require(holder == null || holder == profile) { "Someone else's save is in this game's folder; the import is set aside for this profile instead" }
+        val (current, _) = fingerprintOf(slot)
+        val unowned = holder == null && current.files.isNotEmpty() && (saveKeepers() - profile).isNotEmpty()
+        val own = (if (unowned) null else current.takeIf { it.files.isNotEmpty() }) ?: state.parked[keyOf(profile, slot)]
+        putInFolder(profile, slot, withRest(imported(slot, format, files), part, own), title, "Imported", unowned)
+    }
+
+    /**
+     * The same imported save for [profile], while [slot]'s folder holds someone else's: an Imported
+     * revision of [profile]'s, and the save set aside for them on this device, so it is in the
+     * folder when they play here, even offline. What they had set aside is kept first, in their
+     * history and as a backup on this device ([importBackups]).
+     */
+    suspend fun importSaveParked(profile: String, slot: LocalSlot, format: String, files: Map<String, File>, title: String = "", part: SavePart = SavePart.WHOLE): SaveRevision = mutex.withLock {
+        require(profile.isNotBlank() && slot.available) { "Choose a profile and an available save destination" }
+        require(state.holders[slot.key] != profile) { "This save's folder is already this profile's" }
+        setAside(profile, slot, withRest(imported(slot, format, files), part, state.parked[keyOf(profile, slot)]), title, "Imported")
+    }
+
+    /** [incoming] (in the store) written into [slot]'s folder for [profile]; see [importSave]. Under [mutex]. */
+    private fun putInFolder(profile: String, slot: LocalSlot, incoming: SaveManifest, title: String, provenance: String, unowned: Boolean = false): SaveRevision {
         val (current, hashed) = fingerprintOf(slot)
-        val holder = state.holders[slot.key] ?: profile
         val waiting = state.outbox.lastOrNull { it.revision?.let { r -> r.profile == profile && r.game == slot.game.id && r.kind == slot.kind && r.canBeNewest } == true }?.revision
         val revision = SaveRevision(SyncCrypto.token(12), profile, slot.game.id, slot.kind,
             waiting?.id ?: state.slots[keyOf(profile, slot)]?.base, deviceId, deviceName, hlc.now(), incoming,
-            playSeconds = meta(profile).game(slot.game).totalSeconds, title = title, provenance = "Imported")
+            playSeconds = meta(profile).game(slot.game).totalSeconds, title = title, provenance = provenance)
         if (current.files.isNotEmpty() && current.fingerprint != incoming.fingerprint) {
             for ((lf, h) in hashed) if (!store.has(h)) lf.file.inputStream().use { store.put(it, expected = h) }
-            val kept = SaveRevision(SyncCrypto.token(12), holder, slot.game.id, slot.kind,
-                state.slots[keyOf(holder, slot)]?.base, deviceId, deviceName, hlc.now(), current,
+            state = if (unowned) {
+                // Not anyone's to replace: set aside for whoever claims it, an older unowned one kept as a backup.
+                val before = state.parked[keyOf(UNCLAIMED, slot)]?.takeIf { it.fingerprint != current.fingerprint }
+                (before?.let { state.backedUp(UNCLAIMED, slot, it, title) } ?: state).backedUp(UNCLAIMED, slot, current, title)
+                    .let { it.copy(parked = it.parked + (keyOf(UNCLAIMED, slot) to current)) }
+            } else {
+                val kept = SaveRevision(SyncCrypto.token(12), profile, slot.game.id, slot.kind,
+                    state.slots[keyOf(profile, slot)]?.base, deviceId, deviceName, hlc.now(), current,
+                    reason = RevisionReason.BEFORE_RESTORE, title = title, provenance = "Before import")
+                state.backedUp(profile, slot, current, title).let { it.copy(outbox = it.outbox + Outgoing(kept.id, Priority.SAVE.rank, profile, kept)) }
+            }
+            persist()
+        }
+        // Theirs set aside here is replaced too: kept in their history and as a backup first.
+        state.parked[keyOf(profile, slot)]?.takeIf { it.files.isNotEmpty() && it.fingerprint != incoming.fingerprint && it.fingerprint != current.fingerprint }?.let { theirs ->
+            val kept = SaveRevision(SyncCrypto.token(12), profile, slot.game.id, slot.kind, state.slots[keyOf(profile, slot)]?.base, deviceId, deviceName, hlc.now(), theirs,
                 reason = RevisionReason.BEFORE_RESTORE, title = title, provenance = "Before import")
-            state = state.copy(outbox = state.outbox + Outgoing(kept.id, Priority.SAVE.rank, holder, kept),
-                parked = if (holder != profile) state.parked + (keyOf(holder, slot) to current) else state.parked)
+            state = state.backedUp(profile, slot, theirs, title).let { it.copy(outbox = it.outbox + Outgoing(kept.id, Priority.SAVE.rank, profile, kept)) }
             persist()
         }
         val beforeImport = state
         SaveImportTransaction.write(slot, incoming, store, journal = importJournal, revision = revision.id, expectedOriginal = current, commit = {
             slot.sink?.invoke()
             state = state.copy(outbox = state.outbox + Outgoing(revision.id, Priority.SAVE.rank, profile, revision),
-                holders = state.holders + (slot.key to profile))
+                holders = state.holders + (slot.key to profile), parked = state.parked - keyOf(profile, slot))
             try {
                 persist()
             } catch (e: Exception) {
@@ -354,7 +415,92 @@ class SyncDevice(
                 throw e
             }
         })
-        revision
+        return revision
+    }
+
+    /** [incoming] (in the store) set aside for [profile], whose save isn't in the folder; see [importSaveParked]. Under [mutex]. */
+    private fun setAside(profile: String, slot: LocalSlot, incoming: SaveManifest, title: String, provenance: String): SaveRevision {
+        var next = state
+        next.parked[keyOf(profile, slot)]?.takeIf { it.files.isNotEmpty() && it.fingerprint != incoming.fingerprint }?.let { theirs ->
+            val kept = SaveRevision(SyncCrypto.token(12), profile, slot.game.id, slot.kind, next.slots[keyOf(profile, slot)]?.base, deviceId, deviceName, hlc.now(), theirs,
+                reason = RevisionReason.BEFORE_RESTORE, title = title, provenance = "Before import")
+            next = next.backedUp(profile, slot, theirs, title).let { it.copy(outbox = it.outbox + Outgoing(kept.id, Priority.SAVE.rank, profile, kept)) }
+        }
+        val waiting = next.outbox.lastOrNull { it.revision?.let { r -> r.profile == profile && r.game == slot.game.id && r.kind == slot.kind && r.canBeNewest } == true }?.revision
+        val revision = SaveRevision(SyncCrypto.token(12), profile, slot.game.id, slot.kind,
+            waiting?.id ?: next.slots[keyOf(profile, slot)]?.base, deviceId, deviceName, hlc.now(), incoming,
+            playSeconds = meta(profile).game(slot.game).totalSeconds, title = title, provenance = provenance)
+        state = next.copy(outbox = next.outbox + Outgoing(revision.id, Priority.SAVE.rank, profile, revision),
+            parked = next.parked + (keyOf(profile, slot) to incoming))
+        persist()
+        return revision
+    }
+
+    /**
+     * [incoming], one part of a Switch save, made whole with the other part of [own] (the owner's
+     * own save): an account backup keeps their device save, a device backup their account save.
+     */
+    private fun withRest(incoming: SaveManifest, part: SavePart, own: SaveManifest?): SaveManifest {
+        if (part == SavePart.WHOLE || own == null) return incoming
+        val device = "${SwitchNand.DEVICE}/"
+        val other: (String) -> Boolean = if (part == SavePart.SWITCH_DEVICE) { p -> !p.startsWith(device) } else { p -> p.startsWith(device) }
+        val rest = own.files.filter { other(it.path) && store.has(it.hash) && incoming.files.none { f -> f.path == it.path } }
+        if (rest.isEmpty()) return incoming
+        return incoming.copy(files = (incoming.files + rest).sortedBy { it.path }, folders = (incoming.folders + own.folders.filter(other)).distinct().sorted())
+    }
+
+    /** [manifest] kept as a backup of [profile]'s save from before an import or undo, the newest few for each save. */
+    private fun DeviceState.backedUp(profile: String, slot: LocalSlot, manifest: SaveManifest, title: String): DeviceState {
+        val key = keyOf(profile, slot)
+        val list = (importBackups[key].orEmpty() + ImportBackup(SyncCrypto.token(12), clock(), manifest, title)).takeLast(KEEP_IMPORT_BACKUPS)
+        return copy(importBackups = importBackups + (key to list))
+    }
+
+    /** The saves of [profile]'s kept on this device from before imports into [slot], newest first. */
+    fun importBackups(profile: String, slot: LocalSlot): List<ImportBackup> = state.importBackups[keyOf(profile, slot)].orEmpty().reversed()
+
+    /**
+     * Puts [profile]'s backup [id] (see [importBackups]) back, with no host needed: into the folder
+     * when their save is in it (or no one's is), else set aside for their next launch. What it
+     * replaces is kept as a backup first, so an undo can be undone.
+     */
+    suspend fun restoreImportBackup(profile: String, slot: LocalSlot, id: String): SaveRevision = mutex.withLock {
+        SaveImportTransaction.recover(importJournal) { r -> state.outbox.any { it.revision?.id == r } }
+        require(slot.available) { "The save's folder isn't available" }
+        val backup = state.importBackups[keyOf(profile, slot)]?.firstOrNull { it.id == id } ?: error("That backup is gone")
+        require(backup.manifest.files.all { store.has(it.hash) }) { "That backup's files are gone" }
+        val holder = state.holders[slot.key]
+        if (holder == profile || holder == null && (saveKeepers() - profile).isEmpty()) putInFolder(profile, slot, backup.manifest, backup.title, "Restored from before import")
+        else setAside(profile, slot, backup.manifest, backup.title, "Restored from before import")
+    }
+
+    /**
+     * Whether [profile] already has a save of [slot]'s game here, and where: in the emulator's
+     * folder, set aside on this device, waiting to go to the host, or agreed with the host.
+     */
+    fun existingSave(profile: String, slot: LocalSlot): ExistingSave? {
+        val s = state
+        val holder = s.holders[slot.key]
+        val inFolder = if (slot.available) slot.files.filter { it.file.isFile } else emptyList()
+        if (inFolder.isNotEmpty() && (holder == profile || holder == null && (saveKeepers() - profile).isEmpty()))
+            return ExistingSave(ExistingSave.Where.IN_FOLDER, inFolder.maxOf { it.file.lastModified() })
+        if (s.parked[keyOf(profile, slot)]?.files?.isNotEmpty() == true) return ExistingSave(ExistingSave.Where.SET_ASIDE, null)
+        s.outbox.lastOrNull { it.revision?.let { r -> r.profile == profile && r.game == slot.game.id && r.kind == slot.kind && r.canBeNewest } == true }?.revision?.let {
+            return ExistingSave(ExistingSave.Where.WAITING, it.at.millis)
+        }
+        if (s.slots[keyOf(profile, slot)]?.base != null) return ExistingSave(ExistingSave.Where.SYNCED, null)
+        return null
+    }
+
+    /** An imported save's files, put in the store, in [slot]'s own format. */
+    private fun imported(slot: LocalSlot, format: String, files: Map<String, File>): SaveManifest {
+        require(SaveSlotFormats.compatible(format, slot.format)) { "This save format is not compatible with the selected emulator" }
+        require(files.isNotEmpty() && files.keys.all(SavePath::isSafe)) { "This save has no safe files" }
+        val source = SaveManifest(format, files.map { (name, f) ->
+            require(f.isFile) { "The imported save is no longer available" }
+            SaveFile(name, f.inputStream().use { store.put(it) }, f.length())
+        }.sortedBy { it.path })
+        return inSlotFormat(slot, source)
     }
 
     /**
@@ -636,6 +782,7 @@ class SyncDevice(
         val used = HashSet<String>()
         state.outbox.forEach { o -> o.revision?.manifest?.files?.forEach { used += it.hash } }
         state.parked.values.forEach { m -> m.files.forEach { used += it.hash } }
+        state.importBackups.values.forEach { list -> list.forEach { b -> b.manifest.files.forEach { used += it.hash } } }
         store.collect(used)
     }
 

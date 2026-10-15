@@ -21,6 +21,7 @@ javacpp = "1.5.14"
 junit = "4.13.2"
 jlayer = "1.0.1"
 concentus = "1.0.2"
+commons-compress = "1.28.0"
 pdfbox = "3.0.4"
 jamepad = "2.30.0.0"
 
@@ -89,6 +90,7 @@ javacpp = { module = "org.bytedeco:javacpp", version.ref = "javacpp" }
 junit = { module = "junit:junit", version.ref = "junit" }
 jlayer = { module = "javazoom:jlayer", version.ref = "jlayer" }
 concentus = { module = "io.github.jaredmdobson:concentus", version.ref = "concentus" }
+commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commons-compress" }
 pdfbox = { module = "org.apache.pdfbox:pdfbox", version.ref = "pdfbox" }
 jamepad = { module = "com.badlogicgames.jamepad:jamepad", version.ref = "jamepad" }
 

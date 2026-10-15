@@ -20,6 +20,12 @@ object Dithering {
     /** Asks the platform to dither what [Paint] draws (its gradients), where it can. */
     @Volatile var gradients: ((Paint) -> Unit)? = null
 
+    /**
+     * As [gradients], for a drawing made under a scale (screen pixels per unit, each way), so its
+     * noise is still one screen pixel fine: a glow drawn as a small circle and scaled up.
+     */
+    @Volatile var scaledGradients: ((Paint, Float, Float) -> Unit)? = null
+
     /** A copy of a picture with about one 8-bit step of signed noise in it, or the picture itself. */
     @Volatile var pictures: ((ImageBitmap) -> ImageBitmap)? = null
 
@@ -32,14 +38,30 @@ object Dithering {
     fun picture(image: ImageBitmap): ImageBitmap = pictures?.let { runCatching { it(image) }.getOrNull() } ?: image
 }
 
-/** [brush] over the whole scope, dithered where the platform can ([Dithering.gradients]). */
-fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDitheredRect(brush: androidx.compose.ui.graphics.Brush, alpha: Float = 1f) {
-    val dither = Dithering.gradients ?: return drawRect(brush, alpha = alpha)
+/** [brush] over the whole scope (or [size] at [topLeft], as `drawRect`), dithered where the platform can ([Dithering.gradients]). */
+fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDitheredRect(
+    brush: androidx.compose.ui.graphics.Brush,
+    alpha: Float = 1f,
+    topLeft: androidx.compose.ui.geometry.Offset = androidx.compose.ui.geometry.Offset.Zero,
+    size: androidx.compose.ui.geometry.Size = this.size.let { androidx.compose.ui.geometry.Size(it.width - topLeft.x, it.height - topLeft.y) },
+) {
+    val dither = Dithering.gradients ?: return drawRect(brush, topLeft = topLeft, size = size, alpha = alpha)
     drawIntoCanvas { canvas ->
         val paint = Paint()
         brush.applyTo(size, paint, alpha)
         dither(paint)
-        canvas.drawRect(0f, 0f, size.width, size.height, paint)
+        canvas.drawRect(topLeft.x, topLeft.y, topLeft.x + size.width, topLeft.y + size.height, paint)
+    }
+}
+
+/** [path] filled with [brush], as `drawPath`, dithered where the platform can ([Dithering.gradients]). */
+fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDitheredPath(path: androidx.compose.ui.graphics.Path, brush: androidx.compose.ui.graphics.Brush, alpha: Float = 1f) {
+    val dither = Dithering.gradients ?: return drawPath(path, brush, alpha = alpha)
+    drawIntoCanvas { canvas ->
+        val paint = Paint()
+        brush.applyTo(size, paint, alpha)
+        dither(paint)
+        canvas.drawPath(path, paint)
     }
 }
 
@@ -49,8 +71,13 @@ fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDitheredCircle(
     radius: Float,
     center: androidx.compose.ui.geometry.Offset,
     alpha: Float = 1f,
+    /** Screen pixels per unit of this drawing, each way, when it is drawn under a scale. */
+    scaleX: Float = 1f,
+    scaleY: Float = 1f,
 ) {
-    val dither = Dithering.gradients ?: return drawCircle(brush, radius = radius, center = center, alpha = alpha)
+    val scaled = Dithering.scaledGradients.takeIf { scaleX != 1f || scaleY != 1f }
+    val dither: (Paint) -> Unit = scaled?.let { s -> { p: Paint -> s(p, scaleX, scaleY) } }
+        ?: Dithering.gradients ?: return drawCircle(brush, radius = radius, center = center, alpha = alpha)
     drawIntoCanvas { canvas ->
         val paint = Paint()
         brush.applyTo(androidx.compose.ui.geometry.Size(radius * 2, radius * 2), paint, alpha)

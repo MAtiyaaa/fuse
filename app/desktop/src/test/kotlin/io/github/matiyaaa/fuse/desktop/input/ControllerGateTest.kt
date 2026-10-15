@@ -53,4 +53,23 @@ class ControllerGateTest {
         gate.steamGame = false
         assertTrue(gate.admits())
     }
+
+    @Test
+    fun afterAGameOnADesktopThePressBringsFuseBack() {
+        var now = 0L
+        val gate = ControllerGate(gameMode = false) { now }
+        gate.playing = true
+        assertFalse(gate.admits())
+        // The game closed and the window manager kept the focus from Fuse: a press is Fuse's, and asks for the focus.
+        gate.gameEnded()
+        assertTrue(gate.admits())
+        assertTrue(gate.reclaims())
+        // Once Fuse has the focus, or a while later, it is the front window's again.
+        now += ControllerGate.RETURN_MS + 1
+        assertFalse(gate.admits())
+        gate.gameEnded()
+        gate.focused = true
+        gate.focused = false
+        assertFalse(gate.admits())
+    }
 }

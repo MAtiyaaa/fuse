@@ -353,6 +353,7 @@ internal class AuditPlatform(
 
     override val storage: io.github.matiyaaa.fuse.ui.shell.platform.StorageAccess = object : io.github.matiyaaa.fuse.ui.shell.platform.StorageAccess by ScreenshotPlatform.storage {
         override suspend fun pickFile(title: String, label: String, extensions: List<String>): String? = ownCheats.absolutePath
+        override suspend fun pickFolder(title: String): String? = "/media/sd/JKSV"
     }
 
     /** What the file picker hands back next (a backup to restore); null is a cancelled picker. */

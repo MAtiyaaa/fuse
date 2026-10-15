@@ -24,23 +24,34 @@ import org.jetbrains.skia.ImageInfo
  */
 internal object DesktopDithering {
     fun install() {
-        Dithering.gradients = ::ditherGradient
+        Dithering.gradients = { ditherGradient(it) }
+        Dithering.scaledGradients = ::ditherGradient
         Dithering.pictures = ::dither
         Dithering.blurs = ::blur
     }
 
     /**
      * Triangular noise of [amp] (in 8-bit steps, each way) added to [content] before it is rounded.
-     * Interleaved gradient noise (Jimenez) by pixel (Compose draws in pixels, so the shader's own
-     * coordinates are the screen's), two samples apart, for an even grain with no pattern; a premultiplied colour stays within its alpha, and transparent stays transparent.
+     * Interleaved gradient noise (Jimenez) by screen pixel, two samples apart, for an even grain
+     * with no pattern; a premultiplied colour stays within its alpha, and transparent stays
+     * transparent. The paint's own [alpha] is applied here, before the noise: left to the paint, it
+     * scaled the noise down with the colour, so a soft light drawn at a tenth (every glow of the
+     * room behind Fuse) got a tenth of a step of noise, and banded as if there were none.
+     *
+     * The shader's coordinates are the drawing's, which a transform stretches: a glow drawn as a
+     * small circle scaled up would have its noise in blocks as large as the scale. [scale] (screen
+     * pixels per unit of the drawing, each way) lays the grain out per screen pixel again. Skia here
+     * has no `sk_FragCoord` for runtime shaders, so the drawing says its own scale.
      */
     internal const val NOISE = """
         uniform shader content;
         uniform float amp;
+        uniform float alpha;
+        uniform float2 scale;
         float ign(float2 p) { return fract(52.9829189 * fract(dot(p, float2(0.06711056, 0.00583715)))); }
         half4 main(float2 coords) {
-            half4 c = content.eval(coords);
-            float2 p = floor(coords);
+            half4 c = content.eval(coords) * half(alpha);
+            float2 p = floor(coords * scale);
             float n = ign(p) + ign(p + float2(47.0, 113.0)) - 1.0;
             c.rgb = clamp(c.rgb + half(n * amp / 255.0), 0.0, c.a);
             return c;
@@ -56,8 +67,11 @@ internal object DesktopDithering {
     /** Steps of noise each way: two on a TV, one on a monitor. */
     internal fun amplitude(): Float = if (io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.largeOutput) 2f else 1f
 
-    /** [paint]'s gradient with noise in it before rounding (see [NOISE]); Skia's ordered dither where that can't be. */
-    fun ditherGradient(paint: androidx.compose.ui.graphics.Paint) {
+    /**
+     * [paint]'s gradient with noise in it before rounding (see [NOISE]), for a drawing at [scaleX] by
+     * [scaleY] screen pixels per unit; Skia's ordered dither where that can't be.
+     */
+    fun ditherGradient(paint: androidx.compose.ui.graphics.Paint, scaleX: Float = 1f, scaleY: Float = 1f) {
         val skia = paint.skiaPaint
         val shader = skia.shader
         val effect = noise
@@ -65,14 +79,23 @@ internal object DesktopDithering {
             skia.isDither = true
             return
         }
+        val alpha = paint.alpha
         val wrapped = runCatching {
             org.jetbrains.skia.RuntimeShaderBuilder(effect).run {
                 child("content", shader)
                 uniform("amp", amplitude())
+                uniform("alpha", alpha)
+                uniform("scale", scaleX.coerceAtLeast(0.001f), scaleY.coerceAtLeast(0.001f))
                 makeShader()
             }
         }.getOrNull()
-        if (wrapped == null) skia.isDither = true else skia.shader = wrapped
+        if (wrapped == null) {
+            skia.isDither = true
+        } else {
+            skia.shader = wrapped
+            // The shader applies it (see [NOISE]).
+            paint.alpha = 1f
+        }
     }
 
     /**

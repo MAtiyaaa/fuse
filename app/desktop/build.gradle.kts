@@ -28,6 +28,7 @@ dependencies {
     // MP3 decoding for menu music (LGPL-2.1-or-later, see THIRD_PARTY_NOTICES.md).
     implementation(libs.jlayer)
     implementation(libs.concentus)
+    implementation(libs.commons.compress)
     // Game manuals (PDF), drawn page by page.
     implementation(libs.pdfbox)
     // Recordings: the FFmpeg program Fuse Player already carries encodes them (see DesktopScreenCapture).

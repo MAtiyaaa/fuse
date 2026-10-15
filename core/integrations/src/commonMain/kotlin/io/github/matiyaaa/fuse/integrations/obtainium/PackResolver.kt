@@ -128,20 +128,120 @@ class PackResolver(
         val owner = repo.groupValues[1]
         val project = repo.groupValues[2].removeSuffix(".git")
         return releases("$apiUrl/repos/$owner/$project/releases?per_page=$PER_PAGE", single = false).flatMap { list ->
+            pickDesktop(list, name, host, arch, pattern, prereleases, "https://github.com/$owner/$project/releases")
+        }
+    }
+
+    /**
+     * The newest release on a Forgejo or Gitea server (Eden publishes on its own), whose release list
+     * has the same shape as GitHub's. No token is sent there: the GitHub token is GitHub's alone.
+     */
+    suspend fun desktopForgejo(
+        repoUrl: String,
+        name: String,
+        host: io.github.matiyaaa.fuse.model.Host,
+        arch: String,
+        pattern: Regex? = null,
+        prereleases: Boolean = false,
+    ): ApiResult<DesktopRelease> {
+        val repo = FORGE.find(repoUrl) ?: return ApiResult.NotConfigured("$name's address isn't a repository Fuse can read.")
+        val (server, owner, project) = repo.destructured
+        return pages.execute {
+            url("https://$server/api/v1/repos/$owner/${project.removeSuffix(".git")}/releases?limit=$PER_PAGE")
+            header("Accept", "application/json")
+        }.flatMap { raw ->
+            when {
+                raw.status == 404 -> ApiResult.HttpError(404, "$name's repository is gone (it may have moved).")
+                else -> pages.failureFor(raw) ?: pages.decode(raw, ListSerializer(GhRelease.serializer()))
+            }
+        }.flatMap { list -> pickDesktop(list, name, host, arch, pattern, prereleases, "https://$server/$owner/$project/releases") }
+    }
+
+    /**
+     * The newest version on a plain download listing (RetroArch's build server, Redream's page): the
+     * links whose last part [pattern] matches, its first group the version; the highest version wins,
+     * and [then] (a path below that link) names the file when the link is a version's folder.
+     */
+    suspend fun desktopListing(
+        pageUrl: String,
+        name: String,
+        host: io.github.matiyaaa.fuse.model.Host,
+        pattern: Regex,
+        then: String? = null,
+    ): ApiResult<DesktopRelease> {
+        if (!HtmlLinks.isHttps(pageUrl)) return ApiResult.NotConfigured("$name's download page isn't a secure (HTTPS) address, so Fuse won't use it.")
+        val (body, at) = when (val r = page(pageUrl, emptyMap())) {
+            is ApiResult.Success -> r.value
+            is ApiResult.Failure -> return r
+        }
+        val newest = HtmlLinks.anchors(body, at).mapNotNull { link ->
+            val last = HtmlLinks.decoded(link.url).substringBefore('?').trimEnd('/').substringAfterLast('/')
+            pattern.find(last)?.groupValues?.getOrNull(1)?.let { v -> link.url to v }
+        }.maxWithOrNull { a, b -> compareVersions(a.second, b.second) }
+            ?: return ApiResult.HttpError(404, "$name's download page has no download Fuse can find right now.")
+        val url = then?.let { newest.first.trimEnd('/') + "/" + it } ?: newest.first
+        if (!HtmlLinks.isHttps(url)) return ApiResult.NotConfigured("$name's download isn't offered over a secure (HTTPS) address, so Fuse won't install it.")
+        val fileName = url.substringBefore('?').substringAfterLast('/')
+        val kind = DesktopAssets.kindOf(fileName, host)
+        return ApiResult.Success(DesktopRelease(newest.second, null, null, null, pageUrl, kind?.let { ReleaseAsset(fileName, url) }, kind))
+    }
+
+    /**
+     * A program Flathub carries, for one with no build of its own to fetch: its newest version, as
+     * Flathub's catalogue says. There is no file: it is installed with Flatpak itself.
+     */
+    suspend fun flathub(appId: String, name: String): ApiResult<DesktopRelease> = pages.execute {
+        url("https://flathub.org/api/v2/appstream/$appId")
+        header("Accept", "application/json")
+    }.flatMap { raw ->
+        when {
+            raw.status == 404 -> ApiResult.HttpError(404, "Flathub no longer has $name.")
+            else -> pages.failureFor(raw) ?: try {
+                val release = kotlinx.serialization.json.Json.parseToJsonElement(raw.body).let { it as? kotlinx.serialization.json.JsonObject }
+                    ?.get("releases")?.let { it as? kotlinx.serialization.json.JsonArray }?.firstOrNull() as? kotlinx.serialization.json.JsonObject
+                val version = (release?.get("version") as? kotlinx.serialization.json.JsonPrimitive)?.content
+                ApiResult.Success(DesktopRelease(version, null, null, null, "https://flathub.org/apps/$appId", null, null))
+            } catch (e: Exception) {
+                ApiResult.InvalidResponse("Flathub's answer about $name couldn't be read.")
+            }
+        }
+    }
+
+    /** Version names compared by their numbers ("1.22.2" after "1.9.0"). */
+    private fun compareVersions(a: String, b: String): Int {
+        val x = a.split('.', '-').map { it.toIntOrNull() ?: 0 }
+        val y = b.split('.', '-').map { it.toIntOrNull() ?: 0 }
+        for (i in 0 until maxOf(x.size, y.size)) {
+            val c = (x.getOrElse(i) { 0 }).compareTo(y.getOrElse(i) { 0 })
+            if (c != 0) return c
+        }
+        return 0
+    }
+
+    private fun pickDesktop(
+        list: List<GhRelease>,
+        name: String,
+        host: io.github.matiyaaa.fuse.model.Host,
+        arch: String,
+        pattern: Regex?,
+        prereleases: Boolean,
+        releasesPage: String,
+    ): ApiResult<DesktopRelease> {
+        run {
             val published = list.filter { !it.draft }.sortedByDescending { it.publishedAt.orEmpty() }
             val stable = published.filter { prereleases || !it.prerelease }.ifEmpty { published }
-            if (stable.isEmpty()) return@flatMap ApiResult.HttpError(404, "$name has no release yet.")
+            if (stable.isEmpty()) return ApiResult.HttpError(404, "$name has no release yet.")
             fun assets(r: GhRelease) = r.assets.map { ReleaseAsset(it.name, it.browserDownloadUrl, it.size.takeIf { s -> s > 0 }, it.digest) }.filter { HtmlLinks.isHttps(it.url) }
             val withFile = stable.firstNotNullOfOrNull { r -> DesktopAssets.pick(assets(r), host, arch, pattern)?.let { r to it } }
             // A newer release without a build for this computer doesn't hide the one before it that has one.
             val (target, file) = withFile ?: (stable.first() to null)
-            ApiResult.Success(
+            return ApiResult.Success(
                 DesktopRelease(
                     version = target.tagName.ifEmpty { target.name.orEmpty() }.ifEmpty { null },
                     title = target.name?.takeIf { it.isNotBlank() },
                     publishedAt = target.publishedAt,
                     notes = target.body?.takeIf { it.isNotBlank() },
-                    pageUrl = target.htmlUrl.takeIf { HtmlLinks.isHttps(it) } ?: "https://github.com/$owner/$project/releases",
+                    pageUrl = target.htmlUrl.takeIf { HtmlLinks.isHttps(it) } ?: releasesPage,
                     file = file,
                     kind = file?.let { DesktopAssets.kindOf(it.name, host) },
                 ),
@@ -279,5 +379,6 @@ class PackResolver(
         private const val MAX_STEPS = 10
         private const val MAX_PAGE_CHARS = 4 * 1024 * 1024
         private val REPO = Regex("^https://github\\.com/([^/\\s]+)/([^/\\s?#]+)")
+        private val FORGE = Regex("^https://([^/\\s]+)/([^/\\s]+)/([^/\\s?#]+)")
     }
 }

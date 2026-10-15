@@ -34,4 +34,16 @@ class ProcessFamilyTest {
         family.awaitRest()
         assertTrue(System.currentTimeMillis() - started < 500)
     }
+
+    @Test
+    fun somethingThatLeftTheFamilyWhileTheGameRanIsNotWaitedFor(): Unit = runBlocking {
+        if (System.getProperty("os.name").lowercase().contains("win")) return@runBlocking
+        // After the handover, the game starts a helper that leaves the family (a daemon) and lives on.
+        val process = ProcessBuilder("sh", "-c", "sleep 0.4; (sleep 4 & sleep 0.3); sleep 0.5").start()
+        val family = DesktopLauncher.ProcessFamily(process, handoverMs = 200, slowPollMs = 20)
+        process.onExit().await()
+        val ended = System.currentTimeMillis()
+        family.awaitRest()
+        assertTrue(System.currentTimeMillis() - ended < 1_500, "the helper was not waited for")
+    }
 }

@@ -553,6 +553,22 @@ interface SyncService {
     /** Removes only the temporary preview data. */
     suspend fun discardSaveImport(plan: SaveImportPlan) {}
 
+    /**
+     * The saves the people in [choices] already have of each chosen game, by entry and then profile:
+     * what importing would replace, for the person to override or skip first.
+     */
+    suspend fun existingSaves(plan: SaveImportPlan, choices: List<SaveImportChoice>, profile: String): Map<String, Map<String, ExistingSave>> = emptyMap()
+
+    /** Switch SD cards plugged in now, with JKSV or Checkpoint backups on them. */
+    suspend fun switchCards(): List<SwitchCard> = emptyList()
+
+    /** [profile]'s saves of a game kept on this device from before imports replaced them, newest first. */
+    suspend fun importBackups(query: SaveQuery, kind: SaveKind, profile: String): List<ImportBackupInfo> = emptyList()
+
+    /** Puts [profile]'s save from before an import back (see [importBackups]); works without a host. */
+    suspend fun restoreImportBackup(query: SaveQuery, kind: SaveKind, profile: String, backup: String): Result<Unit> =
+        Result.failure(UnsupportedOperationException("Save importing isn't available here"))
+
     suspend fun versions(query: SaveQuery, kind: SaveKind): List<SaveVersion>
     suspend fun restore(query: SaveQuery, kind: SaveKind, version: String): Result<Unit>
     suspend fun keepVersion(version: String, keep: Boolean): Result<Unit>

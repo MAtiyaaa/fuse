@@ -43,6 +43,27 @@ internal class DesktopStoreInstaller(
     }
     override val folder: String = root.fusePath
 
+    /** Linux handhelds an emulator may build for, from the firmware's product name (Valve's Jupiter and Galileo, ASUS's ROG Ally). */
+    override val handheld: String? by lazy {
+        if (os != DesktopOs.LINUX) return@lazy null
+        val product = runCatching { File("/sys/class/dmi/id/product_name").readText().trim() }.getOrDefault("")
+        when {
+            product == "Jupiter" || product == "Galileo" -> "steamdeck"
+            product.startsWith("ROG Ally", ignoreCase = true) || product.startsWith("RC71L") || product.startsWith("RC72L") -> "rog-ally"
+            else -> null
+        }
+    }
+
+    /** Flathub's [appId] for this account: Flathub is added for it first when it isn't there yet. */
+    override suspend fun installFlatpak(appId: String, name: String): Unit = withContext(Dispatchers.IO) {
+        if (os != DesktopOs.LINUX || !DesktopLauncher.isFlatpakId(appId)) throw IOException("$name is installed with Flatpak, which is for Linux.")
+        val flatpak = Processes.which("flatpak") ?: throw IOException("Flatpak isn't on this computer, so Fuse can't install $name. Install Flatpak, then try again.")
+        Processes.run(listOf(flatpak, "remote-add", "--user", "--if-not-exists", "flathub", "https://dl.flathub.org/repo/flathub.flatpakrepo"), timeoutMs = 60_000, withErrors = true)
+        val r = Processes.run(listOf(flatpak, "install", "--user", "--noninteractive", "-y", "flathub", appId), timeoutMs = INSTALL_FLATPAK_MS, withErrors = true)
+            ?: throw IOException("Installing $name took too long.")
+        if (r.exitCode != 0) throw IOException("Flatpak couldn't install $name${detail(r)}")
+    }
+
     override suspend fun newDownload(fileName: String): DownloadSink? = withContext(Dispatchers.IO) {
         if (!downloads.isDirectory && !downloads.mkdirs()) return@withContext null
         val safe = fileName.replace(Regex("[^A-Za-z0-9._-]"), "_").take(120)
@@ -63,6 +84,7 @@ internal class DesktopStoreInstaller(
                 DesktopOs.MACOS -> appFromZip(download)
             }
             DesktopAssetKind.DMG -> appFromDiskImage(download)
+            DesktopAssetKind.TAR, DesktopAssetKind.SEVEN_ZIP -> unpackLinux(download, name, kind)
         }
         // An update under a new name ("Emu-1.2.AppImage" after "Emu-1.1.AppImage") leaves no old copy behind.
         if (previous != null && previous != placed.fusePath) {
@@ -230,6 +252,35 @@ internal class DesktopStoreInstaller(
         target
     }
 
+    /**
+     * A tarball or 7-Zip archive (Linux): the AppImage in it, when it holds one, as if it had come
+     * on its own; else the program's folder, whole, in ~/Applications/<name>, its program the
+     * runnable file named like it (or the largest).
+     */
+    private fun unpackLinux(download: File, name: String, kind: DesktopAssetKind): File {
+        val dirName = safeName(name)
+        val staging = File(root, ".$dirName.part").apply { deleteRecursively() }
+        try {
+            LinuxArchives.unpack(download, staging, kind)
+            staging.walkTopDown().filter { it.isFile && it.name.endsWith(".AppImage", ignoreCase = true) }.minByOrNull { it.name.length }?.let { image ->
+                val target = File(root, image.name)
+                Files.move(image.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                if (!target.setExecutable(true, false)) throw IOException("Fuse couldn't make ${target.name} runnable.")
+                return target
+            }
+            // An archive holding one folder (most do) is that folder.
+            val content = staging.listFiles()?.singleOrNull()?.takeIf { it.isDirectory } ?: staging
+            val program = LinuxArchives.programIn(content, name) ?: throw IOException("The download has no program Fuse can start.")
+            val relative = content.toPath().relativize(program.toPath())
+            val target = File(root, dirName)
+            target.deleteRecursively()
+            Files.move(content.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            return target.toPath().resolve(relative).toFile()
+        } finally {
+            staging.deleteRecursively()
+        }
+    }
+
     // Windows
 
     /** Unpacks into ~/Emulators/<name>, whole or not at all, and returns its program. */
@@ -372,6 +423,7 @@ internal class DesktopStoreInstaller(
         const val REMOVE_MS = 180_000L
         /** A Flatpak update downloads from its remote: given longer. */
         const val UPDATE_MS = 900_000L
+        const val INSTALL_FLATPAK_MS = 1_800_000L
 
         /** What sudo says when the password was wrong or missing. */
         val SUDO_REFUSED = listOf("incorrect password", "sorry, try again", "no password was provided", "a password is required", "authentication failure")

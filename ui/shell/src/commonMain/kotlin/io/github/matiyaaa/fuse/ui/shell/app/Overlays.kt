@@ -80,6 +80,7 @@ fun OverlayHost(app: AppState) {
     ChoiceOverlay(app)
     ProblemOverlay(app)
     io.github.matiyaaa.fuse.ui.shell.sync.SaveConflictOverlay(app)
+    io.github.matiyaaa.fuse.ui.shell.sync.SwitchImportOverlay(app)
     io.github.matiyaaa.fuse.ui.shell.stream.StreamProgressOverlay(app)
     TextPreviewOverlay(app)
     ReorderOverlay(app)

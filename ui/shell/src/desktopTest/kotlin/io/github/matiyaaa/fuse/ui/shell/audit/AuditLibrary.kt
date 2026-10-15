@@ -189,6 +189,26 @@ internal object AuditCovers {
 
     fun square(file: File, title: String, color: Long) = draw(file, 512, 512, title, color)
 
+    /** A wide scene for a game's hero art: light, horizon and shapes, no words. */
+    fun hero(file: File, color: Long) {
+        val w = 1920
+        val h = 620
+        val img = BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB)
+        val g = img.createGraphics()
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        val base = Color(color.toInt(), true)
+        g.paint = GradientPaint(0f, 0f, base.brighter().brighter(), 0f, h.toFloat(), base.darker().darker())
+        g.fillRect(0, 0, w, h)
+        g.color = Color(255, 240, 210, 120)
+        g.fill(Ellipse2D.Float(w * 0.62f, h * 0.12f, 220f, 220f))
+        g.color = Color(0, 0, 0, 90)
+        g.fill(java.awt.Polygon(intArrayOf(0, 380, 720, 1100, 1500, 1920, 1920, 0), intArrayOf(470, 300, 420, 260, 400, 330, h, h), 8))
+        g.color = Color(0, 0, 0, 140)
+        g.fill(java.awt.Polygon(intArrayOf(0, 520, 980, 1400, 1920, 1920, 0), intArrayOf(560, 430, 520, 450, 540, h, h), 7))
+        g.dispose()
+        ImageIO.write(img, "png", file)
+    }
+
     private fun draw(file: File, w: Int, h: Int, title: String, color: Long) {
         val img = BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB)
         val g = img.createGraphics()

@@ -139,42 +139,72 @@ internal class DesktopLauncher(
     /**
      * Every process [process] starts, noted while it runs (often at first, when launchers hand
      * over), so they can be waited for once it is gone: after a process exits, the system no longer
-     * says which processes were its children. Helpers that outlive any game by design (a sandbox's
-     * D-Bus proxy, Wine's server, desktop daemons) are left out.
+     * says which processes were its children. Waited for: what was still its descendant when it
+     * ended (a game a launcher started and left running), and what it started in its first
+     * [handoverMs] (a launcher handing a game on as it leaves). Something that left the family on
+     * its own while the game ran is a background helper the game spawned (a crash reporter, a
+     * desktop daemon, Wine's services) and is not waited for: one of those living on kept the play
+     * session open forever, so Fuse never came back after the game closed. Known helpers are
+     * left out by name too.
      */
-    internal class ProcessFamily(private val process: Process, private val clock: () -> Long = System::currentTimeMillis) {
-        private val seen = java.util.concurrent.ConcurrentHashMap<Long, ProcessHandle>()
+    internal class ProcessFamily(
+        private val process: Process,
+        private val clock: () -> Long = System::currentTimeMillis,
+        private val handoverMs: Long = 10_000,
+        private val slowPollMs: Long = 1_000,
+    ) {
+        private class Member(val handle: ProcessHandle, val early: Boolean) { @Volatile var lastSeen = 0L }
+        private val seen = java.util.concurrent.ConcurrentHashMap<Long, Member>()
         @Volatile private var stopped = false
+        @Volatile private var lastPoll = 0L
         private val started = clock()
 
         init {
             Thread({
                 while (!stopped && process.isAlive) {
-                    runCatching { process.descendants().forEach { seen.putIfAbsent(it.pid(), it) } }
+                    val now = clock()
+                    runCatching {
+                        process.descendants().forEach { h -> seen.computeIfAbsent(h.pid()) { Member(h, now - started < handoverMs) }.lastSeen = now }
+                        lastPoll = now
+                    }
                     // Often at first, while launchers hand over; then now and then.
-                    Thread.sleep(if (clock() - started < 10_000) 50 else 1_000)
+                    Thread.sleep(if (clock() - started < handoverMs) 50 else slowPollMs)
                 }
             }, "fuse-process-family").apply { isDaemon = true }.start()
         }
 
         fun stop() { stopped = true }
 
-        /** What it started that still runs, helpers left out. */
-        fun rest(): List<ProcessHandle> = seen.values.filter { it.isAlive && !helper(it) }
+        /** What it started that still runs and is waited for, helpers left out. */
+        fun rest(): List<ProcessHandle> = seen.values.filter { m ->
+            m.handle.isAlive && (m.early || m.lastSeen >= lastPoll) && !helper(m.handle)
+        }.map { it.handle }
 
         /** Waits until everything it started (but helpers) has ended too. */
         suspend fun awaitRest() {
             stopped = true
+            var told = false
             while (true) {
                 val alive = rest()
                 if (alive.isEmpty()) return
+                if (!told) {
+                    told = true
+                    Log.info("the game's launcher ended; waiting for what it started: " + alive.joinToString { "${it.pid()} ${baseName(it.info().command().orElse("?"))}" })
+                }
                 for (h in alive) h.onExit().await()
             }
         }
 
         private fun helper(h: ProcessHandle): Boolean {
-            val name = h.info().command().orElse("").let(::baseName).lowercase().removeSuffix(".exe")
-            return name in HELPERS
+            val info = h.info()
+            val name = info.command().orElse("").let(::baseName).lowercase().removeSuffix(".exe")
+            if (name in HELPERS) return true
+            // Wine's own programs all run as its preloader: their name is the first argument.
+            if (name.startsWith("wine")) {
+                val first = info.arguments().orElse(emptyArray()).firstOrNull()?.let(::baseName)?.lowercase()?.removeSuffix(".exe")
+                if (first != null && first in HELPERS) return true
+            }
+            return false
         }
     }
 
@@ -218,6 +248,7 @@ internal class DesktopLauncher(
         private val HELPERS = setOf(
             "xdg-dbus-proxy", "dbus-daemon", "dbus-launch", "wineserver", "winedevice", "services", "plugplay", "explorer", "rpcss",
             "conhost", "gvfsd", "at-spi-bus-launcher", "at-spi2-registryd", "pulseaudio", "pipewire", "ssh-agent", "gpg-agent",
+            "kdeinit5", "kdeinit6", "klauncher", "kioworker", "kioslave5", "crashpad_handler", "bwrap", "tabtip", "svchost",
         )
         private val HANDOFF = setOf("gio", "xdg-open", "steam", "kde-open", "kde-open5", "gnome-open", "exo-open", "explorer")
 

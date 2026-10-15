@@ -231,7 +231,7 @@ internal class GridScene(look: SceneLook) : Scene(look) {
         val w = size.width
         val h = size.height
         val horizon = h * 0.52f
-        drawRect(band)
+        drawDitheredRect(band)
         // Vertical lines converge on a vanishing point.
         val vp = Offset(w / 2, horizon)
         for (i in -12..12) {

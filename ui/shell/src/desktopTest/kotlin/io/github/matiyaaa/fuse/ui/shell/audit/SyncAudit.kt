@@ -8,6 +8,7 @@ import io.github.matiyaaa.fuse.model.PadButton
 import io.github.matiyaaa.fuse.sync.SyncStatus
 import io.github.matiyaaa.fuse.ui.shell.store.RunResult
 import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
 /** Fuse Sync as the library store made it. */
@@ -147,6 +148,74 @@ internal fun AuditDriver.syncScreens() {
         tap(PadButton.DPAD_LEFT)
         shoot("Cancel chosen")
         tap(PadButton.B)
+    }
+
+    scenario("sync", "saves from a switch") {
+        useSync(asHost = false)
+        // Two of the Switch games with their poster, hero and logo; the third with none, as a game Fuse has no art for.
+        val switch = runBlocking { libraryStore.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).first().filter { it.platformId.value == "switch" }.sortedBy { it.title } }
+        val art = java.io.File(cache, "switch-art").apply { mkdirs() }
+        runBlocking {
+            for (g in switch.take(2)) {
+                val owner = io.github.matiyaaa.fuse.model.MediaOwner.OfGame(g.id)
+                val cover = java.io.File(art, "${g.id.value}-cover.png").also { AuditCovers.cover(it, g.title, g.accent) }
+                val hero = java.io.File(art, "${g.id.value}-hero.png").also { AuditCovers.hero(it, g.accent) }
+                val logo = java.io.File(art, "${g.id.value}-logo.png").also { AuditSystemArt.logo(it, g.title) }
+                libraryStore.media.setFromFile(owner, io.github.matiyaaa.fuse.model.MediaKind.BOXART, cover.absolutePath)
+                libraryStore.media.setFromFile(owner, io.github.matiyaaa.fuse.model.MediaKind.HERO, hero.absolutePath)
+                libraryStore.media.setFromFile(owner, io.github.matiyaaa.fuse.model.MediaKind.LOGO, logo.absolutePath)
+            }
+        }
+        openSyncPage()
+        tapText("Import Saves")
+        waitFor("From a Switch")
+        shoot("Import Saves: a file, a folder, or a Switch's card")
+        tapText("From a Switch")
+        settle(250)
+        shoot("reading the card: a spark running along a fuse")
+        waitFor("Is this your save for")
+        settle(900)
+        shoot("is this the game? its art, JKSV, Matt, when, the newest of two backups")
+        tap(PadButton.DPAD_LEFT)
+        tap(PadButton.A)
+        settle(500)
+        shoot("the other, older backup")
+        tap(PadButton.DPAD_RIGHT)
+        tap(PadButton.A)
+        waitFor("Whose save is")
+        settle(700)
+        shoot("whose save is it? Mo, playing here, chosen")
+        tap(PadButton.DPAD_UP)
+        tap(PadButton.DPAD_RIGHT)
+        tap(PadButton.A)
+        settle(500)
+        shoot("Sam too: each gets their own copy")
+        tap(PadButton.DPAD_RIGHT, 2)
+        tap(PadButton.A)
+        settle(500)
+        shoot("everyone")
+        tap(PadButton.DPAD_DOWN)
+        tap(PadButton.A)
+        waitFor("Is this your save for")
+        settle(800)
+        shoot("the next game, from Checkpoint")
+        tap(PadButton.A)
+        settle(500)
+        tap(PadButton.DPAD_DOWN)
+        tap(PadButton.A)
+        waitFor("Is this your save for")
+        settle(800)
+        shoot("a game known only by its name, to be checked")
+        tap(PadButton.DPAD_LEFT)
+        tap(PadButton.A)
+        waitFor("Ready to import")
+        settle(800)
+        shoot("ready to import: each game, whose, and where in Eden")
+        tap(PadButton.A)
+        waitFor("Saves imported")
+        settle(900)
+        shoot("imported")
+        tap(PadButton.A)
     }
 
     scenario("sync", "settings as the host") {

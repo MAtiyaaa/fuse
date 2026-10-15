@@ -201,7 +201,7 @@ object LinuxCatalog {
         ),
         LinuxEmulatorDef(
             id = "linux.citron", name = "Citron", platforms = platforms("switch"),
-            detection = detect(bin = listOf("citron"), appImage = listOf("citron*.appimage")),
+            detection = detect(bin = listOf("citron"), appImage = listOf("*citron*.appimage")),
             modes = emptyList(),
             source = "Not in ES-DE; command line not verified", confidence = UNVERIFIED,
             capabilities = caps(installed = true),
@@ -248,7 +248,7 @@ object LinuxCatalog {
         ),
         LinuxEmulatorDef(
             id = "linux.mandarine", name = "Mandarine", platforms = N3DS,
-            detection = detect(bin = listOf("mandarine-qt"), appImage = listOf("mandarine-qt*.appimage")),
+            detection = detect(bin = listOf("mandarine-qt"), appImage = listOf("mandarine*.appimage")),
             modes = listOf(file("{ROM}")),
             source = esde("MANDARINE"), confidence = VERIFIED_ESDE, homepage = "https://github.com/mandarine3ds/mandarine",
             capabilities = caps(installed = true),
@@ -286,7 +286,7 @@ object LinuxCatalog {
         ),
         LinuxEmulatorDef(
             id = "linux.redream", name = "Redream", platforms = platforms("dc"),
-            detection = detect(bin = listOf("redream"), dirBin = listOf("redream/redream")),
+            detection = detect(bin = listOf("redream"), dirBin = listOf("redream/redream", "Redream/redream")),
             modes = listOf(file("{ROM}")),
             source = esde("REDREAM"), confidence = VERIFIED_ESDE, homepage = "https://redream.io/",
         ),
@@ -316,7 +316,7 @@ object LinuxCatalog {
             detection = detect(
                 bin = listOf("xenia", "xenia_canary"),
                 appImage = listOf("xenia_canary*.appimage", "xenia-canary*.appimage"),
-                dirBin = listOf("xenia/xenia", "xenia/xenia_canary"),
+                dirBin = listOf("xenia/xenia", "xenia/xenia_canary", "Xenia Canary/xenia_canary", "Xenia Canary/xenia"),
             ),
             modes = listOf(file("{ROM}", workingDir = "{EMUDIR}")),
             source = esde("XENIA"), confidence = VERIFIED_ESDE, homepage = "https://xenia.jp/",
@@ -339,7 +339,7 @@ object LinuxCatalog {
         ),
         LinuxEmulatorDef(
             id = "linux.sharpemu", name = "SharpEmu", platforms = platforms("ps5"),
-            detection = detect(bin = listOf("sharpemu", "SharpEmu"), appImage = listOf("sharpemu*.appimage"), dirBin = listOf("SharpEmu/SharpEmu", "sharpemu/SharpEmu")),
+            detection = detect(bin = listOf("sharpemu", "SharpEmu"), appImage = listOf("sharpemu*.appimage"), dirBin = listOf("SharpEmu/SharpEmu", "sharpemu/SharpEmu", "SharpEmu/sharpemu")),
             modes = listOf(file("{ROM}", ext = setOf("bin"), workingDir = "{EMUDIR}", label = "eboot.bin")),
             source = SHARPEMU_SOURCE, confidence = Confidence.VERIFIED_SOURCE, homepage = "https://sharpemu.app/",
             limitations = listOf("PlayStation 5 emulation is young: a few games play, many stop at a menu or loading screen."),
@@ -378,14 +378,14 @@ object LinuxCatalog {
         ),
         LinuxEmulatorDef(
             id = "linux.ruffle", name = "Ruffle", platforms = platforms("flash"),
-            detection = detect(bin = listOf("ruffle"), flatpak = listOf("rs.ruffle.Ruffle"), dirBin = listOf("ruffle/ruffle")),
+            detection = detect(bin = listOf("ruffle"), flatpak = listOf("rs.ruffle.Ruffle"), dirBin = listOf("ruffle/ruffle", "Ruffle/ruffle")),
             modes = listOf(file("--fullscreen", "{ROM}")),
             source = esde("RUFFLE; %EMULATOR_RUFFLE% --fullscreen %ROM%"), confidence = VERIFIED_ESDE, homepage = "https://ruffle.rs/",
             limitations = listOf("Ruffle plays most ActionScript 1 and 2 games; ActionScript 3 support is still growing."),
         ),
         LinuxEmulatorDef(
             id = "linux.dosbox-staging", name = "DOSBox Staging", platforms = platforms("dos"),
-            detection = detect(bin = listOf("dosbox-staging"), flatpak = listOf("io.github.dosbox-staging")),
+            detection = detect(bin = listOf("dosbox-staging"), flatpak = listOf("io.github.dosbox-staging"), dirBin = listOf("DOSBox Staging/dosbox", "DOSBox Staging/dosbox-staging")),
             modes = listOf(file("{ROM}", workingDir = "{ROMDIR}")),
             source = esde("DOSBOX-STAGING"), confidence = VERIFIED_ESDE, homepage = "https://www.dosbox-staging.org/",
         ),
