@@ -96,11 +96,11 @@ internal fun StartupIntroOverlay(onDone: () -> Unit, onCovering: (Boolean) -> Un
             sounds.play(SoundCue.LAUNCH)
         }
     }
-    // Before it, the match: struck as the spark catches, then its flare as the spark runs the fuse.
-    val struck by remember { androidx.compose.runtime.derivedStateOf { clock.value >= STRIKE_AT } }
-    val flared by remember { androidx.compose.runtime.derivedStateOf { clock.value >= RUN_FROM } }
-    LaunchedEffect(struck) { if (struck && !reduced && clock.value < RUN_FROM) sounds.play(SoundCue.STRIKE) }
-    LaunchedEffect(flared) { if (flared && !reduced && clock.value < BURST_AT) sounds.play(SoundCue.FLARE) }
+    // The climax: the wordmark burning in beside the lit mark.
+    val wordReached by remember { androidx.compose.runtime.derivedStateOf { clock.value >= BURN_FROM } }
+    LaunchedEffect(wordReached && !reduced) {
+        if (wordReached && !reduced && clock.value < BURN_TO) sounds.play(SoundCue.CLIMAX)
+    }
 
     // Opaque until it fades: what is under it needn't be drawn until then.
     val fadeFrom = if (reduced) length * 0.6f else EXIT_FADE_FROM
@@ -195,8 +195,6 @@ private const val RUN_FROM = 280f
 private const val RUN_TO = 1_180f
 private const val BURST_AT = 1_180f
 
-/** The match is struck as the spark appears, a moment before it catches. */
-private const val STRIKE_AT = 40f
 private const val FRAME_TO = 1_600f
 private const val GLIDE_FROM = 1_420f
 private const val GLIDE_TO = 1_960f

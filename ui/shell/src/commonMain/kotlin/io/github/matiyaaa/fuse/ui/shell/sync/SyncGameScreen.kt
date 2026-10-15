@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.sync
 
+import io.github.matiyaaa.fuse.ui.designsystem.focus.glideTo
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -122,7 +123,7 @@ internal fun SyncGameScreen(app: AppState, game: String, name: String) {
             NavAction.UP -> if (sel.index > 0) { sel.index--; NavResult.MOVED } else NavResult.BLOCKED
             NavAction.DOWN -> when {
                 sel.index < versions.size - 1 -> { sel.index++; NavResult.MOVED }
-                list.canScrollForward -> { app.scope.launch { list.animateScrollToItem(list.layoutInfo.totalItemsCount - 1) }; NavResult.MOVED }
+                list.canScrollForward -> { app.scope.launch { list.glideTo(list.layoutInfo.totalItemsCount - 1) }; NavResult.MOVED }
                 else -> NavResult.BLOCKED
             }
             NavAction.LEFT, NavAction.RIGHT -> NavResult.BLOCKED
@@ -133,7 +134,7 @@ internal fun SyncGameScreen(app: AppState, game: String, name: String) {
     // The version chosen stays in view with a little of what is above it.
     LaunchedEffect(sel.index, entries.size) {
         val at = entries.indexOfFirst { it is TimelineEntry.Version && it.version.id == versions.getOrNull(sel.index)?.version?.id }
-        if (at >= 0) list.animateScrollToItem((at - 1).coerceAtLeast(0))
+        if (at >= 0) list.glideTo((at - 1).coerceAtLeast(0))
     }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 980.dp

@@ -122,7 +122,7 @@ fun StreamTab(app: AppState, active: Boolean, topPadding: Dp) {
         }
     }
     val list = rememberLazyListState()
-    LaunchedEffect(sel.row) { list.animateScrollToItem(sel.row.coerceAtLeast(0)) }
+    io.github.matiyaaa.fuse.ui.designsystem.focus.GlideTo(list, sel.row.coerceAtLeast(0), settleMs = io.github.matiyaaa.fuse.ui.fuseline.Durations.SLOW)
     BoxWithConstraints(Modifier.fillMaxSize().testTag("streaming")) {
         val compact = maxHeight < 560.dp
         val wide = maxWidth >= 900.dp
@@ -189,7 +189,7 @@ private fun HostShelf(h: StreamHostView, chosen: Int, tile: Dp, onClick: (Int) -
             FText(stateWords(h), Fuse.type.caption, color = c.textMuted, maxLines = 1)
         }
         val listState = rememberLazyListState()
-        LaunchedEffect(chosen) { if (chosen >= 0) listState.animateScrollToItem((chosen - 1).coerceAtLeast(0)) }
+        io.github.matiyaaa.fuse.ui.designsystem.focus.GlideTo(listState, if (chosen >= 0) (chosen - 1).coerceAtLeast(0) else -1)
         LazyRow(state = listState, modifier = Modifier.dragScroll(listState, Orientation.Horizontal), contentPadding = PaddingValues(horizontal = Space.gutter), horizontalArrangement = Arrangement.spacedBy(Space.m)) {
             itemsIndexed(h.host.apps) { i, a -> AppTile(a, appIcon(a), chosen == i, tile, dim = h.online == false && !h.canWake) { onClick(i) } }
             item("add") { AppTile("Add App", FuseIcons.Plus, chosen == h.host.apps.size, tile, quiet = true) { onClick(h.host.apps.size) } }

@@ -286,44 +286,6 @@ private fun DrawScope.selectGame(opensPage: Boolean, area: Size, t: Float, c: Ai
 }
 
 private fun DrawScope.homeStyle(style: io.github.matiyaaa.fuse.model.HomeStyle, area: Size, t: Float, c: AidColors) {
-    if (style.themed) {
-        // Even channels in white frames (flat grey cards for Duo), over a bar with the clock
-        // between two buttons: round for Fii, squared for Duo, rounded for Trio.
-        val duo = style == io.github.matiyaaa.fuse.model.HomeStyle.DUO
-        val trio = style == io.github.matiyaaa.fuse.model.HomeStyle.TRIO
-        val bar = area.height * 0.24f
-        val cols = 4
-        val rows = 3
-        val gap = 6.px(this)
-        val w = (area.width - gap * (cols - 1)) / cols
-        val h = (area.height - bar - gap * rows) / rows
-        val focus = step(t, cols * rows)
-        for (i in 0 until cols * rows) {
-            val x = (i % cols) * (w + gap)
-            val y = (i / cols) * (h + gap)
-            val corner = if (duo) h * 0.1f else h * 0.3f
-            tile(if (i == focus) c.accent.copy(alpha = 0.45f) else c.tile, x, y, w, h, corner)
-            drawRoundRect(if (duo) Color.Gray.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.85f), Offset(x, y), Size(w, h), CornerRadius(corner), style = Stroke((if (duo) 1.5f else 2f).px(this)))
-            if (i == focus) ring(c.focus, x, y, w, h, corner)
-        }
-        val top = area.height - bar + gap
-        when {
-            duo -> drawRect(c.tile, Offset(0f, top), Size(area.width, bar - gap))
-            trio -> drawRoundRect(c.tile, Offset(gap, top), Size(area.width - gap * 2, bar - gap), CornerRadius(bar * 0.3f))
-            else -> drawRoundRect(c.tile, Offset(0f, top), Size(area.width, bar - gap), CornerRadius(bar * 0.4f))
-        }
-        val r = (bar - gap) * 0.36f
-        for (cx in listOf(r * 1.6f, area.width - r * 1.6f)) {
-            val centre = Offset(cx, top + (bar - gap) / 2)
-            if (style == io.github.matiyaaa.fuse.model.HomeStyle.FII) {
-                drawCircle(Color.White.copy(alpha = 0.9f), r, centre)
-            } else {
-                drawRoundRect(Color.White.copy(alpha = 0.9f), centre - Offset(r, r), Size(r * 2, r * 2), CornerRadius(r * (if (duo) 0.3f else 0.6f)))
-            }
-        }
-        textLine(c.text.copy(alpha = 0.6f), area.width * 0.4f, top + (bar - gap) * 0.3f, area.width * 0.2f, 8.px(this))
-        return
-    }
     if (style == io.github.matiyaaa.fuse.model.HomeStyle.FUSED) {
         // A board of tiles of different sizes, arranged by hand.
         val u = minOf(area.width / 6f, area.height / 3.4f)

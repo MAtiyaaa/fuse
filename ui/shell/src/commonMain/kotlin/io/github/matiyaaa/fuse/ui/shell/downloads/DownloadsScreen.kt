@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.downloads
 
+import io.github.matiyaaa.fuse.ui.designsystem.focus.glideTo
 import androidx.compose.foundation.background
 import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
 import androidx.compose.foundation.border
@@ -190,7 +191,7 @@ fun DownloadsScreen(app: AppState) {
     }
     // The chosen row keeps the one before it in view, so the title and filters fold away as you go down.
     LaunchedEffect(zone, sel.index, rows.size) {
-        if (zone != 2) list.animateScrollToItem(0) else list.animateScrollToItem(HEAD_ITEMS + maxOf(0, sel.index - 1))
+        if (zone != 2) list.glideTo(0) else list.glideTo(HEAD_ITEMS + maxOf(0, sel.index - 1))
     }
     BoxWithConstraints(Modifier.fillMaxSize().testTag("downloads")) {
         val tight = maxHeight < 420.dp

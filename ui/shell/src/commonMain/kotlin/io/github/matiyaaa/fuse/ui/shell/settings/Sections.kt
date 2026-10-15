@@ -299,11 +299,10 @@ fun homeRows(app: AppState): List<MenuAction> {
                     onSelect = { if (isHome) homeRole.openHomeSettings() else homeRole.request() },
                 ))
             }
-            // Fused, Network, and Fii's once a Fii theme has unlocked it; every switch is asked.
+            // Fused or Network; every switch is asked.
             add(MenuAction(
                 "mode", "Home style", FuseIcons.Dashboard,
-                trailing = if (p.unlockedNew.any { it in io.github.matiyaaa.fuse.ui.shell.home.HOME_UNLOCKS }) Trailing.Badge("Unlocked")
-                else Trailing.Value(p.home.style.label() + if (p.home.style == io.github.matiyaaa.fuse.model.HomeStyle.FUSED) " (recommended)" else ""),
+                trailing = Trailing.Value(p.home.style.label() + if (p.home.style == io.github.matiyaaa.fuse.model.HomeStyle.FUSED) " (recommended)" else ""),
                 onSelect = { app.chooseHomeStyle() },
             ))
             add(toggleRow(
@@ -1367,7 +1366,7 @@ fun soundRows(app: AppState): List<MenuAction> {
             }
         }
         labelled("Interface sounds") {
-            add(app.choiceRow("sound", "Interface sounds", FuseIcons.AudioLines, p.sound, listOf(SoundProfile.OFF to "Off", SoundProfile.SOFT to "Soft", SoundProfile.CLICK to "Crisp", SoundProfile.CHIME to "Chime", SoundProfile.BUBBLE to "Bubble", SoundProfile.PIP to "Pip", SoundProfile.TAP to "Tap")) { v -> app.store.updatePrefs { it.copy(sound = v) } })
+            add(app.choiceRow("sound", "Interface sounds", FuseIcons.AudioLines, p.sound, listOf(SoundProfile.OFF to "Off", SoundProfile.SOFT to "Soft", SoundProfile.CLICK to "Crisp", SoundProfile.CHIME to "Chime")) { v -> app.store.updatePrefs { it.copy(sound = v) } })
             add(app.percentRow("volume", "Sound effects volume", FuseIcons.Volume, p.soundVolume, "Moving, confirming and going back") { v -> app.store.updatePrefs { it.copy(soundVolume = v) } })
         }
     }

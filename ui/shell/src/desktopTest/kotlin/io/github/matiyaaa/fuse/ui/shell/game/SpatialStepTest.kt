@@ -41,6 +41,26 @@ class SpatialStepTest {
     }
 
     @Test
+    fun howLongToBeatWrappedUnderPlayTimeIsReachedByDownAndUp() {
+        val time = mapOf(0 to Rect(0f, 400f, 620f, 480f), 1 to Rect(0f, 488f, 260f, 540f))
+        assertEquals(1, spatialStep(time, 0, NavAction.DOWN))
+        assertEquals(0, spatialStep(time, 1, NavAction.UP))
+        // Down from the lower one, and Up from the upper, leave the row.
+        assertNull(spatialStep(time, 1, NavAction.DOWN))
+        assertNull(spatialStep(time, 0, NavAction.UP))
+    }
+
+    @Test
+    fun playTimeScrollsBackUpWhenReachedFromBelow() {
+        // Scrolled down to what's below: play time's top (900) is above the view (at 1400).
+        assertEquals(900, timeScrollTarget(value = 1400, maxValue = 2000, viewport = 800, top = 900, bottom = 1100))
+        // From above: far enough down to show all of it.
+        assertEquals(300, timeScrollTarget(value = 0, maxValue = 2000, viewport = 800, top = 900, bottom = 1100))
+        // Already wholly in view.
+        assertNull(timeScrollTarget(value = 500, maxValue = 2000, viewport = 800, top = 900, bottom = 1100))
+    }
+
+    @Test
     fun theSecondScreenFollowsOnlyThePageShowingAndNeverAHeldRoom() {
         val game = GameId(7)
         val page = Route.GameInfo(game)

@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.jellyfin
 
+import io.github.matiyaaa.fuse.ui.designsystem.focus.glideTo
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
@@ -335,7 +336,7 @@ fun OfflineMediaScreen(app: AppState) {
     }
     val list = rememberLazyListState()
     LaunchedEffect(zone, sel.index, entries.size) {
-        if (zone == 0) list.animateScrollToItem(0) else list.animateScrollToItem(1 + maxOf(0, sel.index - 1))
+        if (zone == 0) list.glideTo(0) else list.glideTo(1 + maxOf(0, sel.index - 1))
     }
     BoxWithConstraints(Modifier.fillMaxSize().testTag("offline")) {
         val compact = maxHeight < 560.dp

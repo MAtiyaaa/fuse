@@ -198,7 +198,7 @@ fun HouseholdLibraryScreen(app: AppState) {
             else -> NavResult.IGNORED
         }
     }
-    LaunchedEffect(sel.row) { list.animateScrollToItem(sel.row.coerceAtLeast(0)) }
+    io.github.matiyaaa.fuse.ui.designsystem.focus.GlideTo(list, sel.row.coerceAtLeast(0), settleMs = io.github.matiyaaa.fuse.ui.fuseline.Durations.SLOW)
     BoxWithConstraints(Modifier.fillMaxSize().testTag("household")) {
         val tile = LocalTileMetrics.current.icon
         val compact = maxHeight < 560.dp

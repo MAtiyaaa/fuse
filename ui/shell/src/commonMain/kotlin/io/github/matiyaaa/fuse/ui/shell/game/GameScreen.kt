@@ -481,15 +481,21 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val section = if (row.startsWith("details:")) "details" else row
     // Where the time played ends, so the stick brings all of it above the hint line, not half.
     var timeBottom by remember(game.id) { mutableIntStateOf(0) }
-    val actionRects = remember(game.id) { mutableMapOf<Int, androidx.compose.ui.geometry.Rect>() }
+    var timeTop by remember(game.id) { mutableIntStateOf(0) }
+    // Where each stop of a row that can wrap is (the buttons, play time and How long to beat, the
+    // discs, RomM's downloads): on a narrow screen Down and Up move by place inside such a row first.
+    val placed = remember(game.id) { mutableMapOf<String, MutableMap<Int, androidx.compose.ui.geometry.Rect>>() }
+    fun rectsOf(key: String) = placed.getOrPut(key) { mutableMapOf() }
+    val actionRects = rectsOf("actions")
+    val timeRects = rectsOf("playtime")
     var topOfPage by remember { mutableIntStateOf(0) }
     val clearBelow = with(LocalDensity.current) { (Size.hintHeight + Space.xxl).roundToPx() }
     // Where each line of detail cards ends: on a small screen they stack, and each must come fully into view.
     val lineBottoms = remember(game.id) { mutableStateMapOf<Int, Int>() }
-    LaunchedEffect(row, tops[section], scroll.maxValue, timeBottom, lineBottoms[row.removePrefix("details:").toIntOrNull() ?: -1]) {
+    LaunchedEffect(row, tops[section], scroll.maxValue, timeTop, timeBottom, lineBottoms[row.removePrefix("details:").toIntOrNull() ?: -1]) {
         if (section == "playtime") {
-            val target = (timeBottom + clearBelow - scroll.viewportSize).coerceIn(0, scroll.maxValue)
-            if (target > scroll.value) scroll.fuselineScrollTo(target, motion.followSpring())
+            timeScrollTarget(scroll.value, scroll.maxValue, scroll.viewportSize, timeTop - inset, timeBottom + clearBelow)
+                ?.let { scroll.fuselineScrollTo(it, motion.followSpring()) }
             return@LaunchedEffect
         }
         val line = row.removePrefix("details:").toIntOrNull().takeIf { row.startsWith("details:") }
@@ -509,10 +515,11 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
             NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT -> {
                 val from = row
                 val fromCol = col
-                // The buttons wrap on a narrow screen: Up and Down reach the one above or below first.
-                if (row == "actions") {
-                    spatialStep(actionRects, col, e.action)?.let { to ->
-                        sel.setColumn("actions", to)
+                // A row that wraps on a narrow screen (the buttons, How long to beat under play time):
+                // Up and Down reach the stop above or below inside it first.
+                placed[row]?.let { rects ->
+                    spatialStep(rects.filterKeys { it < sizeOf(row) }, col, e.action)?.let { to ->
+                        sel.setColumn(row, to)
                         return@InputLayer NavResult.MOVED
                     }
                 }
@@ -663,8 +670,12 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                     TimeTogether(
                         d,
                         beat,
-                        Modifier.reveal(reveal, 3).onPlaced { timeBottom = (it.positionInRoot().y + it.size.height).toInt() - topOfPage + scroll.value },
+                        Modifier.reveal(reveal, 3).onPlaced {
+                            timeTop = it.positionInRoot().y.toInt() - topOfPage + scroll.value
+                            timeBottom = timeTop + it.size.height
+                        },
                         focusedPart = if (row == "playtime" && focused) col else null,
+                        onPartPlaced = { part, bounds -> timeRects[part] = bounds },
                         onPlayTime = { sel.row = rows.indexOf("playtime"); sel.setColumn("playtime", 0); app.go(Route.PlayTime) },
                         onBeat = { sel.row = rows.indexOf("playtime"); sel.setColumn("playtime", 1); beat?.let { showBeat(it) } },
                     )
@@ -715,6 +726,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                     RommPartsBlock(
                         v, rommButtons, selected = if (row == "romm" && focused) col else -1,
                         onButton = { i -> sel.row = rows.indexOf("romm"); sel.setColumn("romm", i); app.rommDownload(v.romId, game.displayTitle, rommButtons[i].what) },
+                        onPlaced = { i, r -> rectsOf("romm")[i] = r },
                     )
                 }
             }
@@ -722,7 +734,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                 Section("Discs", Modifier.section("discs", 5), count = discs.size.toString()) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.m), verticalArrangement = Arrangement.spacedBy(Space.m)) {
                         discs.forEachIndexed { i, disc ->
-                            FuseButton(disc.label, selected = row == "discs" && col == i && focused, icon = FuseIcons.Disc, onClick = {
+                            FuseButton(disc.label, modifier = Modifier.onGloballyPositioned { rectsOf("discs")[i] = it.boundsInRoot() }, selected = row == "discs" && col == i && focused, icon = FuseIcons.Disc, onClick = {
                                 sel.row = rows.indexOf("discs"); sel.setColumn("discs", i)
                                 app.play(card, discPath = disc.path)
                             })
@@ -1042,6 +1054,8 @@ private fun TimeTogether(
     focusedPart: Int?,
     onPlayTime: () -> Unit,
     onBeat: () -> Unit,
+    /** Where each part is on screen, so the controller can move between them by place when they wrap. */
+    onPartPlaced: (Int, androidx.compose.ui.geometry.Rect) -> Unit = { _, _ -> },
 ) {
     val c = Fuse.colors
     val shape = RoundedCornerShape(Fuse.geometry.panel)
@@ -1053,7 +1067,7 @@ private fun TimeTogether(
             .padding(Space.xs),
         verticalArrangement = Arrangement.Center,
     ) {
-        TimePart(focusedPart == 0, "All play time", onPlayTime) { PlayedPart(d) }
+        TimePart(focusedPart == 0, "All play time", onPlayTime, Modifier.onGloballyPositioned { onPartPlaced(0, it.boundsInRoot()) }) { PlayedPart(d) }
         if (beat != null) {
             // A hairline between the two while they share a line; none when the beat part wraps under.
             var beside by remember { mutableStateOf(true) }
@@ -1062,7 +1076,7 @@ private fun TimeTogether(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (beside) Box(Modifier.width(Size.divider).height(Size.thumb).background(c.hairline))
-                TimePart(focusedPart == 1, "How long to beat", onBeat) { BeatPart(d, beat) }
+                TimePart(focusedPart == 1, "How long to beat", onBeat, Modifier.onGloballyPositioned { onPartPlaced(1, it.boundsInRoot()) }) { BeatPart(d, beat) }
             }
         }
     }
@@ -1070,12 +1084,12 @@ private fun TimeTogether(
 
 /** One stop of [TimeTogether]: lit when it has the focus, a button for touch and the mouse. */
 @Composable
-private fun TimePart(selected: Boolean, label: String, onClick: () -> Unit, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+private fun TimePart(selected: Boolean, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
     val c = Fuse.colors
     val shape = RoundedCornerShape((Fuse.geometry.panel - Space.xs).coerceAtLeast(0.dp))
     val lit by fuselineFloat(if (selected) 1f else 0f, Fuse.motion.tween(io.github.matiyaaa.fuse.ui.fuseline.Durations.FAST), label = "timePart")
     Row(
-        Modifier
+        modifier
             .clip(shape)
             .background(c.text.copy(alpha = 0.06f * lit))
             .border(Size.focusStroke, c.focus.copy(alpha = lit), shape)
@@ -1695,7 +1709,13 @@ private fun rommButtonsOf(v: io.github.matiyaaa.fuse.ui.shell.store.RommGameView
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun RommPartsBlock(v: io.github.matiyaaa.fuse.ui.shell.store.RommGameView, buttons: List<RommButton>, selected: Int, onButton: (Int) -> Unit) {
+private fun RommPartsBlock(
+    v: io.github.matiyaaa.fuse.ui.shell.store.RommGameView,
+    buttons: List<RommButton>,
+    selected: Int,
+    onButton: (Int) -> Unit,
+    onPlaced: (Int, androidx.compose.ui.geometry.Rect) -> Unit = { _, _ -> },
+) {
     val c = Fuse.colors
     val groups = v.parts.groupBy { it.kind }
     Column(verticalArrangement = Arrangement.spacedBy(Space.m)) {
@@ -1719,7 +1739,7 @@ private fun RommPartsBlock(v: io.github.matiyaaa.fuse.ui.shell.store.RommGameVie
         if (buttons.isNotEmpty()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.m), verticalArrangement = Arrangement.spacedBy(Space.m)) {
                 buttons.forEachIndexed { i, b ->
-                    FuseButton(b.label, selected = selected == i, icon = FuseIcons.CloudDownload, onClick = { onButton(i) })
+                    FuseButton(b.label, modifier = Modifier.onGloballyPositioned { onPlaced(i, it.boundsInRoot()) }, selected = selected == i, icon = FuseIcons.CloudDownload, onClick = { onButton(i) })
                 }
             }
         } else if (v.transfer != null) {
@@ -1807,6 +1827,21 @@ private fun CopyCard(copy: io.github.matiyaaa.fuse.ui.shell.store.CopyView, now:
 
 /** Launchers Fuse lists among emulators that only run files of their own kind, never a game's ROM. */
 private val NOT_EMULATORS = setOf("linux.script", "linux.desktop")
+
+/**
+ * Where the page scrolls to for play time, whose top must sit at or below [top] and whose bottom at
+ * or above [bottom] (both in page pixels, the fade and the hint line already allowed for): coming up
+ * from below, back up to its top; coming down, far enough to show all of it. Null when it already shows.
+ */
+internal fun timeScrollTarget(value: Int, maxValue: Int, viewport: Int, top: Int, bottom: Int): Int? {
+    val above = top.coerceIn(0, maxValue)
+    val below = (bottom - viewport).coerceIn(0, maxValue)
+    return when {
+        above < value -> above
+        below > value -> below
+        else -> null
+    }
+}
 
 /**
  * The button [from] moves to in [direction] by where the buttons are, when they wrap onto more than

@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.2.13 is the <b>Native Update</b>: Duo and Trio themes with Homes of their own, profiles that switch at once, a second screen that follows you, and a rebuilt Library</sub><br>
+<sub>0.4.2.14 is the <b>Native Update</b>: smoother scrolling, every part of a game's page in reach, and art that is ready as you scroll</sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -64,25 +64,13 @@ tile under your thumb lifts toward you with a single sweep of light.
 
 <br><br>
 
-<a href="docs/assets/screenshots/tour.mp4"><img src="docs/assets/screenshots/tour.webp" width="100%" alt="A tour of Fuse: the Library, Trio's Home, the Installed grid, a game's page, Jellyfin, the themes and Duo's Home."></a>
+<a href="docs/assets/screenshots/tour.mp4"><img src="docs/assets/screenshots/tour.webp" width="100%" alt="A tour of Fuse: the Library, a game's page, Systems and Jellyfin."></a>
 
 <sub><b>A short tour.</b> <a href="docs/assets/screenshots/tour.mp4">Watch it as a video</a>.</sub>
 
 </div>
 
 <table>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/home-trio.webp"><img src="docs/assets/screenshots/home-trio.webp" width="100%" alt="Home in the Trio theme: a board of rounded glossy widgets over a dotted light, Favourites, For You with Chrono Trigger, and a Spotlight on Chrono Trigger, with a white toolbar along the bottom holding the time and two rounded buttons."></a>
-      <br><b>Home, a board you arrange</b>
-      <br><sub>Continue playing, your systems, what's new, picks for you, achievements, Jellyfin and more, as tiles you place and resize. Here in Trio, with the Home it unlocks.</sub>
-    </td>
-    <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/library-installed.webp"><img src="docs/assets/screenshots/library-installed.webp" width="100%" alt="The Library's Installed grid in the Trio theme: 43 games in glossy rounded frames, Mega Man X in focus, from A Link to the Past and Ocarina of Time to Super Mario RPG and Zombies Ate My Neighbors."></a>
-      <br><b>What's on this device</b>
-      <br><sub>Installed, Favourites and Recently played, as box art, icons, capsules or a list, sorted and filtered your way.</sub>
-    </td>
-  </tr>
   <tr>
     <td width="50%" valign="top">
       <a href="docs/assets/screenshots/game-page.webp"><img src="docs/assets/screenshots/game-page.webp" width="100%" alt="The page of The Legend of Zelda: A Link to the Past: its logo, Super Nintendo, 1991, Adventure and Puzzle, Play and Choose emulator, 15 hours to beat, the description, and 109 achievements."></a>
@@ -102,26 +90,14 @@ tile under your thumb lifts toward you with a single sweep of light.
       <br><sub>Your Jellyfin server, played by Fuse Player: continue watching, next up, seasons, music and search.</sub>
     </td>
     <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/themes.webp"><img src="docs/assets/screenshots/themes.webp" width="100%" alt="The theme gallery in Trio: a live preview of the Library, and themes from Trio Night, Daylight and Paper Mint to Fii, Duo and Trio, with Make your own and Add a theme."></a>
-      <br><b>27 themes, and yours</b>
-      <br><sub>Each with its own room, corners, focus, motion and sounds. Fii, Duo and Trio come with Homes of their own.</sub>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/home-duo.webp"><img src="docs/assets/screenshots/home-duo.webp" width="100%" alt="Home in the Duo theme: flat cards on graph paper, the Nintendo DS in Systems, Zombies Ate My Neighbors new in the library and Chrono Trigger for you, with a bevelled grey strip along the bottom holding the time in a lit panel between two squared buttons."></a>
-      <br><b>Duo's Home</b>
-      <br><sub>Flat cards on graph paper, with the time in a lit panel, after a dual-screen handheld's menu.</sub>
-    </td>
-    <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/quick-menu.webp"><img src="docs/assets/screenshots/quick-menu.webp" width="100%" alt="The quick menu over Duo's Home: the time and date, tiles for Screenshot, Display, Controller, Performance, Low Power, Find games, Addons, Home and Sound, and the menu music playing."></a>
-      <br><b>Everything at a press</b>
-      <br><sub>The quick menu: time, screenshots, display, controller, performance, what's playing and more, from any screen, arranged your way.</sub>
+      <a href="docs/assets/screenshots/home-channels.webp"><img src="docs/assets/screenshots/home-channels.webp" width="100%" alt="Home as a board: 14 systems with 49 games, Continue playing, Systems, New in your library and Recent achievements."></a>
+      <br><b>Home, a board you arrange</b>
+      <br><sub>Continue playing, your systems, what's new, picks for you, achievements, Jellyfin and more, as tiles you place and resize.</sub>
     </td>
   </tr>
 </table>
 
-<p align="center"><sub>Captured from Fuse 0.4.2.13 on Linux at 1920 x 1080, with a real household library, RomM and Jellyfin, and the art Fuse filled
+<p align="center"><sub>Captured from Fuse 0.4.2.13 and earlier on Linux at 1920 x 1080, with a real household library, RomM and Jellyfin, and the art Fuse filled
 in for them. The games, films, their names and their art belong to their owners.
 Fuse comes with no games and is not affiliated with them.</sub></p>
 
@@ -205,7 +181,7 @@ They behave the same on every device, answer to one design, and get better with 
       <img src="docs/assets/icons/fuseline.svg" width="56" height="56" alt=""><br>
       <h3>Fuseline <sub>by Fuse</sub></h3>
       Fuse's own animation engine, named after the line in Fuse's logo that carries the spark. Every
-      movement in Fuse runs on it, from a tile's lift to the startup's ignition. Fuseline 4.2 is
+      movement in Fuse runs on it, from a tile's lift to the startup's spark. Fuseline 4.2 is
       the one in Fuse today.
       <ul>
         <li><b>Worked out when it is read.</b> Every motion is solved in closed form, so a value is
@@ -326,8 +302,8 @@ Play.
   <tr>
     <td width="33%" valign="top">
       <img src="docs/assets/icons/themes.svg" width="44" height="44" alt=""><br>
-      <b>27 themes, and yours</b><br>
-      <sub>Fuse, Glass, Starlight, Crossbar, Wave, Blades, CRT, Fusi, Fii, Duo, Trio and more, in light and dark, each with its own room, corners, focus, motion and sounds; Fii, Duo and Trio unlock Homes of their own. Make one in the Theme Studio, add one from a link or a file, or <a href="docs/THEMES.md">write your own</a>.</sub>
+      <b>21 themes, and yours</b><br>
+      <sub>Fuse, Glass, Starlight, Crossbar, Wave, Blades, CRT, Fusi and more, in light and dark, each with its own room, corners, focus, motion and sounds. Make one in the Theme Studio, add one from a link or a file, or <a href="docs/THEMES.md">write your own</a>.</sub>
     </td>
     <td width="33%" valign="top">
       <img src="docs/assets/icons/accessibility.svg" width="44" height="44" alt=""><br>
@@ -430,8 +406,8 @@ Play.
 <details>
 <summary><b>Look, feel and comfort</b></summary>
 
-- 27 themes in light and dark, a Theme Studio, community themes from a link or a file, glass panels, a CRT effect and wallpapers.
-- Home styles: Fused (a board you arrange), Network (shelves), and the Homes Fii, Duo and Trio unlock.
+- 21 themes in light and dark, a Theme Studio, community themes from a link or a file, glass panels, a CRT effect and wallpapers.
+- Home styles: Fused (a board you arrange) and Network (shelves).
 - A quick menu you arrange, widgets for what's playing, brightness and volume, and an interface sound set for every theme.
 - Fuseline motion with Enhanced, Standard, Minimal, Reduced and Low Power; focus you can always see; High contrast focus, three text sizes and TV margins.
 - Made for a controller (Xbox, Nintendo, PlayStation and keyboard hints, guided button setup), touch everywhere and a mouse.
@@ -453,11 +429,11 @@ Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.4.2.13 "The Native Update"**: Duo and Trio, two new theme families in light and dark
-> with Homes of their own, profiles that switch at once from what the device keeps (online or not),
-> a second screen that follows what you're on (Jellyfin films and episodes included), Jellyfin
-> logos on Home, a rebuilt All view in the Library, a smoother first scroll, sharper text on a TV
-> and ignition sounds at start. See [the release notes](docs/releases/0.4.2.13.md); every earlier
+> **Fuse 0.4.2.14 "The Native Update"**: the Library's shelves and every list glide instead of
+> jumping, tile art is ready in memory before it scrolls in, How long to beat and play time are in
+> reach on a game's page at any width, the theme filters stop overlapping, the start-up animation
+> plays its launch sound and then one at its climax, and the Fii, Duo and Trio themes are retired. See
+> [the release notes](docs/releases/0.4.2.14.md); every earlier
 > release is in [CHANGELOG.md](CHANGELOG.md).
 
 Fuse runs on Android handhelds and phones, Linux (including SteamOS and its Game Mode), Windows and

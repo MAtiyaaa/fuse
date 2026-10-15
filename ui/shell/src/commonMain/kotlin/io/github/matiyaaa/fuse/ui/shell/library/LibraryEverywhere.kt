@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.library
 
+import io.github.matiyaaa.fuse.ui.designsystem.focus.glideTo
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -377,15 +378,8 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
 
     io.github.matiyaaa.fuse.ui.shell.app.CompanionShowsCopies(true)
     val list = rememberLazyListState()
-    // Only scrolls when the chosen shelf isn't wholly on screen, so shelves that fit keep their titles.
-    LaunchedEffect(sel.row) {
-        if (rows.isEmpty()) return@LaunchedEffect
-        val to = sel.row.coerceIn(0, rows.lastIndex)
-        val info = list.layoutInfo
-        val seen = info.visibleItemsInfo.firstOrNull { it.index == to }
-        val whole = seen != null && seen.offset >= info.viewportStartOffset && seen.offset + seen.size <= info.viewportEndOffset
-        if (!whole) list.animateScrollToItem(to)
-    }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val glide by androidx.compose.runtime.rememberUpdatedState(Fuse.motion.followScroll())
     BoxWithConstraints(modifier.testTag("library.all")) {
         val tile = LocalTileMetrics.current.icon
         if (rows.isEmpty()) {
@@ -397,6 +391,18 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
         // What you're on, and where it is, always in the same place above the shelves (as Installed's
         // stage does), so moving along a shelf never makes the page jump. Small screens skip it.
         val stage = maxHeight >= STAGE_FROM
+        // Only scrolls when the chosen shelf won't be wholly on screen once its name has opened
+        // under it, so shelves that fit keep their titles. The glide measures the shelf every frame,
+        // so the shelf it left closing above it never carries it past.
+        LaunchedEffect(sel.row) {
+            if (rows.isEmpty()) return@LaunchedEffect
+            val to = sel.row.coerceIn(0, rows.lastIndex)
+            val grows = if (!stage && rows[to] != ROW_SYSTEMS) with(density) { (Space.xxl + Space.l).roundToPx() } else 0
+            val info = list.layoutInfo
+            val seen = info.visibleItemsInfo.firstOrNull { it.index == to }
+            val whole = seen != null && seen.offset >= info.viewportStartOffset && seen.offset + seen.size + grows <= info.viewportEndOffset
+            if (!whole) list.glideTo(to, spec = glide, settleMs = io.github.matiyaaa.fuse.ui.fuseline.Durations.SLOW)
+        }
         if (stage) AllStage(chosen, chosenSystem, if (row != null && chosen == null && chosenSystem == null) row else null, Modifier.fillMaxWidth().height(stageHeight(maxHeight)))
         LazyColumn(
             state = list,
@@ -490,7 +496,7 @@ private fun EverywhereShelf(
     named: Boolean = true,
 ) {
     val state = rememberLazyListState()
-    LaunchedEffect(selected) { if (selected >= 0) state.animateScrollToItem(maxOf(0, selected - 1)) }
+    io.github.matiyaaa.fuse.ui.designsystem.focus.GlideTo(state, if (selected >= 0) maxOf(0, selected - 1) else -1)
     Column {
         ShelfHeader(title, icon, if (games.size == 1) "1 $noun" else "${games.size} ${noun}s", onSeeAll)
         LazyRow(
@@ -534,7 +540,7 @@ private fun EverywhereShelf(
 @Composable
 private fun SystemsShelf(systems: List<EverywhereSystem>, selected: Int, tile: Dp, onOpen: (Int) -> Unit) {
     val state = rememberLazyListState()
-    LaunchedEffect(selected) { if (selected >= 0) state.animateScrollToItem(maxOf(0, selected - 1)) }
+    io.github.matiyaaa.fuse.ui.designsystem.focus.GlideTo(state, if (selected >= 0) maxOf(0, selected - 1) else -1)
     Column {
         ShelfHeader("Systems", FuseIcons.Chip, if (systems.size == 1) "1 system" else "${systems.size} systems", null)
         LazyRow(state = state, modifier = Modifier.dragScroll(state, Orientation.Horizontal), contentPadding = PaddingValues(horizontal = Space.gutter, vertical = liftRoom(tile)), horizontalArrangement = Arrangement.spacedBy(LocalTileMetrics.current.gap)) {

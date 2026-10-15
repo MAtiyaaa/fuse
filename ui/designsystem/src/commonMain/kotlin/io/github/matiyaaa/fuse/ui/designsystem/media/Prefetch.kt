@@ -18,8 +18,13 @@ import kotlinx.coroutines.launch
 /**
  * Loads the art of the items around [index] in [models] before they scroll into view, as far as the
  * performance profile allows ([io.github.matiyaaa.fuse.model.RenderQuality.prefetchDepth]: fewer in
- * Low Power). With a [size] (the size the art is drawn at) the images are decoded into the memory
+ * Low Power). With a [size] (the size the art is laid out at) the images are decoded into the memory
  * cache, so moving onto them shows them at once; without one only the disk cache is warmed.
+ *
+ * For tiles ([asTiles]) each decode asks for exactly what [Artwork] will ask for in that space (the
+ * same size bucket and scale), because the memory cache only hands an image to a request of the same
+ * size: art decoded a little larger, or fitted where the tile crops, was decoded again from disk as
+ * it scrolled in.
  *
  * Loads run while the list is on screen (moving on doesn't cancel them) and each image is asked for
  * once.
@@ -38,6 +43,10 @@ fun PrefetchArt(
      * finds the next rows' art ready, not just the next few tiles of the row it is on.
      */
     span: Int = 1,
+    /** Whether the item at an index crops to its space (see [fill]), where items differ. */
+    fillAt: ((Int) -> Boolean)? = null,
+    /** [size] is the space [Artwork] lays the art out in: decode as it will. */
+    asTiles: Boolean = false,
 ) {
     val depth = (Fuse.quality.prefetchDepth * span.coerceIn(1, 12)).coerceAtMost(limit)
     val context = LocalPlatformContext.current
@@ -55,8 +64,12 @@ fun PrefetchArt(
             val model = models.getOrNull(i) ?: continue
             if (!asked.add(model)) continue
             val request = ImageRequest.Builder(context).data(model)
-            if (px != null) {
-                request.size(px, px).precision(Precision.INEXACT).scale(if (fill) Scale.FILL else Scale.FIT)
+            val crops = fillAt?.invoke(i) ?: fill
+            if (px != null && asTiles) {
+                val decode = io.github.matiyaaa.fuse.model.ArtworkSizing.decode(px, px)
+                request.size(decode.width, decode.height).scale(if (crops) Scale.FILL else Scale.FIT)
+            } else if (px != null) {
+                request.size(px, px).precision(Precision.INEXACT).scale(if (crops) Scale.FILL else Scale.FIT)
             } else {
                 request.memoryCachePolicy(CachePolicy.DISABLED)
             }
