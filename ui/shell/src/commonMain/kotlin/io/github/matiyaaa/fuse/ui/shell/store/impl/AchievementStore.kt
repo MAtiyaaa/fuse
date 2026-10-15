@@ -27,6 +27,7 @@ import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.RecentAchievement
 import io.github.matiyaaa.fuse.ui.shell.store.AchievementOps
 import io.github.matiyaaa.fuse.ui.shell.store.AchievementsFeed
+import io.github.matiyaaa.fuse.ui.shell.store.LocalGameAchievements
 import kotlin.time.Duration
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -73,6 +74,7 @@ internal class DefaultAchievementOps(
     }
 
     override fun refresh(force: Boolean) {
+        refreshLocal()
         if (refreshJob?.isActive == true) return
         refreshJob = ctx.scope.launch { lock.withLock { refreshNow(force) } }
     }
@@ -107,7 +109,12 @@ internal class DefaultAchievementOps(
             .sortedByDescending { it.highestAwardDate.orEmpty() }
             .take(10)
             .map { it.toState(user.fetchedAt) }
-        return AchievementsFeed(user, recentLinked, inProgress, mastered)
+        return AchievementsFeed(
+            user, recentLinked, inProgress, mastered,
+            earnedTotal = completion.sumOf { it.numAwarded },
+            masteredTotal = completion.count { it.highestAwardKind == "mastered" },
+            lastUnlock = completion.mapNotNull { c -> c.mostRecentAwardedDate?.let(::raTime)?.let { c.gameId to it } }.toMap(),
+        )
     }
 
     /** Cached progress for [game] first, then fresh progress when an account is connected. */
@@ -175,7 +182,7 @@ internal class DefaultAchievementOps(
         val items = set.items
         // RPCS3's trophies earned here join the game's history, which Fuse One carries to the
         // person's other devices; trophies earned on those are said where they were earned.
-        val elsewhere = if (set.source == io.github.matiyaaa.fuse.library.achievements.LocalAchievementSource.PS3_TROPHIES) trophyHistory(game, items) else emptyMap()
+        val elsewhere = historyKey(set.source)?.let { (key, emulator) -> trophyHistory(game, items, key, emulator) }.orEmpty()
         val earned = items.count { it.unlockedAt != null }
         val points = items.sumOf { it.points }
         val source = when (set.source) {
@@ -226,16 +233,58 @@ internal class DefaultAchievementOps(
      * Notes the trophies [items] says were earned here in [game]'s history (once each, the first
      * time) and answers the ones earned on another of the person's devices, by trophy id.
      */
-    private suspend fun trophyHistory(game: Game, items: List<io.github.matiyaaa.fuse.library.achievements.LocalAchievement>): Map<String, io.github.matiyaaa.fuse.sync.TrophyUnlock> {
+    private suspend fun trophyHistory(
+        game: Game,
+        items: List<io.github.matiyaaa.fuse.library.achievements.LocalAchievement>,
+        key: String,
+        emulator: String,
+    ): Map<String, io.github.matiyaaa.fuse.sync.TrophyUnlock> {
         val sync = ctx.settings.value.sync
         val device = sync.deviceId.ifBlank { "this-device" }
         val here = items.filter { it.unlockedAt != null }.map { a ->
-            io.github.matiyaaa.fuse.sync.TrophyUnlock("ps3", a.id, a.name, a.unlockedAt!!, device, sync.deviceName, "rpcs3")
+            io.github.matiyaaa.fuse.sync.TrophyUnlock(key, a.id, a.name, a.unlockedAt!!, device, sync.deviceName, emulator)
         }
         runCatching { TrophyHistory.add(ctx.data, game.id.value, here) }
         return runCatching { TrophyHistory.read(ctx.data, game.id.value) }.getOrDefault(emptyList())
-            .filter { it.source == "ps3" && it.device != device }
+            .filter { it.source == key && it.device != device }
             .associateBy { it.id }
+    }
+
+    /**
+     * How a trophy set's unlocks are kept in a game's history, which Fuse One carries to the person's
+     * other devices: its kind and the emulator that keeps it. Steam keeps its own across computers.
+     */
+    private fun historyKey(source: io.github.matiyaaa.fuse.library.achievements.LocalAchievementSource): Pair<String, String>? = when (source) {
+        io.github.matiyaaa.fuse.library.achievements.LocalAchievementSource.PS3_TROPHIES -> "ps3" to "rpcs3"
+        io.github.matiyaaa.fuse.library.achievements.LocalAchievementSource.PS4_TROPHIES -> "ps4" to "shadps4"
+        io.github.matiyaaa.fuse.library.achievements.LocalAchievementSource.VITA_TROPHIES -> "psvita" to "vita3k"
+        io.github.matiyaaa.fuse.library.achievements.LocalAchievementSource.XBOX360 -> "xbox360" to "xenia"
+        io.github.matiyaaa.fuse.library.achievements.LocalAchievementSource.STEAM -> null
+    }
+
+    private val localState = MutableStateFlow<List<LocalGameAchievements>?>(null)
+    override val local: StateFlow<List<LocalGameAchievements>?> = localState
+    private var localJob: Job? = null
+
+    /**
+     * Every set this device keeps for the library's games (RPCS3, shadPS4, Vita3K and Xenia's
+     * trophies, Steam's achievements), for the Achievements page beside RetroAchievements. Read off
+     * the main thread; only the games of those systems are looked at.
+     */
+    private fun refreshLocal() {
+        if (localJob?.isActive == true) return
+        localJob = ctx.scope.launch(kotlinx.coroutines.Dispatchers.Default) {
+            val found = ArrayList<LocalGameAchievements>()
+            for (platform in LOCAL_PLATFORMS) {
+                val ids = runCatching { ctx.data.games.inPlatform(io.github.matiyaaa.fuse.model.PlatformId(platform)) }.getOrDefault(emptyList()).map { it.first }
+                if (ids.isEmpty()) continue
+                for (game in runCatching { ctx.data.games.getAll(ids) }.getOrDefault(emptyList())) {
+                    val state = runCatching { local(game) }.getOrNull() ?: continue
+                    if (state.total > 0) found += LocalGameAchievements(game.id, state)
+                }
+            }
+            localState.value = found
+        }
     }
 
     /**
@@ -462,6 +511,13 @@ internal class DefaultAchievementOps(
     private suspend fun <T> cachedAny(key: String, serializer: KSerializer<T>): T? =
         runCatching { cache.get(NS, key, serializer, now = 0L) }.getOrNull()
 
+    /** RetroAchievements' times ("2024-05-01T12:34:56+00:00", or with a space and no zone) as epoch millis. */
+    private fun raTime(text: String): Long? {
+        val t = text.trim().replace(' ', 'T')
+        return runCatching { kotlin.time.Instant.parse(t).toEpochMilliseconds() }.getOrNull()
+            ?: runCatching { kotlin.time.Instant.parse(t + "Z").toEpochMilliseconds() }.getOrNull()
+    }
+
     private fun RaCompletionEntry.toState(fetchedAt: Long) = AchievementState(
         raGameId = gameId,
         title = title,
@@ -477,6 +533,8 @@ internal class DefaultAchievementOps(
     )
 
     private companion object {
+        /** The systems whose own achievements Fuse reads on this device. */
+        private val LOCAL_PLATFORMS = listOf("ps3", "ps4", "psvita", "xbox360", "steam")
         private val STEAM_ID = Regex("(?:rungameid/|^\\s*)(\\d{1,10})")
 
         /** An Xbox 360 title id, and the way it is tagged in a file name ("Halo 3 [4D5307E6].iso"). */

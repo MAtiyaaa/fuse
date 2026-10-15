@@ -227,6 +227,11 @@ internal fun AuditDriver.detailScreens() {
             tap(PadButton.DPAD_RIGHT)
             settle(900)
             shoot("one not yet earned, dimmed")
+            // The Achievements page: Xenia's unlocks beside everything else, with no account at all.
+            tab(io.github.matiyaaa.fuse.model.Destination.ACHIEVEMENTS)
+            waitFor("Halo 3")
+            settle(1_500)
+            shoot("every source on one page: Xbox 360 achievements, no RetroAchievements account")
         } finally {
             controls.xeniaContent = null
         }

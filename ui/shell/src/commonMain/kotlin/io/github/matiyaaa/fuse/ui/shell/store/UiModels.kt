@@ -237,7 +237,17 @@ data class AchievementsFeed(
     val recent: List<RecentAchievement>,
     val inProgress: List<AchievementState>,
     val recentlyMastered: List<AchievementState>,
+    /** Achievements earned across every game RetroAchievements lists for the person. */
+    val earnedTotal: Int = 0,
+    /** Sets mastered across every game. */
+    val masteredTotal: Int = 0,
+    /** When each game (by RetroAchievements id) last had an unlock, epoch millis, for ordering beside other sources. */
+    val lastUnlock: Map<Long, Long> = emptyMap(),
 )
+
+/** A library game's own set ([AchievementState.source] says whose), as this device keeps it. */
+@Immutable
+data class LocalGameAchievements(val game: io.github.matiyaaa.fuse.model.GameId, val state: io.github.matiyaaa.fuse.model.AchievementState)
 
 @Immutable
 data class StorageSummary(val label: String, val freeBytes: Long, val totalBytes: Long)

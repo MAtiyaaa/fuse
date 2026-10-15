@@ -906,6 +906,12 @@ interface AchievementOps {
     /** Null when RetroAchievements isn't set up. */
     val feed: StateFlow<AchievementsFeed?>
     val configured: StateFlow<Boolean>
+
+    /**
+     * The sets this device keeps for the library's games (PS3, PS4, Vita and Xbox 360 trophies,
+     * Steam's achievements), whether or not RetroAchievements is set up; null until first read.
+     */
+    val local: StateFlow<List<LocalGameAchievements>?> get() = kotlinx.coroutines.flow.MutableStateFlow(emptyList())
     fun refresh(force: Boolean = false)
     suspend fun forGame(game: GameId): AchievementState?
     /** Checks a username + key against RetroAchievements and stores them securely on success. */
