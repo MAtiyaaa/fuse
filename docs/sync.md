@@ -361,15 +361,30 @@ kept first, as that save's own version in the history), along with the folders t
 **Saves from a Switch.** Settings, Fuse One, Import Saves, From a Switch reads what a modded
 Switch's save managers copy to its SD card: JKSV's `JKSV/<game>/<backup>` folders and ZIPs (each
 with its `.nx_save_meta.bin`, which names the game's title id, whose save it is and when it was
-made) and Checkpoint's `switch/Checkpoint/saves/0x<title id> <game>/<backup>` folders. Each backup
-is matched to a game by its title id, or by its folder's name when an old JKSV backup has no meta
-file (then the import asks to check it). Fuse then asks, one game at a time, whether it is that
-game and whose save it is: one person, several or everyone, each getting their own copy (the
-emulator's folder holds the copy of whoever plays here; the others' is kept for them on this
-device until they play). The backup's files are the save as the game wrote it, so they go into the
-emulator's NAND as they are, an account save in the user's folder and a device save in the
-game's device folder; the part of the save the backup doesn't hold is kept. The SD card is only
-read.
+made) and Checkpoint's `switch/Checkpoint/saves/0x<title id> <game>/<backup>` folders. A card
+plugged in (straight in, through an adapter or a reader) is found and offered first; otherwise
+choose the JKSV folder, Checkpoint's saves folder or one game's folder, on the card or copied
+anywhere, or one backup ZIP. JKSV writes a backup as a folder or a ZIP (its Export to ZIP
+setting); both are read, a ZIP zipped with its folder too, and a backup kept both ways counts
+once. `AUTO - <user> - <date>` (JKSV's copy before a restore) is that user's, and `Device - <date>`
+is the game's device save. Each backup is matched to a game by its title id, or by its folder's
+name when an old JKSV backup has no meta file (then the import asks to check it); the newest of
+each Switch user's backups is chosen. Fuse then asks, one game at a time, whether it is that game
+and whose save it is: one person, several or everyone, each getting their own copy. When anyone
+chosen already has a save of that game (in the emulator now, kept on this device for them,
+waiting to go to Fuse One, or in Fuse One), it says so and asks Override or Skip; Skip leaves
+theirs as it is and gives them no copy.
+
+An import touches only the chosen people's saves. The emulator's folder is written only for the
+person whose save is in it now (or when no one's is); while someone else's is there, the import
+is kept on this device for its owner and goes into place at their next launch, as a profile swap
+does. A save in the folder that no one owns, on a device several people use, is set aside as
+unowned rather than taken. The backup's files are the save as the game wrote it, so they go into
+the emulator's NAND as they are, an account save in the user's folder and a device save in the
+game's device folder; the other part of the save is the owner's own. Every save an import
+replaces is kept first, in its owner's history and as a backup on this device (the newest five
+for each save), which Undo Replacements or the game's save history ("Before import (this
+device)") puts back, with or without Fuse One. The SD card is only read.
 
 **Never silent.** When a played game's save can't be kept to send (its folder isn't reachable, or
 Fuse found no save where it looked), a message says why and what to do, once per game while Fuse
