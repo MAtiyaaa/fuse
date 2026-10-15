@@ -792,6 +792,7 @@ internal class DefaultLibraryOps(
         plainSave: io.github.matiyaaa.fuse.sync.SaveQuery? = null, romm: Pair<Long, io.github.matiyaaa.fuse.sync.SaveQuery>? = null,
     ) {
         val startedAt = ctx.now()
+        playedWhileAway = true
         val sessionId = data.playSessions.start(game, emulator, startedAt)
         active = ActiveSession(sessionId, game, endsOnResume = awaitExit == null, save = save, plainSave = plainSave, romm = romm)
         // Fuse Sync keeps the save moving while the game runs, and tells the other devices it is being played.
@@ -835,9 +836,13 @@ internal class DefaultLibraryOps(
         ctx.governor.onForeground(true)
         // Back after a while away with no game in between (the screen was off, the device asleep):
         // the interface welcomes the user back with the startup animation.
+        // A game that ran meanwhile has often ended just before this (a desktop's game process ends
+        // first): that is coming back from a game, not from being away, and gets no intro.
         val pausedAt = awayFrom
+        val played = playedWhileAway
         awayFrom = null
-        if (pausedAt != null && active == null) io.github.matiyaaa.fuse.ui.shell.app.Away.returned(ctx.now() - pausedAt)
+        playedWhileAway = false
+        if (pausedAt != null && active == null && !played) io.github.matiyaaa.fuse.ui.shell.app.Away.returned(ctx.now() - pausedAt)
         ctx.scope.launch {
             val session = active
             if (session != null && session.endsOnResume) {
@@ -856,8 +861,12 @@ internal class DefaultLibraryOps(
     /** When Fuse last went to the background, until it comes back. */
     @kotlin.concurrent.Volatile private var awayFrom: Long? = null
 
+    /** A game started since Fuse went to the background (or just before it did). */
+    @kotlin.concurrent.Volatile private var playedWhileAway = false
+
     override fun onPause() {
         awayFrom = ctx.now()
+        if (active == null) playedWhileAway = false
         ctx.governor.onForeground(false)
     }
 

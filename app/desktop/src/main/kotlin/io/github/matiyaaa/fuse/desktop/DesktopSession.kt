@@ -152,7 +152,7 @@ class DesktopSession(
                 if (safe != null) Log.info("starting in safe mode (${safe.reason})")
                 val services = withContext(Dispatchers.IO) { DesktopFuseServices.create(dirs, scope) }
                 io.github.matiyaaa.fuse.ui.designsystem.effects.StartupTrace.mark("services")
-                services.launcherHooks.onGameExited = { gate.playing = false; EventQueue.invokeLater { bringToFront() } }
+                services.launcherHooks.onGameExited = { gate.gameEnded(); EventQueue.invokeLater { bringToFront() } }
                 // Game Mode shows one window of the app at a time: Fuse steps aside for the game it started.
                 services.launcherHooks.onGameStarted = {
                     gate.playing = true
@@ -268,11 +268,19 @@ class DesktopSession(
 
     private fun bringToFront() {
         gate.showing = true
+        // Whether Steam runs a game is asked again from here, not carried over from before.
+        gate.steamGame = false
         io.github.matiyaaa.fuse.desktop.system.GamescopeComposite.shown()
         val w = window ?: return
         if (w.extendedState and java.awt.Frame.ICONIFIED != 0) w.extendedState = w.extendedState and java.awt.Frame.ICONIFIED.inv()
         w.toFront()
+        // Window managers that refuse a background window the focus still raise one that is on top
+        // for a moment; it goes back to an ordinary window at once (not under gamescope, which shows one window).
+        if (!w.isFocused && !io.github.matiyaaa.fuse.desktop.system.GameMode.active && !w.isAlwaysOnTop) {
+            runCatching { w.isAlwaysOnTop = true; w.toFront(); w.isAlwaysOnTop = false }
+        }
         w.requestFocus()
+        w.requestFocusInWindow()
     }
 
     /**
@@ -295,7 +303,7 @@ class DesktopSession(
         val now = System.currentTimeMillis()
         if (now - reclaimedAt < 1_000L) return
         reclaimedAt = now
-        Log.info("controller press without window focus in Game Mode; taking the focus back")
+        Log.info("controller press without window focus; taking the focus back")
         bringToFront()
     }
 
