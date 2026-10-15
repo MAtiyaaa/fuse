@@ -3,6 +3,13 @@
 Lists glide instead of jumping, tile art is ready before it scrolls in, every part of a game's page
 is in reach, the start-up sounds as it should, and Fii, Duo and Trio are gone.
 
+## New
+
+- **A sound at the start-up's climax.** After the launch sound, the start-up now plays a second
+  sound as the wordmark burns in: a quick run up into a wide chord that rings out. The first-start
+  opening does the same: the launch sound as the mark lights, and the climax as the tiles fly out
+  from it. Both are made by Fuse's own synthesizer, in your interface sound.
+
 ## Changed
 
 - **Shelves and lists glide.** Moving down the Library's All view, the shelves now glide to the
@@ -21,10 +28,7 @@ is in reach, the start-up sounds as it should, and Fii, Duo and Trio are gone.
   the Library's grids and on Home's shelves, so a quick scroll down Installed shows art straight
   away.
 - **The start-up's sounds.** The match strike, the flare and the swell from 0.4.2.13 are gone.
-  The start-up plays its launch sound as the spark bursts, as it did before them, then a new sound at
-  its climax as the wordmark burns in: a quick run up into a wide chord that rings out. The
-  first-start opening does the same: the launch sound as the mark lights, and the climax as the
-  tiles fly out from it. Both are made by Fuse's own synthesizer, in your interface sound.
+  The start-up plays its launch sound as the spark bursts again, as it did before them.
 
 ## Removed
 
