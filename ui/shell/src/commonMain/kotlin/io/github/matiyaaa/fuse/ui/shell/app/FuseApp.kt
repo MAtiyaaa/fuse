@@ -1490,7 +1490,7 @@ private fun StayAwakeWatch(app: AppState) {
     val systemArt by app.store.media.systemArtProgress.collectAsState()
     val awake = io.github.matiyaaa.fuse.ui.shell.platform.StayAwake.plan(
         transfers = transfers.active + transfers.queued,
-        finding = filling != null || systemArt != null,
+        finding = io.github.matiyaaa.fuse.ui.shell.platform.StayAwake.finding(filling, systemArt),
         standby = app.standby,
     )
     LaunchedEffect(awake) { app.platform.stayAwake(awake) }

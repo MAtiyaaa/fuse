@@ -775,6 +775,11 @@ interface EmulatorOps {
 
 interface MediaOps {
     fun media(owner: MediaOwner): Flow<io.github.matiyaaa.fuse.model.MediaSet>
+    /**
+     * A game is focused (its room is up): when it has no art yet, it is looked for now, ahead of
+     * the background fill, as opening it does. Once per game while Fuse runs.
+     */
+    fun focused(game: io.github.matiyaaa.fuse.model.GameId) {}
     /** Searches the configured providers for art of [kind]. Never saves anything by itself. */
     suspend fun artworkOptions(owner: MediaOwner, kind: MediaKind): ArtworkResult
     /** Saves [option] as custom art (source USER). */

@@ -52,6 +52,11 @@ class JvmSyncService(
     private val liveLookMs: Long = LIVE_LOOK_MS,
     /** Folders granted through the system's folder picker (`tree:` save folders), by their link; none on computers. */
     private val trees: (String) -> DocumentTree? = { null },
+    /**
+     * Whether reading this device's game files for the household (hashing) may run now: a handheld
+     * only while it charges, as reading every game it has, many gigabytes, ran it hot and drained it.
+     */
+    private val mayHash: () -> Boolean = { true },
 ) : SyncService {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val _status = MutableStateFlow<SyncStatus>(SyncStatus.Off)
@@ -80,7 +85,7 @@ class JvmSyncService(
 
     /** The household's games through this device's host (see [Household]). */
     val householdHere: JvmHousehold by lazy {
-        JvmHousehold(File(dir, "household"), scope, { client }, { cached.deviceId }, { cached }, busy = { _nowPlaying.value != null }, clock = clock)
+        JvmHousehold(File(dir, "household"), scope, { client }, { cached.deviceId }, { cached }, busy = { _nowPlaying.value != null || !mayHash() }, clock = clock)
     }
     override val household: Household get() = householdHere
     private var hostServer: SyncHost? = null
@@ -335,6 +340,15 @@ class JvmSyncService(
             responder = Discovery.answer({ store.hello(c.hostPort, fuseVersion) })
             // Off the interface's thread: the host's status reads its own files.
             scope.launch(Dispatchers.IO) { server.changes.collect { refreshHostView() } }
+            // A host belongs to the system, not to Fuse being open: one set up before this, or
+            // without its service, is handed to the service now (unless the person took it away).
+            if (!c.hostInFuseOnly && !triedService && lifetime.supported && !lifetime.state().installed) {
+                // Once a run: a service that won't start leaves the host here, not in a loop.
+                triedService = true
+                scope.launch(Dispatchers.IO) {
+                    if (hostServer === server) runCatching { handOver() }.onSuccess { refreshHostView() }
+                }
+            }
         }
         refreshHostView()
     }
@@ -382,6 +396,10 @@ class JvmSyncService(
                     }
                     val page = c.events(since, waitSeconds = 25)
                     householdHere.woken(page.wake)
+                    // A device checking in is no event, so when each was last seen (and so which are
+                    // online, and whose games show) is read again now and then: it stayed as it was
+                    // when the list was last read, "seen 5:05" on devices online all along.
+                    if (clock() - listsReadAt > LISTS_EVERY_MS) runCatching { refreshLists() }
                     if (page.events.isNotEmpty()) {
                         convergeLater(page.events)
                         device?.saw(page.seq)
@@ -460,6 +478,21 @@ class JvmSyncService(
             .mapNotNull { it.game }.distinct().filterNot(::localOnly)
         if (games.isEmpty()) return
         scope.launch(Dispatchers.IO) { converging.withLock { for (g in games) runCatching { convergeGame(g) } } }
+    }
+
+    override fun gamesArrived(keys: Collection<String>) {
+        if (keys.isEmpty()) return
+        scope.launch(Dispatchers.IO) {
+            val c = client ?: return@launch
+            val active = cached.activeProfile.ifEmpty { return@launch }
+            if (!cached.saves || queries == null) return@launch
+            // One question to the host for which of them it keeps saves of, then only those.
+            val mine = if (takesFrom(active)) runCatching { c.heads(active).heads }.getOrDefault(emptyList()) else emptyList()
+            val held = (mine + runCatching { c.heads(SHARED_SAVES).heads }.getOrDefault(emptyList())).map { it.game }.toSet()
+            val games = keys.distinct().filter { it in held }.filterNot(::localOnly)
+            if (games.isEmpty()) return@launch
+            converging.withLock { for (g in games) runCatching { convergeGame(g) } }
+        }
     }
 
     /** Every save the host has for the person here, looked at once: catching up after being offline, or joining. */
@@ -553,7 +586,11 @@ class JvmSyncService(
         }
     }
 
+    /** When the devices and profiles were last read from the host. */
+    @Volatile private var listsReadAt = 0L
+
     private suspend fun refreshLists() {
+        listsReadAt = clock()
         listsLock.withLock {
             val c = client ?: return@withLock
             val list = people.ordered(c.profiles())
@@ -1691,7 +1728,10 @@ class JvmSyncService(
         }
     }
 
-    override suspend fun installService(): Result<ServiceState> = withContext(Dispatchers.IO) { handOver().also { refreshHostView() } }
+    override suspend fun installService(): Result<ServiceState> = withContext(Dispatchers.IO) {
+        saveConfig { it.copy(hostInFuseOnly = false) }
+        handOver().also { refreshHostView() }
+    }
 
     /**
      * Hands the host over to the background service: this process stops serving (so the two never
@@ -1758,6 +1798,8 @@ class JvmSyncService(
     }
 
     override suspend fun removeService(): Result<ServiceState> = withContext(Dispatchers.IO) {
+        // Taken away on purpose: Fuse doesn't set it up again by itself.
+        saveConfig { it.copy(hostInFuseOnly = true) }
         lifetime.remove().also {
             // The host lives in Fuse again, while it is open.
             hostAdmin = null
@@ -1772,6 +1814,18 @@ class JvmSyncService(
     }
 
     @Volatile private var lastCode: String? = null
+
+    /** Whether this run already handed the host to its service by itself (see [startHostServerOnce]). */
+    @Volatile private var triedService = false
+
+    override suspend fun updateHost(): Result<HostUpdate> = withContext(Dispatchers.IO) {
+        val c = client ?: return@withContext Result.failure(SyncException("Fuse One isn't connected.", "not-connected", 0))
+        // Not through withClient: a host saying no to an update says nothing about the connection.
+        runCatching { c.updateHost() }.recoverCatching { e ->
+            // A host from before 0.4.2.23 has no such call: it is updated once on its computer.
+            if (e is SyncException && e.status == 404) throw SyncException("The host runs a Fuse from before it could be updated from here. Update Fuse once on the host's computer.", "old-host", 404) else throw e
+        }
+    }
 
     override suspend fun newPairingCode(): String? {
         // The host makes it; any device already connected may ask the host for one too.
@@ -3043,6 +3097,9 @@ class JvmSyncService(
         /** How long a save's files must be left alone before one made outside Fuse is kept. */
         const val OUTSIDE_SETTLED_MS = 60_000L
         const val PRESENCE_WAIT_MS = 3_000L
+
+        /** How often the device list is read again for when each device was last seen (under [ONLINE_MS]). */
+        const val LISTS_EVERY_MS = 45_000L
 
         /** Another device heard from this lately while playing (it may have gone to sleep mid-game). */
         const val PLAYING_ASK_MS = 30 * 60_000L

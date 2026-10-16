@@ -192,6 +192,12 @@ class SyncHost(
         }
     }
 
+    /**
+     * Updates the host to the newest Fuse when a device asks (set where the host runs as the
+     * system's service, which starts it again on the new Fuse; null where it runs inside Fuse).
+     */
+    @Volatile var onUpdateAsked: (suspend () -> HostUpdate)? = null
+
     /** Makes this backup the household's host when a person says so (set where a backup runs; null elsewhere). */
     @Volatile var onTakeOver: (suspend () -> Leadership)? = null
 
@@ -802,6 +808,13 @@ class SyncHost(
                 }
             }
             get("/devices") { device() ?: return@get; call.json(ListSerializer(DeviceInfo.serializer()), store.devices()) }
+            // Any device of the household may ask the host to update itself, from wherever it is.
+            post("/host/update") {
+                device() ?: return@post
+                val answer = onUpdateAsked?.let { ask -> runCatching { ask() }.getOrElse { HostUpdate(false, "The host couldn't update: ${it.message ?: it::class.simpleName}", fuseVersion) } }
+                    ?: HostUpdate(false, "The host runs inside Fuse on its computer just now, so it updates with that Fuse. Open Fuse there and update it, and the host runs on its own from then on.", fuseVersion)
+                call.json(HostUpdate.serializer(), answer)
+            }
             // A computer of the household offering to keep a copy and take over when the host is gone.
             post("/backups/offer") {
                 val d = device() ?: return@post

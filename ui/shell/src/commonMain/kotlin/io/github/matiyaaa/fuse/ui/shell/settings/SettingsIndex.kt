@@ -149,6 +149,7 @@ object SettingsIndex {
         SettingTopic("storage", "Games and space", "disk space drives size usage"),
         SettingTopic("storage", "Films and shows downloaded", "offline jellyfin downloaded movies episodes"),
         SettingTopic("about", "Check for updates", "update new version"),
+        SettingTopic("about", "Update the Fuse One host", "host update remote restart server"),
         SettingTopic("about", "Wi-Fi settings", "wifi internet network"),
         SettingTopic("about", "What Fuse connects to", "network internet privacy online"),
         SettingTopic("about", "No telemetry", "privacy tracking analytics data"),

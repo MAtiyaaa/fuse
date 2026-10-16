@@ -243,6 +243,22 @@ internal class DefaultRommOps(
         return null
     }
 
+    /**
+     * RomM's one game on [platform] going by the same name as [title] (as the All views put names
+     * side by side), for a game page's versions: another version of the game the person has here.
+     * Null when RomM has none, or several. Never a match for identity: that stays [RommMatch]'s.
+     */
+    internal suspend fun sameNameOnServer(platform: io.github.matiyaaa.fuse.model.PlatformId, title: String): RommRom? {
+        if (!settings.enabled) return null
+        val key = io.github.matiyaaa.fuse.ui.shell.library.sameTitleKey(title)
+        if (key.isEmpty()) return null
+        val found = mirror.all(server).filter { r ->
+            ctx.platforms.resolveFolder(r.platformSlug)?.id == platform &&
+                (io.github.matiyaaa.fuse.ui.shell.library.sameTitleKey(r.name) == key || io.github.matiyaaa.fuse.ui.shell.library.sameTitleKey(r.fsName.substringBeforeLast('.')) == key)
+        }
+        return found.singleOrNull()
+    }
+
     /** RomM's game [romId] as the mirror has it (never asks the server). */
     internal suspend fun romHere(romId: Long): RommRom? = if (!settings.enabled) null else mirror.rom(server, romId)
 

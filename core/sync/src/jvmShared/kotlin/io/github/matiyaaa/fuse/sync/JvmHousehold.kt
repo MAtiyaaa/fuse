@@ -81,6 +81,9 @@ class JvmHousehold(
     @Volatile private var shared: Map<String, SharedGame> = emptyMap()
     @Volatile private var published: String = ""
 
+    /** This device's list didn't reach the host the last time it was sent: it is sent again shortly. */
+    @Volatile private var unsent = false
+
     private val server = PeerServer(
         self = selfId,
         secret = { client()?.link?.deviceSecret },
@@ -133,6 +136,10 @@ class JvmHousehold(
             while (isActive && _supported.value) {
                 delay(LOOK_MS)
                 runCatching { refresh() }
+                // This device's own list, until the host has it: a list that didn't go up (the host
+                // away for a moment, the network changing) waited for the next scan, and the other
+                // devices never saw this one's games.
+                if (unsent) runCatching { publish(rebuild = false) }
             }
         }
         runCatching { refreshCommands() }
@@ -200,7 +207,13 @@ class JvmHousehold(
         val body = DeviceLibrary(device = selfId(), entries = entries, endpoint = endpoint, accepts = cfg.acceptSends, steamIdentities = identities)
         val version = SyncCrypto.sha256(json.encodeToString(DeviceLibrary.serializer(), body).toByteArray()).take(24)
         if (version == published) return
-        c.publishLibrary(body.copy(version = version))
+        try {
+            c.publishLibrary(body.copy(version = version))
+        } catch (e: Exception) {
+            unsent = true
+            throw e
+        }
+        unsent = false
         published = version
     }
 

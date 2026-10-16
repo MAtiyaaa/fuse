@@ -537,6 +537,21 @@ internal class DefaultMediaOps(
         fillOne(g, FillJob(MediaFillMode.FILL_MISSING, kinds, platform = null, game = null, everything = false, auto = true, visible = visible), kinds, details, configured)
     }
 
+    /** Games already looked for because they were focused, so moving back and forth asks once. */
+    private val focusAsked: MutableSet<GameId> = java.util.Collections.synchronizedSet(HashSet())
+
+    override fun focused(game: GameId) {
+        if (!ctx.settings.value.scraping.autoFill) return
+        if (!focusAsked.add(game)) return
+        ctx.scope.launch {
+            val owner = MediaOwner.OfGame(game)
+            val m = runCatching { ctx.data.media.mediaFor(listOf(owner))[owner] }.getOrNull()
+            // A game with something to show is left to the background fill.
+            if (m != null && (m.hero != null || m.boxart != null || m.grid != null || m.square != null || m.icon != null)) return@launch
+            runCatching { fillRemoteOne(game, visible = true) }
+        }
+    }
+
     override fun cancelFill() {
         val job = fillJob ?: return
         if (!job.isActive) return
@@ -595,10 +610,16 @@ internal class DefaultMediaOps(
             targets.forEach { queue.trySend(it) }
             queue.close()
             val workers = if (ctx.settings.value.performance.lowPowerMode) 1 else FILL_WORKERS
+            // An automatic fill with sources out of requests stops once games keep coming back with
+            // nothing: what a resting source might have had isn't remembered as "not there", so it
+            // went on through every game, adding nothing. The next one carries on when they are back.
+            var emptyInARow = 0
+            var givenUp = false
             coroutineScope {
                 repeat(workers.coerceAtMost(targets.size)) {
                     launch {
                         for (id in queue) {
+                            if (givenUp) break
                             val g = gameOf(id)
                             val enabled = g != null && ctx.data.scopedSettings.resolve(ScopedSettings.ScrapeEnabled, g.platformId, g.id).value
                             if (g != null && enabled) {
@@ -617,6 +638,8 @@ internal class DefaultMediaOps(
                             }
                             val paused = coordinator.resting().keys.map { it.displayName }
                             lock.withLock {
+                                emptyInARow = if (result.added == 0 && !result.details) emptyInARow + 1 else 0
+                                if (job.auto && paused.isNotEmpty() && emptyInARow >= GIVE_UP_AFTER) givenUp = true
                                 state = state.copy(
                                     done = state.done + 1,
                                     added = state.added + result.added,
@@ -633,6 +656,9 @@ internal class DefaultMediaOps(
             progress.value = state.copy(current = null, finished = true)
         }
     }
+
+    /** Games in a row an automatic fill finds nothing for, with a source resting, before it stops. */
+    private val GIVE_UP_AFTER = 12
 
     private suspend fun gamesIn(platform: PlatformId?): List<GameId> =
         (if (platform != null) ctx.data.games.observeByPlatform(platform) else ctx.data.games.observeAll()).first().map { it.id }

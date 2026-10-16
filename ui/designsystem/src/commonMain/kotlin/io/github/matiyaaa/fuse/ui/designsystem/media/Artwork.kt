@@ -115,9 +115,12 @@ fun Artwork(
             Size(target.width, target.height)
         }
     }
-    val request = remember(model, context, fit, decodeSizer) {
+    // A picture that failed is asked for again a few times ([ArtRetry]), not kept failed while shown.
+    var attempt by remember(model) { mutableStateOf(0) }
+    val request = remember(model, context, fit, decodeSizer, attempt) {
         ImageRequest.Builder(context).data(model).crossfade(false)
             .size(decodeSizer).scale(if (fit) Scale.FIT else Scale.FILL)
+            .memoryCacheKeyExtra(ArtRetry.EXTRA, attempt.toString())
             .build()
     }
     // On a computer, art is drawn with mipmaps: sharper where it is scaled (a tile lifting, a
@@ -127,6 +130,7 @@ fun Artwork(
     val state by loader.state.collectAsStateCompat()
     val success = state as? AsyncImagePainter.State.Success
     val failed = state is AsyncImagePainter.State.Error
+    ArtRetry.Watch(failed, attempt) { attempt++ }
     // Art already shown this session is never faded in again; pinned art is drawn at once while the
     // loader fetches it again.
     var lastPainter by remember(model) { mutableStateOf<Painter?>(null) }

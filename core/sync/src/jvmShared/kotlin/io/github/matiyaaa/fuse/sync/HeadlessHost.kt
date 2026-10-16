@@ -45,7 +45,20 @@ object HeadlessHost {
                 }
             }
         }
-        return Served(store, version) {
+        // The network may come back with another address (Wi-Fi lost and found, a new lease): the
+        // household is told the host's address as it is now, every minute. The server and discovery
+        // listen on every address, so they carry on through it by themselves.
+        val addresses = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
+            while (true) {
+                kotlinx.coroutines.delay(ADDRESS_CHECK_MS)
+                runCatching {
+                    val now = LanAddresses.list().firstOrNull()?.let { "$it:$port" }
+                    if (now != null) store.leadership.noteOwnAddress(now, store.outsideAddress().ifBlank { null })
+                }
+            }
+        }
+        return Served(store, version, server) {
+            addresses.cancel()
             schedule?.cancel()
             keeper?.cancel()
             responder?.stop()
@@ -54,7 +67,12 @@ object HeadlessHost {
     }
 
     /** A host serving on its own, until closed. */
-    class Served internal constructor(private val store: HostStore, private val version: String, private val stop: () -> Unit) : AutoCloseable {
+    class Served internal constructor(private val store: HostStore, private val version: String, private val server: SyncHost, private val stop: () -> Unit) : AutoCloseable {
+        /** What the host does when a device asks it to update ([SyncHost.onUpdateAsked]). */
+        fun onUpdateAsked(handler: suspend () -> HostUpdate) {
+            server.onUpdateAsked = handler
+        }
+
         /**
          * The newest Fuse one of the household's devices runs, when it is newer than this host's own;
          * null otherwise. Devices say which Fuse they run with every call (from 0.4.2 on).
@@ -129,6 +147,9 @@ object HeadlessHost {
     }
 
     const val KEEP_EVERY_MS = 60_000L
+
+    /** How often the host looks at its own address on the network. */
+    const val ADDRESS_CHECK_MS = 60_000L
 
     /** How often a host looks whether the household's backup is due. */
     const val BACKUP_CHECK_MS = 60 * 60_000L

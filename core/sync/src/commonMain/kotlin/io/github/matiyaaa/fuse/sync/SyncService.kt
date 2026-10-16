@@ -267,6 +267,13 @@ interface SyncService {
     suspend fun convergence(game: GameKey): Convergence? = null
 
     /**
+     * Games that just came into this library (downloaded, sent from another device, found by a
+     * scan), by their household keys: those the host keeps a save of for the person here get it
+     * put in place now. One whose save place isn't known yet gets it once its first play shows where.
+     */
+    fun gamesArrived(keys: Collection<String>) {}
+
+    /**
      * This device's own choice of whose saves move here: [pullOff] profiles' saves are never
      * brought in (this device still sends theirs), [off] profiles' saves never move either way.
      * Records and play time are unaffected, and so are saves the household plays together.
@@ -336,6 +343,12 @@ interface SyncService {
     suspend fun hostHere(name: String, installService: Boolean): Result<HostView>
 
     suspend fun installService(): Result<ServiceState>
+
+    /**
+     * Asks the household's host, from any device, to update itself to the newest Fuse; it then
+     * starts again on it by itself. What it answered, or why it couldn't be asked.
+     */
+    suspend fun updateHost(): Result<HostUpdate> = Result.failure(UnsupportedOperationException("Fuse One isn't connected."))
     suspend fun removeService(): Result<ServiceState>
 
     /** A code to add a device (on the host only). */

@@ -149,11 +149,16 @@ class SyncHostService(private val dirs: FuseDirs, private val port: () -> Int, p
             |Description=Fuse Sync by Fuse (host)
             |Wants=network-online.target
             |After=network-online.target
+            |# Never given up on, however often it stops: it is always started again.
+            |StartLimitIntervalSec=0
             |
             |[Service]
             |ExecStart=${Autostart.quoteExec(exec)} $ARGUMENT
             |Restart=always
             |RestartSec=5
+            |# Stopped only by Fuse or the system: kept out of the way of a short memory shortage.
+            |OOMScoreAdjust=-100
+            |TimeoutStopSec=20
             |
             |[Install]
             |WantedBy=default.target
