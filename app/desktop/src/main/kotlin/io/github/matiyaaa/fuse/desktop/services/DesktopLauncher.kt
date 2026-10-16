@@ -125,6 +125,7 @@ internal class DesktopLauncher(
                 family.stop()
                 return@withContext RunResult.Started(awaitExit = null)
             }
+            io.github.matiyaaa.fuse.desktop.system.ExitGuard.played(process)
             hooks.onGameStarted?.invoke()
             RunResult.Started(awaitExit = {
                 process.onExit().await()

@@ -92,6 +92,9 @@ class DesktopSession(
     @Volatile private var reclaimedAt = 0L
     private val closed = AtomicBoolean(false)
 
+    /** Fuse is quitting: its window never comes back (a game ending meanwhile doesn't show it again). */
+    @Volatile private var quitting = false
+
     init {
         val saved = prefs.load()
         val flag = WindowMode.fromArgs(args)
@@ -263,7 +266,10 @@ class DesktopSession(
         gate.showing = false
         io.github.matiyaaa.fuse.desktop.system.GamescopeComposite.hidden()
         val w = window ?: return
-        w.extendedState = w.extendedState or java.awt.Frame.ICONIFIED
+        // gamescope doesn't minimise windows: Fuse's stayed mapped, in front of the game (or of
+        // Cartridge) and still drawing. Hidden, it is out of gamescope's choice and draws nothing.
+        if (io.github.matiyaaa.fuse.desktop.system.GameMode.active) w.isVisible = false
+        else w.extendedState = w.extendedState or java.awt.Frame.ICONIFIED
     }
 
     /** Another start of Fuse asked for this one: it comes to the front. */
@@ -275,6 +281,8 @@ class DesktopSession(
         gate.steamGame = false
         io.github.matiyaaa.fuse.desktop.system.GamescopeComposite.shown()
         val w = window ?: return
+        if (quitting || closed.get()) return
+        if (!w.isVisible) w.isVisible = true
         if (w.extendedState and java.awt.Frame.ICONIFIED != 0) w.extendedState = w.extendedState and java.awt.Frame.ICONIFIED.inv()
         w.toFront()
         // Window managers that refuse a background window the focus still raise one that is on top
@@ -339,6 +347,9 @@ class DesktopSession(
     }
 
     override fun exitApplication() {
+        // Gone within a few seconds whatever happens, so Steam's Exit Game never waits on Fuse.
+        quitting = true
+        io.github.matiyaaa.fuse.desktop.system.ExitGuard.deadline()
         EventQueue.invokeLater {
             // Gone from the screen at once (Steam's Game Mode shows the next thing straight away);
             // what is left to close happens out of sight.

@@ -86,7 +86,7 @@ class DesktopFuseServices private constructor(
     override fun intelligence() = io.github.matiyaaa.fuse.launch.intelligence.FileLook() to
         io.github.matiyaaa.fuse.launch.intelligence.FileKnowledgeStore(File(dirs.data, "intelligence.json"))
     override val launcher: GameLauncher = desktopLauncher
-    override val cartridge: CartridgeBridge = if (os == DesktopOs.LINUX) DesktopCartridgeBridge(dirs) else NoCartridgeBridge
+    override val cartridge: CartridgeBridge = if (os == DesktopOs.LINUX) DesktopCartridgeBridge(dirs, launcherHooks) else NoCartridgeBridge
     override val installer: ReleaseInstaller =
         if (os == DesktopOs.LINUX) DesktopReleaseInstaller(dirs, http) else SystemReleaseInstaller(dirs, http, os)
 
