@@ -9,6 +9,7 @@ Fixes for checking for updates and for the on-screen keyboard.
 ## Changed
 
 - Check for Updates says when it couldn't reach GitHub, instead of saying Fuse is up to date.
+- Check for Updates uses the GitHub token given in the Store, when there is one, as the Store does.
 
 ## Fixed
 

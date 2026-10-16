@@ -5,6 +5,7 @@ import io.github.matiyaaa.fuse.integrations.LooseBoolean
 import io.github.matiyaaa.fuse.integrations.LooseLong
 import io.github.matiyaaa.fuse.integrations.ProviderHttp
 import io.github.matiyaaa.fuse.integrations.RateLimiter
+import io.github.matiyaaa.fuse.integrations.Secret
 import io.github.matiyaaa.fuse.integrations.flatMap
 import io.github.matiyaaa.fuse.model.ReleaseAsset
 import io.github.matiyaaa.fuse.model.ReleaseInfo
@@ -56,8 +57,10 @@ class GitHubReleases(
     limiter: RateLimiter = RateLimiter(minIntervalMillis = 500, maxConcurrency = 2),
     private val apiUrl: String = API_URL,
     private val webUrl: String = WEB_URL,
+    /** A GitHub token (the one given in the Store), which raises the API's limit to 5,000 an hour. */
+    private val token: () -> String? = { null },
 ) {
-    private val api = ProviderHttp(http, "GitHub", limiter, { emptyList() })
+    private val api = ProviderHttp(http, "GitHub", limiter, { listOfNotNull(token()?.takeIf { it.isNotBlank() }?.let(::Secret)) })
 
     /**
      * The latest published (non-draft, non-prerelease) release; Success(null) when there is none.
@@ -75,6 +78,7 @@ class GitHubReleases(
         url("$apiUrl/repos/$owner/$repo/releases/latest")
         header("Accept", "application/vnd.github+json")
         header("X-GitHub-Api-Version", "2022-11-28")
+        token()?.takeIf { it.isNotBlank() }?.let { header("Authorization", "Bearer $it") }
     }.flatMap { raw ->
         when {
             raw.status == 404 -> ApiResult.Success(null)

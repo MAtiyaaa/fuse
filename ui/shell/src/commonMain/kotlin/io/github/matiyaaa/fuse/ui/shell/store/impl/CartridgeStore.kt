@@ -295,7 +295,9 @@ internal class DefaultUpdateOps(private val ctx: StoreContext) : UpdateOps {
     }
 
     override suspend fun check(): ReleaseInfo? {
-        val result = GitHubReleases(ctx.services.http).latest(GitHubReleases.FUSE_REPO)
+        // The GitHub token given in the Store, when there is one, lifts the API's hourly limit for this too.
+        val token = runCatching { ctx.services.secrets.get(DefaultAppStoreOps.TOKEN_KEY) }.getOrNull()
+        val result = GitHubReleases(ctx.services.http, token = { token }).latest(GitHubReleases.FUSE_REPO)
         val now = ctx.now()
         val release = (result as? ApiResult.Success)?.value
         // A check that couldn't reach GitHub says so, never "up to date".

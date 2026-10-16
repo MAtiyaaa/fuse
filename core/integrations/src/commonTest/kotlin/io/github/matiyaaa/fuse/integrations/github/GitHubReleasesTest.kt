@@ -68,6 +68,15 @@ class GitHubReleasesTest {
     }
 
     @Test
+    fun theStoresTokenIsSentWhenThereIsOne() = runTest {
+        val http = TestHttp { json(releaseJson) }
+        GitHubReleases(http.client, RateLimiter.unlimited(), token = { "ghp_example" }).latest(CartridgeProtocol.RELEASE_REPO)
+        assertEquals("Bearer ghp_example", http.last.headers["Authorization"])
+        GitHubReleases(http.client, RateLimiter.unlimited()).latest(CartridgeProtocol.RELEASE_REPO)
+        assertNull(http.last.headers["Authorization"])
+    }
+
+    @Test
     fun aRateLimitedApiFallsBackToTheWebsite() = runTest {
         val sha = "a".repeat(64)
         val http = TestHttp { request ->
