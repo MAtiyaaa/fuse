@@ -315,6 +315,13 @@ class InputRouter(
     fun consumeUntilRelease(action: NavAction) { consumedUntilRelease += action }
     private val longPressConsumed = mutableSetOf<PadButton>()
 
+    /**
+     * Buttons waiting to learn whether they are a long press: they act when let go (unless the long
+     * press happened). A repeating button acted when pressed, so letting it go does nothing more:
+     * acting again there deleted two characters with one tap of X on the keyboard.
+     */
+    private val pendingLongPress = mutableSetOf<PadButton>()
+
     /** Sees every physical press and release (the controller test screen uses it). */
     var rawListener: ((PadButton, Boolean) -> Unit)? = null
 
@@ -429,6 +436,7 @@ class InputRouter(
             }
             action == NavAction.SELECT && topWantsLongPress() -> {
                 // Decide on release, or turn into REORDER once held long enough.
+                pendingLongPress += button
                 held[button] = scope.launch {
                     delay(profile.longPressMs.toLong())
                     longPressConsumed += button
@@ -437,6 +445,7 @@ class InputRouter(
             }
             action == NavAction.CONTEXT && orderedLayers().firstOrNull()?.contextHold == true -> {
                 // The same for Options: let go early it is Options, held it is the second action.
+                pendingLongPress += button
                 held[button] = scope.launch {
                     delay(profile.longPressMs.toLong())
                     longPressConsumed += button
@@ -459,6 +468,7 @@ class InputRouter(
             it(button, false)
             // A button held since before the test started is let go without acting.
             held.remove(button)?.cancel()
+            pendingLongPress -= button
             longPressConsumed.remove(button)
             return
         }
@@ -485,7 +495,8 @@ class InputRouter(
         job?.cancel()
         // A pending long press that was let go early is an ordinary select.
         val pressed = actionFor(button)
-        if (job != null && (pressed == NavAction.SELECT || pressed == NavAction.CONTEXT) && !longPressConsumed.remove(button)) {
+        val pending = pendingLongPress.remove(button)
+        if (job != null && pending && (pressed == NavAction.SELECT || pressed == NavAction.CONTEXT) && !longPressConsumed.remove(button)) {
             dispatch(pressed, source)
         }
     }
@@ -496,6 +507,7 @@ class InputRouter(
         held.values.forEach { it?.cancel() }
         held.clear()
         longPressConsumed.clear()
+        pendingLongPress.clear()
         stickDirection = null
         rightDirection = null
         triggers.clear()
@@ -537,6 +549,7 @@ class InputRouter(
         if (!comboActive) return false
         // A stick that acted on its own before the combo formed is let go quietly.
         held.remove(button)?.cancel()
+        pendingLongPress -= button
         if (!comboDone) {
             comboDone = true
             comboHold?.cancel()
