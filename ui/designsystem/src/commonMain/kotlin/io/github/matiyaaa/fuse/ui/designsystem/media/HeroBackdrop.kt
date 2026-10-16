@@ -330,9 +330,12 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
     // Decoded a little under the screen's size and no larger than the performance profile allows.
     val px = Fuse.quality.heroDecodePx
     val canBlur = Fuse.quality.blur
-    val request = remember(source.model, context, px) { heroRequest(context, source.model, px) }
+    // Art that failed is asked for again a few times ([ArtRetry]), so the room fills in once it can.
+    var attempt by remember { mutableStateOf(0) }
+    val request = remember(source.model, context, px, attempt) { heroRequest(context, source.model, px, attempt) }
     val loader = rememberAsyncImagePainter(request, contentScale = ContentScale.Crop)
     val state by loader.state.collectAsStateCompat()
+    ArtRetry.Watch(state is AsyncImagePainter.State.Error, attempt) { attempt++ }
     // A room shown before is drawn at once from the picture held for it ([ShownArt]), even when the
     // system emptied the image cache while Fuse was in the background, so it never pops in.
     val loaded = state as? AsyncImagePainter.State.Success
@@ -609,5 +612,7 @@ private val BOX_ART_BLUR = 48.dp
 private const val FROZEN_SCALE = 4
 
 /** One background decode, the same everywhere, so art warmed ahead of time is found in memory. */
-fun heroRequest(context: PlatformContext, model: Any?, px: Int): ImageRequest =
-    ImageRequest.Builder(context).data(model).size(px, px).precision(Precision.INEXACT).scale(Scale.FIT).build()
+fun heroRequest(context: PlatformContext, model: Any?, px: Int, attempt: Int = 0): ImageRequest =
+    ImageRequest.Builder(context).data(model).size(px, px).precision(Precision.INEXACT).scale(Scale.FIT)
+        .apply { if (attempt > 0) memoryCacheKeyExtra(ArtRetry.EXTRA, attempt.toString()) }
+        .build()

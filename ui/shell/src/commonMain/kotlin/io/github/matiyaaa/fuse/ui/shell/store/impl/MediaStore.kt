@@ -537,6 +537,21 @@ internal class DefaultMediaOps(
         fillOne(g, FillJob(MediaFillMode.FILL_MISSING, kinds, platform = null, game = null, everything = false, auto = true, visible = visible), kinds, details, configured)
     }
 
+    /** Games already looked for because they were focused, so moving back and forth asks once. */
+    private val focusAsked: MutableSet<GameId> = java.util.Collections.synchronizedSet(HashSet())
+
+    override fun focused(game: GameId) {
+        if (!ctx.settings.value.scraping.autoFill) return
+        if (!focusAsked.add(game)) return
+        ctx.scope.launch {
+            val owner = MediaOwner.OfGame(game)
+            val m = runCatching { ctx.data.media.mediaFor(listOf(owner))[owner] }.getOrNull()
+            // A game with something to show is left to the background fill.
+            if (m != null && (m.hero != null || m.boxart != null || m.grid != null || m.square != null || m.icon != null)) return@launch
+            runCatching { fillRemoteOne(game, visible = true) }
+        }
+    }
+
     override fun cancelFill() {
         val job = fillJob ?: return
         if (!job.isActive) return

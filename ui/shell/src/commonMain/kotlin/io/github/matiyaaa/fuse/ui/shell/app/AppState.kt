@@ -326,6 +326,8 @@ class AppState(
             heroState = value
             heroRoute = navigator.current
             heroHeld = false
+            // A game focused with no art yet has it looked for now, not when it is opened.
+            (value?.id as? io.github.matiyaaa.fuse.model.GameId)?.let { store.media.focused(it) }
         }
     private var heroState by mutableStateOf<HeroSource?>(null)
 
