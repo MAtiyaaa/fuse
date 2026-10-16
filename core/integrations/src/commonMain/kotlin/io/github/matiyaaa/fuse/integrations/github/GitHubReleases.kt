@@ -5,6 +5,7 @@ import io.github.matiyaaa.fuse.integrations.LooseBoolean
 import io.github.matiyaaa.fuse.integrations.LooseLong
 import io.github.matiyaaa.fuse.integrations.ProviderHttp
 import io.github.matiyaaa.fuse.integrations.RateLimiter
+import io.github.matiyaaa.fuse.integrations.Secret
 import io.github.matiyaaa.fuse.integrations.flatMap
 import io.github.matiyaaa.fuse.model.ReleaseAsset
 import io.github.matiyaaa.fuse.model.ReleaseInfo
@@ -55,14 +56,29 @@ class GitHubReleases(
     http: HttpClient,
     limiter: RateLimiter = RateLimiter(minIntervalMillis = 500, maxConcurrency = 2),
     private val apiUrl: String = API_URL,
+    private val webUrl: String = WEB_URL,
+    /** A GitHub token (the one given in the Store), which raises the API's limit to 5,000 an hour. */
+    private val token: () -> String? = { null },
 ) {
-    private val api = ProviderHttp(http, "GitHub", limiter, { emptyList() })
+    private val api = ProviderHttp(http, "GitHub", limiter, { listOfNotNull(token()?.takeIf { it.isNotBlank() }?.let(::Secret)) })
 
-    /** The latest published (non-draft, non-prerelease) release; Success(null) when there is none. */
-    suspend fun latest(owner: String, repo: String): ApiResult<ReleaseInfo?> = api.execute {
+    /**
+     * The latest published (non-draft, non-prerelease) release; Success(null) when there is none.
+     * When the API can't answer (its 60 requests an hour per network used up, by the Store's own
+     * checks too), the release is read from the website instead, which that limit doesn't hold back.
+     */
+    suspend fun latest(owner: String, repo: String): ApiResult<ReleaseInfo?> {
+        val fromApi = latestFromApi(owner, repo)
+        if (fromApi is ApiResult.Success) return fromApi
+        val fromWeb = latestFromWeb(owner, repo)
+        return if (fromWeb is ApiResult.Success && fromWeb.value != null) fromWeb else fromApi
+    }
+
+    private suspend fun latestFromApi(owner: String, repo: String): ApiResult<ReleaseInfo?> = api.execute {
         url("$apiUrl/repos/$owner/$repo/releases/latest")
         header("Accept", "application/vnd.github+json")
         header("X-GitHub-Api-Version", "2022-11-28")
+        token()?.takeIf { it.isNotBlank() }?.let { header("Authorization", "Bearer $it") }
     }.flatMap { raw ->
         when {
             raw.status == 404 -> ApiResult.Success(null)
@@ -77,10 +93,47 @@ class GitHubReleases(
 
     suspend fun latest(repo: RepoRef): ApiResult<ReleaseInfo?> = latest(repo.owner, repo.repo)
 
+    /**
+     * The latest release from the website: `releases/latest` leads to the release's own page, whose
+     * address names its tag, and the release's `SHA256SUMS.txt` lists its files with their SHA-256,
+     * so a download is still checked. Only for releases that publish that list, as Fuse's do.
+     */
+    suspend fun latestFromWeb(owner: String, repo: String): ApiResult<ReleaseInfo?> =
+        api.execute { url("$webUrl/$owner/$repo/releases/latest") }.flatMap { page ->
+            val tag = TAG_IN_URL.find(page.url)?.groupValues?.get(1)
+            when {
+                page.status == 404 -> ApiResult.Success(null)
+                tag == null -> api.failureFor(page) ?: ApiResult.Success(null)
+                else -> api.execute { url("$webUrl/$owner/$repo/releases/download/$tag/$SUMS") }.flatMap { sums ->
+                    api.failureFor(sums) ?: ApiResult.Success(
+                        ReleaseInfo(
+                            tag = tag,
+                            name = tag,
+                            notes = "",
+                            publishedAt = null,
+                            assets = parseSums(sums.body).map { (name, sha) ->
+                                ReleaseAsset(name = name, url = "$webUrl/$owner/$repo/releases/download/$tag/$name", sizeBytes = 0, digest = "sha256:$sha")
+                            },
+                            htmlUrl = "$webUrl/$owner/$repo/releases/tag/$tag",
+                        ),
+                    )
+                }
+            }
+        }
+
     override fun toString(): String = "GitHubReleases"
 
     companion object {
         const val API_URL = "https://api.github.com"
+        const val WEB_URL = "https://github.com"
+        private const val SUMS = "SHA256SUMS.txt"
+        private val TAG_IN_URL = Regex("/releases/tag/([^/?#]+)")
+
+        /** `<sha256>  <file>` lines (sha256sum's own format) as file name to SHA-256. */
+        internal fun parseSums(text: String): List<Pair<String, String>> = text.lineSequence().mapNotNull { line ->
+            val m = Regex("^([0-9a-fA-F]{64})\\s+\\*?(.+)$").find(line.trim()) ?: return@mapNotNull null
+            m.groupValues[2].trim().substringAfterLast('/') to m.groupValues[1].lowercase()
+        }.toList()
 
         /** Fuse's own releases. */
         val FUSE_REPO = RepoRef("MAtiyaaa", "fuse")

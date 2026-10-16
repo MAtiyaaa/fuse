@@ -1,6 +1,6 @@
-# Fuse 0.4.2.21 - The Native Update
+# Fuse 0.4.2.22 - The Native Update
 
-Fixes for starting games and Cartridge in Steam's Game Mode.
+Fixes for checking for updates and for the on-screen keyboard.
 
 ## New
 
@@ -8,16 +8,16 @@ Fixes for starting games and Cartridge in Steam's Game Mode.
 
 ## Changed
 
-- In Game Mode, Fuse hides while a game it started runs, and comes back when the game ends. It no
-  longer draws behind the game while you play.
+- Check for Updates says when it couldn't reach GitHub, instead of saying Fuse is up to date.
+- Check for Updates uses the GitHub token given in the Store, when there is one, as the Store does.
 
 ## Fixed
 
-- In Game Mode, a game or emulator Fuse started could stay hidden behind Fuse, which went on
-  drawing and lagged while it waited for the game. Fuse used to minimise itself, which gamescope
-  doesn't do, so its window stayed in front.
-- In Game Mode, Cartridge didn't come to the screen: Fuse stayed in front and took the controller
-  back on the next press. Fuse now steps aside while Cartridge runs, as for a game.
-- Steam's Exit Game could stay on "Exiting game" forever. When Fuse quits, the games and Cartridge
-  it started now end with it, and Fuse is gone within a few seconds even when something in its
-  shutdown hangs.
+- Check for Updates could say "Fuse is up to date" when a newer Fuse was out. GitHub answers only
+  60 questions an hour from one network, and the Store's own checks can use them up; when it
+  stopped answering, Fuse took that for "nothing new". Fuse now reads the latest release from
+  GitHub's website when the API doesn't answer, still checks the download against the release's
+  SHA-256, and says so when neither answers.
+- On the on-screen keyboard, one press of X deleted two characters, and one press of A on a key
+  typed it twice. A button that repeats while held acted when pressed and again when let go; it now
+  acts once per press.

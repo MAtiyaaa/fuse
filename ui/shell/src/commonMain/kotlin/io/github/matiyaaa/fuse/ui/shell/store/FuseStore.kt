@@ -1011,6 +1011,9 @@ interface UpdateOps {
     /** Where an update stands: downloading with progress, ready to install, installing, failed. */
     val state: StateFlow<UpdateState>
     suspend fun check(): ReleaseInfo?
+
+    /** Why the last [check] couldn't find out (no connection, GitHub not answering), or null when it could. */
+    val checkProblem: String? get() = null
     /** Starts downloading [release] in the background (again after a failure). A second call while it runs does nothing. */
     fun download(release: ReleaseInfo)
     fun cancelDownload()
