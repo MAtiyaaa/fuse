@@ -25,6 +25,16 @@ class DesktopStayAwakeTest {
     }
 
     @Test
+    fun aFinishedFillLetsTheDeviceSleep() {
+        fun fill(finished: Boolean) = io.github.matiyaaa.fuse.ui.shell.store.FillProgress(3, 3, null, 0, finished = finished)
+        assertFalse(StayAwake.finding(null, null))
+        assertTrue(StayAwake.finding(fill(finished = false), null))
+        assertTrue(StayAwake.finding(null, fill(finished = false)))
+        // Still shown once done (what it added, what needs a choice), but no longer work.
+        assertFalse(StayAwake.finding(fill(finished = true), fill(finished = true)))
+    }
+
+    @Test
     fun eachSystemIsAskedItsOwnWayAndTheLockGoesWithFuse() {
         val linux = DesktopStayAwake.command(DesktopOs.LINUX, StayAwake(cpu = true, screen = true), 4242, tools::get)!!
         assertEquals("/usr/bin/systemd-inhibit", linux.first())

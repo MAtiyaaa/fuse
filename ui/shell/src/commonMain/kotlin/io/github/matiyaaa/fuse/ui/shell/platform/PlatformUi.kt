@@ -543,6 +543,15 @@ data class StayAwake(val cpu: Boolean, val screen: Boolean) {
             val working = transfers > 0 || finding
             return StayAwake(cpu = working, screen = working && standby)
         }
+
+        /**
+         * Whether art is being found: a fill still going. One that finished stays shown (what it
+         * added, what needs a choice) and doesn't count. Counted while shown, the locks were held for
+         * good after the first fill following a scan: the processor never slept and Wi-Fi never
+         * saved power, and a handheld ran hot and drained.
+         */
+        fun finding(fill: io.github.matiyaaa.fuse.ui.shell.store.FillProgress?, systemArt: io.github.matiyaaa.fuse.ui.shell.store.FillProgress?): Boolean =
+            fill?.finished == false || systemArt?.finished == false
     }
 }
 
