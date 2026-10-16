@@ -579,6 +579,37 @@ class ServiceTest {
     }
 
     @Test
+    fun aGameThatArrivesLaterGetsItsSaveAtOnce(): Unit = runBlocking {
+        val (pc, _) = service("Gaming PC", Library())
+        val (deck, _) = service("Steam Deck", Library())
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        deck.switchTo(mo.id).getOrThrow()
+        pc.switchTo(mo.id).getOrThrow()
+        // The PC doesn't have Ruby yet when the Deck saves.
+        val pcRoms = File(root, "pc/Games/GBA")
+        val pcQuery = SaveQuery(ct, "gba", File(pcRoms, "Pokemon Ruby.gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby")
+        var hasIt = false
+        pc.saveQueries { id -> pcQuery.takeIf { id == ct.id && hasIt } }
+        val roms = File(root, "deck-roms").apply { mkdirs() }
+        val q = SaveQuery(ct, "gba", File(roms, "ruby.gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby")
+        File(roms, "ruby.sav").writeText("made on the deck")
+        deck.afterExit(q, 0, 60_000)
+        kotlinx.coroutines.delay(1_500)
+        val target = File(pcRoms, "Pokemon Ruby.sav")
+        assertTrue(!target.exists(), "no game here, so no save")
+        // Downloaded: its save is put in place at once, before it is ever launched here.
+        hasIt = true
+        pc.gamesArrived(listOf(ct.id))
+        val until = System.currentTimeMillis() + 20_000
+        while (!target.isFile && System.currentTimeMillis() < until) kotlinx.coroutines.delay(50)
+        assertEquals("made on the deck", target.readText())
+        pc.stop()
+        deck.stop()
+    }
+
+    @Test
     fun aDeviceThatDoesntTakeAPersonsSavesNeverGetsThemAndOneThatDoesntSyncThemNeverSendsThem(): Unit = runBlocking {
         val (pc, _) = service("Gaming PC", Library())
         val (deck, _) = service("Steam Deck", Library())

@@ -466,6 +466,21 @@ class JvmSyncService(
         scope.launch(Dispatchers.IO) { converging.withLock { for (g in games) runCatching { convergeGame(g) } } }
     }
 
+    override fun gamesArrived(keys: Collection<String>) {
+        if (keys.isEmpty()) return
+        scope.launch(Dispatchers.IO) {
+            val c = client ?: return@launch
+            val active = cached.activeProfile.ifEmpty { return@launch }
+            if (!cached.saves || queries == null) return@launch
+            // One question to the host for which of them it keeps saves of, then only those.
+            val mine = if (takesFrom(active)) runCatching { c.heads(active).heads }.getOrDefault(emptyList()) else emptyList()
+            val held = (mine + runCatching { c.heads(SHARED_SAVES).heads }.getOrDefault(emptyList())).map { it.game }.toSet()
+            val games = keys.distinct().filter { it in held }.filterNot(::localOnly)
+            if (games.isEmpty()) return@launch
+            converging.withLock { for (g in games) runCatching { convergeGame(g) } }
+        }
+    }
+
     /** Every save the host has for the person here, looked at once: catching up after being offline, or joining. */
     private suspend fun convergeAll() {
         val c = client ?: return

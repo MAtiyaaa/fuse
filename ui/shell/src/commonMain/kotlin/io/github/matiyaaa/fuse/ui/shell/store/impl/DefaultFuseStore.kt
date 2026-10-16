@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -523,6 +524,20 @@ internal class DefaultFuseStore private constructor(
             // A save made on another device comes into place here by itself, for games this library has.
             svc.saveQueries { household -> profileData.gameFor(household)?.let { library.saveQueryFor(io.github.matiyaaa.fuse.model.GameId(it)) } }
             sync.samples = { library.saveSamples() }
+            // A game new to this library (downloaded, sent over, found by a scan) gets its save from
+            // the host at once, not first at its launch. The library as it first loads isn't "new".
+            ctx.scope.launch {
+                var known: Set<io.github.matiyaaa.fuse.model.GameId>? = null
+                library.games(GameQuery(includeHidden = true)).map { list -> list.map { it.id }.toSet() }.distinctUntilChanged().collect { ids ->
+                    val before = known
+                    known = ids
+                    if (before == null) return@collect
+                    val added = (ids - before).take(MAX_ARRIVALS)
+                    if (added.isEmpty()) return@collect
+                    val keys = added.mapNotNull { id -> runCatching { library.saveQueryFor(id)?.game?.id }.getOrNull() }
+                    svc.gamesArrived(keys)
+                }
+            }
             ctx.onUserChange = { if (sync.config.value.enabled) svc.changed() }
             // Whose saves move on this device: its own choice, followed as it changes.
             ctx.scope.launch {
@@ -714,6 +729,9 @@ internal class DefaultFuseStore private constructor(
     }
 
     companion object {
+        /** New games at once whose saves are looked for (a whole folder added stays a few calls). */
+        const val MAX_ARRIVALS = 200
+
         /** Version of [DisplayNameCleaner]'s rules; existing names are cleaned again when it grows. */
         const val CLEAN_RULES = 2
         const val MAX_THEMES = 32
