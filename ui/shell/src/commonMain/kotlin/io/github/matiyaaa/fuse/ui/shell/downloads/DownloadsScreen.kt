@@ -582,7 +582,8 @@ internal fun rowWords(row: TransferRow, live: TransferLive, queuePosition: Int?)
     val t = row.item
     val name = row.deviceName ?: return statusWords(t, live, queuePosition)
     if (t.source == "request") {
-        return if (t.status == TransferStatus.FAILED) "$name couldn't: ${t.error ?: "it didn't work"}"
+        // The device's own words already name it ("Atiya HTPC can't see this game"): said once, not twice.
+        return if (t.status == TransferStatus.FAILED) t.error?.takeIf { it.startsWith(name) } ?: "$name couldn't: ${t.error ?: "it didn't work"}"
         else "Waiting for $name to be back  ·  asked from this device"
     }
     // The percentage is already on the right of the row, so the line says how much instead.
