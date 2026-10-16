@@ -1194,6 +1194,9 @@ object Slots {
             if (file.isFile) files += LocalFile(f.name, file)
         }
         val root = spot.root?.let(::File) ?: spot.files.firstOrNull()?.let { File(it.path).parentFile } ?: File(".")
+        // A Switch game's own hidden files are its save (Balatro keeps everything in `.lovegame`).
+        val switch = spot.format == "switch.savedata"
+        fun hidden(d: File) = SaveNoise.folder(d.name) && !(switch && d.name.startsWith(".") && !SwitchDumps.macLeftover(d.name))
         if (spot.root != null) {
             // Folder saves: every file in this game's folders, named by its path inside the root.
             val folders = spot.folders.ifEmpty { listOf("") }
@@ -1201,13 +1204,13 @@ object Slots {
                 val dir = if (folder.isEmpty()) root else File(root, folder)
                 if (!dir.isDirectory) continue
                 // Logs, temporary files, caches and what the system leaves behind are never the save's.
-                dir.walkTopDown().onEnter { d -> d == dir || !SaveNoise.folder(d.name) }.forEach { f ->
+                dir.walkTopDown().onEnter { d -> d == dir || !hidden(d) }.forEach { f ->
                     val name = f.relativeTo(root).path.replace(File.separatorChar, '/')
                     when {
-                        f.name.startsWith(".") -> {}
+                        f.name.startsWith(".") && !(switch && !SwitchDumps.macLeftover(f.name)) -> {}
                         // A folder many games share (a GCI folder): only this game's files.
                         spot.only != null && !name.startsWith(spot.only) -> {}
-                        f.isFile -> if (!SaveNoise.file(f.name) && SavePath.isSafe(name)) files += LocalFile(name, f)
+                        f.isFile -> if ((switch && f.name.startsWith(".") || !SaveNoise.file(f.name)) && SavePath.isSafe(name)) files += LocalFile(name, f)
                         // An empty folder inside the save is part of its structure too.
                         f != dir && f.isDirectory && f.list()?.isEmpty() == true -> if (SavePath.isSafe(name)) empty += name
                     }
@@ -1218,11 +1221,12 @@ object Slots {
         val mounts = spot.mounts.mapValues { File(it.value) }
         for ((prefix, dir) in mounts) {
             if (!dir.isDirectory) continue
-            dir.walkTopDown().onEnter { d -> d == dir || !SaveNoise.folder(d.name) }.forEach { f ->
+            dir.walkTopDown().onEnter { d -> d == dir || !hidden(d) }.forEach { f ->
                 val inside = f.relativeTo(dir).path.replace(File.separatorChar, '/')
                 val name = "$prefix/$inside"
                 if (spot.only != null && !inside.startsWith(spot.only)) return@forEach
-                if (f.isFile && !f.name.startsWith(".") && !SaveNoise.file(f.name) && SavePath.isSafe(name)) files += LocalFile(name, f)
+                val kept = if (switch && f.name.startsWith(".")) !SwitchDumps.macLeftover(f.name) else !f.name.startsWith(".") && !SaveNoise.file(f.name)
+                if (f.isFile && kept && SavePath.isSafe(name)) files += LocalFile(name, f)
             }
         }
         return LocalSlot(game, spot.kind, spot.format, root, files.sortedBy { it.path }, spot.available, targets, empty.sorted(), mounts, learnedAs = spot.learnedAs)

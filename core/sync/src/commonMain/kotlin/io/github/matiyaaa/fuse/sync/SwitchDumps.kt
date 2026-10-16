@@ -96,8 +96,10 @@ object SwitchDumps {
         val name = folder.last()
         val game = folder.getOrNull(folder.size - 2)
         val checkpoint = game?.let { CHECKPOINT_GAME.find(it) }
-        val underJksv = folder.size >= 3 && folder.dropLast(2).lastOrNull()?.let { it.equals("JKSV", true) || it.equals("Saves", true) && folder.getOrNull(folder.size - 4)?.equals("JKSV", true) == true } == true
-        val files = inside.filter { it != META && !it.startsWith(".") && !it.contains("/.") }
+        // A folder named JKSV is JKSV's own, never a game or a backup (a zipped JKSV folder in a folder also named so).
+        val underJksv = folder.size >= 3 && !name.equals("JKSV", true) && game?.equals("JKSV", true) != true && folder.dropLast(2).lastOrNull()?.let { it.equals("JKSV", true) || it.equals("Saves", true) && folder.getOrNull(folder.size - 4)?.equals("JKSV", true) == true } == true
+        // A game's own hidden files are its save too (Balatro keeps everything in `.lovegame`); only a Mac's leftovers aren't.
+        val files = inside.filter { it != META && !macLeftover(it) }
         if (files.isEmpty()) return null
         return when {
             meta != null -> Backup(root, Tool.JKSV, meta.titleId, game?.takeUnless { HEX16.matches(it) }, name, userOf(name, Tool.JKSV), meta.kind, meta.savedAt, files)
@@ -112,6 +114,9 @@ object SwitchDumps {
             else -> null
         }
     }
+
+    /** What a Mac adds beside files it copies or zips: the `__MACOSX` folder, `._` copies and `.DS_Store`. */
+    fun macLeftover(path: String): Boolean = path.split('/').any { it == "__MACOSX" || it.startsWith("._") || it == ".DS_Store" }
 
     /** The Switch user a backup's default name carries. */
     fun userOf(name: String, tool: Tool): String? = when (tool) {

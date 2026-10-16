@@ -3109,9 +3109,13 @@ function switchSendSection() {
   const folderBtn = btn('Choose folder', { icon: 'folder-open', kind: 'secondary', onClick: () => folderIn.click() });
   const zipBtn = btn('Choose ZIP', { icon: 'file-up', kind: 'primary', onClick: () => zipIn.click() });
   const run = async (input) => {
+    // JKSV's own `.nx_save_meta.bin` and a game's hidden files (Balatro's `.lovegame`) are part of
+    // the backup; only what a Mac or Windows leaves beside files is not.
     const files = Array.from(input.files || []).filter((f) => {
-      const name = (f.webkitRelativePath || f.name).split('/').pop();
-      return name && !name.startsWith('.') && name !== 'Thumbs.db' && name !== 'desktop.ini';
+      const parts = (f.webkitRelativePath || f.name).split('/');
+      const name = parts[parts.length - 1];
+      return name && !parts.some((p) => p === '__MACOSX' || p.startsWith('._') || p === '.DS_Store')
+        && name !== 'Thumbs.db' && name !== 'desktop.ini';
     });
     input.value = '';
     if (!files.length) return;
