@@ -353,7 +353,14 @@ internal class DefaultReachOps(
     /** Games already sent to be looked for while Fuse runs, so a list redrawn isn't sent again. */
     private val lookedFor: MutableSet<GameId> = java.util.Collections.synchronizedSet(HashSet())
 
-    private val lists = combine(index, redraw, ctx.gameArtFound, transfers.items) { idx, _, _, _ -> idx }
+    /**
+     * The transfers as the lists read them (which game, which transfer, how far along it is in
+     * steps): the list itself changes every few seconds while anything moves, as its bytes are
+     * kept, and every game of every device was gathered again each time on a handheld downloading.
+     */
+    private val transferShape = transfers.items.map { list -> list.map { listOf(it.key, it.id, it.status, it.source) } }.distinctUntilChanged()
+
+    private val lists = combine(index, redraw, ctx.gameArtFound, transferShape) { idx, _, _, _ -> idx }
         .mapLatest { idx ->
             val records = games.allRecords()
             val sorted = idx.groups.sortedBy { (records[it.key]?.titleCustom ?: it.best.title).lowercase() }
@@ -437,7 +444,7 @@ internal class DefaultReachOps(
     }
 
     override fun availability(id: GameId): Flow<GameCopies?> =
-        combine(household.libraries, household.mine, devices, localIds, transfers.items) { _, _, _, _, _ -> }
+        combine(household.libraries, household.mine, devices, localIds, transferShape) { _, _, _, _, _ -> }
             .mapLatest { availabilityNow(id) }
             .distinctUntilChanged()
             .flowOn(Dispatchers.Default)

@@ -252,12 +252,21 @@ internal class DefaultRommOps(
         if (!settings.enabled) return null
         val key = io.github.matiyaaa.fuse.ui.shell.library.sameTitleKey(title)
         if (key.isEmpty()) return null
+        val memo = "${server}|${platform.value}|$key"
+        // A game page asks again every time a transfer or a device changes: the server's whole
+        // list is read once a minute for it, not each time.
+        sameNames[memo]?.takeIf { ctx.now() - it.first < SAME_NAME_MS }?.let { (_, id) -> return id?.let { romHere(it) } }
         val found = mirror.all(server).filter { r ->
             ctx.platforms.resolveFolder(r.platformSlug)?.id == platform &&
                 (io.github.matiyaaa.fuse.ui.shell.library.sameTitleKey(r.name) == key || io.github.matiyaaa.fuse.ui.shell.library.sameTitleKey(r.fsName.substringBeforeLast('.')) == key)
-        }
-        return found.singleOrNull()
+        }.singleOrNull()
+        if (sameNames.size > SAME_NAME_KEEP) sameNames.clear()
+        sameNames[memo] = ctx.now() to found?.id
+        return found
     }
+
+    /** [sameNameOnServer]'s answers lately, by server, system and name: when, and which game (if one). */
+    private val sameNames = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, Long?>>()
 
     /** RomM's game [romId] as the mirror has it (never asks the server). */
     internal suspend fun romHere(romId: Long): RommRom? = if (!settings.enabled) null else mirror.rom(server, romId)
@@ -1181,6 +1190,9 @@ internal class DefaultRommOps(
     }
 
     companion object {
+        /** How long [sameNameOnServer] keeps an answer. */
+        const val SAME_NAME_MS = 60_000L
+        private const val SAME_NAME_KEEP = 500
         const val SECRET = "romm.credential"
 
         /** Fuse Identity's kind for "Not this game" on RomM. */
