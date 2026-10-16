@@ -74,7 +74,9 @@ fun householdWords(s: HouseholdState): String {
         else -> "${withGames[0].name} and ${withGames.size - 1} other devices"
     }
     return when {
-        !s.supported -> "Update Fuse on the host computer to see your other devices' games"
+        // Most often the host just hasn't answered yet (it is asked again every half minute, and
+        // Sync's activity says why when it can't); only an old host never offers them.
+        !s.supported -> "Asking the host for your other devices' games. If they don't come, see Sync's activity"
         s.games == 0 && where == null -> "Your other devices' games show here once they share them"
         s.games == 0 -> "Everything on $where is on this device too"
         else -> "${if (s.games == 1) "1 game" else "${s.games} games"} on $where that this device doesn't have"
