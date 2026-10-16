@@ -21,6 +21,8 @@ class SyncHostServiceTest {
         // A path with a space is quoted, as a Desktop Entry's Exec is.
         assertTrue("ExecStart=\"/home/mo/Apps/Fuse 0.3.0.AppImage\" --sync-host" in unit, unit)
         assertTrue("Restart=always" in unit)
+        // However often it stops (a power cut mid-start, the network not up yet), it is started again.
+        assertTrue("StartLimitIntervalSec=0" in unit)
         assertTrue("WantedBy=default.target" in unit)
         assertTrue("X-Fuse-Sync-Host=true" in unit, "marked as Fuse's own, so only Fuse's is ever removed")
     }

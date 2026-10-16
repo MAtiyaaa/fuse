@@ -343,6 +343,12 @@ interface SyncService {
     suspend fun hostHere(name: String, installService: Boolean): Result<HostView>
 
     suspend fun installService(): Result<ServiceState>
+
+    /**
+     * Asks the household's host, from any device, to update itself to the newest Fuse; it then
+     * starts again on it by itself. What it answered, or why it couldn't be asked.
+     */
+    suspend fun updateHost(): Result<HostUpdate> = Result.failure(UnsupportedOperationException("Fuse One isn't connected."))
     suspend fun removeService(): Result<ServiceState>
 
     /** A code to add a device (on the host only). */

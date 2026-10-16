@@ -1893,6 +1893,10 @@ fun updateRows(app: AppState): List<MenuAction> {
     val p by app.store.prefs.collectAsState()
     val available by app.store.updates.available.collectAsState()
     val state by app.store.updates.state.collectAsState()
+    // The household's host, when this device is in touch with it: it can be updated from here.
+    val sync = app.store.sync.service
+    val online = sync?.status?.collectAsState()?.value as? io.github.matiyaaa.fuse.sync.SyncStatus.Online
+    var askingHost by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     return buildList {
         add(infoRow("version", "Fuse", app.store.updates.currentVersion, icon = FuseIcons.Info))
         val r = available
@@ -1964,6 +1968,27 @@ fun updateRows(app: AppState): List<MenuAction> {
                 )
             }
         }))
+        if (sync != null && online != null) {
+            add(MenuAction(
+                "host-update", "Update the Fuse One host", FuseMarks.FuseOne,
+                detail = "Updates ${online.hostName} to the newest Fuse from here. It starts again by itself, and devices carry on once it is back",
+                trailing = if (askingHost) Trailing.Value("Asking") else Trailing.None,
+                onSelect = {
+                    if (!askingHost) {
+                        askingHost = true
+                        app.scope.launch {
+                            try {
+                                sync.updateHost()
+                                    .onSuccess { app.toasts.show(it.message, if (it.started) ToastKind.SUCCESS else ToastKind.INFO) }
+                                    .onFailure { app.toasts.show("Couldn't ask the host to update. ${it.message ?: ""}".trim(), ToastKind.ERROR) }
+                            } finally {
+                                askingHost = false
+                            }
+                        }
+                    }
+                },
+            ))
+        }
         add(toggleRow("auto", "Check automatically", FuseIcons.Bell, p.checkForUpdates, "Once a day from GitHub Releases; nothing installs without you") { v -> app.store.updatePrefs { it.copy(checkForUpdates = v) } })
     }
 }

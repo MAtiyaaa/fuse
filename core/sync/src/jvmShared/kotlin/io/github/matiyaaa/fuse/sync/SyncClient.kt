@@ -357,6 +357,8 @@ class SyncClient(
         send(HttpMethod.Post, "/profiles/$profile/revisions/$revision/pin", pinned, Boolean.serializer(), kotlinx.serialization.json.JsonObject.serializer())
     suspend fun events(since: Long, waitSeconds: Int = 0): JournalPage = get("/events?since=$since&wait=$waitSeconds", JournalPage.serializer())
     suspend fun devices(): List<DeviceInfo> = get("/devices", ListSerializer(DeviceInfo.serializer()))
+    /** Asks the host to update itself to the newest Fuse and start again on it. */
+    suspend fun updateHost(): HostUpdate = send(HttpMethod.Post, "/host/update", kotlinx.serialization.json.JsonObject(emptyMap()), kotlinx.serialization.json.JsonObject.serializer(), HostUpdate.serializer())
     suspend fun resolveGames(games: List<List<String>>): List<String> =
         send(HttpMethod.Post, "/games/resolve", GameClaims(games), GameClaims.serializer(), ResolvedGames.serializer()).ids
     /** Tells the host which saves are in place here. A host before 0.3.6 doesn't take these; that is fine. */

@@ -335,6 +335,15 @@ class JvmSyncService(
             responder = Discovery.answer({ store.hello(c.hostPort, fuseVersion) })
             // Off the interface's thread: the host's status reads its own files.
             scope.launch(Dispatchers.IO) { server.changes.collect { refreshHostView() } }
+            // A host belongs to the system, not to Fuse being open: one set up before this, or
+            // without its service, is handed to the service now (unless the person took it away).
+            if (!c.hostInFuseOnly && !triedService && lifetime.supported && !lifetime.state().installed) {
+                // Once a run: a service that won't start leaves the host here, not in a loop.
+                triedService = true
+                scope.launch(Dispatchers.IO) {
+                    if (hostServer === server) runCatching { handOver() }.onSuccess { refreshHostView() }
+                }
+            }
         }
         refreshHostView()
     }
@@ -1714,7 +1723,10 @@ class JvmSyncService(
         }
     }
 
-    override suspend fun installService(): Result<ServiceState> = withContext(Dispatchers.IO) { handOver().also { refreshHostView() } }
+    override suspend fun installService(): Result<ServiceState> = withContext(Dispatchers.IO) {
+        saveConfig { it.copy(hostInFuseOnly = false) }
+        handOver().also { refreshHostView() }
+    }
 
     /**
      * Hands the host over to the background service: this process stops serving (so the two never
@@ -1781,6 +1793,8 @@ class JvmSyncService(
     }
 
     override suspend fun removeService(): Result<ServiceState> = withContext(Dispatchers.IO) {
+        // Taken away on purpose: Fuse doesn't set it up again by itself.
+        saveConfig { it.copy(hostInFuseOnly = true) }
         lifetime.remove().also {
             // The host lives in Fuse again, while it is open.
             hostAdmin = null
@@ -1795,6 +1809,18 @@ class JvmSyncService(
     }
 
     @Volatile private var lastCode: String? = null
+
+    /** Whether this run already handed the host to its service by itself (see [startHostServerOnce]). */
+    @Volatile private var triedService = false
+
+    override suspend fun updateHost(): Result<HostUpdate> = withContext(Dispatchers.IO) {
+        val c = client ?: return@withContext Result.failure(SyncException("Fuse One isn't connected.", "not-connected", 0))
+        // Not through withClient: a host saying no to an update says nothing about the connection.
+        runCatching { c.updateHost() }.recoverCatching { e ->
+            // A host from before 0.4.2.23 has no such call: it is updated once on its computer.
+            if (e is SyncException && e.status == 404) throw SyncException("The host runs a Fuse from before it could be updated from here. Update Fuse once on the host's computer.", "old-host", 404) else throw e
+        }
+    }
 
     override suspend fun newPairingCode(): String? {
         // The host makes it; any device already connected may ask the host for one too.

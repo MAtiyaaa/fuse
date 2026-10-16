@@ -282,6 +282,14 @@ data class HouseholdSnapshot(
 @Serializable
 data class HouseholdBackupsState(val folder: String, val snapshots: List<HouseholdSnapshot>, val problem: String? = null)
 
+/**
+ * The host's answer to a device asking it to update ([SyncHost]): whether it [started] (it then
+ * restarts on its own once the new Fuse is in place), what to tell the person, and the Fuse it is
+ * moving to, or runs when it didn't start.
+ */
+@Serializable
+data class HostUpdate(val started: Boolean, val message: String, val version: String = "")
+
 /** Where a device stands as a backup: the household's hosts, and whether its offer waits on the host. */
 @Serializable
 data class BackupState(val leadership: Leadership, val offered: Boolean, val backup: Boolean)

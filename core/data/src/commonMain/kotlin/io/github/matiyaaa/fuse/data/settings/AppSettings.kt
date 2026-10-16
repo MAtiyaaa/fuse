@@ -163,6 +163,12 @@ data class SyncSettings(
     val backupHost: Boolean = false,
     /** Where the host keeps whole copies of the household (every day, week and month); empty is Fuse's own folder. */
     val householdBackupDir: String = "",
+    /**
+     * The host runs only while Fuse is open: the person took its background service away. Otherwise
+     * a host runs as a service of the system, so it keeps serving with Fuse closed, after a restart
+     * or a power cut, and through the network coming and going.
+     */
+    val hostInFuseOnly: Boolean = false,
     /** Profiles whose saves this device never brings in (it still sends theirs). This device's own choice. */
     val noPullProfiles: List<String> = emptyList(),
     /** Profiles whose saves never move on this device, either way. This device's own choice. */
