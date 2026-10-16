@@ -51,7 +51,7 @@ fun SystemEverywhereScreen(app: AppState, platform: PlatformId, name: String, ro
     val rommState by store.romm.state.collectAsState()
     val sel = rememberPageState(app.navigator, "system.everywhere.${platform.value}") { SectionedGridSelection() }
 
-    fun key(title: String) = title.lowercase().filter { it.isLetterOrDigit() }
+    fun key(title: String) = sameTitleKey(title)
     val here = local.orEmpty()
     val seen = HashSet<String>().apply { here.forEach { add(key(it.title)) } }
     val items = ArrayList<Pair<String, SectionItem>>()

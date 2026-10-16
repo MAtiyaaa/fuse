@@ -170,7 +170,28 @@ internal fun streamedApps(hosts: List<io.github.matiyaaa.fuse.ui.shell.store.Str
 }
 
 /** The key a game is known by across sources: its system and its name, so one game is one tile. */
-internal fun sameGameKey(card: GameCard): String = card.platformId.value + "|" + card.title.lowercase().filter { it.isLetterOrDigit() }
+internal fun sameGameKey(card: GameCard): String = card.platformId.value + "|" + sameTitleKey(card.title)
+
+/**
+ * A game's name as sources agree on it: "&" and "and" alike, a leading "The" or a trailing ", The"
+ * dropped, and what is in brackets (a region, "[v131072]" for the update a Switch copy carries, a
+ * release group's tag) left out, as is a bare "v0" at the end. "Mario & Sonic at the Olympic Games
+ * [0100...][v0]" here and "Mario and Sonic at the Olympic Games" on RomM are one game, shown once.
+ */
+internal fun sameTitleKey(title: String): String {
+    val plain = title.lowercase()
+        .replace(BRACKETED, " ")
+        .replace("&", " and ")
+        .replace(TRAILING_VERSION, "")
+        .replace(TRAILING_THE, "")
+        .trim()
+        .removePrefix("the ")
+    return plain.filter { it.isLetterOrDigit() }.ifEmpty { title.lowercase().filter { it.isLetterOrDigit() } }
+}
+
+private val BRACKETED = Regex("""\s*[\[(][^\])]*[\])]""")
+private val TRAILING_VERSION = Regex("""\s+v\d+(\.\d+)*\s*$""")
+private val TRAILING_THE = Regex(""",\s*the\s*$""")
 
 /**
  * Every source's recent games as one shelf, newest first: the library's own, then RomM's and the

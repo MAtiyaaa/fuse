@@ -63,6 +63,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.ContentKind
+import io.github.matiyaaa.fuse.model.Game
 import io.github.matiyaaa.fuse.model.FolderInterpretation
 import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.LocationKind
@@ -326,6 +327,8 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     }
     val rows = buildList {
         if (moreFacts) add("facts")
+        // Several copies of the game (this device's, RomM's, another device's): one is chosen here.
+        if (shownCopies.size > 1) add("versions")
         add("actions")
         // The time played is a stop of its own, so the stick brings it into view on any screen.
         add("playtime")
@@ -341,7 +344,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
         "facts", "about" -> 1
         "playtime" -> if (beat != null) 2 else 1
         "actions" -> actions.size
-        "available" -> shownCopies.size
+        "available", "versions" -> shownCopies.size
         "romm" -> rommButtons.size.coerceAtLeast(1)
         "discs" -> discs.size
         "achievements" -> badges.size
@@ -581,7 +584,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                     "playtime" -> if (col == 1) beat?.let { showBeat(it) } else app.go(Route.PlayTime)
                     "shots" -> viewing = col
                     "romm" -> rommButtons.getOrNull(col)?.let { b -> romm?.let { v -> app.rommDownload(v.romId, game.displayTitle, b.what) } } ?: app.go(Route.Downloads)
-                    "available" -> shownCopies.getOrNull(col)?.let { cp -> app.copyMenu(game.id, game.displayTitle, cp, hereAlready = !notHere, canUpload = canUploadHere, rommHasIt = rommHasIt) }
+                    "available", "versions" -> shownCopies.getOrNull(col)?.let { cp -> app.copyMenu(game.id, game.displayTitle, cp, hereAlready = !notHere, canUpload = canUploadHere, rommHasIt = rommHasIt) }
                     "actions" -> actions.getOrNull(col)?.run?.invoke()
                     "discs" -> discs.getOrNull(col)?.let { disc -> app.play(card, discPath = disc.path) }
                     else -> cardAt(row, col)?.let(::openCard)
@@ -653,6 +656,17 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                             }
                         }
                     }
+                    if (shownCopies.size > 1) {
+                        Spacer(Modifier.height(Space.m))
+                        Versions(
+                            shownCopies, game, Modifier.reveal(reveal, 1),
+                            selected = if (row == "versions" && focused) col else -1,
+                            onCopy = { i ->
+                                sel.row = rows.indexOf("versions"); sel.setColumn("versions", i)
+                                app.copyMenu(game.id, game.displayTitle, shownCopies[i], hereAlready = !notHere, canUpload = canUploadHere, rommHasIt = rommHasIt)
+                            },
+                        )
+                    }
                     Spacer(Modifier.height(Space.xl))
                     // One button, drawn the same in either arrangement below.
                     val button: @Composable (Int, Modifier) -> Unit = { i, mod ->
@@ -661,7 +675,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                         val m = mod.onGloballyPositioned { actionRects[i] = it.boundsInRoot() }
                         val a = actions[i]
                         val selected = row == "actions" && col == i && focused
-                        val tap = { sel.row = 0; sel.setColumn("actions", i); a.run() }
+                        val tap = { sel.row = rows.indexOf("actions").coerceAtLeast(0); sel.setColumn("actions", i); a.run() }
                         if (a.label != null) {
                             FuseButton(
                                 a.label, selected = selected, icon = a.icon,
@@ -1799,6 +1813,53 @@ private fun availableSummary(copies: List<io.github.matiyaaa.fuse.ui.shell.store
  * and RomM. Each says whether its device is around, how big the game is there, whether its files
  * are the same as the others', and when it came. Confirming one shows what can be done with it.
  */
+/**
+ * The game's versions, between its facts and Play: each copy Fuse knows (this device's, another
+ * device's, RomM's) as a chip with where it is, its size and, for this device's, its updates and
+ * DLC. Choosing one offers what can be done with it (download it here too, send it, open it), so
+ * two versions of a game are one game with a choice, not two games.
+ */
+@Composable
+private fun Versions(copies: List<io.github.matiyaaa.fuse.ui.shell.store.CopyView>, game: Game, modifier: Modifier, selected: Int, onCopy: (Int) -> Unit) {
+    val c = Fuse.colors
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.s)) {
+        FText("${copies.size} versions", Fuse.type.label, color = c.textMuted, maxLines = 1)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+            copies.forEachIndexed { i, cp ->
+                io.github.matiyaaa.fuse.ui.designsystem.components.Chip(
+                    versionLabel(cp, game),
+                    icon = io.github.matiyaaa.fuse.ui.shell.reach.copyIcon(cp),
+                    color = if (cp.place == io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.HERE) c.accent else c.text,
+                    selected = cp.place == io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.HERE,
+                    focused = selected == i,
+                    onClick = { onCopy(i) },
+                )
+            }
+        }
+    }
+}
+
+/** A version's chip: where it is, how big, and this device's updates and DLC. */
+internal fun versionLabel(copy: io.github.matiyaaa.fuse.ui.shell.store.CopyView, game: Game): String {
+    val here = copy.place == io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.HERE
+    val place = when (copy.place) {
+        io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.HERE -> "This device"
+        io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.ROMM -> "RomM"
+        else -> copy.name
+    }
+    val version = if (here) listOfNotNull(game.tags.version?.let { "v$it" }, game.tags.revision?.let { "Rev $it" }).joinToString(" ").ifEmpty { null } else null
+    val extras = if (here) {
+        val updates = game.content.count { it.kind == ContentKind.UPDATE }
+        val dlc = game.content.count { it.kind == ContentKind.DLC }
+        listOfNotNull(
+            updates.takeIf { it > 0 }?.let { if (it == 1) "1 update" else "$it updates" },
+            dlc.takeIf { it > 0 }?.let { "$it DLC" },
+        ).joinToString(", ").ifEmpty { null }
+    } else null
+    val size = copy.sizeBytes.takeIf { it > 0 }?.let { io.github.matiyaaa.fuse.ui.shell.home.bytesText(it) }
+    return listOfNotNull(place, version, size, extras).joinToString("  ·  ")
+}
+
 @Composable
 private fun AvailableOn(copies: List<io.github.matiyaaa.fuse.ui.shell.store.CopyView>, selected: Int, onCopy: (Int) -> Unit) {
     val list = rememberLazyListState()

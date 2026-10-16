@@ -449,6 +449,8 @@ internal class DefaultReachOps(
         val others = if (keys.isEmpty()) emptyList() else copiesOf(keys)
         val romId = id.rommOnly ?: local?.let { romm.romOf(it.id) ?: it.links.rommRomId } ?: others.firstNotNullOfOrNull { it.second.rommRomId }
             ?: others.firstNotNullOfOrNull { (_, e) -> romm.sameOnServer(null, e.files.mapNotNull { it.md5 })?.id }
+            // Another version on RomM (another update, another dump), so the game page offers both.
+            ?: local?.let { romm.sameNameOnServer(it.platformId, it.displayTitle)?.id }
         val rom = romId?.takeIf { romm.enabled }?.let { romm.romHere(it) }
         if (local == null && others.isEmpty() && rom == null) return null
         val fingerprints = (others.map { it.second } + listOfNotNull(mineEntry)).mapNotNull { it.fingerprint }
