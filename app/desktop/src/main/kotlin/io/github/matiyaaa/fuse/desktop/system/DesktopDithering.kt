@@ -66,6 +66,7 @@ internal object DesktopDithering {
     """
 
     private val IDENTITY = floatArrayOf(1f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f)
+    private const val OPAQUE = 0xFF000000.toInt()
 
     private val noise: org.jetbrains.skia.RuntimeEffect? by lazy {
         runCatching { org.jetbrains.skia.RuntimeEffect.makeForShader(NOISE) }
@@ -83,13 +84,16 @@ internal object DesktopDithering {
      */
     fun ditherGradient(paint: androidx.compose.ui.graphics.Paint, toScreen: FloatArray = IDENTITY) {
         val skia = paint.skiaPaint
-        val shader = skia.shader
         val effect = noise
-        if (shader == null || effect == null) {
+        if (effect == null) {
             skia.isDither = true
             return
         }
         val alpha = paint.alpha
+        // A flat colour (the dim or veil over a room) gets the noise too: drawn at part strength over
+        // a dithered room, it scales the room's noise down with the light (a dim of a half leaves half
+        // a step), and the bands under it came back. Its own noise brings the step back.
+        val shader = skia.shader ?: org.jetbrains.skia.Shader.makeColor(skia.color or OPAQUE)
         val wrapped = runCatching {
             org.jetbrains.skia.RuntimeShaderBuilder(effect).run {
                 child("content", shader)

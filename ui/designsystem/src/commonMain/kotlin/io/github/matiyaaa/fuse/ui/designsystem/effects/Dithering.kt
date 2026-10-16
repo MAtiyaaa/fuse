@@ -60,6 +60,13 @@ fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDitheredRect(
     }
 }
 
+/**
+ * [color] over the whole scope, dithered where the platform can: for a dim or veil at part strength
+ * over a dithered room, which would otherwise scale the room's noise below a step and bring its bands back.
+ */
+fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDitheredRect(color: androidx.compose.ui.graphics.Color) =
+    drawDitheredRect(androidx.compose.ui.graphics.SolidColor(color))
+
 /** [path] filled with [brush], as `drawPath`, dithered where the platform can ([Dithering.gradients]). */
 fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDitheredPath(path: androidx.compose.ui.graphics.Path, brush: androidx.compose.ui.graphics.Brush, alpha: Float = 1f) {
     val dither = Dithering.gradients ?: return drawPath(path, brush, alpha = alpha)

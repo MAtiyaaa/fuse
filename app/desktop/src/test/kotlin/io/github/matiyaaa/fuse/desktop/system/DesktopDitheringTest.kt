@@ -257,6 +257,51 @@ class DesktopDitheringTest {
         assertTrue(smooth <= 10, "dithered runs at most $smooth px")
     }
 
+    /**
+     * A dithered near-black ramp with a black dim over it at [dim], as a room is darkened behind the
+     * interface: the longest run of one green value along a row.
+     */
+    private fun dimmedRun(ditherDim: Boolean, dim: Float = 0.6f, w: Int = 1024, h: Int = 8): Int {
+        val image = androidx.compose.ui.graphics.ImageBitmap(w, h)
+        val canvas = androidx.compose.ui.graphics.Canvas(image)
+        val ramp = androidx.compose.ui.graphics.Paint()
+        // Green 10 to 54: after a dim of 0.6, 4 to 22, steps about 57 px apart.
+        androidx.compose.ui.graphics.Brush.horizontalGradient(
+            listOf(androidx.compose.ui.graphics.Color(8, 10, 14), androidx.compose.ui.graphics.Color(48, 54, 70)), 0f, w.toFloat(),
+        ).applyTo(androidx.compose.ui.geometry.Size(w.toFloat(), h.toFloat()), ramp, 1f)
+        DesktopDithering.install()
+        io.github.matiyaaa.fuse.ui.designsystem.effects.Dithering.gradients!!(ramp)
+        canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), ramp)
+        val veil = androidx.compose.ui.graphics.Paint()
+        androidx.compose.ui.graphics.SolidColor(androidx.compose.ui.graphics.Color.Black.copy(alpha = dim))
+            .applyTo(androidx.compose.ui.geometry.Size(w.toFloat(), h.toFloat()), veil, 1f)
+        if (ditherDim) io.github.matiyaaa.fuse.ui.designsystem.effects.Dithering.placedGradients!!(veil, canvas)
+        canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), veil)
+        val pixels = IntArray(w * h)
+        image.readPixels(pixels)
+        var longest = 0
+        var run = 0
+        var last = -1
+        for (x in 0 until w) {
+            val g = (pixels[4 * w + x] shr 8) and 0xFF
+            run = if (g == last) run + 1 else 1
+            last = g
+            longest = maxOf(longest, run)
+        }
+        return longest
+    }
+
+    @Test
+    fun aDimOverADitheredRoomKeepsItSmooth() {
+        // A dim of 0.6 leaves 0.4 of the room's noise, under half a step: its bands come back
+        // (Linux, 0.4.2.22). The dim's own noise brings a full step back.
+        val plain = dimmedRun(ditherDim = false)
+        val dithered = dimmedRun(ditherDim = true)
+        println("Dimmed room, longest flat band: plain dim $plain px, dithered dim $dithered px")
+        assertTrue(plain >= 20, "a plain dim leaves bands, $plain px")
+        assertTrue(dithered <= 12, "a dithered dim keeps it smooth, $dithered px")
+    }
+
     /** A flat grey drawn through the noise on a canvas moved by [dx] (a fraction of a pixel): its pixels. */
     private fun greyMovedBy(dx: Float, w: Int = 256, h: Int = 4): IntArray {
         val image = androidx.compose.ui.graphics.ImageBitmap(w, h)

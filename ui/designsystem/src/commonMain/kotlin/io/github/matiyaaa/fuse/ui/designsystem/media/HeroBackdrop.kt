@@ -245,7 +245,7 @@ fun HeroBackdrop(
                     flat.draw(this, key) {
                         // A dark room dims the art; a bright one washes it toward its paper, so dark text
                         // reads on it instead of on a grey haze.
-                        if (dark) drawRect(Color.Black.copy(alpha = dim)) else drawRect(ink.copy(alpha = (dim + LIGHT_WASH).coerceAtMost(0.9f)))
+                        drawDitheredRect(if (dark) Color.Black.copy(alpha = dim) else ink.copy(alpha = (dim + LIGHT_WASH).coerceAtMost(0.9f)))
                         drawDitheredRect(left)
                         drawDitheredRect(top)
                         drawDitheredRect(bottom)
@@ -451,7 +451,7 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
             }
             .drawWithContent {
                 drawContent()
-                if (brightness < 1f) drawRect(veil.copy(alpha = 1f - brightness))
+                if (brightness < 1f) drawDitheredRect(veil.copy(alpha = 1f - brightness))
             },
     ) {
         if (placeholder || failed) {
@@ -470,7 +470,7 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
             val shade = Modifier.drawWithContent {
                 drawContent()
                 // Box art behind the interface is a colour field, not a picture: darker, and more so unblurred.
-                if (source.blurred || soft) drawRect(veil.copy(alpha = (if (canBlur) 0.35f else 0.6f) * shownImage))
+                if (source.blurred || soft) drawDitheredRect(veil.copy(alpha = (if (canBlur) 0.35f else 0.6f) * shownImage))
             }
             if ((source.blurred || soft) && canBlur) {
                 // Blurred once, small, then shown scaled up: the same picture for a single draw a frame.
