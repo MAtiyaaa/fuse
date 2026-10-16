@@ -1,6 +1,6 @@
 # Fuse 0.4.2.22 - The Native Update
 
-A fix for checking for updates.
+Fixes for checking for updates and for the on-screen keyboard.
 
 ## New
 
@@ -17,3 +17,6 @@ A fix for checking for updates.
   stopped answering, Fuse took that for "nothing new". Fuse now reads the latest release from
   GitHub's website when the API doesn't answer, still checks the download against the release's
   SHA-256, and says so when neither answers.
+- On the on-screen keyboard, one press of X deleted two characters, and one press of A on a key
+  typed it twice. A button that repeats while held acted when pressed and again when let go; it now
+  acts once per press.
