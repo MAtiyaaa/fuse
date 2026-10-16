@@ -8,6 +8,16 @@ import kotlin.test.assertTrue
 
 /** Fuse Identity: the one way Fuse decides a game elsewhere is a game here, scenario by scenario. */
 class GameIdentityTest {
+    @Test
+    fun aSwitchGameIsTheSameReleaseWhateverUpdateItCarries() {
+        val romm = Ids.releaseTitle("Red Dead Redemption.xci")
+        assertEquals(romm, Ids.releaseTitle("Red Dead Redemption [01007820196A6000] [v131072] (1G+1U).nsp"))
+        assertEquals(romm, Ids.releaseTitle("[ROMsNS] Red Dead Redemption v0 (01007820196A6000) (BASE).nsp"))
+        assertEquals(Ids.releaseTitle("Mario and Sonic at the Olympic Games Tokyo 2020.xci"), Ids.releaseTitle("Mario & Sonic at the Olympic Games Tokyo 2020 [010019401051C000][v0].xci"))
+        // A version written as a version still tells releases apart.
+        assertTrue(Ids.releaseTitle("Mario Kart 8 Deluxe (USA) (v1.7.1).xci") != Ids.releaseTitle("Mario Kart 8 Deluxe (USA).xci"))
+    }
+
     private fun game(
         id: Long,
         platform: String,

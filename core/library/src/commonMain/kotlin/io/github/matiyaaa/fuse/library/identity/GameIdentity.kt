@@ -128,16 +128,26 @@ object Ids {
      * Fusion (Europe)". Empty when the name has no title.
      */
     fun releaseTitle(name: String): String {
-        val p = FilenameParser.parse(name, hasExtension = name.contains('.'))
-        val title = p.baseTitle.lowercase().filter { it.isLetterOrDigit() }
+        // A release group's own tag before the name ("[ROMsNS] Zelda") is no part of it.
+        val p = FilenameParser.parse(name.replace(GROUP_TAG, ""), hasExtension = name.contains('.'))
+        // "&" and "and" are the same name ("Mario & Sonic", "Mario and Sonic"), and a bare base
+        // version left at the end of the name ("Red Dead Redemption v0") isn't part of it either.
+        val title = p.baseTitle.lowercase().replace("&", " and ").replace(BARE_VERSION, "").filter { it.isLetterOrDigit() }
         if (title.isEmpty()) return ""
-        val t = p.tags
+        val t = p.tags.let { tags ->
+            // A whole number for a version ("[v131072]", "[v65536]") is the update installed on a Switch
+            // or 3DS game, not another release of it: the game stays the same game whatever is installed.
+            if (tags.version?.all { it.isDigit() } == true) tags.copy(version = null) else tags
+        }
         val flags = t.flags.filter { it.lowercase() in DISTINCT_FLAGS }.map { it.lowercase() }.sorted().joinToString(",")
         val parts = listOf(title, t.regions.sorted().joinToString(",").lowercase(), t.revision.orEmpty().lowercase(), t.version.orEmpty().lowercase(), t.discNumber?.toString().orEmpty())
         // Hacks and translations are other games: they never share a name with the original.
         val translation = p.translation?.lowercase().orEmpty()
         return (if (flags.isEmpty() && translation.isEmpty()) parts else parts + flags + translation).joinToString("|")
     }
+
+    private val GROUP_TAG = Regex("^\\s*\\[[^\\]]{2,24}]\\s*(?=\\S)")
+    private val BARE_VERSION = Regex("\\s+v\\d+\\s*$")
 
     /** Flags that make a copy another game, not the same one. */
     private val DISTINCT_FLAGS = setOf("hack", "translated", "beta", "proto", "prototype", "demo", "sample", "homebrew", "unlicensed", "pirate", "aftermarket")
