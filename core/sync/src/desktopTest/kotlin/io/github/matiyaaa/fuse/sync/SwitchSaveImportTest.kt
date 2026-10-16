@@ -119,11 +119,11 @@ class SwitchSaveImportTest {
     @Test fun autoBackupsAreTheirUsersAndUnderscoreDatesSort() = temp { root ->
         eden(root)
         val jksv = File(root, "sd/JKSV")
-        backup(File(jksv, "Super Mario Odyssey/AUTO - Mohammad - 2026-05-11_07-53-56"), mapOf("file1" to "auto"))
-        backup(File(jksv, "Super Mario Odyssey/Mohammad - 2026-10-15_17-05-25"), mapOf("file1" to "newest"))
+        backup(File(jksv, "Super Mario Odyssey/AUTO - Player - 2026-05-11_07-53-56"), mapOf("file1" to "auto"))
+        backup(File(jksv, "Super Mario Odyssey/Player - 2026-10-15_17-05-25"), mapOf("file1" to "newest"))
         val plan = JvmSaveImporter(File(root, "stage")).scan(jksv, listOf(query()), env(root))
-        assertEquals(listOf("Mohammad", "Mohammad"), plan.entries.map { it.switch?.user })
-        assertEquals("Mohammad - 2026-10-15_17-05-25", plan.entries.first().name)
+        assertEquals(listOf("Player", "Player"), plan.entries.map { it.switch?.user })
+        assertEquals("Player - 2026-10-15_17-05-25", plan.entries.first().name)
         assertNotNull(plan.entries.first().selectedTarget)
         assertNull(plan.entries[1].selectedTarget)
     }
@@ -131,10 +131,10 @@ class SwitchSaveImportTest {
     @Test fun eachSwitchUsersNewestBackupIsChosen() = temp { root ->
         eden(root)
         val jksv = File(root, "sd/JKSV")
-        backup(File(jksv, "Super Mario Odyssey/Mohammad - 2026-10-15_17-05-25"), mapOf("file1" to "mo"))
+        backup(File(jksv, "Super Mario Odyssey/Player - 2026-10-15_17-05-25"), mapOf("file1" to "mo"))
         backup(File(jksv, "Super Mario Odyssey/Sam - 2026-05-01_10-00-00"), mapOf("file1" to "sam"))
         val plan = JvmSaveImporter(File(root, "stage")).scan(jksv, listOf(query()), env(root))
-        assertEquals(setOf("Mohammad", "Sam"), plan.entries.filter { it.selectedTarget != null }.map { it.switch?.user }.toSet())
+        assertEquals(setOf("Player", "Sam"), plan.entries.filter { it.selectedTarget != null }.map { it.switch?.user }.toSet())
     }
 
     @Test fun aDeviceBackupWithoutAMetaFileIsStillTheDeviceSave() = temp { root ->
@@ -158,18 +158,18 @@ class SwitchSaveImportTest {
 
     @Test fun aZipInAJksvGameFolderIsReadWithoutAMetaFile() = temp { root ->
         eden(root)
-        zip(File(root, "sd/JKSV/Super Mario Odyssey/Mohammad - 2026-10-15_17-05-25.zip"), mapOf("file1" to "old jksv".toByteArray(), "sub/file2" to "deep".toByteArray()))
+        zip(File(root, "sd/JKSV/Super Mario Odyssey/Player - 2026-10-15_17-05-25.zip"), mapOf("file1" to "old jksv".toByteArray(), "sub/file2" to "deep".toByteArray()))
         val importer = JvmSaveImporter(File(root, "stage"))
         val plan = importer.scan(File(root, "sd/JKSV"), listOf(query()), env(root))
         val e = plan.entries.single()
-        assertEquals("Mohammad", e.switch?.user)
+        assertEquals("Player", e.switch?.user)
         val binding = importer.binding(plan, SaveImportChoice(e.id, assertNotNull(e.selectedTarget)))
         assertEquals(setOf("file1", "sub/file2"), binding.files.keys)
     }
 
     @Test fun aZipOfABackupWithItsFolderIsRead() = temp { root ->
         eden(root)
-        val name = "Mohammad - 2026-10-15_17-05-25"
+        val name = "Player - 2026-10-15_17-05-25"
         zip(File(root, "copied/Super Mario Odyssey/$name.zip"), mapOf("$name/${SwitchDumps.META}" to meta(at = 1_790_000_000L), "$name/file1" to "wrapped".toByteArray()))
         val importer = JvmSaveImporter(File(root, "stage"))
         val plan = importer.scan(File(root, "copied"), listOf(query()), env(root))
@@ -181,7 +181,7 @@ class SwitchSaveImportTest {
     @Test fun aBackupKeptBothZippedAndUnzippedIsOneBackup() = temp { root ->
         eden(root)
         val game = File(root, "sd/JKSV/Super Mario Odyssey")
-        val name = "Mohammad - 2026-05-11_06-51-57"
+        val name = "Player - 2026-05-11_06-51-57"
         backup(File(game, name), mapOf("file1" to "same"), meta(at = 1_778_000_000L))
         zip(File(game, "$name.zip"), mapOf(SwitchDumps.META to meta(at = 1_778_000_000L), "file1" to "same".toByteArray()))
         val plan = JvmSaveImporter(File(root, "stage")).scan(File(root, "sd/JKSV"), listOf(query()), env(root))
@@ -195,14 +195,14 @@ class SwitchSaveImportTest {
         // As a Mac's Archive Utility makes it: the JKSV folder, each game's backup a ZIP, and __MACOSX.
         val sent = File(root, "phone/JKSV.zip")
         zip(sent, mapOf(
-            "JKSV/Super Mario Odyssey/Mohammad - 2026-10-15_17-05-25.zip" to inner.readBytes(),
+            "JKSV/Super Mario Odyssey/Player - 2026-10-15_17-05-25.zip" to inner.readBytes(),
             "__MACOSX/._JKSV" to ByteArray(220),
-            "__MACOSX/JKSV/Super Mario Odyssey/._Mohammad - 2026-10-15_17-05-25.zip" to ByteArray(220),
+            "__MACOSX/JKSV/Super Mario Odyssey/._Player - 2026-10-15_17-05-25.zip" to ByteArray(220),
         ))
         val importer = JvmSaveImporter(File(root, "stage"))
         val plan = importer.scan(sent, listOf(query()), env(root))
         val e = plan.entries.single()
-        assertEquals("Mohammad", e.switch?.user)
+        assertEquals("Player", e.switch?.user)
         val binding = importer.binding(plan, SaveImportChoice(e.id, assertNotNull(e.selectedTarget)))
         assertEquals("from the phone", binding.files.getValue("file1").readText())
         assertTrue(plan.unmatched.none { "__MACOSX" in it || it.endsWith(".zip") })
@@ -212,8 +212,8 @@ class SwitchSaveImportTest {
         eden(root)
         // Balatro keeps its whole save in `.lovegame`.
         val files = mapOf(SwitchDumps.META to meta(at = 1_790_000_000L), ".lovegame/1/profile.jkr" to "balatro".toByteArray(), "._junk" to ByteArray(4))
-        zip(File(root, "sd/JKSV/Super Mario Odyssey/Mohammad - 2026-10-15_17-05-06.zip"), files)
-        backup(File(root, "copied/JKSV/Super Mario Odyssey/Mohammad - 2026-10-15_17-05-06"), mapOf(".lovegame/1/profile.jkr" to "balatro", ".DS_Store" to "mac"), meta(at = 1_790_000_000L))
+        zip(File(root, "sd/JKSV/Super Mario Odyssey/Player - 2026-10-15_17-05-06.zip"), files)
+        backup(File(root, "copied/JKSV/Super Mario Odyssey/Player - 2026-10-15_17-05-06"), mapOf(".lovegame/1/profile.jkr" to "balatro", ".DS_Store" to "mac"), meta(at = 1_790_000_000L))
         for (source in listOf(File(root, "sd/JKSV"), File(root, "copied/JKSV"))) {
             val importer = JvmSaveImporter(File(root, "stage"))
             val plan = importer.scan(source, listOf(query()), env(root))
@@ -225,7 +225,7 @@ class SwitchSaveImportTest {
 
     @Test fun oneBackupZipChosenOnItsOwnIsRead() = temp { root ->
         eden(root)
-        val chosen = File(root, "Downloads/Mohammad - 2026-10-15_17-05-25.zip")
+        val chosen = File(root, "Downloads/Player - 2026-10-15_17-05-25.zip")
         zip(chosen, mapOf(SwitchDumps.META to meta(at = 1_790_000_000L), "file1" to "single".toByteArray()))
         val plan = JvmSaveImporter(File(root, "stage")).scan(chosen, listOf(query()), env(root))
         assertEquals(SaveImportConfidence.TITLE_ID, plan.entries.single().targets.single().confidence)

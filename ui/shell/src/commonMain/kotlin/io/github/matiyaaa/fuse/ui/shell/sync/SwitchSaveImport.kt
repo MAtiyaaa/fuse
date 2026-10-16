@@ -245,8 +245,13 @@ internal fun startSwitchImport(app: AppState, path: String, fromPhone: Boolean =
                             val blocked = runCatching { app.store.sync.saveFolders() }.getOrDefault(emptyList())
                                 .firstOrNull { "switch" in it.systems && it.state == io.github.matiyaaa.fuse.sync.EmulatorSaves.State.NOT_FOUND && it.canChoose }
                             flow.unreachable = blocked?.let { SwitchImport.Unreachable(it.emulator, emulatorName(it.emulatorId)) }
-                            flow.problem = if (blocked != null) {
-                                "Your backups were read, but Fuse can't reach where ${emulatorName(blocked.emulatorId)} keeps its saves, so there is nowhere to put them yet. " +
+                            val name = blocked?.let { emulatorName(it.emulatorId) }
+                            flow.problem = if (blocked != null && blocked.chosen != null) {
+                                // Chosen before, but Android has taken the access away (the emulator reinstalled, or its data cleared).
+                                "Your backups were read, but Fuse can't open the folder chosen for $name any more, so there is nowhere to put them. " +
+                                    "Android takes that access away when $name is reinstalled or its storage is cleared. Choose its folder again and the same backups are read again."
+                            } else if (blocked != null) {
+                                "Your backups were read, but Fuse can't reach where $name keeps its saves, so there is nowhere to put them yet. " +
                                     (blocked.note ?: "Choose the folder it keeps its saves in.")
                             } else if (everywhere) "None of these saves are of a Switch game in your library. Choose the JKSV folder, Checkpoint's saves folder, or one game's folder from your Switch's SD card."
                             else "None of these saves are of a Switch game on this device. Choose Every Game to bring in saves for games on Fuse One too."
