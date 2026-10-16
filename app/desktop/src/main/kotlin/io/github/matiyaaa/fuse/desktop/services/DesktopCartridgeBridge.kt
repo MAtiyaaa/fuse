@@ -22,7 +22,7 @@ import kotlinx.coroutines.withContext
  * protocol 2 the same file carries the queue and the downloaded games; the games are kept from the
  * last read and counted as changed only when they differ.
  */
-internal class DesktopCartridgeBridge(private val dirs: FuseDirs) : CartridgeBridge {
+internal class DesktopCartridgeBridge(private val dirs: FuseDirs, private val hooks: LauncherHooks = LauncherHooks()) : CartridgeBridge {
     private val statusFile: String? = CartridgeProtocol.statusFilePath(System.getenv("XDG_STATE_HOME"), dirs.home)
 
     @Volatile private var lastGames: List<CartridgeGame>? = null
@@ -125,9 +125,25 @@ internal class DesktopCartridgeBridge(private val dirs: FuseDirs) : CartridgeBri
 
     private fun openLink(link: String): Boolean {
         if (!link.startsWith("${CartridgeProtocol.SCHEME}://")) return false
-        // In Game Mode Cartridge must be Fuse's own child for gamescope to show its window.
+        // In Game Mode Cartridge must be Fuse's own child for gamescope to show its window, and Fuse
+        // steps aside while it runs, as for a game: left on screen, Fuse covered Cartridge and took
+        // the controller back on the next press.
         if (io.github.matiyaaa.fuse.desktop.system.GameMode.active) {
-            executable()?.let { exe -> if (Processes.spawn(listOf(exe, link)) != null) return true }
+            executable()?.let { exe ->
+                val process = Processes.spawn(listOf(exe, link))
+                if (process != null) {
+                    val family = DesktopLauncher.ProcessFamily(process)
+                    io.github.matiyaaa.fuse.desktop.system.ExitGuard.played(process)
+                    hooks.onGameStarted?.invoke()
+                    Thread({
+                        runCatching { process.waitFor() }
+                        // An AppImage's runtime or a wrapper may leave Cartridge itself running.
+                        runCatching { kotlinx.coroutines.runBlocking { family.awaitRest() } }
+                        hooks.onGameExited?.invoke()
+                    }, "fuse-cartridge-session").apply { isDaemon = true }.start()
+                    return true
+                }
+            }
         }
         val xdgOpen = Processes.which("xdg-open") ?: return false
         if (hasRegisteredHandler()) return Processes.spawn(listOf(xdgOpen, link)) != null

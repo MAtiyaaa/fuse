@@ -149,6 +149,8 @@ private fun instanceFolder(dirs: FuseDirs): java.io.File {
 }
 
 private fun runWindow(dirs: FuseDirs, args: Array<String>, scope: CoroutineScope) {
+    // Quitting (or Steam's Exit Game) ends the games Fuse started and never hangs.
+    io.github.matiyaaa.fuse.desktop.system.ExitGuard.install()
     application {
         val session = remember { DesktopSession(dirs, args.filter { it != io.github.matiyaaa.fuse.desktop.system.SingleInstance.REPLACE }, scope).also { it.start() } }
         session.exit = ::exitApplication
