@@ -1952,7 +1952,17 @@ fun updateRows(app: AppState): List<MenuAction> {
             ))
         }
         add(MenuAction("check", "Check for updates", FuseIcons.Refresh, onSelect = {
-            app.scope.launch { app.toasts.show(if (app.store.updates.check() != null) "An update is available" else "Fuse is up to date") }
+            app.scope.launch {
+                val found = app.store.updates.check()
+                val problem = app.store.updates.checkProblem
+                app.toasts.show(
+                    when {
+                        found != null -> "An update is available"
+                        problem != null -> "Couldn't check for updates. $problem"
+                        else -> "Fuse is up to date"
+                    },
+                )
+            }
         }))
         add(toggleRow("auto", "Check automatically", FuseIcons.Bell, p.checkForUpdates, "Once a day from GitHub Releases; nothing installs without you") { v -> app.store.updatePrefs { it.copy(checkForUpdates = v) } })
     }

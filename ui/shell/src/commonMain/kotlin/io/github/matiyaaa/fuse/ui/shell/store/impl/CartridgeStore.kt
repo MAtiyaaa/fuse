@@ -278,6 +278,8 @@ internal class DefaultUpdateOps(private val ctx: StoreContext) : UpdateOps {
     private fun ReleaseInfo.isUpdateHere(): Boolean =
         SemVer.isNewer(tag, currentVersion) && GitHubReleases.pickAsset(this, ctx.services.installer.platform) != null
     private val latest = MutableStateFlow<ReleaseInfo?>(null)
+    @Volatile private var problem: String? = null
+    override val checkProblem: String? get() = problem
     override val available: StateFlow<ReleaseInfo?> = latest
 
     /** Checks at most once a day on its own; [check] from Settings always asks. */
@@ -296,6 +298,8 @@ internal class DefaultUpdateOps(private val ctx: StoreContext) : UpdateOps {
         val result = GitHubReleases(ctx.services.http).latest(GitHubReleases.FUSE_REPO)
         val now = ctx.now()
         val release = (result as? ApiResult.Success)?.value
+        // A check that couldn't reach GitHub says so, never "up to date".
+        problem = if (result is ApiResult.Success) null else "GitHub didn't answer. Check the connection and try again."
         if (release != null) {
             ctx.data.cache.put(NS, KEY_RELEASE, release, ReleaseInfo.serializer(), now, ttlMs = null)
         }

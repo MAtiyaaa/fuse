@@ -5,7 +5,11 @@ import io.github.matiyaaa.fuse.integrations.RateLimiter
 import io.github.matiyaaa.fuse.integrations.TestHttp
 import io.github.matiyaaa.fuse.integrations.cartridge.CartridgeProtocol
 import io.github.matiyaaa.fuse.integrations.json
+import io.github.matiyaaa.fuse.integrations.text
+import io.ktor.client.engine.mock.respond
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -61,6 +65,30 @@ class GitHubReleasesTest {
         status = HttpStatusCode.Forbidden
         remaining = "0"
         assertIs<ApiResult.RateLimited>(releases.latest("MAtiyaaa", "fuse"))
+    }
+
+    @Test
+    fun aRateLimitedApiFallsBackToTheWebsite() = runTest {
+        val sha = "a".repeat(64)
+        val http = TestHttp { request ->
+            val url = request.url.toString()
+            when {
+                url.startsWith("https://api.github.com/") ->
+                    json("""{"message":"API rate limit exceeded"}""", HttpStatusCode.Forbidden, "x-ratelimit-remaining" to "0")
+                url.endsWith("/releases/latest") ->
+                    respond("", HttpStatusCode.Found, headersOf(HttpHeaders.Location, "https://github.com/MAtiyaaa/fuse/releases/tag/v9.9.9"))
+                url.endsWith("/releases/tag/v9.9.9") -> text("<html></html>", HttpStatusCode.OK)
+                url.endsWith("/releases/download/v9.9.9/SHA256SUMS.txt") ->
+                    text("$sha  Fuse-9.9.9-x86_64.AppImage\n${"b".repeat(64)}  Fuse-9.9.9-android.apk\n", HttpStatusCode.OK)
+                else -> text("", HttpStatusCode.NotFound)
+            }
+        }
+        val release = (GitHubReleases(http.client, RateLimiter.unlimited()).latest(GitHubReleases.FUSE_REPO) as ApiResult.Success).value!!
+        assertEquals("v9.9.9", release.tag)
+        val appImage = GitHubReleases.pickAsset(release, ReleasePlatform.LINUX_X86_64)!!
+        assertEquals("https://github.com/MAtiyaaa/fuse/releases/download/v9.9.9/Fuse-9.9.9-x86_64.AppImage", appImage.url)
+        assertEquals("sha256:$sha", appImage.digest)
+        assertEquals("Fuse-9.9.9-android.apk", GitHubReleases.pickAsset(release, ReleasePlatform.ANDROID)!!.name)
     }
 
     @Test
