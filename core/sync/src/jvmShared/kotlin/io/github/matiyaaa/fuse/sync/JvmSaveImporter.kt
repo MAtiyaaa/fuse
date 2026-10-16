@@ -364,9 +364,12 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
         val id = SwitchIds.of(q, env)
         for (b in backups) {
             if (b.kind == SwitchDumps.Kind.OTHER) continue
+            val named = b.game != null && (TitleMatch.same(b.game, q.title) || q.romPath.isNotBlank() && TitleMatch.same(b.game, SaveAdapters.stem(q.romPath)))
             val confidence = when {
-                b.titleId != null -> if (id != null && SwitchIds.program(b.titleId.uppercase()) == id.uppercase()) SaveImportConfidence.TITLE_ID else continue
-                b.game != null && (TitleMatch.same(b.game, q.title) || TitleMatch.same(b.game, SaveAdapters.stem(q.romPath))) -> SaveImportConfidence.EXACT_NAME
+                b.titleId != null && id != null && SwitchIds.program(b.titleId.uppercase()) == id.uppercase() -> SaveImportConfidence.TITLE_ID
+                // The same game by name with another id (another region's copy, or an id read from an
+                // update's or DLC's file name): its save goes where the emulator keeps this copy's.
+                named -> SaveImportConfidence.EXACT_NAME
                 else -> continue
             }
             val prefix = if (b.root.isEmpty()) "" else b.root + "/"
