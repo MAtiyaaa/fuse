@@ -1060,8 +1060,11 @@ class SyncHost(
      * for the body's hash when the body is streamed (a file, signed over its content hash).
      */
     private suspend fun RoutingContext.device(bodyHash: String? = null): DeviceRecord? {
-        if (limited()) return null
         val h = call.request.headers
+        // Each device counts on its own: every device at home behind one address (a tunnel, one
+        // public address) shared one allowance, and a busy one (a download, art) left the others
+        // turned away, a television that never saw the household's games among them.
+        if (limited(who = caller() + "|" + h[RequestSigning.DEVICE].orEmpty().take(64))) return null
         val id = h[RequestSigning.DEVICE]
         val time = h[RequestSigning.TIME]?.toLongOrNull()
         val nonce = h[RequestSigning.NONCE]
@@ -1283,9 +1286,8 @@ class SyncHost(
     private fun RoutingContext.route(): String = call.request.headers["X-Fuse-Route"]?.takeIf { it == "LOCAL" || it == "REMOTE" } ?: ""
 
     /** True (after answering) when this address has made too many calls this minute. */
-    private suspend fun RoutingContext.limited(weight: Int = 1): Boolean {
+    private suspend fun RoutingContext.limited(weight: Int = 1, who: String = caller()): Boolean {
         // Each caller a tunnel carries counts on its own, so devices from away don't share one allowance.
-        val who = caller()
         val minute = clock() / 60_000
         val (m, count) = calls[who] ?: (minute to 0)
         val now = if (m == minute) count + weight else weight

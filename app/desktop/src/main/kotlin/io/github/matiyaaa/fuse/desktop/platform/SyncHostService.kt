@@ -156,6 +156,9 @@ class SyncHostService(private val dirs: FuseDirs, private val port: () -> Int, p
             |ExecStart=${Autostart.quoteExec(exec)} $ARGUMENT
             |Restart=always
             |RestartSec=5
+            |# Not the host here any more (3: another computer hosts, or none):
+            |# nothing to start again, instead of a new start every few seconds for good.
+            |RestartPreventExitStatus=3
             |# Stopped only by Fuse or the system: kept out of the way of a short memory shortage.
             |OOMScoreAdjust=-100
             |TimeoutStopSec=20

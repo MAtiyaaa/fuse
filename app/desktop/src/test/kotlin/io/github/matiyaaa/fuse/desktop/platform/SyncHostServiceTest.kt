@@ -23,6 +23,8 @@ class SyncHostServiceTest {
         assertTrue("Restart=always" in unit)
         // However often it stops (a power cut mid-start, the network not up yet), it is started again.
         assertTrue("StartLimitIntervalSec=0" in unit)
+        // But a computer that isn't the host any more isn't started again and again.
+        assertTrue("RestartPreventExitStatus=3" in unit)
         assertTrue("WantedBy=default.target" in unit)
         assertTrue("X-Fuse-Sync-Host=true" in unit, "marked as Fuse's own, so only Fuse's is ever removed")
     }

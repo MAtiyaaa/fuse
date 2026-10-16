@@ -392,7 +392,7 @@ class JvmSyncService(
                     if (!caughtUp) {
                         caughtUp = true
                         scope.launch(Dispatchers.IO) { runCatching { convergeAll() } }
-                        scope.launch(Dispatchers.IO) { runCatching { householdHere.connected() } }
+                        scope.launch(Dispatchers.IO) { householdConnect() }
                     }
                     val page = c.events(since, waitSeconds = 25)
                     householdHere.woken(page.wake)
@@ -400,6 +400,15 @@ class JvmSyncService(
                     // online, and whose games show) is read again now and then: it stayed as it was
                     // when the list was last read, "seen 5:05" on devices online all along.
                     if (clock() - listsReadAt > LISTS_EVERY_MS) runCatching { refreshLists() }
+                    // The household's games didn't come up on the way in (the host didn't answer that
+                    // once): asked again, so this device doesn't go without the other devices' games.
+                    if (!householdHere.supported.value && clock() - householdTriedAt > HOUSEHOLD_RETRY_MS) scope.launch(Dispatchers.IO) { householdConnect() }
+                    householdHere.problem.let { p ->
+                        if (p != listsProblem) {
+                            if (p != null) log("The other devices' games couldn't be read: $p. Trying again shortly.") else if (listsProblem != null) log("The other devices' games are here again")
+                            listsProblem = p
+                        }
+                    }
                     if (page.events.isNotEmpty()) {
                         convergeLater(page.events)
                         device?.saw(page.seq)
@@ -584,6 +593,19 @@ class JvmSyncService(
             "locked" -> SyncStatus.NeedsAttention(name, "This profile's PIN changed on another device. Open it again with the new PIN to keep syncing.", e.code)
             else -> SyncStatus.NeedsAttention(name, e.message ?: "The host said no.", e.code)
         }
+    }
+
+    @Volatile private var householdTriedAt = 0L
+    @Volatile private var householdProblem: String? = null
+    @Volatile private var listsProblem: String? = null
+
+    /** Starts the household's side (the other devices' games); says once in the log when it can't, and when it can again. */
+    private suspend fun householdConnect() {
+        householdTriedAt = clock()
+        val problem = runCatching { householdHere.connected() }.getOrElse { it.message ?: it::class.simpleName ?: "it failed" }
+        if (problem != null && problem != householdProblem) log("The other devices' games couldn't be read: $problem. Trying again shortly.")
+        if (problem == null && householdProblem != null) log("The other devices' games are here again")
+        householdProblem = problem
     }
 
     /** When the devices and profiles were last read from the host. */
@@ -3100,6 +3122,9 @@ class JvmSyncService(
 
         /** How often the device list is read again for when each device was last seen (under [ONLINE_MS]). */
         const val LISTS_EVERY_MS = 45_000L
+
+        /** How soon the household's side is tried again after it didn't come up. */
+        const val HOUSEHOLD_RETRY_MS = 30_000L
 
         /** Another device heard from this lately while playing (it may have gone to sleep mid-game). */
         const val PLAYING_ASK_MS = 30 * 60_000L

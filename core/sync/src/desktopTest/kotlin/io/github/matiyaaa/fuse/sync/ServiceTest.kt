@@ -184,6 +184,8 @@ class ServiceTest {
         // The Deck becomes Mo: what it already had joins Mo's profile (nothing is lost).
         deck.switchTo(mo.id).getOrThrow()
         assertEquals(mo.id, deckSettings.current().sync.activeProfile)
+        // What the Deck brought goes up behind the switch: the PC switches once it is there.
+        deck.syncNow().getOrThrow()
         pc.switchTo(mo.id).getOrThrow()
         // The PC now has Mo's hour of play, favourite and theme.
         assertEquals(3_600L, pcLib.games[ct.id]?.totalSeconds)
@@ -308,7 +310,8 @@ class ServiceTest {
             pc.stop()
             return@runBlocking
         }
-        val back = withTimeoutOrNull(10_000) { while (deckSettings.current().sync.activeProfile != mo.id) kotlinx.coroutines.delay(50) }
+        // A busy machine (a CI runner) takes longer than ten seconds for the host's answer.
+        val back = withTimeoutOrNull(30_000) { while (deckSettings.current().sync.activeProfile != mo.id) kotlinx.coroutines.delay(50) }
         assertNotNull(back, "still on ${deckSettings.current().sync.activeProfile}: ${deck.activity.value.take(6).joinToString { it.text }}")
         pc.stop()
     }
@@ -721,6 +724,7 @@ class ServiceTest {
         val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
         // The Deck's collection becomes Mo's, and reaches the PC.
         deck.switchTo(mo.id).getOrThrow()
+        deck.syncNow().getOrThrow()
         pc.switchTo(mo.id).getOrThrow()
         assertEquals("RPGs", pcLib.collections["c1"]?.name?.value)
         // On the Deck, records stop syncing: its library then reports no collections at all.
