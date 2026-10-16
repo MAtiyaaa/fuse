@@ -72,6 +72,8 @@ fun SectionedGameGrid(
     loading: Boolean,
     empty: String,
     tag: String,
+    /** The room while no game is chosen (a system's page shows the system's). */
+    room: io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource? = null,
     title: @Composable () -> Unit,
 ) {
     val shown = sections.filter { it.items.isNotEmpty() }
@@ -85,9 +87,9 @@ fun SectionedGameGrid(
         if (focused) app.hints = listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.BACK, "Back"))
     }
     val systems by app.store.library.platforms.collectAsState()
-    PageEffect(focused, chosen?.card?.id, chosen?.card?.art) {
+    PageEffect(focused, chosen?.card?.id, chosen?.card?.art, room) {
         val c = chosen?.card
-        if (focused) app.hero = c?.room(systems.firstOrNull { it.platform.id == c.platformId })
+        if (focused) app.hero = c?.room(systems.firstOrNull { it.platform.id == c.platformId }) ?: room
     }
     BoxWithConstraints(Modifier.fillMaxSize().testTag(tag)) {
         val gap = LocalTileMetrics.current.gap

@@ -1,17 +1,22 @@
 package io.github.matiyaaa.fuse.ui.shell.library
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.focus.SectionedGridSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.activateGame
@@ -78,15 +83,33 @@ fun SystemEverywhereScreen(app: AppState, platform: PlatformId, name: String, ro
         )
     }
     val all = items.sortedBy { it.first.lowercase() }.map { it.second }
-    val section = GameSection("all", name, FuseIcons.LibraryBig, null, all)
-    SectionedGameGrid(app, sel, listOf(section), loading = local == null, empty = "No games for this system anywhere yet.", tag = "system.everywhere") {
-        Column(Modifier.fillMaxWidth()) {
-            FText(name, Fuse.type.title, maxLines = 1)
-            val notHere = all.size - here.size
-            FText(
-                listOfNotNull("${all.size} ${if (all.size == 1) "game" else "games"}", "${here.size} on this device".takeIf { here.isNotEmpty() }, "$notHere elsewhere".takeIf { notHere > 0 }).joinToString("  ·  "),
-                Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1,
-            )
+    // One section, named by the header: no heading of its own repeating the system's name.
+    val section = GameSection("main", name, FuseIcons.LibraryBig, null, all)
+    // The same header and room as the system's page from Systems: its logo on top, its background behind.
+    val card = io.github.matiyaaa.fuse.ui.shell.app.rememberSystems(app)[platform]
+    val room = card?.let { io.github.matiyaaa.fuse.ui.shell.app.systemRoom(it) }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val compact = maxHeight < SHORT_SYSTEM_PAGE
+        SectionedGameGrid(app, sel, listOf(section), loading = local == null, empty = "No games for this system anywhere yet.", tag = "system.everywhere", room = room) {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                if (card != null) {
+                    io.github.matiyaaa.fuse.ui.shell.systems.SystemHeader(
+                        card, compact, widthFraction = 0.9f, showMeta = false,
+                        logoHeight = if (compact) Space.xxl else Space.x3 - Space.xs,
+                        nameStyle = if (compact) Fuse.type.titleSmall else Fuse.type.title,
+                    )
+                } else {
+                    FText(name, Fuse.type.title, maxLines = 1)
+                }
+                val notHere = all.size - here.size
+                FText(
+                    listOfNotNull("${all.size} ${if (all.size == 1) "game" else "games"}", "${here.size} on this device".takeIf { here.isNotEmpty() }, "$notHere elsewhere".takeIf { notHere > 0 }).joinToString("  ·  "),
+                    Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1,
+                )
+            }
         }
     }
 }
+
+/** Below this height the system's header is set small, as on the system's page from Systems. */
+private val SHORT_SYSTEM_PAGE = 560.dp
