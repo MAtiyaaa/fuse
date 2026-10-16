@@ -228,9 +228,10 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
                 require(d.relativeTo(source).path.count { it == File.separatorChar } < 64) { "The save hierarchy is too deeply nested" }
                 require(++paths <= limits.files) { "The save hierarchy has too many paths" }
                 require(!Files.isSymbolicLink(d.toPath())) { "Symbolic links are not imported" }
-                d == source || !SaveNoise.folder(d.name)
+                d == source || !SaveNoise.folder(d.name) || d.name.startsWith(".") && inSwitchBackup(d, source)
             }.forEach { f ->
                 require(!Files.isSymbolicLink(f.toPath())) { "Symbolic links are not imported" }
+                if (SwitchDumps.macLeftover(f.name)) return@forEach
                 val rel = f.relativeTo(source).path.replace(File.separatorChar, '/')
                 if (f.isFile && f.extension.equals("zip", true) && jksvZip(f)) {
                     // A JKSV backup kept as a ZIP beside others: its files, in a folder of its name.
@@ -238,10 +239,23 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
                     if (!File(f.parentFile, f.nameWithoutExtension).isDirectory) {
                         unzip(f, rel.removeSuffix(".zip").removeSuffix(".ZIP") + "/", names, ::copy, strip = wrapperOf(zipNames(f)))
                     }
-                } else if (f.isFile && (f.name == SwitchDumps.META || !SaveNoise.file(f.name))) copy(rel, f.length(), input = f::inputStream)
+                } else if (f.isFile && (f.name == SwitchDumps.META || !SaveNoise.file(f.name) || f.name.startsWith(".") && inSwitchBackup(f, source))) {
+                    copy(rel, f.length(), input = f::inputStream)
+                }
             }
         } else if (source.extension.equals("zip", true)) {
             unzip(source, "", names, ::copy)
+            // A ZIP of a whole JKSV folder (as sent from a phone) holds each game's backups zipped
+            // again: those are opened too, as they are in a folder.
+            for ((rel, f) in out.entries.toList()) {
+                if (!rel.endsWith(".zip", true) || !jksvZip(f)) continue
+                val listed = zipNames(f)
+                val backup = rel.dropLast(4)
+                out.remove(rel)
+                names.remove(rel.lowercase())
+                if (names.none { it.startsWith(backup.lowercase() + "/") }) unzip(f, "$backup/", names, ::copy, strip = wrapperOf(listed))
+                f.delete()
+            }
         } else {
             require(source.isFile) { "Choose a save file, folder or ZIP" }
             copy(source.name, source.length(), input = source::inputStream)
@@ -278,7 +292,7 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
             while (true) {
                 val entry = z.nextEntry ?: break
                 i++
-                if (last[entry.name] != i) continue
+                if (last[entry.name] != i || SwitchDumps.macLeftover(entry.name)) continue
                 val inside = entry.name.removePrefix(strip)
                 if (inside.isEmpty() || inside == "/") continue
                 val name = under + inside.removeSuffix("/")
@@ -290,12 +304,16 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
         }
     }
 
+    /** Whether [f] is inside a JKSV backup (a folder with its meta file) within [source]: a game's own hidden files there are its save. */
+    private fun inSwitchBackup(f: File, source: File): Boolean =
+        generateSequence(f.parentFile) { it.parentFile }.takeWhile { it.path.startsWith(source.path) }.any { File(it, SwitchDumps.META).isFile }
+
     /**
      * The one folder (with its `/`) that holds a backup zipped with its folder: everything in the
      * ZIP is in it, JKSV's meta file too. Else "" (a save's own single folder is never taken for one).
      */
     private fun wrapperOf(listed: List<Pair<String, Boolean>>): String {
-        val all = listed.map { it.first }.toSet()
+        val all = listed.map { it.first }.filterNot(SwitchDumps::macLeftover).toSet()
         if (SwitchDumps.META in all) return ""
         val top = all.map { it.substringBefore('/', "") }.toSet().singleOrNull()?.takeIf { it.isNotEmpty() } ?: return ""
         return if ("$top/${SwitchDumps.META}" in all) "$top/" else ""
@@ -328,8 +346,11 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
 
     /** The Switch backups among [files], with where the source was so a game or backup folder chosen on its own is recognised. */
     private fun switchBackups(source: File, files: Map<String, File>): List<SwitchDumps.Backup> {
+        // A ZIP whose contents are all in one folder (a zipped JKSV folder, or a backup zipped with its
+        // folder) is that folder: its own name would put the folder twice ("JKSV/JKSV/<game>").
+        val wrapped = source.isFile && files.keys.map { it.substringBefore('/', "") }.toSet().singleOrNull()?.isNotEmpty() == true
         val above = generateSequence(source.absoluteFile.parentFile) { it.parentFile }.take(3).mapNotNull { it.name.ifEmpty { null } }.toList().reversed() +
-            (if (source.isFile) source.nameWithoutExtension else source.name)
+            listOfNotNull(if (source.isFile) source.nameWithoutExtension.takeUnless { wrapped } else source.name)
         return SwitchDumps.backups(files.keys, above) { p -> files[p]?.takeIf { it.length() <= 4096 }?.readBytes() }
     }
 

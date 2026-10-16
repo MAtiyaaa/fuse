@@ -188,6 +188,41 @@ class SwitchSaveImportTest {
         assertEquals(listOf(name), plan.entries.map { it.name })
     }
 
+    @Test fun aZipOfAWholeJksvFolderOpensTheBackupsZippedInsideIt() = temp { root ->
+        eden(root)
+        val inner = File(root, "inner.zip")
+        zip(inner, mapOf("file1" to "from the phone".toByteArray()))
+        // As a Mac's Archive Utility makes it: the JKSV folder, each game's backup a ZIP, and __MACOSX.
+        val sent = File(root, "phone/JKSV.zip")
+        zip(sent, mapOf(
+            "JKSV/Super Mario Odyssey/Mohammad - 2026-10-15_17-05-25.zip" to inner.readBytes(),
+            "__MACOSX/._JKSV" to ByteArray(220),
+            "__MACOSX/JKSV/Super Mario Odyssey/._Mohammad - 2026-10-15_17-05-25.zip" to ByteArray(220),
+        ))
+        val importer = JvmSaveImporter(File(root, "stage"))
+        val plan = importer.scan(sent, listOf(query()), env(root))
+        val e = plan.entries.single()
+        assertEquals("Mohammad", e.switch?.user)
+        val binding = importer.binding(plan, SaveImportChoice(e.id, assertNotNull(e.selectedTarget)))
+        assertEquals("from the phone", binding.files.getValue("file1").readText())
+        assertTrue(plan.unmatched.none { "__MACOSX" in it || it.endsWith(".zip") })
+    }
+
+    @Test fun aSaveKeptInAHiddenFolderIsImported() = temp { root ->
+        eden(root)
+        // Balatro keeps its whole save in `.lovegame`.
+        val files = mapOf(SwitchDumps.META to meta(at = 1_790_000_000L), ".lovegame/1/profile.jkr" to "balatro".toByteArray(), "._junk" to ByteArray(4))
+        zip(File(root, "sd/JKSV/Super Mario Odyssey/Mohammad - 2026-10-15_17-05-06.zip"), files)
+        backup(File(root, "copied/JKSV/Super Mario Odyssey/Mohammad - 2026-10-15_17-05-06"), mapOf(".lovegame/1/profile.jkr" to "balatro", ".DS_Store" to "mac"), meta(at = 1_790_000_000L))
+        for (source in listOf(File(root, "sd/JKSV"), File(root, "copied/JKSV"))) {
+            val importer = JvmSaveImporter(File(root, "stage"))
+            val plan = importer.scan(source, listOf(query()), env(root))
+            val e = plan.entries.single()
+            val binding = importer.binding(plan, SaveImportChoice(e.id, assertNotNull(e.selectedTarget)))
+            assertEquals(setOf(".lovegame/1/profile.jkr"), binding.files.keys)
+        }
+    }
+
     @Test fun oneBackupZipChosenOnItsOwnIsRead() = temp { root ->
         eden(root)
         val chosen = File(root, "Downloads/Mohammad - 2026-10-15_17-05-25.zip")
