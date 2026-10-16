@@ -152,6 +152,8 @@ internal class SwitchImport(val source: String, val path: String = "") {
     /** Null before an undo; then how it went (the saves the import replaced put back, or why not). */
     var undone by mutableStateOf<String?>(null)
     var problem by mutableStateOf<String?>(null)
+    /** The Switch emulator whose save folder Fuse can't reach, when that is why nothing could be imported. */
+    var unreachable by mutableStateOf<Unreachable?>(null)
     /** True: every game in the library, here or on Fuse One; false: only the games on this device. */
     var everywhere by mutableStateOf(false)
     /** How many Switch games are on Fuse One but not here, for the choice of which games to look at. */
@@ -159,6 +161,9 @@ internal class SwitchImport(val source: String, val path: String = "") {
     /** Starts reading once the choice of games is made; set by [startSwitchImport]. */
     var read: (Boolean) -> Unit = {}
     val game: Game? get() = games.getOrNull(index)
+
+    /** A Switch emulator ([emulator], its save folder setting's key) Fuse has no way into yet, named [name]. */
+    class Unreachable(val emulator: String, val name: String)
 
     /**
      * The games of a plan, from its Switch backups: for each game its backups, newest first. A game is
@@ -235,7 +240,15 @@ internal fun startSwitchImport(app: AppState, path: String, fromPhone: Boolean =
                         if (left > 0) delay(left)
                         if (plan.entries.none { it.switch != null }) {
                             service.discardSaveImport(plan)
-                            flow.problem = if (everywhere) "None of these saves are of a Switch game in your library. Choose the JKSV folder, Checkpoint's saves folder, or one game's folder from your Switch's SD card."
+                            // The usual reason on Android: the Switch emulator keeps its saves in its own
+                            // private folder, so no game has anywhere for a save to go until one is chosen.
+                            val blocked = runCatching { app.store.sync.saveFolders() }.getOrDefault(emptyList())
+                                .firstOrNull { "switch" in it.systems && it.state == io.github.matiyaaa.fuse.sync.EmulatorSaves.State.NOT_FOUND && it.canChoose }
+                            flow.unreachable = blocked?.let { SwitchImport.Unreachable(it.emulator, emulatorName(it.emulatorId)) }
+                            flow.problem = if (blocked != null) {
+                                "Your backups were read, but Fuse can't reach where ${emulatorName(blocked.emulatorId)} keeps its saves, so there is nowhere to put them yet. " +
+                                    (blocked.note ?: "Choose the folder it keeps its saves in.")
+                            } else if (everywhere) "None of these saves are of a Switch game in your library. Choose the JKSV folder, Checkpoint's saves folder, or one game's folder from your Switch's SD card."
                             else "None of these saves are of a Switch game on this device. Choose Every Game to bring in saves for games on Fuse One too."
                             flow.step = SwitchImport.Step.DONE
                         } else {
@@ -316,6 +329,19 @@ internal fun SwitchImportOverlay(app: AppState) {
         }
     }
 
+    /** Chooses the folder the Switch emulator keeps its saves in, then reads the same saves again. */
+    fun chooseFolder(f: SwitchImport) {
+        val blocked = f.unreachable ?: return
+        app.scope.launch {
+            val path = app.platform.storage.pickSaveFolder("Where ${blocked.name} keeps its saves") ?: return@launch
+            app.store.sync.setSaveFolder(blocked.emulator, path)
+            if (app.switchImport !== f) return@launch
+            f.problem = null
+            f.unreachable = null
+            f.read(f.everywhere)
+        }
+    }
+
     /** Puts back every save the import replaced, from the backups made just before. */
     fun undo(f: SwitchImport) {
         val replaced = f.result?.replaced.orEmpty()
@@ -354,7 +380,7 @@ internal fun SwitchImportOverlay(app: AppState) {
         InputLayer(priority = LayerPriority.DIALOG + 1, modal = true) { e ->
             val f = flow
             val g = f.game
-            val actions = actionsOf(f, profiles, me, ::check, ::import, ::undo, ::close)
+            val actions = actionsOf(f, profiles, me, ::check, ::import, ::undo, ::chooseFolder, ::close)
             val people = if (f.step == SwitchImport.Step.PEOPLE) profiles.size + 1 else 0
             val count = people + actions.size
             if (focus < 0) focus = people + actions.indexOfFirst { it.primary }.coerceAtLeast(0)
@@ -401,7 +427,7 @@ internal fun SwitchImportOverlay(app: AppState) {
                         SwitchImport.Step.DONE -> Done(f, profiles)
                     }
                 }
-                    val actions = actionsOf(f, profiles, me, ::check, ::import, ::undo, ::close)
+                    val actions = actionsOf(f, profiles, me, ::check, ::import, ::undo, ::chooseFolder, ::close)
                     if (actions.isNotEmpty()) {
                         Spacer(Modifier.height(if (compact) Space.l else Space.xl))
                         val people = if (f.step == SwitchImport.Step.PEOPLE) profiles.size + 1 else 0
@@ -423,7 +449,7 @@ internal fun SwitchImportOverlay(app: AppState) {
 
 private class Action(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector? = null, val primary: Boolean = false, val enabled: Boolean = true, val run: () -> Unit)
 
-private fun actionsOf(f: SwitchImport, profiles: List<ProfileInfo>, me: String?, check: (SwitchImport) -> Unit, import: (SwitchImport) -> Unit, undo: (SwitchImport) -> Unit, close: () -> Unit): List<Action> {
+private fun actionsOf(f: SwitchImport, profiles: List<ProfileInfo>, me: String?, check: (SwitchImport) -> Unit, import: (SwitchImport) -> Unit, undo: (SwitchImport) -> Unit, choose: (SwitchImport) -> Unit, close: () -> Unit): List<Action> {
     val g = f.game
     return when (f.step) {
         SwitchImport.Step.SCOPE -> listOf(
@@ -465,7 +491,9 @@ private fun actionsOf(f: SwitchImport, profiles: List<ProfileInfo>, me: String?,
         SwitchImport.Step.IMPORTING -> listOf(Action("Importing", FuseIcons.Save, primary = true, enabled = false) {})
         SwitchImport.Step.DONE -> buildList {
             if (f.result?.replaced?.isNotEmpty() == true && f.undone == null) add(Action("Undo Replacements", FuseIcons.Undo) { undo(f) })
-            add(Action("Done", FuseIcons.Check, primary = true, run = close))
+            val blocked = f.unreachable
+            add(Action(if (blocked != null) "Not Now" else "Done", FuseIcons.Check, primary = blocked == null, run = close))
+            if (blocked != null) add(Action("Choose ${blocked.name}'s Folder", FuseIcons.FolderPlus, primary = true) { choose(f) })
         }
     }
 }
@@ -888,9 +916,9 @@ private fun Done(f: SwitchImport, profiles: List<ProfileInfo>) {
             }
             when {
                 f.problem != null -> {
-                    FText("Nothing imported", Fuse.type.title, maxLines = 1)
+                    FText(f.unreachable?.let { "Choose where ${it.name} keeps its saves" } ?: "Nothing imported", Fuse.type.title, maxLines = 2)
                     Spacer(Modifier.height(Space.xs))
-                    FText(f.problem!!, Fuse.type.body, color = c.textMuted, maxLines = 5)
+                    FText(f.problem!!, Fuse.type.body, color = c.textMuted, maxLines = 8)
                 }
                 r == null -> FText("No games from this card are in your library", Fuse.type.title, maxLines = 2)
                 else -> {

@@ -1,6 +1,6 @@
 # Fuse 0.4.2.19 - The Native Update
 
-A fix for sending Switch saves from your phone.
+Fixes for importing Switch saves on Android and from your phone.
 
 ## New
 
@@ -20,3 +20,7 @@ A fix for sending Switch saves from your phone.
   empty backup and left out. It now imports, and it syncs with the rest of the game's save.
 - Sending a JKSV folder from a computer's browser left out JKSV's `.nx_save_meta.bin` files, so
   games were matched only by name. They are now sent too.
+- On Android, a Switch import could end with "None of these saves are of a Switch game in your
+  library" when the backups were fine. Eden keeps its saves in its own private Android folder, so
+  Fuse had nowhere to put them. The import now says so, and **Choose Eden's Folder** picks where
+  Eden keeps its saves and reads the same backups again.
