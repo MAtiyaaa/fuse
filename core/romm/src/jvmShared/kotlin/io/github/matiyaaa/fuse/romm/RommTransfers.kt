@@ -10,6 +10,9 @@ import io.github.matiyaaa.fuse.transfer.TransferIo
 import io.github.matiyaaa.fuse.transfer.TransferItem
 import io.github.matiyaaa.fuse.transfer.TransferPhase
 import io.ktor.client.HttpClient
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -158,15 +161,29 @@ class RommUploadHandler(private val host: RommTransferHost) : TransferHandler {
             }
             io.phase(TransferPhase.TRANSFERRING)
             val chunks = if (f.sizeBytes == 0L) 0 else ((f.sizeBytes + RommClient.CHUNK_BYTES - 1) / RommClient.CHUNK_BYTES).toInt()
-            for (i in job.chunksDone until chunks) {
-                val offset = i.toLong() * RommClient.CHUNK_BYTES
-                val length = minOf(RommClient.CHUNK_BYTES.toLong(), f.sizeBytes - offset).toInt()
-                val bytes = TransferFiles.readChunk(file, offset, length)
-                io.throttle(length)
-                guarded { client.uploadChunk(job.uploadId!!, i, bytes) }
-                job = job.copy(chunksDone = i + 1)
-                done += length
-                io.progress(done, total)
+            // A few pieces at a time: RomM keeps each piece as a file of its own, in any order, and one
+            // at a time left the line idle while RomM stored each (about 5 MB/s at home). What is
+            // noted is only the pieces in before the first one still out, so carrying on after a drop
+            // never skips one.
+            var next = job.chunksDone
+            while (next < chunks) {
+                val batch = (next until minOf(chunks, next + PARALLEL_CHUNKS)).toList()
+                val upload = job.uploadId!!
+                coroutineScope {
+                    batch.map { i ->
+                        val offset = i.toLong() * RommClient.CHUNK_BYTES
+                        val length = minOf(RommClient.CHUNK_BYTES.toLong(), f.sizeBytes - offset).toInt()
+                        io.throttle(length)
+                        val bytes = TransferFiles.readChunk(file, offset, length)
+                        async {
+                            guarded { client.uploadChunk(upload, i, bytes) }
+                            synchronized(this@RommUploadHandler) { done += length }
+                            io.progress(done, total)
+                        }
+                    }.awaitAll()
+                }
+                next = batch.last() + 1
+                job = job.copy(chunksDone = next)
                 io.note(job.encode())
             }
             io.phase(TransferPhase.FINISHING)
@@ -259,6 +276,9 @@ class RommUploadHandler(private val host: RommTransferHost) : TransferHandler {
 
         /** How long a finished upload RomM is still writing is waited for, and how often it is looked for. */
         internal var LANDING_WAIT_MS = 10 * 60_000L
+
+        /** Pieces of a file sent at once (each [RommClient.CHUNK_BYTES]). */
+        const val PARALLEL_CHUNKS = 4
         internal var LANDING_POLL_MS = 10_000L
     }
 }

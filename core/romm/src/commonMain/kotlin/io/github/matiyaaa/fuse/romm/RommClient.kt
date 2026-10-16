@@ -166,7 +166,8 @@ class RommClient(
                 deviceAuth = "/api/auth/device/init" in paths,
                 pairCodes = "/api/client-tokens/exchange" in paths,
                 chunkedUploads = "/api/roms/upload/start" in paths,
-                tokenScans = "/api/tasks/scan" in paths,
+                tokenScans = "/api/tasks/scan" in paths || "/api/tasks/run/{task_name}" in paths,
+                scanTask = "/api/tasks/scan" !in paths && "/api/tasks/run/{task_name}" in paths,
                 incremental = true,
                 identifiers = "/api/roms/identifiers" in paths,
                 saveSync = "/api/devices" in paths && "/api/saves/{id}/downloaded" in paths,
@@ -475,6 +476,12 @@ class RommClient(
 
     /** Asks RomM to look at its folders for new games (needs the `tasks.run` scope). */
     suspend fun scan(platformIds: List<Long> = emptyList()) {
+        // RomM 5.3 runs its library scan as a task: a quick scan of every system, which only takes
+        // in files it hasn't got yet (the task takes no arguments, so the systems can't be named).
+        if (capabilities.scanTask) {
+            call(HttpMethod.Post, "/api/tasks/run/scan_library") { }
+            return
+        }
         call(HttpMethod.Post, "/api/tasks/scan", extra = {
             contentType(ContentType.Application.Json)
             setBody(buildJsonObject {

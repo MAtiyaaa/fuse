@@ -382,6 +382,10 @@ class JvmSyncService(
                     }
                     val page = c.events(since, waitSeconds = 25)
                     householdHere.woken(page.wake)
+                    // A device checking in is no event, so when each was last seen (and so which are
+                    // online, and whose games show) is read again now and then: it stayed as it was
+                    // when the list was last read, "seen 5:05" on devices online all along.
+                    if (clock() - listsReadAt > LISTS_EVERY_MS) runCatching { refreshLists() }
                     if (page.events.isNotEmpty()) {
                         convergeLater(page.events)
                         device?.saw(page.seq)
@@ -553,7 +557,11 @@ class JvmSyncService(
         }
     }
 
+    /** When the devices and profiles were last read from the host. */
+    @Volatile private var listsReadAt = 0L
+
     private suspend fun refreshLists() {
+        listsReadAt = clock()
         listsLock.withLock {
             val c = client ?: return@withLock
             val list = people.ordered(c.profiles())
@@ -3043,6 +3051,9 @@ class JvmSyncService(
         /** How long a save's files must be left alone before one made outside Fuse is kept. */
         const val OUTSIDE_SETTLED_MS = 60_000L
         const val PRESENCE_WAIT_MS = 3_000L
+
+        /** How often the device list is read again for when each device was last seen (under [ONLINE_MS]). */
+        const val LISTS_EVERY_MS = 45_000L
 
         /** Another device heard from this lately while playing (it may have gone to sleep mid-game). */
         const val PLAYING_ASK_MS = 30 * 60_000L

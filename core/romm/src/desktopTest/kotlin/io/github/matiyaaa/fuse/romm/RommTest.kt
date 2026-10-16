@@ -114,6 +114,18 @@ class RommTest {
         assertFalse(old.deviceAuth)
     }
 
+    @Test
+    fun `RomM 5_3 scans through its library scan task`() = runBlocking<Unit> {
+        val fake = server()
+        fake.scanAsTask = true
+        val c = client(fake)
+        val caps = c.detect()
+        assertTrue(caps.tokenScans && caps.scanTask, "a scan can still be started")
+        val before = fake.calls.size
+        runCatching { c.scan(listOf(4L)) }
+        assertTrue(fake.calls.drop(before).any { it == "POST /api/tasks/run/scan_library" }, "the scan task was run: ${fake.calls.drop(before)}")
+    }
+
     // ------------------------------------------------------------------ routes
 
     @Test

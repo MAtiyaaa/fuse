@@ -17,8 +17,13 @@ data class RommCapabilities(
     val pairCodes: Boolean = false,
     /** Uploads in chunks, which can carry on after a drop (`/api/roms/upload/start`). */
     val chunkedUploads: Boolean = false,
-    /** A scan can be started with a token (`POST /api/tasks/scan`), not only from a web session. */
+    /**
+     * A scan can be started with a token, not only from a web session: `POST /api/tasks/scan`, or
+     * from RomM 5.3 (which removed that) its library scan task, `POST /api/tasks/run/scan_library`.
+     */
     val tokenScans: Boolean = false,
+    /** Scans start as RomM 5.3's task (`/api/tasks/run/scan_library`) rather than `/api/tasks/scan`. */
+    val scanTask: Boolean = false,
     /** `updated_after` on the list of games, for bringing in only what changed. */
     val incremental: Boolean = false,
     /** RomM's save sync: devices and their saves (`/api/devices`, RomM 5). */

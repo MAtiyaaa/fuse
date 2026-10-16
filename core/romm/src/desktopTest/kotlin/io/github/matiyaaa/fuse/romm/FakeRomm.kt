@@ -39,6 +39,9 @@ class FakeRomm(var version: String = "4.4.0") {
     val calls = CopyOnWriteArrayList<String>()
     val down = ConcurrentHashMap.newKeySet<String>()
     @Volatile var openApi = true
+
+    /** As RomM 5.3: scans only through its library scan task, `/api/tasks/scan` gone. */
+    @Volatile var scanAsTask = false
     /** Pages of the library bigger than this take too long to put together (as a big PS5 page does). */
     @Volatile var slowAbove: Int = Int.MAX_VALUE
     /** The library can't be read from this many games on (the connection drops part way). */
@@ -88,7 +91,8 @@ class FakeRomm(var version: String = "4.4.0") {
         when {
             path == "/api/heartbeat" -> return json("""{"SYSTEM":{"VERSION":"$version"}}""")
             path == "/openapi.json" -> return if (openApi) {
-                json("""{"paths":{"/api/auth/device/init":{},"/api/client-tokens/exchange":{},"/api/roms/upload/start":{},"/api/tasks/scan":{},"/api/roms/identifiers":{}}}""")
+                json(if (scanAsTask) """{"paths":{"/api/auth/device/init":{},"/api/client-tokens/exchange":{},"/api/roms/upload/start":{},"/api/tasks/run/{task_name}":{},"/api/roms/identifiers":{}}}"""
+                else """{"paths":{"/api/auth/device/init":{},"/api/client-tokens/exchange":{},"/api/roms/upload/start":{},"/api/tasks/scan":{},"/api/roms/identifiers":{}}}""")
             } else {
                 respond("", HttpStatusCode.NotFound)
             }
