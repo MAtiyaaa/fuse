@@ -52,6 +52,11 @@ class JvmSyncService(
     private val liveLookMs: Long = LIVE_LOOK_MS,
     /** Folders granted through the system's folder picker (`tree:` save folders), by their link; none on computers. */
     private val trees: (String) -> DocumentTree? = { null },
+    /**
+     * Whether reading this device's game files for the household (hashing) may run now: a handheld
+     * only while it charges, as reading every game it has, many gigabytes, ran it hot and drained it.
+     */
+    private val mayHash: () -> Boolean = { true },
 ) : SyncService {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val _status = MutableStateFlow<SyncStatus>(SyncStatus.Off)
@@ -80,7 +85,7 @@ class JvmSyncService(
 
     /** The household's games through this device's host (see [Household]). */
     val householdHere: JvmHousehold by lazy {
-        JvmHousehold(File(dir, "household"), scope, { client }, { cached.deviceId }, { cached }, busy = { _nowPlaying.value != null }, clock = clock)
+        JvmHousehold(File(dir, "household"), scope, { client }, { cached.deviceId }, { cached }, busy = { _nowPlaying.value != null || !mayHash() }, clock = clock)
     }
     override val household: Household get() = householdHere
     private var hostServer: SyncHost? = null

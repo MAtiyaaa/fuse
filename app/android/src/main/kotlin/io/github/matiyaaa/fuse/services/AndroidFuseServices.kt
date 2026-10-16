@@ -127,6 +127,8 @@ class AndroidFuseServices(
             scope = scope,
             // Folders the person granted through the picker (Eden's own data folder): read and written through Android.
             trees = { uri -> io.github.matiyaaa.fuse.platform.AndroidDocumentTree.forUri(appContext, uri) },
+            // Game files are read for the household only while charging: on battery it ran a handheld hot.
+            mayHash = { charging(appContext) },
             discoveryLock = {
                 val wifi = appContext.getSystemService(android.content.Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
                 wifi?.createMulticastLock("fuse-sync")?.apply {
@@ -291,3 +293,9 @@ private fun java.io.InputStream.readNBytesCompat(limit: Int): ByteArray {
     }
     return out.toByteArray()
 }
+
+/** Plugged in (charging, or full on the charger): the battery's last report, which Android keeps. */
+private fun charging(context: android.content.Context): Boolean = runCatching {
+    val battery = context.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+    (battery?.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) ?: 0) != 0
+}.getOrDefault(false)
