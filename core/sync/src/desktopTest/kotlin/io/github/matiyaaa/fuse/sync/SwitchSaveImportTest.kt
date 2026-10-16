@@ -93,6 +93,19 @@ class SwitchSaveImportTest {
         assertEquals(SaveImportConfidence.TITLE_ID, e.targets.single().confidence)
     }
 
+    @Test fun theSameGameWithAnotherTitleIdIsMatchedByName() = temp { root ->
+        val space = eden(root)
+        val jksv = File(root, "sd/JKSV")
+        // The backup's meta file says 0100000000010000; this copy is another region's, tagged with its own id.
+        backup(File(jksv, "Super Mario Odyssey/Player - 2026-10-15_17-05-25"), mapOf("file1" to "other region"), meta(at = 1_790_000_000L))
+        val other = "0100000000020000"
+        val q = SaveQuery(GameKey.of("switch", null, null, "Super Mario Odyssey"), "switch", "/games/Super Mario Odyssey [$other].nsp", "linux.eden", title = "Super Mario Odyssey")
+        val plan = JvmSaveImporter(File(root, "stage")).scan(jksv, listOf(q), env(root))
+        val target = plan.entries.single().targets.single()
+        assertEquals(SaveImportConfidence.EXACT_NAME, target.confidence)
+        assertEquals(File(space, "account/$user/$other/0").path, target.destination)
+    }
+
     @Test fun aBackupWithOnlyAGameNameAsksToBeConfirmed() = temp { root ->
         eden(root)
         val jksv = File(root, "sd/JKSV")
