@@ -18,6 +18,8 @@ import kotlin.random.Random
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -153,6 +155,31 @@ class HouseholdGamesTest {
         // What the Thor knew survives a restart (the household's games show while the host is away).
         val again = JvmHousehold(File(root, "hh-Thor"), scope, { null }, { "x" }, { SyncSettings() })
         assertEquals(thor.household.libraries.value.map { it.device }, again.libraries.value.map { it.device })
+    }
+
+    @Test
+    fun `a kept list that went wrong is replaced on the way in`() = runBlocking<Unit> {
+        val pc = Device("PC").join()
+        val htpc = Device("HTPC").join()
+        pc.games = listOf(folderGame("PC", "Crash"))
+        pc.household.connected()
+        htpc.household.connected()
+        pc.household.publish()
+        htpc.household.refresh()
+        assertEquals(listOf("Crash"), htpc.household.libraries.value.single().entries.map { it.title })
+        // The HTPC's kept copy of the PC's list lost its games but kept the version the host has:
+        // asked only for what changed, the host never sent it again, and the HTPC saw none of them.
+        val kept = File(root, "hh-HTPC/household.json")
+        val json = kotlinx.serialization.json.Json.parseToJsonElement(kept.readText()).jsonObject
+        val emptied = kotlinx.serialization.json.JsonObject(json + ("libraries" to kotlinx.serialization.json.JsonArray(json.getValue("libraries").jsonArray.map { lib ->
+            kotlinx.serialization.json.JsonObject(lib.jsonObject + ("entries" to kotlinx.serialization.json.JsonArray(emptyList())))
+        })))
+        kept.writeText(emptied.toString())
+        val again = JvmHousehold(File(root, "hh-HTPC"), scope, { htpc.client }, { htpc.client.link.deviceId }, { SyncSettings(shareLibrary = false) }, peerPort = 0)
+        joined += again
+        assertTrue(again.libraries.value.single().entries.isEmpty(), "the wrong copy is what was kept")
+        assertNull(again.connected(), "the household comes up")
+        assertEquals(listOf("Crash"), again.libraries.value.single().entries.map { it.title })
     }
 
     @Test

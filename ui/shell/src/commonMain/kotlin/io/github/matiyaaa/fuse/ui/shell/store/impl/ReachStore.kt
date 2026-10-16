@@ -798,10 +798,15 @@ internal class DefaultReachOps(
                 else {
                     val key = command.game.orEmpty()
                     val romId = key.removePrefix("romm:").takeIf { key.startsWith("romm:") }?.toLongOrNull()
-                    val target = romId?.let(::rommGameId) ?: index.value.byKey[key]?.id
+                    // Asked for a game this device hasn't seen yet (its lists are read every half minute,
+                    // or weren't read at all): it reads them again and waits a moment before saying no.
+                    val target = romId?.let(::rommGameId) ?: index.value.byKey[key]?.id ?: run {
+                        runCatching { household.refresh() }
+                        kotlinx.coroutines.withTimeoutOrNull(FETCH_LOOK_MS) { index.first { it.byKey.containsKey(key) } }?.byKey?.get(key)?.id
+                    }
                     val why = when {
                         localByKey.value.containsKey(key) -> null.also { return CommandResult(DeviceCommand.DONE, "It's already on ${ctx.services.deviceName}.") }
-                        target == null -> "${ctx.services.deviceName} can't see this game on any device."
+                        target == null -> "${ctx.services.deviceName} can't see this game on any device. The device that has it may be off, or not sharing its games (Settings, Addons, Fuse Library)."
                         else -> downloadFor(target, command.id)
                     }
                     if (why == null) CommandResult(DeviceCommand.DELIVERED, "On its way to ${ctx.services.deviceName}") else CommandResult(DeviceCommand.FAILED, why)
@@ -905,5 +910,8 @@ internal class DefaultReachOps(
     companion object {
         const val ARRIVED = "reach.arrived"
         const val RECENT = 40
+
+        /** How long a request for a game not seen yet waits for the lists read again. */
+        const val FETCH_LOOK_MS = 15_000L
     }
 }

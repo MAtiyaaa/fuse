@@ -81,6 +81,10 @@ class JvmHousehold(
     @Volatile private var shared: Map<String, SharedGame> = emptyMap()
     @Volatile private var published: String = ""
 
+    /** Why the other devices' lists couldn't be read the last time, or null when they could. */
+    @Volatile var problem: String? = null
+        private set
+
     /** This device's list didn't reach the host the last time it was sent: it is sent again shortly. */
     @Volatile private var unsent = false
 
@@ -121,21 +125,24 @@ class JvmHousehold(
      * Linked (again): checks the host offers the household's games, starts this device's server,
      * and catches up on everything. Called by Fuse Sync whenever it reaches its host.
      */
-    suspend fun connected() {
-        val c = client() ?: return off()
-        val hello = runCatching { c.helloNow() }.getOrNull() ?: return
+    suspend fun connected(): String? {
+        val c = client() ?: return "not linked".also { off() }
+        // Unanswered, the household stayed off for as long as Fuse ran: the caller tries again.
+        val hello = runCatching { c.helloNow() }.getOrNull() ?: return "the host didn't say hello"
         val ok = SyncApi.FEATURE_HOUSEHOLD in hello.features
         _supported.value = ok
-        if (!ok) return off()
+        if (!ok) return "the host's Fuse is too old for the Fuse Library".also { off() }
         // The server for other devices starts with the first list of games (see publish), so a
         // device with nothing to share yet doesn't keep one open.
         libraryChanged()
-        runCatching { refresh() }
+        // Every list in full on the way in: one kept from before that had gone wrong (it carried
+        // the version the host has, so it was never sent again) is replaced, whatever it held.
+        runCatching { refresh(full = true) }.onSuccess { problem = null }.onFailure { problem = it.message ?: it::class.simpleName }
         // Who is around, kept fresh: a device that went away shows so within a minute.
         if (lookJob?.isActive != true) lookJob = scope.launch(Dispatchers.IO) {
             while (isActive && _supported.value) {
                 delay(LOOK_MS)
-                runCatching { refresh() }
+                runCatching { refresh() }.onSuccess { problem = null }.onFailure { problem = it.message ?: it::class.simpleName }
                 // This device's own list, until the host has it: a list that didn't go up (the host
                 // away for a moment, the network changing) waited for the next scan, and the other
                 // devices never saw this one's games.
@@ -145,6 +152,7 @@ class JvmHousehold(
         runCatching { refreshCommands() }
         runCatching { takeInbox() }
         runCatching { sendPieces() }
+        return null
     }
 
     /** Unlinked, or Fuse Sync off: nothing more is served. What was kept stays for a later link. */
@@ -280,10 +288,13 @@ class JvmHousehold(
 
     // ---------------------------------------------------------------- the others' lists
 
-    override suspend fun refresh() {
+    override suspend fun refresh() = refresh(full = false)
+
+    /** The other devices' lists as the host has them: only those that changed, or every one when [full]. */
+    suspend fun refresh(full: Boolean) {
         val c = client() ?: return
         if (!_supported.value) return
-        val have = _libraries.value.associate { it.device to it.version }
+        val have = if (full) emptyMap() else _libraries.value.associate { it.device to it.version }
         val page = c.libraries(have)
         val present = page.devices.toSet()
         val byDevice = _libraries.value.associateBy { it.device }.toMutableMap()
