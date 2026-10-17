@@ -83,6 +83,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.FillChoice
 import io.github.matiyaaa.fuse.ui.shell.store.FillProgress
 import io.github.matiyaaa.fuse.ui.shell.store.MusicPrefs
 import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
+import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
 import kotlinx.coroutines.launch
 
 /** System art styles: the pack's sets, and panels from the system's own games. */
@@ -1888,11 +1889,23 @@ fun privacyRows(app: AppState): List<MenuAction> = listOf(
 
 private const val FUSE_RELEASES = "https://github.com/MAtiyaaa/fuse/releases/latest"
 
+/** "78 of 180 MB, 2.1 MB a second" for an update coming down, or null before anything is known. */
+internal fun downloadedWords(st: UpdateState.Downloading): String? {
+    val done = st.doneBytes ?: return null
+    val total = st.totalBytes ?: return null
+    val mib = 1024L * 1024
+    // Tenths of a megabyte below ten, whole ones above.
+    fun mb(b: Long): String = if (b >= 10 * mib) "${b / mib}" else ((b * 10 + mib / 2) / mib).let { "${it / 10}.${it % 10}" }
+    val speed = st.bytesPerSecond?.takeIf { it > 0 }?.let { s -> if (s >= mib) "${mb(s)} MB a second" else "${s / 1024} KB a second" }
+    return listOfNotNull("${mb(done)} of ${mb(total)} MB", speed).joinToString(", ")
+}
+
 @Composable
 fun updateRows(app: AppState): List<MenuAction> {
     val p by app.store.prefs.collectAsState()
     val available by app.store.updates.available.collectAsState()
     val state by app.store.updates.state.collectAsState()
+    val storeState by app.store.appStore.state.collectAsState()
     // The household's host, when this device is in touch with it: it can be updated from here.
     val sync = app.store.sync.service
     val online = sync?.status?.collectAsState()?.value as? io.github.matiyaaa.fuse.sync.SyncStatus.Online
@@ -1914,7 +1927,7 @@ fun updateRows(app: AppState): List<MenuAction> {
             when (val st = state) {
                 is UpdateState.Downloading -> add(MenuAction(
                     "download", "Downloading ${r.name}", FuseIcons.Download,
-                    detail = "You can keep using Fuse. Select to stop",
+                    detail = listOfNotNull(downloadedWords(st), "You can keep using Fuse. Select to stop").joinToString(". "),
                     trailing = Trailing.Value(st.progress?.let { "${(it * 100).toInt()}%" } ?: "Starting"),
                     onSelect = { app.store.updates.cancelDownload() },
                 ))
@@ -1938,6 +1951,24 @@ fun updateRows(app: AppState): List<MenuAction> {
                 val name = io.github.matiyaaa.fuse.ui.shell.notes.releaseNameOf(r.notes) ?: r.name.substringAfter(" - ", "").ifBlank { null }
                 app.go(Route.ReleaseNotes(r.tag.removePrefix("v"), name, r.notes, installed = false))
             }))
+        }
+        // GitHub's API was out of checks for this network, so the update was read from its website:
+        // a token (the Store's, shared) lets the API answer again; without one the download comes
+        // straight from the website, as it does now.
+        if (r != null && r.fromWebsite && !storeState.hasGitHubToken) {
+            add(MenuAction(
+                "token", "Add a GitHub token", FuseIcons.Key,
+                detail = "GitHub is limiting update checks from this network. A token with no permissions lifts that, for the Store too. Without one, ${r.name} downloads straight from GitHub's website",
+                trailing = Trailing.Value("Add"),
+                onSelect = {
+                    app.textInput = TextInputSpec(title = "GitHub token", initial = "", placeholder = "A token with no permissions", secret = true, capitalize = false, doneLabel = "Save") { t ->
+                        app.scope.launch {
+                            app.store.appStore.setGitHubToken(t)
+                            app.store.updates.check()
+                        }
+                    }
+                },
+            ))
         }
         add(MenuAction(
             "installed-notes", "What's new in this version", FuseIcons.Sparkles,

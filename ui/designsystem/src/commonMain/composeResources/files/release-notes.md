@@ -1,23 +1,21 @@
-# Fuse 0.4.2.25 - The Native Update
+# Fuse 0.4.2.26 - The Native Update
 
-Lighter on handhelds while games move between devices, and clearer words when the other devices'
-games aren't there.
+An update coming down says how much has come and how fast, and Fuse offers a GitHub token when
+GitHub limits its checks.
 
 ## New
 
-- Nothing new in this release.
+- When GitHub is limiting update checks from your network, About offers to add a GitHub token
+  (the Store's, so both use it). Without one, the update still downloads straight from GitHub's
+  website.
 
 ## Changed
 
-- The Fuse Library no longer gathers every game of every device again each time the list of
-  transfers changes (every few seconds while anything moves): it follows only which transfer is
-  which and how far along it is, so a handheld downloading stays cooler.
-- A game page finds RomM's copy of another version by name once a minute, instead of reading the
-  server's whole list every time a transfer or a device changes.
-- Without the other devices' games, the Fuse Library says it is asking the host for them and
-  where to see why it can't, instead of always asking for the host to be updated.
+- A Fuse update downloading shows how much has come and how fast ("78 of 180 MB, 2.1 MB a
+  second"), and its percentage moves in tenths, so a slow download no longer looks stuck.
+- An update found through GitHub's website (when its API has no checks left) has its size asked
+  for before it downloads, so its progress shows from the start.
 
 ## Fixed
 
-- A request another device turned down named that device twice in Downloads ("Atiya HTPC
-  couldn't: Atiya HTPC can't see this game").
+- An update could sit at 1% for a long time on a slow connection, as if stuck.

@@ -99,6 +99,7 @@ object ResumableDownload {
             val channel = response.bodyAsChannel()
             val buffer = ByteArray(128 * 1024)
             var done = start
+            // In tenths of a percent: a large download on a slow line moved by whole percents seemed stuck.
             var lastReported = -1
             FileOutputStream(file, resumed).use { out ->
                 while (true) {
@@ -110,10 +111,10 @@ object ResumableDownload {
                     digest.update(buffer, 0, n)
                     done += n
                     if (total != null) {
-                        val pct = (done * 100 / total).toInt().coerceIn(0, 99)
-                        if (pct != lastReported) {
-                            lastReported = pct
-                            onProgress(pct / 100f)
+                        val permille = (done * 1000 / total).toInt().coerceIn(0, 999)
+                        if (permille != lastReported) {
+                            lastReported = permille
+                            onProgress(permille / 1000f)
                         }
                     }
                 }

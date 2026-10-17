@@ -115,11 +115,21 @@ class GitHubReleases(
                                 ReleaseAsset(name = name, url = "$webUrl/$owner/$repo/releases/download/$tag/$name", sizeBytes = 0, digest = "sha256:$sha")
                             },
                             htmlUrl = "$webUrl/$owner/$repo/releases/tag/$tag",
+                            fromWebsite = true,
                         ),
                     )
                 }
             }
         }
+
+    /**
+     * How big the file at [url] is, asked of the server before downloading it (the website's list
+     * of a release's files says nothing of their size); null when the server doesn't say.
+     */
+    suspend fun sizeOf(url: String): Long? = (api.execute {
+        method = io.ktor.http.HttpMethod.Head
+        url(url)
+    } as? ApiResult.Success)?.value?.takeIf { it.status in 200..299 }?.headers?.get("content-length")?.toLongOrNull()?.takeIf { it > 0 }
 
     override fun toString(): String = "GitHubReleases"
 

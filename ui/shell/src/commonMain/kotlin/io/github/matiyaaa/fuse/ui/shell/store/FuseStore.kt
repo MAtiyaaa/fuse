@@ -1044,8 +1044,17 @@ interface UpdateOps {
 
 sealed interface UpdateState {
     data object Idle : UpdateState
-    /** [progress] 0..1, or null while the size is unknown. */
-    data class Downloading(val release: ReleaseInfo, val progress: Float?) : UpdateState
+    /**
+     * [progress] 0..1, or null while the size is unknown; [doneBytes] of [totalBytes] so far, at
+     * [bytesPerSecond] lately (null until it has moved for a moment).
+     */
+    data class Downloading(
+        val release: ReleaseInfo,
+        val progress: Float?,
+        val doneBytes: Long? = null,
+        val totalBytes: Long? = null,
+        val bytesPerSecond: Long? = null,
+    ) : UpdateState
     data class Ready(val release: ReleaseInfo, val file: String) : UpdateState
     data class Installing(val release: ReleaseInfo) : UpdateState
     data class Failed(val release: ReleaseInfo, val message: String) : UpdateState

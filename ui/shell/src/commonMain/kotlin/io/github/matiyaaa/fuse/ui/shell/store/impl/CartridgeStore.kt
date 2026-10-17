@@ -328,7 +328,16 @@ internal class DefaultUpdateOps(private val ctx: StoreContext) : UpdateOps {
         stateFlow.value = UpdateState.Downloading(release, null)
         job = ctx.scope.launch {
             val result = try {
-                ctx.services.installer.download(asset) { p -> stateFlow.value = UpdateState.Downloading(release, p) }
+                // A release read from the website lists no sizes: the file's is asked for first, so the
+                // download shows how much has come and how fast, not a percentage that seems stuck.
+                val total = asset.sizeBytes.takeIf { it > 0 }
+                    ?: runCatching { GitHubReleases(ctx.services.http).sizeOf(asset.url) }.getOrNull()
+                val speed = SpeedOf(ctx::now)
+                stateFlow.value = UpdateState.Downloading(release, null, 0, total)
+                ctx.services.installer.download(if (total != null) asset.copy(sizeBytes = total) else asset) { p ->
+                    val done = total?.let { (it * p).toLong() }
+                    stateFlow.value = UpdateState.Downloading(release, p, done, total, done?.let(speed::sample))
+                }
             } catch (e: CancellationException) {
                 stateFlow.value = UpdateState.Idle
                 throw e
@@ -339,6 +348,25 @@ internal class DefaultUpdateOps(private val ctx: StoreContext) : UpdateOps {
                 onSuccess = { UpdateState.Ready(release, it) },
                 onFailure = { UpdateState.Failed(release, it.message ?: "The download failed. Try again.") },
             )
+        }
+    }
+
+    /** Bytes a second over the last few seconds of a download, from how far it has come. */
+    private class SpeedOf(private val now: () -> Long) {
+        private val samples = ArrayDeque<Pair<Long, Long>>()
+
+        fun sample(done: Long): Long? {
+            val t = now()
+            samples.addLast(t to done)
+            while (samples.size > 2 && t - samples.first().first > WINDOW_MS) samples.removeFirst()
+            val (t0, d0) = samples.first()
+            val ms = t - t0
+            return if (ms < MIN_MS) null else ((done - d0) * 1000 / ms).coerceAtLeast(0)
+        }
+
+        private companion object {
+            const val WINDOW_MS = 5_000L
+            const val MIN_MS = 1_000L
         }
     }
 
