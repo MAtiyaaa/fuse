@@ -344,7 +344,8 @@ internal class DefaultLibraryOps(
         val games = data.games
         if (query.set != io.github.matiyaaa.fuse.ui.shell.store.GameSet.LIBRARY) {
             val set = when (query.set) {
-                io.github.matiyaaa.fuse.ui.shell.store.GameSet.MISSING -> games.observeMissing()
+                io.github.matiyaaa.fuse.ui.shell.store.GameSet.MISSING ->
+                    kotlinx.coroutines.flow.combine(games.observeMissing(), games.observeAll(includeHidden = true), ::stillMissing)
                 io.github.matiyaaa.fuse.ui.shell.store.GameSet.HIDDEN -> games.observeHidden()
                 else -> games.observeRemoved()
             }

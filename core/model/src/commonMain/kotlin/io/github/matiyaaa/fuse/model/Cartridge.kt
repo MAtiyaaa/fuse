@@ -171,6 +171,11 @@ data class ReleaseInfo(
     val publishedAt: String?,
     val assets: List<ReleaseAsset>,
     val htmlUrl: String,
+    /**
+     * Read from GitHub's website, not its API (the API's hourly limit for this network was used
+     * up): its notes aren't known, and a GitHub token would let the API answer again.
+     */
+    val fromWebsite: Boolean = false,
 )
 
 @Serializable

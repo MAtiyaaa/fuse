@@ -157,6 +157,28 @@ class HouseholdGamesTest {
         assertEquals(thor.household.libraries.value.map { it.device }, again.libraries.value.map { it.device })
     }
 
+    /**
+     * A folder game lists every file in it with its hashes: a PC with PS3 and PC games in folders
+     * lists tens of megabytes. Such a list went up refused, and the others' lists came down refused,
+     * so a device with no kept copy (a television just set up) never saw a single game.
+     */
+    @Test
+    fun `a library of big folder games reaches a device that has none kept`() = runBlocking<Unit> {
+        val pc = Device("PC").join()
+        val htpc = Device("HTPC").join()
+        val sha1 = "0123456789abcdef0123456789abcdef01234567"
+        val md5 = "0123456789abcdef0123456789abcdef"
+        pc.games = (1..40).map { g ->
+            val files = (1..3_000).map { f -> PeerFile("PS3_GAME/USRDIR/data/level$g/chunk_${f}_of_the_game_data.sdat", 1_000_000L + f, sha1 = sha1, md5 = md5) }
+            SharedGame(LibraryEntry(game = "g:big$g", title = "Big $g", platform = "ps3", sizeBytes = files.sumOf { it.size }, folder = true, name = "BLUS$g", files = files), emptyMap())
+        }
+        pc.household.connected()
+        htpc.household.connected()
+        pc.household.publish()
+        htpc.household.refresh(full = true)
+        assertEquals(40, htpc.household.libraries.value.single().entries.size)
+    }
+
     @Test
     fun `a kept list that went wrong is replaced on the way in`() = runBlocking<Unit> {
         val pc = Device("PC").join()

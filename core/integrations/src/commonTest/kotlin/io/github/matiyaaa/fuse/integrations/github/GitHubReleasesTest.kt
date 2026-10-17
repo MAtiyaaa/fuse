@@ -98,6 +98,25 @@ class GitHubReleasesTest {
         assertEquals("https://github.com/MAtiyaaa/fuse/releases/download/v9.9.9/Fuse-9.9.9-x86_64.AppImage", appImage.url)
         assertEquals("sha256:$sha", appImage.digest)
         assertEquals("Fuse-9.9.9-android.apk", GitHubReleases.pickAsset(release, ReleasePlatform.ANDROID)!!.name)
+        // Said to come from the website, where a token would let the API answer again.
+        assertTrue(release.fromWebsite)
+    }
+
+    @Test
+    fun aFilesSizeIsAskedOfTheServerBeforeItsDownload() = runTest {
+        val http = TestHttp { request ->
+            if (request.method == io.ktor.http.HttpMethod.Head) respond("", HttpStatusCode.OK, headersOf(HttpHeaders.ContentLength, "180369912"))
+            else text("", HttpStatusCode.NotFound)
+        }
+        val releases = GitHubReleases(http.client, RateLimiter.unlimited())
+        assertEquals(180369912L, releases.sizeOf("https://github.com/MAtiyaaa/fuse/releases/download/v9.9.9/Fuse-9.9.9-x86_64.AppImage"))
+        assertEquals(io.ktor.http.HttpMethod.Head, http.last.method)
+    }
+
+    @Test
+    fun theApisReleaseIsNotFromTheWebsite() = runTest {
+        val release = (GitHubReleases(TestHttp { json(releaseJson) }.client, RateLimiter.unlimited()).latest(CartridgeProtocol.RELEASE_REPO) as ApiResult.Success).value!!
+        assertFalse(release.fromWebsite)
     }
 
     @Test
