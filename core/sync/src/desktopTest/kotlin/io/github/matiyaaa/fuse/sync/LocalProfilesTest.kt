@@ -90,7 +90,8 @@ class LocalProfilesTest {
     @Test
     fun profilesWorkWithoutAHostAndKeepEachPersonsSaveApart(): Unit = runBlocking {
         val deck = device("Steam Deck", enabled = false, Library(hashMapOf(ruby.id to GameRecord(ruby, playSeconds = mapOf("x" to 1_200), lastPlayed = 1))))
-        withTimeout(5_000) { deck.svc.status.first { it is SyncStatus.Off } }
+        // A service starting on a busy machine (a CI runner) can take more than a few seconds.
+        withTimeout(30_000) { deck.svc.status.first { it is SyncStatus.Off } }
         val mo = deck.svc.createProfile("Mo", "fox", null).getOrThrow()
         val sam = deck.svc.createProfile("Sam", "owl", "2468").getOrThrow()
         assertEquals(listOf("Mo", "Sam"), deck.svc.profiles.value.map { it.name })
@@ -133,7 +134,7 @@ class LocalProfilesTest {
         // Everything survives a restart.
         deck.svc.stop()
         val again = JvmSyncService(File(root, "Steam Deck"), deck.settings, Secrets(), deck.lib, "LINUX", "Steam Deck", "test", NoHostLifetime("test"), scope)
-        withTimeout(5_000) { again.profiles.first { it.size == 2 } }
+        withTimeout(30_000) { again.profiles.first { it.size == 2 } }
         assertEquals(listOf("Samira", "Mo"), again.profiles.value.map { it.name })
         assertEquals(mo.id, again.activeProfile.value?.id)
 

@@ -202,12 +202,24 @@ class SyncClient(
                 if (hello(base, quick)?.hostId != link.hostId) return@launch
                 if (link.localAddress == null) {
                     changeLink(link.copy(localAddress = base))
-                    route = Route.LOCAL
-                } else if (route == Route.REMOTE) route = Route.LOCAL
+                    wentHome()
+                } else if (route == Route.REMOTE) wentHome()
             } finally {
                 quick.close()
             }
         }
+    }
+
+    /**
+     * Goes up each time home answered again. A call already on its way outside (the wait for the
+     * host's news is almost always out, for up to half a minute) ends after that, and must not put
+     * this device back outside: home lost to it every time, and "from outside" stayed for good.
+     */
+    @Volatile private var homeAgain = 0L
+
+    private fun wentHome() {
+        homeAgain++
+        route = Route.LOCAL
     }
 
     private val looking = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
@@ -271,8 +283,13 @@ class SyncClient(
         raw: (suspend (io.ktor.client.statement.HttpResponse) -> T)? = null,
         headers: Map<String, String> = emptyMap(),
     ): T {
+        val since = homeAgain
         val targets = bases()
         if (targets.isEmpty()) throw SyncException("This device has no address for its host.", "no-address", 0)
+        // The route this call took, unless home answered again while it was on its way.
+        fun took(r: Route) {
+            if (r == Route.LOCAL || homeAgain == since) route = r
+        }
         var last: Exception? = null
         for ((r, base) in targets) {
             try {
@@ -307,14 +324,14 @@ class SyncClient(
                 if (raw != null) {
                     return http.prepareRequest(build).execute { resp ->
                         if (!resp.status.isSuccess()) throw hostError(resp.status.value, resp.bodyAsText(), json)
-                        route = r
+                        took(r)
                         raw(resp)
                     }
                 }
                 val resp = http.request(build)
                 val text = textOf(resp)
                 if (!resp.status.isSuccess()) throw hostError(resp.status.value, text, json)
-                route = r
+                took(r)
                 @Suppress("UNCHECKED_CAST")
                 return if (out == null) Unit as T else json.decodeFromString(out, text)
             } catch (e: SyncException) {

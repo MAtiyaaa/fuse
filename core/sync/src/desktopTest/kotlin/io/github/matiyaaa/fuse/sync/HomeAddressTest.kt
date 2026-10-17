@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.sync
 
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -53,9 +54,13 @@ class HomeAddressTest {
         c.devices()
         assertEquals(Route.REMOTE, c.route)
         c.learn(told(c, "127.0.0.1:${host.boundPort()}"))
-        c.devices()
-        withTimeout(10_000) { while (c.link.localAddress == null) delay(50) }
+        // The wait for the host's news is out the long way when home answers, and ends after it.
+        val now = c.events(0).seq
+        val waiting = async { c.events(now, waitSeconds = 3) }
+        withTimeout(10_000) { while (c.link.localAddress == null || c.route != Route.LOCAL) delay(50) }
         assertEquals(SyncClient.normalise("127.0.0.1:${host.boundPort()}"), c.link.localAddress)
+        waiting.await()
+        assertEquals(Route.LOCAL, c.route, "a call that went outside before home answered doesn't take this device back out")
         c.devices()
         assertEquals(Route.LOCAL, c.route)
     }
