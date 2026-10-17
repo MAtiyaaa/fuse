@@ -19,3 +19,7 @@ GitHub limits its checks.
 ## Fixed
 
 - An update could sit at 1% for a long time on a slow connection, as if stuck.
+- A game with several versions could show under both Installed and Missing: a version whose file
+  went while the game is still here under another version is one of its versions, not a missing
+  game, so it no longer shows under Missing or counts in the missing games notice. Its record
+  stays, so it comes back if its file does.

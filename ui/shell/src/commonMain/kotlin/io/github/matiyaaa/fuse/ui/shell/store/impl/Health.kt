@@ -269,7 +269,7 @@ internal class DefaultHealthOps(
     /** Games the last scans didn't find, leaving out ones whose drive is simply out. */
     private suspend fun missingGames(): HealthIssue? {
         val roots = ctx.offline.value
-        val missing = ctx.data.games.observeMissing().first().filterNot { s -> roots.any { it.holds(s.folderPath) } }
+        val missing = stillMissing(ctx.data.games.observeMissing().first(), ctx.data.games.observeAll(includeHidden = true).first()).filterNot { s -> roots.any { it.holds(s.folderPath) } }
         if (missing.isEmpty()) return null
         val n = missing.size
         return HealthIssue(

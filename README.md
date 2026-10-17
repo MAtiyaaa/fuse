@@ -434,7 +434,7 @@ Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 > Checkpoint come in one game at a time (is this the game, whose save is it, then into Eden), for
 > the games here or every game in your library, and every emulator Fuse knows on Linux is in the
 > Store, installed by Fuse. Each profile can have its own RetroAchievements account, and a game's
-> updates and DLC come from your other devices. 0.4.2.26 shows an update's real progress and offers a GitHub token when GitHub limits its checks. See [the release notes](docs/releases/0.4.2.26.md); every earlier
+> updates and DLC come from your other devices. 0.4.2.26 shows an update's real progress, offers a GitHub token when GitHub limits its checks, and no longer lists an installed game's old version as Missing. See [the release notes](docs/releases/0.4.2.26.md); every earlier
 > release is in [CHANGELOG.md](CHANGELOG.md).
 
 Fuse runs on Android handhelds and phones, Linux (including SteamOS and its Game Mode), Windows and
