@@ -1185,7 +1185,7 @@ class SyncHost(
     private suspend fun <T> RoutingContext.signedBody(d: DeviceRecord, serializer: KSerializer<T>, packed: Boolean = false): T? {
         val raw = lastBodies.remove(call) ?: ByteArray(0)
         return runCatching {
-            val bytes = if (packed) Gzip.unpack(raw, MAX_JSON) else raw
+            val bytes = if (packed) Gzip.unpack(raw, MAX_UNPACKED) else raw
             json.decodeFromString(serializer, bytes.decodeToString())
         }.getOrElse {
             call.fail(HttpStatusCode.BadRequest, "That isn't a call this host understands.", "bad-body")
@@ -1345,6 +1345,13 @@ class SyncHost(
 
         /** The largest JSON call: a profile's records for a big library fit easily. */
         const val MAX_JSON = 16L * 1024 * 1024
+
+        /**
+         * The largest gzipped JSON once unpacked: a device's list of games names every file of a
+         * folder game with its hashes (a PS3 or PC game holds thousands), so one device lists tens
+         * of megabytes and the household's lists together more. Packed, it is a small part of that.
+         */
+        const val MAX_UNPACKED = 256L * 1024 * 1024
 
         /**
          * The largest single file. Only saves, save states and memory cards are kept (never games

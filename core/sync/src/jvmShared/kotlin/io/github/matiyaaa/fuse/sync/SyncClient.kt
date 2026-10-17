@@ -125,7 +125,15 @@ class SyncClient(
         if (hello.hostId != link.hostId || hello.generation < link.generation) return
         val hosts = hello.hosts.ifEmpty { link.hosts }
         if (hello.generation != link.generation || hosts != link.hosts) changeLink(link.copy(generation = hello.generation, hosts = hosts))
+        if (link.localAddress == null) homeHint = (hosts.firstOrNull { it.nodeId == hello.node } ?: hosts.firstOrNull())?.local ?: hello.addresses.firstOrNull()
     }
+
+    /**
+     * Where the host says it answers at home, for a device that joined from outside: it only knew the
+     * host's address from outside, so every call went the long way (through the tunnel) even on the
+     * same Wi-Fi. Looked at as home is while away ([lookForHome]), and kept once it answers as this host.
+     */
+    @Volatile private var homeHint: String? = null
 
     /**
      * The host didn't answer, or answered that it isn't the host any more: asks every other computer
@@ -176,6 +184,7 @@ class SyncClient(
             lookForHome(home.second)
             return listOf(away, home)
         }
+        if (home == null && away != null) homeHint?.let { lookForHome(normalise(it)) }
         return listOfNotNull(home, away)
     }
 
@@ -190,7 +199,11 @@ class SyncClient(
                 expectSuccess = false
             }
             try {
-                if (hello(base, quick)?.hostId == link.hostId && route == Route.REMOTE) route = Route.LOCAL
+                if (hello(base, quick)?.hostId != link.hostId) return@launch
+                if (link.localAddress == null) {
+                    changeLink(link.copy(localAddress = base))
+                    route = Route.LOCAL
+                } else if (route == Route.REMOTE) route = Route.LOCAL
             } finally {
                 quick.close()
             }
@@ -320,7 +333,7 @@ class SyncClient(
     private suspend fun textOf(resp: io.ktor.client.statement.HttpResponse): String {
         if (resp.headers[io.ktor.http.HttpHeaders.ContentEncoding]?.contains("gzip") != true) return resp.bodyAsText()
         val packed = resp.bodyAsChannel().toInputStream().use { it.readBytes() }
-        return Gzip.unpack(packed, SyncHost.MAX_JSON).decodeToString()
+        return Gzip.unpack(packed, SyncHost.MAX_UNPACKED).decodeToString()
     }
 
     private suspend fun <T> get(path: String, out: KSerializer<T>): T = call(HttpMethod.Get, path, null, out)
