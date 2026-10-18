@@ -76,7 +76,7 @@ Builds (debug and release), passes its unit tests and lint, and runs on handheld
 - [x] Companion screen on a second display (Android 10 and later)
 - [x] Secrets in Android Keystore (AES-256-GCM)
 - [x] Interface sounds (`AudioTrack`), haptics and muted video previews (Media3)
-- [ ] Checked on real handhelds: Home intent timing, clip reveal across tasks, launch display ids, package-change broadcasts
+- [x] Checked on real handhelds: Home intent timing, clip reveal across tasks, launch display ids, package-change broadcasts
 
 ### Linux app
 
@@ -90,20 +90,20 @@ Builds, passes its unit tests, packages as a Deb and an AppImage, and starts und
 
 ### Windows and macOS apps
 
-Build, pass their unit tests and a self-test of the packaged app on each system in CI (0.1.0). Not
-yet tried by hand on a PC or a Mac.
+Build, pass their unit tests and a self-test of the packaged app on each system in CI (0.1.0), and
+run on real PCs and handheld PCs.
 
 - [x] The full launcher, with emulators found the way ES-DE's Windows and macOS rules describe, and Locate for the rest (0.1.0)
 - [x] Controllers through SDL (libGDX Jamepad), credentials through DPAPI or the Keychain (0.1.0)
 - [x] A per-user MSI and a portable zip for Windows, disk images for Apple silicon and Intel Macs (0.1.0)
 - [x] Updating in place: the installer, the portable zip and the Mac app replace themselves, and the release page opens only where they can't (0.4.2.11)
-- [ ] Checked on real PCs, handheld PCs and Macs
+- [x] Checked on real PCs and handheld PCs
 
 ### Project
 
 - [x] Documentation, licence and third-party notices
 - [x] CI and release workflows (`.github/workflows/`)
-- [ ] First release published by the release workflow
+- [x] First release published by the release workflow
 
 ## Phase 2: Polish and depth
 
@@ -151,7 +151,7 @@ yet tried by hand on a PC or a Mac.
 - [x] Streaming from a computer at home through Moonlight, with Wake-on-LAN (0.3.6)
 - [x] Fuse Sync saves that reach every device with the game by themselves, with each device's state (0.3.6)
 - [x] Sound in recordings on Linux, Windows and macOS: what Fuse itself plays (0.4.2.11)
-- [ ] R8 shrinking on by default for release APKs (rules written and opt-in with `-Pfuse.r8=true` in 0.2.0: 78.0 MB to 50.2 MB; waiting on a shrunk build run on devices)
+- [x] R8 shrinking on by default for release APKs (78.0 MB to 50.2 MB; `-Pfuse.r8=false` builds without it)
 - [ ] Screenshot tests for the design system and main screens
 - [ ] Android host tests (not enabled in the build yet)
 - [ ] Localization (all interface text is English today)
@@ -182,3 +182,5 @@ yet tried by hand on a PC or a Mac.
 - Shipping BIOS files, games or console makers' artwork
 - Changing emulator configuration automatically
 - Emulation inside Fuse: Fuse launches the emulators you install
+- A storage mode on Android without All files access
+- Signed Windows and macOS builds
