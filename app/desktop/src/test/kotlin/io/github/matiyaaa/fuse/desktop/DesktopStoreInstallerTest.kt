@@ -74,7 +74,8 @@ class DesktopStoreInstallerTest {
         }
         assertEquals(listOf("1.0", "1.1", "1.2"), shelves.map { File(it).readText() })
         assertEquals(3, shelves.map { File(it).parentFile }.toSet().size, "a shelf each")
-        assertEquals(listOf(current), apps.listFiles()!!.map { it.absolutePath }, "only the version in use is where programs are found")
+        // As files, not text: the installer gives paths with forward slashes on Windows too.
+        assertEquals(listOf(File(current).absoluteFile), apps.listFiles()!!.map { it.absoluteFile }, "only the version in use is where programs are found")
 
         // Back to the oldest, skipping the two between: what was in place is kept first (the Store does that).
         val nowKept = installer.keepPrevious("Emu", current)!!
