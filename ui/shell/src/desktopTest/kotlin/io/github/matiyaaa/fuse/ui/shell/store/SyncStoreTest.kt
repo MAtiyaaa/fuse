@@ -74,16 +74,30 @@ class SyncStoreTest {
             store.library.platforms.first { systems -> systems.sumOf { it.gameCount } == files.size }
             store.sources.scan.first { it.phase == ScanPhase.DONE }
         }
-        return Device(store, services)
+        return Device(store, services).also { made += name to it }
     }
 
     private suspend fun games(d: Device) = d.store.library.games(GameQuery(platform = PlatformId("gba"))).first()
 
+    /** Every device made in this test, for the report when a step never comes. */
+    private val made = mutableListOf<Pair<String, Device>>()
+
+    /**
+     * Waits for [check]; a step that never comes fails by its name, with each device's person,
+     * shown theme and stored theme (and its revision), so a report says what went where.
+     */
     private suspend fun eventually(what: String, check: suspend () -> Boolean) {
-        withTimeout(EVENTUALLY_MS) {
+        val came = kotlinx.coroutines.withTimeoutOrNull(EVENTUALLY_MS) {
             while (!check()) delay(50)
+            true
+        } ?: false
+        if (came || check()) return
+        val state = made.joinToString("\n") { (name, d) ->
+            val stored = runCatching { kotlinx.coroutines.runBlocking { d.services.data.settings.current() } }.getOrNull()
+            val revision = runCatching { kotlinx.coroutines.runBlocking { d.services.data.settings.profileValues()["appearance.themeId"] } }.getOrNull()
+            "$name: person ${stored?.sync?.activeProfile}, shown ${d.store.prefs.value.themeId}, stored ${stored?.appearance?.themeId}, revision $revision"
         }
-        assertTrue(check(), what)
+        throw AssertionError("Not within ${EVENTUALLY_MS / 1000} s: $what\n$state")
     }
 
     @Test

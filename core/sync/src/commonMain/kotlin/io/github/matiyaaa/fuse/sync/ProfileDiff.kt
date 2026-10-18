@@ -7,8 +7,17 @@ package io.github.matiyaaa.fuse.sync
  * stamped now, so it wins over anything older, everywhere; play time this device counted beyond
  * [base] goes on this device's own counter, so time played while Fuse Sync was off or offline is
  * never lost and never counted twice.
+ *
+ * Settings carry when the person chose them, and keep it. A setting without that time (Fuse's own
+ * default, never chosen, or one kept from before settings had times) is no choice: it only fills
+ * what the profile hasn't got, and counts as made before anything chosen anywhere ([UNCHOSEN_AT]).
+ * Stamped now, a default read before the household's value had come in went up as the newest
+ * choice and replaced what the person chose on another device.
  */
 object ProfileDiff {
+    /** When a setting nobody chose counts as made: before any real choice. */
+    const val UNCHOSEN_AT = 1L
+
     fun changes(base: ProfileMeta, local: ProfileMeta, device: String, clock: HlcClock): ProfileMeta {
         val games = HashMap<String, GameRecord>()
         for ((id, now) in local.games) {
@@ -71,8 +80,8 @@ object ProfileDiff {
         }
         val settings = local.settings.filter { (k, v) ->
             val prior = base.settings[k]
-            prior?.value != v.value && (v.at == Hlc.ZERO || prior == null || v.at > prior.at)
-        }.mapValues { (_, v) -> if (v.at == Hlc.ZERO) Lww(v.value, clock.now()) else v }
+            prior?.value != v.value && if (v.at == Hlc.ZERO) prior == null else (prior == null || v.at > prior.at)
+        }.mapValues { (_, v) -> if (v.at == Hlc.ZERO) Lww(v.value, Hlc(UNCHOSEN_AT, 0, device)) else v }
         return ProfileMeta(games, collections, settings)
     }
 

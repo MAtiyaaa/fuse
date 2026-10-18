@@ -40,10 +40,12 @@ class ServiceTest {
         val games: MutableMap<String, GameRecord> = HashMap(),
         val settings: MutableMap<String, JsonPrimitive> = HashMap(),
         val collections: MutableMap<String, CollectionRecord> = HashMap(),
+        /** When the person chose a setting here; a setting not listed was never chosen (Fuse's default). */
+        val chosen: MutableMap<String, Hlc> = HashMap(),
     ) : ProfileDataPort {
         var writes = 0
         override suspend fun read(device: String, clock: HlcClock): ProfileMeta = synchronized(this) {
-            ProfileMeta(games = games.toMap(), collections = collections.toMap(), settings = settings.mapValues { Lww(it.value as kotlinx.serialization.json.JsonElement, Hlc.ZERO) })
+            ProfileMeta(games = games.toMap(), collections = collections.toMap(), settings = settings.mapValues { (k, v) -> Lww(v as kotlinx.serialization.json.JsonElement, chosen[k] ?: Hlc.ZERO) })
         }
 
         /** The games as they are now (the service writes them from its own thread). */
@@ -194,6 +196,7 @@ class ServiceTest {
         // Changed on the PC: unfavourited, a new theme.
         pcLib.games[ct.id] = pcLib.games[ct.id]!!.copy(favorite = Lww(false, Hlc.ZERO))
         pcLib.settings["appearance.themeId"] = JsonPrimitive("dawn")
+        pcLib.chosen["appearance.themeId"] = Hlc(System.currentTimeMillis(), 0, "pc")
         pc.syncNow().getOrThrow()
         deck.syncNow().getOrThrow()
         assertEquals(false, deckLib.games[ct.id]?.favorite?.value)
@@ -239,6 +242,30 @@ class ServiceTest {
         assertEquals("pc: elite four", File(roms, "Pokemon Ruby (USA).sav").readText())
         withTimeout(5_000) { deck.status.first { it is SyncStatus.NotSetUp } }
         pc.stop()
+    }
+
+    @Test
+    fun twoDevicesJoiningANewProfileKeepTheLookThePersonChose(): Unit = runBlocking {
+        // The Deck's theme was chosen a minute ago; the PC's is Fuse's own, never chosen.
+        val deckLib = Library(
+            settings = hashMapOf("appearance.themeId" to JsonPrimitive("midnight")),
+            chosen = hashMapOf("appearance.themeId" to Hlc(System.currentTimeMillis() - 60_000, 0, "deck")),
+        )
+        val pcLib = Library(settings = hashMapOf("appearance.themeId" to JsonPrimitive("fuse")))
+        val (pc, _) = service("Gaming PC", pcLib)
+        val (deck, _) = service("Steam Deck", deckLib)
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        // Both become Mo before the Deck's look has gone up behind its switch.
+        deck.switchTo(mo.id).getOrThrow()
+        pc.switchTo(mo.id).getOrThrow()
+        repeat(2) { deck.syncNow().getOrThrow(); pc.syncNow().getOrThrow() }
+        // The theme someone chose is Mo's on both: the PC's own, never chosen, doesn't win over it.
+        assertEquals(JsonPrimitive("midnight"), deckLib.settings["appearance.themeId"])
+        assertEquals(JsonPrimitive("midnight"), pcLib.settings["appearance.themeId"])
+        pc.stop()
+        deck.stop()
     }
 
     @Test

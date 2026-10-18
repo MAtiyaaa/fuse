@@ -279,6 +279,11 @@ Settings are sorted into four kinds:
 A setting added in a later version stays a device's until it is listed as a person's, so nothing
 crosses over by accident. Each kind can be turned off under **What syncs**.
 
+A person's settings keep when they were chosen, and the latest choice wins wherever it was made. A
+setting nobody chose on a device (Fuse's own default, or one kept from before settings had times)
+is no choice: it only fills what the profile hasn't got, and never replaces a choice made on
+another device, whichever device reaches the host first.
+
 ### This device's own Home
 
 While arranging Home, a switch beside **Add widget** and **Done** chooses whose Home it is:

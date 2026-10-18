@@ -20,6 +20,20 @@ class ConvergenceStateTest {
             ProfileMeta(settings = mapOf("theme" to edit)), "thor", HlcClock("thor") { 9000 }).settings.isEmpty())
     }
 
+    @Test fun aSettingNobodyChoseOnlyFillsAGapAndNeverOutranksAChoice() {
+        val chosen = Lww<JsonElement>(JsonPrimitive("midnight"), Hlc(5_000, 0, "deck"))
+        val untouched = Lww<JsonElement>(JsonPrimitive("fuse"), Hlc.ZERO)
+        val pc = HlcClock("pc") { 9_000 }
+        // The profile has the Deck's choice: the PC's own, never chosen, isn't sent over it.
+        assertTrue(ProfileDiff.changes(ProfileMeta(settings = mapOf("theme" to chosen)), ProfileMeta(settings = mapOf("theme" to untouched)), "pc", pc).settings.isEmpty())
+        // Read before the Deck's choice had come in, it fills the gap, older than any choice...
+        val filled = ProfileDiff.changes(ProfileMeta(), ProfileMeta(settings = mapOf("theme" to untouched)), "pc", pc).settings.getValue("theme")
+        assertEquals(Hlc(ProfileDiff.UNCHOSEN_AT, 0, "pc"), filled.at)
+        // ...so whichever reaches the host first, the choice is what the profile keeps.
+        assertEquals(JsonPrimitive("midnight"), ProfileMeta(settings = mapOf("theme" to filled)).merge(ProfileMeta(settings = mapOf("theme" to chosen))).settings["theme"]?.value)
+        assertEquals(JsonPrimitive("midnight"), ProfileMeta(settings = mapOf("theme" to chosen)).merge(ProfileMeta(settings = mapOf("theme" to filled))).settings["theme"]?.value)
+    }
+
     @Test fun similarTitlesCannotUnifyDifferentSerialsOrPlatforms() {
         val dir = Files.createTempDirectory("fuse-strong-identities").toFile()
         try {
