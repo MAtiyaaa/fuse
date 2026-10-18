@@ -292,9 +292,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
         DetailAction("fav", null, if (game.favorite) FuseIcons.HeartFilled else FuseIcons.Heart, if (game.favorite) "Remove from favourites" else "Add to favourites") {
             app.scope.launch { app.store.library.setFavorite(game.id, !game.favorite) }
         },
-        DetailAction("col", null, FuseIcons.ListPlus, "Add to a collection") { app.collectionPicker(game.id, game.displayTitle) },
-        DetailAction("send", null, FuseIcons.Share, "Send to another device") { app.sendPicker(game.id, game.displayTitle) }.takeIf { canSend && d.unavailable == null && !d.missing },
-        DetailAction("media", null, FuseIcons.Images, "Manage media") { app.go(Route.Media(MediaOwner.OfGame(game.id), game.displayTitle)) },
+        // Collections, sending it and its media are in Options (More, or X), not a row of round buttons.
         DetailAction("more", null, FuseIcons.More, "Options") { app.openContextMenu(app.gameMenu(card, fromDetail = true)) },
     )
     val discs = game.discs
@@ -327,8 +325,6 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     }
     val rows = buildList {
         if (moreFacts) add("facts")
-        // Several copies of the game (this device's, RomM's, another device's): one is chosen here.
-        if (shownCopies.size > 1) add("versions")
         add("actions")
         // The time played is a stop of its own, so the stick brings it into view on any screen.
         add("playtime")
@@ -344,7 +340,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
         "facts", "about" -> 1
         "playtime" -> if (beat != null) 2 else 1
         "actions" -> actions.size
-        "available", "versions" -> shownCopies.size
+        "available" -> shownCopies.size
         "romm" -> rommButtons.size.coerceAtLeast(1)
         "discs" -> discs.size
         "achievements" -> badges.size
@@ -584,7 +580,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                     "playtime" -> if (col == 1) beat?.let { showBeat(it) } else app.go(Route.PlayTime)
                     "shots" -> viewing = col
                     "romm" -> rommButtons.getOrNull(col)?.let { b -> romm?.let { v -> app.rommDownload(v.romId, game.displayTitle, b.what) } } ?: app.go(Route.Downloads)
-                    "available", "versions" -> shownCopies.getOrNull(col)?.let { cp -> app.copyMenu(game.id, game.displayTitle, cp, hereAlready = !notHere, canUpload = canUploadHere, rommHasIt = rommHasIt) }
+                    "available" -> shownCopies.getOrNull(col)?.let { cp -> app.copyMenu(game.id, game.displayTitle, cp, hereAlready = !notHere, canUpload = canUploadHere, rommHasIt = rommHasIt) }
                     "actions" -> actions.getOrNull(col)?.run?.invoke()
                     "discs" -> discs.getOrNull(col)?.let { disc -> app.play(card, discPath = disc.path) }
                     else -> cardAt(row, col)?.let(::openCard)
@@ -656,17 +652,6 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                             }
                         }
                     }
-                    if (shownCopies.size > 1) {
-                        Spacer(Modifier.height(Space.m))
-                        Versions(
-                            shownCopies, game, Modifier.reveal(reveal, 1),
-                            selected = if (row == "versions" && focused) col else -1,
-                            onCopy = { i ->
-                                sel.row = rows.indexOf("versions"); sel.setColumn("versions", i)
-                                app.copyMenu(game.id, game.displayTitle, shownCopies[i], hereAlready = !notHere, canUpload = canUploadHere, rommHasIt = rommHasIt)
-                            },
-                        )
-                    }
                     Spacer(Modifier.height(Space.xl))
                     // One button, drawn the same in either arrangement below.
                     val button: @Composable (Int, Modifier) -> Unit = { i, mod ->
@@ -737,7 +722,8 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                         onBeat = { sel.row = rows.indexOf("playtime"); sel.setColumn("playtime", 1); beat?.let { showBeat(it) } },
                     )
                 }
-                layout.cover?.let { cover ->
+                // Beside the game's logo the cover only says the name a second time; it stands in for a missing logo.
+                layout.cover?.takeIf { d.art.logo == null || !app.store.prefs.value.showLogo }?.let { cover ->
                     Spacer(Modifier.width(Space.xxl))
                     Tile(
                         selected = false, showSpark = false, glow = accent,
@@ -993,8 +979,8 @@ private fun GameTitle(d: GameDetail, layout: GameLayout, showLogo: Boolean, modi
 /** One thing Fuse knows about a game: what it is ([label]), the words, and where it is listed. */
 private data class GameFact(val text: String, val icon: ImageVector?, val label: String, val group: String, val dot: Color? = null)
 
-/** How many facts show as chips before the rest wait behind "+". */
-private const val SHOWN_FACTS = 5
+/** How many facts show in the line under the title before the rest wait behind "+". */
+private const val SHOWN_FACTS = 3
 
 /**
  * Every fact Fuse has about the game, the ones worth a chip first: its system, year, players and
@@ -1032,14 +1018,17 @@ private fun factsOf(d: GameDetail): List<GameFact> {
 }
 
 /**
- * What Fuse knows about the game, as one line of quiet chips: the first few facts, then a "+" chip
- * that lists them all ([onMore]); it is selectable from the buttons below with Up.
+ * What Fuse knows about the game, as one quiet line of words (its system with its colour, the year,
+ * a genre), then a "+" chip that lists them all ([onMore]); it is selectable from the buttons below
+ * with Up. A row of outlined chips said the same in more space and pulled the eye from the art.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FactChips(d: GameDetail, facts: List<GameFact>, modifier: Modifier, moreSelected: Boolean, onMore: () -> Unit) {
-    FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(Space.s), verticalArrangement = Arrangement.spacedBy(Space.s), itemVerticalAlignment = Alignment.CenterVertically) {
-        facts.take(SHOWN_FACTS).forEach { FactChip(it.text, it.icon, it.dot) }
+    val c = Fuse.colors
+    val shown = facts.take(SHOWN_FACTS)
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+        shown.firstOrNull()?.dot?.let { dot -> Box(Modifier.size(Size.dot).clip(PillShape).background(dot)) }
+        FText(shown.joinToString("  ·  ") { it.text }, Fuse.type.bodyStrong, color = c.textMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
         if (facts.size > SHOWN_FACTS) MoreChip(facts.size - SHOWN_FACTS, moreSelected, onMore)
     }
 }
@@ -1277,27 +1266,6 @@ internal fun PictureViewer(shots: List<Any?>, start: Int, onIndex: (Int) -> Unit
             FText("${pager.currentPage + 1} of ${shots.size}", Fuse.type.label.tabular(), maxLines = 1)
             FuseIcon(FuseIcons.ChevronRight, size = Size.iconS, tint = if (pager.currentPage < shots.lastIndex) c.text else c.textFaint)
         }
-    }
-}
-
-/** One fact: an icon (or a dot in a colour) and a few words, on a soft pill that reads over art. */
-@Composable
-private fun FactChip(text: String, icon: ImageVector? = null, dot: Color? = null) {
-    val c = Fuse.colors
-    Row(
-        Modifier
-            .height(Size.chipCompact)
-            .background(c.surfaceDim.copy(alpha = if (c.isDark) 0.62f else 0.72f), PillShape)
-            .border(Size.stroke, c.hairline, PillShape)
-            .padding(start = if (dot != null) Space.m else Space.s + Space.xxs, end = Space.m),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Space.s - Space.xxs),
-    ) {
-        when {
-            dot != null -> Box(Modifier.size(Size.dot).background(dot, CircleShape))
-            icon != null -> FuseIcon(icon, size = Size.iconXS, tint = c.textMuted)
-        }
-        FText(text, Fuse.type.label.tabular(), color = c.text, maxLines = 1)
     }
 }
 
@@ -1819,26 +1787,6 @@ private fun availableSummary(copies: List<io.github.matiyaaa.fuse.ui.shell.store
  * DLC. Choosing one offers what can be done with it (download it here too, send it, open it), so
  * two versions of a game are one game with a choice, not two games.
  */
-@Composable
-private fun Versions(copies: List<io.github.matiyaaa.fuse.ui.shell.store.CopyView>, game: Game, modifier: Modifier, selected: Int, onCopy: (Int) -> Unit) {
-    val c = Fuse.colors
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.s)) {
-        FText("${copies.size} versions", Fuse.type.label, color = c.textMuted, maxLines = 1)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalArrangement = Arrangement.spacedBy(Space.s)) {
-            copies.forEachIndexed { i, cp ->
-                io.github.matiyaaa.fuse.ui.designsystem.components.Chip(
-                    versionLabel(cp, game),
-                    icon = io.github.matiyaaa.fuse.ui.shell.reach.copyIcon(cp),
-                    color = if (cp.place == io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.HERE) c.accent else c.text,
-                    selected = cp.place == io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.HERE,
-                    focused = selected == i,
-                    onClick = { onCopy(i) },
-                )
-            }
-        }
-    }
-}
-
 /** A version's chip: where it is, how big, and this device's updates and DLC. */
 internal fun versionLabel(copy: io.github.matiyaaa.fuse.ui.shell.store.CopyView, game: Game): String {
     val here = copy.place == io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.HERE

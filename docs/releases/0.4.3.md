@@ -2,7 +2,7 @@
 
 A Library that opens quickly on a computer without a graphics card, art found once for the whole
 household, Power and heat in System health, themes with tiles of their own, a shorter setup, and
-Linux that looks and plays more the way Android does.
+a calmer game page, and Linux that looks and plays more the way Android does.
 
 ## New
 
@@ -63,6 +63,11 @@ Linux that looks and plays more the way Android does.
 - **Stronger text on Linux.** Android's text renderer thickens light letters on a dark room; Skia on
   Linux doesn't, so the same text came out thinner and greyer there, worst on a TV across the room.
   On Linux, reading text is now drawn a weight heavier and muted text a little brighter.
+- **A calmer game page.** What Fuse knows about the game is one quiet line under its name (its
+  system, year and a genre, the rest a press away) instead of rows of outlined chips; the buttons are
+  Play, the emulator, Favourite and More (collections, sending it and its media are in Options); the
+  copies of the game are listed once, in Available On, not again at the top; and the cover no longer
+  stands beside the game's logo, saying its name a second time.
 - **A shorter setup.** "Tuned for this device" is gone (the Performance step at the end covers it),
   the BIOS step comes only when a system needs firmware, art, achievements and Jellyfin are one step
   with Continue first, "Which button confirms?" is asked only with a controller in hand, and "When
