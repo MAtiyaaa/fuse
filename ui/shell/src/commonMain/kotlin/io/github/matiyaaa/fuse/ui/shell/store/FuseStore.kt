@@ -430,7 +430,13 @@ data class LocalSave(
  * A game's saves on this device ([LibraryOps.localSaves]): the files where [emulator] keeps them,
  * newest first, and [note] when Fuse can't look (no emulator plays it here, or one Fuse can't read).
  */
-data class LocalSaves(val emulator: String?, val saves: List<LocalSave>, val note: String? = null)
+data class LocalSaves(
+    val emulator: String?,
+    val saves: List<LocalSave>,
+    val note: String? = null,
+    /** Newer saves of it in folders the emulator used before (another install, a moved data folder). */
+    val older: List<io.github.matiyaaa.fuse.sync.OldSave> = emptyList(),
+)
 
 /** How many games a view holds ([LibraryOps.counts]), and how many of them are favourites and were played. */
 data class GameCounts(val total: Int = 0, val favorites: Int = 0, val played: Int = 0)
@@ -440,6 +446,9 @@ interface LibraryOps {
 
     /** [id]'s saves on this device, with or without any save sync. */
     suspend fun localSaves(id: GameId): LocalSaves = LocalSaves(null, emptyList())
+
+    /** [old]'s save copied to where [id]'s emulator reads it now, the one there kept aside first; where it was kept. */
+    suspend fun useOldSave(id: GameId, old: io.github.matiyaaa.fuse.sync.OldSave): Result<String?> = Result.failure(UnsupportedOperationException())
 
     /** Today's game in [platform]'s spotlight, and why; null while the system has no games. */
     fun spotlight(platform: PlatformId): Flow<Suggestion?> = kotlinx.coroutines.flow.flowOf(null)

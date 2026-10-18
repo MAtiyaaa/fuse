@@ -3,6 +3,7 @@ package io.github.matiyaaa.fuse.sync.romm
 import io.github.matiyaaa.fuse.romm.RommClient
 import io.github.matiyaaa.fuse.romm.RommException
 import io.github.matiyaaa.fuse.romm.RommSave
+import io.github.matiyaaa.fuse.sync.LocalSlot
 import io.github.matiyaaa.fuse.sync.SaveAdapters
 import io.github.matiyaaa.fuse.sync.SaveEnvironment
 import io.github.matiyaaa.fuse.sync.SaveKind
@@ -25,8 +26,9 @@ import java.security.MessageDigest
 /**
  * [RommSaveService] on a phone or a computer. [client] is the signed-in RomM client when RomM and its
  * save sync are on (null otherwise); [server] names the server, so what was agreed with one is never
- * taken for another. What was agreed lives in [dir]/romm-saves.json; a save of this device that
- * RomM's replaced is kept in [dir]/kept/RomM first.
+ * taken for another. What was agreed, and what waits to go, lives in [dir]/romm-saves.json; a save of
+ * this device that RomM's replaced is kept in [dir]/kept/RomM first. [person] names who is playing
+ * when the device has more than one person, whose saves on RomM are their own (see [RommSlots]).
  */
 class JvmRommSaves(
     private val dir: File,
@@ -39,6 +41,7 @@ class JvmRommSaves(
     private val clock: () -> Long = System::currentTimeMillis,
     /** Where what happened is written (Fuse's log); never a sign-in or a save's contents. */
     private val log: (String) -> Unit = {},
+    private val person: () -> String? = { null },
 ) : RommSaveService {
     private val _notices = kotlinx.coroutines.flow.MutableSharedFlow<RommSaveNotice>(extraBufferCapacity = 8)
     override val notices: kotlinx.coroutines.flow.SharedFlow<RommSaveNotice> = _notices
@@ -52,12 +55,23 @@ class JvmRommSaves(
     @Serializable
     private data class Agreed(val hash: String, val saveId: Long)
 
+    /** A save that couldn't reach RomM: it goes, in the order they waited, when RomM answers again. */
     @Serializable
-    private data class State(val devices: Map<String, String> = emptyMap(), val agreed: Map<String, Agreed> = emptyMap())
+    private data class Waiting(val key: String, val romId: Long, val query: SaveQuery, val since: Long)
+
+    @Serializable
+    private data class State(
+        val devices: Map<String, String> = emptyMap(),
+        val agreed: Map<String, Agreed> = emptyMap(),
+        val waiting: List<Waiting> = emptyList(),
+    )
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val file = File(dir, "romm-saves.json")
     private val lock = Mutex()
+
+    /** One send at a time: a game's save and the ones waiting never go side by side. */
+    private val sending = Mutex()
     private var state: State = runCatching { json.decodeFromString(State.serializer(), file.readText()) }.getOrDefault(State())
 
     private fun persist() {
@@ -67,14 +81,87 @@ class JvmRommSaves(
         move(tmp, file)
     }
 
-    private fun key(romId: Long, spot: SaveSpot) = "${server()}|$romId|${spot.files.first().name}"
-
     /**
-     * The save of [query] here as files RomM can hold, or null when it isn't one. RomM keeps one file
-     * a save: the first is the save itself, and any after it are companions that stay on this device
-     * (RetroArch's `.rtc` clock beside its `.srm`; asking for exactly one file left every RetroArch
-     * game out of RomM's save sync).
+     * A game's save here as the one file RomM keeps of it: a save that is one file as it is (with any
+     * companions after it, RetroArch's `.rtc` clock, staying here), and a save of folders or of
+     * several parts as one zip of its files ([RommPack]).
      */
+    internal sealed class Held(val format: String) {
+        /** What tells this save apart from the game's others in what was agreed. */
+        abstract val name: String
+
+        /** As RomM hashes it, or null when there is nothing here yet. */
+        abstract fun hash(): String?
+
+        /** Nothing in it yet (save memory a game never wrote to). */
+        abstract fun blank(): Boolean
+
+        /** What goes up, and the name it goes by. */
+        abstract fun upload(title: String): Pair<String, ByteArray>
+
+        /** RomM's [bytes] in place; the caller keeps what was here first. */
+        abstract fun put(bytes: ByteArray)
+
+        /** A copy of what is here, into [to]. */
+        abstract fun copyTo(to: File)
+
+        /** The file to show the person for it (its newest, for a save of folders), and its size in all. */
+        abstract val shown: File?
+        abstract val bytes: Long
+
+        /** Whether one of RomM's saves is this kind (by the emulator that sent it, or its name). */
+        abstract fun matches(save: RommSave): Boolean
+
+        /** [bytes] as RomM hashes a save of this kind. */
+        abstract fun hashOf(bytes: ByteArray): String
+
+        class One(val file: File, format: String) : Held(format) {
+            override val name: String get() = file.name
+            override fun hash(): String? = if (file.isFile) md5(file) else null
+            override fun blank(): Boolean = !file.isFile || Slots.blank(file)
+            override fun upload(title: String) = file.name to file.readBytes()
+            override fun put(bytes: ByteArray) {
+                file.parentFile?.mkdirs()
+                val tmp = File(file.parentFile, ".${file.name}.fuse-romm")
+                tmp.writeBytes(bytes)
+                move(tmp, file)
+            }
+            override fun copyTo(to: File) { if (file.isFile) file.copyTo(File(to, file.name), overwrite = true) }
+            override val shown: File get() = file
+            override val bytes: Long get() = file.length()
+            override fun matches(save: RommSave) = save.emulator == format || extension(save.fileName) == extension(file.name)
+            override fun hashOf(bytes: ByteArray) = md5(bytes)
+        }
+
+        class Many(val slot: LocalSlot, format: String) : Held(format) {
+            override val name: String get() = "folder:$format"
+            override fun hash(): String? = RommPack.contentHash(slot)
+            override fun blank(): Boolean = slot.files.isEmpty()
+            override fun upload(title: String) = "${part(title)}.zip" to RommPack.pack(slot)
+            override fun put(bytes: ByteArray) = RommPack.unpack(bytes, slot)
+            override fun copyTo(to: File) {
+                for (f in slot.files) File(to, f.path).also { it.parentFile.mkdirs() }.let { f.file.copyTo(it, overwrite = true) }
+            }
+            override val shown: File? get() = slot.files.maxByOrNull { it.file.lastModified() }?.file
+            override val bytes: Long get() = slot.files.sumOf { it.file.length() }
+            override fun matches(save: RommSave) = save.emulator == format || extension(save.fileName) == "zip"
+            override fun hashOf(bytes: ByteArray) = RommPack.contentHash(bytes)
+        }
+    }
+
+    /** [query]'s save here as RomM can hold it, or null when it has none Fuse can find. */
+    internal fun heldOf(query: SaveQuery): Held? {
+        val adapter = SaveAdapters.forEmulator(query.emulatorId) ?: return null
+        val spots = runCatching { adapter.locate(query, env()) }.getOrDefault(emptyList()).filter { it.kind == SaveKind.SAVE && it.available }
+        spots.firstOrNull { it.root == null && it.mounts.isEmpty() && it.files.isNotEmpty() }
+            ?.let { return Held.One(File(it.files.first().path), it.format) }
+        // A save of folders, or of several parts: one zip. Not one whose folders aren't known yet.
+        spots.firstOrNull { (it.root != null || it.mounts.isNotEmpty()) && it.learnIn == null }
+            ?.let { return Held.Many(Slots.of(query.game, it), it.format) }
+        return null
+    }
+
+    /** [query]'s save here when it is one file (what RomM's save sync took before saves of folders). */
     internal fun spotOf(query: SaveQuery): SaveSpot? {
         val adapter = SaveAdapters.forEmulator(query.emulatorId) ?: return null
         return runCatching { adapter.locate(query, env()) }.getOrDefault(emptyList()).firstOrNull { s ->
@@ -82,9 +169,13 @@ class JvmRommSaves(
         }
     }
 
-    /** RomM's newest save of [romId] this emulator can read: the same kind of file as [local]. */
-    private suspend fun newest(c: RommClient, romId: Long, local: File, format: String): RommSave? =
-        c.saves(romId).firstOrNull { s -> s.emulator == format || extension(s.fileName) == extension(local.name) }
+    private fun key(romId: Long, held: Held) = "${server()}|$romId|${held.name}" + (person()?.let { "|$it" } ?: "")
+
+    /** RomM's newest save of [romId] this emulator can read, from the slot of whoever is playing. */
+    private suspend fun newest(c: RommClient, romId: Long, held: Held): RommSave? {
+        val who = person()
+        return c.saves(romId).firstOrNull { s -> held.matches(s) && RommSlots.belongs(s.slot, held.format, who) }
+    }
 
     private suspend fun deviceId(c: RommClient): String? = lock.withLock {
         state.devices[server()]?.let { return@withLock it }
@@ -95,65 +186,70 @@ class JvmRommSaves(
     }
 
     private suspend fun agree(key: String, hash: String, saveId: Long) = lock.withLock {
-        state = state.copy(agreed = state.agreed + (key to Agreed(hash, saveId)))
+        state = state.copy(agreed = state.agreed + (key to Agreed(hash, saveId)), waiting = state.waiting.filterNot { it.key == key })
         persist()
     }
 
+    private suspend fun wait(key: String, romId: Long, query: SaveQuery) = lock.withLock {
+        if (state.waiting.none { it.key == key }) state = state.copy(waiting = state.waiting + Waiting(key, romId, query, clock()))
+        persist()
+    }
+
+    private suspend fun drop(key: String) = lock.withLock {
+        state = state.copy(waiting = state.waiting.filterNot { it.key == key })
+        persist()
+    }
+
+    /** The save here and what was last agreed for it, as [RommLedger] weighs them. */
+    private fun ledger(held: Held, key: String) = Pair(
+        held.hash()?.let { RommLedger.Here(it, held.blank()) },
+        state.agreed[key]?.let { RommLedger.Agreed(it.hash, it.saveId) },
+    )
+
+    private fun remote(s: RommSave?) = s?.let { RommLedger.Remote(it.id, it.contentHash) }
+
     override suspend fun beforeLaunch(query: SaveQuery, romId: Long): RommSaveGate = withContext(Dispatchers.IO) {
         val c = client() ?: return@withContext RommSaveGate.Go()
+        // What waited to go goes first, while RomM answers.
+        runCatching { withTimeoutOrNull(WAIT_MS) { sendWaiting() } }
         // Save states first: never in the way of the game starting.
         try {
             withTimeoutOrNull(WAIT_MS) { statesDown(c, query, romId) }
         } catch (e: Exception) {
             log("RomM save states: ${query.title}: not brought down (${e.javaClass.simpleName}: ${e.message})")
         }
-        val spot = spotOf(query) ?: return@withContext RommSaveGate.Go()
-        val local = File(spot.files.first().path)
-        val key = key(romId, spot)
+        val held = heldOf(query) ?: return@withContext RommSaveGate.Go()
+        val key = key(romId, held)
         val latest = try {
-            withTimeoutOrNull(WAIT_MS) { newest(c, romId, local, spot.format) } ?: run {
-                // Asked and nothing came back in time, or RomM has no save of it yet.
-                return@withContext RommSaveGate.Go()
-            }
+            withTimeoutOrNull(WAIT_MS) { newest(c, romId, held) } ?: return@withContext RommSaveGate.Go()
         } catch (e: RommException) {
             return@withContext RommSaveGate.Go("RomM didn't answer: playing with this device's save")
         }
-        val here = if (local.isFile) md5(local) else null
-        val agreed = state.agreed[key]
-        when {
-            here != null && here == latest.contentHash -> {
-                agree(key, here, latest.id)
+        val (here, agreed) = ledger(held, key)
+        when (RommLedger.before(here, agreed, remote(latest))) {
+            RommLedger.Before.NOTHING -> RommSaveGate.Go()
+            RommLedger.Before.IN_STEP -> {
+                agree(key, here!!.hash, latest.id)
                 RommSaveGate.Go()
             }
-            // Nothing here yet, or only a blank one, or this device's unchanged since it agreed: RomM's comes down.
-            here == null || Slots.blank(local) || agreed?.hash == here -> {
-                bringDown(c, query, latest, local, key)
+            RommLedger.Before.BRING_DOWN -> {
+                bringDown(c, query, latest, held, key)
                 RommSaveGate.Go("Your save from ${latest.originDeviceName ?: "RomM"} is in place")
             }
-            // RomM's unchanged since this device agreed: this device's is newer, and goes up now.
-            agreed != null && (agreed.saveId == latest.id || agreed.hash == latest.contentHash) -> {
-                runCatching { withTimeoutOrNull(WAIT_MS) { sendUp(c, query, romId, local, spot.format, key) } }
+            RommLedger.Before.SEND_UP -> {
+                runCatching { withTimeoutOrNull(WAIT_MS) { sendUp(c, query, romId, held, key) } }
                 RommSaveGate.Go()
             }
-            // Both changed, or never agreed and different: the person chooses.
-            else -> RommSaveGate.Conflict(RommSaveConflict(query.title, romId, query, local.path, local.lastModified(), local.length(), latest))
+            RommLedger.Before.ASK -> RommSaveGate.Conflict(
+                RommSaveConflict(query.title, romId, query, held.shown?.path.orEmpty(), held.shown?.lastModified() ?: 0L, held.bytes, latest),
+            )
         }
     }
 
     override suspend fun standing(query: SaveQuery, romId: Long, newest: RommSave?): RommSaveStanding = withContext(Dispatchers.IO) {
-        val spot = spotOf(query) ?: return@withContext RommSaveStanding.UNKNOWN
-        val local = File(spot.files.first().path)
-        val here = if (local.isFile && !Slots.blank(local)) md5(local) else null
-        val agreed = state.agreed[key(romId, spot)]
-        when {
-            newest == null -> if (here != null) RommSaveStanding.NEWER_HERE else RommSaveStanding.UNKNOWN
-            here == null -> RommSaveStanding.NOT_HERE
-            here == newest.contentHash -> RommSaveStanding.IN_STEP
-            agreed == null -> RommSaveStanding.BOTH_CHANGED
-            agreed.hash == here -> RommSaveStanding.NEWER_ON_ROMM
-            agreed.saveId == newest.id || agreed.hash == newest.contentHash -> RommSaveStanding.NEWER_HERE
-            else -> RommSaveStanding.BOTH_CHANGED
-        }
+        val held = heldOf(query) ?: return@withContext RommSaveStanding.UNKNOWN
+        val (here, agreed) = ledger(held, key(romId, held))
+        RommLedger.standing(here, agreed, remote(newest))
     }
 
     override suspend fun afterExit(query: SaveQuery, romId: Long) {
@@ -166,40 +262,78 @@ class JvmRommSaves(
             } catch (e: Exception) {
                 log("RomM save states: ${query.title}: not sent; they go after the next time you play (${e.javaClass.simpleName}: ${e.message})")
             }
-            val spot = spotOf(query) ?: return@withContext notSent(query, "Its emulator keeps this save in a way RomM can't hold as one file.")
-            val local = File(spot.files.first().path)
-            if (!local.isFile || Slots.blank(local)) return@withContext
-            val key = key(romId, spot)
-            val here = md5(local)
-            val agreed = state.agreed[key]
-            if (agreed?.hash == here) return@withContext
-            val latest = try {
-                newest(c, romId, local, spot.format)
-            } catch (e: Exception) {
-                return@withContext notSent(query, "RomM didn't answer. It goes after the next time you play.", e)
-            }
-            suspend fun send() = runCatching { sendUp(c, query, romId, local, spot.format, key) }
-                .onSuccess { log("RomM save sync: ${query.title}: sent"); _notices.tryEmit(RommSaveNotice.Sent(query.title)) }
-                .onFailure { notSent(query, "RomM didn't take it (${it.message ?: "no answer"}). It goes after the next time you play.", it) }
-            when {
-                latest == null -> send()
-                latest.contentHash == here -> agree(key, here, latest.id)
-                // RomM unchanged since this device agreed: this one is the newest.
-                agreed != null && (agreed.saveId == latest.id || agreed.hash == latest.contentHash) -> send()
-                // RomM changed meanwhile too: nothing is sent over it; the next launch asks.
-                else -> log("RomM save sync: ${query.title}: RomM's save changed too; the next launch asks which to keep")
-            }
+            val held = heldOf(query) ?: return@withContext notSent(query, "Fuse couldn't find this game's save to send.")
+            sendOne(c, query, romId, held, quiet = false)
+            runCatching { sendWaiting() }
         }
     }
+
+    /**
+     * [held] up to RomM if it changed since they agreed and RomM didn't meanwhile; a save that
+     * can't reach RomM waits, in order, for the next time it answers. True when nothing is left
+     * waiting for it.
+     */
+    private suspend fun sendOne(c: RommClient, query: SaveQuery, romId: Long, held: Held, quiet: Boolean): Boolean = sending.withLock {
+        val key = key(romId, held)
+        val (here, agreed) = ledger(held, key)
+        if (here == null || here.blank || agreed?.hash == here.hash) {
+            drop(key)
+            return@withLock true
+        }
+        val latest = try {
+            newest(c, romId, held)
+        } catch (e: Exception) {
+            wait(key, romId, query)
+            if (!quiet) notSent(query, "RomM didn't answer. It goes by itself once RomM answers again.", e)
+            return@withLock false
+        }
+        when (RommLedger.after(here, agreed, remote(latest))) {
+            RommLedger.After.NOTHING -> drop(key)
+            RommLedger.After.AGREE -> agree(key, here.hash, latest!!.id)
+            RommLedger.After.SEND -> try {
+                sendUp(c, query, romId, held, key)
+                log("RomM save sync: ${query.title}: sent")
+                _notices.tryEmit(RommSaveNotice.Sent(query.title))
+            } catch (e: Exception) {
+                wait(key, romId, query)
+                if (!quiet) notSent(query, "RomM didn't take it (${e.message ?: "no answer"}). It goes by itself once RomM answers again.", e)
+                return@withLock false
+            }
+            // RomM's changed meanwhile too: nothing is sent over it; the next start asks which to keep.
+            RommLedger.After.LEAVE_FOR_NEXT_START -> {
+                drop(key)
+                log("RomM save sync: ${query.title}: RomM's save changed too; the next launch asks which to keep")
+            }
+        }
+        true
+    }
+
+    /** Sends what waited to go, in the order it waited; stops at the first that still can't. Returns how many went. */
+    override suspend fun sendWaiting(): Int = withContext(Dispatchers.IO) {
+        val c = client() ?: return@withContext 0
+        var done = 0
+        for (w in lock.withLock { state.waiting }) {
+            val held = heldOf(w.query)
+            if (held == null || key(w.romId, held) != w.key) {
+                drop(w.key)
+                continue
+            }
+            if (!sendOne(c, w.query, w.romId, held, quiet = true)) break
+            done++
+        }
+        done
+    }
+
+    /** How many saves wait to go to RomM. */
+    override val waiting: Int get() = state.waiting.size
 
     override suspend fun settle(conflict: RommSaveConflict, keepHere: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val c = client() ?: error("RomM isn't signed in.")
-            val spot = spotOf(conflict.query) ?: error("This game's save isn't here any more.")
-            val local = File(spot.files.first().path)
-            val key = key(conflict.romId, spot)
-            if (keepHere) sendUp(c, conflict.query, conflict.romId, local, spot.format, key)
-            else bringDown(c, conflict.query, conflict.server, local, key)
+            val held = heldOf(conflict.query) ?: error("This game's save isn't here any more.")
+            val key = key(conflict.romId, held)
+            if (keepHere) sendUp(c, conflict.query, conflict.romId, held, key)
+            else bringDown(c, conflict.query, conflict.server, held, key)
         }
     }
 
@@ -235,11 +369,8 @@ class JvmRommSaves(
                     val bytes = c.stateContent(latest)
                     val hash = md5(bytes)
                     if (latest.contentHash != null && latest.contentHash != hash) throw RommException("RomM's save state changed on its way.", code = "bad-hash")
-                    if (local.isFile) keepAside(query, local)
-                    local.parentFile?.mkdirs()
-                    val tmp = File(local.parentFile, ".${local.name}.fuse-romm")
-                    tmp.writeBytes(bytes)
-                    move(tmp, local)
+                    if (local.isFile) keepAside(query, Held.One(local, spot.format))
+                    Held.One(local, spot.format).put(bytes)
                     agree(key, hash, latest.id)
                     log("RomM save states: ${query.title}: ${local.name} brought down")
                 }
@@ -270,40 +401,38 @@ class JvmRommSaves(
         return sent
     }
 
-    /** RomM's [save] into [local]: checked against RomM's hash, this device's kept aside first, then moved over it. */
-    private suspend fun bringDown(c: RommClient, query: SaveQuery, save: RommSave, local: File, key: String) {
+    /** RomM's [save] into place: checked against RomM's hash, this device's kept aside first, then put over it. */
+    private suspend fun bringDown(c: RommClient, query: SaveQuery, save: RommSave, held: Held, key: String) {
         val device = deviceId(c)
         val bytes = c.saveContent(save, device)
-        val hash = md5(bytes)
-        if (save.contentHash != null && save.contentHash != hash) throw RommException("RomM's save changed on its way. Nothing was replaced.", code = "bad-hash")
-        if (local.isFile) keepAside(query, local)
-        local.parentFile?.mkdirs()
-        val tmp = File(local.parentFile, ".${local.name}.fuse-romm")
-        tmp.writeBytes(bytes)
-        move(tmp, local)
-        agree(key, hash, save.id)
+        val hash = held.hashOf(bytes)
+        // A RomM older than its zip-content hash hashed the zip's own bytes: either is RomM's word for it.
+        if (save.contentHash != null && save.contentHash != hash && save.contentHash != md5(bytes)) throw RommException("RomM's save changed on its way. Nothing was replaced.", code = "bad-hash")
+        if (held.hash() != null) keepAside(query, held)
+        held.put(bytes)
+        agree(key, held.hash() ?: hash, save.id)
         if (device != null) runCatching { c.confirmSave(save, device) }
     }
 
-    /** [local] up to RomM as the newest save of [romId]. */
-    private suspend fun sendUp(c: RommClient, query: SaveQuery, romId: Long, local: File, format: String, key: String) {
-        val bytes = local.readBytes()
-        val sent = c.uploadSave(romId, SLOT, format, deviceId(c), local.name, bytes)
-        agree(key, sent.contentHash ?: md5(bytes), sent.id)
+    /** [held] up to RomM as the newest save of [romId], in the slot of what it is (and of whoever is playing). */
+    private suspend fun sendUp(c: RommClient, query: SaveQuery, romId: Long, held: Held, key: String) {
+        val here = held.hash() ?: return
+        val (name, bytes) = held.upload(query.title.ifBlank { query.game.id })
+        val sent = c.uploadSave(romId, RommSlots.of(held.format, person()), held.format, deviceId(c), name, bytes)
+        agree(key, sent.contentHash ?: here, sent.id)
     }
 
-    /** A copy of [local] in Fuse's kept folder, by game and time, before RomM's replaces it. */
-    private fun keepAside(query: SaveQuery, local: File) {
+    /** A copy of what is here in Fuse's kept folder, by game and time, before RomM's replaces it. */
+    private fun keepAside(query: SaveQuery, held: Held) {
         val stamp = java.text.SimpleDateFormat("yyyy-MM-dd HH-mm-ss", java.util.Locale.ROOT).format(java.util.Date(clock()))
-        val name = (query.title.ifBlank { query.game.id }).replace(Regex("[^A-Za-z0-9 ._()-]+"), "_").take(80)
-        val to = File(File(File(File(dir, "kept"), "RomM"), name), stamp)
+        val to = File(File(File(File(dir, "kept"), "RomM"), part(query.title.ifBlank { query.game.id })), stamp)
         to.mkdirs()
-        local.copyTo(File(to, local.name), overwrite = true)
+        held.copyTo(to)
     }
 
     companion object {
-        /** The slot Fuse keeps a game's save in on RomM (RomM pairs saves by game and slot). */
-        const val SLOT = "autosave"
+        /** The slot Fuse kept every game's save in on RomM before 0.4.4; see [RommSlots]. */
+        const val SLOT = RommSlots.LEGACY
 
         /** How long a launch waits on RomM. */
         const val WAIT_MS = 8_000L
@@ -323,6 +452,9 @@ class JvmRommSaves(
 
         /** A file name's extension, without RomM's own " [date]" tag. */
         internal fun extension(name: String): String = name.substringAfterLast('.', "").lowercase()
+
+        /** [text] as a safe file or folder name. */
+        private fun part(text: String) = text.replace(Regex("[^A-Za-z0-9 ._()-]+"), "_").take(80)
 
         private fun move(from: File, to: File) {
             try {

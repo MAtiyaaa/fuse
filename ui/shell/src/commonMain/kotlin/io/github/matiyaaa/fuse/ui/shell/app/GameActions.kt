@@ -1430,6 +1430,36 @@ private fun AppState.planBringOver(emulator: io.github.matiyaaa.fuse.model.Emula
     }
 }
 
+/**
+ * A newer save of [title] in a folder [emulator] used before (the Flatpak beside a native install, a
+ * data folder since moved): choosing it asks, then copies it to where the emulator reads it now.
+ */
+private fun AppState.olderSaveRow(id: io.github.matiyaaa.fuse.model.GameId, title: String, emulator: String, o: io.github.matiyaaa.fuse.sync.OldSave) = MenuAction(
+    "older.${o.where}",
+    if ("/.var/app/" in o.where) "In the Flatpak's Folder" else "In an Earlier Folder",
+    FuseIcons.FolderInput,
+    detail = (if (o.inUseModifiedAt == null) "None in use yet. " else "Newer than the one in use. ") + o.where,
+    trailing = Trailing.Value(io.github.matiyaaa.fuse.ui.shell.components.agoText(o.modifiedAt ?: 0L)),
+    section = "From Before",
+    onSelect = {
+        choice = null
+        confirm = ConfirmSpec(
+            title = "Use the Earlier Save?",
+            message = "Fuse copies $title's save from ${o.where} to where $emulator reads it now. " +
+                (if (o.inUseModifiedAt != null) "The save there now is kept in Fuse's kept folder first. " else "") +
+                "The earlier folder stays as it is.",
+            confirmLabel = "Use This Save",
+        ) {
+            scope.launch {
+                store.library.useOldSave(id, o).fold(
+                    onSuccess = { toasts.show("The earlier save of $title is in use", ToastKind.SUCCESS, icon = FuseIcons.CircleCheck) },
+                    onFailure = { toasts.show(it.message ?: "Fuse couldn't bring that save in", ToastKind.WARNING) },
+                )
+            }
+        }
+    },
+)
+
 /** [title]'s save files on this device, newest first, with where they are. */
 internal fun AppState.localSavesSheet(id: io.github.matiyaaa.fuse.model.GameId, title: String) {
     scope.launch {
@@ -1437,8 +1467,12 @@ internal fun AppState.localSavesSheet(id: io.github.matiyaaa.fuse.model.GameId, 
         choice = ChoiceSpec(
             title = "Saves on This Device",
             icon = FuseIcons.HardDrive,
-            message = found.note ?: "$title, as ${found.emulator ?: "its emulator"} keeps it here. Fuse only reads these; a save sync moves them.",
-            options = found.saves.map { s ->
+            message = found.note ?: if (found.older.isNotEmpty()) {
+                "$title, as ${found.emulator ?: "its emulator"} keeps it here. A folder it used before holds a newer save: choose it to use that one."
+            } else {
+                "$title, as ${found.emulator ?: "its emulator"} keeps it here. Fuse only reads these; a save sync moves them."
+            },
+            options = found.older.map { o -> olderSaveRow(id, title, found.emulator ?: "its emulator", o) } + found.saves.map { s ->
                 MenuAction(
                     "save.${s.path}", s.name,
                     when (s.kind) {
@@ -1448,6 +1482,7 @@ internal fun AppState.localSavesSheet(id: io.github.matiyaaa.fuse.model.GameId, 
                     },
                     detail = "${s.kind.label}, ${io.github.matiyaaa.fuse.ui.shell.sync.sizeText(s.bytes)}. ${s.path}",
                     trailing = Trailing.Value(io.github.matiyaaa.fuse.ui.shell.components.agoText(s.modifiedAt)),
+                    section = if (found.older.isNotEmpty()) "In Use" else null,
                     onSelect = {},
                 )
             },

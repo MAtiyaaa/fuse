@@ -416,6 +416,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                     decided && provider == SaveProvider.FUSE_ONE -> "Fuse One moves this device's saves once it's set up: make this the host, or connect to the one you have."
                     decided && provider == SaveProvider.SYNCTHING -> "Fuse shares your emulators' save folders through Syncthing, brings in the newest save before a game, and asks when two devices both played. Fuse One's profiles and household games still work."
                     decided && provider == SaveProvider.ROMM -> "Games from RomM keep their save in step with RomM's, on every device that chose RomM. Fuse One's profiles and household games still work."
+                    decided && provider == SaveProvider.ROMM_THEN_FUSE_ONE -> "Games from RomM keep their save in step with RomM's, and Fuse One moves every other game's. Never both for one game."
                     decided -> "Nothing moves this device's saves. Your other devices keep their own choice, and this one can join in later from Settings, Fuse One."
                     else -> "Stop on the PC, carry on on the handheld. One way moves this device's saves: Fuse One (the one we recommend), RomM, or Syncthing if you run it. Each device chooses its own. One device? Skip; it waits in Settings, Fuse One."
                 },
@@ -442,7 +443,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                     if (syncthing == null && !store.romm.supported) SyncStage(on = syncOn)
                     else SyncChoiceStage(
                         fuseSync = syncOn && provider == SaveProvider.FUSE_ONE, syncthing = provider == SaveProvider.SYNCTHING && syncthingOn,
-                        hasFuseSync = sync != null, romm = provider == SaveProvider.ROMM, hasRomm = store.romm.supported,
+                        hasFuseSync = sync != null, romm = provider.romm, hasRomm = store.romm.supported,
                     )
                 },
             ))
@@ -546,7 +547,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                 "FUSE" -> if (rommConnected) {
                     (if (withFuseOne) "Fuse One brings the games on your household's devices, and RomM your server's. " else "") +
                         "Your RomM games are in the Library under All, next to everything else. Games you download land in the right folders and play like any other. " +
-                        if (io.github.matiyaaa.fuse.ui.shell.sync.SaveProviders.current(app) == SaveProvider.ROMM) "Their saves stay in step with RomM's (RomM 5)."
+                        if (io.github.matiyaaa.fuse.ui.shell.sync.SaveProviders.current(app).romm) "Their saves stay in step with RomM's (RomM 5)."
                         else "Their saves move with ${io.github.matiyaaa.fuse.ui.shell.sync.SaveProviders.current(app).label.let { if (it == "Off") "nothing on this device" else it }}, this device's Save Sync."
                 } else {
                     "Fuse connects straight to your RomM server: your games and systems appear in the Library under All, downloads land in your library's folders, and their saves stay in step with RomM's on RomM 5. It takes a minute."

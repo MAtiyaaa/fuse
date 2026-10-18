@@ -420,6 +420,19 @@ app's `Android/data` folder private, so an emulator that only saves there says s
 its data out. Still out of reach: xemu (its saves are inside a hard disk image), Windows games in
 Winlator and similar (each keeps its own), and PC games (Steam has its own cloud).
 
+**Saves from an earlier folder.** Saves on This Device, in a game's options, also looks where the
+emulator kept its saves before: the Flatpak beside a native install, an installed copy beside a
+portable one, or the install's own folder once another was chosen in Save Folders. It asks the
+same adapter where it would look were the folder in use not there, so nothing needs a list of its
+own. Only a newer save of the game is offered; Use This Save copies it to the folder in use, keeps
+the save that was there in Fuse One's kept folder first, and leaves the earlier folder as it is.
+
+**One way per game.** Save Sync on this device picks how this device's saves move: Fuse One,
+RomM, Syncthing, or none. RomM, Then Fuse One has RomM move the saves of games from RomM and Fuse
+One every other game's. Fuse One then leaves those games' saves alone, as for a game kept on this
+device only, and still counts the time played. Syncthing moves whole folders, so it is never
+combined.
+
 ## Around a game
 
 **Before a game starts**, Fuse asks the host for that game's newest save and puts it in place (a

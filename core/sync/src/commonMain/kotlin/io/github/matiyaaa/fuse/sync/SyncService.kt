@@ -281,6 +281,23 @@ interface SyncService {
     fun saveChoices(pullOff: Set<String>, off: Set<String>) {}
 
     /**
+     * Games (by household key) whose saves another way moves on this device ([SaveOwners]): Fuse
+     * One neither sends nor brings in their saves here, as for a game kept on this device only, and
+     * still counts their play time.
+     */
+    fun savesMovedElsewhere(games: Set<String>) {}
+
+    /** Save folders [query]'s emulator used before that hold a newer save of it than the one in use ([OldSaveFolders]). Reads only. */
+    suspend fun oldSaveFolders(query: SaveQuery): List<OldSave> = emptyList()
+
+    /**
+     * [old]'s save copied to where the emulator reads it now, what was there kept aside in Fuse's
+     * kept folder first; the old folder is left as it is. Returns where the replaced save was kept
+     * (null when there was none).
+     */
+    suspend fun bringIntoUse(query: SaveQuery, old: OldSave): Result<String?> = Result.failure(UnsupportedOperationException("Fuse can't bring saves in here."))
+
+    /**
      * The household's RomM and Jellyfin from the host: addresses, and the sign-ins this device may
      * have, opened ("romm", and "jellyfin:<profile>" for the profiles it may open). Null without a
      * host, or from a host before 0.3.6.3.

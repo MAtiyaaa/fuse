@@ -323,8 +323,10 @@ internal class DefaultRommOps(
                 standing = standing,
             )
         }.sortedByDescending { it.newest.updatedAt }
-        io.github.matiyaaa.fuse.ui.shell.store.RommSaveReport(server, games, saves.sumOf { it.sizeBytes })
+        io.github.matiyaaa.fuse.ui.shell.store.RommSaveReport(server, games, saves.sumOf { it.sizeBytes }, waiting = saveService?.waiting ?: 0)
     }
+
+    override suspend fun sendWaitingSaves(): Int = saveService?.let { s -> runCatching { s.sendWaiting() }.getOrDefault(0) } ?: 0
 
     /** The signed-in client when RomM and its save sync are on. */
     internal fun saveClient(): RommClient? = client?.takeIf { c ->
@@ -415,6 +417,8 @@ internal class DefaultRommOps(
                 val link = _state.value.link
                 if (link == RommLink.ONLINE) {
                     if (first || ctx.now() - mirror.syncedAt(server) >= settings.refreshMinutes.coerceIn(5, 1440) * 60_000L) syncNow(full = false)
+                    // Saves that couldn't go while RomM was away go now, in the order they waited.
+                    saveService?.takeIf { it.waiting > 0 }?.let { s -> runCatching { s.sendWaiting() } }
                 } else if (link == RommLink.OFFLINE) {
                     connectLock.withLock { }
                     runCatching { client?.heartbeat() }.onSuccess {

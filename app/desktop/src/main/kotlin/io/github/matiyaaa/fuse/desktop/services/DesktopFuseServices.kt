@@ -146,12 +146,14 @@ class DesktopFuseServices private constructor(
         env: () -> io.github.matiyaaa.fuse.sync.SaveEnvironment?,
         client: suspend () -> io.github.matiyaaa.fuse.romm.RommClient?,
         server: () -> String,
+        person: () -> String?,
     ): io.github.matiyaaa.fuse.sync.romm.RommSaveService = io.github.matiyaaa.fuse.sync.romm.JvmRommSaves(
         dir = File(dirs.data, "romm-saves"),
         env = { env() ?: io.github.matiyaaa.fuse.sync.FileSaveEnvironment(os.name) },
         client = client, server = server,
         deviceName = deviceName, platform = os.name.lowercase(), clientVersion = appVersion,
         log = { io.github.matiyaaa.fuse.desktop.Log.info(it) },
+        person = person,
     )
 
     override fun writeCacheFile(relativePath: String, content: String): String? = writeBelow(cacheDir, relativePath, content)

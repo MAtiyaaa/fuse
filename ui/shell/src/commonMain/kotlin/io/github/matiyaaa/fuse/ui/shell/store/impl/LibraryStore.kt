@@ -815,7 +815,20 @@ internal class DefaultLibraryOps(
                 }
             }
         }.distinctBy { it.path }.sortedByDescending { it.modifiedAt }
-        io.github.matiyaaa.fuse.ui.shell.store.LocalSaves(emulator.name, saves, note = if (saves.isEmpty()) "${emulator.name} has no save of it on this device yet." else null)
+        val older = runCatching { sync?.service?.oldSaveFolders(query) }.getOrNull().orEmpty()
+        io.github.matiyaaa.fuse.ui.shell.store.LocalSaves(
+            emulator.name, saves,
+            note = if (saves.isEmpty() && older.isEmpty()) "${emulator.name} has no save of it on this device yet." else null,
+            older = older,
+        )
+    }
+
+    override suspend fun useOldSave(id: GameId, old: io.github.matiyaaa.fuse.sync.OldSave): Result<String?> {
+        val service = sync?.service ?: return Result.failure(IllegalStateException("Fuse can't look at saves on this device."))
+        val game = data.games.get(id) ?: return Result.failure(IllegalStateException("This game isn't in the library any more."))
+        val (resolved, core) = startsWith(game)
+        val emulator = resolved.installed ?: return Result.failure(IllegalStateException("No emulator plays this game here."))
+        return service.bringIntoUse(plainSaveQuery(game, emulator, coreFor(emulator, game, core)), old)
     }
 
     /** [game]'s saves for [emulator], as Syncthing looks for them: by the game's own name and system, no profile needed. */

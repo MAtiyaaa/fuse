@@ -53,6 +53,7 @@ class WithSaveFolders(
 }
 
 /** The game whose saves are wanted, and what it is played with here. */
+@kotlinx.serialization.Serializable
 data class SaveQuery(
     val game: GameKey,
     val platform: String,

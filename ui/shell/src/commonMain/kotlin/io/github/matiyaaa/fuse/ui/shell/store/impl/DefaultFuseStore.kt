@@ -166,9 +166,12 @@ internal class DefaultFuseStore private constructor(
                 }
             }
         }
-        // RomM's save sync, for games from (or matched to) RomM.
+        // RomM's save sync, for games from (or matched to) RomM. With more than one person here, each one's saves are their own.
         library.rommSaves = runCatching {
-            ctx.services.rommSaves(env = { sync.service?.saveEnvironment }, client = { romm.saveClient() }, server = { romm.serverKey })
+            ctx.services.rommSaves(
+                env = { sync.service?.saveEnvironment }, client = { romm.saveClient() }, server = { romm.serverKey },
+                person = { sync.service?.takeIf { sync.inUse && it.profiles.value.size > 1 }?.activeProfile?.value?.name },
+            )
         }.getOrNull()
         library.installedBoot = { id -> content.bootFile(id) }
         library.writeSettings = { t -> writeSettings(t) }
@@ -297,6 +300,22 @@ internal class DefaultFuseStore private constructor(
 
         override fun export(spec: ThemeSpec): String =
             ctx.settings.value.appearance.customThemes.firstOrNull { it.id == spec.id }?.json ?: ThemeCodec.encode(spec)
+    }
+
+    /**
+     * The games (by every household key each is known by) whose saves another way than Fuse One
+     * moves here under [provider]: of the ways a game has here, the first in the order the person
+     * chose ([io.github.matiyaaa.fuse.sync.SaveOwners]).
+     */
+    private suspend fun rommMovesSaves(provider: io.github.matiyaaa.fuse.data.settings.SaveProvider): Set<String> {
+        val fuseOne = io.github.matiyaaa.fuse.sync.SaveWay.FUSE_ONE
+        val romm = io.github.matiyaaa.fuse.sync.SaveWay.ROMM
+        val order = if (provider == io.github.matiyaaa.fuse.data.settings.SaveProvider.ROMM_THEN_FUSE_ONE) listOf(romm.id) else emptyList()
+        val keys = profileData.householdIds()
+        return ctx.data.games.matchRows().filter { r ->
+            val here = setOfNotNull(fuseOne.takeIf { provider.fuseOne }, romm.takeIf { provider.romm && r.rommRomId != null })
+            io.github.matiyaaa.fuse.sync.SaveOwners.owner(here, order).let { it != null && it != fuseOne }
+        }.flatMapTo(HashSet()) { keys[it.id.value].orEmpty() }
     }
 
     override suspend fun setSaveProvider(provider: io.github.matiyaaa.fuse.data.settings.SaveProvider) {
@@ -558,6 +577,19 @@ internal class DefaultFuseStore private constructor(
             ctx.scope.launch {
                 sync.config.map { it.noPullProfiles.toSet() to it.noSyncProfiles.toSet() }.distinctUntilChanged()
                     .collect { (pullOff, off) -> svc.saveChoices(pullOff, off) }
+            }
+            // RomM, Then Fuse One: Fuse One leaves the saves of games from RomM to RomM, so one way moves each game's.
+            ctx.scope.launch {
+                ctx.settings.map { io.github.matiyaaa.fuse.data.settings.SaveProvider.of(it) }.distinctUntilChanged().collectLatest { provider ->
+                    if (provider != io.github.matiyaaa.fuse.data.settings.SaveProvider.ROMM_THEN_FUSE_ONE) return@collectLatest svc.savesMovedElsewhere(emptySet())
+                    var first = true
+                    // Followed as games join, leave or are matched to RomM; a moment's wait lets a scan or a RomM sync settle.
+                    ctx.data.games.observeAll(includeHidden = true).collectLatest {
+                        if (!first) delay(1_000)
+                        first = false
+                        svc.savesMovedElsewhere(rommMovesSaves(provider))
+                    }
+                }
             }
             val setupDone = ctx.settings.value.onboarding.completed
             // Who has had their welcome here. On a device that was already using profiles when it

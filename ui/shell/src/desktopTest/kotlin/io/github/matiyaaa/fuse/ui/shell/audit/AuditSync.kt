@@ -133,6 +133,18 @@ internal class AuditSync(private val settings: SettingsStore) : SyncService {
     /** The next game launched meets a save conflict. */
     @Volatile var conflictNext: SaveConflict? = null
 
+    /** Where a game's saves are looked for, in the scenarios that show them (none by default: Fuse can't look). */
+    @Volatile var saveEnv: io.github.matiyaaa.fuse.sync.SaveEnvironment? = null
+    override val saveEnvironment: io.github.matiyaaa.fuse.sync.SaveEnvironment? get() = saveEnv
+
+    /** Newer saves in folders an emulator used before, as a scenario sets them. */
+    @Volatile var older: List<io.github.matiyaaa.fuse.sync.OldSave> = emptyList()
+    override suspend fun oldSaveFolders(query: SaveQuery) = older
+    override suspend fun bringIntoUse(query: SaveQuery, old: io.github.matiyaaa.fuse.sync.OldSave): Result<String?> {
+        older = older - old
+        return Result.success("${old.inUse.files.firstOrNull()?.path.orEmpty()}.kept")
+    }
+
     private val now get() = System.currentTimeMillis()
 
     /** The household as it is once set up: three people, three devices, a little history. */

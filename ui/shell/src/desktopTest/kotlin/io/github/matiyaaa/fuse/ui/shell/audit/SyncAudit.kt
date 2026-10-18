@@ -393,6 +393,34 @@ internal fun AuditDriver.syncScreens() {
         shoot("no save states yet")
     }
 
+    scenario("sync", "a save from an earlier folder") {
+        useSync(asHost = false)
+        sync.saveEnv = io.github.matiyaaa.fuse.sync.FileSaveEnvironment("LINUX", java.nio.file.Files.createTempDirectory("audit-home").toString(), variables = { null })
+        val flatpak = "/home/deck/.var/app/org.libretro.RetroArch/config/retroarch/saves"
+        val native = "/home/deck/.config/retroarch/saves"
+        val day = 86_400_000L
+        sync.older = listOf(
+            io.github.matiyaaa.fuse.sync.OldSave(
+                io.github.matiyaaa.fuse.sync.SaveSpot(io.github.matiyaaa.fuse.sync.SaveKind.SAVE, "sram", listOf(io.github.matiyaaa.fuse.sync.SpotFile("save.srm", "$flatpak/Emberline Saga.srm"))),
+                io.github.matiyaaa.fuse.sync.SaveSpot(io.github.matiyaaa.fuse.sync.SaveKind.SAVE, "sram", listOf(io.github.matiyaaa.fuse.sync.SpotFile("save.srm", "$native/Emberline Saga.srm"))),
+                flatpak, System.currentTimeMillis() - 2 * day, System.currentTimeMillis() - 40 * day,
+            ),
+        )
+        openGame("Emberline Saga")
+        tap(PadButton.X)
+        tapText("Saves on This Device")
+        waitFor("From Before")
+        settle(900)
+        shoot("a newer save in a folder the emulator used before", 900)
+        tapText("In the Flatpak's Folder")
+        waitFor("Use the Earlier Save?")
+        settle(1_400)
+        shoot("asked first: what is copied, what is kept", 1_000)
+        tap(PadButton.B)
+        sync.saveEnv = null
+        sync.older = emptyList()
+    }
+
     scenario("sync", "home scope") {
         useSync(asHost = false) { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS)) }
         waitFor("Continue playing")

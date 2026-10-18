@@ -183,6 +183,41 @@ class ServiceTest {
     }
 
     @Test
+    fun aGameWhoseSavesAnotherWayMovesIsLeftAloneByFuseOneButItsPlayTimeStillCounts(): Unit = runBlocking {
+        val pcLib = Library()
+        val (pc, _) = service("Gaming PC", pcLib)
+        val (deck, _) = service("Steam Deck", Library())
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        deck.switchTo(mo.id).getOrThrow()
+        pc.switchTo(mo.id).getOrThrow()
+        // RomM moves this game's saves on both (RomM, Then Fuse One): Fuse One neither sends nor brings them in.
+        deck.savesMovedElsewhere(setOf(ct.id))
+        pc.savesMovedElsewhere(setOf(ct.id))
+        val roms = File(root, "deck-roms").apply { mkdirs() }
+        val q = SaveQuery(ct, "gba", File(roms, "ruby.gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby")
+        File(roms, "ruby.sav").writeText("8 badges")
+        deck.afterExit(q, 0, 30 * 60_000)
+        val pcRoms = File(root, "pc-roms").apply { mkdirs() }
+        val pq = q.copy(romPath = File(pcRoms, "ruby.gba").path.replace('\\', '/'))
+        assertIs<LaunchGate.Go>(pc.beforeLaunch(pq))
+        assertFalse(File(pcRoms, "ruby.sav").exists(), "Fuse One didn't move a save RomM moves")
+        // The half hour played still counts.
+        pc.syncNow().getOrThrow()
+        assertEquals(30L * 60, pcLib.gamesNow()[ct.id]?.totalSeconds)
+        // Fuse One moving them again (Fuse One alone): the next save goes as ever.
+        deck.savesMovedElsewhere(emptySet())
+        pc.savesMovedElsewhere(emptySet())
+        File(roms, "ruby.sav").writeText("9 badges")
+        deck.afterExit(q, 0, 31 * 60_000)
+        assertIs<LaunchGate.Go>(pc.beforeLaunch(pq))
+        assertEquals("9 badges", File(pcRoms, "ruby.sav").readText())
+        pc.stop()
+        deck.stop()
+    }
+
+    @Test
     fun aHandheldAndAComputerShareOnePerson(): Unit = runBlocking {
         val pcLib = Library()
         val deckLib = Library(

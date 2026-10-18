@@ -22,8 +22,8 @@ class SaveProviderTest {
         for (p in SaveProvider.entries) {
             val s = SaveProvider.choose(all, p)
             assertEquals(p, SaveProvider.of(s))
-            assertEquals(p == SaveProvider.FUSE_ONE, s.sync.saves)
-            assertEquals(p == SaveProvider.ROMM, s.romm.saveSync)
+            assertEquals(p == SaveProvider.FUSE_ONE || p == SaveProvider.ROMM_THEN_FUSE_ONE, s.sync.saves)
+            assertEquals(p == SaveProvider.ROMM || p == SaveProvider.ROMM_THEN_FUSE_ONE, s.romm.saveSync)
             assertEquals(p == SaveProvider.SYNCTHING, s.syncthing.enabled)
             // Fuse One itself stays on: profiles, play time and the household's games still work.
             assertTrue(s.sync.enabled)
@@ -45,6 +45,15 @@ class SaveProviderTest {
         val fresh = AppSettings()
         assertEquals(fresh, SaveProvider.settle(fresh))
         assertEquals(SaveProvider.FUSE_ONE, SaveProvider.of(fresh.copy(sync = fresh.sync.copy(enabled = true, role = "HOST"))))
+    }
+
+    @Test
+    fun rommThenFuseOneKeepsBothOnOnlyWhenChosen() {
+        val chosen = SaveProvider.choose(fuseOne.copy(romm = FuseRommSettings(enabled = true)), SaveProvider.ROMM_THEN_FUSE_ONE)
+        assertTrue(chosen.sync.saves && chosen.romm.saveSync)
+        // Settling leaves a choice made as it is: both stay on.
+        assertEquals(chosen, SaveProvider.settle(chosen))
+        assertTrue(SaveProvider.ROMM_THEN_FUSE_ONE.fuseOne && SaveProvider.ROMM_THEN_FUSE_ONE.romm)
     }
 
     @Test

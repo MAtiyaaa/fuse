@@ -100,12 +100,14 @@ interface FuseServices {
 
     /**
      * RomM's save sync ([io.github.matiyaaa.fuse.sync.romm.RommSaveService]): [env] finds the saves,
-     * [client] is RomM signed in with its save sync on (null otherwise), [server] names the server.
+     * [client] is RomM signed in with its save sync on (null otherwise), [server] names the server,
+     * [person] who is playing when the device has more than one person (their saves are their own).
      */
     fun rommSaves(
         env: () -> io.github.matiyaaa.fuse.sync.SaveEnvironment?,
         client: suspend () -> io.github.matiyaaa.fuse.romm.RommClient?,
         server: () -> String,
+        person: () -> String? = { null },
     ): io.github.matiyaaa.fuse.sync.romm.RommSaveService? = null
 
     /** Finds Jellyfin servers on the network; null where there is no way to. */

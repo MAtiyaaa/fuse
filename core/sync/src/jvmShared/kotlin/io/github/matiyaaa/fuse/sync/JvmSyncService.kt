@@ -85,8 +85,17 @@ class JvmSyncService(
 
     override val defaultName: String get() = defaultDeviceName
 
-    private var client: SyncClient? = null
+    @Volatile private var client: SyncClient? = null
     private var device: SyncDevice? = null
+
+    /**
+     * Held while what a host said is shown, and while that host is let go of: a list the host sent
+     * just before it was forgotten is never shown (or kept) after.
+     */
+    private val showing = Any()
+
+    /** The host let go of ([showing]). */
+    private fun dropClient() = synchronized(showing) { client = null }
 
     /** The household's games through this device's host (see [Household]). */
     val householdHere: JvmHousehold by lazy {
@@ -472,7 +481,29 @@ class JvmSyncService(
      * [game] keeps its saves on this device (or the person syncs it on none of theirs): never sent,
      * never brought in (each person's still swap here).
      */
-    private fun localOnly(game: String?): Boolean = game != null && (game in cached.localOnlyGames || game in cached.offEverywhereGames)
+    private fun localOnly(game: String?): Boolean = game != null && (game in cached.localOnlyGames || game in cached.offEverywhereGames || game in elsewhere)
+
+    /** Games whose saves another way moves here ([savesMovedElsewhere]). */
+    @Volatile private var elsewhere: Set<String> = emptySet()
+
+    override fun savesMovedElsewhere(games: Set<String>) {
+        elsewhere = games
+    }
+
+    override suspend fun oldSaveFolders(query: SaveQuery): List<OldSave> = withContext(Dispatchers.IO) { OldSaveFolders.find(canonical(query), saveEnv) }
+
+    override suspend fun bringIntoUse(query: SaveQuery, old: OldSave): Result<String?> = withContext(Dispatchers.IO) {
+        runCatching {
+            val q = canonical(query)
+            val title = q.title.ifBlank { "This game" }
+            check(q.game.id !in busy) { "$title is playing. Bring the save in once it has closed." }
+            // Looked for again: only a folder that still holds a newer save, as it is now.
+            val now = OldSaveFolders.find(q, saveEnv).firstOrNull { it.where == old.where } ?: error("That folder has no newer save of $title any more.")
+            val kept = OldSaveMove.bringIn(q.game, now, File(keptFolder(), safeName(q.title.ifBlank { q.game.id })))
+            log("${q.title}: the save from ${now.where} is in use" + (kept?.let { ", the one it replaced kept in ${it.path}" } ?: ""), q.game.id, SyncActivity.RESTORE)
+            kept?.path
+        }
+    }
 
     @Volatile private var queries: (suspend (String) -> SaveQuery?)? = null
 
@@ -624,13 +655,18 @@ class JvmSyncService(
         listsLock.withLock {
             val c = client ?: return@withLock
             val list = people.ordered(c.profiles())
-            runCatching { c.devices() }.onSuccess { devices ->
-                _devices.value = devices
-                writeAtomically(File(dir, DEVICES_FILE), json.encodeToString(ListSerializer(DeviceInfo.serializer()), devices).toByteArray())
+            val devices = runCatching { c.devices() }
+            synchronized(showing) {
+                // Forgotten while it answered (turned off, or left): what it said is no longer this device's.
+                if (client !== c) return@withLock
+                devices.onSuccess { d ->
+                    _devices.value = d
+                    writeAtomically(File(dir, DEVICES_FILE), json.encodeToString(ListSerializer(DeviceInfo.serializer()), d).toByteArray())
+                }
+                showPeople(list, cached.activeProfile)
+                // Kept, so who is playing shows (and Who's playing? has faces) while the host is away.
+                runCatching { writeAtomically(File(dir, PROFILES_FILE), json.encodeToString(ListSerializer(ProfileInfo.serializer()), _profiles.value).toByteArray()) }
             }
-            showPeople(list, cached.activeProfile)
-            // Kept, so who is playing shows (and Who's playing? has faces) while the host is away.
-            runCatching { writeAtomically(File(dir, PROFILES_FILE), json.encodeToString(ListSerializer(ProfileInfo.serializer()), _profiles.value).toByteArray()) }
         }
     }
 
@@ -827,7 +863,7 @@ class JvmSyncService(
         }
         stop()
         if (cached.role == "HOST" && lifetime.state().installed) runCatching { lifetime.remove() }
-        client = null
+        dropClient()
         // The people who played here stay as this device's own (their unsent saves go to the next host).
         val stay = if (keepProfiles) runCatching { stayLocal() }.getOrDefault(emptyList()) else emptyList()
         // Saves that never reached the host (it was away) are this device's only copy: they stay,
@@ -3023,7 +3059,7 @@ class JvmSyncService(
             watch = null
             _nowPlaying.value = null
             cancelJoin()
-            client = null
+            dropClient()
             // The people who played here stay as this device's own profiles, unless they should go too.
             val stay = if (keepProfiles) runCatching { stayLocal() }.getOrDefault(emptyList()) else emptyList()
             secrets.remove(LINK_KEY)

@@ -443,8 +443,10 @@ fun RommSetupScreen(app: AppState, pairing: Boolean) {
         // One way moves this device's saves: choosing RomM's here turns Fuse One's and Syncthing's off.
         val now = io.github.matiyaaa.fuse.ui.shell.sync.SaveProviders.current(app)
         when {
-            saves && now != io.github.matiyaaa.fuse.data.settings.SaveProvider.ROMM -> app.scope.launch { app.store.setSaveProvider(io.github.matiyaaa.fuse.data.settings.SaveProvider.ROMM) }
+            saves && !now.romm -> app.scope.launch { app.store.setSaveProvider(io.github.matiyaaa.fuse.data.settings.SaveProvider.ROMM) }
             !saves && now == io.github.matiyaaa.fuse.data.settings.SaveProvider.ROMM -> app.scope.launch { app.store.setSaveProvider(io.github.matiyaaa.fuse.data.settings.SaveProvider.OFF) }
+            // RomM's save sync off with Fuse One moving the rest: Fuse One moves them all.
+            !saves && now == io.github.matiyaaa.fuse.data.settings.SaveProvider.ROMM_THEN_FUSE_ONE -> app.scope.launch { app.store.setSaveProvider(io.github.matiyaaa.fuse.data.settings.SaveProvider.FUSE_ONE) }
         }
         app.toasts.show("RomM is connected as $name", ToastKind.SUCCESS, icon = FuseIcons.CircleCheck)
         app.back()

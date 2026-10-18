@@ -175,7 +175,13 @@ data class RommSaveGame(
 }
 
 /** RomM's save sync as it stands: every game with saves on the server, newest played first. */
-data class RommSaveReport(val server: String, val games: List<RommSaveGame>, val bytes: Long)
+data class RommSaveReport(
+    val server: String,
+    val games: List<RommSaveGame>,
+    val bytes: Long,
+    /** Saves that couldn't reach RomM yet: they go by themselves once it answers. */
+    val waiting: Int = 0,
+)
 
 interface RommOps {
     val supported: Boolean
@@ -186,6 +192,9 @@ interface RommOps {
      * against it; null when RomM's save sync isn't on here. Throws when RomM doesn't answer.
      */
     suspend fun saveReport(): RommSaveReport? = null
+
+    /** Sends the saves waiting to go to RomM now, in the order they waited; how many went. */
+    suspend fun sendWaitingSaves(): Int = 0
 
     /** Short messages for the person: an upload done, new games on the server, firmware brought over. */
     val notices: Flow<String> get() = kotlinx.coroutines.flow.emptyFlow()

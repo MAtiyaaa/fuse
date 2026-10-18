@@ -304,7 +304,21 @@ turning one on turns the other off in Fuse and keeps both set up.
   change, is kept in Fuse's database and asked for once.
 - **Uploads** use `/api/roms/upload/start`, a `PUT` per piece and `/complete`, resumed where they
   stopped, and optionally a scan of that system (`/api/tasks/scan`) afterwards.
-- **BIOS** (`/api/firmware`): planned against what Fuse's system health expects. A file already in
+- **Saves** (RomM 5, only when the server lists `/api/devices` and `/api/saves/{id}/downloaded`,
+  and only with RomM, or RomM, Then Fuse One, chosen in Save Sync on this device): this device registers once
+  (`POST /api/devices`, its name and platform); before a game from RomM starts, Fuse lists its saves
+  (`GET /api/saves?rom_id=`), brings the newest down (`/api/saves/{id}/content`, then
+  `/api/saves/{id}/downloaded`) and after it closes sends the save up (`POST /api/saves` with the
+  game, slot, emulator and device). What decides is the last version this device and RomM agreed
+  on, kept on the device: one side changed since, and it goes the other way; both changed, and the
+  person chooses, the other kept aside. A save made of folders or of several files (a PSP or PS3
+  save folder, a Switch save) goes as one zip, packed the same way every time, and is matched by
+  RomM's own hash of a zip's contents (`hash_zip_contents`, RomM 5.4: the MD5 of each file's
+  `name:md5`, in name order). Slots are named for what the save is on its console (`PSP Save
+  Data`, `PS2 Memory Card`), with the person's name added on a device with more than one person,
+  whose saves then come only from their own slot; saves sent before 0.4.4 are in `autosave` and
+  are still read. A save that can't reach RomM waits, in order, in the device's own file and goes
+  when RomM answers again, across restarts. Save states use `/api/states` the same way. A file already in
   place is never replaced, whatever the server has under the same name; firmware an emulator
   installs itself is downloaded to a `Firmware/<emulator>` folder with how to install it.
 
