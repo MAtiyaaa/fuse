@@ -18,6 +18,17 @@ class DeckyInstallScriptTest {
     }
 
     @Test
+    fun theCarriedPluginHasThisFusesVersionSoSettingsCanTellItIsUpToDate() {
+        val packageJson = javaClass.getResourceAsStream("/decky/Fuse/package.json")?.use { it.readBytes().decodeToString() }
+        assertTrue(packageJson != null, "Fuse carries the plugin")
+        val version = Regex("\"version\"\\s*:\\s*\"([^\"]+)\"").find(packageJson)?.groupValues?.get(1)
+        assertEquals(io.github.matiyaaa.fuse.desktop.BuildInfo.VERSION, version)
+        // The protocol it speaks is this Fuse's.
+        val main = javaClass.getResourceAsStream("/decky/Fuse/main.py")!!.use { it.readBytes().decodeToString() }
+        assertTrue("PROTOCOL = ${io.github.matiyaaa.fuse.link.DeckyBridge.PROTOCOL}\n" in main)
+    }
+
+    @Test
     fun replacesThePluginAndLeavesOtherPluginsAndThemesAlone() {
         val root = Files.createTempDirectory("decky").toFile()
         try {

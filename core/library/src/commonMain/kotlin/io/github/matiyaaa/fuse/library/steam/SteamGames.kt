@@ -311,6 +311,24 @@ object SteamGames {
         return if (changed) BinaryVdf.write(root) else existing
     }
 
+    /**
+     * How Fuse's entry for [game] starts once written into [existing], as [write] sets it: its
+     * program and folder (quoted, as Steam keeps them) and its launch options, the person's own
+     * beside `--run` kept on a Fast Start entry already there. For changes made through Steam's
+     * running client, which must match what a write would make.
+     */
+    fun startOf(existing: ByteArray?, fuseExe: String, game: SteamGameEntry, isFuse: (String) -> Boolean): Triple<String, String, String> {
+        val d = game.direct
+        val program = program(fuseExe, game)
+        val have = entries(parse(existing)).firstOrNull { ours(it, isFuse)?.first == game.gameId }
+        val options = when {
+            d != null -> directOptions(game.gameId, d)
+            have != null && isFuse(have.exe.trim('"')) && playId(have.options) == game.gameId -> fastStart(have.options, game.gameId)
+            else -> launchOptions(game.gameId)
+        }
+        return Triple(quote(program), quote(d?.workingDir ?: parentOf(program)), options)
+    }
+
     /** [options] (which start [gameId] through Fuse) starting it with Fast Start, the rest as it was. */
     private fun fastStart(options: String, gameId: Long): String =
         if (RUN.containsMatchIn(options)) options else options.replace(Regex("""(^|\s)--play(\s+$gameId)(?=\s|$)"""), "$1--run$2")

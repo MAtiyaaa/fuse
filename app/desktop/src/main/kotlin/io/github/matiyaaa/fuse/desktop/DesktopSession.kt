@@ -202,7 +202,7 @@ class DesktopSession(
                 decky?.close()
                 decky = null
                 if (on) {
-                    val bridge = io.github.matiyaaa.fuse.link.DeckyBridge(store, BuildInfo.VERSION, io.github.matiyaaa.fuse.link.DeckyBridge.discoveryFile())
+                    val bridge = io.github.matiyaaa.fuse.link.DeckyBridge(store, BuildInfo.VERSION, io.github.matiyaaa.fuse.link.DeckyBridge.discoveryFile(), live = platform.steam?.live)
                     if (bridge.start() > 0) decky = bridge else Log.warn("the Fuse Decky Bridge could not start")
                 }
             }

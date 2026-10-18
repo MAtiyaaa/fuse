@@ -18,7 +18,14 @@ import java.awt.image.BufferedImage
 import java.io.File
 import java.nio.file.Files
 import javax.imageio.ImageIO
+import io.github.matiyaaa.fuse.ui.shell.platform.SteamLiveChange
+import io.github.matiyaaa.fuse.ui.shell.platform.SteamLiveResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assume.assumeTrue
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -127,6 +134,54 @@ class DesktopSteamGamesTest {
         // The emulator went away: looking them over says so.
         mgba.delete()
         assertEquals(listOf(SteamHealthIssue.Kind.EMULATOR_GONE), steam.gamesHealth(setOf(12L, 3L)).map { it.kind })
+    }
+
+    @Test
+    fun withSteamOpenTheFusePluginPutsGamesInThroughSteamItself(): Unit = runBlocking {
+        assumeTrue(DesktopOs.current == DesktopOs.LINUX)
+        seed()
+        val before = File(config, "shortcuts.vdf").readBytes()
+        var open = true
+        val steam = DesktopSteam(KnownFolders(root.path, DesktopOs.LINUX), programPath = { fuse.path }, steamOpen = { open })
+        val live = steam.live!!
+        val seen = java.util.Collections.synchronizedList(mutableListOf<SteamLiveChange>())
+        // The plugin, as it runs inside Steam: it asks, makes each change and reports Steam's id for it.
+        val plugin = launch(Dispatchers.Default) {
+            while (isActive) {
+                for (c in live.take()) {
+                    seen += c
+                    live.done(c.id, SteamLiveResult(true, appId = c.appId ?: 3_000_000_012L))
+                }
+                delay(20)
+            }
+        }
+        try {
+            withTimeout(5_000) { while (!steam.changesLive) delay(10) }
+            val art = mapOf(12L to SteamArt(portrait = picture("box", 60, 90)))
+            val message = steam.addGames(listOf(zelda), art, collections = true).getOrThrow()
+            assertTrue("In Steam now" in message, message)
+            val add = seen.single()
+            assertEquals(SteamLiveChange.Op.ADD, add.op)
+            assertEquals("\"${fuse.path}\"", add.exe)
+            assertEquals("--run 12", add.launchOptions)
+            assertEquals(setOf("capsule"), add.art.keys)
+            // Steam's file isn't touched while it runs; Steam writes it when it quits.
+            assertContentEquals(before, File(config, "shortcuts.vdf").readBytes())
+            assertEquals(mapOf(12L to 3_000_000_012L), live.made())
+
+            // Again: Fuse knows it's there, so it's brought up to date, not added twice.
+            steam.addGames(listOf(zelda), art, collections = false).getOrThrow()
+            assertEquals(SteamLiveChange.Op.UPDATE, seen.last().op)
+            assertEquals(3_000_000_012L, seen.last().appId)
+
+            steam.removeGames(setOf(12L)).getOrThrow()
+            assertEquals(SteamLiveChange.Op.REMOVE, seen.last().op)
+            assertEquals(3_000_000_012L, seen.last().appId)
+            assertTrue(live.made().isEmpty())
+        } finally {
+            plugin.cancel()
+            open = false
+        }
     }
 
     @Test

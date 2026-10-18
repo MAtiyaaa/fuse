@@ -42,6 +42,9 @@ const emulators = callable("emulators");
 const updateAllEmulators = callable("emulators_update_all");
 const installAllEmulators = callable("emulators_install_all");
 const uninstallAllEmulators = callable("emulators_uninstall_all");
+const steamChanges = callable("steam_changes");
+const changeArt = callable("change_art");
+const changeDone = callable("change_done");
 /** The words to show for an answer that failed; null when it didn't. */
 function failure(answer) {
     if (!answer)
@@ -180,6 +183,94 @@ const FuseMark = ({ size = 20 }) => (window.SP_REACT.createElement("svg", { widt
     window.SP_REACT.createElement("path", { d: "M49.8 5h.4c15.68 0 23.52 0 29.51 3.05a28 28 0 0 1 12.24 12.24C95 26.28 95 34.12 95 49.8v.4c0 15.68 0 23.52-3.05 29.51a28 28 0 0 1-12.24 12.24C73.72 95 65.88 95 50.2 95h-.4c-15.68 0-23.52 0-29.51-3.05A28 28 0 0 1 8.05 79.71C5 73.72 5 65.88 5 50.2v-.4c0-15.68 0-23.52 3.05-29.51A28 28 0 0 1 20.29 8.05C26.28 5 34.12 5 49.8 5Z", stroke: "currentColor", strokeWidth: 10 }),
     window.SP_REACT.createElement("path", { d: "M28 70c14 0 16-36 36-36 3.2 0 5.2-1.5 6-4", stroke: "currentColor", strokeWidth: 10, strokeLinecap: "round" }),
     window.SP_REACT.createElement("circle", { cx: 70, cy: 30, r: 9, fill: "#FF6A3D" })));
+
+const ASSET = { capsule: 0, hero: 1, logo: 2, header: 3, icon: 4 };
+const EVERY_MS = 2000;
+/** Makes [c] in Steam; the entry's id in Steam, or throws with why it couldn't. */
+async function make(c) {
+    const apps = SteamClient?.Apps;
+    if (!apps)
+        throw new Error("Steam's client isn't reachable from this plugin");
+    switch (c.op) {
+        case "ADD": {
+            const appId = await apps.AddShortcut(c.name, c.exe, c.startDir, c.launchOptions);
+            if (typeof appId !== "number" || appId <= 0)
+                throw new Error("Steam didn't make the entry");
+            // Some Steam builds name a new shortcut after its program: the name Fuse gave it, then.
+            apps.SetShortcutName(appId, c.name);
+            apps.SetShortcutLaunchOptions(appId, c.launchOptions);
+            await pictures(c, appId);
+            return appId;
+        }
+        case "UPDATE": {
+            if (!c.appId)
+                throw new Error("No entry to change");
+            // Its name is the person's: only how it starts changes.
+            apps.SetShortcutExe(c.appId, c.exe);
+            apps.SetShortcutStartDir(c.appId, c.startDir);
+            apps.SetShortcutLaunchOptions(c.appId, c.launchOptions);
+            await pictures(c, c.appId);
+            return c.appId;
+        }
+        case "REMOVE": {
+            if (!c.appId)
+                throw new Error("No entry to take out");
+            apps.RemoveShortcut(c.appId);
+            return c.appId;
+        }
+    }
+    throw new Error("Unknown change");
+}
+/** Gives the entry the pictures Fuse sends with the change; a picture Steam refuses doesn't undo the entry. */
+async function pictures(c, appId) {
+    for (const kind of Object.keys(c.art ?? {})) {
+        const type = ASSET[kind];
+        if (type === undefined)
+            continue;
+        try {
+            const art = await changeArt(c.id, kind);
+            if (failure(art) || !art.data || (art.format !== "png" && art.format !== "jpg"))
+                continue;
+            await SteamClient.Apps.SetCustomArtworkForApp(appId, art.data, art.format, type);
+        }
+        catch {
+            // The entry stays; its picture can be given again from Fuse.
+        }
+    }
+}
+let busy = false;
+/** One round: the waiting changes, each made and reported in turn. Never throws. */
+async function round() {
+    if (busy)
+        return;
+    busy = true;
+    try {
+        const answer = await steamChanges();
+        if (failure(answer) || !answer.changes?.length)
+            return;
+        for (const c of answer.changes) {
+            try {
+                const appId = await make(c);
+                await changeDone(c.id, true, appId ?? null, null);
+            }
+            catch (e) {
+                await changeDone(c.id, false, null, e instanceof Error ? e.message : String(e)).catch(() => undefined);
+            }
+        }
+    }
+    catch {
+        // Fuse isn't running or answering: the next round asks again.
+    }
+    finally {
+        busy = false;
+    }
+}
+/** Starts asking; the function it returns stops it. */
+function startLiveChanges() {
+    const timer = setInterval(() => void round(), EVERY_MS);
+    void round();
+    return () => clearInterval(timer);
+}
 
 /**
  * What the plugin reads from Steam's own client, defensively: each lookup returns nothing rather
@@ -381,6 +472,14 @@ var index = definePlugin(() => {
     // turned them off. Nothing here may throw: a failing plugin must never take Decky down with it.
     let unpatch = () => { };
     let unloaded = false;
+    // Fuse's changes to Steam's library, made through Steam's running client while it runs.
+    let stopLive = () => { };
+    try {
+        stopLive = startLiveChanges();
+    }
+    catch {
+        stopLive = () => { };
+    }
     menuOff()
         .catch(() => true)
         .then((off) => {
@@ -404,6 +503,12 @@ var index = definePlugin(() => {
         icon: window.SP_REACT.createElement(FuseMark, null),
         onDismount() {
             unloaded = true;
+            try {
+                stopLive();
+            }
+            catch {
+                // Nothing is asked any more either way.
+            }
             try {
                 unpatch();
             }

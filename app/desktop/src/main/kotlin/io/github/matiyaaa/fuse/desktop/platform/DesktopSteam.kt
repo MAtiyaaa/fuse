@@ -18,6 +18,8 @@ import io.github.matiyaaa.fuse.library.steam.SteamShortcut
 import io.github.matiyaaa.fuse.library.steam.SteamShortcuts
 import io.github.matiyaaa.fuse.library.steam.SteamStart
 import io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration
+import io.github.matiyaaa.fuse.ui.shell.platform.SteamLiveChange
+import io.github.matiyaaa.fuse.ui.shell.platform.SteamLiveQueue
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -42,6 +44,8 @@ internal class DesktopSteam(
     private val programPath: () -> String? = ::runningProgram,
     /** Fuse's data folder, where a restart of Steam leaves its job and its note; null: no restarts from inside Steam. */
     private val dataDir: String? = null,
+    /** Whether Steam is running; the system's process list unless a test says otherwise. */
+    private val steamOpen: (() -> Boolean)? = null,
 ) : SteamIntegration {
     override val gameMode: Boolean get() = GameMode.active
 
@@ -137,7 +141,8 @@ internal class DesktopSteam(
 
     override suspend fun addGamesRestartingSteam(games: List<SteamGameEntry>, art: Map<Long, SteamArt>, collections: Boolean): Result<String> {
         if (games.isEmpty()) return Result.success("Nothing to add.")
-        if (!steamRunning()) return addGames(games, art, collections)
+        // Steam's running client takes them through the plugin: no restart needed.
+        if (!steamRunning() || changesLive) return addGames(games, art, collections)
         return mutation.withLock {
             withContext(Dispatchers.IO) {
                 val executable = program() ?: return@withContext Result.failure(IllegalStateException("Run Fuse from its AppImage or installed copy: Steam starts these games through it."))
@@ -297,20 +302,83 @@ internal class DesktopSteam(
     override suspend fun addGames(games: List<SteamGameEntry>, art: Map<Long, SteamArt>, collections: Boolean): Result<String> {
         if (games.isEmpty()) return Result.success("Nothing to add.")
         if (steamRunning()) {
-            waitingGames?.cancel()
-            waitingGames = watcher.launch {
-                // Steam is never closed for this: Fuse waits for it to be gone, then writes.
-                while (steamRunningNow()) delay(STEAM_POLL_MS)
-                mutation.withLock { writeGames(games, art, collections) }
-                    .onSuccess { Log.info("Steam: games added after Steam closed") }
-                    .onFailure { Log.warn("Steam: adding games after Steam closed failed", it) }
-            }
+            // With the Fuse Decky plugin there, Steam's running client makes them now.
+            addLive(games, art, collections)?.let { return it }
+            // Steam is never closed for this: Fuse waits for it to be gone, then writes.
+            addWhenClosed(games, art, collections)
             return Result.success(if (games.size == 1) "It goes into Steam's library when Steam next closes. Steam isn't closed for it." else "They go into Steam's library when Steam next closes. Steam isn't closed for it.")
         }
         return mutation.withLock { withContext(Dispatchers.IO) { writeGames(games, art, collections) } }
     }
 
     override val waitingForSteamGames: Boolean get() = waitingGames?.isActive == true
+
+    override val live: SteamLiveQueue? = if (DesktopOs.current == DesktopOs.LINUX) SteamLiveQueue(System::currentTimeMillis) else null
+
+    /**
+     * [games] put in Steam through the Fuse Decky plugin while Steam runs (bridge protocol 2): each
+     * new one added, each of Fuse's brought up to date, with their pictures, exactly as a write of
+     * the file would make them. Steam writes them into its file when it quits; collections, which
+     * Steam keeps apart, follow then. Null when the plugin isn't there; games it didn't make go the
+     * usual way, when Steam closes.
+     */
+    private suspend fun addLive(games: List<SteamGameEntry>, art: Map<Long, SteamArt>, collections: Boolean): Result<String>? {
+        val queue = live?.takeIf { it.connected } ?: return null
+        val exe = program() ?: return null
+        val ready = prepared(games)
+        val lists = withContext(Dispatchers.IO) { userLists().mapNotNull { runCatching { it.readBytes() }.getOrNull() } }
+        val known = lists.fold(HashMap<Long, Long>()) { m, b -> m.apply { SteamGames.inSteam(b, ::fuseProgram).forEach { (k, v) -> putIfAbsent(k, v) } } }
+        val made = queue.made()
+        val plans = lists.mapNotNull { SteamGames.plan(it, exe, ready, ::fuseProgram) }.ifEmpty { listOfNotNull(SteamGames.plan(null, exe, ready, ::fuseProgram)) }
+        val changes = ArrayList<SteamLiveChange>()
+        for (g in ready.distinctBy { it.gameId }) {
+            val actions = plans.mapNotNull { p -> p.firstOrNull { it.entry.gameId == g.gameId }?.action }
+            val appId = made[g.gameId] ?: known[g.gameId]
+            if (appId == null && SteamGameAction.ELSEWHERE in actions) continue
+            if (appId != null && made[g.gameId] == null && actions.all { it == SteamGameAction.UNCHANGED }) continue
+            val (program, dir, options) = SteamGames.startOf(lists.firstOrNull { SteamGames.inSteam(it, ::fuseProgram).containsKey(g.gameId) }, exe, g, ::fuseProgram)
+            val pictures = art[g.gameId]?.let(::liveArt).orEmpty()
+            changes += if (appId == null) {
+                SteamLiveChange(op = SteamLiveChange.Op.ADD, gameId = g.gameId, name = g.name, exe = program, startDir = dir, launchOptions = options, art = pictures)
+            } else {
+                SteamLiveChange(op = SteamLiveChange.Op.UPDATE, gameId = g.gameId, appId = appId, name = g.name, exe = program, startDir = dir, launchOptions = options)
+            }
+        }
+        if (changes.isEmpty()) return Result.success("Already in Steam's library, as they are.")
+        val results = queue.offer(changes)
+        val failed = changes.indices.filter { !results[it].ok }.map { changes[it].gameId }.toSet()
+        results.filter { !it.ok }.forEach { Log.warn("Steam: the Fuse plugin couldn't make a change: ${it.message}") }
+        // What it didn't make, and the collections, go in when Steam next closes.
+        val later = games.filter { it.gameId in failed }
+        if (later.isNotEmpty() || collections) addWhenClosed(later.ifEmpty { games }, art, collections)
+        val inNow = changes.size - failed.size
+        return Result.success(
+            when {
+                inNow == 0 -> "Steam didn't take them through the Fuse plugin, so they go in when Steam next closes."
+                failed.isNotEmpty() -> "$inNow in Steam now; the rest go in when Steam next closes."
+                inNow == 1 -> "In Steam now, through the Fuse plugin." + if (collections) " Its collection follows when Steam next closes." else ""
+                else -> "$inNow in Steam now, through the Fuse plugin." + if (collections) " Their collections follow when Steam next closes." else ""
+            },
+        )
+    }
+
+    /** Fuse's pictures for a live change, by Steam's asset kinds: only files that are there. */
+    private fun liveArt(art: SteamArt): Map<String, String> = listOfNotNull(
+        art.portrait?.let { "capsule" to it }, art.hero?.let { "hero" to it }, art.logo?.let { "logo" to it },
+        art.wide?.let { "header" to it }, art.icon?.let { "icon" to it },
+    ).filter { File(it.second).isFile }.toMap()
+
+    /** Writes [games] (and their collections) once Steam has closed by itself; Steam is never closed for it. */
+    private fun addWhenClosed(games: List<SteamGameEntry>, art: Map<Long, SteamArt>, collections: Boolean) {
+        waitingGames?.cancel()
+        waitingGames = watcher.launch {
+            while (steamRunningNow()) delay(STEAM_POLL_MS)
+            live?.steamClosed()
+            mutation.withLock { writeGames(games, art, collections) }
+                .onSuccess { Log.info("Steam: games written after Steam closed") }
+                .onFailure { Log.warn("Steam: writing games after Steam closed failed", it) }
+        }
+    }
 
     private fun writeGames(asked: List<SteamGameEntry>, art: Map<Long, SteamArt>, collections: Boolean): Result<String> {
         val games = prepared(asked)
@@ -363,7 +431,31 @@ internal class DesktopSteam(
         return Result.success(if (parts.isEmpty()) "Already in Steam's library, as they are." else parts.joinToString(", ").replaceFirstChar { it.uppercase() } + ". Start Steam to see them.")
     }
 
-    override suspend fun removeGames(gameIds: Set<Long>?): Result<String> = mutation.withLock {
+    override suspend fun removeGames(gameIds: Set<Long>?): Result<String> {
+        if (steamRunning()) removeLive(gameIds)?.let { return it }
+        return removeFromFiles(gameIds)
+    }
+
+    /**
+     * Fuse's entries for [gameIds] (null: all) taken out through the Fuse Decky plugin while Steam
+     * runs. Null when the plugin isn't there. Steam writes its file without them when it quits.
+     */
+    private suspend fun removeLive(gameIds: Set<Long>?): Result<String>? {
+        val queue = live?.takeIf { it.connected } ?: return null
+        val lists = withContext(Dispatchers.IO) { userLists().mapNotNull { runCatching { it.readBytes() }.getOrNull() } }
+        val ids = HashMap<Long, Long>()
+        lists.forEach { b -> SteamGames.inSteam(b, ::fuseProgram).forEach { (k, v) -> ids.putIfAbsent(k, v) } }
+        ids.putAll(queue.made())
+        val changes = ids.filterKeys { gameIds == null || it in gameIds }.map { (game, app) -> SteamLiveChange(op = SteamLiveChange.Op.REMOVE, gameId = game, appId = app) }
+        if (changes.isEmpty()) return Result.success("None of them were in Steam's library.")
+        val done = queue.offer(changes).count { it.ok }
+        if (done < changes.size) return Result.failure(IllegalStateException("Steam didn't take them all out through the Fuse plugin. Close Steam, then try again."))
+        // Collections Fuse made for them are put right once Steam closes.
+        addWhenClosed(emptyList(), emptyMap(), collections = true)
+        return Result.success(if (done == 1) "1 game is out of Steam's library." else "$done games are out of Steam's library.")
+    }
+
+    private suspend fun removeFromFiles(gameIds: Set<Long>?): Result<String> = mutation.withLock {
         withContext(Dispatchers.IO) {
             if (steamRunningNow()) return@withContext Result.failure(IllegalStateException("Close Steam first: it rewrites its library when it quits."))
             var removed = 0
@@ -632,7 +724,7 @@ internal class DesktopSteam(
      */
     private fun gameRunningNow(): Boolean = SystemSteamProcessOps(fuseProgram = { program() }, fuseGameId = { null }).gameRunning()
 
-    private fun steamRunningNow(): Boolean = when (DesktopOs.current) {
+    private fun steamRunningNow(): Boolean = steamOpen?.invoke() ?: when (DesktopOs.current) {
         DesktopOs.WINDOWS -> Processes.run(listOf("tasklist", "/FI", "IMAGENAME eq steam.exe", "/NH"), timeoutMs = 3_000)?.stdout?.contains("steam.exe", ignoreCase = true) == true
         DesktopOs.MACOS -> Processes.run(listOf("pgrep", "-x", "steam_osx"), timeoutMs = 3_000)?.exitCode == 0
         DesktopOs.LINUX -> Processes.run(listOf("pgrep", "-x", "steam"), timeoutMs = 3_000)?.exitCode == 0

@@ -100,6 +100,12 @@ val deckyPlugin = tasks.register<Sync>("deckyPlugin") {
     from(rootProject.layout.projectDirectory.dir("tools/decky/fuse")) {
         include("plugin.json", "package.json", "main.py", "README.md", "dist/index.js")
     }
+    // The plugin carries the version of the Fuse that carries it, which is what Settings compares.
+    val version = fuseVersion
+    inputs.property("fuseVersion", version)
+    filesMatching("package.json") {
+        filter { line -> line.replace(Regex("""^(\s*"version"\s*:\s*)"[^"]*""""), "$1\"$version\"") }
+    }
     into(layout.buildDirectory.dir("generated/decky/decky/Fuse"))
 }
 

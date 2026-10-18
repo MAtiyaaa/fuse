@@ -122,6 +122,7 @@ jobs:
           npx tsc --noEmit
           npx rollup -c
           python3 -c "import ast; ast.parse(open('main.py').read())"
+          python3 -m unittest discover -s tests -v
 
       - name: Package the plugin as Decky installs it
         run: |

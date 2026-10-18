@@ -721,7 +721,10 @@ on the first start, keeping each game's play time, favourite, edits and art.
 A game's options, or a system page's, can put Fuse's games in Steam's library as non-Steam games
 (`userdata/<user>/config/shortcuts.vdf`, written only while Steam is closed, with a copy kept for
 Undo), each with Fuse's art and in a Steam collection for its system (`SteamGames`,
-`DesktopSteam`). Settings, Library, Steam, How Steam Starts Them picks how they start:
+`DesktopSteam`). With the Fuse Decky plugin loaded, they go in while Steam runs instead, through
+Steam's own running client (bridge protocol 2, see
+[tools/decky/fuse/README.md](tools/decky/fuse/README.md)). Settings, Library, Steam, How Steam
+Starts Them picks how they start:
 
 - **Fuse Fast Start** (the default): the entry runs `Fuse --run <id>`. Fuse opens only what
   starting one game needs (its database, its secret store and Fuse One's rounds for the saves; no

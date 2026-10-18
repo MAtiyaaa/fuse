@@ -82,6 +82,29 @@ export interface Emulators extends Failure {
   busy?: number;
 }
 
+/** A change Fuse asks Steam's running client to make (bridge protocol 2). */
+export interface SteamChange {
+  id: number;
+  op: "ADD" | "UPDATE" | "REMOVE";
+  gameId: number;
+  appId?: number | null;
+  name: string;
+  exe: string;
+  startDir: string;
+  launchOptions: string;
+  /** The pictures Fuse has for it: each kind (capsule, hero, logo, header, icon) to its format, fetched with [changeArt]. */
+  art?: Record<string, string>;
+}
+
+export interface SteamChanges extends Failure {
+  changes?: SteamChange[];
+}
+
+export interface ChangeArt extends Failure {
+  format?: "png" | "jpg";
+  data?: string;
+}
+
 export const hello = callable<[], Hello>("hello");
 export const status = callable<[], Status>("status");
 export const steamGame = callable<[appId: number], SteamGame>("steam_game");
@@ -95,6 +118,9 @@ export const emulators = callable<[], Emulators>("emulators");
 export const updateAllEmulators = callable<[], Result>("emulators_update_all");
 export const installAllEmulators = callable<[], Result>("emulators_install_all");
 export const uninstallAllEmulators = callable<[], Result>("emulators_uninstall_all");
+export const steamChanges = callable<[], SteamChanges>("steam_changes");
+export const changeArt = callable<[changeId: number, kind: string], ChangeArt>("change_art");
+export const changeDone = callable<[changeId: number, ok: boolean, appId: number | null, message: string | null], Result>("change_done");
 
 /** The words to show for an answer that failed; null when it didn't. */
 export function failure(answer: Failure | null | undefined): string | null {

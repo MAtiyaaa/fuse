@@ -116,8 +116,10 @@ internal fun AppState.addToSteam(cards: List<GameCard>, what: String) {
             "Each starts with Fuse Fast Start: no Fuse window, with its emulator, saves and play time as in Fuse, and Fuse's own art."
         }
         val message = (lines + listOf("$how Systems become Steam collections, and Settings, Library, Steam can undo it.")).joinToString("\n\n")
-        if (!open) {
-            confirm = ConfirmSpec(title = "Add $what to Steam?", message = message, confirmLabel = "Add") { add { steam.addGames(games, art, collections = true) } }
+        // Steam closed, or open with the Fuse Decky plugin there to put them in through Steam itself.
+        if (!open || steam.changesLive) {
+            val live = if (open) "\n\nSteam is open, so the Fuse plugin puts them in through Steam now; their collections follow when Steam next closes." else ""
+            confirm = ConfirmSpec(title = "Add $what to Steam?", message = message + live, confirmLabel = "Add") { add { steam.addGames(games, art, collections = true) } }
             return@launch
         }
         // Steam is open: it writes its library when it quits. Restart it now (asked here, never
@@ -145,7 +147,8 @@ internal fun AppState.removeFromSteam(cards: List<GameCard>, what: String) {
     val steam = platform.steam ?: return
     confirm = ConfirmSpec(
         title = "Remove $what from Steam?",
-        message = "Only the entries Fuse made leave Steam's library. The games stay in Fuse, and your other shortcuts stay as they are. Close Steam first.",
+        message = "Only the entries Fuse made leave Steam's library. The games stay in Fuse, and your other shortcuts stay as they are." +
+            if (steam.changesLive) "" else " Close Steam first.",
         confirmLabel = "Remove",
         destructive = true,
     ) {

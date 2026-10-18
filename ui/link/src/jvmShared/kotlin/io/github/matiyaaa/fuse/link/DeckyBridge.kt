@@ -55,6 +55,8 @@ class DeckyBridge(
     private val version: String,
     private val discovery: File,
     random: SecureRandom = SecureRandom(),
+    /** Fuse's changes to Steam's library waiting for the plugin to make them in Steam's running client. */
+    private val live: io.github.matiyaaa.fuse.ui.shell.platform.SteamLiveQueue? = null,
 ) : AutoCloseable {
     private val token: String = ByteArray(24).also(random::nextBytes).joinToString("") { "%02x".format(it) }
     private var server: EmbeddedServer<*, *>? = null
@@ -93,6 +95,27 @@ class DeckyBridge(
                     call.allowedTo(ExtensionScope.CHANGE_LIBRARY) {
                         val ids = runCatching { Json.parseToJsonElement(call.receiveText()).jsonObject["appIds"]?.jsonArray?.mapNotNull { it.jsonPrimitive.longOrNull } }.getOrNull()
                         if (ids.isNullOrEmpty()) call.bad() else call.json(addSteam(ids.take(MAX_IMPORT)))
+                    }
+                }
+                // Protocol 2: Fuse's changes to Steam's library, made by the plugin in Steam's running client.
+                get("/v1/steam/changes") { call.allowedTo(ExtensionScope.CHANGE_LIBRARY) { call.json(steamChanges()) } }
+                get("/v1/steam/changes/{id}/art/{kind}") {
+                    call.allowedTo(ExtensionScope.CHANGE_LIBRARY) {
+                        val id = call.parameters["id"]?.toLongOrNull() ?: return@allowedTo call.bad()
+                        val answer = changeArt(id, call.parameters["kind"].orEmpty()) ?: return@allowedTo call.respondText(error("Not found"), ContentType.Application.Json, HttpStatusCode.NotFound)
+                        call.json(answer)
+                    }
+                }
+                post("/v1/steam/changes/{id}/done") {
+                    call.allowedTo(ExtensionScope.CHANGE_LIBRARY) {
+                        val id = call.parameters["id"]?.toLongOrNull() ?: return@allowedTo call.bad()
+                        val body = runCatching { Json.parseToJsonElement(call.receiveText()).jsonObject }.getOrNull() ?: return@allowedTo call.bad()
+                        val result = io.github.matiyaaa.fuse.ui.shell.platform.SteamLiveResult(
+                            ok = body["ok"]?.jsonPrimitive?.content == "true",
+                            appId = body["appId"]?.jsonPrimitive?.longOrNull?.takeIf { it > 0 },
+                            message = body["message"]?.jsonPrimitive?.content?.take(MESSAGE_CHARS),
+                        )
+                        call.json(buildJsonObject { put("ok", live?.done(id, result) == true) })
                     }
                 }
                 get("/v1/emulators") { call.allowedTo(ExtensionScope.EMULATORS) { call.json(emulators()) } }
@@ -256,6 +279,48 @@ class DeckyBridge(
         }
     }
 
+    /**
+     * The changes waiting for Steam's running client; asking says the plugin is here. Pictures are
+     * named by kind and file format only: the plugin fetches each through [changeArt], never by path.
+     */
+    private suspend fun steamChanges(): JsonObject {
+        val waiting = live?.take().orEmpty()
+        return buildJsonObject {
+            putJsonArray("changes") {
+                for (c in waiting) add(buildJsonObject {
+                    put("id", c.id)
+                    put("op", c.op.name)
+                    put("gameId", c.gameId)
+                    c.appId?.let { put("appId", it) }
+                    put("name", c.name)
+                    put("exe", c.exe)
+                    put("startDir", c.startDir)
+                    put("launchOptions", c.launchOptions)
+                    putJsonObject("art") { for ((kind, path) in c.art) imageFormat(path)?.let { put(kind, it) } }
+                })
+            }
+        }
+    }
+
+    /** One picture of change [id], as base64 for Steam's client: only a kind the change has, only a picture file. */
+    private suspend fun changeArt(id: Long, kind: String): JsonObject? {
+        val path = live?.change(id)?.art?.get(kind) ?: return null
+        val format = imageFormat(path) ?: return null
+        val file = File(path).takeIf { it.isFile && it.length() in 1..MAX_ART_BYTES } ?: return null
+        val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { file.readBytes() }
+        return buildJsonObject {
+            put("format", format)
+            put("data", java.util.Base64.getEncoder().encodeToString(bytes))
+        }
+    }
+
+    /** "png" or "jpg" for a picture file Steam's client takes, by its name; null for anything else. */
+    private fun imageFormat(path: String): String? = when (path.substringAfterLast('.', "").lowercase()) {
+        "png" -> "png"
+        "jpg", "jpeg" -> "jpg"
+        else -> null
+    }
+
     private fun emulators(): JsonObject {
         val ops = store.appStore
         val state = ops.state.value
@@ -298,8 +363,17 @@ class DeckyBridge(
     private fun error(message: String) = buildJsonObject { put("error", message) }.toString()
 
     companion object {
-        /** The bridge's protocol: a plugin built for another refuses, rather than guessing. */
-        const val PROTOCOL = 1
+        /**
+         * The bridge's protocol: a plugin built for another refuses, rather than guessing. 2: Fuse's
+         * changes to Steam's library go through Steam's running client (`/v1/steam/changes`).
+         */
+        const val PROTOCOL = 2
+
+        /** The largest picture handed to Steam's client through the bridge. */
+        const val MAX_ART_BYTES = 12L * 1024 * 1024
+
+        /** The most of a failure's words kept from the plugin. */
+        const val MESSAGE_CHARS = 300
         const val LOOPBACK = "127.0.0.1"
 
         /** The most Steam games one import asks for. */

@@ -17,8 +17,14 @@ import urllib.request
 import decky
 
 # The bridge protocol this plugin speaks. A Fuse speaking another one is reported, never guessed at.
-PROTOCOL = 1
+# 2: Fuse's changes to Steam's library go through Steam's running client (steam_changes).
+PROTOCOL = 2
 TIMEOUT_S = 4
+
+# Steam's picture kinds for an entry, as Fuse names them in a change (ELibraryAssetType in @decky/ui).
+ART_KINDS = ("capsule", "hero", "logo", "header", "icon")
+# The most of a failure's words sent back to Fuse.
+MESSAGE_CHARS = 300
 
 
 def _discovery_candidates():
@@ -52,10 +58,11 @@ def _call(method, path, body=None):
     if found is None:
         return {"error": "not-running", "message": "Fuse isn't running. Open Fuse, then try again."}
     if found["protocol"] != PROTOCOL:
-        return {
-            "error": "incompatible",
-            "message": "This Fuse plugin doesn't match Fuse " + found["version"] + ". Update the plugin from Fuse (Settings, Steam).",
-        }
+        if found["protocol"] < PROTOCOL:
+            words = "This Fuse plugin is newer than Fuse " + found["version"] + ". Update Fuse, then try again."
+        else:
+            words = "This Fuse plugin is older than Fuse " + found["version"] + ". Update the plugin from Fuse (Settings, Steam)."
+        return {"error": "incompatible", "message": words}
     data = None
     headers = {"Authorization": "Bearer " + found["token"]}
     if body is not None:
@@ -164,6 +171,30 @@ class Plugin:
 
     async def emulators_uninstall_all(self):
         return await _ask("POST", "/v1/emulators/uninstall-all")
+
+    async def steam_changes(self):
+        """The changes Fuse asks Steam's running client to make; asking also tells Fuse the plugin is here."""
+        return await _ask("GET", "/v1/steam/changes")
+
+    async def change_art(self, change_id, kind):
+        """One picture for a change, as Fuse sends it (base64): only the kinds Steam has, only by the change's id."""
+        change_id = _app_id(change_id)
+        if change_id is None or kind not in ART_KINDS:
+            return {"error": "bad-request"}
+        return await _ask("GET", "/v1/steam/changes/" + str(change_id) + "/art/" + kind)
+
+    async def change_done(self, change_id, ok, app_id=None, message=None):
+        """How a change went in Steam: made (with the entry's id in Steam) or not, and why."""
+        change_id = _app_id(change_id)
+        if change_id is None:
+            return {"error": "bad-request"}
+        body = {"ok": bool(ok)}
+        app_id = _app_id(app_id)
+        if app_id is not None:
+            body["appId"] = app_id
+        if isinstance(message, str) and message:
+            body["message"] = message[:MESSAGE_CHARS]
+        return await _ask("POST", "/v1/steam/changes/" + str(change_id) + "/done", body)
 
     async def _main(self):
         decky.logger.info("Fuse plugin loaded; it talks to Fuse only while Fuse runs")
