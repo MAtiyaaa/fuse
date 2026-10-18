@@ -34,6 +34,17 @@ class RefreshRatesTest {
         assertNull(RefreshRates.pick(listOf(Float.NaN, -1f, 0f)))
         assertEquals(1, RefreshRates.pick(listOf(Float.NaN, 120f, Float.POSITIVE_INFINITY)))
     }
+    @Test fun calmRateIsNearSixtyAndOnlyWellBelowTheFullOne() {
+        assertEquals(0, RefreshRates.calm(listOf(60f, 120f), 120f))
+        assertEquals(1, RefreshRates.calm(listOf(30f, 60f, 90f, 120f), 120f))
+        assertEquals(0, RefreshRates.calm(listOf(59.94f, 90f), 90f))
+        assertEquals(1, RefreshRates.calm(listOf(48f, 50f, 144f), 144f))
+        // Nothing worth switching to: the screen tops out near 60, or has nothing slower.
+        assertNull(RefreshRates.calm(listOf(60f), 60f))
+        assertNull(RefreshRates.calm(listOf(60f, 72f), 72f))
+        assertNull(RefreshRates.calm(listOf(120f), 120f))
+        assertNull(RefreshRates.calm(listOf(24f, 30f, 120f), 120f))
+    }
     @Test fun legacySettingsKeepDisplayMaximumAndCapPersists() {
         assertEquals(0, Json.decodeFromString<DisplayProfile>("{}").maxRefreshRate)
         val settings = DisplayProfile(maxRefreshRate = 90)

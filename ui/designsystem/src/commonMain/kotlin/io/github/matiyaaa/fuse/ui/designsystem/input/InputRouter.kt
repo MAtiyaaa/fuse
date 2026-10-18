@@ -612,7 +612,8 @@ class InputRouter(
      */
     fun stick(x: Float, y: Float, source: InputSource = InputSource.GAMEPAD) {
         redirectTo?.let { it.stick(x, y, source); return }
-        io.github.matiyaaa.fuse.ui.fuseline.FramePacing.input()
+        // A stick resting in its dead zone (a worn one trembles there) isn't someone using Fuse.
+        if (abs(x) >= profile.stickDeadzone || abs(y) >= profile.stickDeadzone) io.github.matiyaaa.fuse.ui.fuseline.FramePacing.input()
         val threshold = max(profile.navigationThreshold, profile.stickDeadzone)
         // Hysteresis: once pressed, release only when clearly back toward the centre.
         val releaseAt = threshold * 0.7f

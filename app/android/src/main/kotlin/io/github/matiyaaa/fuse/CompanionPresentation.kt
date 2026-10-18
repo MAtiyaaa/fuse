@@ -181,7 +181,7 @@ internal class CompanionPresentation(
     }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
-        RefreshHold.active(window)
+        if (io.github.matiyaaa.fuse.input.GamepadInput.meaningful(event)) RefreshHold.active(window)
         return app.activities.main?.forwardMotion(event) == true || super.dispatchGenericMotionEvent(event)
     }
 }
