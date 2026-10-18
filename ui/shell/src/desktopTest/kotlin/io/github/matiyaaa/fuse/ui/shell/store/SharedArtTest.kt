@@ -20,10 +20,12 @@ class SharedArtTest {
             MediaItem(MediaKind.LOGO, MediaSource.ROMM, remoteUrl = "https://romm.home/logo.png"),
             MediaItem(MediaKind.ICON, MediaSource.LOCAL_FOLDER, localPath = "/games/icon.png"),
             MediaItem(MediaKind.GRID, MediaSource.SCREENSCRAPER, localPath = "/cache/only-here.png"),
+            MediaItem(MediaKind.SQUARE, MediaSource.SCREENSCRAPER, remoteUrl = "https://neoclone.screenscraper.fr/api2/mediaJeu.php?media=box&ssid=me&sspassword=secret"),
         ) + (0 until 5).map { MediaItem(MediaKind.SCREENSHOT, MediaSource.LIBRETRO, remoteUrl = "https://thumbnails.libretro.com/s$it.png", order = it) })
         val shared = DefaultReachOps.sharedArt(media)
         // One cover (the first the device chose), three screenshots; nothing the person picked, no
-        // RomM art (it needs this device's sign-in), no folder's own pictures, nothing without an address.
+        // RomM art (it needs this device's sign-in), no folder's own pictures, nothing without an address,
+        // and never an address with a password in it.
         assertEquals(listOf("BOXART" to "https://cdn.steamgriddb.com/grid/a.png"), shared.filter { it.kind == "BOXART" }.map { it.kind to it.url })
         assertEquals(3, shared.count { it.kind == "SCREENSHOT" })
         assertEquals(setOf("BOXART", "SCREENSHOT"), shared.map { it.kind }.toSet())

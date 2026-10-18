@@ -997,6 +997,8 @@ internal class DefaultReachOps(
             if (media == null) return emptyList()
             return media.items
                 .filter { it.source in SHAREABLE && it.kind in io.github.matiyaaa.fuse.model.MediaKind.Fillable && it.remoteUrl?.startsWith("http") == true }
+                // Never an address with a key or password in it (links are kept without them; this holds even for an old one).
+                .filter { io.github.matiyaaa.fuse.integrations.redact(it.remoteUrl) == it.remoteUrl }
                 .sortedBy { it.order }
                 .groupBy { it.kind }
                 .flatMap { (kind, items) -> items.take(if (kind == io.github.matiyaaa.fuse.model.MediaKind.SCREENSHOT) SHARED_SCREENSHOTS else 1) }
