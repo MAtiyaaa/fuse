@@ -251,6 +251,37 @@ class ContentInstallStoreTest {
         val mgs = withTimeout(20_000) { store.library.games(GameQuery()).first { it.size == 3 } }.first { it.title.startsWith("Metal Gear") }
         assertNull(store.content.view(mgs.id))
     }
+
+    /**
+     * A PS3's and a Vita's system software, installed through each emulator's own installer
+     * (RPCS3's `--headless --installfw`, Vita3K's `--firmware`), the file never copied or changed;
+     * anything that isn't a `.pup`, or an installer that fails, is said and nothing is claimed.
+     */
+    @Test
+    fun systemSoftwareGoesThroughEachEmulatorsOwnInstaller(): Unit = runBlocking {
+        val services = services()
+        val store = createFuseStore(services, scope)
+        val pup = File(root, "PS3UPDAT.PUP").apply { writeBytes(ByteArray(64) { 1 }) }
+        assertEquals("RPCS3", store.content.firmwareInstaller(PlatformId("ps3")))
+        assertEquals("Vita3K", store.content.firmwareInstaller(PlatformId("psvita")))
+        assertNull(store.content.firmwareInstaller(PlatformId("snes")))
+
+        val words = store.content.installFirmware(PlatformId("ps3"), pup.absolutePath).getOrThrow()
+        assertEquals("RPCS3 installed PS3UPDAT.PUP", words)
+        assertEquals(listOf("/usr/bin/rpcs3", "--headless", "--installfw", pup.absolutePath), services.installerRuns.single().argv)
+
+        val vita = File(root, "PSVUPDAT.PUP").apply { writeBytes(ByteArray(64) { 2 }) }
+        store.content.installFirmware(PlatformId("psvita"), vita.absolutePath).getOrThrow()
+        assertEquals(listOf("/usr/bin/Vita3K", "--firmware", vita.absolutePath), services.installerRuns.last().argv)
+        assertTrue(pup.readBytes().all { it == 1.toByte() }, "the file is left as it was")
+
+        // Not a .pup, or the installer failing: said, and nothing claimed.
+        val zip = File(root, "firmware.zip").apply { writeBytes(ByteArray(8)) }
+        assertTrue(store.content.installFirmware(PlatformId("ps3"), zip.absolutePath).exceptionOrNull()?.message.orEmpty().contains(".pup"))
+        services.contentInstaller = { InstallerResult(1, "E SYS: bad PUP") }
+        assertTrue(store.content.installFirmware(PlatformId("ps3"), pup.absolutePath).isFailure)
+        assertEquals(3, services.installerRuns.size, "the zip was never handed over")
+    }
 }
 
 /** Package and PARAM.SFO bytes laid out as RPCS3's unpkg.h and PSF.cpp read them. */
@@ -325,4 +356,5 @@ private object Pkg {
         2, contentId, 0x15, 0, 2, null,
         sfo("APP_VER" to "01.00", "CATEGORY" to category, "TITLE" to "Gravity Rush", "TITLE_ID" to contentId.substring(7, 16)),
     )
+
 }

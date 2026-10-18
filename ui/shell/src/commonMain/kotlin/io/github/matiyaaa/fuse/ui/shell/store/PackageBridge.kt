@@ -129,6 +129,9 @@ interface DesktopInstaller {
     /** Puts the kept earlier version [kept] back in place of [current]; returns the program's path. */
     suspend fun restorePrevious(kept: String, current: String?): String = throw UnsupportedOperationException("Fuse can't go back to an earlier version here.")
 
+    /** Lets the kept earlier version [kept] go (Fuse keeps a few); false when it had none there. */
+    suspend fun forgetKept(kept: String): Boolean = false
+
     /** Removes a program Fuse put in place (its file, its folder or its app). */
     suspend fun remove(path: String): Boolean
 

@@ -106,6 +106,11 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import io.github.matiyaaa.fuse.romm.RommAccess
+import io.github.matiyaaa.fuse.romm.RommTask
+import io.github.matiyaaa.fuse.romm.RommWrite
+import io.github.matiyaaa.fuse.romm.RommWrites
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 /** A picture RomM keeps, for Fuse's image loader: fetched with Fuse's sign-in and kept for offline. */
@@ -350,7 +355,7 @@ internal class DefaultRommOps(
 
     private suspend fun quickProbe(base: String): Boolean = withContext(Dispatchers.Default) {
         kotlinx.coroutines.withTimeoutOrNull(PROBE_MS) {
-            runCatching { ctx.services.http.get("$base/api/heartbeat").status.isSuccess() }.getOrDefault(false)
+            runCatching { ctx.services.http.get("$base/api/heartbeat") { RommClient.gate(access, this) }.status.isSuccess() }.getOrDefault(false)
         } ?: false
     }
 
@@ -361,10 +366,14 @@ internal class DefaultRommOps(
             return@withLock
         }
         val cred = credential()
-        val c = RommClient(ctx.services.http, routes(s), cred, ctx.services.appVersion)
+        access = loadAccess()
+        val c = RommClient(ctx.services.http, routes(s), cred, ctx.services.appVersion, access)
         client = c
         // The mirror shows at once, whatever the server says.
-        _state.value = _state.value.copy(link = RommLink.CONNECTING, syncedAt = mirror.syncedAt(server), games = mirror.count(server))
+        _state.value = _state.value.copy(
+            link = RommLink.CONNECTING, syncedAt = mirror.syncedAt(server), games = mirror.count(server),
+            accessHost = access?.host.orEmpty(), changesWaiting = changesLock.withLock { loadChanges().size },
+        )
         publishLists()
         if (cred == null) {
             _state.update { it.copy(link = RommLink.SIGNED_OUT, problem = null) }
@@ -379,6 +388,7 @@ internal class DefaultRommOps(
                     canUpload = c.may(RommScopes.ROMS_WRITE) && c.capabilities.chunkedUploads,
                     canScan = c.may(RommScopes.TASKS_RUN) && c.capabilities.tokenScans,
                     canSyncSaves = c.may(RommScopes.ASSETS_WRITE) && c.may(RommScopes.DEVICES_WRITE) && c.capabilities.saveSync,
+                    canSendChanges = mayTakeChanges(c),
                     problem = null,
                 )
             }
@@ -419,6 +429,8 @@ internal class DefaultRommOps(
                     if (first || ctx.now() - mirror.syncedAt(server) >= settings.refreshMinutes.coerceIn(5, 1440) * 60_000L) syncNow(full = false)
                     // Saves that couldn't go while RomM was away go now, in the order they waited.
                     saveService?.takeIf { it.waiting > 0 }?.let { s -> runCatching { s.sendWaiting() } }
+                    // So do the person's changes to its games.
+                    if (settings.sendChanges && _state.value.changesWaiting > 0) runCatching { sendChanges() }
                 } else if (link == RommLink.OFFLINE) {
                     connectLock.withLock { }
                     runCatching { client?.heartbeat() }.onSuccess {
@@ -465,13 +477,233 @@ internal class DefaultRommOps(
     val noticeFlow = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 4)
     override val notices: Flow<String> get() = noticeFlow
 
+    // ------------------------------------------------------------------ Cloudflare Access
+
+    /** The Cloudflare Access service token for the outside address's host, when one is kept. */
+    @kotlin.concurrent.Volatile private var access: RommAccess? = null
+
+    private suspend fun loadAccess(): RommAccess? = ctx.services.secrets.get(ACCESS_SECRET)?.let {
+        runCatching { json.decodeFromString(RommAccess.serializer(), it) }.getOrNull()
+    }
+
+    override suspend fun setAccess(clientId: String, clientSecret: String): Result<String> = runCatching {
+        val remote = settings.remoteAddress.trim()
+        val host = RommAccess.hostOf(remote)
+        if (!remote.startsWith("https://", ignoreCase = true) || host.isBlank()) {
+            throw RommException("Add the outside address first, starting with https://. The token only ever goes there.")
+        }
+        if (clientId.isBlank() || clientSecret.isBlank()) throw RommException("Both the Client ID and the Client Secret are needed.")
+        val a = RommAccess(host, clientId.trim(), clientSecret.trim())
+        ctx.services.secrets.put(ACCESS_SECRET, json.encodeToString(RommAccess.serializer(), a))
+        access = a
+        client?.access = a
+        _state.update { it.copy(accessHost = host) }
+        connect()
+        host
+    }
+
+    override suspend fun removeAccess() {
+        ctx.services.secrets.remove(ACCESS_SECRET)
+        access = null
+        client?.access = null
+        _state.update { it.copy(accessHost = "") }
+    }
+
+    // ------------------------------------------------------------------ RomM on this computer
+
+    override suspend fun homeServer(): io.github.matiyaaa.fuse.ui.shell.store.RommHomeView? {
+        val h = ctx.services.rommHome ?: return null
+        val e = h.engine() ?: return null
+        val spec = h.current()
+        return io.github.matiyaaa.fuse.ui.shell.store.RommHomeView(e.label, spec, spec != null && h.running())
+    }
+
+    override suspend fun startHome(library: String, port: Int, thisComputerOnly: Boolean): Result<String> = runCatching {
+        val h = ctx.services.rommHome ?: throw RommException("RomM can't be set up on this device.")
+        val spec = io.github.matiyaaa.fuse.romm.RommHome.Spec(library, ctx.services.dataDir.trimEnd('/', '\\') + "/romm-home", port, thisComputerOnly)
+        h.start(spec).getOrThrow()
+        val address = io.github.matiyaaa.fuse.romm.RommHome.address(spec)
+        // Ready once it answers: its database comes up first.
+        val until = ctx.now() + HOME_READY_MS
+        while (!quickProbe(address)) {
+            if (ctx.now() > until) throw RommException("RomM started but doesn't answer at $address yet. Give it a minute, then Test Connection.")
+            delay(HOME_LOOK_MS)
+        }
+        setAddresses(address, settings.remoteAddress, RouteMode.AUTO)
+        address
+    }
+
+    override suspend fun stopHome(): Result<Unit> {
+        val h = ctx.services.rommHome ?: return Result.failure(RommException("RomM can't be set up on this device."))
+        return h.stop()
+    }
+
+    // ------------------------------------------------------------------ the person's changes
+
+    /** Changes waiting to go to RomM, in the order made ([RommWrites]); read from Fuse's database once. */
+    private var changes: List<RommWrite>? = null
+    private val changesLock = Mutex()
+    private val changesJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+    /** Under [changesLock]. */
+    private suspend fun loadChanges(): List<RommWrite> = changes ?: (
+        ctx.data.cache.getOrNull(NS, "changes:$server", ctx.now())?.let {
+            runCatching { changesJson.decodeFromString(ListSerializer(RommWrite.serializer()), it) }.getOrNull()
+        } ?: emptyList()
+        ).also { changes = it }
+
+    /** Under [changesLock]. */
+    private suspend fun keepChanges(list: List<RommWrite>) {
+        changes = list
+        ctx.data.cache.put(NS, "changes:$server", changesJson.encodeToString(ListSerializer(RommWrite.serializer()), list), ctx.now(), ttlMs = null)
+        _state.update { it.copy(changesWaiting = list.size) }
+    }
+
+    /** The server takes changes from apps (RomM 5.4) and the sign-in may send them. */
+    private fun mayTakeChanges(c: RommClient): Boolean =
+        c.may(RommScopes.ROMS_USER_WRITE) && c.may(RommScopes.COLLECTIONS_WRITE) &&
+            (c.capabilities.userProps || c.capabilities.collectionRoms || c.capabilities.playSessions)
+
+    /**
+     * The person changed [game] in the library: when it is a game from RomM and they chose to send
+     * their changes, [make]'s change waits to go (and goes shortly, when RomM answers).
+     */
+    internal fun changed(game: GameId, make: (Long) -> RommWrite) {
+        if (!settings.enabled || !settings.sendChanges) return
+        ctx.scope.launch {
+            val romId = romOf(game) ?: ctx.data.games.get(game)?.links?.rommRomId ?: return@launch
+            changesLock.withLock { keepChanges(RommWrites.add(loadChanges(), make(romId))) }
+            sendSoon()
+        }
+    }
+
+    private var sendJob: Job? = null
+
+    private fun sendSoon() {
+        if (sendJob?.isActive == true) return
+        sendJob = ctx.scope.launch {
+            delay(SEND_AFTER_MS)
+            runCatching { sendChanges() }
+        }
+    }
+
+    override suspend fun setSendChanges(on: Boolean): Result<Unit> = runCatching {
+        val c = client
+        if (on && c != null && _state.value.link == RommLink.ONLINE && !mayTakeChanges(c)) {
+            throw RommException(
+                if (c.capabilities.userProps || c.capabilities.collectionRoms || c.capabilities.playSessions) "Your RomM sign-in may not send changes. Pair with RomM again to allow it."
+                else "This RomM server doesn't take changes from apps. RomM 5.4 and later do.",
+            )
+        }
+        write { it.copy(sendChanges = on) }
+        // Off: what waited is forgotten, so nothing goes later that the person no longer wants sent.
+        if (!on) changesLock.withLock { keepChanges(emptyList()) } else sendSoon()
+    }
+
+    override suspend fun sendChangesNow(): Int = runCatching { sendChanges() }.getOrDefault(0)
+
+    /** RomM's favourites collection for this server, once found or made. */
+    private var favourites: Pair<String, Long>? = null
+
+    private suspend fun favouritesOf(c: RommClient): Long =
+        favourites?.takeIf { it.first == server }?.second ?: c.favourites().also { favourites = server to it }
+
+    /**
+     * Sends what waits, in order, while RomM takes it; how many went. A change RomM can't take now
+     * (away, busy, the sign-in not allowed) stays, and so does everything after it; one it never
+     * will (the game gone from RomM, a server without that part) is let go.
+     */
+    private suspend fun sendChanges(): Int {
+        val c = client ?: return 0
+        if (!settings.sendChanges || _state.value.link != RommLink.ONLINE) return 0
+        var sent = 0
+        while (true) {
+            val batch = changesLock.withLock { RommWrites.next(loadChanges()) }
+            if (batch.isEmpty()) break
+            val failed = try {
+                send(c, batch)
+                null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: RommException) {
+                e
+            }
+            if (failed != null && (failed.forbidden || failed.status == 0 || failed.status == 429 || failed.status >= 500)) {
+                if (failed.forbidden) _state.update { it.copy(problem = "Your RomM sign-in may not send changes. Pair with RomM again to allow it.") }
+                break
+            }
+            changesLock.withLock { keepChanges(RommWrites.without(loadChanges(), batch)) }
+            if (failed == null) sent += batch.size
+        }
+        return sent
+    }
+
+    /** [batch] to RomM: a run of play sessions together, anything else alone. */
+    private suspend fun send(c: RommClient, batch: List<RommWrite>) {
+        when (val w = batch.first()) {
+            is RommWrite.Played -> if (c.capabilities.playSessions) c.playSessions(batch.filterIsInstance<RommWrite.Played>().map { it.session })
+            is RommWrite.Hidden -> if (c.capabilities.userProps) c.setHidden(w.romId, w.on)
+            is RommWrite.Favourite -> if (c.capabilities.collectionRoms) {
+                try {
+                    c.collectionRoms(favouritesOf(c), listOf(w.romId), into = w.on)
+                } catch (e: RommException) {
+                    // The favourites collection went (deleted in RomM): found or made again, once.
+                    if (e.status != 404) throw e
+                    favourites = null
+                    c.collectionRoms(favouritesOf(c), listOf(w.romId), into = w.on)
+                }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ scans
+
+    private var scanJob: Job? = null
+
+    /** Follows scan [taskId] while RomM runs it: its counts on the RomM tab, and a word when it ends. */
+    private fun followScan(taskId: String) {
+        val c = client ?: return
+        if (!c.capabilities.taskStatus) return
+        scanJob?.cancel()
+        scanJob = ctx.scope.launch {
+            val until = ctx.now() + SCAN_LOOK_FOR_MS
+            var last: RommTask? = null
+            _state.update { it.copy(scan = io.github.matiyaaa.fuse.romm.RommScanStats()) }
+            try {
+                while (ctx.now() < until) {
+                    val t = runCatching { c.task(taskId) }.getOrNull()
+                    if (t != null) {
+                        last = t
+                        _state.update { it.copy(scan = t.scan ?: io.github.matiyaaa.fuse.romm.RommScanStats()) }
+                        if (t.done) break
+                    }
+                    delay(SCAN_LOOK_MS)
+                }
+            } finally {
+                _state.update { it.copy(scan = null) }
+            }
+            val t = last ?: return@launch
+            if (!t.done) return@launch
+            val found = t.scan?.newRoms ?: 0
+            noticeFlow.tryEmit(
+                when {
+                    t.failed -> "RomM's scan stopped before the end"
+                    found == 1 -> "RomM's scan found 1 new game"
+                    found > 1 -> "RomM's scan found $found new games"
+                    else -> "RomM's scan is done"
+                },
+            )
+            refresh()
+        }
+    }
+
     // ------------------------------------------------------------------ set-up and sign-in
 
     override suspend fun test(local: String, remote: String, mode: RouteMode): RommTest = withContext(Dispatchers.Default) {
         suspend fun at(address: String): Pair<Boolean, String?> {
             if (address.isBlank()) return false to null
             val base = RoutePicker.clean(address)
-            val c = RommClient(ctx.services.http, RoutePicker(base, null, RouteMode.LOCAL, ctx.scope, ctx::now, { true }), null)
+            val c = RommClient(ctx.services.http, RoutePicker(base, null, RouteMode.LOCAL, ctx.scope, ctx::now, { true }), null, access = access ?: loadAccess())
             return try {
                 true to c.heartbeat()
             } catch (e: Exception) {
@@ -507,10 +739,10 @@ internal class DefaultRommOps(
     }
 
     override suspend fun startPairing(upload: Boolean): Result<RommDeviceCode> = runCatching {
-        val c = client ?: RommClient(ctx.services.http, routes(settings), null, ctx.services.appVersion).also { client = it }
+        val c = client ?: RommClient(ctx.services.http, routes(settings), null, ctx.services.appVersion, access).also { client = it }
         if (c.capabilities.version.isEmpty()) c.detect()
         if (!c.capabilities.deviceAuth) throw RommException("This RomM server doesn't pair this way. Use a pairing code or a token from RomM instead.", code = "no-device-auth")
-        c.startPairing(deviceId(), ctx.services.deviceName, ctx.host.name.lowercase(), (if (upload) RommScopes.UPLOAD_AND_SCAN else RommScopes.READ) + RommScopes.SAVES)
+        c.startPairing(deviceId(), ctx.services.deviceName, ctx.host.name.lowercase(), (if (upload) RommScopes.UPLOAD_AND_SCAN else RommScopes.READ) + RommScopes.SAVES + RommScopes.CHANGES)
     }
 
     override suspend fun awaitPairing(code: RommDeviceCode): Result<String> = runCatching {
@@ -531,7 +763,7 @@ internal class DefaultRommOps(
     }
 
     override suspend fun usePairCode(code: String): Result<String> = runCatching {
-        val c = client ?: RommClient(ctx.services.http, routes(settings), null).also { client = it }
+        val c = client ?: RommClient(ctx.services.http, routes(settings), null, access = access).also { client = it }
         signedIn(c.exchangeCode(code))
     }
 
@@ -545,7 +777,7 @@ internal class DefaultRommOps(
 
     /** Keeps [credential] in the secret store once it is shown to work, and connects with it. */
     private suspend fun signedIn(credential: RommCredential): String {
-        val c = RommClient(ctx.services.http, routes(settings), credential, ctx.services.appVersion)
+        val c = RommClient(ctx.services.http, routes(settings), credential, ctx.services.appVersion, access)
         c.detect()
         val account = c.me()
         ctx.services.secrets.put(SECRET, json.encodeToString(RommCredential.serializer(), credential))
@@ -1091,6 +1323,8 @@ internal class DefaultRommOps(
             }
         }
 
+        override fun scanStarted(taskId: String) = followScan(taskId)
+
         override suspend fun uploaded(job: RommUploadJob, item: TransferItem, romId: Long?) {
             if (job.skipped.isNotEmpty()) noticeFlow.tryEmit(if (job.skipped.size == job.files.size) "RomM already had ${item.title}" else "Sent ${item.title} to RomM (it already had some of it)")
             else noticeFlow.tryEmit("Sent ${item.title} to RomM")
@@ -1200,6 +1434,20 @@ internal class DefaultRommOps(
         const val SAME_NAME_MS = 60_000L
         private const val SAME_NAME_KEEP = 500
         const val SECRET = "romm.credential"
+
+        /** Where the Cloudflare Access service token is kept ([RommAccess]). */
+        const val ACCESS_SECRET = "romm.access"
+
+        /** How long RomM on this computer is given to answer once started, and how often it is asked. */
+        private const val HOME_READY_MS = 5 * 60_000L
+        private const val HOME_LOOK_MS = 3_000L
+
+        /** How long after a change it goes, so a burst of them goes together. */
+        private const val SEND_AFTER_MS = 3_000L
+
+        /** How often a scan RomM runs is looked at, and for how long at most. */
+        private const val SCAN_LOOK_MS = 2_000L
+        private const val SCAN_LOOK_FOR_MS = 30 * 60_000L
 
         /** Fuse Identity's kind for "Not this game" on RomM. */
         const val VETO_KIND = "romm"

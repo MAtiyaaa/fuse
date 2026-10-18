@@ -156,6 +156,9 @@ class DesktopFuseServices private constructor(
         person = person,
     )
 
+    override val rommHome: io.github.matiyaaa.fuse.ui.shell.store.RommHomeHost =
+        DesktopRommHome(File(dirs.data, "romm-home"), secrets) { io.github.matiyaaa.fuse.desktop.Log.info(it) }
+
     override fun writeCacheFile(relativePath: String, content: String): String? = writeBelow(cacheDir, relativePath, content)
 
     override suspend fun cacheFile(relativePath: String, content: suspend () -> ByteArray): String? = withContext(Dispatchers.IO) {

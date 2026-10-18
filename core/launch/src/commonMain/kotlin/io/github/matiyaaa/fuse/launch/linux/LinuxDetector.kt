@@ -10,7 +10,8 @@ import io.github.matiyaaa.fuse.model.InstalledEmulator
 /**
  * Finds installed Linux emulators with pure functions over a [LinuxEnvironment]. Search order per
  * emulator, like ES-DE's find rules: program on `$PATH`, then Flatpak, then AppImages and portable
- * folders in [searchDirs]. No EmuDeck layout is assumed.
+ * folders in [searchDirs]. No EmuDeck layout is assumed; an install EmuDeck made is found like any
+ * other and marked as EmuDeck's ([LinuxSuites]).
  */
 object LinuxDetector {
     /** Home-relative folders searched for AppImages and portable builds (ES-DE's staticpath folders plus ~/Downloads). */
@@ -113,6 +114,7 @@ object LinuxDetector {
         val versions = if (flatpaks.isEmpty()) emptyMap() else env.flatpakVersions()
         val dirs = searchDirs(env, extraDirs)
         val identified = identifyAppImages(env, dirs, defs)
+        val emuDeck = LinuxSuites.emuDeckHere(env)
         val found = defs.mapNotNull { def ->
             locate(env, def, flatpaks, dirs, identified)?.let { f ->
                 // What version is installed, where it can be told without running it: the Store compares it with the latest release.
@@ -121,7 +123,7 @@ object LinuxDetector {
                     LinuxInstallKind.APPIMAGE -> versionInName(f.appId) ?: identified[f.appId]?.let(::versionInName)
                     else -> null
                 }
-                toInstalled(def, f).copy(version = version)
+                toInstalled(def, f).copy(version = version, installedBy = LinuxSuites.ownerOf(env, f, emuDeck))
             }
         }
         val gio = findOnPath(env, "gio")

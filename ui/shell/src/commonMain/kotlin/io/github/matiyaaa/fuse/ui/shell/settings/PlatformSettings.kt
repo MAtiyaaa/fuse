@@ -331,7 +331,38 @@ internal fun AppState.biosChoice(platform: io.github.matiyaaa.fuse.model.Platfor
         toasts.show(if (on) "$name firmware marked as set up" else "Fuse goes by its own check for $name again")
     }
     val romm = store.prefs.value.romm.let { it.enabled && it.configured }
+    // System software an emulator installs itself (a PS3's, a Vita's): through that emulator's own installer.
+    val inside = io.github.matiyaaa.fuse.library.PlatformCatalog.byId(platform.value)?.bios?.installedInEmulator == true
+    scope.launch {
+        val installer = if (inside && !bios.confirmed && bios.state != io.github.matiyaaa.fuse.model.BiosState.READY) store.content.firmwareInstaller(platform) else null
+        firmwareChoice(platform, name, bios, romm, installer, ::mark)
+    }
+}
+
+private fun AppState.firmwareChoice(
+    platform: io.github.matiyaaa.fuse.model.PlatformId,
+    name: String,
+    bios: io.github.matiyaaa.fuse.model.BiosStatus,
+    romm: Boolean,
+    installer: String?,
+    mark: (Boolean) -> Unit,
+) {
     val options = buildList {
+        if (installer != null) {
+            add(MenuAction("install", "Install With $installer", FuseIcons.PackagePlus, detail = "Choose its system software file (.pup): $installer installs it itself", onSelect = {
+                choice = null
+                scope.launch {
+                    val file = this@firmwareChoice.platform.storage.pickFile("Choose $name system software", "System software", listOf("pup")) ?: return@launch
+                    toasts.show("$installer is installing it", io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.INFO, icon = FuseIcons.PackagePlus)
+                    store.content.installFirmware(platform, file)
+                        .onSuccess { words ->
+                            toasts.show(words, io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.SUCCESS, icon = FuseIcons.CircleCheck)
+                            store.sources.refreshBios()
+                        }
+                        .onFailure { toasts.show(it.message ?: "It didn't install", io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.WARNING) }
+                }
+            }))
+        }
         if (romm && !bios.confirmed && bios.state != io.github.matiyaaa.fuse.model.BiosState.READY) {
             add(MenuAction("romm", "Download from RomM", FuseIcons.Download, detail = "What your RomM server has for $name. Files already here are never replaced", onSelect = {
                 choice = null

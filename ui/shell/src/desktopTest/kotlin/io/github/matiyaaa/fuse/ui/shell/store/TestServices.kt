@@ -64,6 +64,10 @@ internal class FakeServices(
     /** Answers a test gives first, before the fake's own (null passes to them). */
     @Volatile var web: (suspend io.ktor.client.engine.mock.MockRequestHandleScope.(io.ktor.client.request.HttpRequestData) -> io.ktor.client.request.HttpResponseData?)? = null
 
+    /** RomM on this computer, as a test sets it up (none by default). */
+    @Volatile var home: RommHomeHost? = null
+    override val rommHome: RommHomeHost? get() = home
+
     /** The Store's view of the system, when a test gives it one (Android has one; desktop doesn't). */
     override var packages: PackageBridge? = null
 
@@ -99,7 +103,12 @@ internal class FakeServices(
     /** RetroArch's installed cores, when a test gives it a cores folder Fuse can see; null when it can't. */
     @Volatile var retroArchCores: Set<String>? = null
 
+    /** Emulation setups the fake finds ("EmuDeck", "RetroDECK"); none by default. */
+    @Volatile var suites: Set<String> = emptySet()
+
     override val emulators = object : EmulatorDetector {
+        override suspend fun suites(): Set<String> = this@FakeServices.suites
+
         override fun retroArchCorePath(installed: InstalledEmulator, core: String): String? =
             retroArchCores?.takeIf { core in it }?.let { "/usr/lib/libretro/${core}_libretro.so" }
 

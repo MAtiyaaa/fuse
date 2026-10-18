@@ -279,6 +279,32 @@ internal class DefaultContentOps(
         )
     }
 
+    /** The installed emulator for [platform] that installs its system software from a file, first in the system's order. */
+    private suspend fun firmwareTarget(platform: io.github.matiyaaa.fuse.model.PlatformId): Pair<EmulatorAdapter, InstalledEmulator>? {
+        if (ctx.installed.value.isEmpty()) emulators.detectNow()
+        val installed = ctx.installed.value
+        return ctx.registry.forPlatform(platform, ctx.host).filter { it.firmwareExtensions.isNotEmpty() }
+            .firstNotNullOfOrNull { a -> installed.firstOrNull { it.id == a.id }?.let { a to it } }
+    }
+
+    override suspend fun firmwareInstaller(platform: io.github.matiyaaa.fuse.model.PlatformId): String? = firmwareTarget(platform)?.second?.name
+
+    override suspend fun installFirmware(platform: io.github.matiyaaa.fuse.model.PlatformId, file: String): Result<String> = runCatching {
+        val files = ctx.services.emulatorFiles ?: error("Fuse can't run installers on this device.")
+        val (adapter, inst) = firmwareTarget(platform) ?: error("No emulator here installs it. Install RPCS3 or Vita3K first.")
+        val name = FsPath.name(file.replace('\\', '/'))
+        val command = adapter.firmwareInstall(inst, file) ?: error("${inst.name} installs system software from a .pup file, and $name isn't one.")
+        if (!ctx.services.fs.exists(file)) error("$name isn't there any more.")
+        val result = lock.withLock { files.runInstaller(InstallerRun(command.argv, command.workingDir, timeoutMs = FIRMWARE_MS)) { } }
+            ?: error("Fuse can't run installers on this device.")
+        when {
+            !result.started -> error("${inst.name} didn't start. Check it still opens, then try again.")
+            result.timedOut -> error("${inst.name} took too long and was stopped.")
+            result.exitCode != null && result.exitCode != 0 -> error("${inst.name} couldn't install $name.")
+        }
+        "${inst.name} installed $name"
+    }
+
     private suspend fun target(game: Game, kind: ContentEmulator): Target {
         if (ctx.installed.value.isEmpty()) emulators.detectNow()
         val installed = ctx.installed.value
@@ -358,6 +384,9 @@ internal class DefaultContentOps(
 
     private companion object {
         const val RECORDS = "content.installed"
+
+        /** How long an emulator is given to install system software. */
+        const val FIRMWARE_MS = 15 * 60_000L
         val NEAR_EXTENSIONS = setOf("pkg", "rap", "edat", "rif", "vpk", "zip", "cia")
 
         /** Azahar's exit codes for a failed install: its InstallStatus plus 2 (src/core/hle/service/am/am.h). */

@@ -131,6 +131,9 @@ internal class DefaultLibraryOps(
     /** RomM's save sync, when RomM is set up here. */
     @kotlin.concurrent.Volatile var rommSaves: io.github.matiyaaa.fuse.sync.romm.RommSaveService? = null
 
+    /** A change the person made to a game, for RomM when it is a game from RomM and they send their changes there. */
+    @kotlin.concurrent.Volatile var rommChange: ((GameId, (Long) -> io.github.matiyaaa.fuse.romm.RommWrite) -> Unit)? = null
+
     /** What runs after a game ends (its saves sent, its session counted), for [awaitPlayed]. */
     private val afterGame = mutableListOf<kotlinx.coroutines.Job>()
 
@@ -530,7 +533,11 @@ internal class DefaultLibraryOps(
         // Never in the future, never longer than a day: a clock that jumped isn't a session.
         val end = minOf(endedAt, ctx.now())
         if (end - startedAt !in 1..STEAM_SESSION_MAX_MS) return false
-        return data.playSessions.record(id, startedAt, end, io.github.matiyaaa.fuse.model.PlaySessionSource.STEAM).also { if (it) ctx.userChanged() }
+        return data.playSessions.record(id, startedAt, end, io.github.matiyaaa.fuse.model.PlaySessionSource.STEAM).also { recorded ->
+            if (!recorded) return@also
+            ctx.userChanged()
+            rommChange?.invoke(id) { romId -> io.github.matiyaaa.fuse.romm.RommWrite.Played(romId, startedAt, end) }
+        }
     }
 
     override fun frameGenerationReady(): Boolean = ctx.host == io.github.matiyaaa.fuse.model.Host.LINUX && ctx.services.frameGenerationReady()
@@ -950,6 +957,8 @@ internal class DefaultLibraryOps(
         // RomM's save sync sends it too, when it changed and RomM's didn't.
         active?.takeIf { it.id == sessionId }?.romm?.let { (romId, q) -> rommSaves?.let { rs -> afterGame { delay(ROMM_SETTLE_MS); rs.afterExit(q, romId) } } }
         val ended = data.playSessions.end(sessionId, ctx.now())
+        // RomM counts the session too, for a game from RomM, when the person sends their changes there.
+        ended?.endedAt?.let { end -> rommChange?.invoke(ended.gameId) { romId -> io.github.matiyaaa.fuse.romm.RommWrite.Played(romId, ended.startedAt, end) } }
         // Fuse Sync counts the session and keeps the save the game just wrote.
         val link = sync
         if (save != null && link != null && ended?.endedAt != null) {
@@ -1008,9 +1017,15 @@ internal class DefaultLibraryOps(
 
     // Edits -----------------------------------------------------------------------------------------
 
-    override suspend fun setFavorite(id: GameId, favorite: Boolean) = data.games.setFavorite(id, favorite).also { ctx.userChanged() }
+    override suspend fun setFavorite(id: GameId, favorite: Boolean) = data.games.setFavorite(id, favorite).also {
+        ctx.userChanged()
+        rommChange?.invoke(id) { romId -> io.github.matiyaaa.fuse.romm.RommWrite.Favourite(romId, favorite) }
+    }
 
-    override suspend fun setHidden(id: GameId, hidden: Boolean) = data.games.setHidden(id, hidden).also { ctx.userChanged() }
+    override suspend fun setHidden(id: GameId, hidden: Boolean) = data.games.setHidden(id, hidden).also {
+        ctx.userChanged()
+        rommChange?.invoke(id) { romId -> io.github.matiyaaa.fuse.romm.RommWrite.Hidden(romId, hidden) }
+    }
 
     override suspend fun setPinned(id: GameId, pinned: Boolean) = data.games.setPinned(id, pinned).also { ctx.userChanged() }
 

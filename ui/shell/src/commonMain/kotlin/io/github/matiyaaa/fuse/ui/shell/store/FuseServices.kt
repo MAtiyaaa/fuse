@@ -110,6 +110,9 @@ interface FuseServices {
         person: () -> String? = { null },
     ): io.github.matiyaaa.fuse.sync.romm.RommSaveService? = null
 
+    /** RomM on this computer through the Docker or Podman installed here ([RommHomeHost]); null where Fuse can't. */
+    val rommHome: RommHomeHost? get() = null
+
     /** Finds Jellyfin servers on the network; null where there is no way to. */
     val jellyfinDiscovery: io.github.matiyaaa.fuse.jellyfin.ServerDiscovery? get() = null
 
@@ -206,6 +209,9 @@ interface VolumeMonitor {
 interface EmulatorDetector {
     /** Every installed emulator Fuse has an adapter for. Runs off the main thread. */
     suspend fun detect(): List<InstalledEmulator>
+
+    /** Emulation setups here that keep emulators of their own ("EmuDeck", "RetroDECK"), so the Store can say so. */
+    suspend fun suites(): Set<String> = emptySet()
 
     /** Firmware folders of installed emulators that Fuse can read (RetroArch `system/`, Dolphin `Sys/`). */
     fun biosFolders(installed: List<InstalledEmulator>): List<String> = emptyList()
@@ -602,3 +608,25 @@ data class InstallerRun(
 
 /** How an installer run ended: its exit code (null when Fuse stopped it), and the end of what it printed. */
 data class InstallerResult(val exitCode: Int?, val output: String, val timedOut: Boolean = false, val started: Boolean = true)
+
+/**
+ * RomM on this computer ([io.github.matiyaaa.fuse.romm.RommHome]): Compose run through the Docker or
+ * Podman the person already has. Nothing runs except through [start] and [stop], which only the
+ * person's own choice calls.
+ */
+interface RommHomeHost {
+    /** The way to run Compose here, or null when neither Docker nor Podman is installed. */
+    suspend fun engine(): io.github.matiyaaa.fuse.romm.RommHome.Engine?
+
+    /** What was set up before, or null. */
+    suspend fun current(): io.github.matiyaaa.fuse.romm.RommHome.Spec?
+
+    /** Writes the Compose file for [spec] (its secrets made once, kept in the secret store) and starts RomM. */
+    suspend fun start(spec: io.github.matiyaaa.fuse.romm.RommHome.Spec): Result<Unit>
+
+    /** Stops RomM, keeping everything. */
+    suspend fun stop(): Result<Unit>
+
+    /** Whether its containers run now. */
+    suspend fun running(): Boolean
+}

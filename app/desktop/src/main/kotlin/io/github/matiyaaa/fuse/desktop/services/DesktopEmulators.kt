@@ -50,6 +50,10 @@ internal class DesktopEmulatorDetector(
         }
     }
 
+    override suspend fun suites(): Set<String> = withContext(Dispatchers.IO) {
+        if (os == DesktopOs.LINUX) io.github.matiyaaa.fuse.launch.linux.LinuxSuites.found(env) else emptySet()
+    }
+
     override fun biosFolders(installed: List<InstalledEmulator>): List<String> =
         (folders.retroArchSystemDirs(installed) + folders.biosRoots()).distinct()
 

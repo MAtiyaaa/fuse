@@ -63,6 +63,14 @@ class LinuxCommandAdapter(val def: LinuxEmulatorDef, override val host: Host = H
         return LaunchPlan.Command(id, invocation(installed) + args, workingDir = dir, target = LaunchTarget.File(path))
     }
 
+    override val firmwareExtensions: Set<String> get() = def.firmwareInstall?.extensions.orEmpty()
+
+    override fun firmwareInstall(installed: InstalledEmulator, path: String): LaunchPlan.Command? {
+        val spec = def.firmwareInstall ?: return null
+        if (path.substringAfterLast('.', "").lowercase() !in spec.extensions) return null
+        return LaunchPlan.Command(id, invocation(installed) + spec.args.map { it.replace("{FILE}", path) }, target = LaunchTarget.File(path))
+    }
+
     override fun installHint(kind: ContentKind): String? =
         def.installHint?.takeIf { kind == ContentKind.DLC || kind == ContentKind.UPDATE }
 

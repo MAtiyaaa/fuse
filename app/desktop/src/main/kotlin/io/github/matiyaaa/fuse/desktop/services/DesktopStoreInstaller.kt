@@ -98,14 +98,17 @@ internal class DesktopStoreInstaller(
      * Moves what an earlier install put in place ([previous], below [folder]) into Fuse's own
      * folder of earlier versions, out of the way of the new one and of emulator detection, and
      * returns where its program now is; null when there was nothing to keep or it couldn't be moved
-     * (the update then goes ahead as before, replacing it). Only one earlier version is kept per
-     * program: keeping another replaces it.
+     * (the update then goes ahead as before, replacing it). Each version kept has a shelf of its
+     * own (`<program>/<when>`), beside the ones kept before; [forgetKept] lets one go.
      */
     override suspend fun keepPrevious(name: String, previous: String): String? = withContext(Dispatchers.IO) {
         val program = File(previous)
         if (!inside(program) || !program.exists()) return@withContext null
         val top = topOf(program)
-        val shelf = File(kept, safeName(name)).apply { deleteRecursively(); mkdirs() }
+        val shelves = File(kept, safeName(name))
+        var stamp = System.currentTimeMillis()
+        while (File(shelves, stamp.toString()).exists()) stamp++
+        val shelf = File(shelves, stamp.toString()).apply { mkdirs() }
         val to = File(shelf, top.name)
         try {
             Files.move(top.toPath(), to.toPath(), StandardCopyOption.ATOMIC_MOVE)
@@ -118,20 +121,40 @@ internal class DesktopStoreInstaller(
     }
 
     /**
-     * Puts the kept earlier version ([kept], from [keepPrevious]) back where programs go, removing
+     * Puts a kept earlier version ([kept], from [keepPrevious]) back where programs go, removing
      * [current] (what replaced it) first; returns the restored program's path.
      */
     override suspend fun restorePrevious(kept: String, current: String?): String = withContext(Dispatchers.IO) {
         val program = File(kept)
-        val shelf = generateSequence(program) { it.parentFile }.firstOrNull { it.parentFile == this@DesktopStoreInstaller.kept }
-            ?: throw IOException("Fuse no longer has the earlier version.")
-        val top = shelf.listFiles()?.singleOrNull() ?: throw IOException("Fuse no longer has the earlier version.")
+        val shelf = shelfOf(program) ?: throw IOException("Fuse no longer has that earlier version.")
+        val top = shelf.listFiles()?.singleOrNull() ?: throw IOException("Fuse no longer has that earlier version.")
         current?.let { File(it) }?.takeIf { inside(it) }?.let { topOf(it).deleteRecursively() }
         val back = File(root, top.name)
         if (back.exists()) back.deleteRecursively()
         Files.move(top.toPath(), back.toPath(), StandardCopyOption.ATOMIC_MOVE)
-        shelf.deleteRecursively()
+        letGo(shelf)
         File(back, top.toPath().relativize(program.toPath()).toString()).takeIf { top != program }?.absolutePath ?: back.absolutePath
+    }
+
+    /** Lets a kept earlier version go ([kept], from [keepPrevious]), with its shelf. */
+    override suspend fun forgetKept(kept: String): Boolean = withContext(Dispatchers.IO) {
+        val shelf = shelfOf(File(kept))?.takeIf { it.exists() } ?: return@withContext false
+        letGo(shelf)
+        true
+    }
+
+    /** The shelf [program] is on: `<kept>/<program>/<when>` (or, kept before shelves had a time, `<kept>/<program>`). */
+    private fun shelfOf(program: File): File? {
+        val root = this.kept.absoluteFile
+        return generateSequence(program.absoluteFile) { it.parentFile }.firstOrNull { it.parentFile?.parentFile == root }
+            ?.takeIf { it.name.toLongOrNull() != null }
+            ?: generateSequence(program.absoluteFile) { it.parentFile }.firstOrNull { it.parentFile == root }?.takeIf { it.listFiles()?.size == 1 && it.listFiles()!!.single().name.toLongOrNull() == null }
+    }
+
+    /** [shelf] gone, and its program's folder too once nothing else is kept in it. */
+    private fun letGo(shelf: File) {
+        shelf.deleteRecursively()
+        shelf.parentFile?.takeIf { it.absoluteFile != kept.absoluteFile && it.list()?.isEmpty() == true }?.delete()
     }
 
     private fun safeName(name: String) = name.replace(Regex("[^A-Za-z0-9 ._-]"), "").trim().ifEmpty { "Program" }

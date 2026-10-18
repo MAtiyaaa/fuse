@@ -278,10 +278,20 @@ data class StoreInstall(
     val file: String? = null,
     val versionCode: Long = 0,
     val installedAt: Long = 0,
-    /** The earlier version an update replaced, kept to go back to (its program's path), and its version. */
+    /** The earlier version an update replaced, kept to go back to (its program's path), and its version (before [earlier]). */
     val previous: String? = null,
     val previousVersion: String? = null,
-)
+    /** The earlier versions kept to go back to, newest first. */
+    val earlier: List<KeptVersion> = emptyList(),
+) {
+    /** Every earlier version kept, newest first: [earlier], or the one a record from before it named. */
+    val kept: List<KeptVersion>
+        get() = earlier.ifEmpty { listOfNotNull(previous?.let { KeptVersion(it, previousVersion, installedAt) }) }
+}
+
+/** An earlier version of a program Fuse kept: where its program is now, which version it was, and when it was kept. */
+@Serializable
+data class KeptVersion(val path: String, val version: String? = null, val keptAt: Long = 0)
 
 /** Screenshots and recordings of Fuse's own screen. */
 @Serializable
@@ -636,6 +646,11 @@ data class FuseRommSettings(
     val placeBios: Boolean = true,
     /** Keep games' saves in step with RomM's save sync (games from RomM, or matched to it). */
     val saveSync: Boolean = false,
+    /**
+     * Send the person's changes to games from RomM back to it: favourites (RomM's favourites
+     * collection), games hidden or shown, and play sessions. Off until turned on.
+     */
+    val sendChanges: Boolean = false,
 )
 
 /**

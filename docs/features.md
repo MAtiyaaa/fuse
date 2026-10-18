@@ -54,7 +54,10 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
 - **Every Linux emulator in the Store**, installed by Fuse: AppImages, tarballs and 7-Zip
   archives as each project publishes them (Eden from its own server, with its Steam Deck and ROG
   Ally builds), and Flathub for the few that publish nothing of their own. The Emulators tab shows
-  the ones on the computer.
+  the ones on the computer. The last three versions an update replaced are kept to go back to, the
+  room an install needs is checked before a download, Update All says every update first, and an
+  app can be added by its GitHub, Codeberg, Forgejo or Gitea link with a look at what would install.
+  What EmuDeck installed is left to EmuDeck.
 - **RetroArch for every system it runs**, with ES-DE's cores in ES-DE's order, on Android, Linux,
   Windows and macOS.
 - **Pick an emulator** per system or per game. Forks and renamed builds are recognised by family, and

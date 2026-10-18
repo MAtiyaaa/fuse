@@ -179,6 +179,11 @@ object LinuxCatalog {
                 source = "RPCS3 rpcs3/rpcs3.cpp: --installpkg <path> (\"Forces the emulator to install this pkg file\"); with --headless it " +
                     "installs without a window and quits (main_window::InstallPackages(nullptr, ...)); .rap and .edat files are copied into exdata under their own names",
             ),
+            firmwareInstall = PackageInstallSpec(
+                setOf("pup"), listOf("--headless", "--installfw", "{FILE}"),
+                source = "RPCS3 rpcs3/rpcs3.cpp (v0.0.43): --installfw <path> (\"Forces the emulator to install this firmware file\"); " +
+                    "with --headless it installs without a window (main_window::InstallPup(nullptr, ...))",
+            ),
             limitations = listOf("Folder games are passed as the game folder (disc structure); a .ps3 file with a serial starts an installed game."),
         ),
         LinuxEmulatorDef(
@@ -303,6 +308,11 @@ object LinuxCatalog {
                 source = "Vita3K vita3k/config/src/config.cpp: --pkg <path> needs --zrif <key> (base64) and quits when installed; " +
                     "a .vpk/.zip given as content-path is installed (main.cpp install_archive), then started",
                 archives = setOf("vpk", "zip"),
+            ),
+            firmwareInstall = PackageInstallSpec(
+                setOf("pup"), listOf("--firmware", "{FILE}"),
+                source = "Vita3K vita3k/config/src/config.cpp (b4e35ed3): --firmware <path> (\"Path to the firmware file (.pup extension) to install\") " +
+                    "ends the command line with QuitRequested, and vita3k/main.cpp installs it (install_pup) and quits",
             ),
         ),
         LinuxEmulatorDef(

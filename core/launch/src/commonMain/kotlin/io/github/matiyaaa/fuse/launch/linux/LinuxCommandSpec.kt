@@ -59,6 +59,8 @@ data class LinuxEmulatorDef(
     val shortcutsOnly: Boolean = false,
     /** How it installs a package file from its command line, when it can. */
     val packageInstall: PackageInstallSpec? = null,
+    /** How it installs a console's system software (a `.pup`) from its command line, when it can. */
+    val firmwareInstall: PackageInstallSpec? = null,
 )
 
 /**

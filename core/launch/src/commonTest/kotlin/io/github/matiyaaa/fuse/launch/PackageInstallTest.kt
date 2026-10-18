@@ -35,6 +35,26 @@ class PackageInstallTest {
     }
 
     @Test
+    fun systemSoftwareGoesThroughTheEmulatorsOwnInstaller() {
+        val rpcs3 = registry[EmulatorId("linux.rpcs3")]!!
+        val flatpak = InstalledEmulator(rpcs3.id, "RPCS3", Host.LINUX, "net.rpcs3.RPCS3", platforms = setOf(PlatformId("ps3")), detectedVia = "Flatpak")
+        // RPCS3's --installfw, without a window.
+        assertEquals(listOf("flatpak", "run", "net.rpcs3.RPCS3", "--headless", "--installfw", "/fw/PS3UPDAT.PUP"), rpcs3.firmwareInstall(flatpak, "/fw/PS3UPDAT.PUP")!!.argv)
+        assertNull(rpcs3.firmwareInstall(flatpak, "/fw/Game.pkg"))
+        assertEquals(setOf("pup"), rpcs3.firmwareExtensions)
+        // Vita3K's --firmware, which quits once it is in.
+        val vita = registry[EmulatorId("linux.vita3k")]!!
+        val here = InstalledEmulator(vita.id, "Vita3K", Host.LINUX, "/usr/bin/Vita3K", platforms = setOf(PlatformId("psvita")), detectedVia = "PATH")
+        assertEquals(listOf("/usr/bin/Vita3K", "--firmware", "/fw/PSVUPDAT.PUP"), vita.firmwareInstall(here, "/fw/PSVUPDAT.PUP")!!.argv)
+        // On Windows too, from the same rules.
+        val windows = WindowsCatalog.adapters.first { it.id == EmulatorId("windows.rpcs3") }
+        val exe = InstalledEmulator(windows.id, "RPCS3", Host.WINDOWS, "C:/Emu/RPCS3/rpcs3.exe", platforms = setOf(PlatformId("ps3")), detectedVia = "Folder")
+        assertEquals(listOf("C:/Emu/RPCS3/rpcs3.exe", "--headless", "--installfw", "D:/fw/PS3UPDAT.PUP"), windows.firmwareInstall(exe, "D:/fw/PS3UPDAT.PUP")!!.argv)
+        // An emulator without one: nothing.
+        assertNull(registry[EmulatorId("linux.duckstation")]!!.firmwareInstall(flatpak, "/fw/PS3UPDAT.PUP"))
+    }
+
+    @Test
     fun windowsVita3kInstallsFromItsOwnFolder() {
         val vita = WindowsCatalog.adapters.first { it.id == EmulatorId("windows.vita3k") }
         val here = InstalledEmulator(vita.id, "Vita3K", Host.WINDOWS, "C:/Emu/Vita3K/Vita3K.exe", platforms = setOf(PlatformId("psvita")), detectedVia = "Folder")

@@ -163,8 +163,34 @@ object RommParse {
             smart = smart,
             romIds = o.arr("rom_ids").mapNotNull { (it as? JsonPrimitive)?.longOrNull },
             cover = o.str("path_cover_large") ?: o.str("path_cover_small"),
+            favorite = !smart && (o["is_favorite"] as? JsonPrimitive)?.booleanOrNull == true,
         )
     }
+
+    /**
+     * A task as `GET /api/tasks/{task_id}` (or the answer that queued it) has it: its id, RomM's job
+     * status, and a scan's counts from `meta.scan_stats`. Null when it names no task.
+     */
+    fun task(e: JsonElement): RommTask? {
+        val o = e.obj()
+        val id = o.str("task_id") ?: return null
+        val stats = (o["meta"] as? JsonObject)?.get("scan_stats") as? JsonObject
+        return RommTask(
+            id = id,
+            status = o.str("status")?.lowercase() ?: "queued",
+            scan = stats?.let { s ->
+                fun n(key: String) = s.long(key)?.toInt() ?: 0
+                RommScanStats(
+                    totalPlatforms = n("total_platforms"), scannedPlatforms = n("scanned_platforms"),
+                    totalRoms = n("total_roms"), scannedRoms = n("scanned_roms"),
+                    newRoms = n("new_roms"), identifiedRoms = n("identified_roms"),
+                )
+            },
+        )
+    }
+
+    /** How many sessions RomM took (`created_count`) from `POST /api/play-sessions`. */
+    fun sessionsCreated(e: JsonElement): Int = e.obj().long("created_count")?.toInt() ?: 0
 
     /** Every game's id, from `/api/roms/identifiers`. */
     fun identifiers(e: JsonElement): List<Long> = e.items().mapNotNull { (it as? JsonPrimitive)?.longOrNull }

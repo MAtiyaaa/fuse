@@ -27,6 +27,7 @@ and redact credentials from every error message (`redact()`, see
 - [Cartridge bridge protocol](#cartridge-bridge-protocol)
 - [GitHub Releases](#github-releases)
 - [The Store: Obtainium Emulation Pack](#the-store-obtainium-emulation-pack)
+- [The Store on a computer](#the-store-on-a-computer)
 - [Steam and Windows launchers](#steam-and-windows-launchers)
 - [RPCS3 compatibility list](#rpcs3-compatibility-list)
 - [Jellyfin](#jellyfin)
@@ -46,8 +47,9 @@ and redact credentials from every error message (`redact()`, see
 | System art (Art Book Next) | Nothing | The pack's system name (for example `snes`) in file URLs on raw.githubusercontent.com | When a platform's system art or the style picker is shown and the files are not cached yet |
 | GitHub Releases | Nothing | A request for the latest release of Fuse or Cartridge, your IP address and the User-Agent with Fuse's version | Update checks (automatic check can be turned off) and "Install Cartridge"; downloads only after you confirm |
 | Store (Android): Obtainium Emulation Pack, app sources | Optionally a GitHub token | Requests for the pack's newest release on github.com, each app's releases (GitHub's API, or the download page the pack names), and the APK you install; your IP address and the User-Agent (or the one the pack sets for a download page) | The catalogue when the Store opens and is older than 6 hours, or on "Check now"; an app's releases when its page or card is shown, for installed apps a little after start (at most twice a day, can be turned off); downloads only when you press Install or Update |
+| Store (computer): each program's releases | Optionally a GitHub token (GitHub only) | Requests for a program's releases on GitHub, its own Forgejo or Gitea server, its download listing or Flathub, and the file you install; your IP address and the User-Agent | A program's releases when its page or card is shown, for installed programs a little after start; downloads only when you press Install, Update or Update All |
 | RPCS3 compatibility list (rpcs3.net) | Nothing | A PS3 game's title id (for example `BLUS30443`), your IP address and the User-Agent | Only when you choose How It Runs in RPCS3 in a PS3 game's options; the answer is kept a week |
-| Fuse RomM (off until you turn it on) | Your RomM server's addresses, then an approval in RomM, a pairing code or token made in RomM, or (for a server without client tokens) a user name and password | To your own server only: the token (or the sign-in) on each request, this device's name and a random device id when pairing, requests for the server's API description, systems, collections, games and firmware, the files you download, and the files of games you upload | While Fuse RomM is on: a quick check of each address when it connects, the library brought up to date every 30 minutes (you choose 5 minutes to a day) and when you ask; downloads and uploads only when you start them |
+| Fuse RomM (off until you turn it on) | Your RomM server's addresses, then an approval in RomM, a pairing code or token made in RomM, or (for a server without client tokens) a user name and password | To your own server only: the token (or the sign-in) on each request, this device's name and a random device id when pairing, requests for the server's API description, systems, collections, games and firmware, the files you download, and the files of games you upload; with Send Changes to RomM on (off until you turn it on), your favourites, games you hide and your play sessions for games from RomM; a Cloudflare Access service token, when you add one, to that outside address only, over https | While Fuse RomM is on: a quick check of each address when it connects, the library brought up to date every 30 minutes (you choose 5 minutes to a day) and when you ask; downloads and uploads only when you start them |
 | Fuse Sync, Fuse Library (with Fuse Sync on; Share This Device's Games can turn it off) | Nothing beyond Fuse Sync | To your own Fuse Sync host only: the list of this device's games (titles, systems, sizes, dates, file names with their sizes and SHA-1 and MD5 hashes, and the ids Fuse uses for their art), this device's local addresses and the port it answers on, what it is downloading, and requests you make for games. To another of your own devices, directly on your network or passed through your host: the files of a game that device asks for, with a ticket from your host | While Fuse Sync is on: the list a few seconds after the library changes, and once a minute while its files' hashes are being worked out; what is downloading when it changes, at most every two seconds; game files only when one of your devices asks for them |
 | Cartridge | Nothing | Nothing leaves the device through Fuse: Fuse reads Cartridge's local status and opens it with deep links. "Upload to RomM" hands Cartridge a game's file paths; Cartridge uploads the files to your own RomM server only after you confirm there. On Android Cartridge can read your play sessions (below) and adds their time to its own play sessions on your RomM server | On resume and when Cartridge reports a change; uploads only when you start one and confirm it in Cartridge; play sessions when Cartridge starts or comes back to the front |
 | Jellyfin (off until you turn it on) | Your server's addresses, your Jellyfin user name and password | To your own server only: the user name and password at sign-in (kept only in Fuse's secret store, and shared sealed with your own Fuse Sync host when Share Sign-ins is on), then the access token, this device's name and a random device id, what you browse and search, a device profile of what this device can play, and where you are in what you play (start, progress every ten seconds, stop), plus favourites and watched marks you change. For a download, the request for the original file, its subtitle files and pictures. A UDP broadcast on the local network asks which Jellyfin servers are there when you look for one | While Jellyfin is on: a check that the server answers every 30 seconds, pages as you open them, Home's Jellyfin widgets every 5 minutes while one is on Home, and downloads only when you start one; where you stopped in a downloaded copy is sent once the server can be reached |
@@ -318,7 +320,33 @@ turning one on turns the other off in Fuse and keeps both set up.
   Data`, `PS2 Memory Card`), with the person's name added on a device with more than one person,
   whose saves then come only from their own slot; saves sent before 0.4.4 are in `autosave` and
   are still read. A save that can't reach RomM waits, in order, in the device's own file and goes
-  when RomM answers again, across restarts. Save states use `/api/states` the same way. A file already in
+  when RomM answers again, across restarts. Save states use `/api/states` the same way.
+- **Your changes** (off until you turn on Send Changes to RomM, RomM 5.4, and only what the server
+  lists): a favourite goes into the person's favourites collection (`is_favorite`; found in
+  `GET /api/collections`, made with `POST /api/collections` the first time,
+  `POST`/`DELETE /api/collections/{id}/roms` with only that game's id); a game hidden or shown is
+  `PUT /api/roms/{id}/props` with `hidden` alone; a play session is `POST /api/play-sessions`
+  (the game, start, end and length, at most 100 at a time; RomM skips one it has). Only for games
+  from RomM (linked or matched). They wait in order in Fuse's database while RomM is away and go
+  when it answers; a change RomM never takes (the game gone) is let go, one it can't take now (away,
+  busy, the sign-in not allowed) stays. Pairing asks for `roms.user.write` and `collections.write`
+  for it; a sign-in without them is told to pair again.
+- **Cloudflare Access:** a service token for the outside address (Cloudflare's documented
+  `CF-Access-Client-Id` and `CF-Access-Client-Secret` headers), kept only in Fuse's secret store
+  (`romm.access`) and sent only to that address's host over https, on every request there
+  (unsigned ones and downloads included), never to the home address or anywhere else.
+- **Scan progress:** a scan Fuse starts after an upload is followed with `GET /api/tasks/{task_id}`
+  every two seconds (at most half an hour): its counts show in RomM's status line, and a word says
+  how many new games it found.
+- **RomM on this computer** (Linux, Windows and macOS, only with Docker or Podman already installed):
+  Set Up RomM on This Computer writes a Compose file in Fuse's folder (`romm-home`), after RomM's own
+  `examples/docker-compose.example.yml`, with `rommapp/romm:5.4.0` and MariaDB, the chosen library
+  mounted read-only, RomM's assets and config in Fuse's folder, and port 8080 for the home network
+  or this computer alone. Its database passwords and sign-in key are made once and kept only in
+  Fuse's secret store, handed to Compose in its environment, never written to a file. It runs
+  (`compose up -d`, `stop`, `ps`) only when the person starts or stops it; no metadata service is
+  set up for it.
+- **BIOS** (`/api/firmware`): planned against what Fuse's system health expects. A file already in
   place is never replaced, whatever the server has under the same name; firmware an emulator
   installs itself is downloaded to a `Firmware/<emulator>` folder with how to install it.
 
@@ -683,6 +711,53 @@ asks the user to confirm. Fuse never removes files to "uninstall".
 token when you added one), raw.githubusercontent.com and the download pages the pack names, and
 which app's releases or file was asked for.
 
+## The Store on a computer
+
+**What for.** On Linux, Windows and macOS, the Store in Addons installs, updates and removes the
+emulators and companions Fuse lists (`store/impl/DesktopCatalogue.kt`) from each project's own
+releases, as the project publishes them; the programs and their builds are their developers'.
+
+**Where releases come from** (`obtainium/PackResolver.kt`): GitHub's API
+(`api.github.com/repos/{owner}/{repo}/releases?per_page=50`); a Forgejo or Gitea server's own API,
+which answers in GitHub's shape (`https://{server}/api/v1/repos/{owner}/{repo}/releases?limit=50`,
+Eden's server and anything added by its link), with no token sent there; a plain download listing
+(RetroArch's build server, Redream's page); or Flathub's appstream for the few programs that publish
+no build of their own (`flathub.org/api/v2/appstream/{id}`), installed and updated by Flatpak
+itself. A program follows its stable releases, or its pre-releases when the person chooses them on
+its page or on Updates.
+
+**Added by its link** (`obtainium/ReleaseLink.kt`): a GitHub, Codeberg or other Forgejo or Gitea
+address (HTTPS only; whatever follows the project in the address is dropped). Before it is added,
+its newest release, the file this computer would install, its size and the room it needs are
+shown; nothing is downloaded until Install.
+
+**Before installing.** What this computer can't run is said from the program's published needs (its
+processor features, its graphics), and the room it needs: its download, plus three times that for
+an archive while it is unpacked, plus 64 MB, against what is free where Fuse puts programs
+(`StoreRoom`). With too little room, nothing is downloaded.
+
+**Earlier versions.** Each update moves the version it replaces, whole, to Fuse's own folder
+(`previous-versions/<program>/<time it was kept>/`), out of the programs folder so it is never found
+as a second copy; the newest three are kept and older ones let go. Going back to one keeps the
+version in place in turn. A failed update puts the version before straight back.
+
+**Who keeps a program up to date.** One Fuse put there, Fuse. One found on the computer is left to
+whoever installed it: Flatpak (updated through Flatpak, asking for the password when it was
+installed for every account), the system's packages, or the person. EmuDeck's installs are found
+by EmuDeck's own documented layout ("File Management on SteamOS", emudeck.github.io: its files in
+`~/.config/EmuDeck/`, its emulators as AppImages and program folders in `~/Applications`) and left
+to EmuDeck's Manage Emulators. RetroDECK is one Flatpak, `net.retrodeck.retrodeck`, with its
+emulators inside it (its wiki, "What is Included in RetroDECK?"); Fuse says which emulators it
+already has and never reaches inside it.
+
+**Update All** lists every update first (from and to, size, and whether Fuse or Flatpak makes it),
+updates Fuse's own and Flathub's Flatpaks, holds while a game is played, and ends with one notice
+of what was and wasn't updated.
+
+**Leaves the device.** Your IP address and User-Agent to the project's release host (GitHub with your
+token when you added one, the Forgejo or Gitea server, the listing or Flathub), and which project
+was asked; the download when you install.
+
 ## Steam and Windows launchers
 
 Fuse does not run Windows games itself. It starts them through the launcher you use, with a per-game
@@ -944,5 +1019,13 @@ exactly.
   aPS3e, RPCSX, ARMSX3 and Vita3K on Android only install from their own menus (no exported or
   documented install entry), so there the page is a guide: the files in order, and the emulator to
   open.
+
+  System software (a PS3's or a Vita's `.pup`, chosen by the person in Settings, Systems, Firmware)
+  goes through the same installers: RPCS3's `--headless --installfw <file>` (`rpcs3/rpcs3.cpp`,
+  v0.0.43: "Forces the emulator to install this firmware file"; `main_window::InstallPup`), and
+  Vita3K's `--firmware <file>` (`vita3k/config/src/config.cpp` at b4e35ed3: "Path to the firmware
+  file (.pup extension) to install", which ends the command line, and `vita3k/main.cpp` installs it
+  with `install_pup` and quits). Fuse hands over only a `.pup`, never copies or changes it, and
+  claims nothing when the installer fails.
 - **Disc identity.** The serial and PCSX2 CRC are read from the image itself (SYSTEM.CNF and the boot
   program, as in `pcsx2/CDVD/CDVD.cpp` and `pcsx2/Elfheader.cpp`); nothing is written.

@@ -33,6 +33,11 @@ internal data class DesktopEntry(
     val flathub: String? = null,
     /** Which of a release's files is for this computer, where the plain rules can't tell. */
     val pick: ((Host, arm: Boolean, handheld: String?) -> Regex?)? = null,
+    /**
+     * The emulator it is a build of, where several carry one on ("yuzu" for Eden and Citron, "Citra"
+     * for Azahar and its forks), so each one's page offers the others.
+     */
+    val family: String? = null,
 ) {
     fun repoFor(host: Host): String? = repos[host] ?: repo
 
@@ -107,6 +112,7 @@ internal object DesktopCatalogue {
         DesktopEntry(
             "azahar", "Azahar", "Azahar team", "Nintendo 3DS, carrying on Citra and Lime3DS.",
             EMULATORS, listOf("3ds"), repo = "https://github.com/azahar-emu/azahar", emulator = "azahar",
+            family = "Citra",
         ),
         DesktopEntry(
             "melonds", "melonDS", "Arisotura", "Nintendo DS and DSi, with local wireless play.",
@@ -167,6 +173,7 @@ internal object DesktopCatalogue {
                     else -> null
                 }
             },
+            family = "yuzu",
         ),
         DesktopEntry(
             "ryujinx", "Ryujinx", "Ryubing", "Nintendo Switch, the Ryubing continuation of Ryujinx.",
@@ -175,15 +182,18 @@ internal object DesktopCatalogue {
         DesktopEntry(
             "citron", "Citron", "Citron Neo team", "Nintendo Switch, a yuzu fork. Nightly builds.",
             EMULATORS, listOf("switch"), repo = "https://github.com/citron-neo/CI", emulator = "citron", prereleases = true, hosts = setOf(Host.LINUX),
+            family = "yuzu",
         ),
         DesktopEntry(
             "azaharplus", "AzaharPlus", "AzaharPlus team", "Nintendo 3DS, Azahar with extra features.",
             EMULATORS, listOf("3ds"), repo = "https://github.com/AzaharPlus/AzaharPlus", emulator = "azaharplus", hosts = setOf(Host.LINUX),
+            family = "Citra",
         ),
         DesktopEntry(
             // Its Linux build is a tarball holding the AppImage (mandarine-linux-appimage-….tar.gz).
             "mandarine", "Mandarine", "Mandarine team", "Nintendo 3DS, a Citra fork.",
             EMULATORS, listOf("3ds"), repo = "https://github.com/mandarine3ds/mandarine", emulator = "mandarine", hosts = setOf(Host.LINUX),
+            family = "Citra",
         ),
         DesktopEntry(
             // Linux-Qt.zip holds the Qt AppImage.
@@ -220,10 +230,12 @@ internal object DesktopCatalogue {
         DesktopEntry(
             "dosbox-staging", "DOSBox Staging", "DOSBox Staging team", "DOS games, with modern sound and video.",
             EMULATORS, listOf("dos"), repo = "https://github.com/dosbox-staging/dosbox-staging", emulator = "dosbox-staging", hosts = setOf(Host.LINUX),
+            family = "DOSBox",
         ),
         DesktopEntry(
             "dosbox-x", "DOSBox-X", "joncampbell123", "DOS and Windows 9x games, the most complete DOSBox.",
             EMULATORS, listOf("dos"), emulator = "dosbox-x", flathub = "com.dosbox_x.DOSBox-X", hosts = setOf(Host.LINUX),
+            family = "DOSBox",
         ),
         DesktopEntry(
             "ruffle", "Ruffle", "Ruffle team", "Flash games, safely.",

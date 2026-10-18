@@ -72,6 +72,14 @@ internal object AuditStore {
                     HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"),
                 )
             }
+            // A made-up project on a Forgejo server, added to a computer's Store by its link.
+            request.url.host == "codeberg.org" && request.url.encodedPath == "/api/v1/repos/lantern/pocket-arcade/releases" -> respond(
+                """[{"tag_name":"v0.9.2","name":"Pocket Arcade 0.9.2","published_at":"2026-09-30T09:00:00Z","html_url":"https://codeberg.org/lantern/pocket-arcade/releases/tag/v0.9.2",
+                    "draft":false,"prerelease":false,"body":"Smoother scaling",
+                    "assets":[{"name":"pocket-arcade-v0.9.2-windows-x64.zip","browser_download_url":"https://codeberg.org/lantern/pocket-arcade/releases/download/v0.9.2/pocket-arcade-v0.9.2-windows-x64.zip","size":${18L * 1024 * 1024}},
+                              {"name":"pocket-arcade-v0.9.2-x86_64.AppImage","browser_download_url":"https://codeberg.org/lantern/pocket-arcade/releases/download/v0.9.2/pocket-arcade-v0.9.2-x86_64.AppImage","size":${21L * 1024 * 1024}}]}]""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"),
+            )
             request.url.host == "github.com" && "/releases/download/" in url -> {
                 // Starts, reaches 42 percent and holds.
                 val body = ByteChannel(autoFlush = true)

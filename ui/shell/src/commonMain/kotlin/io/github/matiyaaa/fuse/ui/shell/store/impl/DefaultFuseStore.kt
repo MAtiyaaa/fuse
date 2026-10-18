@@ -198,6 +198,8 @@ internal class DefaultFuseStore private constructor(
         )
         // The Sync tab's view of RomM's saves: how each game's save here stands.
         romm.saveService = library.rommSaves
+        // The person's changes to games from RomM go back to it, when they chose that.
+        library.rommChange = { id, make -> romm.changed(id, make) }
         romm.plainSaveQuery = { id -> library.plainSaveQueryFor(id) }
         reach = DefaultReachOps(
             ctx, engine, transferEngine, sync.service, romm,

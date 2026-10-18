@@ -193,6 +193,49 @@ internal fun AuditDriver.detailScreens() {
         }
     }
 
+    scenario("details", "store channels, room and a link") {
+        show(windowsStore, windowsPlatform)
+        home()
+        repeat(6) { if (!hasText("Emulators for this computer")) tap(PadButton.R1) }
+        waitFor("Emulators for this computer")
+        settle(900)
+        // Cemu isn't on this PC: its page says the room it needs against what's free, and what it follows.
+        focusText("Search") { tap(PadButton.DPAD_UP) }
+        tap(PadButton.A)
+        type("Cemu")
+        router.textInput?.submit()
+        waitFor("Search: Cemu")
+        settle(900)
+        focusHint("Details") { tap(PadButton.DPAD_DOWN) }
+        tap(PadButton.A)
+        waitFor("Needs about")
+        settle(1_200)
+        tap(PadButton.DPAD_DOWN, 2)
+        settle(900)
+        shoot("a program's page: the room it needs, and the releases it follows")
+        tap(PadButton.DPAD_UP, 2)
+        tap(PadButton.DPAD_RIGHT)
+        tap(PadButton.A)
+        waitFor("Cemu's Builds")
+        settle(900)
+        shoot("stable releases or pre-releases")
+        tap(PadButton.B)
+        waitGone("Cemu's Builds")
+        tap(PadButton.B)
+        // A program by its link, on a Forgejo server: what would install is shown before it is added.
+        waitFor("Emulators for this computer")
+        focusText("Search", substring = true) { tap(PadButton.DPAD_UP) }
+        focusText("Add an app") { tap(PadButton.DPAD_RIGHT) }
+        tap(PadButton.A)
+        type("codeberg.org/lantern/pocket-arcade")
+        router.textInput?.submit()
+        waitFor("Add pocket-arcade?")
+        settle(1_200)
+        shoot("what a link would install, and the shelf it goes on")
+        tap(PadButton.B)
+        waitGone("Add pocket-arcade?")
+    }
+
     scenario("details", "achievements from xenia") {
         // A Windows PC of its own with one Xbox 360 game, tagged with its title id, and Xenia's
         // profile holding that game's achievements (a GPD, as Xenia writes it).
