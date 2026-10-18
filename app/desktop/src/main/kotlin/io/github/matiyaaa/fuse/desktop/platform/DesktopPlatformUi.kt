@@ -77,7 +77,7 @@ class DesktopPlatformUi(
         secondScreen = false,
         launchOnOtherDisplay = false,
         overlay = false,
-        videoPreview = false,
+        videoPreview = true,
         brightness = quickControls.brightnessAvailable,
         volume = quickControls.volumeAvailable,
         wifiSettings = quickControls.settingsAvailable,
@@ -132,7 +132,8 @@ class DesktopPlatformUi(
     override val quick: QuickControls = quickControls
 
     /** No desktop video player is bundled yet, so previews are off rather than half working. */
-    override val video: VideoPreview? = null
+    /** Gameplay previews behind the room, as on Android, through Fuse Player's engine. */
+    override val video: VideoPreview? = DesktopVideoPreview()
     override val music: DesktopMenuMusic = DesktopMenuMusic()
 
     init {

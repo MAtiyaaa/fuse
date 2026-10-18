@@ -21,6 +21,8 @@ class SettingTopic(
     val steam: Boolean = false,
     /** Only where Decky can be (Linux). */
     val decky: Boolean = false,
+    /** Only on Android (apps, the Home role). */
+    val android: Boolean = false,
 )
 
 /** A setting found by search, with where it is ("Settings, Appearance"). */
@@ -143,6 +145,75 @@ object SettingsIndex {
         SettingTopic("addons", "Cartridge support", "romm downloads cartridge", group = ADDONS_CARTRIDGE, cartridge = true),
         SettingTopic("accounts", "Pair a phone", "phone link companion upload qr"),
         SettingTopic("health", "Diagnostics report", "bug report logs problems diagnostics support"),
+        // Every other row Settings draws, so search finds each one by its own name (0.4.3's audit).
+        SettingTopic("appearance", "Title logos", "logo game name art over background"),
+        SettingTopic("appearance", "Startup animation", "intro opening launch animation splash"),
+        SettingTopic("appearance", "Glass tuning", "glass custom", group = "appearance.glass"),
+        SettingTopic("appearance", "Panel opacity", "glass transparency see through", group = "appearance.glass"),
+        SettingTopic("appearance", "Blur strength", "glass blur frosted", group = "appearance.glass"),
+        SettingTopic("appearance", "Background brightness", "glass art brightness dim", group = "appearance.glass"),
+        SettingTopic("appearance", "Gradient strength", "glass gradient scrim", group = "appearance.glass"),
+        SettingTopic("appearance", "CRT tuning", "crt custom", group = "appearance.crt"),
+        SettingTopic("appearance", "Scanlines", "crt lines retro tv", group = "appearance.crt"),
+        SettingTopic("appearance", "Curvature", "crt curve bulge tube", group = "appearance.crt"),
+        SettingTopic("appearance", "Bloom", "crt glow bright", group = "appearance.crt"),
+        SettingTopic("appearance", "Colour separation", "crt chromatic aberration rgb fringe color", group = "appearance.crt"),
+        SettingTopic("appearance", "Vignette", "crt dark corners edges", group = "appearance.crt"),
+        SettingTopic("accessibility", "Colours", "colour blind color vision deuteranopia protanopia tritanopia"),
+        SettingTopic("accessibility", "Layout direction", "right to left rtl mirror arabic hebrew"),
+        SettingTopic("home", "Remember where you were", "resume last place reopen"),
+        SettingTopic("home", "Standby", "screensaver sleep idle dim"),
+        SettingTopic("home", "Sections in the top bar", "tabs top bar destinations show hide"),
+        SettingTopic("home", "Apps tab shows first", "apps filter pinned emulators", android = true),
+        SettingTopic("home", "Bluetooth in the top bar", "bluetooth icon status"),
+        SettingTopic("library", "Steam achievements of", "steam account achievements user", steam = true),
+        SettingTopic("library", "Selecting a game", "open game page launch directly press a"),
+        SettingTopic("library", "Spotlight on systems", "systems featured highlight"),
+        SettingTopic("library", "Display names", "names clean titles rename tidy"),
+        SettingTopic("systems", "System art", "system logos art pack art book next"),
+        SettingTopic("systems", "System art style", "system logo style panel"),
+        SettingTopic("systems", "Finding emulators", "detect emulators scan installed"),
+        SettingTopic("media", "Find art by itself", "automatic art fill scrape"),
+        SettingTopic("media", "Preview delay", "video preview wait seconds"),
+        SettingTopic("media", "Sources and keys", "steamgriddb igdb thegamesdb screenscraper api key provider", group = "media.sources"),
+        SettingTopic("inputs", "Button labels", "glyphs xbox playstation nintendo prompts icons"),
+        SettingTopic("inputs", "Swap bumpers and triggers", "l1 r1 l2 r2 shoulders"),
+        SettingTopic("inputs", "Keyboard hints when typing", "keyboard shortcuts hints"),
+        SettingTopic("inputs", "Repeat and sticks", "repeat stick feel", group = "inputs.feel"),
+        SettingTopic("inputs", "Repeat speed", "scroll fast held", group = "inputs.feel"),
+        SettingTopic("inputs", "Speed up while held", "accelerate scroll held", group = "inputs.feel"),
+        SettingTopic("inputs", "Stick push to move", "stick threshold sensitivity", group = "inputs.feel"),
+        SettingTopic("inputs", "Hold time", "long press hold options", group = "inputs.feel"),
+        SettingTopic("inputs", "L3 + R3", "capture shortcut screenshot both sticks"),
+        SettingTopic("inputs", "Record sound", "capture audio microphone recording"),
+        SettingTopic("sound", "Sound", "mute audio off"),
+        SettingTopic("sound", "Master volume", "loudness volume"),
+        SettingTopic("sound", "Music volume", "menu music volume"),
+        SettingTopic("sound", "Shuffle", "music random order"),
+        SettingTopic("sound", "Sound effects volume", "clicks sfx volume"),
+        SettingTopic("displays", "Max refresh rate", "hz 60 120 144 refresh cap"),
+        SettingTopic("displays", "Interface size", "scale zoom bigger smaller ui size dpi"),
+        SettingTopic("displays", "Apps open on", "which screen apps display", secondScreen = true),
+        SettingTopic("displays", "Hide the second screen", "turn off bottom screen blank", secondScreen = true),
+        SettingTopic("displays", "Show performance on the second screen", "stats fps bottom screen", secondScreen = true),
+        SettingTopic("displays", "Start Fuse when you log in", "autostart login startup boot", steam = true),
+        SettingTopic("accounts", "Phone Link", "phone companion remote"),
+        SettingTopic("accounts", "Phone as a controller", "phone gamepad remote touch controller"),
+        SettingTopic("addons", "Streaming", "moonlight sunshine stream pc", group = "addons.streaming"),
+        SettingTopic("addons", "Stream from a Computer", "moonlight sunshine apollo stream", group = "addons.streaming"),
+        SettingTopic("addons", "Show on Systems", "streaming system tile", group = "addons.streaming"),
+        SettingTopic("addons", "Wait for a Computer to Wake", "wake on lan seconds", group = "addons.streaming"),
+        SettingTopic("addons", "Use the Store", "store apps emulators install", group = "addons.store"),
+        SettingTopic("addons", "Check installed programs for updates", "store updates automatic", group = "addons.store"),
+        SettingTopic("addons", "Cartridge", "cartridge romm downloads", group = "addons.cartridge", cartridge = true),
+        SettingTopic("addons", "Pick up new downloads on return", "cartridge new games", group = "addons.cartridge", cartridge = true),
+        SettingTopic("addons", "Details and art from RomM", "cartridge romm metadata", group = "addons.cartridge", cartridge = true),
+        SettingTopic("addons", "Use Jellyfin", "jellyfin films movies shows", group = "addons.jellyfin"),
+        SettingTopic("addons", "Use RomM", "romm server roms", group = "addons.romm"),
+        SettingTopic("about", "Check automatically", "updates automatic check"),
+        SettingTopic("about", "Credits and links", "credits thanks links", group = "about.credits"),
+        SettingTopic("library", "Fuse in Steam's game menu", "decky steam menu entries", decky = true),
+        SettingTopic("health", "Power and heat", "battery drain heat hot warm temperature thermal throttling sleep wake lock refresh rate hz charging", group = "health.power"),
         SettingTopic("storage", "Back up now", "backup export save settings"),
         SettingTopic("storage", "Restore a backup", "restore import move device"),
         SettingTopic("storage", "File access", "permission storage access sd card"),
@@ -159,11 +230,11 @@ object SettingsIndex {
         SettingTopic("about", "Made with", "credits thanks", group = "about.credits"),
     )
 
-    fun search(query: String, sections: List<SettingsSection>, limit: Int = 8, cartridge: Boolean = true, secondScreen: Boolean = true, steam: Boolean = true, decky: Boolean = true): List<SettingHit> {
+    fun search(query: String, sections: List<SettingsSection>, limit: Int = 8, cartridge: Boolean = true, secondScreen: Boolean = true, steam: Boolean = true, decky: Boolean = true, android: Boolean = true): List<SettingHit> {
         val needle = TitleText.normalize(query)
         if (needle.length < 2) return emptyList()
         val byId = sections.associateBy { it.id }
-        val topics = sections.map { SettingTopic(it.id, null, it.summary) } + rows.filter { (cartridge || !it.cartridge) && (secondScreen || !it.secondScreen) && (steam || !it.steam) && (decky || !it.decky) }
+        val topics = sections.map { SettingTopic(it.id, null, it.summary) } + rows.filter { (cartridge || !it.cartridge) && (secondScreen || !it.secondScreen) && (steam || !it.steam) && (decky || !it.decky) && (android || !it.android) }
         return topics.mapNotNull { t ->
             val section = byId[t.section] ?: return@mapNotNull null
             val title = t.row ?: section.label

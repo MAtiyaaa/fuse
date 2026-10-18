@@ -201,6 +201,16 @@ From 0.3.8 ("The Reach Update") your devices' games make one library you can rea
   kept on this device, so the Fuse Library can be browsed with the host away. Art follows the same
   rules as RomM's games (Fuse's art order, SteamGridDB and your choices), and **Fill Everything** in
   Settings can include the Fuse Library.
+- **Art found once for the household (0.4.3).** Each device's list carries the art it chose for
+  each game from the providers (SteamGridDB, IGDB, TheGamesDB, ScreenScraper, Libretro and GameTDB,
+  by its web address: one of each kind and up to three screenshots) and its details (a description
+  of up to 1,500 characters, year, developer, publisher and genres). When another device fills a
+  game it has too (the same serial, household game, RomM game or files), it takes that art and
+  those details as they are, before asking any provider: a household searches each game once, not
+  once a device, so the providers' daily allowances go as far as one device's would. Only filling
+  does this; **Replace** asks the providers anew. Art you picked yourself, a folder's own pictures
+  and RomM's (which need this device's sign-in) stay on their device. New art goes up with the list
+  a minute and a half after a fill finds it, so a fill of many games becomes one update.
 
 ### Bringing a game here, or sending it anywhere
 

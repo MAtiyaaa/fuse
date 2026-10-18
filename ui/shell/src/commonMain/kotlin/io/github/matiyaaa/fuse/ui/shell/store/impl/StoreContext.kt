@@ -87,6 +87,9 @@ internal class StoreContext(
     /** Strong household identity evidence, supplied by Reach before an external scraper search. */
     var householdProviderClaims: suspend (io.github.matiyaaa.fuse.model.Game) -> List<io.github.matiyaaa.fuse.model.ProviderClaim> = { emptyList() }
 
+    /** Art and details another device of the household found for a game, supplied by Reach before any provider is asked. */
+    var householdFill: suspend (io.github.matiyaaa.fuse.model.Game) -> HouseholdFound? = { null }
+
     /** The last launch problems, newest last, for the diagnostics report. Kept in memory only. */
     val recentProblems = MutableStateFlow<List<Pair<Long, io.github.matiyaaa.fuse.ui.shell.store.Problem>>>(emptyList())
 
@@ -98,6 +101,17 @@ internal class StoreContext(
 
     fun recordProblem(problem: io.github.matiyaaa.fuse.ui.shell.store.Problem) {
         recentProblems.update { (it + (now() to problem)).takeLast(10) }
+    }
+
+    /**
+     * The last games that started, newest last, for the diagnostics report beside the problems: a
+     * report then shows what works as well as what didn't (the emulator, how it was handed the
+     * game, how long that took). Kept in memory only.
+     */
+    val recentLaunches = MutableStateFlow<List<LaunchReport>>(emptyList())
+
+    fun recordLaunch(report: LaunchReport) {
+        recentLaunches.update { (it + report).takeLast(10) }
     }
 
     /**
@@ -286,5 +300,58 @@ internal class RemoteGamesHub(private val parts: List<RemoteGames>) : RemoteGame
     }
     override fun changed(id: io.github.matiyaaa.fuse.model.GameId) {
         of(id)?.changed(id)
+    }
+}
+
+/** What another device of the household found for a game: its art as the providers gave it, and its details when whole. */
+internal data class HouseholdFound(
+    val art: List<io.github.matiyaaa.fuse.model.ArtworkOption>,
+    val metadata: io.github.matiyaaa.fuse.model.GameMetadata?,
+    val title: String,
+)
+
+/**
+ * One game that started ([StoreContext.recordLaunch]): when, what, in which emulator (and core),
+ * how Fuse handed it over ([how], as Android's intent or the program it ran), the kind of file
+ * it was given, how long from the press to the emulator taking it ([tookMs]), and what Fuse Sync
+ * or RomM said about the save, if anything.
+ */
+internal data class LaunchReport(
+    val at: Long,
+    val title: String,
+    val system: String,
+    val emulator: String,
+    val core: String?,
+    val how: String,
+    val target: String,
+    val tookMs: Long,
+    val saveNote: String? = null,
+) {
+    fun line(whenText: String): String = buildString {
+        append(whenText).append(": ").append(title).append(" (").append(system).append(") in ").append(emulator)
+        core?.let { append(", core ").append(it) }
+        append(", ").append(how).append(", ").append(target).append(", started in ").append(tookMs).append(" ms")
+        saveNote?.let { append("\n    ").append(it) }
+    }
+
+    companion object {
+        /** How [plan] hands the game over, without the person's paths: the app and activity, or the program's name. */
+        fun how(plan: io.github.matiyaaa.fuse.model.LaunchPlan): String = when (plan) {
+            is io.github.matiyaaa.fuse.model.LaunchPlan.AndroidIntent -> "intent to " + plan.packageName + (plan.activity?.let { "/" + it.substringAfterLast('.') } ?: "") + (plan.action?.let { ", " + it.substringAfterLast('.') } ?: "")
+            is io.github.matiyaaa.fuse.model.LaunchPlan.Command -> "ran " + (plan.argv.firstOrNull()?.let(io.github.matiyaaa.fuse.library.FsPath::name) ?: "a program") + " with ${plan.argv.size - 1} arguments"
+            is io.github.matiyaaa.fuse.model.LaunchPlan.OpenAppOnly -> "opened the app"
+            is io.github.matiyaaa.fuse.model.LaunchPlan.Unsupported -> "not started"
+        }
+
+        /** The kind of thing the emulator was given, by name only. */
+        fun target(target: io.github.matiyaaa.fuse.model.LaunchTarget?): String = when (target) {
+            null -> "no file"
+            is io.github.matiyaaa.fuse.model.LaunchTarget.Playlist -> if (target.generated) "a playlist Fuse made" else "a playlist"
+            is io.github.matiyaaa.fuse.model.LaunchTarget.TitleId -> "title ${target.id}"
+            is io.github.matiyaaa.fuse.model.LaunchTarget.Directory -> "a folder"
+            is io.github.matiyaaa.fuse.model.LaunchTarget.Shortcut -> "a shortcut"
+            is io.github.matiyaaa.fuse.model.LaunchTarget.App -> "an app"
+            is io.github.matiyaaa.fuse.model.LaunchTarget.File -> "a ." + io.github.matiyaaa.fuse.library.FsPath.name(target.path).substringAfterLast('.', "file").lowercase() + " file"
+        }
     }
 }

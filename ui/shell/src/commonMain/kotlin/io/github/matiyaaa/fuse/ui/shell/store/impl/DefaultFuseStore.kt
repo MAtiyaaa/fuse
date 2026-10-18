@@ -538,7 +538,8 @@ internal class DefaultFuseStore private constructor(
             // the host at once, not first at its launch. The library as it first loads isn't "new".
             ctx.scope.launch {
                 var known: Set<io.github.matiyaaa.fuse.model.GameId>? = null
-                library.games(GameQuery(includeHidden = true)).map { list -> list.map { it.id }.toSet() }.distinctUntilChanged().collect { ids ->
+                // The ids alone: as cards, every picture filled anywhere in the library mapped every game again.
+                library.gameIds(GameQuery(includeHidden = true)).map { it.toSet() }.distinctUntilChanged().collect { ids ->
                     val before = known
                     known = ids
                     if (before == null) return@collect

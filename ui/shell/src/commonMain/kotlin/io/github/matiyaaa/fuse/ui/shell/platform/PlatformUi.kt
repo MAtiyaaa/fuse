@@ -56,6 +56,9 @@ interface PlatformUi {
      */
     val secondScreenLog: StateFlow<List<String>> get() = NoSecondScreenLog
 
+    /** What Fuse itself does to the battery and the heat now, for System health's Power and heat. */
+    val power: StateFlow<PowerFacts> get() = NoPowerFacts
+
     fun openUrl(url: String)
     fun restart()
 
@@ -283,6 +286,28 @@ interface DeckyIntegration {
 class OpenedFile(val name: String, val bytes: ByteArray)
 
 private val NoSecondScreenLog: StateFlow<List<String>> = MutableStateFlow(emptyList())
+
+/**
+ * What Fuse does to the battery and the heat right now, as far as the platform can say: what it is
+ * keeping the device awake for ([holding], empty when it lets the device sleep), the screen's rate
+ * as Fuse asks for it ([refresh]), and whether its rounds on the network wait while the device
+ * sleeps ([pausesAsleep]).
+ */
+data class PowerFacts(
+    val holding: Set<PowerHold> = emptySet(),
+    val refresh: RefreshFact? = null,
+    val pausesAsleep: Boolean = false,
+)
+
+/** Why Fuse keeps the device awake. */
+enum class PowerHold { TRANSFERS, ART }
+
+/** The rate Fuse asks of the screen: [FULL] while things move for you, [CALM] (about 60 Hz) while only the background does, [RESTING] when it asks nothing. */
+data class RefreshFact(val state: State, val fullHz: Float?, val calmHz: Float?) {
+    enum class State { FULL, CALM, RESTING }
+}
+
+private val NoPowerFacts: StateFlow<PowerFacts> = MutableStateFlow(PowerFacts())
 
 data class PlatformFeatures(
     val homeRole: Boolean = false,
@@ -530,7 +555,7 @@ data class DrawingInfo(val name: String, val gpu: Boolean, val details: List<Pai
 private val NoDrawingInfo: kotlinx.coroutines.flow.StateFlow<DrawingInfo?> = kotlinx.coroutines.flow.MutableStateFlow(null)
 
 /** What Fuse asks of the system's sleep while it works: see [PlatformUi.stayAwake]. */
-data class StayAwake(val cpu: Boolean, val screen: Boolean) {
+data class StayAwake(val cpu: Boolean, val screen: Boolean, val finding: Boolean = false) {
     companion object {
         val NONE = StayAwake(cpu = false, screen = false)
 
@@ -546,7 +571,7 @@ data class StayAwake(val cpu: Boolean, val screen: Boolean) {
             // [transfers] counts what moves: one waiting its turn starts within moments of a place,
             // and one that can't start (its source signed out) held the locks for as long as it stayed.
             val working = transfers > 0 || finding
-            return StayAwake(cpu = working, screen = working && standby)
+            return StayAwake(cpu = working, screen = working && standby, finding = finding)
         }
 
         /**

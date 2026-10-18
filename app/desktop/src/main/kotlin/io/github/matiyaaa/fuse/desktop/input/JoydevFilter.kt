@@ -81,6 +81,9 @@ internal object JoydevFilter {
 
     fun isSteamVirtual(id: String?): Boolean = id == STEAM_VIRTUAL
 
+    /** The vendor of a `vvvv:pppp` id, as a number; null when there is none. */
+    fun vendor(id: String?): Int? = id?.substringBefore(':')?.toIntOrNull(16)?.takeIf { it != 0 }
+
     /**
      * The controllers Steam Input wraps for the program it started, from the list Steam hands that
      * program (`SDL_GAMECONTROLLER_IGNORE_DEVICES`, `0xVVVV/0xPPPP` comma separated), as `vvvv:pppp`.

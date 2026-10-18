@@ -38,6 +38,7 @@ import io.github.matiyaaa.fuse.model.SortOrder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 
 /**
  * Everything the interface reads and does, in one place. Screens only talk to this interface; the
@@ -431,6 +432,9 @@ data class LocalSave(
  */
 data class LocalSaves(val emulator: String?, val saves: List<LocalSave>, val note: String? = null)
 
+/** How many games a view holds ([LibraryOps.counts]), and how many of them are favourites and were played. */
+data class GameCounts(val total: Int = 0, val favorites: Int = 0, val played: Int = 0)
+
 interface LibraryOps {
     val home: StateFlow<HomeFeed>
 
@@ -441,6 +445,18 @@ interface LibraryOps {
     fun spotlight(platform: PlatformId): Flow<Suggestion?> = kotlinx.coroutines.flow.flowOf(null)
     val platforms: StateFlow<List<PlatformCard>>
     fun games(query: GameQuery): Flow<List<GameCard>>
+
+    /**
+     * How many games [query] lists, and how many of them are favourites and played ([GameCounts]):
+     * for the counts on the Library's tabs. Worked out from the games alone, never their art, so a
+     * count costs nothing like the list it counts.
+     */
+    fun counts(query: GameQuery): Flow<GameCounts> = games(query).map { list ->
+        GameCounts(list.size, list.count { it.favorite }, list.count { it.lastPlayedAt != null })
+    }
+
+    /** The ids of the games [query] lists, in its order, without their art: for code that only needs which games there are. */
+    fun gameIds(query: GameQuery): Flow<List<GameId>> = games(query).map { list -> list.map { it.id } }
     fun game(id: GameId): Flow<GameDetail?>
     fun search(query: String): Flow<SearchResults>
 

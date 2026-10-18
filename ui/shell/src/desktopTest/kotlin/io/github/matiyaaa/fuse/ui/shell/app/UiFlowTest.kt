@@ -105,8 +105,10 @@ class UiFlowTest {
 
         pumpUntil { onAllNodesWithText("Welcome to Fuse").fetchSemanticsNodes().isNotEmpty() }
         router.tap(PadButton.A)
-        pumpUntil { onAllNodesWithText("Tuned for this device").fetchSemanticsNodes().isNotEmpty() }
-        onNodeWithText("Tuned for this device").assertExists()
+        // The next step is the first that asks something (the Home role, file access or the folders).
+        fun shows(text: String) = onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+        // The welcome slides away as the next step comes.
+        pumpUntil { listOf("Make Fuse your Home screen?", "Let Fuse see your games", "Where are your games?", "Finding your games").any(::shows) && !shows("Welcome to Fuse") }
     }
 
     @Test

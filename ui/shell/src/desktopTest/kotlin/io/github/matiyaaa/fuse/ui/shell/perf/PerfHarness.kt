@@ -249,6 +249,33 @@ class PerfHarness {
                 driver.view = shown
                 driver.settle(1_500)
             }
+            // The Library at rest, whole, and with one part at a time taken away: what each costs to draw.
+            if (wants("idle-library")) {
+                driver.tab(Destination.LIBRARY)
+                driver.settle(2_500)
+                measure("idle-library", frames = 12, everyFrames = 1000) { }
+                fun without(name: String, change: (io.github.matiyaaa.fuse.ui.shell.store.UiPrefs) -> io.github.matiyaaa.fuse.ui.shell.store.UiPrefs) {
+                    val before = store.prefs.value
+                    store.updatePrefs(change)
+                    driver.settle(1_500)
+                    measure("idle-library-$name", frames = 12, everyFrames = 1000) { }
+                    store.updatePrefs { before }
+                    driver.settle(1_000)
+                }
+                without("noart") { it.copy(showHero = false) }
+                without("pitch") { it.copy(themeId = "pitch", showHero = false) }
+                without("lowpower") { it.copy(lowPower = true) }
+                val shadows = io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.restingShadows
+                io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.restingShadows = false
+                without("noshadow") { it.copy(showHero = !it.showHero) }
+                io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.restingShadows = shadows
+                val shown = driver.view
+                driver.view = io.github.matiyaaa.fuse.ui.shell.audit.AuditView.Blank
+                driver.settle(500)
+                measure("idle-library-blank", frames = 12, everyFrames = 1000) { }
+                driver.view = shown
+                driver.settle(1_500)
+            }
             switch("switch-systems-cold", 1)
             switch("switch-library-cold", 2)
             switch("switch-systems-warm", 1)

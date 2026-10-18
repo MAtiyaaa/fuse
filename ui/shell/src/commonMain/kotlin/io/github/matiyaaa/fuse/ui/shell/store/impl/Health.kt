@@ -470,6 +470,11 @@ internal class DefaultHealthOps(
                 },
             ),
             DiagnosticsReport.Section(
+                "It launched",
+                ctx.recentLaunches.value.map { it.line(TimeWords.relative(it.at, ctx.now(), ctx.services.utcOffsetMillis())) }
+                    .ifEmpty { listOf("No game started since Fuse opened") },
+            ),
+            DiagnosticsReport.Section(
                 "Recent launch problems",
                 ctx.recentProblems.value.map { (at, p) -> "${TimeWords.relative(at, ctx.now(), ctx.services.utcOffsetMillis())}: ${p.title}" + (p.details?.let { "\n    $it" } ?: "") },
             ),

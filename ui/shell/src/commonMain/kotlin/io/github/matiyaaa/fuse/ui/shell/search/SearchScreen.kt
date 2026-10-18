@@ -272,7 +272,7 @@ fun SearchScreen(app: AppState) {
     val hits = remember(results, rommGames, rommAll) {
         val remote = rommGames.filter { it.game == null && results.chips.isEmpty() }
         // Settings are found by name alone, never with filters.
-        val settings = if (results.chips.isEmpty()) SettingsIndex.search(results.query, sections, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen, steam = app.platform.steam != null, decky = app.platform.decky != null).map { Hit.Setting(it) } else emptyList()
+        val settings = if (results.chips.isEmpty()) SettingsIndex.search(results.query, sections, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen, steam = app.platform.steam != null, decky = app.platform.decky != null, android = app.platform.host == io.github.matiyaaa.fuse.model.Host.ANDROID).map { Hit.Setting(it) } else emptyList()
         val choosing = SearchSyntax.parse(results.query).pending != null
         results.suggestions.map { Hit.Suggestion(it, choosing) } +
             results.games.map { Hit.Game(it) } + results.platforms.map { Hit.System(it) } +

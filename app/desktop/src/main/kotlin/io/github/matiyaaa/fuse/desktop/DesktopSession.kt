@@ -410,8 +410,8 @@ class DesktopSession(
             router.release(button, InputSource.GAMEPAD)
         }
 
-        override fun identified(name: String?) {
-            val family = io.github.matiyaaa.fuse.model.PadFamily.of(name)
+        override fun identified(name: String?, vendorId: Int?) {
+            val family = io.github.matiyaaa.fuse.model.PadFamily.of(name, vendorId)
             EventQueue.invokeLater { router.padIdentified(family) }
         }
 

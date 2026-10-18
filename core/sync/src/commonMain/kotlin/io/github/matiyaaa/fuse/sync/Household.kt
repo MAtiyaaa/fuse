@@ -52,6 +52,13 @@ data class LibraryEntry(
     val providerClaims: List<io.github.matiyaaa.fuse.model.ProviderClaim> = emptyList(),
     /** Steam manifest LastOwner provenance; this never proves ownership or an authenticated session. */
     val steamInstalledBy: List<String> = emptyList(),
+    /**
+     * The art chosen for it here, from the providers: another device with the same game takes these
+     * instead of asking the providers again, so a household fills each game's art once, not once a
+     * device, and its sources' daily allowances go as far as one device's would.
+     */
+    val art: List<SharedArt> = emptyList(),
+    val publisher: String? = null,
 ) {
     /** Every file has its hashes: the copy can be compared with others. */
     val hashed: Boolean get() = files.isNotEmpty() && files.all { it.sha1 != null }
@@ -59,6 +66,13 @@ data class LibraryEntry(
     /** The copy's fingerprint, the same on every device with the same files; null until hashed. */
     val fingerprint: String? get() = if (!hashed) null else files.sortedBy { it.path }.joinToString("|") { "${it.path}:${it.sha1}" }
 }
+
+/**
+ * One picture chosen for a game on a device ([LibraryEntry.art]): Fuse's kind for it (`BOXART`,
+ * `HERO`...), its address, and the source it came from (Fuse's media source, `STEAMGRIDDB`...).
+ */
+@Serializable
+data class SharedArt(val kind: String, val url: String, val source: String)
 
 /** Where a device answers other devices for its games, on its home network. */
 @Serializable
@@ -225,6 +239,9 @@ interface HouseholdLocal {
 
     /** This device is sending a game to another (direct or through the host): Android keeps Fuse awake meanwhile. */
     fun sending(what: String?) {}
+
+    /** The art chosen here for each game by its [LibraryEntry.game] key, as it is now (it changes as art is found). */
+    suspend fun art(): Map<String, List<SharedArt>> = emptyMap()
 }
 
 /** A game here to share, with where its files are on this device ([paths] by [PeerFile.path]). */
@@ -260,6 +277,9 @@ interface Household {
 
     /** This device's games changed (a scan, a download): its list goes up soon. */
     fun libraryChanged()
+
+    /** Art was found for games here: the list goes up again with it, a little later (many finds become one). */
+    fun artChanged() {}
 
     /** Reads the others' lists now. */
     suspend fun refresh()

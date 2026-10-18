@@ -232,7 +232,7 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
     val searching = query.isNotBlank()
     val hits = remember(query, sections) {
         if (!searching) emptyList()
-        else SettingsIndex.search(query, sections, limit = SEARCH_LIMIT, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen, steam = app.platform.steam != null, decky = app.platform.decky != null)
+        else SettingsIndex.search(query, sections, limit = SEARCH_LIMIT, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen, steam = app.platform.steam != null, decky = app.platform.decky != null, android = app.platform.host == io.github.matiyaaa.fuse.model.Host.ANDROID)
     }
     val rows = if (!searching) ownRows else hits.mapIndexed { i, h ->
         MenuAction("hit.$i", h.title, h.section.icon, detail = h.path, trailing = Trailing.Chevron, onSelect = {})
@@ -274,7 +274,7 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
             doneLabel = "Search",
         ) { typed ->
             field.replaceAll(typed.trim())
-            val found = SettingsIndex.search(typed, sections, limit = SEARCH_LIMIT, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen, steam = app.platform.steam != null, decky = app.platform.decky != null)
+            val found = SettingsIndex.search(typed, sections, limit = SEARCH_LIMIT, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen, steam = app.platform.steam != null, decky = app.platform.decky != null, android = app.platform.host == io.github.matiyaaa.fuse.model.Host.ANDROID)
             // One place: straight there. Several: they are listed, the first chosen.
             if (found.size == 1) land(found.single().topic) else if (found.isNotEmpty()) { onSearch = false; rowSel.index = 0; inRows = true }
         }
@@ -295,7 +295,7 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
                 field, title = "Search settings", placeholder = "Text size, controller, RomM", doneLabel = "Go",
                 cancel = { field.replaceAll("") },
             ) {
-                val first = SettingsIndex.search(field.text, sections, limit = SEARCH_LIMIT, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen, steam = app.platform.steam != null, decky = app.platform.decky != null).firstOrNull()
+                val first = SettingsIndex.search(field.text, sections, limit = SEARCH_LIMIT, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen, steam = app.platform.steam != null, decky = app.platform.decky != null, android = app.platform.host == io.github.matiyaaa.fuse.model.Host.ANDROID).firstOrNull()
                 if (first != null) land(first.topic) else if (field.text.isBlank()) search()
             }
         }

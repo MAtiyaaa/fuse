@@ -26,6 +26,7 @@ internal class AndroidStayAwake(context: Context, private val activities: Activi
     fun apply(awake: StayAwake) {
         if (awake.cpu) hold() else release()
         DeviceAwake.hold("work", awake.cpu)
+        DeviceAwake.hold("art", awake.cpu && awake.finding)
         if (awake.screen != screen) {
             screen = awake.screen
             val on = awake.screen

@@ -224,7 +224,9 @@ fun HeroBackdrop(
         }
         val accent = layers.lastOrNull { !it.leaving }?.source?.accent ?: colors.accent
         val ink = colors.ink
-        // The dim and the three scrims never change with the art: drawn once into one picture.
+        // The dim, the three scrims and the game's glow change only with the theme and the art's
+        // colour: drawn once into one picture. Drawn every frame, the glow alone was a screen-sized
+        // gradient with noise in each pixel, the costliest thing a processor drew behind the Library.
         val flat = io.github.matiyaaa.fuse.ui.designsystem.effects.rememberFlatLayer()
         val dark = colors.isDark
         Box(
@@ -232,7 +234,7 @@ fun HeroBackdrop(
                 val left = Brush.horizontalGradient(*scrim(ink, 0.94f * gradient, LEFT_SCRIM))
                 val top = Brush.verticalGradient(*scrim(ink, 0.6f * gradient, TOP_SCRIM))
                 val bottom = Brush.verticalGradient(*scrim(ink, 0.97f * gradient, BOTTOM_SCRIM))
-                val key = listOf(ink, dark, dim, gradient)
+                val key = listOf(ink, dark, dim, gradient, accent)
                 // The room is lit by the game: a low, wide glow in its colour.
                 val glow = Brush.radialGradient(
                     0f to lerp(accent, Color.Transparent, 0.35f).copy(alpha = 0.28f),
@@ -249,8 +251,8 @@ fun HeroBackdrop(
                         drawDitheredRect(left)
                         drawDitheredRect(top)
                         drawDitheredRect(bottom)
+                        drawDitheredRect(glow)
                     }
-                    drawDitheredRect(glow)
                 }
             },
         )
@@ -282,6 +284,10 @@ private fun LitRoom(accent: Color, modifier: Modifier = Modifier) {
     val colors = Fuse.colors
     val dark = colors.isDark
     val room = if (dark) Color.Black else colors.ink
+    // The same room for as long as the accent stays: drawn once into one picture. Every game
+    // without art of its own showed this, and drawn anew each frame its three lights and grain cost a
+    // processor more than the rest of the screen together.
+    val flat = io.github.matiyaaa.fuse.ui.designsystem.effects.rememberFlatLayer()
     Box(
         modifier.fillMaxSize().drawWithCache {
             val w = size.width
@@ -301,10 +307,12 @@ private fun LitRoom(accent: Color, modifier: Modifier = Modifier) {
                 radius = size.maxDimension * 0.6f,
             )
             onDrawBehind {
-                drawDitheredRect(night)
-                drawDitheredRect(key)
-                drawDitheredRect(bounce)
-                drawGrain()
+                flat.draw(this, listOf(accent, room, dark)) {
+                    drawDitheredRect(night)
+                    drawDitheredRect(key)
+                    drawDitheredRect(bounce)
+                    drawGrain()
+                }
             }
         },
     )
@@ -478,6 +486,22 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
             if ((source.blurred || soft) && canBlur) {
                 // Blurred once, small, then shown scaled up: the same picture for a single draw a frame.
                 FrozenBlur(painter, source.model, loaded = held != null || state is AsyncImagePainter.State.Success, alignment, alpha = { shownImage }, onFrozen = { frozen = it }, modifier = Modifier.fillMaxSize().then(shade))
+            } else if (io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.cpu) {
+                // Without a graphics card the art is cropped and scaled to the screen once, with its
+                // shade, into a picture of the screen's size, and every frame after copies it: scaled
+                // anew each frame, it cost a processor more than the rest of the Library together.
+                val shown = held ?: (state as? AsyncImagePainter.State.Success)?.painter
+                val flat = io.github.matiyaaa.fuse.ui.designsystem.effects.rememberFlatLayer()
+                val shadeAlpha = if (source.blurred || soft) (if (canBlur) 0.35f else 0.6f) * shownImage else 0f
+                Box(
+                    Modifier.fillMaxSize().drawBehind {
+                        if (shown == null) return@drawBehind
+                        flat.draw(this, listOf(shown, alignment, shownImage, shadeAlpha, veil)) {
+                            drawCropped(shown, alignment, shownImage)
+                            if (shadeAlpha > 0f) drawDitheredRect(veil.copy(alpha = shadeAlpha))
+                        }
+                    },
+                )
             } else {
                 Box(
                     Modifier
@@ -488,6 +512,19 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
             }
         }
     }
+}
+
+/** [painter] filling the scope as [ContentScale.Crop] does, placed by [alignment], at [alpha]. */
+private fun DrawScope.drawCropped(painter: Painter, alignment: Alignment, alpha: Float) {
+    val intrinsic = painter.intrinsicSize
+    if (intrinsic.isUnspecified || intrinsic.width <= 0f || intrinsic.height <= 0f) {
+        with(painter) { draw(size, alpha) }
+        return
+    }
+    val scale = max(size.width / intrinsic.width, size.height / intrinsic.height)
+    val drawn = Size(intrinsic.width * scale, intrinsic.height * scale)
+    val at = alignment.align(IntSize(drawn.width.roundToInt(), drawn.height.roundToInt()), IntSize(size.width.roundToInt(), size.height.roundToInt()), layoutDirection)
+    translate(at.x.toFloat(), at.y.toFloat()) { with(painter) { draw(drawn, alpha) } }
 }
 
 /**

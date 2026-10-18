@@ -685,14 +685,32 @@ internal class DefaultMediaOps(
      * remembered when a source failed or was resting, since it may have had the rest.
      */
     private suspend fun fillOne(game: Game, job: FillJob, kinds: Set<MediaKind>, detailSources: Boolean, configured: Set<ScrapeProviderId>): GameFill {
-        // Looking by itself waits while a game runs or the device has just woken; asked-for fills don't.
-        if (job.auto) ctx.governor.await { it.artwork }
+        // Looking by itself waits while a game runs, the device has just woken or the person is moving
+        // through Fuse; asked-for fills don't.
+        if (job.auto) {
+            ctx.governor.await { it.artwork }
+            // Between runs of presses, never under a scroll.
+            ctx.governor.awaitQuiet()
+        }
         val owner = MediaOwner.OfGame(game.id)
         val plan = FillPlanner.plan(media.get(owner), job.mode, kinds)
         // Screenshots come along when the game is searched anyway, but never cause a search.
-        val needed = if (job.mode == MediaFillMode.FILL_MISSING) plan.fetch intersect MediaKind.needed(kinds) else plan.fetch
-        val wantDetails = detailSources && job.wantsDetails && game.metadata.lacksDetails()
+        var needed = if (job.mode == MediaFillMode.FILL_MISSING) plan.fetch intersect MediaKind.needed(kinds) else plan.fetch
+        var wantDetails = detailSources && job.wantsDetails && game.metadata.lacksDetails()
         if (needed.isEmpty() && !wantDetails) return GameFill()
+        // What another device of the household already found is taken as it is, with no provider
+        // asked: one search per household, not one per device. Only when filling; replacing asks anew.
+        var shared = 0
+        if (job.mode == MediaFillMode.FILL_MISSING) ctx.householdFill(game)?.let { found ->
+            val art = found.art.filter { it.kind in plan.fetch }
+            val details = found.metadata?.takeIf { wantDetails }
+            if (art.isNotEmpty() || details != null) {
+                shared = store(game, ScrapeOutcome.Accepted(ScrapeCandidate(art.firstOrNull()?.provider ?: ScrapeProviderId.LOCAL, "", found.title, confidence = 1f), details, art), job.mode, plan.fetch, household = true)
+                needed = needed - art.map { it.kind }.toSet()
+                if (details != null) wantDetails = false
+                if (needed.isEmpty() && !wantDetails) return GameFill(shared, details = details != null)
+            }
+        }
         val (request, coordinator) = request(game, plan.fetch, metadata = true, collectAll = false, demand = when {
             job.game != null -> io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand.NEW_GAME
             job.visible -> io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand.VISIBLE
@@ -711,7 +729,7 @@ internal class DefaultMediaOps(
             ?: coordinator.scrape(request, guess = Guess.EXACT_TITLE)
         return when (outcome) {
             is ScrapeOutcome.Accepted -> {
-                val added = store(game, outcome, job.mode, plan.fetch)
+                val added = shared + store(game, outcome, job.mode, plan.fetch)
                 val found = outcome.artwork.map { it.kind }.toSet()
                 val missing = needed - found
                 val choice = outcome.guessed && wantDetails
@@ -740,7 +758,8 @@ internal class DefaultMediaOps(
     private suspend fun remember(key: String, tried: Tried) =
         ctx.data.cache.put(FILL_TRIED, key, tried.encode(), ctx.now(), TRIED_DAYS * 24L * 60 * 60 * 1000)
 
-    private suspend fun store(game: Game, outcome: ScrapeOutcome.Accepted, mode: MediaFillMode, kinds: Set<MediaKind>): Int {
+    /** [household]: what another device found, so it names no provider id to remember. */
+    private suspend fun store(game: Game, outcome: ScrapeOutcome.Accepted, mode: MediaFillMode, kinds: Set<MediaKind>, household: Boolean = false): Int {
         val items = outcome.artwork
             .filter { it.kind in kinds }
             .groupBy { it.kind }
@@ -762,7 +781,7 @@ internal class DefaultMediaOps(
                 onlyFillEmpty = mode == MediaFillMode.FILL_MISSING,
             )
         }
-        remember(game, outcome)
+        if (!household) remember(game, outcome)
         return added
     }
 

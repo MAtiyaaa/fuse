@@ -25,6 +25,7 @@ import io.github.matiyaaa.fuse.ui.shell.platform.VideoPreview
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
 
 /**
@@ -61,6 +62,19 @@ class AndroidPlatformUi(
     override val capture: AndroidScreenCapture = AndroidScreenCapture(appContext, activities, scope)
     override val manuals: AndroidManuals = AndroidManuals(appContext)
     override val secondScreenLog: StateFlow<List<String>> = SecondScreenLog.entries
+
+    override val power: StateFlow<io.github.matiyaaa.fuse.ui.shell.platform.PowerFacts> =
+        kotlinx.coroutines.flow.combine(DeviceAwake.held, io.github.matiyaaa.fuse.RefreshHold.asked) { held, refresh ->
+            io.github.matiyaaa.fuse.ui.shell.platform.PowerFacts(
+                holding = buildSet {
+                    // "work" is the transfers and the art together; the transfers say so themselves.
+                    if ("transfers" in held || ("work" in held && "art" !in held)) add(io.github.matiyaaa.fuse.ui.shell.platform.PowerHold.TRANSFERS)
+                    if ("art" in held) add(io.github.matiyaaa.fuse.ui.shell.platform.PowerHold.ART)
+                },
+                refresh = refresh,
+                pausesAsleep = true,
+            )
+        }.stateIn(scope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(2_000), io.github.matiyaaa.fuse.ui.shell.platform.PowerFacts(pausesAsleep = true))
 
     private val hasBluetooth = appContext.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)
 

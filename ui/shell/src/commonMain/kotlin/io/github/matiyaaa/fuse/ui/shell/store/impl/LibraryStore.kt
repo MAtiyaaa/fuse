@@ -340,7 +340,20 @@ internal class DefaultLibraryOps(
 
     // Lists and search ------------------------------------------------------------------------------
 
-    override fun games(query: GameQuery): Flow<List<GameCard>> {
+    override fun games(query: GameQuery): Flow<List<GameCard>> = ctx.cards(summaries(query))
+
+    override fun counts(query: GameQuery): Flow<io.github.matiyaaa.fuse.ui.shell.store.GameCounts> = summaries(query)
+        .map { list -> io.github.matiyaaa.fuse.ui.shell.store.GameCounts(list.size, list.count { it.favorite }, list.count { it.lastPlayedAt != null }) }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
+
+    override fun gameIds(query: GameQuery): Flow<List<io.github.matiyaaa.fuse.model.GameId>> = summaries(query)
+        .map { list -> list.map { it.id } }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
+
+    /** The games [query] lists, sorted and filtered, without their art (a card reads every game's). */
+    private fun summaries(query: GameQuery): Flow<List<io.github.matiyaaa.fuse.data.repo.GameSummary>> {
         val games = data.games
         if (query.set != io.github.matiyaaa.fuse.ui.shell.store.GameSet.LIBRARY) {
             val set = when (query.set) {
@@ -354,7 +367,7 @@ internal class DefaultLibraryOps(
             val listed = kotlinx.coroutines.flow.combine(set, purged) { list, gone ->
                 if (query.set == io.github.matiyaaa.fuse.ui.shell.store.GameSet.REMOVED) list.filter { it.id.value !in gone } else list
             }
-            return ctx.cards(listed.map { list -> list.filter { query.platform == null || it.platformId == query.platform }.sortedWith(query.sort.comparator()) })
+            return listed.map { list -> list.filter { query.platform == null || it.platformId == query.platform }.sortedWith(query.sort.comparator()) }
         }
         val summaries = when {
             query.collection != null -> data.collections.observeGames(CollectionKey.Manual(query.collection))
@@ -362,12 +375,11 @@ internal class DefaultLibraryOps(
             query.platform != null -> games.observeByPlatform(query.platform, query.sort, query.includeHidden)
             else -> games.observeAll(query.sort, query.includeHidden)
         }
-        val sorted = if (query.collection != null || query.favoritesOnly) {
+        return if (query.collection != null || query.favoritesOnly) {
             summaries.map { list -> list.filter { query.platform == null || it.platformId == query.platform }.sortedWith(query.sort.comparator()) }
         } else {
             summaries
         }
-        return ctx.cards(sorted)
     }
 
     private val searcher by lazy {
@@ -638,8 +650,14 @@ internal class DefaultLibraryOps(
                 }
                 onStage(io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.STARTING)
                 // From here the emulator is starting: nothing calls it off any more.
+                val pressedAt = ctx.now()
                 when (val r = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { ctx.services.launcher.run(resolved, displayId) }) {
                     is RunResult.Started -> {
+                        ctx.recordLaunch(LaunchReport(
+                            at = pressedAt, title = game.displayTitle, system = platform.name,
+                            emulator = installedEmulator.name + (installedEmulator.version?.let { " $it" } ?: ""), core = usedCore,
+                            how = LaunchReport.how(plan), target = LaunchReport.target(resolved.target), tookMs = ctx.now() - pressedAt, saveNote = note,
+                        ))
                         startSession(id, installedEmulator.id, r.awaitExit, save?.takeIf { link != null }, plainSave, rommSave?.takeIf { rommMode.sends })
                         if (note != null) LaunchOutcome.Synced(note) else LaunchOutcome.Started
                     }

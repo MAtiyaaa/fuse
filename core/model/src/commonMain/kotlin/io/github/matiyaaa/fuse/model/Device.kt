@@ -145,6 +145,7 @@ enum class DualScreenMode {
 data class DisplayProfile(
     val mode: DualScreenMode = DualScreenMode.LIBRARY_COMPANION,
     val companionShowsPerformance: Boolean = false,
+    /** No longer a setting (it never changed anything: the second screen's touch controls always work); kept so saved settings still load. */
     val companionTouchControls: Boolean = true,
     /** Where apps open on a device with two screens, unless [appScreens] names one. */
     val appScreen: LaunchDisplay = LaunchDisplay.ASK,

@@ -88,8 +88,14 @@ private fun fuseTypography(sora: FontFamily, manrope: FontFamily, scale: Float):
         fontFamily = sora, fontWeight = weight, fontSize = (size * k).sp, lineHeight = (line * k).sp,
         letterSpacing = tracking.em, lineHeightStyle = trim, lineBreak = LineBreak.Heading, textDirection = direction, platformStyle = sharpText,
     )
+    // Reading text a weight heavier where light letters would come out thin ([strongerText]).
+    fun heavier(weight: FontWeight) = if (!strongerText) weight else when (weight) {
+        FontWeight.Normal -> FontWeight.Medium
+        FontWeight.Medium -> FontWeight.SemiBold
+        else -> weight
+    }
     fun text(size: Int, line: Int, weight: FontWeight, tracking: Double = 0.0) = TextStyle(
-        fontFamily = manrope, fontWeight = weight, fontSize = (size * scale).sp, lineHeight = (line * scale).sp,
+        fontFamily = manrope, fontWeight = heavier(weight), fontSize = (size * scale).sp, lineHeight = (line * scale).sp,
         letterSpacing = tracking.em, lineHeightStyle = trim, textDirection = direction, platformStyle = sharpText,
     )
     return FuseTypography(

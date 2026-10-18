@@ -253,7 +253,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         } else {
             combine(
                 listOf(LibrarySegment.MISSING, LibrarySegment.HIDDEN, LibrarySegment.REMOVED).map { s ->
-                    store.library.games(GameQuery(set = s.set)).map { s to it.size }
+                    // Counted from the games alone: as cards, each view read every game's art just to count it.
+                    store.library.counts(GameQuery(set = s.set)).map { s to it.total }
                 },
             ) { it.toMap() }
         }
@@ -263,18 +264,18 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         if (scope != LibraryScope.All) {
             flowOf(emptyMap())
         } else {
-            val base = store.library.games(GameQuery(platform = state.system))
-            val all = if (state.showHidden) store.library.games(GameQuery(platform = state.system, includeHidden = true)) else base
+            val base = store.library.counts(GameQuery(platform = state.system))
+            val all = if (state.showHidden) store.library.counts(GameQuery(platform = state.system, includeHidden = true)) else base
             combine(base, all, store.romm.systems, store.reach.state) { b, a, romm, household ->
                 // All counts every game once: this device's, then what RomM and the household's other
                 // devices have that this device doesn't.
                 val onRomm = romm.filter { state.system == null || it.platform == state.system }.sumOf { (it.games - it.installed).coerceAtLeast(0) }
                 val elsewhere = if (state.system == null) household.games else 0
                 mapOf(
-                    LibrarySegment.EVERYWHERE to a.size + onRomm + elsewhere,
-                    LibrarySegment.INSTALLED to a.size,
-                    LibrarySegment.FAVORITES to b.count { it.favorite },
-                    LibrarySegment.RECENT to b.count { it.lastPlayedAt != null },
+                    LibrarySegment.EVERYWHERE to a.total + onRomm + elsewhere,
+                    LibrarySegment.INSTALLED to a.total,
+                    LibrarySegment.FAVORITES to b.favorites,
+                    LibrarySegment.RECENT to b.played,
                 )
             }
         }

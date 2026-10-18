@@ -336,7 +336,7 @@ fun homeRows(app: AppState): List<MenuAction> {
             }))
             if (app.store.apps.supported) {
                 add(app.choiceRow(
-                    "apps.filter", "Apps opens on", FuseIcons.Smartphone, p.appsFilter,
+                    "apps.filter", "Apps tab shows first", FuseIcons.Smartphone, p.appsFilter,
                     listOf(AppFilter.ALL to "All apps", AppFilter.PINNED to "Pinned", AppFilter.EMULATORS to "Emulators"),
                     detail = "The list the Apps tab shows first. It keeps your place when you come back",
                 ) { v -> set { it.copy(appsFilter = v) } })
@@ -1736,7 +1736,6 @@ fun displayRows(app: AppState): List<MenuAction> {
             ) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(secondScreenHidden = v)) } })
             add(toggleRow("bg", "Same background as the main screen", FuseIcons.Image, d.companionFollowsBackground, "Its scene or picture behind what the second screen shows") { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionFollowsBackground = v)) } })
             add(toggleRow("perf", "Show performance on the second screen", FuseIcons.ChartLine, d.companionShowsPerformance, "Only values the system really reports; nothing is estimated") { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionShowsPerformance = v)) } })
-            add(toggleRow("touch", "Touch controls on the second screen", FuseIcons.Hand, d.companionTouchControls) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionTouchControls = v)) } })
         }
         // Only a device with a second screen mentions one.
         if (app.platform.features.secondScreen) labelled("Second screen") { addAll(second) }
@@ -1757,7 +1756,7 @@ fun performanceRows(app: AppState): List<MenuAction> {
                 detail = "Now: " + performanceSummary(p.performance, p.lowPower, cap, app.platform.host) +
                     "\nAutomatic picks for this device: ${cap.tier.name.lowercase().replaceFirstChar { it.uppercase() }}",
             ) { v -> app.store.updatePrefs { it.copy(performance = v) } })
-            add(toggleRow("low", "Low Power Mode", FuseIcons.Leaf, p.lowPower, "60 Hz, no video previews, blur, moving backgrounds or CRT; lighter artwork and a smaller image cache. Navigation stays quick") { v -> app.store.updatePrefs { it.copy(lowPower = v) } })
+            add(toggleRow("low", "Low Power Mode", FuseIcons.Leaf, p.lowPower, "No video previews, blur, moving backgrounds or CRT; lighter artwork and a smaller image cache. Navigation stays quick, and the refresh rate stays yours") { v -> app.store.updatePrefs { it.copy(lowPower = v) } })
             app.graphicsRow(drawing)?.let(::add)
             add(toggleRow("overlay", "Performance overlay", FuseIcons.ChartLine, p.performanceOverlay, "Fuse's own frame rate, memory and temperatures, only as the system reports them. Other apps' frame rates can't be read") { v -> app.store.updatePrefs { it.copy(performanceOverlay = v) } })
         }
