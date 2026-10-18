@@ -7,6 +7,7 @@ import io.github.matiyaaa.fuse.library.steam.SteamGameEntry
 import io.github.matiyaaa.fuse.library.steam.SteamHealthIssue
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
+import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.shell.store.DirectCommand
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
@@ -42,14 +43,73 @@ internal fun AppState.steamEntry(card: GameCard): Pair<SteamGameEntry, SteamArt>
     return SteamGameEntry(card.id.value, card.title, system) to art
 }
 
-/** Direct entries are chosen, and Steam here can have them. */
+/** Direct entries are chosen for every game, and Steam here can have them. */
 private fun AppState.directChosen(): Boolean = store.prefs.value.steam.directEntries && platform.steam?.directEntries == true
+
+/** How [card]'s entry starts: its own choice, else the one for every game. */
+private fun AppState.startsDirect(card: GameCard): Boolean =
+    platform.steam?.directEntries == true && (store.prefs.value.steam.startOverrides[card.id.value] ?: store.prefs.value.steam.directEntries)
+
+/**
+ * Game options, Steam Entry: how this game's entry starts, Fast Start or straight in its emulator,
+ * or as for every game. With its entry in Steam already, it is brought up to date after asking.
+ */
+internal fun AppState.steamStartPicker(card: GameCard) {
+    val steam = platform.steam ?: return
+    closeOverlays()
+    val own = store.prefs.value.steam.startOverrides[card.id.value]
+    val every = if (store.prefs.value.steam.directEntries) "Straight in the Emulator" else "Fuse Fast Start"
+    fun pick(value: Boolean?) {
+        choice = null
+        scope.launch {
+            store.updatePrefs { p ->
+                val next = if (value == null) p.steam.startOverrides - card.id.value else p.steam.startOverrides + (card.id.value to value)
+                p.copy(steam = p.steam.copy(startOverrides = next))
+            }
+            if (card.id.value in steamGameIds) addToSteam(listOf(card), card.title)
+        }
+    }
+    choice = ChoiceSpec(
+        title = "Steam Entry",
+        icon = FuseIcons.Rocket,
+        message = "How ${card.title} starts from Steam. Fast Start runs Fuse with no window, so saves, play time and profiles are as in Fuse; Direct starts its emulator itself, as Play would.",
+        options = listOf(
+            MenuAction("start.every", "As for Every Game", FuseIcons.Layers, detail = every, trailing = Trailing.Check(own == null), onSelect = { pick(null) }),
+            MenuAction("start.fast", "Fuse Fast Start", FuseIcons.Zap, trailing = Trailing.Check(own == false), section = "Just this game", onSelect = { pick(false) }),
+            MenuAction("start.direct", "Straight in the Emulator", FuseIcons.Joystick, trailing = Trailing.Check(own == true), section = "Just this game", onSelect = { pick(true) }),
+        ),
+    )
+}
+
+/**
+ * Offered once, after the first games the person put in Steam themselves: Keep Steam in Step,
+ * which is off until they say yes.
+ */
+private fun AppState.offerKeepInStep() {
+    val prefs = store.prefs.value.steam
+    if (prefs.automatic || prefs.automaticOffered) return
+    scope.launch { store.updatePrefs { p -> p.copy(steam = p.steam.copy(automaticOffered = true)) } }
+    choice = ChoiceSpec(
+        title = "Keep Steam in Step?",
+        icon = FuseIcons.RefreshCcw,
+        message = "Games that join your library from now on can go into Steam by themselves, and Fuse's entries for games that leave it come out. Games already in Fuse aren't added by it. You can change this in Settings, Library, Steam.",
+        options = listOf(
+            MenuAction("instep.on", "Keep in Step", FuseIcons.RefreshCcw, detail = "New games go into Steam by themselves", onSelect = {
+                choice = null
+                scope.launch { store.updatePrefs { p -> p.copy(steam = p.steam.copy(automatic = true)) } }
+            }),
+            MenuAction("instep.no", "Not Now", FuseIcons.Close, detail = "Games go into Steam only when you add them", onSelect = { choice = null }),
+        ),
+    )
+}
 
 /**
  * [entry] starting the way the person chose: with [direct], its emulator's own command, as Play
  * would start it; a game that can't start on its own keeps Fast Start, and [why] gets the reason.
  */
-private suspend fun AppState.startingAsChosen(entry: SteamGameEntry, direct: Boolean, why: MutableMap<Long, String>? = null): SteamGameEntry {
+private suspend fun AppState.startingAsChosen(entry: SteamGameEntry, everyGame: Boolean, why: MutableMap<Long, String>? = null): SteamGameEntry {
+    // A game's own choice wins over the one for every game, where Steam can have Direct entries.
+    val direct = platform.steam?.directEntries == true && (store.prefs.value.steam.startOverrides[entry.gameId] ?: everyGame)
     if (!direct) return entry
     return when (val c = runCatching { store.library.directCommand(io.github.matiyaaa.fuse.model.GameId(entry.gameId)) }.getOrElse { DirectCommand.Unavailable("It can't start here") }) {
         is DirectCommand.Ready -> entry.copy(direct = SteamDirect(c.argv, c.workingDir, c.env))
@@ -75,9 +135,10 @@ internal fun AppState.addToSteam(cards: List<GameCard>, what: String) {
         return
     }
     scope.launch {
-        val direct = directChosen()
         val why = HashMap<Long, String>()
-        val pairs = games.map { steamEntry(it) }.map { (entry, art) -> startingAsChosen(entry, direct, why) to art }
+        val pairs = games.map { steamEntry(it) }.map { (entry, art) -> startingAsChosen(entry, directChosen(), why) to art }
+        // Direct for this add when any of them was to start straight in its emulator.
+        val direct = games.any { startsDirect(it) }
         val plan = runCatching { steam.planGames(pairs.map { it.first }) }.getOrNull()
         if (plan == null) {
             toasts.show("Steam's library couldn't be read. Sign in to Steam once, then try again.", ToastKind.ERROR)
@@ -110,7 +171,7 @@ internal fun AppState.addToSteam(cards: List<GameCard>, what: String) {
         val art = pairs.associate { it.first.gameId to it.second }
         fun add(block: suspend () -> Result<String>) = scope.launch {
             block()
-                .onSuccess { toasts.show(it, icon = FuseIcons.Gamepad) }
+                .onSuccess { toasts.show(it, icon = FuseIcons.Gamepad); if (create.isNotEmpty()) offerKeepInStep() }
                 .onFailure { toasts.show(it.message ?: "Couldn't add them to Steam", ToastKind.ERROR) }
             refreshSteamGames()
         }

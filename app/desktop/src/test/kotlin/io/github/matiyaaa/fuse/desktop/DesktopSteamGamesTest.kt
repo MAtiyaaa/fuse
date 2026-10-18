@@ -189,9 +189,8 @@ class DesktopSteamGamesTest {
         val (original, _) = seed()
         steam.addGames(listOf(zelda), emptyMap(), collections = false).getOrThrow()
         val afterFirst = File(config, "shortcuts.vdf").readBytes()
-        Thread.sleep(5)
+        // Straight after each other: each is still a change of its own.
         steam.addGames(listOf(SteamGameEntry(3, "Chrono Trigger", "Super Nintendo")), emptyMap(), collections = false).getOrThrow()
-        Thread.sleep(5)
         steam.removeGames(setOf(12L)).getOrThrow()
         assertEquals(listOf("Took 1 game out", "Added 1 game", "Added 1 game"), steam.undoSteps().map { it.what })
 

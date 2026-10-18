@@ -392,7 +392,18 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
             if (card.id.value in steamGameIds) {
                 add(MenuAction("steam", "Remove from Steam", FuseIcons.Gamepad, detail = "Only the entry Fuse made", onSelect = { closeOverlays(); removeFromSteam(listOf(card), card.title) }))
             } else {
-                add(MenuAction("steam", "Add to Steam", FuseIcons.Gamepad, detail = "Starts through Fuse, with its art", onSelect = { closeOverlays(); addToSteam(listOf(card), card.title) }))
+                add(MenuAction("steam", "Add to Steam", FuseIcons.Gamepad, detail = "Starts with Fuse Fast Start, with its art", onSelect = { closeOverlays(); addToSteam(listOf(card), card.title) }))
+            }
+            // Fast Start or straight in its emulator, for this game alone (where Steam can have that).
+            if (platform.steam?.directEntries == true) {
+                val own = store.prefs.value.steam.startOverrides[card.id.value]
+                add(MenuAction(
+                    "steamstart", "Steam Entry", FuseIcons.Rocket,
+                    detail = "How it starts from Steam", trailing = Trailing.Value(
+                        when (own) { true -> "Direct"; false -> "Fast Start"; null -> if (store.prefs.value.steam.directEntries) "Direct" else "Fast Start" },
+                    ),
+                    onSelect = { steamStartPicker(card) },
+                ))
             }
         }
         // The save files on this device, as its emulator keeps them: with any save sync, or none.

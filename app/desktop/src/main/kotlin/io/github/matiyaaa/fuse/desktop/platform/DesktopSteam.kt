@@ -392,7 +392,7 @@ internal class DesktopSteam(
         var updated = 0
         var elsewhere = 0
         var written = 0
-        val step = System.currentTimeMillis()
+        val step = nextStep()
         for (dir in users) {
             try {
                 val file = File(dir, "shortcuts.vdf")
@@ -461,7 +461,7 @@ internal class DesktopSteam(
         withContext(Dispatchers.IO) {
             if (steamRunningNow()) return@withContext Result.failure(IllegalStateException("Close Steam first: it rewrites its library when it quits."))
             var removed = 0
-            val step = System.currentTimeMillis()
+            val step = nextStep()
             for (dir in userConfigDirs(create = false)) {
                 val file = File(dir, "shortcuts.vdf").takeIf { it.isFile } ?: continue
                 val before = runCatching { file.readBytes() }.getOrNull() ?: continue
@@ -489,7 +489,7 @@ internal class DesktopSteam(
             if (steamRunningNow()) return@withContext Result.failure(IllegalStateException("Close Steam first: it rewrites its library when it quits."))
             val exe = program() ?: return@withContext Result.failure(IllegalStateException("Run Fuse from its AppImage or installed copy, then try again."))
             var changed = 0
-            val step = System.currentTimeMillis()
+            val step = nextStep()
             for (dir in userConfigDirs(create = false)) {
                 val file = File(dir, "shortcuts.vdf").takeIf { it.isFile } ?: continue
                 val before = runCatching { file.readBytes() }.getOrNull() ?: continue
@@ -543,7 +543,7 @@ internal class DesktopSteam(
             val wanted = prepared(takes.map { it.second }).associateBy { it.gameId }
             val byId = takes.mapNotNull { (learned, entry) -> wanted[entry.gameId]?.let { learned.appId to it } }.toMap()
             var changed = 0
-            val step = System.currentTimeMillis()
+            val step = nextStep()
             for (dir in userConfigDirs(create = false)) {
                 val file = File(dir, "shortcuts.vdf").takeIf { it.isFile } ?: continue
                 val before = runCatching { file.readBytes() }.getOrNull() ?: continue
@@ -605,6 +605,12 @@ internal class DesktopSteam(
             if (undone == 0) Result.failure(IllegalStateException("There's no change of Fuse's to undo.")) else Result.success("Steam's library is back as it was before that change.")
         }
     }
+
+    @Volatile private var lastStep = 0L
+
+    /** A new write's step: when it was made, and always after the one before (a clock ticks coarsely on some systems). */
+    @Synchronized
+    private fun nextStep(): Long = maxOf(System.currentTimeMillis(), lastStep + 1).also { lastStep = it }
 
     /**
      * Steam's list as it was before a write of Fuse's, kept by [step] (when it was made) with what

@@ -793,4 +793,8 @@ data class SteamIntegrationSettings(
      * entries for games that leave it come out. Off until the person turns it on.
      */
     val automatic: Boolean = false,
+    /** Keep Steam in Step was offered once, after the first game the person added to Steam. */
+    val automaticOffered: Boolean = false,
+    /** How a game's entry starts when the person chose it for that game: true Direct, false Fast Start. */
+    val startOverrides: Map<Long, Boolean> = emptyMap(),
 )

@@ -765,8 +765,9 @@ plugin, time played in a Direct entry isn't counted (Steam's own `localconfig.vd
 by Valve, so Fuse doesn't read it).
 
 **Keep Steam in Step** (off until chosen) puts games that join the library into Steam by themselves,
-starting as How Steam Starts Them says, and takes out Fuse's entries for games that leave it. Games
-already in the library aren't added by it. **Undo a Change** lists Fuse's last ten writes, each with
+starting as How Steam Starts Them says (or as a game's own Steam Entry says), and takes out Fuse's
+entries for games that leave it. Games already in the library aren't added by it. Fuse offers it
+once, after the first add the person makes themselves, and never again. **Undo a Change** lists Fuse's last ten writes, each with
 what it did, and puts Steam's list back as it was before any of them.
 
 **Shortcuts From Other Tools** (Settings, Library, Steam) reads the shortcuts Steam ROM Manager,
