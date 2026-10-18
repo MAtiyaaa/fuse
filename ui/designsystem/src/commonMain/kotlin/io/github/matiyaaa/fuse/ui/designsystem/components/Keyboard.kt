@@ -215,14 +215,18 @@ private const val HOLD_REPEATS = 3
  * spaces in a row become a full stop, like a phone keyboard. Search leaves it off.
  */
 @Stable
-class KeyboardState(val autoCapitalize: Boolean = false) {
+class KeyboardState(
+    val autoCapitalize: Boolean = false,
+    /** The page it opens on: numbers for a number, letters for anything else. */
+    val startPage: KeyPage = KeyPage.LETTERS,
+) {
     /**
      * The screen around the keyboard is laid out right to left, so what reaches it is mirrored; its
      * keys stay in their own (left to right) order, so it turns left and right back.
      */
     internal var mirroredInput: Boolean = false
 
-    var page by mutableStateOf(KeyPage.LETTERS)
+    var page by mutableStateOf(startPage)
     var shift by mutableStateOf(ShiftState.OFF)
     var row by mutableIntStateOf(0)
     var column by mutableIntStateOf(0)
@@ -257,7 +261,7 @@ class KeyboardState(val autoCapitalize: Boolean = false) {
 
     /** Sets Shift for the text as it is (a capital at the start when [autoCapitalize]). */
     fun prepare(field: EditableText) {
-        page = KeyPage.LETTERS
+        page = startPage
         shift = if (autoCapitalize && sentenceStart(field)) ShiftState.ONCE else ShiftState.OFF
     }
 

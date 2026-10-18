@@ -868,6 +868,33 @@ exactly.
   shown and never changed. The file as it was is kept in Fuse's data (`emulator-backups/`) the first
   time Fuse changes it, and every write is atomic. Rules from PCSX2's `pcsx2/Patch.cpp`,
   `pcsx2/VMManager.cpp` and `pcsx2/Pcsx2Config.cpp`.
+- **Emulator settings, and Every Setting (Fuse Tune)** (Linux, Windows, macOS). Fuse's own picks
+  (renderer, resolution, aspect ratio and the like, with Fuse's words for them) and Every Setting
+  change the emulator's own settings files, for every game or for one game: PCSX2
+  (`inis/PCSX2.ini`, `gamesettings/SERIAL_CRC.ini`), DuckStation (`settings.ini`,
+  `gamesettings/SERIAL.ini`), PPSSPP (`PSP/SYSTEM/ppsspp.ini`, `PSP/SYSTEM/GAMEID_ppsspp.ini`), Dolphin (`Dolphin.ini`
+  and `GFX.ini`, a game's `GameSettings/GAMEID.ini` under its own section names) and RPCS3
+  (`config.yml`, a game's `custom_configs/config_<title id>.yml`, in RPCS3's `config` folder on
+  Windows, as `fs::get_config_dir(true)` has it). Every Setting is all of an emulator's settings,
+  read by Fuse Tune (`tools/tune`) from the emulator's own settings code at its last four release
+  tags, never typed in by hand: PCSX2's `SettingsWrap*` calls in `pcsx2/Pcsx2Config.cpp` with types
+  and defaults from `pcsx2/Config.h` and each options' constructor; DuckStation's `si.Get*Value`
+  calls in `src/core/settings.cpp` with its name arrays and the constants in `settings.h`;
+  PPSSPP's `ConfigSetting` tables in `Core/Config.cpp` (only those flagged `PER_GAME` for a game,
+  none flagged `DONT_SAVE`); Dolphin's `Info<T>` declarations in `Core/Config/*Settings.cpp`, with
+  `GameConfigLoader.cpp`'s table of a game's sections; RPCS3's `cfg::node` tree in
+  `rpcs3/Emu/system_config.h`, with the words for its choices from `system_config_types.cpp`. Only
+  names, kinds, ranges, choices and defaults are taken, no code. The installed version decides
+  which settings show (the newest release read that is no newer than it), a choice a system's
+  build hasn't got (DuckStation's Direct3D on Linux) isn't offered, and a value the emulator
+  wouldn't read (a number out of its range) is refused before anything is written. Files are
+  edited in place: every other line, comment and spacing stays, an ini file through `IniText` and
+  RPCS3's YAML through `YamlText`. Fuse keeps what each key held before it first changed it, and
+  Put Back What Fuse Changed restores exactly that (a key changed in the emulator since stays); a
+  game's own file Fuse made is taken away again once nothing it set is left. RPCS3 gives a game
+  with its own settings file none of the settings from its own database
+  (`rpcs3/Emu/System.cpp`: "Found custom config. Ignoring database config"), so Fuse says so before
+  it makes one.
 - **Installed content (games, updates, DLC, licences).** Fuse-native, with nothing of RomM or
   Cartridge involved. Fuse reads the unencrypted parts of each file and plans the install:
   - `.pkg` headers as RPCS3 (`rpcs3/Crypto/unpkg.h`), Vita3K (`vita3k/packages/src/pkg.cpp`) and

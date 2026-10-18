@@ -1101,7 +1101,7 @@ internal class DefaultLibraryOps(
     private val nativePatches by lazy { NativePatches(ctx, { emulators.detectNow() }, ::discIdentity, ::pspGameId, ::retroArchRun) }
 
     /** The emulator settings Fuse changes, for a game or for every game. */
-    private val nativeSettings by lazy { NativeSettingsStore(ctx, { emulators.detectNow() }, ::discIdentity, ::pspGameId, nintendoGameId = ::nintendoGameId, startsIn = { startsWith(it).first.installed }, changeSettings = changeSettings) }
+    private val nativeSettings by lazy { NativeSettingsStore(ctx, { emulators.detectNow() }, ::discIdentity, ::pspGameId, nintendoGameId = ::nintendoGameId, startsIn = { startsWith(it).first.installed }, changeSettings = changeSettings, ps3TitleId = ::ps3TitleId) }
 
     override suspend fun emulatorSettings(id: GameId?, emulator: EmulatorId?) = nativeSettings.view(id, emulator)
 
@@ -1114,6 +1114,10 @@ internal class DefaultLibraryOps(
     override suspend fun setEmulatorSetting(id: GameId?, emulator: EmulatorId?, setting: String, value: String?) = nativeSettings.set(id, emulator, setting, value)
 
     override suspend fun restoreEmulatorSettings(id: GameId?, emulator: EmulatorId?) = nativeSettings.restore(id, emulator)
+
+    override suspend fun everyEmulatorSetting(id: GameId?, emulator: EmulatorId?) = nativeSettings.every(id, emulator)
+
+    override suspend fun setEveryEmulatorSetting(id: GameId?, emulator: EmulatorId?, setting: String, value: String?) = nativeSettings.setEvery(id, emulator, setting, value)
 
     /** How [game] would start here, as [launch] resolves it, with the RetroArch core it would use (if any). */
     private suspend fun startsWith(game: io.github.matiyaaa.fuse.model.Game): Pair<ResolvedLaunch, String?> {

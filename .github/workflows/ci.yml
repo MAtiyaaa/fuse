@@ -74,6 +74,7 @@ jobs:
           :app:desktop:test
           :app:host:test
           :app:host:installDist
+          :tools:tune:test
 
       # The Fuse One Host image builds from what installDist made (nothing is pushed here).
       - name: Build the Fuse One Host image

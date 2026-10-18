@@ -56,7 +56,7 @@ object EmulatorContracts {
                 val saves = if (adapter != null) Cell(Level.SUPPORTED, "") else Cell(Level.NOT_SUPPORTED, SaveAdapters.whyNot(a.id.value))
                 val computer = a.host != Host.ANDROID
                 val settings = when {
-                    computer && fam in NativeSettings.families -> Cell(Level.SUPPORTED, "for every game and for one game")
+                    computer && fam in NativeSettings.changeable -> Cell(Level.SUPPORTED, "for every game and for one game")
                     computer -> Cell(Level.NOT_SUPPORTED, "changed in the emulator")
                     else -> Cell(Level.NOT_SUPPORTED, "changed in the emulator on Android")
                 }

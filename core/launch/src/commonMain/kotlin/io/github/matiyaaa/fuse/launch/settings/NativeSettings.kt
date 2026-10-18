@@ -1,6 +1,5 @@
 package io.github.matiyaaa.fuse.launch.settings
 
-import io.github.matiyaaa.fuse.launch.patches.IniText
 import io.github.matiyaaa.fuse.model.Host
 
 /** One value a setting can take: what the emulator's file holds, and what to call it. */
@@ -63,6 +62,9 @@ object NativeSettings {
 
     /** The emulators Fuse changes settings in, by their family (`pcsx2`, from `linux.pcsx2`). */
     val families = setOf("pcsx2", "duckstation", "ppsspp", "dolphin")
+
+    /** The emulators whose settings Fuse changes: these, and RPCS3, whose come only as Every Setting (see [Tune]). */
+    val changeable: Set<String> = families + "rpcs3"
 
     /** Dolphin's graphics settings file (GFX.ini), beside Dolphin.ini. */
     const val DOLPHIN_GFX = "GFX"
@@ -238,7 +240,7 @@ data class SettingValue(val setting: NativeSetting, val value: String, val sourc
  */
 object SettingsEdit {
     /** A setting's value for a game: the game's own file, else the emulator's file, else its default. */
-    fun valueFor(setting: NativeSetting, game: IniText?, global: IniText?): SettingValue {
+    fun valueFor(setting: NativeSetting, game: SettingsText?, global: SettingsText?): SettingValue {
         val every = global?.values(setting.section, setting.key)?.lastOrNull()
         val own = if (setting.perGame) game?.values(setting.sectionIn(game = true), setting.key)?.lastOrNull() else null
         val everyGame = every ?: setting.default
@@ -264,7 +266,7 @@ object SettingsEdit {
      * Sets (or, with a null [value], takes out) [section] [key] in [file] and returns [records] with
      * this key's record made or brought up to date.
      */
-    fun change(file: IniText, records: Set<String>, section: String, key: String, value: String?): Set<String> {
+    fun change(file: SettingsText, records: Set<String>, section: String, key: String, value: String?): Set<String> {
         val all = records.mapNotNull(::parse)
         val earlier = all.firstOrNull { it.section.equals(section, ignoreCase = true) && it.key.equals(key, ignoreCase = true) }
         val was = earlier?.was ?: if (earlier == null) file.values(section, key).lastOrNull() else null
@@ -274,7 +276,7 @@ object SettingsEdit {
     }
 
     /** Puts back what [records] say each key held before Fuse; a key changed since in the emulator stays. Returns how many stayed. */
-    fun restore(file: IniText, records: Set<String>): Int {
+    fun restore(file: SettingsText, records: Set<String>): Int {
         var kept = 0
         for (r in records.mapNotNull(::parse)) {
             val current = file.values(r.section, r.key).lastOrNull()

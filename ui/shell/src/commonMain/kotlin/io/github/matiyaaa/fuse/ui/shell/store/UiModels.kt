@@ -589,6 +589,38 @@ sealed interface EmulatorSettingsView {
     data class Unavailable(val title: String, val reason: String) : EmulatorSettingsView
 }
 
+/** One of every setting (Fuse Tune), with its value here and where that comes from. */
+data class TuneValue(
+    val setting: io.github.matiyaaa.fuse.launch.settings.TuneSetting,
+    /** What the file holds or, with nothing set, the emulator's default (null when it works that out when it runs). */
+    val value: String?,
+    val source: io.github.matiyaaa.fuse.launch.settings.SettingSource,
+    /** What every game has (for a game's own view), the same way. */
+    val everyGame: String?,
+)
+
+/** Every setting in one part of the emulator's settings, in the order its code lists them. */
+data class TuneSection(val id: String, val title: String, val values: List<TuneValue>)
+
+sealed interface EverySettingView {
+    data class Ready(
+        val emulator: String,
+        /** The game these are for; null when they are for every game. */
+        val game: String?,
+        /** The release of the emulator's code these were read from (the installed version's, or the nearest read). */
+        val release: String?,
+        val sections: List<TuneSection>,
+        /** Fuse changed something in these files that it can put back. */
+        val canRestore: Boolean,
+        /** Said before a game's own settings file is made, when making it changes something else (RPCS3's database settings). */
+        val gameFileNote: String? = null,
+    ) : EverySettingView {
+        val count: Int get() = sections.sumOf { it.values.size }
+    }
+
+    data class Unavailable(val title: String, val reason: String) : EverySettingView
+}
+
 /** Places [FamilyMoves.offers] to bring an emulator's family's things from, and what was brought already. */
 data class FamilyMoves(val offers: List<io.github.matiyaaa.fuse.sync.FamilyFolder>, val done: List<FamilyMoveDone>)
 

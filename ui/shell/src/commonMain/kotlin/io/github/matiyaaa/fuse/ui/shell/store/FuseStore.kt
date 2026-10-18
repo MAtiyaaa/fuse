@@ -635,6 +635,20 @@ interface LibraryOps {
     /** Puts back what Fuse changed in these settings; anything changed in the emulator since stays. */
     suspend fun restoreEmulatorSettings(id: GameId?, emulator: EmulatorId?): Boolean = false
 
+    /**
+     * Every setting the emulator's own code has (Fuse Tune), for the game [id] or for every game in
+     * [emulator], as the installed version has them, each with its value and where it comes from.
+     */
+    suspend fun everyEmulatorSetting(id: GameId?, emulator: EmulatorId? = null): EverySettingView =
+        EverySettingView.Unavailable("Not here", "Emulator settings can only be changed from Fuse on a computer.")
+
+    /**
+     * Gives the Fuse Tune setting [setting] ([io.github.matiyaaa.fuse.launch.settings.TuneSetting.id])
+     * the [value] for the game [id] (or every game); null makes a game follow every game's again, or
+     * leaves every game with the emulator's default. A value the emulator doesn't read is refused.
+     */
+    suspend fun setEveryEmulatorSetting(id: GameId?, emulator: EmulatorId?, setting: String, value: String?): Boolean = false
+
     /** Gives the game [id] (in [emulator]'s settings) every value of [profile], one of [EmulatorSettingsView.Ready.profiles]. */
     suspend fun applySettingProfile(id: GameId?, emulator: EmulatorId?, profile: String): Boolean = false
 

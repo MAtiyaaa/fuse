@@ -8,7 +8,13 @@ import io.github.matiyaaa.fuse.data.settings.OwnSettingProfile
 import io.github.matiyaaa.fuse.launch.settings.NativeSettings
 import io.github.matiyaaa.fuse.launch.settings.SettingProfile
 import io.github.matiyaaa.fuse.launch.settings.SettingProfiles
+import io.github.matiyaaa.fuse.launch.settings.SettingSource
 import io.github.matiyaaa.fuse.launch.settings.SettingsEdit
+import io.github.matiyaaa.fuse.launch.settings.SettingsText
+import io.github.matiyaaa.fuse.launch.settings.Tune
+import io.github.matiyaaa.fuse.launch.settings.TuneKind
+import io.github.matiyaaa.fuse.launch.settings.TuneSetting
+import io.github.matiyaaa.fuse.launch.settings.YamlText
 import io.github.matiyaaa.fuse.library.disc.DiscIdentity
 import io.github.matiyaaa.fuse.model.EmulatorId
 import io.github.matiyaaa.fuse.model.Game
@@ -16,13 +22,18 @@ import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.InstalledEmulator
 import io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles
 import io.github.matiyaaa.fuse.ui.shell.store.EmulatorSettingsView
+import io.github.matiyaaa.fuse.ui.shell.store.EverySettingView
 import io.github.matiyaaa.fuse.ui.shell.store.SettingProfileView
+import io.github.matiyaaa.fuse.ui.shell.store.TuneSection
+import io.github.matiyaaa.fuse.ui.shell.store.TuneValue
 
 /**
  * An emulator's own settings, for every game or for one game, read and changed in the emulator's own
- * files (PCSX2, DuckStation, PPSSPP, Dolphin): a game's file holds only what differs for it, the rest comes
- * from the emulator's settings for every game. Every key Fuse changes is recorded with what it held
- * before, so Fuse can put back exactly that (see [SettingsEdit]).
+ * files (PCSX2, DuckStation, PPSSPP, Dolphin, and RPCS3 for Every Setting): a game's file holds only
+ * what differs for it, the rest comes from the emulator's settings for every game. Every key Fuse
+ * changes is recorded with what it held before, so Fuse can put back exactly that (see
+ * [SettingsEdit]). Fuse's own picks ([NativeSettings]) come with words of Fuse's; Every Setting is
+ * all of them, as the emulator's code has them ([Tune]).
  */
 internal class NativeSettingsStore(
     private val ctx: StoreContext,
@@ -35,6 +46,8 @@ internal class NativeSettingsStore(
     private val startsIn: suspend (Game) -> InstalledEmulator?,
     /** Changes the stored settings, for the person's own profiles. */
     private val changeSettings: suspend ((AppSettings) -> AppSettings) -> Unit = {},
+    /** A PS3 game's title id (BLUS30443), which RPCS3 keeps its own settings under. */
+    private val ps3TitleId: suspend (Game) -> String? = { null },
 ) {
     private val data = ctx.data
     private val fs get() = ctx.services.fs
@@ -49,8 +62,18 @@ internal class NativeSettingsStore(
         val gameTitle: String?,
         /** The emulator's other settings files for every game, by [io.github.matiyaaa.fuse.launch.settings.NativeSetting.file]. */
         val globals: Map<String, String> = emptyMap(),
+        /** Its files are YAML (RPCS3's), not ini. */
+        val yaml: Boolean = false,
+        /** The installed version, for which of every setting it has. */
+        val version: String? = null,
     ) {
         val forGame: Boolean get() = gamePath != null
+
+        /** A file of this emulator's, to edit in place. */
+        fun text(content: String?): SettingsText = if (yaml) YamlText(content ?: "") else IniText(content ?: "")
+
+        /** The file the every-setting [setting] is changed in by this view. */
+        fun pathOf(setting: TuneSetting): String = gamePath ?: setting.file?.let { globals[it] } ?: globalPath
 
         /** The file [setting] is changed in by this view. */
         fun pathOf(setting: io.github.matiyaaa.fuse.launch.settings.NativeSetting): String =
@@ -69,7 +92,7 @@ internal class NativeSettingsStore(
         val installed = if (game != null) {
             val starts = startsIn(game)
             when {
-                starts != null && family(starts) in NativeSettings.families -> starts
+                starts != null && family(starts) in FAMILIES -> starts
                 starts != null -> return no("Fuse can't change ${starts.name}'s settings", "This game starts in ${starts.name}, which keeps its own settings; change them there. $SUPPORTED")
                 else -> PLATFORM_FAMILY[game.platformId.value]?.let { f -> ctx.installed.value.firstOrNull { family(it) == f } }
                     ?: return no("No emulator to set up", "$SUPPORTED None of them plays this game here.")
@@ -79,6 +102,7 @@ internal class NativeSettingsStore(
         }
         val family = family(installed)
         val name = installed.name
+        val version = installed.version
         fun notSetUp() = no("$name isn't set up yet", "Start $name once and finish its first-run setup, then come back.")
         fun unreadable(what: String) = no("Fuse can't tell which game this is", "$name keeps a game's own settings under its $what, which Fuse reads from ISO and BIN images (and EBOOT.PBP files for PSP). Compressed images (CHD, CSO) aren't read; change this game's settings in $name.")
         return when (family) {
@@ -89,7 +113,7 @@ internal class NativeSettingsStore(
                     val crc = disc.crc ?: return unreadable("serial and CRC")
                     "${home.gameSettings}/${Pcsx2PatchRules.gameSettingsName(disc.serial, crc)}"
                 } else null
-                Target(family, name, files, home.settingsFile, gamePath, game?.titles?.original) to null
+                Target(family, name, files, home.settingsFile, gamePath, game?.titles?.original, version = version) to null
             }
             "duckstation" -> {
                 val home = files.duckstation(installed) ?: return notSetUp()
@@ -97,12 +121,12 @@ internal class NativeSettingsStore(
                     val disc = discIdentity(game.id)?.takeIf { !it.ps2 } ?: return unreadable("serial")
                     "${home.gameSettings}/${DuckStationPatchRules.gameSettingsName(disc.serial)}"
                 } else null
-                Target(family, name, files, home.settingsFile, gamePath, game?.titles?.original) to null
+                Target(family, name, files, home.settingsFile, gamePath, game?.titles?.original, version = version) to null
             }
             "ppsspp" -> {
                 val home = files.ppsspp(installed) ?: return notSetUp()
                 val gamePath = if (game != null) home.gameSettingsFile(pspGameId(game) ?: return unreadable("game id")) else null
-                Target(family, name, files, home.settingsFile, gamePath, game?.titles?.original) to null
+                Target(family, name, files, home.settingsFile, gamePath, game?.titles?.original, version = version) to null
             }
             "dolphin" -> {
                 val home = files.dolphin(installed) ?: return notSetUp()
@@ -111,19 +135,31 @@ internal class NativeSettingsStore(
                         ?: return no("Fuse can't tell which game this is", "Dolphin keeps a game's own settings under its six-letter id, which Fuse reads from ISO, GCM, RVZ, WIA and CISO images. Change this game's settings in Dolphin, or add its id to the file name, like [GALE01].")
                     home.gameFile(gameId)
                 } else null
-                Target(family, name, files, home.file(null), gamePath, game?.titles?.original, mapOf(NativeSettings.DOLPHIN_GFX to home.file(NativeSettings.DOLPHIN_GFX))) to null
+                Target(family, name, files, home.file(null), gamePath, game?.titles?.original, mapOf(NativeSettings.DOLPHIN_GFX to home.file(NativeSettings.DOLPHIN_GFX)), version = version) to null
+            }
+            "rpcs3" -> {
+                val config = files.rpcs3Config(installed) ?: return notSetUp()
+                // fs::get_config_dir(true) (Utilities/File.cpp): its own `config` folder on Windows.
+                val dir = if (ctx.host == io.github.matiyaaa.fuse.model.Host.WINDOWS) "$config/config" else config
+                val gamePath = if (game != null) {
+                    val titleId = ps3TitleId(game)
+                        ?: return no("Fuse can't tell which game this is", "RPCS3 keeps a game's own settings under its title id (like BLUS30443), which Fuse reads from the file or folder name, or from a game folder's PARAM.SFO. Change this game's settings in RPCS3.")
+                    // rpcs3::utils::get_custom_config_path (rpcs3/Emu/system_utils.cpp).
+                    "$dir/custom_configs/config_$titleId.yml"
+                } else null
+                Target(family, name, files, "$dir/config.yml", gamePath, game?.titles?.original, yaml = true, version = version) to null
             }
             else -> no("Fuse can't change ${installed.name}'s settings", "$SUPPORTED Change ${installed.name}'s in ${installed.name}.")
         }
     }
 
-    private suspend fun read(path: String?): IniText? = path?.let { fs.readText(it, MAX_TEXT) }?.let { IniText(it) }
+    private suspend fun read(t: Target, path: String?): SettingsText? = path?.let { fs.readText(it, MAX_TEXT) }?.let(t::text)
 
     suspend fun view(id: GameId?, emulator: EmulatorId?): EmulatorSettingsView {
         val (t, unavailable) = target(id, emulator)
         if (t == null) return unavailable!!
-        val globals = (listOf<String?>(null) + t.globals.keys).associateWith { read(it?.let(t.globals::get) ?: t.globalPath) }
-        val game = read(t.gamePath)
+        val globals = (listOf<String?>(null) + t.globals.keys).associateWith { read(t, it?.let(t.globals::get) ?: t.globalPath) }
+        val game = read(t, t.gamePath)
         val settings = NativeSettings.forEmulator(t.family, ctx.host).filter { !t.forGame || it.perGame }
         val values = settings.map { SettingsEdit.valueFor(it, if (t.forGame) game else null, globals[it.file]) }
         val current = values.associate { it.setting.id to it.value }
@@ -162,7 +198,7 @@ internal class NativeSettingsStore(
         val p = profiles(t.family).firstOrNull { it.id == profile } ?: return false
         val settings = NativeSettings.forEmulator(t.family, ctx.host)
         val before = fs.readText(path, MAX_TEXT)
-        val file = IniText(before ?: "")
+        val file = t.text(before)
         var records = data.owned.get(KIND, path)
         for ((key, value) in p.values) {
             val s = settings.firstOrNull { it.id == key && it.perGame } ?: continue
@@ -202,7 +238,7 @@ internal class NativeSettingsStore(
         if (value != null && s.choices.none { it.value == value }) return false
         val path = t.pathOf(s)
         val before = fs.readText(path, MAX_TEXT)
-        val file = IniText(before ?: "")
+        val file = t.text(before)
         val records = SettingsEdit.change(file, data.owned.get(KIND, path), s.sectionIn(t.forGame), s.key, value)
         if (!t.files.write(path, file.toString())) return false
         data.owned.set(KIND, path, records)
@@ -219,7 +255,7 @@ internal class NativeSettingsStore(
             val records = data.owned.get(KIND, path)
             if (records.isEmpty()) continue
             val text = fs.readText(path, MAX_TEXT)
-            val file = IniText(text ?: "")
+            val file = t.text(text)
             SettingsEdit.restore(file, records)
             val made = data.owned.get(KIND, "$path#made").isNotEmpty()
             val done = when {
@@ -235,6 +271,87 @@ internal class NativeSettingsStore(
         return any
     }
 
+    /**
+     * Every setting of the emulator's (Fuse Tune) for the game [id] or every game in [emulator], as
+     * the installed version has them, grouped as the emulator's code groups them: each with what the
+     * game's own file, else the file for every game, holds, else the emulator's default.
+     */
+    suspend fun every(id: GameId?, emulator: EmulatorId?): EverySettingView {
+        val (t, unavailable) = target(id, emulator)
+        if (t == null) return EverySettingView.Unavailable(unavailable!!.title, unavailable.reason)
+        val all = Tune.forVersion(t.family, t.version).filter { !t.forGame || it.perGame }
+        if (all.isEmpty()) return EverySettingView.Unavailable("Fuse Tune hasn't read ${t.emulator}", "${t.emulator}'s settings aren't in Fuse Tune yet. $SUPPORTED")
+        val files = (listOf<String?>(null) + all.mapNotNull { it.file }.distinct()).associateWith { f ->
+            read(t, f?.let { t.globals[it] } ?: t.globalPath)
+        }
+        val game = read(t, t.gamePath)
+        val sections = all.groupBy { it.file to it.section }.map { (where, settings) ->
+            val (file, section) = where
+            TuneSection(
+                id = "${file.orEmpty()}|$section",
+                title = sectionTitle(t.family, file, settings.first().path),
+                values = settings.map { valueOf(it, if (t.forGame) game else null, files[it.file]) },
+            )
+        }
+        return EverySettingView.Ready(
+            emulator = t.emulator,
+            game = t.gameTitle,
+            release = Tune.releaseFor(t.family, t.version),
+            sections = sections,
+            canRestore = t.paths.any { data.owned.get(KIND, it).isNotEmpty() },
+            gameFileNote = if (t.forGame && t.family == "rpcs3" && fs.readText(t.gamePath!!, MAX_TEXT) == null) RPCS3_GAME_FILE else null,
+        )
+    }
+
+    /** Gives the every-setting [setting] the [value] (see [FuseStore.LibraryOps.setEveryEmulatorSetting]). */
+    suspend fun setEvery(id: GameId?, emulator: EmulatorId?, setting: String, value: String?): Boolean {
+        val t = target(id, emulator).first ?: return false
+        val s = Tune.forVersion(t.family, t.version).firstOrNull { it.id == setting } ?: return false
+        if (t.forGame && !s.perGame) return false
+        if (value != null && !s.accepts(value, ctx.host)) return false
+        val written = value?.let { written(s, it) }
+        val path = t.pathOf(s)
+        val before = fs.readText(path, MAX_TEXT)
+        val file = t.text(before)
+        val records = SettingsEdit.change(file, data.owned.get(KIND, path), s.sectionIn(t.forGame), s.key, written)
+        if (!t.files.write(path, file.toString())) return false
+        data.owned.set(KIND, path, records)
+        if (before == null) data.owned.set(KIND, "$path#made", setOf("file"))
+        return true
+    }
+
+    private fun valueOf(s: TuneSetting, game: SettingsText?, global: SettingsText?): TuneValue {
+        val every = global?.values(s.section, s.key)?.lastOrNull()
+        val own = if (s.perGame) game?.values(s.sectionIn(game = true), s.key)?.lastOrNull() else null
+        val everyGame = every ?: s.default
+        return when {
+            own != null -> TuneValue(s, own, SettingSource.GAME, everyGame)
+            every != null -> TuneValue(s, every, SettingSource.EVERY_GAME, everyGame)
+            else -> TuneValue(s, s.default, SettingSource.DEFAULT, everyGame)
+        }
+    }
+
+    /** [value] as the emulator writes it: Dolphin's and PPSSPP's switches as `True` and `False`. */
+    private fun written(s: TuneSetting, value: String): String = when {
+        s.kind != TuneKind.SWITCH -> value.trim().takeIf { s.kind != TuneKind.TEXT } ?: value
+        s.default?.firstOrNull()?.isUpperCase() == true || s.family in setOf("dolphin", "ppsspp") -> value.lowercase().replaceFirstChar { it.uppercase() }
+        else -> value.lowercase()
+    }
+
+    /**
+     * A part of the emulator's settings as Fuse shows it: its own name as words (DuckStation's
+     * `TextureReplacements` is Texture Replacements, PCSX2's `EmuCore/GS` Emu Core / GS), and the
+     * file when it has more than one.
+     */
+    private fun sectionTitle(family: String, file: String?, path: List<String>): String {
+        val parts = if (family == "pcsx2") path.flatMap { it.split('/') } else path
+        val name = parts.joinToString(" / ") { io.github.matiyaaa.fuse.ui.shell.app.words(it) }
+        return when {
+            family == "dolphin" && file == NativeSettings.DOLPHIN_GFX -> "Graphics: $name"
+            else -> name
+        }
+    }
+
     private companion object {
         const val MAX_TEXT = 1024 * 1024
 
@@ -242,9 +359,14 @@ internal class NativeSettingsStore(
         const val KIND = "emulator.settings"
 
         /** The emulator a system's games are changed in when they don't start in one Fuse knows. */
-        val PLATFORM_FAMILY = mapOf("ps2" to "pcsx2", "psx" to "duckstation", "psp" to "ppsspp", "ngc" to "dolphin", "wii" to "dolphin")
+        val PLATFORM_FAMILY = mapOf("ps2" to "pcsx2", "psx" to "duckstation", "psp" to "ppsspp", "ngc" to "dolphin", "wii" to "dolphin", "ps3" to "rpcs3")
 
-        const val SUPPORTED = "Fuse changes settings in PCSX2, DuckStation, PPSSPP and Dolphin."
+        val FAMILIES = NativeSettings.changeable
+
+        const val SUPPORTED = "Fuse changes settings in PCSX2, DuckStation, PPSSPP, Dolphin and RPCS3."
+
+        /** What making a game's own RPCS3 file changes besides (rpcs3/Emu/System.cpp: "Found custom config. Ignoring database config"). */
+        const val RPCS3_GAME_FILE = "A game's own RPCS3 settings take the place of the settings RPCS3's own database gives that game."
 
         fun family(e: InstalledEmulator): String = e.id.value.substringAfter('.')
     }

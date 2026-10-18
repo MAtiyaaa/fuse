@@ -434,8 +434,8 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
                 else -> if (retroArch) add(MenuAction("patches", "Cheats", FuseIcons.Wand, detail = "This game's cheats, used when it starts in RetroArch", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
             }
             // The emulator's own settings for this game, where Fuse can change them.
-            if (card.platformId.value in setOf("ps2", "psx", "psp")) {
-                add(MenuAction("emusettings", "Emulator Settings", FuseIcons.Sliders, detail = "Resolution, renderer and display for this game, in its emulator's own settings", trailing = Trailing.Chevron, onSelect = { emulatorSettingsSheet(card) }))
+            if (card.platformId.value in setOf("ps2", "psx", "psp", "ngc", "wii", "ps3")) {
+                add(MenuAction("emusettings", "Emulator Settings", FuseIcons.Sliders, detail = "Resolution, renderer and every other setting for this game, in its emulator's own settings", trailing = Trailing.Chevron, onSelect = { emulatorSettingsSheet(card) }))
             }
         }
         if (!card.isApp && card.platformId.value == "ps3") {
@@ -673,8 +673,8 @@ fun AppState.showEmulator(id: io.github.matiyaaa.fuse.model.EmulatorId) {
                     contextMenu = null
                     scope.launch { store.emulators.openEmulator(id) }
                 }))
-                if (id.value.substringAfter('.') in io.github.matiyaaa.fuse.launch.settings.NativeSettings.families && platform.host != io.github.matiyaaa.fuse.model.Host.ANDROID) {
-                    add(MenuAction("settings", "Settings for Every Game", FuseIcons.Sliders, detail = "Resolution, renderer and display, in its own settings", trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Chevron, onSelect = {
+                if (id.value.substringAfter('.') in io.github.matiyaaa.fuse.launch.settings.NativeSettings.changeable && platform.host != io.github.matiyaaa.fuse.model.Host.ANDROID) {
+                    add(MenuAction("settings", "Settings for Every Game", FuseIcons.Sliders, detail = "Resolution, renderer and every other setting, in its own settings", trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Chevron, onSelect = {
                         emulatorSettingsSheet(null, id)
                     }))
                 }
@@ -921,6 +921,11 @@ fun AppState.emulatorSettingsSheet(game: GameId?, gameTitle: String?, emulator: 
                 view.title, view.reason, ProblemKind.EMULATOR, Severity.INFO, reassurance = null,
             ))
             is io.github.matiyaaa.fuse.ui.shell.store.EmulatorSettingsView.Ready -> {
+                // Only Every Setting (RPCS3): straight there.
+                if (view.values.isEmpty() && view.profiles.isEmpty() && !view.canRestore) {
+                    everySettingSheet(game, gameTitle, emulator)
+                    return@launch
+                }
                 val forGame = game != null
                 val active = view.profiles.firstOrNull { it.active }
                 val profileRow = if (!forGame || view.profiles.isEmpty()) emptyList() else listOf(
@@ -946,6 +951,13 @@ fun AppState.emulatorSettingsSheet(game: GameId?, gameTitle: String?, emulator: 
                         onSelect = { settingPicker(game, gameTitle, emulator, view.emulator, v) },
                     )
                 }
+                val every = MenuAction(
+                    "every", "Every Setting", FuseIcons.LayoutList,
+                    detail = "All of ${view.emulator}'s settings, as its own code names them, with search",
+                    trailing = Trailing.Chevron,
+                    section = "More",
+                    onSelect = { everySettingSheet(game, gameTitle, emulator, from = { emulatorSettingsSheet(game, gameTitle, emulator) }) },
+                )
                 val restore = if (!view.canRestore) emptyList() else listOf(
                     MenuAction(
                         "restore", "Put Back What Fuse Changed", FuseIcons.Undo,
@@ -968,7 +980,7 @@ fun AppState.emulatorSettingsSheet(game: GameId?, gameTitle: String?, emulator: 
                     } else {
                         "Every game uses these unless it has its own. Close ${view.emulator} first; changes apply the next time it starts."
                     },
-                    options = profileRow + rows + restore,
+                    options = profileRow + rows + every + restore,
                 )
             }
         }

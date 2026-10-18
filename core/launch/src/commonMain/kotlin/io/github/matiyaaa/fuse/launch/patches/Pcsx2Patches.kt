@@ -71,7 +71,7 @@ object Pnach {
  * other key stay exactly as they were. Sections and keys match ignoring case, as PCSX2's SimpleIni
  * does; a key can repeat, which is how PCSX2 keeps lists (`Enable = name` once per patch).
  */
-class IniText(text: String) {
+class IniText(text: String) : io.github.matiyaaa.fuse.launch.settings.SettingsText {
     private val lines: MutableList<String> = text.replace("\r\n", "\n").split('\n').toMutableList().also {
         // A file's final newline isn't a line of its own.
         if (it.size > 1 && it.last().isEmpty()) it.removeAt(it.lastIndex)
@@ -79,7 +79,7 @@ class IniText(text: String) {
     }
     private val crlf = text.contains("\r\n")
 
-    fun values(section: String, key: String): List<String> {
+    override fun values(section: String, key: String): List<String> {
         val range = sectionRange(section) ?: return emptyList()
         return range.mapNotNull { i -> entry(lines[i])?.takeIf { it.first.equals(key, ignoreCase = true) }?.second }
     }
@@ -116,7 +116,7 @@ class IniText(text: String) {
     }
 
     /** Every `key = …` line in [section] taken out; true when one was there. */
-    fun removeKey(section: String, key: String): Boolean {
+    override fun removeKey(section: String, key: String): Boolean {
         val range = sectionRange(section) ?: return false
         val drop = range.filter { i -> entry(lines[i])?.first?.equals(key, ignoreCase = true) == true }
         drop.asReversed().forEach { lines.removeAt(it) }
@@ -124,7 +124,7 @@ class IniText(text: String) {
     }
 
     /** [key] set to [value] in [section]: its lines replaced by one, where the first one was (or at the end). */
-    fun set(section: String, key: String, value: String) {
+    override fun set(section: String, key: String, value: String) {
         val range = sectionRange(section)
         val at = range?.firstOrNull { i -> entry(lines[i])?.first?.equals(key, ignoreCase = true) == true }
         if (at == null) {
@@ -137,7 +137,7 @@ class IniText(text: String) {
     }
 
     /** Whether any `key = value` line is left (only headers, comments and blank lines otherwise). */
-    fun hasEntries(): Boolean = lines.any { entry(it) != null }
+    override fun hasEntries(): Boolean = lines.any { entry(it) != null }
 
     fun bool(section: String, key: String): Boolean? = values(section, key).lastOrNull()?.lowercase()?.let {
         when (it) {

@@ -74,6 +74,8 @@ data class TextInputSpec(
     /** A capital to start with and after full stops; off for keys, addresses and user names. */
     val capitalize: Boolean = true,
     val doneLabel: String = "Done",
+    /** A number is typed: the keyboard opens on its numbers. */
+    val numbers: Boolean = false,
     /** A line under the title saying what the text is for. */
     val message: String? = null,
     /** Closed without Done (Back, a tap outside). */
@@ -92,6 +94,8 @@ data class ChoiceSpec(
     val icon: ImageVector? = null,
     /** A picture of what each option does, in the options' order, shown beside the list for the one under focus. */
     val aids: List<io.github.matiyaaa.fuse.ui.shell.settings.ChoiceAid>? = null,
+    /** Where Back goes: the sheet this one was opened from. Null closes it. */
+    val onBack: (() -> Unit)? = null,
 )
 
 /**
