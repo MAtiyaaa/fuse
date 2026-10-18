@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -105,14 +106,17 @@ class SystemStatusMonitor(context: Context, private val scope: CoroutineScope) {
             addAction(Intent.ACTION_SCREEN_OFF)
         }
         ContextCompat.registerReceiver(appContext, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
-        // The current is read on a timer only while something shows the battery.
+        // The current is read on a timer only while something shows the battery, and the screen is on
+        // to show it: Fuse's status bar stays composed under a game and with the screen off.
         scope.launch {
-            _status.subscriptionCount.collectLatest { watchers ->
-                while (watchers > 0) {
-                    refreshEstimate()
-                    delay(ESTIMATE_POLL_MS)
+            kotlinx.coroutines.flow.combine(_status.subscriptionCount, DeviceAwake.screenOn) { watchers, on -> watchers > 0 && on }
+                .distinctUntilChanged()
+                .collectLatest { watching ->
+                    while (watching) {
+                        refreshEstimate()
+                        delay(ESTIMATE_POLL_MS)
+                    }
                 }
-            }
         }
     }
 

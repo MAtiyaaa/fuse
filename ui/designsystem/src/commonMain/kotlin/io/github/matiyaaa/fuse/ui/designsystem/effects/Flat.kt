@@ -79,6 +79,7 @@ class FlatLayer(private val layer: GraphicsLayer?, private val cached: Boolean =
     private var madeFor: IntSize = IntSize.Zero
     private var madeWith: Any? = Unset
     private var recorded = false
+    private var madeGeneration = 0
     private var madeDensity = Float.NaN
     private var madeFontScale = Float.NaN
     private var madeDirection: androidx.compose.ui.unit.LayoutDirection? = null
@@ -91,7 +92,8 @@ class FlatLayer(private val layer: GraphicsLayer?, private val cached: Boolean =
         val size = IntSize(scope.size.width.roundToInt(), scope.size.height.roundToInt())
         if (size.width <= 0 || size.height <= 0) return
         val changed = size != madeFor || key != madeWith || scope.density != madeDensity ||
-            scope.fontScale != madeFontScale || scope.layoutDirection != madeDirection
+            scope.fontScale != madeFontScale || scope.layoutDirection != madeDirection || Dithering.generation != madeGeneration
+        madeGeneration = Dithering.generation
         madeDensity = scope.density
         madeFontScale = scope.fontScale
         madeDirection = scope.layoutDirection

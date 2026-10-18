@@ -253,7 +253,11 @@ class Media3Engine(private val context: Context) : PlayerEngine {
             onRelease = { view -> p.clearVideoSurfaceView(view) },
             modifier = modifier,
         )
-        DisposableEffect(p) { onDispose { } }
+        // A film's own rate goes to the screen (see FusePlayer.showingVideo).
+        DisposableEffect(p) {
+            FusePlayer.showingVideo = true
+            onDispose { FusePlayer.showingVideo = false }
+        }
     }
 
     // Cues -------------------------------------------------------------------------------------------

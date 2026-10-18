@@ -7,6 +7,7 @@ import android.os.SystemClock
 import android.view.Display
 import android.view.FrameMetrics
 import android.view.Window
+import io.github.matiyaaa.fuse.ui.player.FusePlayer
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
@@ -53,6 +54,7 @@ internal suspend fun followWindowRefresh(window: Window, app: FuseApplication, s
         ) { maximum, _ -> maximum }.collect { maximum ->
             activeDisplay()?.let { display ->
                 hold.pin = { window.preferRefreshRate(display, maximum) }
+                hold.calm = { window.preferCalmRate(display, maximum) }
                 val rate = hold.pinNow()
                 app.platformUi.displayMonitor.recordWindowRate(display.displayId, rate)
             }
@@ -66,7 +68,8 @@ internal suspend fun followWindowRefresh(window: Window, app: FuseApplication, s
 }
 
 /**
- * Holds a window at its chosen refresh rate only while something moves.
+ * Holds a window at its chosen refresh rate only while something moves, and only at the full rate
+ * while the person is doing something.
  *
  * A window's preferred display mode fixes the screen's lowest and highest rate to that mode's, so
  * a phone whose screen can slow down to a few times a second over a still picture (LTPO panels)
@@ -74,16 +77,39 @@ internal suspend fun followWindowRefresh(window: Window, app: FuseApplication, s
  * the request is let go and the phone does as it likes with a still screen; the next button, touch
  * or drawn frame asks for the rate again before anything moves (input comes before the frame it
  * causes), so movement always gets the full rate.
+ *
+ * A moving background kept frames coming, so a handheld left on Home held its screen at 120 Hz for
+ * as long as it sat there, for a room that changes 30 times a second at most: the screen, its
+ * controller and every layer over the room worked four times as often as anything changed. After
+ * [CALM_MS] with no input while only that goes on, the window asks for a rate near 60 Hz instead
+ * (only one the screen switches to without a blink, Android 12 and later); the next input brings
+ * the full rate back first. While a film's picture is on screen the rate is never lowered.
  */
 internal class RefreshHold(private val window: Window) {
     var pin: () -> Float? = { null }
-    private var lastActive = SystemClock.uptimeMillis()
-    private var released = false
+
+    /** Asks for the calmer rate; false when the screen has none ([preferCalmRate]). */
+    var calm: () -> Boolean = { false }
+
+    private enum class Mode { FULL, CALM, RELEASED }
+
+    private var mode = Mode.FULL
+    private var lastInput = SystemClock.uptimeMillis()
+    private var lastDrawn = lastInput
     private var releasedAt = 0L
     private val handler = Handler(Looper.getMainLooper())
     private val check = object : Runnable {
         override fun run() {
-            if (!released && SystemClock.uptimeMillis() - lastActive >= IDLE_MS) release()
+            val now = SystemClock.uptimeMillis()
+            when (mode) {
+                Mode.FULL -> when {
+                    now - lastInput < IDLE_MS -> Unit
+                    now - lastDrawn >= IDLE_MS -> release()
+                    now - lastInput >= CALM_MS && mayCalm() -> mode = Mode.CALM
+                }
+                Mode.CALM -> if (now - lastDrawn >= IDLE_MS) release() else if (FusePlayer.showingVideo) pinNow()
+                Mode.RELEASED -> Unit
+            }
             handler.postDelayed(this, CHECK_MS)
         }
     }
@@ -99,25 +125,35 @@ internal class RefreshHold(private val window: Window) {
     }
 
     fun pinNow(): Float? {
-        lastActive = SystemClock.uptimeMillis()
-        released = false
+        lastInput = SystemClock.uptimeMillis()
+        lastDrawn = lastInput
+        mode = Mode.FULL
         return pin()
     }
 
-    /** A button, stick or touch: the rate comes back before the frame it causes. */
+    /** A button, stick or touch: the full rate comes back before the frame it causes. */
     fun active() {
-        lastActive = SystemClock.uptimeMillis()
-        if (released) pinNow()
+        lastInput = SystemClock.uptimeMillis()
+        if (mode != Mode.FULL) pinNow()
     }
 
-    /** On the main thread, where frame metrics arrive: a frame was drawn (an animation not caused by input). The one drawn as the request is let go doesn't count. */
+    /**
+     * On the main thread, where frame metrics arrive: a frame was drawn (an animation not caused by
+     * input). The one drawn as the request is let go doesn't count. Movement after a still spell
+     * that no input started is decoration (or art arriving): it goes on at the calmer rate.
+     */
     fun drew() {
-        if (released && SystemClock.uptimeMillis() - releasedAt < SETTLE_MS) return
-        active()
+        val now = SystemClock.uptimeMillis()
+        if (mode == Mode.RELEASED && now - releasedAt < SETTLE_MS) return
+        lastDrawn = now
+        if (mode != Mode.RELEASED) return
+        if (now - lastInput >= CALM_MS && mayCalm()) mode = Mode.CALM else pinNow()
     }
+
+    private fun mayCalm(): Boolean = !FusePlayer.showingVideo && calm()
 
     private fun release() {
-        released = true
+        mode = Mode.RELEASED
         releasedAt = SystemClock.uptimeMillis()
         val attributes = window.attributes
         if (attributes.preferredDisplayModeId != 0) {
@@ -128,6 +164,7 @@ internal class RefreshHold(private val window: Window) {
 
     companion object {
         private const val IDLE_MS = 3_000L
+        private const val CALM_MS = 10_000L
         private const val CHECK_MS = 1_000L
         private const val SETTLE_MS = 500L
         private val holds = WeakHashMap<Window, RefreshHold>()

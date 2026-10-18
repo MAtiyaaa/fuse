@@ -534,12 +534,17 @@ data class StayAwake(val cpu: Boolean, val screen: Boolean) {
     companion object {
         val NONE = StayAwake(cpu = false, screen = false)
 
+        /** How long after the work ends the device is let go. */
+        const val RELEASE_AFTER_MS = 5_000L
+
         /**
          * Awake while anything moves or waits its turn ([transfers]) or art and details are being
          * found ([finding]). The screen stays on only under the standby screen, which is made to be
          * left on: anywhere else the system may turn the screen off and the work carries on.
          */
         fun plan(transfers: Int, finding: Boolean, standby: Boolean): StayAwake {
+            // [transfers] counts what moves: one waiting its turn starts within moments of a place,
+            // and one that can't start (its source signed out) held the locks for as long as it stayed.
             val working = transfers > 0 || finding
             return StayAwake(cpu = working, screen = working && standby)
         }

@@ -98,6 +98,8 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
         crashLog.install()
         // Heat and battery saver reach Fuseline: decoration eases off, interaction never does.
         io.github.matiyaaa.fuse.platform.DevicePacing.start(this)
+        // The screen going off holds Fuse's rounds on the network until it comes back (see DeviceAwake).
+        io.github.matiyaaa.fuse.platform.DeviceAwake.start(this)
         activities = ActivityHolder(this)
         registerActivityLifecycleCallbacks(activities)
         activities.onFuseResumed = { platformUi.onFuseResumed() }

@@ -65,6 +65,75 @@ internal object DesktopDithering {
         }
     """
 
+    /**
+     * The window in half floats, rounded to 8 bits once ([Dithering.window]): what [draw] draws goes
+     * into a layer of 16-bit floating-point colour, where every light, scrim, veil and pane blends
+     * at full precision. Last, still in that layer, a step of triangular noise by screen pixel (two
+     * on a TV) is added to every pixel ([WINDOW_NOISE] and [ADD_NOISE]), and the layer reaches the
+     * 8-bit screen in its only rounding. The noise goes in inside the layer: given to the layer as
+     * a filter on its way out, Skia rounds the layer to 8 bits first and the noise lands on steps
+     * already made. Returns false (drawing nothing) when the noise can't be built here, so the
+     * caller draws as before.
+     */
+    fun drawRoundedOnce(canvas: org.jetbrains.skia.Canvas, draw: () -> Unit): Boolean {
+        val noise = windowNoise() ?: return false
+        val flags = org.jetbrains.skia.Canvas.SaveLayerFlags(org.jetbrains.skia.Canvas.SaveLayerFlagsSet.F16ColorType)
+        val count = canvas.saveLayer(org.jetbrains.skia.Canvas.SaveLayerRec(null, null, null, null, flags))
+        try {
+            draw()
+            canvas.drawPaint(noise)
+        } finally {
+            canvas.restoreToCount(count)
+        }
+        return true
+    }
+
+    /**
+     * Noise by screen pixel for the window's layer, carried in red around a half (0.5 plus a quarter
+     * of the noise, an opaque colour any drawing keeps as it is).
+     */
+    internal const val WINDOW_NOISE = """
+        float ign(float2 p) { return fract(52.9829189 * fract(dot(p, float2(0.06711056, 0.00583715)))); }
+        half4 main(float2 coords) {
+            float2 p = floor(coords);
+            float n = ign(p) + ign(p + float2(47.0, 113.0)) - 1.0;
+            return half4(half(0.5 + 0.25 * n), 0.0, 0.0, 1.0);
+        }
+    """
+
+    /** Adds [WINDOW_NOISE]'s noise, [amp] 8-bit steps each way, to what the window's layer holds. */
+    internal const val ADD_NOISE = """
+        uniform float amp;
+        half4 main(half4 src, half4 dst) {
+            half n = (src.r - 0.5) * 4.0;
+            return half4(clamp(dst.rgb + n * half(amp / 255.0), 0.0, dst.a), dst.a);
+        }
+    """
+
+    /** The paint that adds the window's noise, for the amplitude in use (one step, two on a TV). */
+    private fun windowNoise(): org.jetbrains.skia.Paint? {
+        val amp = amplitude()
+        windowPaint?.takeIf { windowAmp == amp }?.let { return it }
+        val paint = runCatching {
+            val shader = org.jetbrains.skia.RuntimeEffect.makeForShader(WINDOW_NOISE).let { org.jetbrains.skia.RuntimeShaderBuilder(it).makeShader() }
+            val blender = org.jetbrains.skia.RuntimeEffect.makeForBlender(ADD_NOISE).makeBlender(org.jetbrains.skia.Data.makeFromBytes(floatBytes(amp)))
+            org.jetbrains.skia.Paint().apply {
+                this.shader = shader
+                this.blender = blender
+            }
+        }.onFailure { io.github.matiyaaa.fuse.desktop.Log.warn("the window can't be rounded once: its noise couldn't be built", it) }.getOrNull() ?: return null
+        windowPaint = paint
+        windowAmp = amp
+        return paint
+    }
+
+    /** [value] as the four bytes of a uniform (little endian, as Skia lays uniforms out). */
+    private fun floatBytes(value: Float): ByteArray =
+        java.nio.ByteBuffer.allocate(4).order(java.nio.ByteOrder.LITTLE_ENDIAN).putFloat(value).array()
+
+    @Volatile private var windowPaint: org.jetbrains.skia.Paint? = null
+    @Volatile private var windowAmp = 0f
+
     private val IDENTITY = floatArrayOf(1f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f)
     private const val OPAQUE = 0xFF000000.toInt()
 

@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.desktop.system
 
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.unit.IntSize
 import org.jetbrains.skia.ImageInfo
 import kotlin.math.abs
@@ -331,5 +332,93 @@ class DesktopDitheringTest {
         assertTrue(same >= still.size * 95 / 100, "only $same of ${still.size} pixels kept their grain")
         // And there is grain at all.
         assertTrue(still.distinct().size > 1)
+    }
+
+    /**
+     * A room (green 10 to 54) with a dim of 0.6 and a pane of ink at 0.35 over it, as the interface
+     * lays them, drawn on an 8-bit canvas either dithering each gradient as it goes ([roundOnce]
+     * false, the dim and pane plain as most of the interface's are) or in a half-float layer rounded
+     * once ([DesktopDithering.drawRoundedOnce]). Returns, along a row, how far its average strays
+     * from a straight line over each 16 pixels: lines between the shades show as large values.
+     */
+    private fun layeredRoomDrift(roundOnce: Boolean, w: Int = 1024, h: Int = 64): Float {
+        val image = androidx.compose.ui.graphics.ImageBitmap(w, h)
+        val canvas = androidx.compose.ui.graphics.Canvas(image)
+        val c0 = 10
+        val c1 = 54
+        fun draw() {
+            val ramp = androidx.compose.ui.graphics.Paint()
+            androidx.compose.ui.graphics.Brush.horizontalGradient(
+                listOf(androidx.compose.ui.graphics.Color(8, c0, 14), androidx.compose.ui.graphics.Color(48, c1, 70)), 0f, w.toFloat(),
+            ).applyTo(androidx.compose.ui.geometry.Size(w.toFloat(), h.toFloat()), ramp, 1f)
+            if (!roundOnce) {
+                DesktopDithering.install()
+                DesktopDithering.ditherGradient(ramp)
+            }
+            canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), ramp)
+            val dim = androidx.compose.ui.graphics.Paint().apply { color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.6f) }
+            canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), dim)
+            val pane = androidx.compose.ui.graphics.Paint().apply { color = androidx.compose.ui.graphics.Color(10, 12, 16).copy(alpha = 0.35f) }
+            canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), pane)
+        }
+        if (roundOnce) assertTrue(DesktopDithering.drawRoundedOnce(canvas.nativeCanvas) { draw() }) else draw()
+        val pixels = IntArray(w * h)
+        image.readPixels(pixels)
+        // Every layer is a straight line in x, so the exact picture is too: each 16 pixels' average
+        // is compared with the straight line through all of them.
+        val span = 16
+        val xs = (0 until w / span).map { (it * span + span / 2).toFloat() }
+        val means = (0 until w / span).map { i ->
+            var sum = 0f
+            for (y in 0 until h) for (x in i * span until (i + 1) * span) sum += ((pixels[y * w + x] shr 8) and 0xFF).toFloat()
+            sum / (span * h)
+        }
+        val mx = xs.average().toFloat()
+        val my = means.average().toFloat()
+        val slope = xs.indices.sumOf { ((xs[it] - mx) * (means[it] - my)).toDouble() }.toFloat() / xs.sumOf { ((it - mx) * (it - mx)).toDouble() }.toFloat()
+        return xs.indices.maxOf { abs(means[it] - (my + slope * (xs[it] - mx))) }
+    }
+
+    @Test
+    fun aWindowRoundedOnceHasNoLinesBetweenItsShades() {
+        // Each pane at part strength rounds what is under it again, without noise of its own: the
+        // shades of the room come back as steps with a line at each (Linux, 0.4.2.26). In half
+        // floats, rounded once with noise, the colour stays where it should be all along.
+        val each = layeredRoomDrift(roundOnce = false)
+        val once = layeredRoomDrift(roundOnce = true)
+        println("Layered room, worst drift over 16 px: dithered as drawn $each, rounded once $once")
+        assertTrue(each >= 0.2f, "dithering each gradient as drawn drifts $each")
+        assertTrue(once <= 0.12f, "rounded once drifts $once")
+    }
+
+    @Test
+    fun aWindowRoundedOnceHasNoBands() {
+        // The near-black ramp of the first test, plain, in a window rounded once.
+        val w = 1024
+        val h = 8
+        val image = androidx.compose.ui.graphics.ImageBitmap(w, h)
+        val canvas = androidx.compose.ui.graphics.Canvas(image)
+        assertTrue(DesktopDithering.drawRoundedOnce(canvas.nativeCanvas) {
+            val paint = androidx.compose.ui.graphics.Paint()
+            androidx.compose.ui.graphics.Brush.horizontalGradient(
+                listOf(androidx.compose.ui.graphics.Color(4, 5, 8), androidx.compose.ui.graphics.Color(20, 22, 30)), 0f, w.toFloat(),
+            ).applyTo(androidx.compose.ui.geometry.Size(w.toFloat(), h.toFloat()), paint, 1f)
+            canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), paint)
+        })
+        val pixels = IntArray(w * h)
+        image.readPixels(pixels)
+        var longest = 0
+        var run = 0
+        var last = -1
+        for (x in 0 until w) {
+            val g = (pixels[4 * w + x] shr 8) and 0xFF
+            run = if (g == last) run + 1 else 1
+            last = g
+            longest = maxOf(longest, run)
+        }
+        println("Near-black ramp in a window rounded once, longest flat band: $longest px")
+        assertTrue(longest <= 12, "rounded once, runs of $longest px")
+        // Opaque stays opaque: the noise touches colour only.
+        assertTrue(pixels.all { (it ushr 24) == 0xFF })
     }
 }

@@ -130,6 +130,25 @@ class GamepadInput(private val router: InputRouter) {
     }
 
     companion object {
+        /**
+         * Whether [event] is someone doing something: always for a mouse or a touch pad, and for a
+         * controller only once a stick leaves its dead zone or the hat or a trigger is pressed. A
+         * worn stick trembles at rest and sends events all the time, which held the screen at its
+         * full rate and kept Fuse from ever counting as left alone.
+         */
+        fun meaningful(event: MotionEvent): Boolean {
+            val fromPad = event.isFromSource(InputDevice.SOURCE_JOYSTICK) || event.isFromSource(InputDevice.SOURCE_GAMEPAD)
+            if (!fromPad) return true
+            for (axis in STICK_AXES) if (kotlin.math.abs(event.getAxisValue(axis)) >= ACTIVE_STICK) return true
+            for (axis in PRESS_AXES) if (kotlin.math.abs(event.getAxisValue(axis)) >= ACTIVE_PRESS) return true
+            return false
+        }
+
+        private val STICK_AXES = intArrayOf(MotionEvent.AXIS_X, MotionEvent.AXIS_Y, MotionEvent.AXIS_Z, MotionEvent.AXIS_RZ, MotionEvent.AXIS_RX, MotionEvent.AXIS_RY)
+        private val PRESS_AXES = intArrayOf(MotionEvent.AXIS_HAT_X, MotionEvent.AXIS_HAT_Y, MotionEvent.AXIS_LTRIGGER, MotionEvent.AXIS_RTRIGGER, MotionEvent.AXIS_BRAKE, MotionEvent.AXIS_GAS)
+        private const val ACTIVE_STICK = 0.25f
+        private const val ACTIVE_PRESS = 0.3f
+
         private val PAD_ONLY = setOf(
             PadButton.A, PadButton.B, PadButton.X, PadButton.Y, PadButton.L1, PadButton.R1, PadButton.L2, PadButton.R2,
             PadButton.L3, PadButton.R3, PadButton.START, PadButton.SELECT, PadButton.MODE,

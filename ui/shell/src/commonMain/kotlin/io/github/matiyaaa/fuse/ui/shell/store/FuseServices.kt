@@ -75,6 +75,14 @@ interface FuseServices {
      */
     fun keepAliveForTransfers(active: Boolean, text: String, progress: Int?) = Unit
 
+    /**
+     * Whether the device is awake for Fuse's own rounds on the network and optional work
+     * ([io.github.matiyaaa.fuse.sync.Awake]): on Android its screen on, or a transfer moving. False
+     * holds what can wait (the host's news, Jellyfin's checks, art) until it wakes. Always true on a
+     * computer, which sleeps as a whole.
+     */
+    val awake: StateFlow<Boolean> get() = io.github.matiyaaa.fuse.sync.Awake.always
+
     /** This device's name, as servers list it (Jellyfin's dashboard). */
     val deviceName: String get() = "Fuse"
 

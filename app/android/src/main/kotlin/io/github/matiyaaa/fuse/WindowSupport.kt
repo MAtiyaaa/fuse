@@ -57,3 +57,26 @@ internal fun android.view.Window.preferRefreshRate(display: Display, maximum: In
     }
     return selected?.refreshRate
 }
+
+/**
+ * Asks for a calmer rate of this window's display (near 60 Hz) while only decoration moves, when the
+ * screen can switch to it from the full rate without a blink (Android 12 and later tell). False when
+ * there is none, or the screen can't say: the full rate then stays.
+ */
+internal fun android.view.Window.preferCalmRate(display: Display, maximum: Int = 0): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false
+    val current = display.mode
+    val modes = display.supportedModes.filter {
+        it.physicalWidth == current.physicalWidth && it.physicalHeight == current.physicalHeight
+    }
+    val full = io.github.matiyaaa.fuse.model.RefreshRates.pick(modes.map { it.refreshRate }, maximum)?.let { modes[it] } ?: return false
+    val seamless = full.alternativeRefreshRates
+    val candidates = modes.filter { m -> seamless.any { kotlin.math.abs(it - m.refreshRate) < 0.5f } }
+    val calm = io.github.matiyaaa.fuse.model.RefreshRates.calm(candidates.map { it.refreshRate }, full.refreshRate)?.let { candidates[it] } ?: return false
+    val attributes = attributes
+    if (attributes.preferredDisplayModeId != calm.modeId) {
+        attributes.preferredDisplayModeId = calm.modeId
+        this.attributes = attributes
+    }
+    return true
+}

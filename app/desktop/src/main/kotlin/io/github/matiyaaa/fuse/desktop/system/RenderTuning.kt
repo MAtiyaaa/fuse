@@ -26,6 +26,8 @@ package io.github.matiyaaa.fuse.desktop.system
  * - `FUSE_CURSOR=keep`: the pointer is never swapped for a blank one while a controller is used.
  * - `FUSE_STEAM_OVERLAY=off`: Steam's overlay library stays out of Fuse (the AppImage's AppRun sets it
  *   aside; the games Fuse starts still get it).
+ * - `FUSE_DITHER=gradients` or `window`: each gradient dithered as it is drawn, or the whole window
+ *   drawn in half floats and rounded once (the default on a graphics card; see DesktopDithering).
  * A `-Dskiko...` property given to Java itself always wins.
  */
 internal object RenderTuning {

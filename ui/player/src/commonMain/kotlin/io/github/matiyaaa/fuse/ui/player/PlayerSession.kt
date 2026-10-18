@@ -504,6 +504,12 @@ class PlayerSession(
 object FusePlayer {
     var engineFactory: (() -> PlayerEngine)? = null
 
+    /**
+     * A film's picture is on screen. The screen's rate is then left as the window last asked (never
+     * lowered while Fuse sits still), so a film at 24 frames a second stays even on a 120 Hz screen.
+     */
+    @kotlin.concurrent.Volatile var showingVideo: Boolean = false
+
     val available: Boolean get() = engineFactory != null
 
     val session: PlayerSession by lazy {

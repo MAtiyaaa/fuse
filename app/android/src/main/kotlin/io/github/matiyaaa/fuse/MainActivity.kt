@@ -349,7 +349,8 @@ class MainActivity : ComponentActivity(), ActivityRequests {
     }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
-        RefreshHold.active(window)
+        // A stick trembling in its dead zone sends events all the time: only a real move keeps the full rate.
+        if (GamepadInput.meaningful(event)) RefreshHold.active(window)
         return if (dreaming) true else gamepad.onMotion(event) || super.dispatchGenericMotionEvent(event)
     }
 
@@ -365,7 +366,7 @@ class MainActivity : ComponentActivity(), ActivityRequests {
     }
 
     fun forwardMotion(event: MotionEvent): Boolean {
-        RefreshHold.active(window)
+        if (GamepadInput.meaningful(event)) RefreshHold.active(window)
         return gamepad.onMotion(event)
     }
 
