@@ -509,7 +509,7 @@ interface StorageAccess {
     suspend fun pickAudio(title: String): PickedFile? = null
     /** A save file or archive, copied into temporary app storage where document access needs it. */
     suspend fun pickSave(title: String): String? = null
-    /** An IPS, UPS or BPS patch, readable by Fuse (copied into temporary app storage where document access needs it). */
+    /** An IPS, UPS, BPS or xdelta patch, readable by Fuse (copied into temporary app storage where document access needs it). */
     suspend fun pickPatch(title: String): String? = null
     /** A file of one of [extensions] (described as [label]), read where it is; null where Fuse can't open files that way. */
     suspend fun pickFile(title: String, label: String, extensions: List<String>): String? = null

@@ -1,0 +1,72 @@
+# Renders every screen Fuse's audit knows (ui/shell's desktopAudit: each scenario, from Home to the
+# smallest sheet) at every audit size, one size to a job, and keeps the pictures as an artifact to
+# look through. Every Sunday on main, and by hand with the sizes and scenarios to render.
+
+name: Audit
+
+on:
+  schedule:
+    - cron: "17 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      sizes:
+        description: "Audit sizes, as a JSON list (every one by default)"
+        default: '["M","H","D","P","V","T","U","C","J","L","S","Q","O","G","E","K","I","A","B","Y","W","Z","X","R","F","N"]'
+      only:
+        description: "Only these scenarios (group/screen, comma separated); every one when empty"
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render:
+    name: Audit at ${{ matrix.size }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        size: ${{ fromJSON(github.event.inputs.sizes || '["M","H","D","P","V","T","U","C","J","L","S","Q","O","G","E","K","I","A","B","Y","W","Z","X","R","F","N"]') }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Gradle configures every module, including the Android ones, so the audit needs the SDK too.
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android platform 37
+        run: sdkmanager --install "platforms;android-37.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Render the screens
+        env:
+          SIZE: ${{ matrix.size }}
+          ONLY: ${{ github.event.inputs.only }}
+        run: |
+          set -euo pipefail
+          args=(--stacktrace :ui:shell:desktopAudit "-Pfuse.audit.dir=$PWD/build/audit" "-Pfuse.audit.sizes=$SIZE")
+          if [ -n "$ONLY" ]; then args+=("-Pfuse.audit.only=$ONLY"); fi
+          ./gradlew "${args[@]}"
+
+      - name: Upload the pictures
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: audit-${{ matrix.size }}
+          path: build/audit
+          if-no-files-found: warn
+          retention-days: 14

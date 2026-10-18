@@ -182,6 +182,9 @@ interface FuseServices {
      */
     val emulatorFiles: EmulatorFiles? get() = null
 
+    /** This device's addresses on the home network, the likeliest first, for another device to reach a game hosted here. */
+    fun homeAddresses(): List<String> = emptyList()
+
     /** Offset of local time from UTC right now, for "today" and "this week" playtime buckets. */
     fun utcOffsetMillis(): Long
 }
@@ -472,6 +475,12 @@ interface EmulatorFiles {
 
     /** Writes [text] to [path] inside a known emulator data folder; false when it may not or could not. */
     suspend fun write(path: String, text: String): Boolean
+
+    /**
+     * Writes [text] to [path] as [write] does, keeping no copy of the file as it was: for a file
+     * that holds a person's sign-in (RPCS3's `rpcn.yml`), which Fuse never keeps a copy of.
+     */
+    suspend fun writePrivate(path: String, text: String): Boolean = write(path, text)
 
     /**
      * RPCS3's `dev_hdd0` folders for [installed], worked out as RPCS3 does (its config folder, or the

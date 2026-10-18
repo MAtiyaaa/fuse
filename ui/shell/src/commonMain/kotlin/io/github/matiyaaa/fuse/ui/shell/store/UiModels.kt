@@ -550,6 +550,89 @@ sealed interface ModSitePage {
     data class Unavailable(val title: String, val reason: String) : ModSitePage
 }
 
+/** The Nexus Mods account on this device: no key yet, whose key it is, or why it couldn't be checked. */
+sealed interface NexusAccount {
+    data object NoKey : NexusAccount
+
+    /** [premium]: Nexus Mods gives this account download links straight away. */
+    data class Ready(val name: String, val premium: Boolean) : NexusAccount
+
+    data class Problem(val reason: String) : NexusAccount
+}
+
+/** Which game on Nexus Mods a library game is: the one chosen, and the ones its list has by that name. */
+data class NexusGames(
+    val linked: io.github.matiyaaa.fuse.integrations.nexus.NexusGame?,
+    val found: List<io.github.matiyaaa.fuse.integrations.nexus.NexusGame>,
+    val query: String,
+    val problem: String? = null,
+)
+
+/** A game's mods on Nexus Mods (its trending, latest added and latest updated), or why there are none. */
+sealed interface NexusModList {
+    data class Ready(
+        val game: io.github.matiyaaa.fuse.integrations.nexus.NexusGame,
+        val lists: Map<io.github.matiyaaa.fuse.integrations.nexus.NexusList, List<io.github.matiyaaa.fuse.integrations.nexus.NexusMod>>,
+        val premium: Boolean,
+    ) : NexusModList
+
+    /** [needsKey]: no key is set yet; [needsGame]: which game on Nexus Mods this is hasn't been chosen. */
+    data class Unavailable(val title: String, val reason: String, val needsKey: Boolean = false, val needsGame: Boolean = false) : NexusModList
+}
+
+/** A mod on Nexus Mods with its files, the kind Fuse adds it as for this game, and whether files download straight away. */
+sealed interface NexusPage {
+    data class Ready(
+        val mod: io.github.matiyaaa.fuse.integrations.nexus.NexusMod,
+        val files: List<io.github.matiyaaa.fuse.integrations.nexus.NexusFile>,
+        val kind: io.github.matiyaaa.fuse.launch.patches.EnhancementKind?,
+        val premium: Boolean,
+    ) : NexusPage
+
+    data class Unavailable(val title: String, val reason: String) : NexusPage
+}
+
+/** Another device in the household hosting a game now: who, on which device, since when, and where. */
+data class TogetherHost(val deviceId: String, val device: String, val who: String, val since: Long, val address: String?, val port: Int)
+
+/**
+ * Playing a game with others on this device: its emulator's way of doing it, whether that emulator
+ * is set up for it (and what isn't), who in the household hosts it now, and what Fuse can do.
+ */
+sealed interface TogetherView {
+    data class Ready(
+        val title: String,
+        val emulator: String,
+        val way: io.github.matiyaaa.fuse.launch.online.TogetherWay,
+        /** What the emulator still needs for it, in words; empty when it is set up. */
+        val missing: List<String>,
+        /** Fuse can start it hosting here (RetroArch, PPSSPP on a computer). */
+        val canHost: Boolean,
+        /** Others in the household hosting it now (empty without Fuse One). */
+        val hosts: List<TogetherHost>,
+        /** This device is in a household (Fuse One), so hosting reaches the others. */
+        val household: Boolean,
+        /** The RPCN account RPCS3 signs in with, for its games; null for other emulators or none. */
+        val rpcn: String?,
+        /** Fuse changed this emulator's settings for playing together, and can put them back. */
+        val canPutBack: Boolean,
+    ) : TogetherView
+
+    data class Unavailable(val title: String, val reason: String) : TogetherView
+}
+
+/** How a game starts to be played together. */
+sealed interface Together {
+    /** Hosting here, for the household to join. */
+    data object Host : Together
+
+    /** Joining the game [host] hosts. */
+    data class Join(val host: TogetherHost) : Together
+
+    /** Joining by an address the person typed (someone outside Fuse One). */
+    data class JoinAddress(val address: String) : Together
+}
+
 /**
  * What EmuCoreX's catalogues have for a PS2 game: texture packs made for its disc's [serial] and
  * pnach files for its [crc], each with the kind Fuse adds it as (null: not one this game's emulator

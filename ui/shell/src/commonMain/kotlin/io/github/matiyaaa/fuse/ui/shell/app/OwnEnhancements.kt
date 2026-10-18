@@ -58,8 +58,8 @@ internal fun AppState.ownEnhancementRows(card: GameCard, own: Enhancements, emul
             )
         }
     }
-    // Mods made for the game, from GameBanana, where its emulator takes any; for a PS2 game, EmuCoreX's packs and cheats too.
-    val site = if (own.kinds.isEmpty()) emptyList() else listOfNotNull(modSiteRow(card), emuCoreXRow(card).takeIf { card.platformId.value == "ps2" })
+    // Mods made for the game, from GameBanana and Nexus Mods, where its emulator takes any; for a PS2 game, EmuCoreX's packs and cheats too.
+    val site = if (own.kinds.isEmpty()) emptyList() else listOfNotNull(modSiteRow(card), nexusRow(card).takeIf { EnhancementKind.MODS in own.kinds || EnhancementKind.TEXTURES in own.kinds }, emuCoreXRow(card).takeIf { card.platformId.value == "ps2" })
     return added + add + site
 }
 
@@ -84,6 +84,7 @@ private fun extensions(emulator: String): List<String> = when (emulator) {
     "PCSX2" -> listOf("pnach", "txt", "zip")
     "DuckStation" -> listOf("cht", "txt", "zip")
     "PPSSPP" -> listOf("ini", "txt", "db", "zip")
+    "Dolphin" -> listOf("ini", "txt", "zip")
     else -> listOf("cht", "zip")
 }
 
@@ -109,7 +110,7 @@ private fun AppState.addEnhancement(card: GameCard, kind: EnhancementKind, emula
     pickAndPlan(card, kind, emulator, folder = false)
 }
 
-private fun AppState.pickAndPlan(card: GameCard, kind: EnhancementKind, emulator: String, folder: Boolean) {
+internal fun AppState.pickAndPlan(card: GameCard, kind: EnhancementKind, emulator: String, folder: Boolean) {
     choice = null
     scope.launch {
         val word = when (kind) {

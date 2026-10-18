@@ -66,6 +66,13 @@ internal fun SyncNotices(app: AppState) {
                     icon = FuseIcons.CloudOff,
                     durationMs = 8_000L,
                 )
+                // An invitation: someone in the household opened a game to join.
+                is SyncNotice.Hosting -> app.toasts.show(
+                    "${n.who} is hosting ${n.title} on ${n.device}. Join from its Play Together.",
+                    ToastKind.INFO,
+                    icon = FuseIcons.Users,
+                    durationMs = 9_000L,
+                )
             }
         }
     }

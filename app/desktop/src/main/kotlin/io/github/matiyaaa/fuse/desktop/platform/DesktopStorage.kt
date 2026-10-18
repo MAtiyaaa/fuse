@@ -276,7 +276,7 @@ internal class DesktopStorage(private val dirs: FuseDirs, private val host: Dial
     private companion object {
         val SAVES = Filter("Saves and archives", listOf("zip", "sav", "srm", "dsv", "mcd", "ps2", "eep", "mpk", "sra", "fla", "bin", "dat", "raw", "mcr"))
         val IMAGES = Filter("Images", listOf("png", "jpg", "jpeg", "webp", "gif", "bmp"))
-        val PATCHES = Filter("Patches", listOf("ips", "ups", "bps"))
+        val PATCHES = Filter("Patches", io.github.matiyaaa.fuse.library.patch.RomPatches.EXTENSIONS.toList())
 
         /** What [DesktopMenuMusic] can play. */
         val AUDIO = Filter("Music", listOf("mp3", "wav"))

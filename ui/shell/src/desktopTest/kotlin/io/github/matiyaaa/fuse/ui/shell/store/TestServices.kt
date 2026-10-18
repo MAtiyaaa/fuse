@@ -106,6 +106,10 @@ internal class FakeServices(
     /** Emulation setups the fake finds ("EmuDeck", "RetroDECK"); none by default. */
     @Volatile var suites: Set<String> = emptySet()
 
+    /** This device's home network addresses, for a test of hosting a game. */
+    @Volatile var homeNetwork: List<String> = emptyList()
+    override fun homeAddresses(): List<String> = homeNetwork
+
     override val emulators = object : EmulatorDetector {
         override suspend fun suites(): Set<String> = this@FakeServices.suites
 

@@ -258,7 +258,7 @@ private fun Empty(l: BrowseListing, purpose: FilePurpose) {
             purpose == FilePurpose.EMULATOR -> "No programs or folders here."
             purpose == FilePurpose.THEME -> "No theme files (.json) or folders here."
             purpose == FilePurpose.LICENCE -> "No licence files or folders here."
-            purpose == FilePurpose.PATCH -> "No patches (.ips, .ups, .bps) or folders here."
+            purpose == FilePurpose.PATCH -> "No patches (.ips, .ups, .bps, .xdelta) or folders here."
             else -> "This folder is empty."
         },
         Fuse.type.body,
@@ -313,7 +313,7 @@ private fun Guide(purpose: FilePurpose, selected: MenuAction?, modifier: Modifie
                     FilePurpose.LICENCE ->
                         "Pick the licence that came with it. Fuse hands it to the emulator under the name it looks for, and keeps nothing; the file stays where it is."
                     FilePurpose.PATCH ->
-                        "Pick an IPS, UPS or BPS file. Fuse makes a patched copy beside the game and adds it to your library; the game itself stays as it is."
+                        "Pick an IPS, UPS, BPS or xdelta file. Fuse makes a patched copy beside the game and adds it to your library; the game itself stays as it is."
                 },
                 Fuse.type.body,
                 color = c.textMuted,
@@ -328,4 +328,4 @@ private fun Guide(purpose: FilePurpose, selected: MenuAction?, modifier: Modifie
 }
 
 /** The patch formats Fuse applies. */
-private val PATCH_EXTENSIONS = setOf("ips", "ups", "bps")
+private val PATCH_EXTENSIONS = io.github.matiyaaa.fuse.library.patch.RomPatches.EXTENSIONS

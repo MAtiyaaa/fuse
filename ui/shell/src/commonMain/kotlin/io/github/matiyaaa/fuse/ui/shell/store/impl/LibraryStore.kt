@@ -558,8 +558,8 @@ internal class DefaultLibraryOps(
         }
     }
 
-    override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, skipSaveCheck: Boolean, playAnyway: Boolean, onStage: (io.github.matiyaaa.fuse.ui.shell.store.LaunchStage) -> Unit): LaunchOutcome =
-        launchGame(id, emulator, discPath, display, skipSaveCheck, playAnyway, onStage).also { outcome ->
+    override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, skipSaveCheck: Boolean, playAnyway: Boolean, together: io.github.matiyaaa.fuse.ui.shell.store.Together?, onStage: (io.github.matiyaaa.fuse.ui.shell.store.LaunchStage) -> Unit): LaunchOutcome =
+        launchGame(id, emulator, discPath, display, skipSaveCheck, playAnyway, together, onStage).also { outcome ->
             if (outcome is LaunchOutcome.Problem) ctx.recordProblem(outcome.problem)
         }
 
@@ -688,6 +688,7 @@ internal class DefaultLibraryOps(
         display: LaunchDisplay?,
         skipSaveCheck: Boolean,
         playAnyway: Boolean = false,
+        together: io.github.matiyaaa.fuse.ui.shell.store.Together? = null,
         onStage: (io.github.matiyaaa.fuse.ui.shell.store.LaunchStage) -> Unit = {},
     ): LaunchOutcome {
         val ready = when (val r = resolveForPlay(id, emulator, discPath, display)) {
@@ -696,8 +697,17 @@ internal class DefaultLibraryOps(
         }
         val game = ready.game
         val platform = ready.platform
-        val resolved = ready.resolved
+        var resolved = ready.resolved
         val installedEmulator = ready.installed
+        // Played together: the emulator pointed at the game's host (or set to host it) before it starts.
+        if (together != null) {
+            togetherStore.prepare(installedEmulator, together)?.let { return LaunchOutcome.Problem(LaunchProblems.unsupported(it, id)) }
+            if (io.github.matiyaaa.fuse.launch.online.PlayTogether.way(installedEmulator.id.value.substringAfter('.')) == io.github.matiyaaa.fuse.launch.online.TogetherWay.NETPLAY) {
+                val netplay = io.github.matiyaaa.fuse.launch.online.PlayTogether.withNetplay(resolved.plan, togetherStore.netplayArgs(together))
+                    ?: return LaunchOutcome.Problem(LaunchProblems.unsupported("Fuse can't start ${installedEmulator.name} for netplay this way.", id))
+                resolved = resolved.copy(plan = netplay)
+            }
+        }
         val usedCore = ready.usedCore
         val displayId = ready.displayId
         val android = ctx.host == io.github.matiyaaa.fuse.model.Host.ANDROID
@@ -716,7 +726,8 @@ internal class DefaultLibraryOps(
                 val link = sync
                 if (save != null && link != null && !skipSaveCheck) {
                     onStage(io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.CHECKING_SAVE)
-                    when (val gate = link.service.beforeLaunch(save, waitForOthers = !playAnyway)) {
+                    // Joining someone's game is being on it with them on purpose: no asking about it.
+                    when (val gate = link.service.beforeLaunch(save, waitForOthers = !playAnyway && together == null)) {
                         is io.github.matiyaaa.fuse.sync.LaunchGate.Conflict -> return LaunchOutcome.SaveConflict(gate.conflict)
                         is io.github.matiyaaa.fuse.sync.LaunchGate.Busy -> return LaunchOutcome.SyncBusy(gate)
                         is io.github.matiyaaa.fuse.sync.LaunchGate.Waiting -> return LaunchOutcome.SyncWaiting(gate)
@@ -754,9 +765,15 @@ internal class DefaultLibraryOps(
                     }
                 }
                 onStage(io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.STARTING)
+                // Hosting: the household hears of it with this device's presence while it is played.
+                val hosting = if (together == io.github.matiyaaa.fuse.ui.shell.store.Together.Host) togetherStore.hosting(installedEmulator) else null
+                if (hosting != null && save != null) link?.service?.hostNext(save, hosting)
                 // From here the emulator is starting: nothing calls it off any more.
                 val pressedAt = ctx.now()
-                when (val r = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { ctx.services.launcher.run(resolved, displayId) }) {
+                val r = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { ctx.services.launcher.run(resolved, displayId) }
+                // It didn't start: nobody is told it is open.
+                if (r !is RunResult.Started && hosting != null && save != null) link?.service?.hostNext(save, null)
+                when (r) {
                     is RunResult.Started -> {
                         ctx.recordLaunch(LaunchReport(
                             at = pressedAt, title = game.displayTitle, system = platform.name,
@@ -1217,6 +1234,32 @@ internal class DefaultLibraryOps(
 
     override suspend fun fetchModSiteFile(id: GameId, modId: Long, fileId: Long, onProgress: (Float) -> Unit) = modSites.fetch(id, modId, fileId, onProgress)
 
+    /** Mods from Nexus Mods, with the person's own key, added through [nativeEnhancements]. */
+    private val nexus by lazy { NexusSite(ctx, nativeEnhancements) }
+
+    override suspend fun nexusAccount() = nexus.account()
+
+    override suspend fun nexusGames(id: GameId, query: String?) = nexus.games(id, query)
+
+    override suspend fun linkNexusGame(id: GameId, game: io.github.matiyaaa.fuse.integrations.nexus.NexusGame?) = nexus.link(id, game)
+
+    override suspend fun nexusMods(id: GameId) = nexus.mods(id)
+
+    override suspend fun nexusPage(id: GameId, game: String, modId: Long) = nexus.page(id, game, modId)
+
+    override suspend fun fetchNexusFile(id: GameId, game: String, modId: Long, fileId: Long, nxm: String?, onProgress: (Float) -> Unit) =
+        nexus.fetch(id, game, modId, fileId, nxm, onProgress)
+
+    private val togetherStore by lazy { TogetherStore(ctx, nativeSettings, startsIn = { startsWith(it).first.installed }, sync = { sync }, saveQuery = ::saveQueryFor) }
+
+    override suspend fun together(id: GameId) = togetherStore.view(id)
+    override suspend fun setUpTogether(id: GameId) = togetherStore.setUp(id)
+    override suspend fun putBackTogether(id: GameId) = togetherStore.putBack(id)
+    override suspend fun recheckTogether(family: String) = togetherStore.recheck(family)
+    override suspend fun readyTogether(id: GameId, together: io.github.matiyaaa.fuse.ui.shell.store.Together) = togetherStore.ready(id, together)
+    override suspend fun signInRpcn(id: GameId, user: String, password: String, token: String) = togetherStore.signIn(id, user, password, token)
+    override suspend fun signOutRpcn(id: GameId) = togetherStore.signOut(id)
+
     private val emuCoreX by lazy { EmuCoreXMods(ctx, nativeEnhancements, ::discIdentity) }
 
     override suspend fun emuCoreX(id: GameId) = emuCoreX.finds(id)
@@ -1533,6 +1576,7 @@ internal class DefaultLibraryOps(
         fun crc(v: Long) = v.toString(16).uppercase().padStart(8, '0')
         return when (outcome) {
             is io.github.matiyaaa.fuse.library.patch.PatchOutcome.Unreadable -> failed(outcome.reason)
+            is io.github.matiyaaa.fuse.library.patch.PatchOutcome.NotForThisGame -> failed(outcome.reason)
             is io.github.matiyaaa.fuse.library.patch.PatchOutcome.AlreadyPatched -> io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.AlreadyPatched
             is io.github.matiyaaa.fuse.library.patch.PatchOutcome.WrongGame -> io.github.matiyaaa.fuse.ui.shell.store.PatchApplied.WrongGame(outcome.format.label, crc(outcome.expected), crc(outcome.actual))
             is io.github.matiyaaa.fuse.library.patch.PatchOutcome.Patched -> {

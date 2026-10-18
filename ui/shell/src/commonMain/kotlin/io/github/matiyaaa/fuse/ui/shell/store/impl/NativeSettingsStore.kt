@@ -303,6 +303,62 @@ internal class NativeSettingsStore(
         )
     }
 
+    /**
+     * What [emulator]'s files for every game hold for each of [values] (its key, as written), or
+     * null when its settings can't be read here.
+     */
+    suspend fun current(emulator: EmulatorId, values: List<io.github.matiyaaa.fuse.launch.online.OnlineValue>): Map<io.github.matiyaaa.fuse.launch.online.OnlineValue, String?>? {
+        val t = target(null, emulator).first ?: return null
+        val files = values.map { it.file }.distinct().associateWith { f -> read(t, f?.let { t.globals[it] } ?: t.globalPath) }
+        return values.associateWith { v -> files[v.file]?.values(v.section, v.key)?.lastOrNull() }
+    }
+
+    /**
+     * Gives [emulator]'s files for every game each of [values], recorded apart from the person's
+     * other setting changes (as [TOGETHER]), so [restoreTogether] puts back exactly these.
+     */
+    suspend fun setTogether(emulator: EmulatorId, values: List<io.github.matiyaaa.fuse.launch.online.OnlineValue>): Boolean {
+        val t = target(null, emulator).first ?: return false
+        for ((file, these) in values.groupBy { it.file }) {
+            val path = file?.let { t.globals[it] } ?: t.globalPath
+            val text = t.text(fs.readText(path, MAX_TEXT))
+            var records = data.owned.get(TOGETHER, path)
+            for (v in these) records = SettingsEdit.change(text, records, v.section, v.key, v.value)
+            if (!t.files.write(path, text.toString())) return false
+            data.owned.set(TOGETHER, path, records)
+        }
+        return true
+    }
+
+    /** Whether Play Together changed [emulator]'s settings, so they can be put back. */
+    suspend fun changedTogether(emulator: EmulatorId): Boolean {
+        val t = target(null, emulator).first ?: return false
+        return t.paths.any { data.owned.get(TOGETHER, it).isNotEmpty() }
+    }
+
+    /** Puts back what Play Together changed in [emulator]'s settings; a value changed in the emulator since stays. */
+    suspend fun restoreTogether(emulator: EmulatorId): Boolean {
+        val t = target(null, emulator).first ?: return false
+        var any = false
+        for (path in t.paths) {
+            val records = data.owned.get(TOGETHER, path)
+            if (records.isEmpty()) continue
+            val text = fs.readText(path, MAX_TEXT) ?: run { data.owned.set(TOGETHER, path, emptySet()); continue }
+            val file = t.text(text)
+            SettingsEdit.restore(file, records)
+            if (!t.files.write(path, file.toString())) return false
+            data.owned.set(TOGETHER, path, emptySet())
+            any = true
+        }
+        return any
+    }
+
+    /** RPCS3's `rpcn.yml` for [emulator] (beside its `config.yml`), or null when it isn't RPCS3 or isn't set up. */
+    suspend fun rpcnPath(emulator: EmulatorId): Pair<EmulatorFiles, String>? {
+        val t = target(null, emulator).first?.takeIf { it.family == "rpcs3" } ?: return null
+        return t.files to t.globalPath.substringBeforeLast('/') + "/" + io.github.matiyaaa.fuse.launch.online.Rpcn.FILE
+    }
+
     /** Gives the every-setting [setting] the [value] (see [FuseStore.LibraryOps.setEveryEmulatorSetting]). */
     suspend fun setEvery(id: GameId?, emulator: EmulatorId?, setting: String, value: String?): Boolean {
         val t = target(id, emulator).first ?: return false
@@ -357,6 +413,9 @@ internal class NativeSettingsStore(
 
         /** Where Fuse records the keys it changed in emulator settings files, by file. */
         const val KIND = "emulator.settings"
+
+        /** The same, for the keys Play Together changed, put back on their own. */
+        const val TOGETHER = "emulator.together"
 
         /** The emulator a system's games are changed in when they don't start in one Fuse knows. */
         val PLATFORM_FAMILY = mapOf("ps2" to "pcsx2", "psx" to "duckstation", "psp" to "ppsspp", "ngc" to "dolphin", "wii" to "dolphin", "ps3" to "rpcs3")

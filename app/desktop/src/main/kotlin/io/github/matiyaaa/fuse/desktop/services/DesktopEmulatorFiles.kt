@@ -320,13 +320,17 @@ class DesktopEmulatorFiles(
         }
     }
 
-    override suspend fun write(path: String, text: String): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun write(path: String, text: String): Boolean = write(path, text, keepCopy = true)
+
+    override suspend fun writePrivate(path: String, text: String): Boolean = write(path, text, keepCopy = false)
+
+    private suspend fun write(path: String, text: String, keepCopy: Boolean): Boolean = withContext(Dispatchers.IO) {
         val target = File(path).absoluteFile
         val inside = roots.any { root -> target.normalize().path.startsWith(File(root).normalize().path + File.separator) }
         if (!inside) return@withContext false
         try {
             // A copy of the file as it was before Fuse first changed it, kept with Fuse's own data.
-            if (target.isFile) {
+            if (keepCopy && target.isFile) {
                 val copy = File(backups, target.name)
                 if (!copy.exists()) {
                     backups.mkdirs()

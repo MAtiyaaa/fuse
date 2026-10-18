@@ -1890,8 +1890,10 @@ fun networkRows(app: AppState): List<MenuAction> = buildList {
 fun accountsRows(app: AppState): List<MenuAction> {
     val achievements = achievementRows(app)
     val phone = phoneLinkRows(app)
+    val nexus = nexusRows(app)
     return buildList {
         under("RetroAchievements", "ra", achievements)
+        under("Nexus Mods", "nexus", nexus)
         under("Phone Link", "phone", phone)
     }
 }
@@ -2094,7 +2096,40 @@ fun updateRows(app: AppState): List<MenuAction> {
             ))
         }
         add(toggleRow("auto", "Check automatically", FuseIcons.Bell, p.checkForUpdates, "Once a day from GitHub Releases; nothing installs without you") { v -> app.store.updatePrefs { it.copy(checkForUpdates = v) } })
+        add(MenuAction(
+            "channel", "Update Channel", FuseIcons.GitFork,
+            detail = channelDetail(p.updateChannel),
+            trailing = Trailing.Value(channelName(p.updateChannel)),
+            onSelect = {
+                app.choice = ChoiceSpec(
+                    icon = FuseIcons.GitFork,
+                    title = "Update Channel",
+                    message = "Which of Fuse's releases this device updates to. Going back to Stable keeps what is installed until a newer published release comes.",
+                    options = io.github.matiyaaa.fuse.data.settings.UpdateChannel.entries.map { c ->
+                        MenuAction("channel.${c.name}", channelName(c), FuseIcons.GitFork, detail = channelDetail(c), trailing = Trailing.Check(c == p.updateChannel), onSelect = {
+                            app.choice = null
+                            app.scope.launch {
+                                app.store.updatePrefs { it.copy(updateChannel = c) }
+                                app.store.updates.check()
+                            }
+                        })
+                    },
+                )
+            },
+        ))
     }
+}
+
+private fun channelName(c: io.github.matiyaaa.fuse.data.settings.UpdateChannel) = when (c) {
+    io.github.matiyaaa.fuse.data.settings.UpdateChannel.STABLE -> "Stable"
+    io.github.matiyaaa.fuse.data.settings.UpdateChannel.PRERELEASE -> "Beta"
+    io.github.matiyaaa.fuse.data.settings.UpdateChannel.NIGHTLY -> "Nightly"
+}
+
+private fun channelDetail(c: io.github.matiyaaa.fuse.data.settings.UpdateChannel) = when (c) {
+    io.github.matiyaaa.fuse.data.settings.UpdateChannel.STABLE -> "Published releases only"
+    io.github.matiyaaa.fuse.data.settings.UpdateChannel.PRERELEASE -> "Pre-releases too, ahead of each release"
+    io.github.matiyaaa.fuse.data.settings.UpdateChannel.NIGHTLY -> "The newest build, made every night; the least tested"
 }
 
 /**

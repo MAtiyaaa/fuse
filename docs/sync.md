@@ -454,6 +454,14 @@ another device is playing, or has just stopped and is still sending, asks first:
 that went quiet mid-game (asleep or switched off) is said to be quiet, with when its last save
 arrived.
 
+**Playing together.** A game started with Host a Game (RetroArch's netplay, PPSSPP's ad hoc play)
+is said to the host as open to join, with how, its emulator, this device's home network addresses
+and the port the emulator listens on, for as long as it is played and no longer. The host wakes the
+other devices at once, so whoever has Fuse open hears "Ana is hosting Kart Racer on the Steam
+Deck", and the game's Play Together lists it with Join. Joining someone's game is never asked
+about as another device on the same game. Nothing else about the game or the device is sent, and
+an older host simply passes it by.
+
 **When both sides played** since they last agreed, Fuse asks which save to use, showing where and
 when each was saved and how long the game had been played by then: **Use This Device** or
 **Use Fuse One**. The one not chosen is kept in the game's history as the other side of a

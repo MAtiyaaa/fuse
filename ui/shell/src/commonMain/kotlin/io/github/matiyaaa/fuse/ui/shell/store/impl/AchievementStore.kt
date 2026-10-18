@@ -183,6 +183,8 @@ internal class DefaultAchievementOps(
                         runCatching { fs.readBytes(path, 0, size.toInt()) }.getOrNull()?.let(localReader::npCommIds)?.takeIf { it.isNotEmpty() }
                     }.orEmpty()
                     localReader.ps4Trophies(users, ids, game.displayTitle)
+                        // Not set out by shadPS4 yet: the game's own trophy file, with the person's key.
+                        ?: localReader.ps4TrophiesFromGame(folders, users, ids)
                 }
             }
             game.platformId.value == "psvita" -> {

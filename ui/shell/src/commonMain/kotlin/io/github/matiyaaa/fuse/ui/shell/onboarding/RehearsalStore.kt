@@ -77,7 +77,7 @@ class RehearsalStore(scope: CoroutineScope, host: Host = Host.LINUX) : FuseStore
         override fun games(query: GameQuery) = sampleGames
         override fun game(id: GameId) = flowOf<GameDetail?>(null)
         override fun search(query: String) = sampleGames.map { SearchResults(query, games = it.filter { card -> card.title.contains(query, ignoreCase = true) }) }
-        override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, skipSaveCheck: Boolean, playAnyway: Boolean, onStage: (LaunchStage) -> Unit) = LaunchOutcome.Started
+        override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, skipSaveCheck: Boolean, playAnyway: Boolean, together: io.github.matiyaaa.fuse.ui.shell.store.Together?, onStage: (LaunchStage) -> Unit) = LaunchOutcome.Started
         override fun onResume() = Unit
         override fun onPause() = Unit
         override suspend fun setFavorite(id: GameId, favorite: Boolean) = Unit

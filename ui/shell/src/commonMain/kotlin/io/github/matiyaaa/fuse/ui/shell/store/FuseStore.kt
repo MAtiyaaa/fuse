@@ -482,6 +482,8 @@ interface LibraryOps {
         display: LaunchDisplay? = null,
         skipSaveCheck: Boolean = false,
         playAnyway: Boolean = false,
+        /** Played with others: hosting it here, or joining someone's (see [together]). */
+        together: Together? = null,
         /** Told as the launch moves on: checking the save first (when Fuse Sync or Syncthing does), then starting. */
         onStage: (LaunchStage) -> Unit = {},
     ): LaunchOutcome
@@ -617,6 +619,62 @@ interface LibraryOps {
     suspend fun fetchModSiteFile(id: GameId, modId: Long, fileId: Long, onProgress: (Float) -> Unit = {}): EnhancementPreview =
         EnhancementPreview.Unavailable("Not here", "Mods can be added from Fuse on a computer.")
 
+    /** The Nexus Mods account whose key is on this device, checked with Nexus Mods. */
+    suspend fun nexusAccount(): NexusAccount = NexusAccount.NoKey
+
+    /** Which game on Nexus Mods [id] is, and the games its list has by [query] (else the game's name). */
+    suspend fun nexusGames(id: GameId, query: String? = null): NexusGames = NexusGames(null, emptyList(), query.orEmpty(), "Mods can be found from Fuse on a computer.")
+
+    /** Remembers [game] as [id]'s game on Nexus Mods (null forgets it). */
+    suspend fun linkNexusGame(id: GameId, game: io.github.matiyaaa.fuse.integrations.nexus.NexusGame?) = Unit
+
+    /** [id]'s game's trending, latest added and latest updated mods on Nexus Mods. */
+    suspend fun nexusMods(id: GameId): NexusModList = NexusModList.Unavailable("Not here", "Mods can be found from Fuse on a computer.")
+
+    /** A mod on Nexus Mods ([game], [modId]), with what Fuse can do with each of its files for [id]. */
+    suspend fun nexusPage(id: GameId, game: String, modId: Long): NexusPage = NexusPage.Unavailable("Not here", "Mods can be found from Fuse on a computer.")
+
+    /**
+     * Fetches [fileId] of a mod on Nexus Mods into Fuse's own folder and works out what adding it to
+     * [id] would do, as [planEnhancement] does: straight away for a Premium account, else with the
+     * website's [nxm] link for the file. Nothing in the emulator's folders changes yet.
+     */
+    suspend fun fetchNexusFile(id: GameId, game: String, modId: Long, fileId: Long, nxm: String? = null, onProgress: (Float) -> Unit = {}): EnhancementPreview =
+        EnhancementPreview.Unavailable("Not here", "Mods can be added from Fuse on a computer.")
+
+    /** Playing [id] with others here: its emulator's way, what it needs, and who in the household hosts it now. */
+    suspend fun together(id: GameId): TogetherView = TogetherView.Unavailable("Not here", "Playing together is set up from Fuse on a computer.")
+
+    /**
+     * Sets [id]'s emulator up for playing with others, as its own settings: RPCS3's network and
+     * RPCN, PCSX2's network adapter, PPSSPP's wireless, Dolphin's name. Each change can be put back.
+     */
+    suspend fun setUpTogether(id: GameId): Boolean = false
+
+    /**
+     * After an emulator ([family], `ppsspp`) was updated: whether what [setUpTogether] set in it is
+     * still there; the words to say when it isn't, else null.
+     */
+    suspend fun recheckTogether(family: String): String? = null
+
+    /** Puts back what [setUpTogether] and hosting or joining changed in [id]'s emulator. */
+    suspend fun putBackTogether(id: GameId): Boolean = false
+
+    /**
+     * Readies [id]'s emulator for [together] without starting it, for an emulator whose own window
+     * starts it (Dolphin's NetPlay): null when done, else why not.
+     */
+    suspend fun readyTogether(id: GameId, together: Together): String? = "Playing together is set up from Fuse on a computer."
+
+    /**
+     * Signs RPCS3 in to RPCN as [user] for [id]'s emulator: the password is stretched as RPCS3 does
+     * and used once; the [token] is the one RPCN sent by email. Null when done, else why not.
+     */
+    suspend fun signInRpcn(id: GameId, user: String, password: String, token: String): String? = "RPCN is set up from Fuse on a computer."
+
+    /** Signs RPCS3 out of RPCN (its user name stays). */
+    suspend fun signOutRpcn(id: GameId): Boolean = false
+
     /** What EmuCoreX's public catalogues have for [id] (a PS2 game): texture packs by its serial, pnach files by its CRC. */
     suspend fun emuCoreX(id: GameId): EmuCoreXFinds = EmuCoreXFinds(null, null, emptyList(), emptyList(), "EmuCoreX's packs and cheats can be added from Fuse on a computer.")
 
@@ -695,7 +753,7 @@ interface LibraryOps {
     suspend fun detachContent(child: GameId): GameId? = null
 
     /**
-     * Applies the IPS, UPS or BPS patch at [patchPath] to [id]'s game file, as a new copy beside it
+     * Applies the IPS, UPS, BPS or xdelta patch at [patchPath] to [id]'s game file, as a new copy beside it
      * that joins the library: the game itself is never changed. UPS and BPS are checked against the
      * game they were made for, and a patch for another version is refused.
      */

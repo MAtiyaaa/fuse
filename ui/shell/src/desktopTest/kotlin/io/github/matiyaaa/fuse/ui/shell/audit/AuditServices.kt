@@ -143,6 +143,7 @@ internal class AuditServices(
         io.ktor.client.HttpClient(io.ktor.client.engine.mock.MockEngine { request ->
             AuditJellyfin.answer(this, request)
                 ?: AuditGameBanana.answer(this, request)
+                ?: AuditNexus.answer(this, request)
                 ?: AuditHowLongToBeat.answer(this, request)
                 ?: AuditEmuCoreX.answer(this, request)
                 ?: (if (host == Host.ANDROID || desktop) AuditStore.answer(this, request) else null)
@@ -707,6 +708,48 @@ internal object AuditGameBanana {
             path.endsWith("/Util/Search/Results") -> GAMES
             path.endsWith("/Mod/Index") -> MODS
             path.endsWith("/Mod/9101/ProfilePage") -> MOD
+            else -> return null
+        }
+        return with(scope) {
+            respond(body, io.ktor.http.HttpStatusCode.OK, io.ktor.http.headersOf(io.ktor.http.HttpHeaders.ContentType, "application/json"))
+        }
+    }
+}
+
+/**
+ * Nexus Mods as the audit has it, for the made-up PS2 game Sky Racer: an account that isn't
+ * Premium, two games of that name, its lists, and one mod with a file of each kind Fuse meets.
+ */
+internal object AuditNexus {
+    private const val GAMES = """[{"id":8101,"domain_name":"skyracer","name":"Sky Racer","mods":214},
+        {"id":8102,"domain_name":"skyracer2","name":"Sky Racer 2","mods":61},{"id":8103,"domain_name":"harbourlights","name":"Harbour Lights","mods":12}]"""
+    private fun mod(id: Int, name: String, author: String, version: String, endorsements: Int, summary: String) =
+        """{"mod_id":$id,"domain_name":"skyracer","name":"$name","summary":"$summary","version":"$version","author":"$author",
+            "updated_timestamp":1790000000,"endorsement_count":$endorsements,"contains_adult_content":false,"available":true,"status":"published"}"""
+    private val TRENDING = listOf(
+        mod(301, "Clear Skies HD Textures", "Wren", "2.1", 1_840, "Every sky and cloud texture redrawn at four times the size, for PCSX2's texture replacement."),
+        mod(302, "Readable Track Signs", "Ilse", "1.4", 512, "The track signs and the lap counter, sharp at any resolution."),
+    )
+    private val LATEST = listOf(
+        mod(305, "Night Circuit Lighting", "Dov", "0.9", 38, "Warmer street lights for the night circuits."),
+        mod(302, "Readable Track Signs", "Ilse", "1.4", 512, "The track signs and the lap counter, sharp at any resolution."),
+    )
+    private const val FILES = """{"files":[
+        {"file_id":9001,"name":"Clear Skies HD","file_name":"Clear Skies HD-301-2-1.zip","version":"2.1","size_kb":284000,"category_name":"MAIN","uploaded_timestamp":1790000000,"is_primary":true},
+        {"file_id":9002,"name":"Clear Skies, Softer Clouds","file_name":"Clear Skies Soft-301-2-1.zip","version":"2.1","size_kb":131000,"category_name":"OPTIONAL","uploaded_timestamp":1789990000,"is_primary":false},
+        {"file_id":9003,"name":"Clear Skies HD (7z)","file_name":"Clear Skies HD-301-2-1.7z","version":"2.1","size_kb":201000,"category_name":"MISCELLANEOUS","uploaded_timestamp":1789980000,"is_primary":false},
+        {"file_id":8990,"name":"Clear Skies HD","file_name":"Clear Skies HD-301-2-0.zip","version":"2.0","size_kb":276000,"category_name":"OLD_VERSION","uploaded_timestamp":1780000000,"is_primary":false}],"file_updates":[]}"""
+
+    fun answer(scope: io.ktor.client.engine.mock.MockRequestHandleScope, request: io.ktor.client.request.HttpRequestData): io.ktor.client.request.HttpResponseData? {
+        if (request.url.host != "api.nexusmods.com") return null
+        val path = request.url.encodedPath
+        val body = when (path) {
+            "/v1/users/validate.json" -> """{"user_id":42,"name":"Rowan","is_premium":false,"is_supporter":false}"""
+            "/v1/games.json" -> GAMES
+            "/v1/games/skyracer/mods/trending.json" -> TRENDING.joinToString(",", "[", "]")
+            "/v1/games/skyracer/mods/latest_added.json", "/v1/games/skyracer/mods/latest_updated.json" -> LATEST.joinToString(",", "[", "]")
+            "/v1/games/skyracer/mods/301.json" -> TRENDING.first()
+            "/v1/games/skyracer/mods/301/files.json" -> FILES
             else -> return null
         }
         return with(scope) {

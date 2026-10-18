@@ -28,8 +28,8 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
 - **BIOS checks** report Unknown, never Missing, when a location cannot be read.
 - **Transfers that follow your rules**: how many at once, a bandwidth limit, slower or paused while
   you play, only on Wi-Fi, only while charging, a battery level to wait below, and quiet hours.
-- **Patches** (IPS, UPS and BPS) applied from a game's options as a copy beside it, checked against
-  the game they were made for where the patch says; the game itself is never changed.
+- **Patches** (IPS, UPS, BPS and xdelta) applied from a game's options as a copy beside it, checked
+  against the game they were made for where the patch says; the game itself is never changed.
 - **Storage** shows every drive by name, connected or not, every game by the space it takes, and
   Fuse's own files: the saves Fuse One keeps here, a host's household saves, kept saves of removed
   profiles, and art and caches.
@@ -76,8 +76,16 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
   with a test launch. A game's emulator list says why one can't open that game.
 - **PCSX2 patches** (widescreen, 60 FPS and more) for a PS2 game, turned on in PCSX2's own settings
   for that game. Fuse only turns off what it turned on, and leaves anything set in PCSX2 alone.
+- **Cheats, textures and mods** of your own, from GameBanana, or from Nexus Mods with your own key,
+  put where each emulator reads them (Dolphin's Gecko and Action Replay codes in the game's own
+  settings), with every file shown first, a mod that changes the same files as another said before
+  it goes in, and each taken out again exactly.
 - **PlayStation disc details**: the serial and PCSX2's CRC, read from ISO and BIN images.
 - **How a PS3 game runs in RPCS3**, from RPCS3's compatibility list, asked only when you choose it.
+- **Play Together**: host a game in RetroArch or PPSSPP for others to join, or join one your
+  household is hosting (Fuse One says who hosts what), and online play set up as each emulator keeps
+  it: RPCS3 through RPCN with your account, PCSX2's network adapter, PPSSPP's wireless and Dolphin's
+  NetPlay, each put back on request.
 - **Problems that explain themselves**: when a game can't start, Fuse says why, that nothing was
   changed, and offers the fix. If Fuse itself fails to start three times, it starts in **safe mode**.
 

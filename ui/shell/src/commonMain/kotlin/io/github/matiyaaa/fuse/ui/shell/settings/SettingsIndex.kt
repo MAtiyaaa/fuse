@@ -144,6 +144,7 @@ object SettingsIndex {
         SettingTopic("addons", "Sign In to RomM", "romm sign in log in login account server address connect", group = ADDONS_ROMM),
         SettingTopic("addons", "Cartridge support", "romm downloads cartridge", group = ADDONS_CARTRIDGE, cartridge = true),
         SettingTopic("accounts", "Pair a phone", "phone link companion upload qr"),
+        SettingTopic("accounts", "Your Nexus Mods Key", "nexus mods nexusmods api key modding mod manager", steam = true),
         SettingTopic("health", "Diagnostics report", "bug report logs problems diagnostics support"),
         // Every other row Settings draws, so search finds each one by its own name (0.4.3's audit).
         SettingTopic("appearance", "Title logos", "logo game name art over background"),
@@ -211,6 +212,7 @@ object SettingsIndex {
         SettingTopic("addons", "Use Jellyfin", "jellyfin films movies shows", group = "addons.jellyfin"),
         SettingTopic("addons", "Use RomM", "romm server roms", group = "addons.romm"),
         SettingTopic("about", "Check automatically", "updates automatic check"),
+        SettingTopic("about", "Update Channel", "beta nightly prerelease pre-release stable channel updates"),
         SettingTopic("about", "Credits and links", "credits thanks links", group = "about.credits"),
         SettingTopic("library", "Fuse in Steam's game menu", "decky steam menu entries", decky = true),
         SettingTopic("health", "Power and heat", "battery drain heat hot warm temperature thermal throttling sleep wake lock refresh rate hz charging", group = "health.power"),

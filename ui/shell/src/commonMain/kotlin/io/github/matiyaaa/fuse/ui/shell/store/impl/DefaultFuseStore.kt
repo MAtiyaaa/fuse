@@ -74,7 +74,7 @@ internal class DefaultFuseStore private constructor(
     override val apps = DefaultAppOps(ctx)
     private val mediaOps: DefaultMediaOps
     override val credentials = DefaultCredentialOps(ctx) { key, removed ->
-        if (!key.startsWith("ra.")) mediaOps.invalidate()
+        if (!key.startsWith("ra.") && key !in SecretKeys.deviceOnly) mediaOps.invalidate()
         // A key removed here stays off this device; adding it again lets the household's follow.
         if (key in SecretKeys.all) ctx.scope.launch {
             sync.configure { c ->
@@ -90,7 +90,7 @@ internal class DefaultFuseStore private constructor(
     override val settings = DefaultScopedSettingsOps(ctx) { reloadPrefs() }
     private val appStoreOps = ctx.services.packages?.let { DefaultAppStoreOps(ctx, it, prefsState) { t -> updatePrefs(t) } }
     /** A computer's Store, where Fuse can put programs in place. */
-    private val desktopStoreOps = if (appStoreOps == null) ctx.services.desktopApps?.let { DesktopAppStoreOps(ctx, it) { emulators.refresh() } } else null
+    private val desktopStoreOps = if (appStoreOps == null) ctx.services.desktopApps?.let { DesktopAppStoreOps(ctx, it, afterUpdate = { key -> library.recheckTogether(key) }) { emulators.refresh() } } else null
     override val appStore: AppStoreOps = appStoreOps ?: desktopStoreOps ?: AppStoreOps.None
     // Made when Fuse first shows or plays media, never by a Fast Start.
     override val jellyfin by lazy {

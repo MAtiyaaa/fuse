@@ -329,6 +329,105 @@ internal fun AuditDriver.detailScreens() {
         }
     }
 
+    /** A PSP game on a computer showing [view] as its Play Together, opened from its options. */
+    fun playTogether(view: io.github.matiyaaa.fuse.ui.shell.store.TogetherView, until: String, shot: String) {
+        useLibrary()
+        val base = libraryStore
+        val library = object : io.github.matiyaaa.fuse.ui.shell.store.LibraryOps by base.library {
+            override suspend fun together(id: io.github.matiyaaa.fuse.model.GameId) = view
+        }
+        show(object : io.github.matiyaaa.fuse.ui.shell.store.FuseStore by base { override val library = library }, AuditPlatform(size, host = io.github.matiyaaa.fuse.model.Host.LINUX))
+        search("Waystation Nine")
+        tap(PadButton.START)
+        tap(PadButton.X)
+        tapText("Play Together")
+        waitFor(until)
+        settle(900)
+        shoot(shot, 1_200)
+    }
+
+    scenario("details", "play together") {
+        // Two others in the household hosting it.
+        val now = System.currentTimeMillis()
+        playTogether(
+            io.github.matiyaaa.fuse.ui.shell.store.TogetherView.Ready(
+                title = "Waystation Nine", emulator = "PPSSPP", way = io.github.matiyaaa.fuse.launch.online.TogetherWay.AD_HOC,
+                missing = listOf("Its wireless on"), canHost = true,
+                hosts = listOf(
+                    io.github.matiyaaa.fuse.ui.shell.store.TogetherHost("deck", "Steam Deck", "Ana", now - 4 * 60_000, "192.168.1.31", 27312),
+                    io.github.matiyaaa.fuse.ui.shell.store.TogetherHost("ally", "ROG Ally", "Mo", now - 22 * 60_000, "192.168.1.44", 27312),
+                ),
+                household = true, rpcn = null, canPutBack = true,
+            ),
+            until = "Join Ana's Game", shot = "the household's games to join, hosting here, and what PPSSPP needs",
+        )
+    }
+
+    scenario("details", "play together online") {
+        playTogether(
+            io.github.matiyaaa.fuse.ui.shell.store.TogetherView.Ready(
+                title = "Waystation Nine", emulator = "RPCS3", way = io.github.matiyaaa.fuse.launch.online.TogetherWay.ONLINE_SERVICE,
+                missing = listOf("Its network on, through RPCN"), canHost = false, hosts = emptyList(), household = true, rpcn = "Ana_99", canPutBack = true,
+            ),
+            until = "Sign Out of RPCN", shot = "RPCS3 online through RPCN, signed in",
+        )
+    }
+
+    scenario("details", "mods from nexus mods") {
+        // The same computer and PS2 disc, with the person's own Nexus Mods key (an account that isn't Premium).
+        val dir = File(cache, "nexus-audit").apply { deleteRecursively() }
+        File(dir, "games/ps2").mkdirs()
+        File(dir, "games/ps2/Sky Racer.iso").writeBytes(AuditEmuCoreX.ps2Iso())
+        val pcsx2 = File(dir, "pcsx2").apply { listOf("inis", "patches", "cheats", "gamesettings", "textures").forEach { File(this, it).mkdirs() } }
+        File(pcsx2, "inis/PCSX2.ini").writeText("[EmuCore]\nEnableCheats = false\n")
+        val home = pcsx2.absolutePath
+        controls.pcsx2 = io.github.matiyaaa.fuse.launch.patches.Pcsx2Home(home, "$home/gamesettings", "$home/patches", null, cheats = "$home/cheats", textures = "$home/textures")
+        val pc = runBlocking {
+            io.github.matiyaaa.fuse.ui.shell.store.createFuseStore(AuditServices.create(cache, controls), scope).also { s ->
+                s.updatePrefs { it.copy(onboardingDone = true) }
+                s.credentials.put(io.github.matiyaaa.fuse.data.settings.SecretKeys.NEXUS_API_KEY, "audit-own-key")
+                s.sources.add(File(dir, "games").absolutePath, io.github.matiyaaa.fuse.model.LibrarySourceKind.ROMS_ROOT)
+                kotlinx.coroutines.withTimeout(30_000) { s.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).first { it.isNotEmpty() } }
+                kotlinx.coroutines.withTimeout(30_000) { s.emulators.installed.first { it.isNotEmpty() } }
+            }
+        }
+        try {
+            show(pc, AuditPlatform(size, host = io.github.matiyaaa.fuse.model.Host.LINUX))
+            search("Sky Racer")
+            tap(PadButton.START)
+            tap(PadButton.X)
+            tapText("Patches, Cheats and Textures")
+            waitFor("Find Mods on Nexus Mods")
+            focusText("Find Mods on Nexus Mods")
+            shoot("Nexus Mods beside GameBanana and EmuCoreX", 1_200)
+            tap(PadButton.A)
+            waitFor("Which is Sky Racer?")
+            settle(900)
+            shoot("which game on Nexus Mods, the same name first", 1_200)
+            tap(PadButton.A)
+            waitFor("Clear Skies HD Textures")
+            settle(900)
+            shoot("the game's lists: trending, then the newest", 1_200)
+            tapText("Clear Skies HD Textures")
+            waitFor("Open Its Page")
+            settle(900)
+            shoot("a mod's files: what Fuse fetches, and why not the rest", 1_200)
+            tap(PadButton.A)
+            waitFor("Paste Its Mod Manager Download Link")
+            shoot("a file for an account that isn't Premium", 1_200)
+            tap(PadButton.B)
+        } finally {
+            controls.pcsx2 = null
+        }
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("accounts"))
+        tap(PadButton.DPAD_RIGHT)
+        waitFor("Your Nexus Mods Key")
+        focusText("Your Nexus Mods Key")
+        settle(900)
+        shoot("Settings, Accounts: whose key, and where downloads come from", 1_200)
+    }
+
     scenario("details", "a game with many facts") {
         useLibrary()
         val card = runBlocking { libraryStore.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).first().first { it.title == "Emberline Saga" } }

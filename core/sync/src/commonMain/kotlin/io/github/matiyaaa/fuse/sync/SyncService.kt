@@ -157,6 +157,9 @@ sealed interface SyncNotice {
 
     /** This device's profiles went to [hostName] as they were ([count] of them), joining it. */
     data class Brought(val count: Int, val hostName: String) : SyncNotice
+
+    /** [who] (a profile, on [device]) opened [title] for the household to join. */
+    data class Hosting(val who: String, val device: String, val title: String) : SyncNotice
 }
 
 /**
@@ -511,6 +514,18 @@ interface SyncService {
     /** Another device on [query]'s game (playing it, or still sending its save); null when none is, or the host can't say. */
     suspend fun busyWith(query: SaveQuery): LaunchGate.Busy? = null
 
+    /**
+     * [query]'s game, about to start here, is open for the household to join ([hosting]): said with
+     * this device's presence for as long as it is played, and no more once it ends. Null takes it back.
+     */
+    suspend fun hostNext(query: SaveQuery, hosting: Hosting?) {}
+
+    /** The household's other devices hosting [query]'s game now, asked of the host; empty when none is or it can't be reached. */
+    suspend fun hostedFor(query: SaveQuery): List<Presence> = emptyList()
+
+    /** Every game the household's other devices are hosting now, kept up to date as the host says one opens. */
+    val together: StateFlow<List<Presence>> get() = NO_TOGETHER
+
     /** Look at the playing game's save now and send it if it changed (the screen is going off). */
     suspend fun sendWhilePlaying() {}
 
@@ -653,6 +668,8 @@ class NoHostLifetime(private val why: String) : HostLifetime {
 }
 
 private val NO_PLAYING: StateFlow<String?> = kotlinx.coroutines.flow.MutableStateFlow(null)
+
+private val NO_TOGETHER: StateFlow<List<Presence>> = kotlinx.coroutines.flow.MutableStateFlow(emptyList())
 
 private val NO_NOTICES: kotlinx.coroutines.flow.SharedFlow<SyncNotice> = kotlinx.coroutines.flow.MutableSharedFlow()
 

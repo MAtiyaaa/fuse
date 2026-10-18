@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.store.impl
 
+import io.github.matiyaaa.fuse.launch.patches.DolphinCheats
 import io.github.matiyaaa.fuse.launch.patches.DuckStationPatchRules
 import io.github.matiyaaa.fuse.launch.patches.EnhancementKind
 import io.github.matiyaaa.fuse.launch.patches.EnhancementRules
@@ -117,7 +118,7 @@ internal class NativeEnhancements(
         return when (game.platformId.value) {
             "ps2", "psx" -> listOf(EnhancementKind.CHEATS, EnhancementKind.PATCHES, EnhancementKind.TEXTURES)
             "psp" -> listOf(EnhancementKind.CHEATS, EnhancementKind.TEXTURES)
-            "ngc", "wii" -> listOf(EnhancementKind.TEXTURES, EnhancementKind.MODS)
+            "ngc", "wii" -> listOf(EnhancementKind.CHEATS, EnhancementKind.TEXTURES, EnhancementKind.MODS)
             in MOD_PLATFORMS -> listOf(EnhancementKind.MODS)
             else -> emptyList()
         }
@@ -467,7 +468,7 @@ internal class NativeEnhancements(
             else -> {
                 val home = files.modHome(query).getOrElse { return no("Fuse can't add this here", it.message ?: "Fuse doesn't put mods in place for this emulator.") }
                 when (home.emulator) {
-                    "dolphin" -> dolphinMod(id, kind, home, source, listing)
+                    "dolphin" -> if (kind == EnhancementKind.CHEATS) dolphinCheats(id, home, files, source, listing) else dolphinMod(id, kind, home, source, listing)
                     "cemu" -> cemuMod(id, kind, home, files, source, listing)
                     "ryujinx" -> switchMod(id, kind, home, "Ryujinx", source, listing)
                     else -> switchMod(id, kind, home, emulatorTitle(home.emulator), source, listing)
@@ -515,7 +516,40 @@ internal class NativeEnhancements(
         val record = Record(token(), kind, emulator, listing.name, now(), planned.size, target, settingsFile = settingsFile)
         val replaces = planned.map { it.to }.filter { fs.stat(it) != null }
         val plan = Plan(id, record, source, planned, emptyMap(), settings, emptyList())
-        return preview(plan, replaces, rejected, notes, said, 0, listing.bytes)
+        return preview(plan, replaces, rejected, conflicts(id, kind, emulator, target, planned) + notes, said, 0, listing.bytes)
+    }
+
+    /**
+     * Mods already added for the game that change a file this one changes too: each mod sits in a
+     * folder of its own, and the emulator layers them, so for each such file only one of them counts.
+     * Said before anything is added, with the files (at most a few named).
+     */
+    private suspend fun conflicts(id: GameId, kind: EnhancementKind, emulator: String, target: String, planned: List<PlannedFile>): List<String> {
+        if (kind != EnhancementKind.MODS) return emptyList()
+        // Compared without case (the emulators' own file systems may not tell case apart), shown as this mod has them.
+        val mine = planned.associate { it.to.removePrefix("$target/").lowercase() to it.to.removePrefix("$target/") }
+        return records(id).filter { it.kind == EnhancementKind.MODS && it.emulator == emulator && it.target != target }.mapNotNull { other ->
+            val theirs = filesUnder(other.target).map { it.lowercase() }.toSet()
+            val both = mine.filterKeys { it in theirs }.values.sorted()
+            if (both.isEmpty()) return@mapNotNull null
+            val named = both.take(3).joinToString(", ") + if (both.size > 3) " and ${both.size - 3} more" else ""
+            "${other.name} changes ${if (both.size == 1) "the same file" else "the same ${both.size} files"} ($named). $emulator uses only one of them, so turn one off if the game looks wrong."
+        }
+    }
+
+    /** The files below [dir], as paths relative to it; at most [MAX_WALK] are looked at. */
+    private suspend fun filesUnder(dir: String): List<String> {
+        val out = ArrayList<String>()
+        val queue = ArrayDeque(listOf(dir to ""))
+        while (queue.isNotEmpty() && out.size < MAX_WALK) {
+            val (path, rel) = queue.removeFirst()
+            val entries = runCatching { fs.list(path) }.getOrDefault(emptyList())
+            for (e in entries) {
+                val r = if (rel.isEmpty()) e.name else "$rel/${e.name}"
+                if (e.isDirectory) queue.addLast(e.path to r) else out += r
+            }
+        }
+        return out
     }
 
     private suspend fun switchMod(id: GameId, kind: EnhancementKind, home: io.github.matiyaaa.fuse.sync.ModHome, emulator: String, source: String, listing: SourceListing): EnhancementPreview {
@@ -573,7 +607,7 @@ internal class NativeEnhancements(
                 notes = listOf("Dolphin loads these as the game starts; restart the game if it is running."),
             )
         }
-        if (kind != EnhancementKind.MODS) return no("Not for Dolphin", "Dolphin keeps its cheats in its own game properties. Add texture packs or graphics mods here.")
+        if (kind != EnhancementKind.MODS) return no("Not for Dolphin", "Add Dolphin's cheats as cheats, texture packs as textures, and graphics mods as mods.")
         val layout = ModRules.dolphinGraphicsMod(listing.entries, listing.name)
             ?: return no("Not a Dolphin graphics mod", "A Dolphin graphics mod is a folder with a metadata.json in it. ${listing.name} has none. For a texture pack, add it as textures.")
         val parent = "${home.graphicsMods}/${home.gameId}"
@@ -588,6 +622,37 @@ internal class NativeEnhancements(
             said = if (on) emptyList() else listOf("Turns on graphics mods for this game in Dolphin"),
             notes = listOf("Dolphin keeps each graphics mod off until it is ticked: right-click the game, Properties, Graphics Mods."),
         )
+    }
+
+    /**
+     * Dolphin's Gecko and Action Replay codes ([DolphinCheats]) from a person's file, added to the
+     * end of the game's own settings file, off, with Enable Cheats for this game; codes the game
+     * already has are left out, and a file named for another game is turned away.
+     */
+    private suspend fun dolphinCheats(id: GameId, home: io.github.matiyaaa.fuse.sync.ModHome, files: EmulatorFiles, source: String, listing: SourceListing): EnhancementPreview {
+        val dest = home.settingsFile ?: return no("Dolphin's game settings aren't known yet", "Start Dolphin once so it sets up its folders, then add these.")
+        val texts = texts(files, source, listing, setOf("ini", "txt"))
+        if (texts.isEmpty()) return no("No codes in it", "Dolphin's cheats come as text: a game's .ini with [Gecko] or [ActionReplay] codes, or a .txt of Gecko codes each named with $.")
+        // A Dolphin game file is named for its game id (GALE01.ini): one for another game is that game's.
+        texts.firstNotNullOfOrNull { (name, _) ->
+            name.substringAfterLast('/').substringBeforeLast('.').uppercase().takeIf { Regex("^[A-Z0-9]{6}$").matches(it) && it != home.gameId.uppercase() && it.take(3) != home.gameId.uppercase().take(3) }
+        }?.let { return no("Made for another game", "This file is named for $it, and this game is ${home.gameId}. Dolphin files a game's codes under its own id.") }
+        val existing = fs.readText(dest, MAX_TEXT).orEmpty()
+        val read = texts.map { DolphinCheats.parse(it.second) }
+        val all = read.flatMap { it.codes }.distinctBy { it.kind to it.name }
+        val known = DolphinCheats.Kind.entries.associateWith { DolphinCheats.namesIn(existing, it) }
+        val (fresh, already) = all.partition { it.name !in known.getValue(it.kind) }
+        if (fresh.isEmpty()) {
+            return if (all.isEmpty()) no("No codes Dolphin reads", "Nothing in ${listing.name} is a Gecko or Action Replay code as Dolphin reads them.")
+            else no("Already there", "This game already has every code in ${listing.name}.")
+        }
+        val rejected = read.flatMap { it.rejected } + already.map { "$${it.name}: this game has it already" }
+        return appendPlan(id, EnhancementKind.CHEATS, "Dolphin", listing, dest, DolphinCheats.block(fresh), rejected, fresh.size, ppsspp = false) { had ->
+            listOfNotNull(
+                "They are added to the end of the game's settings file; what is in it now stays, and a copy of it is kept.".takeIf { had },
+                "Turn the ones you want on in Dolphin: right-click the game, Properties, Gecko Codes or AR Codes. Cheats are turned on for this game.",
+            )
+        }
     }
 
     private suspend fun rpcs3Mod(id: GameId, game: Game, kind: EnhancementKind, files: EmulatorFiles, source: String, listing: SourceListing): EnhancementPreview {
@@ -654,7 +719,19 @@ internal class NativeEnhancements(
         return preview(plan, replaces, rejected, allNotes, said, 0, listing.bytes)
     }
 
-    private suspend fun appendPlan(id: GameId, kind: EnhancementKind, emulator: String, listing: SourceListing, dest: String, block: String, rejected: List<String>, codes: Int, ppsspp: Boolean): EnhancementPreview {
+    private suspend fun appendPlan(
+        id: GameId,
+        kind: EnhancementKind,
+        emulator: String,
+        listing: SourceListing,
+        dest: String,
+        block: String,
+        rejected: List<String>,
+        codes: Int,
+        ppsspp: Boolean,
+        /** What the preview says about where they go and turning them on, when it isn't the game's Cheats list in Fuse. */
+        notesFor: ((existing: Boolean) -> List<String>)? = null,
+    ): EnhancementPreview {
         if (block.length > MAX_TEXT / 4) return no("That's a lot of codes", "Fuse adds up to 256 KB of codes at a time. Choose the file for this game alone.")
         val existing = fs.readText(dest, MAX_TEXT)
         val record = Record(
@@ -664,7 +741,7 @@ internal class NativeEnhancements(
         // The codes are added to the file as it is when the preview is accepted (see [add]).
         val plan = Plan(id, record, null, emptyList(), emptyMap(), emptyList(), emptyList())
         val word = if (kind == EnhancementKind.CHEATS) "Cheats" else "Patches"
-        val notes = buildList {
+        val notes = notesFor?.invoke(existing != null) ?: buildList {
             if (existing != null) add("They are added to the end of the game's file; what is in it now stays, and a copy of it is kept.")
             add("They show in this game's $word list, off until you turn them on.")
         }
@@ -748,6 +825,9 @@ internal class NativeEnhancements(
         const val KIND = "enhancements"
         const val MAX_TEXT = 1024 * 1024
         const val MAX_CODE_FILES = 64
+
+        /** Files looked at in one added mod when checking what another would change too. */
+        const val MAX_WALK = 20_000
         const val GS = "EmuCore/GS"
         const val LOAD_TEXTURES = "LoadTextureReplacements"
         const val TR = "TextureReplacements"

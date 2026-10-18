@@ -595,6 +595,44 @@ class ServiceTest {
     }
 
     @Test
+    fun aGameOpenToJoinReachesTheOtherDevicesWhileItIsPlayedAndNoLonger(): Unit = runBlocking {
+        val (pc, _) = service("Gaming PC", Library())
+        val (thor, _) = service("AYN Thor", Library(), platform = "ANDROID")
+        val (deck, _) = service("Steam Deck", Library())
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        thor.connect("127.0.0.1:$port", code).getOrThrow()
+        deck.connect("127.0.0.1:$port", assertNotNull(pc.newPairingCode())).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        val ana = pc.createProfile("Ana", "owl", null).getOrThrow()
+        thor.switchTo(mo.id).getOrThrow()
+        deck.switchTo(ana.id).getOrThrow()
+        val tq = SaveQuery(ct, "gba", File(root, "thor/ruby.gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby")
+        val dq = tq.copy(romPath = File(root, "deck/ruby.gba").path.replace('\\', '/'))
+        assertTrue(deck.hostedFor(dq).isEmpty(), "nobody hosts it yet")
+
+        // The Deck hears of it as soon as the host does, without asking.
+        val heard = async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { withTimeout(30_000) { deck.notices.first { it is SyncNotice.Hosting } } }
+        val hosting = Hosting("netplay", "retroarch", listOf("192.168.1.31"), 55435)
+        thor.hostNext(tq, hosting)
+        assertIs<LaunchGate.Go>(thor.beforeLaunch(tq))
+        val started = System.currentTimeMillis()
+        thor.playing(tq, started)
+        val notice = heard.await() as SyncNotice.Hosting
+        assertEquals(SyncNotice.Hosting("Mo", "AYN Thor", "Pokemon Ruby"), notice)
+        val open = deck.hostedFor(dq).single()
+        assertEquals("AYN Thor", open.deviceName)
+        assertEquals(hosting, open.hosting)
+        assertEquals(listOf(open), deck.together.value)
+        // Playing it alone on another device isn't hosting.
+        assertTrue(thor.hostedFor(tq).isEmpty(), "a device never sees its own")
+
+        // Once the Thor is done with it, it isn't open any more.
+        thor.afterExit(tq, started, System.currentTimeMillis())
+        assertTrue(deck.hostedFor(dq).isEmpty())
+        pc.stop()
+    }
+
+    @Test
     fun savedTwiceBeforeEitherWentUpIsOneStepNotAFork(): Unit = runBlocking {
         val pcLib = Library()
         val (pc, _) = service("Gaming PC", pcLib)

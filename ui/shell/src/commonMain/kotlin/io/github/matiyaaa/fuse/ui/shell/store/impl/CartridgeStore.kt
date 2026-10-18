@@ -297,7 +297,13 @@ internal class DefaultUpdateOps(private val ctx: StoreContext) : UpdateOps {
     override suspend fun check(): ReleaseInfo? {
         // The GitHub token given in the Store, when there is one, lifts the API's hourly limit for this too.
         val token = runCatching { ctx.services.secrets.get(DefaultAppStoreOps.TOKEN_KEY) }.getOrNull()
-        val result = GitHubReleases(ctx.services.http, token = { token }).latest(GitHubReleases.FUSE_REPO)
+        // The channel chosen in Settings, About: published releases, Beta's pre-releases, or the nightly one too.
+        val channel = when (ctx.settings.value.updates.channel) {
+            io.github.matiyaaa.fuse.data.settings.UpdateChannel.STABLE -> io.github.matiyaaa.fuse.integrations.github.ReleaseChannel.STABLE
+            io.github.matiyaaa.fuse.data.settings.UpdateChannel.PRERELEASE -> io.github.matiyaaa.fuse.integrations.github.ReleaseChannel.BETA
+            io.github.matiyaaa.fuse.data.settings.UpdateChannel.NIGHTLY -> io.github.matiyaaa.fuse.integrations.github.ReleaseChannel.NIGHTLY
+        }
+        val result = GitHubReleases(ctx.services.http, token = { token }).forChannel(GitHubReleases.FUSE_REPO, channel)
         val now = ctx.now()
         val release = (result as? ApiResult.Success)?.value
         // A check that couldn't reach GitHub says so, never "up to date".

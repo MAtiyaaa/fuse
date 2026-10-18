@@ -704,7 +704,8 @@ data class PrivacySettings(
 )
 
 @Serializable
-enum class UpdateChannel { STABLE, PRERELEASE }
+/** Which releases Fuse updates to: published ones, pre-releases too (Beta), or the nightly one as well. */
+enum class UpdateChannel { STABLE, PRERELEASE, NIGHTLY }
 
 @Serializable
 data class UpdateSettings(

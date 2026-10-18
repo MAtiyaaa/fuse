@@ -32,7 +32,9 @@ and redact credentials from every error message (`redact()`, see
 - [RPCS3 compatibility list](#rpcs3-compatibility-list)
 - [Jellyfin](#jellyfin)
 - [Streaming (GameStream and Moonlight)](#streaming-gamestream-and-moonlight)
+- [Mod sites (GameBanana and Nexus Mods)](#mod-sites-gamebanana-and-nexus-mods)
 - [Emulators' own files](#emulators-own-files)
+- [ROM patches](#rom-patches)
 
 ## Summary: what leaves the device
 
@@ -48,9 +50,12 @@ and redact credentials from every error message (`redact()`, see
 | GitHub Releases | Nothing | A request for the latest release of Fuse or Cartridge, your IP address and the User-Agent with Fuse's version | Update checks (automatic check can be turned off) and "Install Cartridge"; downloads only after you confirm |
 | Store (Android): Obtainium Emulation Pack, app sources | Optionally a GitHub token | Requests for the pack's newest release on github.com, each app's releases (GitHub's API, or the download page the pack names), and the APK you install; your IP address and the User-Agent (or the one the pack sets for a download page) | The catalogue when the Store opens and is older than 6 hours, or on "Check now"; an app's releases when its page or card is shown, for installed apps a little after start (at most twice a day, can be turned off); downloads only when you press Install or Update |
 | Store (computer): each program's releases | Optionally a GitHub token (GitHub only) | Requests for a program's releases on GitHub, its own Forgejo or Gitea server, its download listing or Flathub, and the file you install; your IP address and the User-Agent | A program's releases when its page or card is shown, for installed programs a little after start; downloads only when you press Install, Update or Update All |
+| GameBanana | Nothing | A game's title (or the words you search with), the GameBanana game you chose and the mods you open, your IP address and the User-Agent; then the mod's file from GameBanana's own address | Only when you open GameBanana in a game's cheats, textures or mods, a mod there, or add one of its files; answers are kept a while |
+| Nexus Mods (computer, off until you add your key) | Your own personal API key from your Nexus Mods account | To api.nexusmods.com only: your key in the `apikey` header with "Fuse" and its version, the Nexus Mods game you chose for a game and the mods and files you open; for an account that isn't Premium, the one-time key and expiry of the Mod Manager Download link you paste. Then the file from the address Nexus Mods gives (https only). The key stays on this device: it is never shared with your household or Fuse Sync | Whose key it is when Settings, Accounts, Nexus Mods is shown (once a run per key); the games list when you choose a game (kept a week), a game's lists when you open Nexus Mods for it (kept an hour), a mod's files when you open it; downloads only when you add a file |
 | RPCS3 compatibility list (rpcs3.net) | Nothing | A PS3 game's title id (for example `BLUS30443`), your IP address and the User-Agent | Only when you choose How It Runs in RPCS3 in a PS3 game's options; the answer is kept a week |
 | Fuse RomM (off until you turn it on) | Your RomM server's addresses, then an approval in RomM, a pairing code or token made in RomM, or (for a server without client tokens) a user name and password | To your own server only: the token (or the sign-in) on each request, this device's name and a random device id when pairing, requests for the server's API description, systems, collections, games and firmware, the files you download, and the files of games you upload; with Send Changes to RomM on (off until you turn it on), your favourites, games you hide and your play sessions for games from RomM; a Cloudflare Access service token, when you add one, to that outside address only, over https | While Fuse RomM is on: a quick check of each address when it connects, the library brought up to date every 30 minutes (you choose 5 minutes to a day) and when you ask; downloads and uploads only when you start them |
 | Fuse Sync, Fuse Library (with Fuse Sync on; Share This Device's Games can turn it off) | Nothing beyond Fuse Sync | To your own Fuse Sync host only: the list of this device's games (titles, systems, sizes, dates, file names with their sizes and SHA-1 and MD5 hashes, and the ids Fuse uses for their art), this device's local addresses and the port it answers on, what it is downloading, and requests you make for games. To another of your own devices, directly on your network or passed through your host: the files of a game that device asks for, with a ticket from your host | While Fuse Sync is on: the list a few seconds after the library changes, and once a minute while its files' hashes are being worked out; what is downloading when it changes, at most every two seconds; game files only when one of your devices asks for them |
+| Fuse One, Play Together (with Fuse One on) | Nothing beyond Fuse One | To your own Fuse One host only, while a game you started with Host a Game is played: that it is open to join, how (RetroArch's netplay or PPSSPP's ad hoc play), the emulator, this device's home network addresses and the port the emulator listens on, with the game and profile Fuse One already says it is playing | Every minute while the game is played, as Fuse One already says what it plays; the other devices ask the host when it wakes them and when a game's Play Together is opened |
 | Cartridge | Nothing | Nothing leaves the device through Fuse: Fuse reads Cartridge's local status and opens it with deep links. "Upload to RomM" hands Cartridge a game's file paths; Cartridge uploads the files to your own RomM server only after you confirm there. On Android Cartridge can read your play sessions (below) and adds their time to its own play sessions on your RomM server | On resume and when Cartridge reports a change; uploads only when you start one and confirm it in Cartridge; play sessions when Cartridge starts or comes back to the front |
 | Jellyfin (off until you turn it on) | Your server's addresses, your Jellyfin user name and password | To your own server only: the user name and password at sign-in (kept only in Fuse's secret store, and shared sealed with your own Fuse Sync host when Share Sign-ins is on), then the access token, this device's name and a random device id, what you browse and search, a device profile of what this device can play, and where you are in what you play (start, progress every ten seconds, stop), plus favourites and watched marks you change. For a download, the request for the original file, its subtitle files and pictures. A UDP broadcast on the local network asks which Jellyfin servers are there when you look for one | While Jellyfin is on: a check that the server answers every 30 seconds, pages as you open them, Home's Jellyfin widgets every 5 minutes while one is on Home, and downloads only when you start one; where you stopped in a downloaded copy is sent once the server can be reached |
 | Streaming (off until you add a computer) | The address of your computer running Sunshine, Apollo or GeForce Experience, optionally its network card address | To that computer only: a `serverinfo` request on its open GameStream port (47989). To wake it, a Wake-on-LAN packet with its network card address, broadcast on the local network and sent to its address. Moonlight, not Fuse, pairs and streams | When the Streaming tab is open and when you choose an app; the wake packet only when the computer doesn't answer and waking is on |
@@ -941,10 +946,97 @@ Fuse trusts only an entry whose key is exactly the asked id. Answers are kept a 
 **Code.** `core/integrations/.../rpcs3/Rpcs3Compatibility.kt` (parsing), `LibraryStore` (the request
 and the cache).
 
+## Mod sites (GameBanana and Nexus Mods)
+
+Both are found in a game's own cheats, textures and mods (GameBanana on Android too, Nexus Mods on a
+computer), and both end in the same place as a file of your own: Fuse shows every file and where it goes before anything is added
+(below, [Emulators' own files](#emulators-own-files)). Which game on the site a library game is, is
+always your choice from the site's own list, never guessed from a similar name, and is remembered.
+
+**GameBanana** (`core/integrations/.../gamebanana/GameBanana.kt`, `ModSites`). Its public API
+(`gamebanana.com/apiv11`), read only, with no account: a search for the game, a game's mods (most
+liked first) and a mod's page. A mod is offered only when its category is one Fuse adds for the
+game's emulator and its file passed GameBanana's own checks and is a `.zip`; the file is checked
+against GameBanana's size and checksum once it arrives.
+
+**Nexus Mods** (`core/integrations/.../nexus/NexusMods.kt`, `NexusSite`, Settings, Accounts, Nexus
+Mods). Its public API v1 (`api.nexusmods.com`), as its documentation lays it out and as its own
+client (`Nexus-Mods/node-nexus-api`, `src/types.ts`) types the answers.
+
+- **Your own key only.** You paste your personal API key from your account's API Access page. Nexus
+  Mods asks that no key be built into software, so Fuse carries none. The key is kept encrypted in
+  Fuse's secret store on this device only (`SecretKeys.deviceOnly`): it is never among the keys
+  Fuse One shares with your household, never in an address, and redacted from every message.
+- **What is asked.** `users/validate.json` (whose key it is and whether the account is Premium; it
+  doesn't count towards Nexus Mods' limits), `games.json` (to choose the game, kept a week), a
+  game's `trending`, `latest_added` and `latest_updated` lists (kept an hour, so browsing doesn't
+  spend the account's daily requests), a mod's page and its `files.json`. Every request names Fuse
+  in `Application-Name` and `Application-Version`, as Nexus Mods' own client does. Mods marked for
+  adults and ones that aren't available are left out of the lists.
+- **Downloads.** `download_link.json` gives an address straight away to Premium accounts only. For
+  any other account Nexus Mods asks for the one-time `key` and `expires` of the website's own Mod
+  Manager Download link (`nxm://<game>/mods/<mod>/files/<file>?key=…&expires=…`), so the person has
+  visited the mod's page: Fuse opens that page, you copy the link and paste it, and Fuse checks it is
+  for that same file before asking. A file you downloaded yourself can be added as one of your own
+  instead. Only https addresses are followed, only a current `.zip` (not an old, deleted or archived
+  file) of up to 4 GB is fetched, and a file that doesn't arrive whole leaves nothing behind. A
+  refusal (403: Premium only; 410: the link ran out; 400: not this file or account) is said in
+  plain words.
+
 ## Emulators' own files
 
 Fuse changes an emulator's files only when you ask, never automatically, and only what it can undo
 exactly.
+
+- **Play Together** (Linux, Windows, macOS), from a game's options, only when asked, each change
+  recorded apart from the person's other setting changes so Put Back undoes exactly these, from
+  each emulator's own source:
+  - RetroArch (v1.22.2, `retroarch.c`, `retroarch_parse_input`): Host a Game starts it with
+    `--host`, Join with `--connect=<address>` (and `--port` when the host's isn't 55435, `config.def.h`
+    `RARCH_DEFAULT_PORT`), and `--nick` with the Fuse One profile's name, put before its `-L`; nothing
+    of RetroArch's own files changes.
+  - PPSSPP (v1.20.4, `Core/Config.cpp` `[Network]`): `EnableWlan`, then `proAdhocServer` set to the
+    host's address with `EnableAdhocServer` on for the one hosting (its own server on port 27312,
+    `Core/HLE/sceNetAdhoc.cpp`), and `[SystemParam] NickName`. The host names its own home address,
+    never `localhost`: PPSSPP's server gives each player the address it saw them at
+    (`Core/HLE/proAdhocServer.cpp`).
+  - Dolphin (2609a, `Core/Config/NetplaySettings.cpp`): `[NetPlay] Nickname`, and to join,
+    `TraversalChoice = direct` and `Address`, which its own NetPlay window's Connect tab offers.
+  - RPCS3 (v0.0.43, `rpcs3/Emu/system_config.h`): `Net: Internet enabled: Connected` and `PSN
+    status: RPCN`; the RPCN account in `rpcn.yml` beside `config.yml` (`rpcs3/Emu/NP/rpcn_config.cpp`),
+    with the password stretched as RPCS3's own dialog does (`rpcs3qt/rpcn_settings_dialog.cpp`,
+    `derive_password`: PBKDF2 over HMAC-SHA3-256, 200,000 rounds, its own salt, upper-case hex). The
+    password itself is used once and kept nowhere, by Fuse or RPCS3, and Fuse keeps no copy of
+    `rpcn.yml`. Sign Out empties its password and token.
+  - PCSX2 (v2.8.2, `pcsx2/Pcsx2Config.cpp` `DEV9Options::LoadSave`): `[DEV9/Eth] EthEnable = true`,
+    `EthApi = Sockets`, `EthDevice = Auto`, which needs no administrator rights and answers the game's
+    DHCP itself (`pcsx2/DEV9/sockets.cpp`).
+  - After the Store updates one of these, what Fuse set up is looked at again, and said when it
+    isn't there any more (a portable program's settings go with the version it replaced).
+- **Cheats, textures and mods of your own** (Linux, Windows, macOS). Where each emulator reads a
+  game's mods is a rule book in `core/launch` (`patches/Mods.kt`), from each emulator's own code:
+  Dolphin (`VideoCommon/HiresTextures.cpp`, `GraphicsModSystem/Config/GraphicsModGroup.cpp`), Cemu
+  (`Cafe/GraphicPack/GraphicPack2.cpp`), Eden and its family (`core/file_sys/patch_manager.cpp`),
+  Ryujinx, RPCS3 and shadPS4 (`core/file_sys/fs.cpp`); cheats and patches by each emulator's own
+  format (PCSX2's `.pnach`, DuckStation's patch files, PPSSPP's `.ini` cheats, RetroArch's `.cht`).
+  Every file and where it goes is shown first, nothing outside the emulator's own folder for it is
+  written, a file already there is kept to put back, and Remove takes out exactly what went in.
+  Each mod sits in a folder of its own, which the emulator layers; when a mod about to be added
+  changes a file another added mod changes too (compared without case, as the emulators' file
+  systems may not tell case apart), Fuse names the other mod and the files before it goes in.
+- **Dolphin's cheats.** Gecko and Action Replay codes, from a game's `.ini` or a `.txt` of `$`-named
+  Gecko codes, are added to the end of the game's own settings file (`GameSettings/<game id>.ini`)
+  as Dolphin's own code reads and writes them: `Core/GeckoCodeConfig.cpp` (`LoadCodes`: a `$Name
+  [Creator]` line begins a code, `*` lines are its notes, then lines of two eight-digit hexadecimal
+  numbers; `[Gecko_Enabled]` lists the codes turned on) and `Core/ActionReplay.cpp` (`LoadCodes`,
+  `DeserializeLine`: decrypted `XXXXXXXX YYYYYYYY` or encrypted `XXXX-XXXX-XXXXX` lines). Dolphin's
+  ini reader (`Common/IniFile.cpp`) adds a section met again to the one before and keeps `$`, `*`
+  and code lines as they are, so the codes go in as one block and come out again exactly. The block
+  turns on the game's own Enable Cheats (`[Core] EnableCheats`, which
+  `ConfigLoaders/GameConfigLoader.cpp` maps to that game's Core settings) and leaves every code off,
+  to be ticked in Dolphin's game properties. A code the game already has is left out, a line
+  Dolphin wouldn't read is named, and a file named for another game's id is turned away. The
+  settings file as it was is kept first.
 
 - **PCSX2 patches** (Linux, Windows, macOS). Fuse finds PCSX2's data folder the way PCSX2 does
   (portable mode next to the program; otherwise Documents\PCSX2, `$XDG_CONFIG_HOME/PCSX2` or
@@ -1027,5 +1119,31 @@ exactly.
   file (.pup extension) to install", which ends the command line, and `vita3k/main.cpp` installs it
   with `install_pup` and quits). Fuse hands over only a `.pup`, never copies or changes it, and
   claims nothing when the installer fails.
+- **PS4 trophies before shadPS4 sets them out.** shadPS4 writes a game's trophy list into its user
+  folder when the game first opens it; until then, Fuse reads the game's own
+  `sce_sys/trophy/trophy00.trp` as shadPS4 v.0.20.0 does (`src/core/file_format/trp.cpp`): its
+  `TROP.ESFM` decrypted with AES-128-CBC, the key being the set's id encrypted under the person's
+  own trophy key (`keys.json`'s `TrophyKeySet.ReleaseTrophyKey` in shadPS4's user folder,
+  `src/common/key_manager.cpp`, or an older `config.toml`'s `[Keys] TrophyKey`). The key is only
+  read, in memory, and nothing is written; a wrong key decrypts to nothing, which is never shown.
 - **Disc identity.** The serial and PCSX2 CRC are read from the image itself (SYSTEM.CNF and the boot
   program, as in `pcsx2/CDVD/CDVD.cpp` and `pcsx2/Elfheader.cpp`); nothing is written.
+
+## ROM patches
+
+Apply a Patch, in a game's options, makes a patched copy beside the game and adds it to the library;
+the game itself is never changed (`core/library/.../patch/RomPatches.kt`, pure, and the copy
+written by the data layer). Nothing leaves the device.
+
+- **IPS, UPS and BPS**, by each format's own description: UPS and BPS carry the CRC32 of the game
+  they were made for and of their result, so a patch for another version is said before anything is
+  made, and a game with a copier header (512 bytes before a SNES game) is tried without it.
+- **xdelta** (`Vcdiff.kt`): VCDIFF as RFC 3284 lays it out, with xdelta3's own additions as its
+  decoder (`xdelta3-decode.h`, `xd3_decode_input`) reads them: its application header, and the
+  Adler-32 of each window's result, which a patch for another version fails. Sections xdelta3
+  compressed again with its LZMA (its default when built with liblzma, `xdelta3-main.h`) are read
+  as `xdelta3-second.h` and `xdelta3-lzma.h` write them: each section's decoded size, then the next
+  part of one .xz stream (LZMA2, no check) per kind of section through every window, decoded with
+  xz-java. DJW and FGK, xdelta3's other compressors, and a code table of the patch's own are
+  refused with what to do instead. Tested against patches xdelta3 3.2.2 made from its own source,
+  byte for byte.

@@ -263,7 +263,12 @@ class SyncHost(
         }
         val now = clock()
         val was = presence[d.id]?.takeIf { it.game == note.game }
-        presence[d.id] = Presence(d.id, d.name, note.profile, note.game.take(200), note.title.take(200), state, now, was?.since ?: note.since.takeIf { it in 1..now } ?: now)
+        val hosting = note.hosting?.takeIf { state == Presence.PLAYING }?.let { h ->
+            Hosting(h.way.take(40), h.emulator.take(40), h.addresses.take(MAX_ADDRESSES).map { it.take(100) }, h.port.takeIf { it in 0..65535 } ?: 0)
+        }
+        presence[d.id] = Presence(d.id, d.name, note.profile, note.game.take(200), note.title.take(200), state, now, was?.since ?: note.since.takeIf { it in 1..now } ?: now, hosting)
+        // A game newly open to join: the other devices look, so its invitation reaches them while it is open.
+        if (hosting != null && was?.hosting != hosting) household.wake(HouseholdHost.WAKE_PLAYING, except = d.id, all = ::liveDevices)
     }
 
     // ---------------------------------------------------------------- joining without a code
@@ -1404,6 +1409,9 @@ class SyncHost(
 
         /** A device quiet this long is forgotten as playing anything. */
         const val PRESENCE_TTL_MS = 12 * 60 * 60_000L
+
+        /** Addresses a hosted game is kept with: a device's home network ones, never many. */
+        const val MAX_ADDRESSES = 8
         private const val MAX_JOINS = 8
 
         /** Wrong passwords allowed in [MISS_WINDOW_MS] before that caller waits. */

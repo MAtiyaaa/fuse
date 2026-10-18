@@ -11,6 +11,7 @@
 #   GRADLE_ARGS="..."   extra Gradle arguments (for example "--no-daemon")
 #   APPIMAGETOOL=path   use this appimagetool instead of downloading it into build/tools/
 #   SKIP_CDS=1          leave out the class data sharing archive (scripts/train-cds.sh, needs Xvfb)
+#   SKIP_SELF_TEST=1    don't run the AppImage's own --self-test once it is packed
 #
 # Needs network access the first time (appimagetool, and the AppImage runtime it fetches).
 set -euo pipefail
@@ -77,5 +78,12 @@ rm -f "$OUTPUT"
 # APPIMAGE_EXTRACT_AND_RUN lets appimagetool (itself an AppImage) run where FUSE is unavailable, as in CI containers.
 ARCH="$ARCH" VERSION="$VERSION" APPIMAGE_EXTRACT_AND_RUN=1 "$TOOL" --no-appstream "$APPDIR" "$OUTPUT"
 chmod +x "$OUTPUT"
+
+if [[ "${SKIP_SELF_TEST:-0}" != "1" ]]; then
+  # The packed AppImage itself, started as a person would start it: its exit code is the result.
+  # APPIMAGE_EXTRACT_AND_RUN runs it without FUSE (the filesystem), as CI containers have none.
+  echo "==> Self-test (the AppImage and its bundled runtime)"
+  APPIMAGE_EXTRACT_AND_RUN=1 "$OUTPUT" --self-test
+fi
 
 echo "$OUTPUT"

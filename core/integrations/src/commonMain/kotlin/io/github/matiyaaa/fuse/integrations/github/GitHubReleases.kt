@@ -11,9 +11,11 @@ import io.github.matiyaaa.fuse.model.ReleaseAsset
 import io.github.matiyaaa.fuse.model.ReleaseInfo
 import io.ktor.client.HttpClient
 import io.ktor.client.request.header
+import io.ktor.client.request.parameter
 import io.ktor.client.request.url
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 
 /** owner/repo on GitHub. */
 data class RepoRef(val owner: String, val repo: String) {
@@ -22,6 +24,13 @@ data class RepoRef(val owner: String, val repo: String) {
 
 /** Which build of a release the device needs. */
 /** Which build of a release this device takes. */
+/**
+ * Which of Fuse's releases a device follows: published releases only, pre-releases too (Beta), or
+ * also the rolling `nightly` pre-release a nightly job replaces (its version in its name, like
+ * `0.4.5-nightly.20261019`). Each takes the newest of what it follows, by version.
+ */
+enum class ReleaseChannel { STABLE, BETA, NIGHTLY }
+
 enum class ReleasePlatform { ANDROID, LINUX_X86_64, WINDOWS_X64, MACOS_ARM64, MACOS_X64,
     /** Windows, run from the portable zip: it updates from the zip. */
     WINDOWS_X64_PORTABLE,
@@ -94,6 +103,32 @@ class GitHubReleases(
     suspend fun latest(repo: RepoRef): ApiResult<ReleaseInfo?> = latest(repo.owner, repo.repo)
 
     /**
+     * The newest release [channel] follows (see [ReleaseChannel]): Stable is [latest]; Beta and
+     * Nightly read the repository's recent releases (`GET /repos/{owner}/{repo}/releases`) and take
+     * the newest by version among those they follow.
+     */
+    suspend fun forChannel(repo: RepoRef, channel: ReleaseChannel): ApiResult<ReleaseInfo?> {
+        if (channel == ReleaseChannel.STABLE) return latest(repo)
+        return api.execute {
+            url("$apiUrl/repos/${repo.owner}/${repo.repo}/releases")
+            parameter("per_page", RECENT)
+            header("Accept", "application/vnd.github+json")
+            header("X-GitHub-Api-Version", "2022-11-28")
+            token()?.takeIf { it.isNotBlank() }?.let { header("Authorization", "Bearer $it") }
+        }.flatMap { raw ->
+            when {
+                raw.status == 404 -> ApiResult.Success(null)
+                (raw.status == 403 || raw.status == 429) && raw.headers["x-ratelimit-remaining"] == "0" ->
+                    // Out of requests: the newest published release still answers, from the website.
+                    latest(repo)
+                else -> api.failureFor(raw) ?: api.decode(raw, ListSerializer(GhRelease.serializer())).flatMap { list ->
+                    ApiResult.Success(pick(channel, list.filter { !it.draft }.map { it.toModel(it.prerelease) }))
+                }
+            }
+        }
+    }
+
+    /**
      * The latest release from the website: `releases/latest` leads to the release's own page, whose
      * address names its tag, and the release's `SHA256SUMS.txt` lists its files with their SHA-256,
      * so a download is still checked. Only for releases that publish that list, as Fuse's do.
@@ -148,6 +183,25 @@ class GitHubReleases(
         /** Fuse's own releases. */
         val FUSE_REPO = RepoRef("MAtiyaaa", "fuse")
 
+        /** The tag of the rolling nightly pre-release. */
+        const val NIGHTLY_TAG = "nightly"
+        private const val RECENT = 30
+        private val NIGHTLY_VERSION = Regex("""\d+\.\d+\.\d+(?:\.\d+)?-nightly\.\d+""")
+
+        /**
+         * The newest of [releases] [channel] follows, by version: Stable takes published releases,
+         * Beta pre-releases too, Nightly the rolling `nightly` one as well (by the version in its
+         * name; one without a version in it is passed over, never guessed).
+         */
+        fun pick(channel: ReleaseChannel, releases: List<ReleaseInfo>): ReleaseInfo? = releases.mapNotNull { r ->
+            when {
+                r.tag == NIGHTLY_TAG -> if (channel != ReleaseChannel.NIGHTLY) null
+                    else NIGHTLY_VERSION.find(r.name)?.value?.let { v -> r.copy(tag = v) }
+                r.prerelease -> r.takeIf { channel != ReleaseChannel.STABLE }
+                else -> r
+            }
+        }.filter { SemVer.compare(it.tag, "0") > 0 }.maxWithOrNull { a, b -> SemVer.compare(a.tag, b.tag) }
+
         /**
          * The asset for [platform]: an `.apk` on Android (a universal or "android" build preferred),
          * the `x86_64.AppImage` on Linux, the `windows-x64.msi` (else its portable zip) on Windows,
@@ -172,13 +226,14 @@ class GitHubReleases(
     }
 }
 
-private fun GhRelease.toModel(): ReleaseInfo = ReleaseInfo(
+private fun GhRelease.toModel(prerelease: Boolean = false): ReleaseInfo = ReleaseInfo(
     tag = tagName,
     name = name?.takeIf { it.isNotBlank() } ?: tagName,
     notes = body.orEmpty(),
     publishedAt = publishedAt,
     assets = assets.map { ReleaseAsset(name = it.name, url = it.browserDownloadUrl, sizeBytes = it.size, digest = it.digest) },
     htmlUrl = htmlUrl,
+    prerelease = prerelease,
 )
 
 /**

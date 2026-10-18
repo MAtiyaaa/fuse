@@ -147,6 +147,8 @@ data class UiPrefs(
     /** RomM's details and pictures for games Cartridge downloaded. */
     val cartridgeRommDetails: Boolean = true,
     val checkForUpdates: Boolean = true,
+    /** Which of Fuse's releases it updates to: published, Beta's pre-releases too, or the nightly one as well. */
+    val updateChannel: io.github.matiyaaa.fuse.data.settings.UpdateChannel = io.github.matiyaaa.fuse.data.settings.UpdateChannel.STABLE,
     /** L3 + R3 takes a screenshot, and held, records (where Fuse can capture its screen). */
     val captureCombo: Boolean = true,
     /** Recordings include Fuse's own sound. */

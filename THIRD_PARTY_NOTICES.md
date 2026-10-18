@@ -53,7 +53,7 @@ declared in the version catalog for the platform apps and not yet used by any mo
 | libGDX Jamepad (controllers on Windows and macOS, through SDL) | `com.badlogicgames.jamepad:jamepad` | 2.30.0.0 | Apache-2.0 | `app:desktop`, Windows and macOS builds only | [jamepad](https://github.com/libgdx/jamepad) |
 | SDL2 (inside Jamepad's native libraries) | | 2.30 | zlib | `app:desktop`, Windows and macOS builds only | [SDL](https://github.com/libsdl-org/SDL) |
 | gdx-jnigen-loader (loads Jamepad's native library) | `com.badlogicgames.gdx:gdx-jnigen-loader` | 2.2.0 | Apache-2.0 | `app:desktop`, Windows and macOS builds only | [gdx-jnigen](https://github.com/libgdx/gdx-jnigen) |
-| XZ for Java (LZMA and LZMA2, for compressed disc images) | `org.tukaani:xz` | 1.10 | 0BSD | `core:integrations` (Android and desktop) | [xz-java](https://github.com/tukaani-project/xz-java) |
+| XZ for Java (LZMA and LZMA2, for compressed disc images and xdelta patches) | `org.tukaani:xz` | 1.10 | 0BSD | `core:integrations` and `core:library` (Android and desktop) | [xz-java](https://github.com/tukaani-project/xz-java) |
 | aircompressor (Zstandard and LZ4, for compressed disc images) | `io.airlift:aircompressor` | 0.27 | Apache-2.0 | `core:integrations` (Android and desktop) | [aircompressor](https://github.com/airlift/aircompressor) |
 | SnakeYAML Engine (RPCS3's patch files) | `org.snakeyaml:snakeyaml-engine` | 2.9 | Apache-2.0 | `core:launch` (Android and desktop) | [snakeyaml-engine](https://bitbucket.org/snakeyaml/snakeyaml-engine) |
 

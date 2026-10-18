@@ -346,7 +346,7 @@ private fun Stat(value: String, label: String) {
 }
 
 /** "12,480": thousands grouped, so large totals read at a glance. */
-private fun grouped(n: Long): String {
+internal fun grouped(n: Long): String {
     val digits = n.toString().trimStart('-')
     val sign = if (n < 0) "-" else ""
     return sign + digits.reversed().chunked(3).joinToString(",").reversed()

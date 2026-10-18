@@ -219,6 +219,9 @@ class HouseholdHost(dir: File, private val clock: () -> Long = System::currentTi
         const val WAKE_LIBRARY = "library"
         const val WAKE_COMMANDS = "commands"
         const val WAKE_RELAY = "relay"
+
+        /** Another device opened a game to join (see [Hosting]). */
+        const val WAKE_PLAYING = "playing"
         const val WAKE_TRANSFERS = "transfers"
 
         private val ACK_STATES = setOf(DeviceCommand.DELIVERED, DeviceCommand.DONE, DeviceCommand.FAILED)

@@ -474,4 +474,151 @@ class EnhancementsStoreTest {
         assertEquals("Not a Switch mod", assertIs<EnhancementPreview.Unavailable>(store.library.planEnhancement(game.id, EnhancementKind.MODS, pictures.absolutePath)).title)
         assertTrue(File(load, "0100F2C0115B6000").listFiles().isNullOrEmpty())
     }
+
+    // Nexus Mods ---------------------------------------------------------------------------------
+
+    /** Nexus Mods answering as its documentation and its own client describe, for a made-up game and mod. */
+    private fun nexus(services: FakeServices, mod: File, premium: Boolean) {
+        val json = io.ktor.http.headersOf(io.ktor.http.HttpHeaders.ContentType, "application/json")
+        val ok = io.ktor.http.HttpStatusCode.OK
+        val modJson = """{"mod_id":55,"game_id":1,"domain_name":"hyrule","name":"Better Grass","summary":"Taller grass","version":"1.0","author":"Ana",
+            "updated_timestamp":1790000000,"endorsement_count":12,"contains_adult_content":false,"available":true,"status":"published"}"""
+        services.web = { request ->
+            val path = request.url.encodedPath
+            when {
+                request.url.host != "api.nexusmods.com" -> null
+                request.headers["apikey"] != "my-own-key" -> respond("""{"message":"invalid key"}""", io.ktor.http.HttpStatusCode.Unauthorized, json)
+                path == "/v1/users/validate.json" -> respond("""{"user_id":7,"name":"Mo","is_premium":$premium,"is_supporter":false}""", ok, json)
+                path == "/v1/games.json" -> respond(
+                    """[{"id":2,"domain_name":"hyrulewarriors","name":"Hyrule Warriors","mods":3},{"id":1,"domain_name":"hyrule","name":"Hyrule","mods":10}]""", ok, json,
+                )
+                path == "/v1/games/hyrule/mods/trending.json" -> respond("[$modJson]", ok, json)
+                path.startsWith("/v1/games/hyrule/mods/latest_") -> respond("[]", ok, json)
+                path == "/v1/games/hyrule/mods/55.json" -> respond(modJson, ok, json)
+                path == "/v1/games/hyrule/mods/55/files.json" -> respond(
+                    """{"files":[{"file_id":900,"category_id":1,"category_name":"MAIN","name":"Better Grass","file_name":"Better Grass-55-1-0.zip","version":"1.0",
+                        "size_kb":1,"uploaded_timestamp":1790000000,"is_primary":true}],"file_updates":[]}""",
+                    ok, json,
+                )
+                path == "/v1/games/hyrule/mods/55/files/900/download_link.json" -> when {
+                    premium || (request.url.parameters["key"] == "onetime" && request.url.parameters["expires"] == "1790003600") ->
+                        respond("""[{"name":"Nexus CDN","short_name":"Nexus CDN","URI":"https://cf-files.nexusmods.com/cdn/55/grass.zip"}]""", ok, json)
+                    else -> respond("""{"message":"premium only"}""", io.ktor.http.HttpStatusCode.Forbidden, json)
+                }
+                else -> null
+            }
+        }
+        services.downloads["https://cf-files.nexusmods.com/cdn/55/grass.zip"] = mod
+    }
+
+    private suspend fun hyrule(services: FakeServices): Pair<FuseStore, GameCard> {
+        val load = File(emu, "eden/load").apply { mkdirs() }
+        services.modHomeFor = { io.github.matiyaaa.fuse.sync.ModHome("eden", "0100F2C0115B6000", "${load.absolutePath}/0100F2C0115B6000") }
+        File(root, "switch").mkdirs()
+        File(root, "switch/Hyrule [0100F2C0115B6000].nsp").writeBytes(ByteArray(64))
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        return store to gameIn(store)
+    }
+
+    @Test
+    fun aModFromNexusModsComesWithYourOwnKeyAndIsAddedLikeYourOwn(): Unit = runBlocking {
+        val services = services("nexus.db", edenInstalled)
+        nexus(services, zip("grass.zip", mapOf("Better Grass/romfs/Terrain/grass.bin" to "g")), premium = true)
+        val (store, game) = hyrule(services)
+
+        // Nothing without the person's own key.
+        assertEquals(io.github.matiyaaa.fuse.ui.shell.store.NexusAccount.NoKey, store.library.nexusAccount())
+        assertTrue(assertIs<io.github.matiyaaa.fuse.ui.shell.store.NexusModList.Unavailable>(store.library.nexusMods(game.id)).needsKey)
+        assertTrue(services.requestHosts.none { it == "api.nexusmods.com" })
+        store.credentials.put(io.github.matiyaaa.fuse.data.settings.SecretKeys.NEXUS_API_KEY, "my-own-key")
+        assertEquals(io.github.matiyaaa.fuse.ui.shell.store.NexusAccount.Ready("Mo", premium = true), store.library.nexusAccount())
+
+        // The game there is chosen from Nexus Mods' own list, the same name first.
+        assertTrue(assertIs<io.github.matiyaaa.fuse.ui.shell.store.NexusModList.Unavailable>(store.library.nexusMods(game.id)).needsGame)
+        val found = store.library.nexusGames(game.id)
+        assertEquals(listOf("hyrule", "hyrulewarriors"), found.found.map { it.domain })
+        store.library.linkNexusGame(game.id, found.found.first())
+        val list = assertIs<io.github.matiyaaa.fuse.ui.shell.store.NexusModList.Ready>(store.library.nexusMods(game.id))
+        assertEquals("Better Grass", list.lists.getValue(io.github.matiyaaa.fuse.integrations.nexus.NexusList.TRENDING).single().name)
+
+        val page = assertIs<io.github.matiyaaa.fuse.ui.shell.store.NexusPage.Ready>(store.library.nexusPage(game.id, "hyrule", 55))
+        assertEquals(EnhancementKind.MODS, page.kind)
+        val preview = assertIs<EnhancementPreview.Ready>(store.library.fetchNexusFile(game.id, "hyrule", 55, 900))
+        assertNull(store.library.addEnhancement(preview.token))
+        assertEquals("g", File(emu, "eden/load/0100F2C0115B6000/Better Grass/romfs/Terrain/grass.bin").readText())
+        val added = store.library.enhancements(game.id).added.single()
+        assertEquals("Nexus Mods", added.origin)
+        assertEquals("https://www.nexusmods.com/hyrule/mods/55", added.originUrl)
+        assertTrue(services.fetchedUrls.none { "my-own-key" in it }, "the key goes in its header only")
+        // The person's own: never among the keys the household shares.
+        assertTrue(io.github.matiyaaa.fuse.data.settings.SecretKeys.NEXUS_API_KEY !in io.github.matiyaaa.fuse.data.settings.SecretKeys.all)
+        assertTrue(io.github.matiyaaa.fuse.data.settings.SecretKeys.NEXUS_API_KEY in store.credentials.stored.value)
+    }
+
+    @Test
+    fun anAccountThatIsntPremiumUsesTheWebsitesLinkAndTwoModsChangingOneFileAreSaid(): Unit = runBlocking {
+        val services = services("nexus2.db", edenInstalled)
+        nexus(services, zip("grass.zip", mapOf("Better Grass/romfs/Terrain/grass.bin" to "g")), premium = false)
+        val (store, game) = hyrule(services)
+        services.secrets.put(io.github.matiyaaa.fuse.data.settings.SecretKeys.NEXUS_API_KEY, "my-own-key")
+        store.library.linkNexusGame(game.id, store.library.nexusGames(game.id).found.first())
+
+        val refused = assertIs<EnhancementPreview.Unavailable>(store.library.fetchNexusFile(game.id, "hyrule", 55, 900))
+        assertTrue("Premium" in refused.reason, refused.reason)
+        assertTrue(services.fetchedUrls.isEmpty())
+        val elsewhere = assertIs<EnhancementPreview.Unavailable>(store.library.fetchNexusFile(game.id, "hyrule", 55, 900, "nxm://hyrule/mods/55/files/901?key=onetime&expires=1790003600"))
+        assertTrue("another file" in elsewhere.title)
+        val preview = assertIs<EnhancementPreview.Ready>(
+            store.library.fetchNexusFile(game.id, "hyrule", 55, 900, "nxm://hyrule/mods/55/files/900?key=onetime&expires=1790003600&user_id=7"),
+        )
+        assertNull(store.library.addEnhancement(preview.token))
+
+        // A second mod changing the same file is said before it is added; one changing others isn't.
+        val lush = zip("lush.zip", mapOf("Lush Grass/romfs/Terrain/grass.bin" to "l", "Lush Grass/romfs/Terrain/rock.bin" to "r"))
+        val clash = assertIs<EnhancementPreview.Ready>(store.library.planEnhancement(game.id, EnhancementKind.MODS, lush.absolutePath))
+        assertTrue(clash.notes.any { "Better Grass changes the same file (romfs/Terrain/grass.bin)" in it }, clash.notes.toString())
+        val rocks = zip("rocks.zip", mapOf("Rocks/romfs/Terrain/stone.bin" to "s"))
+        val fine = assertIs<EnhancementPreview.Ready>(store.library.planEnhancement(game.id, EnhancementKind.MODS, rocks.absolutePath))
+        assertTrue(fine.notes.none { "changes the same" in it })
+    }
+
+    // Dolphin's cheats --------------------------------------------------------------------------
+
+    private val dolphinInstalled = InstalledEmulator(EmulatorId("linux.dolphin"), "Dolphin", Host.LINUX, "/usr/bin/dolphin-emu", platforms = setOf(PlatformId("ngc"), PlatformId("wii")), detectedVia = "PATH")
+
+    @Test
+    fun dolphinCodesGoToTheEndOfTheGamesOwnFileOffAndComeOutExactly(): Unit = runBlocking {
+        val services = services("dolphin.db", dolphinInstalled)
+        val settings = File(emu, "dolphin/GameSettings/GALE01.ini").apply { parentFile.mkdirs(); writeText("[Video_Settings]\nHiresTextures = True\n[Gecko]\n\$Old Code\n04000000 00000001\n") }
+        val before = settings.readText()
+        services.modHomeFor = { io.github.matiyaaa.fuse.sync.ModHome("dolphin", "GALE01", File(emu, "dolphin/Load/Textures").absolutePath, settingsFile = settings.absolutePath) }
+        // Dolphin's folders, the only place its files are changed.
+        services.dolphinHome = io.github.matiyaaa.fuse.launch.settings.DolphinHome(File(emu, "dolphin/Config").absolutePath, File(emu, "dolphin/GameSettings").absolutePath)
+        File(root, "gc").mkdirs()
+        File(root, "gc/Melee [GALE01].iso").writeBytes(ByteArray(64))
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = gameIn(store)
+        assertTrue(EnhancementKind.CHEATS in store.library.enhancements(game.id).kinds)
+
+        val codes = File(root, "melee codes.txt").apply { writeText("\$Old Code\n04000000 00000001\n\$Infinite Time [Ana]\n04111111 00000000\nnot a code\n") }
+        val preview = assertIs<EnhancementPreview.Ready>(store.library.planEnhancement(game.id, EnhancementKind.CHEATS, codes.absolutePath))
+        assertEquals(1, preview.codes, "the code the game already has is left out")
+        assertTrue(preview.rejected.any { it.startsWith("\$Old Code") } && preview.rejected.any { it.startsWith("not a code") }, preview.rejected.toString())
+        assertTrue(preview.notes.any { "Properties, Gecko Codes" in it })
+        assertNull(store.library.addEnhancement(preview.token))
+        val now = settings.readText()
+        assertTrue(now.startsWith(before.trimEnd()), "what was there stays")
+        assertTrue("[Gecko]\n\$Infinite Time [Ana]\n04111111 00000000\n[Core]\nEnableCheats = True" in now, now)
+        assertFalse("[Gecko_Enabled]\n\$Infinite Time" in now, "added off")
+
+        // Another game's file is turned away by its name.
+        val other = File(root, "GMSE01.ini").apply { writeText("[Gecko]\n\$Fly\n04000000 00000001\n") }
+        assertEquals("Made for another game", assertIs<EnhancementPreview.Unavailable>(store.library.planEnhancement(game.id, EnhancementKind.CHEATS, other.absolutePath)).title)
+
+        val added = store.library.enhancements(game.id).added.single()
+        assertEquals(EnhancementRemoval.Removed, store.library.removeEnhancement(game.id, added.id))
+        assertEquals(before, settings.readText())
+    }
 }

@@ -413,6 +413,7 @@ class JvmSyncService(
                     // The wait ends when the device goes to sleep: its answer would only wake it again.
                     val page = awake.untilAsleep { c.events(since, waitSeconds = 25) } ?: continue
                     householdHere.woken(page.wake)
+                    if (HouseholdHost.WAKE_PLAYING in page.wake) scope.launch(Dispatchers.IO) { runCatching { lookForHosted(c) } }
                     // A device checking in is no event, so when each was last seen (and so which are
                     // online, and whose games show) is read again now and then: it stayed as it was
                     // when the list was last read, "seen 5:05" on devices online all along.
@@ -2544,6 +2545,8 @@ class JvmSyncService(
     override suspend fun afterExit(asked: SaveQuery, startedAt: Long, endedAt: Long) {
         val query = canonical(asked)
         stopWatching(query)
+        // Open to join only while it was played: the presence said next no longer has it.
+        if (hostingHere?.first == query.game.id) hostingHere = null
         // A test run ends with its game, whatever else happens here; one that never started is gone too.
         val probe = probes.remove(query.game.id)?.takeIf { it.snapshot != null }
         val d = device ?: return run { busy -= query.game.id; _nowPlaying.value = null }
@@ -2832,6 +2835,44 @@ class JvmSyncService(
     private val _nowPlaying = MutableStateFlow<String?>(null)
     override val nowPlaying: StateFlow<String?> = _nowPlaying.asStateFlow()
 
+    /** The game about to start (or playing) here that is open to join, by its id, with how. */
+    @Volatile private var hostingHere: Pair<String, Hosting>? = null
+
+    private val _together = MutableStateFlow<List<Presence>>(emptyList())
+    override val together: StateFlow<List<Presence>> = _together.asStateFlow()
+
+    override suspend fun hostNext(query: SaveQuery, hosting: Hosting?) {
+        val id = canonical(query).game.id
+        // Where the others reach this device: its home network addresses, unless the caller knows better.
+        val open = hosting?.let { if (it.addresses.isEmpty()) it.copy(addresses = lanAddresses()) else it }
+        hostingHere = open?.let { id to it }
+        // Already playing it (hosting from a game that runs): said straight away.
+        val w = watch ?: return
+        if (w.query.game.id == id) client?.let { c -> runCatching { c.notePresence(PresenceNote(w.profile, id, w.query.title, Presence.PLAYING, w.startedAt, open)) } }
+    }
+
+    override suspend fun hostedFor(query: SaveQuery): List<Presence> = withContext(Dispatchers.IO) {
+        val c = client ?: return@withContext emptyList()
+        val id = canonical(query).game.id
+        runCatching { lookForHosted(c) }.getOrDefault(_together.value).filter { it.game == id }
+    }
+
+    /**
+     * The games the household's other devices host now, from the host: kept in [together], and a
+     * notice for each one newly open (so an invitation reaches whoever has Fuse open).
+     */
+    private suspend fun lookForHosted(c: SyncClient): List<Presence> {
+        val me = device?.deviceId
+        val now = clock()
+        val list = withTimeoutOrNull(PRESENCE_WAIT_MS) { c.presence() } ?: return _together.value
+        val open = list.filter { it.hosting != null && it.deviceId != me && it.state == Presence.PLAYING && now - it.at <= PLAYING_ASK_MS }
+        val before = _together.value.map { it.deviceId to it.game }.toSet()
+        _together.value = open
+        val names = profiles.value.associate { it.id to it.name }
+        for (p in open) if ((p.deviceId to p.game) !in before) _notices.tryEmit(SyncNotice.Hosting(names[p.profile] ?: p.deviceName, p.deviceName, p.title))
+        return open
+    }
+
     private val _unclaimed = MutableStateFlow<List<UnclaimedSave>>(emptyList())
     override val unclaimed: StateFlow<List<UnclaimedSave>> = _unclaimed.asStateFlow()
 
@@ -2925,7 +2966,8 @@ class JvmSyncService(
         var saidAt = 0L
         suspend fun say() {
             saidAt = clock()
-            client?.let { c -> runCatching { c.notePresence(PresenceNote(profile, query.game.id, query.title, Presence.PLAYING, startedAt)) } }
+            val hosting = hostingHere?.takeIf { it.first == query.game.id }?.second
+            client?.let { c -> runCatching { c.notePresence(PresenceNote(profile, query.game.id, query.title, Presence.PLAYING, startedAt, hosting)) } }
         }
         say()
         var seen = first

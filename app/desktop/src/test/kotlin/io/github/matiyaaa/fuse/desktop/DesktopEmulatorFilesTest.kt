@@ -79,6 +79,21 @@ class DesktopEmulatorFilesTest {
     }
 
     @Test
+    fun aFileHoldingASignInIsWrittenTheSameWayWithNoCopyKept() = runBlocking {
+        // RPCS3's rpcn.yml: the stretched password and token are RPCS3's alone, never copied into Fuse's folder.
+        val config = File(home, ".config/rpcs3").apply { mkdirs() }
+        File(config, "config.yml").writeText("")
+        val rpcn = File(config, "rpcn.yml").apply { writeText("NPID: Old_One\nPassword: ABCD\nToken: T0K3N\n") }
+        val files = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        val rpcs3 = InstalledEmulator(EmulatorId("linux.rpcs3"), "RPCS3", Host.LINUX, "/usr/bin/rpcs3", platforms = setOf(PlatformId("ps3")), detectedVia = "PATH")
+        files.rpcs3Config(rpcs3)
+        assertTrue(files.writePrivate(rpcn.absolutePath, "NPID: Ana_99\nPassword: E4F6\nToken: NEW\n"))
+        assertEquals("NPID: Ana_99\nPassword: E4F6\nToken: NEW\n", rpcn.readText())
+        assertFalse(File(backups, "rpcn.yml").exists())
+        assertFalse(files.writePrivate(File(home, "elsewhere.yml").absolutePath, "x"), "only inside a known emulator folder")
+    }
+
+    @Test
     fun rpcs3StorageFollowsVfsYml() = runBlocking {
         val config = File(home, ".config/rpcs3").apply { File(this, "config").mkdirs() }
         val files = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)

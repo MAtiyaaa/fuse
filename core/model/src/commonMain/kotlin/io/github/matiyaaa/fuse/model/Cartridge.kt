@@ -176,6 +176,8 @@ data class ReleaseInfo(
      * up): its notes aren't known, and a GitHub token would let the API answer again.
      */
     val fromWebsite: Boolean = false,
+    /** A pre-release (Beta, or the rolling nightly one), not a published release. */
+    val prerelease: Boolean = false,
 )
 
 @Serializable

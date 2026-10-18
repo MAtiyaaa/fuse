@@ -108,7 +108,7 @@ internal class DefaultCredentialOps(
     val revision: StateFlow<Int> = changes
 
     suspend fun load() {
-        keys.value = SecretKeys.all.filter { runCatching { secrets.has(it) }.getOrDefault(false) }.toSet()
+        keys.value = (SecretKeys.all + SecretKeys.deviceOnly).filter { runCatching { secrets.has(it) }.getOrDefault(false) }.toSet()
     }
 
     suspend fun get(key: String): String? = runCatching { secrets.get(key) }.getOrNull()?.takeIf { it.isNotBlank() }

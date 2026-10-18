@@ -62,6 +62,8 @@ import kotlinx.coroutines.withContext
 internal class DesktopAppStoreOps(
     private val ctx: StoreContext,
     private val installer: DesktopInstaller,
+    /** After [key]'s program was updated: what has to be said about it besides (its Play Together setup gone), or null. */
+    private val afterUpdate: suspend (key: String) -> String? = { null },
     /** Looks for emulators again, so a program just put in place is used at once. */
     private val redetect: () -> Unit = {},
 ) : AppStoreOps {
@@ -547,6 +549,8 @@ internal class DesktopAppStoreOps(
                     clearJob(key)
                     redetect()
                     if (inRound(key)) settle(key, null) else noticesFlow.tryEmit(if (replaces) "${e.name} is updated." else "${e.name} is installed.")
+                    // Its settings for playing together, looked at again: a portable program's go with the version it replaced.
+                    if (replaces) runCatching { afterUpdate(key) }.getOrNull()?.let { noticesFlow.tryEmit(it) }
                 } finally {
                     sink.discard()
                 }
