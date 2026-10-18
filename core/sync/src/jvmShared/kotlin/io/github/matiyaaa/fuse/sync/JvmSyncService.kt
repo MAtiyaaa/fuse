@@ -664,7 +664,7 @@ class JvmSyncService(
         if (active.isNotEmpty()) {
             d.pullMeta(c, active)
             // Laid in place only if they are still the one playing (a switch may have happened meanwhile).
-            asActive(active) { data.write(canonical(d.meta(active))) }
+            asActive(active) { layInPlace(d, active) }
         }
         if (sent > 0) log(if (sent == 1) "Sent 1 change to $name" else "Sent $sent changes to $name", kind = SyncActivity.CHANGES)
         _status.value = SyncStatus.Online(name, c.route ?: Route.LOCAL, working = false, pending = d.pendingCount)
@@ -692,7 +692,7 @@ class JvmSyncService(
         val active = cached.activeProfile.ifEmpty { return@withLock }
         asActive(active) { captureChanges(active) }
         d.pullMeta(c, active)
-        asActive(active) { data.write(canonical(d.meta(active))) }
+        asActive(active) { layInPlace(d, active) }
         log("Brought in changes from your other devices", kind = SyncActivity.CHANGES)
     }
 
@@ -736,6 +736,23 @@ class JvmSyncService(
         if (kept > 0) runCatching { d.flush(c, saves = cached.saves) }.onFailure { if (it is SyncException) handle(it) }
     }
 
+    /**
+     * What was last laid into the library for each profile, with what has been taken from the
+     * library since ([captureChanges]). The library's changes are measured against this, never
+     * against records brought in from the host and not yet laid in place: measured against those, a
+     * favourite made on another device read as this one taking it back, stamped now, and replaced
+     * the person's choice everywhere. Until something is laid in place (after a restart), what this
+     * device keeps of the profile stands for it.
+     */
+    private val placed = java.util.concurrent.ConcurrentHashMap<String, ProfileMeta>()
+
+    /** Lays [profile]'s records, settings and Home in the library, and remembers what was laid. */
+    private suspend fun layInPlace(d: SyncDevice, profile: String) {
+        val meta = canonical(d.meta(profile))
+        data.write(meta)
+        placed[profile] = meta
+    }
+
     /** What changed here since the profile was put in place becomes changes waiting to go. */
     private suspend fun captureChanges(profile: String) {
         val d = device ?: return
@@ -743,8 +760,9 @@ class JvmSyncService(
         val c = cached
         // Compared by the household's one id for each game: records kept here under another id
         // (from before the host settled it) are the same game, never a new one.
-        val base = canonical(d.meta(profile))
-        hlc.seen(base.latestRevision())
+        val kept = canonical(d.meta(profile))
+        hlc.seen(kept.latestRevision())
+        val base = placed[profile]?.let(::canonical) ?: kept
         // Only what this device syncs: with records off it reads none, which must never read as
         // every collection deleted (or settings, with settings off).
         val changes = ProfileDiff.changes(base, local, d.deviceId, hlc).let { all ->
@@ -754,7 +772,10 @@ class JvmSyncService(
                 settings = if (c.settings) all.settings else emptyMap(),
             )
         }
-        if (!ProfileDiff.isEmpty(changes)) d.changeMeta(profile) { pending, _ -> pending.merge(changes) }
+        if (!ProfileDiff.isEmpty(changes)) {
+            d.changeMeta(profile) { pending, _ -> pending.merge(changes) }
+            placed[profile] = base.merge(changes)
+        }
     }
 
     override fun changed() {
@@ -823,6 +844,7 @@ class JvmSyncService(
         val keepNames = if (stay.isEmpty()) setOf(KEPT_DIR) else setOf(KEPT_DIR, "device", PEOPLE_FILE, ADOPTED_FILE, aliasFile.name)
         // A file another write renames away meanwhile is simply gone (walking it as a tree would fail).
         dir.listFiles()?.filter { it.canonicalFile != keep && it.name !in keepNames }?.forEach { if (it.isDirectory) it.deleteRecursively() else it.delete() }
+        placed.clear()
         if (stay.isEmpty()) {
             gameAliases = emptyMap()
             data.useAliases(emptyMap())
@@ -2054,7 +2076,7 @@ class JvmSyncService(
                     runCatching { withTimeout(HOST_SWITCH_MS) { d.pullMeta(c, id) } }
                 }
                 saveConfig { it.copy(activeProfile = id) }
-                data.write(canonical(d.meta(id)))
+                layInPlace(d, id)
                 d.useProfile(id)
                 _active.value = _profiles.value.firstOrNull { it.id == id }
                 log("Switched to ${_active.value?.name ?: "a profile"} in ${clock() - began} ms", kind = SyncActivity.PROFILE)
@@ -2071,7 +2093,7 @@ class JvmSyncService(
     private suspend fun arrive(d: SyncDevice, before: String, id: String) = profileLock.withLock {
         if (before.isNotEmpty()) captureChanges(before)
         saveConfig { it.copy(activeProfile = id) }
-        data.write(canonical(d.meta(id)))
+        layInPlace(d, id)
         d.useProfile(id)
         _active.value = _profiles.value.firstOrNull { it.id == id }
     }
@@ -2108,7 +2130,7 @@ class JvmSyncService(
             val pulled = runCatching { d.pullMeta(c, id) }.isSuccess
             if (pulled) asActive(id) {
                 captureChanges(id)
-                data.write(canonical(d.meta(id)))
+                layInPlace(d, id)
             }
         }
         log("Brought in ${_profiles.value.firstOrNull { it.id == id }?.name ?: "the profile"}'s newest in ${clock() - began} ms", kind = SyncActivity.PROFILE)

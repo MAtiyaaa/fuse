@@ -42,10 +42,22 @@ class ServiceTest {
         val collections: MutableMap<String, CollectionRecord> = HashMap(),
         /** When the person chose a setting here; a setting not listed was never chosen (Fuse's default). */
         val chosen: MutableMap<String, Hlc> = HashMap(),
+        /** Games this library has whatever the profile's records say, as a real one keeps its games (with nothing set). */
+        val installed: List<GameKey> = emptyList(),
     ) : ProfileDataPort {
         var writes = 0
+
+        init {
+            installed.forEach { games.putIfAbsent(it.id, GameRecord(it)) }
+        }
+
         override suspend fun read(device: String, clock: HlcClock): ProfileMeta = synchronized(this) {
             ProfileMeta(games = games.toMap(), collections = collections.toMap(), settings = settings.mapValues { (k, v) -> Lww(v as kotlinx.serialization.json.JsonElement, chosen[k] ?: Hlc.ZERO) })
+        }
+
+        /** The person changes a game here (as the library's own screens do). */
+        fun edit(key: GameKey, change: (GameRecord) -> GameRecord) = synchronized(this) {
+            games[key.id] = change(games[key.id] ?: GameRecord(key))
         }
 
         /** The games as they are now (the service writes them from its own thread). */
@@ -58,6 +70,7 @@ class ServiceTest {
                 games[k] = GameRecord(r.key, playSeconds = mapOf("here" to r.totalSeconds), sessions = r.sessions, lastPlayed = r.lastPlayed,
                     favorite = r.favorite?.let { Lww(it.value, Hlc.ZERO) }, hidden = r.hidden?.let { Lww(it.value, Hlc.ZERO) })
             }
+            installed.forEach { games.putIfAbsent(it.id, GameRecord(it)) }
             settings.clear()
             meta.settings.forEach { (k, v) -> settings[k] = v.value as JsonPrimitive }
             collections.clear()
@@ -264,6 +277,37 @@ class ServiceTest {
         // The theme someone chose is Mo's on both: the PC's own, never chosen, doesn't win over it.
         assertEquals(JsonPrimitive("midnight"), deckLib.settings["appearance.themeId"])
         assertEquals(JsonPrimitive("midnight"), pcLib.settings["appearance.themeId"])
+        pc.stop()
+        deck.stop()
+    }
+
+    @Test
+    fun recordsThatComeInBehindASwitchAreLaidInPlaceNeverTakenBack(): Unit = runBlocking {
+        val pcLib = Library(installed = listOf(ct))
+        val deckLib = Library(installed = listOf(ct))
+        val (pc, _) = service("Gaming PC", pcLib)
+        val (deck, _) = service("Steam Deck", deckLib)
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        val sam = pc.createProfile("Sam", "owl", null).getOrThrow()
+        deck.syncNow().getOrThrow()
+        // Each plays on the Deck once, so from then on a switch there is its own work, the host asked after.
+        deck.switchTo(sam.id).getOrThrow()
+        deck.switchTo(mo.id).getOrThrow()
+        pc.switchTo(mo.id).getOrThrow()
+        repeat(2) { deck.syncNow().getOrThrow(); pc.syncNow().getOrThrow() }
+        deck.switchTo(sam.id).getOrThrow()
+        // Meanwhile Mo makes the game a favourite on the PC.
+        pcLib.edit(ct) { it.copy(favorite = Lww(true, Hlc.ZERO)) }
+        pc.syncNow().getOrThrow()
+        // Back to Mo on the Deck, from what it keeps (no favourite yet): the favourite comes in behind
+        // the switch, and is laid in place, never read as the Deck taking it back.
+        deck.switchTo(mo.id).getOrThrow()
+        withTimeoutOrNull(10_000) { while (deckLib.gamesNow()[ct.id]?.favorite?.value != true) kotlinx.coroutines.delay(50) }
+        repeat(2) { deck.syncNow().getOrThrow(); pc.syncNow().getOrThrow() }
+        assertEquals(true, deckLib.gamesNow()[ct.id]?.favorite?.value, "the Deck has Mo's favourite")
+        assertEquals(true, pcLib.gamesNow()[ct.id]?.favorite?.value, "the PC still has it")
         pc.stop()
         deck.stop()
     }
