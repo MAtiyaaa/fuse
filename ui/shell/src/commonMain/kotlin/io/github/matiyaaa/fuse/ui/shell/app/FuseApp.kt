@@ -484,6 +484,7 @@ private fun FuseAppContent(
         // Mirrored for a right-to-left language (or by choice), with the D-pad and shoulders following the screen.
         val direction = layoutDirectionFor(prefs.layoutDirection)
         SideEffect { router.mirrored = direction == androidx.compose.ui.unit.LayoutDirection.Rtl }
+        val desktop = platform.host != io.github.matiyaaa.fuse.model.Host.ANDROID
         CompositionLocalProvider(
             androidx.compose.ui.platform.LocalLayoutDirection provides direction,
             LocalInputRouter provides router,
@@ -507,12 +508,22 @@ private fun FuseAppContent(
                                 router.touched()
                                 // Whether it is a mouse, and whether it really moved, for hovering and clicking.
                                 e.changes.firstOrNull()?.let { ch ->
+                                    val mouse = ch.type != androidx.compose.ui.input.pointer.PointerType.Touch
                                     router.pointer(
-                                        mouse = ch.type != androidx.compose.ui.input.pointer.PointerType.Touch,
+                                        mouse = mouse,
                                         x = ch.position.x, y = ch.position.y,
                                         pressed = e.type == androidx.compose.ui.input.pointer.PointerEventType.Press,
                                         held = ch.pressed,
                                     )
+                                    // A computer's mouse: its back button goes back, and the right button opens the
+                                    // options of what it points at (hovering made that the highlighted one), as
+                                    // Options does on a controller. Android turns both into Back itself.
+                                    if (mouse && desktop && e.type == androidx.compose.ui.input.pointer.PointerEventType.Press) {
+                                        io.github.matiyaaa.fuse.ui.designsystem.input.MouseButtons.action(e.buttons, typing = router.textInput != null)?.let { action ->
+                                            e.changes.forEach { it.consume() }
+                                            router.dispatch(action, io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.POINTER)
+                                        }
+                                    }
                                 }
                             }
                         }

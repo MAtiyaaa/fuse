@@ -30,8 +30,9 @@ interface GamepadSink {
 
 /**
  * Game controllers through the kernel's joystick interface (`/dev/input/js*`, joydev), without
- * native libraries. Each device gets a reader thread; a scanner thread looks for new devices every
- * two seconds. A device that disappears (unplugged, powered off) releases everything it held.
+ * native libraries. Each device gets a reader thread; a scanner thread looks for new devices as soon
+ * as the kernel adds one (every two seconds where that can't be watched). A device that disappears
+ * (unplugged, powered off) releases everything it held.
  *
  * Reading needs permission on the device node, which desktop sessions normally grant to the logged-in
  * user. When no device can be read, controllers simply don't work in Fuse; the keyboard still does.
@@ -50,6 +51,15 @@ class LinuxGamepads(
     fun start() {
         if (!running.compareAndSet(false, true)) return
         scanner = Thread({
+            // The kernel says when a controller's node appears or goes, so a pad plugged in or turned
+            // on works at once; its permissions come a moment after the node, so it is looked at
+            // again shortly. Where that can't be watched, Fuse looks every two seconds as before.
+            val watch = runCatching {
+                java.nio.file.FileSystems.getDefault().newWatchService().also { w ->
+                    java.nio.file.Paths.get("/dev/input").register(w, java.nio.file.StandardWatchEventKinds.ENTRY_CREATE, java.nio.file.StandardWatchEventKinds.ENTRY_DELETE)
+                }
+            }.getOrNull()
+            var settleUntil = 0L
             while (running.get()) {
                 try {
                     scan()
@@ -57,11 +67,27 @@ class LinuxGamepads(
                     Log.warn("controller scan failed", e)
                 }
                 try {
-                    Thread.sleep(SCAN_INTERVAL_MS)
+                    if (watch == null) {
+                        Thread.sleep(SCAN_INTERVAL_MS)
+                        continue
+                    }
+                    val now = System.currentTimeMillis()
+                    // Just after a change, every half second for a little while (udev setting the node's
+                    // permissions); otherwise only when told, with a slow look now and then in case.
+                    val wait = if (now < settleUntil) SETTLE_SCAN_MS else WATCHED_SCAN_MS
+                    val key = watch.poll(wait, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    if (key != null) {
+                        val changed = key.pollEvents().any { (it.context() as? java.nio.file.Path)?.fileName?.toString()?.matches(JS_NAME) == true }
+                        key.reset()
+                        if (changed) settleUntil = System.currentTimeMillis() + SETTLE_MS
+                    }
                 } catch (e: InterruptedException) {
+                    break
+                } catch (e: java.nio.file.ClosedWatchServiceException) {
                     break
                 }
             }
+            runCatching { watch?.close() }
         }, "fuse-gamepad-scan").apply {
             isDaemon = true
             start()
@@ -306,6 +332,11 @@ class LinuxGamepads(
     private companion object {
         val JS_NAME = Regex("js\\d+")
         const val SCAN_INTERVAL_MS = 2_000L
+
+        /** With the node watched: how often to look anyway, and how quickly and for how long after a change. */
+        const val WATCHED_SCAN_MS = 30_000L
+        const val SETTLE_SCAN_MS = 400L
+        const val SETTLE_MS = 3_000L
         const val JS_EVENT_BUTTON = 0x01
         const val JS_EVENT_AXIS = 0x02
         const val JS_EVENT_INIT = 0x80

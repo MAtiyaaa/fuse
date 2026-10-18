@@ -5,9 +5,14 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.input.pointer.PointerButtons
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.isBackPressed
+import androidx.compose.ui.input.pointer.isPrimaryPressed
+import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
+import io.github.matiyaaa.fuse.model.NavAction
 
 /** The router that knows whether the mouse really moved; null (hover always counts) where none is given. */
 val LocalPointerRouter = staticCompositionLocalOf<InputRouter?> { null }
@@ -48,5 +53,19 @@ fun Modifier.mouseHover(enabled: Boolean = true, onHover: () -> Unit): Modifier 
                 }
             }
         }
+    }
+}
+
+/**
+ * What a computer mouse's other buttons do, pressed anywhere: its back button goes back, and the
+ * right one opens the options of what it points at (hovering makes that the highlighted one), as
+ * Options does on a controller. Null for anything else (the main button clicks as it always does).
+ * The right button does nothing while typing, where Options would type.
+ */
+object MouseButtons {
+    fun action(buttons: PointerButtons, typing: Boolean = false): NavAction? = when {
+        buttons.isBackPressed -> NavAction.BACK
+        buttons.isSecondaryPressed && !buttons.isPrimaryPressed && !typing -> NavAction.CONTEXT
+        else -> null
     }
 }
