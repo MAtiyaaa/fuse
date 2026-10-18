@@ -757,6 +757,18 @@ it. Look Them Over finds games no longer in Fuse, entries for an older copy of F
 that open Fuse's window first, Direct entries whose emulator is gone, and doubles, and puts right
 only what it found.
 
+**Time in Direct entries.** A Direct entry has no Fuse to count its time, so with the Fuse Decky
+plugin loaded, Steam's own app lifetime events count it: Fuse names its Direct entries to the
+plugin, the plugin notes when Steam starts and stops one of them (and only them), keeps each session
+in its own settings folder until Fuse answers, and Fuse counts it once for the game. Without the
+plugin, time played in a Direct entry isn't counted (Steam's own `localconfig.vdf` isn't documented
+by Valve, so Fuse doesn't read it).
+
+**Keep Steam in Step** (off until chosen) puts games that join the library into Steam by themselves,
+starting as How Steam Starts Them says, and takes out Fuse's entries for games that leave it. Games
+already in the library aren't added by it. **Undo a Change** lists Fuse's last ten writes, each with
+what it did, and puts Steam's list back as it was before any of them.
+
 **Shortcuts From Other Tools** (Settings, Library, Steam) reads the shortcuts Steam ROM Manager,
 EmuDeck, a script or the person made (`SteamLearn`) and lists those that start one of Fuse's games,
 matched only by the game's own file (its path, or the file it starts from) appearing whole as the
@@ -767,6 +779,18 @@ Steam's art for it stays), its name, icon and tags. Steam must be closed, and Un
 
 **Leaves the device.** Nothing; Steam's files are on this device, and Fast Start's save rounds are
 Fuse One's own (see [docs/sync.md](docs/sync.md)).
+
+### Frame generation (lsfg-vk, Linux)
+
+A system's settings and a game's options have Frame Generation (Off, 2x, 3x, 4x) on Linux. With it
+on, the emulator's command gets lsfg-vk's own variables, as lsfg-vk documents them
+([lsfg-vk.dev](https://lsfg-vk.dev), Configuration, Environment Variables): `LSFGVK_ENV=1` and
+`LSFGVK_MULTIPLIER` (`core:launch/.../FrameGeneration.kt`). It is offered once lsfg-vk is set up,
+which is when its configuration file is there (`~/.config/lsfg-vk/conf.toml`, or under an absolute
+`XDG_CONFIG_HOME`); lsfg-vk itself needs Lossless Scaling, bought on Steam. Play, Fast Start and
+Direct entries all get it from the same resolution. Fuse never writes lsfg-vk's file.
+
+**Leaves the device.** Nothing.
 
 ## Jellyfin
 

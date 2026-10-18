@@ -788,4 +788,9 @@ data class SteamIntegrationSettings(
      * them (Linux); a game that can't start on its own still goes in with Fast Start.
      */
     val directEntries: Boolean = false,
+    /**
+     * Keep Steam in Step: games that join Fuse's library go into Steam by themselves, and Fuse's
+     * entries for games that leave it come out. Off until the person turns it on.
+     */
+    val automatic: Boolean = false,
 )

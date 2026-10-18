@@ -111,6 +111,10 @@ fun <T> AppState.scopedRow(
     })
 }
 
+/** Frame generation's choices: off, or lsfg-vk's multiplier. */
+internal val FRAME_GENERATION: List<Pair<Int, String>> =
+    listOf(0 to "Off") + io.github.matiyaaa.fuse.launch.FrameGeneration.MULTIPLIERS.map { it to "${it}x" }
+
 /** Systems whose updates and DLC can be kept in folders of their own. */
 private val CONTENT_FOLDER_SYSTEMS = setOf("switch", "switch-2")
 
@@ -188,6 +192,14 @@ fun PlatformSettingsScreen(app: AppState, platformId: PlatformId) {
             add(app.scopedRow(ScopedSettings.LaunchScreen, platformId, "Games open on", FuseIcons.DualScreen, LaunchDisplay.entries.map { it to screenName(it) }, detail = "Where this system's games start. A game can have its own in its options").copy(section = playing))
         }
         add(app.scopedRow(ScopedSettings.GenerateM3u, platformId, "Disc playlists", FuseIcons.Disc, on, detail = "Multi-disc games get a playlist in Fuse's storage (never in your folder)").copy(section = playing))
+        if (app.platform.features.frameGeneration) {
+            val ready = app.store.library.frameGenerationReady()
+            add(app.scopedRow(
+                ScopedSettings.FrameGeneration, platformId, "Frame Generation", FuseIcons.Layers2, FRAME_GENERATION,
+                detail = if (ready) "Through lsfg-vk: more frames shown than the emulator draws. A game can have its own in its options"
+                else "Needs lsfg-vk set up with Lossless Scaling on this computer (lsfg-vk.dev)",
+            ).copy(section = playing, enabled = ready))
+        }
         val look = "How its games look"
         add(app.scopedRow(ScopedSettings.Layout, platformId, "View", FuseIcons.Grid, LibraryLayout.entries.map { it to when (it) {
             LibraryLayout.ICON -> "Grid"; LibraryLayout.CAPSULE -> "Capsules"; LibraryLayout.COVER_GRID -> "Cover grid"; LibraryLayout.COMPACT_LIST -> "List"

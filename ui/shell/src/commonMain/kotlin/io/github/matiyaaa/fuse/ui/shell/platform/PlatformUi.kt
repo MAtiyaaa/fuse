@@ -191,6 +191,9 @@ interface SteamIntegration {
     /** The games Fuse put in Steam's library here, by Fuse's game id, for any Steam user. */
     suspend fun gamesInSteam(): Set<Long> = emptySet()
 
+    /** Fuse's Direct entries in Steam here: each entry's id in Steam to its game, for counting their time. */
+    suspend fun directGames(): Map<Long, Long> = emptyMap()
+
     /** How each of Fuse's games in Steam here starts: Fast Start, an older entry through Fuse's window, or Direct. */
     suspend fun gameStarts(): Map<Long, io.github.matiyaaa.fuse.library.steam.SteamStart> = emptyMap()
 
@@ -281,7 +284,16 @@ interface SteamIntegration {
 
     /** Puts Steam's library back as it was before Fuse's last change to its games. */
     suspend fun undoGames(): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
+
+    /** Fuse's recent changes to Steam's games that Undo can take back, newest first. */
+    suspend fun undoSteps(): List<SteamUndoStep> = emptyList()
+
+    /** Puts Steam's library back as it was before change [stepId]; every change after it is undone too. */
+    suspend fun undoTo(stepId: Long): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
 }
+
+/** One of Fuse's changes to Steam's games, made at [at], that Undo can take back: [what] it did, in words. */
+data class SteamUndoStep(val id: Long, val what: String, val at: Long)
 
 /** What Decky Loader and the Fuse Decky plugin look like on this device. */
 data class DeckyState(
@@ -372,6 +384,8 @@ data class PlatformFeatures(
     val cartridge: Boolean = true,
     /** The screen turns with the device, and Fuse can choose how (Android). */
     val rotation: Boolean = false,
+    /** Games can have frame generation through lsfg-vk here (Linux), once it is set up. */
+    val frameGeneration: Boolean = false,
 )
 
 interface Haptics {

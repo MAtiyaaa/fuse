@@ -86,6 +86,7 @@ class DesktopPlatformUi(
         canExit = true,
         windowModes = true,
         cartridge = os == DesktopOs.LINUX,
+        frameGeneration = os == DesktopOs.LINUX,
     )
 
     override val device: CapabilityProfile = measureDevice()

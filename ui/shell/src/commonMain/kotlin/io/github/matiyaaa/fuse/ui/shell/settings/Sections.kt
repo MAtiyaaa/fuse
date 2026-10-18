@@ -49,6 +49,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.addToSteam
 import io.github.matiyaaa.fuse.ui.shell.app.checkSteamGames
 import io.github.matiyaaa.fuse.ui.shell.app.learnSteamShortcuts
+import io.github.matiyaaa.fuse.ui.shell.app.steamUndoHistory
 import io.github.matiyaaa.fuse.ui.shell.app.refreshSteamGames
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
@@ -1182,6 +1183,27 @@ private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.pla
     ) + listOfNotNull(
         // How Fuse's games start from Steam: Fast Start, or straight in the emulator where Steam can have that.
         steamStartRow(app, steam, live).takeIf { !steam.gameMode },
+        // Games joining or leaving the library go into or out of Steam by themselves: off until chosen.
+        MenuAction(
+            "steam.games.auto", "Keep Steam in Step", FuseIcons.RefreshCcw,
+            detail = if (app.store.prefs.value.steam.automatic) "New games go into Steam by themselves, and games that leave Fuse come out"
+            else "Off. New games go into Steam only when you add them",
+            trailing = Trailing.Switch(app.store.prefs.value.steam.automatic),
+            enabled = !live.busy,
+            onSelect = {
+                val on = app.store.prefs.value.steam.automatic
+                if (on) {
+                    app.scope.launch { app.store.updatePrefs { p -> p.copy(steam = p.steam.copy(automatic = false)) } }
+                } else {
+                    app.confirm = io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec(
+                        "Keep Steam in Step?",
+                        "Games that join your library from now on go into Steam by themselves, with their art and collections, and Fuse's entries for games that leave it come out. " +
+                            "Games already in Fuse aren't added by it. Steam is never closed for it, and Settings, Library, Steam can undo each change.",
+                        "Turn On",
+                    ) { app.scope.launch { app.store.updatePrefs { p -> p.copy(steam = p.steam.copy(automatic = true)) } } }
+                }
+            },
+        ).takeIf { !steam.gameMode },
         // Games Fuse put in Steam: look them over, take them out, undo.
         MenuAction(
             "steam.games.fuse", "Your games in Steam", FuseIcons.LibraryBig,
@@ -1215,12 +1237,9 @@ private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.pla
                                 }
                             }
                         }).takeIf { app.steamGameIds.isNotEmpty() },
-                        MenuAction("steam.games.undo", "Undo Fuse's last change", FuseIcons.Undo, detail = "Steam's library as it was before it", onSelect = {
+                        MenuAction("steam.games.undo", "Undo a Change", FuseIcons.Undo, detail = "Fuse's recent changes to Steam's games, each with what it did", onSelect = {
                             app.choice = null
-                            app.scope.launch {
-                                steam.undoGames().onSuccess { app.toasts.show(it, icon = FuseIcons.Undo) }.onFailure { app.toasts.show(it.message ?: "Couldn't change Steam's library", ToastKind.ERROR) }
-                                app.refreshSteamGames()
-                            }
+                            app.steamUndoHistory()
                         }).takeIf { steam.canUndoGames },
                     ),
                 )

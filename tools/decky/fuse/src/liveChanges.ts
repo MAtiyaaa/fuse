@@ -1,4 +1,5 @@
-import { changeArt, changeDone, failure, steamChanges, SteamChange } from "./bridge";
+import { toaster } from "@decky/api";
+import { changeArt, changeDone, failure, played, steamChanges, SteamChange, watched } from "./bridge";
 
 /*
  * Bridge protocol 2: Fuse's changes to Steam's library (its games added, brought up to date or taken
@@ -13,6 +14,11 @@ import { changeArt, changeDone, failure, steamChanges, SteamChange } from "./bri
  * SetCustomArtworkForApp(appId, base64, "jpg" | "png", assetType) with ELibraryAssetType
  * Capsule 0, Hero 1, Logo 2, Header 3, Icon 4. Each is guarded: when Steam changes its internals a
  * change fails and is reported, and Fuse goes the usual way (written when Steam closes).
+ *
+ * Time in Fuse's Direct entries (which start the emulator with no Fuse to count it): Steam says when
+ * an app starts and stops through SteamClient.GameSessions.RegisterForAppLifetimeNotifications
+ * (unAppID, bRunning), and for the entries Fuse names ("watch") the backend notes each session and
+ * gives it to Fuse when Fuse answers, even if Fuse wasn't running while the game was.
  */
 
 declare const SteamClient: any;
@@ -68,6 +74,7 @@ async function pictures(c: SteamChange, appId: number) {
 }
 
 let busy = false;
+let watching = new Set<number>();
 
 /** One round: the waiting changes, each made and reported in turn. Never throws. */
 async function round() {
@@ -75,6 +82,9 @@ async function round() {
   busy = true;
   try {
     const answer = await steamChanges();
+    if (!failure(answer) && Array.isArray(answer.watch)) watching = new Set(answer.watch);
+    // What Fuse would say on its own screen while a game is in front of it in Game Mode.
+    if (!failure(answer)) for (const notice of answer.notices ?? []) toaster.toast({ title: "Fuse", body: notice });
     if (failure(answer) || !answer.changes?.length) return;
     for (const c of answer.changes) {
       try {
@@ -91,9 +101,36 @@ async function round() {
   }
 }
 
+/** Notes the starts and stops of Fuse's Direct entries; nothing else Steam runs is noted. */
+function watchSessions(): () => void {
+  watched()
+    .then((w) => {
+      if (Array.isArray(w?.watch)) watching = new Set(w.watch);
+    })
+    .catch(() => undefined);
+  try {
+    const sub = SteamClient?.GameSessions?.RegisterForAppLifetimeNotifications?.((n: { unAppID: number; bRunning: boolean }) => {
+      if (n && watching.has(n.unAppID)) void played(n.unAppID, !!n.bRunning).catch(() => undefined);
+    });
+    return () => {
+      try {
+        sub?.unregister?.();
+      } catch {
+        // Steam already let go of it.
+      }
+    };
+  } catch {
+    return () => {};
+  }
+}
+
 /** Starts asking; the function it returns stops it. */
 export function startLiveChanges(): () => void {
   const timer = setInterval(() => void round(), EVERY_MS);
+  const stopWatching = watchSessions();
   void round();
-  return () => clearInterval(timer);
+  return () => {
+    clearInterval(timer);
+    stopWatching();
+  };
 }

@@ -185,6 +185,28 @@ class DesktopSteamGamesTest {
     }
 
     @Test
+    fun eachWriteCanBeUndoneWithWhatItDid(): Unit = runBlocking {
+        val (original, _) = seed()
+        steam.addGames(listOf(zelda), emptyMap(), collections = false).getOrThrow()
+        val afterFirst = File(config, "shortcuts.vdf").readBytes()
+        Thread.sleep(5)
+        steam.addGames(listOf(SteamGameEntry(3, "Chrono Trigger", "Super Nintendo")), emptyMap(), collections = false).getOrThrow()
+        Thread.sleep(5)
+        steam.removeGames(setOf(12L)).getOrThrow()
+        assertEquals(listOf("Took 1 game out", "Added 1 game", "Added 1 game"), steam.undoSteps().map { it.what })
+
+        // The latest alone.
+        steam.undoGames().getOrThrow()
+        assertEquals(setOf(12L, 3L), steam.gamesInSteam())
+        // Back to before the first: the change after it goes too.
+        steam.undoTo(steam.undoSteps().last().id).getOrThrow()
+        assertContentEquals(original, File(config, "shortcuts.vdf").readBytes())
+        assertTrue(steam.undoSteps().isEmpty())
+        assertFalse(steam.canUndoGames)
+        assertTrue(afterFirst.isNotEmpty())
+    }
+
+    @Test
     fun anotherToolsShortcutIsTakenOverInPlaceAndUndone(): Unit = runBlocking {
         val rom = File(root, "ROMs/gba/Metroid Fusion (USA).gba").path
         // Steam ROM Manager's shortcut for a game Fuse has, by its file.

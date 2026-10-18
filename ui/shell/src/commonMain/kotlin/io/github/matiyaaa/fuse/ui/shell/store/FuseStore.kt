@@ -491,6 +491,15 @@ interface LibraryOps {
      */
     suspend fun directCommand(id: GameId): DirectCommand = DirectCommand.Unavailable("Only Fuse can start it here")
 
+    /**
+     * A session of [id] played from its Direct entry in Steam, as the Fuse Decky plugin saw Steam
+     * start and stop it: counted once, like one Fuse saw. False when it was already counted.
+     */
+    suspend fun recordSteamSession(id: GameId, startedAt: Long, endedAt: Long): Boolean = false
+
+    /** lsfg-vk is set up on this device, so frame generation can be chosen (Linux). */
+    fun frameGenerationReady(): Boolean = false
+
     /** Every game's own files (its path, and the file it starts from), each to its game: for finding shortcuts others made. */
     suspend fun gameFiles(): Map<String, GameId> = emptyMap()
 

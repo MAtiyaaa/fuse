@@ -44,6 +44,8 @@ const installAllEmulators = callable("emulators_install_all");
 const uninstallAllEmulators = callable("emulators_uninstall_all");
 const steamChanges = callable("steam_changes");
 const changeArt = callable("change_art");
+const watched = callable("watched");
+const played = callable("played");
 const changeDone = callable("change_done");
 /** The words to show for an answer that failed; null when it didn't. */
 function failure(answer) {
@@ -239,6 +241,7 @@ async function pictures(c, appId) {
     }
 }
 let busy = false;
+let watching = new Set();
 /** One round: the waiting changes, each made and reported in turn. Never throws. */
 async function round() {
     if (busy)
@@ -246,6 +249,12 @@ async function round() {
     busy = true;
     try {
         const answer = await steamChanges();
+        if (!failure(answer) && Array.isArray(answer.watch))
+            watching = new Set(answer.watch);
+        // What Fuse would say on its own screen while a game is in front of it in Game Mode.
+        if (!failure(answer))
+            for (const notice of answer.notices ?? [])
+                toaster.toast({ title: "Fuse", body: notice });
         if (failure(answer) || !answer.changes?.length)
             return;
         for (const c of answer.changes) {
@@ -265,11 +274,41 @@ async function round() {
         busy = false;
     }
 }
+/** Notes the starts and stops of Fuse's Direct entries; nothing else Steam runs is noted. */
+function watchSessions() {
+    watched()
+        .then((w) => {
+        if (Array.isArray(w?.watch))
+            watching = new Set(w.watch);
+    })
+        .catch(() => undefined);
+    try {
+        const sub = SteamClient?.GameSessions?.RegisterForAppLifetimeNotifications?.((n) => {
+            if (n && watching.has(n.unAppID))
+                void played(n.unAppID, !!n.bRunning).catch(() => undefined);
+        });
+        return () => {
+            try {
+                sub?.unregister?.();
+            }
+            catch {
+                // Steam already let go of it.
+            }
+        };
+    }
+    catch {
+        return () => { };
+    }
+}
 /** Starts asking; the function it returns stops it. */
 function startLiveChanges() {
     const timer = setInterval(() => void round(), EVERY_MS);
+    const stopWatching = watchSessions();
     void round();
-    return () => clearInterval(timer);
+    return () => {
+        clearInterval(timer);
+        stopWatching();
+    };
 }
 
 /**

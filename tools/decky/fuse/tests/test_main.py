@@ -13,6 +13,7 @@ import os
 import sys
 import tempfile
 import threading
+import time
 import types
 import unittest
 
@@ -61,6 +62,7 @@ class BackendTest(unittest.TestCase):
         # Decky's own module, as the backend uses it.
         decky = types.ModuleType("decky")
         decky.DECKY_USER_HOME = cls.home
+        decky.DECKY_PLUGIN_SETTINGS_DIR = os.path.join(cls.home, "settings")
         decky.logger = types.SimpleNamespace(info=lambda *a: None, warning=lambda *a: None)
         sys.modules["decky"] = decky
         sys.path.insert(0, os.path.dirname(HERE))
@@ -76,6 +78,10 @@ class BackendTest(unittest.TestCase):
     def setUp(self):
         Bridge.seen = []
         Bridge.answers = {}
+        try:
+            os.remove(os.path.join(self.home, "settings", "played.json"))
+        except OSError:
+            pass
         self.discovery = os.path.join(self.home, ".local", "share", "fuse", "decky-bridge.json")
         os.makedirs(os.path.dirname(self.discovery), exist_ok=True)
         self.publish(self.main.PROTOCOL)
@@ -138,6 +144,57 @@ class BackendTest(unittest.TestCase):
         self.publish(self.main.PROTOCOL, token="stale")
         answer = self.run_(self.main.Plugin().steam_changes())
         self.assertEqual("http-401", answer["error"])
+
+
+    # Time in Fuse's Direct entries: noted only for the entries Fuse names, kept until Fuse has it.
+
+    def watch(self, *app_ids):
+        Bridge.answers[("GET", "/v1/steam/changes")] = (200, {"changes": [], "watch": list(app_ids)})
+        self.run_(self.main.Plugin().steam_changes())
+
+    def test_only_the_entries_fuse_names_are_noted(self):
+        self.watch(3045678901)
+        self.assertEqual({"watch": [3045678901]}, self.run_(self.main.Plugin().watched()))
+        self.assertEqual({"noted": False}, self.run_(self.main.Plugin().played(1234, True)))
+        self.assertEqual({"noted": True}, self.run_(self.main.Plugin().played(3045678901, True)))
+
+    def test_a_session_goes_to_fuse_once_it_ends(self):
+        self.watch(3045678901)
+        Bridge.answers[("POST", "/v1/steam/played")] = (200, {"recorded": 1, "unknown": 0})
+        plugin = self.main.Plugin()
+        self.run_(plugin.played(3045678901, True))
+        # A session lasts at least a moment; one of no length isn't counted.
+        time.sleep(0.01)
+        self.run_(plugin.played(3045678901, False))
+        posted = [b for (m, p, _, b) in Bridge.seen if p == "/v1/steam/played"]
+        self.assertEqual(1, len(posted))
+        session = posted[0]["sessions"][0]
+        self.assertEqual(3045678901, session["appId"])
+        self.assertLessEqual(session["start"], session["end"])
+        # Fuse has it: not sent again.
+        self.watch(3045678901)
+        self.assertEqual(1, len([1 for (m, p, _, b) in Bridge.seen if p == "/v1/steam/played"]))
+
+    def test_a_session_played_without_fuse_waits_for_it(self):
+        self.watch(3045678901)
+        plugin = self.main.Plugin()
+        self.run_(plugin.played(3045678901, True))
+        time.sleep(0.01)
+        os.remove(self.discovery)
+        # Played from Steam with Fuse closed: kept.
+        self.run_(plugin.played(3045678901, False))
+        self.assertEqual([], [p for (m, p, _, b) in Bridge.seen if p == "/v1/steam/played"])
+        # Fuse is back: it gets the session with its next question.
+        self.publish(self.main.PROTOCOL)
+        Bridge.answers[("POST", "/v1/steam/played")] = (200, {"recorded": 1, "unknown": 0})
+        self.watch(3045678901)
+        posted = [b for (m, p, _, b) in Bridge.seen if p == "/v1/steam/played"]
+        self.assertEqual(1, len(posted[0]["sessions"]))
+
+    def test_a_stop_without_a_start_is_no_session(self):
+        self.watch(3045678901)
+        self.run_(self.main.Plugin().played(3045678901, False))
+        self.assertEqual([], [p for (m, p, _, b) in Bridge.seen if p == "/v1/steam/played"])
 
 
 if __name__ == "__main__":

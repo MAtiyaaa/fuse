@@ -205,6 +205,9 @@ class DesktopFuseServices private constructor(
         }
     }
 
+    override fun frameGenerationReady(): Boolean = os == DesktopOs.LINUX &&
+        File(io.github.matiyaaa.fuse.launch.FrameGeneration.configPath(dirs.home.toString(), System.getenv("XDG_CONFIG_HOME"))).isFile
+
     override fun utcOffsetMillis(): Long = TimeZone.getDefault().getOffset(System.currentTimeMillis()).toLong()
 
     override fun close() {

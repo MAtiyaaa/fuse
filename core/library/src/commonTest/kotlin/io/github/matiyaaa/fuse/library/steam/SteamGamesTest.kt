@@ -94,6 +94,7 @@ class SteamGamesTest {
         assertEquals("FUSE_GAME=12 QT_QPA_PLATFORM=xcb %command% -f '/home/deck/ROMs/gba/Minish Cap (USA).gba'", ours.str("LaunchOptions"))
         assertEquals(mapOf(12L to SteamGames.newArtId(fuse, direct)), SteamGames.inSteam(after, isFuse))
         assertEquals(mapOf(12L to SteamStart.DIRECT), SteamGames.starts(after, isFuse))
+        assertEquals(mapOf(SteamGames.newArtId(fuse, direct) to 12L), SteamGames.directIn(after, isFuse))
         // Written again, nothing changes.
         assertEquals(SteamGameAction.UNCHANGED, SteamGames.plan(after, fuse, listOf(direct), isFuse)!!.single().action)
         assertContentEquals(after, SteamGames.write(after, fuse, listOf(direct), isFuse))

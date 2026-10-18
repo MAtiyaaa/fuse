@@ -53,6 +53,21 @@ class SteamLiveQueueTest {
     }
 
     @Test
+    fun noticesWaitForSteamOnlyWhileThePluginIsThere(): Unit = runBlocking {
+        queue.notify("Saves sent")
+        assertEquals(emptyList(), queue.takeNotices())
+        queue.take()
+        queue.notify("Saves sent")
+        queue.notify("Download finished")
+        queue.notify("Saves sent")
+        // Each once, the latest last.
+        assertEquals(listOf("Download finished", "Saves sent"), queue.takeNotices())
+        assertEquals(emptyList(), queue.takeNotices())
+        repeat(SteamLiveQueue.MAX_NOTICES + 2) { queue.notify("Notice $it") }
+        assertEquals(SteamLiveQueue.MAX_NOTICES, queue.takeNotices().size)
+    }
+
+    @Test
     fun aRemovalForgetsTheEntry(): Unit = runBlocking {
         val adding = async { queue.offer(listOf(add(3)), waitMs = 10_000) }
         val a = withTimeout(5_000) { var got = queue.take(); while (got.isEmpty()) { delay(10); got = queue.take() }; got.single() }

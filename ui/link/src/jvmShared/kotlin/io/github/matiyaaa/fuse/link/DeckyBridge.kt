@@ -57,6 +57,8 @@ class DeckyBridge(
     random: SecureRandom = SecureRandom(),
     /** Fuse's changes to Steam's library waiting for the plugin to make them in Steam's running client. */
     private val live: io.github.matiyaaa.fuse.ui.shell.platform.SteamLiveQueue? = null,
+    /** Fuse's Direct entries in Steam: each entry's id in Steam to its game, whose time the plugin reports. */
+    private val directGames: suspend () -> Map<Long, Long> = { emptyMap() },
 ) : AutoCloseable {
     private val token: String = ByteArray(24).also(random::nextBytes).joinToString("") { "%02x".format(it) }
     private var server: EmbeddedServer<*, *>? = null
@@ -116,6 +118,13 @@ class DeckyBridge(
                             message = body["message"]?.jsonPrimitive?.content?.take(MESSAGE_CHARS),
                         )
                         call.json(buildJsonObject { put("ok", live?.done(id, result) == true) })
+                    }
+                }
+                // Time played in Fuse's Direct entries, as the plugin saw Steam start and stop them.
+                post("/v1/steam/played") {
+                    call.allowedTo(ExtensionScope.CHANGE_LIBRARY) {
+                        val sessions = runCatching { Json.parseToJsonElement(call.receiveText()).jsonObject["sessions"]?.jsonArray }.getOrNull() ?: return@allowedTo call.bad()
+                        call.json(played(sessions.take(MAX_SESSIONS)))
                     }
                 }
                 get("/v1/emulators") { call.allowedTo(ExtensionScope.EMULATORS) { call.json(emulators()) } }
@@ -285,7 +294,13 @@ class DeckyBridge(
      */
     private suspend fun steamChanges(): JsonObject {
         val waiting = live?.take().orEmpty()
+        val watch = runCatching { directGames().keys }.getOrDefault(emptySet())
+        val notices = live?.takeNotices().orEmpty()
         return buildJsonObject {
+            // The Direct entries whose starts and stops the plugin notes, for their time.
+            putJsonArray("watch") { for (id in watch.sorted()) add(JsonPrimitive(id)) }
+            // What Fuse would say on its own screen while a game is in front of it, for Steam to show.
+            putJsonArray("notices") { for (n in notices) add(JsonPrimitive(n)) }
             putJsonArray("changes") {
                 for (c in waiting) add(buildJsonObject {
                     put("id", c.id)
@@ -299,6 +314,33 @@ class DeckyBridge(
                     putJsonObject("art") { for ((kind, path) in c.art) imageFormat(path)?.let { put(kind, it) } }
                 })
             }
+        }
+    }
+
+    /**
+     * Sessions the plugin saw in Steam (`appId`, `start` and `end`, in milliseconds), each counted
+     * for the game whose Direct entry it was; anything else is left out, and a session already
+     * counted isn't counted again.
+     */
+    private suspend fun played(sessions: List<kotlinx.serialization.json.JsonElement>): JsonObject {
+        val games = runCatching { directGames() }.getOrDefault(emptyMap())
+        var recorded = 0
+        var unknown = 0
+        for (s in sessions) {
+            val o = s as? JsonObject ?: continue
+            val appId = o["appId"]?.jsonPrimitive?.longOrNull
+            val start = o["start"]?.jsonPrimitive?.longOrNull
+            val end = o["end"]?.jsonPrimitive?.longOrNull
+            val game = appId?.let(games::get)
+            if (game == null || start == null || end == null) {
+                unknown++
+                continue
+            }
+            if (store.library.recordSteamSession(io.github.matiyaaa.fuse.model.GameId(game), start, end)) recorded++
+        }
+        return buildJsonObject {
+            put("recorded", recorded)
+            put("unknown", unknown)
         }
     }
 
@@ -374,6 +416,9 @@ class DeckyBridge(
 
         /** The most of a failure's words kept from the plugin. */
         const val MESSAGE_CHARS = 300
+
+        /** The most sessions one report of the plugin's is read for. */
+        const val MAX_SESSIONS = 200
         const val LOOPBACK = "127.0.0.1"
 
         /** The most Steam games one import asks for. */

@@ -45,6 +45,7 @@ class SteamLiveQueue(private val now: () -> Long) {
     private val lock = Mutex()
     private val waiting = LinkedHashMap<Long, Pair<SteamLiveChange, CompletableDeferred<SteamLiveResult>>>()
     private val madeHere = HashMap<Long, Long>()
+    private val notices = ArrayDeque<String>()
     private var next = 1L
 
     @kotlin.concurrent.Volatile private var lastAsked = Long.MIN_VALUE / 2
@@ -100,6 +101,22 @@ class SteamLiveQueue(private val now: () -> Long) {
         true
     }
 
+    /**
+     * Something Fuse would say on its own screen, for Steam to show instead (a game is in front of
+     * Fuse in Game Mode). Kept only while the plugin is there to show it, and only the latest few.
+     */
+    suspend fun notify(message: String) {
+        if (!connected) return
+        lock.withLock {
+            notices.remove(message)
+            notices.addLast(message)
+            while (notices.size > MAX_NOTICES) notices.removeFirst()
+        }
+    }
+
+    /** The notices waiting for Steam to show, each once. */
+    suspend fun takeNotices(): List<String> = lock.withLock { notices.toList().also { notices.clear() } }
+
     /** Steam closed: it wrote what was made into its library file, which says it from now on. */
     suspend fun steamClosed() = lock.withLock { madeHere.clear() }
 
@@ -109,5 +126,8 @@ class SteamLiveQueue(private val now: () -> Long) {
 
         /** How long a change waits for the plugin before Fuse goes the usual way. */
         const val OFFER_WAIT_MS = 15_000L
+
+        /** The most notices kept for Steam to show. */
+        const val MAX_NOTICES = 4
     }
 }

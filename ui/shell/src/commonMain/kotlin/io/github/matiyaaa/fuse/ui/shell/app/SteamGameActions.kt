@@ -11,7 +11,12 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.shell.store.DirectCommand
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /*
@@ -265,5 +270,95 @@ internal fun AppState.learnSteamShortcuts() {
         )
     }
 }
+
+/**
+ * Fuse's recent changes to Steam's games, newest first, each with what it did and when. Choosing one
+ * puts Steam's library back as it was before it, and every change after it with it, after asking.
+ */
+internal fun AppState.steamUndoHistory() {
+    val steam = platform.steam ?: return
+    scope.launch {
+        val steps = runCatching { steam.undoSteps() }.getOrDefault(emptyList())
+        if (steps.isEmpty()) {
+            toasts.show("There's no change of Fuse's to undo")
+            return@launch
+        }
+        val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+        val offset = io.github.matiyaaa.fuse.ui.shell.sync.localOffsetMillis(now)
+        fun undo(index: Int) {
+            val step = steps[index]
+            val later = index
+            confirm = ConfirmSpec(
+                title = "Undo \"${step.what}\"?",
+                message = "Steam's library goes back to how it was before it." +
+                    (if (later == 0) "" else if (later == 1) " The change after it is undone too." else " The $later changes after it are undone too.") +
+                    " Only Fuse's own entries change. Close Steam first.",
+                confirmLabel = "Undo",
+            ) {
+                scope.launch {
+                    steam.undoTo(step.id)
+                        .onSuccess { toasts.show(it, icon = FuseIcons.Undo) }
+                        .onFailure { toasts.show(it.message ?: "Couldn't change Steam's library", ToastKind.ERROR) }
+                    refreshSteamGames()
+                }
+            }
+        }
+        choice = ChoiceSpec(
+            title = "Undo a Change",
+            icon = FuseIcons.Undo,
+            message = "Fuse's recent changes to Steam's games, newest first.",
+            options = steps.mapIndexed { i, step ->
+                MenuAction(
+                    "steam.undo.${step.id}", step.what, FuseIcons.History,
+                    detail = io.github.matiyaaa.fuse.ui.shell.store.impl.TimeWords.relative(step.at, now, offset).replaceFirstChar { it.uppercase() },
+                    onSelect = { choice = null; undo(i) },
+                )
+            },
+        )
+    }
+}
+
+/**
+ * Keep Steam in Step, while the person has it on (off by default): games that join the library go
+ * into Steam by themselves, starting as How Steam Starts Them says, with their art and collections,
+ * and Fuse's entries for games that leave the library come out. Games already in the library when
+ * it is turned on aren't added by it. Steam is never closed for it: with Steam open, the Fuse Decky
+ * plugin puts them in, or they go in when Steam next closes; a removal Steam can't take now is made
+ * the next time Fuse starts.
+ */
+internal suspend fun AppState.keepSteamInStep() {
+    val steam = platform.steam ?: return
+    store.prefs.map { it.steam.automatic }.distinctUntilChanged().collectLatest { on ->
+        if (!on) return@collectLatest
+        var known: Set<Long>? = null
+        store.library.games(GameQuery(includeHidden = true))
+            .map { list -> list.filter { !it.isApp }.associateBy { it.id.value } }
+            .conflate()
+            .collect { cards ->
+                val ids = cards.keys
+                val before = known
+                known = ids
+                val inSteam = runCatching { steam.gamesInSteam() }.getOrDefault(emptySet())
+                // Entries for games no longer in Fuse, every time (also those left from before).
+                val gone = inSteam - ids
+                if (gone.isNotEmpty() && (!runCatching { steam.steamRunning() }.getOrDefault(true) || steam.changesLive)) {
+                    steam.removeGames(gone).onSuccess { refreshSteamGames() }
+                }
+                if (before == null) return@collect
+                val joined = (ids - before - inSteam).mapNotNull(cards::get).filter { !it.dimmed }
+                if (joined.isEmpty()) return@collect
+                val direct = directChosen()
+                val pairs = joined.map { steamEntry(it) }.map { (entry, art) -> startingAsChosen(entry, direct) to art }
+                steam.addGames(pairs.map { it.first }, pairs.associate { it.first.gameId to it.second }, collections = true)
+                    .onSuccess { toasts.show(if (joined.size == 1) "${joined.first().title} is in Steam too" else "${joined.size} new games are in Steam too", icon = FuseIcons.Gamepad) }
+                refreshSteamGames()
+                // A burst of new games (a scan) goes in as one change.
+                delay(STEP_SETTLE_MS)
+            }
+    }
+}
+
+/** How long Keep Steam in Step lets the library settle between changes it makes. */
+private const val STEP_SETTLE_MS = 5_000L
 
 private const val PREVIEW_NAMES = 4

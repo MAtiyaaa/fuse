@@ -275,6 +275,8 @@ private fun FuseAppContent(
         }
     }
     LaunchedEffect(Unit) { app.refreshSteamGames() }
+    // Keep Steam in Step (off until the person turns it on).
+    LaunchedEffect(Unit) { if (app.safeMode == null) app.keepSteamInStep() }
     // An update Fuse went back from at this start, or a library brought back for this version: said once.
     LaunchedEffect(Unit) {
         val note = app.store.updates.takeStartupNote() ?: return@LaunchedEffect

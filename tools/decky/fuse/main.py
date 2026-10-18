@@ -11,6 +11,7 @@ Decky restarts, the next call simply finds the bridge again.
 import asyncio
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 
@@ -25,6 +26,9 @@ TIMEOUT_S = 4
 ART_KINDS = ("capsule", "hero", "logo", "header", "icon")
 # The most of a failure's words sent back to Fuse.
 MESSAGE_CHARS = 300
+# The most finished sessions kept waiting for Fuse, and the longest one counted.
+MAX_SESSIONS = 200
+MAX_SESSION_MS = 24 * 60 * 60 * 1000
 
 
 def _discovery_candidates():
@@ -97,6 +101,50 @@ def _app_id(value):
     except (TypeError, ValueError):
         return None
     return app_id if app_id > 0 else None
+
+
+def _played_path():
+    """Where the plugin keeps, between Steam's starts, the Direct entries it watches and sessions Fuse hasn't had yet."""
+    folder = getattr(decky, "DECKY_PLUGIN_SETTINGS_DIR", None) or os.path.join(
+        getattr(decky, "DECKY_USER_HOME", None) or os.path.expanduser("~"), ".config", "fuse-decky"
+    )
+    return os.path.join(folder, "played.json")
+
+
+def _load_played():
+    try:
+        with open(_played_path(), "r", encoding="utf-8") as f:
+            state = json.load(f)
+        return {
+            "watch": [int(a) for a in state.get("watch", []) if _app_id(a)],
+            "open": {str(k): int(v) for k, v in dict(state.get("open", {})).items()},
+            "done": [d for d in state.get("done", []) if isinstance(d, dict)][-MAX_SESSIONS:],
+        }
+    except (OSError, ValueError, TypeError, AttributeError):
+        return {"watch": [], "open": {}, "done": []}
+
+
+def _save_played(state):
+    path = _played_path()
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(state, f)
+        os.replace(tmp, path)
+    except OSError:
+        pass
+
+
+def _flush_played(state):
+    """Sends finished sessions to Fuse; they are forgotten once Fuse has answered for them."""
+    if not state["done"]:
+        return state
+    answer = _call("POST", "/v1/steam/played", {"sessions": state["done"]})
+    if not answer.get("error"):
+        state["done"] = []
+        _save_played(state)
+    return state
 
 
 def _menu_off():
@@ -174,7 +222,39 @@ class Plugin:
 
     async def steam_changes(self):
         """The changes Fuse asks Steam's running client to make; asking also tells Fuse the plugin is here."""
-        return await _ask("GET", "/v1/steam/changes")
+        answer = await _ask("GET", "/v1/steam/changes")
+        if not answer.get("error"):
+            # Fuse says which Direct entries to watch; sessions waiting for Fuse go now that it answers.
+            state = _load_played()
+            watch = [int(a) for a in answer.get("watch", []) if _app_id(a)]
+            if watch != state["watch"]:
+                state["watch"] = watch
+                _save_played(state)
+            await asyncio.to_thread(_flush_played, state)
+        return answer
+
+    async def watched(self):
+        """The Direct entries whose starts and stops are noted, as Fuse last said."""
+        return {"watch": _load_played()["watch"]}
+
+    async def played(self, app_id, running):
+        """Steam started or stopped one of Fuse's Direct entries: noted, and sent to Fuse when it answers."""
+        app_id = _app_id(app_id)
+        state = _load_played()
+        if app_id is None or app_id not in state["watch"]:
+            return {"noted": False}
+        now = int(time.time() * 1000)
+        key = str(app_id)
+        if running:
+            state["open"][key] = now
+        else:
+            start = state["open"].pop(key, None)
+            if start is not None and 0 < now - start <= MAX_SESSION_MS:
+                state["done"] = (state["done"] + [{"appId": app_id, "start": start, "end": now}])[-MAX_SESSIONS:]
+        _save_played(state)
+        if not running:
+            await asyncio.to_thread(_flush_played, state)
+        return {"noted": True}
 
     async def change_art(self, change_id, kind):
         """One picture for a change, as Fuse sends it (base64): only the kinds Steam has, only by the change's id."""

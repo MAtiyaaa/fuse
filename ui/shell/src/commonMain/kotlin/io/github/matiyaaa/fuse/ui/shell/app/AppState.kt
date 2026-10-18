@@ -17,6 +17,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkControl
 import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 /** Where controller focus is: the section tabs at the top, or the page content. */
 enum class FocusZone { TABS, CONTENT }
@@ -149,6 +150,13 @@ class AppState(
 
     val navigator = kept.navigator
     val toasts = ToastState().apply {
+        // In Game Mode with a game in front of Fuse, its notices show through Steam (the Fuse Decky plugin).
+        onMessage = { message, _ ->
+            val steam = platform.steam
+            if (steam != null && steam.gameMode && store.homeFeed.value.playtime.currentGame != null) {
+                steam.live?.let { live -> scope.launch { live.notify(message) } }
+            }
+        }
         // A light vibration with each notice: firmer when something finished well, a double knock when it didn't.
         onShown = { kind ->
             when (kind) {

@@ -82,8 +82,12 @@ class ToastState {
     /** Told of each toast as it is shown (for a light vibration with it). */
     var onShown: ((ToastKind) -> Unit)? = null
 
+    /** Told what each toast says, for where Fuse's own window isn't seen (a game in front of it). */
+    var onMessage: ((String, ToastKind) -> Unit)? = null
+
     fun show(message: String, kind: ToastKind = ToastKind.INFO, icon: ImageVector? = null, durationMs: Long = 3200) {
         onShown?.invoke(kind)
+        onMessage?.invoke(message, kind)
         items.removeAll { it.message == message }
         items.add(Toast(next++, message, kind, icon, durationMs))
         if (items.size > 3) items.removeAt(0)

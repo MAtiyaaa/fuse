@@ -51,6 +51,10 @@ internal class FakeServices(
     val launched = mutableListOf<ResolvedLaunch>()
     var exit: CompletableDeferred<Unit>? = null
 
+    /** lsfg-vk set up here, for a test of frame generation. */
+    var frameGeneration = false
+    override fun frameGenerationReady() = frameGeneration
+
     override val appVersion = "0.0.1"
     val javaFs = JavaFileSystem()
     override val fs: FuseFileSystem = javaFs

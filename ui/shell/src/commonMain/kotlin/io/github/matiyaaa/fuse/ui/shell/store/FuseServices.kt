@@ -83,6 +83,9 @@ interface FuseServices {
      */
     val awake: StateFlow<Boolean> get() = io.github.matiyaaa.fuse.sync.Awake.always
 
+    /** lsfg-vk is set up here (Linux, its configuration file there), so games can have frame generation. */
+    fun frameGenerationReady(): Boolean = false
+
     /** This device's name, as servers list it (Jellyfin's dashboard). */
     val deviceName: String get() = "Fuse"
 

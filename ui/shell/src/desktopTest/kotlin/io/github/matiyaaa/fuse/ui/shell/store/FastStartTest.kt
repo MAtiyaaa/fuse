@@ -139,6 +139,45 @@ class FastStartTest {
     }
 
     @Test
+    fun frameGenerationChosenForASystemReachesPlayAndDirectEntriesOnlyWhereLsfgVkIsSetUp(): Unit = runBlocking {
+        val (services, id) = library()
+        val run = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val store = createRunStore(services, run)
+            store.settings.set(io.github.matiyaaa.fuse.model.ScopedSettings.FrameGeneration, io.github.matiyaaa.fuse.model.ScopeRef.platform(PlatformId("gba")), 3)
+            // lsfg-vk isn't set up: nothing of it on the command.
+            assertTrue(assertIs<DirectCommand.Ready>(store.library.directCommand(id)).env.keys.none { it.startsWith("LSFGVK") })
+            services.frameGeneration = true
+            val on = assertIs<DirectCommand.Ready>(store.library.directCommand(id))
+            assertEquals("1", on.env["LSFGVK_ENV"])
+            assertEquals("3", on.env["LSFGVK_MULTIPLIER"])
+            // The game's own choice wins over its system's.
+            store.settings.set(io.github.matiyaaa.fuse.model.ScopedSettings.FrameGeneration, io.github.matiyaaa.fuse.model.ScopeRef.game(id), 0)
+            assertTrue(assertIs<DirectCommand.Ready>(store.library.directCommand(id)).env.keys.none { it.startsWith("LSFGVK") })
+        } finally {
+            run.cancel()
+        }
+    }
+
+    @Test
+    fun aSessionFromSteamIsCountedOnceAndOnlyWithinADay(): Unit = runBlocking {
+        val (services, id) = library()
+        val run = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val store = createRunStore(services, run)
+            val now = System.currentTimeMillis()
+            assertTrue(store.library.recordSteamSession(id, now - 3_600_000, now - 600_000))
+            assertFalse(store.library.recordSteamSession(id, now - 3_600_000, now - 600_000))
+            // Longer than a day, or for a game Fuse doesn't have: not a session.
+            assertFalse(store.library.recordSteamSession(id, now - 3 * 86_400_000L, now - 600_000))
+            assertFalse(store.library.recordSteamSession(GameId(987_654), now - 3_600_000, now))
+            assertEquals(1, services.data.playSessions.sessions(id).first().size)
+        } finally {
+            run.cancel()
+        }
+    }
+
+    @Test
     fun theRunStoreStartsNoScan(): Unit = runBlocking {
         val (services, _) = library()
         // A new game in the folder: Fuse open would find it on its next quick scan; a run never scans.

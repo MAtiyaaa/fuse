@@ -525,6 +525,16 @@ internal class DefaultLibraryOps(
 
     override suspend fun gameFiles(): Map<String, GameId> = data.games.files()
 
+    override suspend fun recordSteamSession(id: GameId, startedAt: Long, endedAt: Long): Boolean {
+        if (data.games.get(id) == null) return false
+        // Never in the future, never longer than a day: a clock that jumped isn't a session.
+        val end = minOf(endedAt, ctx.now())
+        if (end - startedAt !in 1..STEAM_SESSION_MAX_MS) return false
+        return data.playSessions.record(id, startedAt, end, io.github.matiyaaa.fuse.model.PlaySessionSource.STEAM).also { if (it) ctx.userChanged() }
+    }
+
+    override fun frameGenerationReady(): Boolean = ctx.host == io.github.matiyaaa.fuse.model.Host.LINUX && ctx.services.frameGenerationReady()
+
     override suspend fun directCommand(id: GameId): io.github.matiyaaa.fuse.ui.shell.store.DirectCommand {
         val ready = when (val r = resolveForPlay(id, emulator = null, discPath = null, display = null)) {
             is PlayResolution.Stopped -> return io.github.matiyaaa.fuse.ui.shell.store.DirectCommand.Unavailable(
@@ -655,6 +665,11 @@ internal class DefaultLibraryOps(
             val suggestions = ctx.registry.forPlatform(game.platformId, ctx.host).filterNot { it.opensAppOnly }.take(3)
                 .map { it.name to emulators.homepage(it.id) }
             return stop(LaunchProblems.noEmulator(platform.name, platform.id, suggestions))
+        }
+        // Frame generation where lsfg-vk is set up and chosen for the game or its system.
+        if (frameGenerationReady()) {
+            val multiplier = settings.resolve(ScopedSettings.FrameGeneration, game.platformId, id).value
+            resolved = resolved.copy(plan = io.github.matiyaaa.fuse.launch.FrameGeneration.apply(resolved.plan, multiplier))
         }
         return PlayResolution.Ready(PlayPlan(game, platform, resolved, installedEmulator, usedCore, displayId))
     }
@@ -1578,6 +1593,9 @@ private const val DISC_CACHE = "disc.identity"
 
 /** How long after an update Fuse offers to go back to the version before when the emulator won't start. */
 private const val GO_BACK_OFFER_MS = 30L * 24 * 60 * 60 * 1000
+
+/** The longest session from Steam that is counted. */
+private const val STEAM_SESSION_MAX_MS = 24L * 60 * 60 * 1000
 
 /** Cache namespace for RPCS3 compatibility entries, by title id. */
 private const val COMPAT_CACHE = "rpcs3.compat"

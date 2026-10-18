@@ -377,6 +377,10 @@ object SteamGames {
     fun inSteam(bytes: ByteArray?, isFuse: (String) -> Boolean): Map<Long, Long> =
         entries(parse(bytes)).mapNotNull { e -> ours(e, isFuse)?.let { it.first to artId(e) } }.toMap()
 
+    /** Fuse's Direct entries in [bytes]: each entry's id as Steam knows it (unsigned 32-bit) to its game. */
+    fun directIn(bytes: ByteArray?, isFuse: (String) -> Boolean): Map<Long, Long> =
+        entries(parse(bytes)).mapNotNull { e -> ours(e, isFuse)?.takeIf { it.second == SteamStart.DIRECT }?.let { artId(e) to it.first } }.toMap()
+
     /** How each Fuse game [bytes] has an entry for starts (its first entry, when there are two). */
     fun starts(bytes: ByteArray?, isFuse: (String) -> Boolean): Map<Long, SteamStart> {
         val out = LinkedHashMap<Long, SteamStart>()

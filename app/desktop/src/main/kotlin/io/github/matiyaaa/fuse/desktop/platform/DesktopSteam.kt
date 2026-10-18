@@ -20,6 +20,7 @@ import io.github.matiyaaa.fuse.library.steam.SteamStart
 import io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration
 import io.github.matiyaaa.fuse.ui.shell.platform.SteamLiveChange
 import io.github.matiyaaa.fuse.ui.shell.platform.SteamLiveQueue
+import io.github.matiyaaa.fuse.ui.shell.platform.SteamUndoStep
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -391,6 +392,7 @@ internal class DesktopSteam(
         var updated = 0
         var elsewhere = 0
         var written = 0
+        val step = System.currentTimeMillis()
         for (dir in users) {
             try {
                 val file = File(dir, "shortcuts.vdf")
@@ -410,7 +412,7 @@ internal class DesktopSteam(
                 val after = SteamGames.write(before, exe, games, ::fuseProgram) { icons[it].orEmpty() } ?: continue
                 if (before == null || !after.contentEquals(before)) {
                     // The list as it was, for Undo.
-                    File(dir, GAMES_BACKUP).writeBytes(before ?: ByteArray(0))
+                    keepUndo(dir, before, step, changesInWords(plan.count { it.action == SteamGameAction.CREATE }, plan.count { it.action == SteamGameAction.UPDATE }))
                     replaceAtomically(file, after)
                 }
                 if (collections) runCatching { writeCollections(dir, after, games.mapNotNull { it.collection }.toSet()) }.onFailure { Log.warn("could not write Steam collections in $dir", it) }
@@ -459,13 +461,14 @@ internal class DesktopSteam(
         withContext(Dispatchers.IO) {
             if (steamRunningNow()) return@withContext Result.failure(IllegalStateException("Close Steam first: it rewrites its library when it quits."))
             var removed = 0
+            val step = System.currentTimeMillis()
             for (dir in userConfigDirs(create = false)) {
                 val file = File(dir, "shortcuts.vdf").takeIf { it.isFile } ?: continue
                 val before = runCatching { file.readBytes() }.getOrNull() ?: continue
                 val had = SteamGames.inSteam(before, ::fuseProgram).keys.let { k -> if (gameIds == null) k else k intersect gameIds }
                 val after = SteamGames.remove(before, gameIds, ::fuseProgram) ?: continue
                 if (after.contentEquals(before)) continue
-                File(dir, GAMES_BACKUP).writeBytes(before)
+                keepUndo(dir, before, step, if (had.size == 1) "Took 1 game out" else "Took ${had.size} games out")
                 replaceAtomically(file, after)
                 runCatching { writeCollections(dir, after, emptySet()) }
                 removed = maxOf(removed, had.size)
@@ -486,6 +489,7 @@ internal class DesktopSteam(
             if (steamRunningNow()) return@withContext Result.failure(IllegalStateException("Close Steam first: it rewrites its library when it quits."))
             val exe = program() ?: return@withContext Result.failure(IllegalStateException("Run Fuse from its AppImage or installed copy, then try again."))
             var changed = 0
+            val step = System.currentTimeMillis()
             for (dir in userConfigDirs(create = false)) {
                 val file = File(dir, "shortcuts.vdf").takeIf { it.isFile } ?: continue
                 val before = runCatching { file.readBytes() }.getOrNull() ?: continue
@@ -501,7 +505,7 @@ internal class DesktopSteam(
                 }
                 val after = SteamGames.write(repaired, exe, rewritten.filter { it.gameId in ids }, ::fuseProgram) { icons[it].orEmpty() } ?: continue
                 if (after.contentEquals(before)) continue
-                File(dir, GAMES_BACKUP).writeBytes(before)
+                keepUndo(dir, before, step, "Put Fuse's entries right")
                 replaceAtomically(file, after)
                 runCatching { writeCollections(dir, after, emptySet()) }
                 changed++
@@ -513,6 +517,12 @@ internal class DesktopSteam(
     override suspend fun gamesHealth(library: Set<Long>): List<SteamHealthIssue> = withContext(Dispatchers.IO) {
         val exe = program() ?: return@withContext emptyList()
         userLists().flatMap { f -> SteamGames.health(runCatching { f.readBytes() }.getOrNull(), exe, library, ::fuseProgram, exists = { File(it).exists() }) }.distinct()
+    }
+
+    override suspend fun directGames(): Map<Long, Long> = withContext(Dispatchers.IO) {
+        val out = HashMap<Long, Long>()
+        for (f in userLists()) out.putAll(SteamGames.directIn(runCatching { f.readBytes() }.getOrNull(), ::fuseProgram))
+        out
     }
 
     override suspend fun gameStarts(): Map<Long, SteamStart> = withContext(Dispatchers.IO) {
@@ -533,13 +543,14 @@ internal class DesktopSteam(
             val wanted = prepared(takes.map { it.second }).associateBy { it.gameId }
             val byId = takes.mapNotNull { (learned, entry) -> wanted[entry.gameId]?.let { learned.appId to it } }.toMap()
             var changed = 0
+            val step = System.currentTimeMillis()
             for (dir in userConfigDirs(create = false)) {
                 val file = File(dir, "shortcuts.vdf").takeIf { it.isFile } ?: continue
                 val before = runCatching { file.readBytes() }.getOrNull() ?: continue
                 val after = SteamGames.takeOver(before, exe, byId, ::fuseProgram) ?: continue
                 if (after.contentEquals(before)) continue
                 // The list as it was, for Undo.
-                File(dir, GAMES_BACKUP).writeBytes(before)
+                keepUndo(dir, before, step, if (byId.size == 1) "Took over 1 shortcut" else "Took over ${byId.size} shortcuts")
                 replaceAtomically(file, after)
                 runCatching { writeCollections(dir, after, wanted.values.mapNotNull { it.collection }.toSet()) }
                     .onFailure { Log.warn("could not write Steam collections in $dir", it) }
@@ -553,14 +564,28 @@ internal class DesktopSteam(
         }
     }
 
-    override val canUndoGames: Boolean get() = userConfigDirs(create = false).any { File(it, GAMES_BACKUP).isFile }
+    override val canUndoGames: Boolean get() = userConfigDirs(create = false).any { undoFiles(it).isNotEmpty() }
 
-    override suspend fun undoGames(): Result<String> = mutation.withLock {
+    override suspend fun undoSteps(): List<SteamUndoStep> = withContext(Dispatchers.IO) {
+        val steps = HashMap<Long, SteamUndoStep>()
+        for (dir in userConfigDirs(create = false)) {
+            for ((id, file) in undoFiles(dir)) steps.putIfAbsent(id, SteamUndoStep(id, File(file.parentFile, "$id.txt").takeIf { it.isFile }?.readText()?.trim().orEmpty().ifEmpty { "Fuse's change" }, id))
+        }
+        steps.values.sortedByDescending { it.id }
+    }
+
+    override suspend fun undoGames(): Result<String> {
+        val last = undoSteps().firstOrNull() ?: return Result.failure(IllegalStateException("There's no change of Fuse's to undo."))
+        return undoTo(last.id).map { "Steam's library is back as it was before Fuse's last change." }
+    }
+
+    override suspend fun undoTo(stepId: Long): Result<String> = mutation.withLock {
         withContext(Dispatchers.IO) {
             if (steamRunningNow()) return@withContext Result.failure(IllegalStateException("Close Steam first: it rewrites its library when it quits."))
             var undone = 0
             for (dir in userConfigDirs(create = false)) {
-                val backup = File(dir, GAMES_BACKUP).takeIf { it.isFile } ?: continue
+                val files = undoFiles(dir)
+                val backup = files[stepId] ?: continue
                 val bytes = backup.readBytes()
                 val file = File(dir, "shortcuts.vdf")
                 if (bytes.isEmpty()) {
@@ -570,12 +595,45 @@ internal class DesktopSteam(
                     replaceAtomically(file, bytes)
                 }
                 runCatching { writeCollections(dir, file.takeIf { it.isFile }?.readBytes(), emptySet()) }
-                backup.delete()
+                // This change and every later one are undone with it.
+                for ((id, f) in files) if (id >= stepId) {
+                    f.delete()
+                    File(f.parentFile, "$id.txt").delete()
+                }
                 undone++
             }
-            if (undone == 0) Result.failure(IllegalStateException("There's no change of Fuse's to undo.")) else Result.success("Steam's library is back as it was before Fuse's last change.")
+            if (undone == 0) Result.failure(IllegalStateException("There's no change of Fuse's to undo.")) else Result.success("Steam's library is back as it was before that change.")
         }
     }
+
+    /**
+     * Steam's list as it was before a write of Fuse's, kept by [step] (when it was made) with what
+     * it did, for Undo. Only the last [UNDO_STEPS] are kept; the single copy earlier Fuses kept goes.
+     */
+    private fun keepUndo(dir: File, before: ByteArray?, step: Long, what: String) {
+        val folder = File(dir, UNDO_DIR).apply { mkdirs() }
+        File(folder, "$step.vdf").writeBytes(before ?: ByteArray(0))
+        File(folder, "$step.txt").writeText(what)
+        undoFiles(dir).keys.sortedDescending().drop(UNDO_STEPS).forEach { old ->
+            File(folder, "$old.vdf").delete()
+            File(folder, "$old.txt").delete()
+        }
+        File(dir, GAMES_BACKUP).delete()
+    }
+
+    /** The lists Undo can put back in [dir], by step; the single copy an earlier Fuse kept counts as one. */
+    private fun undoFiles(dir: File): Map<Long, File> {
+        val out = HashMap<Long, File>()
+        File(dir, UNDO_DIR).listFiles { f -> f.name.endsWith(".vdf") }?.forEach { f -> f.nameWithoutExtension.toLongOrNull()?.let { out[it] = f } }
+        File(dir, GAMES_BACKUP).takeIf { it.isFile }?.let { out.putIfAbsent(it.lastModified(), it) }
+        return out
+    }
+
+    /** What a write did, in words, for the list of changes Undo shows. */
+    private fun changesInWords(added: Int, updated: Int): String = listOfNotNull(
+        added.takeIf { it > 0 }?.let { if (it == 1) "Added 1 game" else "Added $it games" },
+        updated.takeIf { it > 0 }?.let { if (it == 1) "brought 1 up to date" else "brought $it up to date" },
+    ).joinToString(", ").replaceFirstChar { it.uppercase() }.ifEmpty { "Changed Fuse's entries" }
 
     /**
      * Steam's collections for Fuse's games in [shortcuts]: one per system they are tagged with,
@@ -647,6 +705,10 @@ internal class DesktopSteam(
 
         /** Each Steam user's list as it was before Fuse's last change to its games, for Undo. */
         private const val GAMES_BACKUP = "shortcuts.vdf.before-fuse-games"
+
+        /** Where each user's lists before Fuse's writes are kept, for Undo, and how many. */
+        private const val UNDO_DIR = "fuse-steam-undo"
+        private const val UNDO_STEPS = 10
         private val FUSE_PROGRAM = Regex("(?i)^fuse([-_. ][^/\\\\]*)?\\.(appimage|exe)$|^fuse$")
 
         /** Same-directory atomic replacement never deletes the valid original on failure. */

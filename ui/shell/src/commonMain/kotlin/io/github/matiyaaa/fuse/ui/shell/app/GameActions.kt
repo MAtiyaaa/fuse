@@ -437,6 +437,14 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         if (hasTwoScreens && !io.github.matiyaaa.fuse.launch.DualScreenPlatforms.usesSecondScreen(card.platformId)) {
             add(MenuAction("screen", "Screen", FuseIcons.DualScreen, detail = "Top, bottom, or ask when it starts", trailing = Trailing.Chevron, onSelect = { screenPicker(card) }))
         }
+        if (!card.isApp && platform.features.frameGeneration) {
+            val ready = store.library.frameGenerationReady()
+            add(MenuAction(
+                "framegen", "Frame Generation", FuseIcons.Layers2,
+                detail = if (ready) "More frames shown than the emulator draws, through lsfg-vk" else "Needs lsfg-vk set up with Lossless Scaling on this computer",
+                trailing = Trailing.Chevron, enabled = ready, onSelect = { frameGenerationPicker(card) },
+            ))
+        }
         add(MenuAction("rescrape", "Find Details and Art", FuseIcons.Wand, detail = "Fills what's missing, including a proper title. Your own art and names stay", onSelect = {
             closeOverlays()
             findDetailsAndReport(card)

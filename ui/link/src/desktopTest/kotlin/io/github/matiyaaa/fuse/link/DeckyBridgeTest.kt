@@ -7,6 +7,7 @@ import io.github.matiyaaa.fuse.ui.shell.platform.SteamLiveQueue
 import io.github.matiyaaa.fuse.ui.shell.platform.SteamLiveResult
 import io.github.matiyaaa.fuse.ui.shell.store.createFuseStore
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -177,6 +178,41 @@ class DeckyBridgeTest {
             store.updatePrefs { it.copy(extensions = Extensions.set(it.extensions, Extensions.DECKY, ExtensionScope.CHANGE_LIBRARY, false)) }
             withTimeout(10_000) { while (Extensions.allows(store.prefs.value.extensions, Extensions.DECKY, ExtensionScope.CHANGE_LIBRARY)) delay(20) }
             assertEquals(403, http(port, "GET", "/v1/steam/changes", token).first)
+        } finally {
+            bridge.close()
+        }
+    }
+
+    @Test
+    fun timeInADirectEntryIsCountedOnceAndNoticesReachSteam(): Unit = runBlocking {
+        val games = File(home, "roms/gba").apply { mkdirs() }
+        File(games, "Golden Sun (USA).gba").writeBytes(ByteArray(1024) { it.toByte() })
+        val store = createFuseStore(FakeServices(FuseData(DesktopDatabase.open(File(cache, "fuse.db").absolutePath)), cache), scope)
+        store.sources.add(games.parentFile.absolutePath, io.github.matiyaaa.fuse.model.LibrarySourceKind.ROMS_ROOT)
+        val game = withTimeout(20_000) { store.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).first { it.isNotEmpty() }.single().id }
+        val file = DeckyBridge.discoveryFile(home.path, xdgData = null)
+        val live = SteamLiveQueue(System::currentTimeMillis)
+        val entry = 3_000_000_001L
+        val bridge = DeckyBridge(store, "0.4.4", file, live = live, directGames = { mapOf(entry to game.value) })
+        val port = bridge.start()
+        try {
+            val token = Json.parseToJsonElement(file.readText()).jsonObject.getValue("token").jsonPrimitive.content
+            // The plugin is told which Direct entries to watch.
+            val first = Json.parseToJsonElement(http(port, "GET", "/v1/steam/changes", token).second).jsonObject
+            assertEquals(listOf(entry), first.getValue("watch").jsonArray.map { it.jsonPrimitive.content.toLong() })
+            // A notice Fuse would show while a game is in front of it goes to Steam, once.
+            live.notify("Saves sent")
+            assertEquals(listOf("Saves sent"), Json.parseToJsonElement(http(port, "GET", "/v1/steam/changes", token).second).jsonObject.getValue("notices").jsonArray.map { it.jsonPrimitive.content })
+            assertEquals(0, Json.parseToJsonElement(http(port, "GET", "/v1/steam/changes", token).second).jsonObject.getValue("notices").jsonArray.size)
+
+            val now = System.currentTimeMillis()
+            val report = """{"sessions":[{"appId":$entry,"start":${now - 3_600_000},"end":${now - 60_000}},{"appId":12345,"start":1,"end":2}]}"""
+            val answer = Json.parseToJsonElement(http(port, "POST", "/v1/steam/played", token, report).second).jsonObject
+            assertEquals(1, answer.getValue("recorded").jsonPrimitive.int)
+            assertEquals(1, answer.getValue("unknown").jsonPrimitive.int)
+            // Sent again (the plugin didn't hear back): not counted twice.
+            assertEquals(0, Json.parseToJsonElement(http(port, "POST", "/v1/steam/played", token, report).second).jsonObject.getValue("recorded").jsonPrimitive.int)
+            assertEquals(400, http(port, "POST", "/v1/steam/played", token, "{}").first)
         } finally {
             bridge.close()
         }
