@@ -15,9 +15,35 @@ class SingleInstanceTest {
     private val folder = Files.createTempDirectory("fuse-instance").toFile()
     private val held = ArrayList<SingleInstance>()
 
-    private fun start(steam: String? = null, replace: Boolean = false): Pair<SingleInstance, SingleInstance.Decision> {
+    private fun start(steam: String? = null, replace: Boolean = false, run: Long? = null): Pair<SingleInstance, SingleInstance.Decision> {
         val guard = SingleInstance(folder)
-        return guard to guard.claim(steam, replace).also { held += guard }
+        return guard to guard.claim(steam, replace, run).also { held += guard }
+    }
+
+    @Test
+    fun fastStartHasTheOpenFusePlayTheGameAndWaitsUntilItHasEnded() {
+        val (first, _) = start()
+        first.onQuit = { error("the open Fuse was asked to close") }
+        val asked = CountDownLatch(1)
+        var game = 0L
+        var end: () -> Unit = {}
+        first.onRun = { id, ended -> game = id; end = ended; asked.countDown() }
+        val decision = java.util.concurrent.CompletableFuture.supplyAsync { start(run = 42).second }
+        assertTrue(asked.await(2, TimeUnit.SECONDS))
+        assertEquals(42L, game)
+        // The game is playing in the open Fuse: the Fast Start waits as long as it does.
+        Thread.sleep(300)
+        assertFalse(decision.isDone)
+        end()
+        assertEquals(SingleInstance.Decision.Ran, decision.get(2, TimeUnit.SECONDS))
+    }
+
+    @Test
+    fun fastStartTakesThePlaceOfAFuseThatCantPlayGamesForOthers() {
+        // No window yet (or an older Fuse): it doesn't take the game, so the Fast Start runs it itself.
+        val (first, _) = start()
+        first.onQuit = { first.release() }
+        assertIs<SingleInstance.Decision.Replaced>(start(run = 42).second)
     }
 
     @AfterTest

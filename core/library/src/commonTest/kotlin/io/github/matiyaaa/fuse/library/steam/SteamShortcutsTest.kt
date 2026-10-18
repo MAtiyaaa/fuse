@@ -139,6 +139,16 @@ class SteamShortcutsTest {
     private fun entry(bytes: ByteArray, index: String) = (BinaryVdf.parse(bytes)!!["shortcuts"] as BinaryVdf.Block)[index] as BinaryVdf.Block
 
     @Test
+    fun aFastStartGameIsNeverTakenForFuseEither() {
+        val owned = { exe: String, _: String -> exe.endsWith("Fuse.AppImage") }
+        val game = SteamShortcuts.add(null, SteamShortcut("Metroid Fusion", fuse.exe, fuse.startDir, launchOptions = "--run 42"))!!
+        assertTrue(SteamShortcuts.idsOf(game, owned).isEmpty())
+        val added = SteamShortcuts.add(game, fuse, owned)!!
+        assertEquals(2, (BinaryVdf.parse(added)!!["shortcuts"] as BinaryVdf.Block).entries.size)
+        assertEquals("--run 42", (entry(added, "0")["LaunchOptions"] as BinaryVdf.Str).value)
+    }
+
+    @Test
     fun aGameThatStartsFuseIsNeverTakenForFuse() {
         val owned = { exe: String, _: String -> exe.endsWith("Fuse.AppImage") }
         val bytes = gameThenFuse("/grid/fuse_icon.png")

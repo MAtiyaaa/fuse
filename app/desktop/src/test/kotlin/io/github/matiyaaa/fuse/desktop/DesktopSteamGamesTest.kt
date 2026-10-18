@@ -6,17 +6,20 @@ import io.github.matiyaaa.fuse.desktop.system.DesktopOs
 import io.github.matiyaaa.fuse.library.steam.BinaryVdf
 import io.github.matiyaaa.fuse.library.steam.SteamArt
 import io.github.matiyaaa.fuse.library.steam.SteamCollections
+import io.github.matiyaaa.fuse.library.steam.SteamDirect
 import io.github.matiyaaa.fuse.library.steam.SteamGameAction
 import io.github.matiyaaa.fuse.library.steam.SteamGameEntry
 import io.github.matiyaaa.fuse.library.steam.SteamGames
 import io.github.matiyaaa.fuse.library.steam.SteamHealthIssue
 import io.github.matiyaaa.fuse.library.steam.SteamShortcut
 import io.github.matiyaaa.fuse.library.steam.SteamShortcuts
+import io.github.matiyaaa.fuse.library.steam.SteamStart
 import java.awt.image.BufferedImage
 import java.io.File
 import java.nio.file.Files
 import javax.imageio.ImageIO
 import kotlinx.coroutines.runBlocking
+import org.junit.Assume.assumeTrue
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -74,7 +77,7 @@ class DesktopSteamGamesTest {
         assertTrue(File(grid, "${id}_hero.jpg").isFile)
         assertTrue(File(grid, "${id}_icon.png").isFile)
         assertFalse(File(grid, "$id.png").exists(), "no wide picture was given, so none is made up")
-        val entry = (BinaryVdf.parse(bytes)!!["shortcuts"] as BinaryVdf.Block).entries.map { it.second as BinaryVdf.Block }.single { (it["LaunchOptions"] as? BinaryVdf.Str)?.value == "--play 12" }
+        val entry = (BinaryVdf.parse(bytes)!!["shortcuts"] as BinaryVdf.Block).entries.map { it.second as BinaryVdf.Block }.single { (it["LaunchOptions"] as? BinaryVdf.Str)?.value == "--run 12" }
         assertEquals(File(grid, "${id}_icon.png").absolutePath, (entry["icon"] as BinaryVdf.Str).value)
 
         // The system's collection holds the game; the person's own collection is untouched.
@@ -97,6 +100,52 @@ class DesktopSteamGamesTest {
         steam.removeGames(setOf(12L)).getOrThrow()
         assertTrue(steam.gamesInSteam().isEmpty())
         assertEquals(listOf("Metroid Fusion"), (BinaryVdf.parse(File(config, "shortcuts.vdf").readBytes())!!["shortcuts"] as BinaryVdf.Block).entries.map { ((it.second as BinaryVdf.Block)["AppName"] as BinaryVdf.Str).value })
+    }
+
+    @Test
+    fun aDirectEntryStartsTheEmulatorFromItsFullPathAndFallsBackWhereItCant(): Unit = runBlocking {
+        assumeTrue(DesktopOs.current == DesktopOs.LINUX)
+        seed()
+        val mgba = File(root, "Applications/mGBA.AppImage").apply { writeText("#!/bin/sh"); setExecutable(true) }
+        val rom = "/home/deck/ROMs/gba/Minish Cap (USA).gba"
+        val direct = zelda.copy(direct = SteamDirect(listOf(mgba.path, "-f", rom)))
+        // A plan naming a program Steam can't find: that game goes in through Fast Start instead.
+        val lost = SteamGameEntry(3, "Chrono Trigger", "Super Nintendo", direct = SteamDirect(listOf("no-such-emulator-here", "/roms/ct.sfc")))
+        assertTrue(steam.directEntries)
+        val plan = steam.planGames(listOf(direct, lost))!!
+        assertEquals(mgba.path, plan.single { it.entry.gameId == 12L }.entry.direct?.argv?.first())
+        assertEquals(null, plan.single { it.entry.gameId == 3L }.entry.direct)
+
+        steam.addGames(listOf(direct, lost), emptyMap(), collections = false).getOrThrow()
+        assertEquals(mapOf(12L to SteamStart.DIRECT, 3L to SteamStart.FAST_START), steam.gameStarts())
+        val entry = (BinaryVdf.parse(File(config, "shortcuts.vdf").readBytes())!!["shortcuts"] as BinaryVdf.Block).entries
+            .map { it.second as BinaryVdf.Block }.single { (it["AppName"] as BinaryVdf.Str).value == zelda.name }
+        assertEquals("\"${mgba.path}\"", (entry["Exe"] as BinaryVdf.Str).value)
+        assertEquals("FUSE_GAME=12 %command% -f '$rom'", (entry["LaunchOptions"] as BinaryVdf.Str).value)
+        assertTrue(steam.gamesHealth(setOf(12L, 3L)).isEmpty())
+
+        // The emulator went away: looking them over says so.
+        mgba.delete()
+        assertEquals(listOf(SteamHealthIssue.Kind.EMULATOR_GONE), steam.gamesHealth(setOf(12L, 3L)).map { it.kind })
+    }
+
+    @Test
+    fun anotherToolsShortcutIsTakenOverInPlaceAndUndone(): Unit = runBlocking {
+        val rom = File(root, "ROMs/gba/Metroid Fusion (USA).gba").path
+        // Steam ROM Manager's shortcut for a game Fuse has, by its file.
+        val vdf = SteamShortcuts.add(null, SteamShortcut("Metroid Fusion", "\"/usr/bin/flatpak\"", "\"/\"", launchOptions = "run org.libretro.RetroArch -L mgba \"$rom\"", tags = listOf("GBA")))!!
+        File(config, "shortcuts.vdf").writeBytes(vdf)
+        val found = steam.learnShortcuts(mapOf(rom to 15L))
+        assertEquals(listOf(15L), found.map { it.gameId })
+        assertEquals("flatpak", found.single().program)
+
+        steam.takeOver(listOf(found.single() to metroid)).getOrThrow()
+        assertEquals(mapOf(15L to found.single().appId), SteamGames.inSteam(File(config, "shortcuts.vdf").readBytes()) { it == fuse.path })
+        assertEquals(mapOf(15L to SteamStart.FAST_START), steam.gameStarts())
+        assertTrue(steam.learnShortcuts(mapOf(rom to 15L)).isEmpty(), "Fuse's now, so not offered again")
+
+        steam.undoGames().getOrThrow()
+        assertContentEquals(vdf, File(config, "shortcuts.vdf").readBytes())
     }
 
     @Test

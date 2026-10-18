@@ -782,4 +782,10 @@ data class SteamIntegrationSettings(
      * follows the account Steam remembers as most recent. Never switched by switching Fuse profiles.
      */
     val achievementsAccount: String = "",
+    /**
+     * Fuse's games go into Steam as Direct entries, which start their emulator with nothing of
+     * Fuse's in between, instead of with Fuse Fast Start (the default). Only where Steam can have
+     * them (Linux); a game that can't start on its own still goes in with Fast Start.
+     */
+    val directEntries: Boolean = false,
 )

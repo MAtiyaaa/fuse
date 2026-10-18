@@ -262,6 +262,18 @@ private fun FuseAppContent(
     LaunchedEffect(Unit) {
         platform.startupPlay?.let { id -> if (app.safeMode == null) app.playOnStart(id) }
     }
+    // A game Fast Start handed over to play here: the start that sent it waits until it has ended.
+    LaunchedEffect(Unit) {
+        platform.playRequests.collect { request ->
+            app.scope.launch {
+                try {
+                    if (app.safeMode == null) app.playHandedOver(request.gameId)
+                } finally {
+                    request.ended()
+                }
+            }
+        }
+    }
     LaunchedEffect(Unit) { app.refreshSteamGames() }
     // An update Fuse went back from at this start, or a library brought back for this version: said once.
     LaunchedEffect(Unit) {

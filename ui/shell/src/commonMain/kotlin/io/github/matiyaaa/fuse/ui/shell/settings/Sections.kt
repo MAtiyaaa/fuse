@@ -46,7 +46,9 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks
 import io.github.matiyaaa.fuse.ui.shell.app.rescanAndReport
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.addToSteam
 import io.github.matiyaaa.fuse.ui.shell.app.checkSteamGames
+import io.github.matiyaaa.fuse.ui.shell.app.learnSteamShortcuts
 import io.github.matiyaaa.fuse.ui.shell.app.refreshSteamGames
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
@@ -84,6 +86,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.FillProgress
 import io.github.matiyaaa.fuse.ui.shell.store.MusicPrefs
 import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
 import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** System art styles: the pack's sets, and panels from the system's own games. */
@@ -1177,13 +1180,15 @@ private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.pla
             },
         ),
     ) + listOfNotNull(
-        // Games Fuse put in Steam, each starting through Fuse: look them over, take them out, undo.
+        // How Fuse's games start from Steam: Fast Start, or straight in the emulator where Steam can have that.
+        steamStartRow(app, steam, live).takeIf { !steam.gameMode },
+        // Games Fuse put in Steam: look them over, take them out, undo.
         MenuAction(
             "steam.games.fuse", "Your games in Steam", FuseIcons.LibraryBig,
             detail = when {
                 steam.waitingForSteamGames -> "Waiting for Steam to close to add them. Steam isn't closed for it"
                 app.steamGameIds.isEmpty() -> "Add a game from its options, or a whole system from its page's options"
-                else -> "${app.steamGameIds.size} ${if (app.steamGameIds.size == 1) "game starts" else "games start"} through Fuse from Steam. Look them over, take them out or undo"
+                else -> "${app.steamGameIds.size} ${if (app.steamGameIds.size == 1) "game is" else "games are"} in Steam's library. Look them over, take them out or undo"
             },
             trailing = if (app.steamGameIds.isEmpty()) Trailing.None else Trailing.Value(app.steamGameIds.size.toString()),
             enabled = !live.busy,
@@ -1191,9 +1196,9 @@ private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.pla
                 app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
                     title = "Your games in Steam",
                     icon = FuseIcons.LibraryBig,
-                    message = "Each starts through Fuse, so it plays with its emulator, saves and time as in Fuse. Steam must be closed while its library changes.",
+                    message = "Fuse made these entries, and changes only them. Steam must be closed while its library changes.",
                     options = listOfNotNull(
-                        MenuAction("steam.games.check", "Look them over", FuseIcons.ScanSearch, detail = "Games no longer in Fuse, entries for an older Fuse, and doubles", onSelect = {
+                        MenuAction("steam.games.check", "Look them over", FuseIcons.ScanSearch, detail = "Games no longer in Fuse, entries for an older Fuse or a missing emulator, and doubles", onSelect = {
                             app.choice = null
                             app.checkSteamGames()
                         }),
@@ -1221,6 +1226,13 @@ private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.pla
                 )
             },
         ).takeIf { !steam.gameMode },
+        // Shortcuts others made for games Fuse has: take them over in place, or leave them.
+        MenuAction(
+            "steam.learn", "Shortcuts From Other Tools", FuseIcons.Import,
+            detail = "Steam ROM Manager's, EmuDeck's or your own, for games in Fuse. Take them over or leave them",
+            enabled = !live.busy,
+            onSelect = { app.learnSteamShortcuts() },
+        ).takeIf { !steam.gameMode },
         app.confirmRow(
             "steam.remove", "Remove Fuse from Steam", FuseIcons.Trash,
             "Remove Fuse from Steam?", "Only Fuse's own entry leaves Steam's library. Your other shortcuts, your games and everything in Fuse stay as they are. Close Steam first.", "Remove",
@@ -1235,6 +1247,49 @@ private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.pla
                 live.busy = false
             }
         }.takeIf { live.inSteam == true && !steam.gameMode },
+    )
+}
+
+/**
+ * How Steam starts Fuse's games: Fuse Fast Start (no window, saves, time and profiles as in Fuse),
+ * or a Direct entry that starts the emulator itself, where Steam can have one (Linux). Changing it
+ * offers to bring the games already in Steam over, after saying what will change.
+ */
+private fun steamStartRow(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration, live: SteamLive): MenuAction {
+    val direct = app.store.prefs.value.steam.directEntries && steam.directEntries
+    fun choose(on: Boolean) {
+        app.choice = null
+        if (on == direct) return
+        app.scope.launch {
+            app.store.updatePrefs { p -> p.copy(steam = p.steam.copy(directEntries = on)) }
+            // The games already in Steam follow, once the person has seen what changes.
+            val inSteam = app.steamGameIds
+            if (inSteam.isEmpty()) return@launch
+            val cards = app.store.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery(includeHidden = true)).first().filter { it.id.value in inSteam }
+            app.addToSteam(cards, "your games in Steam")
+        }
+    }
+    return MenuAction(
+        "steam.games.start", "How Steam Starts Them", FuseIcons.Rocket,
+        detail = when {
+            !steam.directEntries -> "Fuse Fast Start. Steam here can't keep Fuse's mark on an entry that starts an emulator itself"
+            direct -> "Straight in the emulator, with nothing of Fuse's in between"
+            else -> "Fuse Fast Start: no window, with saves and play time as in Fuse"
+        },
+        trailing = Trailing.Value(if (direct) "Direct" else "Fast Start"),
+        enabled = steam.directEntries && !live.busy,
+        onSelect = {
+            app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+                title = "How Steam Starts Them",
+                icon = FuseIcons.Rocket,
+                message = "Fast Start runs Fuse with no window, so your saves are put in place and sent, play time is counted and your profile is followed. " +
+                    "Direct starts the emulator itself, exactly as Play would, with none of that.",
+                options = listOf(
+                    MenuAction("steam.games.start.fast", "Fuse Fast Start", FuseIcons.Zap, detail = "Recommended. Saves, play time and profiles as in Fuse", trailing = if (!direct) Trailing.Value("In use") else Trailing.None, onSelect = { choose(false) }),
+                    MenuAction("steam.games.start.direct", "Straight in the Emulator", FuseIcons.Joystick, detail = "Nothing of Fuse's in between. Saves stay where the emulator keeps them", trailing = if (direct) Trailing.Value("In use") else Trailing.None, onSelect = { choose(true) }),
+                ),
+            )
+        },
     )
 }
 

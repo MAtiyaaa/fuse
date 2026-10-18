@@ -288,6 +288,15 @@ data class SearchSuggestion(
 /** Where a launch is, for the launch veil: bringing the save up to date (it can still be called off), or starting. */
 enum class LaunchStage { CHECKING_SAVE, STARTING }
 
+/** A game's emulator command for a Steam entry that starts it directly ([LibraryOps.directCommand]). */
+sealed interface DirectCommand {
+    /** [argv] starts it in [emulator] (the program first), in [workingDir], with [env] set. */
+    data class Ready(val emulator: String, val argv: List<String>, val workingDir: String?, val env: Map<String, String>) : DirectCommand
+
+    /** It can't be started without Fuse; [why] says so in a few words. */
+    data class Unavailable(val why: String) : DirectCommand
+}
+
 /** Result of asking to play a game, shown to the user when it didn't simply start. */
 sealed interface LaunchOutcome {
     data object Started : LaunchOutcome

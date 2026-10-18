@@ -7,6 +7,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -39,7 +40,8 @@ class SteamGamesTest {
         assertEquals(3, list.size)
         val ours = list.single { it.str("AppName") == zelda.name }
         assertEquals("\"$fuse\"", ours.str("Exe"))
-        assertEquals("--play 12", ours.str("LaunchOptions"))
+        // Fuse Fast Start: no window of Fuse's between Steam's Play and the game.
+        assertEquals("--run 12", ours.str("LaunchOptions"))
         assertEquals("/grid/12_icon.png", ours.str("icon"))
         assertEquals(listOf("Game Boy Advance"), (ours["tags"] as BinaryVdf.Block).entries.map { (it.second as BinaryVdf.Str).value })
         // Everyone else's entries are exactly as they were.
@@ -56,13 +58,106 @@ class SteamGamesTest {
         val root = BinaryVdf.parse(old)!!
         val e = (root["shortcuts"] as BinaryVdf.Block).entries.single().second as BinaryVdf.Block
         e["AppName"] = BinaryVdf.Str("Minish Cap")
-        e["LaunchOptions"] = BinaryVdf.Str("--play 12 --windowed")
+        e["LaunchOptions"] = BinaryVdf.Str("--run 12 --windowed")
         val edited = BinaryVdf.write(root)
         assertEquals(SteamGameAction.UPDATE, SteamGames.plan(edited, fuse, listOf(zelda), isFuse)!!.single().action)
         val after = entries(SteamGames.write(edited, fuse, listOf(zelda), isFuse)!!).single()
         assertEquals("\"$fuse\"", after.str("Exe"))
         assertEquals("Minish Cap", after.str("AppName"))
-        assertEquals("--play 12 --windowed", after.str("LaunchOptions"))
+        assertEquals("--run 12 --windowed", after.str("LaunchOptions"))
+    }
+
+    @Test
+    fun anOlderEntryThatOpensFusesWindowMovesToFastStartKeepingThePersonsOptions() {
+        // Fuse 0.4.3 and before: `--play`, which opens Fuse's window and plays from it.
+        val old = SteamShortcuts.add(theirs(), SteamShortcut(zelda.name, "\"$fuse\"", "\"/home/deck/Applications\"", launchOptions = "--play 12 --windowed"))!!
+        assertEquals(mapOf(12L to SteamStart.THROUGH_WINDOW), SteamGames.starts(old, isFuse))
+        assertEquals(listOf(SteamHealthIssue.Kind.THROUGH_WINDOW), SteamGames.health(old, fuse, setOf(12L), isFuse).map { it.kind })
+        assertEquals(SteamGameAction.UPDATE, SteamGames.plan(old, fuse, listOf(zelda), isFuse)!!.single().action)
+        val after = SteamGames.write(old, fuse, listOf(zelda), isFuse)!!
+        assertEquals("--run 12 --windowed", entries(after).single { it.str("AppName") == zelda.name }.str("LaunchOptions"))
+        assertEquals(mapOf(12L to SteamStart.FAST_START), SteamGames.starts(after, isFuse))
+        assertTrue(SteamGames.health(after, fuse, setOf(12L), isFuse).isEmpty())
+    }
+
+    private val mgba = SteamDirect(listOf("/usr/bin/mgba-qt", "-f", "/home/deck/ROMs/gba/Minish Cap (USA).gba"), env = mapOf("QT_QPA_PLATFORM" to "xcb"))
+
+    @Test
+    fun aDirectEntryStartsTheEmulatorItselfAndIsKnownByFusesMark() {
+        val direct = zelda.copy(direct = mgba)
+        assertEquals(SteamGameAction.CREATE, SteamGames.plan(theirs(), fuse, listOf(direct), isFuse)!!.single().action)
+        val after = SteamGames.write(theirs(), fuse, listOf(direct), isFuse)!!
+        val ours = entries(after).single { it.str("AppName") == zelda.name }
+        assertEquals("\"/usr/bin/mgba-qt\"", ours.str("Exe"))
+        assertEquals("\"/usr/bin\"", ours.str("StartDir"))
+        // Fuse's mark and the plan's variables, Steam's %command% (the emulator), then its arguments.
+        assertEquals("FUSE_GAME=12 QT_QPA_PLATFORM=xcb %command% -f '/home/deck/ROMs/gba/Minish Cap (USA).gba'", ours.str("LaunchOptions"))
+        assertEquals(mapOf(12L to SteamGames.newArtId(fuse, direct)), SteamGames.inSteam(after, isFuse))
+        assertEquals(mapOf(12L to SteamStart.DIRECT), SteamGames.starts(after, isFuse))
+        // Written again, nothing changes.
+        assertEquals(SteamGameAction.UNCHANGED, SteamGames.plan(after, fuse, listOf(direct), isFuse)!!.single().action)
+        assertContentEquals(after, SteamGames.write(after, fuse, listOf(direct), isFuse))
+        // Its command changing (another emulator chosen in Fuse) brings it up to date.
+        val other = direct.copy(direct = SteamDirect(listOf("/usr/bin/retroarch", "-L", "/cores/mgba_libretro.so", "/roms/zelda.gba")))
+        assertEquals(SteamGameAction.UPDATE, SteamGames.plan(after, fuse, listOf(other), isFuse)!!.single().action)
+        val moved = entries(SteamGames.write(after, fuse, listOf(other), isFuse)!!).single { it.str("AppName") == zelda.name }
+        assertEquals("FUSE_GAME=12 %command% -L /cores/mgba_libretro.so /roms/zelda.gba", moved.str("LaunchOptions"))
+    }
+
+    @Test
+    fun anEntrySwitchesBetweenFastStartAndDirectKeepingItsArtAndTheNamePersonGaveIt() {
+        val fast = SteamGames.write(null, fuse, listOf(zelda), isFuse)!!
+        val root = BinaryVdf.parse(fast)!!
+        ((root["shortcuts"] as BinaryVdf.Block).entries.single().second as BinaryVdf.Block)["AppName"] = BinaryVdf.Str("Minish Cap")
+        val renamed = BinaryVdf.write(root)
+        val id = SteamGames.inSteam(renamed, isFuse).getValue(12)
+        val direct = SteamGames.write(renamed, fuse, listOf(zelda.copy(direct = mgba)), isFuse)!!
+        val d = entries(direct).single()
+        assertEquals("Minish Cap", d.str("AppName"))
+        assertEquals("\"/usr/bin/mgba-qt\"", d.str("Exe"))
+        // The same id, so the art Steam shows for it stays.
+        assertEquals(mapOf(12L to id), SteamGames.inSteam(direct, isFuse))
+        val back = entries(SteamGames.write(direct, fuse, listOf(zelda), isFuse)!!).single()
+        assertEquals("\"$fuse\"", back.str("Exe"))
+        assertEquals("--run 12", back.str("LaunchOptions"))
+        assertEquals("\"/home/deck/Applications\"", back.str("StartDir"))
+    }
+
+    @Test
+    fun anotherToolsEmulatorEntryIsNeverFusesWithoutTheMark() {
+        // Steam ROM Manager's Metroid Fusion starts RetroArch through Flatpak: never Fuse's.
+        val before = theirs()
+        assertTrue(SteamGames.inSteam(before, isFuse).isEmpty())
+        assertEquals(SteamGameAction.ELSEWHERE, SteamGames.plan(before, fuse, listOf(metroid.copy(direct = mgba)), isFuse)!!.single().action)
+        // The mark counts only before %command%, where Steam sets variables.
+        assertNull(SteamGames.directId("%command% FUSE_GAME=15"))
+        assertNull(SteamGames.directId("FUSE_GAME=15 -f game.gba"))
+        assertEquals(15L, SteamGames.directId("FUSE_GAME=15 %command% -f game.gba"))
+        assertContentEquals(before, SteamGames.remove(before, null, isFuse))
+    }
+
+    @Test
+    fun directEntriesAreTakenOutAndLookedOverLikeTheOthers() {
+        val all = SteamGames.write(theirs(), fuse, listOf(zelda.copy(direct = mgba), SteamGameEntry(3, "Chrono Trigger", "Super Nintendo")), isFuse)!!
+        assertEquals(listOf(SteamHealthIssue.Kind.EMULATOR_GONE), SteamGames.health(all, fuse, setOf(12L, 3L), isFuse, exists = { it != "/usr/bin/mgba-qt" }).map { it.kind })
+        assertTrue(SteamGames.health(all, fuse, setOf(12L, 3L), isFuse, exists = { true }).isEmpty())
+        assertEquals(listOf(SteamHealthIssue.Kind.GAME_GONE), SteamGames.health(all, fuse, setOf(3L), isFuse).map { it.kind })
+        assertEquals(1, SteamGames.byCollection(all, setOf("Game Boy Advance"), isFuse).getValue("Game Boy Advance").size)
+        val gone = SteamGames.remove(all, setOf(12L), isFuse)!!
+        assertEquals(listOf("Firefox", "Metroid Fusion", "Chrono Trigger"), entries(gone).map { it.str("AppName") })
+        assertEquals(listOf("Firefox", "Metroid Fusion"), entries(SteamGames.repair(all, emptySet(), isFuse)!!).map { it.str("AppName") })
+    }
+
+    @Test
+    fun argumentsAreQuotedAsAShellReadsThemBack() {
+        assertEquals("/roms/zelda.gba", SteamGames.shell("/roms/zelda.gba"))
+        assertEquals("'/roms/Minish Cap.gba'", SteamGames.shell("/roms/Minish Cap.gba"))
+        assertEquals("'it'\\''s'", SteamGames.shell("it's"))
+        assertEquals("''", SteamGames.shell(""))
+        assertEquals("'\$HOME'", SteamGames.shell("\$HOME"))
+        assertTrue(SteamGames.canWrite(mgba))
+        assertFalse(SteamGames.canWrite(SteamDirect(emptyList())))
+        assertFalse(SteamGames.canWrite(SteamDirect(listOf("/usr/bin/x"), env = mapOf("BAD NAME" to "1"))))
     }
 
     @Test
@@ -98,7 +193,7 @@ class SteamGamesTest {
         val root = BinaryVdf.parse(a)!!
         val list = root["shortcuts"] as BinaryVdf.Block
         // The person renamed Zelda's entry, and a second Zelda entry came from somewhere.
-        val first = list.entries.map { it.second as BinaryVdf.Block }.first { it.str("LaunchOptions") == "--play 12" }
+        val first = list.entries.map { it.second as BinaryVdf.Block }.first { it.str("LaunchOptions") == "--run 12" }
         first["AppName"] = BinaryVdf.Str("Minish Cap")
         list.entries += "9" to BinaryVdf.Block(mutableListOf("AppName" to BinaryVdf.Str("Zelda again"), "Exe" to BinaryVdf.Str("\"$fuse\""), "LaunchOptions" to BinaryVdf.Str("--play 12")))
         val fixed = SteamGames.repair(BinaryVdf.write(root), library = setOf(12L), isFuse)!!

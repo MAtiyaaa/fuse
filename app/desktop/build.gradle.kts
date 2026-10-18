@@ -200,4 +200,6 @@ compose.desktop {
 // Tests reach the X11 toolkit as the packaged Fuse does (GamescopeComposite, the window class).
 tasks.withType<Test>().configureEach {
     jvmArgs("--add-opens=java.desktop/sun.awt.X11=ALL-UNNAMED")
+    // FastStartTimingTest times a packaged Fuse when given its launcher (-Pfuse.faststart.launcher=...).
+    providers.gradleProperty("fuse.faststart.launcher").orNull?.let { systemProperty("fuse.faststart.launcher", it) }
 }

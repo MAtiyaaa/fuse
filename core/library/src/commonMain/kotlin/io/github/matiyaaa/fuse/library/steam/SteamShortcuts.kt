@@ -130,7 +130,7 @@ object SteamShortcuts {
      * Fuse's (its program moved, a new AppImage), is brought up to date in place rather than added
      * again. What the person changed on it stays theirs: its name, launch options, icon (while
      * [iconExists] finds its picture) and the Steam collections it is in. Other entries are never
-     * touched, a game Fuse put in Steam (one that starts Fuse with `--play`) among them.
+     * touched, a game Fuse put in Steam (one that starts Fuse with `--run`, or an older `--play`) among them.
      */
     fun add(existing: ByteArray?, shortcut: SteamShortcut, owned: ((exe: String, name: String) -> Boolean)? = null, iconExists: (String) -> Boolean = { true }): ByteArray? {
         val root = if (existing == null || existing.isEmpty()) BinaryVdf.Block() else BinaryVdf.parse(existing) ?: return null
@@ -271,7 +271,7 @@ object SteamShortcuts {
         return if (changed) BinaryVdf.write(root) else null
     }
 
-    /** A game Fuse put in Steam: it starts Fuse with `--play <id>`, so it is never Fuse's own entry. */
+    /** A game Fuse put in Steam: it starts Fuse with `--run <id>` (or an older `--play <id>`), so it is never Fuse's own entry. */
     private fun isGame(e: BinaryVdf.Block): Boolean = SteamGames.playId((e["LaunchOptions"] as? BinaryVdf.Str)?.value.orEmpty()) != null
 
     /** Whether [bytes] already hold a shortcut that runs [exe]. */

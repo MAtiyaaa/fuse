@@ -92,17 +92,20 @@ internal class DefaultFuseStore private constructor(
     /** A computer's Store, where Fuse can put programs in place. */
     private val desktopStoreOps = if (appStoreOps == null) ctx.services.desktopApps?.let { DesktopAppStoreOps(ctx, it) { emulators.refresh() } } else null
     override val appStore: AppStoreOps = appStoreOps ?: desktopStoreOps ?: AppStoreOps.None
-    override val jellyfin = io.github.matiyaaa.fuse.jellyfin.JellyfinService(
-        io.github.matiyaaa.fuse.jellyfin.JellyfinClient(
-            ctx.services.http,
-            io.github.matiyaaa.fuse.jellyfin.DeviceInfo(ctx.services.deviceName, jellyfinDeviceId, ctx.services.appVersion),
-        ),
-        ctx.services.secrets,
-        ctx.scope,
-        disk = JellyfinFiles(ctx.services),
-        discovery = ctx.services.jellyfinDiscovery,
-        awake = ctx.services.awake,
-    )
+    // Made when Fuse first shows or plays media, never by a Fast Start.
+    override val jellyfin by lazy {
+        io.github.matiyaaa.fuse.jellyfin.JellyfinService(
+            io.github.matiyaaa.fuse.jellyfin.JellyfinClient(
+                ctx.services.http,
+                io.github.matiyaaa.fuse.jellyfin.DeviceInfo(ctx.services.deviceName, jellyfinDeviceId, ctx.services.appVersion),
+            ),
+            ctx.services.secrets,
+            ctx.scope,
+            disk = JellyfinFiles(ctx.services),
+            discovery = ctx.services.jellyfinDiscovery,
+            awake = ctx.services.awake,
+        )
+    }
     private val mediaFeed = MutableStateFlow(io.github.matiyaaa.fuse.jellyfin.MediaFeed())
     override val homeFeed: StateFlow<io.github.matiyaaa.fuse.ui.shell.store.HomeFeed> by lazy {
         kotlinx.coroutines.flow.combine(library.home, mediaFeed) { h, m -> if (m == h.media) h else h.copy(media = m) }
@@ -493,6 +496,7 @@ internal class DefaultFuseStore private constructor(
     }
 
     private fun start() {
+        if (forRun) return startForRun()
         io.github.matiyaaa.fuse.ui.shell.platform.JellyfinImages.service = jellyfin
         // Downloads, and RomM feeding the library through them.
         transfers.start()
@@ -691,6 +695,25 @@ internal class DefaultFuseStore private constructor(
         }
     }
 
+    /**
+     * Fast Start: only what starting one game needs (the person's saves put in place first and sent
+     * after, the session counted, a session a crash left open closed), none of what Fuse does while
+     * open: no scan, download, art, household list, update check or anything else on the network
+     * but Fuse One's own rounds for the saves.
+     */
+    private fun startForRun() {
+        sync.service?.let { svc ->
+            library.sync = SyncLaunch(svc, sync.port)
+            sync.queries = { id -> library.saveQueryFor(id) }
+            ctx.onUserChange = { if (sync.config.value.enabled) svc.changed() }
+        }
+        ctx.scope.launch { for (next in writes) runCatching { persist(next) } }
+        ctx.scope.launch { library.recoverSession() }
+    }
+
+    /** Started for one game with no window ([startForRun]). */
+    private var forRun = false
+
     /** Set in safe mode until the user leaves it: nothing runs by itself meanwhile. */
     private var safe = false
     private var automaticStarted = false
@@ -760,7 +783,7 @@ internal class DefaultFuseStore private constructor(
         /** How long new games wait for Cartridge's RomM details before they are filled. */
         const val NEW_GAMES_DELAY_MS = 1_500L
 
-        suspend fun create(services: FuseServices, scope: CoroutineScope, safeMode: Boolean = false): DefaultFuseStore {
+        suspend fun create(services: FuseServices, scope: CoroutineScope, safeMode: Boolean = false, forRun: Boolean = false): DefaultFuseStore {
             val settings = services.data.settings.current()
             val ctx = StoreContext(services, scope, settings)
             // Jellyfin knows this device by an id of its own that stays the same across runs.
@@ -769,6 +792,7 @@ internal class DefaultFuseStore private constructor(
                     .also { services.secrets.put(io.github.matiyaaa.fuse.jellyfin.JellyfinService.DEVICE_ID, it) }
             return DefaultFuseStore(ctx, settings.toUiPrefs(globalScoped(ctx)), deviceId).also {
                 it.safe = safeMode
+                it.forRun = forRun
                 it.start()
             }
         }

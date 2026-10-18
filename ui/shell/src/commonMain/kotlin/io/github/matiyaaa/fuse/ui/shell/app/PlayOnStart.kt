@@ -16,22 +16,41 @@ import kotlinx.coroutines.withTimeoutOrNull
  */
 internal suspend fun AppState.playOnStart(id: Long) {
     if (!store.prefs.value.onboardingDone) return
+    if (playThrough(id)) platform.exit()
+}
+
+/**
+ * A game another start of Fuse handed to this one (Fast Start from a Steam entry while Fuse is
+ * open): played here as Play plays it, Fuse staying open after. Returns once it has ended and its
+ * saves are kept, or at once when it couldn't start (Fuse says why) or Fuse isn't set up yet.
+ */
+internal suspend fun AppState.playHandedOver(id: Long) {
+    if (!store.prefs.value.onboardingDone) return
+    playThrough(id)
+}
+
+/**
+ * Starts game [id] as Play does and waits for it: true once it has ended and its saves are kept
+ * (and sent, where a household is reachable), false when it never started.
+ */
+private suspend fun AppState.playThrough(id: Long): Boolean {
     val card = withTimeoutOrNull(FIND_MS) {
         store.library.games(GameQuery(includeHidden = true)).first { list -> list.any { it.id.value == id } }.first { it.id.value == id }
     }
     if (card == null) {
         toasts.show("That game isn't in Fuse's library any more. Settings, Library, Steam can tidy Steam's entries", ToastKind.ERROR)
-        return
+        return false
     }
     play(card)
     val playing = store.library.home.map { it.playtime.currentGame?.id }
     // It started (an emulator that couldn't start leaves Fuse open, with why).
-    withTimeoutOrNull(START_MS) { playing.first { it == card.id } } ?: return
+    withTimeoutOrNull(START_MS) { playing.first { it == card.id } } ?: return false
     playing.first { it != card.id }
     // Its saves are kept here (and sent, where a household is reachable) before Fuse goes.
     delay(SETTLE_MS)
+    store.library.awaitPlayed()
     store.sync.service?.let { s -> withTimeoutOrNull(SAVES_MS) { s.status.first { st -> st !is SyncStatus.Online || !st.working } } }
-    platform.exit()
+    return true
 }
 
 /** How long Fuse looks for the game in its library while it starts. */

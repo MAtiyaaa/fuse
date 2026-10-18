@@ -82,6 +82,7 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
@@ -129,6 +130,34 @@ internal class DefaultLibraryOps(
 
     /** RomM's save sync, when RomM is set up here. */
     @kotlin.concurrent.Volatile var rommSaves: io.github.matiyaaa.fuse.sync.romm.RommSaveService? = null
+
+    /** What runs after a game ends (its saves sent, its session counted), for [awaitPlayed]. */
+    private val afterGame = mutableListOf<kotlinx.coroutines.Job>()
+
+    private fun afterGame(work: suspend () -> Unit) {
+        val job = ctx.scope.launch { runCatching { work() } }
+        synchronized(afterGame) {
+            afterGame.removeAll { it.isCompleted }
+            afterGame += job
+        }
+    }
+
+    override suspend fun awaitPlayed() {
+        // A game handed on to another program (Steam's own, a desktop shortcut) has no process to
+        // follow, and with no window there is no coming back to the front to end it: how long it
+        // was played can't be known, so its session isn't counted rather than guessed.
+        active?.takeIf { it.endsOnResume }?.let { open ->
+            data.playSessions.discardOpen()
+            if (active?.id == open.id) active = null
+        }
+        ctx.playing.first { it == null }
+        // The session's end runs right after the game's process ends; then what it started.
+        while (true) {
+            val pending = synchronized(afterGame) { afterGame.filter { it.isActive } }
+            if (pending.isEmpty()) break
+            pending.joinAll()
+        }
+    }
 
     // Platforms ------------------------------------------------------------------------------------
 
@@ -494,33 +523,65 @@ internal class DefaultLibraryOps(
 
     // Launching -------------------------------------------------------------------------------------
 
+    override suspend fun gameFiles(): Map<String, GameId> = data.games.files()
+
+    override suspend fun directCommand(id: GameId): io.github.matiyaaa.fuse.ui.shell.store.DirectCommand {
+        val ready = when (val r = resolveForPlay(id, emulator = null, discPath = null, display = null)) {
+            is PlayResolution.Stopped -> return io.github.matiyaaa.fuse.ui.shell.store.DirectCommand.Unavailable(
+                (r.outcome as? LaunchOutcome.Problem)?.problem?.title ?: "It can't start here",
+            )
+            is PlayResolution.Ready -> r.plan
+        }
+        val name = ready.installed.name
+        return when (val plan = ready.resolved.plan) {
+            is LaunchPlan.Command -> io.github.matiyaaa.fuse.ui.shell.store.DirectCommand.Ready(name, plan.argv, plan.workingDir, plan.env)
+            is LaunchPlan.OpenAppOnly -> io.github.matiyaaa.fuse.ui.shell.store.DirectCommand.Unavailable("$name can't be told which game to start")
+            is LaunchPlan.Unsupported -> io.github.matiyaaa.fuse.ui.shell.store.DirectCommand.Unavailable(plan.reason)
+            is LaunchPlan.AndroidIntent -> io.github.matiyaaa.fuse.ui.shell.store.DirectCommand.Unavailable("It starts through Android")
+        }
+    }
+
     override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, skipSaveCheck: Boolean, playAnyway: Boolean, onStage: (io.github.matiyaaa.fuse.ui.shell.store.LaunchStage) -> Unit): LaunchOutcome =
         launchGame(id, emulator, discPath, display, skipSaveCheck, playAnyway, onStage).also { outcome ->
             if (outcome is LaunchOutcome.Problem) ctx.recordProblem(outcome.problem)
         }
 
-    private suspend fun launchGame(
-        id: GameId,
-        emulator: EmulatorId?,
-        discPath: String?,
-        display: LaunchDisplay?,
-        skipSaveCheck: Boolean,
-        playAnyway: Boolean = false,
-        onStage: (io.github.matiyaaa.fuse.ui.shell.store.LaunchStage) -> Unit = {},
-    ): LaunchOutcome {
-        var stored = data.games.get(id) ?: return LaunchOutcome.Problem(LaunchProblems.gone())
+    /**
+     * Everything Play works out before it starts anything: the game as it plays (a chosen disc, an
+     * installed package's boot file), the emulator and RetroArch core really there, the screen and
+     * the launch plan. A Steam entry that starts the emulator itself ([directCommand]) is made from
+     * the same, so the two can't drift.
+     */
+    private class PlayPlan(
+        val game: io.github.matiyaaa.fuse.model.Game,
+        val platform: io.github.matiyaaa.fuse.model.Platform,
+        val resolved: ResolvedLaunch,
+        val installed: InstalledEmulator,
+        val usedCore: String?,
+        val displayId: Int?,
+    )
+
+    /** A [PlayPlan], or what stopped Play before it started anything. */
+    private sealed interface PlayResolution {
+        class Ready(val plan: PlayPlan) : PlayResolution
+        class Stopped(val outcome: LaunchOutcome) : PlayResolution
+    }
+
+    private suspend fun resolveForPlay(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?): PlayResolution {
+        fun stop(problem: io.github.matiyaaa.fuse.ui.shell.store.Problem) = PlayResolution.Stopped(LaunchOutcome.Problem(problem))
+        var stored = data.games.get(id) ?: return stop(LaunchProblems.gone())
         // A computer's Steam game still kept as a shortcut file that went away moves onto Steam's library.
         if (stored.location.launchPath.endsWith(".steam", ignoreCase = true) && !exists(stored.location.launchPath) && engine.moveSteamShortcutsToLibraries()) {
             stored = data.games.get(id) ?: stored
         }
-        val platform = ctx.platform(stored.platformId) ?: return LaunchOutcome.Problem(LaunchProblems.unknownSystem(stored.platformId))
+        val platform = ctx.platform(stored.platformId) ?: return stop(LaunchProblems.unknownSystem(stored.platformId))
         // A game on a drive that is out says which drive to connect, before anything is tried.
         if (stored.appId == null) {
             engine.drives.offlineFor(stored.location.path)?.let { root ->
-                return LaunchOutcome.Problem(LaunchProblems.unavailable(root, stored.displayTitle, root.lastSeenAt?.let(::describeWhen)))
+                return stop(LaunchProblems.unavailable(root, stored.displayTitle, root.lastSeenAt?.let(::describeWhen)))
             }
             if (discPath == null && stored.location.path.let(FsPath::isAbsolute) && !exists(stored.location.launchPath)) {
-                return LaunchOutcome.Problem(LaunchProblems.fileMissing(stored.displayTitle, stored.location.launchPath))
+                return stop(LaunchProblems.fileMissing(stored.displayTitle, stored.location.launchPath))
             }
         }
 
@@ -540,7 +601,7 @@ internal class DefaultLibraryOps(
         // A package plays only once it is installed: say so, a button away from installing it. An
         // installed 3DS .cia starts from its installed title, which is what Azahar plays.
         if (discPath == null && io.github.matiyaaa.fuse.launch.InstallOnlyFiles.matches(stored.platformId, stored.location.launchPath)) {
-            notInstalled(id)?.let { return LaunchOutcome.Problem(it) }
+            notInstalled(id)?.let { return stop(it) }
             installedBoot(id)?.let { boot -> game = game.copy(location = game.location.copy(launchPath = boot)) }
         }
 
@@ -582,7 +643,7 @@ internal class DefaultLibraryOps(
                 val others = installed.filterNot { it.id == chosen.id }
                 val instead = ctx.resolver.resolve(game, platformEmulator?.takeIf { it != chosen.id }, others, ctx.host, choice)
                 if (instead.installed == null || instead.plan is LaunchPlan.Unsupported) {
-                    return LaunchOutcome.Problem(LaunchProblems.noCore(chosen, platform.name, platform.id, cores, id, canInstall = ctx.services.emulators.canInstallRetroArchCore(chosen)))
+                    return stop(LaunchProblems.noCore(chosen, platform.name, platform.id, cores, id, canInstall = ctx.services.emulators.canInstallRetroArchCore(chosen)))
                 }
                 usedCore = null
                 resolved = instead
@@ -593,8 +654,30 @@ internal class DefaultLibraryOps(
         if (installedEmulator == null) {
             val suggestions = ctx.registry.forPlatform(game.platformId, ctx.host).filterNot { it.opensAppOnly }.take(3)
                 .map { it.name to emulators.homepage(it.id) }
-            return LaunchOutcome.Problem(LaunchProblems.noEmulator(platform.name, platform.id, suggestions))
+            return stop(LaunchProblems.noEmulator(platform.name, platform.id, suggestions))
         }
+        return PlayResolution.Ready(PlayPlan(game, platform, resolved, installedEmulator, usedCore, displayId))
+    }
+
+    private suspend fun launchGame(
+        id: GameId,
+        emulator: EmulatorId?,
+        discPath: String?,
+        display: LaunchDisplay?,
+        skipSaveCheck: Boolean,
+        playAnyway: Boolean = false,
+        onStage: (io.github.matiyaaa.fuse.ui.shell.store.LaunchStage) -> Unit = {},
+    ): LaunchOutcome {
+        val ready = when (val r = resolveForPlay(id, emulator, discPath, display)) {
+            is PlayResolution.Stopped -> return r.outcome
+            is PlayResolution.Ready -> r.plan
+        }
+        val game = ready.game
+        val platform = ready.platform
+        val resolved = ready.resolved
+        val installedEmulator = ready.installed
+        val usedCore = ready.usedCore
+        val displayId = ready.displayId
         val android = ctx.host == io.github.matiyaaa.fuse.model.Host.ANDROID
         return when (val plan = resolved.plan) {
             is LaunchPlan.Unsupported -> LaunchOutcome.Problem(LaunchProblems.unsupported(plan.reason, id))
@@ -835,16 +918,17 @@ internal class DefaultLibraryOps(
     private suspend fun endSession(sessionId: Long) {
         val save = active?.takeIf { it.id == sessionId }?.save
         // Syncthing sends the save the game just wrote.
-        active?.takeIf { it.id == sessionId }?.plainSave?.let { q -> syncthing?.let { st -> ctx.scope.launch { runCatching { st.afterExit(q) } } } }
+        active?.takeIf { it.id == sessionId }?.plainSave?.let { q -> syncthing?.let { st -> afterGame { st.afterExit(q) } } }
         // RomM's save sync sends it too, when it changed and RomM's didn't.
-        active?.takeIf { it.id == sessionId }?.romm?.let { (romId, q) -> rommSaves?.let { rs -> ctx.scope.launch { delay(ROMM_SETTLE_MS); runCatching { rs.afterExit(q, romId) } } } }
-        if (active?.id == sessionId) active = null
+        active?.takeIf { it.id == sessionId }?.romm?.let { (romId, q) -> rommSaves?.let { rs -> afterGame { delay(ROMM_SETTLE_MS); rs.afterExit(q, romId) } } }
         val ended = data.playSessions.end(sessionId, ctx.now())
         // Fuse Sync counts the session and keeps the save the game just wrote.
         val link = sync
         if (save != null && link != null && ended?.endedAt != null) {
-            ctx.scope.launch { runCatching { link.service.afterExit(save, ended.startedAt, ended.endedAt!!) } }
+            afterGame { link.service.afterExit(save, ended.startedAt, ended.endedAt!!) }
         }
+        // Over once its end is written and what follows it has started ([awaitPlayed] waits for both).
+        if (active?.id == sessionId) active = null
     }
 
     private fun afterPlaying() {

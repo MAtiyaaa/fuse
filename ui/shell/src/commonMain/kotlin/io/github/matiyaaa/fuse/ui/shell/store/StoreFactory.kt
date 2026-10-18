@@ -9,3 +9,10 @@ import kotlinx.coroutines.CoroutineScope
  */
 suspend fun createFuseStore(services: FuseServices, scope: CoroutineScope, safeMode: Boolean = false): FuseStore =
     DefaultFuseStore.create(services, scope, safeMode)
+
+/**
+ * The store for Fast Start (`Fuse --run`): one game started with no window. Only what starting it
+ * needs runs (its saves, its session); see [FastStart].
+ */
+suspend fun createRunStore(services: FuseServices, scope: CoroutineScope): FuseStore =
+    DefaultFuseStore.create(services, scope, forRun = true)

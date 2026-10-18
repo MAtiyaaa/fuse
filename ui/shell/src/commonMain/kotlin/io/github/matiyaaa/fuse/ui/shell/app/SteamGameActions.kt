@@ -1,22 +1,25 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
 import io.github.matiyaaa.fuse.library.steam.SteamArt
+import io.github.matiyaaa.fuse.library.steam.SteamDirect
 import io.github.matiyaaa.fuse.library.steam.SteamGameAction
 import io.github.matiyaaa.fuse.library.steam.SteamGameEntry
 import io.github.matiyaaa.fuse.library.steam.SteamHealthIssue
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import io.github.matiyaaa.fuse.ui.shell.store.DirectCommand
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /*
- * Fuse's games in Steam's library: each starts through Fuse (`--play`), so it runs with the emulator,
- * settings and saves it has in Fuse, and its time is counted. Before anything is written Fuse says
- * what will happen; a game another tool already put in Steam is left alone; the last change can be
- * undone from Settings, Library, Steam.
+ * Fuse's games in Steam's library: each starts with Fuse Fast Start (`--run`), so it runs with the
+ * emulator, settings and saves it has in Fuse, with no window of Fuse's, and its time is counted. On
+ * Linux the person can choose Direct entries instead, which start the emulator itself, as Play would
+ * start it. Before anything is written Fuse says what will happen; a game another tool already put
+ * in Steam is left alone; the last change can be undone from Settings, Library, Steam.
  */
 
 /** A game as Steam's library would have it, and the pictures Fuse already keeps for it. */
@@ -32,6 +35,21 @@ internal fun AppState.steamEntry(card: GameCard): Pair<SteamGameEntry, SteamArt>
         icon = file(card.art.icon ?: card.art.square),
     )
     return SteamGameEntry(card.id.value, card.title, system) to art
+}
+
+/** Direct entries are chosen, and Steam here can have them. */
+private fun AppState.directChosen(): Boolean = store.prefs.value.steam.directEntries && platform.steam?.directEntries == true
+
+/**
+ * [entry] starting the way the person chose: with [direct], its emulator's own command, as Play
+ * would start it; a game that can't start on its own keeps Fast Start, and [why] gets the reason.
+ */
+private suspend fun AppState.startingAsChosen(entry: SteamGameEntry, direct: Boolean, why: MutableMap<Long, String>? = null): SteamGameEntry {
+    if (!direct) return entry
+    return when (val c = runCatching { store.library.directCommand(io.github.matiyaaa.fuse.model.GameId(entry.gameId)) }.getOrElse { DirectCommand.Unavailable("It can't start here") }) {
+        is DirectCommand.Ready -> entry.copy(direct = SteamDirect(c.argv, c.workingDir, c.env))
+        is DirectCommand.Unavailable -> entry.also { why?.set(it.gameId, c.why) }
+    }
 }
 
 /** The games Fuse put in Steam here, by id, as last read. */
@@ -52,7 +70,9 @@ internal fun AppState.addToSteam(cards: List<GameCard>, what: String) {
         return
     }
     scope.launch {
-        val pairs = games.map { steamEntry(it) }
+        val direct = directChosen()
+        val why = HashMap<Long, String>()
+        val pairs = games.map { steamEntry(it) }.map { (entry, art) -> startingAsChosen(entry, direct, why) to art }
         val plan = runCatching { steam.planGames(pairs.map { it.first }) }.getOrNull()
         if (plan == null) {
             toasts.show("Steam's library couldn't be read. Sign in to Steam once, then try again.", ToastKind.ERROR)
@@ -67,13 +87,21 @@ internal fun AppState.addToSteam(cards: List<GameCard>, what: String) {
             return@launch
         }
         fun list(names: List<String>) = names.take(PREVIEW_NAMES).joinToString(", ") + if (names.size > PREVIEW_NAMES) " and ${names.size - PREVIEW_NAMES} more" else ""
+        // Asked for Direct, but going in with Fast Start: no command of its own, or none Steam can start here.
+        val fastInstead = if (direct) plan.filter { it.action != SteamGameAction.ELSEWHERE && it.entry.direct == null } else emptyList()
         val lines = listOfNotNull(
             create.takeIf { it.isNotEmpty() }?.let { "New: ${list(it)}." },
             update.takeIf { it.isNotEmpty() }?.let { "Brought up to date: ${list(it)}." },
             elsewhere.takeIf { it.isNotEmpty() }?.let { "Already in Steam from another tool, left as they are: ${list(it)}." },
+            fastInstead.takeIf { it.isNotEmpty() }?.let { items ->
+                val reasons = items.mapNotNull { why[it.entry.gameId] }.distinct()
+                "With Fast Start instead, as they can't start on their own: ${list(items.map { it.entry.name })}" +
+                    (reasons.singleOrNull()?.let { " ($it)." } ?: ".")
+            },
         )
         val open = runCatching { steam.steamRunning() }.getOrDefault(false)
-        val games = pairs.map { it.first }
+        // The entries as Steam here will have them (a Direct entry's program found, or Fast Start).
+        val games = plan.map { it.entry }
         val art = pairs.associate { it.first.gameId to it.second }
         fun add(block: suspend () -> Result<String>) = scope.launch {
             block()
@@ -81,12 +109,13 @@ internal fun AppState.addToSteam(cards: List<GameCard>, what: String) {
                 .onFailure { toasts.show(it.message ?: "Couldn't add them to Steam", ToastKind.ERROR) }
             refreshSteamGames()
         }
-        val message = (
-            lines + listOf(
-                "Each starts through Fuse, with its emulator, saves and play time as in Fuse, and Fuse's own art. " +
-                    "Systems become Steam collections, and Settings, Library, Steam can undo it.",
-            )
-            ).joinToString("\n\n")
+        val how = if (direct) {
+            "Each starts straight in its emulator, as Play starts it, with Fuse's own art. Fuse isn't there while it runs, " +
+                "so it doesn't put saves in place or send them, count play time or follow profiles for these."
+        } else {
+            "Each starts with Fuse Fast Start: no Fuse window, with its emulator, saves and play time as in Fuse, and Fuse's own art."
+        }
+        val message = (lines + listOf("$how Systems become Steam collections, and Settings, Library, Steam can undo it.")).joinToString("\n\n")
         if (!open) {
             confirm = ConfirmSpec(title = "Add $what to Steam?", message = message, confirmLabel = "Add") { add { steam.addGames(games, art, collections = true) } }
             return@launch
@@ -145,10 +174,13 @@ internal fun AppState.checkSteamGames() {
         }
         val gone = issues.filter { it.kind == SteamHealthIssue.Kind.GAME_GONE }
         val fix = issues.filter { it.kind != SteamHealthIssue.Kind.GAME_GONE }
+        fun named(kind: SteamHealthIssue.Kind) = fix.filter { it.kind == kind }.takeIf { it.isNotEmpty() }?.joinToString(", ") { i -> i.name }
         val lines = listOfNotNull(
             gone.takeIf { it.isNotEmpty() }?.let { "No longer in Fuse: ${it.joinToString(", ") { i -> i.name }}." },
-            fix.filter { it.kind == SteamHealthIssue.Kind.PROGRAM_MOVED }.takeIf { it.isNotEmpty() }?.let { "Start an older copy of Fuse: ${it.joinToString(", ") { i -> i.name }}." },
-            fix.filter { it.kind == SteamHealthIssue.Kind.DUPLICATE }.takeIf { it.isNotEmpty() }?.let { "In Steam twice: ${it.joinToString(", ") { i -> i.name }}." },
+            named(SteamHealthIssue.Kind.PROGRAM_MOVED)?.let { "Start an older copy of Fuse: $it." },
+            named(SteamHealthIssue.Kind.DUPLICATE)?.let { "In Steam twice: $it." },
+            named(SteamHealthIssue.Kind.THROUGH_WINDOW)?.let { "Open Fuse's window first, where Fast Start starts the game at once: $it." },
+            named(SteamHealthIssue.Kind.EMULATOR_GONE)?.let { "Start an emulator that isn't there any more: $it." },
         )
         confirm = ConfirmSpec(
             title = "Put Steam's entries right?",
@@ -157,15 +189,77 @@ internal fun AppState.checkSteamGames() {
         ) {
             scope.launch {
                 // Entries for games Fuse no longer has go, doubles go (the first stays), and entries
-                // that start an older Fuse are brought up to date where they are.
-                val moved = library.filter { c -> fix.any { it.kind == SteamHealthIssue.Kind.PROGRAM_MOVED && it.gameId == c.id.value } }
-                val pairs = moved.map { steamEntry(it) }
+                // that start an older Fuse, an older way or a missing emulator are written again where
+                // they are: a Direct entry with the game's command now, else with Fast Start.
+                val again = setOf(SteamHealthIssue.Kind.PROGRAM_MOVED, SteamHealthIssue.Kind.THROUGH_WINDOW, SteamHealthIssue.Kind.EMULATOR_GONE)
+                val moved = library.filter { c -> fix.any { it.kind in again && it.gameId == c.id.value } }
+                val direct = directChosen()
+                val pairs = moved.map { steamEntry(it) }.map { (entry, art) -> startingAsChosen(entry, direct) to art }
                 steam.repairGames(ids, pairs.map { it.first }, pairs.associate { it.first.gameId to it.second })
                     .onSuccess { toasts.show(it, icon = FuseIcons.CircleCheck) }
                     .onFailure { toasts.show(it.message ?: "Couldn't change Steam's library", ToastKind.ERROR) }
                 refreshSteamGames()
             }
         }
+    }
+}
+
+/**
+ * Looks for shortcuts other tools put in Steam for Fuse's games (Steam ROM Manager, EmuDeck, a
+ * script, the person), found by the game's own file in their command, and offers to take them over:
+ * Fuse's entry in their place, starting as the person chose, with their name, art and collections
+ * kept. Or to leave them, all or one by one.
+ */
+internal fun AppState.learnSteamShortcuts() {
+    val steam = platform.steam ?: return
+    scope.launch {
+        val files = runCatching { store.library.gameFiles() }.getOrDefault(emptyMap()).mapValues { it.value.value }
+        val found = runCatching { steam.learnShortcuts(files) }.getOrDefault(emptyList())
+        val cards = if (found.isEmpty()) emptyMap() else store.library.games(GameQuery(includeHidden = true)).first().associateBy { it.id.value }
+        val pairs = found.mapNotNull { l -> cards[l.gameId]?.let { l to it } }
+        if (pairs.isEmpty()) {
+            toasts.show("No shortcuts from other tools start your games in Fuse", icon = FuseIcons.CircleCheck)
+            return@launch
+        }
+        val how = if (directChosen()) "starts straight in its emulator, as Play starts it" else "starts with Fuse Fast Start, with saves and play time as in Fuse"
+        fun take(chosen: List<Pair<io.github.matiyaaa.fuse.library.steam.SteamLearned, GameCard>>) {
+            if (chosen.isEmpty()) return
+            scope.launch {
+                val direct = directChosen()
+                val takes = chosen.map { (learned, card) -> learned to startingAsChosen(steamEntry(card).first, direct) }
+                steam.takeOver(takes)
+                    .onSuccess { toasts.show(it, icon = FuseIcons.Gamepad) }
+                    .onFailure { toasts.show(it.message ?: "Couldn't change Steam's library", ToastKind.ERROR) }
+                refreshSteamGames()
+            }
+        }
+        fun oneByOne(at: Int, chosen: List<Pair<io.github.matiyaaa.fuse.library.steam.SteamLearned, GameCard>>) {
+            if (at >= pairs.size) return take(chosen)
+            val (learned, card) = pairs[at]
+            choice = ChoiceSpec(
+                title = learned.name,
+                icon = FuseIcons.Import,
+                message = "Started by ${learned.program}, with ${card.title}'s file:\n${learned.path}\n\n${at + 1} of ${pairs.size}.",
+                options = listOf(
+                    MenuAction("steam.learn.take", "Take Over", FuseIcons.Import, detail = "Fuse's entry in its place. Its name, art and collections stay", onSelect = { choice = null; oneByOne(at + 1, chosen + pairs[at]) }),
+                    MenuAction("steam.learn.leave", "Leave It", FuseIcons.ChevronRight, detail = "It stays as it is", onSelect = { choice = null; oneByOne(at + 1, chosen) }),
+                    MenuAction("steam.learn.stop", "Stop Here", FuseIcons.Close, detail = if (chosen.isEmpty()) "Nothing changes" else "Only the ones chosen so far change", onSelect = { choice = null; take(chosen) }),
+                ),
+            )
+        }
+        fun list(names: List<String>) = names.take(PREVIEW_NAMES).joinToString(", ") + if (names.size > PREVIEW_NAMES) " and ${names.size - PREVIEW_NAMES} more" else ""
+        val n = pairs.size
+        choice = ChoiceSpec(
+            title = "Shortcuts From Other Tools",
+            icon = FuseIcons.Import,
+            message = "${if (n == 1) "This starts a game" else "These start games"} you have in Fuse, from Steam, without Fuse: ${list(pairs.map { it.first.name })}. " +
+                "Taken over, each is Fuse's entry in the same place and $how. Its name, art and collections stay, and Settings, Library, Steam can undo it. Close Steam first.",
+            options = listOfNotNull(
+                MenuAction("steam.learn.all", if (n == 1) "Take It Over" else "Take Over All $n", FuseIcons.Import, detail = "Fuse's entries in their places", onSelect = { choice = null; take(pairs) }),
+                MenuAction("steam.learn.each", "One by One", FuseIcons.ListChecks, detail = "Take over or leave each", onSelect = { choice = null; oneByOne(0, emptyList()) }).takeIf { n > 1 },
+                MenuAction("steam.learn.none", "Leave Them", FuseIcons.Close, detail = "Nothing changes", onSelect = { choice = null }),
+            ),
+        )
     }
 }
 

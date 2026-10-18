@@ -716,6 +716,55 @@ on the first start, keeping each game's play time, favourite, edits and art.
 
 **Leaves the device.** Nothing; these are local app launches.
 
+### Fuse's games in Steam's library (Fast Start and Direct entries)
+
+A game's options, or a system page's, can put Fuse's games in Steam's library as non-Steam games
+(`userdata/<user>/config/shortcuts.vdf`, written only while Steam is closed, with a copy kept for
+Undo), each with Fuse's art and in a Steam collection for its system (`SteamGames`,
+`DesktopSteam`). Settings, Library, Steam, How Steam Starts Them picks how they start:
+
+- **Fuse Fast Start** (the default): the entry runs `Fuse --run <id>`. Fuse opens only what
+  starting one game needs (its database, its secret store and Fuse One's rounds for the saves; no
+  window, scan, art or network otherwise), starts the game exactly as Play does (the newest save
+  put in place first), counts the session, keeps and sends the save, and leaves once all of that is
+  done. Steam follows Fuse's process, so it sees the game for as long as it runs. Anything only the
+  person can decide (two saves, another device still playing, a problem to read) opens Fuse on the
+  game instead, as `--play` does; with Fuse already open, the open Fuse plays it. On a Linux build
+  container, a release build reached the emulator 0.74 to 0.87 seconds after Steam's Play started
+  Fuse (Fuse's own part about 0.4 seconds, the rest the Java runtime starting), measured by
+  `FastStartTimingTest` with `-Pfuse.faststart.launcher` and again at the end of every
+  `scripts/train-cds.sh`.
+- **Straight in the Emulator** (Direct entries, Linux): the entry starts the emulator itself, with
+  the command Play would run (`LibraryOps.directCommand`, from the same resolution as Play). Its
+  launch options carry Fuse's mark and the plan's variables before `%command%`, as Steam documents
+  launch options ("Set the variable, followed by `%command%`", ValveSoftware/Proton README,
+  Runtime Config Options), then the emulator's arguments quoted as a POSIX shell reads them:
+  `FUSE_GAME=12 %command% -f '/home/deck/ROMs/gba/Minish Cap (USA).gba'`. Nothing of Fuse's runs
+  then: no save is put in place or sent, no time counted, no profile followed. A game that can't
+  start on its own (an emulator that opens only its app, a program Steam can't find) goes in with
+  Fast Start, and the question before writing says which and why. Elsewhere Steam doesn't read
+  launch options through a shell, so every entry uses Fast Start, and Settings says so.
+
+An entry is Fuse's only by what it starts: Fuse with `--run <id>` (or `--play <id>`, as 0.4.3 and
+before wrote them, which still work and become Fast Start the next time Fuse writes them), or a
+program whose launch options carry `FUSE_GAME=<id>` before `%command%`. Entries anyone else made
+are never changed, and a game another tool already put in Steam is never added twice. Switching an
+entry between the two keeps its id, so its art in Steam stays, and keeps the name the person gave
+it. Look Them Over finds games no longer in Fuse, entries for an older copy of Fuse, older entries
+that open Fuse's window first, Direct entries whose emulator is gone, and doubles, and puts right
+only what it found.
+
+**Shortcuts From Other Tools** (Settings, Library, Steam) reads the shortcuts Steam ROM Manager,
+EmuDeck, a script or the person made (`SteamLearn`) and lists those that start one of Fuse's games,
+matched only by the game's own file (its path, or the file it starts from) appearing whole as the
+shortcut's program or one of its arguments, read as a POSIX shell splits words; never by name.
+Each can be taken over (all at once, or one by one) or left: taken over, the shortcut becomes Fuse's
+entry in the same place, starting as How Steam Starts Them says, and keeps its id (written out, so
+Steam's art for it stays), its name, icon and tags. Steam must be closed, and Undo puts the list back.
+
+**Leaves the device.** Nothing; Steam's files are on this device, and Fast Start's save rounds are
+Fuse One's own (see [docs/sync.md](docs/sync.md)).
+
 ## Jellyfin
 
 An addon, off by default (Settings, Addons, Jellyfin). Fuse speaks to your own Jellyfin server

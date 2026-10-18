@@ -51,8 +51,9 @@ class DesktopFuseServices private constructor(
     override val fs: FuseFileSystem = NioFileSystem()
     override val secrets: SecretStore = DesktopSecretStore(dirs.data)
 
-    private val engine = CIO.create()
-    override val http: HttpClient = FuseHttp.client(engine, FuseHttpConfig(appVersion = appVersion))
+    // Made the first time something goes on the network: a Fast Start that needs none never makes it.
+    private val engine = lazy { CIO.create() }
+    override val http: HttpClient by lazy { FuseHttp.client(engine.value, FuseHttpConfig(appVersion = appVersion)) }
     override val cacheDir: String = dirs.cache
     override val dataDir: String = dirs.data
 
@@ -71,7 +72,8 @@ class DesktopFuseServices private constructor(
 
     override fun streamClient(): String? = io.github.matiyaaa.fuse.desktop.stream.DesktopStreaming.client()?.joinToString(" ")
 
-    override val deviceName: String = runCatching { java.net.InetAddress.getLocalHost().hostName }.getOrNull()?.takeIf { it.isNotBlank() } ?: "Fuse"
+    // Asked once, when first needed: looking the name up can wait on the network on some computers.
+    override val deviceName: String by lazy { runCatching { java.net.InetAddress.getLocalHost().hostName }.getOrNull()?.takeIf { it.isNotBlank() } ?: "Fuse" }
     override val jellyfinDiscovery = io.github.matiyaaa.fuse.jellyfin.UdpDiscovery()
 
     private val env = SystemLinuxEnvironment(dirs.home)
@@ -87,8 +89,9 @@ class DesktopFuseServices private constructor(
         io.github.matiyaaa.fuse.launch.intelligence.FileKnowledgeStore(File(dirs.data, "intelligence.json"))
     override val launcher: GameLauncher = desktopLauncher
     override val cartridge: CartridgeBridge = if (os == DesktopOs.LINUX) DesktopCartridgeBridge(dirs, launcherHooks) else NoCartridgeBridge
-    override val installer: ReleaseInstaller =
+    override val installer: ReleaseInstaller by lazy {
         if (os == DesktopOs.LINUX) DesktopReleaseInstaller(dirs, http) else SystemReleaseInstaller(dirs, http, os)
+    }
 
     /** The Store's programs: fetched from their releases and put where Fuse finds emulators. */
     override val desktopApps: io.github.matiyaaa.fuse.ui.shell.store.DesktopInstaller =
@@ -205,8 +208,10 @@ class DesktopFuseServices private constructor(
     override fun utcOffsetMillis(): Long = TimeZone.getDefault().getOffset(System.currentTimeMillis()).toLong()
 
     override fun close() {
-        http.close()
-        engine.close()
+        if (engine.isInitialized()) {
+            http.close()
+            engine.value.close()
+        }
         try {
             driver.close()
         } catch (e: Exception) {

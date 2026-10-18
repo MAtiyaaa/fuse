@@ -477,6 +477,23 @@ interface LibraryOps {
         onStage: (LaunchStage) -> Unit = {},
     ): LaunchOutcome
 
+    /**
+     * Returns once the game playing now (if any) has ended and everything after it is done: its
+     * session counted, its saves kept and sent where they go. Fast Start waits on it before Fuse
+     * leaves, so nothing a game made is left half done.
+     */
+    suspend fun awaitPlayed() {}
+
+    /**
+     * The emulator's own command for [id], exactly as Play would start it now (its emulator, core,
+     * disc playlist and screen), for a Steam entry that starts the emulator with nothing of Fuse's in
+     * between; or, in words, why the game can't be started that way.
+     */
+    suspend fun directCommand(id: GameId): DirectCommand = DirectCommand.Unavailable("Only Fuse can start it here")
+
+    /** Every game's own files (its path, and the file it starts from), each to its game: for finding shortcuts others made. */
+    suspend fun gameFiles(): Map<String, GameId> = emptyMap()
+
     /** Called when Fuse comes back to the foreground: closes the running session, checks for changes. */
     fun onResume()
     fun onPause()

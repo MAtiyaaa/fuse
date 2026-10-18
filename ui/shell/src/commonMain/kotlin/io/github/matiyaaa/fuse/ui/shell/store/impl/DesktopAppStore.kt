@@ -63,8 +63,8 @@ internal class DesktopAppStoreOps(
     override val supported: Boolean = true
 
     private var token: String? = null
-    private val resolver = PackResolver(ctx.services.http, githubToken = { token })
-    private val downloader = ApkDownloader(ctx.services.http)
+    private val resolver by lazy { PackResolver(ctx.services.http, githubToken = { token }) }
+    private val downloader by lazy { ApkDownloader(ctx.services.http) }
     private val mutable = MutableStateFlow(
         StoreState(variant = StoreVariant.STANDARD, canInstall = true, desktop = true, folder = installer.folder),
     )

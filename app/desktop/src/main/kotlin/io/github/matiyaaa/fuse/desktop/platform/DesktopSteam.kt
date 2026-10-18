@@ -12,8 +12,11 @@ import io.github.matiyaaa.fuse.library.steam.SteamGameEntry
 import io.github.matiyaaa.fuse.library.steam.SteamGamePlanItem
 import io.github.matiyaaa.fuse.library.steam.SteamGames
 import io.github.matiyaaa.fuse.library.steam.SteamHealthIssue
+import io.github.matiyaaa.fuse.library.steam.SteamLearn
+import io.github.matiyaaa.fuse.library.steam.SteamLearned
 import io.github.matiyaaa.fuse.library.steam.SteamShortcut
 import io.github.matiyaaa.fuse.library.steam.SteamShortcuts
+import io.github.matiyaaa.fuse.library.steam.SteamStart
 import io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration
 import java.io.File
 import java.nio.file.Files
@@ -61,6 +64,21 @@ internal class DesktopSteam(
     override suspend fun hasUser(): Boolean = withContext(Dispatchers.IO) { userConfigDirs(create = false).isNotEmpty() || userDataDirs().isNotEmpty() }
 
     override val canBeAdded: Boolean get() = program()?.let { File(it).canExecute() || (DesktopOs.isMac && File(it).isDirectory) } == true
+
+    /** Steam on Linux reads a Direct entry's launch options through the shell, so Fuse's mark stays with it (see [SteamGames]). */
+    override val directEntries: Boolean get() = DesktopOs.current == DesktopOs.LINUX
+
+    /**
+     * [games] as this computer's Steam can have them: a Direct entry's program as a full path (a plan
+     * may name one Steam finds on `PATH`, such as `flatpak`), and a game whose Direct entry can't be
+     * made here (another system, a program not found) through Fast Start instead.
+     */
+    private fun prepared(games: List<SteamGameEntry>): List<SteamGameEntry> = games.map { g ->
+        val d = g.direct ?: return@map g
+        val program = d.argv.firstOrNull()?.let { p -> if (File(p).isAbsolute) p.takeIf { File(it).exists() } else Processes.which(p) }
+        val ready = program?.let { d.copy(argv = listOf(it) + d.argv.drop(1)) }
+        if (directEntries && ready != null && SteamGames.canWrite(ready)) g.copy(direct = ready) else g.copy(direct = null)
+    }
 
     private val mutation = Mutex()
 
@@ -261,13 +279,14 @@ internal class DesktopSteam(
 
     override suspend fun planGames(games: List<SteamGameEntry>): List<SteamGamePlanItem>? = withContext(Dispatchers.IO) {
         val exe = program() ?: return@withContext null
+        val ready = prepared(games)
         val dirs = userConfigDirs(create = false)
         if (dirs.isEmpty()) return@withContext null
         // Each Steam user's list on its own; a game counts as new if it is new for any of them.
-        val plans = dirs.mapNotNull { dir -> SteamGames.plan(File(dir, "shortcuts.vdf").takeIf { it.isFile }?.readBytes(), exe, games, ::fuseProgram) }
+        val plans = dirs.mapNotNull { dir -> SteamGames.plan(File(dir, "shortcuts.vdf").takeIf { it.isFile }?.readBytes(), exe, ready, ::fuseProgram) }
         if (plans.isEmpty()) return@withContext null
         val order = listOf(SteamGameAction.CREATE, SteamGameAction.UPDATE, SteamGameAction.ELSEWHERE, SteamGameAction.UNCHANGED)
-        games.distinctBy { it.gameId }.map { g ->
+        ready.distinctBy { it.gameId }.map { g ->
             val actions = plans.mapNotNull { p -> p.firstOrNull { it.entry.gameId == g.gameId }?.action }
             SteamGamePlanItem(g, order.firstOrNull { it in actions } ?: SteamGameAction.UNCHANGED)
         }
@@ -293,7 +312,8 @@ internal class DesktopSteam(
 
     override val waitingForSteamGames: Boolean get() = waitingGames?.isActive == true
 
-    private fun writeGames(games: List<SteamGameEntry>, art: Map<Long, SteamArt>, collections: Boolean): Result<String> {
+    private fun writeGames(asked: List<SteamGameEntry>, art: Map<Long, SteamArt>, collections: Boolean): Result<String> {
+        val games = prepared(asked)
         val exe = program()?.takeIf { File(it).canExecute() || (DesktopOs.isMac && File(it).isDirectory) }
             ?: return Result.failure(IllegalStateException("Run Fuse from its AppImage or installed copy: Steam starts these games through it."))
         if (steamRunningNow()) return Result.failure(IllegalStateException("Close Steam first: it rewrites its library when it quits."))
@@ -370,6 +390,7 @@ internal class DesktopSteam(
 
     override suspend fun repairGames(library: Set<Long>, moved: List<SteamGameEntry>, art: Map<Long, SteamArt>): Result<String> = mutation.withLock {
         withContext(Dispatchers.IO) {
+            val rewritten = prepared(moved)
             if (steamRunningNow()) return@withContext Result.failure(IllegalStateException("Close Steam first: it rewrites its library when it quits."))
             val exe = program() ?: return@withContext Result.failure(IllegalStateException("Run Fuse from its AppImage or installed copy, then try again."))
             var changed = 0
@@ -377,15 +398,16 @@ internal class DesktopSteam(
                 val file = File(dir, "shortcuts.vdf").takeIf { it.isFile } ?: continue
                 val before = runCatching { file.readBytes() }.getOrNull() ?: continue
                 val repaired = SteamGames.repair(before, library, ::fuseProgram) ?: continue
-                // Entries that start an older Fuse: the same entry, pointed at this one (its art id stays).
+                // Entries that start an older Fuse, an older way or a missing emulator: the same entry, written
+                // again as each game starts now (its art id stays).
                 val ids = SteamGames.inSteam(repaired, ::fuseProgram)
                 val icons = HashMap<Long, String>()
-                for (g in moved) {
+                for (g in rewritten) {
                     val pictures = art[g.gameId] ?: continue
                     val id = ids[g.gameId] ?: continue
                     runCatching { placeGameArt(File(dir, "grid"), id, pictures) }.onSuccess { if (it.isNotEmpty()) icons[g.gameId] = it }
                 }
-                val after = SteamGames.write(repaired, exe, moved.filter { it.gameId in ids }, ::fuseProgram) { icons[it].orEmpty() } ?: continue
+                val after = SteamGames.write(repaired, exe, rewritten.filter { it.gameId in ids }, ::fuseProgram) { icons[it].orEmpty() } ?: continue
                 if (after.contentEquals(before)) continue
                 File(dir, GAMES_BACKUP).writeBytes(before)
                 replaceAtomically(file, after)
@@ -398,7 +420,45 @@ internal class DesktopSteam(
 
     override suspend fun gamesHealth(library: Set<Long>): List<SteamHealthIssue> = withContext(Dispatchers.IO) {
         val exe = program() ?: return@withContext emptyList()
-        userLists().flatMap { f -> SteamGames.health(runCatching { f.readBytes() }.getOrNull(), exe, library, ::fuseProgram) }.distinct()
+        userLists().flatMap { f -> SteamGames.health(runCatching { f.readBytes() }.getOrNull(), exe, library, ::fuseProgram, exists = { File(it).exists() }) }.distinct()
+    }
+
+    override suspend fun gameStarts(): Map<Long, SteamStart> = withContext(Dispatchers.IO) {
+        val out = HashMap<Long, SteamStart>()
+        for (f in userLists()) SteamGames.starts(runCatching { f.readBytes() }.getOrNull(), ::fuseProgram).forEach { (id, start) -> out.putIfAbsent(id, start) }
+        out
+    }
+
+    override suspend fun learnShortcuts(files: Map<String, Long>): List<SteamLearned> = withContext(Dispatchers.IO) {
+        userLists().flatMap { f -> SteamLearn.find(runCatching { f.readBytes() }.getOrNull(), ::fuseProgram, files) }.distinctBy { it.appId to it.gameId }
+    }
+
+    override suspend fun takeOver(takes: List<Pair<SteamLearned, SteamGameEntry>>): Result<String> = mutation.withLock {
+        withContext(Dispatchers.IO) {
+            if (takes.isEmpty()) return@withContext Result.success("Nothing to take over.")
+            if (steamRunningNow()) return@withContext Result.failure(IllegalStateException("Close Steam first: it rewrites its library when it quits."))
+            val exe = program() ?: return@withContext Result.failure(IllegalStateException("Run Fuse from its AppImage or installed copy, then try again."))
+            val wanted = prepared(takes.map { it.second }).associateBy { it.gameId }
+            val byId = takes.mapNotNull { (learned, entry) -> wanted[entry.gameId]?.let { learned.appId to it } }.toMap()
+            var changed = 0
+            for (dir in userConfigDirs(create = false)) {
+                val file = File(dir, "shortcuts.vdf").takeIf { it.isFile } ?: continue
+                val before = runCatching { file.readBytes() }.getOrNull() ?: continue
+                val after = SteamGames.takeOver(before, exe, byId, ::fuseProgram) ?: continue
+                if (after.contentEquals(before)) continue
+                // The list as it was, for Undo.
+                File(dir, GAMES_BACKUP).writeBytes(before)
+                replaceAtomically(file, after)
+                runCatching { writeCollections(dir, after, wanted.values.mapNotNull { it.collection }.toSet()) }
+                    .onFailure { Log.warn("could not write Steam collections in $dir", it) }
+                changed++
+            }
+            when {
+                changed == 0 -> Result.success("Nothing needed changing.")
+                takes.size == 1 -> Result.success("It's Fuse's now, with its name and art as they were. Start Steam to see it.")
+                else -> Result.success("${takes.size} are Fuse's now, with their names and art as they were. Start Steam to see them.")
+            }
+        }
     }
 
     override val canUndoGames: Boolean get() = userConfigDirs(create = false).any { File(it, GAMES_BACKUP).isFile }

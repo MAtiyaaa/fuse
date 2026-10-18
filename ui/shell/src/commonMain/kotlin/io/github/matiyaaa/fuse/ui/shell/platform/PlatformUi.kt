@@ -102,6 +102,13 @@ interface PlatformUi {
      */
     val startupPlay: Long? get() = null
 
+    /**
+     * Games another start of Fuse handed to this one to play (Fast Start from a Steam entry while
+     * Fuse is open), each with [PlayRequest.ended] to call once the game has ended and its saves are
+     * kept: the start that handed it over waits for that, so Steam sees the game for as long as it runs.
+     */
+    val playRequests: kotlinx.coroutines.flow.Flow<PlayRequest> get() = kotlinx.coroutines.flow.emptyFlow()
+
     /** Text on the system clipboard, or null when it is empty, not text or can't be read. */
     suspend fun readClipboardText(): String? = null
 
@@ -184,6 +191,16 @@ interface SteamIntegration {
     /** The games Fuse put in Steam's library here, by Fuse's game id, for any Steam user. */
     suspend fun gamesInSteam(): Set<Long> = emptySet()
 
+    /** How each of Fuse's games in Steam here starts: Fast Start, an older entry through Fuse's window, or Direct. */
+    suspend fun gameStarts(): Map<Long, io.github.matiyaaa.fuse.library.steam.SteamStart> = emptyMap()
+
+    /**
+     * Steam here can have Direct entries, which start a game's emulator themselves with Fuse's mark
+     * kept in their launch options (Linux, where Steam reads them through the shell). Elsewhere every
+     * entry starts with Fast Start.
+     */
+    val directEntries: Boolean get() = false
+
     /**
      * What putting [games] in Steam's library would do, game by game, over this computer's Steam
      * users, before anything is written. Null where Steam's library can't be read.
@@ -191,9 +208,11 @@ interface SteamIntegration {
     suspend fun planGames(games: List<io.github.matiyaaa.fuse.library.steam.SteamGameEntry>): List<io.github.matiyaaa.fuse.library.steam.SteamGamePlanItem>? = null
 
     /**
-     * Puts [games] in Steam's library for every Steam user here, each starting through Fuse, with its
-     * pictures from [art] and, with [collections], in a Steam collection for its system. Steam is
-     * never closed for it: while it is open, the games go in when it next closes.
+     * Puts [games] in Steam's library for every Steam user here, each starting with Fast Start or,
+     * where it carries a [io.github.matiyaaa.fuse.library.steam.SteamDirect] and [directEntries] allows,
+     * straight in its emulator, with its pictures from [art] and, with [collections], in a Steam
+     * collection for its system. Steam is never closed for it: while it is open, the games go in when
+     * it next closes.
      */
     suspend fun addGames(
         games: List<io.github.matiyaaa.fuse.library.steam.SteamGameEntry>,
@@ -217,17 +236,35 @@ interface SteamIntegration {
     /** Takes Fuse's entries for [gameIds] (null: all of Fuse's games) out of Steam's library; nobody else's. */
     suspend fun removeGames(gameIds: Set<Long>?): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
 
-    /** What is wrong with Fuse's game entries: games no longer in [library], an older Fuse, doubles. */
+    /**
+     * What is wrong with Fuse's game entries: games no longer in [library], an older Fuse, doubles,
+     * older entries that open Fuse's window first, and Direct entries whose emulator is gone.
+     */
     suspend fun gamesHealth(library: Set<Long>): List<io.github.matiyaaa.fuse.library.steam.SteamHealthIssue> = emptyList()
 
     /**
      * Puts Fuse's game entries right: those for games no longer in [library] and doubles go, and
-     * [moved] (entries that start an older Fuse) are pointed at this one, keeping what the person changed.
+     * [moved] (entries that start an older Fuse, an older way or a missing emulator) are written again
+     * as each game starts now, keeping what the person changed.
      */
     suspend fun repairGames(
         library: Set<Long>,
         moved: List<io.github.matiyaaa.fuse.library.steam.SteamGameEntry>,
         art: Map<Long, io.github.matiyaaa.fuse.library.steam.SteamArt>,
+    ): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
+
+    /**
+     * Shortcuts other tools (Steam ROM Manager, EmuDeck, a script, the person) made here that play
+     * one of Fuse's games, found by the game's own file in their command ([files], each to its game).
+     */
+    suspend fun learnShortcuts(files: Map<String, Long>): List<io.github.matiyaaa.fuse.library.steam.SteamLearned> = emptyList()
+
+    /**
+     * Makes each of [takes] (a shortcut [learnShortcuts] found, and Fuse's entry for its game) Fuse's,
+     * in its place, keeping its name, art and collections. Steam must be closed; Undo puts it back.
+     */
+    suspend fun takeOver(
+        takes: List<Pair<io.github.matiyaaa.fuse.library.steam.SteamLearned, io.github.matiyaaa.fuse.library.steam.SteamGameEntry>>,
     ): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
 
     /** Fuse's last change to Steam's games can be undone. */
@@ -594,3 +631,6 @@ data class StayAwake(val cpu: Boolean, val screen: Boolean, val finding: Boolean
 data class BackgroundLimits(val optimized: Boolean, val restricted: Boolean) {
     val limited: Boolean get() = optimized || restricted
 }
+
+/** A game handed over to play here: [ended] once it has ended and everything after it is done (or it couldn't start). */
+class PlayRequest(val gameId: Long, val ended: () -> Unit)
