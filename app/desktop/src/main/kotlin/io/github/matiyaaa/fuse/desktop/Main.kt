@@ -214,7 +214,7 @@ private val frameWatch = io.github.matiyaaa.fuse.desktop.system.FrameWatch()
 private fun watchFrames(layer: org.jetbrains.skiko.SkiaLayer) {
     val inner = layer.renderDelegate ?: return
     if (inner is TimedRender) return
-    layer.renderDelegate = TimedRender(inner)
+    layer.renderDelegate = TimedRender(inner, layer)
     frameReports
 }
 
@@ -237,12 +237,48 @@ private val frameReports: Unit by lazy {
     Unit
 }
 
-private class TimedRender(private val inner: org.jetbrains.skiko.SkikoRenderDelegate) : org.jetbrains.skiko.SkikoRenderDelegate {
+private class TimedRender(
+    private val inner: org.jetbrains.skiko.SkikoRenderDelegate,
+    private val layer: org.jetbrains.skiko.SkiaLayer,
+) : org.jetbrains.skiko.SkikoRenderDelegate {
+    /** Whether the window is drawn in half floats and rounded once (see [WindowRounding]); decided on its first frame. */
+    private var roundOnce: Boolean? = null
+
     override fun onRender(canvas: org.jetbrains.skia.Canvas, width: Int, height: Int, nanoTime: Long) {
         val start = System.nanoTime()
-        inner.onRender(canvas, width, height, nanoTime)
+        val once = roundOnce ?: WindowRounding.decide(layer.renderApi).also { roundOnce = it }
+        if (!once || !io.github.matiyaaa.fuse.desktop.system.DesktopDithering.drawRoundedOnce(canvas) { inner.onRender(canvas, width, height, nanoTime) }) {
+            inner.onRender(canvas, width, height, nanoTime)
+        }
         frameWatch.rendered(nanoTime, System.nanoTime() - start)
     }
+}
+
+/**
+ * Whether the window is drawn in half floats and rounded to 8 bits once, with noise, as it reaches
+ * the screen ([io.github.matiyaaa.fuse.ui.designsystem.effects.Dithering.window]): on a graphics
+ * card, where it costs a layer and a pass a frame. On the processor each gradient keeps its own
+ * noise instead. `FUSE_DITHER=window` or `gradients` chooses either way, for trying.
+ */
+private object WindowRounding {
+    fun decide(api: org.jetbrains.skiko.GraphicsApi): Boolean {
+        val asked = System.getenv("FUSE_DITHER")?.trim()?.lowercase()
+        val on = when (asked) {
+            "window" -> true
+            "gradients" -> false
+            else -> api != org.jetbrains.skiko.GraphicsApi.SOFTWARE_FAST && api != org.jetbrains.skiko.GraphicsApi.SOFTWARE_COMPAT && api != org.jetbrains.skiko.GraphicsApi.UNKNOWN
+        }
+        Log.info("Drawing the window ${if (on) "in half floats, rounded once as it reaches the screen" else "with each gradient dithered as it is drawn"} (${api.name}${asked?.let { ", FUSE_DITHER=$it" }.orEmpty()})")
+        if (on) io.github.matiyaaa.fuse.ui.designsystem.effects.Dithering.roundWindowOnce()
+        return on
+    }
+}
+
+/** The Skia layer that draws [c] (a window's, found among its components). */
+private fun skiaLayerOf(c: java.awt.Component): org.jetbrains.skiko.SkiaLayer? {
+    if (c is org.jetbrains.skiko.SkiaLayer) return c
+    for (child in (c as? java.awt.Container)?.components.orEmpty()) skiaLayerOf(child)?.let { return it }
+    return null
 }
 
 /** How much larger than Java's own scale Fuse draws (see DesktopScale); 1 almost everywhere. */
@@ -254,9 +290,7 @@ private var desktopScale = 1f
  * window up to the screen, which makes everything soft however sharp the art is.
  */
 private suspend fun probeRenderer(session: DesktopSession, window: java.awt.Window) {
-    fun layers(c: java.awt.Component): List<org.jetbrains.skiko.SkiaLayer> =
-        (if (c is org.jetbrains.skiko.SkiaLayer) listOf(c) else emptyList()) + ((c as? java.awt.Container)?.components?.flatMap(::layers) ?: emptyList())
-    val layer = layers(window).firstOrNull() ?: return
+    val layer = skiaLayerOf(window) ?: return
     val api = layer.renderApi.name
     val info = runCatching { layer.renderInfo }.getOrNull()
     val device = window.graphicsConfiguration.device
@@ -354,6 +388,8 @@ private fun ApplicationScope.FuseWindow(session: DesktopSession) {
         ) {
             DisposableEffect(window) {
                 session.window = window
+                // Its frames are timed, and drawn in half floats on a graphics card, from the first one.
+                runCatching { skiaLayerOf(window)?.let(::watchFrames) }
                 // How the window is drawn: on the processor, Fuse keeps motion light.
                 runCatching {
                     val renderer = window.renderApi.name

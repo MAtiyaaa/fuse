@@ -42,6 +42,34 @@ object Dithering {
     @Volatile var blurs: ((small: ImageBitmap, radius: Float, size: androidx.compose.ui.unit.IntSize) -> ImageBitmap)? = null
 
     fun picture(image: ImageBitmap): ImageBitmap = pictures?.let { runCatching { it(image) }.getOrNull() } ?: image
+
+    /**
+     * The whole window is drawn in floating point and rounded to 8 bits once, with noise, as it goes
+     * to the screen (the desktop on a graphics card). Then nothing is dithered as it is drawn: every
+     * light, scrim, veil and pane over another blends in full precision, and the one rounding at the
+     * end is the only one. Rounded as each was drawn instead, every pane at part strength over the
+     * room rounded it again without noise of its own, and the steps came back as a line between
+     * each shade of every gradient behind it.
+     */
+    @Volatile var window: Boolean = false
+
+    /**
+     * Goes up whenever how gradients are dithered changes ([window] turned on), so drawing kept from
+     * before (a room recorded once) is made again the new way.
+     */
+    val generation: Int get() = generationState.intValue
+    private val generationState = androidx.compose.runtime.mutableIntStateOf(0)
+
+    /** Turns on [window]: nothing is dithered as it is drawn from now on. */
+    fun roundWindowOnce() {
+        if (window) return
+        gradients = null
+        scaledGradients = null
+        placedGradients = null
+        pictures = null
+        window = true
+        generationState.intValue++
+    }
 }
 
 /** [brush] over the whole scope (or [size] at [topLeft], as `drawRect`), dithered where the platform can ([Dithering.gradients]). */
@@ -107,6 +135,8 @@ fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDitheredCircle(
 fun androidx.compose.ui.Modifier.ditheredBackground(brush: androidx.compose.ui.graphics.Brush): androidx.compose.ui.Modifier =
     this.then(
         androidx.compose.ui.Modifier.drawWithCache {
+            // Read so the paint is made again when the window starts rounding once ([Dithering.window]).
+            Dithering.generation
             val dither = Dithering.gradients
             if (dither == null) {
                 onDrawBehind { drawRect(brush) }
