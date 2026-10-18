@@ -85,8 +85,17 @@ class JvmSyncService(
 
     override val defaultName: String get() = defaultDeviceName
 
-    private var client: SyncClient? = null
+    @Volatile private var client: SyncClient? = null
     private var device: SyncDevice? = null
+
+    /**
+     * Held while what a host said is shown, and while that host is let go of: a list the host sent
+     * just before it was forgotten is never shown (or kept) after.
+     */
+    private val showing = Any()
+
+    /** The host let go of ([showing]). */
+    private fun dropClient() = synchronized(showing) { client = null }
 
     /** The household's games through this device's host (see [Household]). */
     val householdHere: JvmHousehold by lazy {
@@ -624,13 +633,18 @@ class JvmSyncService(
         listsLock.withLock {
             val c = client ?: return@withLock
             val list = people.ordered(c.profiles())
-            runCatching { c.devices() }.onSuccess { devices ->
-                _devices.value = devices
-                writeAtomically(File(dir, DEVICES_FILE), json.encodeToString(ListSerializer(DeviceInfo.serializer()), devices).toByteArray())
+            val devices = runCatching { c.devices() }
+            synchronized(showing) {
+                // Forgotten while it answered (turned off, or left): what it said is no longer this device's.
+                if (client !== c) return@withLock
+                devices.onSuccess { d ->
+                    _devices.value = d
+                    writeAtomically(File(dir, DEVICES_FILE), json.encodeToString(ListSerializer(DeviceInfo.serializer()), d).toByteArray())
+                }
+                showPeople(list, cached.activeProfile)
+                // Kept, so who is playing shows (and Who's playing? has faces) while the host is away.
+                runCatching { writeAtomically(File(dir, PROFILES_FILE), json.encodeToString(ListSerializer(ProfileInfo.serializer()), _profiles.value).toByteArray()) }
             }
-            showPeople(list, cached.activeProfile)
-            // Kept, so who is playing shows (and Who's playing? has faces) while the host is away.
-            runCatching { writeAtomically(File(dir, PROFILES_FILE), json.encodeToString(ListSerializer(ProfileInfo.serializer()), _profiles.value).toByteArray()) }
         }
     }
 
@@ -827,7 +841,7 @@ class JvmSyncService(
         }
         stop()
         if (cached.role == "HOST" && lifetime.state().installed) runCatching { lifetime.remove() }
-        client = null
+        dropClient()
         // The people who played here stay as this device's own (their unsent saves go to the next host).
         val stay = if (keepProfiles) runCatching { stayLocal() }.getOrDefault(emptyList()) else emptyList()
         // Saves that never reached the host (it was away) are this device's only copy: they stay,
@@ -3023,7 +3037,7 @@ class JvmSyncService(
             watch = null
             _nowPlaying.value = null
             cancelJoin()
-            client = null
+            dropClient()
             // The people who played here stay as this device's own profiles, unless they should go too.
             val stay = if (keepProfiles) runCatching { stayLocal() }.getOrDefault(emptyList()) else emptyList()
             secrets.remove(LINK_KEY)
