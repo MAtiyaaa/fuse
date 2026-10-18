@@ -1489,11 +1489,15 @@ private fun StayAwakeWatch(app: AppState) {
     val filling by app.store.media.fillProgress.collectAsState()
     val systemArt by app.store.media.systemArtProgress.collectAsState()
     val awake = io.github.matiyaaa.fuse.ui.shell.platform.StayAwake.plan(
-        transfers = transfers.active + transfers.queued,
+        transfers = transfers.active,
         finding = io.github.matiyaaa.fuse.ui.shell.platform.StayAwake.finding(filling, systemArt),
         standby = app.standby,
     )
-    LaunchedEffect(awake) { app.platform.stayAwake(awake) }
+    LaunchedEffect(awake) {
+        // Let go a moment late: one transfer finishing and the next starting is no time to sleep.
+        if (!awake.cpu) kotlinx.coroutines.delay(io.github.matiyaaa.fuse.ui.shell.platform.StayAwake.RELEASE_AFTER_MS)
+        app.platform.stayAwake(awake)
+    }
     androidx.compose.runtime.DisposableEffect(Unit) {
         onDispose { app.platform.stayAwake(io.github.matiyaaa.fuse.ui.shell.platform.StayAwake.NONE) }
     }

@@ -6,6 +6,7 @@ import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.CoroutineContext
@@ -792,7 +793,20 @@ object FramePacing {
      * update, a third of them (idle on screen), or none (behind another window, a game running,
      * the device asleep). Paused decoration stays where it was and carries on from there.
      */
-    var decorationRate: DecorationRate = DecorationRate.FULL
+    var decorationRate: DecorationRate
+        get() = decoration.value
+        set(value) {
+            decoration.value = value
+        }
+    private val decoration = kotlinx.coroutines.flow.MutableStateFlow(DecorationRate.FULL)
+
+    /**
+     * Suspends while decoration is paused, and comes back the moment it may move again. Looked at
+     * four times a second instead, every paused loop woke the processor under every game.
+     */
+    internal suspend fun awaitDecoration() {
+        if (decoration.value == DecorationRate.PAUSED) decoration.first { it != DecorationRate.PAUSED }
+    }
 
     /**
      * Of decoration's updates, one in this many is kept for the device's sake: 1 normally, 2 while

@@ -57,6 +57,11 @@ class JvmSyncService(
      * only while it charges, as reading every game it has, many gigabytes, ran it hot and drained it.
      */
     private val mayHash: () -> Boolean = { true },
+    /**
+     * Whether the device is awake for the rounds that wait on the host ([Awake]): a phone asleep
+     * asks the host nothing until it wakes, and then catches up.
+     */
+    private val awake: StateFlow<Boolean> = Awake.always,
 ) : SyncService {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val _status = MutableStateFlow<SyncStatus>(SyncStatus.Off)
@@ -85,7 +90,7 @@ class JvmSyncService(
 
     /** The household's games through this device's host (see [Household]). */
     val householdHere: JvmHousehold by lazy {
-        JvmHousehold(File(dir, "household"), scope, { client }, { cached.deviceId }, { cached }, busy = { _nowPlaying.value != null || !mayHash() }, clock = clock)
+        JvmHousehold(File(dir, "household"), scope, { client }, { cached.deviceId }, { cached }, busy = { _nowPlaying.value != null || !mayHash() }, clock = clock, awake = awake)
     }
     override val household: Household get() = householdHere
     private var hostServer: SyncHost? = null
@@ -377,6 +382,8 @@ class JvmSyncService(
             var backoff = 2_000L
             var joinsChecked = false
             while (true) {
+                // Asleep, nothing is asked of the host: the first round after waking catches up on everything.
+                awake.awaitAwake()
                 val c = client ?: break
                 try {
                     // Sends what is waiting and catches up, then waits for the host to say something changed.
@@ -394,7 +401,8 @@ class JvmSyncService(
                         scope.launch(Dispatchers.IO) { runCatching { convergeAll() } }
                         scope.launch(Dispatchers.IO) { householdConnect() }
                     }
-                    val page = c.events(since, waitSeconds = 25)
+                    // The wait ends when the device goes to sleep: its answer would only wake it again.
+                    val page = awake.untilAsleep { c.events(since, waitSeconds = 25) } ?: continue
                     householdHere.woken(page.wake)
                     // A device checking in is no event, so when each was last seen (and so which are
                     // online, and whose games show) is read again now and then: it stayed as it was
@@ -2856,12 +2864,18 @@ class JvmSyncService(
      * written its save and left it alone since the last look, keeps it and sends it.
      */
     private suspend fun watchWhilePlaying(query: SaveQuery, profile: String, startedAt: Long, first: List<String>) {
-        suspend fun say() = client?.let { c -> runCatching { c.notePresence(PresenceNote(profile, query.game.id, query.title, Presence.PLAYING, startedAt)) } }
+        var saidAt = 0L
+        suspend fun say() {
+            saidAt = clock()
+            client?.let { c -> runCatching { c.notePresence(PresenceNote(profile, query.game.id, query.title, Presence.PLAYING, startedAt)) } }
+        }
         say()
         var seen = first
         var moving = false
         while (true) {
             delay(liveLookMs)
+            // The lid closed mid-game: the save went as the screen went off, and the looks carry on once it wakes.
+            awake.awaitAwake()
             val now = looks(query)
             val changed = now != seen
             seen = now
@@ -2872,7 +2886,9 @@ class JvmSyncService(
                 moving = false
                 liveLock.withLock { sendLive(query, profile, startedAt) }
             }
-            say()
+            // Others ask whether a game was played in the last half hour: once a minute says so,
+            // without a request on every look at the save.
+            if (clock() - saidAt >= PRESENCE_EVERY_MS) say()
         }
     }
 
@@ -3106,6 +3122,9 @@ class JvmSyncService(
 
         /** How often a running game's save is looked at. */
         const val LIVE_LOOK_MS = 15_000L
+
+        /** How often a device playing says so to the host (see [PLAYING_ASK_MS]). */
+        const val PRESENCE_EVERY_MS = 60_000L
         const val HELLO_EVERY_MS = 10 * 60_000L
         const val FORGET_WAIT_MS = 5_000L
         const val HOST_RELEASE_MS = 1_500L

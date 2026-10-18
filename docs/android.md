@@ -22,7 +22,8 @@ was tried on every Android device.
 | GameBanana: finding and downloading a game's mods | Installing them depends on reaching the emulator's folder (below). |
 | Phone Link and its permissions | |
 | Fuse's own updates | A stopped download resumes and is checked before installing. |
-| Performance Governor | Optional work pauses while a game runs. |
+| Performance Governor | Optional work pauses while a game runs. With the screen off, Fuse asks nothing of Fuse One's host, RomM or Jellyfin until it comes back, unless a transfer or an art search is going (those keep the device awake until they finish). |
+| Refresh rate | Fuse asks for the screen's highest rate while you use it. Left alone with a moving background, it asks for about 60 Hz after ten seconds, where the screen can switch without a blink (Android 12 and later); never while a film plays. |
 
 ## Works where the emulator keeps its files in shared storage
 

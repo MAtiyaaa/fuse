@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -100,6 +101,7 @@ internal class DefaultFuseStore private constructor(
         ctx.scope,
         disk = JellyfinFiles(ctx.services),
         discovery = ctx.services.jellyfinDiscovery,
+        awake = ctx.services.awake,
     )
     private val mediaFeed = MutableStateFlow(io.github.matiyaaa.fuse.jellyfin.MediaFeed())
     override val homeFeed: StateFlow<io.github.matiyaaa.fuse.ui.shell.store.HomeFeed> by lazy {
@@ -504,6 +506,14 @@ internal class DefaultFuseStore private constructor(
         ctx.scope.launch {
             ctx.governor.state.collect { io.github.matiyaaa.fuse.ui.fuseline.FramePacing.decorationRate = io.github.matiyaaa.fuse.ui.shell.store.EnginePolicy.of(it).motion }
         }
+        // The platform says when the device sleeps (Android: the screen off with nothing to do):
+        // optional work holds until it wakes, and starts again after the governor's settling time.
+        ctx.scope.launch {
+            // Started awake, nothing is said (waking would hold optional work for the settling time);
+            // started asleep (Android starting Fuse in the background), it is held from the start.
+            if (!ctx.services.awake.value) ctx.governor.onSuspend()
+            ctx.services.awake.drop(1).distinctUntilChanged().collect { awake -> if (awake) ctx.governor.woke() else ctx.governor.onSuspend() }
+        }
         // One RomM integration at a time: turning Cartridge on in Fuse turns RomM off, and the
         // other way round. Turning one off keeps everything it was set up with.
         ctx.scope.launch {
@@ -642,6 +652,8 @@ internal class DefaultFuseStore private constructor(
                     return@collectLatest
                 }
                 while (true) {
+                    // Asleep, Home isn't looked at: the feed is asked for again when the device wakes.
+                    ctx.services.awake.first { it }
                     val got = runCatching { jellyfin.widgetFeed() }.onSuccess { mediaFeed.value = it }.getOrNull()
                     // Nothing came (the server not answering yet): soon again, not in five minutes.
                     delay(if (got == null || got.isEmpty) MEDIA_FEED_RETRY_MS else MEDIA_FEED_EVERY_MS)

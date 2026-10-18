@@ -8,6 +8,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -62,6 +63,11 @@ class JellyfinService(
     disk: JellyfinDiskCache? = null,
     private val discovery: ServerDiscovery? = null,
     private val clock: () -> Long = { kotlin.time.Clock.System.now().toEpochMilliseconds() },
+    /**
+     * Whether the device is awake (Android: its screen on); asleep, the server isn't checked on.
+     * Null for always.
+     */
+    private val awake: StateFlow<Boolean>? = null,
 ) {
     private val stateFlow = MutableStateFlow(JellyfinState())
     val state: StateFlow<JellyfinState> = stateFlow
@@ -132,6 +138,8 @@ class JellyfinService(
             watcher = scope.launch {
                 loadAccount()
                 while (true) {
+                    // Every half minute all night kept a sleeping handheld's Wi-Fi up: checked again on waking.
+                    awake?.first { it }
                     runCatching { reconnect() }
                     delay(HEALTH_EVERY_MS)
                 }

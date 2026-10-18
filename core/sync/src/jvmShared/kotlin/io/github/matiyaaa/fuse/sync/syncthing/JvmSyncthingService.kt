@@ -9,6 +9,7 @@ import io.github.matiyaaa.fuse.sync.SaveKind
 import io.github.matiyaaa.fuse.sync.SaveQuery
 import io.github.matiyaaa.fuse.sync.SaveSpot
 import io.github.matiyaaa.fuse.sync.WithSaveFolders
+import io.github.matiyaaa.fuse.sync.awaitAwake
 import io.ktor.client.HttpClient
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
@@ -49,6 +50,8 @@ class JvmSyncthingService(
     /** Games to plan folders from (one per emulator and system in the library), for folders another device offers. */
     var samples: suspend () -> List<SaveQuery> = { emptyList() },
     private val clock: () -> Long = System::currentTimeMillis,
+    /** Whether the device is awake ([io.github.matiyaaa.fuse.sync.Awake]): asleep, Syncthing isn't asked about its devices and folders. */
+    private val awake: StateFlow<Boolean> = io.github.matiyaaa.fuse.sync.Awake.always,
 ) : SyncthingService {
     private val _state = MutableStateFlow<SyncthingState>(SyncthingState.Off)
     private val _devices = MutableStateFlow<List<SyncthingDevice>>(emptyList())
@@ -358,6 +361,7 @@ class JvmSyncthingService(
         watcher?.cancel()
         watcher = scope.launch(Dispatchers.IO) {
             while (isActive) {
+                awake.awaitAwake()
                 val a = api ?: break
                 val ok = runCatching { refreshNow(a); acceptOffered(a) }.isSuccess
                 val st = _state.value

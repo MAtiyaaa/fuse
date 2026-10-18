@@ -245,6 +245,10 @@ From 0.3.8 ("The Reach Update") your devices' games make one library you can rea
 - A device that is off, asleep or (on Android) has Fuse closed can't send. Requests wait as
   "Waiting for Thor to be back" and start once it is. While an Android device sends, Fuse keeps
   itself running with a notification ("Sending a game to Gaming PC").
+- An Android device with its screen off doesn't wait for the host's news, look at who is around
+  or read the household's lists: each answer woke it and its Wi-Fi again all night. It catches up
+  the moment the screen comes back on. A save made as the screen goes off mid-game is still sent,
+  and so is anything a transfer in progress needs.
 - Passing through the host needs the host running, and is as fast as the host's upload.
 - **Verified** means the copy's hashes match another copy or RomM's. With nothing to compare against
   a copy says so, and never claims to be verified. Hashes are worked out in the background, once per

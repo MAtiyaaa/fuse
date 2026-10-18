@@ -56,6 +56,8 @@ class JvmHousehold(
     /** Where this device's server listens (tests use a free port). */
     private val peerPort: Int = SyncApi.PEER_PORT,
     private val bindAddresses: () -> List<String> = { LanAddresses.list() },
+    /** Whether the device is awake ([Awake]): asleep, it doesn't look at who is around or at others' transfers. */
+    private val awake: StateFlow<Boolean> = Awake.always,
 ) : Household, PeerBytes {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val _supported = MutableStateFlow(false)
@@ -142,6 +144,7 @@ class JvmHousehold(
         if (lookJob?.isActive != true) lookJob = scope.launch(Dispatchers.IO) {
             while (isActive && _supported.value) {
                 delay(LOOK_MS)
+                awake.awaitAwake()
                 runCatching { refresh() }.onSuccess { problem = null }.onFailure { problem = it.message ?: it::class.simpleName }
                 // This device's own list, until the host has it: a list that didn't go up (the host
                 // away for a moment, the network changing) waited for the next scan, and the other
@@ -488,6 +491,8 @@ class JvmHousehold(
         if (!on) return
         watchJob = scope.launch(Dispatchers.IO) {
             while (isActive) {
+                // Downloads left open on a device that went to sleep asked every two seconds all night.
+                awake.awaitAwake()
                 if (_supported.value) runCatching { client()?.transfers()?.let { _transfers.value = it } }
                 delay(WATCH_MS)
             }

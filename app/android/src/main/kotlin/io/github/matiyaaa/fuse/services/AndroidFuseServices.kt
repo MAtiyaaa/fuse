@@ -73,9 +73,12 @@ class AndroidFuseServices(
     }
 
     override fun keepAliveForTransfers(active: Boolean, text: String, progress: Int?) {
+        io.github.matiyaaa.fuse.platform.DeviceAwake.hold("transfers", active)
         if (active) io.github.matiyaaa.fuse.transfer.TransferService.show(appContext, text, progress)
         else io.github.matiyaaa.fuse.transfer.TransferService.stop(appContext)
     }
+
+    override val awake: kotlinx.coroutines.flow.StateFlow<Boolean> get() = io.github.matiyaaa.fuse.platform.DeviceAwake.awake
     override val deviceName: String =
         android.provider.Settings.Global.getString(appContext.contentResolver, android.provider.Settings.Global.DEVICE_NAME)?.takeIf { it.isNotBlank() } ?: android.os.Build.MODEL
 
@@ -98,6 +101,7 @@ class AndroidFuseServices(
             settings = this.data.settings,
             secrets = secrets,
             scope = scope,
+            awake = awake,
         )
 
     override fun rommSaves(
@@ -136,6 +140,7 @@ class AndroidFuseServices(
                     acquire()
                 }?.let { lock -> AutoCloseable { lock.release() } }
             },
+            awake = awake,
         )
         // While a game it follows is played, Fuse keeps running to send the save as soon as it is written.
         io.github.matiyaaa.fuse.sync.PlaySyncService.onScreenOff = { done ->

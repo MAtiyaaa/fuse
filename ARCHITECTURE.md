@@ -584,5 +584,10 @@ Fuse changes an emulator's own files only when the user asks, and only what it c
   are cancelled on release. The hero backdrop debounces fast selection changes (110 ms) and only
   crossfades once the new art has decoded; animated theme backgrounds are throttled to 30 frames per
   second; the clock updates once a minute.
+- **Asleep, nothing repeats.** `FuseServices.awake` (Android: the screen on, or a transfer or art
+  search holding the device awake; always true on a computer) gates every round that repeats on
+  the network: Fuse One's wait for the host's news, the household's lists and transfers, Syncthing,
+  RomM's and Jellyfin's checks and Home's Jellyfin feed. Asleep, each waits for the device to wake
+  and catches up then (`core/sync/.../Awake.kt`); the Performance Governor holds optional work too.
 - **Transactions.** A scan's reconciliation of one platform folder is a single database transaction,
   so the library is never half updated.
