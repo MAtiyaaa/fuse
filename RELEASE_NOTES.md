@@ -1,36 +1,47 @@
-# Fuse 0.4.2.26 - The Native Update
+# Fuse 0.4.2.27 - The Native Update
 
-Every device sees the household's games again however many it has, a device at home talks to the host at home, an update coming down says how much has come and how fast, and Fuse offers a GitHub token when
-GitHub limits its checks.
+A handheld that sleeps through the night, a cooler Fuse while it sits on screen, backgrounds
+without a line between their shades on Linux, and a mouse's back and right buttons on computers.
 
 ## New
 
-- When GitHub is limiting update checks from your network, About offers to add a GitHub token
-  (the Store's, so both use it). Without one, the update still downloads straight from GitHub's
-  website.
+- On a computer, the mouse's back button goes back, and the right button opens the options of what
+  it points at (as Options does on a controller). Neither does anything while you type.
+- On Linux, a controller plugged in or turned on works at once: Fuse hears from the system when
+  one arrives, instead of looking every two seconds.
 
 ## Changed
 
-- A Fuse update downloading shows how much has come and how fast ("78 of 180 MB, 2.1 MB a
-  second"), and its percentage moves in tenths, so a slow download no longer looks stuck.
-- An update found through GitHub's website (when its API has no checks left) has its size asked
-  for before it downloads, so its progress shows from the start.
+- **Asleep, Fuse leaves the device alone on Android.** With the screen off, Fuse no longer waits
+  for Fuse One's news, looks at who is around, reads the household's lists or Downloads, or checks
+  on RomM, Jellyfin and Syncthing. Each of those answered every half minute or so all night, and
+  every answer woke the processor and the Wi-Fi again, a game open on it or not. They wait for the
+  screen to come back and catch up the moment it does. A save made as the screen goes off is still
+  sent, and transfers and art searches carry on (they keep the device awake until they finish).
+- **Cooler while Fuse sits on screen.** A moving background held a 120 Hz screen at 120 Hz for as
+  long as Fuse was left on, for a room that changes 30 times a second at most. Ten seconds after
+  your last press, while only the background moves, Fuse asks for about 60 Hz where the screen can
+  switch without a blink (Android 12 and later), and the next press brings the full rate back
+  before anything moves. A film keeps the screen's rate.
+- Downloading no longer switches off the Wi-Fi's power saving while Fuse is on screen: the
+  low-latency Wi-Fi lock only warmed the device, since a busy download keeps the radio awake by
+  itself. Before Android 14, Wi-Fi still stays at full speed with the screen off.
+- A game being played says so to Fuse One once a minute instead of every 15 seconds (its save is
+  still looked at every 15 seconds).
+- Paused decoration (while a game runs, or the device sleeps) waits to be told it may move again,
+  instead of looking four times a second.
 
 ## Fixed
 
-- A device could see none of the household's games in the Fuse Library, and turn down every game
-  sent to it ("can't see this game on any device"), however long it waited. A device with games in
-  folders (a PS3 or PC game lists every file in it, with its hashes) lists tens of megabytes: the
-  host turned such a list away, and a device turned the household's lists away once together they
-  passed 16 MB. A device that had kept a copy from before still showed that one; a device just set
-  up, or set up again, had nothing to show. Both now take lists many times that size. Update the
-  Fuse One host too (About, Update the Fuse One host).
-- A device that joined from outside home (through the host's address on the internet) went that
-  way even on the same Wi-Fi: "Online, from outside" at home, and games sent to and from it slow,
-  each piece going out to the internet and back. The host says where it answers at home, and the
-  device goes there whenever that answers as its host.
-- An update could sit at 1% for a long time on a slow connection, as if stuck.
-- A game with several versions could show under both Installed and Missing: a version whose file
-  went while the game is still here under another version is one of its versions, not a missing
-  game, so it no longer shows under Missing or counts in the missing games notice. Its record
-  stays, so it comes back if its file does.
+- **Linux: no more lines between the shades of a background.** Every glow, scrim and veil behind
+  the interface showed thin rings and lines, one at each step of its colour, on every Linux
+  computer and in or out of Steam's Game Mode. Each gradient was dithered as it was drawn, but
+  every pane, dim and veil drawn over it at part strength rounded it to 8 bits again without noise
+  of its own, and the steps came back as lines. On a graphics card Fuse now draws the whole window
+  in 16-bit floating point and rounds it to 8 bits once, with a step of noise, as it reaches the
+  screen: a layered room stays within a hundredth of a step of its true colour, where it strayed by
+  almost half a step before. `FUSE_DITHER=gradients` goes back to the old way, for comparing.
+- On Android, a transfer that could never start (its source signed out) kept the device awake,
+  with its Wi-Fi at full power, for as long as it stayed in the list.
+- A worn controller stick trembling at rest counted as someone using Fuse: it held the screen at
+  its full rate and kept Fuse's moving backgrounds from ever slowing down when left alone.
