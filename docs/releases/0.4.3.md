@@ -63,11 +63,14 @@ a calmer game page, and Linux that looks and plays more the way Android does.
 - **Stronger text on Linux.** Android's text renderer thickens light letters on a dark room; Skia on
   Linux doesn't, so the same text came out thinner and greyer there, worst on a TV across the room.
   On Linux, reading text is now drawn a weight heavier and muted text a little brighter.
-- **A calmer game page.** What Fuse knows about the game is one quiet line under its name (its
-  system, year and a genre, the rest a press away) instead of rows of outlined chips; the buttons are
-  Play, the emulator, Favourite and More (collections, sending it and its media are in Options); the
-  copies of the game are listed once, in Available On, not again at the top; and the cover no longer
-  stands beside the game's logo, saying its name a second time.
+- **A calmer game page.** What Fuse knows about the game is one line under its name, never two: its
+  system as a badge in its colour, what a PS3 game's content needs most, then the year, its genre
+  and players, as many as fit, with the rest behind a "+" chip at the end. Under it, one line says
+  how far along you are: the time played, how much of HowLongToBeat's story that is on a slim bar,
+  and the achievements unlocked, each a press away, so it shows above Play even on a handheld's
+  short upper screen. The buttons are Play, the emulator, Favourite and More (collections, sending
+  it and its media are in Options); the copies of the game are listed once, in Available On; and the
+  cover no longer stands beside the game's logo, saying its name a second time.
 - **A shorter setup.** "Tuned for this device" is gone (the Performance step at the end covers it),
   the BIOS step comes only when a system needs firmware, art, achievements and Jellyfin are one step
   with Continue first, "Which button confirms?" is asked only with a controller in hand, and "When
@@ -85,3 +88,7 @@ a calmer game page, and Linux that looks and plays more the way Android does.
   always work): the switch is gone.
 - Low Power Mode said it held the screen at 60 Hz; it never touched the refresh rate, which stays
   as Settings, Display sets it.
+- Fuse One: when two devices became the same new person at almost the same moment, the second
+  one's untouched setting (Fuse's own theme, say) could go up as a fresh choice and replace the
+  theme the person had chosen on the first. A setting nobody chose now only fills what the profile
+  hasn't got, and never outranks a choice made anywhere.

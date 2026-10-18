@@ -86,7 +86,7 @@ Builds, passes its unit tests, packages as a Deb and an AppImage, and starts und
 - [x] Joystick and gamepad input from `/dev/input/js*`, without native libraries
 - [x] Secrets in the Secret Service, with an encrypted-file fallback
 - [x] AppImage packaging (`scripts/build-appimage.sh`) and an optional login entry
-- [ ] Video previews on the desktop
+- [x] Video previews on the desktop (0.4.3)
 
 ### Windows and macOS apps
 

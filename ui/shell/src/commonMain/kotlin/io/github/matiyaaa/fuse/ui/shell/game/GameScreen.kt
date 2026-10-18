@@ -312,9 +312,10 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     var cardsPerLine by remember(game.id) { mutableIntStateOf(3) }
     val perLine = detailsPerLine(cards.size, cardsPerLine)
     val lines = cards.chunked(perLine)
-    // Facts past what one line shows wait behind a "+" chip above the buttons.
-    val facts = remember(d) { factsOf(d) }
-    val moreFacts = facts.size > SHOWN_FACTS
+    // The line under the title shows what fits of these; the rest wait behind a "+" chip at its end.
+    val facts = remember(d, contentStates) { factsOf(d, contentStates) }
+    var factsShown by remember(game.id) { mutableIntStateOf(facts.count { it.inline }) }
+    val moreFacts = facts.size > factsShown
     val description = game.metadata.description?.takeIf { it.isNotBlank() }
     // How long it takes to beat, from HowLongToBeat: asked when the page opens, kept a month.
     val hltbOn by remember(app.store) { app.store.prefs.map { it.howLongToBeat } }.collectAsState(app.store.prefs.value.howLongToBeat)
@@ -323,11 +324,18 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val beat by produceState<io.github.matiyaaa.fuse.ui.shell.store.HltbView?>(null, game.id, hltbOn, beatVersion) {
         value = if (hltbOn) app.store.library.howLongToBeat(game.id) else null
     }
+    // How far along you are, above Play: each part a stop, as many as fit the line.
+    val progress = listOfNotNull(
+        ProgressPart.PLAYED,
+        ProgressPart.BEAT.takeIf { beat?.let { beatGoal(it.game).first > 0 } == true },
+        ProgressPart.ACHIEVEMENTS.takeIf { (d.achievements?.total ?: 0) > 0 },
+    )
+    var progressShown by remember(game.id) { mutableIntStateOf(progress.size) }
+    val progressParts = progress.take(progressShown.coerceAtLeast(1))
     val rows = buildList {
         if (moreFacts) add("facts")
+        add("progress")
         add("actions")
-        // The time played is a stop of its own, so the stick brings it into view on any screen.
-        add("playtime")
         if (shownCopies.isNotEmpty()) add("available")
         if (description != null) add("about")
         if (rommButtons.isNotEmpty() || (romm?.parts?.size ?: 0) > 1) add("romm")
@@ -338,7 +346,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     }
     fun sizeOf(key: String) = when (key) {
         "facts", "about" -> 1
-        "playtime" -> if (beat != null) 2 else 1
+        "progress" -> progressParts.size
         "actions" -> actions.size
         "available" -> shownCopies.size
         "romm" -> rommButtons.size.coerceAtLeast(1)
@@ -464,6 +472,17 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
         )
     }
 
+    /** A part of the progress line: all play time, HowLongToBeat's times, or the achievements further down. */
+    fun openProgress(part: ProgressPart?) {
+        when (part) {
+            ProgressPart.PLAYED -> app.go(Route.PlayTime)
+            ProgressPart.BEAT -> beat?.let { showBeat(it) }
+            ProgressPart.ACHIEVEMENTS -> rows.indexOf("achievements").takeIf { it >= 0 }?.let { sel.row = it }
+                ?: app.go(Route.Root(io.github.matiyaaa.fuse.model.Destination.ACHIEVEMENTS))
+            null -> Unit
+        }
+    }
+
     fun openCard(info: InfoCard) {
         when (info) {
             InfoCard.STARTS -> app.emulatorPicker(card)
@@ -484,7 +503,11 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val confirm = when (row) {
         "facts" -> "See every detail"
         "about" -> "Read it all"
-        "playtime" -> if (col == 1) "How long to beat" else "All play time"
+        "progress" -> when (progressParts.getOrNull(col)) {
+            ProgressPart.BEAT -> "How long to beat"
+            ProgressPart.ACHIEVEMENTS -> d.achievements?.source?.noun ?: "Achievements"
+            else -> "All play time"
+        }
         "shots" -> "View full screen"
         "romm" -> rommButtons.getOrNull(col)?.label ?: "Downloads"
         "available" -> "This copy"
@@ -521,28 +544,20 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val inset = with(LocalDensity.current) { (Space.xl + Space.s).roundToPx() }
     // Every line of detail cards scrolls to the Details section, so it stays in view as a whole.
     val section = if (row.startsWith("details:")) "details" else row
-    // Where the time played ends, so the stick brings all of it above the hint line, not half.
-    var timeBottom by remember(game.id) { mutableIntStateOf(0) }
-    var timeTop by remember(game.id) { mutableIntStateOf(0) }
-    // Where each stop of a row that can wrap is (the buttons, play time and How long to beat, the
-    // discs, RomM's downloads): on a narrow screen Down and Up move by place inside such a row first.
+    // Where each stop of a row that can wrap is (the buttons, the discs, RomM's downloads): on a
+    // narrow screen Down and Up move by place inside such a row first.
     val placed = remember(game.id) { mutableMapOf<String, MutableMap<Int, androidx.compose.ui.geometry.Rect>>() }
     fun rectsOf(key: String) = placed.getOrPut(key) { mutableMapOf() }
     val actionRects = rectsOf("actions")
-    val timeRects = rectsOf("playtime")
     var topOfPage by remember { mutableIntStateOf(0) }
     val clearBelow = with(LocalDensity.current) { (Size.hintHeight + Space.xxl).roundToPx() }
     // Where each line of detail cards ends: on a small screen they stack, and each must come fully into view.
     val lineBottoms = remember(game.id) { mutableStateMapOf<Int, Int>() }
-    LaunchedEffect(row, tops[section], scroll.maxValue, timeTop, timeBottom, lineBottoms[row.removePrefix("details:").toIntOrNull() ?: -1]) {
-        if (section == "playtime") {
-            timeScrollTarget(scroll.value, scroll.maxValue, scroll.viewportSize, timeTop - inset, timeBottom + clearBelow)
-                ?.let { scroll.fuselineScrollTo(it, motion.followSpring()) }
-            return@LaunchedEffect
-        }
+    LaunchedEffect(row, tops[section], scroll.maxValue, lineBottoms[row.removePrefix("details:").toIntOrNull() ?: -1]) {
         val line = row.removePrefix("details:").toIntOrNull().takeIf { row.startsWith("details:") }
         val target = when {
-            row == "facts" || row == "actions" -> 0
+            // The title's lines and the buttons: the page's top.
+            row == "facts" || row == "progress" || row == "actions" -> 0
             // The last section shows the page's very end, so nothing is left below the stick's reach.
             sel.row == rows.lastIndex -> scroll.maxValue
             // A line of cards: as much of Details as fits above it, and the whole line above the hints.
@@ -577,7 +592,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                 when (row) {
                     "facts" -> showFacts()
                     "about" -> readAbout()
-                    "playtime" -> if (col == 1) beat?.let { showBeat(it) } else app.go(Route.PlayTime)
+                    "progress" -> openProgress(progressParts.getOrNull(col))
                     "shots" -> viewing = col
                     "romm" -> rommButtons.getOrNull(col)?.let { b -> romm?.let { v -> app.rommDownload(v.romId, game.displayTitle, b.what) } } ?: app.go(Route.Downloads)
                     "available" -> shownCopies.getOrNull(col)?.let { cp -> app.copyMenu(game.id, game.displayTitle, cp, hereAlready = !notHere, canUpload = canUploadHere, rommHasIt = rommHasIt) }
@@ -638,21 +653,21 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
             Row(verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f)) {
                     GameTitle(d, layout, app.store.prefs.value.showLogo, Modifier.reveal(reveal, 0))
-                    Spacer(Modifier.height(Space.l))
-                    FactChips(
-                        d, facts, Modifier.reveal(reveal, 1),
+                    Spacer(Modifier.height(Space.m))
+                    MetaLine(
+                        facts, Modifier.reveal(reveal, 1),
                         moreSelected = row == "facts" && focused,
                         onMore = { sel.row = rows.indexOf("facts"); showFacts() },
+                        onShown = { if (it != factsShown) factsShown = it },
                     )
-                    if (contentStates.isNotEmpty()) {
-                        Spacer(Modifier.height(Space.m))
-                        FlowRow(Modifier.reveal(reveal, 1), horizontalArrangement = Arrangement.spacedBy(Space.s), verticalArrangement = Arrangement.spacedBy(Space.s)) {
-                            contentStates.forEach { s ->
-                                io.github.matiyaaa.fuse.ui.designsystem.components.Chip(s.label, icon = stateIcon(s), color = stateColor(s))
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(Space.xl))
+                    Spacer(Modifier.height(Space.s))
+                    ProgressLine(
+                        d, beat, progress, Modifier.reveal(reveal, 1),
+                        focusedPart = if (row == "progress" && focused) col else null,
+                        onPart = { i -> sel.row = rows.indexOf("progress"); sel.setColumn("progress", i); openProgress(progress.getOrNull(i)) },
+                        onShown = { if (it != progressShown) progressShown = it },
+                    )
+                    Spacer(Modifier.height(Space.l))
                     // One button, drawn the same in either arrangement below.
                     val button: @Composable (Int, Modifier) -> Unit = { i, mod ->
                         // Where each button is, so Up and Down go to the one that is above or below
@@ -708,19 +723,6 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                         }
                     }
                     LaunchNote(d, Modifier.reveal(reveal, 3), issues.firstOrNull()?.problem?.title)
-                    Spacer(Modifier.height(Space.l))
-                    TimeTogether(
-                        d,
-                        beat,
-                        Modifier.reveal(reveal, 3).onPlaced {
-                            timeTop = it.positionInRoot().y.toInt() - topOfPage + scroll.value
-                            timeBottom = timeTop + it.size.height
-                        },
-                        focusedPart = if (row == "playtime" && focused) col else null,
-                        onPartPlaced = { part, bounds -> timeRects[part] = bounds },
-                        onPlayTime = { sel.row = rows.indexOf("playtime"); sel.setColumn("playtime", 0); app.go(Route.PlayTime) },
-                        onBeat = { sel.row = rows.indexOf("playtime"); sel.setColumn("playtime", 1); beat?.let { showBeat(it) } },
-                    )
                 }
                 // Beside the game's logo the cover only says the name a second time; it stands in for a missing logo.
                 layout.cover?.takeIf { d.art.logo == null || !app.store.prefs.value.showLogo }?.let { cover ->
@@ -937,11 +939,14 @@ private data class GameLayout(
     companion object {
         fun of(width: Dp, height: Dp): GameLayout {
             val content = width - Space.gutter * 2
+            // A handheld's upper screen at its largest text (about 360dp tall): the title, its two
+            // lines and Play must all show above the hint line, so the art above gets less.
+            val short = height < Size.touch * 9
             return GameLayout(
-                top = Size.hudHeight + (height * 0.1f).coerceIn(Space.l, Space.x5),
+                top = Size.hudHeight + if (short) Space.s else (height * 0.1f).coerceIn(Space.l, Space.x5),
                 cover = if (width > Size.touch * 17) (height * 0.3f).coerceIn(Size.touch * 2, Size.touch * 5) else null,
                 compact = height < Size.touch * 12 || width < Size.touch * 13,
-                logoHeight = (height * 0.19f).coerceIn(Size.touch + Space.l, Size.touch * 3),
+                logoHeight = if (short) Size.touch + Space.s else (height * 0.19f).coerceIn(Size.touch + Space.l, Size.touch * 3),
                 reading = Size.touch * 16,
                 cardsPerLine = when {
                     // A 6 inch handheld (about 850dp) fits all three side by side.
@@ -976,33 +981,54 @@ private fun GameTitle(d: GameDetail, layout: GameLayout, showLogo: Boolean, modi
     }
 }
 
-/** One thing Fuse knows about a game: what it is ([label]), the words, and where it is listed. */
-private data class GameFact(val text: String, val icon: ImageVector?, val label: String, val group: String, val dot: Color? = null)
+/** How a fact sits in the line under the title: the system's badge, a state of its content, or plain words. */
+private enum class FactKind { SYSTEM, STATE, PLAIN }
 
-/** How many facts show in the line under the title before the rest wait behind "+". */
-private const val SHOWN_FACTS = 3
+/** One thing Fuse knows about a game: what it is ([label]), the words, and where it is listed. */
+private data class GameFact(
+    val text: String,
+    val icon: ImageVector?,
+    val label: String,
+    val group: String,
+    val kind: FactKind = FactKind.PLAIN,
+    /** The system's colour, for its badge. */
+    val dot: Color? = null,
+    /** May sit in the line under the title; the rest only wait behind "+". */
+    val inline: Boolean = false,
+    /** Fewer words for that line ("Role-playing" for "Role-playing (RPG)"). */
+    val short: String = text,
+    val state: io.github.matiyaaa.fuse.library.content.ContentState? = null,
+)
+
+/** The most facts the line under the title holds, the system's badge included, even on a wide screen. */
+private const val SHOWN_FACTS = 4
 
 /**
- * Every fact Fuse has about the game, the ones worth a chip first: its system, year, players and
- * genre, extras and collections; then everything else (makers, series, every genre, the file's
- * regions, languages and version). Nothing is guessed: what Fuse doesn't know is left out. Play
- * time has its own place under the buttons.
+ * Every fact Fuse has about the game. First the few that may sit in the line under the title: its
+ * system, what its content needs most (a PS3 game to install), the year, its genre, players and
+ * extras. Then everything else (collections, every genre, series, makers, the file's regions,
+ * languages and version). Nothing is guessed: what Fuse doesn't know is left out. How far along you
+ * are has its own line under it.
  */
-private fun factsOf(d: GameDetail): List<GameFact> {
+private fun factsOf(d: GameDetail, states: List<io.github.matiyaaa.fuse.library.content.ContentState> = emptyList()): List<GameFact> {
     val game = d.game
     val meta = game.metadata
     val tags = game.tags
+    fun state(s: io.github.matiyaaa.fuse.library.content.ContentState, inline: Boolean) =
+        GameFact(s.label, stateIcon(s), "Content", "Content", FactKind.STATE, inline = inline, state = s)
     return buildList {
-        add(GameFact(d.platform.name, null, "System", "About", dot = d.platform.accent.toColor()))
-        meta.releaseYear?.let { add(GameFact(it.toString(), FuseIcons.Calendar, "Released", "About")) }
-        meta.players?.let(::playersLabel)?.let { add(GameFact(it, FuseIcons.Users, "Players", "About")) }
-        meta.genres.firstOrNull()?.let { add(GameFact(it, FuseIcons.Tag, "Genre", "About")) }
+        add(GameFact(d.platform.name, null, "System", "About", FactKind.SYSTEM, dot = d.platform.accent.toColor(), inline = true))
+        states.firstOrNull()?.let { add(state(it, inline = true)) }
+        meta.releaseYear?.let { add(GameFact(it.toString(), FuseIcons.Calendar, "Released", "About", inline = true)) }
+        meta.genres.firstOrNull()?.let { add(GameFact(it, FuseIcons.Tag, "Genre", "About", inline = true, short = shortGenre(it))) }
+        meta.players?.let(::playersLabel)?.let { add(GameFact(it, FuseIcons.Users, "Players", "About", inline = true)) }
         val updates = game.content.count { it.kind == ContentKind.UPDATE }
         val dlc = game.content.count { it.kind == ContentKind.DLC }
         listOfNotNull(
             updates.takeIf { it > 0 }?.let { if (it == 1) "1 update" else "$it updates" },
             dlc.takeIf { it > 0 }?.let { "$it DLC" },
-        ).joinToString(", ").ifEmpty { null }?.let { add(GameFact(it, FuseIcons.Package, "Extras", "About")) }
+        ).joinToString(", ").ifEmpty { null }?.let { add(GameFact(it, FuseIcons.Package, "Extras", "About", inline = true)) }
+        states.drop(1).forEach { add(state(it, inline = false)) }
         d.collections.forEach { add(GameFact(it.name, FuseIcons.Bookmark, "Collection", "Collections")) }
         meta.genres.drop(1).forEach { add(GameFact(it, FuseIcons.Tag, "Genre", "About")) }
         meta.franchise?.let { add(GameFact(it, FuseIcons.Layers, "Series", "About")) }
@@ -1017,25 +1043,124 @@ private fun factsOf(d: GameDetail): List<GameFact> {
     }
 }
 
+/** A genre without the scraper's abbreviation after it: "Role-playing (RPG)" reads "Role-playing". */
+internal fun shortGenre(genre: String): String = genre.substringBefore(" (").trim().ifEmpty { genre }
+
 /**
- * What Fuse knows about the game, as one quiet line of words (its system with its colour, the year,
- * a genre), then a "+" chip that lists them all ([onMore]); it is selectable from the buttons below
- * with Up. A row of outlined chips said the same in more space and pulled the eye from the art.
+ * One line, never two: the items side by side while they fit the width, then [more] holding how
+ * many didn't (plus [extra] that never sit in the line). The first item always shows, shortened if
+ * it must be. [onShown] hears how many fit, so the controller's stops match what is drawn.
  */
 @Composable
-private fun FactChips(d: GameDetail, facts: List<GameFact>, modifier: Modifier, moreSelected: Boolean, onMore: () -> Unit) {
-    val c = Fuse.colors
-    val shown = facts.take(SHOWN_FACTS)
-    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-        shown.firstOrNull()?.dot?.let { dot -> Box(Modifier.size(Size.dot).clip(PillShape).background(dot)) }
-        FText(shown.joinToString("  ·  ") { it.text }, Fuse.type.bodyStrong, color = c.textMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
-        if (facts.size > SHOWN_FACTS) MoreChip(facts.size - SHOWN_FACTS, moreSelected, onMore)
+private fun OneLine(
+    count: Int,
+    modifier: Modifier = Modifier,
+    spacing: Dp = Space.m,
+    extra: Int = 0,
+    /** The "+" at the end; [live] false for the copy only measured, which takes no presses. */
+    more: (@Composable (hidden: Int, live: Boolean) -> Unit)? = null,
+    onShown: (Int) -> Unit = {},
+    item: @Composable (index: Int) -> Unit,
+) {
+    androidx.compose.ui.layout.SubcomposeLayout(modifier) { constraints ->
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val max = constraints.maxWidth
+        val gap = spacing.roundToPx()
+        val parts = (0 until count).map { i -> subcompose(i) { item(i) }.firstOrNull() }
+        val widths = parts.map { it?.maxIntrinsicWidth(androidx.compose.ui.unit.Constraints.Infinity) ?: 0 }
+        fun fits(n: Int, reserve: Int) = widths.take(n).sum() + gap * (n - 1).coerceAtLeast(0) + reserve <= max
+        // Room for "+" at its widest, kept only when something is left out.
+        val probe = if (more != null && count + extra > 0) {
+            (subcompose("probe") { more(count + extra, false) }.firstOrNull()?.maxIntrinsicWidth(androidx.compose.ui.unit.Constraints.Infinity) ?: 0) + gap
+        } else 0
+        var shown = count
+        if (!fits(count, if (extra > 0) probe else 0)) {
+            shown = count.coerceAtMost(1)
+            while (shown < count && fits(shown + 1, probe)) shown++
+        }
+        val hidden = count - shown + extra
+        val moreChip = if (more != null && hidden > 0) subcompose("more") { more(hidden, true) }.firstOrNull()?.measure(loose) else null
+        val reserve = moreChip?.let { it.width + gap } ?: 0
+        val placed = parts.take(shown).mapIndexed { i, m ->
+            m?.measure(if (i == 0) loose.copy(maxWidth = (max - reserve).coerceAtLeast(0)) else loose)
+        }
+        val height = (placed.mapNotNull { it?.height } + listOfNotNull(moreChip?.height)).maxOrNull() ?: 0
+        val width = (placed.sumOf { it?.width ?: 0 } + gap * (placed.size - 1).coerceAtLeast(0) + (if (moreChip != null && placed.isNotEmpty()) gap else 0) + (moreChip?.width ?: 0))
+            .coerceAtMost(max)
+        layout(width, height) {
+            onShown(shown)
+            var x = 0
+            placed.forEach { p ->
+                if (p != null) {
+                    p.placeRelative(x, (height - p.height) / 2)
+                    x += p.width + gap
+                }
+            }
+            moreChip?.let { it.placeRelative(x, (height - it.height) / 2) }
+        }
     }
 }
 
-/** "+3": the facts that didn't get a chip, a press away. Lit like a button when selected. */
+/**
+ * The line under the title, never more than one: the system as a badge in its colour, what the
+ * game's content needs most, then a few plain words (the year, its genre, players), as many as fit.
+ * The rest wait behind a "+" chip at its end, which lists everything ([onMore]) and is reached from
+ * the buttons with Up. Outlined chips with an icon each said the same in twice the space and wrapped
+ * onto a second line.
+ */
 @Composable
-private fun MoreChip(count: Int, selected: Boolean, onClick: () -> Unit) {
+private fun MetaLine(facts: List<GameFact>, modifier: Modifier, moreSelected: Boolean, onMore: () -> Unit, onShown: (Int) -> Unit) {
+    val inline = facts.filter { it.inline }.take(SHOWN_FACTS)
+    OneLine(
+        inline.size, modifier,
+        spacing = Space.m,
+        extra = facts.size - inline.size,
+        more = { n, live -> MoreChip(n, live && moreSelected, onMore.takeIf { live }) },
+        onShown = onShown,
+    ) { i ->
+        val f = inline[i]
+        MetaItem(f, separated = f.kind == FactKind.PLAIN && inline.getOrNull(i - 1)?.kind == FactKind.PLAIN)
+    }
+}
+
+/** One item of [MetaLine]: the system's badge, a content state in its colour, or quiet words (after a small dot when they follow others). */
+@Composable
+private fun MetaItem(f: GameFact, separated: Boolean) {
+    val c = Fuse.colors
+    when (f.kind) {
+        FactKind.SYSTEM -> {
+            val tone = f.dot ?: c.accent
+            Row(
+                Modifier
+                    .height(Size.chipCompact)
+                    .clip(PillShape)
+                    .background(tone.copy(alpha = if (c.isDark) 0.2f else 0.14f))
+                    .border(Size.stroke, tone.copy(alpha = 0.5f), PillShape)
+                    .padding(horizontal = Space.m),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Space.s),
+            ) {
+                Box(Modifier.size(Size.dot).clip(PillShape).background(tone))
+                FText(f.short, Fuse.type.label, color = c.text, maxLines = 1)
+            }
+        }
+        FactKind.STATE -> {
+            val tone = f.state?.let { stateColor(it) } ?: c.text
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                FuseIcon(f.icon ?: FuseIcons.Info, size = Size.iconS, tint = tone)
+                FText(f.short, Fuse.type.bodyStrong, color = tone, maxLines = 1)
+            }
+        }
+        FactKind.PLAIN -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+            if (separated) Box(Modifier.size(Space.xs).clip(PillShape).background(c.textFaint))
+            FText(f.short, Fuse.type.bodyStrong, color = c.textMuted, maxLines = 1)
+        }
+    }
+}
+
+/** "+3": the facts that didn't fit the line, a press away. Lit like a button when selected; without [onClick] it is only measured. */
+@Composable
+private fun MoreChip(count: Int, selected: Boolean, onClick: (() -> Unit)?) {
     val c = Fuse.colors
     val fill by io.github.matiyaaa.fuse.ui.fuseline.fuselineColor(if (selected) c.text else c.surfaceDim.copy(alpha = if (c.isDark) 0.62f else 0.72f), Fuse.motion.tween(io.github.matiyaaa.fuse.ui.fuseline.Durations.FAST), label = "moreChip")
     val tint = if (selected) c.ink else c.text
@@ -1045,7 +1170,7 @@ private fun MoreChip(count: Int, selected: Boolean, onClick: () -> Unit) {
             .clip(PillShape)
             .background(fill)
             .border(Size.stroke, if (selected) c.text else c.hairlineStrong, PillShape)
-            .fuseClickable(shape = PillShape, role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "Every detail", onClick = onClick)
+            .then(if (onClick != null) Modifier.fuseClickable(shape = PillShape, role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "Every detail", onClick = onClick) else Modifier)
             .padding(horizontal = Space.m),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Space.xs),
@@ -1083,140 +1208,109 @@ private fun AboutBlock(text: String, selected: Boolean, reading: Dp, onClick: ()
     }
 }
 
+/** A part of the progress line, in the order the line gives them up when it is short. */
+private enum class ProgressPart { PLAYED, BEAT, ACHIEVEMENTS }
+
+/** The HowLongToBeat time to measure against (the main story, else the longer runs) and what it is "to" do. */
+private fun beatGoal(g: io.github.matiyaaa.fuse.integrations.hltb.HltbGame): Pair<Long, String> = when {
+    g.mainSeconds > 0 -> g.mainSeconds to "to beat"
+    g.plusSeconds > 0 -> g.plusSeconds to "with extras"
+    else -> g.completionistSeconds to "to finish it all"
+}
+
 /**
- * The time you and this game have spent together, front and centre under Play: the total large,
- * in a ring of light whose arc fills with this week's share, then sessions, this week and when you
- * last played. Before the first session it says so, simply. Beside it, when HowLongToBeat knows the
- * game, how long it takes to beat, in a smaller ring that fills with how much of that you've played.
- *
- * The two parts are separate stops ([focusedPart] 0 and 1) for the controller and the keyboard,
- * and separate buttons for touch and the mouse.
+ * How far along you are, in one line between the facts and Play, so it shows on the shortest
+ * screen: the time played, how much of HowLongToBeat's story that is (a slim bar filling with it),
+ * and the achievements unlocked. Each part is a stop (and a button): all play time, HowLongToBeat's
+ * times, the achievements. What doesn't fit the width is left out rather than wrapped; Play history
+ * and the achievements are further down the page.
  */
 @Composable
-private fun TimeTogether(
+private fun ProgressLine(
     d: GameDetail,
     beat: io.github.matiyaaa.fuse.ui.shell.store.HltbView?,
+    parts: List<ProgressPart>,
     modifier: Modifier,
     focusedPart: Int?,
-    onPlayTime: () -> Unit,
-    onBeat: () -> Unit,
-    /** Where each part is on screen, so the controller can move between them by place when they wrap. */
-    onPartPlaced: (Int, androidx.compose.ui.geometry.Rect) -> Unit = { _, _ -> },
+    onPart: (Int) -> Unit,
+    onShown: (Int) -> Unit,
 ) {
-    val c = Fuse.colors
-    val shape = RoundedCornerShape(Fuse.geometry.panel)
-    FlowRow(
-        modifier
-            .clip(shape)
-            .background(c.surfaceDim.copy(alpha = if (c.isDark) 0.55f else 0.7f))
-            .border(Size.stroke, c.hairline, shape)
-            .padding(Space.xs),
-        verticalArrangement = Arrangement.Center,
-    ) {
-        TimePart(focusedPart == 0, "All play time", onPlayTime, Modifier.onGloballyPositioned { onPartPlaced(0, it.boundsInRoot()) }) { PlayedPart(d) }
-        if (beat != null) {
-            // A hairline between the two while they share a line; none when the beat part wraps under.
-            var beside by remember { mutableStateOf(true) }
-            Row(
-                Modifier.align(Alignment.CenterVertically).onPlaced { beside = it.positionInParent().x > 0f },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (beside) Box(Modifier.width(Size.divider).height(Size.thumb).background(c.hairline))
-                TimePart(focusedPart == 1, "How long to beat", onBeat, Modifier.onGloballyPositioned { onPartPlaced(1, it.boundsInRoot()) }) { BeatPart(d, beat) }
-            }
+    BoxWithConstraints(modifier) {
+        // A phone held upright says each part in fewer words, so the story's bar still fits.
+        val compact = maxWidth < Size.touch * 10
+        // The stops' padding hangs past the left edge, so their words line up with the title's.
+        OneLine(parts.size, Modifier.bleedStart(Space.m), spacing = Space.xs, onShown = onShown) { i ->
+            val part = parts[i]
+            ProgressStop(
+                focusedPart == i,
+                when (part) {
+                    ProgressPart.PLAYED -> "All play time"
+                    ProgressPart.BEAT -> "How long to beat"
+                    ProgressPart.ACHIEVEMENTS -> d.achievements?.source?.noun ?: "Achievements"
+                },
+                onClick = { onPart(i) },
+            ) { ProgressWords(part, d, beat, compact) }
         }
     }
 }
 
-/** One stop of [TimeTogether]: lit when it has the focus, a button for touch and the mouse. */
+/** One stop of [ProgressLine]: lit when it has the focus, a button for touch and the mouse. */
 @Composable
-private fun TimePart(selected: Boolean, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+private fun ProgressStop(selected: Boolean, label: String, onClick: () -> Unit, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
     val c = Fuse.colors
-    val shape = RoundedCornerShape((Fuse.geometry.panel - Space.xs).coerceAtLeast(0.dp))
-    val lit by fuselineFloat(if (selected) 1f else 0f, Fuse.motion.tween(io.github.matiyaaa.fuse.ui.fuseline.Durations.FAST), label = "timePart")
+    val lit by fuselineFloat(if (selected) 1f else 0f, Fuse.motion.tween(io.github.matiyaaa.fuse.ui.fuseline.Durations.FAST), label = "progressStop")
     Row(
-        modifier
-            .clip(shape)
-            .background(c.text.copy(alpha = 0.06f * lit))
-            .border(Size.focusStroke, c.focus.copy(alpha = lit), shape)
-            .fuseClickable(shape = shape, scale = false, role = androidx.compose.ui.semantics.Role.Button, onClickLabel = label, onClick = onClick)
-            .padding(horizontal = Space.l - Space.xs, vertical = Space.m - Space.xs),
+        Modifier
+            .height(Size.thumb)
+            .clip(PillShape)
+            .background(c.text.copy(alpha = 0.08f * lit))
+            .border(Size.focusStroke, c.focus.copy(alpha = lit), PillShape)
+            .fuseClickable(shape = PillShape, scale = false, role = androidx.compose.ui.semantics.Role.Button, onClickLabel = label, onClick = onClick)
+            .padding(horizontal = Space.m),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Space.s),
         content = content,
     )
 }
 
-/** A ring of light around an icon, its arc filled to [fill] (0 to 1). */
+/** What a part of [ProgressLine] says: its mark (an icon, or the bar), the number, then quietly what it counts. */
 @Composable
-private fun TimeRing(fill: Float, accent: Color, icon: androidx.compose.ui.graphics.vector.ImageVector, iconTint: Color, size: androidx.compose.ui.unit.Dp, label: String) {
+private fun androidx.compose.foundation.layout.RowScope.ProgressWords(part: ProgressPart, d: GameDetail, beat: io.github.matiyaaa.fuse.ui.shell.store.HltbView?, compact: Boolean) {
     val c = Fuse.colors
-    val arc by fuselineFloat(fill, Fuse.motion.tween(io.github.matiyaaa.fuse.ui.fuseline.Durations.DELIBERATE), label = label)
-    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
-        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-            val stroke = 3.dp.toPx()
-            val inset = stroke / 2
-            val box = androidx.compose.ui.geometry.Size(this.size.width - stroke, this.size.height - stroke)
-            drawArc(c.text.copy(alpha = 0.12f), 0f, 360f, false, androidx.compose.ui.geometry.Offset(inset, inset), box, style = androidx.compose.ui.graphics.drawscope.Stroke(stroke))
-            if (arc > 0f) {
-                drawArc(accent, -90f, 360f * arc.coerceAtLeast(0.02f), false, androidx.compose.ui.geometry.Offset(inset, inset), box, style = androidx.compose.ui.graphics.drawscope.Stroke(stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+    val played = d.game.play.totalSeconds
+    /** The number, then quietly what it counts; [full] only where there is room for it. */
+    @Composable
+    fun words(value: String, what: String, full: String = "") {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+            FText(value, Fuse.type.bodyStrong.tabular(), maxLines = 1)
+            val said = if (compact) what else listOf(what, full).filter { it.isNotEmpty() }.joinToString(" ")
+            if (said.isNotEmpty()) FText(said, Fuse.type.body, color = c.textMuted, maxLines = 1)
+        }
+    }
+    when (part) {
+        ProgressPart.PLAYED -> if (played > 0) {
+            FuseIcon(FuseIcons.Clock3, size = Size.iconS, tint = c.textMuted)
+            words(playtimeText(played), "", full = "played")
+        } else {
+            FuseIcon(FuseIcons.Sparkle, size = Size.iconS, tint = c.textMuted)
+            FText("Not played yet", Fuse.type.body, color = c.textMuted, maxLines = 1)
+        }
+        ProgressPart.BEAT -> {
+            val (seconds, what) = beat?.let { beatGoal(it.game) } ?: (0L to "")
+            if (played > 0 && seconds > 0) {
+                val fill = (played.toFloat() / seconds).coerceIn(0f, 1f)
+                io.github.matiyaaa.fuse.ui.designsystem.components.ProgressBar(fill, Modifier.width(Size.touch), color = c.accent)
+                words("${(fill * 100).toInt()}%", "of ${beatText(seconds)}", full = what)
+            } else {
+                FuseIcon(FuseIcons.Hourglass, size = Size.iconS, tint = c.textMuted)
+                words(beatText(seconds), what)
             }
         }
-        FuseIcon(icon, size = if (size == Size.thumbL) Size.iconM else Size.iconS, tint = iconTint)
-    }
-}
-
-/** The total played, then sessions, this week and when you last played. */
-@Composable
-private fun androidx.compose.foundation.layout.RowScope.PlayedPart(d: GameDetail) {
-    val c = Fuse.colors
-    val play = d.game.play
-    val share = if (play.totalSeconds > 0) (d.secondsThisWeek.toFloat() / play.totalSeconds).coerceIn(0f, 1f) else 0f
-    TimeRing(share, d.platform.accent.toColor(), if (play.totalSeconds > 0) FuseIcons.Clock3 else FuseIcons.Sparkle, if (play.totalSeconds > 0) c.text else c.textMuted, Size.thumbL, "weekArc")
-    Spacer(Modifier.width(Space.l))
-    if (play.totalSeconds <= 0) {
-        Column {
-            FText("Not played yet", Fuse.type.titleSmall, maxLines = 1)
-            FText("Your time together starts with Play", Fuse.type.caption, color = c.textMuted, maxLines = 1)
+        ProgressPart.ACHIEVEMENTS -> {
+            val a = d.achievements ?: return
+            FuseIcon(if (a.mastered) FuseIcons.Crown else FuseIcons.Trophy, size = Size.iconS, tint = if (a.mastered) c.warning else c.textMuted)
+            words("${a.earned} of ${a.total}", "", full = a.source.noun.lowercase())
         }
-        return
-    }
-    Column {
-        FText(playtimeText(play.totalSeconds), Fuse.type.numericLarge, maxLines = 1)
-        FText("played in all", Fuse.type.caption, color = c.textMuted, maxLines = 1)
-    }
-    val stats = listOfNotNull(
-        play.sessions.takeIf { it > 0 }?.let { (if (it == 1) "1" else it.toString()) to (if (it == 1) "session" else "sessions") },
-        d.secondsThisWeek.takeIf { it > 0 }?.let { playtimeText(it) to "this week" },
-        play.lastPlayedAt?.let { agoText(it).replaceFirstChar(Char::uppercase) to "last played" },
-    )
-    for ((value, label) in stats) {
-        Spacer(Modifier.width(Space.l))
-        Box(Modifier.width(Size.divider).height(Size.thumb).background(c.hairline))
-        Spacer(Modifier.width(Space.l))
-        Column {
-            FText(value, Fuse.type.bodyStrong.tabular(), maxLines = 1)
-            FText(label, Fuse.type.caption, color = c.textMuted, maxLines = 1)
-        }
-    }
-}
-
-/** How long the game takes to beat (its main story, else the longer runs), in a ring of how much you've played of it. */
-@Composable
-private fun androidx.compose.foundation.layout.RowScope.BeatPart(d: GameDetail, beat: io.github.matiyaaa.fuse.ui.shell.store.HltbView) {
-    val c = Fuse.colors
-    val g = beat.game
-    val (seconds, what) = when {
-        g.mainSeconds > 0 -> g.mainSeconds to "to beat"
-        g.plusSeconds > 0 -> g.plusSeconds to "with extras"
-        else -> g.completionistSeconds to "to finish it all"
-    }
-    val played = d.game.play.totalSeconds
-    val fill = if (seconds > 0) (played.toFloat() / seconds).coerceIn(0f, 1f) else 0f
-    TimeRing(fill, d.platform.accent.toColor(), FuseIcons.Hourglass, c.text, Size.thumb, "beatArc")
-    Spacer(Modifier.width(Space.m))
-    Column {
-        FText(beatText(seconds), Fuse.type.bodyStrong.tabular(), maxLines = 1)
-        FText(if (played > 0 && seconds > 0) "$what  ·  ${(fill * 100).toInt()}% played" else what, Fuse.type.caption, color = c.textMuted, maxLines = 1)
     }
 }
 
@@ -1875,21 +1969,6 @@ private fun CopyCard(copy: io.github.matiyaaa.fuse.ui.shell.store.CopyView, now:
 
 /** Launchers Fuse lists among emulators that only run files of their own kind, never a game's ROM. */
 private val NOT_EMULATORS = setOf("linux.script", "linux.desktop")
-
-/**
- * Where the page scrolls to for play time, whose top must sit at or below [top] and whose bottom at
- * or above [bottom] (both in page pixels, the fade and the hint line already allowed for): coming up
- * from below, back up to its top; coming down, far enough to show all of it. Null when it already shows.
- */
-internal fun timeScrollTarget(value: Int, maxValue: Int, viewport: Int, top: Int, bottom: Int): Int? {
-    val above = top.coerceIn(0, maxValue)
-    val below = (bottom - viewport).coerceIn(0, maxValue)
-    return when {
-        above < value -> above
-        below > value -> below
-        else -> null
-    }
-}
 
 /**
  * The button [from] moves to in [direction] by where the buttons are, when they wrap onto more than
