@@ -48,9 +48,11 @@ class HeadlessHouseholdTest {
     private class Library(
         val games: MutableMap<String, GameRecord> = HashMap(),
         val settings: MutableMap<String, JsonPrimitive> = HashMap(),
+        /** When the person chose a setting here; a setting not listed was never chosen (Fuse's default). */
+        val chosen: MutableMap<String, Hlc> = HashMap(),
     ) : ProfileDataPort {
         override suspend fun read(device: String, clock: HlcClock): ProfileMeta = synchronized(this) {
-            ProfileMeta(games = games.toMap(), collections = emptyMap<String, CollectionRecord>(), settings = settings.mapValues { Lww(it.value as kotlinx.serialization.json.JsonElement, Hlc.ZERO) })
+            ProfileMeta(games = games.toMap(), collections = emptyMap<String, CollectionRecord>(), settings = settings.mapValues { (k, v) -> Lww(v as kotlinx.serialization.json.JsonElement, chosen[k] ?: Hlc.ZERO) })
         }
 
         override suspend fun write(meta: ProfileMeta) = synchronized(this) {
@@ -92,6 +94,7 @@ class HeadlessHouseholdTest {
             val deckLib = Library(
                 games = hashMapOf(ruby.id to GameRecord(ruby, playSeconds = mapOf("x" to 1_800), lastPlayed = 1_000, favorite = Lww(true, Hlc.ZERO))),
                 settings = hashMapOf("appearance.themeId" to JsonPrimitive("fusi")),
+                chosen = hashMapOf("appearance.themeId" to Hlc(System.currentTimeMillis() - 60_000, 0, "deck")),
             )
             val pcLib = Library()
             val deck = device("Steam Deck", deckLib)
@@ -115,7 +118,9 @@ class HeadlessHouseholdTest {
             // Stopped and started again from the same folder: the same household, the same person.
             host.close()
             host = assertNotNull(HeadlessHost.serve(hostDir, port, "Mini PC", "test"))
+            // Chosen on the PC now, so it is the newest choice.
             pcLib.settings["appearance.themeId"] = JsonPrimitive("dawn")
+            pcLib.chosen["appearance.themeId"] = Hlc(System.currentTimeMillis(), 0, "pc")
             pc.syncNow().getOrThrow()
             deck.syncNow().getOrThrow()
             assertEquals(JsonPrimitive("dawn"), deckLib.settings["appearance.themeId"])
