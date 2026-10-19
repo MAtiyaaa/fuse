@@ -103,8 +103,12 @@ class SyncthingTest {
         server.start(wait = false)
     }
 
+    /** Every service a test made, stopped after it so its client's thread goes with it. */
+    private val made = mutableListOf<JvmSyncthingService>()
+
     @AfterTest
     fun tearDown() {
+        runBlocking { made.forEach { runCatching { it.disconnect() } } }
         scope.cancel()
         server.stop(100, 500)
         root.deleteRecursively()
@@ -120,7 +124,7 @@ class SyncthingTest {
         val settings = SettingsStore(DesktopDatabase.open(null))
         val env = FileSaveEnvironment("LINUX", home.path, variables = { null })
         val q = SaveQuery(GameKey.of("gba", null, null, "Golden Sun"), "gba", File(home, "roms/gba/Golden Sun (USA).gba").path, "linux.retroarch", core = "mgba_libretro")
-        val svc = JvmSyncthingService(Platform, settings, Secrets(), scope, env, samples = { listOf(q) })
+        val svc = JvmSyncthingService(Platform, settings, Secrets(), scope, env, samples = { listOf(q) }).also { made += it }
         return svc to q
     }
 

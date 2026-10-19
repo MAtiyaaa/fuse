@@ -95,7 +95,16 @@ class JvmSyncService(
     private val showing = Any()
 
     /** The host let go of ([showing]). */
-    private fun dropClient() = synchronized(showing) { client = null }
+    private fun dropClient() = synchronized(showing) { retire(client); client = null }
+
+    /**
+     * [old] closed once the calls already on their way with it are done (the longest, the wait for
+     * the host's news, takes up to half a minute): a client holds a thread until it is closed.
+     */
+    private fun retire(old: SyncClient?) {
+        if (old == null) return
+        scope.launch { delay(RETIRE_MS); old.close() }
+    }
 
     /** The household's games through this device's host (see [Household]). */
     val householdHere: JvmHousehold by lazy {
@@ -220,6 +229,7 @@ class JvmSyncService(
             _devices.value = knownDevices()
             showPeople(known, c.activeProfile)
         }
+        retire(client)
         client = linked(l.copy(localAddress = c.localAddress.ifBlank { l.localAddress }, remoteAddress = c.remoteAddress.ifBlank { l.remoteAddress }))
         _status.value = SyncStatus.Connecting(c.hostName.ifBlank { l.hostName })
         startLoop()
@@ -1456,7 +1466,7 @@ class JvmSyncService(
     /** What the host has, against this device's profiles: brought at once when the host has nobody, else asked. */
     private suspend fun offer(linked: HostLink) {
         pendingLink = linked
-        val c = pendingClient?.takeIf { it.link == linked } ?: SyncClient(linked).also { pendingClient = it }
+        val c = pendingClient?.takeIf { it.link == linked } ?: SyncClient(linked).also { retire(pendingClient); pendingClient = it }
         if (people.profiles.isEmpty()) {
             finishMerge()
             linkFor(linked)
@@ -1496,6 +1506,7 @@ class JvmSyncService(
 
     private suspend fun finishMerge() {
         pendingLink = null
+        retire(pendingClient)
         pendingClient = null
         _merge.value = null
         runCatching { secrets.remove(PENDING_LINK_KEY) }
@@ -1769,6 +1780,7 @@ class JvmSyncService(
         if (cfg.remoteAddress.isNotBlank() && !cfg.remoteFromHost) return
         if (SyncClient.normalise(cfg.remoteAddress.ifBlank { "x" }) == SyncClient.normalise(outside)) return
         saveConfig { it.copy(remoteAddress = outside, remoteFromHost = true) }
+        retire(client)
         client = linked(c.link.copy(remoteAddress = SyncClient.normalise(outside)))
         log("Learned the host's address from outside", kind = SyncActivity.HOST)
     }
@@ -3176,6 +3188,9 @@ class JvmSyncService(
 
         /** How often a backup copies the household and looks for the host (and the host for an older one). */
         const val KEEP_EVERY_MS = 60_000L
+
+        /** How long a replaced client is kept for the calls already on their way with it. */
+        const val RETIRE_MS = 60_000L
 
         /** How long the host must be silent before a backup says so. */
         const val HOST_AWAY_SHOWN_MS = 2 * 60_000L

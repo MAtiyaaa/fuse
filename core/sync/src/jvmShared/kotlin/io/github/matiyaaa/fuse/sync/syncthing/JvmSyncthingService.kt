@@ -98,8 +98,9 @@ class JvmSyncthingService(
         val local = if (platform.host != "ANDROID") SyncthingConfig.read(platform.host, env.home) else null
         val addresses = listOfNotNull(saved, local?.address) + DEFAULT_ADDRESSES
         for (address in addresses.distinct()) {
-            val probe = SyncthingApi(SyncthingApi.client(address), SyncthingApi.withScheme(address), null)
-            if (!probe.healthy()) continue
+            // Each client holds a thread of its own until it is closed, so a probe's is closed at once.
+            val healthy = SyncthingApi.client(address).use { SyncthingApi(it, SyncthingApi.withScheme(address), null).healthy() }
+            if (!healthy) continue
             val tryKeys = listOfNotNull(key, local?.apiKey).distinct()
             for (k in tryKeys) {
                 val r = connect(address, k)
@@ -120,6 +121,10 @@ class JvmSyncthingService(
             } catch (e: SyncthingException) {
                 client.close()
                 if (e.kind == SyncthingException.Kind.KEY) return@runCatching SyncthingState.NeedsKey(base, refused = true).also { _state.value = it }
+                throw e
+            } catch (e: Throwable) {
+                // Anything else (cancelled, an error of the connection's own): the client goes too.
+                client.close()
                 throw e
             }
             val id = status["myID"]?.jsonPrimitive?.contentOrNull ?: throw SyncthingException("That isn't Syncthing answering.", SyncthingException.Kind.REFUSED)

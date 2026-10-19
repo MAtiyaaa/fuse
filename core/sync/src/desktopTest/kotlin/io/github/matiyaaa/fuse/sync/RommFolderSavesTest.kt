@@ -90,14 +90,17 @@ class RommFolderSavesTest {
 
     @AfterTest
     fun cleanUp() {
+        http.close()
         server.stop(0)
         scope.cancel()
         root.deleteRecursively()
     }
 
     private val base = "http://127.0.0.1:${server.address.port}"
+    /** Closed after each test: a CIO client holds a thread of its own until then. */
+    private val http = HttpClient(CIO)
     private val client = RommClient(
-        HttpClient(CIO),
+        http,
         RoutePicker(base, null, RouteMode.AUTO, scope, System::currentTimeMillis, probe = { true }, lookEveryMs = 0),
         RommCredential.Token("t", RommScopes.READ + RommScopes.SAVES),
     )
