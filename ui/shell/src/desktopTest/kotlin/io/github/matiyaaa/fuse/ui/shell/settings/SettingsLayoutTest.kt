@@ -60,9 +60,11 @@ class SettingsLayoutTest {
 
     @Test
     fun aFoldedSettingIsFoundWithItsFold() {
+        // A row inside a fold is found by its own name, and opening it unfolds its group.
         val hit = SettingsIndex.search("scanlines", settingsSections).first()
-        assertEquals("CRT effect", hit.title)
+        assertEquals("Scanlines", hit.title)
         assertEquals("appearance.crt", hit.topic.group)
+        assertEquals("CRT effect", SettingsIndex.search("crt effect", settingsSections).first().title)
         val deadzone = SettingsIndex.search("deadzone", settingsSections).first()
         assertEquals("inputs.feel", deadzone.topic.group)
         assertTrue(SettingsIndex.search("cartridge", settingsSections, cartridge = false).none { it.title == "Cartridge support" })

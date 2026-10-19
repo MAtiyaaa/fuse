@@ -69,9 +69,11 @@ object Pnach {
 /**
  * An INI file edited without disturbing anything else in it: comments, order, spacing and every
  * other key stay exactly as they were. Sections and keys match ignoring case, as PCSX2's SimpleIni
- * does; a key can repeat, which is how PCSX2 keeps lists (`Enable = name` once per patch).
+ * does; a key can repeat, which is how PCSX2 keeps lists (`Enable = name` once per patch). A file
+ * with no keys yet gets `key = value`, or `key=value` when not [spaced] (Eden's, SimpleIni's
+ * `SetSpaces(false)`).
  */
-class IniText(text: String) {
+class IniText(text: String, private val spaced: Boolean = true) : io.github.matiyaaa.fuse.launch.settings.SettingsText {
     private val lines: MutableList<String> = text.replace("\r\n", "\n").split('\n').toMutableList().also {
         // A file's final newline isn't a line of its own.
         if (it.size > 1 && it.last().isEmpty()) it.removeAt(it.lastIndex)
@@ -79,7 +81,7 @@ class IniText(text: String) {
     }
     private val crlf = text.contains("\r\n")
 
-    fun values(section: String, key: String): List<String> {
+    override fun values(section: String, key: String): List<String> {
         val range = sectionRange(section) ?: return emptyList()
         return range.mapNotNull { i -> entry(lines[i])?.takeIf { it.first.equals(key, ignoreCase = true) }?.second }
     }
@@ -90,21 +92,32 @@ class IniText(text: String) {
         return range.mapNotNull { i -> entry(lines[i])?.first }.distinct()
     }
 
-    /** Adds `key = value` at the end of [section] (made at the end when missing), unless it is there already. */
+    /**
+     * Adds `key = value` at the end of [section] (made at the end when missing), unless it is there
+     * already; written as the file writes its other keys (`key=value` where they have no spaces).
+     */
     fun add(section: String, key: String, value: String): Boolean {
         if (values(section, key).any { it == value }) return false
         val range = sectionRange(section)
+        val line = key + separator() + value
         if (range == null) {
             if (lines.isNotEmpty() && lines.last().isNotBlank()) lines += ""
             lines += "[$section]"
-            lines += "$key = $value"
+            lines += line
             return true
         }
         // After the section's last line that says something, so blank lines before the next section stay.
         var at = range.first
         for (i in range) if (lines[i].isNotBlank()) at = i + 1
-        lines.add(at, "$key = $value")
+        lines.add(at, line)
         return true
+    }
+
+    /** How this file writes `=`: as its first key does, else with a space each side (unless not [spaced]). */
+    private fun separator(): String {
+        val first = lines.firstOrNull { entry(it) != null } ?: return if (spaced) " = " else "="
+        val eq = first.indexOf('=')
+        return if (eq > 0 && first[eq - 1] != ' ' && first.getOrNull(eq + 1) != ' ') "=" else " = "
     }
 
     /** Removes every `key = value` line in [section]; true when one was there. */
@@ -116,7 +129,7 @@ class IniText(text: String) {
     }
 
     /** Every `key = …` line in [section] taken out; true when one was there. */
-    fun removeKey(section: String, key: String): Boolean {
+    override fun removeKey(section: String, key: String): Boolean {
         val range = sectionRange(section) ?: return false
         val drop = range.filter { i -> entry(lines[i])?.first?.equals(key, ignoreCase = true) == true }
         drop.asReversed().forEach { lines.removeAt(it) }
@@ -124,20 +137,40 @@ class IniText(text: String) {
     }
 
     /** [key] set to [value] in [section]: its lines replaced by one, where the first one was (or at the end). */
-    fun set(section: String, key: String, value: String) {
+    override fun set(section: String, key: String, value: String) {
         val range = sectionRange(section)
         val at = range?.firstOrNull { i -> entry(lines[i])?.first?.equals(key, ignoreCase = true) == true }
         if (at == null) {
             add(section, key, value)
             return
         }
-        lines[at] = "$key = $value"
+        // Only the value changes: the key as written and the spacing around `=` stay.
+        val line = lines[at]
+        val eq = line.indexOf('=')
+        val head = line.substring(0, eq + 1)
+        val space = line.substring(eq + 1).takeWhile { it == ' ' || it == '\t' }
+        lines[at] = head + space + value
         val rest = range.filter { i -> i != at && entry(lines[i])?.first?.equals(key, ignoreCase = true) == true }
         rest.asReversed().forEach { lines.removeAt(it) }
     }
 
     /** Whether any `key = value` line is left (only headers, comments and blank lines otherwise). */
-    fun hasEntries(): Boolean = lines.any { entry(it) != null }
+    override fun hasEntries(): Boolean = lines.any { entry(it) != null }
+
+    override fun hasSection(section: String): Boolean = sectionRange(section) != null
+
+    /** As [add] does: a new section after a blank line, unless the file is empty or already ends with one. */
+    override fun separatesNewSection(): Boolean = lines.isNotEmpty() && lines.last().isNotBlank()
+
+    override fun removeEmptySection(section: String, blankBefore: Boolean): Boolean {
+        val range = sectionRange(section) ?: return false
+        if (range.any { lines[it].isNotBlank() }) return false
+        val header = range.first - 1
+        val end = range.last
+        for (i in end downTo header) lines.removeAt(i)
+        if (blankBefore && header > 0 && lines[header - 1].isBlank()) lines.removeAt(header - 1)
+        return true
+    }
 
     fun bool(section: String, key: String): Boolean? = values(section, key).lastOrNull()?.lowercase()?.let {
         when (it) {

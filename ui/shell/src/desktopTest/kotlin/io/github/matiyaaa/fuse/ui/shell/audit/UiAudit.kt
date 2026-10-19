@@ -83,7 +83,7 @@ class UiAudit {
 
     @Test fun m04Game() = audit(AuditSize.M) { gameScreens(exhaustive = true); contentScreens(); manualScreens() }
 
-    @Test fun gameBeatEverySize() = listOf(AuditSize.H, AuditSize.D, AuditSize.V, AuditSize.T).forEach { size -> audit(size) { beatScreens() } }
+    @Test fun gameBeatEverySize() = listOf(AuditSize.J, AuditSize.H, AuditSize.D, AuditSize.V, AuditSize.T).filter(Audit::sizeEnabled).forEach { size -> audit(size) { beatScreens() } }
 
     @Test fun m05Launch() = audit(AuditSize.M) { launchScreens() }
 

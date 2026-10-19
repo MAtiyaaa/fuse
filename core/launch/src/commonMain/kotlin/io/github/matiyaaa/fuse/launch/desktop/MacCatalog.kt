@@ -75,8 +75,13 @@ object MacCatalog {
         port("xemu", listOf("xemu.app")),
         port("shadps4", listOf("shadps4*.app")),
         port("sharpemu", listOf("SharpEmu*.app"), programs = listOf("SharpEmu")) { it.copy(source = LinuxCatalog.SHARPEMU_SOURCE) },
+        // KytyPS5.app's Contents/MacOS/kyty_emulator, an x86-64 build (Rosetta 2 on Apple silicon) that finds the MoltenVK in its bundle.
+        port("kytyps5", listOf("KytyPS5*.app"), programs = listOf("kyty_emulator")) { d ->
+            d.copy(source = LinuxCatalog.KYTYPS5_SOURCE, limitations = d.limitations + "On a Mac it is experimental, and runs under Rosetta 2 on Apple silicon.")
+        },
         port("mednafen", emptyList(), programs = listOf("mednafen")),
         port("mame", emptyList(), programs = listOf("mame")),
+        port("supermodel", emptyList(), programs = listOf("supermodel")),
         port("scummvm", listOf("ScummVM.app"), programs = listOf("scummvm")),
         port("pico8", listOf("PICO-8.app"), rule = "PICO-8"),
         port("ruffle", listOf("Ruffle.app")),

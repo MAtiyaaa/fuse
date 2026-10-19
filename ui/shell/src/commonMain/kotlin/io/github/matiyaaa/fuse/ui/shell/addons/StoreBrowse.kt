@@ -184,7 +184,6 @@ private fun StoreShelves(app: AppState, state: StoreState, active: Boolean, topP
         }
     }
 
-    val updates = state.updates
     val cartridgeChosen = app.store.prefs.value.rommAnswer.endsWith("CARTRIDGE")
     val rows: List<StoreRow> = remember(state, platforms, page.query, cartridgeChosen) {
         buildList {
@@ -194,7 +193,7 @@ private fun StoreShelves(app: AppState, state: StoreState, active: Boolean, topP
                         TopButton(if (page.query.isEmpty()) "Search" else "Search: ${page.query}", FuseIcons.Search) { search() },
                         TopButton("Clear search", FuseIcons.SearchX) { page.query = "" }.takeIf { page.query.isNotEmpty() },
                         // One place for updates: what each installed app has, channels, Update All.
-                        TopButton(if (updates.isEmpty()) "Updates" else "Updates (${updates.size})", FuseIcons.CircleArrowDown, primary = updates.isNotEmpty()) {
+                        TopButton(if (state.updateCount == 0) "Updates" else "Updates (${state.updateCount})", FuseIcons.CircleArrowDown, primary = state.updateCount > 0) {
                             app.go(Route.StoreUpdates)
                         },
                         TopButton("Add an app", FuseIcons.Plus) { app.addStoreApp() },
@@ -258,10 +257,13 @@ private fun StoreShelves(app: AppState, state: StoreState, active: Boolean, topP
                 actions = listOfNotNull(
                     MenuAction("main", action.label, action.icon, onSelect = { app.closeOverlays(); action.run() }).takeIf { !action.busy },
                     MenuAction("page", "Details", FuseIcons.Info, onSelect = { app.closeOverlays(); openApp(a) }),
-                    state.installed[a.key]?.record?.previousVersion?.let { back ->
-                        MenuAction("back", "Go Back to $back", FuseIcons.Undo, detail = "The version its last update replaced, kept by Fuse", onSelect = { app.closeOverlays(); ops.rollBack(a.key) })
-                            .takeIf { state.jobs[a.key]?.active != true }
-                    },
+                    state.installed[a.key]?.let { inst -> inst.record?.earlier?.takeIf { it.isNotEmpty() }?.let { earlier ->
+                        MenuAction(
+                            "back", if (earlier.size == 1) "Go Back to ${earlier.single().version ?: "the Version You Had"}" else "Go Back to an Earlier Version", FuseIcons.Undo,
+                            detail = if (earlier.size == 1) "The version its last update replaced, kept by Fuse" else "One of the ${earlier.size} versions Fuse kept",
+                            onSelect = { app.closeOverlays(); goBack(app, a.key, a.name, inst.versionName, earlier) },
+                        ).takeIf { state.jobs[a.key]?.active != true }
+                    } },
                     MenuAction("uninstall", "Uninstall", FuseIcons.Trash, destructive = true, onSelect = { app.closeOverlays(); ops.uninstall(a.key) })
                         .takeIf { a.key in state.installed && state.jobs[a.key]?.active != true },
                     MenuAction("source", "View source", FuseIcons.External, detail = a.sourceHost, onSelect = { app.closeOverlays(); app.platform.openUrl(a.sourceUrl) }),

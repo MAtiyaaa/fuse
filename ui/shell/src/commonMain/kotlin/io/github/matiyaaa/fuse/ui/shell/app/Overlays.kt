@@ -180,7 +180,12 @@ private fun ChoiceOverlay(app: AppState) {
     if (spec != null) {
         InputLayer(priority = LayerPriority.DIALOG + 1, modal = true) { e ->
             when (e.action) {
-                NavAction.BACK -> { app.choice = null; NavResult.CONSUMED }
+                NavAction.BACK -> {
+                    app.choice = null
+                    // A sheet opened from another goes back to it.
+                    spec.onBack?.invoke()
+                    NavResult.CONSUMED
+                }
                 else -> handleMenuAction(e, spec.options, sel)
             }
         }
@@ -370,7 +375,12 @@ private fun TextInputOverlay(app: AppState) {
     var shown by remember { mutableStateOf(spec) }
     if (spec != null) shown = spec
     val field = app.textDraft
-    val keyboard = remember(spec) { KeyboardState(autoCapitalize = spec?.capitalize == true && spec.secret.not()) }
+    val keyboard = remember(spec) {
+        KeyboardState(
+            autoCapitalize = spec?.capitalize == true && spec.secret.not(),
+            startPage = if (spec?.numbers == true) io.github.matiyaaa.fuse.ui.designsystem.components.KeyPage.NUMBERS else io.github.matiyaaa.fuse.ui.designsystem.components.KeyPage.LETTERS,
+        )
+    }
     LaunchedEffect(spec) {
         if (spec != null) {
             field.replaceAll(spec.initial)

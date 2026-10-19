@@ -57,11 +57,44 @@ data class AppSettings(
     val romm: FuseRommSettings = FuseRommSettings(),
     val downloads: DownloadSettings = DownloadSettings(),
     val streaming: StreamingSettings = StreamingSettings(),
+    /** Fuse Ports on a computer (this device's own: its paths are this computer's). */
+    val ports: PortsSettings = PortsSettings(),
 ) {
     companion object {
         const val CURRENT_VERSION = 3
     }
 }
+
+/**
+ * Fuse Ports (Addons, Ports, on a computer): off until turned on in Settings, Addons, and nothing is
+ * fetched before. The ports installed here, and the folders the person chose for each one's game
+ * files (by port, then by the port's data id), kept when a port is removed so it comes back set up.
+ * [copies]: the library game whose folder a port reads, when the person took it from the library
+ * (by port). [playWith]: the library games Play starts with a port instead (by game id, the port).
+ */
+@Serializable
+data class PortsSettings(
+    val enabled: Boolean = false,
+    val installed: Map<String, InstalledPort> = emptyMap(),
+    val folders: Map<String, Map<String, String>> = emptyMap(),
+    val copies: Map<String, Long> = emptyMap(),
+    val playWith: Map<String, String> = emptyMap(),
+    /** The AnyPS5 release Fuse has, for recompiling PlayStation 5 games; null before the first. */
+    val anyPs5: String? = null,
+)
+
+/**
+ * A port installed in Fuse's folder of ports: the list's entry and the build it was installed from
+ * (so it starts as that version does, whatever a newer list says), and the links Fuse made in its
+ * copy (relative to it), so a folder chosen again replaces exactly those.
+ */
+@Serializable
+data class InstalledPort(
+    val port: io.github.matiyaaa.fuse.model.Port,
+    val build: io.github.matiyaaa.fuse.model.PortBuild,
+    val links: List<String> = emptyList(),
+    val installedAt: Long = 0,
+)
 
 /**
  * Fuse Sync by Fuse (Settings, Addons, Fuse Sync): off until set up. Whether this device hosts or
@@ -278,10 +311,20 @@ data class StoreInstall(
     val file: String? = null,
     val versionCode: Long = 0,
     val installedAt: Long = 0,
-    /** The earlier version an update replaced, kept to go back to (its program's path), and its version. */
+    /** The earlier version an update replaced, kept to go back to (its program's path), and its version (before [earlier]). */
     val previous: String? = null,
     val previousVersion: String? = null,
-)
+    /** The earlier versions kept to go back to, newest first. */
+    val earlier: List<KeptVersion> = emptyList(),
+) {
+    /** Every earlier version kept, newest first: [earlier], or the one a record from before it named. */
+    val kept: List<KeptVersion>
+        get() = earlier.ifEmpty { listOfNotNull(previous?.let { KeptVersion(it, previousVersion, installedAt) }) }
+}
+
+/** An earlier version of a program Fuse kept: where its program is now, which version it was, and when it was kept. */
+@Serializable
+data class KeptVersion(val path: String, val version: String? = null, val keptAt: Long = 0)
 
 /** Screenshots and recordings of Fuse's own screen. */
 @Serializable
@@ -608,8 +651,13 @@ data class FuseRommSettings(
     val mode: String = "AUTO",
     val localAddress: String = "",
     val remoteAddress: String = "",
-    /** The mirror's key for this server in Fuse's database. */
+    /**
+     * The key everything kept for this server goes under in Fuse (its mirror, the changes and saves
+     * waiting for it); a different server gets its own (`RommServers`).
+     */
     val server: String = "main",
+    /** Each address Fuse was set up with, normalised, to the key of the server it was ([server]). */
+    val servers: Map<String, String> = emptyMap(),
     /** Who Fuse is signed in as, to show (never a password or token). */
     val account: String = "",
     /** The RomM version last seen, to show. */
@@ -636,6 +684,11 @@ data class FuseRommSettings(
     val placeBios: Boolean = true,
     /** Keep games' saves in step with RomM's save sync (games from RomM, or matched to it). */
     val saveSync: Boolean = false,
+    /**
+     * Send the person's changes to games from RomM back to it: favourites (RomM's favourites
+     * collection), games hidden or shown, and play sessions. Off until turned on.
+     */
+    val sendChanges: Boolean = false,
 )
 
 /**
@@ -689,7 +742,8 @@ data class PrivacySettings(
 )
 
 @Serializable
-enum class UpdateChannel { STABLE, PRERELEASE }
+/** Which releases Fuse updates to: published ones, pre-releases too (Beta), or the nightly one as well. */
+enum class UpdateChannel { STABLE, PRERELEASE, NIGHTLY }
 
 @Serializable
 data class UpdateSettings(
@@ -782,4 +836,25 @@ data class SteamIntegrationSettings(
      * follows the account Steam remembers as most recent. Never switched by switching Fuse profiles.
      */
     val achievementsAccount: String = "",
+    /**
+     * Fuse's games go into Steam as Direct entries, which start their emulator with nothing of
+     * Fuse's in between, instead of with Fuse Fast Start (the default). Only where Steam can have
+     * them (Linux); a game that can't start on its own still goes in with Fast Start.
+     */
+    val directEntries: Boolean = false,
+    /**
+     * A Direct entry for a system starts the way the person's own shortcuts start that system's
+     * games, where Fuse learned it from them (their program, start folder and launch options, as
+     * they write them). On by default; off, every Direct entry starts as Play would.
+     */
+    val asTheirShortcuts: Boolean = true,
+    /**
+     * Keep Steam in Step: games that join Fuse's library go into Steam by themselves, and Fuse's
+     * entries for games that leave it come out. Off until the person turns it on.
+     */
+    val automatic: Boolean = false,
+    /** Keep Steam in Step was offered once, after the first game the person added to Steam. */
+    val automaticOffered: Boolean = false,
+    /** How a game's entry starts when the person chose it for that game: true Direct, false Fast Start. */
+    val startOverrides: Map<Long, Boolean> = emptyMap(),
 )

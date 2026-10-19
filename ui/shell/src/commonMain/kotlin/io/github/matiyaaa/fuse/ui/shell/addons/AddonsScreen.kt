@@ -53,7 +53,7 @@ private const val ORDER_REST = 100
 private val TABS = 56.dp
 
 /**
- * Addons: Cartridge (where it runs and is turned on), the Store (Android) and Jellyfin (once turned
+ * Addons: Cartridge (where it runs and is turned on), the Store, Jellyfin and Fuse Ports (once turned
  * on in Settings), as views of one section. Up from the top of any reaches the tabs, Left and Right
  * switch them, Down returns. It opens on the first tab in the order they were dragged into, and
  * remembers which was shown. With one part, Addons is just that part, without
@@ -82,6 +82,7 @@ fun AddonsScreen(app: AppState) {
         // RomM moving this device's saves: its saves, the way Sync shows Fuse One's.
         if (prefs.romm.enabled && prefs.romm.configured && prefs.romm.saveSync && app.store.romm.supported) add(AddonsPart.ROMM_SAVES)
         if (app.store.streaming.supported && prefs.streaming.enabled && prefs.streaming.hosts.isNotEmpty()) add(AddonsPart.STREAMING)
+        if (app.store.ports.supported && prefs.portsEnabled) add(AddonsPart.PORTS)
         if (isEmpty()) add(AddonsPart.CARTRIDGE)
     }.sortedBy { p -> prefs.addonsOrder.indexOf(p.name).let { if (it < 0) ORDER_REST + p.ordinal else it } }
     // Opens on the first tab, in the order they were dragged into (or on the one last shown, while
@@ -173,6 +174,7 @@ fun AddonsScreen(app: AppState) {
                     AddonsPart.SYNCTHING -> io.github.matiyaaa.fuse.ui.shell.sync.SyncthingTab(app, active = !inTabs, topPadding = top)
                     AddonsPart.STREAMING -> io.github.matiyaaa.fuse.ui.shell.stream.StreamTab(app, active = !inTabs, topPadding = top)
                     AddonsPart.ROMM_SAVES -> io.github.matiyaaa.fuse.ui.shell.sync.RommSavesTab(app, active = !inTabs, topPadding = top)
+                    AddonsPart.PORTS -> PortsTab(app, active = !inTabs, topPadding = top)
                 }
             }
         }
@@ -180,12 +182,13 @@ fun AddonsScreen(app: AppState) {
             val items = parts.map { p ->
                 when (p) {
                     AddonsPart.CARTRIDGE -> ViewTab("Cartridge", icon = FuseMarks.Cartridge, badge = (cartridge.activeDownloads + cartridge.queuedDownloads).takeIf { it > 0 }?.toString())
-                    AddonsPart.STORE -> ViewTab("Store", icon = FuseIcons.Store, badge = store.updates.size.takeIf { it > 0 }?.toString())
+                    AddonsPart.STORE -> ViewTab("Store", icon = FuseIcons.Store, badge = store.updateCount.takeIf { it > 0 }?.toString())
                     AddonsPart.JELLYFIN -> ViewTab("Jellyfin", icon = FuseIcons.Clapperboard)
                     AddonsPart.SYNC -> ViewTab("Sync", icon = FuseMarks.FuseOne)
                     AddonsPart.SYNCTHING -> ViewTab("Syncthing", icon = FuseIcons.FolderSync)
                     AddonsPart.STREAMING -> ViewTab("Streaming", icon = FuseIcons.MonitorPlay)
                     AddonsPart.ROMM_SAVES -> ViewTab("RomM Saves", icon = FuseIcons.LibraryBig)
+                    AddonsPart.PORTS -> ViewTab("Ports", icon = FuseIcons.Boxes)
                 }
             }
             // Open: the named tabs, which lift away and shrink toward the top left as the page scrolls.

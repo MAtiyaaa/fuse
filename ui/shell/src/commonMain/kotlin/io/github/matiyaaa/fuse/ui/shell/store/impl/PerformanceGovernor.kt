@@ -95,7 +95,23 @@ internal class PerformanceGovernor(
         state.first { allowed(EnginePolicy.of(it)) && allowed(policy) }
     }
 
+    /**
+     * Waits until the person has stopped moving for a moment ([QUIET_NANOS] without a press). Work
+     * Fuse does by itself (finding art) goes between a run of presses, not during one: on a first
+     * start, with every game's art still to find while Android has yet to compile Fuse, art work
+     * running under a scroll was what made the first scroll stutter.
+     */
+    suspend fun awaitQuiet() {
+        while (true) {
+            val since = sinceInput() ?: return
+            if (since >= QUIET_NANOS) return
+            delay(((QUIET_NANOS - since) / 1_000_000L).coerceAtLeast(MIN_QUIET_WAIT_MS))
+        }
+    }
+
     private companion object {
+        const val QUIET_NANOS = 1_500_000_000L
+        const val MIN_QUIET_WAIT_MS = 50L
         const val TICK_MS = 5_000L
         const val SLEEP_GAP_MS = 25_000L
         const val RESUME_SETTLE_MS = 8_000L

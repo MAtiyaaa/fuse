@@ -139,7 +139,7 @@ val settingsSections: List<SettingsSection> = listOf(
     SettingsSection("inputs", "Controls", FuseIcons.Gamepad, "Buttons, mapping, repeat and sticks", ::inputRows, group = DEVICE),
     SettingsSection("displays", "Display", FuseIcons.Monitor, "Screens, rotation, performance", ::displayAndPerformanceRows, group = DEVICE),
     SettingsSection("sound", "Sound", FuseIcons.Volume, "Menu music and interface sounds", ::soundRows, group = DEVICE),
-    SettingsSection("accounts", "Accounts", FuseIcons.CircleUser, "RetroAchievements and Phone Link", ::accountsRows, group = CONNECTIONS),
+    SettingsSection("accounts", "Accounts", FuseIcons.CircleUser, "Your sign-ins, keys and Phone Link", ::accountsRows, group = CONNECTIONS),
     SettingsSection("fuseone", "Fuse One", FuseMarks.FuseOne, "Profiles, saves, the library, the host", ::fuseOneRows, group = CONNECTIONS, available = { it.store.sync.service != null || it.store.syncthing != null }),
     SettingsSection("addons", "Addons", FuseIcons.Blocks, "RomM, Jellyfin, streaming and the Store", ::addonsRows, group = CONNECTIONS, status = ::addonsStatus),
     SettingsSection("downloads", "Downloads", FuseIcons.Download, "How many, how fast, and when they move", ::downloadsRows, group = CONNECTIONS),
@@ -232,7 +232,7 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
     val searching = query.isNotBlank()
     val hits = remember(query, sections) {
         if (!searching) emptyList()
-        else SettingsIndex.search(query, sections, limit = SEARCH_LIMIT, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen, steam = app.platform.steam != null, decky = app.platform.decky != null)
+        else SettingsIndex.search(query, sections, limit = SEARCH_LIMIT, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen, steam = app.platform.steam != null, decky = app.platform.decky != null, android = app.platform.host == io.github.matiyaaa.fuse.model.Host.ANDROID)
     }
     val rows = if (!searching) ownRows else hits.mapIndexed { i, h ->
         MenuAction("hit.$i", h.title, h.section.icon, detail = h.path, trailing = Trailing.Chevron, onSelect = {})
@@ -274,7 +274,7 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
             doneLabel = "Search",
         ) { typed ->
             field.replaceAll(typed.trim())
-            val found = SettingsIndex.search(typed, sections, limit = SEARCH_LIMIT, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen, steam = app.platform.steam != null, decky = app.platform.decky != null)
+            val found = SettingsIndex.search(typed, sections, limit = SEARCH_LIMIT, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen, steam = app.platform.steam != null, decky = app.platform.decky != null, android = app.platform.host == io.github.matiyaaa.fuse.model.Host.ANDROID)
             // One place: straight there. Several: they are listed, the first chosen.
             if (found.size == 1) land(found.single().topic) else if (found.isNotEmpty()) { onSearch = false; rowSel.index = 0; inRows = true }
         }
@@ -295,7 +295,7 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
                 field, title = "Search settings", placeholder = "Text size, controller, RomM", doneLabel = "Go",
                 cancel = { field.replaceAll("") },
             ) {
-                val first = SettingsIndex.search(field.text, sections, limit = SEARCH_LIMIT, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen, steam = app.platform.steam != null, decky = app.platform.decky != null).firstOrNull()
+                val first = SettingsIndex.search(field.text, sections, limit = SEARCH_LIMIT, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen, steam = app.platform.steam != null, decky = app.platform.decky != null, android = app.platform.host == io.github.matiyaaa.fuse.model.Host.ANDROID).firstOrNull()
                 if (first != null) land(first.topic) else if (field.text.isBlank()) search()
             }
         }

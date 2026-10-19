@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.desktop.platform
 
 import io.github.matiyaaa.fuse.desktop.system.SingleInstance
+import kotlinx.coroutines.flow.receiveAsFlow
 import io.github.matiyaaa.fuse.desktop.BuildInfo
 import io.github.matiyaaa.fuse.desktop.FuseDirs
 import io.github.matiyaaa.fuse.desktop.Log
@@ -77,7 +78,7 @@ class DesktopPlatformUi(
         secondScreen = false,
         launchOnOtherDisplay = false,
         overlay = false,
-        videoPreview = false,
+        videoPreview = true,
         brightness = quickControls.brightnessAvailable,
         volume = quickControls.volumeAvailable,
         wifiSettings = quickControls.settingsAvailable,
@@ -85,6 +86,7 @@ class DesktopPlatformUi(
         canExit = true,
         windowModes = true,
         cartridge = os == DesktopOs.LINUX,
+        frameGeneration = os == DesktopOs.LINUX,
     )
 
     override val device: CapabilityProfile = measureDevice()
@@ -132,7 +134,8 @@ class DesktopPlatformUi(
     override val quick: QuickControls = quickControls
 
     /** No desktop video player is bundled yet, so previews are off rather than half working. */
-    override val video: VideoPreview? = null
+    /** Gameplay previews behind the room, as on Android, through Fuse Player's engine. */
+    override val video: VideoPreview? = DesktopVideoPreview()
     override val music: DesktopMenuMusic = DesktopMenuMusic()
 
     init {
@@ -232,6 +235,17 @@ class DesktopPlatformUi(
     override fun exit() = window.exitApplication()
 
     override val startupPlay: Long? = args.indexOf("--play").takeIf { it >= 0 }?.let { args.getOrNull(it + 1)?.toLongOrNull() }
+
+    /** Games Fast Start handed to this Fuse, waiting for the app to take them (kept until it does). */
+    private val handedOver = kotlinx.coroutines.channels.Channel<io.github.matiyaaa.fuse.ui.shell.platform.PlayRequest>(capacity = 8)
+
+    override val playRequests: kotlinx.coroutines.flow.Flow<io.github.matiyaaa.fuse.ui.shell.platform.PlayRequest> = handedOver.receiveAsFlow()
+
+    /** Plays game [id] here for a Fast Start that found this Fuse open; [ended] once it is over. */
+    fun requestPlay(id: Long, ended: () -> Unit) {
+        // A queue already full: no promise made, the start that asked carries on by itself.
+        if (handedOver.trySend(io.github.matiyaaa.fuse.ui.shell.platform.PlayRequest(id, ended)).isFailure) ended()
+    }
 
     private val crashLog = io.github.matiyaaa.fuse.desktop.CrashLog(File(dirs.data, "crash"))
 

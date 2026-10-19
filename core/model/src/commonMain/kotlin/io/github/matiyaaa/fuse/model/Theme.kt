@@ -31,7 +31,21 @@ data class ThemeSpec(
     val quickMenu: QuickMenuLook = QuickMenuLook.SOFT,
     /** How Home's widgets are drawn. */
     val widgets: WidgetLook = WidgetLook.LIT,
+    /** How game and system tiles are framed. */
+    val tiles: TileLook = TileLook.PLAIN,
 )
+
+/**
+ * How game and system tiles are framed, so a theme's tiles look like its own and not only coloured
+ * differently: [PLAIN] is the art edge to edge (Fuse's own); [GLOSS] sets it in a rounded frame of
+ * white (silver in a dark theme) with a bevel inside and a gloss across its top, and the focus ring
+ * breathes; [PANEL] is a flat card with a thin grey frame, like a handheld's menu cards; [INK] draws a
+ * firm outline in the theme's text colour, like a printed card; [NEON] lines the tile in its accent,
+ * glowing faintly at rest and brightly once lifted; [MAT] mounts the art in a border of the panel
+ * colour, like a print.
+ */
+@Serializable
+enum class TileLook { PLAIN, GLOSS, PANEL, INK, NEON, MAT }
 
 /**
  * How Home's widgets are drawn: [LIT] is the raised panel with a soft light of the widget's own

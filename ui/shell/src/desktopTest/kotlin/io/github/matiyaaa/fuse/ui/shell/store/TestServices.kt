@@ -51,6 +51,10 @@ internal class FakeServices(
     val launched = mutableListOf<ResolvedLaunch>()
     var exit: CompletableDeferred<Unit>? = null
 
+    /** lsfg-vk set up here, for a test of frame generation. */
+    var frameGeneration = false
+    override fun frameGenerationReady() = frameGeneration
+
     override val appVersion = "0.0.1"
     val javaFs = JavaFileSystem()
     override val fs: FuseFileSystem = javaFs
@@ -60,11 +64,17 @@ internal class FakeServices(
     /** Answers a test gives first, before the fake's own (null passes to them). */
     @Volatile var web: (suspend io.ktor.client.engine.mock.MockRequestHandleScope.(io.ktor.client.request.HttpRequestData) -> io.ktor.client.request.HttpResponseData?)? = null
 
+    /** RomM on this computer, as a test sets it up (none by default). */
+    @Volatile var home: RommHomeHost? = null
+    override val rommHome: RommHomeHost? get() = home
+
     /** The Store's view of the system, when a test gives it one (Android has one; desktop doesn't). */
     override var packages: PackageBridge? = null
 
     @Volatile var desktop: DesktopInstaller? = null
     override val desktopApps: DesktopInstaller? get() = desktop
+    @Volatile var ports: PortFiles? = null
+    override val portFiles: PortFiles? get() = ports
 
     override val http = HttpClient(MockEngine { request ->
         requestHosts += request.url.host
@@ -95,7 +105,16 @@ internal class FakeServices(
     /** RetroArch's installed cores, when a test gives it a cores folder Fuse can see; null when it can't. */
     @Volatile var retroArchCores: Set<String>? = null
 
+    /** Emulation setups the fake finds ("EmuDeck", "RetroDECK"); none by default. */
+    @Volatile var suites: Set<String> = emptySet()
+
+    /** This device's home network addresses, for a test of hosting a game. */
+    @Volatile var homeNetwork: List<String> = emptyList()
+    override fun homeAddresses(): List<String> = homeNetwork
+
     override val emulators = object : EmulatorDetector {
+        override suspend fun suites(): Set<String> = this@FakeServices.suites
+
         override fun retroArchCorePath(installed: InstalledEmulator, core: String): String? =
             retroArchCores?.takeIf { core in it }?.let { "/usr/lib/libretro/${core}_libretro.so" }
 
@@ -206,17 +225,70 @@ internal class FakeServices(
     @Volatile var retroArchHome: io.github.matiyaaa.fuse.launch.patches.RetroArchHome? = null
     @Volatile var dolphinHome: io.github.matiyaaa.fuse.launch.settings.DolphinHome? = null
 
+    /** The id DuckStation would encrypt its sign-in with here ("" for a portable one, null when unreadable). */
+    @Volatile var duckMachineKey: String? = "fake-machine-id\n"
+
+    /** The fake RPCS3's config folder (where its config.yml and custom_configs are); null when it isn't set up. */
+    @Volatile var rpcs3ConfigDir: String? = null
+
+    /** The fake Eden's config folder (where its qt-config.ini and custom are); null when it isn't set up. */
+    @Volatile var edenConfigDir: String? = null
+
+    /** The fake Azahar's config folder; null when it isn't set up. */
+    @Volatile var azaharConfigDir: String? = null
+
+    /** The fake Cemu's data and config folders; null when it isn't set up. */
+    @Volatile var cemuHome: io.github.matiyaaa.fuse.launch.settings.CemuHome? = null
+
+    /** The fake shadPS4's user folder; null when it isn't set up. */
+    @Volatile var shadPs4UserDir: String? = null
+
+    /** The fake Xenia's storage root; null when it isn't set up. */
+    @Volatile var xeniaRootDir: String? = null
+
+    /** The fake Vita3K's config folder; null when it isn't set up. */
+    @Volatile var vita3kConfigDir: String? = null
+
+    /** The fake Flycast's config folder; null when it isn't set up. */
+    @Volatile var flycastConfigDir: String? = null
+
+    /** The fake MAME's ini folder; null when it isn't set up. */
+    @Volatile var mameIniDir: String? = null
+
+    /** The fake melonDS's config folder; null when it isn't set up. */
+    @Volatile var melondsConfigDir: String? = null
+
+    /** The fake Supermodel's Config folder; null when it isn't set up. */
+    @Volatile var supermodelConfigDir: String? = null
+
     override val emulatorFiles = object : EmulatorFiles {
         override suspend fun pcsx2(installed: InstalledEmulator) = pcsx2Home
         override suspend fun duckstation(installed: InstalledEmulator) = duckstationHome
+        override suspend fun duckStationMachineKey(installed: InstalledEmulator) = duckMachineKey
         override suspend fun ppsspp(installed: InstalledEmulator) = ppssppHome
         override suspend fun retroArch(installed: InstalledEmulator) = retroArchHome
         override suspend fun dolphin(installed: InstalledEmulator) = dolphinHome
+        override suspend fun rpcs3Config(installed: InstalledEmulator) = rpcs3ConfigDir
+        override suspend fun edenConfig(installed: InstalledEmulator) = edenConfigDir
+        override suspend fun azaharConfig(installed: InstalledEmulator) = azaharConfigDir
+        override suspend fun cemu(installed: InstalledEmulator) = cemuHome
+        override suspend fun shadPs4User(installed: InstalledEmulator) = shadPs4UserDir
+        override suspend fun xeniaRoot(installed: InstalledEmulator) = xeniaRootDir
+        override suspend fun vita3kConfig(installed: InstalledEmulator) = vita3kConfigDir
+        override suspend fun flycastConfig(installed: InstalledEmulator) = flycastConfigDir
+        override suspend fun mameIniFolder(installed: InstalledEmulator) = mameIniDir
+        override suspend fun supermodelConfig(installed: InstalledEmulator, romPath: String?) = supermodelConfigDir
+        override suspend fun melondsConfig(installed: InstalledEmulator) = melondsConfigDir
+        // The real one reads the disc's boot header; the fake's say it in their names.
+        override suspend fun dreamcastGameId(path: String, serial: String?) = Regex("""\[([A-Z0-9-]{4,10})]""").find(path)?.groupValues?.get(1)
+        override suspend fun wiiUTitleId(path: String, serial: String?) = Regex("""\[(00050000[0-9A-Fa-f]{8})]""").find(path)?.groupValues?.get(1)?.uppercase()
+        // The real one reads the file's header; the fake's files say it in their names.
+        override suspend fun threeDsTitleId(path: String, serial: String?) = Regex("""\[(00040000[0-9A-Fa-f]{8})]""").find(path)?.groupValues?.get(1)?.uppercase()
         override suspend fun remove(path: String): Boolean = inside(path) && File(path).delete()
         override suspend fun zipText(zip: String, entry: String): String? =
             java.util.zip.ZipFile(zip).use { z -> z.getEntry(entry)?.let { e -> z.getInputStream(e).use { it.readBytes().decodeToString() } } }
         private fun inside(path: String): Boolean =
-            listOfNotNull(pcsx2Home?.dataRoot, duckstationHome?.dataRoot, ppssppHome?.memstick, retroArchHome?.cheats, retroArchHome?.configDir, dolphinHome?.config, dolphinHome?.gameSettings)
+            listOfNotNull(pcsx2Home?.dataRoot, duckstationHome?.dataRoot, ppssppHome?.memstick, retroArchHome?.cheats, retroArchHome?.configDir, dolphinHome?.config, dolphinHome?.gameSettings, rpcs3ConfigDir, edenConfigDir, azaharConfigDir, cemuHome?.config, shadPs4UserDir, xeniaRootDir, vita3kConfigDir, flycastConfigDir, mameIniDir, supermodelConfigDir, melondsConfigDir)
                 .any { path.startsWith("$it/") }
 
         override suspend fun write(path: String, text: String): Boolean {

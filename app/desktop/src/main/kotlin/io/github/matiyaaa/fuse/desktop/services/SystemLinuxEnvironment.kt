@@ -46,6 +46,18 @@ class SystemLinuxEnvironment(override val homeDir: String) : LinuxEnvironment {
 
     override fun readText(path: String): String? = readSmallText(path)
 
+    /** What each program printed for its version, by path and the time it was last changed: each is run once. */
+    private val printed = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    override fun versionOutput(path: String, flag: String): String? {
+        val key = "$path\u0000${File(path).lastModified()}\u0000$flag"
+        printed[key]?.let { return it.ifEmpty { null } }
+        val out = Processes.run(listOf(path, flag), timeoutMs = 4_000, maxOutput = 16 * 1024, withErrors = true)
+        val text = out?.takeIf { it.exitCode == 0 }?.stdout?.trim().orEmpty()
+        printed[key] = text
+        return text.ifEmpty { null }
+    }
+
     override fun readBytes(path: String, offset: Long, length: Int): ByteArray? = try {
         java.io.RandomAccessFile(path, "r").use { f ->
             if (offset < 0 || offset >= f.length()) return null

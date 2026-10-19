@@ -56,6 +56,9 @@ interface PlatformUi {
      */
     val secondScreenLog: StateFlow<List<String>> get() = NoSecondScreenLog
 
+    /** What Fuse itself does to the battery and the heat now, for System health's Power and heat. */
+    val power: StateFlow<PowerFacts> get() = NoPowerFacts
+
     fun openUrl(url: String)
     fun restart()
 
@@ -98,6 +101,13 @@ interface PlatformUi {
      * starts it as soon as it is ready and closes again once it ends.
      */
     val startupPlay: Long? get() = null
+
+    /**
+     * Games another start of Fuse handed to this one to play (Fast Start from a Steam entry while
+     * Fuse is open), each with [PlayRequest.ended] to call once the game has ended and its saves are
+     * kept: the start that handed it over waits for that, so Steam sees the game for as long as it runs.
+     */
+    val playRequests: kotlinx.coroutines.flow.Flow<PlayRequest> get() = kotlinx.coroutines.flow.emptyFlow()
 
     /** Text on the system clipboard, or null when it is empty, not text or can't be read. */
     suspend fun readClipboardText(): String? = null
@@ -181,6 +191,28 @@ interface SteamIntegration {
     /** The games Fuse put in Steam's library here, by Fuse's game id, for any Steam user. */
     suspend fun gamesInSteam(): Set<Long> = emptySet()
 
+    /** Fuse's Direct entries in Steam here: each entry's id in Steam to its game, for counting their time. */
+    suspend fun directGames(): Map<Long, Long> = emptyMap()
+
+    /** How each of Fuse's games in Steam here starts: Fast Start, an older entry through Fuse's window, or Direct. */
+    suspend fun gameStarts(): Map<Long, io.github.matiyaaa.fuse.library.steam.SteamStart> = emptyMap()
+
+    /**
+     * Steam here can have Direct entries, which start a game's emulator themselves with Fuse's mark
+     * kept in their launch options (Linux, where Steam reads them through the shell). Elsewhere every
+     * entry starts with Fast Start.
+     */
+    val directEntries: Boolean get() = false
+
+    /**
+     * Changes to Steam's library that the Fuse Decky plugin makes through Steam's running client
+     * (bridge protocol 2), so Steam needn't close or restart; null where there is no plugin to do it.
+     */
+    val live: SteamLiveQueue? get() = null
+
+    /** The plugin is there right now, so a change goes into Steam at once with Steam open. */
+    val changesLive: Boolean get() = live?.connected == true
+
     /**
      * What putting [games] in Steam's library would do, game by game, over this computer's Steam
      * users, before anything is written. Null where Steam's library can't be read.
@@ -188,9 +220,11 @@ interface SteamIntegration {
     suspend fun planGames(games: List<io.github.matiyaaa.fuse.library.steam.SteamGameEntry>): List<io.github.matiyaaa.fuse.library.steam.SteamGamePlanItem>? = null
 
     /**
-     * Puts [games] in Steam's library for every Steam user here, each starting through Fuse, with its
-     * pictures from [art] and, with [collections], in a Steam collection for its system. Steam is
-     * never closed for it: while it is open, the games go in when it next closes.
+     * Puts [games] in Steam's library for every Steam user here, each starting with Fast Start or,
+     * where it carries a [io.github.matiyaaa.fuse.library.steam.SteamDirect] and [directEntries] allows,
+     * straight in its emulator, with its pictures from [art] and, with [collections], in a Steam
+     * collection for its system. Steam is never closed for it: while it is open, the games go in when
+     * it next closes.
      */
     suspend fun addGames(
         games: List<io.github.matiyaaa.fuse.library.steam.SteamGameEntry>,
@@ -214,12 +248,20 @@ interface SteamIntegration {
     /** Takes Fuse's entries for [gameIds] (null: all of Fuse's games) out of Steam's library; nobody else's. */
     suspend fun removeGames(gameIds: Set<Long>?): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
 
-    /** What is wrong with Fuse's game entries: games no longer in [library], an older Fuse, doubles. */
-    suspend fun gamesHealth(library: Set<Long>): List<io.github.matiyaaa.fuse.library.steam.SteamHealthIssue> = emptyList()
+    /**
+     * What is wrong with Fuse's game entries: games no longer in [library], an older Fuse, doubles,
+     * older entries that open Fuse's window first, and Direct entries whose emulator is gone.
+     */
+    suspend fun gamesHealth(
+        library: Set<Long>,
+        wanted: Map<Long, io.github.matiyaaa.fuse.library.steam.SteamGameEntry> = emptyMap(),
+        unavailable: Set<Long> = emptySet(),
+    ): List<io.github.matiyaaa.fuse.library.steam.SteamHealthIssue> = emptyList()
 
     /**
      * Puts Fuse's game entries right: those for games no longer in [library] and doubles go, and
-     * [moved] (entries that start an older Fuse) are pointed at this one, keeping what the person changed.
+     * [moved] (entries that start an older Fuse, an older way or a missing emulator) are written again
+     * as each game starts now, keeping what the person changed.
      */
     suspend fun repairGames(
         library: Set<Long>,
@@ -227,12 +269,70 @@ interface SteamIntegration {
         art: Map<Long, io.github.matiyaaa.fuse.library.steam.SteamArt>,
     ): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
 
+    /**
+     * Shortcuts other tools (Steam ROM Manager, EmuDeck, a script, the person) made here that play
+     * one of Fuse's games, found by the game's own file in their command ([files], each to its game).
+     */
+    suspend fun learnShortcuts(files: Map<String, Long>): List<io.github.matiyaaa.fuse.library.steam.SteamLearned> = emptyList()
+
+    /**
+     * How the person's own shortcuts here start each system's games
+     * ([io.github.matiyaaa.fuse.library.steam.SteamLearn.habits]), learned from those that play one
+     * of Fuse's games ([files], each to its game; [systems], each game's system).
+     */
+    suspend fun habits(files: Map<String, Long>, systems: Map<Long, String>): List<io.github.matiyaaa.fuse.library.steam.SteamHabit> = emptyList()
+
+    /**
+     * Starts Fuse's entry for [gameId] through Steam itself, as if it were chosen in Steam's library
+     * (with Steam's overlay and the controller layout the person gave that entry), through the Fuse
+     * Decky plugin. Fails where the plugin isn't there or the game has no entry.
+     */
+    suspend fun playFromSteam(gameId: Long): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
+
+    /** The person's own collections in Steam (not Fuse's), for matching them to Fuse's. */
+    suspend fun theirCollections(): List<io.github.matiyaaa.fuse.library.steam.SteamCollection> = emptyList()
+
+    /** What the person chose for their collections beside Fuse's. */
+    suspend fun collectionChoices(): io.github.matiyaaa.fuse.library.steam.SteamCollectionChoices = io.github.matiyaaa.fuse.library.steam.SteamCollectionChoices()
+
+    /**
+     * How Fuse's collection [fuseName] and the person's [theirs] (by id) live together: apart, Fuse's
+     * games put into theirs, or theirs renamed [fuseName] with Fuse's games in it. Theirs never goes.
+     */
+    suspend fun chooseCollection(fuseName: String, theirs: String, how: io.github.matiyaaa.fuse.library.steam.SteamCollectionWay): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
+
+    /**
+     * Runs while Fuse does: each time Steam closes, Fuse's collections Steam Cloud dropped meanwhile
+     * are put back ([onPutBack] gets how many), as written before; ones the person deleted stay gone.
+     */
+    suspend fun keepCollections(onPutBack: (Int) -> Unit) = Unit
+
+    /** How each of [games]'s entries starts once written: what Steam runs, its start folder and its launch options. */
+    suspend fun entryStarts(games: List<io.github.matiyaaa.fuse.library.steam.SteamGameEntry>): Map<Long, Triple<String, String, String>> = emptyMap()
+
+    /**
+     * Makes each of [takes] (a shortcut [learnShortcuts] found, and Fuse's entry for its game) Fuse's,
+     * in its place, keeping its name, art and collections. Steam must be closed; Undo puts it back.
+     */
+    suspend fun takeOver(
+        takes: List<Pair<io.github.matiyaaa.fuse.library.steam.SteamLearned, io.github.matiyaaa.fuse.library.steam.SteamGameEntry>>,
+    ): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
+
     /** Fuse's last change to Steam's games can be undone. */
     val canUndoGames: Boolean get() = false
 
     /** Puts Steam's library back as it was before Fuse's last change to its games. */
     suspend fun undoGames(): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
+
+    /** Fuse's recent changes to Steam's games that Undo can take back, newest first. */
+    suspend fun undoSteps(): List<SteamUndoStep> = emptyList()
+
+    /** Puts Steam's library back as it was before change [stepId]; every change after it is undone too. */
+    suspend fun undoTo(stepId: Long): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
 }
+
+/** One of Fuse's changes to Steam's games, made at [at], that Undo can take back: [what] it did, in words. */
+data class SteamUndoStep(val id: Long, val what: String, val at: Long)
 
 /** What Decky Loader and the Fuse Decky plugin look like on this device. */
 data class DeckyState(
@@ -284,6 +384,28 @@ class OpenedFile(val name: String, val bytes: ByteArray)
 
 private val NoSecondScreenLog: StateFlow<List<String>> = MutableStateFlow(emptyList())
 
+/**
+ * What Fuse does to the battery and the heat right now, as far as the platform can say: what it is
+ * keeping the device awake for ([holding], empty when it lets the device sleep), the screen's rate
+ * as Fuse asks for it ([refresh]), and whether its rounds on the network wait while the device
+ * sleeps ([pausesAsleep]).
+ */
+data class PowerFacts(
+    val holding: Set<PowerHold> = emptySet(),
+    val refresh: RefreshFact? = null,
+    val pausesAsleep: Boolean = false,
+)
+
+/** Why Fuse keeps the device awake. */
+enum class PowerHold { TRANSFERS, ART }
+
+/** The rate Fuse asks of the screen: [FULL] while things move for you, [CALM] (about 60 Hz) while only the background does, [RESTING] when it asks nothing. */
+data class RefreshFact(val state: State, val fullHz: Float?, val calmHz: Float?) {
+    enum class State { FULL, CALM, RESTING }
+}
+
+private val NoPowerFacts: StateFlow<PowerFacts> = MutableStateFlow(PowerFacts())
+
 data class PlatformFeatures(
     val homeRole: Boolean = false,
     val androidApps: Boolean = false,
@@ -301,6 +423,8 @@ data class PlatformFeatures(
     val cartridge: Boolean = true,
     /** The screen turns with the device, and Fuse can choose how (Android). */
     val rotation: Boolean = false,
+    /** Games can have frame generation through lsfg-vk here (Linux), once it is set up. */
+    val frameGeneration: Boolean = false,
 )
 
 interface Haptics {
@@ -424,7 +548,7 @@ interface StorageAccess {
     suspend fun pickAudio(title: String): PickedFile? = null
     /** A save file or archive, copied into temporary app storage where document access needs it. */
     suspend fun pickSave(title: String): String? = null
-    /** An IPS, UPS or BPS patch, readable by Fuse (copied into temporary app storage where document access needs it). */
+    /** An IPS, UPS, BPS or xdelta patch, readable by Fuse (copied into temporary app storage where document access needs it). */
     suspend fun pickPatch(title: String): String? = null
     /** A file of one of [extensions] (described as [label]), read where it is; null where Fuse can't open files that way. */
     suspend fun pickFile(title: String, label: String, extensions: List<String>): String? = null
@@ -530,7 +654,7 @@ data class DrawingInfo(val name: String, val gpu: Boolean, val details: List<Pai
 private val NoDrawingInfo: kotlinx.coroutines.flow.StateFlow<DrawingInfo?> = kotlinx.coroutines.flow.MutableStateFlow(null)
 
 /** What Fuse asks of the system's sleep while it works: see [PlatformUi.stayAwake]. */
-data class StayAwake(val cpu: Boolean, val screen: Boolean) {
+data class StayAwake(val cpu: Boolean, val screen: Boolean, val finding: Boolean = false) {
     companion object {
         val NONE = StayAwake(cpu = false, screen = false)
 
@@ -546,7 +670,7 @@ data class StayAwake(val cpu: Boolean, val screen: Boolean) {
             // [transfers] counts what moves: one waiting its turn starts within moments of a place,
             // and one that can't start (its source signed out) held the locks for as long as it stayed.
             val working = transfers > 0 || finding
-            return StayAwake(cpu = working, screen = working && standby)
+            return StayAwake(cpu = working, screen = working && standby, finding = finding)
         }
 
         /**
@@ -569,3 +693,6 @@ data class StayAwake(val cpu: Boolean, val screen: Boolean) {
 data class BackgroundLimits(val optimized: Boolean, val restricted: Boolean) {
     val limited: Boolean get() = optimized || restricted
 }
+
+/** A game handed over to play here: [ended] once it has ended and everything after it is done (or it couldn't start). */
+class PlayRequest(val gameId: Long, val ended: () -> Unit)

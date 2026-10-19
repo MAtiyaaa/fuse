@@ -32,6 +32,9 @@ class SingleInstance(private val folder: File) {
         /** Another Fuse was asked to come to the front; this start leaves. */
         data object Handed : Decision
 
+        /** Another Fuse played the game this start was for (Fast Start), and it has ended; this start leaves. */
+        data object Ran : Decision
+
         /** Another Fuse was closed (or ended) and this one holds the lock now. */
         data class Replaced(val ended: Boolean) : Decision
 
@@ -47,6 +50,13 @@ class SingleInstance(private val folder: File) {
     @Volatile var onShow: () -> Boolean = { false }
     @Volatile var onQuit: () -> Unit = {}
 
+    /**
+     * What this Fuse does when a later start hands it a game to play (Fast Start, `--run <id>`):
+     * plays it, and calls the second argument once it has ended. Null where this Fuse can't (no
+     * window yet, or a Fast Start itself): the later start then takes its place.
+     */
+    @Volatile var onRun: ((Long, () -> Unit) -> Unit)? = null
+
     private var channel: FileChannel? = null
     private var lock: FileLock? = null
     private var server: ServerSocket? = null
@@ -55,7 +65,7 @@ class SingleInstance(private val folder: File) {
      * Takes the lock or deals with the Fuse holding it. [steamGameId] is the Steam entry this start
      * came from (Steam's `SteamGameId`), [replace] whether it is Fuse starting itself again.
      */
-    fun claim(steamGameId: String?, replace: Boolean): Decision {
+    fun claim(steamGameId: String?, replace: Boolean, run: Long? = null): Decision {
         folder.mkdirs()
         val lockFile = File(folder, LOCK)
         val ch = try {
@@ -66,7 +76,13 @@ class SingleInstance(private val folder: File) {
         val held = tryLock(ch)
         if (held != null) return hold(ch, held, steamGameId, Decision.First)
         val other = Holder.read(File(folder, INFO))
-        val takeOver = replace || shouldReplace(steamGameId, other?.steamGameId)
+        // A game to play: the Fuse already open plays it, and this start waits until it has ended,
+        // so whatever started it (Steam) sees the game for as long as it runs.
+        if (run != null && other != null && runThere(other, run)) {
+            ch.close()
+            return Decision.Ran
+        }
+        val takeOver = replace || run != null || shouldReplace(steamGameId, other?.steamGameId)
         if (!takeOver && other != null && ask(other, SHOW)) {
             ch.close()
             return Decision.Handed
@@ -122,10 +138,17 @@ class SingleInstance(private val folder: File) {
                     return@Thread
                 }
                 runCatching {
+                    client.soTimeout = ANSWER_MS
+                    val line = BufferedReader(InputStreamReader(client.getInputStream(), Charsets.UTF_8)).readLine().orEmpty()
+                    val (key, command) = line.substringBefore(' ') to line.substringAfter(' ', "")
+                    // A game handed over: the connection stays open until it has ended.
+                    if (key == secret && command.startsWith("$RUN ")) {
+                        val game = command.removePrefix("$RUN ").trim().toLongOrNull()
+                        val play = onRun
+                        if (game == null || play == null) client.close() else handOver(client, game, play)
+                        return@runCatching
+                    }
                     client.use { c ->
-                        c.soTimeout = ANSWER_MS
-                        val line = BufferedReader(InputStreamReader(c.getInputStream(), Charsets.UTF_8)).readLine().orEmpty()
-                        val (key, command) = line.substringBefore(' ') to line.substringAfter(' ', "")
                         if (key != secret) return@use
                         // Coming to the front is promised only once done: a Fuse whose window is
                         // gone or stuck says nothing, and the start that asked takes its place.
@@ -134,11 +157,25 @@ class SingleInstance(private val folder: File) {
                         c.getOutputStream().flush()
                         if (command == QUIT) onQuit()
                     }
-                }
+                }.onFailure { runCatching { client.close() } }
             }
         }, "fuse-single-instance").apply {
             isDaemon = true
             start()
+        }
+    }
+
+    /** Says "ok" on [client], plays [game] through [play], and says "ended" when it has (or this Fuse goes). */
+    private fun handOver(client: Socket, game: Long, play: (Long, () -> Unit) -> Unit) {
+        val out = client.getOutputStream()
+        out.write("ok\n".toByteArray())
+        out.flush()
+        val answered = java.util.concurrent.atomic.AtomicBoolean(false)
+        play(game) {
+            if (answered.compareAndSet(false, true)) {
+                runCatching { out.write("ended\n".toByteArray()); out.flush() }
+                runCatching { client.close() }
+            }
         }
     }
 
@@ -210,6 +247,34 @@ class SingleInstance(private val folder: File) {
             }
         }
 
+        /**
+         * Hands game [game] to [holder] to play and waits until it has ended: true when it took the
+         * game (whether it then ran or couldn't start, it says when it is over, or its Fuse closed),
+         * false when it didn't answer or can't play games for others (an older Fuse).
+         */
+        internal fun runThere(holder: Holder, game: Long): Boolean {
+            if (holder.port <= 0) return false
+            return try {
+                Socket().use { s ->
+                    s.connect(InetSocketAddress(InetAddress.getLoopbackAddress(), holder.port), CONNECT_MS)
+                    s.soTimeout = ANSWER_MS
+                    s.getOutputStream().write("${holder.secret} $RUN $game\n".toByteArray())
+                    s.getOutputStream().flush()
+                    val reader = BufferedReader(InputStreamReader(s.getInputStream(), Charsets.UTF_8))
+                    if (reader.readLine() != "ok") return false
+                    // As long as the game runs: no time limit. The end of the line (that Fuse closing) ends it too.
+                    s.soTimeout = 0
+                    reader.readLine()
+                    true
+                }
+            } catch (e: java.net.SocketTimeoutException) {
+                false
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+        internal const val RUN = "run"
         internal const val SHOW = "show"
         internal const val QUIT = "quit"
         private const val LOCK = "instance.lock"

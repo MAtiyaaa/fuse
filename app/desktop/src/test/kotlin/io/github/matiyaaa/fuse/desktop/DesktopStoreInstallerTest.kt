@@ -62,4 +62,45 @@ class DesktopStoreInstallerTest {
         assertNull(installer.keepPrevious("Emu", elsewhere.absolutePath))
         assertTrue(elsewhere.exists())
     }
+
+    @Test
+    fun everyReplacedVersionIsKeptOnItsOwnShelfAndAnyOfThemComesBack(): Unit = runBlocking {
+        // Three updates in a row: each version they replaced is kept, none over another.
+        var current = installer.install("Emu", download("1.0"), "Emu-1.0.AppImage", DesktopAssetKind.APPIMAGE, null)
+        val shelves = ArrayList<String>()
+        for (v in listOf("1.1", "1.2", "1.3")) {
+            shelves += installer.keepPrevious("Emu", current)!!
+            current = installer.install("Emu", download(v), "Emu-$v.AppImage", DesktopAssetKind.APPIMAGE, null)
+        }
+        assertEquals(listOf("1.0", "1.1", "1.2"), shelves.map { File(it).readText() })
+        assertEquals(3, shelves.map { File(it).parentFile }.toSet().size, "a shelf each")
+        // As files, not text: the installer gives paths with forward slashes on Windows too.
+        assertEquals(listOf(File(current).absoluteFile), apps.listFiles()!!.map { it.absoluteFile }, "only the version in use is where programs are found")
+
+        // Back to the oldest, skipping the two between: what was in place is kept first (the Store does that).
+        val nowKept = installer.keepPrevious("Emu", current)!!
+        val back = installer.restorePrevious(shelves[0], null)
+        assertEquals("1.0", File(back).readText())
+        assertEquals(File(apps, "Emu-1.0.AppImage").absoluteFile, File(back).absoluteFile)
+        assertFalse(File(shelves[0]).exists())
+        assertEquals("1.3", File(nowKept).readText())
+        assertEquals("1.1", File(shelves[1]).readText())
+
+        // Letting versions go: each shelf leaves, and the program's folder with the last of them.
+        for (k in listOf(shelves[1], shelves[2], nowKept)) assertTrue(installer.forgetKept(k))
+        assertFalse(File(kept, "Emu").exists())
+        assertFalse(installer.forgetKept(nowKept), "a version already let go")
+        assertEquals("1.0", File(back).readText())
+    }
+
+    @Test
+    fun aVersionKeptBeforeShelvesHadTimesStillComesBack(): Unit = runBlocking {
+        // 0.4.2 kept one version as <kept>/<name>/<program>.
+        val old = File(kept, "Emu/Emu-0.9.AppImage").apply { parentFile.mkdirs(); writeText("0.9") }
+        val current = installer.install("Emu", download("1.0"), "Emu-1.0.AppImage", DesktopAssetKind.APPIMAGE, null)
+        val back = installer.restorePrevious(old.absolutePath, current)
+        assertEquals("0.9", File(back).readText())
+        assertFalse(File(current).exists())
+        assertFalse(File(kept, "Emu").exists())
+    }
 }

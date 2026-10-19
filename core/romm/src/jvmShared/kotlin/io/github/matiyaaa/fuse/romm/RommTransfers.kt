@@ -199,7 +199,7 @@ class RommUploadHandler(private val host: RommTransferHost) : TransferHandler {
             io.note(job.encode())
         }
         if (job.scanAfter && client.may(RommScopes.TASKS_RUN) && client.capabilities.tokenScans) {
-            runCatching { client.scan(listOf(job.platformId)) }
+            runCatching { client.scan(listOf(job.platformId)) }.getOrNull()?.let(host::scanStarted)
         }
         host.uploaded(job, item, job.romId)
     }

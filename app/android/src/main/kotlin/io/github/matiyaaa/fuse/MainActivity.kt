@@ -200,7 +200,7 @@ class MainActivity : ComponentActivity(), ActivityRequests {
                 }
             }
             launch {
-                followWindowRefresh(window, app, store)
+                followWindowRefresh(window, app, store, main = true)
             }
             launch {
                 store.prefs.map { it.display.rotation }.distinctUntilChanged().collect { followRotation(it) }

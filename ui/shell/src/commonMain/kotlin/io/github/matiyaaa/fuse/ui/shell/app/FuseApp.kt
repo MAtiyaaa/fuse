@@ -262,7 +262,33 @@ private fun FuseAppContent(
     LaunchedEffect(Unit) {
         platform.startupPlay?.let { id -> if (app.safeMode == null) app.playOnStart(id) }
     }
-    LaunchedEffect(Unit) { app.refreshSteamGames() }
+    // A game Fast Start handed over to play here: the start that sent it waits until it has ended.
+    LaunchedEffect(Unit) {
+        platform.playRequests.collect { request ->
+            app.scope.launch {
+                try {
+                    if (app.safeMode == null) app.playHandedOver(request.gameId)
+                } finally {
+                    request.ended()
+                }
+            }
+        }
+    }
+    LaunchedEffect(Unit) {
+        app.refreshSteamGames()
+        // Fuse's entries in Steam looked over once the library has settled, for System health.
+        delay(StartupGuard.SETTLE_MS)
+        if (app.safeMode == null) runCatching { app.reportSteamHealth() }
+    }
+    // Fuse's collections Steam Cloud drops during a Steam session go back each time Steam closes.
+    LaunchedEffect(Unit) {
+        if (app.safeMode != null) return@LaunchedEffect
+        app.platform.steam?.keepCollections { n ->
+            app.toasts.show(if (n == 1) "Steam Cloud had dropped one of Fuse's collections. It's back" else "Steam Cloud had dropped $n of Fuse's collections. They're back", icon = FuseIcons.Layers)
+        }
+    }
+    // Keep Steam in Step (off until the person turns it on).
+    LaunchedEffect(Unit) { if (app.safeMode == null) app.keepSteamInStep() }
     // An update Fuse went back from at this start, or a library brought back for this version: said once.
     LaunchedEffect(Unit) {
         val note = app.store.updates.takeStartupNote() ?: return@LaunchedEffect
@@ -737,10 +763,10 @@ private fun BoxScope.TopLine(app: AppState, platform: PlatformUi, tabs: List<Des
  */
 @Composable
 private fun BoxScope.HintLine(app: AppState, hintFlash: HintFlash) {
-    // An options sheet or a choice over the page answers to Confirm and Back, wherever it was opened:
-    // its hints, not the page's under it.
+    // An options sheet, a choice, a problem or a question over the page answers to Confirm and Back,
+    // wherever it was opened: its hints, not the page's under it.
     val hints = when {
-        app.contextMenu != null || app.choice != null -> MENU_HINTS
+        app.contextMenu != null || app.choice != null || app.problem != null || app.confirm != null -> MENU_HINTS
         app.liftedTab != null -> LIFTED_TAB_HINTS
         else -> app.hints
     }

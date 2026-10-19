@@ -21,6 +21,7 @@ import io.ktor.utils.io.jvm.javaio.copyTo
 import io.ktor.utils.io.jvm.javaio.toInputStream
 import io.ktor.utils.io.writeFully
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withPermit
@@ -103,9 +104,13 @@ internal fun hostError(status: Int, text: String, json: Json): IOException {
  */
 class SyncClient(
     @Volatile var link: HostLink,
-    private val http: HttpClient = defaultClient(),
+    http: HttpClient? = null,
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
+    /** Its own HTTP client unless it was given one, which stays the giver's to close. */
+    private val ownsHttp = http == null
+    private val http: HttpClient = http ?: defaultClient()
+
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     @Volatile var route: Route? = null
@@ -161,11 +166,22 @@ class SyncClient(
         return moved || newer
     }
 
-    private val quickHttp: HttpClient by lazy {
+    private val quickLazy = lazy {
         SyncHttp.client {
             install(HttpTimeout) { connectTimeoutMillis = 1_500; requestTimeoutMillis = 4_000 }
             expectSuccess = false
         }
+    }
+    private val quickHttp: HttpClient by quickLazy
+
+    /**
+     * Lets go of what this client holds: its own HTTP clients (each keeps a thread of its own until
+     * it is closed) and its look for home. A call still on its way with it fails.
+     */
+    fun close() {
+        looking.cancel()
+        if (quickLazy.isInitialized()) quickHttp.close()
+        if (ownsHttp) http.close()
     }
 
     /** When home was last looked at while away (see [bases]). */

@@ -111,7 +111,8 @@ internal val catalogPlatforms: List<Platform> = listOf(
     ),
     platform(
         "ps5", "PlayStation 5", "PS5", CONSOLE, SONY, "Sony", 2020,
-        "ps5 desktop", "playstation5", 0xFFA9B4C8, aspect = BLU_RAY_CASE,
+        // A ZArchive dump (.zar) whose root holds eboot.bin, as KytyPS5 plays it (its README, "Running").
+        "ps5 desktop zar", "playstation5", 0xFFA9B4C8, aspect = BLU_RAY_CASE,
     ),
     platform(
         "psp", "PlayStation Portable", "PSP", HANDHELD, SONY, "Sony", 2004,
@@ -353,6 +354,12 @@ internal val catalogPlatforms: List<Platform> = listOf(
     platform(
         "scummvm", "ScummVM", "ScummVM", PC_GAMES, PC, null, null,
         "scummvm svm", "", 0xFF6FA36F, policy = FolderPolicy.FOLDER_AS_GAME, aspect = BLU_RAY_CASE,
+    ),
+    // Fuse Ports: games rebuilt to run natively, each started by the launcher file Fuse Ports writes
+    // for it in Fuse's own folder (ES-DE and the art pack call the system "ports").
+    platform(
+        "ports", "Ports", "Ports", PC_GAMES, PC, null, null,
+        "fuseport", "", 0xFF8C6BB1, layout = LibraryLayout.CAPSULE, aspect = STEAM_CAPSULE,
     ),
     // PICO-8 carts are .p8 text or .p8.png pictures (ES-DE reads both).
     platform(

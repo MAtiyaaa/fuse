@@ -147,6 +147,8 @@ data class UiPrefs(
     /** RomM's details and pictures for games Cartridge downloaded. */
     val cartridgeRommDetails: Boolean = true,
     val checkForUpdates: Boolean = true,
+    /** Which of Fuse's releases it updates to: published, Beta's pre-releases too, or the nightly one as well. */
+    val updateChannel: io.github.matiyaaa.fuse.data.settings.UpdateChannel = io.github.matiyaaa.fuse.data.settings.UpdateChannel.STABLE,
     /** L3 + R3 takes a screenshot, and held, records (where Fuse can capture its screen). */
     val captureCombo: Boolean = true,
     /** Recordings include Fuse's own sound. */
@@ -172,6 +174,8 @@ data class UiPrefs(
     val storeAutoCheck: Boolean = true,
     /** The Store in Addons (Settings, Addons, Store); off, Addons has no Store and nothing is checked. */
     val storeEnabled: Boolean = true,
+    /** Fuse Ports in Addons, on a computer (Settings, Addons, Ports); off until turned on, and nothing is fetched before. */
+    val portsEnabled: Boolean = false,
 ) {
     /** The theme in use: a built-in one, else an added one, else Fuse (an added theme was removed). */
     val theme: ThemeSpec

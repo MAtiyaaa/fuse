@@ -37,6 +37,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuList
 import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
 import io.github.matiyaaa.fuse.ui.designsystem.components.Spinner
+import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.components.handleMenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberReveal
@@ -93,8 +94,24 @@ internal fun RommSavesTab(app: AppState, active: Boolean, topPadding: Dp) {
     val games = report?.games.orEmpty()
     val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
 
-    val actions = listOf<Triple<String, ImageVector, () -> Unit>>(
+    val waitingHere = report?.waiting ?: 0
+    val actions = listOfNotNull<Triple<String, ImageVector, () -> Unit>>(
         Triple("Look Again", FuseIcons.RefreshCcw) { asked++ },
+        // Saves that couldn't reach RomM: they go by themselves once it answers, or now.
+        if (waitingHere > 0) Triple("Send Them Now", FuseIcons.CloudUpload) {
+            app.scope.launch {
+                val sent = app.store.romm.sendWaitingSaves()
+                app.toasts.show(
+                    when {
+                        sent == waitingHere -> if (sent == 1) "The save went to RomM" else "All $sent saves went to RomM"
+                        sent > 0 -> "$sent saves went to RomM. The rest go once RomM takes them"
+                        else -> "RomM didn't take them yet. They go by themselves once it does"
+                    },
+                    if (sent > 0) ToastKind.SUCCESS else ToastKind.WARNING,
+                )
+                asked++
+            }
+        } else null,
         Triple("RomM Settings", FuseIcons.Settings) { app.go(Route.RommSettings) },
     )
     val rows = games.map { g -> gameRow(app, g, now) }
@@ -150,12 +167,15 @@ internal fun RommSavesTab(app: AppState, active: Boolean, topPadding: Dp) {
                 ok = when {
                     failed != null -> false
                     report == null && !loading -> null
+                    // Saves waiting aren't lost, nor sent yet.
+                    waitingHere > 0 -> null
                     else -> true
                 },
                 status = when {
                     failed != null -> "RomM isn't answering"
                     report == null && loading -> "Looking at RomM"
                     report == null -> "RomM's save sync is off here"
+                    waitingHere > 0 -> if (waitingHere == 1) "1 save waits to go to RomM" else "$waitingHere saves wait to go to RomM"
                     waiting > 0 -> if (waiting == 1) "1 game has a newer save on RomM" else "$waiting games have newer saves on RomM"
                     else -> "In step with RomM"
                 },

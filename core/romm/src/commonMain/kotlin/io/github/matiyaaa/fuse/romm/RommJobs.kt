@@ -65,6 +65,9 @@ interface RommTransferHost {
 
     /** An upload finished. */
     suspend fun uploaded(job: RommUploadJob, item: TransferItem, romId: Long?)
+
+    /** RomM started scan [taskId] for an upload: the app can follow it ([RommClient.task]). */
+    fun scanStarted(taskId: String) {}
 }
 
 internal val jobJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }

@@ -11,6 +11,7 @@ import io.github.matiyaaa.fuse.launch.patches.RetroArchCfg
 import io.github.matiyaaa.fuse.launch.patches.RetroArchHome
 import io.github.matiyaaa.fuse.launch.settings.DolphinHome
 import io.github.matiyaaa.fuse.model.InstalledEmulator
+import io.github.matiyaaa.fuse.ui.shell.store.EmulatorFileCopies
 import io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles
 import io.github.matiyaaa.fuse.ui.shell.store.InstallerResult
 import io.github.matiyaaa.fuse.ui.shell.store.InstallerRun
@@ -49,6 +50,9 @@ class DesktopEmulatorFiles(
 ) : EmulatorFiles {
     private val roots: MutableSet<String> = Collections.synchronizedSet(mutableSetOf())
 
+    /** Single files found outside those folders that may be written too (never removed): RetroArch's `retroarch.cfg` beside its folders. */
+    private val singles: MutableSet<String> = Collections.synchronizedSet(mutableSetOf())
+
     override suspend fun pcsx2(installed: InstalledEmulator): Pcsx2Home? = withContext(Dispatchers.IO) {
         val flatpak = installed.detectedVia == "Flatpak"
         val program = if (flatpak) null else File(installed.appId).takeIf { it.isAbsolute }
@@ -66,9 +70,10 @@ class DesktopEmulatorFiles(
         roots += data.absolutePath
         Pcsx2Home(
             dataRoot = data.absolutePath.replace('\\', '/'),
-            gameSettings = folder("GameSettings", "gamesettings"),
-            patches = folder("Patches", "patches"),
-            cheats = folder("Cheats", "cheats"),
+            // The folders its own settings moved elsewhere are its too.
+            gameSettings = folder("GameSettings", "gamesettings").also { roots += File(it).absolutePath },
+            patches = folder("Patches", "patches").also { roots += File(it).absolutePath },
+            cheats = folder("Cheats", "cheats").also { roots += File(it).absolutePath },
             patchesZip = zipCandidates(appRoot, flatpak).firstOrNull { it.isFile && it.canRead() }?.absolutePath?.replace('\\', '/'),
             textures = folder("Textures", "textures").also { roots += File(it).absolutePath },
         )
@@ -120,14 +125,45 @@ class DesktopEmulatorFiles(
         roots += data.absolutePath
         DuckStationHome(
             dataRoot = data.absolutePath.replace('\\', '/'),
-            gameSettings = folder("GameSettings", "gamesettings"),
-            cheats = folder("Cheats", "cheats"),
-            patches = folder("Patches", "patches"),
+            // The folders its own settings moved elsewhere are its too.
+            gameSettings = folder("GameSettings", "gamesettings").also { roots += File(it).absolutePath },
+            cheats = folder("Cheats", "cheats").also { roots += File(it).absolutePath },
+            patches = folder("Patches", "patches").also { roots += File(it).absolutePath },
             cheatsZip = zip("cheats.zip"),
             patchesZip = zip("patches.zip"),
             textures = folder("Textures", "textures").also { roots += File(it).absolutePath },
         )
     }
+
+    /**
+     * This computer's id as DuckStation reads it for its sign-in key (`src/core/achievements.cpp`
+     * v0.1-11894, `GetLoginEncryptionMachineKey`): the whole of `/etc/machine-id` on Linux (its
+     * Flatpak sees the same file); the registry's `MachineGuid` with the closing NUL that
+     * `RegGetValueA`'s length counts on Windows; the host UUID (`gethostuuid`, the same as the
+     * platform's `IOPlatformUUID`) as 32 lowercase hex digits on macOS. "" when DuckStation runs
+     * portable (`EmuFolders::IsRunningInPortableMode`: its data folder is its program folder).
+     */
+    override suspend fun duckStationMachineKey(installed: InstalledEmulator): String? = withContext(Dispatchers.IO) {
+        val program = if (installed.detectedVia == "Flatpak") null else File(installed.appId).takeIf { it.isAbsolute }
+        val programDir = program?.let { if (it.path.endsWith(".app")) File(it, "Contents/MacOS") else it.parentFile }
+        if (programDir != null && (File(programDir, "portable.txt").isFile || File(programDir, "settings.ini").isFile)) return@withContext ""
+        when (os) {
+            DesktopOs.LINUX -> runCatching { File("/etc/machine-id").readText() }.getOrNull()?.takeIf { it.isNotBlank() }
+            DesktopOs.WINDOWS -> output(listOf("reg", "query", "HKLM\\SOFTWARE\\Microsoft\\Cryptography", "/v", "MachineGuid"))
+                ?.lineSequence()?.map { it.trim() }?.firstOrNull { it.startsWith("MachineGuid") }
+                ?.split(Regex("\\s+"))?.lastOrNull()?.takeIf { it.length >= 32 }?.let { it + "\u0000" }
+            DesktopOs.MACOS -> output(listOf("ioreg", "-rd1", "-c", "IOPlatformExpertDevice"))
+                ?.let { Regex("\"IOPlatformUUID\"\\s*=\\s*\"([0-9A-Fa-f-]{36})\"").find(it)?.groupValues?.get(1) }
+                ?.replace("-", "")?.lowercase()
+        }
+    }
+
+    /** What [command] prints, or null when it can't run or takes over five seconds. */
+    private fun output(command: List<String>): String? = runCatching {
+        val p = ProcessBuilder(command).redirectErrorStream(true).start()
+        val out = p.inputStream.bufferedReader().use { it.readText() }
+        if (!p.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)) { p.destroyForcibly(); null } else out.takeIf { p.exitValue() == 0 }
+    }.getOrNull()
 
     /**
      * PPSSPP's memory stick (UI/NativeApp.cpp, NativeInit; Windows/main.cpp, InitMemstickDirectory):
@@ -243,6 +279,8 @@ class DesktopEmulatorFiles(
         val configDir = RetroArchCfg.folder(cfg["rgui_config_directory"], configDefault.replace('\\', '/'), homePath, programPath)
         roots += File(cheats).absolutePath
         roots += File(configDir).absolutePath
+        // Its own settings (and sign-in) are this one file beside those folders on Linux and Windows, not in them.
+        singles += config.absolutePath
         RetroArchHome(config.absolutePath.replace('\\', '/'), cheats, configDir)
     }
 
@@ -320,16 +358,21 @@ class DesktopEmulatorFiles(
         }
     }
 
-    override suspend fun write(path: String, text: String): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun write(path: String, text: String): Boolean = write(path, text, keepCopy = true)
+
+    override suspend fun writePrivate(path: String, text: String): Boolean = write(path, text, keepCopy = false)
+
+    private suspend fun write(path: String, text: String, keepCopy: Boolean): Boolean = withContext(Dispatchers.IO) {
         val target = File(path).absoluteFile
-        val inside = roots.any { root -> target.normalize().path.startsWith(File(root).normalize().path + File.separator) }
+        val inside = roots.any { root -> target.normalize().path.startsWith(File(root).normalize().path + File.separator) } ||
+            synchronized(singles) { singles.any { File(it).normalize().path == target.normalize().path } }
         if (!inside) return@withContext false
         try {
-            // A copy of the file as it was before Fuse first changed it, kept with Fuse's own data.
-            if (target.isFile) {
-                val copy = File(backups, target.name)
+            // A copy of the file as it was before Fuse first changed it, kept with Fuse's own data at its whole path.
+            if (keepCopy && target.isFile) {
+                val copy = File(backups, EmulatorFileCopies.below(target.normalize().path))
                 if (!copy.exists()) {
-                    backups.mkdirs()
+                    copy.parentFile.mkdirs()
                     Files.copy(target.toPath(), copy.toPath())
                 }
             }
@@ -406,6 +449,203 @@ class DesktopEmulatorFiles(
         // The folder RPCS3 actually uses has its settings in it.
         val config = candidates.firstOrNull { it.isDirectory && (File(it, "patches").isDirectory || File(it, "config.yml").isFile || File(it, "config/config.yml").isFile || File(it, "GuiConfigs").isDirectory) }
             ?: return@withContext null
+        roots += config.absolutePath
+        config.absolutePath.replace('\\', '/').trimEnd('/')
+    }
+
+    /**
+     * Azahar's config folder, as its FileUtil::SetUserPath (src/common/file_util.cpp, 2126.2) and
+     * common_paths.h have it: on Windows `user\config` beside the program when that `user` folder is
+     * there, else %APPDATA%\Azahar\config; on macOS $XDG_CONFIG_HOME/azahar-emu when it was made
+     * before, else ~/Library/Application Support/Azahar/config; elsewhere $XDG_CONFIG_HOME/azahar-emu
+     * or ~/.config/azahar-emu (inside ~/.var/app for the Flatpak). As with Eden, the `user` folder
+     * Linux and macOS builds look for is in the folder they start from, Fuse's own, so it isn't
+     * looked for there. Only a folder with its `qt-config.ini` is returned. The rest of its family
+     * keep the same code with their own folders' names ([THREE_DS_FOLDERS]).
+     */
+    override suspend fun azaharConfig(installed: InstalledEmulator): String? = withContext(Dispatchers.IO) {
+        val flatpak = installed.detectedVia == "Flatpak"
+        val program = if (flatpak) null else File(installed.appId).takeIf { it.isAbsolute }
+        val names = THREE_DS_FOLDERS[io.github.matiyaaa.fuse.launch.settings.NativeSettings.familyOf(installed.id.value)] ?: THREE_DS_FOLDERS.getValue("azahar")
+        val xdg = env["XDG_CONFIG_HOME"]?.takeIf { it.startsWith("/") }?.let { File(it, names.unix) } ?: File(home, ".config/${names.unix}")
+        val candidates = when (os) {
+            DesktopOs.WINDOWS -> listOfNotNull(
+                program?.parentFile?.let { File(it, "user") }?.takeIf { it.isDirectory }?.let { File(it, "config") },
+                env["APPDATA"]?.let { File(it, "${names.named}/config") },
+            ).take(1)
+            DesktopOs.MACOS -> listOf(xdg, File(home, "Library/Application Support/${names.named}/config"))
+            else -> listOfNotNull(if (flatpak) names.flatpak?.let { File(home, ".var/app/$it/config/${names.unix}") } else xdg)
+        }
+        val config = candidates.firstOrNull { File(it, io.github.matiyaaa.fuse.launch.settings.AzaharConfig.GLOBAL).isFile } ?: return@withContext null
+        roots += config.absolutePath
+        config.absolutePath.replace('\\', '/').trimEnd('/')
+    }
+
+    override suspend fun threeDsTitleId(path: String, serial: String?): String? = withContext(Dispatchers.IO) {
+        runCatching { io.github.matiyaaa.fuse.sync.threeDsTitleId(serial, path, saveEnv()) }.getOrNull()
+    }
+
+    /**
+     * Cemu's folders as its CemuApp.cpp (v2.6) sets them, the same Fuse finds its saves by
+     * ([io.github.matiyaaa.fuse.sync.cemuFolders]): a `portable` folder beside the program; on
+     * Windows the program's own folder when a settings.xml is there, else Cemu in Application Data;
+     * on Linux Cemu in the XDG data and config folders (inside ~/.var/app for the Flatpak); on a Mac
+     * Cemu in Application Support. Only once it has a settings.xml.
+     */
+    override suspend fun cemu(installed: InstalledEmulator): io.github.matiyaaa.fuse.launch.settings.CemuHome? = withContext(Dispatchers.IO) {
+        val program = installed.appId.takeIf { installed.detectedVia != "Flatpak" && File(it).isAbsolute }
+        val (data, config) = runCatching { io.github.matiyaaa.fuse.sync.cemuFolders(saveEnv(), program) }.getOrNull() ?: return@withContext null
+        if (!File(config, "settings.xml").isFile) return@withContext null
+        roots += File(config).absolutePath
+        io.github.matiyaaa.fuse.launch.settings.CemuHome(data.replace('\\', '/').trimEnd('/'), config.replace('\\', '/').trimEnd('/'))
+    }
+
+    /**
+     * The folder of MAME's ini path that has its mame.ini (src/osd/sdl/sdlopts.cpp `INI_PATH`):
+     * `$HOME/.mame` on Linux, `$HOME/Library/Application Support/mame` then `$HOME/.mame` on a Mac,
+     * and the program's own folder or its `ini` on Windows (`.;ini;ini/presets`, from the folder it
+     * starts in, its own).
+     */
+    override suspend fun mameIniFolder(installed: InstalledEmulator): String? = withContext(Dispatchers.IO) {
+        val program = File(installed.appId).takeIf { installed.detectedVia != "Flatpak" && it.isAbsolute }
+        val flatpak = if (installed.detectedVia == "Flatpak") File(home, ".var/app/${installed.appId}/.mame") else null
+        val candidates = when (os) {
+            DesktopOs.WINDOWS -> listOfNotNull(program?.parentFile, program?.parentFile?.let { File(it, "ini") })
+            DesktopOs.MACOS -> listOf(File(home, "Library/Application Support/mame"), File(home, ".mame"))
+            DesktopOs.LINUX -> listOfNotNull(flatpak, File(home, ".mame"))
+        }
+        val folder = candidates.firstOrNull { File(it, "mame.ini").isFile } ?: return@withContext null
+        roots += folder.absolutePath
+        folder.absolutePath.replace('\\', '/').trimEnd('/')
+    }
+
+    /**
+     * melonDS's config folder, as its main.cpp `pathInit` finds it: a `portable` folder beside the
+     * program (beside its .app on a Mac) when there is one; else Qt's config folder's `melonDS`
+     * ($XDG_CONFIG_HOME or ~/.config on Linux, its Flatpak's own, ~/Library/Preferences on a Mac,
+     * %LOCALAPPDATA% on Windows), or the program's own folder for a Windows build made portable.
+     * Only once it has written its melonDS.toml.
+     */
+    override suspend fun melondsConfig(installed: InstalledEmulator): String? = withContext(Dispatchers.IO) {
+        val program = File(installed.appId).takeIf { installed.detectedVia != "Flatpak" && it.isAbsolute }
+        val besideApp = program?.absolutePath?.substringBefore(".app/", "")?.takeIf { it.isNotEmpty() }?.let { File(it).parentFile }
+        val portable = (besideApp ?: program?.parentFile)?.let { File(it, "portable") }?.takeIf { it.isDirectory }
+        val candidates = listOfNotNull(portable) + when (os) {
+            DesktopOs.WINDOWS -> listOfNotNull(program?.parentFile, env["LOCALAPPDATA"]?.let { File(it, "melonDS") })
+            DesktopOs.MACOS -> listOf(File(home, "Library/Preferences/melonDS"))
+            DesktopOs.LINUX -> if (installed.detectedVia == "Flatpak") listOf(File(home, ".var/app/${installed.appId}/config/melonDS")) else
+                listOf(env["XDG_CONFIG_HOME"]?.takeIf { it.startsWith("/") }?.let { File(it, "melonDS") } ?: File(home, ".config/melonDS"))
+        }
+        // With a portable folder, that one alone; else the first that has melonDS.toml.
+        val config = (if (portable != null) listOf(portable) else candidates).firstOrNull { File(it, "melonDS.toml").isFile } ?: return@withContext null
+        roots += config.absolutePath
+        config.absolutePath.replace('\\', '/').trimEnd('/')
+    }
+
+    /**
+     * Supermodel's Config folder, as its FileSystemPath.cpp finds it. On Linux: a `Config` folder
+     * where it is started (the game's own folder, as Fuse starts it); else `~/.supermodel/Config`
+     * when there is a `~/.supermodel`; else `~/.config/supermodel/Config`, or
+     * `$XDG_CONFIG_HOME/supermodel/Config` when `~/.config/supermodel` isn't there and that is set
+     * (as it is in a Flatpak, which doesn't see the others). On Windows and a Mac, the `Config` of
+     * the folder it starts in: its own on Windows, the game's on a Mac. Only once it has written its
+     * Supermodel.ini.
+     */
+    override suspend fun supermodelConfig(installed: InstalledEmulator, romPath: String?): String? = withContext(Dispatchers.IO) {
+        val program = File(installed.appId).takeIf { installed.detectedVia != "Flatpak" && it.isAbsolute }
+        val atGame = romPath?.let { File(it).absoluteFile.parentFile }?.let { File(it, "Config") }
+        val config = when (os) {
+            DesktopOs.WINDOWS -> program?.parentFile?.let { File(it, "Config") }
+            DesktopOs.MACOS -> atGame
+            DesktopOs.LINUX -> when {
+                atGame?.isDirectory == true -> atGame
+                installed.detectedVia == "Flatpak" -> File(home, ".var/app/${installed.appId}/config/supermodel/Config")
+                File(home, ".supermodel").isDirectory -> File(home, ".supermodel/Config")
+                // $XDG_CONFIG_HOME only when it is a whole path, as the XDG specification takes it.
+                !File(home, ".config/supermodel").isDirectory && env["XDG_CONFIG_HOME"]?.let { File(it).isAbsolute } == true -> File(env.getValue("XDG_CONFIG_HOME"), "supermodel/Config")
+                else -> File(home, ".config/supermodel/Config")
+            }
+        } ?: return@withContext null
+        if (!File(config, "Supermodel.ini").isFile) return@withContext null
+        roots += config.absolutePath
+        config.absolutePath.replace('\\', '/').trimEnd('/')
+    }
+
+    /** Flycast's emu.cfg folder, found as Fuse finds its saves ([io.github.matiyaaa.fuse.sync.flycastConfig]). */
+    override suspend fun flycastConfig(installed: InstalledEmulator): String? = withContext(Dispatchers.IO) {
+        val program = installed.appId.takeIf { installed.detectedVia != "Flatpak" && File(it).isAbsolute }
+        val config = runCatching { io.github.matiyaaa.fuse.sync.flycastConfig(saveEnv(), program) }.getOrNull() ?: return@withContext null
+        roots += File(config).absolutePath
+        config.replace('\\', '/').trimEnd('/')
+    }
+
+    override suspend fun dreamcastGameId(path: String, serial: String?): String? = withContext(Dispatchers.IO) {
+        runCatching { io.github.matiyaaa.fuse.sync.dreamcastProductNumber(path, saveEnv()) }.getOrNull() ?: serial?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
+    /**
+     * Vita3K's config folder, as its app_init.cpp sets it: a `portable` folder beside the program
+     * (beside the AppImage for one) when there is one; else on Linux $XDG_CONFIG_HOME/Vita3K or
+     * ~/.config/Vita3K, on Windows the program's own folder, and on a Mac the program's Resources
+     * when a config.yml is there, else ~/Library/Application Support/Vita3K/Vita3K. Only once it
+     * has written its config.yml.
+     */
+    override suspend fun vita3kConfig(installed: InstalledEmulator): String? = withContext(Dispatchers.IO) {
+        val program = File(installed.appId).takeIf { installed.detectedVia != "Flatpak" && it.isAbsolute }
+        val portable = program?.parentFile?.let { File(it, "portable") }?.takeIf { it.isDirectory }
+        val config = portable ?: when (os) {
+            DesktopOs.WINDOWS -> program?.parentFile
+            DesktopOs.MACOS -> program?.let { p -> p.absolutePath.substringBefore(".app/", "").takeIf { it.isNotEmpty() }?.let { File("$it.app/Contents/Resources") } }
+                ?.takeIf { File(it, "config.yml").isFile } ?: File(home, "Library/Application Support/Vita3K/Vita3K")
+            DesktopOs.LINUX -> env["XDG_CONFIG_HOME"]?.takeIf { it.startsWith("/") }?.let { File(it, "Vita3K") } ?: File(home, ".config/Vita3K")
+        } ?: return@withContext null
+        if (!File(config, "config.yml").isFile) return@withContext null
+        roots += config.absolutePath
+        config.absolutePath.replace('\\', '/').trimEnd('/')
+    }
+
+    /**
+     * Xenia's storage root, as its xenia_main.cc sets it: the program's own folder when a
+     * `portable.txt` is beside it, else Xenia in Documents on Windows and in $XDG_DATA_HOME, or
+     * ~/.local/share, elsewhere (filesystem_posix.cc GetUserFolder). Only once it has written its
+     * `xenia-canary.config.toml` there (config.cc).
+     */
+    override suspend fun xeniaRoot(installed: InstalledEmulator): String? = withContext(Dispatchers.IO) {
+        val program = File(installed.appId).takeIf { installed.detectedVia != "Flatpak" && it.isAbsolute }
+        val user = when (os) {
+            DesktopOs.WINDOWS -> File(env["USERPROFILE"] ?: home, "Documents")
+            else -> env["XDG_DATA_HOME"]?.takeIf { it.startsWith("/") }?.let(::File) ?: File(home, ".local/share")
+        }
+        val root = program?.parentFile?.takeIf { File(it, "portable.txt").isFile } ?: File(user, "Xenia")
+        if (!File(root, "xenia-canary.config.toml").isFile) return@withContext null
+        roots += root.absolutePath
+        root.absolutePath.replace('\\', '/').trimEnd('/')
+    }
+
+    override suspend fun wiiUTitleId(path: String, serial: String?): String? = withContext(Dispatchers.IO) {
+        runCatching { io.github.matiyaaa.fuse.sync.wiiUTitleId(serial, path, saveEnv()) }.getOrNull()
+    }
+
+    /**
+     * Eden's config folder, as its PathManagerImpl::Reinitialize (src/common/fs/path_util.cpp) and
+     * fs_paths.h have it: on Windows `user\config` beside the program when that `user` folder is
+     * there, else %APPDATA%\eden\config; elsewhere $XDG_CONFIG_HOME/eden or ~/.config/eden (inside
+     * ~/.var/app for the Flatpak). The `user` folder Linux and macOS builds look for is in the folder
+     * they start from, which is Fuse's own when Fuse starts them, so it isn't looked for there. Only a
+     * folder Eden has written its `qt-config.ini` in is returned.
+     */
+    override suspend fun edenConfig(installed: InstalledEmulator): String? = withContext(Dispatchers.IO) {
+        val flatpak = installed.detectedVia == "Flatpak"
+        val program = if (flatpak) null else File(installed.appId).takeIf { it.isAbsolute }
+        // Citron keeps yuzu's paths as Eden does, under its own name (src/common/fs/fs_paths.h: CITRON_DIR "citron").
+        val name = if (io.github.matiyaaa.fuse.launch.settings.NativeSettings.familyOf(installed.id.value) == "citron") "citron" else "eden"
+        val config = when (os) {
+            DesktopOs.WINDOWS -> program?.parentFile?.let { File(it, "user") }?.takeIf { it.isDirectory }?.let { File(it, "config") }
+                ?: env["APPDATA"]?.let { File(it, "$name/config") }
+            else -> if (flatpak && name == "eden") File(home, ".var/app/$EDEN_FLATPAK/config/eden")
+            else env["XDG_CONFIG_HOME"]?.takeIf { it.startsWith("/") }?.let { File(it, name) } ?: File(home, ".config/$name")
+        } ?: return@withContext null
+        if (!File(config, io.github.matiyaaa.fuse.launch.settings.EdenConfig.GLOBAL).isFile) return@withContext null
         roots += config.absolutePath
         config.absolutePath.replace('\\', '/').trimEnd('/')
     }
@@ -931,6 +1171,19 @@ class DesktopEmulatorFiles(
         const val MAX_TAIL = 16 * 1024
         const val STOP_GRACE_MS = 800L
         const val DUCKSTATION_FLATPAK = "org.duckstation.DuckStation"
+        const val EDEN_FLATPAK = "dev.eden_emu.eden"
+        const val AZAHAR_FLATPAK = "org.azahar_emu.Azahar"
+
+        /** A 3DS emulator's folder names (src/common/common_paths.h `EMU_DATA_DIR`): elsewhere, on Windows and macOS, and its Flatpak's id. */
+        class ThreeDsFolders(val unix: String, val named: String, val flatpak: String?)
+
+        /** Azahar's (2126.2), AzaharPlus's, Lime3DS's (2119.1) and Mandarine's (r1.3.0), by family. */
+        val THREE_DS_FOLDERS = mapOf(
+            "azahar" to ThreeDsFolders("azahar-emu", "Azahar", AZAHAR_FLATPAK),
+            "azaharplus" to ThreeDsFolders("azaharplus-emu", "AzaharPlus", null),
+            "lime3ds" to ThreeDsFolders("lime3ds-emu", "Lime3DS", "io.github.lime3ds.Lime3DS"),
+            "mandarine" to ThreeDsFolders("mandarine-emu", "Mandarine", null),
+        )
         const val DOLPHIN_FLATPAK = "org.DolphinEmu.dolphin-emu"
         val VFS_HDD0 = Regex("^\\s*/dev_hdd0/\\s*:\\s*(.+?)\\s*$", RegexOption.MULTILINE)
         val PREF_PATH = Regex("^pref-path:\\s*(.+)$", RegexOption.MULTILINE)

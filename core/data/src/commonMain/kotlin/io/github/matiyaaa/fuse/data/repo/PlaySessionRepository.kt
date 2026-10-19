@@ -102,6 +102,23 @@ class PlaySessionRepository(
         }
     }
 
+    /**
+     * Records a session seen elsewhere that has already ended (a Direct entry played from Steam,
+     * as the Fuse Decky plugin saw it), counted like one Fuse saw. Recorded once: the same game and
+     * start again changes nothing, so a report sent twice isn't counted twice. Open sessions are
+     * left alone. Returns whether it was recorded.
+     */
+    suspend fun record(gameId: GameId, startedAt: Long, endedAt: Long, source: PlaySessionSource): Boolean = withContext(dispatcher) {
+        if (endedAt <= startedAt) return@withContext false
+        db.transactionWithResult {
+            if (q.countAt(gameId.value, startedAt).executeAsOne() > 0) return@transactionWithResult false
+            q.insert(gameId.value, null, startedAt, null, source.name)
+            val id = db.lastInsertId()
+            db.gameQueries.markPlayStarted(startedAt, gameId.value)
+            endLocked(id, endedAt) != null
+        }
+    }
+
     /** Drops open sessions without counting them. Returns how many were dropped. */
     suspend fun discardOpen(): Int = withContext(dispatcher) { q.deleteOpen().value.toInt() }
 

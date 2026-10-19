@@ -46,7 +46,13 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks
 import io.github.matiyaaa.fuse.ui.shell.app.rescanAndReport
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.emulatorSignInSheet
+import io.github.matiyaaa.fuse.ui.shell.app.addToSteam
 import io.github.matiyaaa.fuse.ui.shell.app.checkSteamGames
+import io.github.matiyaaa.fuse.ui.shell.app.learnSteamShortcuts
+import io.github.matiyaaa.fuse.ui.shell.app.learnedWaysSheet
+import io.github.matiyaaa.fuse.ui.shell.app.steamCollectionsSheet
+import io.github.matiyaaa.fuse.ui.shell.app.steamUndoHistory
 import io.github.matiyaaa.fuse.ui.shell.app.refreshSteamGames
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
@@ -84,6 +90,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.FillProgress
 import io.github.matiyaaa.fuse.ui.shell.store.MusicPrefs
 import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
 import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** System art styles: the pack's sets, and panels from the system's own games. */
@@ -336,7 +343,7 @@ fun homeRows(app: AppState): List<MenuAction> {
             }))
             if (app.store.apps.supported) {
                 add(app.choiceRow(
-                    "apps.filter", "Apps opens on", FuseIcons.Smartphone, p.appsFilter,
+                    "apps.filter", "Apps tab shows first", FuseIcons.Smartphone, p.appsFilter,
                     listOf(AppFilter.ALL to "All apps", AppFilter.PINNED to "Pinned", AppFilter.EMULATORS to "Emulators"),
                     detail = "The list the Apps tab shows first. It keeps your place when you come back",
                 ) { v -> set { it.copy(appsFilter = v) } })
@@ -1030,6 +1037,12 @@ fun achievementRows(app: AppState): List<MenuAction> {
             val u = feed?.user
             add(infoRow("user", u?.username ?: "Connected", u?.let { "${it.points} points" }, detail = u?.motto, icon = FuseIcons.User))
             add(MenuAction("refresh", "Refresh now", FuseIcons.Refresh, detail = "Fuse refreshes on its own and caches results", onSelect = { app.store.achievements.refresh(force = true) }))
+            add(MenuAction(
+                "emulators", "Sign Emulators In", FuseIcons.LogIn,
+                detail = "RetroArch, PCSX2, DuckStation, PPSSPP and Dolphin here, with your password once. Switching profiles switches them too",
+                trailing = Trailing.Chevron,
+                onSelect = { app.emulatorSignInSheet() },
+            ))
             add(app.confirmRow("disconnect", "Disconnect", FuseIcons.Unplug, "Disconnect RetroAchievements?", "This profile's username and key are deleted from this device. Other profiles keep theirs.", "Disconnect", destructive = true) {
                 app.scope.launch { app.store.achievements.disconnect() }
             })
@@ -1047,7 +1060,7 @@ fun achievementRows(app: AppState): List<MenuAction> {
             }))
         }
         add(infoRow("profiles", "Each profile has its own account", detail = "Switch profiles to connect another person's. A profile without one shows the first account connected on this device", icon = FuseIcons.Users))
-        add(infoRow("note", "Fuse shows achievements; emulators unlock them", detail = "Sign in to RetroAchievements inside your emulator (RetroArch, DuckStation, PPSSPP and others) for unlocks to count"))
+        add(infoRow("note", "Fuse shows achievements; emulators unlock them", detail = "An emulator counts unlocks once it is signed in: Sign Emulators In does it for every one Fuse knows, and the rest sign in from their own settings"))
     }
 }
 
@@ -1177,13 +1190,52 @@ private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.pla
             },
         ),
     ) + listOfNotNull(
-        // Games Fuse put in Steam, each starting through Fuse: look them over, take them out, undo.
+        // How Fuse's games start from Steam: Fast Start, or straight in the emulator where Steam can have that.
+        steamStartRow(app, steam, live).takeIf { !steam.gameMode },
+        // The person's own collections beside the ones Fuse makes for each system.
+        MenuAction(
+            "steam.games.collections", "Your Collections", FuseIcons.Layers,
+            detail = "Your own collections in Steam beside Fuse's: kept apart, merged or renamed, never deleted",
+            trailing = Trailing.Chevron,
+            enabled = !live.busy,
+            onSelect = { app.steamCollectionsSheet() },
+        ).takeIf { !steam.gameMode },
+        // How the person's own shortcuts start each system's games, which Direct entries copy.
+        MenuAction(
+            "steam.games.ways", "Learned From Your Shortcuts", FuseIcons.Import,
+            detail = if (app.store.prefs.value.steam.asTheirShortcuts) "Direct entries start each system's games as your own shortcuts do" else "Off. Direct entries start as Play would",
+            trailing = Trailing.Chevron,
+            enabled = !live.busy,
+            onSelect = { app.learnedWaysSheet() },
+        ).takeIf { !steam.gameMode && steam.directEntries },
+        // Games joining or leaving the library go into or out of Steam by themselves: off until chosen.
+        MenuAction(
+            "steam.games.auto", "Keep Steam in Step", FuseIcons.RefreshCcw,
+            detail = if (app.store.prefs.value.steam.automatic) "New games go into Steam by themselves, and games that leave Fuse come out"
+            else "Off. New games go into Steam only when you add them",
+            trailing = Trailing.Switch(app.store.prefs.value.steam.automatic),
+            enabled = !live.busy,
+            onSelect = {
+                val on = app.store.prefs.value.steam.automatic
+                if (on) {
+                    app.scope.launch { app.store.updatePrefs { p -> p.copy(steam = p.steam.copy(automatic = false)) } }
+                } else {
+                    app.confirm = io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec(
+                        "Keep Steam in Step?",
+                        "Games that join your library from now on go into Steam by themselves, with their art and collections, and Fuse's entries for games that leave it come out. " +
+                            "Games already in Fuse aren't added by it. Steam is never closed for it, and Settings, Library, Steam can undo each change.",
+                        "Turn On",
+                    ) { app.scope.launch { app.store.updatePrefs { p -> p.copy(steam = p.steam.copy(automatic = true)) } } }
+                }
+            },
+        ).takeIf { !steam.gameMode },
+        // Games Fuse put in Steam: look them over, take them out, undo.
         MenuAction(
             "steam.games.fuse", "Your games in Steam", FuseIcons.LibraryBig,
             detail = when {
                 steam.waitingForSteamGames -> "Waiting for Steam to close to add them. Steam isn't closed for it"
                 app.steamGameIds.isEmpty() -> "Add a game from its options, or a whole system from its page's options"
-                else -> "${app.steamGameIds.size} ${if (app.steamGameIds.size == 1) "game starts" else "games start"} through Fuse from Steam. Look them over, take them out or undo"
+                else -> "${app.steamGameIds.size} ${if (app.steamGameIds.size == 1) "game is" else "games are"} in Steam's library. Look them over, take them out or undo"
             },
             trailing = if (app.steamGameIds.isEmpty()) Trailing.None else Trailing.Value(app.steamGameIds.size.toString()),
             enabled = !live.busy,
@@ -1191,9 +1243,9 @@ private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.pla
                 app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
                     title = "Your games in Steam",
                     icon = FuseIcons.LibraryBig,
-                    message = "Each starts through Fuse, so it plays with its emulator, saves and time as in Fuse. Steam must be closed while its library changes.",
+                    message = "Fuse made these entries, and changes only them. Steam must be closed while its library changes.",
                     options = listOfNotNull(
-                        MenuAction("steam.games.check", "Look them over", FuseIcons.ScanSearch, detail = "Games no longer in Fuse, entries for an older Fuse, and doubles", onSelect = {
+                        MenuAction("steam.games.check", "Look them over", FuseIcons.ScanSearch, detail = "Games no longer in Fuse, entries for an older Fuse or a missing emulator, and doubles", onSelect = {
                             app.choice = null
                             app.checkSteamGames()
                         }),
@@ -1210,16 +1262,20 @@ private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.pla
                                 }
                             }
                         }).takeIf { app.steamGameIds.isNotEmpty() },
-                        MenuAction("steam.games.undo", "Undo Fuse's last change", FuseIcons.Undo, detail = "Steam's library as it was before it", onSelect = {
+                        MenuAction("steam.games.undo", "Undo a Change", FuseIcons.Undo, detail = "Fuse's recent changes to Steam's games, each with what it did", onSelect = {
                             app.choice = null
-                            app.scope.launch {
-                                steam.undoGames().onSuccess { app.toasts.show(it, icon = FuseIcons.Undo) }.onFailure { app.toasts.show(it.message ?: "Couldn't change Steam's library", ToastKind.ERROR) }
-                                app.refreshSteamGames()
-                            }
+                            app.steamUndoHistory()
                         }).takeIf { steam.canUndoGames },
                     ),
                 )
             },
+        ).takeIf { !steam.gameMode },
+        // Shortcuts others made for games Fuse has: take them over in place, or leave them.
+        MenuAction(
+            "steam.learn", "Shortcuts From Other Tools", FuseIcons.Import,
+            detail = "Steam ROM Manager's, EmuDeck's or your own, for games in Fuse. Take them over or leave them",
+            enabled = !live.busy,
+            onSelect = { app.learnSteamShortcuts() },
         ).takeIf { !steam.gameMode },
         app.confirmRow(
             "steam.remove", "Remove Fuse from Steam", FuseIcons.Trash,
@@ -1235,6 +1291,49 @@ private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.pla
                 live.busy = false
             }
         }.takeIf { live.inSteam == true && !steam.gameMode },
+    )
+}
+
+/**
+ * How Steam starts Fuse's games: Fuse Fast Start (no window, saves, time and profiles as in Fuse),
+ * or a Direct entry that starts the emulator itself, where Steam can have one (Linux). Changing it
+ * offers to bring the games already in Steam over, after saying what will change.
+ */
+private fun steamStartRow(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration, live: SteamLive): MenuAction {
+    val direct = app.store.prefs.value.steam.directEntries && steam.directEntries
+    fun choose(on: Boolean) {
+        app.choice = null
+        if (on == direct) return
+        app.scope.launch {
+            app.store.updatePrefs { p -> p.copy(steam = p.steam.copy(directEntries = on)) }
+            // The games already in Steam follow, once the person has seen what changes.
+            val inSteam = app.steamGameIds
+            if (inSteam.isEmpty()) return@launch
+            val cards = app.store.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery(includeHidden = true)).first().filter { it.id.value in inSteam }
+            app.addToSteam(cards, "your games in Steam")
+        }
+    }
+    return MenuAction(
+        "steam.games.start", "How Steam Starts Them", FuseIcons.Rocket,
+        detail = when {
+            !steam.directEntries -> "Fuse Fast Start. Steam here can't keep Fuse's mark on an entry that starts an emulator itself"
+            direct -> "Straight in the emulator, with nothing of Fuse's in between"
+            else -> "Fuse Fast Start: no window, with saves and play time as in Fuse"
+        },
+        trailing = Trailing.Value(if (direct) "Direct" else "Fast Start"),
+        enabled = steam.directEntries && !live.busy,
+        onSelect = {
+            app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+                title = "How Steam Starts Them",
+                icon = FuseIcons.Rocket,
+                message = "Fast Start runs Fuse with no window, so your saves are put in place and sent, play time is counted and your profile is followed. " +
+                    "Direct starts the emulator itself, exactly as Play would, with none of that.",
+                options = listOf(
+                    MenuAction("steam.games.start.fast", "Fuse Fast Start", FuseIcons.Zap, detail = "Recommended. Saves, play time and profiles as in Fuse", trailing = if (!direct) Trailing.Value("In use") else Trailing.None, onSelect = { choose(false) }),
+                    MenuAction("steam.games.start.direct", "Straight in the Emulator", FuseIcons.Joystick, detail = "Nothing of Fuse's in between. Saves stay where the emulator keeps them", trailing = if (direct) Trailing.Value("In use") else Trailing.None, onSelect = { choose(true) }),
+                ),
+            )
+        },
     )
 }
 
@@ -1736,7 +1835,6 @@ fun displayRows(app: AppState): List<MenuAction> {
             ) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(secondScreenHidden = v)) } })
             add(toggleRow("bg", "Same background as the main screen", FuseIcons.Image, d.companionFollowsBackground, "Its scene or picture behind what the second screen shows") { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionFollowsBackground = v)) } })
             add(toggleRow("perf", "Show performance on the second screen", FuseIcons.ChartLine, d.companionShowsPerformance, "Only values the system really reports; nothing is estimated") { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionShowsPerformance = v)) } })
-            add(toggleRow("touch", "Touch controls on the second screen", FuseIcons.Hand, d.companionTouchControls) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionTouchControls = v)) } })
         }
         // Only a device with a second screen mentions one.
         if (app.platform.features.secondScreen) labelled("Second screen") { addAll(second) }
@@ -1757,7 +1855,7 @@ fun performanceRows(app: AppState): List<MenuAction> {
                 detail = "Now: " + performanceSummary(p.performance, p.lowPower, cap, app.platform.host) +
                     "\nAutomatic picks for this device: ${cap.tier.name.lowercase().replaceFirstChar { it.uppercase() }}",
             ) { v -> app.store.updatePrefs { it.copy(performance = v) } })
-            add(toggleRow("low", "Low Power Mode", FuseIcons.Leaf, p.lowPower, "60 Hz, no video previews, blur, moving backgrounds or CRT; lighter artwork and a smaller image cache. Navigation stays quick") { v -> app.store.updatePrefs { it.copy(lowPower = v) } })
+            add(toggleRow("low", "Low Power Mode", FuseIcons.Leaf, p.lowPower, "No video previews, blur, moving backgrounds or CRT; lighter artwork and a smaller image cache. Navigation stays quick, and the refresh rate stays yours") { v -> app.store.updatePrefs { it.copy(lowPower = v) } })
             app.graphicsRow(drawing)?.let(::add)
             add(toggleRow("overlay", "Performance overlay", FuseIcons.ChartLine, p.performanceOverlay, "Fuse's own frame rate, memory and temperatures, only as the system reports them. Other apps' frame rates can't be read") { v -> app.store.updatePrefs { it.copy(performanceOverlay = v) } })
         }
@@ -1817,8 +1915,10 @@ fun networkRows(app: AppState): List<MenuAction> = buildList {
 fun accountsRows(app: AppState): List<MenuAction> {
     val achievements = achievementRows(app)
     val phone = phoneLinkRows(app)
+    val nexus = nexusRows(app)
     return buildList {
         under("RetroAchievements", "ra", achievements)
+        under("Nexus Mods", "nexus", nexus)
         under("Phone Link", "phone", phone)
     }
 }
@@ -2021,7 +2121,40 @@ fun updateRows(app: AppState): List<MenuAction> {
             ))
         }
         add(toggleRow("auto", "Check automatically", FuseIcons.Bell, p.checkForUpdates, "Once a day from GitHub Releases; nothing installs without you") { v -> app.store.updatePrefs { it.copy(checkForUpdates = v) } })
+        add(MenuAction(
+            "channel", "Update Channel", FuseIcons.GitFork,
+            detail = channelDetail(p.updateChannel),
+            trailing = Trailing.Value(channelName(p.updateChannel)),
+            onSelect = {
+                app.choice = ChoiceSpec(
+                    icon = FuseIcons.GitFork,
+                    title = "Update Channel",
+                    message = "Which of Fuse's releases this device updates to. Going back to Stable keeps what is installed until a newer published release comes.",
+                    options = io.github.matiyaaa.fuse.data.settings.UpdateChannel.entries.map { c ->
+                        MenuAction("channel.${c.name}", channelName(c), FuseIcons.GitFork, detail = channelDetail(c), trailing = Trailing.Check(c == p.updateChannel), onSelect = {
+                            app.choice = null
+                            app.scope.launch {
+                                app.store.updatePrefs { it.copy(updateChannel = c) }
+                                app.store.updates.check()
+                            }
+                        })
+                    },
+                )
+            },
+        ))
     }
+}
+
+private fun channelName(c: io.github.matiyaaa.fuse.data.settings.UpdateChannel) = when (c) {
+    io.github.matiyaaa.fuse.data.settings.UpdateChannel.STABLE -> "Stable"
+    io.github.matiyaaa.fuse.data.settings.UpdateChannel.PRERELEASE -> "Beta"
+    io.github.matiyaaa.fuse.data.settings.UpdateChannel.NIGHTLY -> "Nightly"
+}
+
+private fun channelDetail(c: io.github.matiyaaa.fuse.data.settings.UpdateChannel) = when (c) {
+    io.github.matiyaaa.fuse.data.settings.UpdateChannel.STABLE -> "Published releases only"
+    io.github.matiyaaa.fuse.data.settings.UpdateChannel.PRERELEASE -> "Pre-releases too, ahead of each release"
+    io.github.matiyaaa.fuse.data.settings.UpdateChannel.NIGHTLY -> "The newest build, made every night; the least tested"
 }
 
 /**

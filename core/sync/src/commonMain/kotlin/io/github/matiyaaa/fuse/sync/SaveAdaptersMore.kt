@@ -184,6 +184,7 @@ internal object SaturnBackup : SaveAdapter {
  */
 internal object Mame : SaveAdapter {
     override val emulators = setOf("mame", "mame4droid", "mame4droid-current")
+    override val keepsStates = true
 
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
         val base = SaveAdapters.chosen(env, q) ?: when (env.host) {
@@ -192,17 +193,64 @@ internal object Mame : SaveAdapter {
             "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/mame", "${env.home}/.mame")
             else -> SaveAdapters.firstDir(env, "${env.home}/.mame", "${env.home}/.var/app/org.mamedev.MAME/.mame")
         } ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "mame.nvram", "MAME's folder wasn't found here."))
+        val set = SaveAdapters.stem(q.romPath)
         val nvram = nvramDir(env, base) ?: "$base/nvram"
-        return listOf(SaveSpot(SaveKind.SAVE, "mame.nvram", root = nvram, folders = listOf(SaveAdapters.stem(q.romPath))))
+        // Its states: a folder per system in state_directory (sta unless moved), each slot a file in it.
+        val states = SaveSpot(SaveKind.STATE, "mame.state", root = directory(env, base, "state_directory") ?: "$base/sta", folders = listOf(set))
+        return listOf(SaveSpot(SaveKind.SAVE, "mame.nvram", root = nvram, folders = listOf(set)), states)
     }
 
     /** `nvram_directory` from [base]'s mame.ini (or `ini/mame.ini`), with `$HOME` and `~` filled in. */
-    internal fun nvramDir(env: SaveEnvironment, base: String): String? {
+    internal fun nvramDir(env: SaveEnvironment, base: String): String? = directory(env, base, "nvram_directory")
+
+    /** A folder option from [base]'s mame.ini (or `ini/mame.ini`), with `$HOME` and `~` filled in. */
+    private fun directory(env: SaveEnvironment, base: String, option: String): String? {
         val text = env.readText("$base/mame.ini") ?: env.readText("$base/ini/mame.ini") ?: return null
-        val value = text.lineSequence().map { it.trim() }.firstOrNull { it.startsWith("nvram_directory") && it.getOrNull(15)?.isWhitespace() == true }
-            ?.substring(15)?.trim()?.trim('"')?.substringBefore(';')?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val value = text.lineSequence().map { it.trim() }.firstOrNull { it.startsWith(option) && it.getOrNull(option.length)?.isWhitespace() == true }
+            ?.substring(option.length)?.trim()?.trim('"')?.substringBefore(';')?.trim()?.takeIf { it.isNotEmpty() } ?: return null
         val path = value.replace("\$HOME", env.home).replace('\\', '/').let { if (it.startsWith("~")) env.home + it.drop(1) else it }.trimEnd('/')
         return if (path.startsWith("/") || (path.length > 1 && path[1] == ':')) path else "$base/$path"
+    }
+}
+
+/**
+ * Supermodel: a game's NVRAM, `<rom set>.nv` (Src/OSD/SDL/Main.cpp `SaveNVRAM`), in the NVRAM
+ * folder its FileSystemPath.cpp names. On Linux: `NVRAM` where it starts (the game's folder, as
+ * Fuse and ES-DE start it) when a `Config` folder is there; else `~/.supermodel/NVRAM` when there is
+ * a `~/.supermodel`; else `~/.local/share/supermodel/NVRAM`, or `$XDG_DATA_HOME/supermodel/NVRAM`
+ * when that isn't there (as in its Flatpak). On Windows `NVRAM` beside the program; on a Mac
+ * where it starts, the game's folder.
+ */
+internal object Supermodel : SaveAdapter {
+    override val emulators = setOf("supermodel")
+    override val keepsStates = true
+
+    /** One of Supermodel's folders ([kind]: NVRAM, Saves) for [q], as FileSystemPath.cpp names it. */
+    private fun folder(q: SaveQuery, env: SaveEnvironment, kind: String): String? {
+        val romDir = SaveAdapters.parent(q.romPath)
+        val local = "${env.home}/.local/share/supermodel"
+        return when (env.host) {
+            "WINDOWS" -> q.emulatorPath?.let { "${SaveAdapters.parent(it)}/$kind" }
+            "MACOS" -> "$romDir/$kind"
+            "ANDROID" -> null
+            else -> when {
+                env.isDirectory("$romDir/Config") -> "$romDir/$kind"
+                env.isDirectory("${env.home}/.supermodel") -> "${env.home}/.supermodel/$kind"
+                env.isDirectory(local) -> "$local/$kind"
+                env.isDirectory("${env.home}/.var/app/com.supermodel3.Supermodel/data/supermodel") -> "${env.home}/.var/app/com.supermodel3.Supermodel/data/supermodel/$kind"
+                else -> "${SaveAdapters.xdgData(env)}/supermodel/$kind"
+            }
+        }
+    }
+
+    override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
+        val set = SaveAdapters.stem(q.romPath)
+        val dir = SaveAdapters.chosen(env, q) ?: folder(q, env, "NVRAM")
+            ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "model3.nvram", "Supermodel's folder wasn't found here. It keeps its files beside its program."))
+        val name = "$set.nv"
+        // Its states (Main.cpp SaveState): `<ROM set>.st0` to `.st9` in its Saves folder.
+        val states = folder(q, env, "Saves")?.let { saves -> SaveSpot(SaveKind.STATE, "supermodel.state", (0..9).map { n -> SpotFile("$set.st$n", "$saves/$set.st$n") }) }
+        return listOfNotNull(SaveSpot(SaveKind.SAVE, "model3.nvram", listOf(SpotFile(name, "$dir/$name"))), states)
     }
 }
 
@@ -243,6 +291,7 @@ internal object ScummVm : SaveAdapter {
  */
 internal object ThreeDs : SaveAdapter {
     override val emulators = setOf("azahar", "azaharplus", "citra", "citra-canary", "citra-mmj", "lime3ds", "mandarine")
+    override val keepsStates = true
 
     private const val FORMAT = "3ds.savedata"
 
@@ -276,9 +325,11 @@ internal object ThreeDs : SaveAdapter {
      * image's NCSD header, an NCCH's program id, a CIA's title metadata). Null for files whose header
      * is compressed (`.zcci`, `.zcxi`): their id is learned from the first play instead.
      */
-    internal fun titleId(q: SaveQuery, env: SaveEnvironment): String? {
-        q.serial?.uppercase()?.takeIf { HEX16.matches(it) && it.startsWith("00040000") }?.let { return it }
-        val b = env.readBytes(q.romPath, 0x100, 0x20)
+    internal fun titleId(q: SaveQuery, env: SaveEnvironment): String? = titleId(q.serial, q.romPath, env)
+
+    internal fun titleId(serial: String?, romPath: String, env: SaveEnvironment): String? {
+        serial?.uppercase()?.takeIf { HEX16.matches(it) && it.startsWith("00040000") }?.let { return it }
+        val b = env.readBytes(romPath, 0x100, 0x20)
         if (b != null && b.size >= 0x20) {
             when (b.decodeToString(0, 4)) {
                 // Cartridge image: the media id at 0x108.
@@ -287,7 +338,7 @@ internal object ThreeDs : SaveAdapter {
                 "NCCH" -> return leHex(b, 0x18, 8).takeIf { it.startsWith("00040000") }
             }
         }
-        return ciaTitle(env, q.romPath)?.let { "00040000" + it.takeLast(8) }
+        return ciaTitle(env, romPath)?.let { "00040000" + it.takeLast(8) }
     }
 
     /**
@@ -644,10 +695,12 @@ internal object Cemu : SaveAdapter {
     override val emulators = setOf("cemu")
     private val TITLE = Regex("<title_id[^>]*>([0-9A-Fa-f]{16})</title_id>")
 
-    internal fun titleId(q: SaveQuery, env: SaveEnvironment): String? {
-        q.serial?.uppercase()?.takeIf { HEX16.matches(it) && it.startsWith("00050000") }?.let { return it }
+    internal fun titleId(q: SaveQuery, env: SaveEnvironment): String? = titleId(q.serial, q.romPath, env)
+
+    internal fun titleId(serial: String?, romPath: String, env: SaveEnvironment): String? {
+        serial?.uppercase()?.takeIf { HEX16.matches(it) && it.startsWith("00050000") }?.let { return it }
         // A game folder: code/<name>.rpx, with meta/meta.xml beside code.
-        val game = SaveAdapters.parent(SaveAdapters.parent(q.romPath))
+        val game = SaveAdapters.parent(SaveAdapters.parent(romPath))
         return env.readText("$game/meta/meta.xml")?.let { TITLE.find(it)?.groupValues?.get(1)?.uppercase() }
     }
 

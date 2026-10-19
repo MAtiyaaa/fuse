@@ -1,6 +1,5 @@
 package io.github.matiyaaa.fuse.launch.settings
 
-import io.github.matiyaaa.fuse.launch.patches.IniText
 import io.github.matiyaaa.fuse.model.Host
 
 /** One value a setting can take: what the emulator's file holds, and what to call it. */
@@ -63,6 +62,39 @@ object NativeSettings {
 
     /** The emulators Fuse changes settings in, by their family (`pcsx2`, from `linux.pcsx2`). */
     val families = setOf("pcsx2", "duckstation", "ppsspp", "dolphin")
+
+    /**
+     * The emulators whose settings Fuse changes: these, and RPCS3, RetroArch, Eden and Citron, Azahar
+     * and its family, Cemu, shadPS4, Xenia, Vita3K, Flycast, MAME, Supermodel and melonDS, whose come only as Every Setting (see [Tune]).
+     */
+    val changeable: Set<String> = families + setOf("rpcs3", "retroarch", "eden", "citron", "azahar", "azaharplus", "lime3ds", "mandarine", "cemu", "shadps4", "xenia", "vita3k", "flycast", "mame", "supermodel", "melonds")
+
+    /**
+     * The family an emulator's id keeps its settings as (`linux.pcsx2` is `pcsx2`): Steam's RetroArch
+     * is RetroArch, and Eden's nightly builds keep Eden's own folders (src/common/fs/fs_paths.h).
+     */
+    fun familyOf(id: String): String = id.substringAfter('.').let { f ->
+        when (f) {
+            "retroarch-steam" -> "retroarch"
+            "eden-nightly" -> "eden"
+            // PCSX2 for Android: its files laid out as PCSX2's, in the data folder chosen in it.
+            "armsx2" -> "pcsx2"
+            else -> f
+        }
+    }
+
+    /**
+     * The families Fuse changes on Android: those whose files can be in shared storage (PPSSPP's
+     * memory stick, ARMSX2's data folder, RetroArch's own folder). The others keep theirs in their
+     * private `Android/data` folders, which no other app can open.
+     */
+    val onAndroid: Set<String> = setOf("pcsx2", "ppsspp", "retroarch")
+
+    /** Said where Android can't reach an emulator's settings. */
+    const val ON_ANDROID = "On Android, Fuse changes PPSSPP's, ARMSX2's and RetroArch's settings, where their files are in your storage."
+
+    /** Emulators of a family whose versions are their own, not the family's (ARMSX2's against PCSX2's). */
+    val ownVersions: Set<String> = setOf("armsx2")
 
     /** Dolphin's graphics settings file (GFX.ini), beside Dolphin.ini. */
     const val DOLPHIN_GFX = "GFX"
@@ -238,7 +270,7 @@ data class SettingValue(val setting: NativeSetting, val value: String, val sourc
  */
 object SettingsEdit {
     /** A setting's value for a game: the game's own file, else the emulator's file, else its default. */
-    fun valueFor(setting: NativeSetting, game: IniText?, global: IniText?): SettingValue {
+    fun valueFor(setting: NativeSetting, game: SettingsText?, global: SettingsText?): SettingValue {
         val every = global?.values(setting.section, setting.key)?.lastOrNull()
         val own = if (setting.perGame) game?.values(setting.sectionIn(game = true), setting.key)?.lastOrNull() else null
         val everyGame = every ?: setting.default
@@ -249,34 +281,47 @@ object SettingsEdit {
         }
     }
 
-    private data class Record(val section: String, val key: String, val was: String?, val now: String?) {
-        fun text() = "$section\t$key\t${was?.let { "=$it" } ?: ""}\t${now?.let { "=$it" } ?: ""}"
+    /**
+     * One key Fuse changed: what it held before ([was], null when it wasn't there), what Fuse set
+     * ([now]), and [made] when Fuse made its section too (`s`, or `sb` with the blank line before it),
+     * so putting it back takes that section out again.
+     */
+    private data class Record(val section: String, val key: String, val was: String?, val now: String?, val made: String? = null) {
+        fun text() = "$section\t$key\t${was?.let { "=$it" } ?: ""}\t${now?.let { "=$it" } ?: ""}" + (made?.let { "\t$it" } ?: "")
     }
 
     private fun parse(text: String): Record? {
         val p = text.split('\t')
-        if (p.size != 4) return null
+        if (p.size != 4 && p.size != 5) return null
         fun v(s: String) = if (s.startsWith("=")) s.drop(1) else null
-        return Record(p[0], p[1], v(p[2]), v(p[3]))
+        return Record(p[0], p[1], v(p[2]), v(p[3]), p.getOrNull(4)?.takeIf { it == "s" || it == "sb" })
     }
 
     /**
      * Sets (or, with a null [value], takes out) [section] [key] in [file] and returns [records] with
      * this key's record made or brought up to date.
      */
-    fun change(file: IniText, records: Set<String>, section: String, key: String, value: String?): Set<String> {
+    fun change(file: SettingsText, records: Set<String>, section: String, key: String, value: String?): Set<String> {
         val all = records.mapNotNull(::parse)
         val earlier = all.firstOrNull { it.section.equals(section, ignoreCase = true) && it.key.equals(key, ignoreCase = true) }
         val was = earlier?.was ?: if (earlier == null) file.values(section, key).lastOrNull() else null
+        // A section this change makes, noted once (by the first key Fuse put in it).
+        val made = earlier?.made ?: if (earlier == null && value != null && !file.hasSection(section) && all.none { it.made != null && it.section.equals(section, ignoreCase = true) }) {
+            if (file.separatesNewSection()) "sb" else "s"
+        } else null
         if (value == null) file.removeKey(section, key) else file.set(section, key, value)
-        val next = Record(earlier?.section ?: section, earlier?.key ?: key, was, value)
+        val next = Record(earlier?.section ?: section, earlier?.key ?: key, was, value, made)
         return (all - setOfNotNull(earlier) + next).map { it.text() }.toSet()
     }
 
-    /** Puts back what [records] say each key held before Fuse; a key changed since in the emulator stays. Returns how many stayed. */
-    fun restore(file: IniText, records: Set<String>): Int {
+    /**
+     * Puts back what [records] say each key held before Fuse; a key changed since in the emulator
+     * stays, and a section Fuse made goes again once nothing is left in it. Returns how many stayed.
+     */
+    fun restore(file: SettingsText, records: Set<String>): Int {
         var kept = 0
-        for (r in records.mapNotNull(::parse)) {
+        val all = records.mapNotNull(::parse)
+        for (r in all) {
             val current = file.values(r.section, r.key).lastOrNull()
             if (current != r.now) {
                 kept++
@@ -284,6 +329,7 @@ object SettingsEdit {
             }
             if (r.was != null) file.set(r.section, r.key, r.was) else file.removeKey(r.section, r.key)
         }
+        for (r in all) if (r.made != null) file.removeEmptySection(r.section, blankBefore = r.made == "sb")
         return kept
     }
 }

@@ -31,6 +31,7 @@
   "sound": "chime",
   "quickMenu": "outlined",
   "widgets": "lit",
+  "tiles": "plain",
   "glass": {
     "enabled": false,
     "blur": 24.0,

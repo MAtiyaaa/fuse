@@ -50,6 +50,7 @@ internal class DefaultHealthOps(
 
     private var setup: List<HealthIssue> = emptyList()
     private var files: List<HealthIssue> = emptyList()
+    private val found = java.util.concurrent.ConcurrentHashMap<String, List<HealthIssue>>()
     private val recheck = Channel<Unit>(Channel.CONFLATED)
     private var filesJob: Job? = null
 
@@ -91,8 +92,13 @@ internal class DefaultHealthOps(
         checkFiles()
     }
 
+    override fun setFound(key: String, issues: List<HealthIssue>) {
+        if (issues.isEmpty()) found.remove(key) else found[key] = issues
+        publish()
+    }
+
     private fun publish() {
-        val all = (setup + files).sortedWith(compareByDescending<HealthIssue> { it.problem.severity }.thenBy { it.id })
+        val all = (setup + files + found.values.flatten()).sortedWith(compareByDescending<HealthIssue> { it.problem.severity }.thenBy { it.id })
         state.value = state.value.copy(issues = all)
     }
 
@@ -468,6 +474,11 @@ internal class DefaultHealthOps(
                         "Decorative motion ${p.motion.name.lowercase()}, art and details by itself ${if (p.artwork) "allowed" else "held"}, looking for emulators ${if (p.detection) "allowed" else "held"}",
                     )
                 },
+            ),
+            DiagnosticsReport.Section(
+                "It launched",
+                ctx.recentLaunches.value.map { it.line(TimeWords.relative(it.at, ctx.now(), ctx.services.utcOffsetMillis())) }
+                    .ifEmpty { listOf("No game started since Fuse opened") },
             ),
             DiagnosticsReport.Section(
                 "Recent launch problems",

@@ -202,7 +202,7 @@ class DesktopSession(
                 decky?.close()
                 decky = null
                 if (on) {
-                    val bridge = io.github.matiyaaa.fuse.link.DeckyBridge(store, BuildInfo.VERSION, io.github.matiyaaa.fuse.link.DeckyBridge.discoveryFile())
+                    val bridge = io.github.matiyaaa.fuse.link.DeckyBridge(store, BuildInfo.VERSION, io.github.matiyaaa.fuse.link.DeckyBridge.discoveryFile(), live = platform.steam?.live, directGames = { platform.steam?.directGames().orEmpty() })
                     if (bridge.start() > 0) decky = bridge else Log.warn("the Fuse Decky Bridge could not start")
                 }
             }
@@ -410,8 +410,8 @@ class DesktopSession(
             router.release(button, InputSource.GAMEPAD)
         }
 
-        override fun identified(name: String?) {
-            val family = io.github.matiyaaa.fuse.model.PadFamily.of(name)
+        override fun identified(name: String?, vendorId: Int?) {
+            val family = io.github.matiyaaa.fuse.model.PadFamily.of(name, vendorId)
             EventQueue.invokeLater { router.padIdentified(family) }
         }
 

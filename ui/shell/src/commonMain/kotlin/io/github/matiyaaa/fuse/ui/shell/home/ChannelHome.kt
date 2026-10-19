@@ -319,12 +319,20 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
         // cells as tall as a handheld's.
         val narrow = maxWidth < NARROW_BELOW && (maxWidth < maxHeight || maxWidth < TINY_BELOW)
         val small = maxHeight < SMALL_BELOW || maxWidth < NARROW_BELOW
-        val columns = space.columns(narrow, small, maxWidth)
         val gutter = if (narrow || small) Space.gutterCompact else Space.gutter
         val gapX = if (narrow || small) Space.m else Space.l
         // Rows stay clear of the spark under a focused widget.
         val gapY = Size.sparkClearance
-        val cellW = (maxWidth - gutter * 2 - gapX * (columns - 1)) / columns
+        fun cellWidth(columns: Int) = (maxWidth - gutter * 2 - gapX * (columns - 1)) / columns
+        // A board with room to spare may take fewer, larger columns, as long as all of it still shows
+        // between the top and the hints (the Systems page with a few systems on a tall screen).
+        val room = maxHeight - space.top - Space.l - Size.hintHeight - Space.l
+        val columns = space.fill(space.columns(narrow, small, maxWidth), narrow || small) { cols ->
+            val rows = BoardGrid.layout(widgets.map { BoardGrid.Item(it.id, space.allowed(it.boardSize, cols), null) }, cols).rows
+            val cellH = space.cellHeight(cellWidth(cols), gapX, gapY, narrow)
+            cellH * rows + gapY * (rows - 1).coerceAtLeast(0) <= room
+        }
+        val cellW = cellWidth(columns)
         val cellH = space.cellHeight(cellW, gapX, gapY, narrow)
         val density = LocalDensity.current
         val packed = space.packed

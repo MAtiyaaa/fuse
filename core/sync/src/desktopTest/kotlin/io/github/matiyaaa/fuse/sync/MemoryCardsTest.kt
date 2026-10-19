@@ -50,7 +50,7 @@ class MemoryCardsTest {
     @Test
     fun pcsx2ReadsItsSlotsNamesAndFolder() {
         val env = Env(mapOf("$ps2/inis/PCSX2.ini" to "[Folders]\nMemoryCards = /mnt/ps2cards\n[MemoryCards]\nSlot1_Enable = true\nSlot1_Filename = Mine.ps2\nSlot2_Enable = false\nSlot2_Filename = Mcd002.ps2\n"))
-        val spot = SaveAdapters.forEmulator("pcsx2")!!.locate(q(serial = "SLUS-20946", emu = "pcsx2"), env).single()
+        val spot = SaveAdapters.forEmulator("pcsx2")!!.locate(q(serial = "SLUS-20946", emu = "pcsx2"), env).single { it.kind != SaveKind.STATE }
         assertEquals("ps2.card", spot.format)
         assertEquals(listOf(SpotFile("Mcd001.ps2", "/mnt/ps2cards/Mine.ps2")), spot.files)
     }
@@ -58,7 +58,7 @@ class MemoryCardsTest {
     @Test
     fun pcsx2FolderCardsAreTheirOwnKind() {
         val env = Env(mapOf("$ps2/inis/PCSX2.ini" to "", "$ps2/memcards/Mcd001.ps2/_pcsx2_superblock" to "x"))
-        val spot = SaveAdapters.forEmulator("pcsx2")!!.locate(q(serial = "SLUS-20946", emu = "pcsx2"), env).single()
+        val spot = SaveAdapters.forEmulator("pcsx2")!!.locate(q(serial = "SLUS-20946", emu = "pcsx2"), env).single { it.kind != SaveKind.STATE }
         assertEquals("ps2.foldercard", spot.format)
         assertEquals("$ps2/memcards/Mcd001.ps2", spot.mounts["Mcd001.ps2"])
         assertEquals(listOf(SpotFile("Mcd002.ps2", "$ps2/memcards/Mcd002.ps2")), spot.files)
@@ -96,7 +96,7 @@ class DolphinCardsTest {
     @Test
     fun theDefaultIsAGciFolderWithThisGamesFilesOnly() {
         val env = Env(mapOf("$data/GC/USA/Card A/01-GALE-SuperSmash.gci" to "x", "$data/GC/USA/Card A/01-GMSE-Sunshine.gci" to "x"))
-        val spot = SaveAdapters.forEmulator("dolphin")!!.locate(q(), env).single()
+        val spot = SaveAdapters.forEmulator("dolphin")!!.locate(q(), env).single { it.kind != SaveKind.STATE }
         assertEquals("gc.gci", spot.format)
         assertEquals("$data/GC/USA/Card A", spot.root)
         assertEquals("01-GALE-", spot.only)
@@ -113,14 +113,14 @@ class DolphinCardsTest {
         assertEquals("/mnt/gci/EUR", gci.root, "the folder's region follows the game's")
         val card = spots.single { it.kind == SaveKind.MEMORY_CARD }
         assertEquals(listOf(SpotFile("MemoryCardA.EUR.raw", "/mnt/gc/Mine.EUR.raw")), card.files)
-        val wii = SaveAdapters.forEmulator("dolphin")!!.locate(q(serial = "RMGE01", platform = "wii"), env).single()
+        val wii = SaveAdapters.forEmulator("dolphin")!!.locate(q(serial = "RMGE01", platform = "wii"), env).single { it.kind != SaveKind.STATE }
         assertEquals("/mnt/nand/title/00010000/524d4745/data", wii.root)
     }
 
     @Test
     fun dolphinsUserPathVariableWins() {
         val env = Env(mapOf("/srv/dolphin/GC/" to ""), vars = mapOf("DOLPHIN_EMU_USERPATH" to "/srv/dolphin"))
-        assertEquals("/srv/dolphin/GC/USA/Card A", SaveAdapters.forEmulator("dolphin")!!.locate(q(), env).single().root)
+        assertEquals("/srv/dolphin/GC/USA/Card A", SaveAdapters.forEmulator("dolphin")!!.locate(q(), env).single { it.kind != SaveKind.STATE }.root)
     }
 }
 

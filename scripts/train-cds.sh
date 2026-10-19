@@ -9,7 +9,9 @@
 #
 # Fuse runs twice: once to make a fresh profile, which is then marked as set up, and once moving
 # through Home (and, with xdotool on Linux, every tab and Settings) while Java writes down each
-# class it loads. Fuse's own launcher (the runtime inside has no java command) then turns that list
+# class it loads. On Linux two more starts are written down: one whose scan finds a game, and that
+# game started as a Steam entry starts it (Fuse Fast Start, `--run`), whose time is then reported
+# with the archive in use. Fuse's own launcher (the runtime inside has no java command) turns the lists
 # into fuse.jsa beside Fuse's jars, and Fuse's launcher settings name it. Java checks the archive
 # when Fuse starts and goes on without it if anything doesn't match, so this can only help; the
 # folder can move (an AppImage mounts somewhere new every time, an installer puts Fuse anywhere).
@@ -154,9 +156,51 @@ sleep 2
 stop
 [[ -s "$LIST" ]] || skip "the training start listed no classes"
 
+# Linux: a game in the library, found by a start's scan, then started the way a Steam entry starts
+# it (Fuse Fast Start, `--run <id>`, no window), with a stand-in for mGBA that ends at once. Both
+# starts write down their classes too, so a start with games and Steam's Play are quick as well.
+# Anything failing here leaves the archive as the screens alone make it.
+LISTS=("$LIST")
+FAST_ID=""
+fast_start() {
+    local bin="$WORK/bin" games="$HOME/Games/gba" id
+    mkdir -p "$bin" "$games"
+    printf '#!/bin/sh\nexit 0\n' >"$bin/mgba" && chmod +x "$bin/mgba"
+    head -c 4096 /dev/urandom >"$games/Fuse Training (World).gba"
+    "$PYTHON" - "$DB" "$HOME/Games" <<'EOF' || return 1
+import sqlite3, sys
+db = sqlite3.connect(sys.argv[1])
+db.execute("insert or ignore into library_source (path, label, kind) values (?, 'Games', 'ROMS_ROOT')", (sys.argv[2],))
+db.commit()
+EOF
+    export PATH="$bin:$PATH"
+    start "-XX:DumpLoadedClassList=$WORK/scan.lst" || return 1
+    id=""
+    for _ in $(seq 1 300); do
+        id="$("$PYTHON" -c 'import sqlite3, sys; r = sqlite3.connect(sys.argv[1]).execute("select id from game limit 1").fetchone(); print(r[0] if r else "")' "$DB" 2>/dev/null)"
+        [[ -n "$id" ]] && break
+        sleep 0.2
+    done
+    sleep 2
+    stop
+    [[ -s "$WORK/scan.lst" ]] && LISTS+=("$WORK/scan.lst")
+    [[ -n "$id" ]] || return 1
+    FAST_ID="$id"
+    rm -f "$LOG"
+    JAVA_TOOL_OPTIONS="-XX:DumpLoadedClassList=$WORK/run.lst" timeout 60 "$LAUNCHER" --run "$id" >"$WORK/run.log" 2>&1
+    grep -q "Fast Start: the game started" "$LOG" 2>/dev/null || return 1
+    [[ -s "$WORK/run.lst" ]] && LISTS+=("$WORK/run.lst")
+}
+if [[ "$OS" == linux ]]; then
+    echo "==> Class data sharing: a library with a game, and a game started as Steam starts it"
+    fast_start || echo "warning: the archive leaves out Fast Start ($(tail -n 2 "$WORK/run.log" 2>/dev/null | tr '\n' ' '))" >&2
+fi
+
 echo "==> Class data sharing: writing the archive"
-# Java reads lines up to 4096 characters; a few long lambda descriptions are left out.
-awk 'length($0) < 4000' "$LIST" >"$WORK/classes.trimmed"
+# The lists as one, each class once. A list names classes with ids of its own run (`id: 12`),
+# which mean nothing beside another run's, so they are left out, as in the JDK's own list. Java
+# reads lines up to 4096 characters; a few long lambda descriptions are left out.
+sed -E 's/ id: [0-9]+$//' "${LISTS[@]}" | awk 'length($0) < 4000 && !seen[$0]++' >"$WORK/classes.trimmed"
 rm -f "$ARCHIVE"
 JAVA_TOOL_OPTIONS="-Xshare:dump -XX:SharedClassListFile=$(native "$WORK/classes.trimmed") -XX:SharedArchiveFile=$(native "$ARCHIVE")" "$LAUNCHER" >"$WORK/dump.log" 2>&1 \
     || skip "the archive couldn't be written ($(grep -v 'Preload Warning\|ClassNotFound\|Skipping' "$WORK/dump.log" | tail -n 3 | tr '\n' ' '))"
@@ -185,3 +229,11 @@ stop
 shared="$(grep -c 'source: shared objects file' "$WORK/load.txt" || true)"
 [[ "${shared:-0}" -gt 1000 ]] || skip "Fuse didn't use the archive (${shared:-0} classes from it)"
 echo "==> Class data sharing: $(du -h "$ARCHIVE" | cut -f1), $shared classes shared"
+
+# How long Steam's Play takes to reach the game with the archive, as Fuse measures it each time.
+if [[ -n "$FAST_ID" ]]; then
+    rm -f "$LOG"
+    timeout 60 "$LAUNCHER" --run "$FAST_ID" >"$WORK/run.log" 2>&1
+    took="$(grep -o 'the game started [0-9]* ms after Fuse did' "$LOG" 2>/dev/null | grep -o '[0-9]*' | tail -n 1)"
+    [[ -n "$took" ]] && echo "==> Fast Start: the game started $took ms after Fuse started"
+fi

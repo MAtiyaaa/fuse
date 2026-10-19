@@ -8,12 +8,14 @@ import io.github.matiyaaa.fuse.sync.SaveQuery
  * here kept in step with the person's newest save of it on RomM, so another device that plays it
  * through RomM (Fuse, or another RomM client) has it.
  *
- * RomM keeps one file per save, so only saves that are one file take part (a cartridge's save
- * memory, a memory card); a save made of folders stays here. Fuse never lets RomM's own verdict put
- * a new save over a real one: it keeps what it last agreed with RomM for each game, and when both
+ * RomM keeps one file per save: a save that is one file goes as it is (a cartridge's save memory, a
+ * memory card), and a save made of folders or of several parts goes as one zip of its files
+ * ([RommPack]), hashed as RomM hashes zips. Fuse never lets RomM's own verdict put a new save over
+ * a real one: it keeps what it last agreed with RomM for each game ([RommLedger]), and when both
  * this device and RomM changed since (or this device never agreed with RomM yet and the two
  * differ), the person chooses. A blank save is never sent. Every upload is a new save on RomM, the
- * earlier ones kept as its history.
+ * earlier ones kept as its history; one that can't reach RomM waits, in order, and goes when it
+ * answers.
  */
 interface RommSaveService {
     /** Before [query] (RomM's game [romId]) starts: RomM's newer save put in place, or a choice to make. */
@@ -33,6 +35,12 @@ interface RommSaveService {
      * this device last agreed with RomM. Reads only; nothing moves.
      */
     suspend fun standing(query: SaveQuery, romId: Long, newest: RommSave?): RommSaveStanding = RommSaveStanding.UNKNOWN
+
+    /** Sends the saves that couldn't reach RomM before, in the order they waited; how many went. */
+    suspend fun sendWaiting(): Int = 0
+
+    /** How many saves wait to go to RomM (kept across restarts). */
+    val waiting: Int get() = 0
 }
 
 /** A game's save here beside RomM's, for the Sync tab. */

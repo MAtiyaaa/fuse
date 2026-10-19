@@ -85,8 +85,26 @@ class JvmSyncService(
 
     override val defaultName: String get() = defaultDeviceName
 
-    private var client: SyncClient? = null
+    @Volatile private var client: SyncClient? = null
     private var device: SyncDevice? = null
+
+    /**
+     * Held while what a host said is shown, and while that host is let go of: a list the host sent
+     * just before it was forgotten is never shown (or kept) after.
+     */
+    private val showing = Any()
+
+    /** The host let go of ([showing]). */
+    private fun dropClient() = synchronized(showing) { retire(client); client = null }
+
+    /**
+     * [old] closed once the calls already on their way with it are done (the longest, the wait for
+     * the host's news, takes up to half a minute): a client holds a thread until it is closed.
+     */
+    private fun retire(old: SyncClient?) {
+        if (old == null) return
+        scope.launch { delay(RETIRE_MS); old.close() }
+    }
 
     /** The household's games through this device's host (see [Household]). */
     val householdHere: JvmHousehold by lazy {
@@ -137,9 +155,7 @@ class JvmSyncService(
 
     init {
         if (fuseVersion.isNotEmpty()) fuseAppVersion = fuseVersion
-        scope.launch(Dispatchers.IO) { runCatching { start() } }
-        // What syncs (saves, states, records, settings, the folders chosen) follows Settings as it changes.
-        scope.launch(Dispatchers.IO) { runCatching { settings.settings.collect { cached = it.sync } } }
+        // The service starts at the end of the class (see the last init block), once all of it is made.
     }
 
     private suspend fun config(): SyncSettings = settings.current().sync.also { cached = it }
@@ -172,12 +188,15 @@ class JvmSyncService(
 
     private val historyWrite = Mutex()
 
-    private suspend fun ensureDeviceId(): String {
+    /** One device id made at a time: Fuse's own start and setting up a host can both ask at once. */
+    private val idLock = Mutex()
+
+    private suspend fun ensureDeviceId(): String = idLock.withLock {
         val c = config()
-        if (c.deviceId.isNotEmpty()) return c.deviceId
+        if (c.deviceId.isNotEmpty()) return@withLock c.deviceId
         val id = "dev-" + SyncCrypto.token(12)
         saveConfig { it.copy(deviceId = id) }
-        return id
+        id
     }
 
     private suspend fun link(): HostLink? = secrets.get(LINK_KEY)?.let { runCatching { json.decodeFromString(HostLink.serializer(), it) }.getOrNull() }
@@ -208,6 +227,7 @@ class JvmSyncService(
             _devices.value = knownDevices()
             showPeople(known, c.activeProfile)
         }
+        retire(client)
         client = linked(l.copy(localAddress = c.localAddress.ifBlank { l.localAddress }, remoteAddress = c.remoteAddress.ifBlank { l.remoteAddress }))
         _status.value = SyncStatus.Connecting(c.hostName.ifBlank { l.hostName })
         startLoop()
@@ -404,6 +424,7 @@ class JvmSyncService(
                     // The wait ends when the device goes to sleep: its answer would only wake it again.
                     val page = awake.untilAsleep { c.events(since, waitSeconds = 25) } ?: continue
                     householdHere.woken(page.wake)
+                    if (HouseholdHost.WAKE_PLAYING in page.wake) scope.launch(Dispatchers.IO) { runCatching { lookForHosted(c) } }
                     // A device checking in is no event, so when each was last seen (and so which are
                     // online, and whose games show) is read again now and then: it stayed as it was
                     // when the list was last read, "seen 5:05" on devices online all along.
@@ -472,7 +493,29 @@ class JvmSyncService(
      * [game] keeps its saves on this device (or the person syncs it on none of theirs): never sent,
      * never brought in (each person's still swap here).
      */
-    private fun localOnly(game: String?): Boolean = game != null && (game in cached.localOnlyGames || game in cached.offEverywhereGames)
+    private fun localOnly(game: String?): Boolean = game != null && (game in cached.localOnlyGames || game in cached.offEverywhereGames || game in elsewhere)
+
+    /** Games whose saves another way moves here ([savesMovedElsewhere]). */
+    @Volatile private var elsewhere: Set<String> = emptySet()
+
+    override fun savesMovedElsewhere(games: Set<String>) {
+        elsewhere = games
+    }
+
+    override suspend fun oldSaveFolders(query: SaveQuery): List<OldSave> = withContext(Dispatchers.IO) { OldSaveFolders.find(canonical(query), saveEnv) }
+
+    override suspend fun bringIntoUse(query: SaveQuery, old: OldSave): Result<String?> = withContext(Dispatchers.IO) {
+        runCatching {
+            val q = canonical(query)
+            val title = q.title.ifBlank { "This game" }
+            check(q.game.id !in busy) { "$title is playing. Bring the save in once it has closed." }
+            // Looked for again: only a folder that still holds a newer save, as it is now.
+            val now = OldSaveFolders.find(q, saveEnv).firstOrNull { it.where == old.where } ?: error("That folder has no newer save of $title any more.")
+            val kept = OldSaveMove.bringIn(q.game, now, File(keptFolder(), safeName(q.title.ifBlank { q.game.id })))
+            log("${q.title}: the save from ${now.where} is in use" + (kept?.let { ", the one it replaced kept in ${it.path}" } ?: ""), q.game.id, SyncActivity.RESTORE)
+            kept?.path
+        }
+    }
 
     @Volatile private var queries: (suspend (String) -> SaveQuery?)? = null
 
@@ -586,9 +629,11 @@ class JvmSyncService(
         // (everything here stays as it is) and asks who is playing.
         if (e.code == "locked" && active.isNotEmpty() && _profiles.value.isNotEmpty() && _profiles.value.none { it.id == active }) {
             scope.launch(Dispatchers.IO) {
-                if (cached.activeProfile != active) return@launch
-                runCatching { switchTo(null) }
-                log("The profile in use here was deleted on another device. Choose who's playing.", kind = SyncActivity.PROFILE)
+                // A switch to it the host is still checking knows who was here before: it goes back there.
+                if (active in checking) return@launch
+                if (runCatching { leave(active) }.getOrDefault(false)) {
+                    log("The profile in use here was deleted on another device. Choose who's playing.", kind = SyncActivity.PROFILE)
+                }
             }
             return
         }
@@ -624,13 +669,18 @@ class JvmSyncService(
         listsLock.withLock {
             val c = client ?: return@withLock
             val list = people.ordered(c.profiles())
-            runCatching { c.devices() }.onSuccess { devices ->
-                _devices.value = devices
-                writeAtomically(File(dir, DEVICES_FILE), json.encodeToString(ListSerializer(DeviceInfo.serializer()), devices).toByteArray())
+            val devices = runCatching { c.devices() }
+            synchronized(showing) {
+                // Forgotten while it answered (turned off, or left): what it said is no longer this device's.
+                if (client !== c) return@withLock
+                devices.onSuccess { d ->
+                    _devices.value = d
+                    writeAtomically(File(dir, DEVICES_FILE), json.encodeToString(ListSerializer(DeviceInfo.serializer()), d).toByteArray())
+                }
+                showPeople(list, cached.activeProfile)
+                // Kept, so who is playing shows (and Who's playing? has faces) while the host is away.
+                runCatching { writeAtomically(File(dir, PROFILES_FILE), json.encodeToString(ListSerializer(ProfileInfo.serializer()), _profiles.value).toByteArray()) }
             }
-            showPeople(list, cached.activeProfile)
-            // Kept, so who is playing shows (and Who's playing? has faces) while the host is away.
-            runCatching { writeAtomically(File(dir, PROFILES_FILE), json.encodeToString(ListSerializer(ProfileInfo.serializer()), _profiles.value).toByteArray()) }
         }
     }
 
@@ -664,7 +714,7 @@ class JvmSyncService(
         if (active.isNotEmpty()) {
             d.pullMeta(c, active)
             // Laid in place only if they are still the one playing (a switch may have happened meanwhile).
-            asActive(active) { data.write(canonical(d.meta(active))) }
+            asActive(active) { layInPlace(d, active) }
         }
         if (sent > 0) log(if (sent == 1) "Sent 1 change to $name" else "Sent $sent changes to $name", kind = SyncActivity.CHANGES)
         _status.value = SyncStatus.Online(name, c.route ?: Route.LOCAL, working = false, pending = d.pendingCount)
@@ -692,7 +742,7 @@ class JvmSyncService(
         val active = cached.activeProfile.ifEmpty { return@withLock }
         asActive(active) { captureChanges(active) }
         d.pullMeta(c, active)
-        asActive(active) { data.write(canonical(d.meta(active))) }
+        asActive(active) { layInPlace(d, active) }
         log("Brought in changes from your other devices", kind = SyncActivity.CHANGES)
     }
 
@@ -736,6 +786,23 @@ class JvmSyncService(
         if (kept > 0) runCatching { d.flush(c, saves = cached.saves) }.onFailure { if (it is SyncException) handle(it) }
     }
 
+    /**
+     * What was last laid into the library for each profile, with what has been taken from the
+     * library since ([captureChanges]). The library's changes are measured against this, never
+     * against records brought in from the host and not yet laid in place: measured against those, a
+     * favourite made on another device read as this one taking it back, stamped now, and replaced
+     * the person's choice everywhere. Until something is laid in place (after a restart), what this
+     * device keeps of the profile stands for it.
+     */
+    private val placed = java.util.concurrent.ConcurrentHashMap<String, ProfileMeta>()
+
+    /** Lays [profile]'s records, settings and Home in the library, and remembers what was laid. */
+    private suspend fun layInPlace(d: SyncDevice, profile: String) {
+        val meta = canonical(d.meta(profile))
+        data.write(meta)
+        placed[profile] = meta
+    }
+
     /** What changed here since the profile was put in place becomes changes waiting to go. */
     private suspend fun captureChanges(profile: String) {
         val d = device ?: return
@@ -743,8 +810,9 @@ class JvmSyncService(
         val c = cached
         // Compared by the household's one id for each game: records kept here under another id
         // (from before the host settled it) are the same game, never a new one.
-        val base = canonical(d.meta(profile))
-        hlc.seen(base.latestRevision())
+        val kept = canonical(d.meta(profile))
+        hlc.seen(kept.latestRevision())
+        val base = placed[profile]?.let(::canonical) ?: kept
         // Only what this device syncs: with records off it reads none, which must never read as
         // every collection deleted (or settings, with settings off).
         val changes = ProfileDiff.changes(base, local, d.deviceId, hlc).let { all ->
@@ -754,7 +822,10 @@ class JvmSyncService(
                 settings = if (c.settings) all.settings else emptyMap(),
             )
         }
-        if (!ProfileDiff.isEmpty(changes)) d.changeMeta(profile) { pending, _ -> pending.merge(changes) }
+        if (!ProfileDiff.isEmpty(changes)) {
+            d.changeMeta(profile) { pending, _ -> pending.merge(changes) }
+            placed[profile] = base.merge(changes)
+        }
     }
 
     override fun changed() {
@@ -806,7 +877,7 @@ class JvmSyncService(
         }
         stop()
         if (cached.role == "HOST" && lifetime.state().installed) runCatching { lifetime.remove() }
-        client = null
+        dropClient()
         // The people who played here stay as this device's own (their unsent saves go to the next host).
         val stay = if (keepProfiles) runCatching { stayLocal() }.getOrDefault(emptyList()) else emptyList()
         // Saves that never reached the host (it was away) are this device's only copy: they stay,
@@ -823,6 +894,7 @@ class JvmSyncService(
         val keepNames = if (stay.isEmpty()) setOf(KEPT_DIR) else setOf(KEPT_DIR, "device", PEOPLE_FILE, ADOPTED_FILE, aliasFile.name)
         // A file another write renames away meanwhile is simply gone (walking it as a tree would fail).
         dir.listFiles()?.filter { it.canonicalFile != keep && it.name !in keepNames }?.forEach { if (it.isDirectory) it.deleteRecursively() else it.delete() }
+        placed.clear()
         if (stay.isEmpty()) {
             gameAliases = emptyMap()
             data.useAliases(emptyMap())
@@ -1394,7 +1466,7 @@ class JvmSyncService(
     /** What the host has, against this device's profiles: brought at once when the host has nobody, else asked. */
     private suspend fun offer(linked: HostLink) {
         pendingLink = linked
-        val c = pendingClient?.takeIf { it.link == linked } ?: SyncClient(linked).also { pendingClient = it }
+        val c = pendingClient?.takeIf { it.link == linked } ?: SyncClient(linked).also { retire(pendingClient); pendingClient = it }
         if (people.profiles.isEmpty()) {
             finishMerge()
             linkFor(linked)
@@ -1434,6 +1506,7 @@ class JvmSyncService(
 
     private suspend fun finishMerge() {
         pendingLink = null
+        retire(pendingClient)
         pendingClient = null
         _merge.value = null
         runCatching { secrets.remove(PENDING_LINK_KEY) }
@@ -1707,6 +1780,7 @@ class JvmSyncService(
         if (cfg.remoteAddress.isNotBlank() && !cfg.remoteFromHost) return
         if (SyncClient.normalise(cfg.remoteAddress.ifBlank { "x" }) == SyncClient.normalise(outside)) return
         saveConfig { it.copy(remoteAddress = outside, remoteFromHost = true) }
+        retire(client)
         client = linked(c.link.copy(remoteAddress = SyncClient.normalise(outside)))
         log("Learned the host's address from outside", kind = SyncActivity.HOST)
     }
@@ -1729,13 +1803,14 @@ class JvmSyncService(
     override suspend fun hostHere(name: String, installService: Boolean): Result<HostView> = withContext(Dispatchers.IO) {
         runCatching {
             require(canHost) { "This device can't be a host." }
-            saveConfig { it.copy(enabled = true, role = "HOST", hostName = name.trim().ifEmpty { defaultDeviceName }) }
             // A folder chosen for the host that already holds other things (a whole drive, say)
             // gets a folder of the host's own inside it, so the host's files never mix with them.
-            val chosen = cached.hostDataDir.ifBlank { null }?.let(::File)
-            if (chosen != null && chosen.isDirectory && !File(chosen, "host.json").isFile && HostFiles.holdsOthers(chosen)) {
-                saveConfig { it.copy(hostDataDir = File(chosen, HOST_FOLDER).path.replace('\\', '/')) }
-            }
+            // Decided before this device is the host, in the same change: Fuse's own start, running
+            // meanwhile, would otherwise start the host in the chosen folder itself.
+            val chosen = config().hostDataDir.ifBlank { null }?.let(::File)
+            val own = chosen?.takeIf { it.isDirectory && !File(it, "host.json").isFile && HostFiles.holdsOthers(it) }
+                ?.let { File(it, HOST_FOLDER).path.replace('\\', '/') }
+            saveConfig { it.copy(enabled = true, role = "HOST", hostName = name.trim().ifEmpty { defaultDeviceName }, hostDataDir = own ?: it.hostDataDir) }
             val c = config()
             ensureDeviceId()
             startHostServer(c)
@@ -2000,7 +2075,14 @@ class JvmSyncService(
                 (!known.protected || people.pins[id] != null)
             ) {
                 if (known.protected) checkOfflinePin(id, known.name, pin)
-                arrive(d, before, id)
+                // Being checked from before it arrives, so nothing else sends this device away from it meanwhile.
+                checking += id
+                try {
+                    arrive(d, before, id)
+                } catch (e: Throwable) {
+                    checking -= id
+                    throw e
+                }
                 log("Switched to ${known.name} in ${clock() - began} ms", kind = SyncActivity.PROFILE)
                 scope.launch(Dispatchers.IO) { catchUp(c, d, id, pin, before, check = true) }
                 return@runCatching
@@ -2054,7 +2136,7 @@ class JvmSyncService(
                     runCatching { withTimeout(HOST_SWITCH_MS) { d.pullMeta(c, id) } }
                 }
                 saveConfig { it.copy(activeProfile = id) }
-                data.write(canonical(d.meta(id)))
+                layInPlace(d, id)
                 d.useProfile(id)
                 _active.value = _profiles.value.firstOrNull { it.id == id }
                 log("Switched to ${_active.value?.name ?: "a profile"} in ${clock() - began} ms", kind = SyncActivity.PROFILE)
@@ -2068,13 +2150,32 @@ class JvmSyncService(
      * Puts [id] in place from what this device keeps of them: what changed under [before] stays
      * with [before], then [id]'s records, settings and Home become the library's. Local only.
      */
-    private suspend fun arrive(d: SyncDevice, before: String, id: String) = profileLock.withLock {
+    private suspend fun arrive(d: SyncDevice, before: String, id: String, onlyIfStill: Boolean = false): Boolean = profileLock.withLock {
+        // [onlyIfStill]: only while [before] is still the one playing; a switch made meanwhile stands.
+        if (onlyIfStill && cached.activeProfile != before) return@withLock false
         if (before.isNotEmpty()) captureChanges(before)
         saveConfig { it.copy(activeProfile = id) }
-        data.write(canonical(d.meta(id)))
+        layInPlace(d, id)
         d.useProfile(id)
         _active.value = _profiles.value.firstOrNull { it.id == id }
+        true
     }
+
+    /**
+     * This device stops using [id] when it is still the profile in use, decided under the same lock
+     * as every switch, so a switch made meanwhile (back to who was here) is never undone. Its changes
+     * stay with it. True when it did.
+     */
+    private suspend fun leave(id: String): Boolean = profileLock.withLock {
+        if (cached.activeProfile != id) return@withLock false
+        captureChanges(id)
+        saveConfig { it.copy(activeProfile = "") }
+        _active.value = null
+        true
+    }
+
+    /** Profiles just switched to from what is kept here, which the host is still checking ([catchUp]). */
+    private val checking: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
 
     /**
      * After a switch: the host checks the person (a PIN changed elsewhere, a profile deleted
@@ -2091,14 +2192,18 @@ class JvmSyncService(
                 rememberPin(id, pin)
             } catch (e: SyncException) {
                 if (e.code == "offline" || e.code == "rate") return
-                if (cached.activeProfile != id) return
                 val back = before.takeIf { b -> b.isNotEmpty() && _profiles.value.any { it.id == b } }
-                if (back != null) arrive(d, id, back) else runCatching { switchTo(null) }
-                log(
-                    (e.message ?: "The host didn't accept that profile.") + if (back != null) " Switched back." else " Choose who's playing.",
-                    kind = SyncActivity.PROFILE,
-                )
+                // Only while [id] is still the one playing: a switch made meanwhile stands.
+                val moved = if (back != null) arrive(d, id, back, onlyIfStill = true) else leave(id)
+                if (moved) {
+                    log(
+                        (e.message ?: "The host didn't accept that profile.") + if (back != null) " Switched back." else " Choose who's playing.",
+                        kind = SyncActivity.PROFILE,
+                    )
+                }
                 return
+            } finally {
+                checking -= id
             }
         }
         work.withLock {
@@ -2108,7 +2213,7 @@ class JvmSyncService(
             val pulled = runCatching { d.pullMeta(c, id) }.isSuccess
             if (pulled) asActive(id) {
                 captureChanges(id)
-                data.write(canonical(d.meta(id)))
+                layInPlace(d, id)
             }
         }
         log("Brought in ${_profiles.value.firstOrNull { it.id == id }?.name ?: "the profile"}'s newest in ${clock() - began} ms", kind = SyncActivity.PROFILE)
@@ -2486,6 +2591,8 @@ class JvmSyncService(
     override suspend fun afterExit(asked: SaveQuery, startedAt: Long, endedAt: Long) {
         val query = canonical(asked)
         stopWatching(query)
+        // Open to join only while it was played: the presence said next no longer has it.
+        if (hostingHere?.first == query.game.id) hostingHere = null
         // A test run ends with its game, whatever else happens here; one that never started is gone too.
         val probe = probes.remove(query.game.id)?.takeIf { it.snapshot != null }
         val d = device ?: return run { busy -= query.game.id; _nowPlaying.value = null }
@@ -2774,6 +2881,44 @@ class JvmSyncService(
     private val _nowPlaying = MutableStateFlow<String?>(null)
     override val nowPlaying: StateFlow<String?> = _nowPlaying.asStateFlow()
 
+    /** The game about to start (or playing) here that is open to join, by its id, with how. */
+    @Volatile private var hostingHere: Pair<String, Hosting>? = null
+
+    private val _together = MutableStateFlow<List<Presence>>(emptyList())
+    override val together: StateFlow<List<Presence>> = _together.asStateFlow()
+
+    override suspend fun hostNext(query: SaveQuery, hosting: Hosting?) {
+        val id = canonical(query).game.id
+        // Where the others reach this device: its home network addresses, unless the caller knows better.
+        val open = hosting?.let { if (it.addresses.isEmpty()) it.copy(addresses = lanAddresses()) else it }
+        hostingHere = open?.let { id to it }
+        // Already playing it (hosting from a game that runs): said straight away.
+        val w = watch ?: return
+        if (w.query.game.id == id) client?.let { c -> runCatching { c.notePresence(PresenceNote(w.profile, id, w.query.title, Presence.PLAYING, w.startedAt, open)) } }
+    }
+
+    override suspend fun hostedFor(query: SaveQuery): List<Presence> = withContext(Dispatchers.IO) {
+        val c = client ?: return@withContext emptyList()
+        val id = canonical(query).game.id
+        runCatching { lookForHosted(c) }.getOrDefault(_together.value).filter { it.game == id }
+    }
+
+    /**
+     * The games the household's other devices host now, from the host: kept in [together], and a
+     * notice for each one newly open (so an invitation reaches whoever has Fuse open).
+     */
+    private suspend fun lookForHosted(c: SyncClient): List<Presence> {
+        val me = device?.deviceId
+        val now = clock()
+        val list = withTimeoutOrNull(PRESENCE_WAIT_MS) { c.presence() } ?: return _together.value
+        val open = list.filter { it.hosting != null && it.deviceId != me && it.state == Presence.PLAYING && now - it.at <= PLAYING_ASK_MS }
+        val before = _together.value.map { it.deviceId to it.game }.toSet()
+        _together.value = open
+        val names = profiles.value.associate { it.id to it.name }
+        for (p in open) if ((p.deviceId to p.game) !in before) _notices.tryEmit(SyncNotice.Hosting(names[p.profile] ?: p.deviceName, p.deviceName, p.title))
+        return open
+    }
+
     private val _unclaimed = MutableStateFlow<List<UnclaimedSave>>(emptyList())
     override val unclaimed: StateFlow<List<UnclaimedSave>> = _unclaimed.asStateFlow()
 
@@ -2867,7 +3012,8 @@ class JvmSyncService(
         var saidAt = 0L
         suspend fun say() {
             saidAt = clock()
-            client?.let { c -> runCatching { c.notePresence(PresenceNote(profile, query.game.id, query.title, Presence.PLAYING, startedAt)) } }
+            val hosting = hostingHere?.takeIf { it.first == query.game.id }?.second
+            client?.let { c -> runCatching { c.notePresence(PresenceNote(profile, query.game.id, query.title, Presence.PLAYING, startedAt, hosting)) } }
         }
         say()
         var seen = first
@@ -3001,7 +3147,7 @@ class JvmSyncService(
             watch = null
             _nowPlaying.value = null
             cancelJoin()
-            client = null
+            dropClient()
             // The people who played here stay as this device's own profiles, unless they should go too.
             val stay = if (keepProfiles) runCatching { stayLocal() }.getOrDefault(emptyList()) else emptyList()
             secrets.remove(LINK_KEY)
@@ -3046,6 +3192,14 @@ class JvmSyncService(
 
     private fun lanAddresses(): List<String> = LanAddresses.list()
 
+    // Last of all, once every field above is made: started from the first init block, a busy machine
+    // ran start() on another thread before its locks existed, and it stopped there without a word.
+    init {
+        scope.launch(Dispatchers.IO) { runCatching { start() } }
+        // What syncs (saves, states, records, settings, the folders chosen) follows Settings as it changes.
+        scope.launch(Dispatchers.IO) { runCatching { settings.settings.collect { cached = it.sync } } }
+    }
+
     companion object {
         /** The id a save kept on this device from before an import has in [versions], beside the host's. */
         const val LOCAL_BACKUP = "local:"
@@ -3072,6 +3226,9 @@ class JvmSyncService(
 
         /** How often a backup copies the household and looks for the host (and the host for an older one). */
         const val KEEP_EVERY_MS = 60_000L
+
+        /** How long a replaced client is kept for the calls already on their way with it. */
+        const val RETIRE_MS = 60_000L
 
         /** How long the host must be silent before a backup says so. */
         const val HOST_AWAY_SHOWN_MS = 2 * 60_000L

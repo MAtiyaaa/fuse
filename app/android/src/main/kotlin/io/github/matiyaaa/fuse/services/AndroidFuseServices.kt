@@ -108,12 +108,14 @@ class AndroidFuseServices(
         env: () -> io.github.matiyaaa.fuse.sync.SaveEnvironment?,
         client: suspend () -> io.github.matiyaaa.fuse.romm.RommClient?,
         server: () -> String,
+        person: () -> String?,
     ): io.github.matiyaaa.fuse.sync.romm.RommSaveService = io.github.matiyaaa.fuse.sync.romm.JvmRommSaves(
         dir = java.io.File(appContext.filesDir, "romm-saves"),
         env = { env() ?: io.github.matiyaaa.fuse.sync.FileSaveEnvironment("ANDROID") },
         client = client, server = server,
         deviceName = deviceName, platform = "android", clientVersion = appVersion,
         log = { android.util.Log.i("Fuse", it) },
+        person = person,
     )
 
     override fun syncService(data: io.github.matiyaaa.fuse.sync.ProfileDataPort, scope: CoroutineScope): io.github.matiyaaa.fuse.sync.SyncService {
@@ -154,6 +156,10 @@ class AndroidFuseServices(
         }
         return service
     }
+
+    // Emulator Settings for the emulators whose files are in shared storage; their other files stay a computer's to change.
+    override val settingsFiles: io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles =
+        AndroidEmulatorFiles(io.github.matiyaaa.fuse.sync.FileSaveEnvironment("ANDROID"), java.io.File(appContext.filesDir, "emulator-settings-backups"))
 
     override val emulators: EmulatorDetector = AndroidEmulatorDetector(appContext, storageVolumes)
 

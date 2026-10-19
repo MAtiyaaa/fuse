@@ -707,6 +707,24 @@ internal fun io.github.matiyaaa.fuse.model.WidgetLook.note(): String = when (thi
     io.github.matiyaaa.fuse.model.WidgetLook.GLASS -> "Frosted over the room, with a light across the top"
 }
 
+internal fun io.github.matiyaaa.fuse.model.TileLook.label(): String = when (this) {
+    io.github.matiyaaa.fuse.model.TileLook.PLAIN -> "Plain"
+    io.github.matiyaaa.fuse.model.TileLook.GLOSS -> "Gloss"
+    io.github.matiyaaa.fuse.model.TileLook.PANEL -> "Panel"
+    io.github.matiyaaa.fuse.model.TileLook.INK -> "Ink"
+    io.github.matiyaaa.fuse.model.TileLook.NEON -> "Neon"
+    io.github.matiyaaa.fuse.model.TileLook.MAT -> "Mounted"
+}
+
+internal fun io.github.matiyaaa.fuse.model.TileLook.note(): String = when (this) {
+    io.github.matiyaaa.fuse.model.TileLook.PLAIN -> "The art edge to edge"
+    io.github.matiyaaa.fuse.model.TileLook.GLOSS -> "Set in a rounded frame with a gloss across the top, and a ring that breathes"
+    io.github.matiyaaa.fuse.model.TileLook.PANEL -> "A flat card with a thin grey frame"
+    io.github.matiyaaa.fuse.model.TileLook.INK -> "A firm outline in the text colour, like a printed card"
+    io.github.matiyaaa.fuse.model.TileLook.NEON -> "Lined in the accent, glowing brighter when you're on it"
+    io.github.matiyaaa.fuse.model.TileLook.MAT -> "Mounted in a border of the panel colour, like a print"
+}
+
 internal fun SoundProfile.icon(): ImageVector = if (this == SoundProfile.OFF) FuseIcons.VolumeOff else FuseIcons.Volume
 
 // ---------------------------------------------------------------------------------- spotlight

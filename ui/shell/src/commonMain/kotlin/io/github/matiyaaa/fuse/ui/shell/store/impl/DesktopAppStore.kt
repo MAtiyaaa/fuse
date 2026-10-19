@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.store.impl
 
 import io.github.matiyaaa.fuse.data.settings.CustomStoreApp
+import io.github.matiyaaa.fuse.data.settings.KeptVersion
 import io.github.matiyaaa.fuse.data.settings.StoreInstall
 import io.github.matiyaaa.fuse.integrations.ApiResult
 import io.github.matiyaaa.fuse.integrations.obtainium.DesktopAssetKind
@@ -8,13 +9,16 @@ import io.github.matiyaaa.fuse.integrations.obtainium.DesktopAssets
 import io.github.matiyaaa.fuse.integrations.obtainium.DesktopRelease
 import io.github.matiyaaa.fuse.integrations.obtainium.HtmlLinks
 import io.github.matiyaaa.fuse.integrations.obtainium.PackResolver
+import io.github.matiyaaa.fuse.integrations.obtainium.ReleaseLink
 import io.github.matiyaaa.fuse.model.Host
 import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.model.StoreVariant
 import io.github.matiyaaa.fuse.ui.shell.store.AppStoreOps
 import io.github.matiyaaa.fuse.ui.shell.store.Availability
+import io.github.matiyaaa.fuse.ui.shell.store.CustomPreview
 import io.github.matiyaaa.fuse.ui.shell.store.DesktopInstaller
 import io.github.matiyaaa.fuse.ui.shell.store.InFuse
+import io.github.matiyaaa.fuse.ui.shell.store.EarlierVersion
 import io.github.matiyaaa.fuse.ui.shell.store.InstallRecord
 import io.github.matiyaaa.fuse.ui.shell.store.InstalledApp
 import io.github.matiyaaa.fuse.ui.shell.store.Managed
@@ -42,6 +46,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -57,14 +62,16 @@ import kotlinx.coroutines.withContext
 internal class DesktopAppStoreOps(
     private val ctx: StoreContext,
     private val installer: DesktopInstaller,
+    /** After [key]'s program was updated: what has to be said about it besides (its Play Together setup gone), or null. */
+    private val afterUpdate: suspend (key: String) -> String? = { null },
     /** Looks for emulators again, so a program just put in place is used at once. */
     private val redetect: () -> Unit = {},
 ) : AppStoreOps {
     override val supported: Boolean = true
 
     private var token: String? = null
-    private val resolver = PackResolver(ctx.services.http, githubToken = { token })
-    private val downloader = ApkDownloader(ctx.services.http)
+    private val resolver by lazy { PackResolver(ctx.services.http, githubToken = { token }) }
+    private val downloader by lazy { ApkDownloader(ctx.services.http) }
     private val mutable = MutableStateFlow(
         StoreState(variant = StoreVariant.STANDARD, canInstall = true, desktop = true, folder = installer.folder),
     )
@@ -149,10 +156,13 @@ internal class DesktopAppStoreOps(
 
     private fun customEntry(c: CustomStoreApp): DesktopEntry {
         val place = c.url.substringAfter("://").trimEnd('/').lowercase()
+        // Added from GitHub, or from a Forgejo or Gitea server (its releases read the same way).
+        val link = ReleaseLink.parse(c.url)
+        val forge = link?.kind == ReleaseLink.Kind.FORGE
         return DesktopEntry(
-            key = "custom@$place", name = c.name, author = c.url.substringAfter("github.com/").substringBefore('/'),
+            key = "custom@$place", name = c.name, author = link?.owner ?: c.url.substringAfter("github.com/").substringBefore('/'),
             about = "Added by you from ${c.url.substringAfter("://")}.", category = c.category, systems = emptyList(),
-            repo = c.url, inFuse = InFuse.TOOL,
+            repo = c.url.takeIf { !forge }, forge = c.url.takeIf { forge }, inFuse = InFuse.TOOL,
         )
     }
 
@@ -178,6 +188,8 @@ internal class DesktopAppStoreOps(
             color = DesktopCatalogue.colors[e.category] ?: DesktopCatalogue.colors[AppStoreOps.OTHER],
             inFuse = e.inFuse,
             custom = e.key.startsWith("custom@"),
+            family = e.family,
+            otherBuilds = e.family?.let { f -> entries.values.filter { it.family == f && it.key != e.key }.map { it.key } }.orEmpty(),
         )
     }
 
@@ -196,17 +208,21 @@ internal class DesktopAppStoreOps(
         for (e in entries.values) {
             val rec = records[e.key]
             if (rec != null && installer.exists(rec.packageName)) {
-                val back = rec.previousVersion?.takeIf { rec.previous != null && installer.exists(rec.previous!!) }
-                found[e.key] = InstalledApp(rec.packageName, rec.version, rec.versionCode, e.name, InstallRecord(rec.version, rec.file, rec.versionCode, back))
+                val earlier = rec.kept.filter { installer.exists(it.path) }
+                found[e.key] = InstalledApp(
+                    rec.packageName, rec.version, rec.versionCode, e.name,
+                    InstallRecord(rec.version, rec.file, rec.versionCode, earlier.firstOrNull()?.version, earlier.map { EarlierVersion(it.path, it.version, it.keptAt) }),
+                )
                 continue
             }
             val other = e.emulator?.let { detected["$prefix$it"] } ?: continue
             // Just removed: detection catches up a moment later.
             if (e.key in gone) continue
             found[e.key] = InstalledApp(other.appId, other.version, 0, other.name)
-            managed[e.key] = managedOf(other.appId, other.detectedVia)
+            managed[e.key] = managedOf(other.appId, other.detectedVia, other.installedBy)
         }
-        mutable.update { it.copy(installed = found, managed = managed) }
+        val suites = runCatching { ctx.services.emulators.suites() }.getOrDefault(emptySet())
+        mutable.update { it.copy(installed = found, managed = managed, suites = suites) }
     }
 
     // Updates: left out, channels, and programs installed some other way.
@@ -244,13 +260,16 @@ internal class DesktopAppStoreOps(
                 clearJob(key)
                 redetect()
                 refreshInstalled()
-                noticesFlow.tryEmit("$name is up to date.")
+                if (inRound(key)) settle(key, null) else noticesFlow.tryEmit("$name is up to date.")
             }
             is UpdateOutcome.NeedsPassword -> {
                 clearJob(key)
                 ask(PasswordAsk(key, name, r.wrong, update = true))
             }
-            is UpdateOutcome.Failed -> setJob(key, StoreJob.Failed(r.message, retry = false))
+            is UpdateOutcome.Failed -> {
+                setJob(key, StoreJob.Failed(r.message, retry = false))
+                settle(key, r.message)
+            }
         }
     }
 
@@ -326,7 +345,9 @@ internal class DesktopAppStoreOps(
         return when (val result = found) {
             is ApiResult.Success -> {
                 val r = release(e, result.value)
-                mutable.update { s -> s.copy(releases = s.releases + (key to ReleaseCheck.Ready(r, ctx.now()))) }
+                // What it would need to install, against what is free, said before anything is downloaded.
+                val room = r.file?.let { f -> StoreRoom.line(f.sizeBytes, DesktopAssets.kindOf(f.name, installer.host), installer.freeBytes()) }
+                mutable.update { s -> s.copy(releases = s.releases + (key to ReleaseCheck.Ready(r, ctx.now())), room = if (room != null) s.room + (key to room) else s.room - key) }
                 r
             }
             is ApiResult.Failure -> {
@@ -344,7 +365,12 @@ internal class DesktopAppStoreOps(
         pageUrl = r.pageUrl,
         file = r.file?.let { StoreFile(it.name, it.url, it.sizeBytes, it.digest) },
         // A Flathub program has no file: Flatpak installs it.
-        manual = if (r.file == null && e.sourceFor(installer.host) != DesktopEntry.Source.FLATHUB) "${e.name}'s newest release has no ${systemWord()} build Fuse can use as published. Its page has every download." else null,
+        manual = when {
+            r.file != null || e.sourceFor(installer.host) == DesktopEntry.Source.FLATHUB -> null
+            // Said as the processor it is, so the reason is plain: most emulators build for x86-64 only.
+            installer.arch == "arm64" -> "${e.name}'s newest release has no ${systemWord()} build for this computer's ARM processor. Its page has every download."
+            else -> "${e.name}'s newest release has no ${systemWord()} build Fuse can use as published. Its page has every download."
+        },
     )
 
     private fun systemWord() = when (installer.host) {
@@ -374,23 +400,79 @@ internal class DesktopAppStoreOps(
 
     override fun updateAll() {
         if (holdForGame { updateAll() }) return
-        mutable.value.updatable.forEach { install(it.key) }
+        val s = mutable.value
+        val own = s.updatable.map { it.key }
+        val flatpaks = s.flatpakUpdates.map { it.key }
+        if (own.isEmpty() && flatpaks.isEmpty()) return
+        // One round: each update is shown as it goes, and what came of all of them is said once at the end.
+        round.update { r -> Round((r?.keys.orEmpty()) + own + flatpaks, r?.done.orEmpty()) }
+        own.forEach(::install)
+        flatpaks.forEach(::updateOther)
+    }
+
+    /** Update All's round: the updates in it, and each one's outcome as it lands (null: it worked). */
+    private data class Round(val keys: Set<String>, val done: Map<String, String?> = emptyMap())
+
+    private val round = MutableStateFlow<Round?>(null)
+
+    private fun inRound(key: String) = round.value?.keys?.contains(key) == true
+
+    /** [key]'s update came to an end ([problem] when it didn't work); once every one has, the round is said. */
+    private fun settle(key: String, problem: String?) {
+        val r = round.updateAndGet { r -> if (r == null || key !in r.keys) r else r.copy(done = r.done + (key to problem)) } ?: return
+        if (key in r.keys && r.done.keys.containsAll(r.keys) && round.compareAndSet(r, null)) noticesFlow.tryEmit(roundText(r))
+    }
+
+    private fun roundText(r: Round): String {
+        fun name(k: String) = entries[k]?.name ?: k
+        val worked = r.keys.filter { r.done[it] == null }.map(::name)
+        val failed = r.keys.filter { r.done[it] != null }
+        val good = when (worked.size) {
+            0 -> null
+            1 -> "${worked.single()} is updated."
+            else -> "${worked.dropLast(1).joinToString(", ")} and ${worked.last()} are updated."
+        }
+        val bad = when (failed.size) {
+            0 -> null
+            1 -> "${name(failed.single())} wasn't updated. ${r.done[failed.single()]}"
+            else -> "${failed.size} weren't updated (${failed.joinToString(", ") { name(it) }}). Updates says why for each."
+        }
+        return listOfNotNull(good, bad).joinToString(" ")
+    }
+
+    /** [earlier] as Fuse keeps it: the newest [KEPT_VERSIONS], the rest let go from the disk. */
+    private suspend fun pruneKept(earlier: List<KeptVersion>): List<KeptVersion> {
+        earlier.drop(KEPT_VERSIONS).forEach { runCatching { installer.forgetKept(it.path) } }
+        return earlier.take(KEPT_VERSIONS)
     }
 
     override fun rollBack(key: String) {
+        val newest = ctx.settings.value.store.installs[key]?.kept?.firstOrNull() ?: return
+        rollBackTo(key, newest.path)
+    }
+
+    override fun rollBackTo(key: String, earlierId: String) {
         if (mutable.value.jobs[key]?.active == true) return
         val e = entries[key] ?: return
         val rec = ctx.settings.value.store.installs[key] ?: return
-        val kept = rec.previous ?: return
+        val chosen = rec.kept.firstOrNull { it.path == earlierId } ?: return
         ctx.scope.launch {
             setJob(key, StoreJob.Installing(waitingTurn = false))
             try {
-                val path = installer.restorePrevious(kept, rec.packageName)
-                remember(key, StoreInstall(path, rec.previousVersion, null, 0, ctx.now()))
+                // What is in place now is kept in turn, so going back is never a version lost.
+                val now = runCatching { installer.keepPrevious(e.name, rec.packageName) }.getOrNull()
+                val path = try {
+                    installer.restorePrevious(chosen.path, if (now != null) null else rec.packageName)
+                } catch (x: Exception) {
+                    now?.let { k -> withContext(NonCancellable) { runCatching { installer.restorePrevious(k, null) } } }
+                    throw x
+                }
+                val earlier = listOfNotNull(now?.let { KeptVersion(it, rec.version, ctx.now()) }) + rec.kept.filter { it.path != chosen.path }
+                remember(key, StoreInstall(path, chosen.version, null, 0, ctx.now(), earlier = pruneKept(earlier)))
                 refreshInstalled()
                 clearJob(key)
                 redetect()
-                noticesFlow.tryEmit("${e.name} is back to ${rec.previousVersion?.let { "version $it" } ?: "the version you had"}.")
+                noticesFlow.tryEmit("${e.name} is back to ${chosen.version?.let { "version $it" } ?: "the version you had"}.")
             } catch (x: CancellationException) {
                 clearJob(key)
                 throw x
@@ -429,6 +511,8 @@ internal class DesktopAppStoreOps(
                 }
                 val file = release.file ?: throw Failure(release.manual ?: "${e.name} has nothing Fuse can install here.", retry = false)
                 val kind = DesktopAssets.kindOf(file.name, installer.host) ?: throw Failure("${e.name}'s download isn't something Fuse can put in place.", retry = false)
+                // Room for the download and its unpacking, before a byte is fetched.
+                StoreRoom.problem(e.name, file.sizeBytes, kind, installer.freeBytes())?.let { throw Failure(it, retry = true) }
                 val sink = installer.newDownload(file.name) ?: throw Failure("Fuse couldn't prepare its download folder.", retry = true)
                 setJob(key, StoreJob.Downloading(null, 0, file.sizeBytes))
                 var lastPercent = -1
@@ -459,22 +543,28 @@ internal class DesktopAppStoreOps(
                         val restored = kept?.let { k -> runCatching { installer.restorePrevious(k, null) }.isSuccess } == true
                         throw Failure((x.message ?: "Fuse couldn't put ${e.name} in place.") + if (restored) " The version you had is back in place." else "", retry = true)
                     }
-                    remember(key, StoreInstall(path, release.version, file.url, 0, ctx.now(), previous = kept, previousVersion = if (kept != null) before?.version else null))
+                    val earlier = listOfNotNull(kept?.let { KeptVersion(it, before?.version, ctx.now()) }) + before?.kept.orEmpty().filter { installer.exists(it.path) }
+                    remember(key, StoreInstall(path, release.version, file.url, 0, ctx.now(), earlier = pruneKept(earlier)))
                     refreshInstalled()
                     clearJob(key)
                     redetect()
-                    noticesFlow.tryEmit(if (replaces) "${e.name} is updated." else "${e.name} is installed.")
+                    if (inRound(key)) settle(key, null) else noticesFlow.tryEmit(if (replaces) "${e.name} is updated." else "${e.name} is installed.")
+                    // Its settings for playing together, looked at again: a portable program's go with the version it replaced.
+                    if (replaces) runCatching { afterUpdate(key) }.getOrNull()?.let { noticesFlow.tryEmit(it) }
                 } finally {
                     sink.discard()
                 }
             }
         } catch (x: CancellationException) {
             clearJob(key)
+            settle(key, "It was stopped.")
             throw x
         } catch (x: Failure) {
             setJob(key, StoreJob.Failed(x.message ?: "It didn't work.", x.retry))
+            settle(key, x.message ?: "It didn't work.")
         } catch (x: Exception) {
             setJob(key, StoreJob.Failed("Something went wrong installing ${e.name}. Try again.", retry = true))
+            settle(key, "Something went wrong. Try it again from its page.")
         }
     }
 
@@ -493,7 +583,7 @@ internal class DesktopAppStoreOps(
         mutable.update { it.copy(password = null) }
         // The password was asked for an update (a Flatpak for every account), not a removal.
         if (asked?.update == true && asked.key == key) {
-            if (password != null) ctx.scope.launch { updateOtherNow(key, password) }
+            if (password != null) ctx.scope.launch { updateOtherNow(key, password) } else settle(key, "It needs this computer's password, and none was given.")
             return
         }
         if (key == ALL) {
@@ -595,22 +685,40 @@ internal class DesktopAppStoreOps(
 
     // Apps the user adds
 
-    override suspend fun addCustom(url: String, category: String): String? {
-        val clean = url.trim().removeSuffix("/").removeSuffix(".git").let { if (it.startsWith("github.com/")) "https://$it" else it }
-        val match = GITHUB.matchEntire(clean) ?: return "That isn't a GitHub repository address (github.com/owner/project)."
-        val canonical = "https://github.com/${match.groupValues[1]}/${match.groupValues[2]}"
+    /** The project at [url] with its newest release that has this computer's build, or why it can't be added. */
+    private suspend fun linked(url: String): Result<Pair<ReleaseLink, DesktopRelease>> {
+        val link = ReleaseLink.parse(url)
+            ?: return Result.failure(IllegalArgumentException("That isn't a project address Fuse can read releases from: github.com/owner/project, or the same on a Forgejo or Gitea server."))
         val existing = ctx.settings.value.store.custom
-        if (existing.any { it.url.equals(canonical, ignoreCase = true) } || DesktopCatalogue.entries.any { it.repoFor(installer.host).equals(canonical, ignoreCase = true) }) {
-            return "It's already in the Store."
-        }
-        val name = match.groupValues[2]
+        if (existing.any { it.url.equals(link.url, ignoreCase = true) } ||
+            DesktopCatalogue.entries.any { it.repoFor(installer.host).equals(link.url, ignoreCase = true) || it.forge.equals(link.url, ignoreCase = true) }
+        ) return Result.failure(IllegalArgumentException("It's already in the Store."))
         // It must be an app: a release with this computer's build.
-        val found = resolver.desktop(canonical, name, installer.host, installer.arch, prereleases = true)
-        when {
-            found is ApiResult.Failure -> return friendly(found)
-            (found as ApiResult.Success).value.file == null -> return "$name has no ${systemWord()} build in its releases, so it can't be installed here."
+        val found = when (link.kind) {
+            ReleaseLink.Kind.GITHUB -> resolver.desktop(link.url, link.project, installer.host, installer.arch, prereleases = true)
+            ReleaseLink.Kind.FORGE -> resolver.desktopForgejo(link.url, link.project, installer.host, installer.arch, prereleases = true)
         }
-        val app = CustomStoreApp(canonical, name, category.ifBlank { AppStoreOps.OTHER })
+        return when {
+            found is ApiResult.Failure -> Result.failure(IllegalStateException(friendly(found)))
+            (found as ApiResult.Success).value.file == null ->
+                Result.failure(IllegalStateException("${link.project} has no ${systemWord()} build in its releases, so it can't be installed here."))
+            else -> Result.success(link to found.value)
+        }
+    }
+
+    override suspend fun previewCustom(url: String): Result<CustomPreview> = linked(url).map { (link, r) ->
+        val f = r.file!!
+        CustomPreview(
+            url = link.url, name = link.project, source = "${link.server}/${link.owner}/${link.project}",
+            version = r.version, publishedAt = r.publishedAt,
+            file = StoreFile(f.name, f.url, f.sizeBytes, f.digest),
+            room = StoreRoom.line(f.sizeBytes, DesktopAssets.kindOf(f.name, installer.host), installer.freeBytes()),
+        )
+    }
+
+    override suspend fun addCustom(url: String, category: String): String? {
+        val (link, _) = linked(url).getOrElse { return it.message }
+        val app = CustomStoreApp(link.url, link.project, category.ifBlank { AppStoreOps.OTHER })
         val next = ctx.data.settings.update { it.copy(store = it.store.copy(custom = it.store.custom + app)) }
         ctx.settings.value = next
         build()
@@ -618,7 +726,7 @@ internal class DesktopAppStoreOps(
     }
 
     override suspend fun removeCustom(key: String) {
-        val url = entries[key]?.repo ?: return
+        val url = entries[key]?.let { it.repo ?: it.forge } ?: return
         val next = ctx.data.settings.update { it.copy(store = it.store.copy(custom = it.store.custom.filterNot { c -> c.url.equals(url, ignoreCase = true) })) }
         ctx.settings.value = next
         build()
@@ -655,12 +763,13 @@ internal class DesktopAppStoreOps(
     private class Failure(message: String, val retry: Boolean) : Exception(message)
 
     private companion object {
+        /** How many earlier versions of a program Fuse keeps to go back to. */
+        const val KEPT_VERSIONS = 3
         const val MAX_CHECKS = 3
         const val MAX_NOTES = 4_000
         const val INSTALL_FRESH_MS = 10L * 60 * 1000
         const val LIMIT_PAUSE_MS = 15L * 60 * 1000
         const val AUTO_CHECK_DELAY_MS = 30_000L
-        val GITHUB = Regex("^https://github\\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)$")
 
         /** The password asked for Uninstall all, not one program. */
         const val ALL = "*all"
@@ -679,9 +788,11 @@ internal fun DesktopAssetKind.word(): String = when (this) {
 /**
  * Who looks after a program found on this computer (not put there by Fuse), from how it was found
  * ([appId], [detectedVia]): Flatpak, Linux's packages (under /usr, /bin, /opt or /snap), or the
- * person (an AppImage of their own, a program installed with its own installer).
+ * person (an AppImage of their own, a program installed with its own installer). One EmuDeck
+ * installed ([installedBy]) is EmuDeck's.
  */
-internal fun managedOf(appId: String, detectedVia: String): Managed = when {
+internal fun managedOf(appId: String, detectedVia: String, installedBy: String? = null): Managed = when {
+    installedBy == io.github.matiyaaa.fuse.launch.linux.LinuxSuites.EMUDECK -> Managed.EMUDECK
     detectedVia.contains("flatpak", ignoreCase = true) -> Managed.FLATPAK
     SYSTEM_PLACES.any { appId.startsWith(it) } -> Managed.SYSTEM
     else -> Managed.ELSEWHERE

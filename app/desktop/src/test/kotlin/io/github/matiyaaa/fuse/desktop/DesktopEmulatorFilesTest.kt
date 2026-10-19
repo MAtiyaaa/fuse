@@ -75,7 +75,219 @@ class DesktopEmulatorFilesTest {
         assertFalse(files.write(File(home, "elsewhere.ini").absolutePath, "x"))
         assertTrue(files.write(settings.absolutePath, "[Patches]\nEnable = Mine\nEnable = 60 FPS\n"))
         assertTrue(files.write(settings.absolutePath, "[Patches]\nEnable = Mine\n"))
-        assertEquals("[Patches]\nEnable = Mine\n", File(backups, settings.name).readText())
+        assertEquals("[Patches]\nEnable = Mine\n", copyOf(settings).readText())
+    }
+
+    /** Where the copy of [f] as it was before Fuse first changed it is kept: at its whole path. */
+    private fun copyOf(f: File) = File(backups, io.github.matiyaaa.fuse.ui.shell.store.EmulatorFileCopies.below(f.absoluteFile.normalize().path))
+
+    @Test
+    fun foldersPcsx2sOwnSettingsMovedAndRetroArchsOwnSettingsAreWritten() = runBlocking {
+        val data = File(home, ".config/PCSX2").apply { File(this, "inis").mkdirs() }
+        val cheats = File(home, "srv/ps2-cheats").apply { mkdirs() }
+        File(data, "inis/PCSX2.ini").writeText("[Folders]\nCheats = ${p(cheats)}\n")
+        val files = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        files.pcsx2(pcsx2("/usr/bin/pcsx2-qt"))
+        assertTrue(files.write(File(cheats, "SLUS-20946_0C040404.pnach").absolutePath, "patch=1,EE,0,word,0\n"), "its cheats folder, where its settings put it")
+        assertFalse(files.write(File(home, "srv/other.ini").absolutePath, "x"), "but nothing beside it")
+
+        // RetroArch's retroarch.cfg sits beside its cheats and config folders, not in them.
+        val ra = File(home, ".config/retroarch").apply { mkdirs() }
+        val cfg = File(ra, "retroarch.cfg").apply { writeText("video_vsync = \"true\"\n") }
+        val retroArch = InstalledEmulator(EmulatorId("linux.retroarch"), "RetroArch", Host.LINUX, "/usr/bin/retroarch", platforms = emptySet(), detectedVia = "PATH")
+        assertEquals(p(cfg), files.retroArch(retroArch)!!.config)
+        assertTrue(files.write(cfg.absolutePath, "video_vsync = \"false\"\n"), "RetroArch's own settings")
+        assertEquals("video_vsync = \"true\"\n", copyOf(cfg).readText())
+        assertFalse(files.remove(cfg.absolutePath), "never removed")
+        assertTrue(cfg.isFile)
+        assertFalse(files.write(File(ra, "retroarch-core-options.cfg").absolutePath, "x"), "nothing else beside it")
+
+        // Two files of one name, each with its own copy.
+        val mgba = File(ra, "config/mGBA/Golden Sun.cfg").apply { parentFile.mkdirs(); writeText("mgba's\n") }
+        val vba = File(ra, "config/VBA-M/Golden Sun.cfg").apply { parentFile.mkdirs(); writeText("vba-m's\n") }
+        assertTrue(files.write(mgba.absolutePath, "changed\n") && files.write(vba.absolutePath, "changed\n"))
+        assertEquals("mgba's\n", copyOf(mgba).readText())
+        assertEquals("vba-m's\n", copyOf(vba).readText())
+    }
+
+    @Test
+    fun aFileHoldingASignInIsWrittenTheSameWayWithNoCopyKept() = runBlocking {
+        // RPCS3's rpcn.yml: the stretched password and token are RPCS3's alone, never copied into Fuse's folder.
+        val config = File(home, ".config/rpcs3").apply { mkdirs() }
+        File(config, "config.yml").writeText("")
+        val rpcn = File(config, "rpcn.yml").apply { writeText("NPID: Old_One\nPassword: ABCD\nToken: T0K3N\n") }
+        val files = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        val rpcs3 = InstalledEmulator(EmulatorId("linux.rpcs3"), "RPCS3", Host.LINUX, "/usr/bin/rpcs3", platforms = setOf(PlatformId("ps3")), detectedVia = "PATH")
+        files.rpcs3Config(rpcs3)
+        assertTrue(files.writePrivate(rpcn.absolutePath, "NPID: Ana_99\nPassword: E4F6\nToken: NEW\n"))
+        assertEquals("NPID: Ana_99\nPassword: E4F6\nToken: NEW\n", rpcn.readText())
+        assertFalse(copyOf(rpcn).exists() || File(backups, "rpcn.yml").exists())
+        assertFalse(files.writePrivate(File(home, "elsewhere.yml").absolutePath, "x"), "only inside a known emulator folder")
+    }
+
+    @Test
+    fun azaharsConfigFolderIsWhereItsOwnPathsPutIt() = runBlocking {
+        val azahar = InstalledEmulator(EmulatorId("linux.azahar"), "Azahar", Host.LINUX, "/usr/bin/azahar", platforms = setOf(PlatformId("3ds")), detectedVia = "PATH")
+        val linux = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        val config = File(home, ".config/azahar-emu").apply { mkdirs() }
+        assertNull(linux.azaharConfig(azahar), "not until Azahar has written its qt-config.ini")
+        File(config, "qt-config.ini").writeText("[Core]\n")
+        assertEquals(p(config), linux.azaharConfig(azahar))
+        val flatpak = File(home, ".var/app/org.azahar_emu.Azahar/config/azahar-emu").apply { mkdirs(); File(this, "qt-config.ini").writeText("") }
+        assertEquals(p(flatpak), linux.azaharConfig(azahar.copy(appId = "org.azahar_emu.Azahar", detectedVia = "Flatpak")))
+        // macOS: its Application Support folder unless the XDG one was made first.
+        val support = File(home, "Library/Application Support/Azahar/config").apply { mkdirs(); File(this, "qt-config.ini").writeText("") }
+        val mac = DesktopEmulatorFiles(DesktopOs.MACOS, env = emptyMap(), home = home.absolutePath, backups = backups)
+        assertEquals(p(config), mac.azaharConfig(azahar))
+        File(config, "qt-config.ini").delete()
+        assertEquals(p(support), mac.azaharConfig(azahar))
+    }
+
+    @Test
+    fun flycastsAndVita3ksConfigFoldersAreWhereTheirOwnPathsPutThem() = runBlocking {
+        val linux = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        val flycast = InstalledEmulator(EmulatorId("linux.flycast"), "Flycast", Host.LINUX, "/usr/bin/flycast", platforms = setOf(PlatformId("dc")), detectedVia = "PATH")
+        assertNull(linux.flycastConfig(flycast), "not until it has its emu.cfg")
+        val fly = File(home, ".config/flycast").apply { mkdirs(); File(this, "emu.cfg").writeText("[config]\n") }
+        assertEquals(p(fly), linux.flycastConfig(flycast))
+        val vita = InstalledEmulator(EmulatorId("linux.vita3k"), "Vita3K", Host.LINUX, File(home, "Apps/Vita3K/Vita3K").absolutePath, platforms = setOf(PlatformId("psvita")), detectedVia = "Folder")
+        val config = File(home, ".config/Vita3K").apply { mkdirs(); File(this, "config.yml").writeText("v-sync: true\n") }
+        assertEquals(p(config), linux.vita3kConfig(vita))
+        // A portable folder beside the program is used for everything.
+        val portable = File(home, "Apps/Vita3K/portable").apply { mkdirs(); File(this, "config.yml").writeText("v-sync: true\n") }
+        assertEquals(p(portable), linux.vita3kConfig(vita))
+    }
+
+    @Test
+    fun melonDsConfigFolderIsWhereItsPathInitPutsIt() = runBlocking {
+        fun toml(dir: File) = dir.apply { mkdirs(); File(this, "melonDS.toml").writeText("LimitFPS = true\n") }
+        val linux = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        val program = File(home, "Apps/melonDS/melonDS").apply { parentFile.mkdirs(); writeText("") }
+        val melon = InstalledEmulator(EmulatorId("linux.melonds"), "melonDS", Host.LINUX, program.absolutePath, platforms = setOf(PlatformId("nds")), detectedVia = "Folder")
+        assertNull(linux.melondsConfig(melon), "not until it has written melonDS.toml")
+        val config = toml(File(home, ".config/melonDS"))
+        assertEquals(p(config), linux.melondsConfig(melon))
+        // A portable folder beside the program is used instead.
+        val portable = toml(File(program.parentFile, "portable"))
+        assertEquals(p(portable), linux.melondsConfig(melon))
+        val flat = InstalledEmulator(EmulatorId("linux.melonds"), "melonDS", Host.LINUX, "net.kuribo64.melonDS", platforms = setOf(PlatformId("nds")), detectedVia = "Flatpak")
+        val sandboxed = toml(File(home, ".var/app/net.kuribo64.melonDS/config/melonDS"))
+        assertEquals(p(sandboxed), linux.melondsConfig(flat))
+        // On Windows, %LOCALAPPDATA%'s, or beside a build made portable.
+        val local = File(home, "AppData/Local")
+        val windows = DesktopEmulatorFiles(DesktopOs.WINDOWS, env = mapOf("LOCALAPPDATA" to local.absolutePath), home = home.absolutePath, backups = backups)
+        val exe = File(home, "Emu/melonDS/melonDS.exe").apply { parentFile.mkdirs(); writeText("") }
+        val win = InstalledEmulator(EmulatorId("windows.melonds"), "melonDS", Host.WINDOWS, exe.absolutePath, platforms = setOf(PlatformId("nds")), detectedVia = "Folder")
+        val appData = toml(File(local, "melonDS"))
+        assertEquals(p(appData), windows.melondsConfig(win))
+        val beside = toml(exe.parentFile)
+        assertEquals(p(beside), windows.melondsConfig(win))
+    }
+
+    @Test
+    fun supermodelsConfigFolderIsWhereItsFileSystemPathPutsIt() = runBlocking {
+        val sm = InstalledEmulator(EmulatorId("linux.supermodel"), "Supermodel", Host.LINUX, "/usr/bin/supermodel", platforms = setOf(PlatformId("model3")), detectedVia = "PATH")
+        fun ini(dir: File) = dir.apply { mkdirs(); File(this, "Supermodel.ini").writeText("[ Global ]\n") }
+        val rom = File(home, "roms/model3/daytona2.zip").apply { parentFile.mkdirs(); writeBytes(ByteArray(4)) }
+        // With nothing of its own yet, ~/.config/supermodel/Config; $XDG_CONFIG_HOME's only when that isn't there.
+        val xdg = File(home, "xdg")
+        val linux = DesktopEmulatorFiles(DesktopOs.LINUX, env = mapOf("XDG_CONFIG_HOME" to xdg.absolutePath), home = home.absolutePath, backups = backups)
+        assertNull(linux.supermodelConfig(sm, null), "not until it has written Supermodel.ini")
+        val atXdg = ini(File(xdg, "supermodel/Config"))
+        assertEquals(p(atXdg), linux.supermodelConfig(sm, null))
+        val config = ini(File(home, ".config/supermodel/Config"))
+        assertEquals(p(config), linux.supermodelConfig(sm, rom.absolutePath))
+        // ~/.supermodel before those, and a Config folder where it starts (the game's) before everything.
+        val dot = ini(File(home, ".supermodel/Config"))
+        assertEquals(p(dot), linux.supermodelConfig(sm, rom.absolutePath))
+        val atGame = ini(File(rom.parentFile, "Config"))
+        assertEquals(p(atGame), linux.supermodelConfig(sm, rom.absolutePath))
+        assertEquals(p(dot), linux.supermodelConfig(sm, null), "every game's, with no game to start from")
+        // The Flatpak's own config folder.
+        val flat = InstalledEmulator(EmulatorId("linux.supermodel"), "Supermodel", Host.LINUX, "com.supermodel3.Supermodel", platforms = setOf(PlatformId("model3")), detectedVia = "Flatpak")
+        val sandboxed = ini(File(home, ".var/app/com.supermodel3.Supermodel/config/supermodel/Config"))
+        assertEquals(p(sandboxed), linux.supermodelConfig(flat, null))
+        // On Windows, the Config folder beside it.
+        val exe = File(home, "Supermodel/Supermodel.exe").apply { parentFile.mkdirs(); writeText("") }
+        val windows = DesktopEmulatorFiles(DesktopOs.WINDOWS, env = emptyMap(), home = home.absolutePath, backups = backups)
+        val win = InstalledEmulator(EmulatorId("windows.supermodel"), "Supermodel", Host.WINDOWS, exe.absolutePath, platforms = setOf(PlatformId("model3")), detectedVia = "Folder")
+        val beside = ini(File(exe.parentFile, "Config"))
+        assertEquals(p(beside), windows.supermodelConfig(win, rom.absolutePath))
+    }
+
+    @Test
+    fun xeniasStorageRootIsBesideItWhenPortableElseInTheDataFolder() = runBlocking {
+        val linux = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        val program = File(home, "Apps/xenia/xenia_canary").apply { parentFile.mkdirs(); writeText("") }
+        val xenia = InstalledEmulator(EmulatorId("linux.xenia"), "Xenia", Host.LINUX, program.absolutePath, platforms = setOf(PlatformId("xbox360")), detectedVia = "Folder")
+        val data = File(home, ".local/share/Xenia").apply { mkdirs() }
+        assertNull(linux.xeniaRoot(xenia), "not until Xenia has written its config")
+        File(data, "xenia-canary.config.toml").writeText("[GPU]\n")
+        assertEquals(p(data), linux.xeniaRoot(xenia))
+        // With portable.txt beside the program, its own folder.
+        File(program.parentFile, "portable.txt").writeText("")
+        File(program.parentFile, "xenia-canary.config.toml").writeText("[GPU]\n")
+        assertEquals(p(program.parentFile), linux.xeniaRoot(xenia))
+    }
+
+    @Test
+    fun azaharsFamilyAndCitronKeepTheirOwnFoldersNames() = runBlocking {
+        val linux = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        fun installed(id: String, via: String = "AppImage") = InstalledEmulator(EmulatorId("linux.$id"), id, Host.LINUX, "/opt/$id.AppImage", platforms = setOf(PlatformId("3ds")), detectedVia = via)
+        for ((id, folder) in listOf("lime3ds" to "lime3ds-emu", "mandarine" to "mandarine-emu", "azaharplus" to "azaharplus-emu")) {
+            val config = File(home, ".config/$folder").apply { mkdirs(); File(this, "qt-config.ini").writeText("") }
+            assertEquals(p(config), linux.azaharConfig(installed(id)), id)
+        }
+        val lime = File(home, ".var/app/io.github.lime3ds.Lime3DS/config/lime3ds-emu").apply { mkdirs(); File(this, "qt-config.ini").writeText("") }
+        assertEquals(p(lime), linux.azaharConfig(installed("lime3ds").copy(appId = "io.github.lime3ds.Lime3DS", detectedVia = "Flatpak")))
+        val windows = DesktopEmulatorFiles(DesktopOs.WINDOWS, env = mapOf("APPDATA" to File(home, "AppData/Roaming").absolutePath), home = home.absolutePath, backups = backups)
+        val roaming = File(home, "AppData/Roaming/Mandarine/config").apply { mkdirs(); File(this, "qt-config.ini").writeText("") }
+        assertEquals(p(roaming), windows.azaharConfig(installed("mandarine").copy(host = Host.WINDOWS, appId = "C:/Mandarine/mandarine-qt.exe", detectedVia = "Folder")))
+        // Citron: yuzu's paths under its own name.
+        val citron = File(home, ".config/citron").apply { mkdirs(); File(this, "qt-config.ini").writeText("") }
+        assertEquals(p(citron), linux.edenConfig(InstalledEmulator(EmulatorId("linux.citron"), "Citron", Host.LINUX, "/opt/citron.AppImage", platforms = setOf(PlatformId("switch")), detectedVia = "AppImage")))
+    }
+
+    @Test
+    fun cemusFoldersAreWhereItsOwnPathsPutThemAndItsGameProfilesCanBeWritten() = runBlocking {
+        val cemu = InstalledEmulator(EmulatorId("linux.cemu"), "Cemu", Host.LINUX, "/usr/bin/cemu", platforms = setOf(PlatformId("wiiu")), detectedVia = "PATH")
+        val linux = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        val data = File(home, ".local/share/Cemu").apply { mkdirs() }
+        val config = File(home, ".config/Cemu").apply { mkdirs() }
+        assertNull(linux.cemu(cemu), "not until Cemu has written its settings.xml")
+        File(config, "settings.xml").writeText("<content/>")
+        assertEquals(io.github.matiyaaa.fuse.launch.settings.CemuHome(p(data), p(config)), linux.cemu(cemu))
+        // A game's own profile goes in its config folder, which Fuse may write once it found it.
+        val profile = io.github.matiyaaa.fuse.launch.settings.CemuProfile.gameFile(p(config), "0005000010145D00")
+        assertEquals("${p(config)}/gameProfiles/0005000010145d00.ini", profile)
+        assertTrue(linux.write(profile, "# Mario Kart 8\n\n[CPU]\ncpuMode = Auto\n"))
+        // A game folder's title id, from the meta.xml beside its code folder.
+        val game = File(home, "wiiu/Mario Kart 8").apply { File(this, "code").mkdirs(); File(this, "meta").mkdirs() }
+        File(game, "meta/meta.xml").writeText("<menu><title_id type=\"hexBinary\" length=\"8\">0005000010145D00</title_id></menu>")
+        assertEquals("0005000010145D00", linux.wiiUTitleId(File(game, "code/Turbo.rpx").absolutePath, null))
+    }
+
+    @Test
+    fun edensConfigFolderIsWhereItsOwnPathsPutIt() = runBlocking {
+        val linux = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        val eden = InstalledEmulator(EmulatorId("linux.eden"), "Eden", Host.LINUX, "/usr/bin/eden", platforms = setOf(PlatformId("switch")), detectedVia = "PATH")
+        val config = File(home, ".config/eden").apply { mkdirs() }
+        assertNull(linux.edenConfig(eden), "not until Eden has written its qt-config.ini")
+        File(config, "qt-config.ini").writeText("[Renderer]\n")
+        assertEquals(p(config), linux.edenConfig(eden))
+        assertTrue(linux.write(File(config, "custom/0100F2C0115B6000.ini").absolutePath, "[Renderer]\n"), "a game's own file may be written there")
+        // The Flatpak's, inside its own folder.
+        val flatpak = File(home, ".var/app/dev.eden_emu.eden/config/eden").apply { mkdirs(); File(this, "qt-config.ini").writeText("") }
+        assertEquals(p(flatpak), linux.edenConfig(eden.copy(appId = "dev.eden_emu.eden", detectedVia = "Flatpak")))
+        // Windows: a `user` folder beside the program, else its own folder in AppData.
+        val program = File(home, "Eden/eden.exe").apply { parentFile.mkdirs(); writeText("") }
+        val appData = File(home, "AppData/Roaming").apply { File(this, "eden/config").mkdirs(); File(this, "eden/config/qt-config.ini").writeText("") }
+        val windows = DesktopEmulatorFiles(DesktopOs.WINDOWS, env = mapOf("APPDATA" to appData.absolutePath), home = home.absolutePath, backups = backups)
+        val onWindows = InstalledEmulator(EmulatorId("windows.eden"), "Eden", Host.WINDOWS, program.absolutePath, platforms = setOf(PlatformId("switch")), detectedVia = "Folder")
+        assertEquals(p(File(appData, "eden/config")), windows.edenConfig(onWindows))
+        File(program.parentFile, "user/config").mkdirs()
+        File(program.parentFile, "user/config/qt-config.ini").writeText("")
+        assertEquals(p(File(program.parentFile, "user/config")), windows.edenConfig(onWindows))
     }
 
     @Test

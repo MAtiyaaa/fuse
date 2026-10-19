@@ -21,8 +21,11 @@ interface GamepadSink {
     /** Analog trigger ([PadButton.L2] or [PadButton.R2]), 0..1. */
     fun trigger(button: PadButton, value: Float, device: String? = null)
 
-    /** The controller being pressed calls itself [name] (its device name, or SDL's type for it). */
-    fun identified(name: String?) {}
+    /**
+     * The controller being pressed calls itself [name] (its device name, or SDL's type for it), and
+     * is made by [vendorId] (its USB vendor) when the reader knows it.
+     */
+    fun identified(name: String?, vendorId: Int? = null) {}
 
     /** The controllers connected now, by name, after one arrived or went away. */
     fun connected(devices: List<String>) {}
@@ -132,7 +135,7 @@ class LinuxGamepads(
             }
             warnedUnreadable.remove(node.name)
             val name = readName(node.name)
-            val device = Device(node.name, name, stream, JoystickMapping.forDevice(node.name, name))
+            val device = Device(node.name, name, stream, JoystickMapping.forDevice(node.name, name), vendorOf(node.name, ids[node.name] ?: JoydevFilter.usbId(node.name)))
             device.muted = wrapped(node.name)
             if (device.muted) Log.info("${device.label} is wrapped by Steam Input; read through Steam's virtual controller instead")
             open[node.name] = device
@@ -140,6 +143,16 @@ class LinuxGamepads(
             device.start()
             announce()
         }
+    }
+
+    /**
+     * Who made the pad behind `/dev/input/[js]`, for its button labels. Steam's virtual controller is
+     * made by Valve whatever it carries: through it, the maker is that of the pads Steam wraps when
+     * they are all one maker's (a DualSense through Steam Input still shows PlayStation's shapes).
+     */
+    private fun vendorOf(js: String, id: String?): Int? {
+        if (!JoydevFilter.isSteamVirtual(id)) return JoydevFilter.vendor(id)
+        return steamWrapped.mapNotNull(JoydevFilter::vendor).distinct().singleOrNull()
     }
 
     private fun announce() = sink.connected(open.values.sortedBy { it.node }.map { it.label }.distinct())
@@ -162,6 +175,8 @@ class LinuxGamepads(
         name: String?,
         private val input: FileInputStream,
         private val mapping: JoystickMapping,
+        /** Its USB vendor (see [vendorOf]), for its button labels; null when unknown. */
+        private val vendor: Int?,
     ) {
         val label: String = name ?: node
 
@@ -234,7 +249,7 @@ class LinuxGamepads(
             val button = mapping.button(number) ?: return
             if (down) {
                 if (held.add(button)) {
-                    sink.identified(label)
+                    sink.identified(label, vendor)
                     sink.press(button, label)
                 }
             } else if (held.remove(button)) {

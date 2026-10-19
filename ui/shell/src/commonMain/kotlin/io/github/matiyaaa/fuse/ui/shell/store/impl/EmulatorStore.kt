@@ -286,7 +286,7 @@ internal class DefaultEmulatorOps(private val ctx: StoreContext) : EmulatorOps {
                 if (io.github.matiyaaa.fuse.sync.SaveAdapters.forEmulator(a.id.value) != null) add("saves")
                 if (family in setOf("pcsx2", "duckstation")) add("patches")
                 if (family in setOf("pcsx2", "duckstation", "ppsspp") || family.startsWith("retroarch")) add("cheats")
-                if (family in io.github.matiyaaa.fuse.launch.settings.NativeSettings.families) add("settings")
+                if (io.github.matiyaaa.fuse.launch.settings.NativeSettings.familyOf(a.id.value) in io.github.matiyaaa.fuse.launch.settings.NativeSettings.changeable) add("settings")
             },
         )
     }.sortedWith(compareByDescending<EmulatorSupportRow> { it.installed }.thenBy { it.name.lowercase() })

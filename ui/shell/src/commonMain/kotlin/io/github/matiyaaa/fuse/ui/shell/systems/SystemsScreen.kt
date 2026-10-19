@@ -141,6 +141,11 @@ fun SystemsScreen(app: AppState) {
     val systems = platforms.filter { it.gameCount > 0 } + listOfNotNull(streamSystem(app, streamPrefs))
     var chosen by remember { mutableStateOf<String?>(null) }
     val current = systems.firstOrNull { it.platform.id.value == chosen } ?: systems.firstOrNull()
+    // What has been played on the chosen system here, named with it so another system's never shows.
+    val currentId = current?.platform?.id?.takeIf { it != STREAM_SYSTEM }
+    val played by remember(app.store, currentId) {
+        currentId?.let { id -> app.store.library.systemActivity(id).map { id to it } } ?: kotlinx.coroutines.flow.flowOf(null)
+    }.collectAsState(null)
     // On a two-screen device the board is kept once with the menus on top and once with them below.
     val twoScreens = app.platform.features.secondScreen || app.menusOnSecondScreen
     val looks = remember(twoScreens, app.menusOnSecondScreen) { SystemsLooks(twoScreens, app.menusOnSecondScreen) }
@@ -166,7 +171,10 @@ fun SystemsScreen(app: AppState) {
                 enter = io.github.matiyaaa.fuse.ui.fuseline.fadeIn(Fuse.motion.enter(Durations.BASE)) + io.github.matiyaaa.fuse.ui.fuseline.expandVertically(Fuse.motion.enter(Durations.BASE)),
                 exit = io.github.matiyaaa.fuse.ui.fuseline.fadeOut(Fuse.motion.exit(Durations.FAST)) + io.github.matiyaaa.fuse.ui.fuseline.shrinkVertically(Fuse.motion.exit(Durations.BASE)),
             ) {
-                SystemHeader(current, compactHeader, Modifier.padding(horizontal = Space.gutter).reveal(reveal, 0), widthFraction = headerWidth)
+                SystemHeader(
+                    current, compactHeader, Modifier.padding(horizontal = Space.gutter).reveal(reveal, 0), widthFraction = headerWidth,
+                    activity = played?.takeIf { it.first == currentId }?.second,
+                )
             }
             if (systems.isEmpty()) {
                 PageEffect(Unit) {
@@ -267,6 +275,9 @@ internal class SystemsSpace(
     /** Whether the board was on a small screen when last shown at rest. */
     private var shownSmall: Boolean? = null
 
+    /** The columns a roomy board filled to when last shown at rest, kept while arranging. */
+    private var shownFill: Int? = null
+
     override fun shown(c: HomeLayoutConfig, page: Int) = c.boardWidgets(page).filter { it.visible && it.target in byId }
     override fun title(w: HomeWidget) = card(w)?.platform?.name ?: "System"
 
@@ -293,6 +304,27 @@ internal class SystemsSpace(
             p.systemsCardsSeen[key] ?: if (looks.flipped) SystemsBoard.FLIPPED_CARDS else SystemsBoard.cards(narrow, small, width)
         }
         return SystemsBoard.columns(cards, step)
+    }
+
+    /**
+     * Fewer, larger cards where the screen has room for them (a tall monitor, an ultrawide, a TV
+     * with a few systems): a card fewer across at a time, down to three, while every system still
+     * shows at once. Arranging keeps the cards the size they were, so nothing jumps as it starts
+     * or as a card grows. Never on a handheld or a phone, never for the other screen's look, and
+     * never when the person chose smaller systems (Settings, Systems, System size).
+     */
+    override fun fill(usual: Int, compact: Boolean, fits: (columns: Int) -> Boolean): Int {
+        val p = app.store.prefs.value
+        val step = if (looks.flipped) p.systemTileStepFlipped else p.systemTileStep
+        if (compact || step != 0 || looks.flipped != looks.flippedHere) return usual.also { shownFill = null }
+        if (looks.arranging) return shownFill?.coerceAtMost(usual) ?: usual
+        var best = usual
+        var next = usual - SystemsBoard.GRAIN
+        while (next >= SystemsBoard.GRAIN * SystemsBoard.MIN_FILL_CARDS && fits(next)) {
+            best = next
+            next -= SystemsBoard.GRAIN
+        }
+        return best.also { shownFill = it }
     }
 
     /**
@@ -471,6 +503,9 @@ internal object SystemsBoard {
 
     /** Cards across the lower screen until it has been seen: three, as a Thor's has. */
     const val FLIPPED_CARDS = 3
+
+    /** The fewest cards across a roomy screen's board takes to fill it (see [SystemsSpace.fill]). */
+    const val MIN_FILL_CARDS = 3
 
     /** The most cards a row can gain over its usual count (Settings, Systems, System size). */
     const val MAX_STEP = 2
@@ -727,6 +762,8 @@ internal fun SystemHeader(
     nameStyle: TextStyle = if (compact) Fuse.type.title else Fuse.type.display,
     /** Said in place of the maker line while the system is being moved ("Moving, place 3 of 11"). */
     moving: String? = null,
+    /** What has been played on it here, told under its emulator where there is room. */
+    activity: io.github.matiyaaa.fuse.ui.shell.store.SystemActivity? = null,
 ) {
     val c = Fuse.colors
     val motion = Fuse.motion
@@ -779,6 +816,8 @@ internal fun SystemHeader(
                 val problem = firmwareProblem(s)
                 // Where the line would crowd (a phone held upright), the firmware gets its own line.
                 val apart = problem != null && maxWidth < Size.touch * 8
+                // Covers of the games played last only where they have the room.
+                val roomy = maxWidth >= Size.touch * 8
                 Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                         FText(s.countText(), Fuse.type.bodyStrong.tabular(), color = c.text, maxLines = 1)
@@ -796,6 +835,51 @@ internal fun SystemHeader(
                         }
                     }
                     if (problem != null && apart) FirmwareProblem(problem)
+                    if (activity != null) SystemPlay(s, activity, covers = roomy && !compact)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * What has been played on a system here: the time in all, how many of its games, the one played
+ * most, and the covers of those played last (with [covers], where the header has the room); or
+ * that none has been yet.
+ */
+@Composable
+private fun SystemPlay(card: PlatformCard, a: io.github.matiyaaa.fuse.ui.shell.store.SystemActivity, covers: Boolean) {
+    val c = Fuse.colors
+    if (a.played == 0) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            FuseIcon(FuseIcons.Clock, size = Size.iconS, tint = c.textFaint)
+            FText("None of its games played yet", Fuse.type.body, color = c.textFaint, maxLines = 1)
+        }
+        return
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            FuseIcon(FuseIcons.Clock, size = Size.iconS, tint = c.textMuted)
+            FText(if (a.seconds >= 60) "${io.github.matiyaaa.fuse.ui.shell.components.playtimeText(a.seconds)} played" else "Played", Fuse.type.bodyStrong.tabular(), color = c.text, maxLines = 1)
+            FText("·", Fuse.type.body, color = c.textFaint)
+            FText("${a.played} of ${card.gameCount} played", Fuse.type.body.tabular(), color = c.textMuted, maxLines = 1)
+            a.mostPlayed.firstOrNull()?.let { top ->
+                FText("·", Fuse.type.body, color = c.textFaint)
+                FuseIcon(FuseIcons.TrendingUp, size = Size.iconS, tint = c.textMuted)
+                FText("Most played: ${top.title}", Fuse.type.body, color = c.textMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+            }
+        }
+        if (covers && a.recent.isNotEmpty()) {
+            // The games played last, newest first: covers only, their names a tile away on the Library.
+            val shape = remember { SquircleShape.fraction(0.22f) }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                FuseIcon(FuseIcons.History, size = Size.iconS, tint = c.textMuted)
+                for (g in a.recent) {
+                    io.github.matiyaaa.fuse.ui.shell.components.SquareGameArt(
+                        g.art,
+                        Modifier.size(Size.touch).clip(shape),
+                        fallback = { GeneratedArt(g.title, g.accent.toColor(), slot = ArtSlot.ICON) },
+                    )
                 }
             }
         }

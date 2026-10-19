@@ -32,6 +32,11 @@ internal object DeviceAwake {
     /** The screen is on, or Fuse holds the device awake for work. */
     val awake: StateFlow<Boolean> = _awake.asStateFlow()
 
+    private val _held = MutableStateFlow<Set<String>>(emptySet())
+
+    /** What Fuse holds the device awake for now ("transfers", "work", "art"), for Power and heat. */
+    val held: StateFlow<Set<String>> = _held.asStateFlow()
+
     fun start(context: Context) {
         synchronized(this) {
             if (started) return
@@ -60,7 +65,8 @@ internal object DeviceAwake {
     }
 
     private fun publish() {
-        val held = synchronized(holds) { holds.isNotEmpty() }
-        _awake.value = _screenOn.value || held
+        val now = synchronized(holds) { holds.toSet() }
+        _held.value = now
+        _awake.value = _screenOn.value || now.isNotEmpty()
     }
 }

@@ -61,6 +61,24 @@ class RelinkTest {
     }
 
     @Test
+    fun aGamesFilesAreItsPathAndTheFileItStartsFrom() = TestDb().use { t ->
+        runBlocking {
+            val source = t.data.sources.add(old, "ROMs", LibrarySourceKind.ROMS_ROOT)
+            val folderGame = scanned("$old/ps2/Okami", platform = "ps2", source = source.value).copy(
+                kind = io.github.matiyaaa.fuse.model.LocationKind.FOLDER,
+                launchPath = "$old/ps2/Okami/Okami.iso",
+            )
+            t.data.indexer.apply(report(folder("$old/ps2", listOf(folderGame), platform = "ps2"), folder("$old/gba", listOf(scanned("$old/gba/a.gba", source = source.value)))), t.now, testCleaner)
+            val files = t.data.games.files()
+            val okami = t.data.games.idByPath("$old/ps2/Okami")!!
+            assertEquals(okami, files["$old/ps2/Okami"])
+            assertEquals(okami, files["$old/ps2/Okami/Okami.iso"])
+            assertEquals(t.data.games.idByPath("$old/gba/a.gba"), files["$old/gba/a.gba"])
+            assertEquals(3, files.size)
+        }
+    }
+
+    @Test
     fun relinkingOntoGamesThatAlreadyExistChangesNothing() = TestDb().use { t ->
         runBlocking {
             val (source, id) = t.library()

@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.2.27 is the <b>Native Update</b>: saves from a modded Switch, and every emulator in the Linux Store</sub><br>
+<sub>0.4.3 is the <b>Overdrive Update</b>: Fuse in Steam's Game Mode, every emulator setting, RomM both ways, and Fuse Ports</sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -430,11 +430,13 @@ Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.4.2.27 "The Native Update"**: saves backed up on a modded Switch with JKSV or
-> Checkpoint come in one game at a time (is this the game, whose save is it, then into Eden), for
-> the games here or every game in your library, and every emulator Fuse knows on Linux is in the
-> Store, installed by Fuse. Each profile can have its own RetroAchievements account, and a game's
-> updates and DLC come from your other devices. 0.4.2.27 lets an Android handheld sleep without Fuse waking it all night, keeps Fuse cooler while it sits on screen, draws Linux backgrounds without a line between their shades, and gives a computer's mouse its back and right buttons. See [the release notes](docs/releases/0.4.2.27.md); every earlier
+> **Fuse 0.4.3 "The Overdrive Update"**: games added to Steam start through Fuse Fast Start (saves
+> kept in step, time counted), and the Decky plugin changes Steam without a restart. Every setting of
+> an emulator is in Fuse (Fuse Tune), RomM keeps saves of every shape and your changes go back to it,
+> the Store looks after emulators (any earlier version, Codeberg and Forgejo), mods come from Nexus
+> Mods, games are played together as each emulator does it, and Fuse Ports installs games rebuilt to
+> run natively. The Library also opens quickly without a graphics card, and each game's art is
+> found once for the household. See [the release notes](docs/releases/0.4.3.md); every earlier
 > release is in [CHANGELOG.md](CHANGELOG.md).
 
 Fuse runs on Android handhelds and phones, Linux (including SteamOS and its Game Mode), Windows and
@@ -442,10 +444,9 @@ macOS. Every screen is rendered and checked at 23 screen sizes, from a 3.5 inch 
 32:9 monitor and a 4K TV; the Android app passes its tests and lint and runs on handhelds every day;
 the Linux, Windows and macOS builds pass their tests and a self-test of the packaged app in CI.
 
-Not there yet: checks on more handhelds and on more Windows and Mac computers, signed Windows and
-macOS builds, a storage mode on Android without All files access, translations (the interface is
-English only), native patches for Android emulators, and ScreenScraper. [ROADMAP.md](ROADMAP.md)
-ticks a box only when the code is in this repository.
+Not there yet: translations (the interface is English only), native patches for Android
+emulators, and ScreenScraper. [ROADMAP.md](ROADMAP.md) ticks a box only when the code is in this
+repository.
 
 **Tried it on your device?** A short report ("this emulator launches on my handheld") helps more than
 anything right now. [Open an issue](https://github.com/MAtiyaaa/fuse/issues) or see

@@ -6,15 +6,26 @@ import io.github.matiyaaa.fuse.desktop.system.DesktopOs
 import io.github.matiyaaa.fuse.desktop.system.GameMode
 import io.github.matiyaaa.fuse.desktop.system.Processes
 import io.github.matiyaaa.fuse.library.steam.SteamArt
+import io.github.matiyaaa.fuse.library.steam.SteamArtShape
+import io.github.matiyaaa.fuse.library.steam.SteamCollection
+import io.github.matiyaaa.fuse.library.steam.SteamCollectionChoices
 import io.github.matiyaaa.fuse.library.steam.SteamCollections
 import io.github.matiyaaa.fuse.library.steam.SteamGameAction
 import io.github.matiyaaa.fuse.library.steam.SteamGameEntry
 import io.github.matiyaaa.fuse.library.steam.SteamGamePlanItem
 import io.github.matiyaaa.fuse.library.steam.SteamGames
+import io.github.matiyaaa.fuse.library.steam.SteamHabit
 import io.github.matiyaaa.fuse.library.steam.SteamHealthIssue
+import io.github.matiyaaa.fuse.library.steam.SteamLearn
+import io.github.matiyaaa.fuse.library.steam.SteamLearned
 import io.github.matiyaaa.fuse.library.steam.SteamShortcut
 import io.github.matiyaaa.fuse.library.steam.SteamShortcuts
+import io.github.matiyaaa.fuse.library.steam.SteamStart
 import io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration
+import io.github.matiyaaa.fuse.ui.shell.platform.SteamLiveChange
+import io.github.matiyaaa.fuse.ui.shell.platform.SteamLiveQueue
+import io.github.matiyaaa.fuse.ui.shell.platform.SteamLogo
+import io.github.matiyaaa.fuse.ui.shell.platform.SteamUndoStep
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -39,6 +50,8 @@ internal class DesktopSteam(
     private val programPath: () -> String? = ::runningProgram,
     /** Fuse's data folder, where a restart of Steam leaves its job and its note; null: no restarts from inside Steam. */
     private val dataDir: String? = null,
+    /** Whether Steam is running; the system's process list unless a test says otherwise. */
+    private val steamOpen: (() -> Boolean)? = null,
 ) : SteamIntegration {
     override val gameMode: Boolean get() = GameMode.active
 
@@ -61,6 +74,24 @@ internal class DesktopSteam(
     override suspend fun hasUser(): Boolean = withContext(Dispatchers.IO) { userConfigDirs(create = false).isNotEmpty() || userDataDirs().isNotEmpty() }
 
     override val canBeAdded: Boolean get() = program()?.let { File(it).canExecute() || (DesktopOs.isMac && File(it).isDirectory) } == true
+
+    /** Steam on Linux reads a Direct entry's launch options through the shell, so Fuse's mark stays with it (see [SteamGames]). */
+    override val directEntries: Boolean get() = DesktopOs.current == DesktopOs.LINUX
+
+    /**
+     * [games] as this computer's Steam can have them: a Direct entry's program as a full path (a plan
+     * may name one Steam finds on `PATH`, such as `flatpak`), one written the person's own way only
+     * while their program is still there (else as Play starts it), and a game whose Direct entry
+     * can't be made here (another system, a program not found) through Fast Start instead.
+     */
+    private fun prepared(games: List<SteamGameEntry>): List<SteamGameEntry> = games.map { g ->
+        val d = g.direct ?: return@map g
+        val theirs = d.written?.takeIf { w -> SteamLearn.words(w.exe).firstOrNull()?.let { File(it).isFile } == true }
+        if (directEntries && theirs != null && SteamGames.canWrite(d)) return@map g
+        val program = d.argv.firstOrNull()?.let { p -> if (File(p).isAbsolute) p.takeIf { File(it).exists() } else Processes.which(p) }
+        val ready = program?.let { d.copy(argv = listOf(it) + d.argv.drop(1), written = null) }
+        if (directEntries && ready != null && SteamGames.canWrite(ready)) g.copy(direct = ready) else g.copy(direct = null)
+    }
 
     private val mutation = Mutex()
 
@@ -119,7 +150,8 @@ internal class DesktopSteam(
 
     override suspend fun addGamesRestartingSteam(games: List<SteamGameEntry>, art: Map<Long, SteamArt>, collections: Boolean): Result<String> {
         if (games.isEmpty()) return Result.success("Nothing to add.")
-        if (!steamRunning()) return addGames(games, art, collections)
+        // Steam's running client takes them through the plugin: no restart needed.
+        if (!steamRunning() || changesLive) return addGames(games, art, collections)
         return mutation.withLock {
             withContext(Dispatchers.IO) {
                 val executable = program() ?: return@withContext Result.failure(IllegalStateException("Run Fuse from its AppImage or installed copy: Steam starts these games through it."))
@@ -261,13 +293,14 @@ internal class DesktopSteam(
 
     override suspend fun planGames(games: List<SteamGameEntry>): List<SteamGamePlanItem>? = withContext(Dispatchers.IO) {
         val exe = program() ?: return@withContext null
+        val ready = prepared(games)
         val dirs = userConfigDirs(create = false)
         if (dirs.isEmpty()) return@withContext null
         // Each Steam user's list on its own; a game counts as new if it is new for any of them.
-        val plans = dirs.mapNotNull { dir -> SteamGames.plan(File(dir, "shortcuts.vdf").takeIf { it.isFile }?.readBytes(), exe, games, ::fuseProgram) }
+        val plans = dirs.mapNotNull { dir -> SteamGames.plan(File(dir, "shortcuts.vdf").takeIf { it.isFile }?.readBytes(), exe, ready, ::fuseProgram) }
         if (plans.isEmpty()) return@withContext null
         val order = listOf(SteamGameAction.CREATE, SteamGameAction.UPDATE, SteamGameAction.ELSEWHERE, SteamGameAction.UNCHANGED)
-        games.distinctBy { it.gameId }.map { g ->
+        ready.distinctBy { it.gameId }.map { g ->
             val actions = plans.mapNotNull { p -> p.firstOrNull { it.entry.gameId == g.gameId }?.action }
             SteamGamePlanItem(g, order.firstOrNull { it in actions } ?: SteamGameAction.UNCHANGED)
         }
@@ -278,14 +311,10 @@ internal class DesktopSteam(
     override suspend fun addGames(games: List<SteamGameEntry>, art: Map<Long, SteamArt>, collections: Boolean): Result<String> {
         if (games.isEmpty()) return Result.success("Nothing to add.")
         if (steamRunning()) {
-            waitingGames?.cancel()
-            waitingGames = watcher.launch {
-                // Steam is never closed for this: Fuse waits for it to be gone, then writes.
-                while (steamRunningNow()) delay(STEAM_POLL_MS)
-                mutation.withLock { writeGames(games, art, collections) }
-                    .onSuccess { Log.info("Steam: games added after Steam closed") }
-                    .onFailure { Log.warn("Steam: adding games after Steam closed failed", it) }
-            }
+            // With the Fuse Decky plugin there, Steam's running client makes them now.
+            addLive(games, art, collections)?.let { return it }
+            // Steam is never closed for this: Fuse waits for it to be gone, then writes.
+            addWhenClosed(games, art, collections)
             return Result.success(if (games.size == 1) "It goes into Steam's library when Steam next closes. Steam isn't closed for it." else "They go into Steam's library when Steam next closes. Steam isn't closed for it.")
         }
         return mutation.withLock { withContext(Dispatchers.IO) { writeGames(games, art, collections) } }
@@ -293,7 +322,78 @@ internal class DesktopSteam(
 
     override val waitingForSteamGames: Boolean get() = waitingGames?.isActive == true
 
-    private fun writeGames(games: List<SteamGameEntry>, art: Map<Long, SteamArt>, collections: Boolean): Result<String> {
+    override val live: SteamLiveQueue? = if (DesktopOs.current == DesktopOs.LINUX) SteamLiveQueue(System::currentTimeMillis) else null
+
+    /**
+     * [games] put in Steam through the Fuse Decky plugin while Steam runs (bridge protocol 2): each
+     * new one added, each of Fuse's brought up to date, with their pictures, exactly as a write of
+     * the file would make them. Steam writes them into its file when it quits; collections, which
+     * Steam keeps apart, follow then. Null when the plugin isn't there; games it didn't make go the
+     * usual way, when Steam closes.
+     */
+    private suspend fun addLive(games: List<SteamGameEntry>, art: Map<Long, SteamArt>, collections: Boolean): Result<String>? {
+        val queue = live?.takeIf { it.connected } ?: return null
+        val exe = program() ?: return null
+        val ready = prepared(games)
+        val lists = withContext(Dispatchers.IO) { userLists().mapNotNull { runCatching { it.readBytes() }.getOrNull() } }
+        val known = lists.fold(HashMap<Long, Long>()) { m, b -> m.apply { SteamGames.inSteam(b, ::fuseProgram).forEach { (k, v) -> putIfAbsent(k, v) } } }
+        val made = queue.made()
+        val plans = lists.mapNotNull { SteamGames.plan(it, exe, ready, ::fuseProgram) }.ifEmpty { listOfNotNull(SteamGames.plan(null, exe, ready, ::fuseProgram)) }
+        val changes = ArrayList<SteamLiveChange>()
+        for (g in ready.distinctBy { it.gameId }) {
+            val actions = plans.mapNotNull { p -> p.firstOrNull { it.entry.gameId == g.gameId }?.action }
+            val appId = made[g.gameId] ?: known[g.gameId]
+            if (appId == null && SteamGameAction.ELSEWHERE in actions) continue
+            if (appId != null && made[g.gameId] == null && actions.all { it == SteamGameAction.UNCHANGED }) continue
+            val (program, dir, options) = SteamGames.startOf(lists.firstOrNull { SteamGames.inSteam(it, ::fuseProgram).containsKey(g.gameId) }, exe, g, ::fuseProgram)
+            val pictures = art[g.gameId]?.let(::liveArt).orEmpty()
+            changes += if (appId == null) {
+                SteamLiveChange(
+                    op = SteamLiveChange.Op.ADD, gameId = g.gameId, name = g.name, exe = program, startDir = dir, launchOptions = options, art = pictures,
+                    logo = SteamLogo.FUSE.takeIf { "logo" in pictures },
+                )
+            } else {
+                SteamLiveChange(op = SteamLiveChange.Op.UPDATE, gameId = g.gameId, appId = appId, name = g.name, exe = program, startDir = dir, launchOptions = options)
+            }
+        }
+        if (changes.isEmpty()) return Result.success("Already in Steam's library, as they are.")
+        val results = queue.offer(changes)
+        val failed = changes.indices.filter { !results[it].ok }.map { changes[it].gameId }.toSet()
+        results.filter { !it.ok }.forEach { Log.warn("Steam: the Fuse plugin couldn't make a change: ${it.message}") }
+        // What it didn't make, and the collections, go in when Steam next closes.
+        val later = games.filter { it.gameId in failed }
+        if (later.isNotEmpty() || collections) addWhenClosed(later.ifEmpty { games }, art, collections)
+        val inNow = changes.size - failed.size
+        return Result.success(
+            when {
+                inNow == 0 -> "Steam didn't take them through the Fuse plugin, so they go in when Steam next closes."
+                failed.isNotEmpty() -> "$inNow in Steam now; the rest go in when Steam next closes."
+                inNow == 1 -> "In Steam now, through the Fuse plugin." + if (collections) " Its collection follows when Steam next closes." else ""
+                else -> "$inNow in Steam now, through the Fuse plugin." + if (collections) " Their collections follow when Steam next closes." else ""
+            },
+        )
+    }
+
+    /** Fuse's pictures for a live change, by Steam's asset kinds: only files that are there, each in its shape ([SteamArtShape]). */
+    private fun liveArt(art: SteamArt): Map<String, String> = listOfNotNull(
+        art.portrait?.let { Triple("capsule", "portrait", it) }, art.hero?.let { Triple("hero", "hero", it) }, art.logo?.let { Triple("logo", "logo", it) },
+        art.wide?.let { Triple("header", "wide", it) }, art.icon?.let { Triple("icon", "icon", it) },
+    ).filter { (_, kind, path) -> File(path).isFile && inShape(kind, File(path)) }.associate { (asset, _, path) -> asset to path }
+
+    /** Writes [games] (and their collections) once Steam has closed by itself; Steam is never closed for it. */
+    private fun addWhenClosed(games: List<SteamGameEntry>, art: Map<Long, SteamArt>, collections: Boolean) {
+        waitingGames?.cancel()
+        waitingGames = watcher.launch {
+            while (steamRunningNow()) delay(STEAM_POLL_MS)
+            live?.steamClosed()
+            mutation.withLock { writeGames(games, art, collections) }
+                .onSuccess { Log.info("Steam: games written after Steam closed") }
+                .onFailure { Log.warn("Steam: writing games after Steam closed failed", it) }
+        }
+    }
+
+    private fun writeGames(asked: List<SteamGameEntry>, art: Map<Long, SteamArt>, collections: Boolean): Result<String> {
+        val games = prepared(asked)
         val exe = program()?.takeIf { File(it).canExecute() || (DesktopOs.isMac && File(it).isDirectory) }
             ?: return Result.failure(IllegalStateException("Run Fuse from its AppImage or installed copy: Steam starts these games through it."))
         if (steamRunningNow()) return Result.failure(IllegalStateException("Close Steam first: it rewrites its library when it quits."))
@@ -303,6 +403,7 @@ internal class DesktopSteam(
         var updated = 0
         var elsewhere = 0
         var written = 0
+        val step = nextStep()
         for (dir in users) {
             try {
                 val file = File(dir, "shortcuts.vdf")
@@ -322,7 +423,7 @@ internal class DesktopSteam(
                 val after = SteamGames.write(before, exe, games, ::fuseProgram) { icons[it].orEmpty() } ?: continue
                 if (before == null || !after.contentEquals(before)) {
                     // The list as it was, for Undo.
-                    File(dir, GAMES_BACKUP).writeBytes(before ?: ByteArray(0))
+                    keepUndo(dir, before, step, changesInWords(plan.count { it.action == SteamGameAction.CREATE }, plan.count { it.action == SteamGameAction.UPDATE }))
                     replaceAtomically(file, after)
                 }
                 if (collections) runCatching { writeCollections(dir, after, games.mapNotNull { it.collection }.toSet()) }.onFailure { Log.warn("could not write Steam collections in $dir", it) }
@@ -343,17 +444,42 @@ internal class DesktopSteam(
         return Result.success(if (parts.isEmpty()) "Already in Steam's library, as they are." else parts.joinToString(", ").replaceFirstChar { it.uppercase() } + ". Start Steam to see them.")
     }
 
-    override suspend fun removeGames(gameIds: Set<Long>?): Result<String> = mutation.withLock {
+    override suspend fun removeGames(gameIds: Set<Long>?): Result<String> {
+        if (steamRunning()) removeLive(gameIds)?.let { return it }
+        return removeFromFiles(gameIds)
+    }
+
+    /**
+     * Fuse's entries for [gameIds] (null: all) taken out through the Fuse Decky plugin while Steam
+     * runs. Null when the plugin isn't there. Steam writes its file without them when it quits.
+     */
+    private suspend fun removeLive(gameIds: Set<Long>?): Result<String>? {
+        val queue = live?.takeIf { it.connected } ?: return null
+        val lists = withContext(Dispatchers.IO) { userLists().mapNotNull { runCatching { it.readBytes() }.getOrNull() } }
+        val ids = HashMap<Long, Long>()
+        lists.forEach { b -> SteamGames.inSteam(b, ::fuseProgram).forEach { (k, v) -> ids.putIfAbsent(k, v) } }
+        ids.putAll(queue.made())
+        val changes = ids.filterKeys { gameIds == null || it in gameIds }.map { (game, app) -> SteamLiveChange(op = SteamLiveChange.Op.REMOVE, gameId = game, appId = app) }
+        if (changes.isEmpty()) return Result.success("None of them were in Steam's library.")
+        val done = queue.offer(changes).count { it.ok }
+        if (done < changes.size) return Result.failure(IllegalStateException("Steam didn't take them all out through the Fuse plugin. Close Steam, then try again."))
+        // Collections Fuse made for them are put right once Steam closes.
+        addWhenClosed(emptyList(), emptyMap(), collections = true)
+        return Result.success(if (done == 1) "1 game is out of Steam's library." else "$done games are out of Steam's library.")
+    }
+
+    private suspend fun removeFromFiles(gameIds: Set<Long>?): Result<String> = mutation.withLock {
         withContext(Dispatchers.IO) {
             if (steamRunningNow()) return@withContext Result.failure(IllegalStateException("Close Steam first: it rewrites its library when it quits."))
             var removed = 0
+            val step = nextStep()
             for (dir in userConfigDirs(create = false)) {
                 val file = File(dir, "shortcuts.vdf").takeIf { it.isFile } ?: continue
                 val before = runCatching { file.readBytes() }.getOrNull() ?: continue
                 val had = SteamGames.inSteam(before, ::fuseProgram).keys.let { k -> if (gameIds == null) k else k intersect gameIds }
                 val after = SteamGames.remove(before, gameIds, ::fuseProgram) ?: continue
                 if (after.contentEquals(before)) continue
-                File(dir, GAMES_BACKUP).writeBytes(before)
+                keepUndo(dir, before, step, if (had.size == 1) "Took 1 game out" else "Took ${had.size} games out")
                 replaceAtomically(file, after)
                 runCatching { writeCollections(dir, after, emptySet()) }
                 removed = maxOf(removed, had.size)
@@ -370,24 +496,27 @@ internal class DesktopSteam(
 
     override suspend fun repairGames(library: Set<Long>, moved: List<SteamGameEntry>, art: Map<Long, SteamArt>): Result<String> = mutation.withLock {
         withContext(Dispatchers.IO) {
+            val rewritten = prepared(moved)
             if (steamRunningNow()) return@withContext Result.failure(IllegalStateException("Close Steam first: it rewrites its library when it quits."))
             val exe = program() ?: return@withContext Result.failure(IllegalStateException("Run Fuse from its AppImage or installed copy, then try again."))
             var changed = 0
+            val step = nextStep()
             for (dir in userConfigDirs(create = false)) {
                 val file = File(dir, "shortcuts.vdf").takeIf { it.isFile } ?: continue
                 val before = runCatching { file.readBytes() }.getOrNull() ?: continue
                 val repaired = SteamGames.repair(before, library, ::fuseProgram) ?: continue
-                // Entries that start an older Fuse: the same entry, pointed at this one (its art id stays).
+                // Entries that start an older Fuse, an older way or a missing emulator: the same entry, written
+                // again as each game starts now (its art id stays).
                 val ids = SteamGames.inSteam(repaired, ::fuseProgram)
                 val icons = HashMap<Long, String>()
-                for (g in moved) {
+                for (g in rewritten) {
                     val pictures = art[g.gameId] ?: continue
                     val id = ids[g.gameId] ?: continue
                     runCatching { placeGameArt(File(dir, "grid"), id, pictures) }.onSuccess { if (it.isNotEmpty()) icons[g.gameId] = it }
                 }
-                val after = SteamGames.write(repaired, exe, moved.filter { it.gameId in ids }, ::fuseProgram) { icons[it].orEmpty() } ?: continue
+                val after = SteamGames.write(repaired, exe, rewritten.filter { it.gameId in ids }, ::fuseProgram) { icons[it].orEmpty() } ?: continue
                 if (after.contentEquals(before)) continue
-                File(dir, GAMES_BACKUP).writeBytes(before)
+                keepUndo(dir, before, step, "Put Fuse's entries right")
                 replaceAtomically(file, after)
                 runCatching { writeCollections(dir, after, emptySet()) }
                 changed++
@@ -396,19 +525,101 @@ internal class DesktopSteam(
         }
     }
 
-    override suspend fun gamesHealth(library: Set<Long>): List<SteamHealthIssue> = withContext(Dispatchers.IO) {
+    override suspend fun gamesHealth(library: Set<Long>, wanted: Map<Long, SteamGameEntry>, unavailable: Set<Long>): List<SteamHealthIssue> = withContext(Dispatchers.IO) {
         val exe = program() ?: return@withContext emptyList()
-        userLists().flatMap { f -> SteamGames.health(runCatching { f.readBytes() }.getOrNull(), exe, library, ::fuseProgram) }.distinct()
+        // Each as it would be written here (a Direct entry's program found, or Fast Start).
+        val now = prepared(wanted.values.toList()).associateBy { it.gameId }
+        userLists().flatMap { f ->
+            SteamGames.health(runCatching { f.readBytes() }.getOrNull(), exe, library, ::fuseProgram, exists = { File(it).exists() }, wanted = now, unavailable = unavailable)
+        }.distinct()
     }
 
-    override val canUndoGames: Boolean get() = userConfigDirs(create = false).any { File(it, GAMES_BACKUP).isFile }
+    override suspend fun directGames(): Map<Long, Long> = withContext(Dispatchers.IO) {
+        val out = HashMap<Long, Long>()
+        for (f in userLists()) out.putAll(SteamGames.directIn(runCatching { f.readBytes() }.getOrNull(), ::fuseProgram))
+        out
+    }
 
-    override suspend fun undoGames(): Result<String> = mutation.withLock {
+    override suspend fun gameStarts(): Map<Long, SteamStart> = withContext(Dispatchers.IO) {
+        val out = HashMap<Long, SteamStart>()
+        for (f in userLists()) SteamGames.starts(runCatching { f.readBytes() }.getOrNull(), ::fuseProgram).forEach { (id, start) -> out.putIfAbsent(id, start) }
+        out
+    }
+
+    override suspend fun learnShortcuts(files: Map<String, Long>): List<SteamLearned> = withContext(Dispatchers.IO) {
+        userLists().flatMap { f -> SteamLearn.find(runCatching { f.readBytes() }.getOrNull(), ::fuseProgram, files) }.distinctBy { it.appId to it.gameId }
+    }
+
+    override suspend fun playFromSteam(gameId: Long): Result<String> {
+        val queue = live?.takeIf { it.connected } ?: return Result.failure(IllegalStateException("Starting a game through Steam needs the Fuse plugin for Decky, with Steam open."))
+        val appId = queue.made()[gameId] ?: withContext(Dispatchers.IO) {
+            userLists().firstNotNullOfOrNull { f -> SteamGames.inSteam(runCatching { f.readBytes() }.getOrNull(), ::fuseProgram)[gameId] }
+        } ?: return Result.failure(IllegalStateException("It isn't in Steam's library yet. Add it to Steam first."))
+        val result = queue.offer(listOf(SteamLiveChange(op = SteamLiveChange.Op.RUN, gameId = gameId, appId = appId))).single()
+        return if (result.ok) Result.success("Starting through Steam") else Result.failure(IllegalStateException(result.message ?: "Steam didn't start it"))
+    }
+
+    override suspend fun habits(files: Map<String, Long>, systems: Map<Long, String>): List<SteamHabit> = withContext(Dispatchers.IO) {
+        SteamLearn.habits(userLists().map { f -> runCatching { f.readBytes() }.getOrNull() }, ::fuseProgram, files, systems::get)
+    }
+
+    override suspend fun entryStarts(games: List<SteamGameEntry>): Map<Long, Triple<String, String, String>> = withContext(Dispatchers.IO) {
+        val exe = program() ?: return@withContext emptyMap()
+        val bytes = userLists().firstOrNull()?.let { f -> runCatching { f.readBytes() }.getOrNull() }
+        prepared(games).associate { it.gameId to SteamGames.startOf(bytes, exe, it, ::fuseProgram) }
+    }
+
+    override suspend fun takeOver(takes: List<Pair<SteamLearned, SteamGameEntry>>): Result<String> = mutation.withLock {
+        withContext(Dispatchers.IO) {
+            if (takes.isEmpty()) return@withContext Result.success("Nothing to take over.")
+            if (steamRunningNow()) return@withContext Result.failure(IllegalStateException("Close Steam first: it rewrites its library when it quits."))
+            val exe = program() ?: return@withContext Result.failure(IllegalStateException("Run Fuse from its AppImage or installed copy, then try again."))
+            val wanted = prepared(takes.map { it.second }).associateBy { it.gameId }
+            val byId = takes.mapNotNull { (learned, entry) -> wanted[entry.gameId]?.let { learned.appId to it } }.toMap()
+            var changed = 0
+            val step = nextStep()
+            for (dir in userConfigDirs(create = false)) {
+                val file = File(dir, "shortcuts.vdf").takeIf { it.isFile } ?: continue
+                val before = runCatching { file.readBytes() }.getOrNull() ?: continue
+                val after = SteamGames.takeOver(before, exe, byId, ::fuseProgram) ?: continue
+                if (after.contentEquals(before)) continue
+                // The list as it was, for Undo.
+                keepUndo(dir, before, step, if (byId.size == 1) "Took over 1 shortcut" else "Took over ${byId.size} shortcuts")
+                replaceAtomically(file, after)
+                runCatching { writeCollections(dir, after, wanted.values.mapNotNull { it.collection }.toSet()) }
+                    .onFailure { Log.warn("could not write Steam collections in $dir", it) }
+                changed++
+            }
+            when {
+                changed == 0 -> Result.success("Nothing needed changing.")
+                takes.size == 1 -> Result.success("It's Fuse's now, with its name and art as they were. Start Steam to see it.")
+                else -> Result.success("${takes.size} are Fuse's now, with their names and art as they were. Start Steam to see them.")
+            }
+        }
+    }
+
+    override val canUndoGames: Boolean get() = userConfigDirs(create = false).any { undoFiles(it).isNotEmpty() }
+
+    override suspend fun undoSteps(): List<SteamUndoStep> = withContext(Dispatchers.IO) {
+        val steps = HashMap<Long, SteamUndoStep>()
+        for (dir in userConfigDirs(create = false)) {
+            for ((id, file) in undoFiles(dir)) steps.putIfAbsent(id, SteamUndoStep(id, File(file.parentFile, "$id.txt").takeIf { it.isFile }?.readText()?.trim().orEmpty().ifEmpty { "Fuse's change" }, id))
+        }
+        steps.values.sortedByDescending { it.id }
+    }
+
+    override suspend fun undoGames(): Result<String> {
+        val last = undoSteps().firstOrNull() ?: return Result.failure(IllegalStateException("There's no change of Fuse's to undo."))
+        return undoTo(last.id).map { "Steam's library is back as it was before Fuse's last change." }
+    }
+
+    override suspend fun undoTo(stepId: Long): Result<String> = mutation.withLock {
         withContext(Dispatchers.IO) {
             if (steamRunningNow()) return@withContext Result.failure(IllegalStateException("Close Steam first: it rewrites its library when it quits."))
             var undone = 0
             for (dir in userConfigDirs(create = false)) {
-                val backup = File(dir, GAMES_BACKUP).takeIf { it.isFile } ?: continue
+                val files = undoFiles(dir)
+                val backup = files[stepId] ?: continue
                 val bytes = backup.readBytes()
                 val file = File(dir, "shortcuts.vdf")
                 if (bytes.isEmpty()) {
@@ -418,28 +629,150 @@ internal class DesktopSteam(
                     replaceAtomically(file, bytes)
                 }
                 runCatching { writeCollections(dir, file.takeIf { it.isFile }?.readBytes(), emptySet()) }
-                backup.delete()
+                // This change and every later one are undone with it.
+                for ((id, f) in files) if (id >= stepId) {
+                    f.delete()
+                    File(f.parentFile, "$id.txt").delete()
+                }
                 undone++
             }
-            if (undone == 0) Result.failure(IllegalStateException("There's no change of Fuse's to undo.")) else Result.success("Steam's library is back as it was before Fuse's last change.")
+            if (undone == 0) Result.failure(IllegalStateException("There's no change of Fuse's to undo.")) else Result.success("Steam's library is back as it was before that change.")
         }
     }
+
+    @Volatile private var lastStep = 0L
+
+    /** A new write's step: when it was made, and always after the one before (a clock ticks coarsely on some systems). */
+    @Synchronized
+    private fun nextStep(): Long = maxOf(System.currentTimeMillis(), lastStep + 1).also { lastStep = it }
+
+    /**
+     * Steam's list as it was before a write of Fuse's, kept by [step] (when it was made) with what
+     * it did, for Undo. Only the last [UNDO_STEPS] are kept; the single copy earlier Fuses kept goes.
+     */
+    private fun keepUndo(dir: File, before: ByteArray?, step: Long, what: String) {
+        val folder = File(dir, UNDO_DIR).apply { mkdirs() }
+        File(folder, "$step.vdf").writeBytes(before ?: ByteArray(0))
+        File(folder, "$step.txt").writeText(what)
+        undoFiles(dir).keys.sortedDescending().drop(UNDO_STEPS).forEach { old ->
+            File(folder, "$old.vdf").delete()
+            File(folder, "$old.txt").delete()
+        }
+        File(dir, GAMES_BACKUP).delete()
+    }
+
+    /** The lists Undo can put back in [dir], by step; the single copy an earlier Fuse kept counts as one. */
+    private fun undoFiles(dir: File): Map<Long, File> {
+        val out = HashMap<Long, File>()
+        File(dir, UNDO_DIR).listFiles { f -> f.name.endsWith(".vdf") }?.forEach { f -> f.nameWithoutExtension.toLongOrNull()?.let { out[it] = f } }
+        File(dir, GAMES_BACKUP).takeIf { it.isFile }?.let { out.putIfAbsent(it.lastModified(), it) }
+        return out
+    }
+
+    /** What a write did, in words, for the list of changes Undo shows. */
+    private fun changesInWords(added: Int, updated: Int): String = listOfNotNull(
+        added.takeIf { it > 0 }?.let { if (it == 1) "Added 1 game" else "Added $it games" },
+        updated.takeIf { it > 0 }?.let { if (it == 1) "brought 1 up to date" else "brought $it up to date" },
+    ).joinToString(", ").replaceFirstChar { it.uppercase() }.ifEmpty { "Changed Fuse's entries" }
 
     /**
      * Steam's collections for Fuse's games in [shortcuts]: one per system they are tagged with,
      * written into the user's cloud storage file, where Steam keeps collections. Only Fuse's own
      * collections change. Nothing is written when Steam hasn't made the file yet.
      */
-    private fun writeCollections(dir: File, shortcuts: ByteArray?, names: Set<String>) {
-        val cloud = File(dir, "cloudstorage").takeIf { it.isDirectory } ?: return
+    private fun writeCollections(dir: File, shortcuts: ByteArray?, names: Set<String>): Set<String> {
+        val (file, text) = collectionsFile(dir) ?: return emptySet()
+        val choices = choices(dir)
+        // Fuse's own that Steam Cloud dropped (not ones the person deleted) come back with the rest.
+        val dropped = SteamCollections.dropped(text, choices)
+        val members = SteamGames.byCollection(shortcuts, SteamCollections.fuseNames(text) + names + dropped + choices.into.keys + choices.back, ::fuseProgram).filterValues { it.isNotEmpty() }
+        val out = SteamCollections.write(text, members, System.currentTimeMillis() / 1000, choices) ?: return emptySet()
+        val written = choices.written + members.keys.filter { it !in choices.into }
+        if (written != choices.written || choices.back.isNotEmpty()) saveChoices(dir, choices.copy(written = written, back = emptySet()))
+        if (out == text) return emptySet()
+        text?.let { File(file.parentFile, "${file.name}.before-fuse-games").writeText(it) }
+        replaceAtomically(file, out.encodeToByteArray())
+        return dropped.intersect(members.keys)
+    }
+
+    /** The namespace file Steam keeps this user's collections in, and what it holds (null for none yet); null without a cloud folder. */
+    private fun collectionsFile(dir: File): Pair<File, String?>? {
+        val cloud = File(dir, "cloudstorage").takeIf { it.isDirectory } ?: return null
         val namespace = SteamCollections.activeNamespace(File(cloud, "cloud-storage-namespaces.json").takeIf { it.isFile }?.readText())
         val file = File(cloud, "cloud-storage-namespace-$namespace.json")
-        val text = file.takeIf { it.isFile }?.readText()
-        val members = SteamGames.byCollection(shortcuts, SteamCollections.fuseNames(text) + names, ::fuseProgram).filterValues { it.isNotEmpty() }
-        val out = SteamCollections.write(text, members, System.currentTimeMillis() / 1000) ?: return
-        if (out == text) return
-        text?.let { File(cloud, "${file.name}.before-fuse-games").writeText(it) }
-        replaceAtomically(file, out.encodeToByteArray())
+        return file to file.takeIf { it.isFile }?.readText()
+    }
+
+    private val choicesJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
+    /** What the person chose for their collections in [dir] (Steam's `config` folder), kept beside Steam's files. */
+    private fun choices(dir: File): SteamCollectionChoices =
+        File(dir, CHOICES).takeIf { it.isFile }?.let { f -> runCatching { choicesJson.decodeFromString(SteamCollectionChoices.serializer(), f.readText()) }.getOrNull() }
+            ?: SteamCollectionChoices()
+
+    private fun saveChoices(dir: File, choices: SteamCollectionChoices) {
+        replaceAtomically(File(dir, CHOICES), choicesJson.encodeToString(SteamCollectionChoices.serializer(), choices).encodeToByteArray())
+    }
+
+    override suspend fun theirCollections(): List<SteamCollection> = withContext(Dispatchers.IO) {
+        userConfigDirs(create = false).flatMap { dir -> collectionsFile(dir)?.second?.let(SteamCollections::theirs).orEmpty() }.distinctBy { it.id }
+    }
+
+    override suspend fun collectionChoices(): SteamCollectionChoices = withContext(Dispatchers.IO) {
+        userConfigDirs(create = false).firstOrNull()?.let(::choices) ?: SteamCollectionChoices()
+    }
+
+    override suspend fun chooseCollection(fuseName: String, theirs: String, how: io.github.matiyaaa.fuse.library.steam.SteamCollectionWay): Result<String> = mutation.withLock {
+        withContext(Dispatchers.IO) {
+            for (dir in userConfigDirs(create = false)) {
+                val c = choices(dir)
+                saveChoices(
+                    dir,
+                    when (how) {
+                        io.github.matiyaaa.fuse.library.steam.SteamCollectionWay.APART -> c.copy(
+                            into = c.into - fuseName, renamed = c.renamed - theirs, kept = c.kept + theirs,
+                            back = if (c.into[fuseName] == theirs) c.back + fuseName else c.back,
+                        )
+                        io.github.matiyaaa.fuse.library.steam.SteamCollectionWay.INTO -> c.copy(into = c.into + (fuseName to theirs), renamed = c.renamed - theirs, kept = c.kept - theirs)
+                        io.github.matiyaaa.fuse.library.steam.SteamCollectionWay.RENAMED -> c.copy(into = c.into + (fuseName to theirs), renamed = c.renamed + (theirs to fuseName), kept = c.kept - theirs)
+                    },
+                )
+            }
+            // Steam writes its collections when it quits: written now when it's closed, else once it closes.
+            if (steamRunningNow()) {
+                addWhenClosed(emptyList(), emptyMap(), collections = true)
+                Result.success("Done when Steam next closes. Steam isn't closed for it.")
+            } else {
+                for (dir in userConfigDirs(create = false)) {
+                    runCatching { writeCollections(dir, File(dir, "shortcuts.vdf").takeIf { it.isFile }?.readBytes(), emptySet()) }
+                        .onFailure { Log.warn("could not write Steam collections in $dir", it) }
+                }
+                Result.success("Done. Start Steam to see it.")
+            }
+        }
+    }
+
+    override suspend fun keepCollections(onPutBack: (Int) -> Unit) {
+        var open = withContext(Dispatchers.IO) { steamRunningNow() }
+        while (true) {
+            delay(STEAM_POLL_MS)
+            val now = withContext(Dispatchers.IO) { steamRunningNow() }
+            // Steam just closed after a session: what Steam Cloud dropped of Fuse's collections goes back.
+            if (open && !now) {
+                val back = mutation.withLock {
+                    withContext(Dispatchers.IO) {
+                        userConfigDirs(create = false).sumOf { dir ->
+                            runCatching { writeCollections(dir, File(dir, "shortcuts.vdf").takeIf { it.isFile }?.readBytes(), emptySet()).size }.getOrDefault(0)
+                        }
+                    }
+                }
+                if (back > 0) {
+                    Log.info("Steam: put back $back of Fuse's collections Steam Cloud dropped")
+                    onPutBack(back)
+                }
+            }
+            open = now
+        }
     }
 
     /**
@@ -450,9 +783,14 @@ internal class DesktopSteam(
      */
     internal fun placeGameArt(grid: File, id: Long, art: SteamArt): String {
         grid.mkdirs()
-        for ((source, name) in listOf(art.portrait to "${id}p", art.wide to "$id", art.hero to "${id}_hero", art.logo to "${id}_logo", art.icon to "${id}_icon")) {
+        for ((kind, source, name) in listOf(
+            Triple("portrait", art.portrait, "${id}p"), Triple("wide", art.wide, "$id"), Triple("hero", art.hero, "${id}_hero"),
+            Triple("logo", art.logo, "${id}_logo"), Triple("icon", art.icon, "${id}_icon"),
+        )) {
             val from = source?.let(::File)?.takeIf { it.isFile } ?: continue
             if (listOf("png", "jpg", "jpeg", "webp").any { File(grid, "$name.$it").exists() }) continue
+            // Only a picture in the shape Steam shows it in; otherwise Steam's own stays.
+            if (!inShape(kind, from)) continue
             val ext = from.extension.lowercase()
             val (bytes, out) = when (ext) {
                 "png", "jpg", "jpeg" -> from.readBytes() to ext
@@ -468,6 +806,25 @@ internal class DesktopSteam(
         }
         return listOf("png", "jpg", "jpeg").map { File(grid, "${id}_icon.$it") }.firstOrNull { it.isFile }?.absolutePath.orEmpty()
     }
+
+    /** Whether the picture in [file] is in the shape Steam shows a [kind] in; unreadable pictures aren't. */
+    private fun inShape(kind: String, file: File): Boolean {
+        val (w, h) = imageSize(file) ?: return false
+        return SteamArtShape.fits(kind, w, h)
+    }
+
+    /** A picture's width and height from its header (PNG, JPEG), or by decoding it (WebP and the rest). */
+    private fun imageSize(file: File): Pair<Int, Int>? = runCatching {
+        javax.imageio.ImageIO.createImageInputStream(file)?.use { input ->
+            val reader = javax.imageio.ImageIO.getImageReaders(input).asSequence().firstOrNull() ?: return@use null
+            try {
+                reader.setInput(input, true, true)
+                reader.getWidth(0) to reader.getHeight(0)
+            } finally {
+                reader.dispose()
+            }
+        }
+    }.getOrNull() ?: runCatching { org.jetbrains.skia.Image.makeFromEncoded(file.readBytes()).let { it.width to it.height } }.getOrNull()
 
     private fun program(): String? = programPath()
 
@@ -493,8 +850,15 @@ internal class DesktopSteam(
 
         private const val STEAM_POLL_MS = 5_000L
 
+        /** What the person chose for their collections beside Fuse's, beside each user's Steam files. */
+        private const val CHOICES = "fuse-collections.json"
+
         /** Each Steam user's list as it was before Fuse's last change to its games, for Undo. */
         private const val GAMES_BACKUP = "shortcuts.vdf.before-fuse-games"
+
+        /** Where each user's lists before Fuse's writes are kept, for Undo, and how many. */
+        private const val UNDO_DIR = "fuse-steam-undo"
+        private const val UNDO_STEPS = 10
         private val FUSE_PROGRAM = Regex("(?i)^fuse([-_. ][^/\\\\]*)?\\.(appimage|exe)$|^fuse$")
 
         /** Same-directory atomic replacement never deletes the valid original on failure. */
@@ -572,7 +936,7 @@ internal class DesktopSteam(
      */
     private fun gameRunningNow(): Boolean = SystemSteamProcessOps(fuseProgram = { program() }, fuseGameId = { null }).gameRunning()
 
-    private fun steamRunningNow(): Boolean = when (DesktopOs.current) {
+    private fun steamRunningNow(): Boolean = steamOpen?.invoke() ?: when (DesktopOs.current) {
         DesktopOs.WINDOWS -> Processes.run(listOf("tasklist", "/FI", "IMAGENAME eq steam.exe", "/NH"), timeoutMs = 3_000)?.stdout?.contains("steam.exe", ignoreCase = true) == true
         DesktopOs.MACOS -> Processes.run(listOf("pgrep", "-x", "steam_osx"), timeoutMs = 3_000)?.exitCode == 0
         DesktopOs.LINUX -> Processes.run(listOf("pgrep", "-x", "steam"), timeoutMs = 3_000)?.exitCode == 0

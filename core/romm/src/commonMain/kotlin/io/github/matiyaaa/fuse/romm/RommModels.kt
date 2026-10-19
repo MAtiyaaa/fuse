@@ -30,6 +30,16 @@ data class RommCapabilities(
     val saveSync: Boolean = false,
     /** Every game's id in one call (`/api/roms/identifiers`), for noticing removals cheaply. */
     val identifiers: Boolean = false,
+    /** The person's own marks on a game, hidden among them (`PUT /api/roms/{id}/props`). */
+    val userProps: Boolean = false,
+    /** Games added to and taken from a collection one by one (`POST`/`DELETE /api/collections/{id}/roms`, RomM 5.4). */
+    val collectionRoms: Boolean = false,
+    /** Play sessions from a client (`POST /api/play-sessions`). */
+    val playSessions: Boolean = false,
+    /** A task followed while it runs, a scan's counts among it (`GET /api/tasks/{task_id}`). */
+    val taskStatus: Boolean = false,
+    /** The person's own notes on a game, read, made and changed (`/api/roms/{id}/notes`, RomM 5.4). */
+    val notes: Boolean = false,
 ) {
     val major: Int get() = version.removePrefix("v").substringBefore('.').toIntOrNull() ?: if (version == "development") 99 else 0
 }
@@ -43,6 +53,8 @@ object RommScopes {
     const val PLATFORMS_READ = "platforms.read"
     const val FIRMWARE_READ = "firmware.read"
     const val COLLECTIONS_READ = "collections.read"
+    const val ROMS_USER_WRITE = "roms.user.write"
+    const val COLLECTIONS_WRITE = "collections.write"
     const val ASSETS_READ = "assets.read"
     const val ASSETS_WRITE = "assets.write"
     const val DEVICES_READ = "devices.read"
@@ -63,7 +75,65 @@ object RommScopes {
      * devices. Asked for with every pairing, so save sync can be turned on without pairing again.
      */
     val SAVES: List<String> = listOf(ASSETS_READ, ASSETS_WRITE, DEVICES_READ, DEVICES_WRITE)
+
+    /**
+     * Sending the person's changes to RomM: favourites (RomM's favourites collection), games hidden
+     * and played. Asked for with every pairing, so sending them can be turned on without pairing again.
+     */
+    val CHANGES: List<String> = listOf(ROMS_USER_WRITE, COLLECTIONS_WRITE)
 }
+
+/**
+ * A Cloudflare Access service token for the RomM server behind it: its two headers
+ * (`CF-Access-Client-Id`, `CF-Access-Client-Secret`, as Cloudflare documents service tokens) go
+ * with every request to [host] only, never to another address. Kept only in Fuse's secret store.
+ */
+@Serializable
+data class RommAccess(val host: String, val clientId: String, val clientSecret: String) {
+    /** Whether a request to [url] carries the token: its host is [host], over https. */
+    fun covers(url: String): Boolean {
+        val u = url.trim()
+        if (!u.startsWith("https://", ignoreCase = true)) return false
+        val h = u.substringAfter("://").substringBefore('/').substringBefore('?').substringBeforeLast(':').lowercase()
+        return host.isNotBlank() && h == host.trim().lowercase()
+    }
+
+    /** Never the token itself, wherever it is printed. */
+    override fun toString(): String = "RommAccess(host=$host, clientId=(kept), clientSecret=(kept))"
+
+    companion object {
+        const val ID_HEADER = "CF-Access-Client-Id"
+        const val SECRET_HEADER = "CF-Access-Client-Secret"
+
+        /** The host of [address] ("https://romm.example.com:443/" is "romm.example.com"), or "". */
+        fun hostOf(address: String): String =
+            address.trim().substringAfter("://").substringBefore('/').substringBefore('?').substringBeforeLast(':').lowercase()
+    }
+}
+
+/**
+ * A task on the server as it runs ([RommClient.task]): RomM's job status (`queued`, `started`,
+ * `finished`, `failed`, ...) and, for a scan, its counts so far.
+ */
+data class RommTask(
+    val id: String,
+    val status: String,
+    val scan: RommScanStats? = null,
+) {
+    /** Over, however it went. */
+    val done: Boolean get() = status in setOf("finished", "failed", "stopped", "canceled", "cancelled")
+    val failed: Boolean get() = status == "failed" || status == "stopped" || status == "canceled" || status == "cancelled"
+}
+
+/** A scan's counts so far, as RomM keeps them (`scan_stats`). */
+data class RommScanStats(
+    val totalPlatforms: Int = 0,
+    val scannedPlatforms: Int = 0,
+    val totalRoms: Int = 0,
+    val scannedRoms: Int = 0,
+    val newRoms: Int = 0,
+    val identifiedRoms: Int = 0,
+)
 
 /** How Fuse signs in to RomM. Kept only in Fuse's secret store. */
 @Serializable
@@ -167,7 +237,16 @@ data class RommCollection(
     val smart: Boolean,
     val romIds: List<Long>,
     val cover: String? = null,
+    /** RomM's favourites collection (`is_favorite`): the heart on a game in RomM. */
+    val favorite: Boolean = false,
 )
+
+/** A play session of a game on RomM ([RommClient.playSessions]): epoch milliseconds. */
+@Serializable
+data class RommPlayed(val romId: Long, val startedAt: Long, val endedAt: Long)
+
+/** A note on a game on RomM ([RommClient.notes]): its author's [username], kept to them unless [isPublic]. */
+data class RommNote(val id: Long, val title: String, val content: String, val isPublic: Boolean, val username: String)
 
 /** A page of games and how many there are in all. */
 data class RommPage(val items: List<RommRom>, val total: Int?)

@@ -54,6 +54,28 @@ class PlaySessionRepositoryTest {
     }
 
     @Test
+    fun aSessionFromSteamCountsOnceAndLeavesAnOpenOneAlone(): Unit = runBlocking {
+        TestDb().use { t ->
+            val (a, b) = t.twoGames()
+            val sessions = t.data.playSessions
+            val start = TestDb.BASE_TIME - 2 * hour
+            // A game is being played through Fuse right now; Steam's report of another is counted beside it.
+            val open = sessions.start(b, null, now = TestDb.BASE_TIME)
+            assertEquals(true, sessions.record(a, start, start + 45 * minute, io.github.matiyaaa.fuse.model.PlaySessionSource.STEAM))
+            assertEquals(b, sessions.openSession().first()?.gameId)
+            // Reported again: not counted twice.
+            assertEquals(false, sessions.record(a, start, start + 45 * minute, io.github.matiyaaa.fuse.model.PlaySessionSource.STEAM))
+            assertEquals(false, sessions.record(a, start + hour, start + hour, io.github.matiyaaa.fuse.model.PlaySessionSource.STEAM))
+            val game = t.data.games.get(a)!!
+            assertEquals(45 * 60L, game.play.trackedSeconds)
+            assertEquals(1, game.play.sessions)
+            assertEquals(start + 45 * minute, game.play.lastPlayedAt)
+            assertEquals("STEAM", sessions.sessions(a).first().single().source.name)
+            assertNotNull(sessions.end(open, TestDb.BASE_TIME + minute))
+        }
+    }
+
+    @Test
     fun theReportSplitsTimeAtTodayTheWeekAndTheMonth() = runBlocking {
         TestDb().use { t ->
             val (a, b) = t.twoGames()

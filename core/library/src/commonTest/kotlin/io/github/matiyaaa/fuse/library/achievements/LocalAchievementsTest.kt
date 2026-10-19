@@ -155,6 +155,52 @@ class LocalAchievementsTest {
         assertNull(reader.ps4Trophies(listOf("/shadPS4"), emptyList(), "Not There"))
     }
 
+    /**
+     * A made-up trophy file in shadPS4's layout (trp.h), its TROP.ESFM encrypted with OpenSSL's own
+     * AES-128-CBC as shadPS4's DecryptEFSM decrypts it, under a made-up key (not a console's).
+     */
+    @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
+    private val trp: ByteArray = kotlin.io.encoding.Base64.decode(
+        "3KJNAAAAAAMAAAAAAAAC9AAAAAIAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASUNPTjAuUE5HAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4AAAAAAAAAAU" +
+        "AAAAAAAAAAAAAAAAAAAAAFRST1AuRVNGTQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPQAAAAAAAACAAAAAAMAAAAA" +
+        "AAAAAAAAAACJUE5HDQoaCm1hZGUtdXAgaWNvbgABAgMEBQYHCAkKCwwNDg957N/SqKEHCBh5arnd5Rrj1vRQaWX1byXlT3bG" +
+        "xSKvvOzYYiErJohdRCx8FAHpzhlafdhfEfbIFydAjryVV9gtWwfU0UQ2ik7ICB/P3CLv4JMJx4PeVkm+7xB7bNu0ie+b8yFS" +
+        "B1AV8drF6I+KV8Zun6JPUeAYsEPXGJYvKcEFEW7GkOM89ZZEil4v5x76WTQXaBrzdxQWyrSOqg6SBJnkKeV9kObmfI/1JJyZ" +
+        "oYxN02/k9IEE0II1cg7dEVPpAc68b9Xiz7YBqFOUyzRumMHgBUZ26JDRZMUP1gbxRtjq89tYXsEjULDLsoniMsyDSPEhpQmx" +
+        "uscNYaaaOAKhhNzRhZABWY195GUf9ieC05yQdPs5AytKXLkP4IIk0dRRqbPabzcJvAqEk3FAHugHPLAGrdOwmitlJobEFex4" +
+        "UyGnumIp2SHMKI0WygU9YUaujO7aDeghZVZW/6+87tjLwFiDLmQ2smRZA0XjgJaxmZ9W/UUKpiRJdt2/6mB+L4XItToyup4Q" +
+        "eX2CvY8Ds5qJ2oUeg8jYnSsY4TXKLk23ehq9YvYDJilQwEePf2e1E51c7Xsf7uaWJxHNG0VZKaBZNzR1eD5kP2FiqFKTeycW" +
+        "Ny53+I842AEFqeImdEVWZsLAPEf8pAgg61HAAFrQ5kZvt9Bd",
+    )
+
+    @Test
+    fun aPs4GamesOwnTrophiesAreReadWithThePersonsKeyBeforeShadPs4SetsThemOut() = runTest {
+        val fs = InMemoryFileSystem()
+            .bytes("/games/Kart Racer/sce_sys/trophy/trophy00.trp", trp)
+            .file("/shadPS4/keys.json", content = "{\n    \"TrophyKeySet\": {\n        \"ReleaseTrophyKey\": \"00112233445566778899AABBCCDDEEFF\"\n    }\n}")
+        val reader = LocalAchievements(fs)
+        val set = assertNotNull(reader.ps4TrophiesFromGame(listOf("/games/Kart Racer"), listOf("/shadPS4"), listOf("NPWR99999_00")))
+        assertEquals("Kart Racer", set.title)
+        assertEquals(listOf("Champion", "First Lap", "Secret Track"), set.items.map { it.name })
+        assertEquals(listOf("platinum", "bronze", "gold"), set.items.map { it.grade })
+        assertTrue(set.items[2].hidden)
+        assertTrue(set.items.all { it.unlockedAt == null && it.icon == null }, "nothing earned yet, and no pictures")
+        // Another set's id, or another key, decrypts to nothing: never taken for trophies.
+        assertNull(reader.ps4TrophiesFromGame(listOf("/games/Kart Racer"), listOf("/shadPS4"), listOf("NPWR00001_00")))
+        val wrongKey = InMemoryFileSystem()
+            .bytes("/games/Kart Racer/sce_sys/trophy/trophy00.trp", trp)
+            .file("/shadPS4/config.toml", content = "[Keys]\nTrophyKey = \"FFEEDDCCBBAA99887766554433221100\"\n")
+        assertNull(LocalAchievements(wrongKey).ps4TrophiesFromGame(listOf("/games/Kart Racer"), listOf("/shadPS4"), listOf("NPWR99999_00")))
+        // An older shadPS4 keeps the key in config.toml.
+        val older = InMemoryFileSystem()
+            .bytes("/games/Kart Racer/sce_sys/trophy/trophy00.trp", trp)
+            .file("/shadPS4/config.toml", content = "[General]\nisPS4Pro = false\n\n[Keys]\nTrophyKey = \"00112233445566778899AABBCCDDEEFF\"\n")
+        assertEquals(3, LocalAchievements(older).ps4TrophiesFromGame(listOf("/games/Kart Racer"), listOf("/shadPS4"), listOf("NPWR99999_00"))?.items?.size)
+        // Without a key, nothing.
+        assertNull(LocalAchievements(InMemoryFileSystem().bytes("/g/sce_sys/trophy/trophy00.trp", trp)).ps4TrophiesFromGame(listOf("/g"), listOf("/shadPS4"), listOf("NPWR99999_00")))
+    }
+
     /** Vita3K's TROPUSR.DAT (context.cpp save_trophy_progress_file): little-endian, 1648 bytes. */
     private fun vitaUsr(unlocked: Map<Int, Long>): ByteArray {
         val b = ByteArray(1648)

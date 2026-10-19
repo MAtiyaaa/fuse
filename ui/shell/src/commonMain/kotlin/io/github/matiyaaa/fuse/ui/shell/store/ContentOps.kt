@@ -83,6 +83,16 @@ interface ContentOps {
     /** Stops the running install (the emulator's installer is closed; a retry starts where it left off). */
     fun cancel()
 
+    /** The emulator here that installs [platform]'s system software from a file (a `.pup`), by name; null when none can. */
+    suspend fun firmwareInstaller(platform: io.github.matiyaaa.fuse.model.PlatformId): String? = null
+
+    /**
+     * [file] (a PS3 or Vita `.pup`) installed through that emulator's own installer (RPCS3's
+     * `--installfw`, Vita3K's `--firmware`). Returns words for the person, or why it didn't.
+     */
+    suspend fun installFirmware(platform: io.github.matiyaaa.fuse.model.PlatformId, file: String): Result<String> =
+        Result.failure(UnsupportedOperationException("Installing isn't available here."))
+
     object None : ContentOps {
         override val progress: StateFlow<InstallProgress?> = MutableStateFlow(null)
         override suspend fun view(id: GameId, picked: Map<String, String>, keys: Map<String, String>): GameContentView? = null

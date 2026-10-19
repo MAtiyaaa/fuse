@@ -74,7 +74,7 @@ internal class DefaultFuseStore private constructor(
     override val apps = DefaultAppOps(ctx)
     private val mediaOps: DefaultMediaOps
     override val credentials = DefaultCredentialOps(ctx) { key, removed ->
-        if (!key.startsWith("ra.")) mediaOps.invalidate()
+        if (!key.startsWith("ra.") && key !in SecretKeys.deviceOnly) mediaOps.invalidate()
         // A key removed here stays off this device; adding it again lets the household's follow.
         if (key in SecretKeys.all) ctx.scope.launch {
             sync.configure { c ->
@@ -90,19 +90,26 @@ internal class DefaultFuseStore private constructor(
     override val settings = DefaultScopedSettingsOps(ctx) { reloadPrefs() }
     private val appStoreOps = ctx.services.packages?.let { DefaultAppStoreOps(ctx, it, prefsState) { t -> updatePrefs(t) } }
     /** A computer's Store, where Fuse can put programs in place. */
-    private val desktopStoreOps = if (appStoreOps == null) ctx.services.desktopApps?.let { DesktopAppStoreOps(ctx, it) { emulators.refresh() } } else null
+    private val desktopStoreOps = if (appStoreOps == null) ctx.services.desktopApps?.let { DesktopAppStoreOps(ctx, it, afterUpdate = { key -> library.recheckTogether(key) }) { emulators.refresh() } } else null
     override val appStore: AppStoreOps = appStoreOps ?: desktopStoreOps ?: AppStoreOps.None
-    override val jellyfin = io.github.matiyaaa.fuse.jellyfin.JellyfinService(
-        io.github.matiyaaa.fuse.jellyfin.JellyfinClient(
-            ctx.services.http,
-            io.github.matiyaaa.fuse.jellyfin.DeviceInfo(ctx.services.deviceName, jellyfinDeviceId, ctx.services.appVersion),
-        ),
-        ctx.services.secrets,
-        ctx.scope,
-        disk = JellyfinFiles(ctx.services),
-        discovery = ctx.services.jellyfinDiscovery,
-        awake = ctx.services.awake,
-    )
+    /** Fuse Ports, where the computer has a folder for them; made when Ports is first shown. */
+    override val ports: io.github.matiyaaa.fuse.ui.shell.store.PortsOps by lazy {
+        ctx.services.portFiles?.let { PortsStore(ctx, it, library = { library }, write = { t -> writeSettings(t) }) } ?: io.github.matiyaaa.fuse.ui.shell.store.PortsOps.None
+    }
+    // Made when Fuse first shows or plays media, never by a Fast Start.
+    override val jellyfin by lazy {
+        io.github.matiyaaa.fuse.jellyfin.JellyfinService(
+            io.github.matiyaaa.fuse.jellyfin.JellyfinClient(
+                ctx.services.http,
+                io.github.matiyaaa.fuse.jellyfin.DeviceInfo(ctx.services.deviceName, jellyfinDeviceId, ctx.services.appVersion),
+            ),
+            ctx.services.secrets,
+            ctx.scope,
+            disk = JellyfinFiles(ctx.services),
+            discovery = ctx.services.jellyfinDiscovery,
+            awake = ctx.services.awake,
+        )
+    }
     private val mediaFeed = MutableStateFlow(io.github.matiyaaa.fuse.jellyfin.MediaFeed())
     override val homeFeed: StateFlow<io.github.matiyaaa.fuse.ui.shell.store.HomeFeed> by lazy {
         kotlinx.coroutines.flow.combine(library.home, mediaFeed) { h, m -> if (m == h.media) h else h.copy(media = m) }
@@ -163,9 +170,12 @@ internal class DefaultFuseStore private constructor(
                 }
             }
         }
-        // RomM's save sync, for games from (or matched to) RomM.
+        // RomM's save sync, for games from (or matched to) RomM. With more than one person here, each one's saves are their own.
         library.rommSaves = runCatching {
-            ctx.services.rommSaves(env = { sync.service?.saveEnvironment }, client = { romm.saveClient() }, server = { romm.serverKey })
+            ctx.services.rommSaves(
+                env = { sync.service?.saveEnvironment }, client = { romm.saveClient() }, server = { romm.serverKey },
+                person = { sync.service?.takeIf { sync.inUse && it.profiles.value.size > 1 }?.activeProfile?.value?.name },
+            )
         }.getOrNull()
         library.installedBoot = { id -> content.bootFile(id) }
         library.writeSettings = { t -> writeSettings(t) }
@@ -192,6 +202,12 @@ internal class DefaultFuseStore private constructor(
         )
         // The Sync tab's view of RomM's saves: how each game's save here stands.
         romm.saveService = library.rommSaves
+        // The person's changes to games from RomM go back to it, when they chose that.
+        library.rommChange = { id, make -> romm.changed(id, make) }
+        // Trophies earned in emulators reach the person's other devices through RomM's notes too.
+        achievements.trophyShare = { id, news -> romm.shareTrophies(id, news) }
+        // A game played with a port (Play With) starts as the port's game; Ports is made only for one.
+        library.portPlay = { id -> if (ctx.settings.value.ports.playWith.containsKey(id.value.toString())) (ports as? PortsStore)?.playTargetNamed(id) else null }
         romm.plainSaveQuery = { id -> library.plainSaveQueryFor(id) }
         reach = DefaultReachOps(
             ctx, engine, transferEngine, sync.service, romm,
@@ -294,6 +310,22 @@ internal class DefaultFuseStore private constructor(
 
         override fun export(spec: ThemeSpec): String =
             ctx.settings.value.appearance.customThemes.firstOrNull { it.id == spec.id }?.json ?: ThemeCodec.encode(spec)
+    }
+
+    /**
+     * The games (by every household key each is known by) whose saves another way than Fuse One
+     * moves here under [provider]: of the ways a game has here, the first in the order the person
+     * chose ([io.github.matiyaaa.fuse.sync.SaveOwners]).
+     */
+    private suspend fun rommMovesSaves(provider: io.github.matiyaaa.fuse.data.settings.SaveProvider): Set<String> {
+        val fuseOne = io.github.matiyaaa.fuse.sync.SaveWay.FUSE_ONE
+        val romm = io.github.matiyaaa.fuse.sync.SaveWay.ROMM
+        val order = if (provider == io.github.matiyaaa.fuse.data.settings.SaveProvider.ROMM_THEN_FUSE_ONE) listOf(romm.id) else emptyList()
+        val keys = profileData.householdIds()
+        return ctx.data.games.matchRows().filter { r ->
+            val here = setOfNotNull(fuseOne.takeIf { provider.fuseOne }, romm.takeIf { provider.romm && r.rommRomId != null })
+            io.github.matiyaaa.fuse.sync.SaveOwners.owner(here, order).let { it != null && it != fuseOne }
+        }.flatMapTo(HashSet()) { keys[it.id.value].orEmpty() }
     }
 
     override suspend fun setSaveProvider(provider: io.github.matiyaaa.fuse.data.settings.SaveProvider) {
@@ -493,6 +525,7 @@ internal class DefaultFuseStore private constructor(
     }
 
     private fun start() {
+        if (forRun) return startForRun()
         io.github.matiyaaa.fuse.ui.shell.platform.JellyfinImages.service = jellyfin
         // Downloads, and RomM feeding the library through them.
         transfers.start()
@@ -538,7 +571,8 @@ internal class DefaultFuseStore private constructor(
             // the host at once, not first at its launch. The library as it first loads isn't "new".
             ctx.scope.launch {
                 var known: Set<io.github.matiyaaa.fuse.model.GameId>? = null
-                library.games(GameQuery(includeHidden = true)).map { list -> list.map { it.id }.toSet() }.distinctUntilChanged().collect { ids ->
+                // The ids alone: as cards, every picture filled anywhere in the library mapped every game again.
+                library.gameIds(GameQuery(includeHidden = true)).map { it.toSet() }.distinctUntilChanged().collect { ids ->
                     val before = known
                     known = ids
                     if (before == null) return@collect
@@ -553,6 +587,19 @@ internal class DefaultFuseStore private constructor(
             ctx.scope.launch {
                 sync.config.map { it.noPullProfiles.toSet() to it.noSyncProfiles.toSet() }.distinctUntilChanged()
                     .collect { (pullOff, off) -> svc.saveChoices(pullOff, off) }
+            }
+            // RomM, Then Fuse One: Fuse One leaves the saves of games from RomM to RomM, so one way moves each game's.
+            ctx.scope.launch {
+                ctx.settings.map { io.github.matiyaaa.fuse.data.settings.SaveProvider.of(it) }.distinctUntilChanged().collectLatest { provider ->
+                    if (provider != io.github.matiyaaa.fuse.data.settings.SaveProvider.ROMM_THEN_FUSE_ONE) return@collectLatest svc.savesMovedElsewhere(emptySet())
+                    var first = true
+                    // Followed as games join, leave or are matched to RomM; a moment's wait lets a scan or a RomM sync settle.
+                    ctx.data.games.observeAll(includeHidden = true).collectLatest {
+                        if (!first) delay(1_000)
+                        first = false
+                        svc.savesMovedElsewhere(rommMovesSaves(provider))
+                    }
+                }
             }
             val setupDone = ctx.settings.value.onboarding.completed
             // Who has had their welcome here. On a device that was already using profiles when it
@@ -690,6 +737,25 @@ internal class DefaultFuseStore private constructor(
         }
     }
 
+    /**
+     * Fast Start: only what starting one game needs (the person's saves put in place first and sent
+     * after, the session counted, a session a crash left open closed), none of what Fuse does while
+     * open: no scan, download, art, household list, update check or anything else on the network
+     * but Fuse One's own rounds for the saves.
+     */
+    private fun startForRun() {
+        sync.service?.let { svc ->
+            library.sync = SyncLaunch(svc, sync.port)
+            sync.queries = { id -> library.saveQueryFor(id) }
+            ctx.onUserChange = { if (sync.config.value.enabled) svc.changed() }
+        }
+        ctx.scope.launch { for (next in writes) runCatching { persist(next) } }
+        ctx.scope.launch { library.recoverSession() }
+    }
+
+    /** Started for one game with no window ([startForRun]). */
+    private var forRun = false
+
     /** Set in safe mode until the user leaves it: nothing runs by itself meanwhile. */
     private var safe = false
     private var automaticStarted = false
@@ -759,7 +825,7 @@ internal class DefaultFuseStore private constructor(
         /** How long new games wait for Cartridge's RomM details before they are filled. */
         const val NEW_GAMES_DELAY_MS = 1_500L
 
-        suspend fun create(services: FuseServices, scope: CoroutineScope, safeMode: Boolean = false): DefaultFuseStore {
+        suspend fun create(services: FuseServices, scope: CoroutineScope, safeMode: Boolean = false, forRun: Boolean = false): DefaultFuseStore {
             val settings = services.data.settings.current()
             val ctx = StoreContext(services, scope, settings)
             // Jellyfin knows this device by an id of its own that stays the same across runs.
@@ -768,6 +834,7 @@ internal class DefaultFuseStore private constructor(
                     .also { services.secrets.put(io.github.matiyaaa.fuse.jellyfin.JellyfinService.DEVICE_ID, it) }
             return DefaultFuseStore(ctx, settings.toUiPrefs(globalScoped(ctx)), deviceId).also {
                 it.safe = safeMode
+                it.forRun = forRun
                 it.start()
             }
         }

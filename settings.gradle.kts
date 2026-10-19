@@ -39,4 +39,6 @@ include(
     ":app:android",
     ":app:desktop",
     ":app:host",
+    // Fuse Tune's generator (tools/tune): run by hand, never part of Fuse.
+    ":tools:tune",
 )

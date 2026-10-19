@@ -93,15 +93,20 @@ internal object MelonDsDesktop {
     }
 
     fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
-        val name = SaveAdapters.stem(q.romPath) + ".sav"
-        SaveAdapters.chosen(env, q)?.let { return listOf(HandheldSaves.spot(q, "$it/$name", SaveConfidence.KNOWN)) }
+        val stem = SaveAdapters.stem(q.romPath)
+        val name = "$stem.sav"
         val config = configs(env, q.emulatorPath).firstOrNull(env::exists)
-        val set = HandheldSaves.setting(config?.let { env.readText(it) }, "Instance0", "SaveFilePath")?.takeIf { it.isNotBlank() }?.trimEnd('/')
+        val text = config?.let { env.readText(it) }
+        fun folder(key: String) = HandheldSaves.setting(text, "Instance0", key)?.takeIf { it.isNotBlank() }?.trimEnd('/')
             ?.let { if (it.startsWith("/") || (it.length > 1 && it[1] == ':')) it else config?.let { c -> "${SaveAdapters.parent(c)}/$it" } ?: it }
         val game = SaveAdapters.parent(q.romPath)
-        val dirs = listOfNotNull(set, game).distinct()
+        // Its states (EmuInstance::getSavestateName): `<game>.ml1` to `.ml8` in SavestatePath, else beside the game,
+        // whichever folder its saves are kept in.
+        val states = (folder("SavestatePath") ?: game).let { dir -> SaveSpot(SaveKind.STATE, "melonds.state", (1..8).map { n -> SpotFile("$stem.ml$n", "$dir/$stem.ml$n") }) }
+        SaveAdapters.chosen(env, q)?.let { return listOf(HandheldSaves.spot(q, "$it/$name", SaveConfidence.KNOWN), states) }
+        val dirs = listOfNotNull(folder("SaveFilePath"), game).distinct()
         val (path, confidence) = HandheldSaves.pick(env, dirs, name, SaveConfidence.KNOWN)
-        return listOf(HandheldSaves.spot(q, path, confidence, HandheldSaves.ZIPPED.takeIf { HandheldSaves.isArchive(q.romPath) && confidence != SaveConfidence.FOUND }))
+        return listOf(HandheldSaves.spot(q, path, confidence, HandheldSaves.ZIPPED.takeIf { HandheldSaves.isArchive(q.romPath) && confidence != SaveConfidence.FOUND }), states)
     }
 }
 
@@ -169,7 +174,6 @@ internal object NooDs : SaveAdapter {
 internal object MgbaDesktop {
     fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
         val name = SaveAdapters.stem(q.romPath) + ".sav"
-        SaveAdapters.chosen(env, q)?.let { return listOf(HandheldSaves.spot(q, "$it/$name", SaveConfidence.KNOWN)) }
         val beside = q.emulatorPath?.let { SaveAdapters.parent(it) }
         val configDirs = listOfNotNull(beside?.takeIf { env.exists("$it/portable.ini") }) + when (env.host) {
             "WINDOWS" -> listOf("${SaveAdapters.appData(env)}/mGBA")
@@ -178,12 +182,18 @@ internal object MgbaDesktop {
         }
         val configDir = configDirs.firstOrNull { env.exists("$it/config.ini") }
         val text = configDir?.let { env.readText("$it/config.ini") }
-        val set = (HandheldSaves.setting(text, "ports.qt", "savegamePath") ?: HandheldSaves.setting(text, "default", "savegamePath"))
+        fun folder(key: String) = (HandheldSaves.setting(text, "ports.qt", key) ?: HandheldSaves.setting(text, "default", key))
             ?.takeIf { it.isNotBlank() }?.trimEnd('/')
             ?.let { if (it.startsWith("/") || (it.length > 1 && it[1] == ':')) it else "$configDir/$it" }
-        val dirs = listOfNotNull(set, SaveAdapters.parent(q.romPath))
+        // Its states (src/core/core.c mCoreSaveState): `<game>.ss0` to `.ss9` in savestatePath, else beside the game,
+        // whichever folder its saves are kept in.
+        val stem = SaveAdapters.stem(q.romPath)
+        val dir = folder("savestatePath") ?: SaveAdapters.parent(q.romPath)
+        val states = SaveSpot(SaveKind.STATE, "mgba.state", (0..9).map { n -> SpotFile("$stem.ss$n", "$dir/$stem.ss$n") })
+        SaveAdapters.chosen(env, q)?.let { return listOf(HandheldSaves.spot(q, "$it/$name", SaveConfidence.KNOWN), states) }
+        val dirs = listOfNotNull(folder("savegamePath"), SaveAdapters.parent(q.romPath))
         val (path, confidence) = HandheldSaves.pick(env, dirs, name, SaveConfidence.KNOWN)
-        return listOf(HandheldSaves.spot(q, path, confidence))
+        return listOf(HandheldSaves.spot(q, path, confidence), states)
     }
 }
 
@@ -205,6 +215,7 @@ internal object SkyEmu : SaveAdapter {
 /** Mednafen: `sav/<name>.<md5>.sav` in its home folder, found by the game's name. */
 internal object Mednafen : SaveAdapter {
     override val emulators = setOf("mednafen")
+    override val keepsStates = true
     private val md5 = Regex("[0-9a-f]{32}")
 
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
@@ -234,8 +245,15 @@ internal object Mednafen : SaveAdapter {
                 add("save.rtc" to "$stem.$hash.rtc")
             }
         }
-        return listOf(SaveSpot(SaveKind.SAVE, format, names.map { (n, f) -> SpotFile(n, "$savDir/$f") }, confidence = SaveConfidence.FOUND))
+        // Its states, `<game>.<MD5>.mc0` to `.mc9` in filesys.path_state (mcs unless moved).
+        val stateDir = setting(env, base, "filesys.path_state")?.let { if (it.startsWith("/") || (it.length > 1 && it[1] == ':')) it else "$base/$it" } ?: "$base/mcs"
+        val states = SaveSpot(SaveKind.STATE, "mednafen.state:${q.platform}", (0..9).map { n -> "$stem.$hash.mc$n".let { SpotFile(it, "$stateDir/$it") } })
+        return listOf(SaveSpot(SaveKind.SAVE, format, names.map { (n, f) -> SpotFile(n, "$savDir/$f") }, confidence = SaveConfidence.FOUND), states)
     }
+
+    /** A setting from mednafen.cfg, its "name value" lines (no equals sign). */
+    private fun setting(env: SaveEnvironment, base: String, name: String): String? = env.readText("$base/mednafen.cfg")?.lineSequence()?.map { it.trim() }
+        ?.firstOrNull { it.startsWith("$name ") }?.removePrefix("$name ")?.trim()?.replace('\\', '/')?.ifBlank { null }
 }
 
 /** My Boy! and My OldBoy!: their own save folders on the device, or beside the game when chosen. */
@@ -273,11 +291,13 @@ internal object UnpublishedHandheld : SaveAdapter {
 /** The computer and Android sides of melonDS and mGBA, which keep saves differently. */
 internal object MelonDs : SaveAdapter {
     override val emulators = setOf("melonds", "melonds-nightly", "watermelonds")
+    override val keepsStates = true
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> =
         if (env.host == "ANDROID") MelonDsAndroid.locate(q, env) else MelonDsDesktop.locate(q, env)
 }
 
 internal object Mgba : SaveAdapter {
     override val emulators = setOf("mgba")
+    override val keepsStates = true
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> = MgbaDesktop.locate(q, env)
 }

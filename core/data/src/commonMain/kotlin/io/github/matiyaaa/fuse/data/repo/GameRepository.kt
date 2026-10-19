@@ -166,6 +166,19 @@ class GameRepository(
         q.selectPaths().executeAsList().map { GameId(it.id) to it.path }
     }
 
+    /**
+     * Every game's own files (removed games left out): its path and, where it differs, the file it
+     * starts from (a folder game's disc, an archive's inside), each to its game.
+     */
+    suspend fun files(): Map<String, GameId> = withContext(dispatcher) {
+        val out = HashMap<String, GameId>()
+        for (r in q.selectFiles().executeAsList()) {
+            out[r.path] = GameId(r.id)
+            out.putIfAbsent(r.launch_path, GameId(r.id))
+        }
+        out
+    }
+
     /** A system's games (removed games left out): id, library folder and whether it is hidden. */
     suspend fun inPlatform(platform: PlatformId): List<Triple<GameId, LibrarySourceId, Boolean>> = withContext(dispatcher) {
         q.selectInPlatform(platform.value).executeAsList().map { Triple(GameId(it.id), LibrarySourceId(it.source_id), it.hidden != 0L) }

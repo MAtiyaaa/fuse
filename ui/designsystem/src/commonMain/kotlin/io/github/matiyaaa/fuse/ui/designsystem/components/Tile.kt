@@ -148,6 +148,32 @@ fun Tile(
         }
     }
 
+    // The theme's own frame for its tiles (see TileLook): the art edge to edge, or set in a frame.
+    val tileLook = look.spec.tiles
+    val gloss = tileLook == io.github.matiyaaa.fuse.model.TileLook.GLOSS
+    val frameColor = when (tileLook) {
+        io.github.matiyaaa.fuse.model.TileLook.GLOSS -> if (colors.isDark) GLOSS_FRAME_NIGHT else Color.White
+        io.github.matiyaaa.fuse.model.TileLook.PANEL -> if (colors.isDark) PANEL_FRAME_NIGHT else PANEL_FRAME
+        io.github.matiyaaa.fuse.model.TileLook.INK -> colors.text
+        io.github.matiyaaa.fuse.model.TileLook.NEON -> colors.accent
+        io.github.matiyaaa.fuse.model.TileLook.MAT -> colors.surfaceRaised
+        io.github.matiyaaa.fuse.model.TileLook.PLAIN -> Color.Transparent
+    }
+    val bevelColor = if (colors.isDark) Color.Black.copy(alpha = 0.35f) else GLOSS_BEVEL
+    // GLOSS: the focus ring breathes slowly while it rests on a tile.
+    val breathe = remember { FuselineValue(0f) }
+    val breathing = gloss && selected && motion.ambient
+    LaunchedEffect(breathing) {
+        if (!breathing) {
+            breathe.snapTo(0f)
+            return@LaunchedEffect
+        }
+        while (true) {
+            breathe.animateTo(1f, tween(BREATHE_MS, easing = BREATHE_CURVE))
+            breathe.animateTo(0f, tween(BREATHE_MS, easing = BREATHE_CURVE))
+        }
+    }
+
     val style = look.focusStyle
     val ring = style == FocusStyle.RING || look.highContrastFocus
     val spark = showSpark && style != FocusStyle.RING
@@ -189,7 +215,8 @@ fun Tile(
                 val scale = 1f + minOf(focusScale - 1f, cap) * lift + minOf(hoverScale, cap) * hover * (1f - lift) - minOf(pressDepth, cap) * p
                 scaleX = scale
                 scaleY = scale
-                val rest = if (io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.restingShadows) Elevation.tile.shadow.toPx() else 0f
+                // Drawn by the processor, a shadow under every tile at rest cost a quarter of each frame: only the lifted one casts one there.
+                val rest = if (io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.restingShadows && !io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.cpu) Elevation.tile.shadow.toPx() else 0f
                 val up = Elevation.tileFocused.shadow.toPx()
                 // A pressed tile is pushed toward the surface, so its shadow tightens.
                 shadowElevation = if (!surface) 0f else (rest + (up - rest) * raised) * (1f - 0.45f * p.coerceIn(0f, 1f))
@@ -266,6 +293,28 @@ fun Tile(
                     radius = poolRadius,
                 )
                 val poolSquash = (h / w * 0.6f).coerceIn(0.4f, 1.1f)
+                // The theme's frame: its width, and for GLOSS the bevel just inside it and the gloss.
+                val short = minOf(w, h)
+                val frameStroke = Stroke(when (tileLook) {
+                    io.github.matiyaaa.fuse.model.TileLook.GLOSS -> short * GLOSS_FRAME_SHARE
+                    io.github.matiyaaa.fuse.model.TileLook.PANEL -> maxOf(short * PANEL_FRAME_SHARE, 2f)
+                    io.github.matiyaaa.fuse.model.TileLook.INK -> maxOf(short * INK_FRAME_SHARE, 2.5f)
+                    io.github.matiyaaa.fuse.model.TileLook.NEON -> maxOf(Size.stroke.toPx() * 1.5f, 1.5f)
+                    // Drawn on the outline, half of it falls outside the clipped art: twice the mount.
+                    io.github.matiyaaa.fuse.model.TileLook.MAT -> short * MAT_SHARE * 2f
+                    io.github.matiyaaa.fuse.model.TileLook.PLAIN -> 0f
+                })
+                val neonHalo = Stroke(frameStroke.width * NEON_HALO)
+                val bevelStroke = Stroke(Size.stroke.toPx())
+                val bevelInset = frameStroke.width / 2 + bevelStroke.width / 2
+                val bevelPath = if (gloss) squirclePath(w - bevelInset * 2, h - bevelInset * 2, (corner - bevelInset).coerceAtLeast(0f), SMOOTHING) else null
+                val bevelBrush = Brush.verticalGradient(0f to Color.Transparent, 0.55f to Color.Transparent, 1f to bevelColor)
+                val glossBrush = Brush.verticalGradient(
+                    0f to Color.White.copy(alpha = if (colors.isDark) 0.16f else 0.42f),
+                    1f to Color.White.copy(alpha = if (colors.isDark) 0.02f else 0.06f),
+                    startY = -h * 0.6f,
+                    endY = h * 0.42f,
+                )
 
                 onDrawWithContent {
                     val l = lift
@@ -280,6 +329,25 @@ fun Tile(
                     val hv = hover
                     val p = press.coerceIn(0f, 1f)
                     val lit = maxOf(l, hv * 0.5f)
+                    if (surface) when (tileLook) {
+                        io.github.matiyaaa.fuse.model.TileLook.PLAIN -> Unit
+                        io.github.matiyaaa.fuse.model.TileLook.GLOSS -> {
+                            clipPath(outline) {
+                                drawOval(glossBrush, topLeft = Offset(-w * 0.35f, -h * 0.6f), size = PxSize(w * 1.7f, h * 1.02f))
+                            }
+                            bevelPath?.let { translate(bevelInset, bevelInset) { drawPath(it, bevelBrush, style = bevelStroke) } }
+                            drawPath(outline, frameColor, alpha = 0.92f, style = frameStroke)
+                        }
+                        io.github.matiyaaa.fuse.model.TileLook.NEON -> {
+                            // A faint line at rest that brightens, with a soft halo, as the tile lifts.
+                            drawPath(outline, frameColor, alpha = NEON_REST * (1f - lit) * 0.5f + 0.5f * lit, style = neonHalo)
+                            drawPath(outline, frameColor, alpha = NEON_REST + (1f - NEON_REST) * lit, style = frameStroke)
+                        }
+                        io.github.matiyaaa.fuse.model.TileLook.INK -> drawPath(outline, frameColor, alpha = INK_ALPHA, style = frameStroke)
+                        // Inside the tile only: the mount covers the art's edge and never spills into the gap.
+                        io.github.matiyaaa.fuse.model.TileLook.MAT -> clipPath(outline) { drawPath(outline, frameColor, style = frameStroke) }
+                        io.github.matiyaaa.fuse.model.TileLook.PANEL -> drawPath(outline, frameColor, style = frameStroke)
+                    }
                     if (surface) {
                         drawPath(outline, sheen, alpha = 0.35f + 0.65f * lit)
                         if (hv > 0.005f) drawPath(outline, Color.White, alpha = HOVER_TINT * hv)
@@ -306,7 +374,9 @@ fun Tile(
                                 scaleY = ringRestY + (1f - ringRestY) * l,
                                 pivot = Offset(w / 2 + gap, h / 2 + gap),
                             ) {
-                                drawPath(ringPath, focusColor, alpha = l.coerceIn(0f, 1f), style = ringStroke)
+                                // GLOSS: the ring breathes between full and a soft two thirds while focus rests.
+                                val breath = if (gloss) 1f - BREATHE_DEPTH * breathe.value else 1f
+                                drawPath(ringPath, focusColor, alpha = (l * breath).coerceIn(0f, 1f), style = ringStroke)
                             }
                         }
                     }
@@ -337,6 +407,28 @@ fun Tile(
 
 /** Corner smoothing of every tile (the Fuse squircle). */
 private const val SMOOTHING = 0.6f
+
+/** The frames' widths as a share of the tile's short side (see TileLook). */
+private const val GLOSS_FRAME_SHARE = 0.045f
+private const val PANEL_FRAME_SHARE = 0.022f
+private const val INK_FRAME_SHARE = 0.028f
+private const val MAT_SHARE = 0.055f
+private val PANEL_FRAME = Color(0xFFB4BCC6)
+private val PANEL_FRAME_NIGHT = Color(0xFF5E6772)
+
+/** GLOSS: the frame in a dark theme (brushed silver), and the bevel's shade in a bright one. */
+private val GLOSS_FRAME_NIGHT = Color(0xFFAEB8C4)
+private val GLOSS_BEVEL = Color(0x2E3A4A5C)
+
+/** GLOSS: one breath of the focus ring, in, and how far it fades at the bottom of it. */
+private const val BREATHE_MS = 1_300
+private const val BREATHE_DEPTH = 0.35f
+private val BREATHE_CURVE = io.github.matiyaaa.fuse.ui.fuseline.CubicCurve(0.45f, 0f, 0.55f, 1f)
+
+/** INK: how solid the outline is. NEON: the line's strength at rest, and its halo's width against it. */
+private const val INK_ALPHA = 0.88f
+private const val NEON_REST = 0.45f
+private const val NEON_HALO = 4f
 
 /** How long the sweep waits for the lift to get going. */
 private const val SWEEP_DELAY_MS = 30L

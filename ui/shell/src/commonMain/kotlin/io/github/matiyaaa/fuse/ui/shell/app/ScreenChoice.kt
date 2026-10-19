@@ -125,6 +125,34 @@ fun AppState.screenPicker(card: GameCard) {
     }
 }
 
+/** Game options, Frame Generation: lsfg-vk's multiplier for this game, or its system's setting. */
+fun AppState.frameGenerationPicker(card: GameCard) {
+    closeOverlays()
+    scope.launch {
+        val resolved = store.settings.observe(ScopedSettings.FrameGeneration, card.platformId, card.id).first()
+        val own = resolved.value.takeIf { resolved.from == SettingScope.GAME }
+        val system = store.library.platforms.value.firstOrNull { it.platform.id == card.platformId }?.platform?.name ?: card.platformShort
+        val inherited = io.github.matiyaaa.fuse.ui.shell.settings.FRAME_GENERATION.firstOrNull { it.first == resolved.value }?.second ?: "Off"
+        fun pick(value: Int?) {
+            choice = null
+            scope.launch {
+                if (value == null) store.settings.clear(ScopedSettings.FrameGeneration, ScopeRef.game(card.id))
+                else store.settings.set(ScopedSettings.FrameGeneration, ScopeRef.game(card.id), value)
+            }
+        }
+        choice = ChoiceSpec(
+            icon = FuseIcons.Layers2,
+            title = "Frame Generation",
+            message = "lsfg-vk shows more frames than ${card.title}'s emulator draws, for smoother motion at a little more delay. It starts with the game, from Fuse and from Steam.",
+            options = listOf(
+                MenuAction("inherit", "Use the $system setting", FuseIcons.Layers, detail = if (own == null) inherited else null, trailing = Trailing.Check(own == null), onSelect = { pick(null) }),
+            ) + io.github.matiyaaa.fuse.ui.shell.settings.FRAME_GENERATION.map { (v, name) ->
+                MenuAction("fg.$v", name, null, trailing = Trailing.Check(own == v), section = "Just this game", onSelect = { pick(v) })
+            },
+        )
+    }
+}
+
 /** App options, Screen: where this app opens, or the setting for all apps. */
 fun AppState.appScreenPicker(app: AppCard) {
     closeOverlays()

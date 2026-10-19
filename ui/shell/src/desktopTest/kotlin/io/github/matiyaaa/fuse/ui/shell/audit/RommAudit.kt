@@ -24,7 +24,7 @@ import kotlinx.coroutines.runBlocking
  * A RomM server that answers from the sample library: its games as the server's (some here, some
  * not, one downloading), its systems plus one the library hasn't got, and a collection.
  */
-internal class AuditRomm(base: FuseStore) : RommOps by RommOps.None {
+internal class AuditRomm(base: FuseStore, private val waiting: Int = 0, private val changes: Boolean = false) : RommOps by RommOps.None {
     private val cards = runBlocking { base.library.games(GameQuery()).first() }
     private val games = cards.take(24).mapIndexed { i, c ->
         RommGame(
@@ -35,7 +35,12 @@ internal class AuditRomm(base: FuseStore) : RommOps by RommOps.None {
     }
     override val supported = true
     override val state: StateFlow<RommState> = MutableStateFlow(
-        RommState(RommLink.ONLINE, NetRoute.LOCAL, version = "4.4.0", account = "pat", games = 1_284, newGames = 6, syncedAt = System.currentTimeMillis() - 4 * 60_000),
+        RommState(RommLink.ONLINE, NetRoute.LOCAL, version = "4.4.0", account = "pat", games = 1_284, newGames = 6, syncedAt = System.currentTimeMillis() - 4 * 60_000).let { s ->
+            if (!changes) s else s.copy(
+                version = "5.4.0", canSendChanges = true, canSyncSaves = true, changesWaiting = 2, accessHost = "romm.example.com",
+                scan = io.github.matiyaaa.fuse.romm.RommScanStats(totalPlatforms = 12, scannedPlatforms = 4, totalRoms = 1_284, scannedRoms = 412, newRoms = 3),
+            )
+        },
     )
     override val newGames: StateFlow<List<RommGame>> = MutableStateFlow(games.take(6))
     override val recent: StateFlow<List<RommGame>> = MutableStateFlow(games.drop(6))
@@ -65,8 +70,10 @@ internal class AuditRomm(base: FuseStore) : RommOps by RommOps.None {
             }
             io.github.matiyaaa.fuse.ui.shell.store.RommSaveGame(1_000L + i, c.title, c.id.takeIf { i % 4 != 3 }, c.platformId, saves, standings[i % standings.size])
         }
-        return io.github.matiyaaa.fuse.ui.shell.store.RommSaveReport("https://romm.home.arpa", games, games.sumOf { g -> g.saves.sumOf { it.sizeBytes } })
+        return io.github.matiyaaa.fuse.ui.shell.store.RommSaveReport("https://romm.home.arpa", games, games.sumOf { g -> g.saves.sumOf { it.sizeBytes } }, waiting)
     }
+
+    override suspend fun sendWaitingSaves(): Int = waiting
 }
 
 /** The RomM tab: its line, the shelves with a game chosen, the systems and the options of a game not here. */
@@ -111,5 +118,39 @@ internal fun AuditDriver.rommScreens() {
         tap(PadButton.A)
         waitFor("Open the Game")
         shoot("a game's saves on RomM, newest first", 900)
+    }
+
+    scenario("romm", "settings: changes, Cloudflare Access and a scan") {
+        useLibrary {
+            it.copy(romm = it.romm.copy(
+                enabled = true, configured = true, saveSync = true, sendChanges = true, account = "pat",
+                localAddress = "http://192.168.1.20:8080", remoteAddress = "https://romm.example.com",
+            ))
+        }
+        val base = libraryStore
+        show(object : FuseStore by base { override val romm: RommOps = AuditRomm(base, changes = true) })
+        tab(Destination.CARTRIDGE)
+        settle(900)
+        waitFor("Your saves on RomM")
+        tapText("RomM Settings", step = PadButton.DPAD_RIGHT)
+        waitFor("RomM is scanning")
+        settle(900)
+        shoot("RomM scanning, with how far it came", 1_200)
+        focusText("Cloudflare Access")
+        settle(600)
+        shoot("Cloudflare Access on for the outside address", 900)
+        focusText("Send Changes to RomM")
+        settle(600)
+        shoot("changes waiting to go to RomM", 900)
+    }
+
+    scenario("romm", "saves waiting to go") {
+        useLibrary { it.copy(romm = it.romm.copy(enabled = true, configured = true, saveSync = true)) }
+        val base = libraryStore
+        show(object : FuseStore by base { override val romm: RommOps = AuditRomm(base, waiting = 2) })
+        tab(Destination.CARTRIDGE)
+        settle(900)
+        waitFor("2 saves wait to go to RomM")
+        shoot("saves that couldn't reach RomM, and sending them now", 1_500)
     }
 }

@@ -40,10 +40,24 @@ class ServiceTest {
         val games: MutableMap<String, GameRecord> = HashMap(),
         val settings: MutableMap<String, JsonPrimitive> = HashMap(),
         val collections: MutableMap<String, CollectionRecord> = HashMap(),
+        /** When the person chose a setting here; a setting not listed was never chosen (Fuse's default). */
+        val chosen: MutableMap<String, Hlc> = HashMap(),
+        /** Games this library has whatever the profile's records say, as a real one keeps its games (with nothing set). */
+        val installed: List<GameKey> = emptyList(),
     ) : ProfileDataPort {
         var writes = 0
+
+        init {
+            installed.forEach { games.putIfAbsent(it.id, GameRecord(it)) }
+        }
+
         override suspend fun read(device: String, clock: HlcClock): ProfileMeta = synchronized(this) {
-            ProfileMeta(games = games.toMap(), collections = collections.toMap(), settings = settings.mapValues { Lww(it.value as kotlinx.serialization.json.JsonElement, Hlc.ZERO) })
+            ProfileMeta(games = games.toMap(), collections = collections.toMap(), settings = settings.mapValues { (k, v) -> Lww(v as kotlinx.serialization.json.JsonElement, chosen[k] ?: Hlc.ZERO) })
+        }
+
+        /** The person changes a game here (as the library's own screens do). */
+        fun edit(key: GameKey, change: (GameRecord) -> GameRecord) = synchronized(this) {
+            games[key.id] = change(games[key.id] ?: GameRecord(key))
         }
 
         /** The games as they are now (the service writes them from its own thread). */
@@ -56,6 +70,7 @@ class ServiceTest {
                 games[k] = GameRecord(r.key, playSeconds = mapOf("here" to r.totalSeconds), sessions = r.sessions, lastPlayed = r.lastPlayed,
                     favorite = r.favorite?.let { Lww(it.value, Hlc.ZERO) }, hidden = r.hidden?.let { Lww(it.value, Hlc.ZERO) })
             }
+            installed.forEach { games.putIfAbsent(it.id, GameRecord(it)) }
             settings.clear()
             meta.settings.forEach { (k, v) -> settings[k] = v.value as JsonPrimitive }
             collections.clear()
@@ -168,6 +183,41 @@ class ServiceTest {
     }
 
     @Test
+    fun aGameWhoseSavesAnotherWayMovesIsLeftAloneByFuseOneButItsPlayTimeStillCounts(): Unit = runBlocking {
+        val pcLib = Library()
+        val (pc, _) = service("Gaming PC", pcLib)
+        val (deck, _) = service("Steam Deck", Library())
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        deck.switchTo(mo.id).getOrThrow()
+        pc.switchTo(mo.id).getOrThrow()
+        // RomM moves this game's saves on both (RomM, Then Fuse One): Fuse One neither sends nor brings them in.
+        deck.savesMovedElsewhere(setOf(ct.id))
+        pc.savesMovedElsewhere(setOf(ct.id))
+        val roms = File(root, "deck-roms").apply { mkdirs() }
+        val q = SaveQuery(ct, "gba", File(roms, "ruby.gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby")
+        File(roms, "ruby.sav").writeText("8 badges")
+        deck.afterExit(q, 0, 30 * 60_000)
+        val pcRoms = File(root, "pc-roms").apply { mkdirs() }
+        val pq = q.copy(romPath = File(pcRoms, "ruby.gba").path.replace('\\', '/'))
+        assertIs<LaunchGate.Go>(pc.beforeLaunch(pq))
+        assertFalse(File(pcRoms, "ruby.sav").exists(), "Fuse One didn't move a save RomM moves")
+        // The half hour played still counts.
+        pc.syncNow().getOrThrow()
+        assertEquals(30L * 60, pcLib.gamesNow()[ct.id]?.totalSeconds)
+        // Fuse One moving them again (Fuse One alone): the next save goes as ever.
+        deck.savesMovedElsewhere(emptySet())
+        pc.savesMovedElsewhere(emptySet())
+        File(roms, "ruby.sav").writeText("9 badges")
+        deck.afterExit(q, 0, 31 * 60_000)
+        assertIs<LaunchGate.Go>(pc.beforeLaunch(pq))
+        assertEquals("9 badges", File(pcRoms, "ruby.sav").readText())
+        pc.stop()
+        deck.stop()
+    }
+
+    @Test
     fun aHandheldAndAComputerShareOnePerson(): Unit = runBlocking {
         val pcLib = Library()
         val deckLib = Library(
@@ -194,6 +244,7 @@ class ServiceTest {
         // Changed on the PC: unfavourited, a new theme.
         pcLib.games[ct.id] = pcLib.games[ct.id]!!.copy(favorite = Lww(false, Hlc.ZERO))
         pcLib.settings["appearance.themeId"] = JsonPrimitive("dawn")
+        pcLib.chosen["appearance.themeId"] = Hlc(System.currentTimeMillis(), 0, "pc")
         pc.syncNow().getOrThrow()
         deck.syncNow().getOrThrow()
         assertEquals(false, deckLib.games[ct.id]?.favorite?.value)
@@ -239,6 +290,61 @@ class ServiceTest {
         assertEquals("pc: elite four", File(roms, "Pokemon Ruby (USA).sav").readText())
         withTimeout(5_000) { deck.status.first { it is SyncStatus.NotSetUp } }
         pc.stop()
+    }
+
+    @Test
+    fun twoDevicesJoiningANewProfileKeepTheLookThePersonChose(): Unit = runBlocking {
+        // The Deck's theme was chosen a minute ago; the PC's is Fuse's own, never chosen.
+        val deckLib = Library(
+            settings = hashMapOf("appearance.themeId" to JsonPrimitive("midnight")),
+            chosen = hashMapOf("appearance.themeId" to Hlc(System.currentTimeMillis() - 60_000, 0, "deck")),
+        )
+        val pcLib = Library(settings = hashMapOf("appearance.themeId" to JsonPrimitive("fuse")))
+        val (pc, _) = service("Gaming PC", pcLib)
+        val (deck, _) = service("Steam Deck", deckLib)
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        // Both become Mo before the Deck's look has gone up behind its switch.
+        deck.switchTo(mo.id).getOrThrow()
+        pc.switchTo(mo.id).getOrThrow()
+        repeat(2) { deck.syncNow().getOrThrow(); pc.syncNow().getOrThrow() }
+        // The theme someone chose is Mo's on both: the PC's own, never chosen, doesn't win over it.
+        assertEquals(JsonPrimitive("midnight"), deckLib.settings["appearance.themeId"])
+        assertEquals(JsonPrimitive("midnight"), pcLib.settings["appearance.themeId"])
+        pc.stop()
+        deck.stop()
+    }
+
+    @Test
+    fun recordsThatComeInBehindASwitchAreLaidInPlaceNeverTakenBack(): Unit = runBlocking {
+        val pcLib = Library(installed = listOf(ct))
+        val deckLib = Library(installed = listOf(ct))
+        val (pc, _) = service("Gaming PC", pcLib)
+        val (deck, _) = service("Steam Deck", deckLib)
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        val sam = pc.createProfile("Sam", "owl", null).getOrThrow()
+        deck.syncNow().getOrThrow()
+        // Each plays on the Deck once, so from then on a switch there is its own work, the host asked after.
+        deck.switchTo(sam.id).getOrThrow()
+        deck.switchTo(mo.id).getOrThrow()
+        pc.switchTo(mo.id).getOrThrow()
+        repeat(2) { deck.syncNow().getOrThrow(); pc.syncNow().getOrThrow() }
+        deck.switchTo(sam.id).getOrThrow()
+        // Meanwhile Mo makes the game a favourite on the PC.
+        pcLib.edit(ct) { it.copy(favorite = Lww(true, Hlc.ZERO)) }
+        pc.syncNow().getOrThrow()
+        // Back to Mo on the Deck, from what it keeps (no favourite yet): the favourite comes in behind
+        // the switch, and is laid in place, never read as the Deck taking it back.
+        deck.switchTo(mo.id).getOrThrow()
+        withTimeoutOrNull(10_000) { while (deckLib.gamesNow()[ct.id]?.favorite?.value != true) kotlinx.coroutines.delay(50) }
+        repeat(2) { deck.syncNow().getOrThrow(); pc.syncNow().getOrThrow() }
+        assertEquals(true, deckLib.gamesNow()[ct.id]?.favorite?.value, "the Deck has Mo's favourite")
+        assertEquals(true, pcLib.gamesNow()[ct.id]?.favorite?.value, "the PC still has it")
+        pc.stop()
+        deck.stop()
     }
 
     @Test
@@ -489,6 +595,44 @@ class ServiceTest {
     }
 
     @Test
+    fun aGameOpenToJoinReachesTheOtherDevicesWhileItIsPlayedAndNoLonger(): Unit = runBlocking {
+        val (pc, _) = service("Gaming PC", Library())
+        val (thor, _) = service("AYN Thor", Library(), platform = "ANDROID")
+        val (deck, _) = service("Steam Deck", Library())
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        thor.connect("127.0.0.1:$port", code).getOrThrow()
+        deck.connect("127.0.0.1:$port", assertNotNull(pc.newPairingCode())).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        val ana = pc.createProfile("Ana", "owl", null).getOrThrow()
+        thor.switchTo(mo.id).getOrThrow()
+        deck.switchTo(ana.id).getOrThrow()
+        val tq = SaveQuery(ct, "gba", File(root, "thor/ruby.gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby")
+        val dq = tq.copy(romPath = File(root, "deck/ruby.gba").path.replace('\\', '/'))
+        assertTrue(deck.hostedFor(dq).isEmpty(), "nobody hosts it yet")
+
+        // The Deck hears of it as soon as the host does, without asking.
+        val heard = async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { withTimeout(30_000) { deck.notices.first { it is SyncNotice.Hosting } } }
+        val hosting = Hosting("netplay", "retroarch", listOf("192.168.1.31"), 55435)
+        thor.hostNext(tq, hosting)
+        assertIs<LaunchGate.Go>(thor.beforeLaunch(tq))
+        val started = System.currentTimeMillis()
+        thor.playing(tq, started)
+        val notice = heard.await() as SyncNotice.Hosting
+        assertEquals(SyncNotice.Hosting("Mo", "AYN Thor", "Pokemon Ruby"), notice)
+        val open = deck.hostedFor(dq).single()
+        assertEquals("AYN Thor", open.deviceName)
+        assertEquals(hosting, open.hosting)
+        assertEquals(listOf(open), deck.together.value)
+        // Playing it alone on another device isn't hosting.
+        assertTrue(thor.hostedFor(tq).isEmpty(), "a device never sees its own")
+
+        // Once the Thor is done with it, it isn't open any more.
+        thor.afterExit(tq, started, System.currentTimeMillis())
+        assertTrue(deck.hostedFor(dq).isEmpty())
+        pc.stop()
+    }
+
+    @Test
     fun savedTwiceBeforeEitherWentUpIsOneStepNotAFork(): Unit = runBlocking {
         val pcLib = Library()
         val (pc, _) = service("Gaming PC", pcLib)
@@ -698,10 +842,12 @@ class ServiceTest {
         val notes = File(drive, "notes.txt").apply { writeText("keep") }
         pcSettings.update { it.copy(sync = it.sync.copy(hostDataDir = drive.path)) }
         pc.hostHere("Gaming PC", installService = false).getOrThrow()
-        // Its files go in a folder of their own there.
+        // Its files go in a folder of their own there, and never in the drive itself: not even from
+        // Fuse's own start, which runs while the host is being set up.
         val own = File(drive, JvmSyncService.HOST_FOLDER)
         assertEquals(own.path.replace('\\', '/'), pcSettings.current().sync.hostDataDir)
         assertTrue(File(own, "host.json").isFile)
+        assertEquals(setOf("Photos", "notes.txt", JvmSyncService.HOST_FOLDER), drive.list()!!.toSet())
         // Moved and then deleted: the drive's own things stay exactly where they were.
         val elsewhere = File(root, "elsewhere")
         pc.moveHostData(elsewhere.path).getOrThrow()

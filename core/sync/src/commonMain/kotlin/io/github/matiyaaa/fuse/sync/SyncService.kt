@@ -157,6 +157,9 @@ sealed interface SyncNotice {
 
     /** This device's profiles went to [hostName] as they were ([count] of them), joining it. */
     data class Brought(val count: Int, val hostName: String) : SyncNotice
+
+    /** [who] (a profile, on [device]) opened [title] for the household to join. */
+    data class Hosting(val who: String, val device: String, val title: String) : SyncNotice
 }
 
 /**
@@ -279,6 +282,23 @@ interface SyncService {
      * Records and play time are unaffected, and so are saves the household plays together.
      */
     fun saveChoices(pullOff: Set<String>, off: Set<String>) {}
+
+    /**
+     * Games (by household key) whose saves another way moves on this device ([SaveOwners]): Fuse
+     * One neither sends nor brings in their saves here, as for a game kept on this device only, and
+     * still counts their play time.
+     */
+    fun savesMovedElsewhere(games: Set<String>) {}
+
+    /** Save folders [query]'s emulator used before that hold a newer save of it than the one in use ([OldSaveFolders]). Reads only. */
+    suspend fun oldSaveFolders(query: SaveQuery): List<OldSave> = emptyList()
+
+    /**
+     * [old]'s save copied to where the emulator reads it now, what was there kept aside in Fuse's
+     * kept folder first; the old folder is left as it is. Returns where the replaced save was kept
+     * (null when there was none).
+     */
+    suspend fun bringIntoUse(query: SaveQuery, old: OldSave): Result<String?> = Result.failure(UnsupportedOperationException("Fuse can't bring saves in here."))
 
     /**
      * The household's RomM and Jellyfin from the host: addresses, and the sign-ins this device may
@@ -494,6 +514,18 @@ interface SyncService {
     /** Another device on [query]'s game (playing it, or still sending its save); null when none is, or the host can't say. */
     suspend fun busyWith(query: SaveQuery): LaunchGate.Busy? = null
 
+    /**
+     * [query]'s game, about to start here, is open for the household to join ([hosting]): said with
+     * this device's presence for as long as it is played, and no more once it ends. Null takes it back.
+     */
+    suspend fun hostNext(query: SaveQuery, hosting: Hosting?) {}
+
+    /** The household's other devices hosting [query]'s game now, asked of the host; empty when none is or it can't be reached. */
+    suspend fun hostedFor(query: SaveQuery): List<Presence> = emptyList()
+
+    /** Every game the household's other devices are hosting now, kept up to date as the host says one opens. */
+    val together: StateFlow<List<Presence>> get() = NO_TOGETHER
+
     /** Look at the playing game's save now and send it if it changed (the screen is going off). */
     suspend fun sendWhilePlaying() {}
 
@@ -636,6 +668,8 @@ class NoHostLifetime(private val why: String) : HostLifetime {
 }
 
 private val NO_PLAYING: StateFlow<String?> = kotlinx.coroutines.flow.MutableStateFlow(null)
+
+private val NO_TOGETHER: StateFlow<List<Presence>> = kotlinx.coroutines.flow.MutableStateFlow(emptyList())
 
 private val NO_NOTICES: kotlinx.coroutines.flow.SharedFlow<SyncNotice> = kotlinx.coroutines.flow.MutableSharedFlow()
 

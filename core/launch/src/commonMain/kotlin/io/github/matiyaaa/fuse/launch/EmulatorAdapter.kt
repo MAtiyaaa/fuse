@@ -134,6 +134,15 @@ interface EmulatorAdapter {
      */
     fun packageInstall(installed: InstalledEmulator, path: String, key: String? = null): LaunchPlan.Command? = null
 
+    /** File types of a console's system software it installs from its command line (`pup`), empty when it can't. */
+    val firmwareExtensions: Set<String> get() = emptySet()
+
+    /**
+     * The command that installs the system software at [path] (a PS3 or Vita `.pup`) in [installed],
+     * through the emulator's own installer; null when it can't. Nothing is run here.
+     */
+    fun firmwareInstall(installed: InstalledEmulator, path: String): LaunchPlan.Command? = null
+
     /** Describes how to start [LaunchRequest.game]. Pure: no I/O, nothing is launched. */
     fun plan(request: LaunchRequest): LaunchPlan
 }

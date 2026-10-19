@@ -41,6 +41,8 @@ class RommClient(
     val routes: RoutePicker,
     @kotlin.concurrent.Volatile var credential: RommCredential?,
     private val clientVersion: String = "",
+    /** A Cloudflare Access service token in front of the server, sent only to its own host ([RommAccess.covers]). */
+    @kotlin.concurrent.Volatile var access: RommAccess? = null,
 ) {
     @kotlin.concurrent.Volatile var capabilities: RommCapabilities = RommCapabilities()
         private set
@@ -48,13 +50,14 @@ class RommClient(
     /** The address calls go to first right now (for downloads, which carry on by range if it changes). */
     fun base(): String = routes.preferred()?.second ?: throw RommException("RomM has no address for the server. Add one in Settings, Addons, RomM.", code = "no-address")
 
-    /** Adds the sign-in to a request (downloads made outside this client use it too). */
+    /** Adds the sign-in to a request, and the Cloudflare Access token where it goes (downloads made outside this client use it too). */
     fun authorize(b: HttpRequestBuilder) {
         when (val c = credential) {
             is RommCredential.Token -> b.header(HttpHeaders.Authorization, "Bearer ${c.token.trim()}")
             is RommCredential.Password -> b.header(HttpHeaders.Authorization, "Basic " + base64("${c.username}:${c.password}"))
             null -> Unit
         }
+        gate(access, b)
     }
 
     /** Whether the signed-in token may [scope]; a password sign-in may do whatever its user may. */
@@ -82,7 +85,7 @@ class RommClient(
                 http.request(base + path) {
                     this.method = method
                     header(HttpHeaders.Accept, "application/json")
-                    if (signed) authorize(this)
+                    if (signed) authorize(this) else gate(access, this)
                     if (timeoutMs != null) timeout { requestTimeoutMillis = timeoutMs; socketTimeoutMillis = timeoutMs }
                     // Not `build`: that name is HttpRequestBuilder's own and would win.
                     extra()
@@ -171,6 +174,11 @@ class RommClient(
                 incremental = true,
                 identifiers = "/api/roms/identifiers" in paths,
                 saveSync = "/api/devices" in paths && "/api/saves/{id}/downloaded" in paths,
+                userProps = "/api/roms/{id}/props" in paths,
+                collectionRoms = "/api/collections/{id}/roms" in paths,
+                playSessions = "/api/play-sessions" in paths,
+                taskStatus = "/api/tasks/{task_id}" in paths,
+                notes = "/api/roms/{id}/notes" in paths && "/api/roms/{id}/notes/{note_id}" in paths,
             )
         } else {
             RommCapabilities(version = version, pairCodes = major >= 4, chunkedUploads = major >= 4, incremental = major >= 4, identifiers = major >= 4)
@@ -474,20 +482,119 @@ class RommClient(
         runCatching { call(HttpMethod.Post, "/api/roms/upload/$uploadId/cancel") { } }
     }
 
-    /** Asks RomM to look at its folders for new games (needs the `tasks.run` scope). */
-    suspend fun scan(platformIds: List<Long> = emptyList()) {
+    /**
+     * Asks RomM to look at its folders for new games (needs the `tasks.run` scope). Returns the
+     * scan's task, to follow with [task], when RomM names it.
+     */
+    suspend fun scan(platformIds: List<Long> = emptyList()): String? {
         // RomM 5.3 runs its library scan as a task: a quick scan of every system, which only takes
         // in files it hasn't got yet (the task takes no arguments, so the systems can't be named).
-        if (capabilities.scanTask) {
-            call(HttpMethod.Post, "/api/tasks/run/scan_library") { }
-            return
+        val answer = if (capabilities.scanTask) {
+            json(HttpMethod.Post, "/api/tasks/run/scan_library")
+        } else {
+            json(HttpMethod.Post, "/api/tasks/scan") {
+                contentType(ContentType.Application.Json)
+                setBody(buildJsonObject {
+                    putJsonArray("platforms") { platformIds.forEach { add(JsonPrimitive(it)) } }
+                    put("type", "quick")
+                }.toString())
+            }
         }
-        call(HttpMethod.Post, "/api/tasks/scan", extra = {
+        return RommParse.task(answer)?.id
+    }
+
+    /** Where task [id] is (a scan's counts so far among it), from `GET /api/tasks/{task_id}`. */
+    suspend fun task(id: String): RommTask =
+        RommParse.task(json(HttpMethod.Get, "/api/tasks/${id.encodeURLPathPart()}")) ?: throw RommException("RomM didn't say where the scan is.", code = "unreadable")
+
+    // ------------------------------------------------------------------ the person's changes
+
+    /** [romId] hidden from the signed-in person's library, or shown again (`PUT /api/roms/{id}/props`, only this changed). */
+    suspend fun setHidden(romId: Long, hidden: Boolean) {
+        call(HttpMethod.Put, "/api/roms/$romId/props", extra = {
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject { put("hidden", hidden) }.toString())
+        }) { }
+    }
+
+    /**
+     * The signed-in person's favourites collection on RomM (`is_favorite`, the heart in RomM's own
+     * pages), made the first time it is needed when they have none.
+     */
+    suspend fun favourites(): Long {
+        suspend fun own() = RommParse.collections(json(HttpMethod.Get, "/api/collections"), smart = false).firstOrNull { it.favorite }?.id?.removePrefix("user-")?.toLongOrNull()
+        own()?.let { return it }
+        val made = runCatching {
+            json(HttpMethod.Post, "/api/collections") {
+                parameter("is_favorite", true)
+                parameter("is_public", false)
+                setBody(io.ktor.client.request.forms.MultiPartFormDataContent(io.ktor.client.request.forms.formData { append("name", FAVOURITES_NAME) }))
+            }
+        }
+        // Made meanwhile (another device, or RomM's own pages), or a collection of that name already there.
+        made.getOrNull()?.let { (it as? JsonObject)?.get("id") as? JsonPrimitive }?.contentOrNull?.toLongOrNull()?.let { return it }
+        return own() ?: throw (made.exceptionOrNull() ?: RommException("RomM didn't make a favourites collection.", code = "unreadable"))
+    }
+
+    /** [romIds] put in the person's collection [collectionId] ([into]), or taken out of it, leaving the rest as it is. */
+    suspend fun collectionRoms(collectionId: Long, romIds: List<Long>, into: Boolean) {
+        if (romIds.isEmpty()) return
+        call(if (into) HttpMethod.Post else HttpMethod.Delete, "/api/collections/$collectionId/roms", extra = {
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject { putJsonArray("rom_ids") { romIds.forEach { add(JsonPrimitive(it)) } } }.toString())
+        }) { }
+    }
+
+    /**
+     * Play sessions for the signed-in person (`POST /api/play-sessions`, at most [MAX_SESSIONS] at a
+     * time): each game's id, when it started and ended. RomM keeps one of each (one sent twice is
+     * skipped). Returns how many it took.
+     */
+    suspend fun playSessions(sessions: List<RommPlayed>, deviceId: String? = null): Int {
+        if (sessions.isEmpty()) return 0
+        require(sessions.size <= MAX_SESSIONS) { "At most $MAX_SESSIONS sessions at a time." }
+        val e = json(HttpMethod.Post, "/api/play-sessions") {
             contentType(ContentType.Application.Json)
             setBody(buildJsonObject {
-                putJsonArray("platforms") { platformIds.forEach { add(JsonPrimitive(it)) } }
-                put("type", "quick")
+                if (deviceId != null) put("device_id", deviceId)
+                putJsonArray("sessions") {
+                    for (s in sessions) add(buildJsonObject {
+                        put("rom_id", s.romId)
+                        put("start_time", RommParse.iso(s.startedAt))
+                        put("end_time", RommParse.iso(s.endedAt))
+                        put("duration_ms", s.endedAt - s.startedAt)
+                    })
+                }
             }.toString())
+        }
+        return RommParse.sessionsCreated(e)
+    }
+
+    /** [romId]'s notes: the signed-in person's own and others' public ones (`GET /api/roms/{id}/notes`). */
+    suspend fun notes(romId: Long): List<RommNote> = RommParse.notes(json(HttpMethod.Get, "/api/roms/$romId/notes"))
+
+    /**
+     * A note of the signed-in person's own on [romId] (`POST /api/roms/{id}/notes`), kept to them
+     * (`is_public` false). RomM keeps one note of each title per person and game.
+     */
+    suspend fun addNote(romId: Long, title: String, content: String, tags: List<String> = emptyList()): RommNote {
+        val e = json(HttpMethod.Post, "/api/roms/$romId/notes") {
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("title", title)
+                put("content", content)
+                put("is_public", false)
+                putJsonArray("tags") { tags.forEach { add(JsonPrimitive(it)) } }
+            }.toString())
+        }
+        return RommParse.note(e) ?: throw RommException("RomM didn't say which note it made.", code = "unreadable")
+    }
+
+    /** The text of the person's note [noteId] on [romId], nothing else of it changed (`PUT /api/roms/{id}/notes/{note_id}`). */
+    suspend fun updateNote(romId: Long, noteId: Long, content: String) {
+        call(HttpMethod.Put, "/api/roms/$romId/notes/$noteId", extra = {
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject { put("content", content) }.toString())
         }) { }
     }
 
@@ -516,6 +623,20 @@ class RommClient(
         /** Time for sending [bytes] at the slowest upload speed Fuse allows for, never under two minutes. */
         /** How long a save's upload or download may take: saves are small. */
         const val SAVE_TIMEOUT_MS = 60_000L
+
+        /** The most play sessions RomM takes in one request (`MAX_BATCH_SIZE` in its play_sessions.py). */
+        const val MAX_SESSIONS = 100
+
+        /** What Fuse names the person's favourites collection when it makes one (RomM finds it by `is_favorite`, not its name). */
+        const val FAVOURITES_NAME = "Favourites"
+
+        /** [access]'s token on [b], when [b] goes to the host it is for ([RommAccess.covers]); nothing otherwise. */
+        fun gate(access: RommAccess?, b: HttpRequestBuilder) {
+            val a = access ?: return
+            if (!a.covers(b.url.buildString())) return
+            b.header(RommAccess.ID_HEADER, a.clientId)
+            b.header(RommAccess.SECRET_HEADER, a.clientSecret)
+        }
 
         fun chunkTimeout(bytes: Int): Long = maxOf(120_000L, bytes * 1000L / SLOWEST_UPLOAD_BYTES_PER_SECOND)
 

@@ -156,4 +156,6 @@ data class InstalledEmulator(
     val detectedVia: String,
     /** True when this is a fork/rename matched by family rather than an exact known package. */
     val isFamilyMatch: Boolean = false,
+    /** The setup that installed it and keeps it up to date ("EmuDeck"), when it is one Fuse knows; null otherwise. */
+    val installedBy: String? = null,
 )

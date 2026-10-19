@@ -71,7 +71,7 @@ class SaveAdapterTest {
             "/home/mo/.config/ppsspp/PSP/SAVEDATA/ULES00151/DATA.BIN" to "z",
         ))
         val g = GameKey.of("psp", "ULUS10041", null, "Lumines")
-        val spot = SaveAdapters.forEmulator("ppsspp")!!.locate(SaveQuery(g, "psp", "/roms/psp/l.iso", "ppsspp", serial = "ULUS-10041"), env).single()
+        val spot = SaveAdapters.forEmulator("ppsspp")!!.locate(SaveQuery(g, "psp", "/roms/psp/l.iso", "ppsspp", serial = "ULUS-10041"), env).single { it.kind != SaveKind.STATE }
         assertEquals(listOf("ULUS10041DATA00", "ULUS10041SYS"), spot.folders)
         assertEquals("/home/mo/.config/ppsspp/PSP/SAVEDATA", spot.root)
     }
@@ -109,12 +109,12 @@ class SaveAdapterTest {
             File(deckRoms, "Chrono Trigger (USA).srm").writeText("deck progress")
             val q = { rom: File -> SaveQuery(ct, "snes", rom.path.replace('\\', '/'), "mgba") }
             val env = FileSaveEnvironment("LINUX", root.path, variables = { null })
-            val deckSpot = SaveAdapters.forEmulator("mgba")!!.locate(q(File(deckRoms, "Chrono Trigger (USA).sfc")), env).single()
+            val deckSpot = SaveAdapters.forEmulator("mgba")!!.locate(q(File(deckRoms, "Chrono Trigger (USA).sfc")), env).single { it.kind != SaveKind.STATE }
             // mGBA keeps .sav beside the game; write it there.
             File(deckSpot.pathFor("save.srm")!!).writeText("deck progress")
             assertNotNull(deck.capture(p, Slots.of(ct, deckSpot), 600))
             deck.flush(deckClient)
-            val pcSpot = SaveAdapters.forEmulator("mgba")!!.locate(q(File(pcRoms, "CT.smc")), env).single()
+            val pcSpot = SaveAdapters.forEmulator("mgba")!!.locate(q(File(pcRoms, "CT.smc")), env).single { it.kind != SaveKind.STATE }
             assertIs<PrepareResult.Updated>(pc.prepare(pcClient, p, Slots.of(ct, pcSpot)))
             assertEquals("deck progress", File(pcRoms, "CT.sav").readText())
             // A state from RetroArch's core can't go to a device playing with another core.

@@ -28,13 +28,13 @@ internal object LinuxArchives {
         }
     }
 
-    private fun tar(archive: File, into: File) {
-        val name = archive.name.lowercase()
+    private fun tar(archive: File, into: File) = tar(archive, into, xz = archive.name.lowercase().endsWith(".xz"))
+
+    /** A tarball, gzip-compressed or ([xz]) xz-compressed, unpacked into [into]. */
+    fun tar(archive: File, into: File, xz: Boolean) {
+        into.mkdirs()
         archive.inputStream().buffered().use { raw ->
-            val decompressed: InputStream = when {
-                name.endsWith(".xz") -> XZCompressorInputStream(raw)
-                else -> GzipCompressorInputStream(raw)
-            }
+            val decompressed: InputStream = if (xz) XZCompressorInputStream(raw) else GzipCompressorInputStream(raw)
             TarArchiveInputStream(decompressed).use { tar ->
                 var count = 0
                 var total = 0L

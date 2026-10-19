@@ -54,8 +54,21 @@ data class RommState(
     val newGames: Int = 0,
     /** What went wrong last, in words for the person. */
     val problem: String? = null,
+    /** The server takes the person's changes (favourites, hidden games, play sessions, trophies) and the sign-in may send them. */
+    val canSendChanges: Boolean = false,
+    /** Changes made here that wait to go to RomM. */
+    val changesWaiting: Int = 0,
+    /** A scan RomM is running that Fuse asked for, with its counts so far; null when none. */
+    val scan: io.github.matiyaaa.fuse.romm.RommScanStats? = null,
+    /** The host a Cloudflare Access service token is kept for; "" when none. */
+    val accessHost: String = "",
 ) {
     val usable: Boolean get() = link == RommLink.ONLINE || (link == RommLink.OFFLINE && games > 0)
+}
+
+/** RomM on this computer: the [engine] that runs it ("Docker", "Podman"), what was set up ([spec], null before), and whether it [running]. */
+data class RommHomeView(val engine: String, val spec: io.github.matiyaaa.fuse.romm.RommHome.Spec?, val running: Boolean) {
+    val address: String? get() = spec?.let(io.github.matiyaaa.fuse.romm.RommHome::address)
 }
 
 /** Where a RomM game stands on this device: one game, whichever of these it is. */
@@ -175,7 +188,13 @@ data class RommSaveGame(
 }
 
 /** RomM's save sync as it stands: every game with saves on the server, newest played first. */
-data class RommSaveReport(val server: String, val games: List<RommSaveGame>, val bytes: Long)
+data class RommSaveReport(
+    val server: String,
+    val games: List<RommSaveGame>,
+    val bytes: Long,
+    /** Saves that couldn't reach RomM yet: they go by themselves once it answers. */
+    val waiting: Int = 0,
+)
 
 interface RommOps {
     val supported: Boolean
@@ -186,6 +205,41 @@ interface RommOps {
      * against it; null when RomM's save sync isn't on here. Throws when RomM doesn't answer.
      */
     suspend fun saveReport(): RommSaveReport? = null
+
+    /** Sends the saves waiting to go to RomM now, in the order they waited; how many went. */
+    suspend fun sendWaitingSaves(): Int = 0
+
+    /**
+     * Sends the person's changes to games from RomM (favourites, hidden games, play sessions, the
+     * trophies earned in emulators, in a note of the person's own) from now on, or stops. Turning
+     * it on fails, saying why, when the sign-in may not (pair again).
+     */
+    suspend fun setSendChanges(on: Boolean): Result<Unit> = Result.failure(UnsupportedOperationException())
+
+    /** Sends the changes waiting to go to RomM now; how many went. */
+    suspend fun sendChangesNow(): Int = 0
+
+    /**
+     * Keeps a Cloudflare Access service token for the outside address's host (it goes with requests
+     * to that host only, over https). Fails, saying why, without an https outside address.
+     */
+    suspend fun setAccess(clientId: String, clientSecret: String): Result<String> = Result.failure(UnsupportedOperationException())
+
+    /** Forgets the Cloudflare Access service token. */
+    suspend fun removeAccess() {}
+
+    /** RomM on this computer: where Fuse can set it up (Docker or Podman here), and how it stands; null where it can't. */
+    suspend fun homeServer(): RommHomeView? = null
+
+    /**
+     * Sets RomM up on this computer and starts it (only ever on the person's go-ahead): the Compose
+     * file written in Fuse's folder, [library] read-only to it, answering on [port] for this computer
+     * alone or the home network too. Once it answers, it is RomM's home address. Returns the address.
+     */
+    suspend fun startHome(library: String, port: Int, thisComputerOnly: Boolean): Result<String> = Result.failure(UnsupportedOperationException())
+
+    /** Stops RomM on this computer, keeping everything. */
+    suspend fun stopHome(): Result<Unit> = Result.failure(UnsupportedOperationException())
 
     /** Short messages for the person: an upload done, new games on the server, firmware brought over. */
     val notices: Flow<String> get() = kotlinx.coroutines.flow.emptyFlow()

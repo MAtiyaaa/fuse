@@ -73,6 +73,9 @@ private class RommSettingsState {
     var test by mutableStateOf<String?>(null)
     var bios by mutableStateOf(false)
     var looking by mutableStateOf(false)
+
+    /** RomM on this computer, where Docker or Podman is installed here; null where it isn't. */
+    var home by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.store.RommHomeView?>(null)
 }
 
 /**
@@ -112,6 +115,7 @@ internal fun rommStatus(s: RommState, p: FuseRommSettings): Triple<Boolean?, Str
     s.link == RommLink.SIGNED_OUT -> Triple(false, "Signed out", "RomM no longer accepts Fuse's sign-in. Pair again")
     s.link == RommLink.OFFLINE -> Triple(false, "Can't reach the server", "Browsing what Fuse kept; it keeps trying")
     s.link == RommLink.CONNECTING -> Triple(null, "Connecting", "Asking your home and outside addresses")
+    s.scan != null -> Triple(true, "RomM is scanning", scanText(s.scan))
     // "At home" only for an address that is on this network; a public server reached by the address
     // typed first (which lands in the home slot) is simply connected.
     s.route == NetRoute.LOCAL && io.github.matiyaaa.fuse.ui.shell.onboarding.looksAtHome(p.localAddress) ->
@@ -119,6 +123,12 @@ internal fun rommStatus(s: RommState, p: FuseRommSettings): Triple<Boolean?, Str
     s.route == NetRoute.LOCAL -> Triple(true, "Connected", listOfNotNull(s.account.ifBlank { null }, s.version.ifBlank { null }?.let { "RomM $it" }).joinToString("  ·  "))
     else -> Triple(true, "Connected from outside", listOfNotNull(s.account.ifBlank { null }, s.version.ifBlank { null }?.let { "RomM $it" }).joinToString("  ·  "))
 }
+
+/** How far a scan RomM runs has come, in words: games looked at of all, and new ones. */
+internal fun scanText(s: io.github.matiyaaa.fuse.romm.RommScanStats): String = listOfNotNull(
+    if (s.totalRoms > 0) "${s.scannedRoms} of ${s.totalRoms} games looked at" else "Starting",
+    s.newRoms.takeIf { it > 0 }?.let { if (it == 1) "1 new" else "$it new" },
+).joinToString("  ·  ")
 
 /**
  * Settings, Addons, RomM: the RomM native integration. Connection (Auto recommended, home
@@ -131,6 +141,7 @@ fun RommSettingsScreen(app: AppState) {
     val state by app.store.romm.state.collectAsState()
     val p = prefs.romm
     val page = rememberRouteState(app.navigator, "romm.settings") { RommSettingsState() }
+    LaunchedEffect(page) { page.home = runCatching { app.store.romm.homeServer() }.getOrNull() }
     val reveal = rememberReveal()
     fun set(change: (FuseRommSettings) -> FuseRommSettings) = app.store.updatePrefs { it.copy(romm = change(it.romm)) }
     fun setDl(change: (DownloadSettings) -> DownloadSettings) = app.store.updatePrefs { it.copy(downloads = change(it.downloads)) }
@@ -238,6 +249,16 @@ private fun rommRows(
             }
         },
     ))
+    add(MenuAction(
+        "access", "Cloudflare Access", FuseIcons.ShieldCheck,
+        detail = when {
+            state.accessHost.isBlank() -> "For an outside address behind Cloudflare Access: its service token, sent only there"
+            state.accessHost != io.github.matiyaaa.fuse.romm.RommAccess.hostOf(p.remoteAddress) -> "Kept for ${state.accessHost}, which isn't the outside address now. Add the token again"
+            else -> "Its service token goes only to ${state.accessHost}, over https"
+        },
+        trailing = Trailing.Value(if (state.accessHost.isBlank()) "Off" else "On"), section = connection,
+        onSelect = { accessFlow(app, state.accessHost) },
+    ))
     add(infoRow("route", "In use now", value = when (state.route) { NetRoute.LOCAL -> "Home"; NetRoute.REMOTE -> "Outside"; null -> "None" }, icon = FuseIcons.Router).copy(section = connection))
     if (state.version.isNotBlank()) add(infoRow("version", "Server version", value = "RomM ${state.version}", icon = FuseIcons.Server).copy(section = connection))
     val account = "Account"
@@ -257,6 +278,37 @@ private fun rommRows(
         }
     }))
 
+    // RomM on this computer ------------------------------------------------------------------------
+    page.home?.let { h ->
+        val section = "On This Computer"
+        if (h.spec == null) {
+            add(MenuAction(
+                "home.setup", "Set Up RomM on This Computer", FuseIcons.Server,
+                detail = "Runs RomM here with the ${h.engine} you have, your library read-only to it",
+                trailing = Trailing.Chevron, section = section, onSelect = { setUpHomeFlow(app, h.engine) },
+            ))
+        } else {
+            add(infoRow(
+                "home.state", "RomM on This Computer", value = if (h.running) "Running" else "Stopped",
+                detail = "${h.address}  ·  ${h.engine}  ·  your library read-only to it", icon = FuseIcons.Server,
+            ).copy(section = section))
+            add(MenuAction(
+                "home.toggle", if (h.running) "Stop RomM" else "Start RomM", if (h.running) FuseIcons.Power else FuseIcons.Play,
+                detail = if (h.running) "Everything it keeps stays, for the next start" else "With the ${h.engine} you have, as it was set up",
+                section = section,
+                onSelect = {
+                    app.scope.launch {
+                        val spec = h.spec
+                        val done = if (h.running) ops.stopHome() else ops.startHome(spec.library, spec.port, spec.thisComputerOnly).map { }
+                        done.onSuccess { app.toasts.show(if (h.running) "RomM on this computer stopped" else "RomM on this computer is running", ToastKind.SUCCESS, icon = FuseIcons.Server) }
+                            .onFailure { app.toasts.show(it.message ?: "That didn't work", ToastKind.WARNING) }
+                        page.home = runCatching { ops.homeServer() }.getOrNull()
+                    }
+                },
+            ))
+        }
+    }
+
     // Saves --------------------------------------------------------------------------------------
     // One way moves this device's saves: RomM, Fuse One or Syncthing, chosen in one place.
     if (state.canSyncSaves || state.link != RommLink.ONLINE) {
@@ -264,6 +316,33 @@ private fun rommRows(
     } else {
         add(MenuAction("saves", "Save Sync", FuseIcons.Save, detail = "Needs RomM 5 and a sign-in that may sync saves: pair with RomM again", enabled = false, section = "Saves"))
     }
+
+    // Your changes -------------------------------------------------------------------------------
+    val changes = "Your Changes"
+    add(toggleRow(
+        "changes", "Send Changes to RomM", FuseIcons.CloudUpload, p.sendChanges,
+        when {
+            p.sendChanges && state.changesWaiting > 0 -> if (state.changesWaiting == 1) "1 change waits to go to RomM" else "${state.changesWaiting} changes wait to go to RomM"
+            p.sendChanges -> "Favourites, games you hide, the time you play and trophies earned in emulators go to RomM, for games from RomM"
+            state.link == RommLink.ONLINE && !state.canSendChanges -> "Needs RomM 5.4 and a sign-in that may send changes: pair again"
+            else -> "Favourites, games you hide, the time you play and trophies earned in emulators, for games from RomM. Off until you turn it on"
+        },
+    ) { v ->
+        app.scope.launch {
+            ops.setSendChanges(v)
+                .onSuccess { if (v) app.toasts.show("Your changes go to RomM from now on", ToastKind.SUCCESS, icon = FuseIcons.CloudUpload) }
+                .onFailure { app.toasts.show(it.message ?: "RomM didn't take that", ToastKind.WARNING) }
+        }
+    }.copy(section = changes))
+    if (p.sendChanges && state.changesWaiting > 0) add(MenuAction(
+        "changes.now", "Send Them Now", FuseIcons.CloudUpload, detail = "They go by themselves once RomM answers", section = changes,
+        onSelect = {
+            app.scope.launch {
+                val sent = ops.sendChangesNow()
+                app.toasts.show(if (sent > 0) (if (sent == 1) "1 change went to RomM" else "$sent changes went to RomM") else "RomM didn't take them yet. They go by themselves once it does", if (sent > 0) ToastKind.SUCCESS else ToastKind.WARNING)
+            }
+        },
+    ))
 
     // Library -----------------------------------------------------------------------------------
     val library = "Library"
@@ -358,6 +437,95 @@ private fun clockText(minute: Int, clock24h: Boolean): String {
     return if (m == 0) "$h12 ${if (h < 12) "AM" else "PM"}" else "$h12:${m.toString().padStart(2, '0')} ${if (h < 12) "AM" else "PM"}"
 }
 
+/**
+ * RomM on this computer: which library it gets (read-only), who may reach it, then what will run,
+ * asked before anything does. Once it answers, it is RomM's home address and pairing follows.
+ */
+internal fun setUpHomeFlow(app: AppState, engine: String) {
+    val ops = app.store.romm
+    val sources = app.store.sources.sources.value.filter { it.enabled }
+    if (sources.isEmpty()) return app.toasts.show("Add a library first: RomM is given one to show", ToastKind.WARNING)
+    fun reach(library: String) {
+        app.choice = ChoiceSpec(
+            title = "Who Can Reach It", icon = FuseIcons.Network,
+            message = "RomM answers on port 8080.",
+            options = listOf(
+                MenuAction("home.lan", "Your Home Network", FuseIcons.Router, detail = "Your other devices use it too, as RomM's home address", onSelect = { app.choice = null; confirm(app, engine, library, thisComputerOnly = false) }),
+                MenuAction("home.local", "This Computer Only", FuseIcons.Monitor, detail = "Nothing else on the network can reach it", onSelect = { app.choice = null; confirm(app, engine, library, thisComputerOnly = true) }),
+            ),
+        )
+    }
+    if (sources.size == 1) return reach(sources.single().path)
+    app.choice = ChoiceSpec(
+        title = "Which Library", icon = FuseIcons.FolderOpen,
+        message = "RomM shows this library's games. It can read it but never change it.",
+        options = sources.map { s -> MenuAction("home.lib.${s.id.value}", s.label, FuseIcons.Folder, detail = s.path, onSelect = { app.choice = null; reach(s.path) }) },
+    )
+}
+
+private fun confirm(app: AppState, engine: String, library: String, thisComputerOnly: Boolean) {
+    val ops = app.store.romm
+    app.confirm = ConfirmSpec(
+        title = "Start RomM on This Computer?",
+        message = "Fuse writes a Compose file in its own folder and has $engine start RomM 5.4.0 and its database (MariaDB) in containers. " +
+            "The first time, $engine downloads them first (about a gigabyte). $library is read-only to RomM. " +
+            "Its passwords are made now and kept in this device's secret store. Stop it any time in Settings, Addons, RomM.",
+        confirmLabel = "Start RomM",
+    ) {
+        app.toasts.show("Starting RomM. The first time takes a while", ToastKind.INFO, icon = FuseIcons.Server)
+        app.scope.launch {
+            ops.startHome(library, 8080, thisComputerOnly)
+                .onSuccess { address ->
+                    app.choice = ChoiceSpec(
+                        title = "RomM Is Running", icon = FuseIcons.CircleCheck,
+                        message = "At $address. Make your RomM account there first, then pair Fuse with it.",
+                        options = listOf(
+                            MenuAction("home.open", "Open RomM", FuseIcons.Globe, detail = address, onSelect = { app.choice = null; app.platform.openUrl(address) }),
+                            MenuAction("home.pair", "Pair Now", FuseIcons.QrCode, detail = "Once your account is made", onSelect = { app.choice = null; app.go(Route.RommSetup(pairing = true)) }),
+                        ),
+                    )
+                }
+                .onFailure { app.toasts.show(it.message ?: "RomM didn't start", ToastKind.WARNING) }
+        }
+    }
+}
+
+/** Cloudflare Access: a service token added (its Client ID, then its Client Secret), changed or removed. */
+private fun accessFlow(app: AppState, kept: String) {
+    val ops = app.store.romm
+    fun add() {
+        app.textInput = TextInputSpec(
+            "Client ID", "", "1a2b3c.access", capitalize = false,
+            message = "From Cloudflare Zero Trust, Access, Service Auth: the service token's Client ID",
+            doneLabel = "Next",
+        ) { id ->
+            app.textInput = TextInputSpec(
+                "Client Secret", "", "", secret = true, capitalize = false,
+                message = "Kept only in this device's secret store, and sent only to your outside address",
+            ) { secret ->
+                app.scope.launch {
+                    ops.setAccess(id, secret)
+                        .onSuccess { host -> app.toasts.show("Cloudflare Access is on for $host", ToastKind.SUCCESS, icon = FuseIcons.ShieldCheck) }
+                        .onFailure { app.toasts.show(it.message ?: "Fuse couldn't keep the token", ToastKind.WARNING) }
+                }
+            }
+        }
+    }
+    if (kept.isBlank()) return add()
+    app.choice = ChoiceSpec(
+        title = "Cloudflare Access",
+        icon = FuseIcons.ShieldCheck,
+        message = "A service token for $kept is kept on this device.",
+        options = listOf(
+            MenuAction("access.change", "Change the Token", FuseIcons.Key, detail = "Its Client ID and Client Secret again", onSelect = { app.choice = null; add() }),
+            MenuAction("access.remove", "Remove the Token", FuseIcons.Trash, destructive = true, detail = "Requests go without it from now on", onSelect = {
+                app.choice = null
+                app.scope.launch { ops.removeAccess(); app.toasts.show("Cloudflare Access is off", ToastKind.SUCCESS) }
+            }),
+        ),
+    )
+}
+
 private fun shortFolder(path: String): String = path.replace('\\', '/').trimEnd('/').split('/').takeLast(2).joinToString("/").ifBlank { path }
 
 private fun chooseRoot(app: AppState, p: FuseRommSettings, set: ((FuseRommSettings) -> FuseRommSettings) -> Unit) {
@@ -421,6 +589,9 @@ fun RommSetupScreen(app: AppState, pairing: Boolean) {
     var saves by remember { mutableStateOf(true) }
     val sel = remember { LinearSelection(if (pairing && (p.localAddress.isNotBlank() || p.remoteAddress.isNotBlank())) 2 else 0) }
     var looking by remember { mutableStateOf(false) }
+    // RomM on this computer, where Docker or Podman is installed here.
+    var home by remember { mutableStateOf<io.github.matiyaaa.fuse.ui.shell.store.RommHomeView?>(null) }
+    LaunchedEffect(Unit) { home = runCatching { ops.homeServer() }.getOrNull() }
     fun keepHome(address: String) = app.store.updatePrefs { it.copy(romm = it.romm.copy(localAddress = address)) }
     // With no home address yet, Fuse looks for RomM straight away: one server found is filled in,
     // several are offered to choose from. Typing an address is always there instead.
@@ -443,8 +614,10 @@ fun RommSetupScreen(app: AppState, pairing: Boolean) {
         // One way moves this device's saves: choosing RomM's here turns Fuse One's and Syncthing's off.
         val now = io.github.matiyaaa.fuse.ui.shell.sync.SaveProviders.current(app)
         when {
-            saves && now != io.github.matiyaaa.fuse.data.settings.SaveProvider.ROMM -> app.scope.launch { app.store.setSaveProvider(io.github.matiyaaa.fuse.data.settings.SaveProvider.ROMM) }
+            saves && !now.romm -> app.scope.launch { app.store.setSaveProvider(io.github.matiyaaa.fuse.data.settings.SaveProvider.ROMM) }
             !saves && now == io.github.matiyaaa.fuse.data.settings.SaveProvider.ROMM -> app.scope.launch { app.store.setSaveProvider(io.github.matiyaaa.fuse.data.settings.SaveProvider.OFF) }
+            // RomM's save sync off with Fuse One moving the rest: Fuse One moves them all.
+            !saves && now == io.github.matiyaaa.fuse.data.settings.SaveProvider.ROMM_THEN_FUSE_ONE -> app.scope.launch { app.store.setSaveProvider(io.github.matiyaaa.fuse.data.settings.SaveProvider.FUSE_ONE) }
         }
         app.toasts.show("RomM is connected as $name", ToastKind.SUCCESS, icon = FuseIcons.CircleCheck)
         app.back()
@@ -475,6 +648,13 @@ fun RommSetupScreen(app: AppState, pairing: Boolean) {
         add(MenuAction("s.remote", "Outside address (optional)", FuseIcons.Globe, detail = "For away from home, through a tunnel or VPN", trailing = Trailing.Value(p.remoteAddress.ifBlank { "Not set" }), onSelect = {
             app.textInput = TextInputSpec("Outside address", p.remoteAddress, "https://romm.example.com", capitalize = false) { v -> app.store.updatePrefs { it.copy(romm = it.romm.copy(remoteAddress = v.trim())) } }
         }))
+        home?.takeIf { it.spec == null }?.let { h ->
+            add(MenuAction(
+                "s.home", "Set Up RomM on This Computer", FuseIcons.Server,
+                detail = "No RomM yet? It runs here with the ${h.engine} you have, your library read-only to it",
+                trailing = Trailing.Chevron, onSelect = { setUpHomeFlow(app, h.engine) },
+            ))
+        }
         val ready = p.localAddress.isNotBlank() || p.remoteAddress.isNotBlank()
         add(MenuAction("s.pair", "Pair with RomM", FuseIcons.QrCode, detail = "Shows a short code to approve in RomM. Nothing long to type", trailing = if (busy && code == null) Trailing.Value("Asking") else Trailing.Chevron, unavailableReason = if (!ready) "Add an address first" else null, onSelect = ::pair))
         add(toggleRow("s.uploads", "Allow uploads too", FuseIcons.CloudUpload, uploads, "Asks RomM for upload and scan rights. Leave off to only browse and download") { uploads = it })

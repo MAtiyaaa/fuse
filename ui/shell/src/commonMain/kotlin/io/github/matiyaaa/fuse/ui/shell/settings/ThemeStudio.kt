@@ -167,7 +167,7 @@ private val SimpleSteps = listOf(StudioStep.ROOM, StudioStep.ACCENT, StudioStep.
 
 /** The rows Simple shows: one choice each, nothing to fine-tune. */
 private val SimpleRows = setOf(
-    StudioRow.DEPTH, StudioRow.MODE, StudioRow.ACCENT, StudioRow.CORNERS, StudioRow.QUICK_LOOK, StudioRow.WIDGET_LOOK, StudioRow.PICTURE, StudioRow.PICTURE_REMOVE,
+    StudioRow.DEPTH, StudioRow.MODE, StudioRow.ACCENT, StudioRow.CORNERS, StudioRow.QUICK_LOOK, StudioRow.WIDGET_LOOK, StudioRow.TILE_LOOK, StudioRow.PICTURE, StudioRow.PICTURE_REMOVE,
     StudioRow.BACKGROUND, StudioRow.GLASS, StudioRow.CRT, StudioRow.SAVE, StudioRow.NEXT,
 )
 
@@ -208,6 +208,7 @@ internal enum class StudioRow(val label: String, val icon: ImageVector, val step
     FOCUS("Focus", FuseIcons.Target, StudioStep.SHAPE, RowKind.CHOICE),
     QUICK_LOOK("Quick menu", FuseIcons.Sliders, StudioStep.SHAPE, RowKind.CHOICE),
     WIDGET_LOOK("Home's widgets", FuseIcons.Grid, StudioStep.SHAPE, RowKind.CHOICE),
+    TILE_LOOK("Tiles", FuseIcons.Square, StudioStep.SHAPE, RowKind.CHOICE),
     PICTURE("Your picture", FuseIcons.ImagePlay, StudioStep.SCENE, RowKind.ACTION),
     PICTURE_DIM("Picture dimming", FuseIcons.SunDim, StudioStep.SCENE, RowKind.LEVEL),
     PICTURE_ALIGN("Picture position", FuseIcons.Move, StudioStep.SCENE, RowKind.CHOICE),
@@ -275,6 +276,7 @@ internal data class StudioValues(
     val pictureAlign: WallpaperAlign,
     val quickMenu: QuickMenuLook,
     val widgets: io.github.matiyaaa.fuse.model.WidgetLook,
+    val tiles: io.github.matiyaaa.fuse.model.TileLook = io.github.matiyaaa.fuse.model.TileLook.PLAIN,
 )
 
 /**
@@ -331,6 +333,7 @@ internal class StudioState(val base: ThemeSpec, val editing: ThemeSpec?, val ext
     var pictureAlign by mutableStateOf(initial.pictureAlign)
     var quickMenu by mutableStateOf(initial.quickMenu)
     var widgets by mutableStateOf(initial.widgets)
+    var tiles by mutableStateOf(initial.tiles)
 
     /** Colours picked lately (newest first), offered in every colour's editor. */
     val recents = mutableStateListOf<Long>()
@@ -384,6 +387,7 @@ internal class StudioState(val base: ThemeSpec, val editing: ThemeSpec?, val ext
         pictureAlign = v.pictureAlign
         quickMenu = v.quickMenu
         widgets = v.widgets
+        tiles = v.tiles
     }
 
     var step by mutableStateOf(StudioStep.ROOM)
@@ -402,7 +406,7 @@ internal class StudioState(val base: ThemeSpec, val editing: ThemeSpec?, val ext
 
     fun values(): StudioValues = StudioValues(
         dark, colors.toMap(), background, light, speed, corners, focus, motion, sound, glass, blur, opacity, crt, scanlines, bloom,
-        picture, pictureDim, pictureAlign, quickMenu, widgets,
+        picture, pictureDim, pictureAlign, quickMenu, widgets, tiles,
     )
 
     val changed: Boolean get() = values() != initial
@@ -456,6 +460,7 @@ internal class StudioState(val base: ThemeSpec, val editing: ThemeSpec?, val ext
         pictureAlign = initial.pictureAlign
         quickMenu = initial.quickMenu
         widgets = initial.widgets
+        tiles = initial.tiles
         openColor = null
         index = index.coerceAtMost(lines().lastIndex)
     }
@@ -515,6 +520,7 @@ internal class StudioState(val base: ThemeSpec, val editing: ThemeSpec?, val ext
             StudioRow.FOCUS -> focus = FocusStyle.entries.cycle(focus, delta)
             StudioRow.QUICK_LOOK -> quickMenu = QuickMenuLook.entries.cycle(quickMenu, delta)
             StudioRow.WIDGET_LOOK -> widgets = io.github.matiyaaa.fuse.model.WidgetLook.entries.cycle(widgets, delta)
+            StudioRow.TILE_LOOK -> tiles = io.github.matiyaaa.fuse.model.TileLook.entries.cycle(tiles, delta)
             StudioRow.MOTION -> motion = MotionProfile.entries.cycle(motion, delta)
             StudioRow.SOUND -> sound = SoundProfile.entries.cycle(sound, delta)
             StudioRow.GLASS -> if (glass == delta > 0) return false else glass = delta > 0
@@ -697,6 +703,7 @@ internal class StudioState(val base: ThemeSpec, val editing: ThemeSpec?, val ext
             wallpaper = picture?.let { Wallpaper(it, pictureDim, pictureAlign) },
             quickMenu = quickMenu,
             widgets = widgets,
+            tiles = tiles,
         )
     }
 
@@ -740,6 +747,7 @@ internal class StudioState(val base: ThemeSpec, val editing: ThemeSpec?, val ext
                 pictureAlign = t.wallpaper?.align ?: WallpaperAlign.CENTER,
                 quickMenu = t.quickMenu,
                 widgets = t.widgets,
+                tiles = t.tiles,
             )
         }
     }
@@ -1101,6 +1109,7 @@ private fun detailOf(line: StudioLine, studio: StudioState, userMotion: String?)
         StudioRow.DEPTH -> if (studio.simple) "The main choices. Advanced has every colour, amount, motion and sound" else "Every colour, amount, motion and sound. Simple keeps the main choices"
         StudioRow.QUICK_LOOK -> studio.quickMenu.note()
         StudioRow.WIDGET_LOOK -> studio.widgets.note()
+        StudioRow.TILE_LOOK -> studio.tiles.note()
         StudioRow.MODE -> if (studio.dark) "A dark room. Changing it makes the room and text again" else "A bright room. Changing it makes the room and text again"
         StudioRow.LIGHT -> "How bright the scene's light is"
         StudioRow.SPEED -> "How fast it drifts; none holds it still"
@@ -1321,6 +1330,7 @@ private fun StudioLineView(
                 }
                 StudioRow.QUICK_LOOK -> Stepper(studio.quickMenu, dir, selected, onStep, narrow) { q -> FText(q.label(), Fuse.type.label, maxLines = 1) }
                 StudioRow.WIDGET_LOOK -> Stepper(studio.widgets, dir, selected, onStep, narrow) { q -> FText(q.label(), Fuse.type.label, maxLines = 1) }
+                StudioRow.TILE_LOOK -> Stepper(studio.tiles, dir, selected, onStep, narrow) { q -> FText(q.label(), Fuse.type.label, maxLines = 1) }
                 StudioRow.MOTION -> Stepper(studio.motion, dir, selected, onStep, narrow) { m -> FText(m.label(), Fuse.type.label, maxLines = 1) }
                 StudioRow.SOUND -> Stepper(studio.sound, dir, selected, onStep, narrow) { s ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1585,6 +1595,7 @@ internal fun spotlightOf(studio: StudioState): Spotlight? {
         StudioRow.FOCUS -> Spotlight(setOf(SpotPart.FOCUSED_TILE), "Focus", "How the tile you're on stands out from the rest")
         StudioRow.QUICK_LOOK -> Spotlight(setOf(SpotPart.QUICK), "Quick menu", "How its tiles and widgets are drawn", quick = true)
         StudioRow.WIDGET_LOOK -> Spotlight(setOf(SpotPart.TILES), "Home's widgets", "Lit from a corner, washed in their own colour, or glass over the room")
+        StudioRow.TILE_LOOK -> Spotlight(setOf(SpotPart.TILES, SpotPart.FOCUSED_TILE), "Tiles", "How every game and system tile is framed")
         StudioRow.BACKGROUND, StudioRow.LIGHT, StudioRow.SPEED -> Spotlight(emptySet(), row.label, "The scene behind everything: which one, how bright, how lively")
         StudioRow.PICTURE, StudioRow.PICTURE_DIM, StudioRow.PICTURE_ALIGN, StudioRow.PICTURE_REMOVE -> Spotlight(emptySet(), "Your picture", "Behind everything, darkened so text reads over it")
         StudioRow.GLASS, StudioRow.BLUR, StudioRow.OPACITY -> Spotlight(setOf(SpotPart.SHEET), row.label, "Panels like frosted glass, with the room showing through", sheet = true)

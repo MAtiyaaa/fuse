@@ -211,7 +211,9 @@ class JvmHousehold(
         }
         shared = games.associateBy { it.entry.game }
         if (cfg.shareLibrary) runCatching { server.start(peerPort) } else server.stop()
-        val entries = games.map { g -> withHashes(g) }
+        // The art as it is now: found since the games were listed, it goes up without listing them again.
+        val art = if (cfg.shareLibrary) runCatching { l.art() }.getOrDefault(emptyMap()) else emptyMap()
+        val entries = games.map { g -> withHashes(g).let { e -> art[e.game]?.let { e.copy(art = it) } ?: e } }
         _mine.value = entries
         val endpoint = if (cfg.shareLibrary && server.port > 0) PeerEndpoint(bindAddresses(), server.port) else null
         val identities = if (cfg.shareLibrary) runCatching { l.steamIdentities() }.getOrDefault(emptyList()) else emptyList()
@@ -230,6 +232,16 @@ class JvmHousehold(
 
     private fun withHashes(g: SharedGame): LibraryEntry =
         g.entry.copy(files = g.entry.files.map { f -> g.paths[f.path]?.let { hashes.known(File(it)) }?.let { (sha1, md5) -> f.copy(sha1 = sha1, md5 = md5) } ?: f })
+
+    private var artJob: Job? = null
+
+    override fun artChanged() {
+        if (artJob?.isActive == true) return
+        artJob = scope.launch(Dispatchers.IO) {
+            delay(ART_PUBLISH_DELAY_MS)
+            runCatching { publish(rebuild = false) }
+        }
+    }
 
     /** Reads the files not yet hashed, a file at a time, pausing while a game is played; lists again as it goes. */
     private fun startHashing() {
@@ -514,6 +526,9 @@ class JvmHousehold(
 
     companion object {
         const val PUBLISH_DELAY_MS = 3_000L
+
+        /** How long after art is found the list goes up with it: a fill finds many in a row. */
+        const val ART_PUBLISH_DELAY_MS = 90_000L
         const val REPUBLISH_MS = 60_000L
         const val WATCH_MS = 2_000L
         const val POST_EVERY_MS = 2_000L

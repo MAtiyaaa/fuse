@@ -100,10 +100,24 @@ val deckyPlugin = tasks.register<Sync>("deckyPlugin") {
     from(rootProject.layout.projectDirectory.dir("tools/decky/fuse")) {
         include("plugin.json", "package.json", "main.py", "README.md", "dist/index.js")
     }
+    // The plugin carries the version of the Fuse that carries it, which is what Settings compares.
+    val version = fuseVersion
+    inputs.property("fuseVersion", version)
+    filesMatching("package.json") {
+        filter { line -> line.replace(Regex("""^(\s*"version"\s*:\s*)"[^"]*""""), "$1\"$version\"") }
+    }
     into(layout.buildDirectory.dir("generated/decky/decky/Fuse"))
 }
 
 sourceSets.named("main") { resources.srcDir(deckyPlugin.map { it.destinationDir.parentFile.parentFile }) }
+
+// Fuse Ports' list (ports/index.json), carried inside the build as the list Fuse starts from.
+val portsIndex = tasks.register<Sync>("portsIndex") {
+    from(rootProject.layout.projectDirectory.dir("ports")) { include("index.json") }
+    into(layout.buildDirectory.dir("generated/ports/ports"))
+}
+
+sourceSets.named("main") { resources.srcDir(portsIndex.map { it.destinationDir.parentFile }) }
 
 compose.desktop {
     application {
@@ -200,4 +214,22 @@ compose.desktop {
 // Tests reach the X11 toolkit as the packaged Fuse does (GamescopeComposite, the window class).
 tasks.withType<Test>().configureEach {
     jvmArgs("--add-opens=java.desktop/sun.awt.X11=ALL-UNNAMED")
+    // FastStartTimingTest times a packaged Fuse when given its launcher (-Pfuse.faststart.launcher=...).
+    providers.gradleProperty("fuse.faststart.launcher").orNull?.let { systemProperty("fuse.faststart.launcher", it) }
 }
+
+// Fast Start's time to reach the emulator is measured with nothing else of the build running: beside
+// the other modules' tests (a parallel build, a processor's worth each) it times them more than Fuse
+// (5 to 8 s there, 1.9 s alone, on the same four cores). CI runs it as a step of its own, after the rest.
+val fastStartTiming by tasks.registering(Test::class) {
+    description = "Times Fast Start, from Steam's new process to the emulator's, with nothing else running."
+    group = "verification"
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    filter { includeTestsMatching("*.FastStartTimingTest") }
+    mustRunAfter(tasks.test)
+    // A time is measured each run, never taken from an earlier one.
+    outputs.cacheIf { false }
+    outputs.upToDateWhen { false }
+}
+tasks.test { filter { excludeTestsMatching("*.FastStartTimingTest") } }

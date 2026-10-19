@@ -27,6 +27,7 @@
   "sound": "soft",
   "quickMenu": "soft",
   "widgets": "lit",
+  "tiles": "plain",
   "glass": {
     "enabled": false,
     "blur": 24.0,

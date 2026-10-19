@@ -61,10 +61,16 @@ object ScopedSettings {
     /** A folder a system's DLC is kept in, outside its games folder; empty for none. */
     val DlcFolder = ScopedKey("content.dlc", "", String.serializer(), setOf(SettingScope.PLATFORM))
 
+    /**
+     * Frame generation through lsfg-vk on Linux: its multiplier (2, 3 or 4), or 0 for off. Set on
+     * the emulator's command as lsfg-vk's own variables (`FrameGeneration` in `core:launch`).
+     */
+    val FrameGeneration = ScopedKey("launch.framegen", 0, Int.serializer(), setOf(SettingScope.PLATFORM, SettingScope.GAME))
+
     val all: List<ScopedKey<*>> = listOf(
         Layout, ShowHero, ShowLogo, PreferredCover, Border, Emulator, RetroArchCore, FolderMode,
         VideoPreview, VideoDelaySeconds, ScrapeEnabled, SearchTitle, Matching, LaunchScreen, GenerateM3u,
-        UpdatesFolder, DlcFolder,
+        UpdatesFolder, DlcFolder, FrameGeneration,
     )
 }
 

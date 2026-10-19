@@ -163,6 +163,47 @@ object RommParse {
             smart = smart,
             romIds = o.arr("rom_ids").mapNotNull { (it as? JsonPrimitive)?.longOrNull },
             cover = o.str("path_cover_large") ?: o.str("path_cover_small"),
+            favorite = !smart && (o["is_favorite"] as? JsonPrimitive)?.booleanOrNull == true,
+        )
+    }
+
+    /**
+     * A task as `GET /api/tasks/{task_id}` (or the answer that queued it) has it: its id, RomM's job
+     * status, and a scan's counts from `meta.scan_stats`. Null when it names no task.
+     */
+    fun task(e: JsonElement): RommTask? {
+        val o = e.obj()
+        val id = o.str("task_id") ?: return null
+        val stats = (o["meta"] as? JsonObject)?.get("scan_stats") as? JsonObject
+        return RommTask(
+            id = id,
+            status = o.str("status")?.lowercase() ?: "queued",
+            scan = stats?.let { s ->
+                fun n(key: String) = s.long(key)?.toInt() ?: 0
+                RommScanStats(
+                    totalPlatforms = n("total_platforms"), scannedPlatforms = n("scanned_platforms"),
+                    totalRoms = n("total_roms"), scannedRoms = n("scanned_roms"),
+                    newRoms = n("new_roms"), identifiedRoms = n("identified_roms"),
+                )
+            },
+        )
+    }
+
+    /** How many sessions RomM took (`created_count`) from `POST /api/play-sessions`. */
+    fun sessionsCreated(e: JsonElement): Int = e.obj().long("created_count")?.toInt() ?: 0
+
+    /** A game's notes, from `/api/roms/{id}/notes` (RomM's `UserNoteSchema`: the person's own and others' public ones). */
+    fun notes(e: JsonElement): List<RommNote> = e.items().mapNotNull(::note)
+
+    /** One note, as RomM answers a note made or changed. */
+    fun note(e: JsonElement): RommNote? {
+        val o = e as? JsonObject ?: return null
+        return RommNote(
+            id = o.long("id") ?: return null,
+            title = o.str("title") ?: return null,
+            content = (o["content"] as? JsonPrimitive)?.contentOrNull.orEmpty(),
+            isPublic = o.bool("is_public") ?: false,
+            username = o.str("username").orEmpty(),
         )
     }
 

@@ -51,8 +51,9 @@ class DesktopFuseServices private constructor(
     override val fs: FuseFileSystem = NioFileSystem()
     override val secrets: SecretStore = DesktopSecretStore(dirs.data)
 
-    private val engine = CIO.create()
-    override val http: HttpClient = FuseHttp.client(engine, FuseHttpConfig(appVersion = appVersion))
+    // Made the first time something goes on the network: a Fast Start that needs none never makes it.
+    private val engine = lazy { CIO.create() }
+    override val http: HttpClient by lazy { FuseHttp.client(engine.value, FuseHttpConfig(appVersion = appVersion)) }
     override val cacheDir: String = dirs.cache
     override val dataDir: String = dirs.data
 
@@ -71,7 +72,8 @@ class DesktopFuseServices private constructor(
 
     override fun streamClient(): String? = io.github.matiyaaa.fuse.desktop.stream.DesktopStreaming.client()?.joinToString(" ")
 
-    override val deviceName: String = runCatching { java.net.InetAddress.getLocalHost().hostName }.getOrNull()?.takeIf { it.isNotBlank() } ?: "Fuse"
+    // Asked once, when first needed: looking the name up can wait on the network on some computers.
+    override val deviceName: String by lazy { runCatching { java.net.InetAddress.getLocalHost().hostName }.getOrNull()?.takeIf { it.isNotBlank() } ?: "Fuse" }
     override val jellyfinDiscovery = io.github.matiyaaa.fuse.jellyfin.UdpDiscovery()
 
     private val env = SystemLinuxEnvironment(dirs.home)
@@ -87,12 +89,18 @@ class DesktopFuseServices private constructor(
         io.github.matiyaaa.fuse.launch.intelligence.FileKnowledgeStore(File(dirs.data, "intelligence.json"))
     override val launcher: GameLauncher = desktopLauncher
     override val cartridge: CartridgeBridge = if (os == DesktopOs.LINUX) DesktopCartridgeBridge(dirs, launcherHooks) else NoCartridgeBridge
-    override val installer: ReleaseInstaller =
+    override val installer: ReleaseInstaller by lazy {
         if (os == DesktopOs.LINUX) DesktopReleaseInstaller(dirs, http) else SystemReleaseInstaller(dirs, http, os)
+    }
 
     /** The Store's programs: fetched from their releases and put where Fuse finds emulators. */
     override val desktopApps: io.github.matiyaaa.fuse.ui.shell.store.DesktopInstaller =
         DesktopStoreInstaller(os, File(dirs.home.toString()), File(dirs.cache, "store-downloads"), File(dirs.data, "previous-versions"))
+
+    /** Fuse Ports: its folder in Fuse's own data folder, downloads beside the Store's. */
+    override val portFiles: io.github.matiyaaa.fuse.ui.shell.store.PortFiles by lazy {
+        DesktopPortFiles(File(dirs.data), File(dirs.cache, "port-downloads"), os)
+    }
 
     /** No Apps section on a desktop: Fuse manages games there, not programs. */
     override val apps: AppsProvider? = null
@@ -100,6 +108,9 @@ class DesktopFuseServices private constructor(
     override val volumes: VolumeMonitor = io.github.matiyaaa.fuse.desktop.platform.DesktopVolumes(os)
     override val emulatorFiles: io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles =
         DesktopEmulatorFiles(os, backups = java.io.File(dirs.data, "emulator-backups"))
+
+    /** The home network's addresses as Fuse One gives them to the household: no container's, VPNs last. */
+    override fun homeAddresses(): List<String> = io.github.matiyaaa.fuse.sync.LanAddresses.list()
 
     /** Fuse Sync by Fuse: a computer can be the host, kept running by [io.github.matiyaaa.fuse.desktop.platform.SyncHostService]. */
     override fun syncthingService(scope: CoroutineScope): io.github.matiyaaa.fuse.sync.syncthing.SyncthingService =
@@ -143,13 +154,18 @@ class DesktopFuseServices private constructor(
         env: () -> io.github.matiyaaa.fuse.sync.SaveEnvironment?,
         client: suspend () -> io.github.matiyaaa.fuse.romm.RommClient?,
         server: () -> String,
+        person: () -> String?,
     ): io.github.matiyaaa.fuse.sync.romm.RommSaveService = io.github.matiyaaa.fuse.sync.romm.JvmRommSaves(
         dir = File(dirs.data, "romm-saves"),
         env = { env() ?: io.github.matiyaaa.fuse.sync.FileSaveEnvironment(os.name) },
         client = client, server = server,
         deviceName = deviceName, platform = os.name.lowercase(), clientVersion = appVersion,
         log = { io.github.matiyaaa.fuse.desktop.Log.info(it) },
+        person = person,
     )
+
+    override val rommHome: io.github.matiyaaa.fuse.ui.shell.store.RommHomeHost =
+        DesktopRommHome(File(dirs.data, "romm-home"), secrets) { io.github.matiyaaa.fuse.desktop.Log.info(it) }
 
     override fun writeCacheFile(relativePath: String, content: String): String? = writeBelow(cacheDir, relativePath, content)
 
@@ -202,11 +218,16 @@ class DesktopFuseServices private constructor(
         }
     }
 
+    override fun frameGenerationReady(): Boolean = os == DesktopOs.LINUX &&
+        File(io.github.matiyaaa.fuse.launch.FrameGeneration.configPath(dirs.home.toString(), System.getenv("XDG_CONFIG_HOME"))).isFile
+
     override fun utcOffsetMillis(): Long = TimeZone.getDefault().getOffset(System.currentTimeMillis()).toLong()
 
     override fun close() {
-        http.close()
-        engine.close()
+        if (engine.isInitialized()) {
+            http.close()
+            engine.value.close()
+        }
         try {
             driver.close()
         } catch (e: Exception) {

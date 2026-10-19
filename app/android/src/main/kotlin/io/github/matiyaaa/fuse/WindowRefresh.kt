@@ -23,14 +23,14 @@ import java.util.WeakHashMap
  * performance-quality coupling. FrameMetrics is passive: an idle window is never forced to draw.
  * Sources: Android Display.supportedModes and Window.OnFrameMetricsAvailableListener reference.
  */
-internal suspend fun followWindowRefresh(window: Window, app: FuseApplication, store: FuseStore, fallback: Display? = null): Unit = coroutineScope {
+internal suspend fun followWindowRefresh(window: Window, app: FuseApplication, store: FuseStore, fallback: Display? = null, main: Boolean = false): Unit = coroutineScope {
     val manager = window.context.getSystemService(DisplayManager::class.java)
     fun activeDisplay(): Display? = window.decorView.display ?: fallback
         ?: manager?.getDisplay(Display.DEFAULT_DISPLAY)
     var previous = 0L
     val intervals = ArrayDeque<Long>()
     var publishedAt = 0L
-    val hold = RefreshHold(window)
+    val hold = RefreshHold(window, main)
     val listener = Window.OnFrameMetricsAvailableListener { _, metrics, _ ->
         hold.drew()
         val now = metrics.getMetric(FrameMetrics.VSYNC_TIMESTAMP)
@@ -85,15 +85,21 @@ internal suspend fun followWindowRefresh(window: Window, app: FuseApplication, s
  * (only one the screen switches to without a blink, Android 12 and later); the next input brings
  * the full rate back first. While a film's picture is on screen the rate is never lowered.
  */
-internal class RefreshHold(private val window: Window) {
+internal class RefreshHold(private val window: Window, private val main: Boolean = false) {
     var pin: () -> Float? = { null }
 
-    /** Asks for the calmer rate; false when the screen has none ([preferCalmRate]). */
-    var calm: () -> Boolean = { false }
+    /** Asks for the calmer rate: the rate, or null when the screen has none ([preferCalmRate]). */
+    var calm: () -> Float? = { null }
 
     private enum class Mode { FULL, CALM, RELEASED }
 
     private var mode = Mode.FULL
+        set(value) {
+            field = value
+            publish()
+        }
+    private var fullHz: Float? = null
+    private var calmHz: Float? = null
     private var lastInput = SystemClock.uptimeMillis()
     private var lastDrawn = lastInput
     private var releasedAt = 0L
@@ -127,8 +133,19 @@ internal class RefreshHold(private val window: Window) {
     fun pinNow(): Float? {
         lastInput = SystemClock.uptimeMillis()
         lastDrawn = lastInput
+        fullHz = pin() ?: fullHz
         mode = Mode.FULL
-        return pin()
+        return fullHz
+    }
+
+    /** What this window asks of the screen now, for System health's Power and heat. */
+    private fun publish() {
+        val state = when (mode) {
+            Mode.FULL -> io.github.matiyaaa.fuse.ui.shell.platform.RefreshFact.State.FULL
+            Mode.CALM -> io.github.matiyaaa.fuse.ui.shell.platform.RefreshFact.State.CALM
+            Mode.RELEASED -> io.github.matiyaaa.fuse.ui.shell.platform.RefreshFact.State.RESTING
+        }
+        if (main) asked.value = io.github.matiyaaa.fuse.ui.shell.platform.RefreshFact(state, fullHz, calmHz)
     }
 
     /** A button, stick or touch: the full rate comes back before the frame it causes. */
@@ -150,7 +167,7 @@ internal class RefreshHold(private val window: Window) {
         if (now - lastInput >= CALM_MS && mayCalm()) mode = Mode.CALM else pinNow()
     }
 
-    private fun mayCalm(): Boolean = !FusePlayer.showingVideo && calm()
+    private fun mayCalm(): Boolean = !FusePlayer.showingVideo && calm()?.also { calmHz = it } != null
 
     private fun release() {
         mode = Mode.RELEASED
@@ -168,6 +185,9 @@ internal class RefreshHold(private val window: Window) {
         private const val CHECK_MS = 1_000L
         private const val SETTLE_MS = 500L
         private val holds = WeakHashMap<Window, RefreshHold>()
+
+        /** What the main window asks of its screen now (null before it has asked). Main thread writes. */
+        val asked = kotlinx.coroutines.flow.MutableStateFlow<io.github.matiyaaa.fuse.ui.shell.platform.RefreshFact?>(null)
 
         /** Input reached [window]. Main thread. */
         fun active(window: Window?) {

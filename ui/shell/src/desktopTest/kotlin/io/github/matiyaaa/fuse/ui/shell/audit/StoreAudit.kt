@@ -64,6 +64,13 @@ internal fun AuditDriver.addonsScreens() {
         waitFor("Update All (2)")
         settle(900)
         shoot("every installed app's updates, Update All first")
+        // Update All says every update it would make before it starts.
+        tap(PadButton.A)
+        waitFor("Update 2 Apps?")
+        settle(900)
+        shoot("Update All, each update said first")
+        tap(PadButton.B)
+        waitGone("Update 2 Apps?")
         tap(PadButton.DPAD_DOWN, 2)
         tap(PadButton.A)
         waitFor("Leave Out of Update All")

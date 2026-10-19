@@ -28,6 +28,9 @@ enum class PlaySessionSource {
     IMPORTED,
     /** Played on another device of the same profile, brought in by Fuse Sync. */
     SYNCED,
+
+    /** Played from a Direct entry in Steam, as the Fuse Decky plugin saw Steam start and stop it. */
+    STEAM,
 }
 
 @Serializable

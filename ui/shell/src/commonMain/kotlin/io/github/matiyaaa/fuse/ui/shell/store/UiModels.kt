@@ -164,6 +164,14 @@ data class EmulatorChoice(
     val launchSummary: String?,
     val canLaunch: Boolean,
     val emulatorHomepage: String? = null,
+    /**
+     * What Play does, in one line, before it is pressed: where the game starts and with what (its
+     * core, frame generation), and its newest save put in place first where Fuse keeps saves in
+     * step. Null when nothing starts it here.
+     */
+    val playLine: String? = null,
+    /** The port Play starts it with instead of an emulator, by name, when the person chose one (Play With). */
+    val port: String? = null,
 )
 
 @Immutable
@@ -288,6 +296,15 @@ data class SearchSuggestion(
 /** Where a launch is, for the launch veil: bringing the save up to date (it can still be called off), or starting. */
 enum class LaunchStage { CHECKING_SAVE, STARTING }
 
+/** A game's emulator command for a Steam entry that starts it directly ([LibraryOps.directCommand]). */
+sealed interface DirectCommand {
+    /** [argv] starts it in [emulator] (the program first), in [workingDir], with [env] set. */
+    data class Ready(val emulator: String, val argv: List<String>, val workingDir: String?, val env: Map<String, String>) : DirectCommand
+
+    /** It can't be started without Fuse; [why] says so in a few words. */
+    data class Unavailable(val why: String) : DirectCommand
+}
+
 /** Result of asking to play a game, shown to the user when it didn't simply start. */
 sealed interface LaunchOutcome {
     data object Started : LaunchOutcome
@@ -382,6 +399,9 @@ sealed interface ProblemAction {
 
     /** The library's list of games whose files weren't found. */
     data class ShowMissing(override val label: String = "Show these games") : ProblemAction
+
+    /** Looks over Fuse's entries in Steam and offers to put them right, each where it is. */
+    data class PutSteamRight(override val label: String = "Put Them Right") : ProblemAction
     data class OpenHealth(override val label: String = "System health") : ProblemAction
 
     /** Back to Fuse's own theme with standard motion and no glass or CRT, saved. */
@@ -541,6 +561,113 @@ sealed interface ModSitePage {
     data class Unavailable(val title: String, val reason: String) : ModSitePage
 }
 
+/** The Nexus Mods account on this device: no key yet, whose key it is, or why it couldn't be checked. */
+sealed interface NexusAccount {
+    data object NoKey : NexusAccount
+
+    /** [premium]: Nexus Mods gives this account download links straight away. */
+    data class Ready(val name: String, val premium: Boolean) : NexusAccount
+
+    data class Problem(val reason: String) : NexusAccount
+}
+
+/** Which game on Nexus Mods a library game is: the one chosen, and the ones its list has by that name. */
+data class NexusGames(
+    val linked: io.github.matiyaaa.fuse.integrations.nexus.NexusGame?,
+    val found: List<io.github.matiyaaa.fuse.integrations.nexus.NexusGame>,
+    val query: String,
+    val problem: String? = null,
+)
+
+/** A game's mods on Nexus Mods (its trending, latest added and latest updated), or why there are none. */
+sealed interface NexusModList {
+    data class Ready(
+        val game: io.github.matiyaaa.fuse.integrations.nexus.NexusGame,
+        val lists: Map<io.github.matiyaaa.fuse.integrations.nexus.NexusList, List<io.github.matiyaaa.fuse.integrations.nexus.NexusMod>>,
+        val premium: Boolean,
+    ) : NexusModList
+
+    /** [needsKey]: no key is set yet; [needsGame]: which game on Nexus Mods this is hasn't been chosen. */
+    data class Unavailable(val title: String, val reason: String, val needsKey: Boolean = false, val needsGame: Boolean = false) : NexusModList
+}
+
+/** A mod on Nexus Mods with its files, the kind Fuse adds it as for this game, and whether files download straight away. */
+sealed interface NexusPage {
+    data class Ready(
+        val mod: io.github.matiyaaa.fuse.integrations.nexus.NexusMod,
+        val files: List<io.github.matiyaaa.fuse.integrations.nexus.NexusFile>,
+        val kind: io.github.matiyaaa.fuse.launch.patches.EnhancementKind?,
+        val premium: Boolean,
+    ) : NexusPage
+
+    data class Unavailable(val title: String, val reason: String) : NexusPage
+}
+
+/** Another device in the household hosting a game now: who, on which device, since when, and where. */
+data class TogetherHost(val deviceId: String, val device: String, val who: String, val since: Long, val address: String?, val port: Int)
+
+/** An emulator here that keeps a RetroAchievements sign-in: who it is signed in as ([user], null for no one), whether Fuse signed it in, or why Fuse can't. */
+@Immutable
+data class EmulatorSignIn(val emulator: String, val family: String, val user: String?, val byFuse: Boolean, val problem: String? = null)
+
+/** The emulators' RetroAchievements sign-ins on this device, for the account in use ([account], null without one). */
+sealed interface EmulatorSignIns {
+    data class Ready(val account: String?, val emulators: List<EmulatorSignIn>) : EmulatorSignIns
+    data class Unavailable(val reason: String) : EmulatorSignIns
+}
+
+/** What signing the emulators in did: the ones signed in, the ones Fuse couldn't (with why), or why nothing was tried. */
+data class EmulatorSignInResult(
+    val signedIn: List<String> = emptyList(),
+    val failed: List<Pair<String, String>> = emptyList(),
+    val problem: String? = null,
+)
+
+/**
+ * Playing a game with others on this device: its emulator's way of doing it, whether that emulator
+ * is set up for it (and what isn't), who in the household hosts it now, and what Fuse can do.
+ */
+sealed interface TogetherView {
+    data class Ready(
+        val title: String,
+        val emulator: String,
+        val way: io.github.matiyaaa.fuse.launch.online.TogetherWay,
+        /** What the emulator still needs for it, in words; empty when it is set up. */
+        val missing: List<String>,
+        /** Fuse can start it hosting here (RetroArch, PPSSPP on a computer). */
+        val canHost: Boolean,
+        /** Others in the household hosting it now (empty without Fuse One). */
+        val hosts: List<TogetherHost>,
+        /** This device is in a household (Fuse One), so hosting reaches the others. */
+        val household: Boolean,
+        /** The RPCN account RPCS3 signs in with, for its games; null for other emulators or none. */
+        val rpcn: String?,
+        /** The emulator's family (`azahar`, `cemu`), for what is said of its own way. */
+        val family: String = "",
+        /** For a Wii game in Dolphin: whether its WiiConnect24 channels go through WiiLink; null for any other game. */
+        val wiiLink: Boolean? = null,
+        /** Fuse changed this emulator's settings for playing together, and can put them back. */
+        val canPutBack: Boolean,
+    ) : TogetherView
+
+    data class Unavailable(val title: String, val reason: String) : TogetherView
+}
+
+/** How a game starts to be played together. */
+sealed interface Together {
+    /** Hosting here, for the household to join. */
+    data object Host : Together
+
+    /** Joining the game [host] hosts. */
+    data class Join(val host: TogetherHost) : Together
+
+    /** Joining by an address the person typed (someone outside Fuse One). */
+    data class JoinAddress(val address: String) : Together
+
+    /** Joining a Dolphin game hosted over the internet, by the host code its traversal server gave it. */
+    data class JoinCode(val code: String) : Together
+}
+
 /**
  * What EmuCoreX's catalogues have for a PS2 game: texture packs made for its disc's [serial] and
  * pnach files for its [crc], each with the kind Fuse adds it as (null: not one this game's emulator
@@ -580,6 +707,42 @@ sealed interface EmulatorSettingsView {
     data class Unavailable(val title: String, val reason: String) : EmulatorSettingsView
 }
 
+/** One of every setting (Fuse Tune), with its value here and where that comes from. */
+data class TuneValue(
+    val setting: io.github.matiyaaa.fuse.launch.settings.TuneSetting,
+    /** What the file holds or, with nothing set, the emulator's default (null when it works that out when it runs). */
+    val value: String?,
+    val source: io.github.matiyaaa.fuse.launch.settings.SettingSource,
+    /** What every game has (for a game's own view), the same way. */
+    val everyGame: String?,
+    /** Why it can't be changed here: the installed version is unknown and only some releases have it. */
+    val locked: String? = null,
+)
+
+/** Every setting in one part of the emulator's settings, in the order its code lists them. */
+data class TuneSection(val id: String, val title: String, val values: List<TuneValue>)
+
+sealed interface EverySettingView {
+    data class Ready(
+        val emulator: String,
+        /** The game these are for; null when they are for every game. */
+        val game: String?,
+        /** The release of the emulator's code these were read from (the installed version's, or the nearest read). */
+        val release: String?,
+        val sections: List<TuneSection>,
+        /** Fuse changed something in these files that it can put back. */
+        val canRestore: Boolean,
+        /** Said before a game's own settings file is made, when making it changes something else (RPCS3's database settings). */
+        val gameFileNote: String? = null,
+        /** Fuse can't tell which version is installed: every release's settings are shown, those only some have locked. */
+        val versionUnknown: Boolean = false,
+    ) : EverySettingView {
+        val count: Int get() = sections.sumOf { it.values.size }
+    }
+
+    data class Unavailable(val title: String, val reason: String) : EverySettingView
+}
+
 /** Places [FamilyMoves.offers] to bring an emulator's family's things from, and what was brought already. */
 data class FamilyMoves(val offers: List<io.github.matiyaaa.fuse.sync.FamilyFolder>, val done: List<FamilyMoveDone>)
 
@@ -604,7 +767,15 @@ sealed interface FamilyMovePreview {
 }
 
 /** One setting profile a game can be given: [active] when every value in it is the game's now. */
-data class SettingProfileView(val id: String, val name: String, val about: String, val own: Boolean, val active: Boolean)
+data class SettingProfileView(
+    val id: String,
+    val name: String,
+    val about: String,
+    val own: Boolean,
+    val active: Boolean,
+    /** For a profile made for a device: how many lines its screen shows. */
+    val lines: Int? = null,
+)
 
 /** What RPCS3's compatibility list says about a PS3 game, asked for by the user. */
 sealed interface CompatibilityAnswer {

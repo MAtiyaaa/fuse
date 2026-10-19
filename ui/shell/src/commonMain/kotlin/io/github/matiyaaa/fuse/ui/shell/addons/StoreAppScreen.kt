@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import io.github.matiyaaa.fuse.launch.linux.LinuxSuites
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.ButtonKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.Chip
@@ -56,13 +57,19 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.fuseline.PageEffect
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineScrollBy
+import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
+import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
+import io.github.matiyaaa.fuse.ui.shell.components.agoText
+import io.github.matiyaaa.fuse.ui.shell.store.EarlierVersion
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.home.bytesText
 import io.github.matiyaaa.fuse.ui.shell.notes.NotesWell
 import io.github.matiyaaa.fuse.ui.shell.notes.noteLines
 import io.github.matiyaaa.fuse.ui.shell.store.Availability
+import io.github.matiyaaa.fuse.ui.shell.store.Managed
 import io.github.matiyaaa.fuse.ui.shell.store.ReleaseCheck
 import io.github.matiyaaa.fuse.ui.shell.store.SourceKind
 import io.github.matiyaaa.fuse.ui.shell.store.Standing
@@ -126,15 +133,14 @@ private fun StorePage(app: AppState, state: StoreState, item: StoreApp) {
                 )
             })
         }
-        installed?.record?.previousVersion?.takeIf { job == null || !job.active }?.let { back ->
-            add(PageButton("Go Back to $back", FuseIcons.Undo, ButtonKind.SECONDARY) {
-                app.confirm = ConfirmSpec(
-                    title = "Go back to ${item.name} $back?",
-                    message = "Fuse kept the version this update replaced and puts it back in place of ${installed.versionName ?: "this one"}. ${item.name}'s own settings and saves, and your games, stay where they are.",
-                    confirmLabel = "Go Back",
-                    onConfirm = { ops.rollBack(key) },
-                )
-            })
+        installed?.record?.earlier?.takeIf { it.isNotEmpty() && (job == null || !job.active) }?.let { earlier ->
+            val label = if (earlier.size == 1) "Go Back to ${earlier.single().version ?: "the Version You Had"}" else "Go Back to an Earlier Version"
+            add(PageButton(label, FuseIcons.Undo, ButtonKind.SECONDARY) { goBack(app, key, item.name, installed.versionName, earlier) })
+        }
+        // Which builds it follows (stable or pre-releases) and the other builds of the same emulator.
+        val channel = key in state.channels && state.managedBy(key) == Managed.FUSE
+        if (channel || item.otherBuilds.isNotEmpty()) {
+            add(PageButton(if (item.otherBuilds.isNotEmpty()) "Builds" else "Channel", FuseIcons.GitFork, ButtonKind.GHOST) { builds(app, state, item, channel) })
         }
         add(PageButton(if (item.sourceKind == SourceKind.GITHUB) "GitHub" else "Website", FuseIcons.External, ButtonKind.GHOST) { app.platform.openUrl(item.sourceUrl) })
         add(PageButton("Check again", FuseIcons.Refresh, ButtonKind.GHOST, busy = check == ReleaseCheck.Checking) { ops.check(key, force = true) })
@@ -223,8 +229,12 @@ private fun StorePage(app: AppState, state: StoreState, item: StoreApp) {
                 item.availability == Availability.MANUAL ->
                     FuseIcons.External to "${item.name}'s releases come from a source Fuse doesn't read, so it's installed by hand from its page."
                 release?.manual != null && job == null -> FuseIcons.External to release.manual
+                installed != null && state.managedBy(key) == Managed.EMUDECK ->
+                    FuseIcons.Info to "EmuDeck installed ${item.name} and keeps it up to date, so Fuse leaves its updates to EmuDeck and never puts a second copy beside it."
                 installed != null && state.standing(key) == Standing.UNKNOWN && release != null && job == null ->
                     FuseIcons.Info to "Fuse can't compare the installed version with the newest release, so it won't claim an update. Installing from here once lets Fuse follow it exactly."
+                installed == null && LinuxSuites.RETRODECK in state.suites && key in LinuxSuites.RETRODECK_EMULATORS ->
+                    FuseIcons.Info to "RetroDECK has a ${item.name} of its own inside it, which it keeps up to date. Installing here gives Fuse a separate copy to start your games in."
                 else -> null
             }
             if (note != null) {
@@ -327,6 +337,7 @@ private fun details(state: StoreState, item: StoreApp): List<Pair<String, String
             else -> "Found on this computer"
         },
         "Newest release" to newest,
+        ("Follows" to if (item.key in state.prerelease) "Pre-releases, nightly and preview" else "Stable releases").takeIf { item.key in state.channels },
         release?.publishedAt?.let { "Released" to dateText(it) },
         release?.file?.let { f -> "Download" to (f.name + (f.sizeBytes?.let { "  ·  ${bytesText(it)}" } ?: "")) },
         "Source" to when (item.sourceKind) {
@@ -336,6 +347,8 @@ private fun details(state: StoreState, item: StoreApp): List<Pair<String, String
         },
         ("Package" to (item.packageName ?: "Learnt when it is first installed")).takeIf { !state.desktop },
         installed?.packageName?.takeIf { state.desktop }?.let { "Installed at" to it },
+        installed?.takeIf { state.desktop }?.let { "Kept up to date by" to keeperText(state.managedBy(item.key)) },
+        state.room[item.key]?.let { "Space" to it },
         systemNames(item.systems, 12).takeIf { it.isNotEmpty() }?.let { "Plays" to it.joinToString(", ") },
         inFuseText(item.inFuse)?.let { "In Fuse" to it },
         when {
@@ -368,6 +381,52 @@ internal fun dateText(iso: String): String {
     return "${m.groupValues[3].trimStart('0')} $month ${m.groupValues[1]}"
 }
 
+/**
+ * The builds an app can follow: its channel (stable releases or pre-releases, where its developers
+ * publish both) and the other builds of the same emulator in the Store, each opening its own page.
+ */
+internal fun builds(app: AppState, state: StoreState, item: StoreApp, channel: Boolean) {
+    val ops = app.store.appStore
+    val pre = item.key in state.prerelease
+    val options = buildList {
+        if (channel) {
+            add(MenuAction(
+                "build.stable", "Stable Releases", FuseIcons.PackageCheck, detail = "The releases its developers mark as stable",
+                trailing = Trailing.Check(!pre), section = "Channel", onSelect = { app.choice = null; if (pre) ops.setPrerelease(item.key, false) },
+            ))
+            add(MenuAction(
+                "build.pre", "Pre-releases", FuseIcons.GitCompare, detail = "Nightly and preview builds as they are published. Newer, and less tested",
+                trailing = Trailing.Check(pre), section = "Channel", onSelect = { app.choice = null; if (!pre) ops.setPrerelease(item.key, true) },
+            ))
+        }
+        for (k in item.otherBuilds) {
+            val other = state.app(k) ?: continue
+            add(MenuAction(
+                "build.$k", other.name, FuseIcons.GitFork,
+                detail = listOfNotNull(other.about, "Installed".takeIf { k in state.installed }).joinToString("  ·  "),
+                trailing = Trailing.Chevron, section = "Other Builds of ${item.family ?: item.name}",
+                onSelect = { app.choice = null; app.go(io.github.matiyaaa.fuse.ui.shell.app.Route.StoreApp(k)) },
+            ))
+        }
+    }
+    app.choice = ChoiceSpec(
+        title = "${item.name}'s Builds",
+        message = if (item.otherBuilds.isEmpty()) "Which of ${item.name}'s releases Fuse installs and updates to." else
+            "${item.name} is one of ${item.otherBuilds.size + 1} builds carrying ${item.family} on. Each installs on its own, beside the others.",
+        icon = FuseIcons.GitFork,
+        options = options,
+    )
+}
+
+/** Who updates an installed program, for its page. */
+internal fun keeperText(managed: Managed): String = when (managed) {
+    Managed.FUSE -> "Fuse, from its releases"
+    Managed.FLATPAK -> "Flatpak, from its own remote"
+    Managed.SYSTEM -> "Your system's packages"
+    Managed.ELSEWHERE -> "You: Fuse found it and leaves it as it is"
+    Managed.EMUDECK -> "EmuDeck, in its Manage Emulators page"
+}
+
 /** What Fuse does with an app once it is installed, for its page; null when Fuse doesn't use it. */
 internal fun inFuseText(inFuse: io.github.matiyaaa.fuse.ui.shell.store.InFuse): String? = when (inFuse) {
     io.github.matiyaaa.fuse.ui.shell.store.InFuse.LAUNCHES_GAMES -> "Starts your games for the systems it plays"
@@ -375,4 +434,34 @@ internal fun inFuseText(inFuse: io.github.matiyaaa.fuse.ui.shell.store.InFuse): 
     io.github.matiyaaa.fuse.ui.shell.store.InFuse.STREAMING -> "Listed under Streaming in Apps"
     io.github.matiyaaa.fuse.ui.shell.store.InFuse.TOOL -> "Listed under Tools in Apps"
     io.github.matiyaaa.fuse.ui.shell.store.InFuse.NOTHING -> null
+}
+
+/**
+ * Going back to a version Fuse kept: straight to it when there is one, else a choice of every one
+ * it kept (newest first), each asked first. What is in place now is kept in turn.
+ */
+internal fun goBack(app: AppState, key: String, name: String, current: String?, earlier: List<EarlierVersion>) {
+    val ops = app.store.appStore
+    fun confirm(v: EarlierVersion) {
+        app.confirm = ConfirmSpec(
+            title = "Go back to $name ${v.version ?: "as it was"}?",
+            message = "Fuse puts the version it kept back in place of ${current ?: "this one"}, and keeps ${current ?: "this one"} in turn to come back to. " +
+                "$name's own settings and saves, and your games, stay where they are.",
+            confirmLabel = "Go Back",
+            onConfirm = { ops.rollBackTo(key, v.id) },
+        )
+    }
+    if (earlier.size == 1) return confirm(earlier.single())
+    app.choice = ChoiceSpec(
+        title = "Go Back to an Earlier Version",
+        icon = FuseIcons.Undo,
+        message = "Fuse keeps the last ${earlier.size} versions $name's updates replaced.",
+        options = earlier.map { v ->
+            MenuAction(
+                "back.${v.id}", v.version?.let { "Version $it" } ?: "The Version You Had", FuseIcons.Undo,
+                detail = "Kept ${agoText(v.keptAt)}",
+                onSelect = { app.choice = null; confirm(v) },
+            )
+        },
+    )
 }

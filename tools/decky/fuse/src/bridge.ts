@@ -82,6 +82,35 @@ export interface Emulators extends Failure {
   busy?: number;
 }
 
+/** A change Fuse asks Steam's running client to make (bridge protocol 2). */
+export interface SteamChange {
+  id: number;
+  op: "ADD" | "UPDATE" | "REMOVE" | "RUN";
+  gameId: number;
+  appId?: number | null;
+  name: string;
+  exe: string;
+  startDir: string;
+  launchOptions: string;
+  /** The pictures Fuse has for it: each kind (capsule, hero, logo, header, icon) to its format, fetched with [changeArt]. */
+  art?: Record<string, string>;
+  /** Where its logo sits over the hero, as Steam's LogoPosition has it; set only where the person has no position of their own. */
+  logo?: { pinnedPosition: "BottomLeft" | "UpperLeft" | "CenterCenter" | "UpperCenter" | "BottomCenter"; nWidthPct: number; nHeightPct: number };
+}
+
+export interface SteamChanges extends Failure {
+  changes?: SteamChange[];
+  /** Fuse's Direct entries, by their id in Steam, whose starts and stops are noted for their time. */
+  watch?: number[];
+  /** What Fuse would say on its own screen while a game is in front of it, for Steam to show. */
+  notices?: string[];
+}
+
+export interface ChangeArt extends Failure {
+  format?: "png" | "jpg";
+  data?: string;
+}
+
 export const hello = callable<[], Hello>("hello");
 export const status = callable<[], Status>("status");
 export const steamGame = callable<[appId: number], SteamGame>("steam_game");
@@ -95,6 +124,11 @@ export const emulators = callable<[], Emulators>("emulators");
 export const updateAllEmulators = callable<[], Result>("emulators_update_all");
 export const installAllEmulators = callable<[], Result>("emulators_install_all");
 export const uninstallAllEmulators = callable<[], Result>("emulators_uninstall_all");
+export const steamChanges = callable<[], SteamChanges>("steam_changes");
+export const changeArt = callable<[changeId: number, kind: string], ChangeArt>("change_art");
+export const watched = callable<[], { watch?: number[] }>("watched");
+export const played = callable<[appId: number, running: boolean], { noted?: boolean }>("played");
+export const changeDone = callable<[changeId: number, ok: boolean, appId: number | null, message: string | null], Result>("change_done");
 
 /** The words to show for an answer that failed; null when it didn't. */
 export function failure(answer: Failure | null | undefined): string | null {

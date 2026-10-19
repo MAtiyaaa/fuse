@@ -14,15 +14,16 @@ import io.github.matiyaaa.fuse.ui.shell.app.Route
 import kotlinx.coroutines.launch
 
 /**
- * Save Sync on this device: one of Fuse One, RomM and Syncthing moves its saves, or none. Two would
- * move the same files and fight over them, so choosing one turns the others' save sync off here;
- * every other device keeps its own choice.
+ * Save Sync on this device: one of Fuse One, RomM and Syncthing moves its saves, RomM those of games
+ * from RomM and Fuse One the rest, or none. Two moving the same game's save would fight over it, so
+ * choosing one turns the others' save sync off here; every other device keeps its own choice.
  */
 internal object SaveProviders {
-    /** The ways this device can offer: Fuse One, RomM and Syncthing where Fuse has them, and Off. */
+    /** The ways this device can offer: Fuse One, RomM (and the two together) and Syncthing where Fuse has them, and Off. */
     fun offered(app: AppState): List<SaveProvider> = buildList {
         if (app.store.sync.service != null) add(SaveProvider.FUSE_ONE)
         if (app.store.romm.supported) add(SaveProvider.ROMM)
+        if (app.store.sync.service != null && app.store.romm.supported) add(SaveProvider.ROMM_THEN_FUSE_ONE)
         if (app.store.syncthing != null) add(SaveProvider.SYNCTHING)
         add(SaveProvider.OFF)
     }
@@ -30,6 +31,7 @@ internal object SaveProviders {
     fun icon(p: SaveProvider): ImageVector = when (p) {
         SaveProvider.FUSE_ONE -> FuseMarks.FuseOne
         SaveProvider.ROMM -> FuseIcons.Server
+        SaveProvider.ROMM_THEN_FUSE_ONE -> FuseIcons.Layers2
         SaveProvider.SYNCTHING -> FuseIcons.FolderSync
         SaveProvider.OFF -> FuseIcons.CloudOff
     }
@@ -37,6 +39,7 @@ internal object SaveProviders {
     fun detail(p: SaveProvider): String = when (p) {
         SaveProvider.FUSE_ONE -> "Fuse's own: each person's saves, play time and save history, from your host"
         SaveProvider.ROMM -> "Games from RomM keep their save and save states in step with RomM's"
+        SaveProvider.ROMM_THEN_FUSE_ONE -> "RomM moves the saves of games from RomM, and Fuse One every other game's"
         SaveProvider.SYNCTHING -> "Your emulators' save folders, through the Syncthing you run"
         SaveProvider.OFF -> "Saves stay on this device. Your other devices keep syncing"
     }
@@ -55,7 +58,11 @@ internal fun saveProviderRow(app: AppState, section: String? = null, id: String 
     val now = SaveProviders.current(app)
     return MenuAction(
         id, "Save Sync", SaveProviders.icon(now),
-        detail = if (now == SaveProvider.OFF) "Off on this device: saves stay here" else "Saves move with ${now.label} on this device. Only one moves saves at a time",
+        detail = when (now) {
+            SaveProvider.OFF -> "Off on this device: saves stay here"
+            SaveProvider.ROMM_THEN_FUSE_ONE -> "RomM moves the saves of games from RomM here, and Fuse One the rest. Never both for one game"
+            else -> "Saves move with ${now.label} on this device. Only one moves saves at a time"
+        },
         trailing = Trailing.Value(now.label), section = section,
         onSelect = { chooseSaveProvider(app) },
     )
@@ -92,6 +99,7 @@ private fun chosenWords(app: AppState, p: SaveProvider): String {
     return when (p) {
         SaveProvider.FUSE_ONE -> if (prefs.sync.enabled && prefs.sync.role.isNotEmpty()) "Fuse One moves this device's saves" else "Fuse One moves this device's saves once it's set up"
         SaveProvider.ROMM -> if (prefs.romm.enabled && prefs.romm.configured) "RomM moves this device's saves and save states for games from RomM" else "RomM moves this device's saves and save states once you sign in"
+        SaveProvider.ROMM_THEN_FUSE_ONE -> if (prefs.romm.enabled && prefs.romm.configured) "RomM moves the saves of games from RomM, and Fuse One the rest" else "RomM moves the saves of games from RomM once you sign in, and Fuse One the rest"
         SaveProvider.SYNCTHING -> "Syncthing moves this device's save folders"
         SaveProvider.OFF -> "Save Sync is off on this device. Your other devices keep syncing"
     }
@@ -102,7 +110,7 @@ internal fun setUpRoute(app: AppState, p: SaveProvider): Route? {
     val prefs = app.store.prefs.value
     return when (p) {
         SaveProvider.SYNCTHING -> Route.SyncthingSettings
-        SaveProvider.ROMM -> if (prefs.romm.enabled && prefs.romm.configured) null else Route.RommSetup(pairing = true)
+        SaveProvider.ROMM, SaveProvider.ROMM_THEN_FUSE_ONE -> if (prefs.romm.enabled && prefs.romm.configured) null else Route.RommSetup(pairing = true)
         else -> null
     }
 }

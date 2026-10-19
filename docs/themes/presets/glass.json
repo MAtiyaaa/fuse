@@ -31,6 +31,7 @@
   "sound": "soft",
   "quickMenu": "glass",
   "widgets": "glass",
+  "tiles": "gloss",
   "glass": {
     "enabled": true,
     "blur": 28.0,

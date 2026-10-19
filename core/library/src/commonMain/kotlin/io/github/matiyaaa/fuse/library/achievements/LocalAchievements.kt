@@ -252,7 +252,7 @@ class LocalAchievements(private val fs: FuseFileSystem) {
      * The trophies a trophy set's configuration ([conf], PS4's TROP.XML or the Vita's TROP.SFM) lists,
      * read attribute by attribute, with [unlocked]'s times (by trophy id) and pictures in [icons].
      */
-    private fun confItems(conf: String, unlocked: Map<Int, Long>, icons: String): List<LocalAchievement> =
+    private fun confItems(conf: String, unlocked: Map<Int, Long>, icons: String?): List<LocalAchievement> =
         TROPHY_BLOCK.findAll(conf).mapNotNull { m ->
             val attrs = m.groupValues[1]
             val body = m.groupValues[2]
@@ -263,7 +263,7 @@ class LocalAchievements(private val fs: FuseFileSystem) {
                 "S" -> "silver"
                 else -> "bronze"
             }
-            val icon = FsPath.join(icons, "TROP${number.toString().padStart(3, '0')}.PNG")
+            val icon = icons?.let { FsPath.join(it, "TROP${number.toString().padStart(3, '0')}.PNG") }
             LocalAchievement(
                 id = number.toString(),
                 name = NAME.find(body)?.groupValues?.get(1)?.let(::xml) ?: "Trophy",
@@ -276,6 +276,41 @@ class LocalAchievements(private val fs: FuseFileSystem) {
                 grade = grade,
             )
         }.toList()
+
+    /**
+     * A PS4 game's trophies from the game itself, before shadPS4 has set them out in its user folder
+     * (it does when the game first opens them): `sce_sys/trophy/trophy00.trp` in one of
+     * [gameFolders] ([Ps4Trp]), decrypted with the person's own trophy key as shadPS4 keeps it in
+     * [userDirs] (`keys.json`'s `TrophyKeySet.ReleaseTrophyKey`, `src/common/key_manager.cpp`, else
+     * an older `config.toml`'s `[Keys] TrophyKey`). Nothing is earned yet (shadPS4 records that) and
+     * no pictures come with them; the key is only read. Only reads.
+     */
+    suspend fun ps4TrophiesFromGame(gameFolders: List<String>, userDirs: List<String>, npCommIds: List<String>): LocalAchievementSet? {
+        val id = npCommIds.firstOrNull() ?: return null
+        val key = userDirs.firstNotNullOfOrNull { trophyKey(it) } ?: return null
+        for (folder in gameFolders) {
+            val path = FsPath.join(folder, "sce_sys", "trophy", "trophy00.trp")
+            val header = runCatching { fs.readBytes(path, 0, Ps4Trp.HEADER) }.getOrNull() ?: continue
+            val (count, size) = Ps4Trp.entryCount(header) ?: continue
+            val table = runCatching { fs.readBytes(path, Ps4Trp.HEADER.toLong(), count * size) }.getOrNull() ?: continue
+            val entry = Ps4Trp.conf(Ps4Trp.entries(table, count, size))?.takeIf { it.length <= MAX_CONF } ?: continue
+            val esfm = runCatching { fs.readBytes(path, entry.offset, entry.length.toInt()) }.getOrNull() ?: continue
+            val conf = Ps4Trp.decrypt(esfm, key, id) ?: continue
+            val items = confItems(conf, emptyMap(), icons = null)
+            if (items.isEmpty()) continue
+            return LocalAchievementSet(LocalAchievementSource.PS4_TROPHIES, TITLE.find(conf)?.groupValues?.get(1)?.let(::xml), items)
+        }
+        return null
+    }
+
+    /** The trophy key shadPS4 has for the person in its user folder [user], or null. */
+    private suspend fun trophyKey(user: String): ByteArray? {
+        read(FsPath.join(user, "keys.json"), MAX_CONF)?.decodeToString()?.let { json ->
+            Ps4Trp.key(TROPHY_KEY_JSON.find(json)?.groupValues?.get(1))?.let { return it }
+        }
+        val toml = read(FsPath.join(user, "config.toml"), MAX_CONF)?.decodeToString() ?: return null
+        return Ps4Trp.key(TROPHY_KEY_TOML.find(toml)?.groupValues?.get(1))
+    }
 
     /** The trophy set ids (NPWRxxxxx_00) a PS4 game's npbind.dat names. */
     fun npCommIds(npbind: ByteArray): List<String> =
@@ -482,6 +517,10 @@ class LocalAchievements(private val fs: FuseFileSystem) {
         val NAME = Regex("""<name>(.*?)</name>""", RegexOption.DOT_MATCHES_ALL)
         val DETAIL = Regex("""<detail>(.*?)</detail>""", RegexOption.DOT_MATCHES_ALL)
         val NPWR = Regex("""NPWR\d{5}_\d{2}""")
+
+        // shadPS4's trophy key: keys.json (v.0.20.0) as nlohmann writes it, or an older config.toml's [Keys].
+        val TROPHY_KEY_JSON = Regex(""""ReleaseTrophyKey"\s*:\s*"([0-9A-Fa-f]{32})"""")
+        val TROPHY_KEY_TOML = Regex("""(?m)^\s*TrophyKey\s*=\s*["']([0-9A-Fa-f]{32})["']""")
         val NUMERIC = Regex("""&#(\d+);""")
         val VITA_TITLE = Regex("""[A-Z]{4}\d{5}""")
         val X360_TITLE = Regex("""[0-9A-F]{8}""")

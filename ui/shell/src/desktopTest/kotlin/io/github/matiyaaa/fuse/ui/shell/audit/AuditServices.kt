@@ -138,11 +138,16 @@ internal class AuditServices(
     override val desktopApps: io.github.matiyaaa.fuse.ui.shell.store.DesktopInstaller? =
         if (desktop) AuditDesktopInstaller(host, File(base.cacheDir, "store-desktop")) else null
 
+    /** Fuse Ports on a computer: the real list Fuse carries, and nothing ever written or run. */
+    override val portFiles: io.github.matiyaaa.fuse.ui.shell.store.PortFiles? =
+        if (desktop) AuditPortFiles(if (host == Host.WINDOWS) "windows" else "macos") else null
+
     /** The made-up Jellyfin server everywhere; the Store's catalogue where there is a Store. */
     override val http: io.ktor.client.HttpClient =
         io.ktor.client.HttpClient(io.ktor.client.engine.mock.MockEngine { request ->
             AuditJellyfin.answer(this, request)
                 ?: AuditGameBanana.answer(this, request)
+                ?: AuditNexus.answer(this, request)
                 ?: AuditHowLongToBeat.answer(this, request)
                 ?: AuditEmuCoreX.answer(this, request)
                 ?: (if (host == Host.ANDROID || desktop) AuditStore.answer(this, request) else null)
@@ -506,7 +511,7 @@ internal class AuditDesktopInstaller(override val host: Host, private val dir: F
  * Steam on a Linux computer, with Fuse not yet in its library: closed, or [open] in Game Mode with
  * Fuse running inside it ([closesFuse]), where adding Fuse restarts Steam and Fuse with it.
  */
-internal class AuditSteam(private val open: Boolean = false, override val closesFuse: Boolean = false) : io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration {
+internal class AuditSteam(private val open: Boolean = false, override val closesFuse: Boolean = false, override val directEntries: Boolean = false) : io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration {
     @Volatile private var inLibrary = false
     override val gameMode: Boolean = closesFuse
     override suspend fun steamRunning(): Boolean = open
@@ -545,6 +550,28 @@ internal class AuditSteam(private val open: Boolean = false, override val closes
         if (gameIds == null) games.clear() else games -= gameIds
         return Result.success("Out of Steam's library.")
     }
+    override suspend fun entryStarts(games: List<io.github.matiyaaa.fuse.library.steam.SteamGameEntry>) =
+        games.associate { it.gameId to Triple("\"/home/deck/Applications/Fuse.AppImage\"", "\"/home/deck/Applications\"", "--run ${it.gameId}") }
+
+    // The person's own shortcuts: Game Boy Advance games through RetroArch's Flatpak, GameCube ones with frame generation.
+    override suspend fun habits(files: Map<String, Long>, systems: Map<Long, String>) = listOf(
+        io.github.matiyaaa.fuse.library.steam.SteamHabit(
+            "Game Boy Advance", "flatpak", "\"/usr/bin/flatpak\"", "\"/\"", "run org.libretro.RetroArch -L /home/deck/.var/app/org.libretro.RetroArch/config/retroarch/cores/mgba_libretro.so ", "",
+            io.github.matiyaaa.fuse.library.steam.SteamQuoting.DOUBLE, shortcuts = 12,
+        ),
+        io.github.matiyaaa.fuse.library.steam.SteamHabit(
+            "Nintendo GameCube", "dolphin-emu.sh", "\"/home/deck/Emulation/tools/launchers/dolphin-emu.sh\"", "\"/home/deck\"", "-b -e ", "",
+            io.github.matiyaaa.fuse.library.steam.SteamQuoting.SINGLE, frameGeneration = io.github.matiyaaa.fuse.library.steam.SteamFrameWrapper("LSFG_PROCESS=fuse ~/lsfg", null), shortcuts = 3,
+        ),
+    )
+
+    // The person's own collections: two are the ones Fuse makes for a system, by another name.
+    override suspend fun theirCollections() = listOf(
+        io.github.matiyaaa.fuse.library.steam.SteamCollection("uc-gba", "GBA", listOf(1L, 2L, 3L)),
+        io.github.matiyaaa.fuse.library.steam.SteamCollection("uc-ps1", "PlayStation", listOf(4L)),
+        io.github.matiyaaa.fuse.library.steam.SteamCollection("uc-couch", "Couch Co-op", listOf(5L, 6L)),
+    )
+
     override val canUndoGames: Boolean get() = undo != null
     override suspend fun undoGames(): Result<String> {
         val back = undo ?: return Result.failure(IllegalStateException("There's no change of Fuse's to undo."))
@@ -715,6 +742,48 @@ internal object AuditGameBanana {
     }
 }
 
+/**
+ * Nexus Mods as the audit has it, for the made-up PS2 game Sky Racer: an account that isn't
+ * Premium, two games of that name, its lists, and one mod with a file of each kind Fuse meets.
+ */
+internal object AuditNexus {
+    private const val GAMES = """[{"id":8101,"domain_name":"skyracer","name":"Sky Racer","mods":214},
+        {"id":8102,"domain_name":"skyracer2","name":"Sky Racer 2","mods":61},{"id":8103,"domain_name":"harbourlights","name":"Harbour Lights","mods":12}]"""
+    private fun mod(id: Int, name: String, author: String, version: String, endorsements: Int, summary: String) =
+        """{"mod_id":$id,"domain_name":"skyracer","name":"$name","summary":"$summary","version":"$version","author":"$author",
+            "updated_timestamp":1790000000,"endorsement_count":$endorsements,"contains_adult_content":false,"available":true,"status":"published"}"""
+    private val TRENDING = listOf(
+        mod(301, "Clear Skies HD Textures", "Wren", "2.1", 1_840, "Every sky and cloud texture redrawn at four times the size, for PCSX2's texture replacement."),
+        mod(302, "Readable Track Signs", "Ilse", "1.4", 512, "The track signs and the lap counter, sharp at any resolution."),
+    )
+    private val LATEST = listOf(
+        mod(305, "Night Circuit Lighting", "Dov", "0.9", 38, "Warmer street lights for the night circuits."),
+        mod(302, "Readable Track Signs", "Ilse", "1.4", 512, "The track signs and the lap counter, sharp at any resolution."),
+    )
+    private const val FILES = """{"files":[
+        {"file_id":9001,"name":"Clear Skies HD","file_name":"Clear Skies HD-301-2-1.zip","version":"2.1","size_kb":284000,"category_name":"MAIN","uploaded_timestamp":1790000000,"is_primary":true},
+        {"file_id":9002,"name":"Clear Skies, Softer Clouds","file_name":"Clear Skies Soft-301-2-1.zip","version":"2.1","size_kb":131000,"category_name":"OPTIONAL","uploaded_timestamp":1789990000,"is_primary":false},
+        {"file_id":9003,"name":"Clear Skies HD (7z)","file_name":"Clear Skies HD-301-2-1.7z","version":"2.1","size_kb":201000,"category_name":"MISCELLANEOUS","uploaded_timestamp":1789980000,"is_primary":false},
+        {"file_id":8990,"name":"Clear Skies HD","file_name":"Clear Skies HD-301-2-0.zip","version":"2.0","size_kb":276000,"category_name":"OLD_VERSION","uploaded_timestamp":1780000000,"is_primary":false}],"file_updates":[]}"""
+
+    fun answer(scope: io.ktor.client.engine.mock.MockRequestHandleScope, request: io.ktor.client.request.HttpRequestData): io.ktor.client.request.HttpResponseData? {
+        if (request.url.host != "api.nexusmods.com") return null
+        val path = request.url.encodedPath
+        val body = when (path) {
+            "/v1/users/validate.json" -> """{"user_id":42,"name":"Rowan","is_premium":false,"is_supporter":false}"""
+            "/v1/games.json" -> GAMES
+            "/v1/games/skyracer/mods/trending.json" -> TRENDING.joinToString(",", "[", "]")
+            "/v1/games/skyracer/mods/latest_added.json", "/v1/games/skyracer/mods/latest_updated.json" -> LATEST.joinToString(",", "[", "]")
+            "/v1/games/skyracer/mods/301.json" -> TRENDING.first()
+            "/v1/games/skyracer/mods/301/files.json" -> FILES
+            else -> return null
+        }
+        return with(scope) {
+            respond(body, io.ktor.http.HttpStatusCode.OK, io.ktor.http.headersOf(io.ktor.http.HttpHeaders.ContentType, "application/json"))
+        }
+    }
+}
+
 /** HowLongToBeat as Fuse asks it: a token, then a search that knows the library's made-up games. */
 internal object AuditHowLongToBeat {
     private const val GAMES = """{"count":2,"data":[
@@ -732,4 +801,23 @@ internal object AuditHowLongToBeat {
             respond(body, io.ktor.http.HttpStatusCode.OK, io.ktor.http.headersOf(io.ktor.http.HttpHeaders.ContentType, "application/json"))
         }
     }
+}
+
+/** Fuse Ports' files on the audit's computer: the list from the repository's ports/index.json, nothing installed or changed. */
+internal class AuditPortFiles(override val os: String) : io.github.matiyaaa.fuse.ui.shell.store.PortFiles {
+    override val folder: String = if (os == "windows") "C:/Users/you/AppData/Roaming/Fuse/ports" else "~/Library/Application Support/Fuse/ports"
+    override val arch: String = "x86_64"
+    override fun bundledIndex(): String? =
+        generateSequence(File("").absoluteFile) { it.parentFile }.map { File(it, "ports/index.json") }.firstOrNull { it.isFile }?.readText()
+    override fun umuRun(): String? = null
+    override suspend fun newDownload(name: String): io.github.matiyaaa.fuse.ui.shell.store.DownloadSink? = null
+    override fun freeBytes(): Long? = 120L shl 30
+    override suspend fun unpack(archive: String, kind: io.github.matiyaaa.fuse.model.PortFileKind, name: String, into: String) = throw java.io.IOException("The audit installs nothing.")
+    override suspend fun link(target: String, at: String): String? = "The audit links nothing."
+    override suspend fun makeFolder(path: String) = false
+    override suspend fun writeText(path: String, text: String) = false
+    override suspend fun isLink(path: String) = false
+    override suspend fun remove(path: String) = false
+    override suspend fun move(from: String, to: String) = false
+    override suspend fun exists(path: String) = false
 }

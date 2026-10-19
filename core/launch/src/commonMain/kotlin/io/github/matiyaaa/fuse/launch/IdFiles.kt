@@ -25,7 +25,7 @@ object IdFiles {
     )
 
     /** Every id-file extension any adapter reads. */
-    val extensions: Set<String> = storeSources.keys + setOf("psvita", "ps3", "ps4", "app", "scummvm", "desktop")
+    val extensions: Set<String> = storeSources.keys + setOf("psvita", "ps3", "ps4", "app", "scummvm", "desktop", "fuseport")
 
     /** True when [location] is a file whose content the caller should read before resolving. */
     fun needsContent(location: GameLocation): Boolean =

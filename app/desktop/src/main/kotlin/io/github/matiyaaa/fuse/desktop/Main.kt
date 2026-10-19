@@ -65,22 +65,21 @@ fun main(args: Array<String>) {
         kotlin.system.exitProcess(SyncHostMain.run(dirs))
     }
     UiRenderTrace.enabled = "--trace-ui" in args
-    // Gradients and baked pictures behind the interface are dithered, on the graphics card or not.
-    io.github.matiyaaa.fuse.desktop.system.DesktopDithering.install()
-    // Compose here draws shadows at one strength whatever their colour's alpha: they stay neutral.
-    io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.tintedShadows = false
-    // Skia's own messages, so a fallback to drawing on the processor has its reason.
-    io.github.matiyaaa.fuse.desktop.system.GraphicsReport.install()
-    setX11WmClass()
-    // Fuse Player plays on FFmpeg here.
-    io.github.matiyaaa.fuse.ui.player.FusePlayer.engineFactory = { io.github.matiyaaa.fuse.ui.player.ffmpeg.FfmpegEngine() }
     val dirs = FuseDirs.fromEnvironment()
+    // Fast Start (`--run <id>`, a game's entry in Steam): the game with no window.
+    val runGame = FastStartMain.gameOf(args)
     // One Fuse at a time: a second start brings the first to the front, or takes its place (see
-    // SingleInstance); a start that plays a game (--play) takes its place. Before the log, so a
+    // SingleInstance); a start that plays a game (--play) takes its place, and one for Fast Start
+    // has the Fuse already open play the game, waiting here until it ends. Before the log, so a
     // start that leaves doesn't turn the running one's log over.
     val guard = io.github.matiyaaa.fuse.desktop.system.SingleInstance(instanceFolder(dirs))
-    val claim = guard.claim(System.getenv("SteamGameId")?.takeIf { it.isNotBlank() }, replace = io.github.matiyaaa.fuse.desktop.system.SingleInstance.REPLACE in args || "--play" in args)
+    val claim = guard.claim(
+        System.getenv("SteamGameId")?.takeIf { it.isNotBlank() },
+        replace = io.github.matiyaaa.fuse.desktop.system.SingleInstance.REPLACE in args || "--play" in args,
+        run = runGame,
+    )
     if (claim is io.github.matiyaaa.fuse.desktop.system.SingleInstance.Decision.Handed) kotlin.system.exitProcess(0)
+    if (claim is io.github.matiyaaa.fuse.desktop.system.SingleInstance.Decision.Ran) kotlin.system.exitProcess(0)
     instance = guard
     dirs.eraseIfAsked()
     dirs.ensure()
@@ -97,6 +96,17 @@ fun main(args: Array<String>) {
         is io.github.matiyaaa.fuse.desktop.system.SingleInstance.Decision.Unguarded -> Log.warn("not guarded against a second Fuse: ${claim.why}")
         else -> Unit
     }
+    var windowArgs = args
+    if (runGame != null) {
+        val code = FastStartMain.run(dirs, runGame)
+        if (code != null) {
+            guard.release()
+            kotlin.system.exitProcess(code)
+        }
+        // Something only the person can decide: Fuse opens on the game, as a game's --play entry does.
+        windowArgs = (args.filterIndexed { i, a -> a != FastStartMain.FLAG && !(i > 0 && args[i - 1] == FastStartMain.FLAG) } + listOf("--play", runGame.toString())).toTypedArray()
+    }
+    prepareWindowToolkit()
     // A stalled interface thread writes what it was doing into the log.
     io.github.matiyaaa.fuse.desktop.system.UiWatchdog().start()
     // Without a screen to open a window on, one plain sentence instead of the toolkit's error.
@@ -104,7 +114,7 @@ fun main(args: Array<String>) {
         System.err.println(NoDisplay.message(why))
         kotlin.system.exitProcess(NoDisplay.EXIT_CODE)
     }
-    goBackFromAFailedUpdate(dirs, args)
+    goBackFromAFailedUpdate(dirs, windowArgs)
     // Skia's picture cache sized for the screen, and the drawing settings asked for, before a window opens.
     val tuning = io.github.matiyaaa.fuse.desktop.system.RenderTuning.install(io.github.matiyaaa.fuse.desktop.system.RenderTuning.screenPixels())
     Log.info("Drawing: ${tuning.notes.joinToString("; ")}")
@@ -119,7 +129,7 @@ fun main(args: Array<String>) {
     // Lives as long as the process; runs on the AWT event thread, which is Compose's UI thread.
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     try {
-        runWindow(dirs, args, scope)
+        runWindow(dirs, windowArgs, scope)
         // The window is closed: Fuse is done, whatever thread something left running, so no Fuse
         // stays behind without a window (Steam would think it still runs).
         guard.release()
@@ -132,6 +142,19 @@ fun main(args: Array<String>) {
         System.err.println(NoDisplay.message(e.message ?: e.javaClass.simpleName))
         kotlin.system.exitProcess(NoDisplay.EXIT_CODE)
     }
+}
+
+/** What drawing a window here needs, set up only once a window is going to open (never for Fast Start). */
+private fun prepareWindowToolkit() {
+    // Gradients and baked pictures behind the interface are dithered, on the graphics card or not.
+    io.github.matiyaaa.fuse.desktop.system.DesktopDithering.install()
+    // Compose here draws shadows at one strength whatever their colour's alpha: they stay neutral.
+    io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.tintedShadows = false
+    // Skia's own messages, so a fallback to drawing on the processor has its reason.
+    io.github.matiyaaa.fuse.desktop.system.GraphicsReport.install()
+    setX11WmClass()
+    // Fuse Player plays on FFmpeg here.
+    io.github.matiyaaa.fuse.ui.player.FusePlayer.engineFactory = { io.github.matiyaaa.fuse.ui.player.ffmpeg.FfmpegEngine() }
 }
 
 /** The single-instance guard this Fuse holds, once it holds it. */
@@ -167,7 +190,9 @@ private fun runWindow(dirs: FuseDirs, args: Array<String>, scope: CoroutineScope
                 // A Fuse that can't close in time is ended, so the one taking its place isn't kept waiting.
                 Thread({ Thread.sleep(4_000); Runtime.getRuntime().halt(0) }, "fuse-quit").apply { isDaemon = true; start() }
             }
-            onDispose { instance?.onShow = { false }; instance?.onQuit = {} }
+            // Fast Start from a Steam entry while this Fuse is open: the game is played here.
+            instance?.onRun = { id, ended -> session.platform.requestPlay(id, ended) }
+            onDispose { instance?.onShow = { false }; instance?.onQuit = {}; instance?.onRun = null }
         }
         DisposableEffect(session) { onDispose { session.close() } }
         FuseWindow(session)

@@ -56,8 +56,13 @@ object EmulatorContracts {
                 val saves = if (adapter != null) Cell(Level.SUPPORTED, "") else Cell(Level.NOT_SUPPORTED, SaveAdapters.whyNot(a.id.value))
                 val computer = a.host != Host.ANDROID
                 val settings = when {
-                    computer && fam in NativeSettings.families -> Cell(Level.SUPPORTED, "for every game and for one game")
+                    // Cemu's for every game are its own Options; Fuse changes a game's profile.
+                    computer && NativeSettings.familyOf(a.id.value) == "cemu" -> Cell(Level.SUPPORTED, "for one game (its profile)")
+                    computer && NativeSettings.familyOf(a.id.value) == "melonds" -> Cell(Level.SUPPORTED, "for every game (it has none of a game's own)")
+                    computer && NativeSettings.familyOf(a.id.value) in NativeSettings.changeable -> Cell(Level.SUPPORTED, "for every game and for one game")
                     computer -> Cell(Level.NOT_SUPPORTED, "changed in the emulator")
+                    // On Android, where its files are in shared storage.
+                    NativeSettings.familyOf(a.id.value) in NativeSettings.onAndroid -> Cell(Level.SUPPORTED, "for every game and for one game, where its files are in your storage")
                     else -> Cell(Level.NOT_SUPPORTED, "changed in the emulator on Android")
                 }
                 val cheats = when {

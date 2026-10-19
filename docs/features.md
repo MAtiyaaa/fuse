@@ -28,8 +28,8 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
 - **BIOS checks** report Unknown, never Missing, when a location cannot be read.
 - **Transfers that follow your rules**: how many at once, a bandwidth limit, slower or paused while
   you play, only on Wi-Fi, only while charging, a battery level to wait below, and quiet hours.
-- **Patches** (IPS, UPS and BPS) applied from a game's options as a copy beside it, checked against
-  the game they were made for where the patch says; the game itself is never changed.
+- **Patches** (IPS, UPS, BPS and xdelta) applied from a game's options as a copy beside it, checked
+  against the game they were made for where the patch says; the game itself is never changed.
 - **Storage** shows every drive by name, connected or not, every game by the space it takes, and
   Fuse's own files: the saves Fuse One keeps here, a host's household saves, kept saves of removed
   profiles, and art and caches.
@@ -54,7 +54,10 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
 - **Every Linux emulator in the Store**, installed by Fuse: AppImages, tarballs and 7-Zip
   archives as each project publishes them (Eden from its own server, with its Steam Deck and ROG
   Ally builds), and Flathub for the few that publish nothing of their own. The Emulators tab shows
-  the ones on the computer.
+  the ones on the computer. The last three versions an update replaced are kept to go back to, the
+  room an install needs is checked before a download, Update All says every update first, and an
+  app can be added by its GitHub, Codeberg, Forgejo or Gitea link with a look at what would install.
+  What EmuDeck installed is left to EmuDeck.
 - **RetroArch for every system it runs**, with ES-DE's cores in ES-DE's order, on Android, Linux,
   Windows and macOS.
 - **Pick an emulator** per system or per game. Forks and renamed builds are recognised by family, and
@@ -73,8 +76,24 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
   with a test launch. A game's emulator list says why one can't open that game.
 - **PCSX2 patches** (widescreen, 60 FPS and more) for a PS2 game, turned on in PCSX2's own settings
   for that game. Fuse only turns off what it turned on, and leaves anything set in PCSX2 alone.
+- **Cheats, textures and mods** of your own, from GameBanana, or from Nexus Mods with your own key,
+  put where each emulator reads them (Dolphin's Gecko and Action Replay codes in the game's own
+  settings), with every file shown first, a mod that changes the same files as another said before
+  it goes in, and each taken out again exactly.
 - **PlayStation disc details**: the serial and PCSX2's CRC, read from ISO and BIN images.
 - **How a PS3 game runs in RPCS3**, from RPCS3's compatibility list, asked only when you choose it.
+- **Play Together**: host a game in RetroArch or PPSSPP for others to join, or join one your
+  household is hosting (Fuse One says who hosts what), and online play set up as each emulator keeps
+  it: RPCS3 through RPCN with your account, shadPS4 through ShadNet, PCSX2's network adapter,
+  PPSSPP's wireless and its name for revival servers, Dolphin's NetPlay by address or host code and
+  WiiLink, and the rooms of Azahar, Eden and Citron, each put back on request.
+- **Fuse Ports** (on a computer): games rebuilt to run natively, played with your own copy of the
+  game. Diablo through DevilutionX, RollerCoaster Tycoon 2 through OpenRCT2 and Fallout 2 through
+  Fallout 2 Community Edition install from their projects' own releases, checked against Fuse's
+  signed list, and your game's files are linked in, never copied or changed. Each becomes a game of
+  your library, with Steam entries and saves kept in step like the rest. Majora's Mask plays through
+  Zelda 64: Recompiled, made from your own ROM, and on Linux and Windows a PlayStation 5 dump can be
+  recompiled with AnyPS5 into a program of your computer's own, from its Play With list.
 - **Problems that explain themselves**: when a game can't start, Fuse says why, that nothing was
   changed, and offers the fix. If Fuse itself fails to start three times, it starts in **safe mode**.
 
@@ -117,6 +136,11 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
 - Uncertain matches are **shown to you** before anything is saved.
 - **Art you choose yourself is never replaced**, except when you ask to reset it.
 - Games without art get **generated placeholder art** instead of a blank tile.
+- **Achievements and trophies** on each game's page: RetroAchievements with your own key, Steam's
+  own, trophies from RPCS3, shadPS4 (before the first play too) and Vita3K, and Xenia's
+  achievements. **Sign Emulators In** signs RetroArch, PCSX2, DuckStation, PPSSPP and Dolphin in to
+  RetroAchievements with one password that is never kept, per profile, and Sign Them Out puts their
+  files back exactly.
 
 </details>
 

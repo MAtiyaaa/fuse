@@ -418,6 +418,8 @@ data class Presence(
     val at: Long,
     /** When it started playing. */
     val since: Long,
+    /** The game is open for the others to join, and where (null for most games, played alone). */
+    val hosting: Hosting? = null,
 ) {
     companion object {
         const val PLAYING = "playing"
@@ -425,9 +427,17 @@ data class Presence(
     }
 }
 
+/**
+ * A game a device is hosting for the household to join: how ([way], Fuse's name for the emulator's
+ * way of playing together: `netplay`, `adhoc`, `netplay-window`), in which emulator family, and
+ * where on the home network (its [addresses] and the [port] the emulator listens on).
+ */
+@Serializable
+data class Hosting(val way: String, val emulator: String, val addresses: List<String> = emptyList(), val port: Int = 0)
+
 /** What a device says about itself: [state] null when it is done (nothing playing, nothing waiting). */
 @Serializable
-data class PresenceNote(val profile: String, val game: String, val title: String = "", val state: String? = null, val since: Long = 0)
+data class PresenceNote(val profile: String, val game: String, val title: String = "", val state: String? = null, val since: Long = 0, val hosting: Hosting? = null)
 
 @Serializable
 data class JournalPage(

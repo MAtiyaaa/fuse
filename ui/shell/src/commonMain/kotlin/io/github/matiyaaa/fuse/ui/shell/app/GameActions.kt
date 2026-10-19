@@ -51,7 +51,14 @@ fun AppState.play(card: GameCard, emulator: io.github.matiyaaa.fuse.model.Emulat
     playOnChosenScreen(card) { display -> launch(card, emulator, discPath, display) }
 }
 
-private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.model.EmulatorId?, discPath: String?, display: io.github.matiyaaa.fuse.model.LaunchDisplay?, skipSaveCheck: Boolean = false, playAnyway: Boolean = false) {
+/** Starts [card] to be played with others: hosting it here, or joining someone's game ([together]). */
+internal fun AppState.playTogether(card: GameCard, together: io.github.matiyaaa.fuse.ui.shell.store.Together) {
+    if (launching != null) return
+    choice = null
+    launch(card, null, null, null, together = together)
+}
+
+private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.model.EmulatorId?, discPath: String?, display: io.github.matiyaaa.fuse.model.LaunchDisplay?, skipSaveCheck: Boolean = false, playAnyway: Boolean = false, together: io.github.matiyaaa.fuse.ui.shell.store.Together? = null) {
     if (launching != null) return
     // The veil shows the room the game was lit by, with its own cover beside the title.
     val system = store.library.platforms.value.firstOrNull { it.platform.id == card.platformId }
@@ -78,7 +85,7 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
         }
     }
     job = scope.launch {
-        val outcome = store.library.launch(card.id, emulator, discPath, display, skipSaveCheck, playAnyway) { stage ->
+        val outcome = store.library.launch(card.id, emulator, discPath, display, skipSaveCheck, playAnyway, together) { stage ->
             launching = when (stage) {
                 io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.CHECKING_SAVE -> launching?.copy(status = "Checking your save", cancel = callOff)
                 io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.STARTING -> launching?.copy(status = null, cancel = null)
@@ -101,35 +108,35 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
             is LaunchOutcome.Problem -> {
                 // A package that isn't installed yet installs now, then plays: no detour through its page.
                 if (!skipSaveCheck && outcome.problem.actions.any { it is io.github.matiyaaa.fuse.ui.shell.store.ProblemAction.InstallContent }) {
-                    installThenPlay(card) { launching = null; launch(card, emulator, discPath, display) }
+                    installThenPlay(card) { launching = null; launch(card, emulator, discPath, display, together = together) }
                     return@launch
                 }
                 launching = null
-                showProblem(outcome.problem, card, retry = { launch(card, emulator, discPath, display) })
+                showProblem(outcome.problem, card, retry = { launch(card, emulator, discPath, display, together = together) })
             }
             // Both sides played since they last synced: the person picks, then the game starts.
             is LaunchOutcome.SaveConflict -> {
                 launching = null
-                saveConflict = io.github.matiyaaa.fuse.ui.shell.sync.SaveConflictSpec(outcome.conflict) { launch(card, emulator, discPath, display, skipSaveCheck = true) }
+                saveConflict = io.github.matiyaaa.fuse.ui.shell.sync.SaveConflictSpec(outcome.conflict) { launch(card, emulator, discPath, display, skipSaveCheck = true, together = together) }
             }
             // Another device is on this game, or still sending its save: wait for it, or play here.
             is LaunchOutcome.SyncBusy -> {
                 launching = null
-                syncBusy(card, outcome.busy, play = { launch(card, emulator, discPath, display, playAnyway = true) }, retry = { launch(card, emulator, discPath, display) })
+                syncBusy(card, outcome.busy, play = { launch(card, emulator, discPath, display, playAnyway = true, together = together) }, retry = { launch(card, emulator, discPath, display, together = together) })
             }
             is LaunchOutcome.SyncWaiting -> {
                 launching = null
-                syncWaiting(card, outcome.waiting, play = { launch(card, emulator, discPath, display, playAnyway = true) }, retry = { launch(card, emulator, discPath, display) })
+                syncWaiting(card, outcome.waiting, play = { launch(card, emulator, discPath, display, playAnyway = true, together = together) }, retry = { launch(card, emulator, discPath, display, together = together) })
             }
             // This device's save and RomM's both changed: which one to play with, then the game starts.
             is LaunchOutcome.RommSaveConflict -> {
                 launching = null
-                rommSaveConflict(card, outcome.conflict) { launch(card, emulator, discPath, display) }
+                rommSaveConflict(card, outcome.conflict) { launch(card, emulator, discPath, display, together = together) }
             }
             // Syncthing kept two versions of the save: which one to play with, then the game starts.
             is LaunchOutcome.SyncthingConflict -> {
                 launching = null
-                syncthingConflict(card, outcome.conflicts) { launch(card, emulator, discPath, display, skipSaveCheck = true) }
+                syncthingConflict(card, outcome.conflicts) { launch(card, emulator, discPath, display, skipSaveCheck = true, together = together) }
             }
         }
     }
@@ -390,9 +397,31 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         // Steam's library (computers): the game starts through Fuse, with its art.
         if (platform.steam != null && !card.isApp) {
             if (card.id.value in steamGameIds) {
+                // In Game Mode, with the plugin there: Steam starts its entry, with Steam's overlay and the controller layout given to it.
+                if (platform.steam?.gameMode == true && platform.steam?.changesLive == true) {
+                    add(MenuAction("steamplay", "Play From Steam", FuseIcons.Play, detail = "As its Steam entry, with Steam's overlay and the controller layout you gave it", onSelect = {
+                        closeOverlays()
+                        scope.launch {
+                            platform.steam?.playFromSteam(card.id.value)
+                                ?.onSuccess { toasts.show(it, icon = FuseIcons.Play) }
+                                ?.onFailure { toasts.show(it.message ?: "Steam didn't start it", ToastKind.ERROR) }
+                        }
+                    }))
+                }
                 add(MenuAction("steam", "Remove from Steam", FuseIcons.Gamepad, detail = "Only the entry Fuse made", onSelect = { closeOverlays(); removeFromSteam(listOf(card), card.title) }))
             } else {
-                add(MenuAction("steam", "Add to Steam", FuseIcons.Gamepad, detail = "Starts through Fuse, with its art", onSelect = { closeOverlays(); addToSteam(listOf(card), card.title) }))
+                add(MenuAction("steam", "Add to Steam", FuseIcons.Gamepad, detail = "Starts with Fuse Fast Start, with its art", onSelect = { closeOverlays(); addToSteam(listOf(card), card.title) }))
+            }
+            // Fast Start or straight in its emulator, for this game alone (where Steam can have that).
+            if (platform.steam?.directEntries == true) {
+                val own = store.prefs.value.steam.startOverrides[card.id.value]
+                add(MenuAction(
+                    "steamstart", "Steam Entry", FuseIcons.Rocket,
+                    detail = "How it starts from Steam", trailing = Trailing.Value(
+                        when (own) { true -> "Direct"; false -> "Fast Start"; null -> if (store.prefs.value.steam.directEntries) "Direct" else "Fast Start" },
+                    ),
+                    onSelect = { steamStartPicker(card) },
+                ))
             }
         }
         // The save files on this device, as its emulator keeps them: with any save sync, or none.
@@ -420,11 +449,29 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
                 "ps2" -> add(MenuAction("patches", "Patches, Cheats and Textures", FuseIcons.Bandage, detail = "Widescreen, 60 FPS and other fixes, cheats, and texture packs of your own, in its emulator's own folders", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
                 "psx" -> add(MenuAction("patches", "Patches, Cheats and Textures", FuseIcons.Bandage, detail = "Widescreen and other fixes, cheats, and texture packs of your own, in its emulator's own folders", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
                 "psp" -> add(MenuAction("patches", "Cheats and Textures", FuseIcons.Wand, detail = "This game's cheats, and texture packs of your own, in its emulator's own folders", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
+                "ngc", "wii" -> add(MenuAction("patches", "Cheats, Textures and Mods", FuseIcons.Wand, detail = "Gecko and Action Replay codes, texture packs and graphics mods of your own, in Dolphin's own folders", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
+                "ps3", "ps4" -> add(MenuAction("patches", "Patches and Mods", FuseIcons.Bandage, detail = "Its emulator's patches for this game, and mods of your own, in its own folders", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
+                "switch", "wiiu" -> add(MenuAction("patches", "Mods", FuseIcons.Puzzle, detail = "Mods of your own and from GameBanana or Nexus Mods, where its emulator reads them", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
                 else -> if (retroArch) add(MenuAction("patches", "Cheats", FuseIcons.Wand, detail = "This game's cheats, used when it starts in RetroArch", trailing = Trailing.Chevron, onSelect = { gamePatchPicker(card) }))
             }
+            // With others: netplay, ad hoc, NetPlay or an online service, as the game's emulator plays together.
+            if (card.platformId.value in TOGETHER_SYSTEMS || retroArch && io.github.matiyaaa.fuse.launch.RetroArchCores.coresFor(platform.host, card.platformId).isNotEmpty()) {
+                add(MenuAction("together", "Play Together", FuseIcons.Users, detail = "Host it for your household or join someone's game, as its emulator plays with others", trailing = Trailing.Chevron, onSelect = { playTogetherSheet(card) }))
+            }
             // The emulator's own settings for this game, where Fuse can change them.
-            if (card.platformId.value in setOf("ps2", "psx", "psp")) {
-                add(MenuAction("emusettings", "Emulator Settings", FuseIcons.Sliders, detail = "Resolution, renderer and display for this game, in its emulator's own settings", trailing = Trailing.Chevron, onSelect = { emulatorSettingsSheet(card) }))
+            if (card.platformId.value in setOf("ps2", "psx", "psp", "ngc", "wii", "ps3", "switch", "3ds", "new-nintendo-3ds", "wiiu", "ps4", "xbox360", "psvita", "dc", "arcade", "model3") || retroArch && io.github.matiyaaa.fuse.launch.RetroArchCores.coresFor(platform.host, card.platformId).isNotEmpty()) {
+                add(MenuAction("emusettings", "Emulator Settings", FuseIcons.Sliders, detail = "Resolution, renderer and every other setting for this game, in its emulator's own settings", trailing = Trailing.Chevron, onSelect = { emulatorSettingsSheet(card) }))
+            }
+            // A port's own settings, as its code names them, in its own file.
+            if (card.platformId == io.github.matiyaaa.fuse.launch.ports.PortAdapter.PLATFORM) {
+                add(MenuAction("emusettings", "Game Settings", FuseIcons.Sliders, detail = "Every setting of the port's own, as its code names them, in its own file", trailing = Trailing.Chevron, onSelect = { emulatorSettingsSheet(card) }))
+            }
+        }
+        // On Android, the settings of an emulator whose files are in shared storage (PPSSPP, ARMSX2, RetroArch).
+        if (!card.isApp && platform.host == io.github.matiyaaa.fuse.model.Host.ANDROID) {
+            val retroArch = store.emulators.installed.value.any { it.id.value.substringAfter('.').startsWith("retroarch") }
+            if (card.platformId.value in setOf("ps2", "psp") || retroArch && io.github.matiyaaa.fuse.launch.RetroArchCores.coresFor(platform.host, card.platformId).isNotEmpty()) {
+                add(MenuAction("emusettings", "Emulator Settings", FuseIcons.Sliders, detail = "Resolution, renderer and every other setting for this game, in its emulator's own settings", trailing = Trailing.Chevron, onSelect = { emulatorSettingsSheet(card) }))
             }
         }
         if (!card.isApp && card.platformId.value == "ps3") {
@@ -436,6 +483,14 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         }
         if (hasTwoScreens && !io.github.matiyaaa.fuse.launch.DualScreenPlatforms.usesSecondScreen(card.platformId)) {
             add(MenuAction("screen", "Screen", FuseIcons.DualScreen, detail = "Top, bottom, or ask when it starts", trailing = Trailing.Chevron, onSelect = { screenPicker(card) }))
+        }
+        if (!card.isApp && platform.features.frameGeneration) {
+            val ready = store.library.frameGenerationReady()
+            add(MenuAction(
+                "framegen", "Frame Generation", FuseIcons.Layers2,
+                detail = if (ready) "More frames shown than the emulator draws, through lsfg-vk" else "Needs lsfg-vk set up with Lossless Scaling on this computer",
+                trailing = Trailing.Chevron, enabled = ready, onSelect = { frameGenerationPicker(card) },
+            ))
         }
         add(MenuAction("rescrape", "Find Details and Art", FuseIcons.Wand, detail = "Fills what's missing, including a proper title. Your own art and names stay", onSelect = {
             closeOverlays()
@@ -496,7 +551,7 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         }
         if (!card.isApp) add(MenuAction("folder", "Folder Behaviour", FuseIcons.FolderOpen, trailing = Trailing.Chevron, onSelect = { folderPolicyPicker(card) }))
         // A translation, a hack or a fix, as its own copy beside the game: the game stays as it is.
-        if (!card.isApp && card.platformId.value !in NO_ROM_PATCHES) add(MenuAction("patch", "Apply a Patch", FuseIcons.Bandage, detail = "An IPS, UPS or BPS file. Makes a patched copy; this game stays as it is", onSelect = { applyPatch(card) }))
+        if (!card.isApp && card.platformId.value !in NO_ROM_PATCHES) add(MenuAction("patch", "Apply a Patch", FuseIcons.Bandage, detail = "An IPS, UPS, BPS or xdelta file. Makes a patched copy; this game stays as it is", onSelect = { applyPatch(card) }))
         // RomM, when it is the RomM integration in use: games not on RomM go up from here.
         if (store.prefs.value.romm.enabled && store.romm.supported && !card.isApp && card.rommRomId == null) {
             add(MenuAction("romm.upload", "Upload to RomM", FuseIcons.Upload, detail = "With its other discs, DLC and updates, through Downloads", onSelect = {
@@ -538,7 +593,7 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
     return ContextMenuSpec(
         title = card.title, subtitle = card.platformShort, art = card.art.tile, actions = actions, accent = card.accent,
         tabs = listOf(
-            MenuTab("Game", FuseIcons.Gamepad, listOf("play", "info", "fav", "collection", "pin", "steam", "reach.send", "hide", "notgame", "remove") + extra.map { it.id }),
+            MenuTab("Game", FuseIcons.Gamepad, listOf("play", "together", "info", "fav", "collection", "pin", "steam", "reach.send", "hide", "notgame", "remove") + extra.map { it.id }),
             MenuTab("Saves", FuseIcons.Save, listOf("savesync", "saves")),
             MenuTab("Setup", FuseIcons.Sliders, listOf("system", "emulator", "emusettings", "patches", "parts", "packages", "screen", "compat", "folder", "patch", "move")),
             MenuTab("Details", FuseIcons.Images, listOf("media", "rescrape", "rename", "restoretitle", "reset", "romm.upload", "cartridge", "find", "upload")),
@@ -578,23 +633,100 @@ fun AppState.collectionPicker(game: GameId, title: String) {
     }
 }
 
+/**
+ * A PlayStation 5 dump's rows for AnyPS5 in Play With: recompiling it (again, with AnyPS5's newest
+ * release, once it has a build), or why it can't be here, and taking its build out.
+ */
+private fun AppState.recompileChoices(card: GameCard, offer: io.github.matiyaaa.fuse.ui.shell.store.RecompileOffer?): List<MenuAction> {
+    offer ?: return emptyList()
+    val built = offer.builtWith
+    return listOfNotNull(
+        MenuAction(
+            "recompile", if (built == null) "Recompile to Run Natively" else "Recompile Again", FuseIcons.Zap,
+            detail = offer.warning ?: if (built == null) {
+                if (offer.copies) "AnyPS5 makes a program of this computer's own from your dump, with a copy of its files in Fuse's folder, so your dump is never changed"
+                else "AnyPS5 makes a program of this computer's own from your dump, in Fuse's folder. Your dump stays read-only while it plays"
+            } else {
+                "Made with AnyPS5 $built. Made again with its newest release"
+            },
+            section = "AnyPS5",
+            enabled = offer.whyNot == null,
+            unavailableReason = offer.whyNot,
+            onSelect = { recompileGame(card) },
+        ),
+        built?.let {
+            MenuAction(
+                "recompile.remove", "Remove the Recompiled Build", FuseIcons.Trash,
+                detail = "Play goes back to the emulator. Its saves stay in Fuse's folder",
+                section = "AnyPS5",
+                onSelect = {
+                    choice = null
+                    scope.launch {
+                        if (store.ports.removeRecompiled(card.id)) toasts.show("${card.title}'s recompiled build is gone; its saves are kept", ToastKind.INFO, icon = FuseIcons.Trash)
+                        else toasts.show("Fuse couldn't take ${card.title}'s build out.", ToastKind.WARNING)
+                    }
+                },
+            )
+        },
+    )
+}
+
+/** Recompiles [card] with AnyPS5, saying when it downloads AnyPS5 and how it ended. */
+private fun AppState.recompileGame(card: GameCard) {
+    choice = null
+    scope.launch {
+        toasts.show("Recompiling ${card.title} with AnyPS5. A large game takes a few minutes", ToastKind.INFO, icon = FuseIcons.Zap, durationMs = 8_000L)
+        val said = HashSet<String>()
+        val problem = store.ports.recompile(card.id) { step ->
+            // Fetching AnyPS5 itself is said once; the recompiler's own lines aren't.
+            if (step.startsWith("Downloading AnyPS5") && said.add(step)) toasts.show(step, ToastKind.INFO, icon = FuseIcons.Download)
+        }
+        if (problem == null) toasts.show("${card.title} is recompiled, and Play starts it natively from now on", ToastKind.SUCCESS, icon = FuseIcons.CircleCheck)
+        else toasts.show(problem, ToastKind.WARNING, durationMs = 10_000L)
+    }
+}
+
 fun AppState.emulatorPicker(card: GameCard) {
     contextMenu = null
     scope.launch {
         // Each emulator is checked against this game, so one that can't open it says why.
         val options = store.emulators.optionsForGame(card.id).ifEmpty { store.emulators.optionsFor(card.platformId) }
         val streamed = store.prefs.value.streaming.games[card.id.value.toString()]?.host
+        // The ports set up here that play this game (Play With): picked, they start in the emulator's place.
+        val ports = if (store.ports.supported) store.ports.portsFor(card.id) else emptyList()
+        val withPort = store.ports.playWith(card.id)
+        // A PlayStation 5 dump AnyPS5 can recompile into a program of this computer's own.
+        val recompile = if (store.ports.supported) store.ports.recompileOffer(card.id) else null
+        fun noPort() { if (withPort != null) scope.launch { store.ports.setPlayWith(card.id, null) } }
         choice = ChoiceSpec(
             icon = FuseIcons.Chip,
-            title = "Emulator for ${card.title}",
-            message = "The system's choice is used unless you pick one here.",
+            title = if (ports.isEmpty() && recompile == null) "Emulator for ${card.title}" else "Play ${card.title} With",
+            message = when {
+                recompile != null -> "An emulator, or a build AnyPS5 recompiles from your dump to run natively. The system's emulator is used unless you pick one here."
+                ports.isEmpty() -> "The system's choice is used unless you pick one here."
+                else -> "An emulator, or a port of it rebuilt to run natively. The system's emulator is used unless you pick one here."
+            },
             options = listOf(
                 MenuAction("default", "Use the system's emulator", FuseIcons.Layers, onSelect = {
                     scope.launch { store.library.setEmulator(card.id, null) }
+                    noPort()
                     setStreamPick(card, null)
                     choice = null
                 }),
-            ) + streamChoices(streamed) { hostId ->
+            ) + ports.map { v ->
+                MenuAction(
+                    "port.${v.port.id}", v.port.name, FuseIcons.Boxes,
+                    detail = "Fuse Ports: ${v.port.game} rebuilt to run natively. Its saves and time are kept with the port's",
+                    trailing = Trailing.Check(withPort == v.port.id),
+                    onSelect = {
+                        choice = null
+                        scope.launch {
+                            store.ports.setPlayWith(card.id, v.port.id)
+                            toasts.show("${card.title} plays with ${v.port.name} from now on", ToastKind.SUCCESS, icon = FuseIcons.Boxes)
+                        }
+                    },
+                )
+            } + streamChoices(streamed) { hostId ->
                 setStreamPick(card, io.github.matiyaaa.fuse.data.settings.StreamPick(hostId))
                 choice = null
                 toasts.show("${card.title} streams with Moonlight from now on")
@@ -628,12 +760,13 @@ fun AppState.emulatorPicker(card: GameCard) {
                             startLocate(LocateRequest(o.id, o.name, game = card.id))
                         } else {
                             scope.launch { store.library.setEmulator(card.id, o.id) }
+                            noPort()
                             setStreamPick(card, null)
                             choice = null
                         }
                     },
                 )
-            },
+            } + recompileChoices(card, recompile),
         )
     }
 }
@@ -654,8 +787,12 @@ fun AppState.showEmulator(id: io.github.matiyaaa.fuse.model.EmulatorId) {
                     contextMenu = null
                     scope.launch { store.emulators.openEmulator(id) }
                 }))
-                if (id.value.substringAfter('.') in io.github.matiyaaa.fuse.launch.settings.NativeSettings.families && platform.host != io.github.matiyaaa.fuse.model.Host.ANDROID) {
-                    add(MenuAction("settings", "Settings for Every Game", FuseIcons.Sliders, detail = "Resolution, renderer and display, in its own settings", trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Chevron, onSelect = {
+                val family = io.github.matiyaaa.fuse.launch.settings.NativeSettings.familyOf(id.value)
+                // On Android, those whose files can be in shared storage.
+                if (family in io.github.matiyaaa.fuse.launch.settings.NativeSettings.changeable &&
+                    (platform.host != io.github.matiyaaa.fuse.model.Host.ANDROID || family in io.github.matiyaaa.fuse.launch.settings.NativeSettings.onAndroid)
+                ) {
+                    add(MenuAction("settings", "Settings for Every Game", FuseIcons.Sliders, detail = "Resolution, renderer and every other setting, in its own settings", trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Chevron, onSelect = {
                         emulatorSettingsSheet(null, id)
                     }))
                 }
@@ -824,9 +961,21 @@ fun AppState.gamePatchPicker(card: GameCard) {
     contextMenu = null
     scope.launch {
         when (val list = store.library.gamePatches(card.id)) {
-            is io.github.matiyaaa.fuse.ui.shell.store.GamePatchList.Unavailable -> showProblem(Problem(
-                list.title, list.reason, ProblemKind.EMULATOR, Severity.INFO, reassurance = null,
-            ))
+            is io.github.matiyaaa.fuse.ui.shell.store.GamePatchList.Unavailable -> {
+                // No patch list of its emulator's own (Dolphin, the Switch's, Cemu): what it takes of a person's own, if anything.
+                val own = store.library.enhancements(card.id)
+                if (own.kinds.isEmpty() && own.added.isEmpty()) {
+                    showProblem(Problem(list.title, list.reason, ProblemKind.EMULATOR, Severity.INFO, reassurance = null))
+                    return@launch
+                }
+                val emulator = ownEmulatorName(card)
+                choice = ChoiceSpec(
+                    icon = FuseIcons.Puzzle,
+                    title = if (emulator != null) "$emulator for ${card.title}" else "Mods for ${card.title}",
+                    message = "What you add goes where ${emulator ?: "the game's emulator"} reads it, and you see exactly what goes where first. Each comes out again as it went in.",
+                    options = ownEnhancementRows(card, own, emulator ?: "its emulator"),
+                )
+            }
             is io.github.matiyaaa.fuse.ui.shell.store.GamePatchList.Ready -> {
                 val emulator = list.emulator
                 val own = store.library.enhancements(card.id)
@@ -885,6 +1034,15 @@ fun AppState.gamePatchPicker(card: GameCard) {
     }
 }
 
+/** The emulator a game's own cheats, textures and mods go to, by its system, for the sheet's words; null where several could (the Switch). */
+private fun ownEmulatorName(card: GameCard): String? = when (card.platformId.value) {
+    "ngc", "wii" -> "Dolphin"
+    "wiiu" -> "Cemu"
+    "ps3" -> "RPCS3"
+    "ps4" -> "shadPS4"
+    else -> null
+}
+
 /**
  * An emulator's own settings, for one game ([card]) or for every game ([emulator]), grouped as the
  * emulator groups them. Each says whether it is the game's own or follows every game's; choosing one
@@ -902,6 +1060,11 @@ fun AppState.emulatorSettingsSheet(game: GameId?, gameTitle: String?, emulator: 
                 view.title, view.reason, ProblemKind.EMULATOR, Severity.INFO, reassurance = null,
             ))
             is io.github.matiyaaa.fuse.ui.shell.store.EmulatorSettingsView.Ready -> {
+                // Only Every Setting (RPCS3): straight there.
+                if (view.values.isEmpty() && view.profiles.isEmpty() && !view.canRestore) {
+                    everySettingSheet(game, gameTitle, emulator)
+                    return@launch
+                }
                 val forGame = game != null
                 val active = view.profiles.firstOrNull { it.active }
                 val profileRow = if (!forGame || view.profiles.isEmpty()) emptyList() else listOf(
@@ -927,6 +1090,13 @@ fun AppState.emulatorSettingsSheet(game: GameId?, gameTitle: String?, emulator: 
                         onSelect = { settingPicker(game, gameTitle, emulator, view.emulator, v) },
                     )
                 }
+                val every = MenuAction(
+                    "every", "Every Setting", FuseIcons.LayoutList,
+                    detail = "All of ${view.emulator}'s settings, as its own code names them, with search",
+                    trailing = Trailing.Chevron,
+                    section = "More",
+                    onSelect = { everySettingSheet(game, gameTitle, emulator, from = { emulatorSettingsSheet(game, gameTitle, emulator) }) },
+                )
                 val restore = if (!view.canRestore) emptyList() else listOf(
                     MenuAction(
                         "restore", "Put Back What Fuse Changed", FuseIcons.Undo,
@@ -949,7 +1119,7 @@ fun AppState.emulatorSettingsSheet(game: GameId?, gameTitle: String?, emulator: 
                     } else {
                         "Every game uses these unless it has its own. Close ${view.emulator} first; changes apply the next time it starts."
                     },
-                    options = profileRow + rows + restore,
+                    options = profileRow + rows + every + restore,
                 )
             }
         }
@@ -978,12 +1148,18 @@ private fun AppState.settingProfilesSheet(
         }
     }
     val own = view.profiles.filter { it.own }
+    // The device whose screen this one's matches, by its shorter side.
+    val here = minOf(platform.device.screenWidthPx, platform.device.screenHeightPx)
     val rows = view.profiles.map { p ->
         MenuAction(
             "profile.${p.id}", p.name, if (p.own) FuseIcons.Bookmark else profileIcon(p.id),
-            detail = p.about,
+            detail = if (p.lines != null && p.lines == here) "Fits this screen. ${p.about}" else p.about,
             trailing = Trailing.Check(p.active),
-            section = if (p.own) "Your Own" else "From Fuse",
+            section = when {
+                p.own -> "Your Own"
+                p.lines != null -> "For a Device"
+                else -> "From Fuse"
+            },
             onSelect = { apply(p) },
         )
     }
@@ -1048,7 +1224,9 @@ private fun profileIcon(id: String) = when (id) {
     io.github.matiyaaa.fuse.launch.settings.SettingProfiles.PERFORMANCE -> FuseIcons.Gauge
     io.github.matiyaaa.fuse.launch.settings.SettingProfiles.QUALITY -> FuseIcons.Sparkles
     io.github.matiyaaa.fuse.launch.settings.SettingProfiles.BATTERY -> FuseIcons.BatteryMedium
-    else -> FuseIcons.Layers
+    io.github.matiyaaa.fuse.launch.settings.SettingProfiles.DEVICE + "tv-4k" -> FuseIcons.Tv
+    // A handheld's.
+    else -> if (id.startsWith(io.github.matiyaaa.fuse.launch.settings.SettingProfiles.DEVICE)) FuseIcons.Joystick else FuseIcons.Layers
 }
 
 /** The values one setting can take, with the one in use checked; for a game, following every game's comes first. */
@@ -1364,7 +1542,10 @@ internal fun AppState.patchWith(card: GameCard, patch: String) {
     }
 }
 
-/** Systems whose games are installed packages or programs, where ROM patches (IPS, UPS, BPS) don't apply. */
+/** Systems whose emulators Fuse knows a way of playing together in (PCSX2, PPSSPP, Dolphin, RPCS3), besides RetroArch's. */
+private val TOGETHER_SYSTEMS = setOf("ps2", "psp", "ngc", "wii", "ps3")
+
+/** Systems whose games are installed packages or programs, where ROM patches (IPS, UPS, BPS, xdelta) don't apply. */
 private val NO_ROM_PATCHES = setOf("switch", "ps3", "ps4", "ps5", "psvita", "wiiu", "xbox", "xbox360", "win", "win3x", "win9x", "steam", "android", "dos", "mac", "scummvm", "pico8", "flash", "j2me")
 
 /**
@@ -1399,6 +1580,36 @@ private fun AppState.planBringOver(emulator: io.github.matiyaaa.fuse.model.Emula
     }
 }
 
+/**
+ * A newer save of [title] in a folder [emulator] used before (the Flatpak beside a native install, a
+ * data folder since moved): choosing it asks, then copies it to where the emulator reads it now.
+ */
+private fun AppState.olderSaveRow(id: io.github.matiyaaa.fuse.model.GameId, title: String, emulator: String, o: io.github.matiyaaa.fuse.sync.OldSave) = MenuAction(
+    "older.${o.where}",
+    if ("/.var/app/" in o.where) "In the Flatpak's Folder" else "In an Earlier Folder",
+    FuseIcons.FolderInput,
+    detail = (if (o.inUseModifiedAt == null) "None in use yet. " else "Newer than the one in use. ") + o.where,
+    trailing = Trailing.Value(io.github.matiyaaa.fuse.ui.shell.components.agoText(o.modifiedAt ?: 0L)),
+    section = "From Before",
+    onSelect = {
+        choice = null
+        confirm = ConfirmSpec(
+            title = "Use the Earlier Save?",
+            message = "Fuse copies $title's save from ${o.where} to where $emulator reads it now. " +
+                (if (o.inUseModifiedAt != null) "The save there now is kept in Fuse's kept folder first. " else "") +
+                "The earlier folder stays as it is.",
+            confirmLabel = "Use This Save",
+        ) {
+            scope.launch {
+                store.library.useOldSave(id, o).fold(
+                    onSuccess = { toasts.show("The earlier save of $title is in use", ToastKind.SUCCESS, icon = FuseIcons.CircleCheck) },
+                    onFailure = { toasts.show(it.message ?: "Fuse couldn't bring that save in", ToastKind.WARNING) },
+                )
+            }
+        }
+    },
+)
+
 /** [title]'s save files on this device, newest first, with where they are. */
 internal fun AppState.localSavesSheet(id: io.github.matiyaaa.fuse.model.GameId, title: String) {
     scope.launch {
@@ -1406,8 +1617,12 @@ internal fun AppState.localSavesSheet(id: io.github.matiyaaa.fuse.model.GameId, 
         choice = ChoiceSpec(
             title = "Saves on This Device",
             icon = FuseIcons.HardDrive,
-            message = found.note ?: "$title, as ${found.emulator ?: "its emulator"} keeps it here. Fuse only reads these; a save sync moves them.",
-            options = found.saves.map { s ->
+            message = found.note ?: if (found.older.isNotEmpty()) {
+                "$title, as ${found.emulator ?: "its emulator"} keeps it here. A folder it used before holds a newer save: choose it to use that one."
+            } else {
+                "$title, as ${found.emulator ?: "its emulator"} keeps it here. Fuse only reads these; a save sync moves them."
+            },
+            options = found.older.map { o -> olderSaveRow(id, title, found.emulator ?: "its emulator", o) } + found.saves.map { s ->
                 MenuAction(
                     "save.${s.path}", s.name,
                     when (s.kind) {
@@ -1417,6 +1632,7 @@ internal fun AppState.localSavesSheet(id: io.github.matiyaaa.fuse.model.GameId, 
                     },
                     detail = "${s.kind.label}, ${io.github.matiyaaa.fuse.ui.shell.sync.sizeText(s.bytes)}. ${s.path}",
                     trailing = Trailing.Value(io.github.matiyaaa.fuse.ui.shell.components.agoText(s.modifiedAt)),
+                    section = if (found.older.isNotEmpty()) "In Use" else null,
                     onSelect = {},
                 )
             },

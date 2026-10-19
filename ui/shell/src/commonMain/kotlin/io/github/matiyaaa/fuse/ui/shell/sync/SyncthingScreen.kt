@@ -165,7 +165,7 @@ internal fun useSyncthing(app: AppState, svc: SyncthingService, on: Boolean) {
     val now = SaveProviders.current(app)
     when {
         !on -> turnOffSyncthing(app) { app.store.setSaveProvider(SaveProvider.OFF) }
-        now == SaveProvider.FUSE_ONE || now == SaveProvider.ROMM -> app.confirm = ConfirmSpec(
+        now.fuseOne || now.romm -> app.confirm = ConfirmSpec(
             title = "Move saves with Syncthing instead?",
             message = "Only one moves this device's saves. ${now.label} stops moving them here and Syncthing takes over the save folders. Fuse One's profiles, play time and household games keep working, and your other devices keep their own choice.",
             confirmLabel = "Use Syncthing",

@@ -31,6 +31,7 @@ fun rememberHealthIssues(app: AppState): List<HealthIssue> {
     val report by app.store.health.report.collectAsState()
     val access by app.platform.storage.state.collectAsState()
     val link = app.phoneLink?.state?.collectAsState()?.value
+    val displays by app.platform.displays.collectAsState()
     val device = buildList {
         if (access == StorageState.DENIED) {
             add(HealthIssue("device.access", Problem(
@@ -40,6 +41,19 @@ fun rememberHealthIssues(app: AppState): List<HealthIssue> {
                 severity = Severity.BROKEN,
                 reassurance = null,
                 actions = listOf(ProblemAction.GrantAccess()),
+            )))
+        }
+        // Game Mode drawing Fuse at the handheld's size and enlarging it to a TV: soft text and art,
+        // and nothing in Fuse can undo it. Said here (with Health's badge), with Steam's own fix.
+        displays.firstOrNull { it.isPrimary && it.outputWidthPx != null }?.let { s ->
+            add(HealthIssue("device.enlarged", Problem(
+                title = "Game Mode is enlarging Fuse",
+                message = "Fuse is drawn at ${s.widthPx} by ${s.heightPx} and enlarged to this screen's ${s.outputWidthPx} by ${s.outputHeightPx}, which softens text and art. " +
+                    "In Steam, open Fuse's Properties, set Game Resolution to Native, and start Fuse again.",
+                kind = ProblemKind.DISPLAY,
+                severity = Severity.ATTENTION,
+                reassurance = null,
+                actions = listOf(ProblemAction.OpenSettings("displays", "Open Display")),
             )))
         }
         link?.error?.let { error ->
@@ -56,7 +70,7 @@ fun rememberHealthIssues(app: AppState): List<HealthIssue> {
     return (device + report.issues).sortedByDescending { it.problem.severity }
 }
 
-/** Settings, System health: how the setup is, each finding (A opens it), checking again and the diagnostics report. */
+/** Settings, System health: how the setup is, each finding (A opens it), checking again, power and heat, and the diagnostics report. */
 @Composable
 fun healthRows(app: AppState): List<MenuAction> {
     val report by app.store.health.report.collectAsState()
@@ -66,6 +80,7 @@ fun healthRows(app: AppState): List<MenuAction> {
     val attention = issues.count { it.problem.severity >= Severity.ATTENTION }
     val notes = issues.size - attention
     val drawing by app.platform.drawing.collectAsState()
+    val power = powerRows(app)
     return buildList {
         add(MenuAction(
             "status",
@@ -100,7 +115,11 @@ fun healthRows(app: AppState): List<MenuAction> {
                 onSelect = { app.showProblem(issue.problem) },
             ))
         }
-        app.graphicsRow(drawing, section = "This computer")?.let(::add)
+        // Android doesn't say how it draws: there the section is the device's, not a computer's.
+        val here = if (drawing != null) "This computer" else "This device"
+        app.graphicsRow(drawing, section = here)?.let(::add)
+        // Power and heat folds open in place, its facts read only while shown.
+        addAll(app.group("health.power", "Power and heat", FuseIcons.BatteryMedium, summary = power.firstOrNull { it.id == "power.heat" }?.let { (it.trailing as? Trailing.Value)?.text }, detail = "The battery, how warm the device is, the screen's rate and what keeps it awake") { power }.map { it.copy(section = it.section ?: here) })
         add(MenuAction(
             "report", "Diagnostics report", FuseIcons.ClipboardList,
             detail = "For a bug report: versions, systems, emulators, drives and what went wrong. You see it before it's saved",

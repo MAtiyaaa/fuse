@@ -14,7 +14,7 @@ import java.util.Properties
  * one is migrated in a transaction (with foreign keys off, as SQLite recommends for table rebuilds),
  * and a file written by a newer Fuse is refused rather than risk damaging the library, unless that
  * newer Fuse's copy from before it updated the library is there ([restoreForOlderFuse]). Runtime
- * connections have foreign keys on, WAL journaling and a busy timeout.
+ * connections have foreign keys on, WAL journaling and a busy timeout, and stay open ([KeptSqliteDriver]).
  */
 object DesktopDatabase {
     /** Opens (creating or migrating) the database at [path], or an in-memory one when null. */
@@ -35,7 +35,8 @@ object DesktopDatabase {
             backupBeforeMigrating(driver, path)
             prepare(driver)
         }
-        return JdbcSqliteDriver(url, properties(foreignKeys = true, wal = true))
+        // The connection stays open between queries (KeptSqliteDriver says why).
+        return KeptSqliteDriver(url, properties(foreignKeys = true, wal = true))
     }
 
     /** Current `user_version` of the database behind [driver]. */

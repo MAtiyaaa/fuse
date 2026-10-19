@@ -61,7 +61,7 @@ fun StoreUpdatesScreen(app: AppState) {
     }
 
     val apps = installedApps(state)
-    val updatable = state.updatable
+    val updatable = state.updateAllList
     val size = updatable.sumOf { (state.releases[it.key] as? ReleaseCheck.Ready)?.release?.file?.sizeBytes ?: 0L }
     val checkedAt = state.releases.values.filterIsInstance<ReleaseCheck.Ready>().maxOfOrNull { it.checkedAt }
     val rows = buildList {
@@ -74,7 +74,15 @@ fun StoreUpdatesScreen(app: AppState) {
                 else -> listOfNotNull(updatable.joinToString(", ") { it.name }.take(80), size.takeIf { it > 0 }?.let(::bytesText)).joinToString("  ·  ")
             },
             enabled = updatable.isNotEmpty() && !state.holding,
-            onSelect = { ops.updateAll() },
+            // Every update it would make, said first: none is silent.
+            onSelect = {
+                app.confirm = io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec(
+                    title = if (updatable.size == 1) "Update ${updatable.single().name}?" else "Update ${updatable.size} Apps?",
+                    message = updateAllText(state, updatable),
+                    confirmLabel = "Update All",
+                    onConfirm = { ops.updateAll() },
+                )
+            },
         ))
         add(MenuAction(
             "updates.check", "Check Again", FuseIcons.Refresh,
@@ -95,8 +103,8 @@ fun StoreUpdatesScreen(app: AppState) {
             FText(
                 when {
                     apps.isEmpty() -> "Nothing from the Store is installed yet."
-                    state.updates.isEmpty() -> "${apps.size} installed, all up to date as far as Fuse knows."
-                    else -> "${state.updates.size} of ${apps.size} installed ${if (state.updates.size == 1) "has an update" else "have updates"}. Choose one to leave it out of Update All, or to follow its pre-releases."
+                    state.updateCount == 0 -> "${apps.size} installed, all up to date as far as Fuse knows."
+                    else -> "${state.updateCount} of ${apps.size} installed ${if (state.updateCount == 1) "has an update" else "have updates"}. Choose one to leave it out of Update All, or to follow its pre-releases."
                 },
                 Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 2,
             )
@@ -108,10 +116,27 @@ fun StoreUpdatesScreen(app: AppState) {
     }
 }
 
+/**
+ * What Update All will do, one line an app: its version now and the one it goes to, its size, and
+ * how (Fuse from its releases, or Flatpak), then what holds for them all.
+ */
+internal fun updateAllText(state: StoreState, apps: List<StoreApp>): String = buildString {
+    for (a in apps) {
+        val have = state.installed[a.key]?.versionName?.removePrefix("v")
+        val release = (state.releases[a.key] as? ReleaseCheck.Ready)?.release
+        val to = release?.version?.removePrefix("v")
+        val how = if (state.managedBy(a.key) == Managed.FLATPAK) "with Flatpak" else release?.file?.sizeBytes?.takeIf { it > 0 }?.let(::bytesText)
+        appendLine(listOfNotNull(a.name, listOfNotNull(have, to).joinToString(" to ").ifEmpty { null }, how).joinToString("  ·  "))
+    }
+    append(
+        if (state.desktop) "Each version replaced is kept, to go back to. Nothing is replaced while a game is played." else "Android asks about each one.",
+    )
+}
+
 /** Installed apps, those with an update first, then by name. */
 internal fun installedApps(state: StoreState): List<StoreApp> =
     state.catalogue?.apps.orEmpty().filter { it.key in state.installed }
-        .sortedWith(compareBy<StoreApp>({ a -> if (state.updates.any { it.key == a.key }) 0 else 1 }, { it.name.lowercase() }))
+        .sortedWith(compareBy<StoreApp>({ a -> if (state.hasUpdate(a.key)) 0 else 1 }, { it.name.lowercase() }))
 
 /** What an app's line on the Updates page says about it, from its install and its newest release. */
 internal fun updateLine(state: StoreState, a: StoreApp): String {
@@ -124,6 +149,7 @@ internal fun updateLine(state: StoreState, a: StoreApp): String {
         Managed.FLATPAK -> "Updated with Flatpak, from its own remote" + (have?.let { "  ·  $it" } ?: "")
         Managed.SYSTEM -> "Updated by your system's packages" + (have?.let { "  ·  $it" } ?: "")
         Managed.ELSEWHERE -> "Installed outside Fuse, so Fuse leaves it as it is" + (have?.let { "  ·  $it" } ?: "")
+        Managed.EMUDECK -> "Installed by EmuDeck, which updates it in Manage Emulators" + (have?.let { "  ·  $it" } ?: "")
         Managed.FUSE -> when (state.standing(a.key)) {
             Standing.UPDATE -> listOfNotNull(
                 listOfNotNull(have, release?.version?.removePrefix("v")).joinToString(" to "),
@@ -142,18 +168,19 @@ internal fun updateLine(state: StoreState, a: StoreApp): String {
 private fun appRow(app: AppState, state: StoreState, a: StoreApp): MenuAction {
     val ops = app.store.appStore
     val update = state.updates.any { it.key == a.key }
+    val any = state.hasUpdate(a.key)
     val excluded = a.key in state.excluded
     return MenuAction(
         "app.${a.key}", a.name,
         when {
-            update -> FuseIcons.CircleArrowDown
+            any -> FuseIcons.CircleArrowDown
             state.managedBy(a.key) != Managed.FUSE -> FuseIcons.Package
             else -> FuseIcons.PackageCheck
         },
         detail = updateLine(state, a),
         trailing = when {
-            excluded && update -> Trailing.Value("Left out")
-            update -> Trailing.Value("Update")
+            excluded && any -> Trailing.Value("Left out")
+            any -> Trailing.Value("Update")
             else -> Trailing.Chevron
         },
         onSelect = {
@@ -170,7 +197,7 @@ private fun appRow(app: AppState, state: StoreState, a: StoreApp): MenuAction {
                     MenuAction(
                         "u.exclude", if (excluded) "Put Back in Update All" else "Leave Out of Update All", if (excluded) FuseIcons.ListPlus else FuseIcons.CircleSlash,
                         detail = if (excluded) null else "It still updates from here or its page", onSelect = { app.choice = null; ops.setExcluded(a.key, !excluded) },
-                    ).takeIf { state.managedBy(a.key) == Managed.FUSE },
+                    ).takeIf { state.managedBy(a.key) == Managed.FUSE || state.managedBy(a.key) == Managed.FLATPAK },
                     MenuAction(
                         "u.channel", if (prerelease) "Follow Stable Releases" else "Follow Pre-releases", FuseIcons.GitCompare,
                         detail = if (prerelease) "Back to the releases its developers mark as stable" else "Nightly and beta builds, as its developers publish them. Newer, and less tested",

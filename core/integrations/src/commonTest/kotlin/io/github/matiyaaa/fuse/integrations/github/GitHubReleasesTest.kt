@@ -56,6 +56,45 @@ class GitHubReleasesTest {
     }
 
     @Test
+    fun eachChannelTakesTheNewestOfWhatItFollows() = runTest {
+        fun release(tag: String, name: String, pre: Boolean, draft: Boolean = false) =
+            """{"tag_name":"$tag","name":"$name","draft":$draft,"prerelease":$pre,"html_url":"https://github.com/MAtiyaaa/fuse/releases/tag/$tag",
+               "assets":[{"name":"Fuse-x-x86_64.AppImage","size":1,"browser_download_url":"https://github.com/MAtiyaaa/fuse/releases/download/$tag/Fuse-x-x86_64.AppImage"}]}"""
+        // Newest first, as GitHub lists them: the rolling nightly, a draft, a beta, the published release.
+        val list = "[" + listOf(
+            release("nightly", "Fuse 0.4.5-nightly.20261019", pre = true),
+            release("v0.4.6", "Fuse 0.4.6", pre = false, draft = true),
+            release("v0.4.5-beta.1", "Fuse 0.4.5 beta 1", pre = true),
+            release("v0.4.4", "Fuse 0.4.4 - The Overdrive Update", pre = false),
+        ).joinToString(",") + "]"
+        val http = TestHttp { json(list) }
+        val releases = GitHubReleases(http.client, RateLimiter.unlimited())
+        val beta = (releases.forChannel(GitHubReleases.FUSE_REPO, ReleaseChannel.BETA) as ApiResult.Success).value!!
+        assertEquals("https://api.github.com/repos/MAtiyaaa/fuse/releases?per_page=30", http.last.url.toString())
+        assertEquals("v0.4.5-beta.1", beta.tag)
+        assertTrue(beta.prerelease)
+        val nightly = (releases.forChannel(GitHubReleases.FUSE_REPO, ReleaseChannel.NIGHTLY) as ApiResult.Success).value!!
+        assertEquals("0.4.5-nightly.20261019", nightly.tag, "the nightly's version, from its name")
+        assertTrue(SemVer.isNewer(nightly.tag, "0.4.4"))
+
+        // A draft is never offered, and the published release wins once it is the newest.
+        val models = listOf(
+            io.github.matiyaaa.fuse.model.ReleaseInfo("v0.4.5", "Fuse 0.4.5", "", null, emptyList(), ""),
+            io.github.matiyaaa.fuse.model.ReleaseInfo("v0.4.5-beta.1", "", "", null, emptyList(), "", prerelease = true),
+            io.github.matiyaaa.fuse.model.ReleaseInfo("nightly", "Fuse 0.4.5-nightly.20261019", "", null, emptyList(), "", prerelease = true),
+        )
+        assertEquals("v0.4.5", GitHubReleases.pick(ReleaseChannel.BETA, models)?.tag)
+        assertEquals("v0.4.5", GitHubReleases.pick(ReleaseChannel.NIGHTLY, models)?.tag)
+        assertEquals("v0.4.5", GitHubReleases.pick(ReleaseChannel.STABLE, models)?.tag)
+        // Fuse Ports' list rides on a release of its own, whatever it is named: never an update.
+        val ports = io.github.matiyaaa.fuse.model.ReleaseInfo("ports", "Fuse Ports 99.0", "", null, emptyList(), "", prerelease = true)
+        assertEquals("v0.4.5", GitHubReleases.pick(ReleaseChannel.NIGHTLY, models + ports)?.tag)
+        assertNull(GitHubReleases.pick(ReleaseChannel.BETA, listOf(ports, ports.copy(prerelease = false))))
+        // A nightly whose name says no version is passed over, never guessed.
+        assertNull(GitHubReleases.pick(ReleaseChannel.NIGHTLY, listOf(models[2].copy(name = "Nightly build"))))
+    }
+
+    @Test
     fun missingReleaseAndRateLimit() = runTest {
         var status = HttpStatusCode.NotFound
         var remaining = "59"

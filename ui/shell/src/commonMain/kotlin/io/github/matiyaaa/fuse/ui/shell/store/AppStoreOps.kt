@@ -61,6 +61,9 @@ interface AppStoreOps {
     /** Goes back to the version [key]'s last update replaced (kept by Fuse on a computer). */
     fun rollBack(key: String) = Unit
 
+    /** Goes back to the earlier version [earlierId] Fuse kept ([EarlierVersion.id]); what is in place now is kept in turn. */
+    fun rollBackTo(key: String, earlierId: String) = rollBack(key)
+
     /** Stops [key]'s download, or forgets its failure. */
     fun cancel(key: String)
 
@@ -103,6 +106,13 @@ interface AppStoreOps {
      * with an APK on Android, with this computer's build elsewhere. Null when it was added, else why not.
      */
     suspend fun addCustom(url: String, category: String = OTHER): String? = "The Store can't add apps here."
+
+    /**
+     * What adding the project at [url] would bring, before it is added: its newest release and the
+     * file this device would install from it, read from its releases (GitHub, or a Forgejo or Gitea
+     * server on a computer). A failure says why it can't be added. Nothing is downloaded.
+     */
+    suspend fun previewCustom(url: String): Result<CustomPreview> = Result.failure(IllegalStateException("The Store can't show an app by its address here."))
 
     /** Takes an app the user added out of the Store again (an installed copy stays installed). */
     suspend fun removeCustom(key: String) = Unit
@@ -186,6 +196,10 @@ data class StoreState(
     val holding: Boolean = false,
     /** Why this computer can't run an app, by key (its processor, its graphics), as its developers publish what it needs. */
     val requirements: Map<String, String> = emptyMap(),
+    /** Emulation setups on this computer that keep emulators of their own ("EmuDeck", "RetroDECK"). */
+    val suites: Set<String> = emptySet(),
+    /** The room each app's newest release needs to install against what is free, by key, where both are known. */
+    val room: Map<String, String> = emptyMap(),
 ) {
     fun app(key: String): StoreApp? = catalogue?.apps?.firstOrNull { it.key == key }
 
@@ -209,6 +223,31 @@ data class StoreState(
     /** The updates Update All installs: [updates] less those left out. */
     val updatable: List<StoreApp> get() = updates.filter { it.key !in excluded }
 
+    /**
+     * Flatpaks from Flathub with a newer release there, which Update All updates through Flatpak (a
+     * Flathub release has no file of its own: Flatpak fetches it), less those left out.
+     */
+    val flatpakUpdates: List<StoreApp>
+        get() = catalogue?.apps.orEmpty().filter { app ->
+            app.key in installed && app.key !in excluded && managedBy(app.key) == Managed.FLATPAK && standing(app.key) == Standing.UPDATE &&
+                (releases[app.key] as? ReleaseCheck.Ready)?.release?.let { it.file == null && it.manual == null } == true
+        }
+
+    /** Everything Update All updates, Fuse's own first. */
+    val updateAllList: List<StoreApp> get() = updatable + flatpakUpdates
+
+    /** How many installed apps have an update, whoever makes it (Fuse, or Flatpak from Flathub), left out of Update All or not. */
+    val updateCount: Int
+        get() = updates.size + catalogue?.apps.orEmpty().count { app ->
+            app.key in installed && managedBy(app.key) == Managed.FLATPAK && standing(app.key) == Standing.UPDATE &&
+                (releases[app.key] as? ReleaseCheck.Ready)?.release?.let { it.file == null && it.manual == null } == true
+        }
+
+    /** True when [key] has an update Fuse or Flatpak makes from here. */
+    fun hasUpdate(key: String): Boolean = updates.any { it.key == key } || flatpakUpdates.any { it.key == key } ||
+        (key in excluded && managedBy(key) == Managed.FLATPAK && standing(key) == Standing.UPDATE &&
+            (releases[key] as? ReleaseCheck.Ready)?.release?.let { it.file == null && it.manual == null } == true)
+
     /** Who looks after [key]'s installed copy. */
     fun managedBy(key: String): Managed = managed[key] ?: Managed.FUSE
 }
@@ -226,6 +265,9 @@ enum class Managed {
 
     /** The person put it there themselves (an AppImage of their own): left as it is. */
     ELSEWHERE,
+
+    /** EmuDeck installed it and updates it (in EmuDeck, Manage Emulators): left to EmuDeck. */
+    EMUDECK,
 }
 
 /** How an app stands on this device. */
@@ -290,6 +332,9 @@ data class StoreApp(
     val inFuse: InFuse = InFuse.NOTHING,
     /** The user added it by its address; it can be taken out again. */
     val custom: Boolean = false,
+    /** The emulator it is a build of when others carry it on too ("yuzu"), and their keys in the Store, to choose between. */
+    val family: String? = null,
+    val otherBuilds: List<String> = emptyList(),
 )
 
 /** What Fuse does with a Store app once it is installed. */
@@ -326,7 +371,29 @@ data class InstallRecord(
     val versionCode: Long,
     /** The version before the last update, which Fuse kept and can go back to; null when none is kept. */
     val previousVersion: String? = null,
+    /** Every earlier version Fuse kept, newest first, to go back to any of them. */
+    val earlier: List<EarlierVersion> = emptyList(),
 )
+
+/**
+ * A project found by its address, not added yet: its [name] and [source] (`codeberg.org/owner/project`),
+ * its newest release's [version] and date, the [file] this device would install from it, and the
+ * [room] it needs against what is free, when known.
+ */
+@Immutable
+data class CustomPreview(
+    val url: String,
+    val name: String,
+    val source: String,
+    val version: String?,
+    val publishedAt: String?,
+    val file: StoreFile,
+    val room: String?,
+)
+
+/** An earlier version Fuse kept: which version it was ([version], when known), when it was kept, and its [id] to go back to it by. */
+@Immutable
+data class EarlierVersion(val id: String, val version: String?, val keptAt: Long)
 
 /** What is known about an app's newest release. */
 sealed interface ReleaseCheck {

@@ -38,6 +38,7 @@ import io.github.matiyaaa.fuse.model.SortOrder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 
 /**
  * Everything the interface reads and does, in one place. Screens only talk to this interface; the
@@ -83,6 +84,9 @@ interface FuseStore {
 
     /** The Store, where Fuse can install apps (Android); [AppStoreOps.None] elsewhere. */
     val appStore: AppStoreOps get() = AppStoreOps.None
+
+    /** Fuse Ports, on a computer; [PortsOps.None] elsewhere. */
+    val ports: PortsOps get() = PortsOps.None
 
     /** Jellyfin, an addon; idle until it is turned on in Settings, Addons, Jellyfin. */
     val jellyfin: io.github.matiyaaa.fuse.jellyfin.JellyfinService? get() = null
@@ -153,6 +157,12 @@ interface HealthOps {
 
     /** Checks everything again, game files included. */
     fun check()
+
+    /**
+     * What the interface found under [key] (Fuse's entries in Steam, which only it can read), shown
+     * with the store's own findings; an empty list takes them away.
+     */
+    fun setFound(key: String, issues: List<HealthIssue>) = Unit
 
     /**
      * A diagnostics report for a bug report: versions, systems, emulators found, drives and folders
@@ -429,7 +439,27 @@ data class LocalSave(
  * A game's saves on this device ([LibraryOps.localSaves]): the files where [emulator] keeps them,
  * newest first, and [note] when Fuse can't look (no emulator plays it here, or one Fuse can't read).
  */
-data class LocalSaves(val emulator: String?, val saves: List<LocalSave>, val note: String? = null)
+data class LocalSaves(
+    val emulator: String?,
+    val saves: List<LocalSave>,
+    val note: String? = null,
+    /** Newer saves of it in folders the emulator used before (another install, a moved data folder). */
+    val older: List<io.github.matiyaaa.fuse.sync.OldSave> = emptyList(),
+)
+
+/** How many games a view holds ([LibraryOps.counts]), and how many of them are favourites and were played. */
+data class GameCounts(val total: Int = 0, val favorites: Int = 0, val played: Int = 0)
+
+/**
+ * A system's play on this device, for the Systems page: the time played in all, how many of its
+ * games have been played, and the few played last and played most.
+ */
+data class SystemActivity(
+    val seconds: Long = 0,
+    val played: Int = 0,
+    val recent: List<GameCard> = emptyList(),
+    val mostPlayed: List<GameCard> = emptyList(),
+)
 
 interface LibraryOps {
     val home: StateFlow<HomeFeed>
@@ -437,10 +467,39 @@ interface LibraryOps {
     /** [id]'s saves on this device, with or without any save sync. */
     suspend fun localSaves(id: GameId): LocalSaves = LocalSaves(null, emptyList())
 
+    /** [old]'s save copied to where [id]'s emulator reads it now, the one there kept aside first; where it was kept. */
+    suspend fun useOldSave(id: GameId, old: io.github.matiyaaa.fuse.sync.OldSave): Result<String?> = Result.failure(UnsupportedOperationException())
+
     /** Today's game in [platform]'s spotlight, and why; null while the system has no games. */
     fun spotlight(platform: PlatformId): Flow<Suggestion?> = kotlinx.coroutines.flow.flowOf(null)
     val platforms: StateFlow<List<PlatformCard>>
     fun games(query: GameQuery): Flow<List<GameCard>>
+
+    /**
+     * How many games [query] lists, and how many of them are favourites and played ([GameCounts]):
+     * for the counts on the Library's tabs. Worked out from the games alone, never their art, so a
+     * count costs nothing like the list it counts.
+     */
+    fun counts(query: GameQuery): Flow<GameCounts> = games(query).map { list ->
+        GameCounts(list.size, list.count { it.favorite }, list.count { it.lastPlayedAt != null })
+    }
+
+    /**
+     * [platform]'s play here ([SystemActivity]): worked out from its games without their art, the
+     * art read only for the [shown] played last and the [shown] played most.
+     */
+    fun systemActivity(platform: io.github.matiyaaa.fuse.model.PlatformId, shown: Int = 4): Flow<SystemActivity> =
+        games(GameQuery(platform = platform)).map { list ->
+            val played = list.filter { it.lastPlayedAt != null }
+            SystemActivity(
+                list.sumOf { it.playSeconds }, played.size,
+                played.sortedByDescending { it.lastPlayedAt }.take(shown),
+                list.filter { it.playSeconds > 0 }.sortedByDescending { it.playSeconds }.take(shown),
+            )
+        }
+
+    /** The ids of the games [query] lists, in its order, without their art: for code that only needs which games there are. */
+    fun gameIds(query: GameQuery): Flow<List<GameId>> = games(query).map { list -> list.map { it.id } }
     fun game(id: GameId): Flow<GameDetail?>
     fun search(query: String): Flow<SearchResults>
 
@@ -457,9 +516,37 @@ interface LibraryOps {
         display: LaunchDisplay? = null,
         skipSaveCheck: Boolean = false,
         playAnyway: Boolean = false,
+        /** Played with others: hosting it here, or joining someone's (see [together]). */
+        together: Together? = null,
         /** Told as the launch moves on: checking the save first (when Fuse Sync or Syncthing does), then starting. */
         onStage: (LaunchStage) -> Unit = {},
     ): LaunchOutcome
+
+    /**
+     * Returns once the game playing now (if any) has ended and everything after it is done: its
+     * session counted, its saves kept and sent where they go. Fast Start waits on it before Fuse
+     * leaves, so nothing a game made is left half done.
+     */
+    suspend fun awaitPlayed() {}
+
+    /**
+     * The emulator's own command for [id], exactly as Play would start it now (its emulator, core,
+     * disc playlist and screen), for a Steam entry that starts the emulator with nothing of Fuse's in
+     * between; or, in words, why the game can't be started that way.
+     */
+    suspend fun directCommand(id: GameId): DirectCommand = DirectCommand.Unavailable("Only Fuse can start it here")
+
+    /**
+     * A session of [id] played from its Direct entry in Steam, as the Fuse Decky plugin saw Steam
+     * start and stop it: counted once, like one Fuse saw. False when it was already counted.
+     */
+    suspend fun recordSteamSession(id: GameId, startedAt: Long, endedAt: Long): Boolean = false
+
+    /** lsfg-vk is set up on this device, so frame generation can be chosen (Linux). */
+    fun frameGenerationReady(): Boolean = false
+
+    /** Every game's own files (its path, and the file it starts from), each to its game: for finding shortcuts others made. */
+    suspend fun gameFiles(): Map<String, GameId> = emptyMap()
 
     /** Called when Fuse comes back to the foreground: closes the running session, checks for changes. */
     fun onResume()
@@ -566,6 +653,65 @@ interface LibraryOps {
     suspend fun fetchModSiteFile(id: GameId, modId: Long, fileId: Long, onProgress: (Float) -> Unit = {}): EnhancementPreview =
         EnhancementPreview.Unavailable("Not here", "Mods can be added from Fuse on a computer.")
 
+    /** The Nexus Mods account whose key is on this device, checked with Nexus Mods. */
+    suspend fun nexusAccount(): NexusAccount = NexusAccount.NoKey
+
+    /** Which game on Nexus Mods [id] is, and the games its list has by [query] (else the game's name). */
+    suspend fun nexusGames(id: GameId, query: String? = null): NexusGames = NexusGames(null, emptyList(), query.orEmpty(), "Mods can be found from Fuse on a computer.")
+
+    /** Remembers [game] as [id]'s game on Nexus Mods (null forgets it). */
+    suspend fun linkNexusGame(id: GameId, game: io.github.matiyaaa.fuse.integrations.nexus.NexusGame?) = Unit
+
+    /** [id]'s game's trending, latest added and latest updated mods on Nexus Mods. */
+    suspend fun nexusMods(id: GameId): NexusModList = NexusModList.Unavailable("Not here", "Mods can be found from Fuse on a computer.")
+
+    /** A mod on Nexus Mods ([game], [modId]), with what Fuse can do with each of its files for [id]. */
+    suspend fun nexusPage(id: GameId, game: String, modId: Long): NexusPage = NexusPage.Unavailable("Not here", "Mods can be found from Fuse on a computer.")
+
+    /**
+     * Fetches [fileId] of a mod on Nexus Mods into Fuse's own folder and works out what adding it to
+     * [id] would do, as [planEnhancement] does: straight away for a Premium account, else with the
+     * website's [nxm] link for the file. Nothing in the emulator's folders changes yet.
+     */
+    suspend fun fetchNexusFile(id: GameId, game: String, modId: Long, fileId: Long, nxm: String? = null, onProgress: (Float) -> Unit = {}): EnhancementPreview =
+        EnhancementPreview.Unavailable("Not here", "Mods can be added from Fuse on a computer.")
+
+    /** Playing [id] with others here: its emulator's way, what it needs, and who in the household hosts it now. */
+    suspend fun together(id: GameId): TogetherView = TogetherView.Unavailable("Not here", "Playing together is set up from Fuse on a computer.")
+
+    /**
+     * Sets [id]'s emulator up for playing with others, as its own settings: RPCS3's network and
+     * RPCN, PCSX2's network adapter, PPSSPP's wireless, Dolphin's name. Each change can be put back.
+     */
+    suspend fun setUpTogether(id: GameId): Boolean = false
+
+    /**
+     * After an emulator ([family], `ppsspp`) was updated: whether what [setUpTogether] set in it is
+     * still there; the words to say when it isn't, else null.
+     */
+    suspend fun recheckTogether(family: String): String? = null
+
+    /** Puts back what [setUpTogether] and hosting or joining changed in [id]'s emulator. */
+    suspend fun putBackTogether(id: GameId): Boolean = false
+
+    /** Turns Dolphin's WiiConnect24 through WiiLink [on] or off, for [id] (a Wii game); put back with the rest. */
+    suspend fun setWiiLink(id: GameId, on: Boolean): Boolean = false
+
+    /**
+     * Readies [id]'s emulator for [together] without starting it, for an emulator whose own window
+     * starts it (Dolphin's NetPlay): null when done, else why not.
+     */
+    suspend fun readyTogether(id: GameId, together: Together): String? = "Playing together is set up from Fuse on a computer."
+
+    /**
+     * Signs RPCS3 in to RPCN as [user] for [id]'s emulator: the password is stretched as RPCS3 does
+     * and used once; the [token] is the one RPCN sent by email. Null when done, else why not.
+     */
+    suspend fun signInRpcn(id: GameId, user: String, password: String, token: String): String? = "RPCN is set up from Fuse on a computer."
+
+    /** Signs RPCS3 out of RPCN (its user name stays). */
+    suspend fun signOutRpcn(id: GameId): Boolean = false
+
     /** What EmuCoreX's public catalogues have for [id] (a PS2 game): texture packs by its serial, pnach files by its CRC. */
     suspend fun emuCoreX(id: GameId): EmuCoreXFinds = EmuCoreXFinds(null, null, emptyList(), emptyList(), "EmuCoreX's packs and cheats can be added from Fuse on a computer.")
 
@@ -593,6 +739,20 @@ interface LibraryOps {
     /** Puts back what Fuse changed in these settings; anything changed in the emulator since stays. */
     suspend fun restoreEmulatorSettings(id: GameId?, emulator: EmulatorId?): Boolean = false
 
+    /**
+     * Every setting the emulator's own code has (Fuse Tune), for the game [id] or for every game in
+     * [emulator], as the installed version has them, each with its value and where it comes from.
+     */
+    suspend fun everyEmulatorSetting(id: GameId?, emulator: EmulatorId? = null): EverySettingView =
+        EverySettingView.Unavailable("Not here", "Emulator settings can only be changed from Fuse on a computer.")
+
+    /**
+     * Gives the Fuse Tune setting [setting] ([io.github.matiyaaa.fuse.launch.settings.TuneSetting.id])
+     * the [value] for the game [id] (or every game); null makes a game follow every game's again, or
+     * leaves every game with the emulator's default. A value the emulator doesn't read is refused.
+     */
+    suspend fun setEveryEmulatorSetting(id: GameId?, emulator: EmulatorId?, setting: String, value: String?): Boolean = false
+
     /** Gives the game [id] (in [emulator]'s settings) every value of [profile], one of [EmulatorSettingsView.Ready.profiles]. */
     suspend fun applySettingProfile(id: GameId?, emulator: EmulatorId?, profile: String): Boolean = false
 
@@ -611,8 +771,11 @@ interface LibraryOps {
      */
     suspend fun setPlatform(id: GameId, platform: PlatformId?) = Unit
 
-    /** Adds the game file at [path], wherever it is on the device, to [platform]. Null when it can't be read. */
-    suspend fun addGameFile(path: String, platform: PlatformId): GameId? = null
+    /**
+     * Adds the game file at [path], wherever it is on the device, to [platform], named [title] when
+     * given (else by its file's name). Null when it can't be read.
+     */
+    suspend fun addGameFile(path: String, platform: PlatformId, title: String? = null): GameId? = null
 
     /**
      * Adds the game folder at [path] (a game with its updates, DLC and other parts, laid out the way
@@ -630,7 +793,7 @@ interface LibraryOps {
     suspend fun detachContent(child: GameId): GameId? = null
 
     /**
-     * Applies the IPS, UPS or BPS patch at [patchPath] to [id]'s game file, as a new copy beside it
+     * Applies the IPS, UPS, BPS or xdelta patch at [patchPath] to [id]'s game file, as a new copy beside it
      * that joins the library: the game itself is never changed. UPS and BPS are checked against the
      * game they were made for, and a patch for another version is refused.
      */
@@ -922,6 +1085,19 @@ interface AchievementOps {
     /** Checks a username + key against RetroAchievements and stores them securely on success. */
     suspend fun connect(username: String, apiKey: String): Result<Unit>
     suspend fun disconnect()
+
+    /** Each emulator here that keeps a RetroAchievements sign-in, and who it is signed in as. */
+    suspend fun emulatorSignIns(): EmulatorSignIns = EmulatorSignIns.Unavailable("On this device, each emulator signs in to RetroAchievements from its own settings.")
+
+    /**
+     * Signs the account in use in to RetroAchievements with [password] (used for that one request
+     * and kept nowhere) and every emulator here in with the login token it gives, each in its own
+     * settings, as it would sign itself in.
+     */
+    suspend fun signInEmulators(password: String): EmulatorSignInResult = EmulatorSignInResult(problem = "Not available on this device.")
+
+    /** Puts back what signing the emulators in changed. */
+    suspend fun signOutEmulators(): Boolean = false
 }
 
 interface AppOps {

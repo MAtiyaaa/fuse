@@ -33,6 +33,13 @@ object LinuxCatalog {
     /** SharpEmu's README (github.com/sharpemu/sharpemu): `SharpEmu <path to eboot.bin>`. */
     internal const val SHARPEMU_SOURCE = "SharpEmu's README: SharpEmu \"<game>/eboot.bin\""
 
+    /**
+     * KytyPS5's README at e5f0ee7 ("Running"): `kyty_emulator --game <game directory, ELF file or
+     * ZArchive dump>`, the same on Windows, Linux and macOS; its release workflow
+     * (.github/workflows/build.yml) packs `kyty_emulator` at the top of each system's build.
+     */
+    internal const val KYTYPS5_SOURCE = "KytyPS5's README (e5f0ee7): kyty_emulator --game <game directory, ELF file or ZArchive dump>"
+
     private fun spec(args: Array<out String>, workingDir: String?) = LinuxCommandSpec(args.toList(), workingDir)
 
     private fun file(vararg args: String, ext: Set<String>? = null, workingDir: String? = null, platforms: Set<PlatformId>? = null, label: String = "File") =
@@ -54,7 +61,8 @@ object LinuxCatalog {
         dirBin: List<String> = emptyList(),
         flatpakCommand: String? = null,
         required: List<String> = emptyList(),
-    ) = LinuxDetection(bin, flatpak, flatpakCommand, appImage, exclude, dirBin, required)
+        version: Map<String, String> = emptyMap(),
+    ) = LinuxDetection(bin, flatpak, flatpakCommand, appImage, exclude, dirBin, required, version)
 
     private fun caps(
         folders: FolderSupport = FolderSupport.RESOLVES_FILE,
@@ -82,7 +90,8 @@ object LinuxCatalog {
         LinuxEmulatorDef(
             id = "linux.retroarch", name = "RetroArch",
             platforms = RetroArchCores.linux.keys,
-            detection = detect(bin = listOf("retroarch"), flatpak = listOf("org.libretro.RetroArch"), appImage = listOf("*retroarch*.appimage")),
+            // retroarch.c (v1.22.2): `--version` prints "Version: 1.22.2" and exits (`RA_OPT_VERSION`).
+            detection = detect(bin = listOf("retroarch"), flatpak = listOf("org.libretro.RetroArch"), appImage = listOf("*retroarch*.appimage"), version = mapOf("retroarch" to "--version")),
             modes = listOf(file("-L", "{CORE_PATH}", "{ROM}")),
             source = esde("RETROARCH rule and core paths; %EMULATOR_RETROARCH% -L %CORE_RETROARCH%/<core>_libretro.so %ROM%"),
             confidence = VERIFIED_ESDE, homepage = "https://www.retroarch.com/",
@@ -135,7 +144,11 @@ object LinuxCatalog {
         ),
         LinuxEmulatorDef(
             id = "linux.ppsspp", name = "PPSSPP", platforms = platforms("psp"),
-            detection = detect(bin = listOf("ppsspp", "PPSSPPSDL", "PPSSPPQt"), flatpak = listOf("org.ppsspp.PPSSPP"), appImage = listOf("*ppsspp*.appimage")),
+            // SDL/SDLMain.cpp (v1.20.4): the SDL build's `--version` prints PPSSPP_GIT_VERSION and returns before anything starts.
+            detection = detect(
+                bin = listOf("ppsspp", "PPSSPPSDL", "PPSSPPQt"), flatpak = listOf("org.ppsspp.PPSSPP"), appImage = listOf("*ppsspp*.appimage"),
+                version = mapOf("PPSSPPSDL" to "--version"),
+            ),
             modes = listOf(file("{ROM}")),
             source = esde("PPSSPP"), confidence = VERIFIED_ESDE, homepage = "https://www.ppsspp.org/",
             capabilities = caps(installed = true),
@@ -178,6 +191,11 @@ object LinuxCatalog {
                 setOf("pkg", "rap", "edat"), listOf("--headless", "--installpkg", "{FILE}"),
                 source = "RPCS3 rpcs3/rpcs3.cpp: --installpkg <path> (\"Forces the emulator to install this pkg file\"); with --headless it " +
                     "installs without a window and quits (main_window::InstallPackages(nullptr, ...)); .rap and .edat files are copied into exdata under their own names",
+            ),
+            firmwareInstall = PackageInstallSpec(
+                setOf("pup"), listOf("--headless", "--installfw", "{FILE}"),
+                source = "RPCS3 rpcs3/rpcs3.cpp (v0.0.43): --installfw <path> (\"Forces the emulator to install this firmware file\"); " +
+                    "with --headless it installs without a window (main_window::InstallPup(nullptr, ...))",
             ),
             limitations = listOf("Folder games are passed as the game folder (disc structure); a .ps3 file with a serial starts an installed game."),
         ),
@@ -304,6 +322,11 @@ object LinuxCatalog {
                     "a .vpk/.zip given as content-path is installed (main.cpp install_archive), then started",
                 archives = setOf("vpk", "zip"),
             ),
+            firmwareInstall = PackageInstallSpec(
+                setOf("pup"), listOf("--firmware", "{FILE}"),
+                source = "Vita3K vita3k/config/src/config.cpp (b4e35ed3): --firmware <path> (\"Path to the firmware file (.pup extension) to install\") " +
+                    "ends the command line with QuitRequested, and vita3k/main.cpp installs it (install_pup) and quits",
+            ),
         ),
         LinuxEmulatorDef(
             id = "linux.xemu", name = "xemu", platforms = platforms("xbox"),
@@ -345,6 +368,18 @@ object LinuxCatalog {
             limitations = listOf("PlayStation 5 emulation is young: a few games play, many stop at a menu or loading screen."),
         ),
         LinuxEmulatorDef(
+            id = "linux.kytyps5", name = "KytyPS5", platforms = platforms("ps5"),
+            // The Store unpacks its build into a folder of its name (its files are at the build's top).
+            detection = detect(dirBin = listOf("KytyPS5/kyty_emulator", "kytyps5/kyty_emulator")),
+            modes = listOf(
+                // A folder dump by its folder (eboot.bin's), a ZArchive dump by its file; settings and saves beside the program.
+                file("--game", "{ROMDIR}", ext = setOf("bin"), workingDir = "{EMUDIR}", label = "Game folder"),
+                file("--game", "{ROM}", ext = setOf("zar"), workingDir = "{EMUDIR}", label = "ZArchive dump"),
+            ),
+            source = KYTYPS5_SOURCE, confidence = Confidence.VERIFIED_SOURCE, homepage = "https://kytyps5.github.io/",
+            limitations = listOf("PlayStation 5 emulation is young: a few games play, many stop at a menu or loading screen."),
+        ),
+        LinuxEmulatorDef(
             id = "linux.mednafen", name = "Mednafen",
             platforms = mednafenModules.keys.map(::PlatformId).toSet(),
             detection = detect(bin = listOf("mednafen"), flatpak = listOf("com.github.AmatCoder.mednaffe"), flatpakCommand = "mednafen"),
@@ -359,6 +394,17 @@ object LinuxCatalog {
             modes = listOf(file("-rompath", "{ROMDIR}", "{BASENAME}", workingDir = "~/.mame")),
             source = esde("MAME, arcade/neogeo commands (-rompath uses the game's own folder; ES-DE also appends <ROMs>/<system>)"),
             confidence = VERIFIED_ESDE, homepage = "https://www.mamedev.org/",
+        ),
+        LinuxEmulatorDef(
+            id = "linux.supermodel", name = "Supermodel", platforms = platforms("model3"),
+            detection = detect(
+                bin = listOf("supermodel"), flatpak = listOf("com.supermodel3.Supermodel"), appImage = listOf("supermodel*.appimage"),
+                dirBin = listOf("Supermodel/supermodel"),
+            ),
+            // From the game's folder, as ES-DE starts it: a `Config` folder there is Supermodel's own (FileSystemPath.cpp).
+            modes = listOf(file("-log-output={ROMDIR}/Config/Supermodel.log", "{ROM}", workingDir = "{ROMDIR}")),
+            source = esde("SUPERMODEL, model3 (Supermodel (Standalone)): %STARTDIR%=%GAMEDIR% %EMULATOR_SUPERMODEL% -log-output=%GAMEDIR%/Config/Supermodel.log %ROM%"),
+            confidence = VERIFIED_ESDE, homepage = "https://www.supermodel3.com/",
         ),
         LinuxEmulatorDef(
             id = "linux.scummvm", name = "ScummVM", platforms = platforms("scummvm"),

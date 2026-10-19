@@ -147,7 +147,6 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
         steamLoaded = true
     }
 
-    val cap = platform.device
     val scanning = scan.phase == ScanPhase.DISCOVERING || scan.phase == ScanPhase.SCANNING || scan.phase == ScanPhase.SAVING
     val withGames = platforms.filter { it.gameCount > 0 }
 
@@ -161,13 +160,8 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             content = { Ignition() },
         ))
         addAll(steamFlow.steps(next))
-        add(Step(
-            "device", "This device", "Tuned for this device",
-            "Fuse looked at this device to pick how rich the effects and motion can be without slowing anything down. You can change it at the end.",
-            icon = FuseIcons.Gauge, chapter = Chapters.START,
-            actions = listOf(StepAction("Continue", primary = true, run = next)),
-            content = { DeviceCard(cap) },
-        ))
+        // What effects this device gets is chosen at the end (Performance), where it can be changed:
+        // no step only to say it was looked at.
         val role = platform.homeRole
         if (role != null) add(Step(
             "home", "Home screen", if (isHome) "Fuse is your Home screen" else "Make Fuse your Home screen?",
@@ -354,8 +348,9 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             },
         ))
         val needsBios = withGames.filter { it.bios.state != BiosState.NOT_REQUIRED }
-        add(Step(
-            "bios", "BIOS", if (needsBios.isEmpty()) "No BIOS needed so far" else "BIOS check",
+        // Only when a system here needs firmware: a step to say none is needed is a step for nothing.
+        if (needsBios.isNotEmpty()) add(Step(
+            "bios", "BIOS", "BIOS check",
             "Some systems need firmware you dump from your own console. Fuse checks your BIOS folders; when an emulator keeps it in its own storage, Fuse can't look and says so instead of guessing.",
             icon = FuseIcons.Memory, chapter = Chapters.GAMES,
             actions = listOf(StepAction("Continue", primary = true, run = next), StepAction("Check again") { store.sources.refreshBios() }),
@@ -421,6 +416,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                     decided && provider == SaveProvider.FUSE_ONE -> "Fuse One moves this device's saves once it's set up: make this the host, or connect to the one you have."
                     decided && provider == SaveProvider.SYNCTHING -> "Fuse shares your emulators' save folders through Syncthing, brings in the newest save before a game, and asks when two devices both played. Fuse One's profiles and household games still work."
                     decided && provider == SaveProvider.ROMM -> "Games from RomM keep their save in step with RomM's, on every device that chose RomM. Fuse One's profiles and household games still work."
+                    decided && provider == SaveProvider.ROMM_THEN_FUSE_ONE -> "Games from RomM keep their save in step with RomM's, and Fuse One moves every other game's. Never both for one game."
                     decided -> "Nothing moves this device's saves. Your other devices keep their own choice, and this one can join in later from Settings, Fuse One."
                     else -> "Stop on the PC, carry on on the handheld. One way moves this device's saves: Fuse One (the one we recommend), RomM, or Syncthing if you run it. Each device chooses its own. One device? Skip; it waits in Settings, Fuse One."
                 },
@@ -447,7 +443,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                     if (syncthing == null && !store.romm.supported) SyncStage(on = syncOn)
                     else SyncChoiceStage(
                         fuseSync = syncOn && provider == SaveProvider.FUSE_ONE, syncthing = provider == SaveProvider.SYNCTHING && syncthingOn,
-                        hasFuseSync = sync != null, romm = provider == SaveProvider.ROMM, hasRomm = store.romm.supported,
+                        hasFuseSync = sync != null, romm = provider.romm, hasRomm = store.romm.supported,
                     )
                 },
             ))
@@ -551,7 +547,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                 "FUSE" -> if (rommConnected) {
                     (if (withFuseOne) "Fuse One brings the games on your household's devices, and RomM your server's. " else "") +
                         "Your RomM games are in the Library under All, next to everything else. Games you download land in the right folders and play like any other. " +
-                        if (io.github.matiyaaa.fuse.ui.shell.sync.SaveProviders.current(app) == SaveProvider.ROMM) "Their saves stay in step with RomM's (RomM 5)."
+                        if (io.github.matiyaaa.fuse.ui.shell.sync.SaveProviders.current(app).romm) "Their saves stay in step with RomM's (RomM 5)."
                         else "Their saves move with ${io.github.matiyaaa.fuse.ui.shell.sync.SaveProviders.current(app).label.let { if (it == "Off") "nothing on this device" else it }}, this device's Save Sync."
                 } else {
                     "Fuse connects straight to your RomM server: your games and systems appear in the Library under All, downloads land in your library's folders, and their saves stay in step with RomM's on RomM 5. It takes a minute."
@@ -639,72 +635,66 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                 )
             },
         ))
-        // Jellyfin: what it is, for anyone who hasn't met it, and signing in right here.
+        // Art, achievements and films in one step: each a press away, none in the way. Continue comes
+        // first, so a person who wants none of them moves on with one press.
         val jellyfinAccount = jellyfinState?.account?.takeIf { prefs.jellyfin.enabled }
-        add(Step(
-            "jellyfin", "Films and shows", if (jellyfinAccount != null) "Jellyfin is connected" else "Your films, here too",
-            if (jellyfinAccount != null) {
-                "Signed in as ${jellyfinAccount.userName ?: "you"}. Your films, shows and music are in Addons, and Fuse Player plays them, with subtitles, resume and the next episode on its own."
-            } else {
-                "Jellyfin is a free media server you run at home, on a computer or a NAS. It keeps your films, shows and music in one library you can reach from anywhere. Connect it and Fuse plays them with its own player. No server? Skip this, and add one later in Settings, Addons."
-            },
-            optional = true, icon = FuseIcons.Clapperboard, chapter = Chapters.CONNECT,
-            actions = if (jellyfinAccount != null) {
-                listOf(StepAction("Continue", primary = true, run = next))
-            } else {
-                listOf(
-                    StepAction("Connect Jellyfin", primary = true) {
-                        if (store.jellyfin == null) connectJellyfin(app) { if (state.index < state.total - 1) next() } else app.go(Route.JellyfinSetup)
-                    },
-                    StepAction("Skip", run = next),
-                )
-            },
-            content = { JellyfinStage(connected = jellyfinAccount != null, server = jellyfinAccount?.serverName) },
-        ))
-        add(Step(
-            "ra", "Achievements", if (raConfigured) "Achievements are on" else "Show your achievements?",
-            if (raConfigured) "RetroAchievements is connected. Recent unlocks and progress appear on Home and on each game's page."
-            else "Connect RetroAchievements with your username and Web API key (retroachievements.org, Settings, Keys) to see progress in Fuse. The key is stored encrypted on this device.",
-            optional = true, icon = FuseIcons.Trophy, chapter = Chapters.CONNECT,
-            actions = if (raConfigured) listOf(StepAction("Continue", primary = true, run = next)) else listOf(
-                StepAction("Connect", primary = true) {
-                    app.textInput = TextInputSpec("RetroAchievements username", "") { user ->
-                        app.textInput = TextInputSpec("Web API key", "", "Paste your key") { key ->
-                            app.scope.launch {
-                                store.achievements.connect(user.trim(), key.trim())
-                                    .onSuccess { app.toasts.show("Connected as ${user.trim()}") }
-                                    .onFailure { app.toasts.show(it.message ?: "Couldn't connect") }
-                            }
-                        }
+        val sgdbKey = "sgdb.apikey" in secrets
+        val sgdbWorks = sgdbCheck is io.github.matiyaaa.fuse.integrations.KeyCheck.Working
+        fun askKey() {
+            app.textInput = TextInputSpec("SteamGridDB API key", "", "From steamgriddb.com, Preferences, API") { key ->
+                if (key.isNotBlank()) app.scope.launch { store.credentials.put("sgdb.apikey", key.trim()); store.media.checkKeys() }
+            }
+        }
+        fun connectAchievements() {
+            app.textInput = TextInputSpec("RetroAchievements username", "") { user ->
+                app.textInput = TextInputSpec("Web API key", "", "Paste your key") { key ->
+                    app.scope.launch {
+                        store.achievements.connect(user.trim(), key.trim())
+                            .onSuccess { app.toasts.show("Connected as ${user.trim()}") }
+                            .onFailure { app.toasts.show(it.message ?: "Couldn't connect") }
                     }
-                },
-                StepAction("Skip", run = next),
-            ),
-        ))
+                }
+            }
+        }
+        val connected = listOf(sgdbWorks, raConfigured, jellyfinAccount != null).count { it }
         add(Step(
-            "art", "Artwork",
-            // Said only once SteamGridDB has answered: a key it turns down isn't "ready".
-            when {
-                "sgdb.apikey" !in secrets -> "Better artwork"
-                sgdbCheck is io.github.matiyaaa.fuse.integrations.KeyCheck.Working -> "SteamGridDB is ready"
-                sgdbCheck is io.github.matiyaaa.fuse.integrations.KeyCheck.Rejected -> "SteamGridDB turned that key down"
-                sgdbCheck is io.github.matiyaaa.fuse.integrations.KeyCheck.Unreachable -> "SteamGridDB didn't answer"
-                else -> "Checking your key"
+            "connect", "Connect",
+            when (connected) {
+                3 -> "Everything is connected"
+                0 -> "Connect what you use"
+                else -> "$connected of 3 connected"
             },
             (if (platform.features.cartridge) "Fuse uses art from RomM (through Cartridge, or straight from RomM) and your folders first. " else "Fuse uses art from RomM and your folders first. ") +
-                "A free SteamGridDB key adds box art, covers, backgrounds, logos and icons for everything else. More sources are in Settings, Art and details.",
-            optional = true, icon = FuseIcons.Images, chapter = Chapters.CONNECT,
-            actions = run {
-                fun askKey() {
-                    app.textInput = TextInputSpec("SteamGridDB API key", "", "From steamgriddb.com, Preferences, API") { key ->
-                        if (key.isNotBlank()) app.scope.launch { store.credentials.put("sgdb.apikey", key.trim()); store.media.checkKeys() }
-                    }
-                }
-                when {
-                    "sgdb.apikey" !in secrets -> listOf(StepAction("Add SteamGridDB key", primary = true) { askKey() }, StepAction("Skip", run = next))
-                    sgdbCheck is io.github.matiyaaa.fuse.integrations.KeyCheck.Rejected -> listOf(StepAction("Try another key", primary = true) { askKey() }, StepAction("Skip", run = next))
-                    else -> listOf(StepAction("Continue", primary = true, run = next), StepAction("Change key") { askKey() })
-                }
+                "A free SteamGridDB key adds box art, covers, backgrounds and logos for everything else. RetroAchievements shows your progress, and Jellyfin, a free media server you run at home, brings your films and shows to Fuse Player. Each is optional, and all of them are in Settings later.",
+            optional = true, icon = FuseIcons.Link, chapter = Chapters.CONNECT,
+            actions = buildList {
+                add(StepAction("Continue", primary = true, run = next))
+                if (!sgdbWorks) add(StepAction(if (sgdbKey) "Change key" else "SteamGridDB key") { askKey() })
+                if (!raConfigured) add(StepAction("Achievements") { connectAchievements() })
+                if (jellyfinAccount == null) add(StepAction("Jellyfin") {
+                    if (store.jellyfin == null) connectJellyfin(app) {} else app.go(Route.JellyfinSetup)
+                })
+            },
+            content = {
+                StatusList(listOf(
+                    Triple(
+                        when {
+                            sgdbWorks -> true
+                            sgdbCheck is io.github.matiyaaa.fuse.integrations.KeyCheck.Rejected -> false
+                            else -> null
+                        },
+                        "Art",
+                        when {
+                            !sgdbKey -> "SteamGridDB: no key yet"
+                            sgdbWorks -> "SteamGridDB is ready"
+                            sgdbCheck is io.github.matiyaaa.fuse.integrations.KeyCheck.Rejected -> "SteamGridDB turned that key down"
+                            sgdbCheck is io.github.matiyaaa.fuse.integrations.KeyCheck.Unreachable -> "SteamGridDB didn't answer; Fuse asks again later"
+                            else -> "Checking your SteamGridDB key"
+                        },
+                    ),
+                    Triple(raConfigured.takeIf { it }, "Trophies", if (raConfigured) "RetroAchievements is on" else "RetroAchievements: not connected"),
+                    Triple((jellyfinAccount != null).takeIf { it }, "Films", jellyfinAccount?.let { "Jellyfin as ${it.userName ?: "you"}" } ?: "Jellyfin: not connected"),
+                ))
             },
         ))
 
@@ -730,27 +720,19 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             ),
             content = { WhichWayPreview(state.button) },
         ))
-        add(Step(
+        // Detecting takes presses on a pad: asked only when a pad is what is being used.
+        if (padInHand) add(Step(
             "controller", "Controller", "Which button confirms?",
             "Detect your buttons so Fuse knows how your pad is labelled and which button confirms. It takes two presses.",
             icon = FuseIcons.Gamepad, chapter = Chapters.YOURS,
-            // Detecting takes presses on a pad: offered first only when a pad is what is being used.
             actions = listOf(
-                StepAction("Detect my buttons", primary = padInHand) { app.buttonDetect = true },
-                StepAction("Continue", primary = !padInHand, run = next),
+                StepAction("Detect my buttons", primary = true) { app.buttonDetect = true },
+                StepAction("Continue", run = next),
             ),
             content = { ControllerTest(prefs.input.glyphs == io.github.matiyaaa.fuse.model.GlyphStyle.NINTENDO) },
         ))
-        add(Step(
-            "launch", "Choosing a game", "When you choose a game",
-            "Play it straight away, or open its page first, with its art, details, achievements and time played, and Play one press away. The other way is always in the game's options.",
-            icon = FuseIcons.CirclePlay, chapter = Chapters.YOURS,
-            actions = listOf(
-                StepAction("Play straight away", primary = !prefs.openGamePage) { store.updatePrefs { it.copy(openGamePage = false) }; next() },
-                StepAction("Show its page first", primary = prefs.openGamePage) { store.updatePrefs { it.copy(openGamePage = true) }; next() },
-            ),
-            content = { LaunchStylePreview(pagesFirst = state.button == 1) },
-        ))
+        // Play straight away or open the page first stays as Fuse comes: Settings, Library,
+        // Selecting a game changes it, and every game's options have the other way.
         add(Step(
             "homestyle", "Home", "Pick a Home style",
             "Fused, the one we recommend, is a board of tiles you arrange yourself. Network is a continuous dashboard of shelves. Either can be rearranged by holding confirm.",
@@ -810,34 +792,6 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
     }
 }
 
-@Composable
-private fun Fact(label: String, value: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        FText(label, Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 1, modifier = Modifier.width(120.dp))
-        FText(value, Fuse.type.bodyStrong, maxLines = 1)
-    }
-}
-
-/** What Fuse read about the device, on a panel, with the effects it recommends. */
-@Composable
-private fun DeviceCard(cap: io.github.matiyaaa.fuse.model.CapabilityProfile) {
-    Panel(Modifier.widthIn(max = 460.dp).fillMaxWidth()) {
-        Column(Modifier.padding(Space.xl), verticalArrangement = Arrangement.spacedBy(Space.s)) {
-            Fact("Processor", "${cap.cpuCores} cores")
-            Fact("Memory", "${(cap.totalRamMb / 1024.0 * 10).toInt() / 10.0} GB")
-            Fact("Screen", "${cap.screenWidthPx} x ${cap.screenHeightPx}, ${cap.maxRefreshRate.toInt()} Hz")
-            Fact("Displays", "${cap.displayCount}")
-            Spacer(Modifier.height(Space.s))
-            val motion = io.github.matiyaaa.fuse.model.recommendedMotion(PerformanceProfile.AUTOMATIC, cap, lowPower = false)
-            Chip(
-                "Recommended: ${cap.tier.name.lowercase().replaceFirstChar { it.uppercase() }} effects, ${motion.name.lowercase()} motion",
-                icon = FuseIcons.Gauge, color = Fuse.colors.accent,
-            )
-        }
-    }
-}
-
-/** Systems with a light for each: ready (green), missing (red) or unknown (grey), and a word. */
 @Composable
 internal fun StatusList(rows: List<Triple<Boolean?, String, String>>) {
     Panel(Modifier.widthIn(max = 520.dp).fillMaxWidth()) {
@@ -1040,95 +994,6 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.miniTiles(c: io.git
             if (i == chosen) androidx.compose.ui.graphics.lerp(c.text.copy(alpha = 0.2f), c.accent, lift) else c.text.copy(alpha = 0.16f),
             Offset(i * (w + gap), y - up), androidx.compose.ui.geometry.Size(w, h), androidx.compose.ui.geometry.CornerRadius(w * 0.16f),
         )
-    }
-}
-
-/**
- * The two ways a game can open, played out side by side: a tile is chosen and pressed, then either
- * the game fills the screen at once, or its page comes first (cover, title, Play), and Play is
- * pressed there. The way the highlighted button picks is lit.
- */
-@Composable
-private fun LaunchStylePreview(pagesFirst: Boolean) {
-    val c = Fuse.colors
-    val t = loopClock(3_600)
-    Row(Modifier.widthIn(max = 620.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.l)) {
-        MiniScreen("Straight into the game", active = !pagesFirst, modifier = Modifier.weight(1f)) {
-            val choose = phase(t, 0.05f, 0.25f)
-            val play = phase(t, 0.35f, 0.6f)
-            // The menu: a title bar and tiles.
-            drawRoundRect(c.text.copy(alpha = 0.5f), Offset(0f, 0f), androidx.compose.ui.geometry.Size(size.width * 0.35f, size.height * 0.07f), androidx.compose.ui.geometry.CornerRadius(size.height))
-            miniTiles(c, chosen = 1, lift = choose, y = size.height * 0.32f)
-            // The press: a ring out from the tile.
-            if (play > 0f && play < 1f) {
-                val gap = size.width * 0.03f
-                val w = (size.width - gap * 4) / 5
-                val center = Offset(w + gap + w / 2, size.height * 0.32f + w * 0.62f)
-                drawCircle(c.accent.copy(alpha = 0.6f * (1f - play)), radius = w * (0.4f + play), center = center, style = Stroke(2.dp.toPx()))
-            }
-            // The game, filling the screen.
-            val fill = phase(t, 0.5f, 0.68f) * (1f - phase(t, 0.94f, 1f))
-            if (fill > 0f) {
-                val inset = (1f - fill) * size.minDimension * 0.3f
-                drawRoundRect(
-                    Brush.verticalGradient(listOf(c.accent.copy(alpha = 0.9f), c.accent.copy(alpha = 0.35f), c.ink)),
-                    Offset(inset, inset), androidx.compose.ui.geometry.Size(size.width - inset * 2, size.height - inset * 2),
-                    androidx.compose.ui.geometry.CornerRadius(8.dp.toPx()), alpha = fill,
-                )
-                // Hills and a sun: a game, abstractly.
-                val ground = Path().apply {
-                    moveTo(inset, size.height - inset)
-                    lineTo(inset, size.height * 0.72f)
-                    quadraticTo(size.width * 0.3f, size.height * 0.5f, size.width * 0.55f, size.height * 0.7f)
-                    quadraticTo(size.width * 0.8f, size.height * 0.86f, size.width - inset, size.height * 0.62f)
-                    lineTo(size.width - inset, size.height - inset)
-                    close()
-                }
-                drawPath(ground, c.ink.copy(alpha = 0.7f * fill))
-                drawCircle(Color.White.copy(alpha = 0.85f * fill), radius = size.minDimension * 0.08f, center = Offset(size.width * 0.72f, size.height * 0.3f))
-            }
-        }
-        MiniScreen("The game's page first", active = pagesFirst, modifier = Modifier.weight(1f)) {
-            val choose = phase(t, 0.05f, 0.25f)
-            val page = phase(t, 0.32f, 0.48f) * (1f - phase(t, 0.94f, 1f))
-            val press = phase(t, 0.62f, 0.8f)
-            if (page < 1f) {
-                drawRoundRect(c.text.copy(alpha = 0.5f * (1f - page)), Offset(0f, 0f), androidx.compose.ui.geometry.Size(size.width * 0.35f, size.height * 0.07f), androidx.compose.ui.geometry.CornerRadius(size.height))
-                miniTiles(c, chosen = 1, lift = choose * (1f - page), y = size.height * 0.32f)
-            }
-            if (page > 0f) {
-                val dy = (1f - page) * size.height * 0.08f
-                // Cover, title, a meta line, a description and the Play button.
-                drawRoundRect(c.accent.copy(alpha = 0.75f * page), Offset(0f, dy), androidx.compose.ui.geometry.Size(size.width * 0.3f, size.height * 0.72f), androidx.compose.ui.geometry.CornerRadius(6.dp.toPx()))
-                val x = size.width * 0.36f
-                drawRoundRect(c.text.copy(alpha = 0.85f * page), Offset(x, dy + size.height * 0.04f), androidx.compose.ui.geometry.Size(size.width * 0.46f, size.height * 0.09f), androidx.compose.ui.geometry.CornerRadius(size.height))
-                drawRoundRect(c.text.copy(alpha = 0.35f * page), Offset(x, dy + size.height * 0.2f), androidx.compose.ui.geometry.Size(size.width * 0.3f, size.height * 0.05f), androidx.compose.ui.geometry.CornerRadius(size.height))
-                for (i in 0 until 3) {
-                    drawRoundRect(c.text.copy(alpha = 0.2f * page), Offset(x, dy + size.height * (0.32f + 0.08f * i)), androidx.compose.ui.geometry.Size(size.width * (0.58f - 0.1f * (i % 2)), size.height * 0.035f), androidx.compose.ui.geometry.CornerRadius(size.height))
-                }
-                val pill = androidx.compose.ui.geometry.Size(size.width * 0.24f, size.height * 0.13f)
-                val at = Offset(x, dy + size.height * 0.6f)
-                val pressed = if (press > 0f && press < 1f) 1f - 0.08f * kotlin.math.sin(press * kotlin.math.PI.toFloat()) else 1f
-                drawRoundRect(
-                    c.accent.copy(alpha = page), Offset(at.x + pill.width * (1f - pressed) / 2, at.y + pill.height * (1f - pressed) / 2),
-                    androidx.compose.ui.geometry.Size(pill.width * pressed, pill.height * pressed), androidx.compose.ui.geometry.CornerRadius(size.height),
-                )
-                // A small play triangle on it.
-                val tri = Path().apply {
-                    val cx = at.x + pill.width * 0.5f
-                    val cy = at.y + pill.height * 0.5f
-                    val r = pill.height * 0.22f
-                    moveTo(cx - r * 0.7f, cy - r)
-                    lineTo(cx + r, cy)
-                    lineTo(cx - r * 0.7f, cy + r)
-                    close()
-                }
-                drawPath(tri, c.onAccent.copy(alpha = page))
-                if (press > 0f && press < 1f) {
-                    drawCircle(c.accent.copy(alpha = 0.6f * (1f - press)), radius = pill.width * (0.5f + press * 0.6f), center = Offset(at.x + pill.width / 2, at.y + pill.height / 2), style = Stroke(2.dp.toPx()))
-                }
-            }
-        }
     }
 }
 

@@ -201,6 +201,16 @@ From 0.3.8 ("The Reach Update") your devices' games make one library you can rea
   kept on this device, so the Fuse Library can be browsed with the host away. Art follows the same
   rules as RomM's games (Fuse's art order, SteamGridDB and your choices), and **Fill Everything** in
   Settings can include the Fuse Library.
+- **Art found once for the household (0.4.3).** Each device's list carries the art it chose for
+  each game from the providers (SteamGridDB, IGDB, TheGamesDB, ScreenScraper, Libretro and GameTDB,
+  by its web address: one of each kind and up to three screenshots) and its details (a description
+  of up to 1,500 characters, year, developer, publisher and genres). When another device fills a
+  game it has too (the same serial, household game, RomM game or files), it takes that art and
+  those details as they are, before asking any provider: a household searches each game once, not
+  once a device, so the providers' daily allowances go as far as one device's would. Only filling
+  does this; **Replace** asks the providers anew. Art you picked yourself, a folder's own pictures
+  and RomM's (which need this device's sign-in) stay on their device. New art goes up with the list
+  a minute and a half after a fill finds it, so a fill of many games becomes one update.
 
 ### Bringing a game here, or sending it anywhere
 
@@ -269,6 +279,11 @@ Settings are sorted into four kinds:
 A setting added in a later version stays a device's until it is listed as a person's, so nothing
 crosses over by accident. Each kind can be turned off under **What syncs**.
 
+A person's settings keep when they were chosen, and the latest choice wins wherever it was made. A
+setting nobody chose on a device (Fuse's own default, or one kept from before settings had times)
+is no choice: it only fills what the profile hasn't got, and never replaces a choice made on
+another device, whichever device reaches the host first.
+
 ### This device's own Home
 
 While arranging Home, a switch beside **Add widget** and **Done** chooses whose Home it is:
@@ -296,23 +311,24 @@ Saves are found by per-emulator adapters. Fuse One and Syncthing use the same on
 | RetroArch | Per core, where its config says (beside the content, or its saves folder) | Per core |
 | Lemuroid | Its saves folder, when moved out of Android's private storage | |
 | DuckStation, ePSXe, FPse | Memory cards | DuckStation |
-| PCSX2, NetherSX2, AetherSX2, ARMSX2 | Memory cards (shared by every game on them, synced as cards) | |
+| PCSX2, NetherSX2, AetherSX2, ARMSX2 | Memory cards (shared by every game on them, synced as cards) | `<serial> (<CRC>).<slot>.p2s` and its resume state, in `sstates` or `[Folders] Savestates` |
 | Play! | Its first memory card, the folder `vfs/mc0` in Play Data Files (or where its `config.xml` moved it) | |
-| PPSSPP | SAVEDATA folders by game id, on the memory stick you chose | |
-| Dolphin (and MMJR) | GameCube memory cards, Wii saves | |
-| melonDS (computer) | The save folder in its settings (`SaveFilePath` in `melonDS.toml`), else beside the game; portable, Flatpak and system config folders | |
+| PPSSPP | SAVEDATA folders by game id, on the memory stick you chose | `PSP/PPSSPP_STATE/<game id>_<version>_<slot>.ppst`, with their pictures |
+| Dolphin (and MMJR) | GameCube memory cards, Wii saves | `StateSaves/<game id>.s01` to `.s10` |
+| melonDS (computer) | The save folder in its settings (`SaveFilePath` in `melonDS.toml`), else beside the game; portable, Flatpak and system config folders | `<game>.ml1` to `.ml8`, in `SavestatePath` or beside the game |
 | melonDS (Android) | Beside the game for games in its ROM search folders; games opened another way save in its private `Android/data` folder, and Fuse says so | |
 | NooDS | Beside the game, or its separate `saves` folder when that setting is on | |
-| mGBA (computer) | `savegamePath` in its `config.ini`, else beside the game | |
-| Mednafen | `sav/<name>.<fingerprint>.sav` (and `.eep`, `.rtc` for GBA), only between Mednafen installs | |
+| mGBA (computer) | `savegamePath` in its `config.ini`, else beside the game | `<game>.ss0` to `.ss9`, in `savestatePath` or beside the game |
+| Mednafen | `sav/<name>.<fingerprint>.sav` (and `.eep`, `.rtc` for GBA), only between Mednafen installs | `mcs/<name>.<fingerprint>.mc0` to `.mc9` |
 | My Boy!, My OldBoy! | Their own `MyBoy/save` and `MyOldBoy/save` folders | |
 | mGBA, SkyEmu (Android), Pizza Boy, Linkboy, other handheld emulators | Beside the game (a guess where the emulator publishes no layout) | |
 | DraStic | `backup/<game>.dsv`, converted to and from a plain DS save | |
 | Mupen64Plus, M64Plus FZ | The game's EEPROM, SRAM, FlashRAM and paks, converted to and from RetroArch's one file | |
-| Flycast | Each game's own VMU, `<product number>_vmu_save_A1.bin` (read from a GDI's boot header), or the one shared VMU when Per-game VMU is off; `Dreamcast.VMUPath` when set | |
+| Flycast | Each game's own VMU, `<product number>_vmu_save_A1.bin` (read from a GDI's boot header), or the one shared VMU when Per-game VMU is off; `Dreamcast.VMUPath` when set | `<game>.state` and `<game>_<n>.state`, in `Dreamcast.SavestatePath` or its data folder |
 | Redream | Its shared VMU, `vmu0.bin`, beside its program | |
 | Yaba Sanshiro, Saturn emulators | Backup RAM | |
-| MAME | NVRAM by set, in `nvram_directory` from `mame.ini` | |
+| MAME | NVRAM by set, in `nvram_directory` from `mame.ini` | A folder by set in `state_directory` (`sta`) |
+| Supermodel | NVRAM by ROM set, `<set>.nv` in its NVRAM folder: beside a `Config` folder in the game's folder, else `~/.supermodel/NVRAM`, else the XDG data folder's `supermodel/NVRAM` (beside the program on Windows) | `Saves/<set>.st0` to `.st9` |
 | ScummVM | Its saves folder, `savepath` from `scummvm.ini` when set | |
 | RPCS3 (and on Android) | dev_hdd0 savedata by serial | |
 | Vita3K | ux0 savedata by title id: its `portable/fs`, the `pref-path` in its `config.yml`, or its own folder | |
@@ -405,6 +421,19 @@ app's `Android/data` folder private, so an emulator that only saves there says s
 its data out. Still out of reach: xemu (its saves are inside a hard disk image), Windows games in
 Winlator and similar (each keeps its own), and PC games (Steam has its own cloud).
 
+**Saves from an earlier folder.** Saves on This Device, in a game's options, also looks where the
+emulator kept its saves before: the Flatpak beside a native install, an installed copy beside a
+portable one, or the install's own folder once another was chosen in Save Folders. It asks the
+same adapter where it would look were the folder in use not there, so nothing needs a list of its
+own. Only a newer save of the game is offered; Use This Save copies it to the folder in use, keeps
+the save that was there in Fuse One's kept folder first, and leaves the earlier folder as it is.
+
+**One way per game.** Save Sync on this device picks how this device's saves move: Fuse One,
+RomM, Syncthing, or none. RomM, Then Fuse One has RomM move the saves of games from RomM and Fuse
+One every other game's. Fuse One then leaves those games' saves alone, as for a game kept on this
+device only, and still counts the time played. Syncthing moves whole folders, so it is never
+combined.
+
 ## Around a game
 
 **Before a game starts**, Fuse asks the host for that game's newest save and puts it in place (a
@@ -425,6 +454,14 @@ another device is playing, or has just stopped and is still sending, asks first:
 (the game starts by itself once it arrives) or play with the newest save the host has. A device
 that went quiet mid-game (asleep or switched off) is said to be quiet, with when its last save
 arrived.
+
+**Playing together.** A game started with Host a Game (RetroArch's netplay, PPSSPP's ad hoc play)
+is said to the host as open to join, with how, its emulator, this device's home network addresses
+and the port the emulator listens on, for as long as it is played and no longer. The host wakes the
+other devices at once, so whoever has Fuse open hears "Ana is hosting Kart Racer on the Steam
+Deck", and the game's Play Together lists it with Join. Joining someone's game is never asked
+about as another device on the same game. Nothing else about the game or the device is sent, and
+an older host simply passes it by.
 
 **When both sides played** since they last agreed, Fuse asks which save to use, showing where and
 when each was saved and how long the game had been played by then: **Use This Device** or

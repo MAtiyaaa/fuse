@@ -10,6 +10,9 @@ enum class PatchFormat(val label: String) {
 
     /** Beat Patching System (byuu): copy commands, with the game's and the result's CRC32. */
     BPS("BPS"),
+
+    /** VCDIFF (RFC 3284) as xdelta3 writes it: copies and adds, with an Adler-32 of each part of the result. */
+    XDELTA("xdelta"),
 }
 
 /** What applying a patch to a game came to. */
@@ -30,6 +33,9 @@ sealed interface PatchOutcome {
 
     /** The patch isn't one Fuse can read, or is damaged ([reason] says how). */
     data class Unreadable(val reason: String) : PatchOutcome
+
+    /** The patch's own check of what it makes failed on this game: it was made for another version ([reason] says so). */
+    data class NotForThisGame(val format: PatchFormat, val reason: String) : PatchOutcome
 }
 
 /**
@@ -44,18 +50,20 @@ object RomPatches {
         patch.startsWith("PATCH") -> PatchFormat.IPS
         patch.startsWith("UPS1") -> PatchFormat.UPS
         patch.startsWith("BPS1") -> PatchFormat.BPS
+        Vcdiff.isVcdiff(patch) -> PatchFormat.XDELTA
         else -> null
     }
 
     /** File extensions of patches Fuse applies. */
-    val EXTENSIONS = setOf("ips", "ups", "bps")
+    val EXTENSIONS = setOf("ips", "ups", "bps", "xdelta", "vcdiff")
 
     fun apply(source: ByteArray, patch: ByteArray): PatchOutcome = try {
         when (formatOf(patch)) {
             PatchFormat.IPS -> ips(source, patch)
             PatchFormat.UPS -> checkedWithHeader(source) { ups(it, patch) }
             PatchFormat.BPS -> checkedWithHeader(source) { bps(it, patch) }
-            null -> PatchOutcome.Unreadable("This isn't an IPS, UPS or BPS patch.")
+            PatchFormat.XDELTA -> xdelta(source, patch)
+            null -> PatchOutcome.Unreadable("This isn't an IPS, UPS, BPS or xdelta patch.")
         }
     } catch (e: Damaged) {
         PatchOutcome.Unreadable(e.message ?: "The patch is damaged.")
@@ -70,6 +78,23 @@ object RomPatches {
         if (first !is PatchOutcome.WrongGame || source.size % 1024 != COPIER_HEADER) return first
         val second = run(source.copyOfRange(COPIER_HEADER, source.size))
         return if (second is PatchOutcome.Patched) PatchOutcome.Patched(second.bytes, second.format, second.checked, headerRemoved = true) else first
+    }
+
+    // ---------------------------------------------------------------------------------- xdelta
+
+    /**
+     * An xdelta patch ([Vcdiff]). It names no game, but each part of its result carries an
+     * Adler-32 that a patch for another version fails; that is tried again without a copier header.
+     */
+    private fun xdelta(source: ByteArray, patch: ByteArray): PatchOutcome {
+        fun run(on: ByteArray, headerRemoved: Boolean): PatchOutcome = try {
+            Vcdiff.apply(on, patch, MAX_SIZE).let { PatchOutcome.Patched(it.bytes, PatchFormat.XDELTA, it.checked, headerRemoved) }
+        } catch (e: Vcdiff.Problem) {
+            if (e.notForThisGame) PatchOutcome.NotForThisGame(PatchFormat.XDELTA, e.message.orEmpty()) else PatchOutcome.Unreadable(e.message.orEmpty())
+        }
+        val first = run(source, headerRemoved = false)
+        if (first !is PatchOutcome.NotForThisGame || source.size % 1024 != COPIER_HEADER) return first
+        return run(source.copyOfRange(COPIER_HEADER, source.size), headerRemoved = true).takeIf { it is PatchOutcome.Patched } ?: first
     }
 
     // ------------------------------------------------------------------------------------- IPS

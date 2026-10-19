@@ -68,6 +68,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -153,33 +154,18 @@ internal class DefaultReachOps(
         ctx.addRemoteGames(games)
         val previousClaims = ctx.householdProviderClaims
         ctx.householdProviderClaims = { game ->
-            val platform = game.platformId.value
-            val serialKey = game.tags.serial?.takeIf { it.isNotBlank() }?.let {
-                GameKey.of(platform, it, null, "").id
-            }
-            val romId = game.links.rommRomId
-            val householdKey = game.id.householdOnly?.let { games.keyOf(game.id) }
-            val mine = household.mine.value.filter { entry ->
-                entry.platform == platform && entry.name == FsPath.name(game.location.path) && entry.sizeBytes == game.location.sizeBytes
-            }.singleOrNull()
-            val matches = household.libraries.value.flatMap { library ->
-                library.entries.filter { entry ->
-                    entry.platform == platform && (
-                        householdKey != null && householdKey in entry.identityKeys() ||
-                        serialKey != null && serialKey in entry.identityKeys() ||
-                        romId != null && entry.rommRomId == romId ||
-                        mine?.fingerprint != null && mine.fingerprint == entry.fingerprint &&
-                            (serialKey == null || entry.serial.isNullOrBlank() || serialKey == GameKey.of(platform, entry.serial, null, "").id)
-                    )
-                }.flatMap { entry ->
-                    entry.providerClaims + listOfNotNull(
-                        entry.steamGridDbId?.let { io.github.matiyaaa.fuse.model.ProviderClaim("steamgriddb", it.toString(), originDeviceId = library.device) },
-                        entry.igdbId?.let { io.github.matiyaaa.fuse.model.ProviderClaim("igdb", it.toString(), originDeviceId = library.device) },
-                    )
-                }
+            val matches = sameGameElsewhere(game).flatMap { (device, entry) ->
+                entry.providerClaims + listOfNotNull(
+                    entry.steamGridDbId?.let { io.github.matiyaaa.fuse.model.ProviderClaim("steamgriddb", it.toString(), originDeviceId = device) },
+                    entry.igdbId?.let { io.github.matiyaaa.fuse.model.ProviderClaim("igdb", it.toString(), originDeviceId = device) },
+                )
             }
             (previousClaims(game) + matches).distinct()
         }
+        val previousFill = ctx.householdFill
+        ctx.householdFill = { game -> householdFound(game) ?: previousFill(game) }
+        // Art found here goes up with this device's list, so the others take it instead of asking the providers.
+        ctx.scope.launch { ctx.gameArtFound.drop(1).collect { household.artChanged() } }
 
         val otherDetail = ctx.remoteDetail
         ctx.remoteDetail = { id -> if (id.householdOnly != null) detail(id) else otherDetail(id) }
@@ -762,9 +748,73 @@ internal class DefaultReachOps(
         return TransferRow(item, if (failed) emptyList() else listOf(TransferAction.CANCEL), device = c.target, deviceName = name, deviceOnline = online(c.target, devs), deviceSeen = lastSeen(c.target, devs))
     }
 
+    /**
+     * [game] as another device of the household has it (with that device's id): the same serial,
+     * the same household game, the same RomM game, or the very same files.
+     */
+    private suspend fun sameGameElsewhere(game: io.github.matiyaaa.fuse.model.Game): List<Pair<String, LibraryEntry>> {
+        val platform = game.platformId.value
+        val serialKey = game.tags.serial?.takeIf { it.isNotBlank() }?.let { GameKey.of(platform, it, null, "").id }
+        val romId = game.links.rommRomId
+        val householdKey = game.id.householdOnly?.let { games.keyOf(game.id) }
+        val mine = household.mine.value.filter { entry ->
+            entry.platform == platform && entry.name == FsPath.name(game.location.path) && entry.sizeBytes == game.location.sizeBytes
+        }.singleOrNull()
+        return household.libraries.value.flatMap { library ->
+            library.entries.filter { entry ->
+                entry.platform == platform && (
+                    householdKey != null && householdKey in entry.identityKeys() ||
+                        serialKey != null && serialKey in entry.identityKeys() ||
+                        romId != null && entry.rommRomId == romId ||
+                        mine?.fingerprint != null && mine.fingerprint == entry.fingerprint &&
+                        (serialKey == null || entry.serial.isNullOrBlank() || serialKey == GameKey.of(platform, entry.serial, null, "").id)
+                    )
+            }.map { library.device to it }
+        }
+    }
+
+    /**
+     * The art and details another device of the household found for [game], to be taken as they are
+     * instead of asking the providers again ([StoreContext.householdFill]); null when none has any.
+     */
+    private suspend fun householdFound(game: io.github.matiyaaa.fuse.model.Game): HouseholdFound? {
+        val entries = sameGameElsewhere(game).map { it.second }
+        if (entries.isEmpty()) return null
+        val art = entries.flatMap { it.art }
+            .mapNotNull { a ->
+                val kind = runCatching { io.github.matiyaaa.fuse.model.MediaKind.valueOf(a.kind) }.getOrNull() ?: return@mapNotNull null
+                val provider = sharedProvider(a.source) ?: return@mapNotNull null
+                io.github.matiyaaa.fuse.model.ArtworkOption(provider, kind, a.url, thumbUrl = null, width = null, height = null)
+            }
+            .distinctBy { it.kind to it.url }
+        // Details only when the other device has them whole (its description isn't cut short).
+        val full = entries.firstOrNull { (it.summary?.length ?: 0) in 1 until SHARED_SUMMARY && it.releaseYear != null && it.genres.isNotEmpty() }
+        val details = full?.let {
+            io.github.matiyaaa.fuse.model.GameMetadata(
+                description = it.summary, releaseYear = it.releaseYear, developer = it.developer,
+                publisher = it.publisher, genres = it.genres,
+            )
+        }
+        if (art.isEmpty() && details == null) return null
+        return HouseholdFound(art, details, (full ?: entries.first()).title)
+    }
+
     // ------------------------------------------------------------------ what this device does for the others
 
     private val local = object : HouseholdLocal {
+        override suspend fun art(): Map<String, List<io.github.matiyaaa.fuse.sync.SharedArt>> = withContext(Dispatchers.Default) {
+            val ids = localIds.value
+            if (ids.isEmpty()) return@withContext emptyMap()
+            val media = ctx.data.media.mediaFor(ids.keys.map { io.github.matiyaaa.fuse.model.MediaOwner.OfGame(GameId(it)) })
+            buildMap {
+                for ((id, keys) in ids) {
+                    val key = keys.firstOrNull() ?: continue
+                    val art = sharedArt(media[io.github.matiyaaa.fuse.model.MediaOwner.OfGame(GameId(id))])
+                    if (art.isNotEmpty()) put(key, art)
+                }
+            }
+        }
+
         override suspend fun steamIdentities(): List<io.github.matiyaaa.fuse.sync.SteamIdentity> =
             engine.steamAccounts().map { io.github.matiyaaa.fuse.sync.SteamIdentity(it.steamId, it.personaName, it.mostRecent) }
 
@@ -787,8 +837,9 @@ internal class DefaultReachOps(
                     game = keys.first(), ids = keys.drop(1), title = g.displayTitle, platform = g.platformId.value, sizeBytes = files.sumOf { it.sizeBytes },
                     addedAt = arrival?.at ?: s.addedAt, arrivedFrom = arrival?.from, folder = folder, name = FsPath.name(g.location.path),
                     files = rel.map { (p, f) -> PeerFile(p, f.sizeBytes) }, serial = g.tags.serial, rommRomId = romm.romOf(g.id) ?: g.links.rommRomId,
-                    steamGridDbId = g.links.steamGridDbGameId, igdbId = g.links.igdbId, summary = g.metadata.description?.take(600),
+                    steamGridDbId = g.links.steamGridDbGameId, igdbId = g.links.igdbId, summary = g.metadata.description?.take(SHARED_SUMMARY),
                     releaseYear = g.metadata.releaseYear, developer = g.metadata.developer, genres = g.metadata.genres.take(6),
+                    publisher = g.metadata.publisher,
                     providerClaims = io.github.matiyaaa.fuse.data.repo.ProviderClaimRepository(ctx.data.cache).get(g.id) + listOfNotNull(
                         g.links.steamGridDbGameId?.let { io.github.matiyaaa.fuse.model.ProviderClaim("STEAMGRIDDB", it.toString(), originDeviceId = self) },
                         g.links.igdbId?.let { io.github.matiyaaa.fuse.model.ProviderClaim("IGDB", it.toString(), originDeviceId = self) },
@@ -917,6 +968,42 @@ internal class DefaultReachOps(
     companion object {
         const val ARRIVED = "reach.arrived"
         const val RECENT = 40
+
+        /** How much of a game's description goes up with the list (enough for a whole one, mostly). */
+        const val SHARED_SUMMARY = 1500
+
+        /** Screenshots shared per game: enough for the game's page, without swelling the list. */
+        private const val SHARED_SCREENSHOTS = 3
+
+        /** The providers whose art another device can take as it is: public addresses, none of them private to one person. */
+        private val SHAREABLE = mapOf(
+            io.github.matiyaaa.fuse.model.MediaSource.STEAMGRIDDB to io.github.matiyaaa.fuse.model.ScrapeProviderId.STEAMGRIDDB,
+            io.github.matiyaaa.fuse.model.MediaSource.IGDB to io.github.matiyaaa.fuse.model.ScrapeProviderId.IGDB,
+            io.github.matiyaaa.fuse.model.MediaSource.THEGAMESDB to io.github.matiyaaa.fuse.model.ScrapeProviderId.THEGAMESDB,
+            io.github.matiyaaa.fuse.model.MediaSource.SCREENSCRAPER to io.github.matiyaaa.fuse.model.ScrapeProviderId.SCREENSCRAPER,
+            io.github.matiyaaa.fuse.model.MediaSource.LIBRETRO to io.github.matiyaaa.fuse.model.ScrapeProviderId.LIBRETRO,
+            io.github.matiyaaa.fuse.model.MediaSource.GAMETDB to io.github.matiyaaa.fuse.model.ScrapeProviderId.GAMETDB,
+        )
+
+        internal fun sharedProvider(source: String): io.github.matiyaaa.fuse.model.ScrapeProviderId? =
+            SHAREABLE.entries.firstOrNull { it.key.name == source }?.value
+
+        /**
+         * The art of a game this device can share: what a provider gave (never a person's own picks,
+         * a folder's files or RomM's, which need this device's sign-in), by its web address, one of
+         * each kind and a few screenshots.
+         */
+        internal fun sharedArt(media: io.github.matiyaaa.fuse.model.MediaSet?): List<io.github.matiyaaa.fuse.sync.SharedArt> {
+            if (media == null) return emptyList()
+            return media.items
+                .filter { it.source in SHAREABLE && it.kind in io.github.matiyaaa.fuse.model.MediaKind.Fillable && it.remoteUrl?.startsWith("http") == true }
+                // Never an address with a key or password in it (links are kept without them; this holds even for an old one).
+                .filter { io.github.matiyaaa.fuse.integrations.redact(it.remoteUrl) == it.remoteUrl }
+                .sortedBy { it.order }
+                .groupBy { it.kind }
+                .flatMap { (kind, items) -> items.take(if (kind == io.github.matiyaaa.fuse.model.MediaKind.SCREENSHOT) SHARED_SCREENSHOTS else 1) }
+                .map { io.github.matiyaaa.fuse.sync.SharedArt(it.kind.name, it.remoteUrl!!, it.source.name) }
+        }
 
         /** How long a request for a game not seen yet waits for the lists read again. */
         const val FETCH_LOOK_MS = 15_000L

@@ -193,6 +193,130 @@ internal fun AuditDriver.detailScreens() {
         }
     }
 
+    scenario("details", "ports on a computer") {
+        windowsStore.updatePrefs { it.copy(portsEnabled = true, addonsOrder = listOf("PORTS")) }
+        try {
+            show(windowsStore, windowsPlatform)
+            home()
+            // Addons is found by name: the Ports tab, moved first, opens with it.
+            repeat(6) { if (!hasText("Games rebuilt to run natively")) tap(PadButton.R1) }
+            waitFor("Games rebuilt to run natively")
+            settle(1_200)
+            shoot("Ports: the list inside Fuse, nothing installed")
+            tap(PadButton.DPAD_DOWN)
+            settle(600)
+            shoot("a port focused, Install its next step")
+            tap(PadButton.X)
+            waitFor("DevilutionX's Project Page")
+            settle(600)
+            shoot("a port's options: install, its game's files first, its project")
+            tap(PadButton.B)
+            waitGone("DevilutionX's Project Page")
+        } finally {
+            windowsStore.updatePrefs { it.copy(portsEnabled = false, addonsOrder = emptyList()) }
+        }
+    }
+
+    scenario("details", "ports while reading, empty, failing and in every stage") {
+        // Fuse's own list, dressed in each state Ports can show: the list being read, a list with no
+        // ports, a look for a newer list that failed, and each port somewhere between install and play.
+        val base = windowsStore
+        val real = runBlocking {
+            base.ports.open()
+            kotlinx.coroutines.withTimeout(10_000) { base.ports.state.first { it.loaded && it.ports.size >= 3 } }
+        }
+        val (dx, rct, fo) = real.ports
+        val fixed = kotlinx.coroutines.flow.MutableStateFlow(io.github.matiyaaa.fuse.ui.shell.store.PortsState())
+        val ops = object : io.github.matiyaaa.fuse.ui.shell.store.PortsOps by base.ports {
+            override val state = fixed
+            override fun open() = Unit
+        }
+        val store = object : io.github.matiyaaa.fuse.ui.shell.store.FuseStore by base { override val ports = ops }
+        base.updatePrefs { it.copy(portsEnabled = true, addonsOrder = listOf("PORTS")) }
+        fun installed(v: io.github.matiyaaa.fuse.ui.shell.store.PortView) = v.copy(installedVersion = v.port.version, installedSha = v.build?.sha256)
+        try {
+            show(store, windowsPlatform)
+            home()
+            repeat(6) { if (!hasText("Games rebuilt to run natively")) tap(PadButton.R1) }
+            waitFor("Reading the list of ports...")
+            settle(900)
+            shoot("Ports: the list being read, the shapes its cards will take")
+            fixed.value = io.github.matiyaaa.fuse.ui.shell.store.PortsState(loaded = true)
+            waitFor("No ports in the list yet")
+            settle(600)
+            shoot("a list with no ports in it")
+            fixed.value = real.copy(
+                signed = true, canCheck = true, revision = 4, problem = "GitHub didn't answer.",
+                ports = listOf(
+                    dx.copy(job = io.github.matiyaaa.fuse.ui.shell.store.PortJob.Downloading(0.42f, (dx.build?.size ?: 0) * 42 / 100, dx.build?.size)),
+                    rct.copy(job = io.github.matiyaaa.fuse.ui.shell.store.PortJob.Failed("The download didn't match the checksum its source published, so it was deleted.")),
+                    installed(fo).copy(folders = mapOf(fo.port.data.first().id to "D:/Games/Fallout 2"), missing = mapOf(fo.port.data.first().id to "That folder has no master.dat.")),
+                ),
+            )
+            waitFor("GitHub didn't answer. The list Fuse has is shown.")
+            tap(PadButton.DPAD_DOWN, 2)
+            settle(900)
+            shoot("a look for a newer list that failed; downloading, a download refused, a folder lacking a file")
+            fixed.value = real.copy(
+                signed = true, canCheck = true, revision = 4,
+                ports = listOf(
+                    installed(dx).copy(verified = "2026-10-17", folders = mapOf(dx.port.data.first().id to "D:/Games/Diablo"), missing = emptyMap(), game = io.github.matiyaaa.fuse.model.GameId(900_001L)),
+                    installed(rct).copy(installedVersion = "0.5.5", installedSha = "0".repeat(64), missing = emptyMap(), folders = mapOf(rct.port.data.first().id to "D:/Games/RCT2"), game = io.github.matiyaaa.fuse.model.GameId(900_002L)),
+                    fo.copy(build = null, whyNot = "${fo.port.name} isn't published for this computer."),
+                ),
+            )
+            waitFor("signed list, revision 4")
+            tap(PadButton.DPAD_UP)
+            settle(900)
+            shoot("a signed list: verified and ready, an update out, one not made for this computer")
+        } finally {
+            base.updatePrefs { it.copy(portsEnabled = false, addonsOrder = emptyList()) }
+        }
+    }
+
+    scenario("details", "store channels, room and a link") {
+        show(windowsStore, windowsPlatform)
+        home()
+        repeat(6) { if (!hasText("Emulators for this computer")) tap(PadButton.R1) }
+        waitFor("Emulators for this computer")
+        settle(900)
+        // Cemu isn't on this PC: its page says the room it needs against what's free, and what it follows.
+        focusText("Search") { tap(PadButton.DPAD_UP) }
+        tap(PadButton.A)
+        type("Cemu")
+        router.textInput?.submit()
+        waitFor("Search: Cemu")
+        settle(900)
+        focusHint("Details") { tap(PadButton.DPAD_DOWN) }
+        tap(PadButton.A)
+        waitFor("Needs about")
+        settle(1_200)
+        tap(PadButton.DPAD_DOWN, 2)
+        settle(900)
+        shoot("a program's page: the room it needs, and the releases it follows")
+        tap(PadButton.DPAD_UP, 2)
+        tap(PadButton.DPAD_RIGHT)
+        tap(PadButton.A)
+        waitFor("Cemu's Builds")
+        settle(900)
+        shoot("stable releases or pre-releases")
+        tap(PadButton.B)
+        waitGone("Cemu's Builds")
+        tap(PadButton.B)
+        // A program by its link, on a Forgejo server: what would install is shown before it is added.
+        waitFor("Emulators for this computer")
+        focusText("Search", substring = true) { tap(PadButton.DPAD_UP) }
+        focusText("Add an app") { tap(PadButton.DPAD_RIGHT) }
+        tap(PadButton.A)
+        type("codeberg.org/lantern/pocket-arcade")
+        router.textInput?.submit()
+        waitFor("Add pocket-arcade?")
+        settle(1_200)
+        shoot("what a link would install, and the shelf it goes on")
+        tap(PadButton.B)
+        waitGone("Add pocket-arcade?")
+    }
+
     scenario("details", "achievements from xenia") {
         // A Windows PC of its own with one Xbox 360 game, tagged with its title id, and Xenia's
         // profile holding that game's achievements (a GPD, as Xenia writes it).
@@ -284,6 +408,230 @@ internal fun AuditDriver.detailScreens() {
         } finally {
             controls.pcsx2 = null
         }
+    }
+
+    /** A PSP game on a computer showing [view] as its Play Together, opened from its options. */
+    fun playTogether(view: io.github.matiyaaa.fuse.ui.shell.store.TogetherView, until: String, shot: String) {
+        useLibrary()
+        val base = libraryStore
+        val library = object : io.github.matiyaaa.fuse.ui.shell.store.LibraryOps by base.library {
+            override suspend fun together(id: io.github.matiyaaa.fuse.model.GameId) = view
+        }
+        show(object : io.github.matiyaaa.fuse.ui.shell.store.FuseStore by base { override val library = library }, AuditPlatform(size, host = io.github.matiyaaa.fuse.model.Host.LINUX))
+        search("Waystation Nine")
+        tap(PadButton.START)
+        tap(PadButton.X)
+        tapText("Play Together")
+        waitFor(until)
+        settle(900)
+        shoot(shot, 1_200)
+    }
+
+    scenario("details", "play together") {
+        // Two others in the household hosting it.
+        val now = System.currentTimeMillis()
+        playTogether(
+            io.github.matiyaaa.fuse.ui.shell.store.TogetherView.Ready(
+                title = "Waystation Nine", emulator = "PPSSPP", way = io.github.matiyaaa.fuse.launch.online.TogetherWay.AD_HOC,
+                missing = listOf("Its wireless on"), canHost = true,
+                hosts = listOf(
+                    io.github.matiyaaa.fuse.ui.shell.store.TogetherHost("deck", "Steam Deck", "Ana", now - 4 * 60_000, "192.168.1.31", 27312),
+                    io.github.matiyaaa.fuse.ui.shell.store.TogetherHost("ally", "ROG Ally", "Mo", now - 22 * 60_000, "192.168.1.44", 27312),
+                ),
+                household = true, rpcn = null, canPutBack = true,
+            ),
+            until = "Join Ana's Game", shot = "the household's games to join, hosting here, and what PPSSPP needs",
+        )
+    }
+
+    scenario("details", "play together online") {
+        playTogether(
+            io.github.matiyaaa.fuse.ui.shell.store.TogetherView.Ready(
+                title = "Waystation Nine", emulator = "RPCS3", way = io.github.matiyaaa.fuse.launch.online.TogetherWay.ONLINE_SERVICE,
+                missing = listOf("Its network on, through RPCN"), canHost = false, hosts = emptyList(), household = true, rpcn = "Ana_99", canPutBack = true,
+            ),
+            until = "Sign Out of RPCN", shot = "RPCS3 online through RPCN, signed in",
+        )
+    }
+
+    /** The game's Play With list with [offer] standing in for what AnyPS5 would do with it. */
+    fun recompilePicker(offer: io.github.matiyaaa.fuse.ui.shell.store.RecompileOffer, until: String, shot: String) {
+        useLibrary()
+        val base = libraryStore
+        val ports = object : io.github.matiyaaa.fuse.ui.shell.store.PortsOps by base.ports {
+            override val supported = true
+            override suspend fun recompileOffer(game: io.github.matiyaaa.fuse.model.GameId) = offer
+        }
+        show(object : io.github.matiyaaa.fuse.ui.shell.store.FuseStore by base { override val ports = ports }, AuditPlatform(size, host = io.github.matiyaaa.fuse.model.Host.LINUX))
+        search("Waystation Nine")
+        tap(PadButton.START)
+        tap(PadButton.X)
+        tapText("Emulator")
+        waitFor(until)
+        settle(900)
+        shoot(shot, 1_200)
+    }
+
+    scenario("details", "recompile with anyps5") {
+        recompilePicker(io.github.matiyaaa.fuse.ui.shell.store.RecompileOffer(builtWith = "v0.1.3"), until = "Recompile Again", shot = "a PS5 dump recompiled, again or taken out")
+        recompilePicker(
+            io.github.matiyaaa.fuse.ui.shell.store.RecompileOffer(whyNot = "This dump's eboot.bin is still in its signed container (a SELF). AnyPS5 recompiles a dump whose eboot.bin is a plain ELF: unwrap it first (AnyPS5's tools/unwrap_self.py does for a decrypted one)."),
+            until = "Recompile to Run Natively", shot = "a dump AnyPS5 can't recompile, and why",
+        )
+    }
+
+    scenario("details", "play together rooms and host codes") {
+        // Azahar's rooms: its name and unlisted rooms still to set, then joined by address in its own window.
+        playTogether(
+            io.github.matiyaaa.fuse.ui.shell.store.TogetherView.Ready(
+                title = "Waystation Nine", emulator = "Azahar", family = "azahar", way = io.github.matiyaaa.fuse.launch.online.TogetherWay.ROOMS,
+                missing = listOf("Its rooms set up for your household"), canHost = false, hosts = emptyList(), household = true, rpcn = null, canPutBack = false,
+            ),
+            until = "Join by Address", shot = "Azahar's rooms: set up, then joined by address",
+        )
+        // A Wii game in Dolphin: by address or host code, and WiiLink for the Wii's channels.
+        playTogether(
+            io.github.matiyaaa.fuse.ui.shell.store.TogetherView.Ready(
+                title = "Waystation Nine", emulator = "Dolphin", family = "dolphin", way = io.github.matiyaaa.fuse.launch.online.TogetherWay.NETPLAY_WINDOW,
+                missing = emptyList(), canHost = false, hosts = emptyList(), household = false, rpcn = null, wiiLink = false, canPutBack = true,
+            ),
+            until = "Join by Host Code", shot = "Dolphin by address or host code, with WiiLink",
+        )
+        // shadPS4 online through ShadNet, signed in from its own users.
+        playTogether(
+            io.github.matiyaaa.fuse.ui.shell.store.TogetherView.Ready(
+                title = "Waystation Nine", emulator = "shadPS4", family = "shadps4", way = io.github.matiyaaa.fuse.launch.online.TogetherWay.ONLINE_SERVICE,
+                missing = listOf("Its network on, through ShadNet"), canHost = false, hosts = emptyList(), household = false, rpcn = null, canPutBack = false,
+            ),
+            until = "Set Up shadPS4", shot = "shadPS4 online through ShadNet",
+        )
+    }
+
+    scenario("details", "play together alone and where it can't") {
+        // Nobody in the household hosting, and no Fuse One: hosting here and joining by address.
+        playTogether(
+            io.github.matiyaaa.fuse.ui.shell.store.TogetherView.Ready(
+                title = "Waystation Nine", emulator = "PPSSPP", way = io.github.matiyaaa.fuse.launch.online.TogetherWay.AD_HOC,
+                missing = emptyList(), canHost = true, hosts = emptyList(), household = false, rpcn = null, canPutBack = false,
+            ),
+            until = "Join by Address", shot = "nobody hosting yet: host here, or join by an address",
+        )
+        // An emulator Fuse doesn't know how to play together with: said, with where to look instead.
+        playTogether(
+            io.github.matiyaaa.fuse.ui.shell.store.TogetherView.Unavailable(
+                "Not with Mednafen", "Fuse doesn't know how Mednafen plays with others. Look in its own menus for multiplayer or netplay.",
+            ),
+            until = "Not with Mednafen", shot = "an emulator Fuse can't play together with",
+        )
+    }
+
+    scenario("details", "mods from nexus mods") {
+        // The same computer and PS2 disc, with the person's own Nexus Mods key (an account that isn't Premium).
+        val dir = File(cache, "nexus-audit").apply { deleteRecursively() }
+        File(dir, "games/ps2").mkdirs()
+        File(dir, "games/ps2/Sky Racer.iso").writeBytes(AuditEmuCoreX.ps2Iso())
+        val pcsx2 = File(dir, "pcsx2").apply { listOf("inis", "patches", "cheats", "gamesettings", "textures").forEach { File(this, it).mkdirs() } }
+        File(pcsx2, "inis/PCSX2.ini").writeText("[EmuCore]\nEnableCheats = false\n")
+        val home = pcsx2.absolutePath
+        controls.pcsx2 = io.github.matiyaaa.fuse.launch.patches.Pcsx2Home(home, "$home/gamesettings", "$home/patches", null, cheats = "$home/cheats", textures = "$home/textures")
+        val pc = runBlocking {
+            io.github.matiyaaa.fuse.ui.shell.store.createFuseStore(AuditServices.create(cache, controls), scope).also { s ->
+                s.updatePrefs { it.copy(onboardingDone = true) }
+                s.credentials.put(io.github.matiyaaa.fuse.data.settings.SecretKeys.NEXUS_API_KEY, "audit-own-key")
+                s.sources.add(File(dir, "games").absolutePath, io.github.matiyaaa.fuse.model.LibrarySourceKind.ROMS_ROOT)
+                kotlinx.coroutines.withTimeout(30_000) { s.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).first { it.isNotEmpty() } }
+                kotlinx.coroutines.withTimeout(30_000) { s.emulators.installed.first { it.isNotEmpty() } }
+            }
+        }
+        try {
+            show(pc, AuditPlatform(size, host = io.github.matiyaaa.fuse.model.Host.LINUX))
+            search("Sky Racer")
+            tap(PadButton.START)
+            tap(PadButton.X)
+            tapText("Patches, Cheats and Textures")
+            waitFor("Find Mods on Nexus Mods")
+            focusText("Find Mods on Nexus Mods")
+            shoot("Nexus Mods beside GameBanana and EmuCoreX", 1_200)
+            tap(PadButton.A)
+            waitFor("Which is Sky Racer?")
+            settle(900)
+            shoot("which game on Nexus Mods, the same name first", 1_200)
+            tap(PadButton.A)
+            waitFor("Clear Skies HD Textures")
+            settle(900)
+            shoot("the game's lists: trending, then the newest", 1_200)
+            tapText("Clear Skies HD Textures")
+            waitFor("Open Its Page")
+            settle(900)
+            shoot("a mod's files: what Fuse fetches, and why not the rest", 1_200)
+            tap(PadButton.A)
+            waitFor("Paste Its Mod Manager Download Link")
+            shoot("a file for an account that isn't Premium", 1_200)
+            tap(PadButton.B)
+        } finally {
+            controls.pcsx2 = null
+        }
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("accounts"))
+        tap(PadButton.DPAD_RIGHT)
+        waitFor("Your Nexus Mods Key")
+        focusText("Your Nexus Mods Key")
+        settle(900)
+        shoot("Settings, Accounts: whose key, and where downloads come from", 1_200)
+        // Without a key, Nexus Mods is never asked: Fuse says where the key goes.
+        runBlocking { pc.credentials.remove(io.github.matiyaaa.fuse.data.settings.SecretKeys.NEXUS_API_KEY) }
+        controls.pcsx2 = io.github.matiyaaa.fuse.launch.patches.Pcsx2Home(home, "$home/gamesettings", "$home/patches", null, cheats = "$home/cheats", textures = "$home/textures")
+        try {
+            show(pc, AuditPlatform(size, host = io.github.matiyaaa.fuse.model.Host.LINUX))
+            search("Sky Racer")
+            tap(PadButton.START)
+            tap(PadButton.X)
+            tapText("Patches, Cheats and Textures")
+            waitFor("Find Mods on Nexus Mods")
+            tapText("Find Mods on Nexus Mods")
+            waitFor("Add your Nexus Mods key")
+            shoot("no key yet: where to add it", 1_200)
+            tap(PadButton.B)
+        } finally {
+            controls.pcsx2 = null
+        }
+    }
+
+    scenario("details", "emulators signed in to retroachievements") {
+        // A computer with Ana's account connected and five emulators: some signed in by Fuse, one by
+        // someone else, one that hasn't set up its folders yet.
+        useLibrary()
+        val base = libraryStore
+        val achievements = object : io.github.matiyaaa.fuse.ui.shell.store.AchievementOps by base.achievements {
+            override val configured = kotlinx.coroutines.flow.MutableStateFlow(true)
+            override suspend fun emulatorSignIns() = io.github.matiyaaa.fuse.ui.shell.store.EmulatorSignIns.Ready(
+                "Ana",
+                listOf(
+                    io.github.matiyaaa.fuse.ui.shell.store.EmulatorSignIn("RetroArch", "retroarch", "Ana", byFuse = true),
+                    io.github.matiyaaa.fuse.ui.shell.store.EmulatorSignIn("PCSX2", "pcsx2", "Mo", byFuse = false),
+                    io.github.matiyaaa.fuse.ui.shell.store.EmulatorSignIn("DuckStation", "duckstation", "Ana", byFuse = true),
+                    io.github.matiyaaa.fuse.ui.shell.store.EmulatorSignIn("PPSSPP", "ppsspp", null, byFuse = false),
+                    io.github.matiyaaa.fuse.ui.shell.store.EmulatorSignIn("Dolphin", "dolphin", null, byFuse = false, problem = "Start Dolphin once so it sets up its folders."),
+                ),
+            )
+        }
+        show(object : io.github.matiyaaa.fuse.ui.shell.store.FuseStore by base { override val achievements = achievements }, AuditPlatform(size, host = io.github.matiyaaa.fuse.model.Host.LINUX))
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("accounts"))
+        tap(PadButton.DPAD_RIGHT)
+        waitFor("Sign Emulators In")
+        focusText("Sign Emulators In")
+        settle(900)
+        shoot("Settings, Accounts: signing every emulator in at once", 1_200)
+        tap(PadButton.A)
+        waitFor("Emulators and RetroAchievements")
+        settle(900)
+        shoot("who each emulator is signed in as, and one sign-in for all", 1_200)
+        tap(PadButton.A)
+        waitFor("RetroAchievements password")
+        settle(900)
+        shoot("the password, asked once and kept nowhere", 1_200)
+        tap(PadButton.B)
     }
 
     scenario("details", "a game with many facts") {

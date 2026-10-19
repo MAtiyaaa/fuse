@@ -83,6 +83,9 @@ interface FuseServices {
      */
     val awake: StateFlow<Boolean> get() = io.github.matiyaaa.fuse.sync.Awake.always
 
+    /** lsfg-vk is set up here (Linux, its configuration file there), so games can have frame generation. */
+    fun frameGenerationReady(): Boolean = false
+
     /** This device's name, as servers list it (Jellyfin's dashboard). */
     val deviceName: String get() = "Fuse"
 
@@ -97,13 +100,18 @@ interface FuseServices {
 
     /**
      * RomM's save sync ([io.github.matiyaaa.fuse.sync.romm.RommSaveService]): [env] finds the saves,
-     * [client] is RomM signed in with its save sync on (null otherwise), [server] names the server.
+     * [client] is RomM signed in with its save sync on (null otherwise), [server] names the server,
+     * [person] who is playing when the device has more than one person (their saves are their own).
      */
     fun rommSaves(
         env: () -> io.github.matiyaaa.fuse.sync.SaveEnvironment?,
         client: suspend () -> io.github.matiyaaa.fuse.romm.RommClient?,
         server: () -> String,
+        person: () -> String? = { null },
     ): io.github.matiyaaa.fuse.sync.romm.RommSaveService? = null
+
+    /** RomM on this computer through the Docker or Podman installed here ([RommHomeHost]); null where Fuse can't. */
+    val rommHome: RommHomeHost? get() = null
 
     /** Finds Jellyfin servers on the network; null where there is no way to. */
     val jellyfinDiscovery: io.github.matiyaaa.fuse.jellyfin.ServerDiscovery? get() = null
@@ -168,11 +176,24 @@ interface FuseServices {
     /** Where the Store puts programs on a computer; null on Android (which has [packages]) and in tests. */
     val desktopApps: io.github.matiyaaa.fuse.ui.shell.store.DesktopInstaller? get() = null
 
+    /** Fuse Ports' folder, downloads, unpacking and links on a computer; null on Android and in tests that don't need it. */
+    val portFiles: PortFiles? get() = null
+
     /**
      * Emulators' own settings files, for the few changes Fuse makes there when asked (PCSX2 patches).
      * Null where Fuse can't reach them (Android).
      */
     val emulatorFiles: EmulatorFiles? get() = null
+
+    /**
+     * The emulators' files Emulator Settings changes: [emulatorFiles] on a computer; on Android, only
+     * those in shared storage, where Fuse reaches them. The rest of [emulatorFiles]' work (installers,
+     * mods, sign-ins) stays a computer's.
+     */
+    val settingsFiles: EmulatorFiles? get() = emulatorFiles
+
+    /** This device's addresses on the home network, the likeliest first, for another device to reach a game hosted here. */
+    fun homeAddresses(): List<String> = emptyList()
 
     /** Offset of local time from UTC right now, for "today" and "this week" playtime buckets. */
     fun utcOffsetMillis(): Long
@@ -201,6 +222,9 @@ interface VolumeMonitor {
 interface EmulatorDetector {
     /** Every installed emulator Fuse has an adapter for. Runs off the main thread. */
     suspend fun detect(): List<InstalledEmulator>
+
+    /** Emulation setups here that keep emulators of their own ("EmuDeck", "RetroDECK"), so the Store can say so. */
+    suspend fun suites(): Set<String> = emptySet()
 
     /** Firmware folders of installed emulators that Fuse can read (RetroArch `system/`, Dolphin `Sys/`). */
     fun biosFolders(installed: List<InstalledEmulator>): List<String> = emptyList()
@@ -444,6 +468,14 @@ interface EmulatorFiles {
     /** Where the DuckStation install [installed] keeps its data; null when it hasn't been set up or can't be found. */
     suspend fun duckstation(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): io.github.matiyaaa.fuse.launch.patches.DuckStationHome? = null
 
+    /**
+     * The text DuckStation [installed] makes the key for its RetroAchievements sign-in from
+     * ([io.github.matiyaaa.fuse.launch.achievements.RaSignIn.MACHINE_KEY]): this computer's own id,
+     * exactly as DuckStation reads it; "" when it runs portable (it uses none then); null when it
+     * can't be read here.
+     */
+    suspend fun duckStationMachineKey(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
+
     /** The memory stick of the PPSSPP install [installed] (the folder holding `PSP`); null when it can't be found. */
     suspend fun ppsspp(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): io.github.matiyaaa.fuse.launch.patches.PpssppHome? = null
 
@@ -463,6 +495,12 @@ interface EmulatorFiles {
     suspend fun write(path: String, text: String): Boolean
 
     /**
+     * Writes [text] to [path] as [write] does, keeping no copy of the file as it was: for a file
+     * that holds a person's sign-in (RPCS3's `rpcn.yml`), which Fuse never keeps a copy of.
+     */
+    suspend fun writePrivate(path: String, text: String): Boolean = write(path, text)
+
+    /**
      * RPCS3's `dev_hdd0` folders for [installed], worked out as RPCS3 does (its config folder, or the
      * folder its `vfs.yml` moved `/dev_hdd0/` to). Not checked to exist; empty where unknown.
      */
@@ -470,6 +508,46 @@ interface EmulatorFiles {
 
     /** RPCS3's config folder for [installed] (where `patches/` and its settings are); null until it has one. */
     suspend fun rpcs3Config(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
+
+    /** Azahar's config folder for [installed] (where `qt-config.ini` and `custom/` are); null until it has a `qt-config.ini`. */
+    suspend fun azaharConfig(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
+
+    /** A 3DS game's title id from its serial or its file's own header ([io.github.matiyaaa.fuse.sync.threeDsTitleId]); null when unreadable. */
+    suspend fun threeDsTitleId(path: String, serial: String?): String? = null
+
+    /** The folder MAME reads its `mame.ini` from for [installed] (the first of its ini path that has one); null until it has one. */
+    suspend fun mameIniFolder(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
+
+    /** Flycast's config folder for [installed] (where its `emu.cfg` is); null until it has one. */
+    suspend fun flycastConfig(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
+
+    /** A Dreamcast game's id as Flycast names it: its product number ([io.github.matiyaaa.fuse.sync.dreamcastProductNumber]); null when unread. */
+    suspend fun dreamcastGameId(path: String, serial: String?): String? = null
+
+    /** melonDS's config folder for [installed] (where its melonDS.toml is); null until it has written melonDS.toml. */
+    suspend fun melondsConfig(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
+
+    /**
+     * Supermodel's Config folder for [installed] (where its Supermodel.ini is), for a game at
+     * [romPath] when there is one (Supermodel looks first for a `Config` folder where it is started,
+     * the game's own folder); null until it has written Supermodel.ini.
+     */
+    suspend fun supermodelConfig(installed: io.github.matiyaaa.fuse.model.InstalledEmulator, romPath: String?): String? = null
+
+    /** Vita3K's config folder for [installed] (where its `config.yml` and `config/` are); null until it has written `config.yml`. */
+    suspend fun vita3kConfig(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
+
+    /** Xenia's storage root for [installed] (where its `xenia-canary.config.toml` and `config/` are); null until it has written that file. */
+    suspend fun xeniaRoot(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
+
+    /** Cemu's data and config folders for [installed]; null until it has a settings.xml. */
+    suspend fun cemu(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): io.github.matiyaaa.fuse.launch.settings.CemuHome? = null
+
+    /** A Wii U game's title id from its serial or its folder's meta.xml ([io.github.matiyaaa.fuse.sync.wiiUTitleId]); null when unknown. */
+    suspend fun wiiUTitleId(path: String, serial: String?): String? = null
+
+    /** Eden's config folder for [installed] (where `qt-config.ini` and `custom/` are); null until it has a `qt-config.ini`. */
+    suspend fun edenConfig(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
 
     /** shadPS4's user folder for [installed] (where `patches/` is); null until it has one. */
     suspend fun shadPs4User(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
@@ -568,6 +646,18 @@ interface EmulatorFiles {
 }
 
 /**
+ * Where [EmulatorFiles] keeps the copy of an emulator's file as it was before Fuse first changed it:
+ * below its folder of copies at the file's whole path, so two files of one name (a game's settings
+ * under two cores, two installs' `PCSX2.ini`) each keep their own.
+ */
+object EmulatorFileCopies {
+    /** [path] (absolute, either slash) as a path below the folder of copies; a drive's colon dropped. */
+    fun below(path: String): String = path.replace('\\', '/').split('/')
+        .filter { it.isNotEmpty() && it != "." && it != ".." }
+        .joinToString("/") { it.replace(":", "") }
+}
+
+/**
  * A file, folder or archive someone chose to add, as Fuse read it: [entries] are paths below a folder
  * or in an archive (or the file's own name), [bytes] their size together, and [truncated] when there
  * were more than Fuse lists.
@@ -597,3 +687,25 @@ data class InstallerRun(
 
 /** How an installer run ended: its exit code (null when Fuse stopped it), and the end of what it printed. */
 data class InstallerResult(val exitCode: Int?, val output: String, val timedOut: Boolean = false, val started: Boolean = true)
+
+/**
+ * RomM on this computer ([io.github.matiyaaa.fuse.romm.RommHome]): Compose run through the Docker or
+ * Podman the person already has. Nothing runs except through [start] and [stop], which only the
+ * person's own choice calls.
+ */
+interface RommHomeHost {
+    /** The way to run Compose here, or null when neither Docker nor Podman is installed. */
+    suspend fun engine(): io.github.matiyaaa.fuse.romm.RommHome.Engine?
+
+    /** What was set up before, or null. */
+    suspend fun current(): io.github.matiyaaa.fuse.romm.RommHome.Spec?
+
+    /** Writes the Compose file for [spec] (its secrets made once, kept in the secret store) and starts RomM. */
+    suspend fun start(spec: io.github.matiyaaa.fuse.romm.RommHome.Spec): Result<Unit>
+
+    /** Stops RomM, keeping everything. */
+    suspend fun stop(): Result<Unit>
+
+    /** Whether its containers run now. */
+    suspend fun running(): Boolean
+}

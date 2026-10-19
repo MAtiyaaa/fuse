@@ -18,6 +18,9 @@ INSERT INTO play_session(game_id, emulator_id, started_at, ended_at, source) VAL
 selectById:
 SELECT * FROM play_session WHERE id = ?;
 
+countAt:
+SELECT COUNT(*) FROM play_session WHERE game_id = ? AND started_at = ?;
+
 selectOpen:
 SELECT * FROM play_session WHERE ended_at IS NULL ORDER BY started_at DESC, id DESC LIMIT 1;
 

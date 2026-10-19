@@ -107,8 +107,9 @@ data class FuseColors(
             val surface = Color(p.surface)
             val raised = Color(p.surfaceRaised)
             val text = Color(p.textPrimary)
-            val muted = Color(p.textSecondary)
             val dark = p.dark
+            // Where light text comes out thin ([strongerText]), muted text on a dark room sits a little nearer the main text.
+            val muted = Color(p.textSecondary).let { if (strongerText && dark) lerp(it, text, MUTED_LIFT) else it }
             return FuseColors(
                 ink = ink,
                 surface = surface,
@@ -137,6 +138,9 @@ data class FuseColors(
                 shadow = if (dark) Color.Black else lerp(text, Color.Black, 0.4f).copy(alpha = 0.6f),
             )
         }
+
+        /** How far muted text moves toward the main text where light text needs help. */
+        private const val MUTED_LIFT = 0.18f
 
         /**
          * Tertiary text: the secondary colour faded as far as it can go while still reading at 4.5:1

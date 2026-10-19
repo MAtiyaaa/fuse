@@ -21,7 +21,7 @@ class DesktopStayAwakeTest {
         assertEquals(StayAwake.NONE, StayAwake.plan(transfers = 0, finding = false, standby = true))
         assertEquals(StayAwake(cpu = true, screen = false), StayAwake.plan(transfers = 2, finding = false, standby = false))
         // Under the standby screen the screen stays on too: it is made to be left on.
-        assertEquals(StayAwake(cpu = true, screen = true), StayAwake.plan(transfers = 0, finding = true, standby = true))
+        assertEquals(StayAwake(cpu = true, screen = true, finding = true), StayAwake.plan(transfers = 0, finding = true, standby = true))
     }
 
     @Test

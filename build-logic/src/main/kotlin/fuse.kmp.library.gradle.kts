@@ -30,3 +30,15 @@ kotlin {
         }
     }
 }
+
+// A failing test says its message and the whole trace in the build's log (CI's too), not only the
+// exception's name, so a failure that won't happen again on purpose still says what it was.
+tasks.withType<Test>().configureEach {
+    testLogging {
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
+    // Every Ktor CIO client and server keeps one of Dispatchers.IO's threads in its selector until it
+    // is closed. A module's tests share one JVM, so a few left open would use up IO's 64 threads and
+    // every later withContext(Dispatchers.IO) would wait for ever; this many can't be used up.
+    systemProperty("kotlinx.coroutines.io.parallelism", "512")
+}

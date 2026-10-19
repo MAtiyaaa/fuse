@@ -34,6 +34,7 @@ import {
 } from "./bridge";
 import { findLibraryContextMenu, patchContextMenu } from "./contextMenu";
 import { FuseMark } from "./FuseMark";
+import { startLiveChanges } from "./liveChanges";
 import { installedSteamGames, startFuse } from "./steam";
 
 /** How often the panel asks again while it is open. Closed, it asks nothing at all. */
@@ -287,6 +288,13 @@ export default definePlugin(() => {
   // turned them off. Nothing here may throw: a failing plugin must never take Decky down with it.
   let unpatch: () => void = () => {};
   let unloaded = false;
+  // Fuse's changes to Steam's library, made through Steam's running client while it runs.
+  let stopLive: () => void = () => {};
+  try {
+    stopLive = startLiveChanges();
+  } catch {
+    stopLive = () => {};
+  }
   menuOff()
     .catch(() => true)
     .then((off) => {
@@ -309,6 +317,11 @@ export default definePlugin(() => {
     icon: <FuseMark />,
     onDismount() {
       unloaded = true;
+      try {
+        stopLive();
+      } catch {
+        // Nothing is asked any more either way.
+      }
       try {
         unpatch();
       } catch {

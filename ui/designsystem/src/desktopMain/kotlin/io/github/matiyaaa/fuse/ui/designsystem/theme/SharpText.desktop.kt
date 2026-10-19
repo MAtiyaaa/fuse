@@ -22,3 +22,6 @@ internal actual val sharpText: PlatformTextStyle? = PlatformTextStyle(
         ),
     ),
 )
+
+// Windows and macOS hint and blend text their own way; only Linux needs it.
+internal actual val strongerText: Boolean = System.getProperty("os.name").orEmpty().lowercase().startsWith("linux")

@@ -59,4 +59,13 @@ class JoydevFilterTest {
         assertNull(JoydevFilter.usbId("js1", sys))
         sys.deleteRecursively()
     }
+
+    @Test fun aPadsMakerComesFromItsUsbVendor() {
+        // A DualShock 4 calls itself "Wireless Controller": its vendor still says PlayStation.
+        assertEquals(io.github.matiyaaa.fuse.model.GlyphStyle.PLAYSTATION, io.github.matiyaaa.fuse.model.PadFamily.of("Wireless Controller", JoydevFilter.vendor("054c:09cc")))
+        assertEquals(io.github.matiyaaa.fuse.model.GlyphStyle.NINTENDO, io.github.matiyaaa.fuse.model.PadFamily.of("Pro Controller", JoydevFilter.vendor("057e:2009")))
+        assertEquals(0x28de, JoydevFilter.vendor("28de:11ff"))
+        assertNull(JoydevFilter.vendor(null))
+        assertNull(JoydevFilter.vendor("0000:0000"))
+    }
 }
