@@ -49,16 +49,24 @@ internal class TogetherStore(
     suspend fun view(id: GameId): TogetherView {
         val game = data.games.get(id) ?: return no("Game not found", "This game is no longer in the library.")
         val installed = startsIn(game) ?: return no("No emulator for it here", "Install an emulator for ${game.displayTitle}'s system first.")
-        val way = PlayTogether.way(family(installed))
-            ?: return no("Not with ${installed.name}", "Fuse doesn't know how ${installed.name} plays with others. Look in its own menus for multiplayer or netplay.")
         val files = ctx.services.emulatorFiles
+        val way = PlayTogether.way(family(installed))
+            // Rooms whose settings Fuse can't reach here are its own menus' alone.
+            ?.let { if (it == TogetherWay.ROOMS && files == null) TogetherWay.IN_EMULATOR else it }
+            ?: return no("Not with ${installed.name}", "Fuse doesn't know how ${installed.name} plays with others. Look in its own menus for multiplayer or netplay.")
         val missing = if (files == null) emptyList() else missing(installed, way)
-        val rpcn = if (way == TogetherWay.ONLINE_SERVICE) account(installed)?.npid else null
+        val rpcn = if (way == TogetherWay.ONLINE_SERVICE && family(installed) == "rpcs3") account(installed)?.npid else null
+        val wiiLink = if (files != null && way == TogetherWay.NETPLAY_WINDOW && game.platformId.value == "wii") {
+            val on = PlayTogether.wiiLink(true)
+            settings.current(installed.id, listOf(on))?.let { now -> PlayTogether.ready(listOf(on)) { now[it] } }
+        } else null
         val link = sync()
         val hosts = hostsFor(id, way)
         return TogetherView.Ready(
             title = game.displayTitle,
             emulator = installed.name,
+            family = family(installed),
+            wiiLink = wiiLink,
             way = way,
             missing = missing,
             canHost = files != null && ctx.host.isDesktop && way in HOSTED,
@@ -84,32 +92,54 @@ internal class TogetherStore(
     private suspend fun missing(installed: InstalledEmulator, way: TogetherWay): List<String> {
         fun ready(values: List<OnlineValue>, now: Map<OnlineValue, String?>?) = now != null && PlayTogether.ready(values) { now[it] }
         return when (way) {
-            TogetherWay.ONLINE_SERVICE -> listOfNotNull(
+            TogetherWay.ONLINE_SERVICE -> if (family(installed) == "shadps4") {
+                // Signed in from shadPS4's own users: Fuse never writes the password it keeps as typed.
+                val shadNet = PlayTogether.shadPs4(installed.version)
+                listOfNotNull("Its network on, through ShadNet".takeIf { !ready(shadNet, settings.current(installed.id, shadNet)) })
+            } else listOfNotNull(
                 "Its network on, through RPCN".takeIf { !ready(PlayTogether.rpcs3, settings.current(installed.id, PlayTogether.rpcs3)) },
                 "An RPCN account".takeIf { account(installed) == null },
             )
             TogetherWay.NETWORK_ADAPTER -> listOfNotNull("Its network adapter on".takeIf { !ready(PlayTogether.pcsx2, settings.current(installed.id, PlayTogether.pcsx2)) })
             TogetherWay.AD_HOC -> {
                 val wlan = listOf(OnlineValue(null, "Network", "EnableWlan", "True"))
-                listOfNotNull("Its wireless on".takeIf { !ready(wlan, settings.current(installed.id, wlan)) })
+                listOfNotNull(
+                    "Its wireless on".takeIf { !ready(wlan, settings.current(installed.id, wlan)) },
+                    "Your name for games' online servers".takeIf { onlineName(installed) != null },
+                )
             }
             TogetherWay.NETPLAY_WINDOW -> {
                 val name = PlayTogether.dolphin(null, nickname())
                 listOfNotNull("Your name in its NetPlay".takeIf { name.isNotEmpty() && !ready(name, settings.current(installed.id, name)) })
             }
+            TogetherWay.ROOMS -> {
+                val rooms = PlayTogether.rooms(nickname(), null)
+                listOfNotNull("Its rooms set up for your household".takeIf { !ready(rooms, settings.current(installed.id, rooms)) })
+            }
             TogetherWay.NETPLAY, TogetherWay.IN_EMULATOR -> emptyList()
         }
+    }
+
+    /**
+     * PPSSPP's name for games' revival servers, to give it when it has none of its own (a name it
+     * keeps is the person's, never replaced); null when it has one or Fuse has no name to give.
+     */
+    private suspend fun onlineName(installed: InstalledEmulator): OnlineValue? {
+        val name = PlayTogether.ppssppUsername(nickname())?.let { OnlineValue(null, "Network", "InfrastructureUsername", it) } ?: return null
+        val now = settings.current(installed.id, listOf(name)) ?: return null
+        return name.takeIf { now[it].isNullOrBlank() }
     }
 
     /** Sets [id]'s emulator up for its way of playing together (see [missing]). */
     suspend fun setUp(id: GameId): Boolean {
         val installed = installedFor(id) ?: return false
         val values = when (PlayTogether.way(family(installed))) {
-            TogetherWay.ONLINE_SERVICE -> PlayTogether.rpcs3
+            TogetherWay.ONLINE_SERVICE -> if (family(installed) == "shadps4") PlayTogether.shadPs4(installed.version) else PlayTogether.rpcs3
             TogetherWay.NETWORK_ADAPTER -> PlayTogether.pcsx2
             TogetherWay.AD_HOC -> listOf(OnlineValue(null, "Network", "EnableWlan", "True")) +
-                listOfNotNull(PlayTogether.nickname(nickname(), 16)?.let { OnlineValue(null, "SystemParam", "NickName", it) })
+                listOfNotNull(PlayTogether.nickname(nickname(), 16)?.let { OnlineValue(null, "SystemParam", "NickName", it) }, onlineName(installed))
             TogetherWay.NETPLAY_WINDOW -> PlayTogether.dolphin(null, nickname())
+            TogetherWay.ROOMS -> PlayTogether.rooms(nickname(), null)
             else -> return false
         }
         if (values.isEmpty() || !settings.setTogether(installed.id, values)) return false
@@ -139,6 +169,13 @@ internal class TogetherStore(
 
     suspend fun putBack(id: GameId): Boolean = installedFor(id)?.let { settings.restoreTogether(it.id) } ?: false
 
+    /** Dolphin's WiiConnect24 through WiiLink for [id], a Wii game, [on] or off (recorded with the rest, so Put Back undoes it). */
+    suspend fun setWiiLink(id: GameId, on: Boolean): Boolean {
+        val game = data.games.get(id)?.takeIf { it.platformId.value == "wii" } ?: return false
+        val installed = startsIn(game)?.takeIf { PlayTogether.way(family(it)) == TogetherWay.NETPLAY_WINDOW } ?: return false
+        return settings.setTogether(installed.id, listOf(PlayTogether.wiiLink(on)))
+    }
+
     private suspend fun installedFor(id: GameId): InstalledEmulator? = data.games.get(id)?.let { startsIn(it) }
 
     /**
@@ -149,6 +186,10 @@ internal class TogetherStore(
     suspend fun prepare(installed: InstalledEmulator, together: Together): String? {
         val way = PlayTogether.way(family(installed)) ?: return "Fuse doesn't know how ${installed.name} plays with others."
         if (ctx.services.emulatorFiles == null) return "Playing together is set up from Fuse on a computer."
+        if (together is Together.JoinCode) {
+            if (way != TogetherWay.NETPLAY_WINDOW) return "${installed.name} doesn't join games by host code."
+            return if (settings.setTogether(installed.id, PlayTogether.dolphinCode(together.code, nickname()))) null else "Fuse couldn't change Dolphin's settings."
+        }
         val address = addressFor(together)
         return when (way) {
             TogetherWay.NETPLAY -> null
@@ -160,6 +201,9 @@ internal class TogetherStore(
             }
             TogetherWay.NETPLAY_WINDOW ->
                 if (settings.setTogether(installed.id, PlayTogether.dolphin(address, nickname()))) null else "Fuse couldn't change Dolphin's settings."
+            TogetherWay.ROOMS ->
+                if (settings.setTogether(installed.id, PlayTogether.rooms(nickname(), address))) null
+                else "Fuse couldn't change ${installed.name}'s settings. Start it once so it sets up its folders, then try again."
             else -> "${installed.name} plays together from its own menus."
         }
     }
@@ -181,6 +225,8 @@ internal class TogetherStore(
         Together.Host -> null
         is Together.Join -> together.host.address
         is Together.JoinAddress -> together.address
+        // Reached through Dolphin's traversal server, not an address (see [prepare]).
+        is Together.JoinCode -> null
     }
 
     /** What the household is told while [installed] hosts here. */

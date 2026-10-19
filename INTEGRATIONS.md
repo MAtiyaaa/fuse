@@ -1155,9 +1155,14 @@ exactly.
     host's address with `EnableAdhocServer` on for the one hosting (its own server on port 27312,
     `Core/HLE/sceNetAdhoc.cpp`), and `[SystemParam] NickName`. The host names its own home address,
     never `localhost`: PPSSPP's server gives each player the address it saw them at
-    (`Core/HLE/proAdhocServer.cpp`).
+    (`Core/HLE/proAdhocServer.cpp`). For games with a revival server, `[Network]
+    InfrastructureUsername` is given the profile's name (letters, digits, `-` and `_`) only when
+    PPSSPP has none of its own (`DefaultInfrastructureUsername`); a name it keeps is never replaced.
   - Dolphin (2609a, `Core/Config/NetplaySettings.cpp`): `[NetPlay] Nickname`, and to join,
-    `TraversalChoice = direct` and `Address`, which its own NetPlay window's Connect tab offers.
+    `TraversalChoice = direct` and `Address`, or `TraversalChoice = traversal` and `HostCode` for a
+    game hosted through its traversal server, which its own NetPlay window's Connect tab offers
+    (`DolphinQt/NetPlay/NetPlaySetupDialog.cpp`). For a Wii game, `[Core] EnableWiiLink` when the
+    person turns WiiLink on (`Core/Config/MainSettings.cpp`), under WiiLink's terms.
   - RPCS3 (v0.0.43, `rpcs3/Emu/system_config.h`): `Net: Internet enabled: Connected` and `PSN
     status: RPCN`; the RPCN account in `rpcn.yml` beside `config.yml` (`rpcs3/Emu/NP/rpcn_config.cpp`),
     with the password stretched as RPCS3's own dialog does (`rpcs3qt/rpcn_settings_dialog.cpp`,
@@ -1167,6 +1172,19 @@ exactly.
   - PCSX2 (v2.8.2, `pcsx2/Pcsx2Config.cpp` `DEV9Options::LoadSave`): `[DEV9/Eth] EthEnable = true`,
     `EthApi = Sockets`, `EthDevice = Auto`, which needs no administrator rights and answers the game's
     DHCP itself (`pcsx2/DEV9/sockets.cpp`).
+  - shadPS4 (v0.20.0, `src/core/emulator_settings.h`): `connected_to_network` and
+    `shad_net_enabled` in `config.json`'s `Network` group (`General` from 0.17 to 0.19, as the
+    installed version keeps them). Its ShadNet account is signed in from shadPS4's own users: it
+    keeps the password in `users.json` as typed and sends it so (`src/shadnet/client.cpp`), and Fuse
+    writes no password in plain text, so it never touches that file.
+  - Azahar and its forks, Eden and Citron (Azahar 2125.0.1 `src/citra_qt/configuration/config.cpp`
+    `ReadMultiplayerValues`; Eden v0.2.1 `src/qt_common/config/uisettings.h`): `[Multiplayer]
+    nickname` and `room_nickname` (4 to 20 letters, digits, spaces, `.`, `_` or `-`,
+    `multiplayer/validation.h`), `host_type = 1` so rooms made are unlisted, and to join, `ip` for
+    Direct Connect to Room; each written with its `key\default` as the emulator writes it. Where
+    their files are their own (Android), nothing is written.
+  - Cemu (v2.6, `Account::ValidateOnlineFiles`): nothing written; Play Together says what it needs
+    to go online, the person's own Wii U `otp.bin` and `seeprom.bin` and console account.
   - After the Store updates one of these, what Fuse set up is looked at again, and said when it
     isn't there any more (a portable program's settings go with the version it replaced).
 - **Cheats, textures and mods of your own** (Linux, Windows, macOS). Where each emulator reads a

@@ -454,6 +454,33 @@ internal fun AuditDriver.detailScreens() {
         )
     }
 
+    scenario("details", "play together rooms and host codes") {
+        // Azahar's rooms: its name and unlisted rooms still to set, then joined by address in its own window.
+        playTogether(
+            io.github.matiyaaa.fuse.ui.shell.store.TogetherView.Ready(
+                title = "Waystation Nine", emulator = "Azahar", family = "azahar", way = io.github.matiyaaa.fuse.launch.online.TogetherWay.ROOMS,
+                missing = listOf("Its rooms set up for your household"), canHost = false, hosts = emptyList(), household = true, rpcn = null, canPutBack = false,
+            ),
+            until = "Join by Address", shot = "Azahar's rooms: set up, then joined by address",
+        )
+        // A Wii game in Dolphin: by address or host code, and WiiLink for the Wii's channels.
+        playTogether(
+            io.github.matiyaaa.fuse.ui.shell.store.TogetherView.Ready(
+                title = "Waystation Nine", emulator = "Dolphin", family = "dolphin", way = io.github.matiyaaa.fuse.launch.online.TogetherWay.NETPLAY_WINDOW,
+                missing = emptyList(), canHost = false, hosts = emptyList(), household = false, rpcn = null, wiiLink = false, canPutBack = true,
+            ),
+            until = "Join by Host Code", shot = "Dolphin by address or host code, with WiiLink",
+        )
+        // shadPS4 online through ShadNet, signed in from its own users.
+        playTogether(
+            io.github.matiyaaa.fuse.ui.shell.store.TogetherView.Ready(
+                title = "Waystation Nine", emulator = "shadPS4", family = "shadps4", way = io.github.matiyaaa.fuse.launch.online.TogetherWay.ONLINE_SERVICE,
+                missing = listOf("Its network on, through ShadNet"), canHost = false, hosts = emptyList(), household = false, rpcn = null, canPutBack = false,
+            ),
+            until = "Set Up shadPS4", shot = "shadPS4 online through ShadNet",
+        )
+    }
+
     scenario("details", "play together alone and where it can't") {
         // Nobody in the household hosting, and no Fuse One: hosting here and joining by address.
         playTogether(

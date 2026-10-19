@@ -69,8 +69,24 @@ class PlayTogetherTest {
             host.map { it.key to it.value },
         )
         assertEquals("False", PlayTogether.ppsspp("192.168.1.20", hosting = false, nick = null).single { it.key == "EnableAdhocServer" }.value)
+        // DefaultInfrastructureUsername's rule: letters, digits, - and _, 3 to 16, not PPSSPP's own.
+        assertEquals("AnaLee", PlayTogether.ppssppUsername("Ana Lee"))
+        assertEquals("a-very_long_name", PlayTogether.ppssppUsername("a-very_long_name_indeed"))
+        assertNull(PlayTogether.ppssppUsername("Zoë"))
+        assertNull(PlayTogether.ppssppUsername("PPSSPP"))
         assertEquals(listOf("Nickname", "TraversalChoice", "Address"), PlayTogether.dolphin("192.168.1.20", "Ana").map { it.key })
         assertEquals(listOf("Nickname"), PlayTogether.dolphin(null, "Ana").map { it.key })
+        assertEquals(
+            listOf("Nickname" to "Ana", "TraversalChoice" to "traversal", "HostCode" to "1a2b3c4d"),
+            PlayTogether.dolphinCode("1a2b3c4d", "Ana").map { it.key to it.value },
+        )
+        assertEquals(OnlineValue(null, "Core", "EnableWiiLink", "True"), PlayTogether.wiiLink(true))
+        assertEquals("False", PlayTogether.wiiLink(false).value)
+        // As the traversal server makes them ({:08x}): typed in any case, kept in its.
+        assertEquals("1a2b3c4d", PlayTogether.hostCode(" 1A2B3C4D "))
+        assertNull(PlayTogether.hostCode("1a2b3c4"))
+        assertNull(PlayTogether.hostCode("1a2b3c4g"))
+        assertNull(PlayTogether.hostCode("1a2b3c4d5"), "Dolphin refuses a code over 8")
         // Ready only when every value is there, a switch's case aside.
         val have = mapOf("EnableWlan" to "true", "EnableAdhocServer" to "True", "proAdhocServer" to "192.168.1.20", "NickName" to "Ana 3")
         assertTrue(PlayTogether.ready(host) { have[it.key] })
@@ -81,5 +97,32 @@ class PlayTogetherTest {
         assertNull(PlayTogether.address("http://x"))
         assertEquals(io.github.matiyaaa.fuse.launch.online.TogetherWay.AD_HOC, PlayTogether.way("ppsspp"))
         assertNull(PlayTogether.way("xemu"))
+    }
+
+    @Test
+    fun shadPs4sNetworkAndShadNetAreWhereItsVersionKeepsThem() {
+        assertEquals(TogetherWay.ONLINE_SERVICE, PlayTogether.way("shadps4"))
+        val newest = listOf(OnlineValue(null, "Network", "connected_to_network", "true"), OnlineValue(null, "Network", "shad_net_enabled", "true"))
+        assertEquals(newest, PlayTogether.shadPs4("0.20.0"))
+        assertEquals(newest, PlayTogether.shadPs4(null), "a version Fuse can't tell: the newest's")
+        assertEquals(listOf("General", "General"), PlayTogether.shadPs4("v.0.19.0").map { it.section }, "its General group until 0.19")
+    }
+
+    @Test
+    fun azaharsAndEdensRoomsTakeTheNameTheirOwnCheckAllowsAndStayUnlisted() {
+        for (family in listOf("azahar", "lime3ds", "eden", "eden-nightly", "citron")) assertEquals(TogetherWay.ROOMS, PlayTogether.way(family), family)
+        assertEquals(TogetherWay.IN_EMULATOR, PlayTogether.way("cemu"))
+        // multiplayer/validation.h: ^[a-zA-Z0-9._\- ]{4,20}$.
+        assertEquals("Ana 3", PlayTogether.roomName("Ana <3"))
+        assertNull(PlayTogether.roomName("Zoë"), "only ASCII letters, so two are left: too short for a room")
+        assertNull(PlayTogether.roomName("Ana"))
+        assertEquals("A Very Long Player N", PlayTogether.roomName("A Very Long Player Name Indeed"))
+        assertEquals("mo.k_2-x", PlayTogether.roomName("mo.k_2-x"))
+        assertEquals(
+            listOf("nickname" to "Ana 3", "room_nickname" to "Ana 3", "host_type" to "1"),
+            PlayTogether.rooms("Ana <3", null).map { it.key to it.value },
+        )
+        assertTrue(PlayTogether.rooms("Ana <3", null).all { it.section == "Multiplayer" && it.file == null })
+        assertEquals(listOf("host_type" to "1", "ip" to "192.168.1.20"), PlayTogether.rooms(null, "192.168.1.20").map { it.key to it.value }, "no name a room takes: the person's own stays")
     }
 }

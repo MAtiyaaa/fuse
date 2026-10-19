@@ -694,6 +694,9 @@ interface LibraryOps {
     /** Puts back what [setUpTogether] and hosting or joining changed in [id]'s emulator. */
     suspend fun putBackTogether(id: GameId): Boolean = false
 
+    /** Turns Dolphin's WiiConnect24 through WiiLink [on] or off, for [id] (a Wii game); put back with the rest. */
+    suspend fun setWiiLink(id: GameId, on: Boolean): Boolean = false
+
     /**
      * Readies [id]'s emulator for [together] without starting it, for an emulator whose own window
      * starts it (Dolphin's NetPlay): null when done, else why not.

@@ -118,6 +118,44 @@ class PlayTogetherStoreTest {
     }
 
     @Test
+    fun ppssppIsGivenANameForGamesOnlineServersOnlyWhenItHasNone(): Unit = runBlocking {
+        val ppsspp = InstalledEmulator(EmulatorId("linux.ppsspp"), "PPSSPP", Host.LINUX, "/usr/bin/PPSSPPSDL", platforms = setOf(PlatformId("psp")), detectedVia = "PATH")
+        val memstick = File(emu, "ppsspp").apply { File(this, "PSP/SYSTEM").mkdirs() }
+        val ini = File(memstick, "PSP/SYSTEM/ppsspp.ini")
+        // As PPSSPP saves it when its nickname isn't one a server takes: no name for them.
+        ini.writeText("[SystemParam]\nNickName = PPSSPP\n[Network]\nEnableWlan = False\nInfrastructureUsername = \n")
+        // Fuse One on this computer alone, as Ana Lee: the name Fuse has to give.
+        val port = java.net.ServerSocket(0).use { it.localPort }
+        val data = FuseData(DesktopDatabase.open(File(cache, "fuse-one.db").absolutePath))
+        data.settings.update { it.copy(sync = it.sync.copy(enabled = true, hostPort = port, deviceName = "PC")) }
+        lateinit var services: FakeServices
+        services = FakeServices(data, cache, installedEmulators = listOf(ppsspp), sync = { p, s ->
+            io.github.matiyaaa.fuse.sync.JvmSyncService(File(cache, "sync"), data.settings, services.secrets, p, "LINUX", "PC", "test", io.github.matiyaaa.fuse.sync.NoHostLifetime("test"), s)
+        })
+        services.ppssppHome = io.github.matiyaaa.fuse.launch.patches.PpssppHome(memstick.absolutePath)
+        File(root, "psp").mkdirs()
+        File(root, "psp/Monster Quest (USA).iso").writeBytes(ByteArray(64))
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = withTimeout(20_000) { store.library.games(GameQuery()).first { it.isNotEmpty() } }.single()
+        val sync = kotlin.test.assertNotNull(store.sync.service)
+        sync.hostHere("PC", installService = false).getOrThrow()
+        sync.switchTo(sync.createProfile("Ana Lee", "cat", null).getOrThrow().id).getOrThrow()
+
+        assertEquals(listOf("Its wireless on", "Your name for games' online servers"), assertIs<TogetherView.Ready>(store.library.together(game.id)).missing)
+        assertTrue(store.library.setUpTogether(game.id))
+        val set = ini.readText()
+        assertTrue("NickName = Ana Lee" in set && "InfrastructureUsername = AnaLee" in set && "EnableWlan = True" in set, set)
+        assertTrue(assertIs<TogetherView.Ready>(store.library.together(game.id)).missing.isEmpty())
+
+        // A name PPSSPP has is the person's own: never replaced.
+        ini.writeText("[Network]\nEnableWlan = True\nInfrastructureUsername = ana_psp\n")
+        assertTrue(assertIs<TogetherView.Ready>(store.library.together(game.id)).missing.isEmpty())
+        assertTrue(store.library.setUpTogether(game.id))
+        assertTrue("InfrastructureUsername = ana_psp" in ini.readText(), ini.readText())
+    }
+
+    @Test
     fun rpcs3SignsInToRpcnAsItsOwnDialogDoesAndGoesOnline(): Unit = runBlocking {
         val rpcs3 = InstalledEmulator(EmulatorId("linux.rpcs3"), "RPCS3", Host.LINUX, "/usr/bin/rpcs3", version = "0.0.43-17000", platforms = setOf(PlatformId("ps3")), detectedVia = "PATH")
         val config = File(emu, "rpcs3").apply { mkdirs() }
@@ -147,6 +185,32 @@ class PlayTogetherStoreTest {
     }
 
     @Test
+    fun shadPs4GoesOnlineThroughShadNetWithoutFuseEverWritingItsPassword(): Unit = runBlocking {
+        val shadPs4 = InstalledEmulator(EmulatorId("linux.shadps4"), "shadPS4", Host.LINUX, "/opt/shadps4/Shadps4-sdl.AppImage", version = "0.20.0", platforms = setOf(PlatformId("ps4")), detectedVia = "AppImage")
+        val user = File(emu, "shadps4").apply { mkdirs() }
+        val config = File(user, "config.json")
+        // As shadPS4 0.20 saves it: every group, network off.
+        val before = "{\n  \"General\": {\n    \"volume_slider\": 100\n  },\n  \"Network\": {\n    \"connected_to_network\": false,\n    \"shad_net_enabled\": false\n  }\n}\n"
+        config.writeText(before)
+        val (store, _, game) = storeWith(shadPs4, "ps4", "Racing Day [CUSA00001]/eboot.bin") {
+            it.shadPs4UserDir = user.absolutePath
+            File(root, "ps4/Racing Day [CUSA00001]").mkdirs()
+        }
+        val view = assertIs<TogetherView.Ready>(store.library.together(game.id))
+        assertEquals(TogetherWay.ONLINE_SERVICE, view.way)
+        assertEquals(listOf("Its network on, through ShadNet"), view.missing, "no RPCN account asked for")
+        assertNull(view.rpcn)
+        assertTrue(store.library.setUpTogether(game.id))
+        val set = config.readText()
+        assertTrue("\"connected_to_network\": true" in set && "\"shad_net_enabled\": true" in set, set)
+        assertTrue(assertIs<TogetherView.Ready>(store.library.together(game.id)).missing.isEmpty())
+        assertTrue("RPCS3" in store.library.signInRpcn(game.id, "Ana_99", "pw", "TOKEN123").orEmpty(), "RPCN is RPCS3's")
+        assertFalse(File(user, "users.json").exists(), "its users, and their passwords, are shadPS4's own")
+        assertTrue(store.library.putBackTogether(game.id))
+        assertEquals(before, config.readText())
+    }
+
+    @Test
     fun pcsx2sNetworkAdapterIsTurnedOnAndLookedAtAgainAfterAnUpdate(): Unit = runBlocking {
         val pcsx2 = InstalledEmulator(EmulatorId("linux.pcsx2"), "PCSX2", Host.LINUX, "/usr/bin/pcsx2-qt", platforms = setOf(PlatformId("ps2")), detectedVia = "PATH")
         val home = File(emu, "pcsx2").apply { File(this, "inis").mkdirs(); File(this, "gamesettings").mkdirs() }
@@ -164,6 +228,105 @@ class PlayTogetherStoreTest {
         ini.writeText("[EmuCore]\nEnableCheats = false\n")
         assertTrue("PCSX2" in store.library.recheckTogether("pcsx2").orEmpty())
         assertNull(store.library.recheckTogether("ppsspp"), "nothing set up there")
+    }
+
+    @Test
+    fun azaharsRoomsAreLeftUnlistedAndJoinedByAddressThenPutBack(): Unit = runBlocking {
+        val azahar = InstalledEmulator(EmulatorId("linux.azahar"), "Azahar", Host.LINUX, "/usr/bin/azahar", platforms = setOf(PlatformId("3ds")), detectedVia = "PATH")
+        val config = File(emu, "azahar").apply { mkdirs() }
+        val ini = File(config, "qt-config.ini")
+        // As Azahar writes it: each value with whether it is the default beside it.
+        val before = "[Multiplayer]\nhost_type\\default=true\nhost_type=0\nip\\default=true\nip=\n[Renderer]\nresolution_factor\\default=false\nresolution_factor=2\n"
+        ini.writeText(before)
+        val (store, _, game) = storeWith(azahar, "3ds", "Kart Racer 7 [0004000000030800].3ds") { it.azaharConfigDir = config.absolutePath }
+        val view = assertIs<TogetherView.Ready>(store.library.together(game.id))
+        assertEquals(TogetherWay.ROOMS, view.way)
+        assertEquals("azahar", view.family)
+        assertEquals(listOf("Its rooms set up for your household"), view.missing)
+        assertFalse(view.canHost, "a room is made in Azahar's own window")
+
+        assertTrue(store.library.setUpTogether(game.id))
+        val set = ini.readText()
+        assertTrue("host_type\\default=false\nhost_type=1\n" in set, set)
+        assertTrue(assertIs<TogetherView.Ready>(store.library.together(game.id)).missing.isEmpty(), "read back as Azahar reads it")
+
+        // Joining: the address waits in Direct Connect to Room.
+        assertNull(store.library.readyTogether(game.id, Together.JoinAddress("192.168.1.31")))
+        val joined = ini.readText()
+        assertTrue("ip\\default=false\nip=192.168.1.31\n" in joined, joined)
+        assertTrue("[Renderer]\nresolution_factor\\default=false\nresolution_factor=2\n" in joined, "the rest stays")
+
+        assertTrue(store.library.putBackTogether(game.id))
+        assertEquals(before, ini.readText())
+    }
+
+    @Test
+    fun edensRoomsAreSetInItsOwnFileAndPutBack(): Unit = runBlocking {
+        val eden = InstalledEmulator(EmulatorId("linux.eden"), "Eden", Host.LINUX, "/usr/bin/eden", platforms = setOf(PlatformId("switch")), detectedVia = "PATH")
+        val config = File(emu, "eden").apply { mkdirs() }
+        val ini = File(config, "qt-config.ini")
+        val before = "[Multiplayer]\nhost_type\\default=true\nhost_type=0\n"
+        ini.writeText(before)
+        val (store, _, game) = storeWith(eden, "switch", "Party Game [0100F2C0115B6000].nsp") { it.edenConfigDir = config.absolutePath }
+        assertEquals(TogetherWay.ROOMS, assertIs<TogetherView.Ready>(store.library.together(game.id)).way)
+        assertTrue(store.library.setUpTogether(game.id))
+        assertTrue("host_type\\default=false\nhost_type=1\n" in ini.readText(), ini.readText())
+        assertTrue(assertIs<TogetherView.Ready>(store.library.together(game.id)).canPutBack)
+        assertTrue(store.library.putBackTogether(game.id))
+        assertEquals(before, ini.readText())
+    }
+
+    @Test
+    fun dolphinJoinsByAddressOrByHostCodeOnItsConnectTab(): Unit = runBlocking {
+        val dolphin = InstalledEmulator(EmulatorId("linux.dolphin"), "Dolphin", Host.LINUX, "/usr/bin/dolphin-emu", platforms = setOf(PlatformId("ngc")), detectedVia = "PATH")
+        val config = File(emu, "dolphin").apply { mkdirs() }
+        val ini = File(config, "Dolphin.ini")
+        val before = "[NetPlay]\nTraversalChoice = direct\nAddress = 127.0.0.1\n"
+        ini.writeText(before)
+        val (store, services, game) = storeWith(dolphin, "ngc", "Party Game [GALE01].iso") {
+            it.dolphinHome = io.github.matiyaaa.fuse.launch.settings.DolphinHome(config.absolutePath, "${config.absolutePath}/GameSettings")
+        }
+        assertEquals(TogetherWay.NETPLAY_WINDOW, assertIs<TogetherView.Ready>(store.library.together(game.id)).way)
+        assertNull(store.library.readyTogether(game.id, Together.JoinAddress("192.168.1.31")))
+        assertTrue("TraversalChoice = direct" in ini.readText() && "Address = 192.168.1.31" in ini.readText(), ini.readText())
+        // Hosted over the internet: Dolphin reaches it through its traversal server, by the code.
+        assertNull(store.library.readyTogether(game.id, Together.JoinCode("1a2b3c4d")))
+        val coded = ini.readText()
+        assertTrue("TraversalChoice = traversal" in coded && "HostCode = 1a2b3c4d" in coded, coded)
+        assertTrue(services.launched.isEmpty(), "Dolphin's own window joins it")
+        assertNull(assertIs<TogetherView.Ready>(store.library.together(game.id)).wiiLink, "a GameCube game has no WiiConnect24")
+        assertFalse(store.library.setWiiLink(game.id, true))
+        assertTrue(store.library.putBackTogether(game.id))
+        assertEquals(before, ini.readText())
+    }
+
+    @Test
+    fun aWiiGamesWiiConnect24GoesThroughWiiLinkOnlyWhenTurnedOn(): Unit = runBlocking {
+        val dolphin = InstalledEmulator(EmulatorId("linux.dolphin"), "Dolphin", Host.LINUX, "/usr/bin/dolphin-emu", platforms = setOf(PlatformId("wii")), detectedVia = "PATH")
+        val config = File(emu, "dolphin").apply { mkdirs() }
+        val ini = File(config, "Dolphin.ini")
+        val before = "[Core]\nCPUThread = True\n"
+        ini.writeText(before)
+        val (store, _, game) = storeWith(dolphin, "wii", "Forecast Fun [RFNE01].iso") {
+            it.dolphinHome = io.github.matiyaaa.fuse.launch.settings.DolphinHome(config.absolutePath, "${config.absolutePath}/GameSettings")
+        }
+        assertEquals(false, assertIs<TogetherView.Ready>(store.library.together(game.id)).wiiLink, "off until the person turns it on")
+        assertTrue(store.library.setWiiLink(game.id, true))
+        assertEquals("[Core]\nCPUThread = True\nEnableWiiLink = True\n", ini.readText())
+        assertEquals(true, assertIs<TogetherView.Ready>(store.library.together(game.id)).wiiLink)
+        assertTrue(store.library.setWiiLink(game.id, false))
+        assertEquals(false, assertIs<TogetherView.Ready>(store.library.together(game.id)).wiiLink)
+        assertTrue(store.library.putBackTogether(game.id))
+        assertEquals(before, ini.readText())
+    }
+
+    @Test
+    fun onlyDolphinJoinsByHostCode(): Unit = runBlocking {
+        val retroArch = InstalledEmulator(EmulatorId("linux.retroarch"), "RetroArch", Host.LINUX, "/usr/bin/retroarch", platforms = setOf(PlatformId("snes")), detectedVia = "PATH")
+        val (store, services, game) = storeWith(retroArch, "snes", "Kart Racer (USA).sfc") { it.retroArchCores = setOf("snes9x") }
+        assertTrue("host code" in store.library.readyTogether(game.id, Together.JoinCode("1a2b3c4d")).orEmpty())
+        assertIs<LaunchOutcome.Problem>(store.library.launch(game.id, together = Together.JoinCode("1a2b3c4d")))
+        assertTrue(services.launched.isEmpty(), "never started as if hosting")
     }
 
     @Test

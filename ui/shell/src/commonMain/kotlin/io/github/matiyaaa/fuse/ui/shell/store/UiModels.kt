@@ -642,6 +642,10 @@ sealed interface TogetherView {
         val household: Boolean,
         /** The RPCN account RPCS3 signs in with, for its games; null for other emulators or none. */
         val rpcn: String?,
+        /** The emulator's family (`azahar`, `cemu`), for what is said of its own way. */
+        val family: String = "",
+        /** For a Wii game in Dolphin: whether its WiiConnect24 channels go through WiiLink; null for any other game. */
+        val wiiLink: Boolean? = null,
         /** Fuse changed this emulator's settings for playing together, and can put them back. */
         val canPutBack: Boolean,
     ) : TogetherView
@@ -659,6 +663,9 @@ sealed interface Together {
 
     /** Joining by an address the person typed (someone outside Fuse One). */
     data class JoinAddress(val address: String) : Together
+
+    /** Joining a Dolphin game hosted over the internet, by the host code its traversal server gave it. */
+    data class JoinCode(val code: String) : Together
 }
 
 /**

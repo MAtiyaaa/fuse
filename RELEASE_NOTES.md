@@ -191,6 +191,13 @@ together as each emulator does it, and Fuse Ports brings games rebuilt to run na
   uses it, and kept nowhere), turns on PCSX2's network adapter, PPSSPP's wireless and your name in
   Dolphin's NetPlay, with the host's address on its Connect tab to join. Put Back undoes exactly
   that, and after the Store updates one of them, Fuse says if its setup is gone.
+- **More ways to play together.** Azahar, its forks, Eden and Citron get your name for their
+  rooms, and the rooms you create stay unlisted, joined by address; Join by Address puts the
+  host's address in Direct Connect to Room. Dolphin joins a game hosted over the internet by its
+  host code, and a Wii game's Play Together turns WiiLink on for the Wii's WiiConnect24 channels.
+  shadPS4 has its network and ShadNet turned on (you sign in to ShadNet in shadPS4 itself, which
+  keeps your password as you type it). PPSSPP gets your name for games' revival servers when it
+  has none of its own, and Cemu says which of your own Wii U's files it needs to go online.
 - **Fuse Ports**, in Addons on a computer (turn it on in Settings, Addons): games rebuilt to run
   natively, played with your own copy of the game. Diablo (DevilutionX), RollerCoaster Tycoon 2
   (OpenRCT2) and Fallout 2 (Fallout 2 Community Edition) install from their own projects' releases,

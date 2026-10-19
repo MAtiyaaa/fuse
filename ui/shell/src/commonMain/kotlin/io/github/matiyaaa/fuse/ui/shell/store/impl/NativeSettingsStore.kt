@@ -643,18 +643,19 @@ internal class NativeSettingsStore(
     }
 
     /**
-     * What [emulator]'s files for every game hold for each of [values] (its key, as written), or
-     * null when its settings can't be read here.
+     * What [emulator]'s files for every game hold for each of [values], as the emulator reads it
+     * (Azahar's and Eden's from their keys together), or null when its settings can't be read here.
      */
     suspend fun current(emulator: EmulatorId, values: List<io.github.matiyaaa.fuse.launch.online.OnlineValue>): Map<io.github.matiyaaa.fuse.launch.online.OnlineValue, String?>? {
         val t = target(null, emulator).first ?: return null
         val files = values.map { it.file }.distinct().associateWith { f -> read(t, f?.let { t.globals[it] } ?: t.globalPath) }
-        return values.associateWith { v -> files[v.file]?.values(v.section, v.key)?.lastOrNull() }
+        return values.associateWith { v -> t.valueIn(files[v.file], v.section, v.key, false, null) }
     }
 
     /**
-     * Gives [emulator]'s files for every game each of [values], recorded apart from the person's
-     * other setting changes (as [TOGETHER]), so [restoreTogether] puts back exactly these.
+     * Gives [emulator]'s files for every game each of [values] (each as the emulator writes it, see
+     * [Target.keys]), recorded apart from the person's other setting changes (as [TOGETHER]), so
+     * [restoreTogether] puts back exactly these.
      */
     suspend fun setTogether(emulator: EmulatorId, values: List<io.github.matiyaaa.fuse.launch.online.OnlineValue>): Boolean {
         val t = target(null, emulator).first ?: return false
@@ -662,7 +663,7 @@ internal class NativeSettingsStore(
             val path = file?.let { t.globals[it] } ?: t.globalPath
             val text = t.text(fs.readText(path, MAX_TEXT), path)
             var records = data.owned.get(TOGETHER, path)
-            for (v in these) records = SettingsEdit.change(text, records, v.section, v.key, v.value)
+            for (v in these) for ((section, key, value) in t.keys(v.section, v.key, v.value, false, null)) records = SettingsEdit.change(text, records, section, key, value)
             if (!t.writer.write(path, text.toString())) return false
             data.owned.set(TOGETHER, path, records)
         }

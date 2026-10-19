@@ -1331,6 +1331,7 @@ internal class DefaultLibraryOps(
     override suspend fun together(id: GameId) = togetherStore.view(id)
     override suspend fun setUpTogether(id: GameId) = togetherStore.setUp(id)
     override suspend fun putBackTogether(id: GameId) = togetherStore.putBack(id)
+    override suspend fun setWiiLink(id: GameId, on: Boolean) = togetherStore.setWiiLink(id, on)
     override suspend fun recheckTogether(family: String) = togetherStore.recheck(family)
     override suspend fun readyTogether(id: GameId, together: io.github.matiyaaa.fuse.ui.shell.store.Together) = togetherStore.ready(id, together)
     override suspend fun signInRpcn(id: GameId, user: String, password: String, token: String) = togetherStore.signIn(id, user, password, token)
