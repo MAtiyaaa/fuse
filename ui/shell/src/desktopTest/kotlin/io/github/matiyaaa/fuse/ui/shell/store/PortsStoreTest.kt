@@ -236,6 +236,50 @@ class PortsStoreTest {
     }
 
     @Test
+    fun theCopyInTheLibraryIsTakenAndItsGamePlaysWithThePortUntilItIsRemoved(): Unit = runBlocking {
+        File(game, "SKY.DAT").writeBytes(ByteArray(16) { 7 })
+        File(game, "SKYRACER.EXE").writeBytes(ByteArray(8))
+        // Another game of a similar name whose folder lacks the port's file: never offered.
+        val other = Files.createTempDirectory("fuse-ports-other").toFile()
+        File(other, "SKYRACER2.EXE").writeBytes(ByteArray(8))
+        val (services, files) = services()
+        val store = createFuseStore(services, scope)
+        val dos = assertNotNull(store.library.addGameFile(File(game, "SKYRACER.EXE").absolutePath, PlatformId("dos"), title = "Sky Racer"))
+        assertNotNull(store.library.addGameFile(File(other, "SKYRACER2.EXE").absolutePath, PlatformId("dos"), title = "Sky Racer 2"))
+        store.ports.open()
+        store.until("listed") { it.loaded }
+
+        // The person's copy is found in the library by its name and believed by its files.
+        val copies = store.ports.copiesInLibrary("skyport", "game")
+        assertEquals(listOf(PortCopy(dos, "Sky Racer", "MS-DOS", game.absolutePath.replace('\\', '/'))), copies)
+        assertNull(store.ports.useCopy("skyport", "game", copies.single()))
+        assertEquals(dos.value, services.data.settings.current().ports.copies["skyport"])
+        store.ports.install("skyport")
+        store.until("set up") { it.port("skyport")?.ready == true }
+        assertEquals(File(game, "SKY.DAT").readBytes().toList(), ByteArray(16) { 7 }.toList(), "the copy is untouched")
+
+        // Play With on the game's page: the port is offered, and once chosen Play starts it.
+        assertEquals(listOf("skyport"), store.ports.portsFor(dos).map { it.port.id })
+        assertNull(store.ports.playWith(dos))
+        store.ports.setPlayWith(dos, "skyport")
+        val page = withTimeout(20_000) { store.library.game(dos).first { it?.emulator?.port != null } }!!
+        assertEquals("SkyPort", page.emulator.port)
+        assertEquals("Starts in SkyPort", page.emulator.launchSummary)
+        assertTrue(page.emulator.canLaunch)
+        val launcher = PortLauncher.decode(File(files.folder, "skyport/skyport.fuseport").readText())!!
+        assertIs<LaunchOutcome.Started>(store.library.launch(dos))
+        assertEquals(launcher.argv, (services.launched.last().plan as LaunchPlan.Command).argv)
+        // A Direct entry in Steam for the game starts the port too.
+        assertEquals(launcher.argv, assertIs<DirectCommand.Ready>(store.library.directCommand(dos)).argv)
+
+        // Removed: the game goes back to its emulator.
+        assertTrue(store.ports.remove("skyport"))
+        assertNull(store.ports.playWith(dos))
+        assertTrue(store.ports.portsFor(dos).isEmpty())
+        other.deleteRecursively()
+    }
+
+    @Test
     fun aDownloadThatIsntTheListsFileIsNeverInstalled(): Unit = runBlocking {
         val (services, files) = services(body = build.copyOf().also { it[it.size - 1] = 9 })
         val store = createFuseStore(services, scope)

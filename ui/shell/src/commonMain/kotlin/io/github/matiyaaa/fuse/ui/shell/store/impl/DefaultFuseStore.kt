@@ -206,6 +206,8 @@ internal class DefaultFuseStore private constructor(
         library.rommChange = { id, make -> romm.changed(id, make) }
         // Trophies earned in emulators reach the person's other devices through RomM's notes too.
         achievements.trophyShare = { id, news -> romm.shareTrophies(id, news) }
+        // A game played with a port (Play With) starts as the port's game; Ports is made only for one.
+        library.portPlay = { id -> if (ctx.settings.value.ports.playWith.containsKey(id.value.toString())) (ports as? PortsStore)?.playTargetNamed(id) else null }
         romm.plainSaveQuery = { id -> library.plainSaveQueryFor(id) }
         reach = DefaultReachOps(
             ctx, engine, transferEngine, sync.service, romm,

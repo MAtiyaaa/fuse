@@ -69,12 +69,16 @@ data class AppSettings(
  * Fuse Ports (Addons, Ports, on a computer): off until turned on in Settings, Addons, and nothing is
  * fetched before. The ports installed here, and the folders the person chose for each one's game
  * files (by port, then by the port's data id), kept when a port is removed so it comes back set up.
+ * [copies]: the library game whose folder a port reads, when the person took it from the library
+ * (by port). [playWith]: the library games Play starts with a port instead (by game id, the port).
  */
 @Serializable
 data class PortsSettings(
     val enabled: Boolean = false,
     val installed: Map<String, InstalledPort> = emptyMap(),
     val folders: Map<String, Map<String, String>> = emptyMap(),
+    val copies: Map<String, Long> = emptyMap(),
+    val playWith: Map<String, String> = emptyMap(),
 )
 
 /**

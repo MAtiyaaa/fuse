@@ -131,7 +131,9 @@ together as each emulator does it, and Fuse Ports brings games rebuilt to run na
   linked in where the port reads them, never copied or changed; what the port writes, its saves
   too, stays in Fuse's folder. Each becomes a game of your library, with Steam entries and saves
   kept in step. A nightly check starts every port, and once Fuse carries the key the list is signed
-  with, the ones that passed show as verified.
+  with, the ones that passed show as verified. Your copy can come straight from the library, and
+  the original game's page offers the port beside its emulators: pick it, and Play (and its Steam
+  entry) starts the port instead.
 - **PS4 trophies before the first play.** A PS4 game's trophies show on its page before shadPS4
   has opened it, read from the game's own trophy file with the trophy key you gave shadPS4.
 - **Sign Emulators In**, in Settings, Accounts, once RetroAchievements is connected: type your

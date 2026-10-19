@@ -134,6 +134,13 @@ internal class DefaultLibraryOps(
     /** A change the person made to a game, for RomM when it is a game from RomM and they send their changes there. */
     @kotlin.concurrent.Volatile var rommChange: ((GameId, (Long) -> io.github.matiyaaa.fuse.romm.RommWrite) -> Unit)? = null
 
+    /**
+     * The port the person chose to play a game with instead of its emulator (Play With): the port's
+     * own game in the library, which Play, Fast Start and Direct entries start in its place, and the
+     * port's name. Null when none was chosen or it isn't set up here.
+     */
+    @kotlin.concurrent.Volatile var portPlay: (suspend (GameId) -> Pair<GameId, String>?)? = null
+
     /** What runs after a game ends (its saves sent, its session counted), for [awaitPlayed]. */
     private val afterGame = mutableListOf<kotlinx.coroutines.Job>()
 
@@ -448,6 +455,8 @@ internal class DefaultLibraryOps(
                 ) { core, frames -> core.value to frames.value },
             ) { parts, _ -> parts }
             .combine(ctx.offline) { parts, roots -> parts to roots.takeIf { game.appId == null }?.firstOrNull { it.holds(game.location.path) } }
+            // Play With a port, chosen or taken back, changes what Play says.
+            .combine(ctx.settings.map { it.ports.playWith[id.value.toString()] }.distinctUntilChanged()) { parts, _ -> parts }
             .map { (parts, away) ->
             val (media, installed, platformEmulator, cols, week, ra) = parts
             val resolved = ctx.resolver.resolve(
@@ -457,12 +466,17 @@ internal class DefaultLibraryOps(
                 ctx.host,
             )
             val choice = choiceOf(game, platform, resolved, installed)
+            val port = portPlay?.invoke(id)?.second
             GameDetail(
                 game = game,
                 platform = platform,
                 media = media,
                 art = Art.from(media),
-                emulator = choice.copy(playLine = playLine(game, resolved, choice.launchSummary)),
+                emulator = if (port != null) {
+                    choice.copy(launchSummary = "Starts in $port", playLine = "Starts in $port, the port you chose to play it with, its saves and time kept with the port's.", canLaunch = true, port = port)
+                } else {
+                    choice.copy(playLine = playLine(game, resolved, choice.launchSummary))
+                },
                 contentNotes = contentNotes(game, resolved),
                 achievements = ra,
                 collections = cols,
@@ -579,7 +593,8 @@ internal class DefaultLibraryOps(
     override fun frameGenerationReady(): Boolean = ctx.host == io.github.matiyaaa.fuse.model.Host.LINUX && ctx.services.frameGenerationReady()
 
     override suspend fun directCommand(id: GameId): io.github.matiyaaa.fuse.ui.shell.store.DirectCommand {
-        val ready = when (val r = resolveForPlay(id, emulator = null, discPath = null, display = null)) {
+        val target = portPlay?.invoke(id)?.first ?: id
+        val ready = when (val r = resolveForPlay(target, emulator = null, discPath = null, display = null)) {
             is PlayResolution.Stopped -> return io.github.matiyaaa.fuse.ui.shell.store.DirectCommand.Unavailable(
                 (r.outcome as? LaunchOutcome.Problem)?.problem?.title ?: "It can't start here",
             )
@@ -594,10 +609,13 @@ internal class DefaultLibraryOps(
         }
     }
 
-    override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, skipSaveCheck: Boolean, playAnyway: Boolean, together: io.github.matiyaaa.fuse.ui.shell.store.Together?, onStage: (io.github.matiyaaa.fuse.ui.shell.store.LaunchStage) -> Unit): LaunchOutcome =
-        launchGame(id, emulator, discPath, display, skipSaveCheck, playAnyway, together, onStage).also { outcome ->
+    override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, skipSaveCheck: Boolean, playAnyway: Boolean, together: io.github.matiyaaa.fuse.ui.shell.store.Together?, onStage: (io.github.matiyaaa.fuse.ui.shell.store.LaunchStage) -> Unit): LaunchOutcome {
+        // A game the person plays with a port starts as the port's own game (its saves and time there).
+        val target = if (emulator == null && discPath == null && together == null) portPlay?.invoke(id)?.first ?: id else id
+        return launchGame(target, emulator, discPath, display, skipSaveCheck, playAnyway, together, onStage).also { outcome ->
             if (outcome is LaunchOutcome.Problem) ctx.recordProblem(outcome.problem)
         }
+    }
 
     /**
      * Everything Play works out before it starts anything: the game as it plays (a chosen disc, an

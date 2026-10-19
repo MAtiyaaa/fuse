@@ -60,6 +60,7 @@ import io.github.matiyaaa.fuse.ui.fuseline.PageEffect
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
 import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
@@ -372,14 +373,40 @@ private fun AppState.doNext(v: PortView) {
     }
 }
 
-/** Asks for the folder of [v]'s game files [dataId], and sets the port up with it. */
+/**
+ * Asks for [v]'s game files [dataId] and sets the port up with them: the person's copy already in
+ * the library, when one has what the port needs, or a folder they pick.
+ */
 private fun AppState.choosePortFolder(v: PortView, dataId: String) {
     val data = v.port.data.firstOrNull { it.id == dataId } ?: return
-    scope.launch {
-        val folder = platform.storage.pickFolder(data.name) ?: return@launch
-        val problem = store.ports.chooseFolder(v.port.id, dataId, folder)
+    fun said(problem: String?) {
         if (problem == null) toasts.show("${v.port.game} reads its files from there", ToastKind.SUCCESS, icon = FuseIcons.FolderOpen)
         else toasts.show(problem, ToastKind.WARNING)
+    }
+    fun pick() = scope.launch {
+        val folder = platform.storage.pickFolder(data.name) ?: return@launch
+        said(store.ports.chooseFolder(v.port.id, dataId, folder))
+    }
+    scope.launch {
+        val copies = store.ports.copiesInLibrary(v.port.id, dataId)
+        if (copies.isEmpty()) {
+            pick()
+            return@launch
+        }
+        choice = ChoiceSpec(
+            icon = FuseIcons.FolderOpen,
+            title = "Choose ${data.name}",
+            message = "Your copy in the library, or another folder. ${v.port.name} reads its files where they are; Fuse never changes them.",
+            options = copies.map { c ->
+                MenuAction("copy.${c.game.value}", c.title, FuseIcons.Library, detail = "${c.system}  ·  ${c.folder}", onSelect = {
+                    choice = null
+                    scope.launch { said(store.ports.useCopy(v.port.id, dataId, c)) }
+                })
+            } + MenuAction("folder", "Choose a Folder", FuseIcons.FolderSearch, detail = data.about, onSelect = {
+                choice = null
+                pick()
+            }),
+        )
     }
 }
 

@@ -117,3 +117,35 @@ class CheckTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReportTest(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.mkdtemp(prefix="fuse-ports-report-")
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def results(self, r):
+        path = os.path.join(self.dir, "results.json")
+        with open(path, "w") as f:
+            json.dump(r, f)
+        return path
+
+    def test_a_port_that_broke_is_said_and_one_that_started_isnt(self):
+        path = self.results({
+            "devilutionx": {"os": "linux", "sha256": "a", "at": "2026-10-19", "passed": True, "detail": "still running after 8 s"},
+            "openrct2": {"os": "linux", "sha256": "b", "at": "2026-10-19", "passed": False, "detail": "ended with signal 11 | core"},
+        })
+        text = check.report(path, "https://github.com/o/r/actions/runs/1")
+        self.assertIn("1 of 2 ports didn't start in the nightly check on 2026-10-19", text)
+        self.assertIn("| openrct2 | linux | ended with signal 11 / core |", text)
+        self.assertNotIn("devilutionx", text)
+        self.assertTrue(text.rstrip().endswith("https://github.com/o/r/actions/runs/1"))
+
+    def test_nothing_to_say_when_every_port_started(self):
+        path = self.results({"devilutionx": {"os": "linux", "sha256": "a", "at": "2026-10-19", "passed": True, "detail": "ok"}})
+        self.assertIsNone(check.report(path))
+
+    def test_a_check_that_didnt_finish_is_said(self):
+        self.assertIn("didn't finish", check.report(os.path.join(self.dir, "missing.json")))

@@ -13,7 +13,10 @@ import io.github.matiyaaa.fuse.launch.ports.PortLayout
 import io.github.matiyaaa.fuse.launch.ports.PortPlan
 import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.PortData
+import io.github.matiyaaa.fuse.data.TitleText
+import io.github.matiyaaa.fuse.library.FsPath
 import io.github.matiyaaa.fuse.ui.shell.store.LibraryOps
+import io.github.matiyaaa.fuse.ui.shell.store.PortCopy
 import io.github.matiyaaa.fuse.ui.shell.store.PortFiles
 import io.github.matiyaaa.fuse.ui.shell.store.PortJob
 import io.github.matiyaaa.fuse.ui.shell.store.PortView
@@ -240,7 +243,8 @@ internal class PortsStore(
         val data = port.data.firstOrNull { it.id == dataId } ?: return@withLock "${port.name} doesn't need that."
         val path = folder.replace('\\', '/').trimEnd('/')
         lacking(data, path)?.let { return@withLock it }
-        write { s -> s.copy(ports = s.ports.copy(folders = s.ports.folders + (id to (s.ports.folders[id].orEmpty() + (dataId to path))))) }
+        // A folder chosen by hand is no longer a library game's ([useCopy] says when it is).
+        write { s -> s.copy(ports = s.ports.copy(folders = s.ports.folders + (id to (s.ports.folders[id].orEmpty() + (dataId to path))), copies = s.ports.copies - id)) }
         val problem = if (id in ctx.settings.value.ports.installed && port.data.all { it.id in ctx.settings.value.ports.folders[id].orEmpty() }) setUp(id) else null
         recheck()
         problem
@@ -253,9 +257,71 @@ internal class PortsStore(
         // Fuse's copy and its links go (a link is removed itself, never what it points at); the home stays.
         val ok = files.remove(layout.install) and files.remove(layout.launcher)
         files.remove("${layout.root}/build.new")
-        write { s -> s.copy(ports = s.ports.copy(installed = s.ports.installed - id)) }
+        // Games played with it go back to their emulators.
+        write { s -> s.copy(ports = s.ports.copy(installed = s.ports.installed - id, playWith = s.ports.playWith.filterValues { it != id })) }
         recheck()
         ok
+    }
+
+    override suspend fun copiesInLibrary(id: String, dataId: String): List<PortCopy> {
+        if (list == null) lock.withLock { load() }
+        val port = list?.index?.ports?.firstOrNull { it.id == id } ?: return emptyList()
+        val data = port.data.firstOrNull { it.id == dataId } ?: return emptyList()
+        // Found by the game's name, then believed only by its files: a folder the port can read.
+        val found = runCatching { ctx.data.games.search(port.game, limit = LIBRARY_LOOK) }.getOrDefault(emptyList())
+            .filter { it.platformId != PortAdapter.PLATFORM }
+        val out = ArrayList<PortCopy>()
+        for (summary in found) {
+            val game = runCatching { ctx.data.games.get(summary.id) }.getOrNull() ?: continue
+            val path = game.location.path.replace('\\', '/').trimEnd('/')
+            if (path.isEmpty() || !FsPath.isAbsolute(path)) continue
+            val folder = listOfNotNull(path, FsPath.parent(path)).distinct().firstOrNull { lacking(data, it) == null } ?: continue
+            if (out.none { it.folder == folder }) out += PortCopy(game.id, game.displayTitle, ctx.platformName(game.platformId), folder)
+        }
+        val name = TitleText.normalize(port.game)
+        return out.sortedByDescending { TitleText.normalize(it.title) == name }
+    }
+
+    override suspend fun useCopy(id: String, dataId: String, copy: PortCopy): String? {
+        val problem = chooseFolder(id, dataId, copy.folder)
+        if (problem == null) write { s -> s.copy(ports = s.ports.copy(copies = s.ports.copies + (id to copy.game.value))) }
+        return problem
+    }
+
+    override suspend fun portsFor(game: GameId): List<PortView> {
+        val g = runCatching { ctx.data.games.get(game) }.getOrNull() ?: return emptyList()
+        if (g.platformId == PortAdapter.PLATFORM) return emptyList()
+        val name = TitleText.normalize(g.displayTitle)
+        val path = g.location.path.replace('\\', '/').trimEnd('/')
+        val near = setOfNotNull(path, FsPath.parent(path))
+        val s = ctx.settings.value.ports
+        return mutable.value.ports.filter { v ->
+            v.ready && (s.copies[v.port.id] == game.value || s.folders[v.port.id].orEmpty().values.any { it in near } || TitleText.normalize(v.port.game) == name)
+        }
+    }
+
+    override suspend fun setPlayWith(game: GameId, portId: String?) = write { s ->
+        val key = game.value.toString()
+        s.copy(ports = s.ports.copy(playWith = if (portId == null) s.ports.playWith - key else s.ports.playWith + (key to portId)))
+    }
+
+    override fun playWith(game: GameId): String? = ctx.settings.value.ports.playWith[game.value.toString()]
+
+    /**
+     * The port's own game for [game], found from what is kept (not from what Ports shows), so a
+     * start from Steam before Ports was ever opened finds it too.
+     */
+    override suspend fun playTarget(game: GameId): GameId? {
+        val portId = playWith(game) ?: return null
+        if (portId !in ctx.settings.value.ports.installed) return null
+        return runCatching { ctx.data.games.idByPath(layout(portId).launcher) }.getOrNull()?.takeIf { it != game }
+    }
+
+    /** [playTarget] with the port's name, for the game's page. */
+    suspend fun playTargetNamed(game: GameId): Pair<GameId, String>? {
+        val target = playTarget(game) ?: return null
+        val portId = playWith(game) ?: return null
+        return target to (ctx.settings.value.ports.installed[portId]?.port?.name ?: return null)
     }
 
     /**
@@ -377,6 +443,9 @@ internal class PortsStore(
 
     companion object {
         const val INDEX = "index.json"
+
+        /** How many of the library's games with the port's game's name are looked in for its files. */
+        private const val LIBRARY_LOOK = 40
         private const val MAX_INDEX = 1 shl 20
 
         /** How often opening Ports looks for a newer signed list. */

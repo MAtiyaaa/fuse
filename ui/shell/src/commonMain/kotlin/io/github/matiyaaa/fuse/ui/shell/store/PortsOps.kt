@@ -45,6 +45,30 @@ interface PortsOps {
      */
     suspend fun remove(id: String): Boolean = false
 
+    /**
+     * The person's copies of [id]'s game already in the library whose folder has what [dataId]
+     * needs, found by the game's name and then checked file by file; the best first.
+     */
+    suspend fun copiesInLibrary(id: String, dataId: String): List<PortCopy> = emptyList()
+
+    /** [copy]'s folder for [id]'s game files [dataId], as [chooseFolder] takes one, remembered as that game's. */
+    suspend fun useCopy(id: String, dataId: String, copy: PortCopy): String? = chooseFolder(id, dataId, copy.folder)
+
+    /**
+     * The ports set up here that play [game]: one whose files were taken from it, or one of the
+     * same game by name. For Play With on the game's page.
+     */
+    suspend fun portsFor(game: GameId): List<PortView> = emptyList()
+
+    /** The port Play starts [game] with instead of its emulator, or none ([portId] null). */
+    suspend fun setPlayWith(game: GameId, portId: String?) = Unit
+
+    /** The port Play starts [game] with, when the person chose one. */
+    fun playWith(game: GameId): String? = null
+
+    /** The library game Play starts for [game]: its port's, when one was chosen and is ready; else null. */
+    suspend fun playTarget(game: GameId): GameId? = null
+
     object None : PortsOps {
         override val state: StateFlow<PortsState> = MutableStateFlow(PortsState())
     }
@@ -95,6 +119,10 @@ data class PortView(
     val update: Boolean get() = installedSha != null && build != null && installedSha != build.sha256
     val ready: Boolean get() = installed && missing.isEmpty() && game != null
 }
+
+/** A game of the library whose [folder] holds a port's game files. */
+@Immutable
+data class PortCopy(val game: GameId, val title: String, val system: String, val folder: String)
 
 /** An install in progress, or one that failed. */
 sealed interface PortJob {

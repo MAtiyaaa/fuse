@@ -617,17 +617,35 @@ fun AppState.emulatorPicker(card: GameCard) {
         // Each emulator is checked against this game, so one that can't open it says why.
         val options = store.emulators.optionsForGame(card.id).ifEmpty { store.emulators.optionsFor(card.platformId) }
         val streamed = store.prefs.value.streaming.games[card.id.value.toString()]?.host
+        // The ports set up here that play this game (Play With): picked, they start in the emulator's place.
+        val ports = if (store.ports.supported) store.ports.portsFor(card.id) else emptyList()
+        val withPort = store.ports.playWith(card.id)
+        fun noPort() { if (withPort != null) scope.launch { store.ports.setPlayWith(card.id, null) } }
         choice = ChoiceSpec(
             icon = FuseIcons.Chip,
-            title = "Emulator for ${card.title}",
-            message = "The system's choice is used unless you pick one here.",
+            title = if (ports.isEmpty()) "Emulator for ${card.title}" else "Play ${card.title} With",
+            message = if (ports.isEmpty()) "The system's choice is used unless you pick one here." else "An emulator, or a port of it rebuilt to run natively. The system's emulator is used unless you pick one here.",
             options = listOf(
                 MenuAction("default", "Use the system's emulator", FuseIcons.Layers, onSelect = {
                     scope.launch { store.library.setEmulator(card.id, null) }
+                    noPort()
                     setStreamPick(card, null)
                     choice = null
                 }),
-            ) + streamChoices(streamed) { hostId ->
+            ) + ports.map { v ->
+                MenuAction(
+                    "port.${v.port.id}", v.port.name, FuseIcons.Boxes,
+                    detail = "Fuse Ports: ${v.port.game} rebuilt to run natively. Its saves and time are kept with the port's",
+                    trailing = Trailing.Check(withPort == v.port.id),
+                    onSelect = {
+                        choice = null
+                        scope.launch {
+                            store.ports.setPlayWith(card.id, v.port.id)
+                            toasts.show("${card.title} plays with ${v.port.name} from now on", ToastKind.SUCCESS, icon = FuseIcons.Boxes)
+                        }
+                    },
+                )
+            } + streamChoices(streamed) { hostId ->
                 setStreamPick(card, io.github.matiyaaa.fuse.data.settings.StreamPick(hostId))
                 choice = null
                 toasts.show("${card.title} streams with Moonlight from now on")
@@ -661,6 +679,7 @@ fun AppState.emulatorPicker(card: GameCard) {
                             startLocate(LocateRequest(o.id, o.name, game = card.id))
                         } else {
                             scope.launch { store.library.setEmulator(card.id, o.id) }
+                            noPort()
                             setStreamPick(card, null)
                             choice = null
                         }

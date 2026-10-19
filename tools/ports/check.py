@@ -9,6 +9,8 @@ check:   every port's build for this system is downloaded, compared with the lis
 publish: the list with each build's "verified" set to the day it passed (and taken away from one
          that didn't), its revision raised, signed with Ed25519 by OpenSSL with the key in
          PORTS_SIGNING_KEY. Without the key nothing is signed, and the step says so.
+report:  what to say in the issue the nightly run opens when a port broke (an empty file when
+         every port started), from the results, or that the check didn't finish when there are none.
 
 Only the Python standard library and the openssl command are used.
 """
@@ -224,6 +226,21 @@ def publish(index_path, results_paths, out_dir, revision=None):
     return True
 
 
+def report(results_path, run_url=None):
+    """The issue's text when a port didn't start (or the check didn't finish), else None."""
+    where = f"\n\nThe run: {run_url}" if run_url else ""
+    if not os.path.exists(results_path):
+        return "The nightly check of Fuse Ports didn't finish, so no port was checked." + where + "\n"
+    results = read_json(results_path)
+    broke = sorted((pid, r) for pid, r in results.items() if not r.get("passed"))
+    if not broke:
+        return None
+    lines = [f"{len(broke)} of {len(results)} ports didn't start in the nightly check on {broke[0][1].get('at', 'its day')}, "
+             "so the list marks them unverified until they do.", "", "| Port | System | What was seen |", "|---|---|---|"]
+    lines += [f"| {pid} | {r.get('os', '')} | {str(r.get('detail', '')).replace('|', '/')} |" for pid, r in broke]
+    return "\n".join(lines) + where + "\n"
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = p.add_subparsers(dest="command", required=True)
@@ -234,10 +251,19 @@ def main():
     s.add_argument("--index", default="ports/index.json")
     s.add_argument("--results", nargs="*", default=[])
     s.add_argument("--out", required=True)
+    r = sub.add_parser("report")
+    r.add_argument("--results", required=True)
+    r.add_argument("--out", required=True)
+    r.add_argument("--run-url")
     a = p.parse_args()
     if a.command == "check":
         results = check(a.index, a.out)
         print(f"{sum(r['passed'] for r in results.values())} of {len(results)} started.")
+    elif a.command == "report":
+        text = report(a.results, a.run_url)
+        with open(a.out, "w", encoding="utf-8") as f:
+            f.write(text or "")
+        print(text or "Every port started.")
     else:
         publish(a.index, a.results, a.out)
 

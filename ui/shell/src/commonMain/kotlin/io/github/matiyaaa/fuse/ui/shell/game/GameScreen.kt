@@ -1448,11 +1448,13 @@ private fun StartsCard(d: GameDetail, selected: Boolean, onClick: () -> Unit, mo
     val c = Fuse.colors
     val e = d.emulator
     InfoPanel("Starts in", FuseIcons.Chip, selected, onClick, modifier, actionable = true) {
-        val name = e.selected?.name
+        // A port chosen to play it with (Play With) starts in the emulator's place.
+        val name = e.port ?: e.selected?.name
         FText(name ?: "No emulator yet", Fuse.type.titleSmall, color = if (name == null) c.warning else c.text, maxLines = 1)
         // Why this one, right under its name.
         val why = when {
             name == null -> null
+            e.port != null -> "A Fuse Ports port, chosen for this game"
             e.source == "Game" -> "Chosen for this game"
             e.source == "Platform" -> "Chosen for every ${d.platform.shortName} game"
             e.source == "Automatic" -> "Fuse's first choice of the emulators you have"

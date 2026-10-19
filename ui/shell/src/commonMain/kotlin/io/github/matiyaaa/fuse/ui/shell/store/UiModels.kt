@@ -170,6 +170,8 @@ data class EmulatorChoice(
      * step. Null when nothing starts it here.
      */
     val playLine: String? = null,
+    /** The port Play starts it with instead of an emulator, by name, when the person chose one (Play With). */
+    val port: String? = null,
 )
 
 @Immutable

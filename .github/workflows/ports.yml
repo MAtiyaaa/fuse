@@ -3,7 +3,9 @@
 # game's files (tools/ports/check.py). Each night on main, the list is then marked with what
 # passed and signed with the Ed25519 key in the PORTS_SIGNING_KEY secret, and put on the `ports`
 # pre-release, where Fuse looks for it. Without the secret, nothing is signed or published, and the
-# summary says so. On a pull request that changes the list or the tool, only the check runs.
+# summary says so. When a port didn't start (or the check didn't finish), the night's run opens an
+# issue labelled ports-broken, or adds to the one open, and closes it once every port starts again.
+# On a pull request that changes the list or the tool, only the check runs.
 
 name: Ports
 
@@ -64,6 +66,47 @@ jobs:
           path: build/ports/results-linux.json
           if-no-files-found: error
           retention-days: 14
+
+  report:
+    name: Open an issue when a port breaks
+    needs: check
+    if: always() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      # Missing when the check didn't finish, which the issue then says.
+      - name: Get the results
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: ports-results
+          path: build/ports
+
+      - name: Open, add to or close the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/ports
+          python3 tools/ports/check.py report --results build/ports/results-linux.json --out build/ports/issue.md --run-url "$RUN_URL"
+          open=$(gh issue list --state open --label ports-broken --json number --jq '.[0].number // empty')
+          if [ -s build/ports/issue.md ]; then
+            if [ -n "$open" ]; then
+              gh issue comment "$open" --body-file build/ports/issue.md
+            else
+              gh label create ports-broken --color B60205 --description "A port didn't start in the nightly check" 2>/dev/null || true
+              gh issue create --title "A port didn't start in the nightly check" --label ports-broken --body-file build/ports/issue.md
+            fi
+          elif [ -n "$open" ]; then
+            gh issue close "$open" --comment "Every port started again in the nightly check: $RUN_URL"
+          fi
 
   publish:
     name: Sign and publish the list
