@@ -155,9 +155,7 @@ class JvmSyncService(
 
     init {
         if (fuseVersion.isNotEmpty()) fuseAppVersion = fuseVersion
-        scope.launch(Dispatchers.IO) { runCatching { start() } }
-        // What syncs (saves, states, records, settings, the folders chosen) follows Settings as it changes.
-        scope.launch(Dispatchers.IO) { runCatching { settings.settings.collect { cached = it.sync } } }
+        // The service starts at the end of the class (see the last init block), once all of it is made.
     }
 
     private suspend fun config(): SyncSettings = settings.current().sync.also { cached = it }
@@ -3161,6 +3159,14 @@ class JvmSyncService(
     }
 
     private fun lanAddresses(): List<String> = LanAddresses.list()
+
+    // Last of all, once every field above is made: started from the first init block, a busy machine
+    // ran start() on another thread before its locks existed, and it stopped there without a word.
+    init {
+        scope.launch(Dispatchers.IO) { runCatching { start() } }
+        // What syncs (saves, states, records, settings, the folders chosen) follows Settings as it changes.
+        scope.launch(Dispatchers.IO) { runCatching { settings.settings.collect { cached = it.sync } } }
+    }
 
     companion object {
         /** The id a save kept on this device from before an import has in [versions], beside the host's. */
