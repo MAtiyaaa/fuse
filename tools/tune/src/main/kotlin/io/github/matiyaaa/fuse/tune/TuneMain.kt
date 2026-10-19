@@ -25,6 +25,10 @@ val EMULATORS = listOf(
     // PCSX2's stable releases have an even minor number; odd ones are its nightlies.
     Emulator("pcsx2", "PCSX2/pcsx2", Regex("""^v\d+\.\d*[02468]\.\d+$"""), Pcsx2.FILES, Pcsx2::parse),
     Emulator("rpcs3", "RPCS3/rpcs3", Regex("""^v\d+\.\d+\.\d+$"""), Rpcs3.FILES, Rpcs3::parse),
+    // Fuse Ports' ports, by their ids in ports/index.json.
+    Emulator("devilutionx", "diasurgical/devilutionX", Regex("""^\d+\.\d+\.\d+$"""), DevilutionX.FILES, DevilutionX::parse),
+    Emulator("openrct2", "OpenRCT2/OpenRCT2", Regex("""^v\d+\.\d+\.\d+$"""), OpenRct2.FILES, OpenRct2::parse),
+    Emulator("fallout2-ce", "alexbatalov/fallout2-ce", Regex("""^v\d+\.\d+\.\d+$"""), Fallout2Ce.FILES, Fallout2Ce::parse),
 )
 
 /** How many releases back each emulator is read. */
@@ -36,19 +40,36 @@ data class Merged(val found: Found, val tags: List<String>)
 /**
  * Reads every emulator in [EMULATORS] at its last [RELEASES] release tags and writes the data to
  * the file named first on the command line. A setting is described as its newest release has it.
+ * With `--only=a,b`, only those families are read again and the others are kept as the file has them.
  */
 fun main(args: Array<String>) {
-    val target = File(args.firstOrNull() ?: error("usage: tune <TuneData.kt>"))
+    val target = File(args.firstOrNull() ?: error("usage: tune <TuneData.kt> [--only=family,...]"))
+    val only = args.firstOrNull { it.startsWith("--only=") }?.removePrefix("--only=")?.split(',')?.filter { it.isNotBlank() }?.toSet()
     val read = LinkedHashMap<Emulator, Pair<List<String>, List<Merged>>>()
     for (e in EMULATORS) {
+        if (only != null && e.family !in only) continue
         val tags = releases(tagsOf(e.repo), e.release).take(RELEASES)
         require(tags.isNotEmpty()) { "${e.family}: no release tags found" }
         val perTag = tags.associateWith { tag -> e.parse(e.files.mapNotNull { path -> fetch(e.repo, tag, path)?.let { path to it } }.toMap()) }
         perTag.forEach { (tag, found) -> println("${e.family} $tag: ${found.size} settings") }
         read[e] = tags to merge(tags, perTag)
     }
-    target.writeText(TuneWriter.kotlin(read.map { (e, v) -> Triple(e.family, v.first, v.second) }))
+    val fresh = read.map { (e, v) -> Triple(e.family, v.first, v.second) }
+    if (only == null) {
+        target.writeText(TuneWriter.kotlin(fresh))
+    } else {
+        target.writeText(keep(target.takeIf { it.isFile }?.readText(), fresh))
+    }
     println("Wrote ${target.path}")
+}
+
+/** The data file [before] with the families in [fresh] replaced (or added after the others). */
+fun keep(before: String?, fresh: List<Triple<String, List<String>, List<Merged>>>): String {
+    val (releases, lines) = before?.let(TuneWriter::readBack) ?: (emptyList<Pair<String, List<String>>>() to emptyList())
+    val families = fresh.map { it.first }.toSet()
+    val keptReleases = releases.filter { it.first !in families } + fresh.map { it.first to it.second }
+    val keptLines = lines.filter { it.substringBefore('\t') !in families } + fresh.flatMap { (family, _, settings) -> settings.map { TuneWriter.line(family, it) } }
+    return TuneWriter.kotlinOf(keptReleases, keptLines)
 }
 
 /** One entry per setting, across [tags] (newest first): as the newest that has it describes it. */

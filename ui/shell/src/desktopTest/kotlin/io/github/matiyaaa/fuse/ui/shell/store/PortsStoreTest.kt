@@ -280,6 +280,45 @@ class PortsStoreTest {
     }
 
     @Test
+    fun aPortsOwnSettingsAreChangedInItsFileAsItsCodeNamesThemAndPutBack(): Unit = runBlocking {
+        File(game, "SKY.DAT").writeBytes(ByteArray(16) { 7 })
+        // A port Fuse Tune has read (DevilutionX's settings, by its id), its settings file in its home.
+        val list = """
+            {"format":1,"revision":2,"ports":[
+              {"id":"devilutionx","name":"DevilutionX","game":"Diablo","about":"Made up.","homepage":"https://example.org/dvx","version":"1.5.5",
+               "builds":[{"os":"linux","url":"https://example.org/dvx.zip","size":${build.size},"sha256":"${sha(build)}","kind":"ZIP","run":"skyport"}],
+               "data":[{"id":"game","name":"Diablo's files","about":"From the CD.","needs":[["SKY.DAT"]]}],
+               "args":["--config-dir","{home}/config"],"source":"made up","settings":{"file":"{home}/config/diablo.ini"}}
+            ]}
+        """.trimIndent()
+        val (services, files) = services(list = list)
+        val store = createFuseStore(services, scope)
+        store.ports.open()
+        store.until("listed") { it.loaded }
+        assertNull(store.ports.chooseFolder("devilutionx", "game", game.absolutePath))
+        store.ports.install("devilutionx")
+        val id = store.until("set up") { it.port("devilutionx")?.ready == true }.port("devilutionx")!!.game!!
+        // As DevilutionX wrote it before: key=value, CRLF.
+        val ini = File(files.folder, "devilutionx/home/config/diablo.ini").apply { parentFile.mkdirs(); writeText("[Graphics]\r\nFullscreen=1\r\n") }
+        val before = ini.readText()
+
+        val view = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(id, null))
+        assertEquals("DevilutionX", view.emulator)
+        val graphics = view.sections.single { it.id == "|Graphics" }
+        val full = graphics.values.single { it.setting.key == "Fullscreen" }
+        assertEquals("true", full.value, "its 1 shown as on")
+        assertEquals("Fullscreen", full.setting.label)
+        val zoom = graphics.values.single { it.setting.key == "Zoom" }
+        assertEquals("false", zoom.value, "DevilutionX's default where the file says nothing")
+
+        assertTrue(store.library.setEveryEmulatorSetting(id, null, full.setting.id, "false"))
+        assertTrue(store.library.setEveryEmulatorSetting(id, null, zoom.setting.id, "true"))
+        assertEquals("[Graphics]\r\nFullscreen=0\r\nZoom=1\r\n", ini.readText(), "written as DevilutionX writes it")
+        assertTrue(store.library.restoreEmulatorSettings(id, null))
+        assertEquals(before, ini.readText(), "put back exactly")
+    }
+
+    @Test
     fun aDownloadThatIsntTheListsFileIsNeverInstalled(): Unit = runBlocking {
         val (services, files) = services(body = build.copyOf().also { it[it.size - 1] = 9 })
         val store = createFuseStore(services, scope)

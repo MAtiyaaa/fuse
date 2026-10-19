@@ -66,6 +66,8 @@ internal class NativeSettingsStore(
         val yaml: Boolean = false,
         /** The installed version, for which of every setting it has. */
         val version: String? = null,
+        /** How its files are changed: the emulator's own folders, or a port's in Fuse's folder of ports. */
+        val writer: Writer = EmulatorWriter(files),
     ) {
         val forGame: Boolean get() = gamePath != null
 
@@ -83,12 +85,49 @@ internal class NativeSettingsStore(
         val paths: List<String> get() = gamePath?.let(::listOf) ?: (listOf(globalPath) + globals.values).distinct()
     }
 
+    /** How a [Target]'s files are written and taken away. */
+    private interface Writer {
+        suspend fun write(path: String, text: String): Boolean
+        suspend fun remove(path: String): Boolean
+    }
+
+    private class EmulatorWriter(private val files: EmulatorFiles) : Writer {
+        override suspend fun write(path: String, text: String) = files.write(path, text)
+        override suspend fun remove(path: String) = files.remove(path)
+    }
+
+    /** A port's settings, in its home in Fuse's folder of ports (never an emulator's folder). */
+    private class PortWriter(private val files: io.github.matiyaaa.fuse.ui.shell.store.PortFiles) : Writer {
+        override suspend fun write(path: String, text: String) = files.writeText(path, text)
+        override suspend fun remove(path: String) = files.remove(path)
+    }
+
     private fun no(title: String, reason: String) = null to EmulatorSettingsView.Unavailable(title, reason)
+
+    /**
+     * A Fuse Ports game's own settings: the port's file the list names ([io.github.matiyaaa.fuse.model.PortSettings],
+     * in its home), read through Fuse Tune as the port's code has them. The port is the game, so
+     * its file is the game's.
+     */
+    private fun portTarget(game: Game, files: EmulatorFiles): Pair<Target?, EmulatorSettingsView.Unavailable?> {
+        val launcher = game.location.path.replace('\\', '/')
+        val root = launcher.substringBeforeLast('/', "").ifEmpty { return no("Not set up", "Set this port up again in Addons, Ports.") }
+        val id = launcher.substringAfterLast('/').removeSuffix(".${io.github.matiyaaa.fuse.launch.ports.PortLauncher.EXTENSION}")
+        val installed = ctx.settings.value.ports.installed[id] ?: return no("Not installed", "Install it again in Addons, Ports.")
+        val port = installed.port
+        val own = port.settings
+        if (own == null || Tune.forEmulator(id).isEmpty()) return no("Fuse can't change ${port.name}'s settings", "${port.name} keeps its settings its own way. Change them in its own menus.")
+        val portFiles = ctx.services.portFiles ?: return no("Not on this device", "Ports' settings can be changed from Fuse on a computer.")
+        val layout = io.github.matiyaaa.fuse.launch.ports.PortLayout(root, id)
+        val path = own.file.replace(io.github.matiyaaa.fuse.model.PortTokens.HOME, layout.home).replace(io.github.matiyaaa.fuse.model.PortTokens.INSTALL, layout.install)
+        return Target(id, port.name, files, path, null, port.game, version = port.version, writer = PortWriter(portFiles)) to null
+    }
 
     private suspend fun target(id: GameId?, emulator: EmulatorId?): Pair<Target?, EmulatorSettingsView.Unavailable?> {
         val files = ctx.services.emulatorFiles ?: return no("Not on this device", "Emulator settings can be changed from Fuse on a computer. On this device, change them in the emulator.")
         if (ctx.installed.value.isEmpty()) detectNow()
         val game = id?.let { data.games.get(it) ?: return no("Game not found", "This game is no longer in the library.") }
+        if (game != null && game.platformId == io.github.matiyaaa.fuse.launch.ports.PortAdapter.PLATFORM) return portTarget(game, files)
         val installed = if (game != null) {
             val starts = startsIn(game)
             when {
@@ -204,7 +243,7 @@ internal class NativeSettingsStore(
             val s = settings.firstOrNull { it.id == key && it.perGame } ?: continue
             records = SettingsEdit.change(file, records, s.sectionIn(game = true), s.key, value)
         }
-        if (!t.files.write(path, file.toString())) return false
+        if (!t.writer.write(path, file.toString())) return false
         data.owned.set(KIND, path, records)
         if (before == null) data.owned.set(KIND, "$path#made", setOf("file"))
         return true
@@ -240,7 +279,7 @@ internal class NativeSettingsStore(
         val before = fs.readText(path, MAX_TEXT)
         val file = t.text(before)
         val records = SettingsEdit.change(file, data.owned.get(KIND, path), s.sectionIn(t.forGame), s.key, value)
-        if (!t.files.write(path, file.toString())) return false
+        if (!t.writer.write(path, file.toString())) return false
         data.owned.set(KIND, path, records)
         // A game's own file Fuse made: taken away again once nothing Fuse set is left in it.
         if (before == null) data.owned.set(KIND, "$path#made", setOf("file"))
@@ -260,8 +299,8 @@ internal class NativeSettingsStore(
             val made = data.owned.get(KIND, "$path#made").isNotEmpty()
             val done = when {
                 text == null -> true
-                made && !file.hasEntries() -> t.files.remove(path)
-                else -> t.files.write(path, file.toString())
+                made && !file.hasEntries() -> t.writer.remove(path)
+                else -> t.writer.write(path, file.toString())
             }
             if (!done) return false
             data.owned.set(KIND, path, emptySet())
@@ -324,7 +363,7 @@ internal class NativeSettingsStore(
             val text = t.text(fs.readText(path, MAX_TEXT))
             var records = data.owned.get(TOGETHER, path)
             for (v in these) records = SettingsEdit.change(text, records, v.section, v.key, v.value)
-            if (!t.files.write(path, text.toString())) return false
+            if (!t.writer.write(path, text.toString())) return false
             data.owned.set(TOGETHER, path, records)
         }
         return true
@@ -346,7 +385,7 @@ internal class NativeSettingsStore(
             val text = fs.readText(path, MAX_TEXT) ?: run { data.owned.set(TOGETHER, path, emptySet()); continue }
             val file = t.text(text)
             SettingsEdit.restore(file, records)
-            if (!t.files.write(path, file.toString())) return false
+            if (!t.writer.write(path, file.toString())) return false
             data.owned.set(TOGETHER, path, emptySet())
             any = true
         }
@@ -370,26 +409,28 @@ internal class NativeSettingsStore(
         val before = fs.readText(path, MAX_TEXT)
         val file = t.text(before)
         val records = SettingsEdit.change(file, data.owned.get(KIND, path), s.sectionIn(t.forGame), s.key, written)
-        if (!t.files.write(path, file.toString())) return false
+        if (!t.writer.write(path, file.toString())) return false
         data.owned.set(KIND, path, records)
         if (before == null) data.owned.set(KIND, "$path#made", setOf("file"))
         return true
     }
 
     private fun valueOf(s: TuneSetting, game: SettingsText?, global: SettingsText?): TuneValue {
-        val every = global?.values(s.section, s.key)?.lastOrNull()
-        val own = if (s.perGame) game?.values(s.sectionIn(game = true), s.key)?.lastOrNull() else null
-        val everyGame = every ?: s.default
+        fun shown(v: String?) = if (s.kind == TuneKind.SWITCH) Tune.switchShown(s.family, v) else v
+        val every = shown(global?.values(s.section, s.key)?.lastOrNull())
+        val own = shown(if (s.perGame) game?.values(s.sectionIn(game = true), s.key)?.lastOrNull() else null)
+        val everyGame = every ?: shown(s.default)
         return when {
             own != null -> TuneValue(s, own, SettingSource.GAME, everyGame)
             every != null -> TuneValue(s, every, SettingSource.EVERY_GAME, everyGame)
-            else -> TuneValue(s, s.default, SettingSource.DEFAULT, everyGame)
+            else -> TuneValue(s, shown(s.default), SettingSource.DEFAULT, everyGame)
         }
     }
 
     /** [value] as the emulator writes it: Dolphin's and PPSSPP's switches as `True` and `False`. */
     private fun written(s: TuneSetting, value: String): String = when {
         s.kind != TuneKind.SWITCH -> value.trim().takeIf { s.kind != TuneKind.TEXT } ?: value
+        Tune.switchWritten(s.family, value.equals("true", ignoreCase = true)) != null -> Tune.switchWritten(s.family, value.equals("true", ignoreCase = true))!!
         s.default?.firstOrNull()?.isUpperCase() == true || s.family in setOf("dolphin", "ppsspp") -> value.lowercase().replaceFirstChar { it.uppercase() }
         else -> value.lowercase()
     }

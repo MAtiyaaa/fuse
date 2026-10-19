@@ -14,7 +14,8 @@ data class Choice(val value: String, val label: String? = null, val hosts: Set<S
  * ([file], null for the emulator's main settings file), its [section] and [key], its [kind], the
  * [default] when the code gives one as a plain value (null when it is worked out at run time), the
  * range a number may take, the values an enum is written as (in the order the code lists them),
- * and whether a game's own settings can hold it.
+ * and whether a game's own settings can hold it. Where the code names it for people, its [label],
+ * its description ([about]) and the tab or page its own settings show it on ([tab]).
  */
 data class Found(
     val file: String?,
@@ -28,6 +29,9 @@ data class Found(
     val perGame: Boolean = true,
     /** Its section in a game's own file, when that differs from [section] (Dolphin's `Video_Settings`). */
     val gameSection: String? = null,
+    val label: String? = null,
+    val about: String? = null,
+    val tab: String? = null,
 ) {
     /** What makes it the same setting in another release. */
     val identity: String get() = "${file.orEmpty()}\u0000$section\u0000$key"
@@ -40,6 +44,82 @@ data class Found(
 
 /** Small pieces of reading C and C++ source as text: no compiler, only what the declarations need. */
 internal object Source {
+    /**
+     * [text] with only the lines a build would compile: each `#if`, `#ifdef`, `#ifndef`, `#elif`
+     * and `#else` decided by [truth] for the macros it names (`defined(X)`, a bare `X`, or a call
+     * such as `SDL_VERSION_ATLEAST(2, 0, 0)`, given as written without spaces), with `!`, `&&`,
+     * `||` and brackets. A macro [truth] doesn't know (null) is taken as not defined. Lines left
+     * out become empty, so line numbers stay; the directives themselves go too.
+     */
+    fun select(text: String, truth: (String) -> Boolean?): String {
+        // Each level: whether its own branch is taken, whether one of its branches already was, and whether its parent is live.
+        data class Level(var taking: Boolean, var taken: Boolean, val live: Boolean)
+        val stack = ArrayList<Level>()
+        fun live() = stack.all { it.taking }
+        val out = StringBuilder(text.length)
+        val lines = text.split('\n')
+        var i = 0
+        while (i < lines.size) {
+            var line = lines[i]
+            var consumed = 1
+            // A directive continued over lines with a backslash is one directive.
+            while (line.trimStart().startsWith("#") && line.endsWith("\\") && i + consumed < lines.size) {
+                line = line.dropLast(1) + " " + lines[i + consumed]
+                consumed++
+            }
+            val t = line.trim()
+            val directive = if (t.startsWith("#")) t.removePrefix("#").trim() else null
+            when {
+                directive == null -> out.append(if (live()) lines[i] else "")
+                directive.startsWith("ifdef") -> { val parent = live(); val v = truth(directive.removePrefix("ifdef").trim()) == true; stack += Level(parent && v, v, parent) }
+                directive.startsWith("ifndef") -> { val parent = live(); val v = truth(directive.removePrefix("ifndef").trim()) != true; stack += Level(parent && v, v, parent) }
+                directive.startsWith("if") -> { val parent = live(); val v = condition(directive.removePrefix("if"), truth); stack += Level(parent && v, v, parent) }
+                directive.startsWith("elif") -> stack.lastOrNull()?.let { l ->
+                    val v = !l.taken && condition(directive.removePrefix("elif"), truth)
+                    l.taking = l.live && v
+                    if (v) l.taken = true
+                }
+                directive.startsWith("else") -> stack.lastOrNull()?.let { l -> l.taking = l.live && !l.taken; l.taken = true }
+                directive.startsWith("endif") -> if (stack.isNotEmpty()) stack.removeAt(stack.size - 1)
+                else -> out.append(if (live()) lines[i] else "")
+            }
+            repeat(consumed) { out.append('\n') }
+            i += consumed
+        }
+        if (out.isNotEmpty()) out.setLength(out.length - 1)
+        return out.toString()
+    }
+
+    /** A preprocessor condition's value, as [select] reads one. */
+    fun condition(expression: String, truth: (String) -> Boolean?): Boolean {
+        val tokens = Regex("""defined\s*\(\s*\w+\s*\)|defined\s+\w+|\w+\s*\([^()]*\)|\w+|&&|\|\||[!()]""").findAll(expression).map { it.value }.toList()
+        var at = 0
+        fun atom(t: String): Boolean = when {
+            t.startsWith("defined") -> truth(t.removePrefix("defined").trim().trim('(', ')').trim()) == true
+            t.toLongOrNull() != null -> t.toLong() != 0L
+            else -> truth(t.replace(Regex("""\s+"""), "")) == true
+        }
+        fun or(): Boolean {
+            fun unary(): Boolean {
+                val t = tokens.getOrNull(at++) ?: return false
+                return when (t) {
+                    "!" -> !unary()
+                    "(" -> or().also { if (tokens.getOrNull(at) == ")") at++ }
+                    else -> atom(t)
+                }
+            }
+            fun and(): Boolean {
+                var v = unary()
+                while (tokens.getOrNull(at) == "&&") { at++; val r = unary(); v = v && r }
+                return v
+            }
+            var v = and()
+            while (tokens.getOrNull(at) == "||") { at++; val r = and(); v = v || r }
+            return v
+        }
+        return or()
+    }
+
     /** [text] without its comments (`//` to the line's end, and block comments), strings kept. */
     fun withoutComments(text: String): String {
         val out = StringBuilder(text.length)

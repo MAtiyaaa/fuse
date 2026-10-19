@@ -18,6 +18,8 @@ tasks.named<JavaExec>("run") {
     // The data goes beside core:launch's settings, from the repository's root.
     workingDir = rootProject.projectDir
     args("core/launch/src/commonMain/kotlin/io/github/matiyaaa/fuse/launch/settings/TuneData.kt")
+    // `-Ptune.only=devilutionx,openrct2` reads only those again, keeping the rest as they are.
+    providers.gradleProperty("tune.only").orNull?.let { args("--only=$it") }
 }
 
 tasks.test {

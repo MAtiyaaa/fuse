@@ -5,7 +5,8 @@ package io.github.matiyaaa.fuse.tune
  * resources): the releases read for each emulator, and every setting as one line of tab-separated
  * fields in string constants small enough for the JVM's limits (see `Tune` in core:launch, which
  * reads them). A field that is absent is [NONE]; an enum's values are joined by [JOIN], each its
- * value, then [LABEL] and what the code calls it, then [HOSTS] and the systems that have it.
+ * value, then [LABEL] and what the code calls it, then [HOSTS] and the systems that have it. The
+ * setting's own name, description and tab follow the releases (lines written before had none).
  */
 object TuneWriter {
     const val NONE = "\u0001"
@@ -22,6 +23,7 @@ object TuneWriter {
             family, f.file ?: NONE, f.section, f.key, f.kind.name, f.default ?: NONE,
             f.min?.toString() ?: NONE, f.max?.toString() ?: NONE, f.choices.joinToString(JOIN, transform = ::choice),
             if (f.perGame) "1" else "0", f.gameSection ?: NONE, m.tags.joinToString(","),
+            f.label ?: NONE, f.about ?: NONE, f.tab ?: NONE,
         ).joinToString("\t") { it.replace('\t', ' ').replace('\n', ' ') }
     }
 
@@ -31,8 +33,11 @@ object TuneWriter {
         c.hosts?.let { append(HOSTS).append(it.sorted().joinToString("+")) }
     }
 
-    fun kotlin(emulators: List<Triple<String, List<String>, List<Merged>>>): String {
-        val lines = emulators.flatMap { (family, _, settings) -> settings.map { line(family, it) } }
+    fun kotlin(emulators: List<Triple<String, List<String>, List<Merged>>>): String =
+        kotlinOf(emulators.map { it.first to it.second }, emulators.flatMap { (family, _, settings) -> settings.map { line(family, it) } })
+
+    /** The Kotlin file for each family's [releases] and every setting's [lines], as [line] writes them. */
+    fun kotlinOf(releases: List<Pair<String, List<String>>>, lines: List<String>): String {
         val chunks = ArrayList<String>()
         val cur = StringBuilder()
         var bytes = 0
@@ -54,13 +59,66 @@ object TuneWriter {
             appendLine()
             appendLine("/** The releases Fuse Tune read for each emulator, newest first. */")
             appendLine("internal val TUNE_RELEASES: Map<String, List<String>> = mapOf(")
-            for ((family, tags, _) in emulators) appendLine("    ${quote(family)} to listOf(${tags.joinToString(", ") { quote(it) }}),")
+            for ((family, tags) in releases) appendLine("    ${quote(family)} to listOf(${tags.joinToString(", ") { quote(it) }}),")
             appendLine(")")
             appendLine()
             appendLine("/** Every setting, one per line, its fields separated by tabs (read by [Tune]). */")
             appendLine("internal val TUNE_DATA: List<String> = listOf(")
             for (c in chunks) appendLine("    ${quote(c)},")
             appendLine(")")
+        }
+    }
+
+    /**
+     * What a data file [kotlin] wrote holds: each family's releases in order, and every setting's
+     * line. For writing it again with only some families read anew.
+     */
+    fun readBack(text: String): Pair<List<Pair<String, List<String>>>, List<String>> {
+        val releases = ArrayList<Pair<String, List<String>>>()
+        val lines = ArrayList<String>()
+        var inData = false
+        for (l in text.lines()) {
+            val t = l.trim()
+            when {
+                t.startsWith("internal val TUNE_DATA") -> inData = true
+                inData && t.startsWith("\"") -> lines += literals(t).single().split('\n').filter { it.isNotEmpty() }
+                !inData && t.startsWith("\"") && " to listOf(" in t -> {
+                    val all = literals(t)
+                    releases += all.first() to all.drop(1)
+                }
+            }
+        }
+        return releases to lines
+    }
+
+    /** The string literals in one line of Kotlin, their escapes read (a scan, not a regex: the lines are long). */
+    private fun literals(line: String): List<String> {
+        val out = ArrayList<String>()
+        var i = 0
+        while (true) {
+            val start = line.indexOf('"', i).takeIf { it >= 0 } ?: break
+            var j = start + 1
+            while (j < line.length && line[j] != '"') j += if (line[j] == '\\') 2 else 1
+            out += unquote(line.substring(start + 1, minOf(j, line.length)))
+            i = j + 1
+        }
+        return out
+    }
+
+    /** A Kotlin string literal's text, its escapes read ([quote] the other way). */
+    fun unquote(s: String): String = buildString {
+        var i = 0
+        while (i < s.length) {
+            val c = s[i]
+            if (c != '\\' || i + 1 >= s.length) { append(c); i++; continue }
+            when (val n = s[i + 1]) {
+                'n' -> append('\n')
+                't' -> append('\t')
+                'r' -> append('\r')
+                'u' -> { append(s.substring(i + 2, i + 6).toInt(16).toChar()); i += 4 }
+                else -> append(n)
+            }
+            i += 2
         }
     }
 

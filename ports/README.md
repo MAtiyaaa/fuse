@@ -23,7 +23,10 @@ a game from the person's own files, without them nothing. For each one:
 4. Keep its saves and settings in its home: `{home}/...` in `args`, and `saves` relative to it.
 5. Give it a `check` the nightly job can run without the game's files: `args` and the `expect`ed
    output (a regular expression), or `stay` seconds it keeps running.
-6. Raise `revision`. Leave `verified` out: only the nightly job writes it.
+6. Name its own settings file in `settings` (`{"file": "{home}/config/diablo.ini"}`, under
+   `{home}` or `{install}`) and add a reader for its settings code to `tools/tune` with the port's
+   id as its family, so Fuse Tune offers every setting the port reads.
+7. Raise `revision`. Leave `verified` out: only the nightly job writes it.
 
 `tools/ports/check.py check --out results.json` runs the same check on your computer.
 

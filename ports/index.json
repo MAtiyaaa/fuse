@@ -46,7 +46,8 @@
         "DevilutionX reads Diablo's own files from your folder, through links in Fuse's copy.",
         "Your saves and settings are DevilutionX's own, kept by Fuse beside its copy."
       ],
-      "source": "DevilutionX 1.5.5: README.md and docs/installing.md (the MPQ files and where they go); Source/diablo.cpp, the argument loop (--save-dir, --config-dir, --version); Source/init.cpp, GetMPQSearchPaths (the program's folder, then the folder it starts from) and LoadGameArchives (DIABDAT.MPQ, diabdat.mpq, spawn.mpq); Packaging/nix/AppImage.sh (devilutionx.mpq beside the program inside the AppImage)"
+      "source": "DevilutionX 1.5.5: README.md and docs/installing.md (the MPQ files and where they go); Source/diablo.cpp, the argument loop (--save-dir, --config-dir, --version); Source/init.cpp, GetMPQSearchPaths (the program's folder, then the folder it starts from) and LoadGameArchives (DIABDAT.MPQ, diabdat.mpq, spawn.mpq); Packaging/nix/AppImage.sh (devilutionx.mpq beside the program inside the AppImage); Source/options.cpp, LoadOptions (diablo.ini in the config folder)",
+      "settings": { "file": "{home}/config/diablo.ini" }
     },
     {
       "id": "openrct2",
@@ -89,7 +90,8 @@
         "OpenRCT2 reads RollerCoaster Tycoon 2's files where they are; it never changes them.",
         "Your parks, settings and screenshots are OpenRCT2's own, kept by Fuse beside its copy."
       ],
-      "source": "OpenRCT2 v0.5.6: src/openrct2/command_line/RootCommands.cpp (--rct2-data-path, --user-data-path, --version) and CommandLine.cpp ParseLongOption (a value after the option); src/openrct2/platform/Platform.Common.cpp classifyGamePath (Data/g1.dat or Assets/g1.dat, letter case resolved); src/openrct2/PlatformEnvironment.cpp (save inside the user data folder); src/openrct2/Version.cpp (the version line)"
+      "source": "OpenRCT2 v0.5.6: src/openrct2/command_line/RootCommands.cpp (--rct2-data-path, --user-data-path, --version) and CommandLine.cpp ParseLongOption (a value after the option); src/openrct2/platform/Platform.Common.cpp classifyGamePath (Data/g1.dat or Assets/g1.dat, letter case resolved); src/openrct2/PlatformEnvironment.cpp (save and config.ini inside the user data folder); src/openrct2/Version.cpp (the version line)",
+      "settings": { "file": "{home}/user/config.ini" }
     },
     {
       "id": "fallout2-ce",
@@ -133,7 +135,8 @@
         "Mods that change maps or protos in your game's data folder aren't carried over, and the saves of your own copy stay with it: the port's are its own.",
         "On Linux it needs SDL2, which SteamOS and most desktops have."
       ],
-      "source": "fallout2-ce v1.3.0: README.md (run from the game's folder, SDL2 on Linux); src/game_config.cc gameConfigInit (fallout2.cfg beside the program, master.dat, critter.dat and data as defaults); src/loadsave.cc (data/SAVEGAME), src/map.cc and src/proto.cc (data/MAPS and data/proto written while playing); src/platform_compat.cc compat_resolve_path (letter case ignored on Linux)"
+      "source": "fallout2-ce v1.3.0: README.md (run from the game's folder, SDL2 on Linux); src/game_config.cc gameConfigInit (fallout2.cfg beside the program, master.dat, critter.dat and data as defaults); src/loadsave.cc (data/SAVEGAME), src/map.cc and src/proto.cc (data/MAPS and data/proto written while playing); src/platform_compat.cc compat_resolve_path (letter case ignored on Linux)",
+      "settings": { "file": "{install}/fallout2.cfg" }
     }
   ]
 }

@@ -55,7 +55,16 @@ data class Port(
     /** What to know before playing, in the port's own terms. */
     val notes: List<String> = emptyList(),
     val source: String,
+    /** Its own settings file, which Fuse Tune shows (read from the port's code as the family [id]); null when it doesn't. */
+    val settings: PortSettings? = null,
 )
+
+/**
+ * Where a port keeps its own settings: [file], under its home or its copy (`{home}/config/diablo.ini`,
+ * with [PortTokens.HOME] or [PortTokens.INSTALL] first), and how it is written ("ini").
+ */
+@Serializable
+data class PortSettings(val file: String, val format: String = "ini")
 
 /**
  * One build of a port: its file at [url] (HTTPS, [size] bytes, [sha256] the lower-case hex digest it

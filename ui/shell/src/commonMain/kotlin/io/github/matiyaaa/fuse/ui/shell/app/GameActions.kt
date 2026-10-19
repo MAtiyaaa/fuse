@@ -451,6 +451,10 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
             if (card.platformId.value in setOf("ps2", "psx", "psp", "ngc", "wii", "ps3")) {
                 add(MenuAction("emusettings", "Emulator Settings", FuseIcons.Sliders, detail = "Resolution, renderer and every other setting for this game, in its emulator's own settings", trailing = Trailing.Chevron, onSelect = { emulatorSettingsSheet(card) }))
             }
+            // A port's own settings, as its code names them, in its own file.
+            if (card.platformId == io.github.matiyaaa.fuse.launch.ports.PortAdapter.PLATFORM) {
+                add(MenuAction("emusettings", "Game Settings", FuseIcons.Sliders, detail = "Every setting of the port's own, as its code names them, in its own file", trailing = Trailing.Chevron, onSelect = { emulatorSettingsSheet(card) }))
+            }
         }
         if (!card.isApp && card.platformId.value == "ps3") {
             add(MenuAction("compat", "How It Runs in RPCS3", FuseIcons.Gauge, detail = "From RPCS3's compatibility list. Asks rpcs3.net with the game's title id", trailing = Trailing.Chevron, onSelect = { showCompatibility(card) }))

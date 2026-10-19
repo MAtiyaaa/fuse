@@ -10,13 +10,35 @@ import kotlin.test.assertTrue
 class TuneTest {
     @Test
     fun everyEmulatorReadHasItsReleasesAndASettingsCountLikeItsOwn() {
-        assertEquals(setOf("dolphin", "duckstation", "ppsspp", "pcsx2", "rpcs3"), Tune.families)
+        assertEquals(setOf("dolphin", "duckstation", "ppsspp", "pcsx2", "rpcs3", "devilutionx", "openrct2", "fallout2-ce"), Tune.families)
+        // Each has as many as its own settings show; a reader that broke would find a handful.
+        val least = mapOf("devilutionx" to 40, "fallout2-ce" to 40)
         for (family in Tune.families) {
             assertEquals(4, Tune.releases(family).size, family)
-            // Each has a few hundred settings; a reader that broke would find a handful.
-            assertTrue(Tune.forEmulator(family).size > 150, "$family: ${Tune.forEmulator(family).size}")
+            assertTrue(Tune.forEmulator(family).size > (least[family] ?: 150), "$family: ${Tune.forEmulator(family).size}")
             assertTrue(Tune.forEmulator(family).all { it.releases.isNotEmpty() }, family)
         }
+    }
+
+    @Test
+    fun aPortsSettingsComeWithItsOwnNamesAndSwitchesAsItWritesThem() {
+        val full = assertNotNull(Tune.find("devilutionx", null, "Graphics", "Fullscreen"))
+        assertEquals(TuneKind.SWITCH, full.kind)
+        assertEquals("true", full.default, "shown as every switch is, though DevilutionX writes 1")
+        assertEquals("Fullscreen", full.label)
+        assertEquals("Display the game in windowed or fullscreen mode.", full.about)
+        assertEquals("1", Tune.switchWritten("devilutionx", true))
+        assertEquals("0", Tune.switchWritten("devilutionx", false))
+        assertEquals("false", Tune.switchShown("devilutionx", "0"))
+        assertEquals(null, Tune.switchWritten("dolphin", true), "the others write their own words")
+        val scale = assertNotNull(Tune.find("devilutionx", null, "Graphics", "Scaling Quality"))
+        assertEquals(listOf("Nearest Pixel", "Bilinear", "Anisotropic"), scale.choices.map { it.shown })
+        // Hidden in DevilutionX's own settings, so not offered.
+        assertEquals(null, Tune.find("devilutionx", null, "Graphics", "Gamma Correction"))
+        // OpenRCT2's switches are its own `true` and `false`; Fallout 2's settings are numbers.
+        assertEquals("true", assertNotNull(Tune.find("openrct2", null, "general", "use_vsync")).default)
+        assertEquals(listOf("IMPERIAL", "METRIC", "SI"), assertNotNull(Tune.find("openrct2", null, "general", "measurement_format")).choices.map { it.value })
+        assertEquals(TuneKind.NUMBER, assertNotNull(Tune.find("fallout2-ce", null, "preferences", "game_difficulty")).kind)
     }
 
     @Test

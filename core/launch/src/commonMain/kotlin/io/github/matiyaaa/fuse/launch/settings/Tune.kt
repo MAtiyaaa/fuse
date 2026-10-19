@@ -20,7 +20,8 @@ data class TuneChoice(val value: String, val label: String? = null, val hosts: S
  * ([path]: the section of an ini file, or the nodes of a YAML one), its [key], what it holds, the
  * value it has when nothing is set (null when the emulator works it out when it runs), the range a
  * number may take, and whether a game's own settings can hold it. [releases] are the releases Fuse
- * Tune read that have it, newest first.
+ * Tune read that have it, newest first. Where the emulator's code names it for people: its [label],
+ * its description ([about]) and the tab its own settings show it on ([tab]).
  */
 data class TuneSetting(
     val family: String,
@@ -36,6 +37,9 @@ data class TuneSetting(
     /** Its section in a game's own file, when that differs (Dolphin's `Video_Settings`). */
     val gameSection: String?,
     val releases: List<String>,
+    val label: String? = null,
+    val about: String? = null,
+    val tab: String? = null,
 ) {
     /** Its ini section (the only part of an ini file's path). */
     val section: String get() = path.joinToString("/")
@@ -135,10 +139,31 @@ object Tune {
         }
         return TuneSetting(
             family = f[0], file = opt(f[1]), path = f[2].split(JOIN), key = f[3], kind = if (kind == TuneKind.CHOICE && choices.isEmpty()) TuneKind.TEXT else kind,
-            default = opt(f[5]), min = opt(f[6])?.toLongOrNull(), max = opt(f[7])?.toLongOrNull(), choices = choices,
+            // A switch's default as Fuse shows every switch, whatever the emulator writes.
+            default = opt(f[5])?.let { if (kind == TuneKind.SWITCH) switchShown(f[0], it) else it }, min = opt(f[6])?.toLongOrNull(), max = opt(f[7])?.toLongOrNull(), choices = choices,
             perGame = f[9] == "1", gameSection = opt(f[10]), releases = f[11].split(',').filter { it.isNotEmpty() },
+            label = f.getOrNull(12)?.let(::opt), about = f.getOrNull(13)?.let(::opt), tab = f.getOrNull(14)?.let(::opt),
         )
     }
+
+    /**
+     * How [family] writes a switch, on then off, where it isn't `true` and `false`: DevilutionX
+     * `1` and `0` (`Ini::set(bool)`, Source/utils/ini.cpp).
+     */
+    private val SWITCH_WORDS = mapOf("devilutionx" to ("1" to "0"))
+
+    /** [value] of a switch as Fuse shows it (`true` or `false`), from what [family] writes. */
+    fun switchShown(family: String, value: String?): String? {
+        val (on, off) = SWITCH_WORDS[family] ?: return value
+        return when (value?.trim()) {
+            on -> "true"
+            off -> "false"
+            else -> value
+        }
+    }
+
+    /** A switch as [family] writes it, from `true` or `false`; null when it writes them as they are. */
+    fun switchWritten(family: String, on: Boolean): String? = SWITCH_WORDS[family]?.let { if (on) it.first else it.second }
 
     private fun host(name: String): Host? = when (name) {
         "windows" -> Host.WINDOWS

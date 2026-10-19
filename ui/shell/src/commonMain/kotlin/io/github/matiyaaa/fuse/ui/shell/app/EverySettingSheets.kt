@@ -267,7 +267,9 @@ private fun undo(view: EverySettingView.Ready, v: TuneValue, forGame: Boolean, o
 private fun about(view: EverySettingView.Ready, s: TuneSetting, forGame: Boolean): String {
     val where = s.path.joinToString(" / ")
     val scope = if (forGame) "For this game in ${view.emulator}." else "For every game in ${view.emulator}."
-    return "$scope Kept as ${s.key} under $where."
+    // The emulator's own description first, where its code gives one.
+    val own = s.about?.trim()?.let { if (it.endsWith('.')) "$it " else "$it. " }.orEmpty()
+    return "$own$scope Kept as ${s.key} under $where."
 }
 
 /** What [value] is called for [s]: its choice's name, On or Off, or itself; nothing set and no default is Automatic. */
@@ -291,7 +293,7 @@ private fun same(s: TuneSetting, a: String, b: String): Boolean {
 }
 
 /** A setting's name as words: `upscale_multiplier` is Upscale Multiplier, `wideScreenHack` Wide Screen Hack. */
-internal fun settingName(s: TuneSetting): String = words(s.key)
+internal fun settingName(s: TuneSetting): String = s.label ?: words(s.key)
 
 /** A choice's name: the emulator's own words, or the name its code gives the value, as words. */
 private fun choiceName(s: TuneSetting, c: TuneChoice): String {

@@ -90,21 +90,32 @@ class IniText(text: String) : io.github.matiyaaa.fuse.launch.settings.SettingsTe
         return range.mapNotNull { i -> entry(lines[i])?.first }.distinct()
     }
 
-    /** Adds `key = value` at the end of [section] (made at the end when missing), unless it is there already. */
+    /**
+     * Adds `key = value` at the end of [section] (made at the end when missing), unless it is there
+     * already; written as the file writes its other keys (`key=value` where they have no spaces).
+     */
     fun add(section: String, key: String, value: String): Boolean {
         if (values(section, key).any { it == value }) return false
         val range = sectionRange(section)
+        val line = key + separator() + value
         if (range == null) {
             if (lines.isNotEmpty() && lines.last().isNotBlank()) lines += ""
             lines += "[$section]"
-            lines += "$key = $value"
+            lines += line
             return true
         }
         // After the section's last line that says something, so blank lines before the next section stay.
         var at = range.first
         for (i in range) if (lines[i].isNotBlank()) at = i + 1
-        lines.add(at, "$key = $value")
+        lines.add(at, line)
         return true
+    }
+
+    /** How this file writes `=`: as its first key does, else with a space each side. */
+    private fun separator(): String {
+        val first = lines.firstOrNull { entry(it) != null } ?: return " = "
+        val eq = first.indexOf('=')
+        return if (eq > 0 && first[eq - 1] != ' ' && first.getOrNull(eq + 1) != ' ') "=" else " = "
     }
 
     /** Removes every `key = value` line in [section]; true when one was there. */
@@ -131,7 +142,12 @@ class IniText(text: String) : io.github.matiyaaa.fuse.launch.settings.SettingsTe
             add(section, key, value)
             return
         }
-        lines[at] = "$key = $value"
+        // Only the value changes: the key as written and the spacing around `=` stay.
+        val line = lines[at]
+        val eq = line.indexOf('=')
+        val head = line.substring(0, eq + 1)
+        val space = line.substring(eq + 1).takeWhile { it == ' ' || it == '\t' }
+        lines[at] = head + space + value
         val rest = range.filter { i -> i != at && entry(lines[i])?.first?.equals(key, ignoreCase = true) == true }
         rest.asReversed().forEach { lines.removeAt(it) }
     }

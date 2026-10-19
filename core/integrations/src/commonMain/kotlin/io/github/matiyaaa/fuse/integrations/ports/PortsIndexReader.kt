@@ -85,6 +85,11 @@ object PortsIndexReader {
             }
         }
         port.check?.expect?.let { if (runCatching { Regex(it) }.isFailure) return "its check can't be read" }
+        port.settings?.let { st ->
+            val inside = listOf(PortTokens.HOME, PortTokens.INSTALL).firstOrNull { st.file.startsWith("$it/") }?.let { st.file.removePrefix("$it/") }
+            if (inside == null || !safe(inside)) return "its settings file would be outside it"
+            if (st.format !in SETTINGS_FORMATS) return "its settings are in a form Fuse doesn't write"
+        }
         return null
     }
 
@@ -93,6 +98,7 @@ object PortsIndexReader {
         path.isNotBlank() && !path.startsWith("/") && '\\' !in path && ':' !in path && path.split('/').none { it.isEmpty() || it == "." || it == ".." }
 
     private val OSES = setOf("linux", "windows", "macos")
+    private val SETTINGS_FORMATS = setOf("ini")
     private val ARCHES = setOf("x86_64", "arm64")
 }
 

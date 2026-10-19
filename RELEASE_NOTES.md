@@ -133,7 +133,9 @@ together as each emulator does it, and Fuse Ports brings games rebuilt to run na
   kept in step. A nightly check starts every port, and once Fuse carries the key the list is signed
   with, the ones that passed show as verified. Your copy can come straight from the library, and
   the original game's page offers the port beside its emulators: pick it, and Play (and its Steam
-  entry) starts the port instead.
+  entry) starts the port instead. Each port's Game Settings are every setting of its own, read from
+  its code (DevilutionX's with its own names and descriptions), changed in its own file and put
+  back exactly.
 - **PS4 trophies before the first play.** A PS4 game's trophies show on its page before shadPS4
   has opened it, read from the game's own trophy file with the trophy key you gave shadPS4.
 - **Sign Emulators In**, in Settings, Accounts, once RetroAchievements is connected: type your

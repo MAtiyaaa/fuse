@@ -410,7 +410,9 @@ class ParsersTest {
         assertEquals("D3D11\u001eDirect3D 11\u001dwindows", TuneWriter.choice(Choice("D3D11", "Direct3D 11", setOf("windows"))))
         assertEquals("OpenGL\u001dandroid+linux+windows", TuneWriter.choice(Choice("OpenGL", hosts = setOf("windows", "linux", "android"))))
         val line = TuneWriter.line("rpcs3", Merged(Found(null, "Video${Found.PATH}Vulkan", "Adapter", Kind.STRING, ""), listOf("v0.0.43", "v0.0.42")))
-        assertEquals(listOf("rpcs3", TuneWriter.NONE, "Video${Found.PATH}Vulkan", "Adapter", "STRING", "", TuneWriter.NONE, TuneWriter.NONE, "", "1", TuneWriter.NONE, "v0.0.43,v0.0.42"), line.split('\t'))
+        assertEquals(listOf("rpcs3", TuneWriter.NONE, "Video${Found.PATH}Vulkan", "Adapter", "STRING", "", TuneWriter.NONE, TuneWriter.NONE, "", "1", TuneWriter.NONE, "v0.0.43,v0.0.42", TuneWriter.NONE, TuneWriter.NONE, TuneWriter.NONE), line.split('\t'))
+        val named = TuneWriter.line("devilutionx", Merged(Found(null, "Graphics", "Zoom", Kind.BOOL, "0", label = "Zoom", about = "Zoom on when enabled."), listOf("1.5.5")))
+        assertEquals(listOf("Zoom", "Zoom on when enabled.", TuneWriter.NONE), named.split('\t').takeLast(3))
     }
 
     @Test
@@ -423,5 +425,217 @@ class ParsersTest {
         assertTrue(strings.all { it.length < 65_000 })
         assertTrue(strings.size > 3)
         assertTrue("\\\$dollars" in text)
+    }
+
+    @Test
+    fun onlyTheLinesABuildCompilesAreKept() {
+        val text = """
+            a
+            #ifndef USE_SDL1
+            b
+            #if defined(NXDK) || defined(__ANDROID__)
+            c
+            #elif SDL_VERSION_ATLEAST(2, 0, 0)
+            d
+            #else
+            e
+            #endif
+            #endif
+            #ifdef USE_SDL1
+            f
+            #else
+            g
+            #endif
+            #if !defined(USE_SDL1) || \
+                defined(__3DS__)
+            h
+            #endif
+            i
+        """.trimIndent()
+        val kept = Source.select(text) { mapOf("SDL_VERSION_ATLEAST(2,0,0)" to true)[it] }
+        assertEquals(listOf("a", "b", "d", "g", "h", "i"), kept.lines().filter { it.isNotBlank() })
+        assertEquals(text.lines().size, kept.lines().size, "lines left out stay as empty lines")
+        assertTrue(Source.condition(" !(defined(A) && B) || C", mapOf("A" to true, "B" to true)::get).not())
+        assertTrue(Source.condition(" 1", { null }))
+    }
+
+    @Test
+    fun devilutionXsOptionsUnderTheirCategoriesWithTheirNamesAsADesktopBuildHasThem() {
+        val header = """
+            enum class ScalingQuality : uint8_t {
+                NearestPixel,
+                BilinearFiltering,
+                AnisotropicFiltering,
+            };
+            enum class FrameRateControl : uint8_t {
+                None = 0,
+            #ifndef USE_SDL1
+                VerticalSync = 1,
+            #endif
+                CPUSleep = 2,
+            };
+            struct GraphicsOptions : OptionCategoryBase {
+                OptionEntryResolution resolution;
+                OptionEntryBoolean fullscreen;
+            #ifndef USE_SDL1
+                OptionEntryEnum<ScalingQuality> scaleQuality;
+            #endif
+                OptionEntryEnum<FrameRateControl> frameRateControl;
+                OptionEntryInt<int> gammaCorrection;
+            };
+            struct AudioOptions : OptionCategoryBase {
+                OptionEntryInt<std::uint32_t> sampleRate;
+                OptionEntryInt<int> soundVolume;
+            };
+        """.trimIndent()
+        val options = """
+            #ifndef DEFAULT_AUDIO_SAMPLE_RATE
+            #define DEFAULT_AUDIO_SAMPLE_RATE 22050
+            #endif
+            GraphicsOptions::GraphicsOptions()
+                : OptionCategoryBase("Graphics", N_("Graphics"), N_("Graphics Settings"))
+                , fullscreen("Fullscreen", OptionEntryFlags::CantChangeInGame, N_("Fullscreen"), N_("Display the game in windowed or fullscreen mode."), true)
+            #ifndef USE_SDL1
+                , scaleQuality("Scaling Quality", OptionEntryFlags::None, N_("Scaling Quality"), N_("Enables optional filters."), ScalingQuality::AnisotropicFiltering,
+                      {
+                          { ScalingQuality::NearestPixel, N_("Nearest Pixel") },
+                          { ScalingQuality::BilinearFiltering, N_("Bilinear") },
+                          { ScalingQuality::AnisotropicFiltering, N_("Anisotropic") },
+                      })
+            #endif
+                , frameRateControl("Frame Rate Control", OptionEntryFlags::RecreateUI, N_("Frame Rate Control"), N_("Manages frame rate."),
+            #if defined(NXDK) || defined(USE_SDL1)
+                      FrameRateControl::CPUSleep
+            #else
+                      FrameRateControl::VerticalSync
+            #endif
+                      ,
+                      {
+                          { FrameRateControl::None, N_("None") },
+            #ifndef USE_SDL1
+                          { FrameRateControl::VerticalSync, N_("Vertical Sync") },
+            #endif
+                          { FrameRateControl::CPUSleep, N_("Limit FPS") },
+                      })
+                , gammaCorrection("Gamma Correction", OptionEntryFlags::Invisible, "Gamma Correction", "Gamma correction level.", 100)
+            {
+                fullscreen.SetValueChangedCallback(SetFullscreenMode);
+            }
+            AudioOptions::AudioOptions()
+                : OptionCategoryBase("Audio", N_("Audio"), N_("Audio Settings"))
+                , soundVolume("Sound Volume", OptionEntryFlags::Invisible, "Sound Volume", "Movie and SFX volume.", VOLUME_MAX)
+                , sampleRate("Sample Rate", OptionEntryFlags::CantChangeInGame, N_("Sample Rate"), N_("Output sample rate (Hz)."), DEFAULT_AUDIO_SAMPLE_RATE, { 22050, 44100, 48000 })
+            {
+            }
+        """.trimIndent()
+        val found = DevilutionX.parse(mapOf(DevilutionX.OPTIONS to options, DevilutionX.HEADER to header))
+        assertEquals(listOf("Graphics/Fullscreen", "Graphics/Scaling Quality", "Graphics/Frame Rate Control", "Audio/Sample Rate"), found.map { "${it.section}/${it.key}" }, "hidden entries and its own kinds are left out")
+        val full = found.at("Graphics", "Fullscreen")
+        assertEquals(Kind.BOOL, full.kind)
+        assertEquals("1", full.default, "a switch as DevilutionX writes it")
+        assertEquals("Fullscreen", full.label)
+        assertEquals("Display the game in windowed or fullscreen mode.", full.about)
+        val scale = found.at("Graphics", "Scaling Quality")
+        assertEquals(listOf(Choice("0", "Nearest Pixel"), Choice("1", "Bilinear"), Choice("2", "Anisotropic")), scale.choices)
+        assertEquals("2", scale.default)
+        val frames = found.at("Graphics", "Frame Rate Control")
+        assertEquals(listOf("0", "1", "2"), frames.choices.map { it.value }, "a desktop build has vertical sync")
+        assertEquals("1", frames.default)
+        val rate = found.at("Audio", "Sample Rate")
+        assertEquals(Kind.ENUM, rate.kind)
+        assertEquals(listOf("22050", "44100", "48000"), rate.choices.map { it.value })
+        assertEquals("22050", rate.default, "a default named by a #define")
+    }
+
+    @Test
+    fun readingSomeFamiliesAgainKeepsTheOthersAsTheyWere() {
+        val before = TuneWriter.kotlin(
+            listOf(
+                Triple("dolphin", listOf("2609"), listOf(Merged(Found(null, "Core", "CPUThread", Kind.BOOL, "True"), listOf("2609")))),
+                Triple("devilutionx", listOf("1.5.4"), listOf(Merged(Found(null, "Graphics", "Old", Kind.BOOL, "0"), listOf("1.5.4")))),
+            ),
+        )
+        val (releases, lines) = TuneWriter.readBack(before)
+        assertEquals(listOf("dolphin" to listOf("2609"), "devilutionx" to listOf("1.5.4")), releases)
+        assertEquals(2, lines.size)
+        val after = keep(before, listOf(Triple("devilutionx", listOf("1.5.5", "1.5.4"), listOf(Merged(Found(null, "Graphics", "Zoom", Kind.BOOL, "0", label = "Zoom"), listOf("1.5.5", "1.5.4"))))))
+        val (r2, l2) = TuneWriter.readBack(after)
+        assertEquals(listOf("dolphin" to listOf("2609"), "devilutionx" to listOf("1.5.5", "1.5.4")), r2)
+        assertEquals(listOf(lines[0], TuneWriter.line("devilutionx", Merged(Found(null, "Graphics", "Zoom", Kind.BOOL, "0", label = "Zoom"), listOf("1.5.5", "1.5.4")))), l2)
+        val raw = "a\\b\"c\$d\u0001\n\t"
+        assertEquals(raw, TuneWriter.unquote(TuneWriter.quote(raw).removeSurrounding("\"")), "quoting read back is the same text")
+    }
+
+    @Test
+    fun openRct2sSectionsWithTheirKeysDefaultsAndEnumWords() {
+        val code = """
+            static const auto Enum_MeasurementFormat = ConfigEnum<MeasurementFormat>({
+                ConfigEnumEntry<MeasurementFormat>("IMPERIAL", MeasurementFormat::imperial),
+                ConfigEnumEntry<MeasurementFormat>("METRIC", MeasurementFormat::metric),
+            });
+            static void ReadGeneral(IIniReader* reader)
+            {
+                if (reader->ReadSection("general"))
+                {
+                    model->alwaysShowGridlines = reader->GetBoolean("always_show_gridlines", false);
+                    model->autosaveFrequency = reader->GetInt32("autosave", AUTOSAVE_EVERY_5MINUTES);
+                    model->edgeScrollingSpeed = reader->GetInt32("edge_scrolling_speed", 12);
+                    model->measurementFormat = reader->GetEnum<MeasurementFormat>(
+                        "measurement_format", MeasurementFormat::metric, Enum_MeasurementFormat);
+                    model->language = reader->GetEnum<int32_t>("language", Platform::GetLocaleLanguage(), Enum_LanguageEnum);
+                    model->customCurrencySymbol = reader->GetString("custom_currency_symbol", "Ctm");
+                }
+            }
+            static void WriteGeneral(IIniWriter* writer)
+            {
+                writer->WriteSection("general");
+                writer->WriteBoolean("always_show_gridlines", model->alwaysShowGridlines);
+            }
+            static void ReadSound(IIniReader* reader)
+            {
+                if (reader->ReadSection("sound"))
+                {
+                    model->masterVolume = reader->GetFloat("master_volume", 1.0f);
+                }
+            }
+        """.trimIndent()
+        val found = OpenRct2.parse(mapOf(OpenRct2.CONFIG to code))
+        assertEquals(listOf("general/always_show_gridlines", "general/autosave", "general/edge_scrolling_speed", "general/measurement_format", "general/custom_currency_symbol", "sound/master_volume"), found.map { "${it.section}/${it.key}" }, "the language, of a table of its own, is left out")
+        assertEquals("false", found.at("general", "always_show_gridlines").default)
+        assertEquals(null, found.at("general", "autosave").default, "a constant from elsewhere")
+        assertEquals(listOf(Choice("IMPERIAL"), Choice("METRIC")), found.at("general", "measurement_format").choices)
+        assertEquals("METRIC", found.at("general", "measurement_format").default)
+        assertEquals(Kind.FLOAT, found.at("sound", "master_volume").kind)
+        assertEquals("1.0", found.at("sound", "master_volume").default)
+    }
+
+    @Test
+    fun fallout2sDefaultsByTheNamesItsHeaderGivesThemAndNotTheMapEditors() {
+        val header = """
+            #define GAME_CONFIG_SYSTEM_KEY "system"
+            #define GAME_CONFIG_PREFERENCES_KEY "preferences"
+            #define GAME_CONFIG_MAPPER_KEY "mapper"
+            #define GAME_CONFIG_LANGUAGE_KEY "language"
+            #define GAME_CONFIG_GAME_DIFFICULTY_KEY "game_difficulty"
+            #define GAME_CONFIG_BRIGHTNESS_KEY "brightness"
+            #define GAME_CONFIG_LIBRARIAN_KEY "librarian"
+            #define ENGLISH "english"
+        """.trimIndent()
+        val code = """
+            bool gameConfigInit(bool isMapper, int argc, char** argv)
+            {
+                configSetString(&gGameConfig, GAME_CONFIG_SYSTEM_KEY, GAME_CONFIG_LANGUAGE_KEY, ENGLISH);
+                configSetInt(&gGameConfig, GAME_CONFIG_PREFERENCES_KEY, GAME_CONFIG_GAME_DIFFICULTY_KEY, 1);
+                configSetDouble(&gGameConfig, GAME_CONFIG_PREFERENCES_KEY, GAME_CONFIG_BRIGHTNESS_KEY, 1.0);
+                if (isMapper) {
+                    configSetInt(&gGameConfig, GAME_CONFIG_MAPPER_KEY, GAME_CONFIG_LIBRARIAN_KEY, 0);
+                }
+            }
+        """.trimIndent()
+        val found = Fallout2Ce.parse(mapOf(Fallout2Ce.CONFIG to code, Fallout2Ce.HEADER to header))
+        assertEquals(listOf("system/language", "preferences/game_difficulty", "preferences/brightness"), found.map { "${it.section}/${it.key}" })
+        assertEquals("english", found.at("system", "language").default)
+        assertEquals(Kind.INT, found.at("preferences", "game_difficulty").kind)
+        assertEquals("1.0", found.at("preferences", "brightness").default)
     }
 }
