@@ -1051,6 +1051,19 @@ interface AchievementOps {
     /** Checks a username + key against RetroAchievements and stores them securely on success. */
     suspend fun connect(username: String, apiKey: String): Result<Unit>
     suspend fun disconnect()
+
+    /** Each emulator here that keeps a RetroAchievements sign-in, and who it is signed in as. */
+    suspend fun emulatorSignIns(): EmulatorSignIns = EmulatorSignIns.Unavailable("On this device, each emulator signs in to RetroAchievements from its own settings.")
+
+    /**
+     * Signs the account in use in to RetroAchievements with [password] (used for that one request
+     * and kept nowhere) and every emulator here in with the login token it gives, each in its own
+     * settings, as it would sign itself in.
+     */
+    suspend fun signInEmulators(password: String): EmulatorSignInResult = EmulatorSignInResult(problem = "Not available on this device.")
+
+    /** Puts back what signing the emulators in changed. */
+    suspend fun signOutEmulators(): Boolean = false
 }
 
 interface AppOps {

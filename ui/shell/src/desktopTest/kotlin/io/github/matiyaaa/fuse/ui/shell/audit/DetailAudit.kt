@@ -544,6 +544,43 @@ internal fun AuditDriver.detailScreens() {
         }
     }
 
+    scenario("details", "emulators signed in to retroachievements") {
+        // A computer with Ana's account connected and five emulators: some signed in by Fuse, one by
+        // someone else, one that hasn't set up its folders yet.
+        useLibrary()
+        val base = libraryStore
+        val achievements = object : io.github.matiyaaa.fuse.ui.shell.store.AchievementOps by base.achievements {
+            override val configured = kotlinx.coroutines.flow.MutableStateFlow(true)
+            override suspend fun emulatorSignIns() = io.github.matiyaaa.fuse.ui.shell.store.EmulatorSignIns.Ready(
+                "Ana",
+                listOf(
+                    io.github.matiyaaa.fuse.ui.shell.store.EmulatorSignIn("RetroArch", "retroarch", "Ana", byFuse = true),
+                    io.github.matiyaaa.fuse.ui.shell.store.EmulatorSignIn("PCSX2", "pcsx2", "Mo", byFuse = false),
+                    io.github.matiyaaa.fuse.ui.shell.store.EmulatorSignIn("DuckStation", "duckstation", "Ana", byFuse = true),
+                    io.github.matiyaaa.fuse.ui.shell.store.EmulatorSignIn("PPSSPP", "ppsspp", null, byFuse = false),
+                    io.github.matiyaaa.fuse.ui.shell.store.EmulatorSignIn("Dolphin", "dolphin", null, byFuse = false, problem = "Start Dolphin once so it sets up its folders."),
+                ),
+            )
+        }
+        show(object : io.github.matiyaaa.fuse.ui.shell.store.FuseStore by base { override val achievements = achievements }, AuditPlatform(size, host = io.github.matiyaaa.fuse.model.Host.LINUX))
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("accounts"))
+        tap(PadButton.DPAD_RIGHT)
+        waitFor("Sign Emulators In")
+        focusText("Sign Emulators In")
+        settle(900)
+        shoot("Settings, Accounts: signing every emulator in at once", 1_200)
+        tap(PadButton.A)
+        waitFor("Emulators and RetroAchievements")
+        settle(900)
+        shoot("who each emulator is signed in as, and one sign-in for all", 1_200)
+        tap(PadButton.A)
+        waitFor("RetroAchievements password")
+        settle(900)
+        shoot("the password, asked once and kept nowhere", 1_200)
+        tap(PadButton.B)
+    }
+
     scenario("details", "a game with many facts") {
         useLibrary()
         val card = runBlocking { libraryStore.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).first().first { it.title == "Emberline Saga" } }

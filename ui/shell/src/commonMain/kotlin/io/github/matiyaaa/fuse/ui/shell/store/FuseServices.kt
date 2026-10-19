@@ -461,6 +461,14 @@ interface EmulatorFiles {
     /** Where the DuckStation install [installed] keeps its data; null when it hasn't been set up or can't be found. */
     suspend fun duckstation(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): io.github.matiyaaa.fuse.launch.patches.DuckStationHome? = null
 
+    /**
+     * The text DuckStation [installed] makes the key for its RetroAchievements sign-in from
+     * ([io.github.matiyaaa.fuse.launch.achievements.RaSignIn.MACHINE_KEY]): this computer's own id,
+     * exactly as DuckStation reads it; "" when it runs portable (it uses none then); null when it
+     * can't be read here.
+     */
+    suspend fun duckStationMachineKey(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
+
     /** The memory stick of the PPSSPP install [installed] (the folder holding `PSP`); null when it can't be found. */
     suspend fun ppsspp(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): io.github.matiyaaa.fuse.launch.patches.PpssppHome? = null
 

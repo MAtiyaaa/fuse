@@ -38,6 +38,8 @@ data class RommCapabilities(
     val playSessions: Boolean = false,
     /** A task followed while it runs, a scan's counts among it (`GET /api/tasks/{task_id}`). */
     val taskStatus: Boolean = false,
+    /** The person's own notes on a game, read, made and changed (`/api/roms/{id}/notes`, RomM 5.4). */
+    val notes: Boolean = false,
 ) {
     val major: Int get() = version.removePrefix("v").substringBefore('.').toIntOrNull() ?: if (version == "development") 99 else 0
 }
@@ -242,6 +244,9 @@ data class RommCollection(
 /** A play session of a game on RomM ([RommClient.playSessions]): epoch milliseconds. */
 @Serializable
 data class RommPlayed(val romId: Long, val startedAt: Long, val endedAt: Long)
+
+/** A note on a game on RomM ([RommClient.notes]): its author's [username], kept to them unless [isPublic]. */
+data class RommNote(val id: Long, val title: String, val content: String, val isPublic: Boolean, val username: String)
 
 /** A page of games and how many there are in all. */
 data class RommPage(val items: List<RommRom>, val total: Int?)

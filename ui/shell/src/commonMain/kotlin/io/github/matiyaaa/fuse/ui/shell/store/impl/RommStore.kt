@@ -643,6 +643,7 @@ internal class DefaultRommOps(
         when (val w = batch.first()) {
             is RommWrite.Played -> if (c.capabilities.playSessions) c.playSessions(batch.filterIsInstance<RommWrite.Played>().map { it.session })
             is RommWrite.Hidden -> if (c.capabilities.userProps) c.setHidden(w.romId, w.on)
+            is RommWrite.Trophies -> if (c.capabilities.notes) trophyNote(c, w.romId, w.game)
             is RommWrite.Favourite -> if (c.capabilities.collectionRoms) {
                 try {
                     c.collectionRoms(favouritesOf(c), listOf(w.romId), into = w.on)
@@ -653,6 +654,75 @@ internal class DefaultRommOps(
                     c.collectionRoms(favouritesOf(c), listOf(w.romId), into = w.on)
                 }
             }
+        }
+    }
+
+    // ------------------------------------------------------------------ trophies
+
+    /** When each game's trophy note was last read, so a page opened again soon doesn't ask again. */
+    private val trophyLooks = HashMap<Long, Long>()
+    private val trophyLock = Mutex()
+
+    /**
+     * Trophies across the person's devices with RomM and no Fuse One host: [game]'s unlocks in the
+     * person's own note on it ([TrophyNote]) join its history here, and, when they chose to send
+     * their changes, what was earned here is added to the note. Only for a game from RomM, on a
+     * server that keeps notes. [news]: something was earned here just now, so the note is read
+     * even when it was a moment ago, and the change waits for RomM when it is away.
+     */
+    internal suspend fun shareTrophies(game: GameId, news: Boolean) {
+        if (!settings.enabled) return
+        val romId = romOf(game) ?: ctx.data.games.get(game)?.links?.rommRomId ?: return
+        val c = client
+        if (c == null || _state.value.link != RommLink.ONLINE) {
+            if (news) changed(game) { RommWrite.Trophies(it, game.value) }
+            return
+        }
+        if (!c.capabilities.notes) return
+        val now = ctx.now()
+        val look = trophyLock.withLock {
+            val last = trophyLooks[romId]
+            if (!news && last != null && now - last < TROPHY_LOOK_MS) false else true.also { trophyLooks[romId] = now }
+        }
+        if (!look) return
+        try {
+            trophyNote(c, romId, game.value)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: RommException) {
+            if (news) changed(game) { RommWrite.Trophies(it, game.value) }
+        }
+    }
+
+    /**
+     * Reads the person's trophy note on [romId] into library game [game]'s history, then adds to
+     * it what the history has that the note doesn't (or has later), when changes may go to RomM.
+     * The note is made the first time there is something to put in it.
+     */
+    private suspend fun trophyNote(c: RommClient, romId: Long, game: Long) {
+        val me = _state.value.account
+        suspend fun mine() = c.notes(romId).firstOrNull { it.title == TrophyNote.TITLE && (me.isBlank() || it.username.equals(me, ignoreCase = true)) }
+        val note = mine()
+        val there = note?.let { TrophyNote.read(it.content) }.orEmpty()
+        TrophyHistory.add(ctx.data, game, there)
+        if (!settings.sendChanges || !mayTakeChanges(c)) return
+        val id = ThisDevice.id(ctx)
+        val ours = TrophyHistory.read(ctx.data, game).map { if (it.device == ThisDevice.LEGACY) it.copy(device = id) else it }
+        val before = TrophyNote.merge(there, emptyList())
+        val after = TrophyNote.merge(there, ours)
+        if (after.isEmpty() || (note != null && after == before)) return
+        if (note != null) {
+            c.updateNote(romId, note.id, TrophyNote.write(after.values))
+            return
+        }
+        try {
+            c.addNote(romId, TrophyNote.TITLE, TrophyNote.write(after.values), listOf(TrophyNote.TAG))
+        } catch (e: RommException) {
+            // Made meanwhile by another device (RomM keeps one of a title per person and game): added to.
+            val made = mine() ?: throw e
+            val all = TrophyNote.merge(TrophyNote.read(made.content), after.values)
+            TrophyHistory.add(ctx.data, game, all.values)
+            c.updateNote(romId, made.id, TrophyNote.write(all.values))
         }
     }
 
@@ -1444,6 +1514,9 @@ internal class DefaultRommOps(
 
         /** How long after a change it goes, so a burst of them goes together. */
         private const val SEND_AFTER_MS = 3_000L
+
+        /** How long a game's trophy note, once read, isn't read again for its page. */
+        private const val TROPHY_LOOK_MS = 10 * 60_000L
 
         /** How often a scan RomM runs is looked at, and for how long at most. */
         private const val SCAN_LOOK_MS = 2_000L

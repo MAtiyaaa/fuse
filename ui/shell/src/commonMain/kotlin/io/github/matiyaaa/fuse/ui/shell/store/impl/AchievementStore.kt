@@ -35,7 +35,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.KSerializer
@@ -90,12 +92,25 @@ internal class DefaultAchievementOps(
         return RetroAchievementsClient(ctx.services.http, RaCredentials(user, key))
     }
 
-    /** The profile in use changed: its own account (or the device's), from the cache, then refreshed. */
+    /** The emulators' own RetroAchievements sign-ins, for the account in use. */
+    private val signIns = RaEmulatorSignIn(ctx, credentials, account = { account()?.first }, profile = ::profile)
+
+    override suspend fun emulatorSignIns() = signIns.list()
+
+    override suspend fun signInEmulators(password: String) = signIns.signIn(password)
+
+    override suspend fun signOutEmulators() = signIns.signOut()
+
+    /**
+     * The profile in use changed: its own account (or the device's), from the cache, then refreshed;
+     * and the emulators Fuse signed in are signed in as this profile's account.
+     */
     fun profileChanged() {
         feedState.value = null
         ctx.scope.launch {
             load()
             if (configuredState.value) refresh(force = false)
+            runCatching { signIns.follow() }
         }
     }
 
@@ -159,13 +174,16 @@ internal class DefaultAchievementOps(
         val fresh = if (configuredState.value) forGame(game) else null
         if (fresh != null) emit(fresh)
         // Without RetroAchievements for it, what its own platform keeps here: Steam's achievements, RPCS3's trophies.
-        else if (cached == null) emit(runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { local(game) } }.getOrNull())
+        else if (cached == null) emit(runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { local(game, page = true) } }.getOrNull())
     }
 
     private val localReader by lazy { io.github.matiyaaa.fuse.library.achievements.LocalAchievements(ctx.services.fs) }
 
-    /** [game]'s achievements from what this device keeps for it, without an account; null when there are none. */
-    private suspend fun local(game: Game): AchievementState? {
+    /**
+     * [game]'s achievements from what this device keeps for it, without an account; null when there
+     * are none. For its [page], the trophies earned on the person's other devices are looked for too.
+     */
+    private suspend fun local(game: Game, page: Boolean = false): AchievementState? {
         val set = when {
             game.platformId.value == "ps3" -> {
                 val folders = listOfNotNull(game.location.path, io.github.matiyaaa.fuse.library.FsPath.parent(game.location.path))
@@ -218,7 +236,7 @@ internal class DefaultAchievementOps(
         val items = set.items
         // RPCS3's trophies earned here join the game's history, which Fuse One carries to the
         // person's other devices; trophies earned on those are said where they were earned.
-        val elsewhere = historyKey(set.source)?.let { (key, emulator) -> trophyHistory(game, items, key, emulator) }.orEmpty()
+        val elsewhere = historyKey(set.source)?.let { (key, emulator) -> trophyHistory(game, items, key, emulator, page) }.orEmpty()
         val earned = items.count { it.unlockedAt != null }
         val points = items.sumOf { it.points }
         val source = when (set.source) {
@@ -266,23 +284,39 @@ internal class DefaultAchievementOps(
     }
 
     /**
+     * Shares a game's trophies through RomM, for a game from RomM ([DefaultRommOps.shareTrophies]):
+     * the person's note on it read into the game's history, and what was earned here added to it.
+     * The second value says something was earned here just now.
+     */
+    var trophyShare: (suspend (io.github.matiyaaa.fuse.model.GameId, Boolean) -> Unit)? = null
+
+    /**
      * Notes the trophies [items] says were earned here in [game]'s history (once each, the first
-     * time) and answers the ones earned on another of the person's devices, by trophy id.
+     * time) and answers the ones earned on another of the person's devices, by trophy id. On its
+     * [page], or when something new was earned, RomM's note of them is read and added to as well,
+     * waited for a moment at most (it carries on after).
      */
     private suspend fun trophyHistory(
         game: Game,
         items: List<io.github.matiyaaa.fuse.library.achievements.LocalAchievement>,
         key: String,
         emulator: String,
+        page: Boolean,
     ): Map<String, io.github.matiyaaa.fuse.sync.TrophyUnlock> {
         val sync = ctx.settings.value.sync
-        val device = sync.deviceId.ifBlank { "this-device" }
+        val device = ThisDevice.id(ctx)
         val here = items.filter { it.unlockedAt != null }.map { a ->
             io.github.matiyaaa.fuse.sync.TrophyUnlock(key, a.id, a.name, a.unlockedAt!!, device, sync.deviceName, emulator)
         }
-        runCatching { TrophyHistory.add(ctx.data, game.id.value, here) }
+        val news = runCatching { TrophyHistory.add(ctx.data, game.id.value, here) }.getOrDefault(false)
+        val share = trophyShare
+        if (share != null && (page || news)) {
+            val going = ctx.scope.async { runCatching { share(game.id, news) } }
+            withTimeoutOrNull(SHARE_WAIT_MS) { going.await() }
+        }
+        val mine = ThisDevice.ids(ctx)
         return runCatching { TrophyHistory.read(ctx.data, game.id.value) }.getOrDefault(emptyList())
-            .filter { it.source == key && it.device != device }
+            .filter { it.source == key && it.device !in mine }
             .associateBy { it.id }
     }
 
@@ -533,9 +567,11 @@ internal class DefaultAchievementOps(
             // This profile only: it has no account from now on, and the others keep theirs.
             credentials.put(own(SecretKeys.RA_USERNAME, p), NONE)
             credentials.remove(own(SecretKeys.RA_API_KEY, p))
+            credentials.remove(own(SecretKeys.RA_TOKEN, p))
         } else {
             credentials.remove(SecretKeys.RA_USERNAME)
             credentials.remove(SecretKeys.RA_API_KEY)
+            credentials.remove(SecretKeys.RA_TOKEN)
             cache.clear(NS)
         }
         configuredState.value = false
@@ -610,6 +646,9 @@ internal class DefaultAchievementOps(
         const val KEY_RARITY = "steam-rarity:"
         const val RARITY_TTL_MS = 24 * 60 * 60 * 1000L
         const val MISS_TTL_MS = 24L * 60 * 60 * 1000
+
+        /** How long a game's page waits for RomM's note of its trophies before showing what it has. */
+        const val SHARE_WAIT_MS = 4_000L
         const val RECENT_WINDOW_MINUTES = 60 * 24 * 14
         val RecentList = ListSerializer(RecentAchievement.serializer())
         val CompletionList = ListSerializer(RaCompletionEntry.serializer())

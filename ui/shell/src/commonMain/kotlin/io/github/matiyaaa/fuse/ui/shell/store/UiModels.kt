@@ -601,6 +601,23 @@ sealed interface NexusPage {
 /** Another device in the household hosting a game now: who, on which device, since when, and where. */
 data class TogetherHost(val deviceId: String, val device: String, val who: String, val since: Long, val address: String?, val port: Int)
 
+/** An emulator here that keeps a RetroAchievements sign-in: who it is signed in as ([user], null for no one), whether Fuse signed it in, or why Fuse can't. */
+@Immutable
+data class EmulatorSignIn(val emulator: String, val family: String, val user: String?, val byFuse: Boolean, val problem: String? = null)
+
+/** The emulators' RetroAchievements sign-ins on this device, for the account in use ([account], null without one). */
+sealed interface EmulatorSignIns {
+    data class Ready(val account: String?, val emulators: List<EmulatorSignIn>) : EmulatorSignIns
+    data class Unavailable(val reason: String) : EmulatorSignIns
+}
+
+/** What signing the emulators in did: the ones signed in, the ones Fuse couldn't (with why), or why nothing was tried. */
+data class EmulatorSignInResult(
+    val signedIn: List<String> = emptyList(),
+    val failed: List<Pair<String, String>> = emptyList(),
+    val problem: String? = null,
+)
+
 /**
  * Playing a game with others on this device: its emulator's way of doing it, whether that emulator
  * is set up for it (and what isn't), who in the household hosts it now, and what Fuse can do.

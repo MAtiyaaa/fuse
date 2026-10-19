@@ -139,6 +139,21 @@ class IniText(text: String) : io.github.matiyaaa.fuse.launch.settings.SettingsTe
     /** Whether any `key = value` line is left (only headers, comments and blank lines otherwise). */
     override fun hasEntries(): Boolean = lines.any { entry(it) != null }
 
+    override fun hasSection(section: String): Boolean = sectionRange(section) != null
+
+    /** As [add] does: a new section after a blank line, unless the file is empty or already ends with one. */
+    override fun separatesNewSection(): Boolean = lines.isNotEmpty() && lines.last().isNotBlank()
+
+    override fun removeEmptySection(section: String, blankBefore: Boolean): Boolean {
+        val range = sectionRange(section) ?: return false
+        if (range.any { lines[it].isNotBlank() }) return false
+        val header = range.first - 1
+        val end = range.last
+        for (i in end downTo header) lines.removeAt(i)
+        if (blankBefore && header > 0 && lines[header - 1].isBlank()) lines.removeAt(header - 1)
+        return true
+    }
+
     fun bool(section: String, key: String): Boolean? = values(section, key).lastOrNull()?.lowercase()?.let {
         when (it) {
             "true", "1", "yes", "on" -> true

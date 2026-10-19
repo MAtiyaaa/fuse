@@ -225,12 +225,16 @@ internal class FakeServices(
     @Volatile var retroArchHome: io.github.matiyaaa.fuse.launch.patches.RetroArchHome? = null
     @Volatile var dolphinHome: io.github.matiyaaa.fuse.launch.settings.DolphinHome? = null
 
+    /** The id DuckStation would encrypt its sign-in with here ("" for a portable one, null when unreadable). */
+    @Volatile var duckMachineKey: String? = "fake-machine-id\n"
+
     /** The fake RPCS3's config folder (where its config.yml and custom_configs are); null when it isn't set up. */
     @Volatile var rpcs3ConfigDir: String? = null
 
     override val emulatorFiles = object : EmulatorFiles {
         override suspend fun pcsx2(installed: InstalledEmulator) = pcsx2Home
         override suspend fun duckstation(installed: InstalledEmulator) = duckstationHome
+        override suspend fun duckStationMachineKey(installed: InstalledEmulator) = duckMachineKey
         override suspend fun ppsspp(installed: InstalledEmulator) = ppssppHome
         override suspend fun retroArch(installed: InstalledEmulator) = retroArchHome
         override suspend fun dolphin(installed: InstalledEmulator) = dolphinHome

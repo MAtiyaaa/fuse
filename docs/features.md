@@ -133,6 +133,11 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
 - Uncertain matches are **shown to you** before anything is saved.
 - **Art you choose yourself is never replaced**, except when you ask to reset it.
 - Games without art get **generated placeholder art** instead of a blank tile.
+- **Achievements and trophies** on each game's page: RetroAchievements with your own key, Steam's
+  own, trophies from RPCS3, shadPS4 (before the first play too) and Vita3K, and Xenia's
+  achievements. **Sign Emulators In** signs RetroArch, PCSX2, DuckStation, PPSSPP and Dolphin in to
+  RetroAchievements with one password that is never kept, per profile, and Sign Them Out puts their
+  files back exactly.
 
 </details>
 

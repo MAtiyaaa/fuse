@@ -67,6 +67,12 @@ class RommWritesTest {
                 json("""{"id":41,"name":"Favourites","rom_ids":[],"is_favorite":true}""")
             }
             path == "/api/play-sessions" -> json("""{"results":[],"created_count":2,"skipped_count":0}""", HttpStatusCode.Created)
+            path == "/api/roms/7/notes" && req.method == HttpMethod.Get -> json(
+                """[{"id":5,"title":"Fuse trophies","content":"text","is_public":false,"tags":["fuse"],"user_id":1,"username":"pat","created_at":"2026-10-01T00:00:00Z","updated_at":"2026-10-01T00:00:00Z"},""" +
+                    """{"id":6,"title":"Tips","content":null,"is_public":true,"tags":null,"user_id":2,"username":"sam","created_at":"2026-10-01T00:00:00Z","updated_at":"2026-10-01T00:00:00Z"},{"title":"no id"}]""",
+            )
+            path == "/api/roms/7/notes" -> json("""{"id":9,"title":"Fuse trophies","content":"made","is_public":false,"tags":["fuse"],"user_id":1,"username":"pat","created_at":"2026-10-01T00:00:00Z","updated_at":"2026-10-01T00:00:00Z"}""")
+            path == "/api/roms/7/notes/9" -> json("""{"id":9,"title":"Fuse trophies","content":"changed","is_public":false,"tags":["fuse"],"user_id":1,"username":"pat","created_at":"2026-10-01T00:00:00Z","updated_at":"2026-10-01T00:00:00Z"}""")
             path == "/api/tasks/scan" -> json("""{"task_key":null,"task_name":"scan_library","task_id":"job-9","status":"queued","created_at":null,"enqueued_at":null}""", HttpStatusCode.Accepted)
             path == "/api/tasks/job-9" -> json(
                 """{"task_id":"job-9","task_name":"scan_library","status":"started","task_type":"scan","meta":{"scan_stats":{"total_platforms":3,"scanned_platforms":1,"total_roms":120,"scanned_roms":45,"new_roms":2,"identified_roms":40}}}""",
@@ -133,6 +139,29 @@ class RommWritesTest {
     }
 
     @Test
+    fun aGamesNotesAreReadMadeKeptToThePersonAndChangedByTheirTextAlone(): Unit = runBlocking {
+        // As RomM 5.4 answers them (backend/endpoints/roms/notes.py, UserNoteSchema in responses/rom.py).
+        val c = client()
+        val notes = c.notes(7)
+        assertEquals(listOf(5L, 6L), notes.map { it.id }, "one without an id is passed over")
+        assertEquals(RommNote(5, "Fuse trophies", "text", isPublic = false, username = "pat"), notes[0])
+        assertEquals("", notes[1].content)
+        assertTrue(notes[1].isPublic)
+        seen.clear()
+        assertEquals(9L, c.addNote(7, "Fuse trophies", "made", listOf("fuse")).id)
+        val made = body(seen.single())
+        assertEquals(setOf("title", "content", "is_public", "tags"), made.keys)
+        assertEquals("false", made["is_public"]!!.jsonPrimitive.content)
+        assertEquals(listOf("fuse"), made["tags"]!!.jsonArray.map { it.jsonPrimitive.content })
+        seen.clear()
+        c.updateNote(7, 9, "changed")
+        assertEquals(HttpMethod.Put, seen.single().method)
+        assertTrue(seen.single().url.endsWith("/api/roms/7/notes/9"), seen.single().url)
+        // Only its text: RomM keeps the title, who may see it and the tags as they were.
+        assertEquals(setOf("content"), body(seen.single()).keys)
+    }
+
+    @Test
     fun aScanIsFollowedByItsTask(): Unit = runBlocking {
         val c = client()
         c.detect()
@@ -185,6 +214,9 @@ class RommWritesTest {
         assertEquals(100, RommWrites.next(many).size)
         assertEquals(listOf(RommWrite.Hidden(8, true)), RommWrites.next(RommWrites.without(q, RommWrites.next(q))))
         assertTrue(RommWrites.next(emptyList()).isEmpty())
+        // A game's trophies wait once: they are read from its history when they go.
+        val t = RommWrites.add(RommWrites.add(RommWrites.add(emptyList(), RommWrite.Trophies(7, 70)), RommWrite.Hidden(7, true)), RommWrite.Trophies(7, 70))
+        assertEquals(listOf(RommWrite.Hidden(7, true), RommWrite.Trophies(7, 70)), t)
         // Taken off once each, as it was sent: a change made meanwhile stays.
         val sent = RommWrites.next(q)
         val meanwhile = RommWrites.add(q, RommWrite.Hidden(9, true))

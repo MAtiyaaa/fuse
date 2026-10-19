@@ -192,6 +192,21 @@ object RommParse {
     /** How many sessions RomM took (`created_count`) from `POST /api/play-sessions`. */
     fun sessionsCreated(e: JsonElement): Int = e.obj().long("created_count")?.toInt() ?: 0
 
+    /** A game's notes, from `/api/roms/{id}/notes` (RomM's `UserNoteSchema`: the person's own and others' public ones). */
+    fun notes(e: JsonElement): List<RommNote> = e.items().mapNotNull(::note)
+
+    /** One note, as RomM answers a note made or changed. */
+    fun note(e: JsonElement): RommNote? {
+        val o = e as? JsonObject ?: return null
+        return RommNote(
+            id = o.long("id") ?: return null,
+            title = o.str("title") ?: return null,
+            content = (o["content"] as? JsonPrimitive)?.contentOrNull.orEmpty(),
+            isPublic = o.bool("is_public") ?: false,
+            username = o.str("username").orEmpty(),
+        )
+    }
+
     /** Every game's id, from `/api/roms/identifiers`. */
     fun identifiers(e: JsonElement): List<Long> = e.items().mapNotNull { (it as? JsonPrimitive)?.longOrNull }
 

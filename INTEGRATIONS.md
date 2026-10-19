@@ -41,7 +41,7 @@ and redact credentials from every error message (`redact()`, see
 
 | Service | You provide | Sent by Fuse | When |
 |---|---|---|---|
-| RetroAchievements | Username and web API key | Your username (or ULID), your key, RetroAchievements game and console ids | When the achievement data Fuse has cached is older than its time to live and a screen needs it |
+| RetroAchievements | Username and web API key; your password once to sign the emulators in | Your username (or ULID), your key, RetroAchievements game and console ids; the password in one sign-in request | When the achievement data Fuse has cached is older than its time to live and a screen needs it; the sign-in only when you choose Sign Emulators In |
 | SteamGridDB | API key | Your key, game titles you look up, SteamGridDB game ids, Steam app ids | When you fill or pick artwork |
 | IGDB | Twitch Client ID and Client Secret | Your Client ID and Secret (to Twitch, for a token), the token, game titles, IGDB platform ids | When you fill metadata or artwork |
 | TheGamesDB | API key | Your key, game titles, TheGamesDB platform and game ids | When you fill metadata or artwork |
@@ -55,7 +55,7 @@ and redact credentials from every error message (`redact()`, see
 | GameBanana | Nothing | A game's title (or the words you search with), the GameBanana game you chose and the mods you open, your IP address and the User-Agent; then the mod's file from GameBanana's own address | Only when you open GameBanana in a game's cheats, textures or mods, a mod there, or add one of its files; answers are kept a while |
 | Nexus Mods (computer, off until you add your key) | Your own personal API key from your Nexus Mods account | To api.nexusmods.com only: your key in the `apikey` header with "Fuse" and its version, the Nexus Mods game you chose for a game and the mods and files you open; for an account that isn't Premium, the one-time key and expiry of the Mod Manager Download link you paste. Then the file from the address Nexus Mods gives (https only). The key stays on this device: it is never shared with your household or Fuse Sync | Whose key it is when Settings, Accounts, Nexus Mods is shown (once a run per key); the games list when you choose a game (kept a week), a game's lists when you open Nexus Mods for it (kept an hour), a mod's files when you open it; downloads only when you add a file |
 | RPCS3 compatibility list (rpcs3.net) | Nothing | A PS3 game's title id (for example `BLUS30443`), your IP address and the User-Agent | Only when you choose How It Runs in RPCS3 in a PS3 game's options; the answer is kept a week |
-| Fuse RomM (off until you turn it on) | Your RomM server's addresses, then an approval in RomM, a pairing code or token made in RomM, or (for a server without client tokens) a user name and password | To your own server only: the token (or the sign-in) on each request, this device's name and a random device id when pairing, requests for the server's API description, systems, collections, games and firmware, the files you download, and the files of games you upload; with Send Changes to RomM on (off until you turn it on), your favourites, games you hide and your play sessions for games from RomM; a Cloudflare Access service token, when you add one, to that outside address only, over https | While Fuse RomM is on: a quick check of each address when it connects, the library brought up to date every 30 minutes (you choose 5 minutes to a day) and when you ask; downloads and uploads only when you start them |
+| Fuse RomM (off until you turn it on) | Your RomM server's addresses, then an approval in RomM, a pairing code or token made in RomM, or (for a server without client tokens) a user name and password | To your own server only: the token (or the sign-in) on each request, this device's name and a random device id when pairing, requests for the server's API description, systems, collections, games and firmware, the files you download, and the files of games you upload; with Send Changes to RomM on (off until you turn it on), your favourites, games you hide, your play sessions and the trophies you earn in emulators (a note of your own on each game, kept to you) for games from RomM; a Cloudflare Access service token, when you add one, to that outside address only, over https | While Fuse RomM is on: a quick check of each address when it connects, the library brought up to date every 30 minutes (you choose 5 minutes to a day) and when you ask; downloads and uploads only when you start them |
 | Fuse Sync, Fuse Library (with Fuse Sync on; Share This Device's Games can turn it off) | Nothing beyond Fuse Sync | To your own Fuse Sync host only: the list of this device's games (titles, systems, sizes, dates, file names with their sizes and SHA-1 and MD5 hashes, and the ids Fuse uses for their art), this device's local addresses and the port it answers on, what it is downloading, and requests you make for games. To another of your own devices, directly on your network or passed through your host: the files of a game that device asks for, with a ticket from your host | While Fuse Sync is on: the list a few seconds after the library changes, and once a minute while its files' hashes are being worked out; what is downloading when it changes, at most every two seconds; game files only when one of your devices asks for them |
 | Fuse One, Play Together (with Fuse One on) | Nothing beyond Fuse One | To your own Fuse One host only, while a game you started with Host a Game is played: that it is open to join, how (RetroArch's netplay or PPSSPP's ad hoc play), the emulator, this device's home network addresses and the port the emulator listens on, with the game and profile Fuse One already says it is playing | Every minute while the game is played, as Fuse One already says what it plays; the other devices ask the host when it wakes them and when a game's Play Together is opened |
 | Cartridge | Nothing | Nothing leaves the device through Fuse: Fuse reads Cartridge's local status and opens it with deep links. "Upload to RomM" hands Cartridge a game's file paths; Cartridge uploads the files to your own RomM server only after you confirm there. On Android Cartridge can read your play sessions (below) and adds their time to its own play sessions on your RomM server | On resume and when Cartridge reports a change; uploads only when you start one and confirm it in Cartridge; play sessions when Cartridge starts or comes back to the front |
@@ -123,8 +123,24 @@ lists it downloads (the store does the comparison, and caches each console's lis
 accepts a hash, so hashes never leave the device. Disc images, Nintendo DS/DSi and
 3DS are not hashed yet; Fuse reports them as unsupported instead of guessing.
 
+**Signing the emulators in** (`retroachievements/RaConnect.kt`, `launch/achievements/RaSignIn.kt`,
+`RaEmulatorSignIn.kt`). Settings, Accounts, Sign Emulators In asks for the account's password once
+and posts it, with the user name, to `https://retroachievements.org/dorequest.php` as `r=login2`, the
+request RetroAchievements' own client library makes (rcheevos v12.1.0, `rc_api_init_login_request_hosted`).
+The answer's login token, not the password, is what emulators sign in with: Fuse keeps it in the
+secure store (`ra.token`, `ra.token@<profile>` for a profile's own account) and writes it where each
+emulator's own code keeps it: RetroArch's `retroarch.cfg` (`cheevos_username`, `cheevos_token`),
+PCSX2's `PCSX2.ini` `[Achievements]` (PCSX2 moves the token to its own secrets file when it starts),
+DuckStation's `settings.ini` `[Cheevos]` (the token encrypted as DuckStation encrypts it, with this
+computer's own id), PPSSPP's `ppsspp.ini` and `PSP/SYSTEM/ppsspp_retroachievements.dat`, and
+Dolphin's `RetroAchievements.ini`. Switching profiles signs the emulators Fuse signed in in as that
+profile's account. Fuse's change records hold a fingerprint of each token, never the token; a token
+an emulator had before is kept in the secure store so Sign Them Out puts it back. On Android each
+emulator still signs in from its own settings.
+
 **Leaves the device.** Your username or ULID and key in HTTPS query parameters, and RetroAchievements
-game and console ids.
+game and console ids. When you sign the emulators in, your password once, in the body of one HTTPS
+request; it is never kept or logged.
 
 Docs: [RetroAchievements API](https://api-docs.retroachievements.org/).
 
@@ -338,6 +354,18 @@ turning one on turns the other off in Fuse and keeps both set up.
   when it answers; a change RomM never takes (the game gone) is let go, one it can't take now (away,
   busy, the sign-in not allowed) stays. Pairing asks for `roms.user.write` and `collections.write`
   for it; a sign-in without them is told to pair again.
+- **Trophies across devices, without a Fuse One host** (RomM 5.4's notes, where the server lists
+  `/api/roms/{id}/notes`): the trophies earned in RPCS3, shadPS4, Vita3K and Xenia for a game from
+  RomM are kept in a note of the person's own on that game, titled "Fuse trophies", tagged `fuse`
+  and kept to them (`is_public` false). Its text is a line saying what it is, a line for each
+  trophy, and each unlock (which trophy, its name, when, and the Fuse device and its name) as a
+  line of JSON in a `fuse-trophies` block, which is all Fuse reads back. A game's page reads it
+  (`GET /api/roms/{id}/notes`, the person's own note of that title only, never someone else's
+  public one), at most every 10 minutes, and its unlocks join the game's history; with Send
+  Changes to RomM on, what was earned here is added (`POST` the first time, then `PUT
+  /api/roms/{id}/notes/{note_id}` with `content` alone), and waits with the other changes while
+  RomM is away. Unlocks are only ever added, each trophy's earliest kept, so devices agree
+  whichever writes first.
 - **Cloudflare Access:** a service token for the outside address (Cloudflare's documented
   `CF-Access-Client-Id` and `CF-Access-Client-Secret` headers), kept only in Fuse's secret store
   (`romm.access`) and sent only to that address's host over https, on every request there

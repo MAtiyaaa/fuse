@@ -204,6 +204,8 @@ internal class DefaultFuseStore private constructor(
         romm.saveService = library.rommSaves
         // The person's changes to games from RomM go back to it, when they chose that.
         library.rommChange = { id, make -> romm.changed(id, make) }
+        // Trophies earned in emulators reach the person's other devices through RomM's notes too.
+        achievements.trophyShare = { id, news -> romm.shareTrophies(id, news) }
         romm.plainSaveQuery = { id -> library.plainSaveQueryFor(id) }
         reach = DefaultReachOps(
             ctx, engine, transferEngine, sync.service, romm,

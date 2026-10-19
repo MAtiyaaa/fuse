@@ -323,9 +323,9 @@ private fun rommRows(
         "changes", "Send Changes to RomM", FuseIcons.CloudUpload, p.sendChanges,
         when {
             p.sendChanges && state.changesWaiting > 0 -> if (state.changesWaiting == 1) "1 change waits to go to RomM" else "${state.changesWaiting} changes wait to go to RomM"
-            p.sendChanges -> "Favourites, games you hide and the time you play go to RomM, for games from RomM"
+            p.sendChanges -> "Favourites, games you hide, the time you play and trophies earned in emulators go to RomM, for games from RomM"
             state.link == RommLink.ONLINE && !state.canSendChanges -> "Needs RomM 5.4 and a sign-in that may send changes: pair again"
-            else -> "Favourites, games you hide and the time you play, for games from RomM. Off until you turn it on"
+            else -> "Favourites, games you hide, the time you play and trophies earned in emulators, for games from RomM. Off until you turn it on"
         },
     ) { v ->
         app.scope.launch {

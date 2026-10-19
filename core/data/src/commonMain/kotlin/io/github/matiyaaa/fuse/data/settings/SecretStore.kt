@@ -21,6 +21,12 @@ interface SecretStore {
 object SecretKeys {
     const val RA_USERNAME = "ra.username"
     const val RA_API_KEY = "ra.apikey"
+
+    /**
+     * The login token RetroAchievements gave for the account's password, which emulators sign in
+     * with (the password itself is never kept); `@<profile>` for one profile's own account.
+     */
+    const val RA_TOKEN = "ra.token"
     const val SGDB_API_KEY = "sgdb.apikey"
     const val IGDB_CLIENT_ID = "igdb.clientId"
     const val IGDB_CLIENT_SECRET = "igdb.clientSecret"
@@ -33,7 +39,7 @@ object SecretKeys {
 
     /** Keys the household shares through Fuse One (when it shares keys). */
     val all: List<String> = listOf(
-        RA_USERNAME, RA_API_KEY, SGDB_API_KEY, IGDB_CLIENT_ID, IGDB_CLIENT_SECRET, TGDB_API_KEY,
+        RA_USERNAME, RA_API_KEY, RA_TOKEN, SGDB_API_KEY, IGDB_CLIENT_ID, IGDB_CLIENT_SECRET, TGDB_API_KEY,
         SCREENSCRAPER_USER, SCREENSCRAPER_PASSWORD,
     )
 

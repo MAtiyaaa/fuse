@@ -5,8 +5,9 @@ import kotlinx.serialization.Serializable
 
 /**
  * A change the person made in Fuse to a game from RomM, on its way to RomM through RomM's own API:
- * a favourite (RomM's favourites collection), a game hidden or shown, a play session. Kept, in the
- * order made, until RomM takes it, so a change made while RomM is away goes once it answers.
+ * a favourite (RomM's favourites collection), a game hidden or shown, a play session, trophies
+ * earned. Kept, in the order made, until RomM takes it, so a change made while RomM is away goes
+ * once it answers.
  */
 @Serializable
 sealed interface RommWrite {
@@ -29,6 +30,14 @@ sealed interface RommWrite {
     data class Played(override val romId: Long, val startedAt: Long, val endedAt: Long) : RommWrite {
         val session: RommPlayed get() = RommPlayed(romId, startedAt, endedAt)
     }
+
+    /**
+     * Trophies earned in library game [game] (RomM's [romId]) to add to the person's own note of
+     * them on RomM ([RommClient.notes]); what to add is read from the game's history when it goes.
+     */
+    @Serializable
+    @SerialName("trophies")
+    data class Trophies(override val romId: Long, val game: Long) : RommWrite
 }
 
 /** What waits to go to RomM, kept in the order it was made. */
@@ -41,7 +50,8 @@ object RommWrites {
 
     /**
      * [queue] with [w] at its end. A later favourite or hide of the same game replaces one not sent
-     * yet (only where the person left it goes); every play session is its own.
+     * yet (only where the person left it goes), and so does a game's trophies (they are read when
+     * they go); every play session is its own.
      */
     fun add(queue: List<RommWrite>, w: RommWrite): List<RommWrite> {
         // A session too short for RomM, or one already waiting (counted twice), adds nothing.
@@ -49,6 +59,7 @@ object RommWrites {
         val kept = when (w) {
             is RommWrite.Favourite -> queue.filterNot { it is RommWrite.Favourite && it.romId == w.romId }
             is RommWrite.Hidden -> queue.filterNot { it is RommWrite.Hidden && it.romId == w.romId }
+            is RommWrite.Trophies -> queue.filterNot { it is RommWrite.Trophies && it.romId == w.romId }
             is RommWrite.Played -> queue
         }
         return (kept + w).takeLast(MOST)

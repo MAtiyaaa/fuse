@@ -46,6 +46,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks
 import io.github.matiyaaa.fuse.ui.shell.app.rescanAndReport
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.emulatorSignInSheet
 import io.github.matiyaaa.fuse.ui.shell.app.addToSteam
 import io.github.matiyaaa.fuse.ui.shell.app.checkSteamGames
 import io.github.matiyaaa.fuse.ui.shell.app.learnSteamShortcuts
@@ -1034,6 +1035,12 @@ fun achievementRows(app: AppState): List<MenuAction> {
             val u = feed?.user
             add(infoRow("user", u?.username ?: "Connected", u?.let { "${it.points} points" }, detail = u?.motto, icon = FuseIcons.User))
             add(MenuAction("refresh", "Refresh now", FuseIcons.Refresh, detail = "Fuse refreshes on its own and caches results", onSelect = { app.store.achievements.refresh(force = true) }))
+            add(MenuAction(
+                "emulators", "Sign Emulators In", FuseIcons.LogIn,
+                detail = "RetroArch, PCSX2, DuckStation, PPSSPP and Dolphin here, with your password once. Switching profiles switches them too",
+                trailing = Trailing.Chevron,
+                onSelect = { app.emulatorSignInSheet() },
+            ))
             add(app.confirmRow("disconnect", "Disconnect", FuseIcons.Unplug, "Disconnect RetroAchievements?", "This profile's username and key are deleted from this device. Other profiles keep theirs.", "Disconnect", destructive = true) {
                 app.scope.launch { app.store.achievements.disconnect() }
             })
@@ -1051,7 +1058,7 @@ fun achievementRows(app: AppState): List<MenuAction> {
             }))
         }
         add(infoRow("profiles", "Each profile has its own account", detail = "Switch profiles to connect another person's. A profile without one shows the first account connected on this device", icon = FuseIcons.Users))
-        add(infoRow("note", "Fuse shows achievements; emulators unlock them", detail = "Sign in to RetroAchievements inside your emulator (RetroArch, DuckStation, PPSSPP and others) for unlocks to count"))
+        add(infoRow("note", "Fuse shows achievements; emulators unlock them", detail = "An emulator counts unlocks once it is signed in: Sign Emulators In does it for every one Fuse knows, and the rest sign in from their own settings"))
     }
 }
 

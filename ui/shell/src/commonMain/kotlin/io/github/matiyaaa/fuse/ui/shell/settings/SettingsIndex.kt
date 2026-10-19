@@ -140,6 +140,7 @@ object SettingsIndex {
         SettingTopic("displays", "Graphics", "gpu graphics card processor software rendering opengl driver llvmpipe drawn with gamescope", steam = true),
         SettingTopic("displays", "About this device", "processor memory ram cpu displays specs"),
         SettingTopic("accounts", "Connect RetroAchievements", "retroachievements ra cheevos login account"),
+        SettingTopic("accounts", "Sign Emulators In", "retroachievements ra cheevos sign in login emulators retroarch pcsx2 duckstation ppsspp dolphin token"),
         SettingTopic("addons", "RomM", "romm server games downloads uploads pair sign in save sync", group = ADDONS_ROMM),
         SettingTopic("addons", "Sign In to RomM", "romm sign in log in login account server address connect", group = ADDONS_ROMM),
         SettingTopic("addons", "Cartridge support", "romm downloads cartridge", group = ADDONS_CARTRIDGE, cartridge = true),

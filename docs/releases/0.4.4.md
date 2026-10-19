@@ -134,6 +134,16 @@ together as each emulator does it, and Fuse Ports brings games rebuilt to run na
   with, the ones that passed show as verified.
 - **PS4 trophies before the first play.** A PS4 game's trophies show on its page before shadPS4
   has opened it, read from the game's own trophy file with the trophy key you gave shadPS4.
+- **Sign Emulators In**, in Settings, Accounts, once RetroAchievements is connected: type your
+  RetroAchievements password once and RetroArch, PCSX2, DuckStation, PPSSPP and Dolphin are signed
+  in, each in its own way (DuckStation's token locked to the computer as DuckStation does it).
+  The password goes to RetroAchievements and is never kept; the token it gives back is kept with
+  Fuse's other secrets. Each profile signs in as its own account, switching profile switches the
+  emulators, and Sign Them Out puts every file back as it was.
+- **Trophies through RomM.** Without a Fuse One host, the trophies you earn in RPCS3, shadPS4,
+  Vita3K and Xenia reach your other devices through RomM 5.4: for a game from RomM they are kept
+  in a note of your own on it (with Send Changes to RomM on), and each device's game page reads
+  it, saying where each was earned. Trophies are only ever added, each with the first time.
 - **Update Channel**, in Settings, About: Stable (published releases) or Beta (pre-releases too),
   each taking the newest Fuse it follows. Nightly is there for nightly builds, and gets what Beta
   gets until they are published.

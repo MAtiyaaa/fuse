@@ -10,6 +10,18 @@ interface SettingsText {
     fun set(section: String, key: String, value: String)
     fun removeKey(section: String, key: String): Boolean
     fun hasEntries(): Boolean
+
+    /** Whether [section] is in the file (a file without sections has every one). */
+    fun hasSection(section: String): Boolean = true
+
+    /** Whether a section [set] makes now goes after a blank line it adds to keep it apart. */
+    fun separatesNewSection(): Boolean = false
+
+    /**
+     * Takes out [section] when nothing is left in it, with the blank line [set] put before it when
+     * [blankBefore]: a section Fuse made, gone again as if it never was. False when it has keys.
+     */
+    fun removeEmptySection(section: String, blankBefore: Boolean): Boolean = false
 }
 
 /**

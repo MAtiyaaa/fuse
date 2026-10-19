@@ -178,6 +178,7 @@ class RommClient(
                 collectionRoms = "/api/collections/{id}/roms" in paths,
                 playSessions = "/api/play-sessions" in paths,
                 taskStatus = "/api/tasks/{task_id}" in paths,
+                notes = "/api/roms/{id}/notes" in paths && "/api/roms/{id}/notes/{note_id}" in paths,
             )
         } else {
             RommCapabilities(version = version, pairCodes = major >= 4, chunkedUploads = major >= 4, incremental = major >= 4, identifiers = major >= 4)
@@ -567,6 +568,34 @@ class RommClient(
             }.toString())
         }
         return RommParse.sessionsCreated(e)
+    }
+
+    /** [romId]'s notes: the signed-in person's own and others' public ones (`GET /api/roms/{id}/notes`). */
+    suspend fun notes(romId: Long): List<RommNote> = RommParse.notes(json(HttpMethod.Get, "/api/roms/$romId/notes"))
+
+    /**
+     * A note of the signed-in person's own on [romId] (`POST /api/roms/{id}/notes`), kept to them
+     * (`is_public` false). RomM keeps one note of each title per person and game.
+     */
+    suspend fun addNote(romId: Long, title: String, content: String, tags: List<String> = emptyList()): RommNote {
+        val e = json(HttpMethod.Post, "/api/roms/$romId/notes") {
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("title", title)
+                put("content", content)
+                put("is_public", false)
+                putJsonArray("tags") { tags.forEach { add(JsonPrimitive(it)) } }
+            }.toString())
+        }
+        return RommParse.note(e) ?: throw RommException("RomM didn't say which note it made.", code = "unreadable")
+    }
+
+    /** The text of the person's note [noteId] on [romId], nothing else of it changed (`PUT /api/roms/{id}/notes/{note_id}`). */
+    suspend fun updateNote(romId: Long, noteId: Long, content: String) {
+        call(HttpMethod.Put, "/api/roms/$romId/notes/$noteId", extra = {
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject { put("content", content) }.toString())
+        }) { }
     }
 
     /** Which route the last call used. */

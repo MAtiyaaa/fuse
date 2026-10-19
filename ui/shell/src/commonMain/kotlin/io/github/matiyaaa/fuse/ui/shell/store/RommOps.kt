@@ -54,7 +54,7 @@ data class RommState(
     val newGames: Int = 0,
     /** What went wrong last, in words for the person. */
     val problem: String? = null,
-    /** The server takes the person's changes (favourites, hidden games, play sessions) and the sign-in may send them. */
+    /** The server takes the person's changes (favourites, hidden games, play sessions, trophies) and the sign-in may send them. */
     val canSendChanges: Boolean = false,
     /** Changes made here that wait to go to RomM. */
     val changesWaiting: Int = 0,
@@ -210,8 +210,9 @@ interface RommOps {
     suspend fun sendWaitingSaves(): Int = 0
 
     /**
-     * Sends the person's changes to games from RomM (favourites, hidden games, play sessions) from
-     * now on, or stops. Turning it on fails, saying why, when the sign-in may not (pair again).
+     * Sends the person's changes to games from RomM (favourites, hidden games, play sessions, the
+     * trophies earned in emulators, in a note of the person's own) from now on, or stops. Turning
+     * it on fails, saying why, when the sign-in may not (pair again).
      */
     suspend fun setSendChanges(on: Boolean): Result<Unit> = Result.failure(UnsupportedOperationException())
 

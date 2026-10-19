@@ -272,7 +272,8 @@ internal class LibraryProfileData(
 
 /**
  * Trophies an emulator made, kept per library game (by its row) as history: earned here, or on
- * the person's other devices (through Fuse One). Each kept once, the first time it was earned.
+ * the person's other devices (through Fuse One, or the person's note on RomM, [TrophyNote]). Each
+ * kept once, the first time it was earned.
  */
 internal object TrophyHistory {
     private const val KIND = "trophies"
@@ -289,12 +290,16 @@ internal object TrophyHistory {
         return out
     }
 
-    /** Adds [unlocks] to [game]'s history, keeping the earlier of two for one trophy; written only when it changed. */
-    suspend fun add(data: FuseData, game: Long, unlocks: Collection<io.github.matiyaaa.fuse.sync.TrophyUnlock>) {
+    /**
+     * Adds [unlocks] to [game]'s history, keeping the earlier of two for one trophy; written only
+     * when it changed. Whether it did.
+     */
+    suspend fun add(data: FuseData, game: Long, unlocks: Collection<io.github.matiyaaa.fuse.sync.TrophyUnlock>): Boolean {
         val before = read(data, game).associateBy { it.key }
         val after = HashMap(before)
         for (t in unlocks) after[t.key] = io.github.matiyaaa.fuse.sync.TrophyUnlock.earlier(after[t.key], t)!!
-        if (after == before) return
+        if (after == before) return false
         data.owned.set(KIND, game.toString(), after.values.map { json.encodeToString(io.github.matiyaaa.fuse.sync.TrophyUnlock.serializer(), it) }.toSet())
+        return true
     }
 }

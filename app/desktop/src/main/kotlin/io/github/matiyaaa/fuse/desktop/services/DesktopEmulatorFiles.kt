@@ -130,6 +130,36 @@ class DesktopEmulatorFiles(
     }
 
     /**
+     * This computer's id as DuckStation reads it for its sign-in key (`src/core/achievements.cpp`
+     * v0.1-11894, `GetLoginEncryptionMachineKey`): the whole of `/etc/machine-id` on Linux (its
+     * Flatpak sees the same file); the registry's `MachineGuid` with the closing NUL that
+     * `RegGetValueA`'s length counts on Windows; the host UUID (`gethostuuid`, the same as the
+     * platform's `IOPlatformUUID`) as 32 lowercase hex digits on macOS. "" when DuckStation runs
+     * portable (`EmuFolders::IsRunningInPortableMode`: its data folder is its program folder).
+     */
+    override suspend fun duckStationMachineKey(installed: InstalledEmulator): String? = withContext(Dispatchers.IO) {
+        val program = if (installed.detectedVia == "Flatpak") null else File(installed.appId).takeIf { it.isAbsolute }
+        val programDir = program?.let { if (it.path.endsWith(".app")) File(it, "Contents/MacOS") else it.parentFile }
+        if (programDir != null && (File(programDir, "portable.txt").isFile || File(programDir, "settings.ini").isFile)) return@withContext ""
+        when (os) {
+            DesktopOs.LINUX -> runCatching { File("/etc/machine-id").readText() }.getOrNull()?.takeIf { it.isNotBlank() }
+            DesktopOs.WINDOWS -> output(listOf("reg", "query", "HKLM\\SOFTWARE\\Microsoft\\Cryptography", "/v", "MachineGuid"))
+                ?.lineSequence()?.map { it.trim() }?.firstOrNull { it.startsWith("MachineGuid") }
+                ?.split(Regex("\\s+"))?.lastOrNull()?.takeIf { it.length >= 32 }?.let { it + "\u0000" }
+            DesktopOs.MACOS -> output(listOf("ioreg", "-rd1", "-c", "IOPlatformExpertDevice"))
+                ?.let { Regex("\"IOPlatformUUID\"\\s*=\\s*\"([0-9A-Fa-f-]{36})\"").find(it)?.groupValues?.get(1) }
+                ?.replace("-", "")?.lowercase()
+        }
+    }
+
+    /** What [command] prints, or null when it can't run or takes over five seconds. */
+    private fun output(command: List<String>): String? = runCatching {
+        val p = ProcessBuilder(command).redirectErrorStream(true).start()
+        val out = p.inputStream.bufferedReader().use { it.readText() }
+        if (!p.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)) { p.destroyForcibly(); null } else out.takeIf { p.exitValue() == 0 }
+    }.getOrNull()
+
+    /**
      * PPSSPP's memory stick (UI/NativeApp.cpp, NativeInit; Windows/main.cpp, InitMemstickDirectory):
      * on Windows the folder installed.txt beside the program names (Documents\PPSSPP when it is empty),
      * else `memstick` beside the program, else Documents\PPSSPP; on Linux $XDG_CONFIG_HOME/ppsspp or
