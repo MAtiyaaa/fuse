@@ -129,12 +129,12 @@ Version 1. Generated from Fuse's code by `EmulatorContractsTest`; do not edit by
 | DOSBox-X | `linux.dosbox-x` | dos | No: DOS games save inside their own folders; keep those folders in step with Syncthing. | No: changed in the emulator | No: changed in the emulator | Not needed |
 | DuckStation | `linux.duckstation` | psx | Yes | Yes: for every game and for one game | Yes | Yes: BIOS folders, by name and checksum |
 | Eden | `linux.eden` | switch | Yes | Yes: for every game and for one game | No: changed in the emulator | Yes: installed inside it: checked to be there |
-| Flycast | `linux.flycast` | arcade, dc | Yes | No: changed in the emulator | No: changed in the emulator | Yes: optional; BIOS folders, by name and checksum |
+| Flycast | `linux.flycast` | arcade, dc | Yes | Yes: for every game and for one game | No: changed in the emulator | Yes: optional; BIOS folders, by name and checksum |
 | Lime3DS | `linux.lime3ds` | 3ds, new-nintendo-3ds | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
-| MAME | `linux.mame` | arcade, neogeoaes | Yes | No: changed in the emulator | No: changed in the emulator | Yes: BIOS folders, by name and checksum |
+| MAME | `linux.mame` | arcade, neogeoaes | Yes | Yes: for every game and for one game | No: changed in the emulator | Yes: BIOS folders, by name and checksum |
 | Mandarine | `linux.mandarine` | 3ds, new-nintendo-3ds | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
 | Mednafen | `linux.mednafen` | famicom, fds, gamegear, gb, gba, gbc, genesis, lynx, neo-geo-pocket, neo-geo-pocket-color, nes, psx, saturn, sfam, sms, snes, tg16, turbografx-cd, virtualboy, wonderswan, wonderswan-color | Yes | No: changed in the emulator | No: changed in the emulator | Yes: BIOS folders, by name and checksum |
-| melonDS | `linux.melonds` | nds, nintendo-dsi | Yes | No: changed in the emulator | No: changed in the emulator | Yes: BIOS folders, by name and checksum |
+| melonDS | `linux.melonds` | nds, nintendo-dsi | Yes | Yes: for every game (it has none of a game's own) | No: changed in the emulator | Yes: BIOS folders, by name and checksum |
 | mGBA | `linux.mgba` | gb, gba, gbc | Yes | No: changed in the emulator | No: changed in the emulator | Yes: optional; BIOS folders, by name and checksum |
 | Mupen64Plus (m64p) | `linux.mupen64plus` | n64 | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
 | Panda3DS | `linux.panda3ds` | 3ds, new-nintendo-3ds | No: Panda3DS keeps its saves in a layout Fuse doesn't read yet; Azahar's saves sync. | No: changed in the emulator | No: changed in the emulator | Not needed |
@@ -152,6 +152,7 @@ Version 1. Generated from Fuse's code by `EmulatorContractsTest`; do not edit by
 | ScummVM | `linux.scummvm` | scummvm | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
 | shadPS4 | `linux.shadps4` | ps4 | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
 | SharpEmu | `linux.sharpemu` | ps5 | No: This emulator is early, and where it keeps saves still changes between versions. | No: changed in the emulator | No: changed in the emulator | Not needed |
+| Supermodel | `linux.supermodel` | model3 | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
 | Vita3K | `linux.vita3k` | psvita | Yes | Yes: for every game and for one game | No: changed in the emulator | Yes: installed inside it: checked to be there |
 | xemu | `linux.xemu` | xbox | No: xemu keeps saves inside its hard disk image, which Fuse can't open safely. | No: changed in the emulator | No: changed in the emulator | Yes: BIOS folders, by name and checksum |
 | Xenia | `linux.xenia` | xbox360 | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
@@ -170,13 +171,13 @@ Version 1. Generated from Fuse's code by `EmulatorContractsTest`; do not edit by
 | DOSBox-X | `windows.dosbox-x` | dos | No: DOS games save inside their own folders; keep those folders in step with Syncthing. | No: changed in the emulator | No: changed in the emulator | Not needed |
 | DuckStation | `windows.duckstation` | psx | Yes | Yes: for every game and for one game | Yes | Yes: BIOS folders, by name and checksum |
 | Eden | `windows.eden` | switch | Yes | Yes: for every game and for one game | No: changed in the emulator | Yes: installed inside it: checked to be there |
-| Flycast | `windows.flycast` | arcade, dc | Yes | No: changed in the emulator | No: changed in the emulator | Yes: optional; BIOS folders, by name and checksum |
+| Flycast | `windows.flycast` | arcade, dc | Yes | Yes: for every game and for one game | No: changed in the emulator | Yes: optional; BIOS folders, by name and checksum |
 | KytyPS5 | `windows.kytyps5` | ps5 | No: This emulator is early, and where it keeps saves still changes between versions. | No: changed in the emulator | No: changed in the emulator | Not needed |
 | Lime3DS | `windows.lime3ds` | 3ds, new-nintendo-3ds | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
-| MAME | `windows.mame` | arcade, neogeoaes | Yes | No: changed in the emulator | No: changed in the emulator | Yes: BIOS folders, by name and checksum |
+| MAME | `windows.mame` | arcade, neogeoaes | Yes | Yes: for every game and for one game | No: changed in the emulator | Yes: BIOS folders, by name and checksum |
 | Mandarine | `windows.mandarine` | 3ds, new-nintendo-3ds | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
 | Mednafen | `windows.mednafen` | famicom, fds, gamegear, gb, gba, gbc, genesis, lynx, neo-geo-pocket, neo-geo-pocket-color, nes, psx, saturn, sfam, sms, snes, tg16, turbografx-cd, virtualboy, wonderswan, wonderswan-color | Yes | No: changed in the emulator | No: changed in the emulator | Yes: BIOS folders, by name and checksum |
-| melonDS | `windows.melonds` | nds, nintendo-dsi | Yes | No: changed in the emulator | No: changed in the emulator | Yes: BIOS folders, by name and checksum |
+| melonDS | `windows.melonds` | nds, nintendo-dsi | Yes | Yes: for every game (it has none of a game's own) | No: changed in the emulator | Yes: BIOS folders, by name and checksum |
 | mGBA | `windows.mgba` | gb, gba, gbc | Yes | No: changed in the emulator | No: changed in the emulator | Yes: optional; BIOS folders, by name and checksum |
 | Mupen64Plus | `windows.mupen64plus` | n64 | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
 | Panda3DS | `windows.panda3ds` | 3ds, new-nintendo-3ds | No: Panda3DS keeps its saves in a layout Fuse doesn't read yet; Azahar's saves sync. | No: changed in the emulator | No: changed in the emulator | Not needed |
@@ -193,6 +194,7 @@ Version 1. Generated from Fuse's code by `EmulatorContractsTest`; do not edit by
 | ScummVM | `windows.scummvm` | scummvm | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
 | shadPS4 | `windows.shadps4` | ps4 | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
 | SharpEmu | `windows.sharpemu` | ps5 | No: This emulator is early, and where it keeps saves still changes between versions. | No: changed in the emulator | No: changed in the emulator | Not needed |
+| Supermodel | `windows.supermodel` | model3 | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
 | Vita3K | `windows.vita3k` | psvita | Yes | Yes: for every game and for one game | No: changed in the emulator | Yes: installed inside it: checked to be there |
 | xemu | `windows.xemu` | xbox | No: xemu keeps saves inside its hard disk image, which Fuse can't open safely. | No: changed in the emulator | No: changed in the emulator | Yes: BIOS folders, by name and checksum |
 | Xenia | `windows.xenia` | xbox360 | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
@@ -209,12 +211,12 @@ Version 1. Generated from Fuse's code by `EmulatorContractsTest`; do not edit by
 | DOSBox-X | `macos.dosbox-x` | dos | No: DOS games save inside their own folders; keep those folders in step with Syncthing. | No: changed in the emulator | No: changed in the emulator | Not needed |
 | DuckStation | `macos.duckstation` | psx | Yes | Yes: for every game and for one game | Yes | Yes: BIOS folders, by name and checksum |
 | Eden | `macos.eden` | switch | Yes | Yes: for every game and for one game | No: changed in the emulator | Yes: installed inside it: checked to be there |
-| Flycast | `macos.flycast` | arcade, dc | Yes | No: changed in the emulator | No: changed in the emulator | Yes: optional; BIOS folders, by name and checksum |
+| Flycast | `macos.flycast` | arcade, dc | Yes | Yes: for every game and for one game | No: changed in the emulator | Yes: optional; BIOS folders, by name and checksum |
 | Lime3DS | `macos.lime3ds` | 3ds, new-nintendo-3ds | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
-| MAME | `macos.mame` | arcade, neogeoaes | Yes | No: changed in the emulator | No: changed in the emulator | Yes: BIOS folders, by name and checksum |
+| MAME | `macos.mame` | arcade, neogeoaes | Yes | Yes: for every game and for one game | No: changed in the emulator | Yes: BIOS folders, by name and checksum |
 | Mandarine | `macos.mandarine` | 3ds, new-nintendo-3ds | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
 | Mednafen | `macos.mednafen` | famicom, fds, gamegear, gb, gba, gbc, genesis, lynx, neo-geo-pocket, neo-geo-pocket-color, nes, psx, saturn, sfam, sms, snes, tg16, turbografx-cd, virtualboy, wonderswan, wonderswan-color | Yes | No: changed in the emulator | No: changed in the emulator | Yes: BIOS folders, by name and checksum |
-| melonDS | `macos.melonds` | nds, nintendo-dsi | Yes | No: changed in the emulator | No: changed in the emulator | Yes: BIOS folders, by name and checksum |
+| melonDS | `macos.melonds` | nds, nintendo-dsi | Yes | Yes: for every game (it has none of a game's own) | No: changed in the emulator | Yes: BIOS folders, by name and checksum |
 | mGBA | `macos.mgba` | gb, gba, gbc | Yes | No: changed in the emulator | No: changed in the emulator | Yes: optional; BIOS folders, by name and checksum |
 | Mupen64Plus | `macos.mupen64plus` | n64 | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
 | Panda3DS | `macos.panda3ds` | 3ds, new-nintendo-3ds | No: Panda3DS keeps its saves in a layout Fuse doesn't read yet; Azahar's saves sync. | No: changed in the emulator | No: changed in the emulator | Not needed |
@@ -231,6 +233,7 @@ Version 1. Generated from Fuse's code by `EmulatorContractsTest`; do not edit by
 | ScummVM | `macos.scummvm` | scummvm | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
 | shadPS4 | `macos.shadps4` | ps4 | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
 | SharpEmu | `macos.sharpemu` | ps5 | No: This emulator is early, and where it keeps saves still changes between versions. | No: changed in the emulator | No: changed in the emulator | Not needed |
+| Supermodel | `macos.supermodel` | model3 | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
 | Vita3K | `macos.vita3k` | psvita | Yes | Yes: for every game and for one game | No: changed in the emulator | Yes: installed inside it: checked to be there |
 | xemu | `macos.xemu` | xbox | No: xemu keeps saves inside its hard disk image, which Fuse can't open safely. | No: changed in the emulator | No: changed in the emulator | Yes: BIOS folders, by name and checksum |
 

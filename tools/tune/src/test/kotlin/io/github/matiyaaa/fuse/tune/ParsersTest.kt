@@ -577,6 +577,28 @@ class ParsersTest {
     }
 
     @Test
+    fun noSignInIsOfferedAndThoseInTheDataAlreadyGo() {
+        assertTrue(Credentials.held(Found(null, "", "cheevos_password", Kind.STRING)))
+        assertTrue(Credentials.held(Found(null, "achievements", "Token", Kind.STRING)))
+        assertTrue(Credentials.held(Found(null, "WebService", "web_api_key", Kind.STRING)))
+        assertFalse(Credentials.held(Found(null, "", "netplay_show_passworded", Kind.BOOL)), "a switch about rooms with a password holds none")
+        assertFalse(Credentials.held(Found(null, "", "cheevos_username", Kind.STRING)), "a name is not a sign-in")
+        val before = TuneWriter.kotlin(
+            listOf(
+                Triple(
+                    "retroarch", listOf("v1.22.0"),
+                    listOf(
+                        Merged(Found(null, "", "video_vsync", Kind.BOOL, "true"), listOf("v1.22.0")),
+                        Merged(Found(null, "", "webdav_password", Kind.STRING, ""), listOf("v1.22.0")),
+                    ),
+                ),
+            ),
+        )
+        val after = keep(before, listOf(Triple("flycast", listOf("v2.7"), emptyList())))
+        assertEquals(listOf("video_vsync"), TuneWriter.readBack(after).second.map { it.split('\t')[3] }, "a family kept as it was loses its sign-ins too")
+    }
+
+    @Test
     fun openRct2sSectionsWithTheirKeysDefaultsAndEnumWords() {
         val code = """
             static const auto Enum_MeasurementFormat = ConfigEnum<MeasurementFormat>({
@@ -944,6 +966,365 @@ class ParsersTest {
         assertEquals("Renderer Advanced", scale.tab)
         assertFalse(found.single { it.key == "use_multi_core" }.perGame, "a plain Setting is for every game only")
         assertEquals(listOf("0", "1", "2", "3", "4"), found.single { it.key == "output_engine" }.choices.map { it.value })
+    }
+
+    @Test
+    fun mamesOptionsByTheirTablesHeadersWithNoPathsOrCommands() {
+        val emu = """
+            const options_entry emu_options::s_option_entries[] =
+            {
+                { OPTION_SYSTEMNAME,                 nullptr,     core_options::option_type::STRING,     nullptr },
+                { nullptr,                           nullptr,     core_options::option_type::HEADER,     "CORE CONFIGURATION OPTIONS" },
+                { OPTION_READCONFIG ";rc",           "1",         core_options::option_type::BOOLEAN,    "enable loading of configuration files" },
+                { nullptr,                           nullptr,     core_options::option_type::HEADER,     "CORE SEARCH PATH OPTIONS" },
+                { OPTION_MEDIAPATH ";rp;biospath",   "roms",      core_options::option_type::MULTIPATH,  "path to ROM sets and hard disk images" },
+                { nullptr,                           nullptr,     core_options::option_type::HEADER,     "CORE PERFORMANCE OPTIONS" },
+                { OPTION_SPEED,                      "1.0",       core_options::option_type::FLOAT,      "controls the speed of gameplay, relative to realtime; smaller numbers are slower" },
+                { OPTION_FRAMESKIP ";fs(0-10)",      "0",         core_options::option_type::INTEGER,    "set frameskip to fixed value, 0-10 (upper limit with autoframeskip)" },
+                { nullptr }
+            };
+        """.trimIndent()
+        val header = "#define OPTION_SYSTEMNAME \"\"\n#define OPTION_READCONFIG \"readconfig\"\n#define OPTION_MEDIAPATH \"rompath\"\n#define OPTION_SPEED \"speed\"\n#define OPTION_FRAMESKIP \"frameskip\"\n"
+        val osd = """
+            const options_entry osd_options::s_option_entries[] =
+            {
+                { nullptr,                           nullptr,     core_options::option_type::HEADER,     "OSD VIDEO OPTIONS" },
+                { OSDOPTION_VIDEO,                   OSDOPTVAL_AUTO, core_options::option_type::STRING,  "video output method: " },
+                { nullptr }
+            };
+        """.trimIndent()
+        val found = Mame.parse(mapOf("src/emu/emuopts.cpp" to emu, "src/emu/emuopts.h" to header, "src/osd/modules/lib/osdobj_common.cpp" to osd, "src/osd/modules/lib/osdobj_common.h" to "#define OSDOPTION_VIDEO \"video\"\n#define OSDOPTVAL_AUTO \"auto\"\n")).associateBy { it.key }
+        assertEquals(setOf("readconfig", "speed", "frameskip", "video"), found.keys, "no system name, paths or commands")
+        assertEquals(Triple(Kind.BOOL, "true", "Core Configuration Options"), found.getValue("readconfig").let { Triple(it.kind, it.default, it.tab) })
+        assertEquals(Kind.FLOAT to "1.0", found.getValue("speed").let { it.kind to it.default })
+        assertEquals("set frameskip to fixed value, 0-10 (upper limit with autoframeskip)", found.getValue("frameskip").about)
+        assertEquals(Triple(Kind.STRING, "auto", "OSD Video Options"), found.getValue("video").let { Triple(it.kind, it.default, it.tab) })
+        assertTrue(found.values.all { it.perGame && it.section.isEmpty() }, "a system's own ini may hold any")
+    }
+
+    @Test
+    fun melonDssSettingsByTheTableEachIsReadFromWithWhatItsDialogsCallThem() {
+        val config = """
+            DefaultList<int> DefaultInts =
+            {
+                {"Instance*.Window*.Width", 256},
+                {"3D.Renderer", renderer3D_Software},
+                {"3D.GL.ScaleFactor", 1},
+            #ifdef JIT_ENABLED
+                {"JIT.MaxBlockSize", 32},
+            #endif
+                {"Instance*.Audio.Volume", 256},
+                {"Instance*.DSi.Battery.Level", 0xF},
+            };
+            RangeList IntRanges =
+            {
+                {"3D.Renderer", {0, renderer3D_Max-1}},
+                {"3D.GL.ScaleFactor", {1, 16}},
+                {"Instance*.Audio.Volume", {0, 256}},
+            };
+            DefaultList<bool> DefaultBools =
+            {
+                {"Screen.Filter", true},
+                {"Emu.DirectBoot", true},
+            };
+            DefaultList<std::string> DefaultStrings =
+            {
+                {"Instance*.Firmware.Username",     "melonDS"}
+            };
+            DefaultList<double> DefaultDoubles =
+            {
+                {"TargetFPS", 60.0},
+            };
+        """.trimIndent()
+        val main = "enum\n{\n    renderer3D_Software = 0,\n#ifdef OGLRENDERER_ENABLED\n    renderer3D_OpenGL,\n    renderer3D_OpenGLCompute,\n#endif\n    renderer3D_Max,\n};\n"
+        val dialog = """
+            EmuSettingsDialog::EmuSettingsDialog(QWidget* parent)
+            {
+                auto& cfg = emuInstance->getGlobalConfig();
+                auto& instcfg = emuInstance->getLocalConfig();
+                lastBIOSFolder = cfg.GetQString("LastBIOSFolder");
+                ui->txtBIOS9Path->setText(cfg.GetQString("DS.BIOS9Path"));
+                ui->cbxConsoleType->addItem("DS");
+                ui->cbxConsoleType->addItem("DSi (experimental)");
+                ui->cbxConsoleType->setCurrentIndex(cfg.GetInt("Emu.ConsoleType"));
+                ui->chkDirectBoot->setChecked(cfg.GetBool("Emu.DirectBoot"));
+                ui->cbxDLDISize->addItem("Auto");
+                for (int i = 0; imgsizes[i] != 0; i++) ui->cbxDLDISize->addItem(sizelbl);
+                ui->cbxDLDISize->setCurrentIndex(cfg.GetInt("DLDI.ImageSize"));
+            }
+            VideoSettingsDialog::VideoSettingsDialog(QWidget* parent)
+            {
+                auto& cfg = emuInstance->getGlobalConfig();
+                oldRenderer = cfg.GetInt("3D.Renderer");
+                oldVSync = cfg.GetBool("Screen.VSync");
+                oldGLScale = cfg.GetInt("3D.GL.ScaleFactor");
+                grp3DRenderer->addButton(ui->rb3DSoftware, renderer3D_Software);
+                grp3DRenderer->addButton(ui->rb3DOpenGL,   renderer3D_OpenGL);
+                grp3DRenderer->button(oldRenderer)->setChecked(true);
+                ui->cbVSync->setChecked(oldVSync != 0);
+                ui->cbxGLResolution->addItem("1x native");
+                ui->cbxGLResolution->addItem("2x native");
+                ui->cbxGLResolution->setCurrentIndex(oldGLScale-1);
+            }
+            CameraManager::CameraManager(int num, int width, int height, bool yuv) :
+                config(Config::GetGlobalTable().GetTable(kCamConfigPath[num]))
+            {
+                inputType = config.GetInt("InputType");
+            }
+            void CameraSettingsDialog::populate(int id)
+            {
+                auto& cfg = camManager[id]->getConfig();
+                ui->chkFlipPicture->setChecked(cfg.GetBool("XFlip"));
+            }
+            void EmuInstance::start()
+            {
+                auto firmcfg = localCfg.GetTable("Firmware");
+                std::string name = firmcfg.GetString("Username");
+                Config::Table jitopt = globalCfg.GetTable("JIT");
+                bool jit = jitopt.GetBool("Enable");
+                Config::Table keycfg = localCfg.GetTable("Keyboard");
+                int a = keycfg.GetInt("A");
+                bool cheats = localCfg.GetBool("EnableCheats");
+            }
+        """.trimIndent()
+        val window = """
+            MainWindow::MainWindow(int id, EmuInstance* inst, QWidget* parent) :
+                globalCfg(inst->globalCfg),
+                localCfg(inst->localCfg),
+                windowCfg(localCfg.GetTable("Window"+std::to_string(id), "Window0"))
+            {
+                int layout = windowCfg.GetInt("ScreenLayout");
+            }
+        """.trimIndent()
+        val ui = """
+            <widget class="QWidget" name="tab"><attribute name="title"><string>General</string></attribute>
+             <layout class="QGridLayout" name="gridLayout">
+              <item row="0" column="0"><widget class="QLabel" name="label"><property name="text"><string>Console type:</string></property></widget></item>
+              <item row="0" column="1"><widget class="QComboBox" name="cbxConsoleType"><property name="whatsThis"><string>&lt;html&gt;&lt;body&gt;&lt;p&gt;The type of console to emulate&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string></property></widget></item>
+              <item row="1" column="0" colspan="2"><widget class="QCheckBox" name="chkDirectBoot"><property name="text"><string>Boot game directly</string></property></widget></item>
+             </layout>
+            </widget>
+            <widget class="QRadioButton" name="rb3DSoftware"><property name="text"><string>Software</string></property></widget>
+            <widget class="QRadioButton" name="rb3DOpenGL"><property name="text"><string>OpenGL (Classic)</string></property></widget>
+            <widget class="QCheckBox" name="cbVSync"><property name="text"><string>VSync</string></property></widget>
+        """.trimIndent()
+        val d = MelonDs.DIR
+        val found = MelonDs.parse(mapOf("$d/Config.cpp" to config, "$d/main.h" to main, "$d/EmuSettingsDialog.cpp" to dialog, "$d/EmuInstance.cpp" to dialog.substringAfter("void EmuInstance"), "$d/Window.cpp" to window, "$d/EmuSettingsDialog.ui" to ui))
+            .associateBy { if (it.section.isEmpty()) it.key else "${it.section}.${it.key}" }
+        assertTrue(found.values.none { it.perGame }, "melonDS has no settings of a game's own")
+        assertFalse(found.keys.any { it.endsWith("Path") || it.endsWith("Folder") || ".Keyboard." in it || it.endsWith("Width") }, found.keys.toString())
+        val console = found.getValue("Emu.ConsoleType")
+        assertEquals(listOf("Console type", "The type of console to emulate", "General"), listOf(console.label, console.about, console.tab))
+        assertEquals(listOf("0" to "DS", "1" to "DSi (experimental)"), console.choices.map { it.value to it.label })
+        assertEquals(Kind.INT, found.getValue("DLDI.ImageSize").kind, "a list made in a loop isn't offered as choices")
+        assertEquals(listOf("Boot game directly", "true"), found.getValue("Emu.DirectBoot").let { listOf(it.label, it.default) })
+        val renderer = found.getValue("3D.Renderer")
+        assertEquals(Kind.ENUM to "0", renderer.kind to renderer.default)
+        assertEquals(listOf("0" to "Software", "1" to "OpenGL (Classic)"), renderer.choices.map { it.value to it.label }, "its group of buttons, as a build with OpenGL numbers them")
+        assertEquals("VSync" to "false", found.getValue("Screen.VSync").let { it.label to it.default }, "read into a name, then shown")
+        assertEquals(listOf("1" to "1x native", "2" to "2x native"), found.getValue("3D.GL.ScaleFactor").choices.map { it.value to it.label }, "a list's place one less than its value")
+        assertFalse("XFlip" in found || "InputType" in found, "a camera's own table isn't one Fuse knows the place of")
+        assertEquals("32", found.getValue("JIT.MaxBlockSize").default, "as a build with the JIT has it")
+        assertEquals("Instance0.Firmware" to "melonDS", found.getValue("Instance0.Firmware.Username").let { it.section to it.default }, "the first instance's own")
+        assertEquals("15", found.getValue("Instance0.DSi.Battery.Level").default)
+        assertEquals("false", found.getValue("JIT.Enable").default, "off until set")
+        assertEquals("Instance0", found.getValue("Instance0.EnableCheats").section)
+        assertEquals("Instance0.Window0", found.getValue("Instance0.Window0.ScreenLayout").section, "the first window's")
+        assertEquals(Kind.FLOAT to "60.0", found.getValue("TargetFPS").let { it.kind to it.default })
+        assertEquals("", found.getValue("TargetFPS").section, "the root table")
+    }
+
+    @Test
+    fun supermodelsSettingsWithTheirGroupsChoicesAndHelp() {
+        val main = """
+            Util::Config::Node DefaultConfig()
+            {
+              Util::Config::Node config("Global");
+              auto SetLabels = [&config](const std::string& key, const std::vector<std::string>& labels) { };
+              config.Set("GameXMLFile", s_gameXMLFilePath);
+              config.Set("PowerPCFrequency", 0u, "Core", 0u, 200u);
+              config.Set<std::string>("ROMDirectory", FileSystemPath::GetPath(FileSystemPath::ROMs), "Core", "", "");
+            #ifndef SUPERMODEL_OSX
+              config.Set<std::string>("VertexShader", "", "Legacy3D", "", "");
+            #endif
+              config.Set("SoundFreq", 57.6f, "Sound", 0.0f, 0.0f, { 57.524160f, 57.6f, 60.f });
+              SetLabels("SoundFreq", { "57.524 Hz (original hardware)", "57.6 Hz", "60 Hz" });
+              config.Set("Balance", 0.0f, "Sound", -100.f, 100.f);
+              config.Set("VSync", true, "Video");
+              config.Set("Supersampling", 1, "Video", 1, 8);
+              config.Set("UpscaleMode", 2, "Video", 0, 0, { 0,1,2,3 });
+              SetLabels("UpscaleMode", { "None (sharp pixels)", "Biquintic", "Bilinear", "Bicubic" });
+            #ifdef SUPERMODEL_WIN32
+              config.Set<std::string>("InputSystem", "dinput", "Core", "", "", { "sdl","dinput" });
+            #else
+              config.Set<std::string>("InputSystem", "sdl", "Core", "", "", { "sdl","sdlgamepad" });
+            #endif
+              config.Set("PortIn", unsigned(1970), "Network");
+              config.Set<unsigned int>("OutputsTCPPort", 8000, "Misc", 1024, 65535);
+              config.Set<unsigned>("InputDigitalSensitivity", DEFAULT_DIGITAL_SENSITIVITY, "Sensitivity", 0, 100);
+              static const char* joyAxisIds[] = { "X", "Y" };
+              for (const char* axis : joyAxisIds)
+                config.Set<unsigned>(std::string("InputJoy") + axis + "DeadZone", DEFAULT_JOY_DEADZONE, "Sensitivity", 0, 99);
+              config.Set<std::string>("InputStart1", "KEY_1,JOY1_BUTTON9", "Input", "", "");
+              return config;
+            }
+
+            static void Help(void)
+            {
+              puts("  -ss=<n>                 Supersampling (range 1-8)");
+              puts("  -vsync                  Lock to vertical refresh rate [Default]");
+              puts("  -no-vsync               Do not lock to vertical refresh rate");
+              puts("  -sound-volume=<vol>     Volume of SCSP-generated sound in %, applies only");
+              puts("                          when Digital Sound Board is present [Default: 100]");
+            }
+
+            static ParsedCommandLine ParseCommandLine(int argc, char **argv)
+            {
+              static const std::map<std::string, std::string> valued_options
+              {
+                { "-sound-volume",          "SoundVolume"             },
+              };
+              static const std::map<std::string, std::pair<std::string, bool>> bool_options
+              {
+                { "-vsync",               { "VSync",            true } },
+                { "-no-vsync",            { "VSync",            false } },
+              };
+              if (arg == "-print-games")
+                cmd_line.print_games = true;
+              else if (arg == "-ss" || arg.find("-ss=") == 0) {
+                cmd_line.config.Set("Supersampling", val);
+              }
+            }
+        """.trimIndent()
+        val inputs = "#define DEFAULT_DIGITAL_SENSITIVITY 25\n#define DEFAULT_JOY_DEADZONE 3\n"
+        val found = Supermodel.parse(mapOf(Supermodel.MAIN to main, Supermodel.INPUTS to inputs)).associateBy { it.key }
+        assertEquals(
+            setOf("PowerPCFrequency", "SoundFreq", "Balance", "VSync", "Supersampling", "UpscaleMode", "InputSystem", "PortIn", "OutputsTCPPort", "InputDigitalSensitivity", "InputJoyXDeadZone", "InputJoyYDeadZone", "InputStart1"),
+            found.keys, "no files or folders of this computer's",
+        )
+        assertTrue(found.values.all { it.section == "Global" && it.perGame }, "a game's own section may hold any")
+        assertEquals(listOf("0", "0", "200"), found.getValue("PowerPCFrequency").let { listOf(it.default, it.min.toString(), it.max.toString()) })
+        val freq = found.getValue("SoundFreq")
+        assertEquals(Kind.ENUM to "57.6", freq.kind to freq.default)
+        assertEquals(listOf("57.5242" to "57.524 Hz (original hardware)", "57.6" to "57.6 Hz", "60" to "60 Hz"), freq.choices.map { it.value to it.label }, "as C++ prints a float")
+        assertEquals(Kind.FLOAT to "0", found.getValue("Balance").let { it.kind to it.default })
+        val vsync = found.getValue("VSync")
+        assertEquals(listOf("true", "Video", "Lock to vertical refresh rate."), listOf(vsync.default, vsync.tab, vsync.about))
+        assertEquals("Supersampling (range 1-8).", found.getValue("Supersampling").about)
+        assertEquals(1L to 8L, found.getValue("Supersampling").let { it.min to it.max })
+        assertEquals(listOf("0" to "None (sharp pixels)", "1" to "Biquintic", "2" to "Bilinear", "3" to "Bicubic"), found.getValue("UpscaleMode").choices.map { it.value to it.label })
+        assertEquals("sdl" to listOf("sdl", "sdlgamepad"), found.getValue("InputSystem").let { it.default to it.choices.map { c -> c.value } }, "as a Linux build has it")
+        assertEquals(Kind.INT to "1970", found.getValue("PortIn").let { it.kind to it.default })
+        assertEquals(1024L to 65535L, found.getValue("OutputsTCPPort").let { it.min to it.max })
+        assertEquals("25", found.getValue("InputDigitalSensitivity").default)
+        assertEquals(listOf("3", "0", "99"), found.getValue("InputJoyYDeadZone").let { listOf(it.default, it.min.toString(), it.max.toString()) })
+        assertEquals(Kind.STRING to "KEY_1,JOY1_BUTTON9", found.getValue("InputStart1").let { it.kind to it.default })
+    }
+
+    @Test
+    fun flycastsRendererAndVolumeFromTheirOwnClasses() {
+        val header = """
+            class AudioVolumeOption : public Option<int> {
+            public:
+                AudioVolumeOption() : Option<int>("aica.Volume", 100) {};
+            };
+            extern AudioVolumeOption AudioVolume;
+            class RendererOption : public Option<RenderType> {
+            public:
+            #ifdef LIBRETRO
+                RendererOption() : Option<RenderType>("",
+            #else
+                RendererOption() : Option<RenderType>("pvr.rend",
+            #endif
+            #if defined(USE_DX11)
+                    RenderType::DirectX11
+            #elif !defined(USE_OPENGL)
+                    RenderType::Vulkan
+            #else
+                    RenderType::OpenGL
+            #endif
+                ) {}
+            };
+            extern RendererOption RendererType;
+        """.trimIndent()
+        val types = "enum class RenderType {\n\tOpenGL = 0,\n\tOpenGL_OIT = 3,\n\tVulkan = 4,\n\tVulkan_OIT = 5,\n\tDirectX11 = 2,\n};\n"
+        val video = """
+            header(T("Graphics API"));
+            #ifdef USE_OPENGL
+                ImGui::RadioButton("OpenGL", &renderApi, OpenGL);
+            #endif
+            #ifdef USE_VULKAN
+            #ifdef __APPLE__
+                ImGui::RadioButton("Vulkan (Metal)", &renderApi, Vulkan);
+            #else
+                ImGui::RadioButton("Vulkan", &renderApi, Vulkan);
+            #endif
+            #endif
+            #ifdef USE_DX11
+                ImGui::RadioButton("DirectX 11", &renderApi, DirectX11);
+            #endif
+            header(T("Transparent Sorting"));
+                ImGui::RadioButton(T("Per Triangle"), &renderer, 0);
+                ImGui::RadioButton(T("Per Pixel"), &renderer, 2);
+        """.trimIndent()
+        val audio = "if (OptionSlider(T(\"Volume Level\"), config::AudioVolume, 0, 100, T(\"Adjust the emulator's audio level\"), \"%d%%\"))"
+        val found = Flycast.parse(mapOf(Flycast.OPTIONS to "", Flycast.HEADER to header, Flycast.TYPES to types, Flycast.VIDEO to video, "core/ui/settings_audio.cpp" to audio)).associateBy { it.key }
+        val volume = found.getValue("aica.Volume")
+        assertEquals(listOf("config", "100", "0", "100", "Volume Level", "Adjust the emulator's audio level", "Audio"), listOf(volume.section, volume.default, volume.min.toString(), volume.max.toString(), volume.label, volume.about, volume.tab), "its help, not the slider's format")
+        val rend = found.getValue("pvr.rend")
+        assertEquals(listOf(Kind.ENUM, "0", "Graphics API", "Video"), listOf(rend.kind, rend.default, rend.label, rend.tab), "OpenGL, as a Linux build starts")
+        assertEquals(
+            listOf(Triple("0", "OpenGL", null), Triple("3", "OpenGL, Per Pixel", null), Triple("4", "Vulkan", null), Triple("5", "Vulkan, Per Pixel", null), Triple("2", "DirectX 11", setOf("windows"))),
+            rend.choices.map { Triple(it.value, it.label, it.hosts) },
+        )
+    }
+
+    @Test
+    fun flycastsOptionsWithWhatItsScreensCallThem() {
+        val options = """
+            namespace config {
+            Option<bool> DynarecEnabled("Dynarec.Enabled", true);
+            Option<int> Sh4Clock("Sh4Clock", 200);
+            Option<int, false> SavestateSlot("Dreamcast.SavestateSlot");
+            OptionString AudioBackend("backend", "auto", "audio");
+            #if HOST_CPU == CPU_ARM
+            Option<int> AudioBufferSize("aica.BufferSize", 5644);
+            #else
+            Option<int> AudioBufferSize("aica.BufferSize", 2822);
+            #endif
+            Option<int> ScreenStretching("rend.ScreenStretching", 100);
+            Option<int> AutoSkipFrame("pvr.AutoSkipFrame", 0);
+            Option<float> ExtraDepthScale("rend.ExtraDepthScale", 1.f);
+            Option<bool> Widescreen("rend.WideScreen");
+            std::array<Option<int>, 2> CrosshairColor {
+                Option<int>("rend.CrossHairColor1"),
+                Option<int>("rend.CrossHairColor2"),
+            };
+            }
+        """.trimIndent()
+        val video = """
+            OptionCheckbox(T("Widescreen"), config::Widescreen,
+                    T("Draw geometry outside of the normal 4:3 aspect ratio."));
+            OptionSlider(T("Horizontal Stretching"), config::ScreenStretching, 100, 250,
+                    T("Stretch the screen horizontally"));
+            OptionRadioButton(T("Disabled"), config::AutoSkipFrame, 0, T("No frame skipping"));
+            OptionRadioButton(T("Normal"), config::AutoSkipFrame, 1, T("Skip a frame when the GPU and CPU are both running slow"));
+        """.trimIndent()
+        val found = Flycast.parse(mapOf(Flycast.OPTIONS to options, "core/ui/settings_video.cpp" to video)).associateBy { it.key }
+        assertEquals("config" to "true", found.getValue("Dynarec.Enabled").let { it.section to it.default })
+        assertFalse(found.getValue("Dreamcast.SavestateSlot").perGame, "declared for every game only")
+        assertEquals("0", found.getValue("Dreamcast.SavestateSlot").default)
+        assertEquals("audio" to "auto", found.getValue("backend").let { it.section to it.default })
+        assertEquals("2822", found.getValue("aica.BufferSize").default, "as a PC build has it")
+        val wide = found.getValue("rend.WideScreen")
+        assertEquals(listOf("Widescreen", "Draw geometry outside of the normal 4:3 aspect ratio.", "false", "Video"), listOf(wide.label, wide.about, wide.default, wide.tab))
+        assertEquals(100L to 250L, found.getValue("rend.ScreenStretching").let { it.min to it.max })
+        val skip = found.getValue("pvr.AutoSkipFrame")
+        assertEquals(Kind.ENUM, skip.kind)
+        assertEquals(listOf("0" to "Disabled", "1" to "Normal"), skip.choices.map { it.value to it.label })
+        assertEquals("1.0", found.getValue("rend.ExtraDepthScale").default)
+        assertTrue("rend.CrossHairColor1" in found && "rend.CrossHairColor2" in found, "those in a list too")
+        assertTrue(found.getValue("Dynarec.Enabled").perGame)
     }
 
     @Test

@@ -65,9 +65,9 @@ object NativeSettings {
 
     /**
      * The emulators whose settings Fuse changes: these, and RPCS3, RetroArch, Eden and Citron, Azahar
-     * and its family, Cemu, shadPS4, Xenia and Vita3K, whose come only as Every Setting (see [Tune]).
+     * and its family, Cemu, shadPS4, Xenia, Vita3K, Flycast, MAME, Supermodel and melonDS, whose come only as Every Setting (see [Tune]).
      */
-    val changeable: Set<String> = families + setOf("rpcs3", "retroarch", "eden", "citron", "azahar", "azaharplus", "lime3ds", "mandarine", "cemu", "shadps4", "xenia", "vita3k")
+    val changeable: Set<String> = families + setOf("rpcs3", "retroarch", "eden", "citron", "azahar", "azaharplus", "lime3ds", "mandarine", "cemu", "shadps4", "xenia", "vita3k", "flycast", "mame", "supermodel", "melonds")
 
     /**
      * The family an emulator's id keeps its settings as (`linux.pcsx2` is `pcsx2`): Steam's RetroArch

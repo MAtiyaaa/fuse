@@ -81,10 +81,17 @@ together as each emulator does it, and Fuse Ports brings games rebuilt to run na
   there too, for every game and for a Switch game by its title id; Azahar's, AzaharPlus's,
   Lime3DS's and Mandarine's, for every game and for a 3DS game by the title id in its own file;
   shadPS4's for a PS4 game by its serial; Xenia's for an Xbox 360 game by its title id; and
-  Vita3K's for a Vita game by its title id. Each is written as the emulator writes its own, so it
-  reads every value back exactly. A Wii U game's Cemu profile is there as well, made as a copy of
+  Vita3K's for a Vita game by its title id; Flycast's for a Dreamcast game by its product number,
+  with its renderer and volume; MAME's for a system by its short name; Supermodel's for a Model 3
+  game by its ROM set; and melonDS's, which has settings for every game only. Each is written as
+  the emulator writes its own, so it reads every value back exactly. A Wii U game's Cemu profile is there as well, made as a copy of
   the one Cemu ships for the game, and a Vita game's own file is made with every setting it holds,
   so nothing else about the game changes. Put Back undoes any of them.
+- **No sign-ins in Every Setting.** Passwords, tokens and keys an emulator keeps among its
+  settings (RetroArch's RetroAchievements and WebDAV sign-ins, Flycast's RetroAchievements token,
+  Azahar's and Citron's web service tokens) are never shown or written by Fuse.
+- **Supermodel's own build.** Model 3 games can start in Supermodel itself, from the game's folder
+  as ES-DE starts it, and their NVRAM is kept in step like any other save.
 - **A game's core options.** A RetroArch game's page now has its core's own options too (85 cores,
   from Snes9x and mGBA to Beetle PSX, SwanStation, Flycast and Mupen64Plus-Next), named and grouped
   as the core names them. Changing one gives the game its own options file, made as RetroArch's

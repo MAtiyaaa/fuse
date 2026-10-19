@@ -21,6 +21,10 @@ class Emulator(
     val branch: String? = null,
     /** For settings spread over a whole tree: the files read, as patterns, from a sparse checkout at each release. */
     val tree: List<String>? = null,
+    /** A release as the program names its own version, where its tag differs (MAME's `mame0289` is 0.289). */
+    val releaseName: (String) -> String = { it },
+    /** How many releases back it is read; one for daily builds that all say the same version. */
+    val reads: Int = RELEASES,
 )
 
 val EMULATORS = listOf(
@@ -48,6 +52,13 @@ val EMULATORS = listOf(
     Emulator("lime3ds", "Lime3DS/lime3ds-archive", Regex("""^\d{4}(?:\.\d+)*$"""), Azahar.LIME3DS.files, Azahar.LIME3DS::parse),
     Emulator("mandarine", "mandarine3ds/mandarine", Regex("""^r\d+\.\d+(?:\.\d+)?$"""), Azahar.MANDARINE.files, Azahar.MANDARINE::parse),
     Emulator("azaharplus", "AzaharPlus/AzaharPlus", Regex(".^"), Azahar.AZAHAR.files, Azahar.AZAHAR::parse, branch = "AzaharPlus"),
+    // MAME's releases are mame0289 and the like.
+    Emulator("mame", "mamedev/mame", Regex("""^mame\d{4}$"""), Mame.FILES, Mame::parse, releaseName = { "0." + it.removePrefix("mame").trimStart('0') }),
+    Emulator("flycast", "flyinghead/flycast", Regex("""^v\d+\.\d+(?:\.\d+)?$"""), Flycast.FILES, Flycast::parse),
+    // Supermodel's builds are tagged by day and commit (v0.3a-20261018-git-ddbc306), every one 0.3a: its newest is read.
+    Emulator("supermodel", "trzy/Supermodel", Regex("""^v\d+\.\d+[a-z]?-\d{8}-git-[0-9a-f]+$"""), Supermodel.FILES, Supermodel::parse, reads = 1),
+    // melonDS keeps melonDS.toml from 1.0 (melonDS.ini before), its releases 1.0, 1.1 and on; its release candidates left out.
+    Emulator("melonds", "melonDS-emu/melonDS", Regex("""^[1-9]\d*\.\d+(?:\.\d+)?$"""), emptyList(), MelonDs::parse, tree = MelonDs.TREE),
     // Vita3K tags only `continuous`, its rolling build.
     Emulator("vita3k", "Vita3K/Vita3K", Regex("^continuous$"), Vita3K.FILES, Vita3K::parse),
     // Xenia Canary's builds come from its canary_experimental branch; its tags name commits, not releases.
@@ -80,18 +91,21 @@ fun main(args: Array<String>) {
     for (e in EMULATORS) {
         if (only != null && e.family !in only) continue
         val head = e.branch?.let { b -> headOf(e.git, b) ?: error("${e.family}: no branch $b") }
-        val tags = if (head != null) listOf(head) else releases(tagsOf(e.git), e.release).take(RELEASES)
+        val tags = if (head != null) listOf(head) else releases(tagsOf(e.git), e.release).take(e.reads)
         require(tags.isNotEmpty()) { "${e.family}: no release tags found" }
         val perTag = tags.associateWith { tag ->
             val files = e.tree?.let { treeFiles(e.git, tag, it) } ?: e.files.mapNotNull { path -> fetch(e.raw(tag, path))?.let { path to it } }.toMap()
             e.parse(files)
         }
         perTag.forEach { (tag, found) -> println("${e.family} $tag: ${found.size} settings") }
-        // A branch's head is named by its commit's first ten digits, as a core's is.
-        val named = tags.map { if (head != null) it.take(10) else it }
-        read[e] = named to merge(named, perTag.mapKeys { (k, _) -> if (head != null) k.take(10) else k })
+        // A branch's head is named by its commit's first ten digits, as a core's is; a tag as the program names its version.
+        fun name(tag: String) = if (head != null) tag.take(10) else e.releaseName(tag)
+        val named = tags.map(::name)
+        read[e] = named to merge(named, perTag.mapKeys { (k, _) -> name(k) })
     }
-    val fresh = read.map { (e, v) -> Triple(e.family, v.first, v.second) } + cores(only)
+    // No sign-in is offered (see [Credentials]).
+    val fresh = (read.map { (e, v) -> Triple(e.family, v.first, v.second) } + cores(only))
+        .map { (family, tags, settings) -> Triple(family, tags, settings.filterNot { Credentials.held(it.found) }) }
     if (only == null) {
         target.writeText(TuneWriter.kotlin(fresh))
     } else {
@@ -105,9 +119,12 @@ fun keep(before: String?, fresh: List<Triple<String, List<String>, List<Merged>>
     val (releases, lines) = before?.let(TuneWriter::readBack) ?: (emptyList<Pair<String, List<String>>>() to emptyList())
     val families = fresh.map { it.first }.toSet()
     val keptReleases = releases.filter { it.first !in families } + fresh.map { it.first to it.second }
-    val keptLines = lines.filter { it.substringBefore('\t') !in families } + fresh.flatMap { (family, _, settings) -> settings.map { TuneWriter.line(family, it) } }
+    val keptLines = lines.filter { it.substringBefore('\t') !in families && !heldCredential(it) } + fresh.flatMap { (family, _, settings) -> settings.map { TuneWriter.line(family, it) } }
     return TuneWriter.kotlinOf(keptReleases, keptLines)
 }
+
+/** Whether a data line (family, file, section, key, kind, ...) is a sign-in's (see [Credentials]). */
+fun heldCredential(line: String): Boolean = line.split('\t').let { f -> f.getOrNull(4) == Kind.STRING.name && Credentials.named(f.getOrNull(3).orEmpty()) }
 
 /** One entry per setting, across [tags] (newest first): as the newest that has it describes it. */
 fun merge(tags: List<String>, perTag: Map<String, List<Found>>): List<Merged> {

@@ -262,6 +262,138 @@ class EverySettingStoreTest {
     }
 
     @Test
+    fun mamesSystemFileIsItsShortNamesBesideMameIni(): Unit = runBlocking {
+        val installed = InstalledEmulator(EmulatorId("linux.mame"), "MAME", Host.LINUX, "/usr/bin/mame", version = "0.289 (mame0289)", platforms = setOf(PlatformId("arcade")), detectedVia = "PATH")
+        val services = services("mame.db", installed)
+        val folder = File(emu, ".mame").apply { mkdirs() }
+        val ini = File(folder, "mame.ini")
+        val text = "#\n# OSD VIDEO OPTIONS\n#\nwaitvsync                 0\n"
+        ini.writeText(text)
+        services.mameIniDir = folder.absolutePath
+        File(root, "arcade").mkdirs()
+        File(root, "arcade/pacman.zip").writeBytes(ByteArray(64))
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = withTimeout(20_000) { store.library.games(GameQuery()).first { it.isNotEmpty() } }.first()
+
+        val every = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(null, installed.id))
+        assertEquals("0.289", every.release, "named as MAME names its version")
+        val vsync = every.value("", "waitvsync")
+        assertEquals("false" to SettingSource.EVERY_GAME, vsync.value to vsync.source)
+        val own = File(folder, "pacman.ini")
+        assertTrue(store.library.setEveryEmulatorSetting(game.id, null, vsync.setting.id, "true"))
+        assertEquals("waitvsync                 1\n", own.readText(), "a switch as MAME writes one")
+        assertTrue(store.library.restoreEmulatorSettings(game.id, null))
+        assertFalse(own.exists())
+        assertEquals(text, ini.readText())
+    }
+
+    @Test
+    fun flycastsGameSettingsAreItsOwnSectionOfEmuCfgPutBackApartFromEveryGames(): Unit = runBlocking {
+        val installed = InstalledEmulator(EmulatorId("linux.flycast"), "Flycast", Host.LINUX, "/usr/bin/flycast", version = "2.7", platforms = setOf(PlatformId("dc")), detectedVia = "PATH")
+        val services = services("flycast.db", installed)
+        val config = File(emu, "flycast").apply { mkdirs() }
+        val cfg = File(config, "emu.cfg")
+        val text = "[config]\nrend.Resolution = 480\nrend.WideScreen = no\n\n[audio]\nbackend = auto\n\n"
+        cfg.writeText(text)
+        services.flycastConfigDir = config.absolutePath
+        File(root, "dc").mkdirs()
+        File(root, "dc/Shenmue [MK-51059].gdi").writeText("3\n")
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = withTimeout(20_000) { store.library.games(GameQuery()).first { it.isNotEmpty() } }.first()
+
+        val every = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(null, installed.id))
+        val wide = every.value("config", "rend.WideScreen")
+        assertEquals("false" to SettingSource.EVERY_GAME, wide.value to wide.source, "no read as off")
+        assertTrue(store.library.setEveryEmulatorSetting(null, installed.id, wide.setting.id, "true"))
+        assertEquals(text.replace("rend.WideScreen = no", "rend.WideScreen = yes"), cfg.readText(), "written as Flycast writes a switch")
+
+        // The game's own: its [<product number>] section, each key as <section>.<key>.
+        val res = every.value("config", "rend.Resolution").setting
+        assertTrue(store.library.setEveryEmulatorSetting(game.id, null, res.id, "960"))
+        assertTrue("[MK-51059]\nconfig.rend.Resolution = 960\n" in cfg.readText(), cfg.readText())
+        val after = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(game.id)).value("config", "rend.Resolution")
+        assertEquals(Triple("960", SettingSource.GAME, "480"), Triple(after.value, after.source, after.everyGame))
+
+        // Put Back for the game takes only the game's, then every game's goes back too.
+        assertTrue(store.library.restoreEmulatorSettings(game.id, null))
+        assertEquals(text.replace("rend.WideScreen = no", "rend.WideScreen = yes"), cfg.readText())
+        assertTrue(store.library.restoreEmulatorSettings(null, installed.id))
+        assertEquals(text, cfg.readText())
+    }
+
+    @Test
+    fun melonDsHasEveryGamesSettingsOnlyInItsTomlWithAFloatWrittenAsOne(): Unit = runBlocking {
+        val installed = InstalledEmulator(EmulatorId("linux.melonds"), "melonDS", Host.LINUX, "/usr/bin/melonDS", version = "1.1", platforms = setOf(PlatformId("nds")), detectedVia = "PATH")
+        val services = services("melonds.db", installed)
+        val config = File(emu, ".config/melonDS").apply { mkdirs() }
+        val toml = File(config, "melonDS.toml")
+        val text = "LimitFPS = true\nTargetFPS = 60.0\n\n[3D.GL]\nScaleFactor = 1\n\n[Instance0.Firmware]\nUsername = \"melonDS\"\n"
+        toml.writeText(text)
+        services.melondsConfigDir = config.absolutePath
+        File(root, "nds").mkdirs()
+        File(root, "nds/Mario Kart DS.nds").writeBytes(ByteArray(64))
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = withTimeout(20_000) { store.library.games(GameQuery()).first { it.isNotEmpty() } }.first()
+
+        val every = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(null, installed.id))
+        val fps = every.value("", "TargetFPS")
+        assertEquals("60.0" to SettingSource.EVERY_GAME, fps.value to fps.source, "the root table's")
+        assertTrue(store.library.setEveryEmulatorSetting(null, installed.id, fps.setting.id, "120"))
+        assertTrue(store.library.setEveryEmulatorSetting(null, installed.id, every.value("3D.GL", "ScaleFactor").setting.id, "4"))
+        assertTrue(store.library.setEveryEmulatorSetting(null, installed.id, every.value("Instance0.Firmware", "Username").setting.id, "Mo"))
+        assertEquals(text.replace("TargetFPS = 60.0", "TargetFPS = 120.0").replace("ScaleFactor = 1", "ScaleFactor = 4").replace("\"melonDS\"", "\"Mo\""), toml.readText(), "a decimal with its point, as melonDS reads only a float as one")
+
+        // No settings of a game's own: a game's view says so.
+        val own = assertIs<EverySettingView.Unavailable>(store.library.everyEmulatorSetting(game.id, installed.id))
+        assertEquals("melonDS has no settings of a game's own", own.title)
+
+        assertTrue(store.library.restoreEmulatorSettings(null, installed.id))
+        assertEquals(text, toml.readText())
+    }
+
+    @Test
+    fun supermodelsGameSettingsAreItsRomSetsSectionReadAsSupermodelReadsThem(): Unit = runBlocking {
+        val installed = InstalledEmulator(EmulatorId("linux.supermodel"), "Supermodel", Host.LINUX, "/usr/bin/supermodel", platforms = setOf(PlatformId("model3")), detectedVia = "PATH")
+        val services = services("supermodel.db", installed)
+        val config = File(emu, ".config/supermodel/Config").apply { mkdirs() }
+        val ini = File(config, "Supermodel.ini")
+        val text = ";;\n;; Supermodel Configuration File\n;;\n\n[ Global ]\n\n; Graphics\nSupersampling = 1\nVSync = 1\nInputStart1 = \"KEY_1,JOY1_BUTTON9\"\n"
+        ini.writeText(text)
+        services.supermodelConfigDir = config.absolutePath
+        File(root, "model3").mkdirs()
+        File(root, "model3/daytona2.zip").writeBytes(ByteArray(64))
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = withTimeout(20_000) { store.library.games(GameQuery()).first { it.isNotEmpty() } }.first()
+
+        val every = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(null, installed.id))
+        val vsync = every.value("Global", "VSync")
+        assertEquals("true" to SettingSource.EVERY_GAME, vsync.value to vsync.source, "1 read as on, as Supermodel reads it")
+        val start = every.value("Global", "InputStart1")
+        assertEquals("KEY_1,JOY1_BUTTON9", start.value, "its quotes off")
+        assertTrue(store.library.setEveryEmulatorSetting(null, installed.id, vsync.setting.id, "false"))
+        assertTrue(store.library.setEveryEmulatorSetting(null, installed.id, start.setting.id, "KEY_1"))
+        val changed = text.replace("VSync = 1", "VSync = false").replace("\"KEY_1,JOY1_BUTTON9\"", "\"KEY_1\"")
+        assertEquals(changed, ini.readText(), "text in quotes, as its own file writes it")
+
+        // The game's own: its [<rom set>] section of the same file, read over [ Global ].
+        val ss = every.value("Global", "Supersampling").setting
+        assertTrue(store.library.setEveryEmulatorSetting(game.id, null, ss.id, "4"))
+        assertTrue(ini.readText().endsWith("\n[daytona2]\nSupersampling = 4\n"), ini.readText())
+        val after = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(game.id)).value("Global", "Supersampling")
+        assertEquals(Triple("4", SettingSource.GAME, "1"), Triple(after.value, after.source, after.everyGame))
+
+        // Put Back for the game takes only the game's, then every game's goes back too.
+        assertTrue(store.library.restoreEmulatorSettings(game.id, null))
+        assertEquals(changed, ini.readText())
+        assertTrue(store.library.restoreEmulatorSettings(null, installed.id))
+        assertEquals(text, ini.readText())
+    }
+
+    @Test
     fun vita3ksGameFileIsXmlMadeWithEverySettingItHoldsUnderItsOwnNames(): Unit = runBlocking {
         val installed = InstalledEmulator(EmulatorId("linux.vita3k"), "Vita3K", Host.LINUX, "/usr/bin/vita3k", platforms = setOf(PlatformId("psvita")), detectedVia = "PATH")
         val services = services("vita3k.db", installed)

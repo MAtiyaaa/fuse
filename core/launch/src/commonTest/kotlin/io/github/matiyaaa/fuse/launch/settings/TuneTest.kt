@@ -8,8 +8,14 @@ import kotlin.test.assertTrue
 
 /** Fuse Tune's data as core:launch reads it, against what Fuse already offers. */
 class TuneTest {
-    /** Those read at one build: a branch's head (AzaharPlus, Xenia Canary) or a rolling tag (Vita3K's `continuous`). */
-    private val ONE_BUILD = setOf("azaharplus", "xenia", "vita3k")
+    /**
+     * Those read at one build: a branch's head (AzaharPlus, Xenia Canary), a rolling tag (Vita3K's
+     * `continuous`) or the newest of daily builds that all say the same version (Supermodel's).
+     */
+    private val ONE_BUILD = setOf("azaharplus", "xenia", "vita3k", "supermodel")
+
+    /** Those with fewer releases read: melonDS's melonDS.toml came with 1.0, so 1.0 and 1.1. */
+    private val RELEASES = mapOf("melonds" to 2)
 
     @Test
     fun everyEmulatorReadHasItsReleasesAndASettingsCountLikeItsOwn() {
@@ -18,19 +24,37 @@ class TuneTest {
         assertEquals(
             setOf(
                 "dolphin", "duckstation", "ppsspp", "pcsx2", "rpcs3", "devilutionx", "openrct2", "fallout2-ce", "retroarch", "eden", "citron",
-                "azahar", "azaharplus", "lime3ds", "mandarine", "cemu", "shadps4", "xenia", "vita3k",
+                "azahar", "azaharplus", "lime3ds", "mandarine", "cemu", "shadps4", "xenia", "vita3k", "flycast", "mame", "supermodel", "melonds",
             ),
             emulators,
         )
         // Each has as many as its own settings show; a reader that broke would find a handful.
         val least = mapOf(
             "devilutionx" to 40, "fallout2-ce" to 40, "azahar" to 90, "azaharplus" to 90, "lime3ds" to 70, "mandarine" to 80, "cemu" to 10, "shadps4" to 80, "vita3k" to 70,
+            "flycast" to 95, "mame" to 120, "melonds" to 60,
         )
         for (family in emulators) {
-            assertEquals(if (family in ONE_BUILD) 1 else 4, Tune.releases(family).size, family)
+            assertEquals(if (family in ONE_BUILD) 1 else RELEASES[family] ?: 4, Tune.releases(family).size, family)
             assertTrue(Tune.forEmulator(family).size > (least[family] ?: 150), "$family: ${Tune.forEmulator(family).size}")
             assertTrue(Tune.forEmulator(family).all { it.releases.isNotEmpty() }, family)
         }
+    }
+
+    @Test
+    fun noSignInIsEverOffered() {
+        // RetroArch's cheevos_password, Flycast's RetroAchievements Token and the like are left out where they are read.
+        val names = Regex("(?i)pass(?:word|wd|phrase)|token|secret|api_?key")
+        val held = Tune.families.flatMap { Tune.forEmulator(it) }.filter { it.kind == TuneKind.TEXT && names.containsMatchIn(it.key) }
+        assertEquals(emptyList(), held.map { it.id })
+    }
+
+    @Test
+    fun supermodelsSwitchesAreReadEveryWayItReadsThemAndWrittenAsItsOwnFile() {
+        assertEquals(listOf("true", "false", "true"), listOf("1", "0", "On").map { Tune.switchShown("supermodel", it) })
+        assertEquals(null, Tune.switchWritten("supermodel", true), "true and false, as its own Supermodel.ini has them")
+        val vsync = Tune.find("supermodel", null, "Global", "VSync")!!
+        assertEquals(Triple(TuneKind.SWITCH, "true", "Video"), Triple(vsync.kind, vsync.default, vsync.tab))
+        assertTrue(vsync.perGame, "a game's own section may hold any")
     }
 
     @Test

@@ -207,6 +207,37 @@ internal object Mame : SaveAdapter {
 }
 
 /**
+ * Supermodel: a game's NVRAM, `<rom set>.nv` (Src/OSD/SDL/Main.cpp `SaveNVRAM`), in the NVRAM
+ * folder its FileSystemPath.cpp names. On Linux: `NVRAM` where it starts (the game's folder, as
+ * Fuse and ES-DE start it) when a `Config` folder is there; else `~/.supermodel/NVRAM` when there is
+ * a `~/.supermodel`; else `~/.local/share/supermodel/NVRAM`, or `$XDG_DATA_HOME/supermodel/NVRAM`
+ * when that isn't there (as in its Flatpak). On Windows `NVRAM` beside the program; on a Mac
+ * where it starts, the game's folder.
+ */
+internal object Supermodel : SaveAdapter {
+    override val emulators = setOf("supermodel")
+
+    override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
+        val romDir = SaveAdapters.parent(q.romPath)
+        val local = "${env.home}/.local/share/supermodel"
+        val dir = SaveAdapters.chosen(env, q) ?: when (env.host) {
+            "WINDOWS" -> q.emulatorPath?.let { "${SaveAdapters.parent(it)}/NVRAM" }
+            "MACOS" -> "$romDir/NVRAM"
+            "ANDROID" -> null
+            else -> when {
+                env.isDirectory("$romDir/Config") -> "$romDir/NVRAM"
+                env.isDirectory("${env.home}/.supermodel") -> "${env.home}/.supermodel/NVRAM"
+                env.isDirectory(local) -> "$local/NVRAM"
+                env.isDirectory("${env.home}/.var/app/com.supermodel3.Supermodel/data/supermodel") -> "${env.home}/.var/app/com.supermodel3.Supermodel/data/supermodel/NVRAM"
+                else -> "${SaveAdapters.xdgData(env)}/supermodel/NVRAM"
+            }
+        } ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "model3.nvram", "Supermodel's folder wasn't found here. It keeps its files beside its program."))
+        val name = "${SaveAdapters.stem(q.romPath)}.nv"
+        return listOf(SaveSpot(SaveKind.SAVE, "model3.nvram", listOf(SpotFile(name, "$dir/$name"))))
+    }
+}
+
+/**
  * ScummVM: every game's saves in one folder, kept as one (each person's own). The folder is
  * `savepath` in scummvm.ini when set; else, as its save managers register it, `Saved games` in its
  * Application Data folder (beside the program when portable) on Windows, `Savegames` in

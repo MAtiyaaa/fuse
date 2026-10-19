@@ -73,10 +73,14 @@ internal class NativeSettingsStore(
         val json: Boolean = false,
         /** Its files are TOML (Xenia's), not ini. */
         val toml: Boolean = false,
+        /** Its files are MAME's ini, an option a line with its name padded before its value. */
+        val mameIni: Boolean = false,
         /** Its files are Eden's, each value kept in two or three keys ([io.github.matiyaaa.fuse.launch.settings.EdenConfig]). */
         val eden: Boolean = false,
         /** Its files are Azahar's, each value kept in two keys ([io.github.matiyaaa.fuse.launch.settings.AzaharConfig]). */
         val azahar: Boolean = false,
+        /** Its file is Supermodel.ini, its values read with their quotes and comments off ([io.github.matiyaaa.fuse.launch.settings.SupermodelIni]). */
+        val supermodel: Boolean = false,
         /** The installed version, for which of every setting it has. */
         val version: String? = null,
         /** How its files are changed: the emulator's own folders, or a port's in Fuse's folder of ports. */
@@ -92,6 +96,13 @@ internal class NativeSettingsStore(
         val aloneBySection: Boolean = false,
         /** A game's own file is XML with this root (Vita3K's `config`), whatever the file for every game is. */
         val gameXml: String? = null,
+        /**
+         * A game's settings kept in the file for every game, in a section of its own (Flycast's
+         * `[<game id>]`, each as `<section>.<key>`): where each goes, and the game it is, which its
+         * changes are recorded under apart from every game's.
+         */
+        val gameEntry: ((TuneSetting) -> Pair<String, String>)? = null,
+        val gameRecords: String? = null,
         /** A RetroArch game's core options, beside RetroArch's own settings. */
         val core: CoreTarget? = null,
     ) {
@@ -105,6 +116,7 @@ internal class NativeSettingsStore(
             // A text setting is written as a JSON string, whatever it holds.
             json -> io.github.matiyaaa.fuse.launch.settings.JsonText(content ?: "") { section, key -> Tune.find(family, null, section, key)?.kind == TuneKind.TEXT }
             toml -> io.github.matiyaaa.fuse.launch.settings.TomlText(content ?: "") { section, key -> Tune.find(family, null, section, key)?.kind == TuneKind.TEXT }
+            mameIni -> io.github.matiyaaa.fuse.launch.settings.MameIniText(content ?: "")
             else -> IniText(content ?: "", spaced = !(eden || azahar))
         }
 
@@ -113,6 +125,7 @@ internal class NativeSettingsStore(
             file == null -> null
             eden -> io.github.matiyaaa.fuse.launch.settings.EdenConfig.value(file, section, key, game, default)
             azahar -> io.github.matiyaaa.fuse.launch.settings.AzaharConfig.value(file, section, key, game, default)
+            supermodel -> file.values(section, key).lastOrNull()?.let(io.github.matiyaaa.fuse.launch.settings.SupermodelIni::value)
             else -> file.values(section, key).lastOrNull()
         }
 
@@ -122,6 +135,13 @@ internal class NativeSettingsStore(
             azahar -> io.github.matiyaaa.fuse.launch.settings.AzaharConfig.writes(section, key, value, game, default)
             else -> listOf(Triple(section, key, value))
         }
+
+        /** Where the every-setting [s] is kept in a game's own settings: its section and key. */
+        fun gameSectionOf(s: TuneSetting): String = gameEntry?.invoke(s)?.first ?: s.sectionIn(true)
+        fun gameKeyOf(s: TuneSetting): String = gameEntry?.invoke(s)?.second ?: s.keyIn(true)
+
+        /** What Fuse's changes to [path] are recorded under: a game's apart when it shares the file for every game. */
+        fun record(path: String): String = if (gameRecords != null && path == gamePath) "$path#game:$gameRecords" else path
 
         /** The file the every-setting [setting] is changed in by this view. */
         fun pathOf(setting: TuneSetting): String = gamePath ?: setting.file?.let { globals[it] } ?: globalPath
@@ -271,6 +291,42 @@ internal class NativeSettingsStore(
                 } else null
                 Target(family, name, files, io.github.matiyaaa.fuse.launch.settings.AzaharConfig.globalFile(config), gamePath, game?.titles?.original, azahar = true, version = version) to null
             }
+            "mame" -> {
+                // src/emu/emuopts.cpp, mame_options::parse_standard_inis: mame.ini, then a system's own <short name>.ini along its ini path.
+                val folder = files.mameIniFolder(installed) ?: return notSetUp()
+                val gamePath = game?.let { "$folder/${it.location.path.replace('\\', '/').substringAfterLast('/').substringBeforeLast('.')}.ini" }
+                Target(family, name, files, "$folder/mame.ini", gamePath, game?.titles?.original, mameIni = true, version = version) to null
+            }
+            "flycast" -> {
+                // emu.cfg; a game's own in its [<game id>] section there, each as <section>.<key> (core/cfg/option.h Option::load).
+                val config = files.flycastConfig(installed) ?: return notSetUp()
+                val gameId = if (game != null) {
+                    files.dreamcastGameId(game.location.path, game.tags.serial)
+                        ?: return no("Fuse can't tell which game this is", "Flycast keeps a game's own settings under its product number, which Fuse reads from GDI, ISO and BIN images. Compressed ones (CHD, CDI) don't say it here; change this game's settings in Flycast.")
+                } else null
+                val path = "$config/emu.cfg"
+                Target(
+                    family, name, files, path, if (gameId != null) path else null, game?.titles?.original, version = version,
+                    gameEntry = gameId?.let { id -> { s: TuneSetting -> id to "${s.section}.${s.key}" } }, gameRecords = gameId,
+                ) to null
+            }
+            "melonds" -> {
+                // melonDS.toml in its config folder (main.cpp pathInit); the first instance's own under [Instance0].
+                if (game != null) return no("melonDS has no settings of a game's own", "Every game plays with melonDS's settings for every game. Change them from melonDS's own page in Fuse, or in melonDS.")
+                val config = files.melondsConfig(installed) ?: return notSetUp()
+                Target(family, name, files, "$config/melonDS.toml", null, null, toml = true, version = version) to null
+            }
+            "supermodel" -> {
+                // Supermodel.ini in its Config folder (FileSystemPath.cpp); a game's own in its [ <rom set> ] section
+                // there, which Supermodel reads over [ Global ] (Main.cpp, MergeINISections).
+                val config = files.supermodelConfig(installed, game?.location?.path) ?: return notSetUp()
+                val path = "$config/Supermodel.ini"
+                val romSet = game?.location?.path?.replace('\\', '/')?.substringAfterLast('/')?.substringBeforeLast('.')
+                Target(
+                    family, name, files, path, if (romSet != null) path else null, game?.titles?.original, version = version, supermodel = true,
+                    gameEntry = romSet?.let { r -> { s: TuneSetting -> r to s.key } }, gameRecords = romSet,
+                ) to null
+            }
             "vita3k" -> {
                 // settings.cpp: config.yml in its config folder, a game's config/config_<title id>.xml (get_custom_config_path).
                 val config = files.vita3kConfig(installed) ?: return notSetUp()
@@ -368,7 +424,7 @@ internal class NativeSettingsStore(
             emulator = t.emulator,
             game = t.gameTitle,
             values = values,
-            canRestore = t.paths.any { data.owned.get(KIND, it).isNotEmpty() },
+            canRestore = t.paths.any { data.owned.get(KIND, t.record(it)).isNotEmpty() },
             profiles = if (t.gamePath == null) emptyList() else profiles(t.family).map { p ->
                 SettingProfileView(p.id, p.name, p.about, p.own, SettingProfiles.matches(p, current, settings), p.lines)
             },
@@ -453,7 +509,7 @@ internal class NativeSettingsStore(
         val t = target(id, emulator).first ?: return false
         var any = false
         for (path in t.paths) {
-            val records = data.owned.get(KIND, path)
+            val records = data.owned.get(KIND, t.record(path))
             if (records.isEmpty()) continue
             val text = fs.readText(path, MAX_TEXT)
             val file = t.text(text, path)
@@ -465,7 +521,7 @@ internal class NativeSettingsStore(
                 else -> t.writer.write(path, file.toString())
             }
             if (!done) return false
-            data.owned.set(KIND, path, emptySet())
+            data.owned.set(KIND, t.record(path), emptySet())
             data.owned.set(KIND, "$path#made", emptySet())
             any = true
         }
@@ -503,7 +559,7 @@ internal class NativeSettingsStore(
             game = t.gameTitle,
             release = if (known) Tune.releaseFor(t.family, t.version) else null,
             sections = sections + coreSections(t),
-            canRestore = t.paths.any { data.owned.get(KIND, it).isNotEmpty() },
+            canRestore = t.paths.any { data.owned.get(KIND, t.record(it)).isNotEmpty() },
             gameFileNote = when {
                 !t.forGame || fs.readText(t.gamePath!!, MAX_TEXT) != null -> null
                 t.family == "rpcs3" -> RPCS3_GAME_FILE
@@ -653,7 +709,7 @@ internal class NativeSettingsStore(
         val path = t.pathOf(s)
         val before = fs.readText(path, MAX_TEXT)
         val file = t.text(before, path)
-        var records = data.owned.get(KIND, path)
+        var records = data.owned.get(KIND, t.record(path))
         if (before == null && t.alone && t.forGame) {
             // Made as a copy of what the emulator read until now, every key of it recorded.
             val from = read(t, t.globalPath)
@@ -661,17 +717,18 @@ internal class NativeSettingsStore(
             // Read a section at a time, every one of its settings goes in, as the emulator's own dialog writes them.
             for (o in offered(t).map { it.first }.filter { it.perGame }) {
                 val v = from?.values(o.section, o.key)?.lastOrNull() ?: o.default.takeIf { t.aloneBySection }
-                v?.let { records = SettingsEdit.change(made, records, o.sectionIn(true), o.keyIn(true), written(o, it)) }
+                v?.let { records = SettingsEdit.change(made, records, t.gameSectionOf(o), t.gameKeyOf(o), written(o, it)) }
             }
-            for ((section, key, v) in t.keys(s.sectionIn(true), s.keyIn(true), written, true, s.default)) records = SettingsEdit.change(made, records, section, key, v)
+            for ((section, key, v) in t.keys(t.gameSectionOf(s), t.gameKeyOf(s), written, true, s.default)) records = SettingsEdit.change(made, records, section, key, v)
             if (!t.writer.write(path, made.toString())) return false
             data.owned.set(KIND, path, records)
             data.owned.set(KIND, "$path#made", setOf("file"))
             return true
         }
-        for ((section, key, v) in t.keys(s.sectionIn(t.forGame), s.keyIn(t.forGame), written, t.forGame, s.default)) records = SettingsEdit.change(file, records, section, key, v)
+        val (inSection, inKey) = if (t.forGame) t.gameSectionOf(s) to t.gameKeyOf(s) else s.section to s.key
+        for ((section, key, v) in t.keys(inSection, inKey, written, t.forGame, s.default)) records = SettingsEdit.change(file, records, section, key, v)
         if (!t.writer.write(path, file.toString())) return false
-        data.owned.set(KIND, path, records)
+        data.owned.set(KIND, t.record(path), records)
         if (before == null) data.owned.set(KIND, "$path#made", setOf("file"))
         return true
     }
@@ -679,19 +736,25 @@ internal class NativeSettingsStore(
     private fun valueOf(t: Target, s: TuneSetting, game: SettingsText?, global: SettingsText?): TuneValue {
         fun shown(v: String?) = if (s.kind == TuneKind.SWITCH) Tune.switchShown(s.family, v) else v
         val every = shown(t.valueIn(global, s.section, s.key, game = false, s.default))
-        val own = shown(if (s.perGame) t.valueIn(game, s.sectionIn(game = true), s.keyIn(game = true), game = true, s.default) else null)
+        val own = shown(if (s.perGame) t.valueIn(game, t.gameSectionOf(s), t.gameKeyOf(s), game = true, s.default) else null)
         val everyGame = every ?: shown(s.default)
         return when {
             own != null -> TuneValue(s, own, SettingSource.GAME, everyGame)
             // Read alone: what its own file hasn't got is the emulator's default, not the other file's.
-            t.alone && game != null && (!t.aloneBySection || game.hasSection(s.sectionIn(true))) -> TuneValue(s, shown(s.default), SettingSource.DEFAULT, everyGame)
+            t.alone && game != null && (!t.aloneBySection || game.hasSection(t.gameSectionOf(s))) -> TuneValue(s, shown(s.default), SettingSource.DEFAULT, everyGame)
             every != null -> TuneValue(s, every, SettingSource.EVERY_GAME, everyGame)
             else -> TuneValue(s, shown(s.default), SettingSource.DEFAULT, everyGame)
         }
     }
 
-    /** [value] as the emulator writes it: Dolphin's and PPSSPP's switches as `True` and `False`. */
+    /**
+     * [value] as the emulator writes it: Dolphin's and PPSSPP's switches as `True` and `False`,
+     * Supermodel's text in quotes, and a decimal in a TOML file with its point, as melonDS reads only
+     * a float as one (`Table::GetDouble`, `is_floating`).
+     */
     private fun written(s: TuneSetting, value: String): String = when {
+        s.family == "supermodel" && s.kind == TuneKind.TEXT -> io.github.matiyaaa.fuse.launch.settings.SupermodelIni.text(value)
+        s.family in TOML_POINT && s.kind == TuneKind.DECIMAL && Regex("^[+-]?\\d+$").matches(value.trim()) -> value.trim() + ".0"
         s.kind != TuneKind.SWITCH -> value.trim().takeIf { s.kind != TuneKind.TEXT } ?: value
         Tune.switchWritten(s.family, value.equals("true", ignoreCase = true)) != null -> Tune.switchWritten(s.family, value.equals("true", ignoreCase = true))!!
         s.default?.firstOrNull()?.isUpperCase() == true || s.family in setOf("dolphin", "ppsspp") -> value.lowercase().replaceFirstChar { it.uppercase() }
@@ -723,14 +786,17 @@ internal class NativeSettingsStore(
         const val TOGETHER = "emulator.together"
 
         /** The emulator a system's games are changed in when they don't start in one Fuse knows. */
-        val PLATFORM_FAMILY = mapOf("ps2" to "pcsx2", "psx" to "duckstation", "psp" to "ppsspp", "ngc" to "dolphin", "wii" to "dolphin", "ps3" to "rpcs3", "switch" to "eden", "3ds" to "azahar", "new-nintendo-3ds" to "azahar", "wiiu" to "cemu", "ps4" to "shadps4", "xbox360" to "xenia", "psvita" to "vita3k")
+        val PLATFORM_FAMILY = mapOf("ps2" to "pcsx2", "psx" to "duckstation", "psp" to "ppsspp", "ngc" to "dolphin", "wii" to "dolphin", "ps3" to "rpcs3", "switch" to "eden", "3ds" to "azahar", "new-nintendo-3ds" to "azahar", "wiiu" to "cemu", "ps4" to "shadps4", "xbox360" to "xenia", "psvita" to "vita3k", "dc" to "flycast", "model3" to "supermodel")
 
         val FAMILIES = NativeSettings.changeable
+
+        /** Those whose TOML reads a decimal only with its point. */
+        val TOML_POINT = setOf("melonds", "xenia")
 
         /** A Vita game's title id: four letters, five digits (PCSE00082). */
         val VITA_ID = Regex("^[A-Z]{4}\\d{5}$")
 
-        const val SUPPORTED = "Fuse changes settings in PCSX2, DuckStation, PPSSPP, Dolphin, RPCS3, RetroArch, Eden and Citron, Azahar and its family (AzaharPlus, Lime3DS, Mandarine), Cemu, shadPS4, Xenia and Vita3K."
+        const val SUPPORTED = "Fuse changes settings in PCSX2, DuckStation, PPSSPP, Dolphin, RPCS3, RetroArch, Eden and Citron, Azahar and its family (AzaharPlus, Lime3DS, Mandarine), Cemu, shadPS4, Xenia, Vita3K, Flycast, MAME, Supermodel and melonDS."
 
         /** What making a game's own RPCS3 file changes besides (rpcs3/Emu/System.cpp: "Found custom config. Ignoring database config"). */
         const val RPCS3_GAME_FILE = "A game's own RPCS3 settings take the place of the settings RPCS3's own database gives that game."

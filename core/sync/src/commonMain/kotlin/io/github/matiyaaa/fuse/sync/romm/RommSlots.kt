@@ -33,6 +33,7 @@ object RommSlots {
         format.startsWith("dc.vmu") -> "Dreamcast VMU"
         format == "x360.savedata" -> "Xbox 360 Save Data"
         format == "mame.nvram" -> "Arcade NVRAM"
+        format == "model3.nvram" -> "Model 3 NVRAM"
         format == "sram" -> "Cartridge Save"
         format == "scummvm.saves" -> "ScummVM Saves"
         else -> "Save"

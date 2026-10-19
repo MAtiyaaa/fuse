@@ -1238,7 +1238,18 @@ exactly.
   `app_init.cpp` sets it: a `portable` folder beside the program, else `$XDG_CONFIG_HOME/Vita3K` on
   Linux, the program's own folder on Windows and its Application Support folder on a Mac; a
   game's `config/config_<title id>.xml`, which Vita3K reads an element at a time, so Fuse makes it
-  with every setting it holds). A RetroArch game's core options are in
+  with every setting it holds); Flycast (`emu.cfg` in the config folder its saves are found by; a
+  game's own in its `[<product number>]` section there, each key as `<section>.<key>`, as
+  `Option::load` in `core/cfg/option.h` reads it); MAME (`mame.ini` in the first folder of its ini
+  path that has one, `$HOME/.mame` on Linux, Application Support's `mame` then `$HOME/.mame` on a
+  Mac and the program's folder or its `ini` on Windows; a system's own `<short name>.ini` beside
+  it); Supermodel (`Supermodel.ini` in its `Config` folder, as `FileSystemPath.cpp` finds it: a
+  `Config` folder where it starts, the game's own folder as Fuse and ES-DE start it, else
+  `~/.supermodel/Config`, else `~/.config/supermodel/Config` or `$XDG_CONFIG_HOME`'s, beside the
+  program on Windows and in the game's folder on a Mac; a game's own in its `[ <ROM set> ]`
+  section, read over `[ Global ]`); and melonDS (`melonDS.toml` in its config folder, as
+  `pathInit` in `main.cpp` sets it: a `portable` folder beside the program, else Qt's config
+  folder's `melonDS`; for every game only, the first instance's own under `[Instance0]`). A RetroArch game's core options are in
   `config/<core>/<content>.opt` (`runloop_init_core_options_path` in `runloop.c`), which RetroArch
   reads alone when it is there, so Fuse makes it as RetroArch's Quick Menu does, with every option
   as the game has it now from the folder's `.opt`, the core's own `<core>.opt`, or
@@ -1274,7 +1285,17 @@ exactly.
   and `GetOverrideableFields` (those a game's file may hold), as a Linux build compiles it; Xenia's
   `DEFINE_*` settings anywhere in `src/xenia`, from a sparse checkout of its tree; and Vita3K's
   `CONFIG_INDIVIDUAL` list with `load_custom_config` for what a game's file holds and the name it
-  has there. Ryujinx isn't read yet: its source is only on git.ryujinx.app. Only
+  has there; Flycast's `Option<T>` declarations in `core/cfg/option.cpp` and the classes of their
+  own in `option.h` (its renderer one of `core/types.h`'s `RenderType`s), with the names, help,
+  ranges and choices its `core/ui/settings_*.cpp` screens give them; MAME's option tables
+  (`s_option_entries[]` in `src/emu/emuopts.cpp`, `osdobj_common.cpp` and `sdlopts.cpp`, paths and
+  commands left out); Supermodel's `DefaultConfig()` in `Src/OSD/SDL/Main.cpp`, with what each does
+  from its `-help` text, at its newest daily build (every one is 0.3a); and melonDS's every `Get*`
+  read in its Qt frontend, by the table each is read from, with `Config.cpp`'s defaults and ranges
+  and the names, help and choices of its dialogs' `.ui` files. A text setting whose key names a
+  password, token, secret or API key (a sign-in: RetroArch's RetroAchievements and WebDAV ones,
+  Flycast's RetroAchievements token) is left out, so Fuse never shows or writes one. Ryujinx isn't
+  read yet: its source is only on git.ryujinx.app. Only
   names, kinds, ranges, choices and defaults are taken, no code. The installed version decides
   which settings show (the newest release read that is no newer than it; when Fuse can't tell the
   version, every release's, those not every release has locked with which have them). On Linux the
@@ -1295,8 +1316,14 @@ exactly.
   `%20`: Fuse reads and writes each as Azahar does (`AzaharConfig`). shadPS4's JSON goes through
   `JsonText`: a value changed where it is, a text one kept a string, a new member last in its
   group as nlohmann's `dump(2)` lays it out. Xenia's TOML goes through `TomlText` (the value only,
-  its comment kept) and Vita3K's XML through `XmlText` (an attribute changed where it is, new ones
-  last, a new file as pugixml starts one). Fuse keeps what each key held before it first changed it, and
+  its comment kept; melonDS's root table as the section with no name, a decimal written with its
+  point, as melonDS's toml11 reads only a float as one) and Vita3K's XML through `XmlText` (an
+  attribute changed where it is, new ones last, a new file as pugixml starts one). Flycast's
+  switches are written `yes` and `no` and MAME's `1` and `0`, as each writes its own; a MAME ini
+  goes through `MameIniText` (each option's name padded to 25 characters, as
+  `core_options::output_ini` writes it); and Supermodel's values are read with their quotes and
+  `;` comments off and a switch every way it reads one (`SupermodelIni`), text written in quotes
+  as its own file has it. Fuse keeps what each key held before it first changed it, and
   Put Back What Fuse Changed restores exactly that (a key changed in the emulator since stays); a
   game's own file Fuse made is taken away again once nothing it set is left. RPCS3 gives a game
   with its own settings file none of the settings from its own database

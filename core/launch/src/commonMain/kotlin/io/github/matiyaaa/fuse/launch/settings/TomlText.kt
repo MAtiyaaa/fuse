@@ -7,7 +7,8 @@ package io.github.matiyaaa.fuse.launch.settings
  * comment itself stay as they were, byte for byte. A section is a table's header as written, a key
  * a bare key in it. A value is read as written (a string's text unescaped); one Fuse writes is a
  * basic string when [isText] says the setting holds text, else as it is (`true`, `60`, `1.5`).
- * A new key goes after the last one of its table, a new table at the end after a blank line.
+ * A new key goes after the last one of its table, a new table at the end after a blank line. The
+ * root table, the keys before any header (melonDS's `LimitFPS`), is the section "".
  */
 class TomlText(text: String, private val isText: (section: String, key: String) -> Boolean = { _, _ -> false }) : SettingsText {
     private val crlf = text.contains("\r\n")
@@ -40,6 +41,18 @@ class TomlText(text: String, private val isText: (section: String, key: String) 
             return
         }
         val written = "$key = ${encode(value, isText(section, key))}"
+        if (section.isEmpty()) {
+            // After the root table's last key; with none yet, first, a blank line before any table.
+            val first = lines.indexOfFirst(::isHeader).let { if (it < 0) lines.size else it }
+            val last = (0 until first).lastOrNull { entry(lines[it]) != null }
+            if (last != null) {
+                lines.add(last + 1, written)
+            } else {
+                lines.add(0, written)
+                if (lines.size > 1 && isHeader(lines[1])) lines.add(1, "")
+            }
+            return
+        }
         val header = headerAt(section)
         if (header == null) {
             if (lines.isNotEmpty() && lines.last().isNotBlank()) lines += ""
@@ -65,11 +78,12 @@ class TomlText(text: String, private val isText: (section: String, key: String) 
 
     override fun hasEntries(): Boolean = lines.any { entry(it) != null }
 
-    override fun hasSection(section: String): Boolean = headerAt(section) != null
+    override fun hasSection(section: String): Boolean = section.isEmpty() || headerAt(section) != null
 
     override fun separatesNewSection(): Boolean = lines.isNotEmpty() && lines.last().isNotBlank()
 
     override fun removeEmptySection(section: String, blankBefore: Boolean): Boolean {
+        if (section.isEmpty()) return false
         val header = headerAt(section) ?: return false
         var i = header + 1
         while (i < lines.size && !isHeader(lines[i])) {
@@ -95,7 +109,7 @@ class TomlText(text: String, private val isText: (section: String, key: String) 
     }.takeIf { it >= 0 }
 
     private fun find(section: String, key: String): Int? {
-        val header = headerAt(section) ?: return null
+        val header = if (section.isEmpty()) -1 else headerAt(section) ?: return null
         var i = header + 1
         while (i < lines.size && !isHeader(lines[i])) {
             if (entry(lines[i])?.key == key) return i

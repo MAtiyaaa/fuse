@@ -385,6 +385,21 @@ class MoreAdaptersTest {
     }
 
     @Test
+    fun supermodelsNvramIsWhereItsFileSystemPathPutsIt() {
+        val sm = SaveAdapters.forEmulator("linux.supermodel")!!
+        val game = q("model3", "/roms/model3/daytona2.zip", "linux.supermodel")
+        fun path(env: FakeEnv, query: SaveQuery = game) = sm.locate(query, env).single().files.single().path
+        // Nothing of its own yet: the data folder, ~/.local/share/supermodel/NVRAM.
+        assertEquals("/home/mo/.local/share/supermodel/NVRAM/daytona2.nv", path(FakeEnv("LINUX", "/home/mo")))
+        // ~/.supermodel before that, and a Config folder in the game's folder (where it starts) before everything.
+        assertEquals("/home/mo/.supermodel/NVRAM/daytona2.nv", path(FakeEnv("LINUX", "/home/mo", files = mapOf("/home/mo/.supermodel/" to "", "/home/mo/.local/share/supermodel/" to ""))))
+        assertEquals("/roms/model3/NVRAM/daytona2.nv", path(FakeEnv("LINUX", "/home/mo", files = mapOf("/roms/model3/Config/" to "", "/home/mo/.supermodel/" to ""))))
+        // On Windows, beside the program.
+        val win = game.copy(emulatorId = "windows.supermodel", emulatorPath = "C:/Emu/Supermodel/Supermodel.exe")
+        assertEquals("C:/Emu/Supermodel/NVRAM/daytona2.nv", path(FakeEnv("WINDOWS", "C:/Users/mo"), win))
+    }
+
+    @Test
     fun xeniaOnLinuxKeepsItsContentInTheDataFolder() {
         // Without XDG_DATA_HOME, Xenia's user folder is ~/.local/share (filesystem_posix.cc), not the home folder.
         val content = "/home/mo/.local/share/Xenia/content"

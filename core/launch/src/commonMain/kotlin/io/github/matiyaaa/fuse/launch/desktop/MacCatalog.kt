@@ -77,6 +77,7 @@ object MacCatalog {
         port("sharpemu", listOf("SharpEmu*.app"), programs = listOf("SharpEmu")) { it.copy(source = LinuxCatalog.SHARPEMU_SOURCE) },
         port("mednafen", emptyList(), programs = listOf("mednafen")),
         port("mame", emptyList(), programs = listOf("mame")),
+        port("supermodel", emptyList(), programs = listOf("supermodel")),
         port("scummvm", listOf("ScummVM.app"), programs = listOf("scummvm")),
         port("pico8", listOf("PICO-8.app"), rule = "PICO-8"),
         port("ruffle", listOf("Ruffle.app")),

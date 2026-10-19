@@ -377,6 +377,17 @@ object LinuxCatalog {
             confidence = VERIFIED_ESDE, homepage = "https://www.mamedev.org/",
         ),
         LinuxEmulatorDef(
+            id = "linux.supermodel", name = "Supermodel", platforms = platforms("model3"),
+            detection = detect(
+                bin = listOf("supermodel"), flatpak = listOf("com.supermodel3.Supermodel"), appImage = listOf("supermodel*.appimage"),
+                dirBin = listOf("Supermodel/supermodel"),
+            ),
+            // From the game's folder, as ES-DE starts it: a `Config` folder there is Supermodel's own (FileSystemPath.cpp).
+            modes = listOf(file("-log-output={ROMDIR}/Config/Supermodel.log", "{ROM}", workingDir = "{ROMDIR}")),
+            source = esde("SUPERMODEL, model3 (Supermodel (Standalone)): %STARTDIR%=%GAMEDIR% %EMULATOR_SUPERMODEL% -log-output=%GAMEDIR%/Config/Supermodel.log %ROM%"),
+            confidence = VERIFIED_ESDE, homepage = "https://www.supermodel3.com/",
+        ),
+        LinuxEmulatorDef(
             id = "linux.scummvm", name = "ScummVM", platforms = platforms("scummvm"),
             detection = detect(bin = listOf("scummvm"), flatpak = listOf("org.scummvm.ScummVM")),
             modes = listOf(file("{BASENAME}", ext = setOf("scummvm", "svm"), workingDir = "{ROMDIR}")),

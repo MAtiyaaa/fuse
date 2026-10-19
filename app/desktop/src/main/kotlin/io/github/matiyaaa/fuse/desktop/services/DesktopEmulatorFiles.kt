@@ -492,6 +492,88 @@ class DesktopEmulatorFiles(
     }
 
     /**
+     * The folder of MAME's ini path that has its mame.ini (src/osd/sdl/sdlopts.cpp `INI_PATH`):
+     * `$HOME/.mame` on Linux, `$HOME/Library/Application Support/mame` then `$HOME/.mame` on a Mac,
+     * and the program's own folder or its `ini` on Windows (`.;ini;ini/presets`, from the folder it
+     * starts in, its own).
+     */
+    override suspend fun mameIniFolder(installed: InstalledEmulator): String? = withContext(Dispatchers.IO) {
+        val program = File(installed.appId).takeIf { installed.detectedVia != "Flatpak" && it.isAbsolute }
+        val flatpak = if (installed.detectedVia == "Flatpak") File(home, ".var/app/${installed.appId}/.mame") else null
+        val candidates = when (os) {
+            DesktopOs.WINDOWS -> listOfNotNull(program?.parentFile, program?.parentFile?.let { File(it, "ini") })
+            DesktopOs.MACOS -> listOf(File(home, "Library/Application Support/mame"), File(home, ".mame"))
+            DesktopOs.LINUX -> listOfNotNull(flatpak, File(home, ".mame"))
+        }
+        val folder = candidates.firstOrNull { File(it, "mame.ini").isFile } ?: return@withContext null
+        roots += folder.absolutePath
+        folder.absolutePath.replace('\\', '/').trimEnd('/')
+    }
+
+    /**
+     * melonDS's config folder, as its main.cpp `pathInit` finds it: a `portable` folder beside the
+     * program (beside its .app on a Mac) when there is one; else Qt's config folder's `melonDS`
+     * ($XDG_CONFIG_HOME or ~/.config on Linux, its Flatpak's own, ~/Library/Preferences on a Mac,
+     * %LOCALAPPDATA% on Windows), or the program's own folder for a Windows build made portable.
+     * Only once it has written its melonDS.toml.
+     */
+    override suspend fun melondsConfig(installed: InstalledEmulator): String? = withContext(Dispatchers.IO) {
+        val program = File(installed.appId).takeIf { installed.detectedVia != "Flatpak" && it.isAbsolute }
+        val besideApp = program?.absolutePath?.substringBefore(".app/", "")?.takeIf { it.isNotEmpty() }?.let { File(it).parentFile }
+        val portable = (besideApp ?: program?.parentFile)?.let { File(it, "portable") }?.takeIf { it.isDirectory }
+        val candidates = listOfNotNull(portable) + when (os) {
+            DesktopOs.WINDOWS -> listOfNotNull(program?.parentFile, env["LOCALAPPDATA"]?.let { File(it, "melonDS") })
+            DesktopOs.MACOS -> listOf(File(home, "Library/Preferences/melonDS"))
+            DesktopOs.LINUX -> if (installed.detectedVia == "Flatpak") listOf(File(home, ".var/app/${installed.appId}/config/melonDS")) else
+                listOf(env["XDG_CONFIG_HOME"]?.takeIf { it.startsWith("/") }?.let { File(it, "melonDS") } ?: File(home, ".config/melonDS"))
+        }
+        // With a portable folder, that one alone; else the first that has melonDS.toml.
+        val config = (if (portable != null) listOf(portable) else candidates).firstOrNull { File(it, "melonDS.toml").isFile } ?: return@withContext null
+        roots += config.absolutePath
+        config.absolutePath.replace('\\', '/').trimEnd('/')
+    }
+
+    /**
+     * Supermodel's Config folder, as its FileSystemPath.cpp finds it. On Linux: a `Config` folder
+     * where it is started (the game's own folder, as Fuse starts it); else `~/.supermodel/Config`
+     * when there is a `~/.supermodel`; else `~/.config/supermodel/Config`, or
+     * `$XDG_CONFIG_HOME/supermodel/Config` when `~/.config/supermodel` isn't there and that is set
+     * (as it is in a Flatpak, which doesn't see the others). On Windows and a Mac, the `Config` of
+     * the folder it starts in: its own on Windows, the game's on a Mac. Only once it has written its
+     * Supermodel.ini.
+     */
+    override suspend fun supermodelConfig(installed: InstalledEmulator, romPath: String?): String? = withContext(Dispatchers.IO) {
+        val program = File(installed.appId).takeIf { installed.detectedVia != "Flatpak" && it.isAbsolute }
+        val atGame = romPath?.let { File(it).absoluteFile.parentFile }?.let { File(it, "Config") }
+        val config = when (os) {
+            DesktopOs.WINDOWS -> program?.parentFile?.let { File(it, "Config") }
+            DesktopOs.MACOS -> atGame
+            DesktopOs.LINUX -> when {
+                atGame?.isDirectory == true -> atGame
+                installed.detectedVia == "Flatpak" -> File(home, ".var/app/${installed.appId}/config/supermodel/Config")
+                File(home, ".supermodel").isDirectory -> File(home, ".supermodel/Config")
+                !File(home, ".config/supermodel").isDirectory && env["XDG_CONFIG_HOME"]?.startsWith("/") == true -> File(env.getValue("XDG_CONFIG_HOME"), "supermodel/Config")
+                else -> File(home, ".config/supermodel/Config")
+            }
+        } ?: return@withContext null
+        if (!File(config, "Supermodel.ini").isFile) return@withContext null
+        roots += config.absolutePath
+        config.absolutePath.replace('\\', '/').trimEnd('/')
+    }
+
+    /** Flycast's emu.cfg folder, found as Fuse finds its saves ([io.github.matiyaaa.fuse.sync.flycastConfig]). */
+    override suspend fun flycastConfig(installed: InstalledEmulator): String? = withContext(Dispatchers.IO) {
+        val program = installed.appId.takeIf { installed.detectedVia != "Flatpak" && File(it).isAbsolute }
+        val config = runCatching { io.github.matiyaaa.fuse.sync.flycastConfig(saveEnv(), program) }.getOrNull() ?: return@withContext null
+        roots += File(config).absolutePath
+        config.replace('\\', '/').trimEnd('/')
+    }
+
+    override suspend fun dreamcastGameId(path: String, serial: String?): String? = withContext(Dispatchers.IO) {
+        runCatching { io.github.matiyaaa.fuse.sync.dreamcastProductNumber(path, saveEnv()) }.getOrNull() ?: serial?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
+    /**
      * Vita3K's config folder, as its app_init.cpp sets it: a `portable` folder beside the program
      * (beside the AppImage for one) when there is one; else on Linux $XDG_CONFIG_HOME/Vita3K or
      * ~/.config/Vita3K, on Windows the program's own folder, and on a Mac the program's Resources

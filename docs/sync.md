@@ -328,6 +328,7 @@ Saves are found by per-emulator adapters. Fuse One and Syncthing use the same on
 | Redream | Its shared VMU, `vmu0.bin`, beside its program | |
 | Yaba Sanshiro, Saturn emulators | Backup RAM | |
 | MAME | NVRAM by set, in `nvram_directory` from `mame.ini` | |
+| Supermodel | NVRAM by ROM set, `<set>.nv` in its NVRAM folder: beside a `Config` folder in the game's folder, else `~/.supermodel/NVRAM`, else the XDG data folder's `supermodel/NVRAM` (beside the program on Windows) | |
 | ScummVM | Its saves folder, `savepath` from `scummvm.ini` when set | |
 | RPCS3 (and on Android) | dev_hdd0 savedata by serial | |
 | Vita3K | ux0 savedata by title id: its `portable/fs`, the `pref-path` in its `config.yml`, or its own folder | |

@@ -508,6 +508,25 @@ interface EmulatorFiles {
     /** A 3DS game's title id from its serial or its file's own header ([io.github.matiyaaa.fuse.sync.threeDsTitleId]); null when unreadable. */
     suspend fun threeDsTitleId(path: String, serial: String?): String? = null
 
+    /** The folder MAME reads its `mame.ini` from for [installed] (the first of its ini path that has one); null until it has one. */
+    suspend fun mameIniFolder(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
+
+    /** Flycast's config folder for [installed] (where its `emu.cfg` is); null until it has one. */
+    suspend fun flycastConfig(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
+
+    /** A Dreamcast game's id as Flycast names it: its product number ([io.github.matiyaaa.fuse.sync.dreamcastProductNumber]); null when unread. */
+    suspend fun dreamcastGameId(path: String, serial: String?): String? = null
+
+    /** melonDS's config folder for [installed] (where its melonDS.toml is); null until it has written melonDS.toml. */
+    suspend fun melondsConfig(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
+
+    /**
+     * Supermodel's Config folder for [installed] (where its Supermodel.ini is), for a game at
+     * [romPath] when there is one (Supermodel looks first for a `Config` folder where it is started,
+     * the game's own folder); null until it has written Supermodel.ini.
+     */
+    suspend fun supermodelConfig(installed: io.github.matiyaaa.fuse.model.InstalledEmulator, romPath: String?): String? = null
+
     /** Vita3K's config folder for [installed] (where its `config.yml` and `config/` are); null until it has written `config.yml`. */
     suspend fun vita3kConfig(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
 

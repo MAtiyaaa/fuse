@@ -44,6 +44,19 @@ data class Found(
     }
 }
 
+/**
+ * A sign-in an emulator keeps among its settings (RetroArch's `cheevos_password` and
+ * `webdav_password`, Flycast's RetroAchievements `Token`): text whose key names a password, token,
+ * secret or key to a service. Fuse never offers one, so none is shown or written by it.
+ */
+object Credentials {
+    private val NAMES = Regex("""(?i)pass(?:word|wd|phrase)|token|secret|api_?key""")
+
+    fun named(key: String): Boolean = NAMES.containsMatchIn(key)
+
+    fun held(f: Found): Boolean = f.kind == Kind.STRING && named(f.key)
+}
+
 /** Small pieces of reading C and C++ source as text: no compiler, only what the declarations need. */
 internal object Source {
     /**

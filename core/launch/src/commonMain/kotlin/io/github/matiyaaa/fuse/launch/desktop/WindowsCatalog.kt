@@ -96,6 +96,8 @@ object WindowsCatalog {
         ),
         port("mednafen", "mednafen.exe"),
         port("mame", "mame.exe", fromItsFolder = true),
+        // %STARTDIR%=%EMUDIR% Supermodel.exe %ROM%: its Config folder is beside it.
+        port("supermodel", "Supermodel.exe", fromItsFolder = true) { d -> d.copy(modes = listOf(file("{ROM}").copy(spec = LinuxCommandSpec(listOf("{ROM}"), workingDir = "{EMUDIR}")))) },
         port("scummvm", "scummvm.exe"),
         port("pico8", "pico8.exe", rule = "PICO-8"),
         port("ruffle", "ruffle.exe"),

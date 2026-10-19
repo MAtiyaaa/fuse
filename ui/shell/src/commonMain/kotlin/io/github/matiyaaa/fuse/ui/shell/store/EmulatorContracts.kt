@@ -58,6 +58,7 @@ object EmulatorContracts {
                 val settings = when {
                     // Cemu's for every game are its own Options; Fuse changes a game's profile.
                     computer && NativeSettings.familyOf(a.id.value) == "cemu" -> Cell(Level.SUPPORTED, "for one game (its profile)")
+                    computer && NativeSettings.familyOf(a.id.value) == "melonds" -> Cell(Level.SUPPORTED, "for every game (it has none of a game's own)")
                     computer && NativeSettings.familyOf(a.id.value) in NativeSettings.changeable -> Cell(Level.SUPPORTED, "for every game and for one game")
                     computer -> Cell(Level.NOT_SUPPORTED, "changed in the emulator")
                     else -> Cell(Level.NOT_SUPPORTED, "changed in the emulator on Android")

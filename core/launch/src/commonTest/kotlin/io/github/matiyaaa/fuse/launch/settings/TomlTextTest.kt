@@ -29,6 +29,25 @@ class TomlTextTest {
     }
 
     @Test
+    fun theRootTablesKeysAreTheSectionWithNoName() {
+        // melonDS.toml as toml11 writes it: the root table's keys, then its tables.
+        val melon = "LimitFPS = true\nTargetFPS = 60.0\n\n[3D.GL]\nScaleFactor = 1\n"
+        val t = TomlText(melon)
+        assertEquals(listOf("true"), t.values("", "LimitFPS"))
+        assertEquals(emptyList(), t.values("", "ScaleFactor"), "a table's key isn't the root's")
+        t.set("", "TargetFPS", "120.0")
+        t.set("", "AudioSync", "true")
+        t.set("3D.GL", "ScaleFactor", "4")
+        assertEquals("LimitFPS = true\nTargetFPS = 120.0\nAudioSync = true\n\n[3D.GL]\nScaleFactor = 4\n", t.toString())
+        assertTrue(t.removeKey("", "AudioSync"))
+        assertFalse(t.removeEmptySection("", true), "the root table stays")
+        // A file with no root keys yet gets its first one at the top, a blank line before the first table.
+        val tables = TomlText("[Emu]\nDirectBoot = true\n")
+        tables.set("", "LimitFPS", "false")
+        assertEquals("LimitFPS = false\n\n[Emu]\nDirectBoot = true\n", tables.toString())
+    }
+
+    @Test
     fun aValueIsChangedWhereItIsAndItsCommentStays() {
         val t = TomlText(config)
         t.set("GPU", "framerate_limit", "60")

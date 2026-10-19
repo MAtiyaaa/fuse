@@ -112,6 +112,78 @@ class DesktopEmulatorFilesTest {
     }
 
     @Test
+    fun flycastsAndVita3ksConfigFoldersAreWhereTheirOwnPathsPutThem() = runBlocking {
+        val linux = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        val flycast = InstalledEmulator(EmulatorId("linux.flycast"), "Flycast", Host.LINUX, "/usr/bin/flycast", platforms = setOf(PlatformId("dc")), detectedVia = "PATH")
+        assertNull(linux.flycastConfig(flycast), "not until it has its emu.cfg")
+        val fly = File(home, ".config/flycast").apply { mkdirs(); File(this, "emu.cfg").writeText("[config]\n") }
+        assertEquals(p(fly), linux.flycastConfig(flycast))
+        val vita = InstalledEmulator(EmulatorId("linux.vita3k"), "Vita3K", Host.LINUX, File(home, "Apps/Vita3K/Vita3K").absolutePath, platforms = setOf(PlatformId("psvita")), detectedVia = "Folder")
+        val config = File(home, ".config/Vita3K").apply { mkdirs(); File(this, "config.yml").writeText("v-sync: true\n") }
+        assertEquals(p(config), linux.vita3kConfig(vita))
+        // A portable folder beside the program is used for everything.
+        val portable = File(home, "Apps/Vita3K/portable").apply { mkdirs(); File(this, "config.yml").writeText("v-sync: true\n") }
+        assertEquals(p(portable), linux.vita3kConfig(vita))
+    }
+
+    @Test
+    fun melonDsConfigFolderIsWhereItsPathInitPutsIt() = runBlocking {
+        fun toml(dir: File) = dir.apply { mkdirs(); File(this, "melonDS.toml").writeText("LimitFPS = true\n") }
+        val linux = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        val program = File(home, "Apps/melonDS/melonDS").apply { parentFile.mkdirs(); writeText("") }
+        val melon = InstalledEmulator(EmulatorId("linux.melonds"), "melonDS", Host.LINUX, program.absolutePath, platforms = setOf(PlatformId("nds")), detectedVia = "Folder")
+        assertNull(linux.melondsConfig(melon), "not until it has written melonDS.toml")
+        val config = toml(File(home, ".config/melonDS"))
+        assertEquals(p(config), linux.melondsConfig(melon))
+        // A portable folder beside the program is used instead.
+        val portable = toml(File(program.parentFile, "portable"))
+        assertEquals(p(portable), linux.melondsConfig(melon))
+        val flat = InstalledEmulator(EmulatorId("linux.melonds"), "melonDS", Host.LINUX, "net.kuribo64.melonDS", platforms = setOf(PlatformId("nds")), detectedVia = "Flatpak")
+        val sandboxed = toml(File(home, ".var/app/net.kuribo64.melonDS/config/melonDS"))
+        assertEquals(p(sandboxed), linux.melondsConfig(flat))
+        // On Windows, %LOCALAPPDATA%'s, or beside a build made portable.
+        val local = File(home, "AppData/Local")
+        val windows = DesktopEmulatorFiles(DesktopOs.WINDOWS, env = mapOf("LOCALAPPDATA" to local.absolutePath), home = home.absolutePath, backups = backups)
+        val exe = File(home, "Emu/melonDS/melonDS.exe").apply { parentFile.mkdirs(); writeText("") }
+        val win = InstalledEmulator(EmulatorId("windows.melonds"), "melonDS", Host.WINDOWS, exe.absolutePath, platforms = setOf(PlatformId("nds")), detectedVia = "Folder")
+        val appData = toml(File(local, "melonDS"))
+        assertEquals(p(appData), windows.melondsConfig(win))
+        val beside = toml(exe.parentFile)
+        assertEquals(p(beside), windows.melondsConfig(win))
+    }
+
+    @Test
+    fun supermodelsConfigFolderIsWhereItsFileSystemPathPutsIt() = runBlocking {
+        val sm = InstalledEmulator(EmulatorId("linux.supermodel"), "Supermodel", Host.LINUX, "/usr/bin/supermodel", platforms = setOf(PlatformId("model3")), detectedVia = "PATH")
+        fun ini(dir: File) = dir.apply { mkdirs(); File(this, "Supermodel.ini").writeText("[ Global ]\n") }
+        val rom = File(home, "roms/model3/daytona2.zip").apply { parentFile.mkdirs(); writeBytes(ByteArray(4)) }
+        // With nothing of its own yet, ~/.config/supermodel/Config; $XDG_CONFIG_HOME's only when that isn't there.
+        val xdg = File(home, "xdg")
+        val linux = DesktopEmulatorFiles(DesktopOs.LINUX, env = mapOf("XDG_CONFIG_HOME" to xdg.absolutePath), home = home.absolutePath, backups = backups)
+        assertNull(linux.supermodelConfig(sm, null), "not until it has written Supermodel.ini")
+        val atXdg = ini(File(xdg, "supermodel/Config"))
+        assertEquals(p(atXdg), linux.supermodelConfig(sm, null))
+        val config = ini(File(home, ".config/supermodel/Config"))
+        assertEquals(p(config), linux.supermodelConfig(sm, rom.absolutePath))
+        // ~/.supermodel before those, and a Config folder where it starts (the game's) before everything.
+        val dot = ini(File(home, ".supermodel/Config"))
+        assertEquals(p(dot), linux.supermodelConfig(sm, rom.absolutePath))
+        val atGame = ini(File(rom.parentFile, "Config"))
+        assertEquals(p(atGame), linux.supermodelConfig(sm, rom.absolutePath))
+        assertEquals(p(dot), linux.supermodelConfig(sm, null), "every game's, with no game to start from")
+        // The Flatpak's own config folder.
+        val flat = InstalledEmulator(EmulatorId("linux.supermodel"), "Supermodel", Host.LINUX, "com.supermodel3.Supermodel", platforms = setOf(PlatformId("model3")), detectedVia = "Flatpak")
+        val sandboxed = ini(File(home, ".var/app/com.supermodel3.Supermodel/config/supermodel/Config"))
+        assertEquals(p(sandboxed), linux.supermodelConfig(flat, null))
+        // On Windows, the Config folder beside it.
+        val exe = File(home, "Supermodel/Supermodel.exe").apply { parentFile.mkdirs(); writeText("") }
+        val windows = DesktopEmulatorFiles(DesktopOs.WINDOWS, env = emptyMap(), home = home.absolutePath, backups = backups)
+        val win = InstalledEmulator(EmulatorId("windows.supermodel"), "Supermodel", Host.WINDOWS, exe.absolutePath, platforms = setOf(PlatformId("model3")), detectedVia = "Folder")
+        val beside = ini(File(exe.parentFile, "Config"))
+        assertEquals(p(beside), windows.supermodelConfig(win, rom.absolutePath))
+    }
+
+    @Test
     fun xeniasStorageRootIsBesideItWhenPortableElseInTheDataFolder() = runBlocking {
         val linux = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
         val program = File(home, "Apps/xenia/xenia_canary").apply { parentFile.mkdirs(); writeText("") }

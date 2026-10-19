@@ -65,6 +65,12 @@ fun threeDsTitleId(serial: String?, path: String, env: SaveEnvironment): String?
  */
 fun wiiUTitleId(serial: String?, path: String, env: SaveEnvironment): String? = Cemu.titleId(serial, path, env)
 
+/** A Dreamcast disc's product number from its boot header, which Flycast names a game by (`settings.content.gameId`); null when unread. */
+fun dreamcastProductNumber(path: String, env: SaveEnvironment): String? = DreamcastDisc.productNumber(env, path)
+
+/** Flycast's `emu.cfg` folder, as its winmain.cpp, osx-main.mm and linux-dist main.cpp have it; null when none has its emu.cfg. */
+fun flycastConfig(env: SaveEnvironment, emulatorPath: String?): String? = Flycast.configFolder(env, emulatorPath)
+
 /** Cemu's data folder and the folder its settings.xml is in, as its CemuApp.cpp sets them; null when neither is there. */
 fun cemuFolders(env: SaveEnvironment, emulatorPath: String?): Pair<String, String>? = Cemu.folders(env, emulatorPath)
 
@@ -149,7 +155,7 @@ interface SaveAdapter {
 object SaveAdapters {
     val all: List<SaveAdapter> = listOf(
         RetroArch, Lemuroid, DuckStation, Pcsx2, Ppsspp, Dolphin, MelonDs, NooDs, Mgba, SkyEmu, Mednafen, MyBoy, UnpublishedHandheld, Rpcs3, Vita3k, ShadPs4, Flycast,
-        DraStic, ExAlpha, Mupen64, Redream, Epsxe, Fpse, PlayPs2, SaturnBackup, Mame, ScummVm,
+        DraStic, ExAlpha, Mupen64, Redream, Epsxe, Fpse, PlayPs2, SaturnBackup, Mame, Supermodel, ScummVm,
         ThreeDs, SwitchNand, Ryujinx, Cemu, Xenia, AnyPs5, PortSaves,
     )
 
@@ -821,6 +827,8 @@ internal object ShadPs4 : SaveAdapter {
  */
 internal object Flycast : SaveAdapter {
     override val emulators = setOf("flycast")
+
+    internal fun configFolder(env: SaveEnvironment, emuPath: String?): String? = configDirs(env, emuPath).firstOrNull { env.exists("$it/emu.cfg") }
 
     private fun configDirs(env: SaveEnvironment, emuPath: String?): List<String> = when (env.host) {
         "WINDOWS" -> listOfNotNull(emuPath?.let(SaveAdapters::parent))

@@ -154,12 +154,14 @@ object Tune {
 
     /**
      * How [family] writes a switch, on then off, where it isn't `true` and `false`: DevilutionX
-     * `1` and `0` (`Ini::set(bool)`, Source/utils/ini.cpp).
+     * `1` and `0` (`Ini::set(bool)`, Source/utils/ini.cpp), Flycast `yes` and `no` (core/cfg/ini.h
+     * `IniFile::set`), MAME `1` and `0` (its options' `BOOLEAN`).
      */
-    private val SWITCH_WORDS = mapOf("devilutionx" to ("1" to "0"))
+    private val SWITCH_WORDS = mapOf("devilutionx" to ("1" to "0"), "flycast" to ("yes" to "no"), "mame" to ("1" to "0"))
 
-    /** [value] of a switch as Fuse shows it (`true` or `false`), from what [family] writes. */
+    /** [value] of a switch as Fuse shows it (`true` or `false`), from what [family] writes (Supermodel's every way it reads one). */
     fun switchShown(family: String, value: String?): String? {
+        if (family == "supermodel") return SupermodelIni.switch(value)
         val (on, off) = SWITCH_WORDS[family] ?: return value
         return when (value?.trim()) {
             on -> "true"
