@@ -85,6 +85,10 @@ jobs:
           :app:host:installDist
           :tools:tune:test
 
+      # Timed alone, once every other test above has finished: beside them it measures them, not Fuse.
+      - name: Time Fast Start
+        run: ./gradlew --stacktrace :app:desktop:fastStartTiming
+
       # The Fuse One Host image builds from what installDist made (nothing is pushed here).
       - name: Build the Fuse One Host image
         run: |

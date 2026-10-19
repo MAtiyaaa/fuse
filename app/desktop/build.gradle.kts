@@ -217,3 +217,19 @@ tasks.withType<Test>().configureEach {
     // FastStartTimingTest times a packaged Fuse when given its launcher (-Pfuse.faststart.launcher=...).
     providers.gradleProperty("fuse.faststart.launcher").orNull?.let { systemProperty("fuse.faststart.launcher", it) }
 }
+
+// Fast Start's time to reach the emulator is measured with nothing else of the build running: beside
+// the other modules' tests (a parallel build, a processor's worth each) it times them more than Fuse
+// (5 to 8 s there, 1.9 s alone, on the same four cores). CI runs it as a step of its own, after the rest.
+val fastStartTiming by tasks.registering(Test::class) {
+    description = "Times Fast Start, from Steam's new process to the emulator's, with nothing else running."
+    group = "verification"
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    filter { includeTestsMatching("*.FastStartTimingTest") }
+    mustRunAfter(tasks.test)
+    // A time is measured each run, never taken from an earlier one.
+    outputs.cacheIf { false }
+    outputs.upToDateWhen { false }
+}
+tasks.test { filter { excludeTestsMatching("*.FastStartTimingTest") } }

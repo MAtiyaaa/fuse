@@ -25,7 +25,9 @@ import org.junit.Assume.assumeTrue
 /**
  * Fast Start as Steam runs it: a new process, `--run <id>`, and the time from that process starting
  * to the emulator's own process starting. A stand-in for mGBA on `PATH` notes when it starts and
- * exits. Linux only (where Steam's Game Mode is).
+ * exits. Linux only (where Steam's Game Mode is). Run by `:app:desktop:fastStartTiming`, with nothing
+ * else of the build beside it (`test` leaves it out): beside the other modules' tests it took 5 to 8
+ * seconds on the same four cores, timing them rather than Fuse.
  *
  * Built as tests build it (Fuse's classes in folders, so no class data sharing archive), it takes
  * about 1.3 to 1.9 seconds on a Linux build container, and the budget here only catches it getting
