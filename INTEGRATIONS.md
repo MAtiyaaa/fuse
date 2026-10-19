@@ -798,7 +798,8 @@ was asked; the download when you install.
 **What for.** On a computer, Addons, Ports lists games rebuilt to run natively (source ports), each
 the program its own project publishes, played with the person's own copy of the game: Diablo
 through DevilutionX, RollerCoaster Tycoon 2 through OpenRCT2, Fallout 2 through Fallout 2
-Community Edition. Off until turned on in Settings, Addons, Fuse Ports; nothing is fetched before.
+Community Edition, and recompilations made from the person's own ROM: Majora's Mask through Zelda
+64: Recompiled. Off until turned on in Settings, Addons, Fuse Ports; nothing is fetched before.
 
 **The list** (`ports/index.json`, `core:model` `Ports.kt`, read by `core:integrations`
 `PortsIndexReader`): each port's builds (system, processor, HTTPS address, size, SHA-256, the kind of
@@ -836,13 +837,29 @@ person's folder: its own folders are links into its home instead. Nothing is cop
 person's files are never changed; removing a port removes the links themselves, never what they
 point at. Windows makes symbolic links only in Developer Mode or for an administrator: a folder is
 joined with a junction instead, a file on the same drive with a hard link, and otherwise Fuse says
-to turn on Developer Mode.
+to turn on Developer Mode. The copy can be the person's own already in the library
+(`copiesInLibrary`): the games of the port's game's name, offered only where the folder has what the
+port needs.
+
+**Recompilations.** A recompilation is made from one ROM (`rom` in its `data`): the library's games
+of its system and name, or a file the person picks, are believed only by the XXH3-64 hash of the
+ROM's big-endian form (`Xxh3`, written from xxHash 0.8's scalar code and checked against the
+reference library), as N64: Recompiled's runtime checks it (librecomp `select_rom` and
+`check_stored_rom`: padded to four bytes, `.v64` and `.n64` orders turned round). The ROM goes where
+the port looks for it in its home: a link to the person's file when it is already in that form,
+else a copy turned into it in the home; the person's file never changes. Its variables
+(`env`, `APP_FOLDER_PATH={home}` for Zelda 64: Recompiled, `src/game/config.cpp`) keep its
+settings, mods and saves in its home. Its Linux build is a tarball inside the release's zip
+(`ZIP_TAR_GZ`). On Windows it keeps its files in the person's own AppData, so it is Linux only.
 
 **Playing.** A set-up port is a game of the library (the Ports system), started by `PortAdapter`
 from its launcher exactly as written there, from the build's folder; Play, Fast Start, Steam entries
 and Direct entries all start the same command. Saves are its home's saves folder (`PortSaves`,
 format `port.<id>`), kept in step like any other game's and only ever put back into the same port.
-Ports keep no achievements Fuse can read. A Windows build marked to run through umu-launcher runs on
+Ports keep no achievements Fuse can read. Play With on the original game's page offers the ports
+set up for it beside its emulators; chosen, Play, Fast Start and its Direct entry start the port's
+game in its place. Each port's own settings file (`settings` in the list) is Fuse Tune's, read
+from the port's settings code by `tools/tune`. A Windows build marked to run through umu-launcher runs on
 Linux as `umu-run <program>` with `WINEPREFIX` (a prefix in the port's home) and `GAMEID=umu-default`
 (umu-launcher's README), and the paths it is given as Windows sees them through Proton (`Z:`); umu
 downloads Steam's runtime and Proton itself the first time. None of the ports listed now needs it.

@@ -383,8 +383,9 @@ private fun AppState.choosePortFolder(v: PortView, dataId: String) {
         if (problem == null) toasts.show("${v.port.game} reads its files from there", ToastKind.SUCCESS, icon = FuseIcons.FolderOpen)
         else toasts.show(problem, ToastKind.WARNING)
     }
+    // A recompilation is made from one ROM file; any other port reads a folder.
     fun pick() = scope.launch {
-        val folder = platform.storage.pickFolder(data.name) ?: return@launch
+        val folder = (if (data.rom != null) platform.storage.pickFile(data.name, "N64 ROM", listOf("z64", "n64", "v64")) else platform.storage.pickFolder(data.name)) ?: return@launch
         said(store.ports.chooseFolder(v.port.id, dataId, folder))
     }
     scope.launch {
@@ -396,13 +397,14 @@ private fun AppState.choosePortFolder(v: PortView, dataId: String) {
         choice = ChoiceSpec(
             icon = FuseIcons.FolderOpen,
             title = "Choose ${data.name}",
-            message = "Your copy in the library, or another folder. ${v.port.name} reads its files where they are; Fuse never changes them.",
+            message = if (data.rom != null) "Your copy in the library, or another ROM file. ${v.port.name} reads it where it is, or a copy Fuse makes in the form it reads; your file never changes."
+                else "Your copy in the library, or another folder. ${v.port.name} reads its files where they are; Fuse never changes them.",
             options = copies.map { c ->
                 MenuAction("copy.${c.game.value}", c.title, FuseIcons.Library, detail = "${c.system}  ·  ${c.folder}", onSelect = {
                     choice = null
                     scope.launch { said(store.ports.useCopy(v.port.id, dataId, c)) }
                 })
-            } + MenuAction("folder", "Choose a Folder", FuseIcons.FolderSearch, detail = data.about, onSelect = {
+            } + MenuAction("folder", if (data.rom != null) "Choose a ROM File" else "Choose a Folder", FuseIcons.FolderSearch, detail = data.about, onSelect = {
                 choice = null
                 pick()
             }),

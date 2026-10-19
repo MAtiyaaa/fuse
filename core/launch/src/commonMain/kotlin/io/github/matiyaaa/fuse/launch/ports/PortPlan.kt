@@ -152,6 +152,7 @@ object PortPlan {
             return arg.substring(0, at) + windowsPath(fill(arg.substring(at)))
         }
         val args = port.args.map { if (umu) windowsArg(it) else fill(it) }
+        val env = port.env.mapValues { (_, v) -> if (umu) windowsArg(v) else fill(v) }
         if (unresolved) return null
         val program = "${layout.install}/${build.run}"
         val saves = port.saves?.let { s -> if (s.isEmpty()) layout.home else "${layout.home}/${s.trim('/')}" }
@@ -161,13 +162,49 @@ object PortPlan {
                 argv = listOf(umuRun!!, program) + args,
                 cwd = layout.install,
                 // umu-launcher README: WINEPREFIX is where the prefix is made, GAMEID which fixes apply.
-                env = mapOf("WINEPREFIX" to "${layout.home}/prefix", "GAMEID" to UMU_GAME_ID),
+                env = env + mapOf("WINEPREFIX" to "${layout.home}/prefix", "GAMEID" to UMU_GAME_ID),
                 saves = saves,
             )
         } else {
-            PortLauncher(port = port.id, version = port.version, argv = listOf(program) + args, cwd = layout.install, saves = saves)
+            PortLauncher(port = port.id, version = port.version, argv = listOf(program) + args, cwd = layout.install, env = env, saves = saves)
         }
     }
+
+    /** An N64 ROM's first four bytes in its own byte order (librecomp's `first_rom_bytes`). */
+    private val ROM_START = byteArrayOf(0x80.toByte(), 0x37, 0x12, 0x40)
+
+    /**
+     * The N64 ROM [bytes] as N64: Recompiled's runtime keeps it (librecomp `select_rom`): padded
+     * to a multiple of four bytes, then turned round from the `.v64` (pairs swapped) or `.n64`
+     * (fours reversed) order where its first bytes show one. Null when it isn't an N64 ROM.
+     */
+    fun bigEndianRom(bytes: ByteArray): ByteArray? {
+        if (bytes.size < 4) return null
+        val data = bytes.copyOf((bytes.size + 3) and 3.inv())
+        fun starts(i0: Int, i1: Int, i2: Int, i3: Int) =
+            data[0] == ROM_START[i0] && data[1] == ROM_START[i1] && data[2] == ROM_START[i2] && data[3] == ROM_START[i3]
+        val xor = when {
+            starts(0, 1, 2, 3) -> 0
+            starts(3, 2, 1, 0) -> 3
+            starts(1, 0, 3, 2) -> 1
+            else -> return null
+        }
+        if (xor != 0) {
+            for (at in data.indices step 4) {
+                val t = data.copyOfRange(at, at + 4)
+                for (i in 0 until 4) data[at + (i xor xor)] = t[i]
+            }
+        }
+        return data
+    }
+
+    /** True when [bytes] are an N64 ROM already as [bigEndianRom] would make it: nothing to turn round or pad. */
+    fun isBigEndianRom(bytes: ByteArray): Boolean =
+        bytes.size >= 4 && bytes.size % 4 == 0 && (0 until 4).all { bytes[it] == ROM_START[it] }
+
+    /** Whether [bytes] are [rom]'s ROM, in any byte order: the hash of their big-endian form is its. */
+    fun isRom(rom: io.github.matiyaaa.fuse.model.PortRom, bytes: ByteArray): Boolean =
+        bigEndianRom(bytes)?.let { Xxh3.hex(it) == rom.xxh3.lowercase() } == true
 
     /** [path] (a Linux path) as a Windows program sees it under Proton: `Z:\` and backslashes. */
     fun windowsPath(path: String): String = "Z:" + path.replace('/', '\\')

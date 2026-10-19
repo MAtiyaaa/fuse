@@ -126,6 +126,7 @@ class PortsStoreTest {
         }
         override suspend fun makeFolder(path: String) = File(path).let { it.isDirectory || it.mkdirs() }
         override suspend fun writeText(path: String, text: String) = runCatching { File(path).apply { parentFile.mkdirs() }.writeText(text) }.isSuccess
+        override suspend fun writeBytes(path: String, bytes: ByteArray) = runCatching { File(path).apply { parentFile.mkdirs() }.writeBytes(bytes) }.isSuccess
         override suspend fun isLink(path: String) = Files.isSymbolicLink(File(path).toPath())
         override suspend fun remove(path: String): Boolean {
             val p = File(path).toPath()
@@ -316,6 +317,56 @@ class PortsStoreTest {
         assertEquals("[Graphics]\r\nFullscreen=0\r\nZoom=1\r\n", ini.readText(), "written as DevilutionX writes it")
         assertTrue(store.library.restoreEmulatorSettings(id, null))
         assertEquals(before, ini.readText(), "put back exactly")
+    }
+
+    @Test
+    fun aRecompilationIsMadeFromThePersonsRomInTheLibraryLinkedOrTurnedNeverChanged(): Unit = runBlocking {
+        // A made-up N64 ROM in its own order (.z64), and the same ROM with its pairs swapped (.v64).
+        val z64 = ByteArray(4096) { (it * 7).toByte() }.also { it[0] = 0x80.toByte(); it[1] = 0x37; it[2] = 0x12; it[3] = 0x40 }
+        val v64 = ByteArray(z64.size) { z64[it xor 1] }
+        val hash = io.github.matiyaaa.fuse.launch.ports.Xxh3.hex(z64)
+        val roms = Files.createTempDirectory("fuse-ports-roms").toFile()
+        val rom = File(roms, "Majoras Mask (USA).z64").apply { writeBytes(z64) }
+        val swapped = File(roms, "Majoras Mask (USA).v64").apply { writeBytes(v64) }
+        val wrong = File(roms, "Majoras Mask (Europe).z64").apply { writeBytes(z64.copyOf().also { it[100] = 1 }) }
+        val list = """
+            {"format":1,"revision":2,"ports":[
+              {"id":"maskport","name":"MaskPort","game":"Majoras Mask","about":"Made up.","homepage":"https://example.org/mask","version":"1.2.2",
+               "builds":[{"os":"linux","url":"https://example.org/mask.zip","size":${build.size},"sha256":"${sha(build)}","kind":"ZIP","run":"skyport"}],
+               "data":[{"id":"rom","name":"Its ROM","about":"The North American one.","needs":[],"rom":{"system":"n64","xxh3":"$hash","place":"mask.us.z64"}}],
+               "env":{"APP_FOLDER_PATH":"{home}"},"saves":"saves","source":"made up"}
+            ]}
+        """.trimIndent()
+        val (services, files) = services(list = list)
+        val store = createFuseStore(services, scope)
+        val usa = assertNotNull(store.library.addGameFile(rom.absolutePath, PlatformId("n64"), title = "Majoras Mask"))
+        assertNotNull(store.library.addGameFile(wrong.absolutePath, PlatformId("n64"), title = "Majoras Mask Europe"))
+        store.ports.open()
+        store.until("listed") { it.loaded }
+
+        // Only the ROM it is made from is offered, found by its hash.
+        val copies = store.ports.copiesInLibrary("maskport", "rom")
+        assertEquals(listOf(rom.absolutePath.replace('\\', '/')), copies.map { it.folder })
+        assertEquals("That isn't the ROM it is made from. The North American one.", store.ports.chooseFolder("maskport", "rom", wrong.absolutePath))
+        assertNull(store.ports.useCopy("maskport", "rom", copies.single()))
+        store.ports.install("maskport")
+        store.until("set up") { it.port("maskport")?.ready == true }
+        val placed = File(files.folder, "maskport/home/mask.us.z64").toPath()
+        assertTrue(Files.isSymbolicLink(placed), "already in the form it reads: linked")
+        assertEquals(rom.toPath(), Files.readSymbolicLink(placed))
+        val launcher = PortLauncher.decode(File(files.folder, "maskport/maskport.fuseport").readText())!!
+        assertEquals(mapOf("APP_FOLDER_PATH" to File(files.folder, "maskport/home").path), launcher.env)
+        // The N64 game's page offers it.
+        assertEquals(listOf("maskport"), store.ports.portsFor(usa).map { it.port.id })
+
+        // The same ROM in the other order: a copy turned into the one it reads; the person's file as it was.
+        assertNull(store.ports.chooseFolder("maskport", "rom", swapped.absolutePath))
+        store.until("set up again") { it.port("maskport")?.ready == true }
+        assertFalse(Files.isSymbolicLink(placed))
+        assertTrue(Files.readAllBytes(placed).contentEquals(z64))
+        assertTrue(swapped.readBytes().contentEquals(v64), "the person's file is untouched")
+        assertTrue(rom.readBytes().contentEquals(z64))
+        roms.deleteRecursively()
     }
 
     @Test

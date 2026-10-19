@@ -76,6 +76,24 @@ class CheckTest(unittest.TestCase):
         self.assertFalse(results["sly"]["passed"])
         self.assertFalse(os.path.exists(os.path.join(self.dir, "escaped")))
 
+    def test_a_zip_holding_a_tarball_is_unpacked_as_the_tarball(self):
+        import tarfile
+        tar = io.BytesIO()
+        with tarfile.open(fileobj=tar, mode="w:gz") as t:
+            body = b"#!/bin/sh\necho 'Recompiled 1.2'\n"
+            info = tarfile.TarInfo("game")
+            info.size = len(body)
+            info.mode = 0o755
+            t.addfile(info, io.BytesIO(body))
+        wrapped = zip_with({"game.tar.gz": (tar.getvalue(), 0o644)})
+        port = self.port("wrapped", wrapped, {"args": [], "expect": "Recompiled 1\\.2"})
+        port["builds"][0]["kind"] = "ZIP_TAR_GZ"
+        self.assertTrue(self.run_check([port])["wrapped"]["passed"])
+        two = zip_with({"a.tar.gz": (tar.getvalue(), 0o644), "b.txt": (b"x", 0o644)})
+        odd = self.port("odd", two, {"stay": 1})
+        odd["builds"][0]["kind"] = "ZIP_TAR_GZ"
+        self.assertFalse(self.run_check([odd])["odd"]["passed"])
+
     def test_only_a_build_that_passed_is_verified_and_the_list_is_signed(self):
         index = {"format": 1, "revision": 3, "ports": [
             {"id": "a", "builds": [{"os": "linux", "sha256": "1" * 64, "verified": "2026-01-01"}, {"os": "windows", "sha256": "2" * 64, "verified": "2026-01-01"}]},

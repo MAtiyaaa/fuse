@@ -39,9 +39,11 @@ class DesktopPortFilesTest {
         val text = assertNotNull(files().bundledIndex(), "ports/index.json is in the build")
         val list = PortsIndexReader.read(text).getOrThrow()
         assertEquals(emptyMap(), list.skipped, "no port in Fuse's own list fails a check")
-        assertEquals(listOf("devilutionx", "openrct2", "fallout2-ce"), list.index.ports.map { it.id })
+        assertEquals(listOf("devilutionx", "openrct2", "fallout2-ce", "zelda64recomp"), list.index.ports.map { it.id })
         for (p in list.index.ports) {
-            assertTrue(p.builds.any { it.os == "linux" } && p.builds.any { it.os == "windows" }, "${p.id} runs on Linux and Windows")
+            assertTrue(p.builds.any { it.os == "linux" }, "${p.id} runs on Linux")
+            // Windows too, unless the port keeps its files where Fuse doesn't set it up there, and says so.
+            assertTrue(p.builds.any { it.os == "windows" } || p.notes.any { "Linux only" in it }, "${p.id} runs on Windows or says why not")
             assertTrue(p.builds.all { it.verified == null }, "only the nightly job says a build is verified")
             assertTrue(p.source.isNotBlank() && p.data.isNotEmpty(), "${p.id} says where its facts are from and what it needs")
         }
@@ -78,6 +80,20 @@ class DesktopPortFilesTest {
         f.unpack(tar.path, PortFileKind.TAR_GZ, "port.tar.gz", tarInto.path)
         assertTrue(File(tarInto, "game").isFile)
         if (DesktopOs.current != DesktopOs.WINDOWS) assertTrue(File(tarInto, "game").canExecute())
+
+        // A zip holding one tarball, as a project's build artifacts wrap one: the tarball unpacked, then gone.
+        val wrapped = File(dir, "wrapped.zip")
+        ZipArchiveOutputStream(wrapped).use { z ->
+            z.putArchiveEntry(ZipArchiveEntry("Game.tar.gz").apply { unixMode = "100644".toInt(8) })
+            z.write(tar.readBytes())
+            z.closeArchiveEntry()
+        }
+        val wrappedInto = File(f.folder, "wrappedport/build.new")
+        f.unpack(wrapped.path, PortFileKind.ZIP_TAR_GZ, "wrapped.zip", wrappedInto.path)
+        assertTrue(File(wrappedInto, "game").isFile)
+        if (DesktopOs.current != DesktopOs.WINDOWS) assertTrue(File(wrappedInto, "game").canExecute())
+        assertFalse(File(dir, "wrapped.zip.tar.gz").exists(), "the tarball taken out is gone")
+        assertFailsWith<java.io.IOException>("a zip of anything else") { f.unpack(zip.path, PortFileKind.ZIP_TAR_GZ, "port.zip", File(f.folder, "notwrapped/build.new").path) }
 
         val image = File(dir, "Port-x86_64.AppImage").apply { writeBytes(ByteArray(16)) }
         val imageInto = File(f.folder, "imageport/build.new")

@@ -63,6 +63,26 @@ class PortsIndexTest {
     }
 
     @Test
+    fun aRecompilationsRomItsVariablesAndASettingsFileAreChecked() {
+        val build = io.github.matiyaaa.fuse.model.PortBuild("linux", url = "https://example.org/r.zip", size = 10, sha256 = "a".repeat(64), kind = PortFileKind.ZIP_TAR_GZ, run = "Recomp")
+        val rom = io.github.matiyaaa.fuse.model.PortData("rom", "Its ROM", "The US one.", needs = emptyList(), rom = io.github.matiyaaa.fuse.model.PortRom("n64", "ef18b4a9e2386169", "mm.n64.us.1.0.z64"))
+        val port = io.github.matiyaaa.fuse.model.Port(
+            id = "recomp", name = "Recomp", game = "A Game", about = "", homepage = "https://example.org", version = "1.0",
+            builds = listOf(build), data = listOf(rom), env = mapOf("APP_FOLDER_PATH" to "{home}"), source = "made up",
+            settings = io.github.matiyaaa.fuse.model.PortSettings("{home}/config.ini"),
+        )
+        assertEquals(null, PortsIndexReader.problem(port))
+        assertEquals("the ROM it needs isn't said", PortsIndexReader.problem(port.copy(data = listOf(rom.copy(rom = rom.rom!!.copy(xxh3 = "EF18"))))))
+        assertEquals("its ROM would go outside it", PortsIndexReader.problem(port.copy(data = listOf(rom.copy(rom = rom.rom!!.copy(place = "../mm.z64"))))))
+        assertEquals("it needs a ROM and a folder at once", PortsIndexReader.problem(port.copy(data = listOf(rom.copy(needs = listOf(listOf("a.dat")))))))
+        assertEquals("it names a variable oddly", PortsIndexReader.problem(port.copy(env = mapOf("app folder" to "{home}"))))
+        assertEquals("its command names {secrets}, which Fuse doesn't fill", PortsIndexReader.problem(port.copy(env = mapOf("A" to "{secrets}"))))
+        assertEquals("its settings file would be outside it", PortsIndexReader.problem(port.copy(settings = io.github.matiyaaa.fuse.model.PortSettings("/etc/config.ini"))))
+        assertEquals("its settings file would be outside it", PortsIndexReader.problem(port.copy(settings = io.github.matiyaaa.fuse.model.PortSettings("{home}/../x.ini"))))
+        assertEquals("its settings are in a form Fuse doesn't write", PortsIndexReader.problem(port.copy(settings = io.github.matiyaaa.fuse.model.PortSettings("{home}/x.json", "json"))))
+    }
+
+    @Test
     fun aFetchedIndexIsUsedOnlyWhenSignedAndNewer() = runTest {
         var body = SIGNED
         var sig = signature

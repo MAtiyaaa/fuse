@@ -1,7 +1,7 @@
 {
   "format": 1,
-  "revision": 1,
-  "generated": "2026-10-18",
+  "revision": 2,
+  "generated": "2026-10-19",
   "ports": [
     {
       "id": "devilutionx",
@@ -137,6 +137,43 @@
       ],
       "source": "fallout2-ce v1.3.0: README.md (run from the game's folder, SDL2 on Linux); src/game_config.cc gameConfigInit (fallout2.cfg beside the program, master.dat, critter.dat and data as defaults); src/loadsave.cc (data/SAVEGAME), src/map.cc and src/proto.cc (data/MAPS and data/proto written while playing); src/platform_compat.cc compat_resolve_path (letter case ignored on Linux)",
       "settings": { "file": "{install}/fallout2.cfg" }
+    },
+    {
+      "id": "zelda64recomp",
+      "name": "Zelda 64: Recompiled",
+      "game": "The Legend of Zelda: Majora's Mask",
+      "about": "Majora's Mask recompiled from the N64 cartridge's own code to run natively, at any resolution and frame rate, with widescreen, gyro aiming and mods, made from your own ROM as it starts.",
+      "homepage": "https://github.com/Zelda64Recomp/Zelda64Recomp",
+      "licence": "GPL-3.0",
+      "version": "1.2.2",
+      "builds": [
+        {
+          "os": "linux",
+          "url": "https://github.com/Zelda64Recomp/Zelda64Recomp/releases/download/v1.2.2/Zelda64Recompiled-v1.2.2-Linux-X64.zip",
+          "size": 18638525,
+          "sha256": "de8b19cdb4e3ad0c10fd6d8127f7a6cc2a9eba106d89c753439178b718887c42",
+          "kind": "ZIP_TAR_GZ",
+          "run": "Zelda64Recompiled"
+        }
+      ],
+      "data": [
+        {
+          "id": "rom",
+          "name": "Majora's Mask's ROM",
+          "about": "The ROM of the North American N64 cartridge (.z64, .n64 or .v64), the only one it is made from.",
+          "needs": [],
+          "rom": { "system": "n64", "xxh3": "ef18b4a9e2386169", "place": "mm.n64.us.1.0.z64" }
+        }
+      ],
+      "env": { "APP_FOLDER_PATH": "{home}" },
+      "saves": "saves",
+      "check": { "stay": 5 },
+      "notes": [
+        "It is made from the North American ROM of Majora's Mask only; Fuse puts yours where it looks for it, linked or as a copy in the form it reads, and never changes your file.",
+        "Its saves, settings and mods are its own, kept by Fuse in its home.",
+        "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
+      ],
+      "source": "Zelda64Recomp v1.2.2: README.md (the North American ROM, other formats converted, portable.txt); src/main/main.cpp supported_games (rom_hash 0xEF18B4A9E2386169, game_id mm.n64.us.1.0); src/game/config.cpp get_app_folder_path (APP_FOLDER_PATH on Linux, LocalAppData on Windows); N64ModernRuntime df7e820 librecomp/src/recomp.cpp (select_rom, check_rom_start, byteswap_data, check_stored_rom: the ROM kept as <game_id>.z64 in that folder, checked by XXH3-64) and src/pi.cpp get_save_file_path (saves in that folder); .github/workflows/validate.yml (the Linux build, a tarball the release zips)"
     }
   ]
 }

@@ -33,6 +33,8 @@ object PortsIndexReader {
     private val ID = Regex("^[a-z0-9][a-z0-9-]{0,39}$")
     private val SHA256 = Regex("^[0-9a-f]{64}$")
     private val PLACEHOLDER = Regex("\\{[^}]*\\}")
+    private val XXH3 = Regex("^[0-9a-f]{16}$")
+    private val ENV = Regex("^[A-Z_][A-Z0-9_]{0,63}$")
 
     /** The largest build Fuse downloads (2 GiB). */
     const val MAX_BUILD = 2L shl 30
@@ -68,6 +70,13 @@ object PortsIndexReader {
         val dataIds = port.data.map { it.id }
         if (dataIds.size != dataIds.toSet().size || dataIds.any { !ID.matches(it) }) return "its game files are named twice or oddly"
         for (d in port.data) {
+            val r = d.rom
+            if (r != null) {
+                if (d.needs.isNotEmpty() || d.overlay != null) return "it needs a ROM and a folder at once"
+                if (!XXH3.matches(r.xxh3) || !ID.matches(r.system)) return "the ROM it needs isn't said"
+                if (!safe(r.place)) return "its ROM would go outside it"
+                continue
+            }
             if (d.needs.isEmpty() || d.needs.any { names -> names.isEmpty() || names.any { !safe(it) } }) return "what it needs from the game isn't said"
             d.overlay?.let { o ->
                 if (o.into.isNotEmpty() && !safe(o.into)) return "its game files would go outside it"
@@ -76,7 +85,8 @@ object PortsIndexReader {
         }
         if (port.data.count { it.overlay != null } > 1) return "it links more than one folder in"
         port.saves?.let { if (it.isNotEmpty() && !safe(it)) return "its saves would go outside it" }
-        for (arg in port.args) {
+        if (port.env.keys.any { !ENV.matches(it) }) return "it names a variable oddly"
+        for (arg in port.args + port.env.values) {
             for (m in PLACEHOLDER.findAll(arg)) {
                 val token = m.value
                 val known = token == PortTokens.INSTALL || token == PortTokens.HOME ||

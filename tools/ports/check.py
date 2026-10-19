@@ -103,6 +103,20 @@ def unpack(archive, kind, name, into):
                 z.extract(info, into)
                 if mode & 0o111 and not info.is_dir():
                     os.chmod(os.path.join(into, info.filename), 0o755)
+    elif kind == "ZIP_TAR_GZ":
+        # A zip holding one tarball (as a project's build artifacts wrap one): the tarball unpacked as one.
+        with zipfile.ZipFile(archive) as z:
+            files = [i for i in z.infolist() if not i.is_dir()]
+            if len(files) != 1 or not (files[0].filename.endswith(".tar.gz") or files[0].filename.endswith(".tgz")):
+                raise ValueError("the zip doesn't hold one tarball")
+            inner = archive + ".tar.gz"
+            with z.open(files[0]) as src, open(inner, "wb") as dst:
+                shutil.copyfileobj(src, dst)
+        try:
+            os.rmdir(into)
+            unpack(inner, "TAR_GZ", name, into)
+        finally:
+            os.remove(inner)
     elif kind in ("TAR_GZ", "TAR_XZ"):
         with tarfile.open(archive, "r:gz" if kind == "TAR_GZ" else "r:xz") as t:
             for m in t.getmembers():

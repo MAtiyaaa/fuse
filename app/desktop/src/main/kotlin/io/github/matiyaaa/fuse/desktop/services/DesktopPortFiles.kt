@@ -76,6 +76,21 @@ internal class DesktopPortFiles(
             PortFileKind.ZIP -> unzip(from, to)
             PortFileKind.TAR_GZ -> LinuxArchives.tar(from, to, xz = false)
             PortFileKind.TAR_XZ -> LinuxArchives.tar(from, to, xz = true)
+            PortFileKind.ZIP_TAR_GZ -> {
+                // The zip's one tarball taken out beside the download, unpacked as a tarball is, then gone.
+                val inner = File(from.parentFile, "${from.name}.tar.gz")
+                try {
+                    ZipFile.builder().setFile(from).get().use { z ->
+                        val entries = z.entries.toList().filter { !it.isDirectory }
+                        val tar = entries.singleOrNull()?.takeIf { it.name.endsWith(".tar.gz") || it.name.endsWith(".tgz") }
+                            ?: throw IOException("The zip doesn't hold one tarball, as the list says it does.")
+                        z.getInputStream(tar).use { input -> inner.outputStream().use { input.copyTo(it) } }
+                    }
+                    LinuxArchives.tar(inner, to, xz = false)
+                } finally {
+                    inner.delete()
+                }
+            }
         }
     }
 
@@ -137,6 +152,16 @@ internal class DesktopPortFiles(
     override suspend fun makeFolder(path: String): Boolean = withContext(Dispatchers.IO) {
         val f = File(path)
         f.isDirectory || f.mkdirs()
+    }
+
+    override suspend fun writeBytes(path: String, bytes: ByteArray): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            val target = File(path)
+            target.parentFile?.mkdirs()
+            val part = File(target.parentFile, ".${target.name}.part")
+            part.writeBytes(bytes)
+            Files.move(part.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        }.isSuccess
     }
 
     override suspend fun writeText(path: String, text: String): Boolean = withContext(Dispatchers.IO) {

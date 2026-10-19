@@ -180,6 +180,9 @@ interface PortFiles {
     /** Writes [text] to [path], under a temporary name first; false when it couldn't. */
     suspend fun writeText(path: String, text: String): Boolean
 
+    /** [bytes] written to [path] (a recompilation's ROM turned into the form it reads), replacing what was there. */
+    suspend fun writeBytes(path: String, bytes: ByteArray): Boolean = false
+
     /** True when [path] is a link Fuse made (not a file or folder of its own). */
     suspend fun isLink(path: String): Boolean
 

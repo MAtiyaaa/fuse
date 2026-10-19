@@ -127,7 +127,10 @@ together as each emulator does it, and Fuse Ports brings games rebuilt to run na
 - **Fuse Ports**, in Addons on a computer (turn it on in Settings, Addons): games rebuilt to run
   natively, played with your own copy of the game. Diablo (DevilutionX), RollerCoaster Tycoon 2
   (OpenRCT2) and Fallout 2 (Fallout 2 Community Edition) install from their own projects' releases,
-  each checked against Fuse's list before it goes in. Choose your game's folder and its files are
+  each checked against Fuse's list before it goes in, and so does Majora's Mask through Zelda 64:
+  Recompiled, on Linux, made from your own ROM: Fuse finds it in your library by its hash, as the
+  recompilation itself checks it, and links it in (or a copy in the form it reads), never changing
+  your file. Choose your game's folder and its files are
   linked in where the port reads them, never copied or changed; what the port writes, its saves
   too, stays in Fuse's folder. Each becomes a game of your library, with Steam entries and saves
   kept in step. A nightly check starts every port, and once Fuse carries the key the list is signed

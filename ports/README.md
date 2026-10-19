@@ -8,7 +8,9 @@ game. Fuse carries this file inside every build. What Fuse does with it is in
 ## Adding a port
 
 A port belongs here when its project publishes builds for Linux and Windows (x86_64) and it plays
-a game from the person's own files, without them nothing. For each one:
+a game from the person's own files, without them nothing; a recompilation made from one ROM (`rom`
+in its `data`) may be Linux only where it keeps its files in the person's own folders on Windows,
+and says so in its `notes`. For each one:
 
 1. Read the port's own code and documentation at the release you list, and cite every fact in its
    `source` (the file and function): where it reads the game's files, how it is given a folder,

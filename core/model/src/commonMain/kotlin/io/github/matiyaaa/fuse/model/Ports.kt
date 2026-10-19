@@ -48,6 +48,8 @@ data class Port(
     val data: List<PortData> = emptyList(),
     /** The program's arguments, with [PortTokens] placeholders. */
     val args: List<String> = emptyList(),
+    /** Variables it is started with, their values with [PortTokens] placeholders (`APP_FOLDER_PATH` = `{home}`). */
+    val env: Map<String, String> = emptyMap(),
     /** Where the port keeps its saves, relative to its home ([PortTokens.HOME]); null when it keeps none there. */
     val saves: String? = null,
     /** How the nightly check sees it start ([PortCheck]); null when it isn't checked. */
@@ -105,6 +107,9 @@ enum class PortFileKind {
     /** An xz-compressed tar, unpacked with each file's own permissions. */
     TAR_XZ,
 
+    /** A zip holding one gzip-compressed tar (as a project's build artifacts wrap one), the tar unpacked as [TAR_GZ]. */
+    ZIP_TAR_GZ,
+
     /** One program file, kept as it is and made runnable. */
     FILE,
 }
@@ -117,7 +122,8 @@ enum class PortRunner { NATIVE, UMU }
  * list of names any one of which will do (paths inside the folder, with `/`). [exact] when the port
  * reads the names exactly as written, letter case and all; otherwise case is ignored, as the port
  * itself ignores it. With an [overlay], the folder's contents are linked into Fuse's copy;
- * otherwise the folder is handed to the port by its path (`{data:<id>}` in [Port.args]).
+ * otherwise the folder is handed to the port by its path (`{data:<id>}` in [Port.args]). A
+ * recompilation needs one ROM instead ([rom]), and [needs] is empty.
  */
 @Serializable
 data class PortData(
@@ -129,7 +135,17 @@ data class PortData(
     val needs: List<List<String>>,
     val exact: Boolean = false,
     val overlay: PortOverlay? = null,
+    val rom: PortRom? = null,
 )
+
+/**
+ * The one ROM a recompilation is made from, of the library's [system] ("n64"): known by the
+ * XXH3-64 hash of its big-endian form ([xxh3], 16 hex digits, as N64: Recompiled's runtime checks
+ * it), and put where the port looks for it ([place], relative to its home): a link to the person's
+ * file when it is already in that form, else a copy turned into it. The person's file never changes.
+ */
+@Serializable
+data class PortRom(val system: String, val xxh3: String, val place: String)
 
 /**
  * The person's folder linked into Fuse's copy at [into] (relative; empty for its top), entry by

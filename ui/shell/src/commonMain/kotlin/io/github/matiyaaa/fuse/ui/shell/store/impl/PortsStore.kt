@@ -267,15 +267,17 @@ internal class PortsStore(
         if (list == null) lock.withLock { load() }
         val port = list?.index?.ports?.firstOrNull { it.id == id } ?: return emptyList()
         val data = port.data.firstOrNull { it.id == dataId } ?: return emptyList()
-        // Found by the game's name, then believed only by its files: a folder the port can read.
+        // Found by the game's name, then believed only by its files: a folder the port can read, or
+        // for a recompilation the ROM of its system it was made from, by its hash.
         val found = runCatching { ctx.data.games.search(port.game, limit = LIBRARY_LOOK) }.getOrDefault(emptyList())
-            .filter { it.platformId != PortAdapter.PLATFORM }
+            .filter { it.platformId != PortAdapter.PLATFORM && (data.rom == null || it.platformId.value == data.rom!!.system) }
         val out = ArrayList<PortCopy>()
         for (summary in found) {
             val game = runCatching { ctx.data.games.get(summary.id) }.getOrNull() ?: continue
             val path = game.location.path.replace('\\', '/').trimEnd('/')
             if (path.isEmpty() || !FsPath.isAbsolute(path)) continue
-            val folder = listOfNotNull(path, FsPath.parent(path)).distinct().firstOrNull { lacking(data, it) == null } ?: continue
+            val places = if (data.rom != null) listOf(game.location.launchPath.replace('\\', '/')) else listOfNotNull(path, FsPath.parent(path)).distinct()
+            val folder = places.firstOrNull { lacking(data, it) == null } ?: continue
             if (out.none { it.folder == folder }) out += PortCopy(game.id, game.displayTitle, ctx.platformName(game.platformId), folder)
         }
         val name = TitleText.normalize(port.game)
@@ -350,6 +352,7 @@ internal class PortsStore(
             if (problem != null) return problem
             if (!files.makeFolder(layout.home)) return "Fuse couldn't make ${port.name}'s home in its folder."
             port.saves?.takeIf { it.isNotEmpty() }?.let { files.makeFolder("${layout.home}/$it") }
+            for (d in port.data) d.rom?.let { rom -> placeRom(rom, chosen.getValue(d.id), layout)?.let { return it } }
             val launcher = PortPlan.launcher(port, build, layout, chosen, files.umuRun())
                 ?: return if (build.runner == io.github.matiyaaa.fuse.model.PortRunner.UMU) PortPlan.noBuild(port, files.os) else "Choose its game files first."
             if (!files.writeText(layout.launcher, launcher.encode())) return "Fuse couldn't write how ${port.name} starts."
@@ -417,9 +420,36 @@ internal class PortsStore(
         return null
     }
 
+    /**
+     * A recompilation's ROM where it looks for it in its home: a link to the person's [file] when
+     * that is already in the form it reads, else a copy turned into it. The person's file stays as it is.
+     */
+    private suspend fun placeRom(rom: io.github.matiyaaa.fuse.model.PortRom, file: String, layout: PortLayout): String? {
+        val at = "${layout.home}/${rom.place}"
+        val bytes = romBytes(file) ?: return "Fuse can't read that ROM."
+        files.makeFolder(at.substringBeforeLast('/'))
+        files.remove(at)
+        return if (PortPlan.isBigEndianRom(bytes)) {
+            files.link(file, at)
+        } else {
+            val turned = PortPlan.bigEndianRom(bytes) ?: return "That isn't an N64 ROM."
+            if (files.writeBytes(at, turned)) null else "Fuse couldn't put the ROM in its folder."
+        }
+    }
+
+    /** The whole of [file], when it is a file no larger than any ROM. */
+    private suspend fun romBytes(file: String): ByteArray? {
+        val st = runCatching { ctx.services.fs.stat(file) }.getOrNull()?.takeIf { !it.isDirectory && it.sizeBytes in 1..MAX_ROM } ?: return null
+        return runCatching { ctx.services.fs.readBytes(file, 0, st.sizeBytes.toInt()) }.getOrNull()
+    }
+
     /** What [folder] lacks of [d]'s needs, said for the person; null when it has them all. */
     private suspend fun lacking(d: PortData, folder: String): String? {
         val fs = ctx.services.fs
+        d.rom?.let { rom ->
+            val bytes = romBytes(folder) ?: return "Choose the ROM file itself."
+            return if (PortPlan.isRom(rom, bytes)) null else "That isn't the ROM it is made from. ${d.about}"
+        }
         if (runCatching { fs.stat(folder) }.getOrNull()?.isDirectory != true) return "Fuse can't open that folder."
         // As PortPlan.missing says, with the folder looked at here (each need: any one of its names).
         val missing = d.needs.filter { names -> names.none { has(folder, it, d.exact) } }
@@ -446,6 +476,9 @@ internal class PortsStore(
 
         /** How many of the library's games with the port's game's name are looked in for its files. */
         private const val LIBRARY_LOOK = 40
+
+        /** The largest ROM read to check it (an N64 cartridge holds 64 MB at most). */
+        private const val MAX_ROM = 128L * 1024 * 1024
         private const val MAX_INDEX = 1 shl 20
 
         /** How often opening Ports looks for a newer signed list. */
