@@ -105,6 +105,8 @@ class HeadlessHouseholdTest {
             // A profile made on a device, not on the host: the host has no screen.
             val mo = deck.createProfile("Mo", "fox", null).getOrThrow()
             deck.switchTo(mo.id).getOrThrow()
+            // What the Deck brought goes up behind its switch: the PC switches once it is there.
+            deck.syncNow().getOrThrow()
             pc.switchTo(mo.id).getOrThrow()
             assertEquals(1_800L, pcLib.games[ruby.id]?.totalSeconds)
             assertEquals(true, pcLib.games[ruby.id]?.favorite?.value)

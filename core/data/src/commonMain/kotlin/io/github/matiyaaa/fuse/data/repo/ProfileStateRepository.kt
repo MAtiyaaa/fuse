@@ -121,14 +121,21 @@ class ProfileStateRepository(
      * change, not a rewrite): each game listed gets its state and games not listed are cleared to
      * no one's; sessions are matched by game and times; collections by when they were made
      * ([CollectionRow.createdAt], the same on every device), with [CollectionRow.id] ignored.
+     *
+     * [since]: the state [state] was worked out from. What the person changed after it (a game
+     * added to a collection, a favourite tapped, a session that ended) stays as it is, decided
+     * inside the same transaction as the write, so nothing done a moment before is undone: a game's
+     * row, the collections, and every session that ended since.
      */
-    suspend fun write(state: UserState) = withContext(dispatcher) {
+    suspend fun write(state: UserState, since: UserState? = null) = withContext(dispatcher) {
         val now = clock()
         db.transaction {
             val current = readNow()
             val canonical = normalizeAbsorbed(state)
             val byId = canonical.games.associateBy { it.id }
+            val sinceRows = since?.games?.associateBy { it.id }
             for (r in current.games) {
+                if (sinceRows != null && sinceRows[r.id] != r) continue
                 val g = byId[r.id]
                 val want = g?.let { r.copy(customTitle = it.customTitle, favorite = it.favorite, hidden = it.hidden, pinned = it.pinned, lastPlayed = it.lastPlayed, trackedSeconds = it.trackedSeconds, sessionCount = it.sessionCount, emulator = it.emulator) }
                     ?: r.copy(customTitle = null, favorite = false, hidden = false, pinned = false, lastPlayed = null, trackedSeconds = 0, sessionCount = 0, emulator = null)
@@ -149,8 +156,10 @@ class ProfileStateRepository(
             fun SessionRow.key() = Triple(gameId, startedAt, endedAt)
             val have = current.sessions.associateBy { it.key() }
             val want = canonical.sessions.associateBy { it.key() }
-            for (k in have.keys - want.keys) q.deleteSession(k.first, k.second, k.third)
+            val ended = since?.let { s -> (current.sessions - s.sessions.toSet()).map { it.key() }.toSet() }.orEmpty()
+            for (k in have.keys - want.keys - ended) q.deleteSession(k.first, k.second, k.third)
             for (k in want.keys - have.keys) want.getValue(k).let { q.insertSession(it.gameId, it.emulator, it.startedAt, it.endedAt) }
+            if (since != null && since.collections != current.collections) return@transaction
             val haveC = current.collections.associateBy { it.createdAt }
             val wantC = canonical.collections.associateBy { it.createdAt }
             for (k in haveC.keys - wantC.keys) haveC.getValue(k).let { q.clearMembers(it.id); q.deleteCollection(it.id) }

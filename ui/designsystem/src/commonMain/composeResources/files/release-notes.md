@@ -347,6 +347,11 @@ the game page is calmer, and Linux looks and plays more the way Android does.
   said no, the device went back to the person before, and a moment later could still stop using
   everyone and ask who's playing. Only the profile in use is ever let go now, never the one the
   device just went back to.
+- **Nothing you do while Fuse One brings your library in is undone.** A game added to a collection,
+  a favourite or a name given, or a game that had just ended, at the very moment your profile's
+  records were put in place, could be put back as it was, so the collection reached your other
+  devices without the game. What changes meanwhile now always stays, and goes to your other
+  devices with the next sync.
 - **The hints under a problem or a question are its own.** A problem sheet or a confirmation shows
   Select and Back along the bottom, not the buttons of the page beneath it.
 - "Touch controls on the second screen" did nothing at all (the second screen's touch controls

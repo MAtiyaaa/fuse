@@ -29,7 +29,9 @@ import kotlinx.serialization.json.JsonElement
  * every device), the collections they made, and the settings that are theirs ([ProfileSettings]).
  *
  * Anything changed here between a read and the next write (a favourite tapped while the host
- * answered) is kept as it is, and goes up on the next round: a write never undoes the person.
+ * answered) is kept as it is, and goes up on the next round: a write never undoes the person, up
+ * to the moment it is written ([io.github.matiyaaa.fuse.data.repo.ProfileStateRepository.write]
+ * decides it in its own transaction).
  */
 internal class LibraryProfileData(
     private val data: FuseData,
@@ -189,7 +191,8 @@ internal class LibraryProfileData(
                     CollectionRow(0, c.name.value, (c.order?.value ?: 0).toLong(), createdAtOf(c.id), c.games.mapNotNull { firstRow[it] })
                 }
             }
-            data.profileState.write(UserState(rows, sessions.distinct(), collections))
+            // Checked again as it is written: a change made while this was worked out stays too.
+            data.profileState.write(UserState(rows, sessions.distinct(), collections), since = before)
             // Trophies earned on the person's other devices, kept as history beside each copy of the game.
             for (r in state.games) meta.games[keys.getValue(r.id).id]?.trophies?.takeIf { it.isNotEmpty() }?.let { TrophyHistory.add(data, r.id, it.values) }
         }
