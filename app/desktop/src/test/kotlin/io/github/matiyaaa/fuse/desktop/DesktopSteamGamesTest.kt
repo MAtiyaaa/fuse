@@ -137,6 +137,18 @@ class DesktopSteamGamesTest {
     }
 
     @Test
+    fun onlyPicturesInTheShapeSteamShowsThemInAreUsed() {
+        val grid = File(config, "grid")
+        val art = SteamArt(
+            portrait = picture("landscape-box", 120, 90), wide = picture("header", 920, 430),
+            hero = picture("screenshot", 1600, 900), logo = picture("logo", 400, 120), icon = picture("icon", 64, 64, "jpg"),
+        )
+        steam.placeGameArt(grid, 77, art)
+        // A landscape box and a screenshot would be cropped as a capsule and a hero: Steam's own stay.
+        assertEquals(listOf("77.png", "77_icon.jpg", "77_logo.png"), grid.list()!!.sorted())
+    }
+
+    @Test
     fun aSystemsGamesStartAsThePersonsOwnShortcutsStartThemWhileTheirProgramIsThere(): Unit = runBlocking {
         assumeTrue(DesktopOs.current == DesktopOs.LINUX)
         val retroarch = File(root, "Emulation/tools/launchers/retroarch.sh").apply { parentFile.mkdirs(); writeText("#!/bin/sh"); setExecutable(true) }

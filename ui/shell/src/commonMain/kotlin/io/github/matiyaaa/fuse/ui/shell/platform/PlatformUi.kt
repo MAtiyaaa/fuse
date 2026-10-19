@@ -252,7 +252,11 @@ interface SteamIntegration {
      * What is wrong with Fuse's game entries: games no longer in [library], an older Fuse, doubles,
      * older entries that open Fuse's window first, and Direct entries whose emulator is gone.
      */
-    suspend fun gamesHealth(library: Set<Long>): List<io.github.matiyaaa.fuse.library.steam.SteamHealthIssue> = emptyList()
+    suspend fun gamesHealth(
+        library: Set<Long>,
+        wanted: Map<Long, io.github.matiyaaa.fuse.library.steam.SteamGameEntry> = emptyMap(),
+        unavailable: Set<Long> = emptySet(),
+    ): List<io.github.matiyaaa.fuse.library.steam.SteamHealthIssue> = emptyList()
 
     /**
      * Puts Fuse's game entries right: those for games no longer in [library] and doubles go, and

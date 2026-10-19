@@ -159,6 +159,12 @@ interface HealthOps {
     fun check()
 
     /**
+     * What the interface found under [key] (Fuse's entries in Steam, which only it can read), shown
+     * with the store's own findings; an empty list takes them away.
+     */
+    fun setFound(key: String, issues: List<HealthIssue>) = Unit
+
+    /**
      * A diagnostics report for a bug report: versions, systems, emulators found, drives and folders
      * with their state, integrations on or off, the health findings and recent launch problems, plus
      * [device] lines the interface knows. Personal folder names and anything secret are removed.

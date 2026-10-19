@@ -309,22 +309,91 @@ internal fun AppState.removeFromSteam(cards: List<GameCard>, what: String) {
     }
 }
 
+/** What [steamIssues] found, with the library it looked against. */
+private class SteamLook(val library: List<GameCard>, val issues: List<SteamHealthIssue>)
+
+/**
+ * What is wrong with the entries Fuse made in Steam, against the library now: each Direct entry
+ * compared with the entry its game would get written now (its emulator updated or moved, its game
+ * moved, its way of starting changed), and games whose files can't be reached now said as such.
+ */
+private suspend fun AppState.steamIssues(): SteamLook? {
+    val steam = platform.steam ?: return null
+    val library = store.library.games(GameQuery(includeHidden = true)).first()
+    val ids = library.map { it.id.value }.toSet()
+    val direct = runCatching { steam.gameStarts() }.getOrDefault(emptyMap()).filterValues { it == io.github.matiyaaa.fuse.library.steam.SteamStart.DIRECT }.keys
+    val wanted = if (direct.isEmpty()) emptyMap() else {
+        val everyGame = directChosen()
+        val ways = steamWays()
+        library.filter { it.id.value in direct }.associate { c -> c.id.value to startingAsChosen(steamEntry(c).first, everyGame, ways = ways) }
+    }
+    val unavailable = library.filter { it.dimmed }.map { it.id.value }.toSet()
+    return SteamLook(library, runCatching { steam.gamesHealth(ids, wanted, unavailable) }.getOrDefault(emptyList()))
+}
+
+/**
+ * Puts what [steamIssues] finds in System health, where Put Them Right opens [checkSteamGames];
+ * nothing when all is well (or no entry of Fuse's is in Steam).
+ */
+internal suspend fun AppState.reportSteamHealth() {
+    if (platform.steam == null) return
+    val issues = steamIssues()?.issues.orEmpty()
+    val fixable = issues.filter { it.kind != SteamHealthIssue.Kind.GAME_UNAVAILABLE }
+    val waiting = issues.filter { it.kind == SteamHealthIssue.Kind.GAME_UNAVAILABLE }
+    store.health.setFound(
+        "steam",
+        listOfNotNull(
+            fixable.takeIf { it.isNotEmpty() }?.let { found ->
+                io.github.matiyaaa.fuse.ui.shell.store.HealthIssue(
+                    "steam.entries",
+                    io.github.matiyaaa.fuse.ui.shell.store.Problem(
+                        title = if (found.size == 1) "A Steam entry needs putting right" else "${found.size} Steam entries need putting right",
+                        message = "${found.joinToString(", ") { it.name }}. Each is put right where it is, keeping its art, play time and collections.",
+                        reassurance = null,
+                        actions = listOf(io.github.matiyaaa.fuse.ui.shell.store.ProblemAction.PutSteamRight()),
+                    ),
+                )
+            },
+            waiting.takeIf { it.isNotEmpty() }?.let { found ->
+                io.github.matiyaaa.fuse.ui.shell.store.HealthIssue(
+                    "steam.unavailable",
+                    io.github.matiyaaa.fuse.ui.shell.store.Problem(
+                        title = if (found.size == 1) "A game in Steam can't start now" else "${found.size} games in Steam can't start now",
+                        message = "${found.joinToString(", ") { it.name }}: their files can't be reached, so their Steam entries can't start them until the drive is back.",
+                        kind = io.github.matiyaaa.fuse.ui.shell.store.ProblemKind.DRIVE,
+                        severity = io.github.matiyaaa.fuse.ui.shell.store.Severity.INFO,
+                        reassurance = null,
+                        actions = listOf(io.github.matiyaaa.fuse.ui.shell.store.ProblemAction.CheckDrives()),
+                    ),
+                )
+            },
+        ),
+    )
+}
+
 /**
  * Looks over the entries Fuse made in Steam: games no longer in Fuse, entries that start an old
- * copy of Fuse and games in there twice. Offers to put right only what it found.
+ * copy of Fuse or an emulator that moved, Direct entries that no longer start their game as Play
+ * would, and games in there twice. Offers to put right only what it found, each entry where it is.
  */
 internal fun AppState.checkSteamGames() {
     val steam = platform.steam ?: return
     scope.launch {
-        val library = store.library.games(GameQuery(includeHidden = true)).first()
+        val look = steamIssues() ?: return@launch
+        val library = look.library
         val ids = library.map { it.id.value }.toSet()
-        val issues = runCatching { steam.gamesHealth(ids) }.getOrDefault(emptyList())
-        if (issues.isEmpty()) {
-            toasts.show("Fuse's games in Steam are all as they should be", icon = FuseIcons.CircleCheck)
+        val issues = look.issues
+        val waiting = issues.filter { it.kind == SteamHealthIssue.Kind.GAME_UNAVAILABLE }
+        if (issues.size == waiting.size) {
+            toasts.show(
+                if (waiting.isEmpty()) "Fuse's games in Steam are all as they should be"
+                else "Fuse's games in Steam are as they should be. ${waiting.joinToString(", ") { it.name }} can't start until their drive is back",
+                icon = FuseIcons.CircleCheck,
+            )
             return@launch
         }
         val gone = issues.filter { it.kind == SteamHealthIssue.Kind.GAME_GONE }
-        val fix = issues.filter { it.kind != SteamHealthIssue.Kind.GAME_GONE }
+        val fix = issues.filter { it.kind != SteamHealthIssue.Kind.GAME_GONE && it.kind != SteamHealthIssue.Kind.GAME_UNAVAILABLE }
         fun named(kind: SteamHealthIssue.Kind) = fix.filter { it.kind == kind }.takeIf { it.isNotEmpty() }?.joinToString(", ") { i -> i.name }
         val lines = listOfNotNull(
             gone.takeIf { it.isNotEmpty() }?.let { "No longer in Fuse: ${it.joinToString(", ") { i -> i.name }}." },
@@ -332,17 +401,19 @@ internal fun AppState.checkSteamGames() {
             named(SteamHealthIssue.Kind.DUPLICATE)?.let { "In Steam twice: $it." },
             named(SteamHealthIssue.Kind.THROUGH_WINDOW)?.let { "Open Fuse's window first, where Fast Start starts the game at once: $it." },
             named(SteamHealthIssue.Kind.EMULATOR_GONE)?.let { "Start an emulator that isn't there any more: $it." },
+            named(SteamHealthIssue.Kind.OUT_OF_DATE)?.let { "Don't start the game as Play would now (its emulator updated or moved, the game moved, or how it starts changed): $it." },
+            waiting.takeIf { it.isNotEmpty() }?.let { "Can't start until their drive is back, and stay as they are: ${it.joinToString(", ") { i -> i.name }}." },
         )
         confirm = ConfirmSpec(
             title = "Put Steam's entries right?",
-            message = (lines + "Only Fuse's own entries change. Settings, Library, Steam can undo it.").joinToString("\n\n"),
+            message = (lines + "Only Fuse's own entries change, each where it is, so its art, play time and collections stay. Settings, Library, Steam can undo it.").joinToString("\n\n"),
             confirmLabel = "Put right",
         ) {
             scope.launch {
                 // Entries for games Fuse no longer has go, doubles go (the first stays), and entries
-                // that start an older Fuse, an older way or a missing emulator are written again where
-                // they are: a Direct entry with the game's command now, else with Fast Start.
-                val again = setOf(SteamHealthIssue.Kind.PROGRAM_MOVED, SteamHealthIssue.Kind.THROUGH_WINDOW, SteamHealthIssue.Kind.EMULATOR_GONE)
+                // that start an older Fuse, an older way, a missing emulator or an old command are
+                // written again where they are: a Direct entry with the game's command now, else with Fast Start.
+                val again = setOf(SteamHealthIssue.Kind.PROGRAM_MOVED, SteamHealthIssue.Kind.THROUGH_WINDOW, SteamHealthIssue.Kind.EMULATOR_GONE, SteamHealthIssue.Kind.OUT_OF_DATE)
                 val moved = library.filter { c -> fix.any { it.kind in again && it.gameId == c.id.value } }
                 val direct = directChosen()
                 val ways = steamWays()
@@ -351,6 +422,7 @@ internal fun AppState.checkSteamGames() {
                     .onSuccess { toasts.show(it, icon = FuseIcons.CircleCheck) }
                     .onFailure { toasts.show(it.message ?: "Couldn't change Steam's library", ToastKind.ERROR) }
                 refreshSteamGames()
+                reportSteamHealth()
             }
         }
     }

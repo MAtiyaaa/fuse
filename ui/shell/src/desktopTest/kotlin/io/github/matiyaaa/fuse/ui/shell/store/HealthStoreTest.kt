@@ -105,6 +105,20 @@ class HealthStoreTest {
     }
 
     @Test
+    fun whatTheInterfaceFindsIsShownWithTheRestAndGoesWhenPutRight(): Unit = runBlocking {
+        val services = FakeServices(FuseData(DesktopDatabase.open(File(cache, "fuse4.db").absolutePath)), cache)
+        val store = createFuseStore(services, scope)
+        val steam = io.github.matiyaaa.fuse.ui.shell.store.HealthIssue(
+            "steam.entries",
+            io.github.matiyaaa.fuse.ui.shell.store.Problem("A Steam entry needs putting right", "Metroid Fusion.", actions = listOf(ProblemAction.PutSteamRight())),
+        )
+        store.health.setFound("steam", listOf(steam))
+        assertTrue(report(store) { r -> r.issues.any { it.id == "steam.entries" } }.issues.single { it.id == "steam.entries" }.problem.actions.single() is ProblemAction.PutSteamRight)
+        store.health.setFound("steam", emptyList())
+        report(store) { r -> r.issues.none { it.id == "steam.entries" } }
+    }
+
+    @Test
     fun theReportLeavesOutTheHomeFolderAndSecrets(): Unit = runBlocking {
         val services = FakeServices(FuseData(DesktopDatabase.open(File(cache, "fuse3.db").absolutePath)), cache)
         services.secrets.put("sgdb.apikey", "SUPERSECRETKEY123")

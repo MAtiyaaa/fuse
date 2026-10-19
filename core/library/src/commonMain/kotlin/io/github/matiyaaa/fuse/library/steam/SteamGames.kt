@@ -86,6 +86,25 @@ data class SteamArt(
     val icon: String? = null,
 )
 
+/**
+ * The shape Steam's library shows each picture in, from Steamworks' documentation: Library Assets
+ * gives the library capsule as 600 by 900 and the library hero as 3840 by 1240, Store Graphical
+ * Assets the header capsule as 460 by 215; an icon is square, and a logo has no shape of its own. A
+ * picture far from its shape would be cropped or stretched there, so it isn't used and Steam's own
+ * stays: [fits] allows 15% either way (10% for an icon), so a 16:9 screenshot is no header.
+ */
+object SteamArtShape {
+    /** Width over height, by [SteamArt]'s kinds; none for the logo. */
+    private val SHAPES = mapOf("portrait" to 600.0 / 900, "wide" to 460.0 / 215, "hero" to 3840.0 / 1240, "icon" to 1.0)
+
+    fun fits(kind: String, width: Int, height: Int): Boolean {
+        if (width <= 0 || height <= 0) return false
+        val shape = SHAPES[kind] ?: return true
+        val off = (width.toDouble() / height) / shape - 1
+        return kotlin.math.abs(off) <= if (kind == "icon") 0.1 else 0.15
+    }
+}
+
 /** Something wrong with an entry Fuse made, found by [SteamGames.health]. */
 data class SteamHealthIssue(val gameId: Long, val appId: Long, val name: String, val kind: Kind) {
     enum class Kind {
@@ -103,6 +122,15 @@ data class SteamHealthIssue(val gameId: Long, val appId: Long, val name: String,
 
         /** A Direct entry whose emulator isn't where the entry starts it any more. */
         EMULATOR_GONE,
+
+        /**
+         * A Direct entry that no longer starts the game as Play would: its emulator updated or moved,
+         * its game moved to another drive, or its way of starting changed.
+         */
+        OUT_OF_DATE,
+
+        /** The game's files can't be reached now (their drive or card is out): it can't start until they're back. */
+        GAME_UNAVAILABLE,
     }
 }
 
@@ -410,11 +438,21 @@ object SteamGames {
     }
 
     /**
-     * What is wrong with the entries Fuse made in [bytes]: a game no longer in [library], a program
-     * that isn't [fuseExe] any more, the same game twice, an older entry that opens Fuse's window
-     * first, and a Direct entry whose emulator [exists] no longer finds.
+     * What is wrong with the entries Fuse made in [bytes]: a game no longer in [library], the same
+     * game twice, a game whose files can't be reached now ([unavailable]), a program that isn't
+     * [fuseExe] any more, an older entry that opens Fuse's window first, a Direct entry whose
+     * emulator [exists] no longer finds, and one that doesn't start its game as [wanted] (the entry
+     * each game would get written now) says.
      */
-    fun health(bytes: ByteArray?, fuseExe: String, library: Set<Long>, isFuse: (String) -> Boolean, exists: (String) -> Boolean = { true }): List<SteamHealthIssue> {
+    fun health(
+        bytes: ByteArray?,
+        fuseExe: String,
+        library: Set<Long>,
+        isFuse: (String) -> Boolean,
+        exists: (String) -> Boolean = { true },
+        wanted: Map<Long, SteamGameEntry> = emptyMap(),
+        unavailable: Set<Long> = emptySet(),
+    ): List<SteamHealthIssue> {
         val out = ArrayList<SteamHealthIssue>()
         val seen = HashSet<Long>()
         for (e in entries(parse(bytes))) {
@@ -423,7 +461,12 @@ object SteamGames {
             val kind = when {
                 id !in seen && id !in library -> SteamHealthIssue.Kind.GAME_GONE
                 id in seen -> SteamHealthIssue.Kind.DUPLICATE
-                start == SteamStart.DIRECT -> SteamHealthIssue.Kind.EMULATOR_GONE.takeIf { !exists(e.exe.trim('"')) }
+                id in unavailable -> SteamHealthIssue.Kind.GAME_UNAVAILABLE
+                start == SteamStart.DIRECT -> when {
+                    !exists(SteamLearn.words(e.exe).firstOrNull().orEmpty()) -> SteamHealthIssue.Kind.EMULATOR_GONE
+                    wanted[id]?.let { !upToDate(e, start, fuseExe, it) } == true -> SteamHealthIssue.Kind.OUT_OF_DATE
+                    else -> null
+                }
                 e.exe != quote(fuseExe) -> SteamHealthIssue.Kind.PROGRAM_MOVED
                 start == SteamStart.THROUGH_WINDOW -> SteamHealthIssue.Kind.THROUGH_WINDOW
                 else -> null

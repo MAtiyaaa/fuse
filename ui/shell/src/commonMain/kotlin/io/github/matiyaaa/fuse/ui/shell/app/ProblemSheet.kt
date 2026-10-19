@@ -163,6 +163,7 @@ fun AppState.runProblemAction(action: ProblemAction, spec: ProblemSpec?) {
             store.sources.rescan(ScanScope.QUICK)
             toasts.show("Scanning your library")
         }
+        is ProblemAction.PutSteamRight -> checkSteamGames()
         is ProblemAction.ShowMissing -> {
             navigator.remembered("lib.all") { io.github.matiyaaa.fuse.ui.shell.library.LibraryViewState() }.apply {
                 segment = io.github.matiyaaa.fuse.ui.shell.library.LibrarySegment.MISSING
@@ -324,6 +325,7 @@ private fun ProblemAction.icon(): ImageVector = when (this) {
     is ProblemAction.Rescan -> FuseIcons.ScanSearch
     is ProblemAction.LeaveSafeMode -> FuseIcons.LogOut
     is ProblemAction.ShowMissing -> FuseIcons.FileSearch
+    is ProblemAction.PutSteamRight -> FuseIcons.Gamepad
     is ProblemAction.OpenHealth -> FuseIcons.HeartPulse
     is ProblemAction.ResetAppearance -> FuseIcons.Paintbrush
 }

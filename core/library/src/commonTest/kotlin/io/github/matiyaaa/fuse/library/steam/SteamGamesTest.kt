@@ -150,6 +150,24 @@ class SteamGamesTest {
     }
 
     @Test
+    fun aDirectEntryThatNoLongerStartsItsGameAsPlayWouldIsFoundAndAnUnreachableGameSaidAsSuch() {
+        val all = SteamGames.write(theirs(), fuse, listOf(zelda.copy(direct = mgba), SteamGameEntry(3, "Chrono Trigger", "Super Nintendo")), isFuse)!!
+        // As written: nothing wrong.
+        assertTrue(SteamGames.health(all, fuse, setOf(12L, 3L), isFuse, wanted = mapOf(12L to zelda.copy(direct = mgba))).isEmpty())
+        // The emulator updated to another file, the game moved to another drive, or the game now starts with Fast Start.
+        val updated = zelda.copy(direct = mgba.copy(argv = listOf("/usr/bin/mgba-qt-0.11", "-f", "/home/deck/ROMs/gba/Minish Cap (USA).gba")))
+        val moved = zelda.copy(direct = mgba.copy(argv = listOf("/usr/bin/mgba-qt", "-f", "/run/media/deck/SD/gba/Minish Cap (USA).gba")))
+        for (now in listOf(updated, moved, zelda)) {
+            assertEquals(listOf(SteamHealthIssue.Kind.OUT_OF_DATE), SteamGames.health(all, fuse, setOf(12L, 3L), isFuse, wanted = mapOf(12L to now)).map { it.kind })
+        }
+        // Its files on a drive that isn't there: said, whatever kind of entry it has.
+        assertEquals(
+            listOf(SteamHealthIssue.Kind.GAME_UNAVAILABLE, SteamHealthIssue.Kind.GAME_UNAVAILABLE),
+            SteamGames.health(all, fuse, setOf(12L, 3L), isFuse, wanted = mapOf(12L to moved), unavailable = setOf(12L, 3L)).map { it.kind },
+        )
+    }
+
+    @Test
     fun argumentsAreQuotedAsAShellReadsThemBack() {
         assertEquals("/roms/zelda.gba", SteamGames.shell("/roms/zelda.gba"))
         assertEquals("'/roms/Minish Cap.gba'", SteamGames.shell("/roms/Minish Cap.gba"))
@@ -255,5 +273,20 @@ class SteamGamesTest {
         assertEquals(3, SteamCollections.activeNamespace("""[[1,"798"],[3,"901"]]"""))
         assertEquals(1, SteamCollections.activeNamespace("""[[1,"798"],[3,"0"]]"""))
         assertEquals(1, SteamCollections.activeNamespace(null))
+    }
+
+    @Test
+    fun eachPictureIsCheckedForTheShapeSteamShowsItIn() {
+        assertTrue(SteamArtShape.fits("portrait", 600, 900))
+        assertTrue(SteamArtShape.fits("portrait", 512, 720), "a box a little wider than 2:3")
+        assertFalse(SteamArtShape.fits("portrait", 640, 480), "a landscape box")
+        assertTrue(SteamArtShape.fits("wide", 920, 430))
+        assertFalse(SteamArtShape.fits("wide", 1920, 1080), "a screenshot")
+        assertTrue(SteamArtShape.fits("hero", 3840, 1240))
+        assertFalse(SteamArtShape.fits("hero", 1920, 1080))
+        assertTrue(SteamArtShape.fits("icon", 256, 256))
+        assertFalse(SteamArtShape.fits("icon", 256, 192))
+        assertTrue(SteamArtShape.fits("logo", 800, 200), "a logo has no shape of its own")
+        assertFalse(SteamArtShape.fits("portrait", 0, 900))
     }
 }

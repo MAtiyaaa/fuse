@@ -274,7 +274,12 @@ private fun FuseAppContent(
             }
         }
     }
-    LaunchedEffect(Unit) { app.refreshSteamGames() }
+    LaunchedEffect(Unit) {
+        app.refreshSteamGames()
+        // Fuse's entries in Steam looked over once the library has settled, for System health.
+        delay(StartupGuard.SETTLE_MS)
+        if (app.safeMode == null) runCatching { app.reportSteamHealth() }
+    }
     // Keep Steam in Step (off until the person turns it on).
     LaunchedEffect(Unit) { if (app.safeMode == null) app.keepSteamInStep() }
     // An update Fuse went back from at this start, or a library brought back for this version: said once.

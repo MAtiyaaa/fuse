@@ -6,6 +6,7 @@ import io.github.matiyaaa.fuse.desktop.system.DesktopOs
 import io.github.matiyaaa.fuse.desktop.system.GameMode
 import io.github.matiyaaa.fuse.desktop.system.Processes
 import io.github.matiyaaa.fuse.library.steam.SteamArt
+import io.github.matiyaaa.fuse.library.steam.SteamArtShape
 import io.github.matiyaaa.fuse.library.steam.SteamCollections
 import io.github.matiyaaa.fuse.library.steam.SteamGameAction
 import io.github.matiyaaa.fuse.library.steam.SteamGameEntry
@@ -371,11 +372,11 @@ internal class DesktopSteam(
         )
     }
 
-    /** Fuse's pictures for a live change, by Steam's asset kinds: only files that are there. */
+    /** Fuse's pictures for a live change, by Steam's asset kinds: only files that are there, each in its shape ([SteamArtShape]). */
     private fun liveArt(art: SteamArt): Map<String, String> = listOfNotNull(
-        art.portrait?.let { "capsule" to it }, art.hero?.let { "hero" to it }, art.logo?.let { "logo" to it },
-        art.wide?.let { "header" to it }, art.icon?.let { "icon" to it },
-    ).filter { File(it.second).isFile }.toMap()
+        art.portrait?.let { Triple("capsule", "portrait", it) }, art.hero?.let { Triple("hero", "hero", it) }, art.logo?.let { Triple("logo", "logo", it) },
+        art.wide?.let { Triple("header", "wide", it) }, art.icon?.let { Triple("icon", "icon", it) },
+    ).filter { (_, kind, path) -> File(path).isFile && inShape(kind, File(path)) }.associate { (asset, _, path) -> asset to path }
 
     /** Writes [games] (and their collections) once Steam has closed by itself; Steam is never closed for it. */
     private fun addWhenClosed(games: List<SteamGameEntry>, art: Map<Long, SteamArt>, collections: Boolean) {
@@ -522,9 +523,13 @@ internal class DesktopSteam(
         }
     }
 
-    override suspend fun gamesHealth(library: Set<Long>): List<SteamHealthIssue> = withContext(Dispatchers.IO) {
+    override suspend fun gamesHealth(library: Set<Long>, wanted: Map<Long, SteamGameEntry>, unavailable: Set<Long>): List<SteamHealthIssue> = withContext(Dispatchers.IO) {
         val exe = program() ?: return@withContext emptyList()
-        userLists().flatMap { f -> SteamGames.health(runCatching { f.readBytes() }.getOrNull(), exe, library, ::fuseProgram, exists = { File(it).exists() }) }.distinct()
+        // Each as it would be written here (a Direct entry's program found, or Fast Start).
+        val now = prepared(wanted.values.toList()).associateBy { it.gameId }
+        userLists().flatMap { f ->
+            SteamGames.health(runCatching { f.readBytes() }.getOrNull(), exe, library, ::fuseProgram, exists = { File(it).exists() }, wanted = now, unavailable = unavailable)
+        }.distinct()
     }
 
     override suspend fun directGames(): Map<Long, Long> = withContext(Dispatchers.IO) {
@@ -693,9 +698,14 @@ internal class DesktopSteam(
      */
     internal fun placeGameArt(grid: File, id: Long, art: SteamArt): String {
         grid.mkdirs()
-        for ((source, name) in listOf(art.portrait to "${id}p", art.wide to "$id", art.hero to "${id}_hero", art.logo to "${id}_logo", art.icon to "${id}_icon")) {
+        for ((kind, source, name) in listOf(
+            Triple("portrait", art.portrait, "${id}p"), Triple("wide", art.wide, "$id"), Triple("hero", art.hero, "${id}_hero"),
+            Triple("logo", art.logo, "${id}_logo"), Triple("icon", art.icon, "${id}_icon"),
+        )) {
             val from = source?.let(::File)?.takeIf { it.isFile } ?: continue
             if (listOf("png", "jpg", "jpeg", "webp").any { File(grid, "$name.$it").exists() }) continue
+            // Only a picture in the shape Steam shows it in; otherwise Steam's own stays.
+            if (!inShape(kind, from)) continue
             val ext = from.extension.lowercase()
             val (bytes, out) = when (ext) {
                 "png", "jpg", "jpeg" -> from.readBytes() to ext
@@ -711,6 +721,25 @@ internal class DesktopSteam(
         }
         return listOf("png", "jpg", "jpeg").map { File(grid, "${id}_icon.$it") }.firstOrNull { it.isFile }?.absolutePath.orEmpty()
     }
+
+    /** Whether the picture in [file] is in the shape Steam shows a [kind] in; unreadable pictures aren't. */
+    private fun inShape(kind: String, file: File): Boolean {
+        val (w, h) = imageSize(file) ?: return false
+        return SteamArtShape.fits(kind, w, h)
+    }
+
+    /** A picture's width and height from its header (PNG, JPEG), or by decoding it (WebP and the rest). */
+    private fun imageSize(file: File): Pair<Int, Int>? = runCatching {
+        javax.imageio.ImageIO.createImageInputStream(file)?.use { input ->
+            val reader = javax.imageio.ImageIO.getImageReaders(input).asSequence().firstOrNull() ?: return@use null
+            try {
+                reader.setInput(input, true, true)
+                reader.getWidth(0) to reader.getHeight(0)
+            } finally {
+                reader.dispose()
+            }
+        }
+    }.getOrNull() ?: runCatching { org.jetbrains.skia.Image.makeFromEncoded(file.readBytes()).let { it.width to it.height } }.getOrNull()
 
     private fun program(): String? = programPath()
 

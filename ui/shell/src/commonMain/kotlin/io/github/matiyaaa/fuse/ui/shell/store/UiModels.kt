@@ -399,6 +399,9 @@ sealed interface ProblemAction {
 
     /** The library's list of games whose files weren't found. */
     data class ShowMissing(override val label: String = "Show these games") : ProblemAction
+
+    /** Looks over Fuse's entries in Steam and offers to put them right, each where it is. */
+    data class PutSteamRight(override val label: String = "Put Them Right") : ProblemAction
     data class OpenHealth(override val label: String = "System health") : ProblemAction
 
     /** Back to Fuse's own theme with standard motion and no glass or CRT, saved. */
