@@ -947,6 +947,88 @@ class ParsersTest {
     }
 
     @Test
+    fun vita3ksSettingsWithTheElementAndNameAGamesFileKeepsEachUnder() {
+        val config = """
+            #define CONFIG_KEYBOARD(code) \\
+                code(PhysicalKeyCode, "keyboard-button-select", PhysicalKeyCode::ShiftRight, keyboard_button_select)
+
+            #define CONFIG_INDIVIDUAL(code)                                              \\
+                code(bool, "v-sync", true, v_sync)                                       \\
+                code(float, "resolution-multiplier", 1.0f, resolution_multiplier)       \\
+                code(std::string, "backend-renderer", "Vulkan", backend_renderer)        \\
+                code(bool, "ngs-enable", true, ngs_enable)                               \\
+                code(int, "sys-button", static_cast<int>(SCE_SYSTEM_PARAM_ENTER_BUTTON_CROSS), sys_button) \\
+                code(float, "background-alpha", .300f, background_alpha)                 \\
+                code(int, "psn-signed-in", false, psn_signed_in)                         \\
+                CONFIG_KEYBOARD(code)                                                    \\
+                code(std::string, "user-id", std::string{}, user_id)
+
+            #define CONFIG_VECTOR(code) \\
+                code(std::vector<std::string>, "lle-modules", std::vector<std::string>{}, lle_modules)
+        """.trimIndent()
+        val custom = """
+            bool load_custom_config(Config::CurrentConfig &out, const fs::path &config_path, const std::string &app_path) {
+                const auto config_child = doc.child("config");
+                if (!config_child.child("gpu").empty()) {
+                    const auto gpu = config_child.child("gpu");
+                    out.backend_renderer = gpu.attribute("backend-renderer").as_string();
+            #ifdef __ANDROID__
+                    out.custom_driver_name = gpu.attribute("custom-driver-name").as_string();
+            #endif
+                    out.resolution_multiplier = gpu.attribute("resolution-multiplier").as_float();
+                    out.v_sync = gpu.attribute("v-sync").as_bool();
+                }
+                if (!config_child.child("audio").empty()) {
+                    const auto audio = config_child.child("audio");
+                    out.ngs_enable = audio.attribute("enable-ngs").as_bool();
+                }
+                if (!config_child.child("network").empty())
+                    out.psn_signed_in = config_child.child("network").attribute("psn-signed-in").as_bool();
+                return true;
+            }
+            bool save_custom_config(const Config::CurrentConfig &cc, const fs::path &config_path, const std::string &app_path) { return true; }
+        """.trimIndent()
+        val found = Vita3K.parse(mapOf(Vita3K.CONFIG to config, Vita3K.CUSTOM to custom)).associateBy { it.key }
+        assertEquals(setOf("v-sync", "resolution-multiplier", "backend-renderer", "ngs-enable", "sys-button", "background-alpha", "psn-signed-in", "user-id"), found.keys, "no key bindings or lists")
+        val vsync = found.getValue("v-sync")
+        assertEquals(listOf("", "true", "gpu", null), listOf(vsync.section, vsync.default, vsync.gameSection, vsync.gameKey))
+        assertTrue(vsync.perGame)
+        assertEquals("GPU", vsync.tab)
+        assertEquals("audio" to "enable-ngs", found.getValue("ngs-enable").let { it.gameSection to it.gameKey }, "its own name in a game's file")
+        assertEquals("network", found.getValue("psn-signed-in").gameSection)
+        assertEquals("0", found.getValue("psn-signed-in").default)
+        assertEquals("0.300", found.getValue("background-alpha").default)
+        assertFalse(found.getValue("background-alpha").perGame, "not one a game's file holds")
+        assertEquals(null, found.getValue("sys-button").default, "worked out from a constant")
+        assertEquals("" to Kind.STRING, found.getValue("user-id").let { it.default to it.kind })
+    }
+
+    @Test
+    fun xeniasSettingsAreItsDefinesWhereverTheyAre() {
+        val gpu = """
+            DEFINE_bool(vsync, true, "Enable VSYNC.", "GPU");
+            DEFINE_uint64(framerate_limit, 0,
+                          "Maximum frames per second. 0 = Unlimited frames.\n"
+                          "Defaults to 60, when set to 0, and VSYNC is enabled.",
+                          "GPU");
+            DEFINE_string(gpu, "any", "Graphics system. Use: [any, d3d12, vulkan, null]", "GPU");
+            DEFINE_path(cache_root, "", "Root path for files used to speed up certain parts of the emulator.", "Storage");
+            DEFINE_transient_bool(headless, false, "Don't display any UI.", "UI");
+        """.trimIndent()
+        val apu = "DEFINE_double(apu_volume, 1.0, \"Volume.\", \"APU\");\nDEFINE_int32(apu_max_queued_frames, 64, \"Allows changing max buffered audio frames.\", \"APU\");"
+        val found = Xenia.parse(mapOf("src/xenia/gpu/graphics_system.cc" to gpu, "src/xenia/apu/audio_system.cc" to apu))
+        assertEquals(listOf("apu_volume", "apu_max_queued_frames", "vsync", "framerate_limit", "gpu"), found.map { it.key }, "not a path or one only for the command line")
+        val vsync = found.single { it.key == "vsync" }
+        assertEquals(Triple("GPU", Kind.BOOL, "true"), Triple(vsync.section, vsync.kind, vsync.default))
+        val limit = found.single { it.key == "framerate_limit" }
+        assertEquals(Kind.INT to 0L, limit.kind to limit.min, "an unsigned one has nothing below 0")
+        assertEquals("Maximum frames per second. 0 = Unlimited frames.\nDefaults to 60, when set to 0, and VSYNC is enabled.", limit.about)
+        assertEquals(Kind.STRING to "any", found.single { it.key == "gpu" }.let { it.kind to it.default })
+        assertEquals(Kind.FLOAT to "1.0", found.single { it.key == "apu_volume" }.let { it.kind to it.default })
+        assertTrue(found.all { it.perGame }, "ReadGameConfig reads any of them for a game")
+    }
+
+    @Test
     fun shadPs4sGroupsWithWhatAGamesOwnFileCanHold() {
         val header = """
             enum GpuReadbacksMode : int {

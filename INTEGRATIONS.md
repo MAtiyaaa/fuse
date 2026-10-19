@@ -1229,7 +1229,16 @@ exactly.
   in `gameProfiles/default/` of its data folder, so Fuse makes the game's own as a copy of that one;
   its settings for every game stay in its Options) and shadPS4 (`config.json` in its user folder,
   a game's `custom_configs/<serial>.json`, as `EmulatorSettingsImpl::Save` writes them in
-  `src/core/emulator_settings.cpp`). A RetroArch game's core options are in
+  `src/core/emulator_settings.cpp`); Citron as Eden, in its own `citron` folder; Azahar's family in
+  their own folders from each one's `common_paths.h` (`azaharplus-emu`, `lime3ds-emu`,
+  `mandarine-emu`, and their Windows and macOS names); Xenia (`xenia-canary.config.toml` in its
+  storage root, `portable.txt` beside the program making that the program's folder, else Xenia in
+  Documents on Windows and in the XDG data folder elsewhere, as `xenia_main.cc` sets it; a game's
+  `config/<title id>.config.toml`); and Vita3K (`config.yml` in its config folder, as
+  `app_init.cpp` sets it: a `portable` folder beside the program, else `$XDG_CONFIG_HOME/Vita3K` on
+  Linux, the program's own folder on Windows and its Application Support folder on a Mac; a
+  game's `config/config_<title id>.xml`, which Vita3K reads an element at a time, so Fuse makes it
+  with every setting it holds). A RetroArch game's core options are in
   `config/<core>/<content>.opt` (`runloop_init_core_options_path` in `runloop.c`), which RetroArch
   reads alone when it is there, so Fuse makes it as RetroArch's Quick Menu does, with every option
   as the game has it now from the folder's `.opt`, the core's own `<core>.opt`, or
@@ -1262,7 +1271,10 @@ exactly.
   include, as the recipe's build flags define them; Cemu's `GameProfile::Load` with the types and
   defaults in `GameProfile.h` and the words `CemuConfig.h`'s formatters write each enum as; and
   shadPS4's `Setting<T>` groups in `src/core/emulator_settings.h`, each group's written members
-  and `GetOverrideableFields` (those a game's file may hold), as a Linux build compiles it. Only
+  and `GetOverrideableFields` (those a game's file may hold), as a Linux build compiles it; Xenia's
+  `DEFINE_*` settings anywhere in `src/xenia`, from a sparse checkout of its tree; and Vita3K's
+  `CONFIG_INDIVIDUAL` list with `load_custom_config` for what a game's file holds and the name it
+  has there. Ryujinx isn't read yet: its source is only on git.ryujinx.app. Only
   names, kinds, ranges, choices and defaults are taken, no code. The installed version decides
   which settings show (the newest release read that is no newer than it; when Fuse can't tell the
   version, every release's, those not every release has locked with which have them). On Linux the
@@ -1282,7 +1294,9 @@ exactly.
   game's (`QtConfig::WriteBasicSetting` and `WriteGlobalSetting`), a group with a space written as
   `%20`: Fuse reads and writes each as Azahar does (`AzaharConfig`). shadPS4's JSON goes through
   `JsonText`: a value changed where it is, a text one kept a string, a new member last in its
-  group as nlohmann's `dump(2)` lays it out. Fuse keeps what each key held before it first changed it, and
+  group as nlohmann's `dump(2)` lays it out. Xenia's TOML goes through `TomlText` (the value only,
+  its comment kept) and Vita3K's XML through `XmlText` (an attribute changed where it is, new ones
+  last, a new file as pugixml starts one). Fuse keeps what each key held before it first changed it, and
   Put Back What Fuse Changed restores exactly that (a key changed in the emulator since stays); a
   game's own file Fuse made is taken away again once nothing it set is left. RPCS3 gives a game
   with its own settings file none of the settings from its own database

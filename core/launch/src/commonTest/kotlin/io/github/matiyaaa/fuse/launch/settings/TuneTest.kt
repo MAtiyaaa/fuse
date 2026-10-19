@@ -8,15 +8,26 @@ import kotlin.test.assertTrue
 
 /** Fuse Tune's data as core:launch reads it, against what Fuse already offers. */
 class TuneTest {
+    /** Those read at one build: a branch's head (AzaharPlus, Xenia Canary) or a rolling tag (Vita3K's `continuous`). */
+    private val ONE_BUILD = setOf("azaharplus", "xenia", "vita3k")
+
     @Test
     fun everyEmulatorReadHasItsReleasesAndASettingsCountLikeItsOwn() {
         // RetroArch's cores are read as families of their own (`core.snes9x`), at one commit each.
         val emulators = Tune.families.filterNot { it.startsWith(CoreOptionFiles.family("")) }.toSet()
-        assertEquals(setOf("dolphin", "duckstation", "ppsspp", "pcsx2", "rpcs3", "devilutionx", "openrct2", "fallout2-ce", "retroarch", "eden", "azahar", "cemu", "shadps4"), emulators)
+        assertEquals(
+            setOf(
+                "dolphin", "duckstation", "ppsspp", "pcsx2", "rpcs3", "devilutionx", "openrct2", "fallout2-ce", "retroarch", "eden", "citron",
+                "azahar", "azaharplus", "lime3ds", "mandarine", "cemu", "shadps4", "xenia", "vita3k",
+            ),
+            emulators,
+        )
         // Each has as many as its own settings show; a reader that broke would find a handful.
-        val least = mapOf("devilutionx" to 40, "fallout2-ce" to 40, "azahar" to 90, "cemu" to 10, "shadps4" to 80)
+        val least = mapOf(
+            "devilutionx" to 40, "fallout2-ce" to 40, "azahar" to 90, "azaharplus" to 90, "lime3ds" to 70, "mandarine" to 80, "cemu" to 10, "shadps4" to 80, "vita3k" to 70,
+        )
         for (family in emulators) {
-            assertEquals(4, Tune.releases(family).size, family)
+            assertEquals(if (family in ONE_BUILD) 1 else 4, Tune.releases(family).size, family)
             assertTrue(Tune.forEmulator(family).size > (least[family] ?: 150), "$family: ${Tune.forEmulator(family).size}")
             assertTrue(Tune.forEmulator(family).all { it.releases.isNotEmpty() }, family)
         }
@@ -130,8 +141,8 @@ class TuneTest {
 
     @Test
     fun theInstalledVersionDecidesWhichSettingsShow() {
-        // A core's one release is the commit read, not a version a core says it is.
-        for (family in Tune.families.filterNot { it.startsWith(CoreOptionFiles.family("")) }) {
+        // A core's one release is the commit read, not a version a core says it is; so is a project's that tags no releases.
+        for (family in Tune.families.filterNot { it.startsWith(CoreOptionFiles.family("")) || it in ONE_BUILD }) {
             val read = Tune.releases(family)
             assertEquals(read.first(), Tune.releaseFor(family, null), "unknown: the newest")
             val newer = TuneVersions.numbers(read.first()).let { listOf(it[0] + 1) + it.drop(1) }.joinToString(".")

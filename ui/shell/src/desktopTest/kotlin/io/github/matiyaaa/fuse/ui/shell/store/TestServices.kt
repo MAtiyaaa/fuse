@@ -243,6 +243,12 @@ internal class FakeServices(
     /** The fake shadPS4's user folder; null when it isn't set up. */
     @Volatile var shadPs4UserDir: String? = null
 
+    /** The fake Xenia's storage root; null when it isn't set up. */
+    @Volatile var xeniaRootDir: String? = null
+
+    /** The fake Vita3K's config folder; null when it isn't set up. */
+    @Volatile var vita3kConfigDir: String? = null
+
     override val emulatorFiles = object : EmulatorFiles {
         override suspend fun pcsx2(installed: InstalledEmulator) = pcsx2Home
         override suspend fun duckstation(installed: InstalledEmulator) = duckstationHome
@@ -255,6 +261,8 @@ internal class FakeServices(
         override suspend fun azaharConfig(installed: InstalledEmulator) = azaharConfigDir
         override suspend fun cemu(installed: InstalledEmulator) = cemuHome
         override suspend fun shadPs4User(installed: InstalledEmulator) = shadPs4UserDir
+        override suspend fun xeniaRoot(installed: InstalledEmulator) = xeniaRootDir
+        override suspend fun vita3kConfig(installed: InstalledEmulator) = vita3kConfigDir
         override suspend fun wiiUTitleId(path: String, serial: String?) = Regex("""\[(00050000[0-9A-Fa-f]{8})]""").find(path)?.groupValues?.get(1)?.uppercase()
         // The real one reads the file's header; the fake's files say it in their names.
         override suspend fun threeDsTitleId(path: String, serial: String?) = Regex("""\[(00040000[0-9A-Fa-f]{8})]""").find(path)?.groupValues?.get(1)?.uppercase()
@@ -262,7 +270,7 @@ internal class FakeServices(
         override suspend fun zipText(zip: String, entry: String): String? =
             java.util.zip.ZipFile(zip).use { z -> z.getEntry(entry)?.let { e -> z.getInputStream(e).use { it.readBytes().decodeToString() } } }
         private fun inside(path: String): Boolean =
-            listOfNotNull(pcsx2Home?.dataRoot, duckstationHome?.dataRoot, ppssppHome?.memstick, retroArchHome?.cheats, retroArchHome?.configDir, dolphinHome?.config, dolphinHome?.gameSettings, rpcs3ConfigDir, edenConfigDir, azaharConfigDir, cemuHome?.config, shadPs4UserDir)
+            listOfNotNull(pcsx2Home?.dataRoot, duckstationHome?.dataRoot, ppssppHome?.memstick, retroArchHome?.cheats, retroArchHome?.configDir, dolphinHome?.config, dolphinHome?.gameSettings, rpcs3ConfigDir, edenConfigDir, azaharConfigDir, cemuHome?.config, shadPs4UserDir, xeniaRootDir, vita3kConfigDir)
                 .any { path.startsWith("$it/") }
 
         override suspend fun write(path: String, text: String): Boolean {

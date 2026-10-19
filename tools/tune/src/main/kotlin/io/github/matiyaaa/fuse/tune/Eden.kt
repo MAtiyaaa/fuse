@@ -27,6 +27,10 @@ object Eden {
     const val WORDS = "src/qt_common/config/shared_translation.cpp"
     val FILES = listOf(SETTINGS, CATEGORIES, ENUMS, WORDS)
 
+    /** Citron keeps the same files, its frontend's words in its own folder. */
+    const val CITRON_WORDS = "src/citron/configuration/shared_translation.cpp"
+    val CITRON_FILES = listOf(SETTINGS, CATEGORIES, ENUMS, CITRON_WORDS)
+
     private val DECLARATION = Regex("""\b(SwitchableSetting|Setting)\s*<\s*([\w:<>]+?)\s*(?:,\s*(true|false)\s*)?>\s*(\w+)\s*\{""")
     private val ENUM_MACRO = Regex("""\bENUM\s*\(\s*(\w+)\s*,([^;]*)\)\s*;""")
     private val INSERT = Regex("""\bINSERT\s*\(""")
@@ -34,11 +38,14 @@ object Eden {
     private val INTEGERS = setOf("u8", "u16", "u32", "u64", "s8", "s16", "s32", "s64", "int", "unsigned", "long", "size_t")
     private val DECIMALS = setOf("f32", "f64", "float", "double")
 
-    fun parse(files: Map<String, String>): List<Found> {
+    fun parse(files: Map<String, String>): List<Found> = parse(files, WORDS)
+
+    /** [parse] for a member of the family whose frontend's words are in [wordsFile]. */
+    fun parse(files: Map<String, String>, wordsFile: String): List<Found> {
         val settings = Source.withoutComments(files[SETTINGS] ?: return emptyList())
         val sections = sections(Source.withoutComments(files[CATEGORIES].orEmpty()))
         val enums = enums(Source.withoutComments(files[ENUMS].orEmpty()))
-        val words = Source.withoutComments(files[WORDS].orEmpty())
+        val words = Source.withoutComments(files[wordsFile].orEmpty())
         val (named, valueNames) = names(words)
         val out = LinkedHashMap<String, Found>()
         for (d in DECLARATION.findAll(settings)) {

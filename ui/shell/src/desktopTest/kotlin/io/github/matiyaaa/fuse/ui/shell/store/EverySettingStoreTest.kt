@@ -262,6 +262,77 @@ class EverySettingStoreTest {
     }
 
     @Test
+    fun vita3ksGameFileIsXmlMadeWithEverySettingItHoldsUnderItsOwnNames(): Unit = runBlocking {
+        val installed = InstalledEmulator(EmulatorId("linux.vita3k"), "Vita3K", Host.LINUX, "/usr/bin/vita3k", platforms = setOf(PlatformId("psvita")), detectedVia = "PATH")
+        val services = services("vita3k.db", installed)
+        val config = File(emu, "Vita3K").apply { mkdirs() }
+        val yml = File(config, "config.yml")
+        val text = "v-sync: true\nngs-enable: false\nresolution-multiplier: 1\nbackend-renderer: Vulkan\n"
+        yml.writeText(text)
+        services.vita3kConfigDir = config.absolutePath
+        File(root, "psvita").mkdirs()
+        File(root, "psvita/Persona 4 Golden [PCSB00245].psvita").writeBytes(ByteArray(64))
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = withTimeout(20_000) { store.library.games(GameQuery()).first { it.isNotEmpty() } }.first()
+
+        // For every game: config.yml's own keys.
+        val every = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(null, installed.id))
+        val vsync = every.value("", "v-sync")
+        assertEquals("true" to SettingSource.EVERY_GAME, vsync.value to vsync.source)
+
+        // A game's own: config/config_<title id>.xml, made with every setting a game's file holds, each under its element and name.
+        val forGame = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(game.id))
+        assertTrue(forGame.sections.flatMap { it.values }.all { it.setting.perGame })
+        assertTrue(store.library.setEveryEmulatorSetting(game.id, null, vsync.setting.id, "false"))
+        val own = File(config, "config/config_PCSB00245.xml")
+        val xml = io.github.matiyaaa.fuse.launch.settings.XmlText(own.readText(), "config")
+        assertEquals(listOf("false"), xml.values("gpu", "v-sync"))
+        assertEquals(listOf("false"), xml.values("audio", "enable-ngs"), "copied from ngs-enable, by the name a game's file has")
+        assertEquals(listOf("Vulkan"), xml.values("gpu", "backend-renderer"))
+        val after = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(game.id))
+        val ngs = after.value("", "ngs-enable")
+        assertEquals("false" to SettingSource.GAME, ngs.value to ngs.source)
+        assertEquals(text, yml.readText(), "every game's stay as they were")
+
+        assertTrue(store.library.restoreEmulatorSettings(game.id, null))
+        assertFalse(own.exists(), "every attribute Fuse wrote went, so the file did too")
+    }
+
+    @Test
+    fun xeniasTomlIsChangedInPlaceAndAGamesOwnFileIsItsTitleIds(): Unit = runBlocking {
+        val installed = InstalledEmulator(EmulatorId("linux.xenia"), "Xenia", Host.LINUX, "/opt/xenia/xenia_canary", platforms = setOf(PlatformId("xbox360")), detectedVia = "Folder")
+        val services = services("xenia.db", installed)
+        val storage = File(emu, "Xenia").apply { mkdirs() }
+        val config = File(storage, "xenia-canary.config.toml")
+        val text = "[GPU]\nvsync = true                                      \t# Enable VSYNC.\n"
+        config.writeText(text)
+        services.xeniaRootDir = storage.absolutePath
+        File(root, "xbox360").mkdirs()
+        File(root, "xbox360/Halo 3 [4D5307E6].iso").writeBytes(ByteArray(64))
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = withTimeout(20_000) { store.library.games(GameQuery()).first { it.isNotEmpty() } }.first()
+
+        val every = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(null, installed.id))
+        val vsync = every.value("GPU", "vsync")
+        assertEquals("true" to SettingSource.EVERY_GAME, vsync.value to vsync.source)
+        assertTrue(store.library.setEveryEmulatorSetting(null, installed.id, vsync.setting.id, "false"))
+        assertEquals(text.replace("vsync = true", "vsync = false"), config.readText(), "the value only, its comment kept")
+
+        val own = File(storage, "config/4D5307E6.config.toml")
+        assertTrue(store.library.setEveryEmulatorSetting(game.id, null, vsync.setting.id, "true"))
+        assertEquals("[GPU]\nvsync = true\n", own.readText())
+        val after = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(game.id)).value("GPU", "vsync")
+        assertEquals(Triple("true", SettingSource.GAME, "false"), Triple(after.value, after.source, after.everyGame))
+
+        assertTrue(store.library.restoreEmulatorSettings(game.id, null))
+        assertFalse(own.exists())
+        assertTrue(store.library.restoreEmulatorSettings(null, installed.id))
+        assertEquals(text, config.readText())
+    }
+
+    @Test
     fun shadPs4sJsonIsChangedInPlaceAndAGamesOwnFileIsKeptUnderItsSerial(): Unit = runBlocking {
         val installed = InstalledEmulator(EmulatorId("linux.shadps4"), "shadPS4", Host.LINUX, "/opt/shadps4/Shadps4-sdl.AppImage", version = "0.20.0", platforms = setOf(PlatformId("ps4")), detectedVia = "AppImage")
         val services = services("shadps4.db", installed)

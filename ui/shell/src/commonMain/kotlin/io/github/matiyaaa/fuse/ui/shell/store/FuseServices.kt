@@ -508,6 +508,12 @@ interface EmulatorFiles {
     /** A 3DS game's title id from its serial or its file's own header ([io.github.matiyaaa.fuse.sync.threeDsTitleId]); null when unreadable. */
     suspend fun threeDsTitleId(path: String, serial: String?): String? = null
 
+    /** Vita3K's config folder for [installed] (where its `config.yml` and `config/` are); null until it has written `config.yml`. */
+    suspend fun vita3kConfig(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
+
+    /** Xenia's storage root for [installed] (where its `xenia-canary.config.toml` and `config/` are); null until it has written that file. */
+    suspend fun xeniaRoot(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
+
     /** Cemu's data and config folders for [installed]; null until it has a settings.xml. */
     suspend fun cemu(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): io.github.matiyaaa.fuse.launch.settings.CemuHome? = null
 

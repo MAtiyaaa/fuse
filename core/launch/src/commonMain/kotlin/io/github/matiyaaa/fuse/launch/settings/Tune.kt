@@ -40,7 +40,12 @@ data class TuneSetting(
     val label: String? = null,
     val about: String? = null,
     val tab: String? = null,
+    /** Its key in a game's own file, when that differs from [key] (Vita3K's `enable-ngs` for `ngs-enable`). */
+    val gameKey: String? = null,
 ) {
+    /** The key it is kept under: in a game's own file when [game], else in the file for every game. */
+    fun keyIn(game: Boolean): String = if (game) gameKey ?: key else key
+
     /** Its ini section (the only part of an ini file's path). */
     val section: String get() = path.joinToString("/")
 
@@ -143,6 +148,7 @@ object Tune {
             default = opt(f[5])?.let { if (kind == TuneKind.SWITCH) switchShown(f[0], it) else it }, min = opt(f[6])?.toLongOrNull(), max = opt(f[7])?.toLongOrNull(), choices = choices,
             perGame = f[9] == "1", gameSection = opt(f[10]), releases = f[11].split(',').filter { it.isNotEmpty() },
             label = f.getOrNull(12)?.let(::opt), about = f.getOrNull(13)?.let(::opt), tab = f.getOrNull(14)?.let(::opt),
+            gameKey = f.getOrNull(15)?.let(::opt),
         )
     }
 

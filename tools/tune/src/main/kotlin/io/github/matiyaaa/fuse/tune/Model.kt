@@ -32,6 +32,8 @@ data class Found(
     val label: String? = null,
     val about: String? = null,
     val tab: String? = null,
+    /** Its key in a game's own file, when that differs from [key] (Vita3K's `enable-ngs` for `ngs-enable`). */
+    val gameKey: String? = null,
 ) {
     /** What makes it the same setting in another release. */
     val identity: String get() = "${file.orEmpty()}\u0000$section\u0000$key"

@@ -75,14 +75,16 @@ together as each emulator does it, and Fuse Ports brings games rebuilt to run na
 - **RPCS3's settings in Fuse.** RPCS3 joins the emulators whose settings Fuse changes, through
   Every Setting, for every game and for one game (its file kept under the game's title id). Fuse
   says first that a game's own RPCS3 settings take the place of those RPCS3's database gives it.
-- **RetroArch's, Eden's, Azahar's, Cemu's and shadPS4's settings in Fuse.** Every Setting now has
-  RetroArch's own settings, named, described and grouped as its menu has them, for every game and
-  for one game, kept in the override RetroArch reads for that game with the core that plays it.
-  Eden's are there too, for every game and for a Switch game by its title id, Azahar's, for every
-  game and for a 3DS game by the title id in its own file, and shadPS4's, for every game and for a
-  PS4 game by its serial, each written as the emulator writes its own so it reads every value back
-  exactly. A Wii U game's Cemu profile is there as well, made as a copy of the one Cemu ships for
-  the game so nothing else about it changes. Put Back undoes any of them.
+- **Many more emulators' settings in Fuse.** Every Setting now has RetroArch's own settings, named,
+  described and grouped as its menu has them, for every game and for one game, kept in the
+  override RetroArch reads for that game with the core that plays it. Eden's and Citron's are
+  there too, for every game and for a Switch game by its title id; Azahar's, AzaharPlus's,
+  Lime3DS's and Mandarine's, for every game and for a 3DS game by the title id in its own file;
+  shadPS4's for a PS4 game by its serial; Xenia's for an Xbox 360 game by its title id; and
+  Vita3K's for a Vita game by its title id. Each is written as the emulator writes its own, so it
+  reads every value back exactly. A Wii U game's Cemu profile is there as well, made as a copy of
+  the one Cemu ships for the game, and a Vita game's own file is made with every setting it holds,
+  so nothing else about the game changes. Put Back undoes any of them.
 - **A game's core options.** A RetroArch game's page now has its core's own options too (85 cores,
   from Snes9x and mGBA to Beetle PSX, SwanStation, Flycast and Mupen64Plus-Next), named and grouped
   as the core names them. Changing one gives the game its own options file, made as RetroArch's

@@ -8,7 +8,7 @@ package io.github.matiyaaa.fuse.tune
  *   key (CMakeModules/GenerateSettingKeys.cmake makes each `Keys::` name the string of itself), and
  *   the enums they take (`enum class GraphicsAPI { Software = 0, OpenGL = 1, Vulkan = 2 }`), written
  *   as each member's number (`QtConfig::WriteBasicSetting`).
- * - src/citra_qt/configuration/config.cpp: the group each is kept under (`qt_config->beginGroup(
+ * - src/citra_qt/configuration/config.cpp (`QtConfig`, or `Config` in older builds of the family): the group each is kept under (`qt_config->beginGroup(
  *   QStringLiteral("Renderer"))` before `ReadGlobalSetting(Settings::values.use_hw_shader)`), and
  *   which a game's own file holds: only those read with `ReadGlobalSetting` in the groups
  *   `QtConfig::ReadValues` reads for a game too (not those inside its `if (global)`).
@@ -26,13 +26,31 @@ package io.github.matiyaaa.fuse.tune
  */
 object Azahar {
     const val SETTINGS = "src/common/settings.h"
-    const val CONFIG = "src/citra_qt/configuration/config.cpp"
     private const val ANDROID = "src/android/app/src/main"
-    const val SCREENS = "$ANDROID/java/org/citra/citra_emu/features/settings/ui/SettingsFragmentPresenter.kt"
-    val MODELS = listOf("BooleanSetting", "IntSetting", "FloatSetting", "StringSetting").map { "$ANDROID/java/org/citra/citra_emu/features/settings/model/$it.kt" }
     const val STRINGS = "$ANDROID/res/values/strings.xml"
     const val ARRAYS = "$ANDROID/res/values/arrays.xml"
-    val FILES = listOf(SETTINGS, CONFIG, SCREENS, STRINGS, ARRAYS) + MODELS
+
+    /**
+     * Where a member of the family keeps these: its Qt frontend's folder (`citra_qt`, Lime3DS's
+     * `lime_qt`, Mandarine's `mandarine_qt`) and its Android app's package folder.
+     */
+    class Layout(qt: String, android: String) {
+        val config = "src/$qt/configuration/config.cpp"
+        val screens = "$ANDROID/java/$android/features/settings/ui/SettingsFragmentPresenter.kt"
+        val models = listOf("BooleanSetting", "IntSetting", "FloatSetting", "StringSetting").map { "$ANDROID/java/$android/features/settings/model/$it.kt" }
+        val files = listOf(SETTINGS, config, screens, STRINGS, ARRAYS) + models
+        fun parse(files: Map<String, String>): List<Found> = parse(files, this)
+    }
+
+    /** Azahar's, and AzaharPlus's (a fork that keeps Azahar's folders in its code). */
+    val AZAHAR = Layout("citra_qt", "org/citra/citra_emu")
+    val LIME3DS = Layout("lime_qt", "io/github/lime3ds/android")
+    val MANDARINE = Layout("mandarine_qt", "io/github/mandarine3ds/mandarine")
+
+    val CONFIG = AZAHAR.config
+    val SCREENS = AZAHAR.screens
+    val MODELS = AZAHAR.models
+    val FILES = AZAHAR.files
 
     /** A setting on a screen: its enum's name and member (`BooleanSetting.NEW_3DS`), its words' names, and a choice's names and values. */
     private val ON_SCREEN = Regex(
@@ -44,16 +62,18 @@ object Azahar {
     private val READ = Regex("""\b(ReadGlobalSetting|ReadBasicSetting)\s*\(\s*Settings::values\.(\w+)\s*\)""")
     /** A group begun (its name when it is a literal, else empty: kept for the count, never a section) or ended. */
     private val GROUP = Regex("""beginGroup\s*\((?:\s*QStringLiteral\s*\(\s*"([^"]*)"\s*\))?[^;]*;|endGroup\s*\(\s*\)""")
-    private val FUNCTION = Regex("""\bvoid\s+QtConfig::(Read\w+Values)\s*\(\s*\)\s*\{""")
+    private val FUNCTION = Regex("""\bvoid\s+(?:Qt)?Config::(Read\w+Values)\s*\(\s*\)\s*\{""")
     private val INTEGERS = setOf("u8", "u16", "u32", "u64", "s8", "s16", "s32", "s64", "int", "unsigned", "long", "size_t")
     private val DECIMALS = setOf("f32", "f64", "float", "double")
 
     /** Where a setting is read: its group and whether a game's own file can hold it. */
     private data class Read(val group: String, val perGame: Boolean)
 
-    fun parse(files: Map<String, String>): List<Found> {
+    fun parse(files: Map<String, String>): List<Found> = parse(files, AZAHAR)
+
+    fun parse(files: Map<String, String>, layout: Layout): List<Found> {
         val settings = Source.withoutComments(files[SETTINGS] ?: return emptyList())
-        val reads = reads(Source.withoutComments(files[CONFIG] ?: return emptyList()))
+        val reads = reads(Source.withoutComments(files[layout.config] ?: return emptyList()))
         val enums = Source.enums(settings)
         val out = LinkedHashMap<String, Found>()
         for (d in DECLARATION.findAll(settings)) {
@@ -87,16 +107,16 @@ object Azahar {
             }
             out.putIfAbsent(found.identity, found)
         }
-        return withWords(out.values.toList(), files)
+        return withWords(out.values.toList(), files, layout)
     }
 
     /** [found] with what Azahar's settings screens call each setting and its choices, where they name it. */
-    private fun withWords(found: List<Found>, files: Map<String, String>): List<Found> {
-        val screens = files[SCREENS] ?: return found
+    private fun withWords(found: List<Found>, files: Map<String, String>, layout: Layout): List<Found> {
+        val screens = files[layout.screens] ?: return found
         val strings = AndroidResources.strings(files[STRINGS].orEmpty())
         val arrays = AndroidResources.arrays(files[ARRAYS].orEmpty(), strings)
         // `BooleanSetting.NEW_3DS` to its key, from each model's own enum.
-        val keys = MODELS.flatMap { path ->
+        val keys = layout.models.flatMap { path ->
             val kind = path.substringAfterLast('/').removeSuffix(".kt")
             MODEL.findAll(files[path].orEmpty()).map { "$kind.${it.groupValues[1]}" to it.groupValues[2] }.toList()
         }.toMap()
@@ -150,7 +170,7 @@ object Azahar {
 
     /** The functions `ReadValues` calls for a game's own file too: those after its `if (global)` block. */
     private fun forGames(config: String): Set<String> {
-        val start = Regex("""void\s+QtConfig::ReadValues\s*\(\s*\)\s*\{""").find(config) ?: return emptySet()
+        val start = Regex("""void\s+(?:Qt)?Config::ReadValues\s*\(\s*\)\s*\{""").find(config) ?: return emptySet()
         val (body, _) = block(config, start.range.last) ?: return emptySet()
         val global = globalBlocks(body)
         return Regex("""\b(Read\w+Values)\s*\(\s*\)""").findAll(body).filter { m -> global.none { m.range.first in it } }.map { it.groupValues[1] }.toSet()

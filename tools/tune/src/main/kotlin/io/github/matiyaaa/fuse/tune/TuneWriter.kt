@@ -6,7 +6,8 @@ package io.github.matiyaaa.fuse.tune
  * fields in string constants small enough for the JVM's limits (see `Tune` in core:launch, which
  * reads them). A field that is absent is [NONE]; an enum's values are joined by [JOIN], each its
  * value, then [LABEL] and what the code calls it, then [HOSTS] and the systems that have it. The
- * setting's own name, description and tab follow the releases (lines written before had none).
+ * setting's own name, description and tab follow the releases (lines written before had none),
+ * and last, only where it differs, its key in a game's own file.
  */
 object TuneWriter {
     const val NONE = "\u0001"
@@ -24,13 +25,13 @@ object TuneWriter {
             f.min?.toString() ?: NONE, f.max?.toString() ?: NONE, f.choices.joinToString(JOIN, transform = ::choice),
             if (f.perGame) "1" else "0", f.gameSection ?: NONE, m.tags.joinToString(","),
             f.label?.let(::words) ?: NONE, f.about?.let(::words) ?: NONE, f.tab?.let(::words) ?: NONE,
-        ).joinToString("\t") { it.replace('\t', ' ').replace('\n', ' ') }
+        ).plus(listOfNotNull(f.gameKey)).joinToString("\t") { it.replace('\t', ' ').replace('\n', ' ') }
     }
 
     /**
-     * An emulator's words as Fuse shows them: a dash between words becomes a comma (`Modern –
-     * Balanced` is `Modern, Balanced`) and one between numbers a hyphen. Values and keys are never
-     * changed, being what the emulator reads.
+     * An emulator's words as Fuse shows them: a dash (U+2013 or U+2014) between words becomes a
+     * comma (SameBoy's "Modern, Balanced") and one between numbers a hyphen. Values and keys are
+     * never changed, being what the emulator reads.
      */
     fun words(text: String): String = text
         .replace(Regex("""\s+[\u2013\u2014]\s+"""), ", ")

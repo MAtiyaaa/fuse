@@ -17,6 +17,10 @@ class Emulator(
     val parse: (Map<String, String>) -> List<Found>,
     val git: String = "https://github.com/$repo",
     val raw: (tag: String, path: String) -> String = { tag, path -> "https://raw.githubusercontent.com/$repo/$tag/$path" },
+    /** For a project that tags no releases: the branch its builds come from, read at its head (the commit is the release). */
+    val branch: String? = null,
+    /** For settings spread over a whole tree: the files read, as patterns, from a sparse checkout at each release. */
+    val tree: List<String>? = null,
 )
 
 val EMULATORS = listOf(
@@ -40,6 +44,16 @@ val EMULATORS = listOf(
     Emulator("cemu", "cemu-project/Cemu", Regex("""^v\d+\.\d+$"""), Cemu.FILES, Cemu::parse),
     // Azahar's releases are numbered by year and week (2126.2, 2126.1.2); alphas and release candidates left out.
     Emulator("azahar", "azahar-emu/azahar", Regex("""^\d{4}(?:\.\d+)*$"""), Azahar.FILES, Azahar::parse),
+    // Azahar's family: Lime3DS (archived; 2119.1 its last), Mandarine (r1.3.0 and the like) and AzaharPlus, whose releases are branches of Azahar's, read at its own branch's head.
+    Emulator("lime3ds", "Lime3DS/lime3ds-archive", Regex("""^\d{4}(?:\.\d+)*$"""), Azahar.LIME3DS.files, Azahar.LIME3DS::parse),
+    Emulator("mandarine", "mandarine3ds/mandarine", Regex("""^r\d+\.\d+(?:\.\d+)?$"""), Azahar.MANDARINE.files, Azahar.MANDARINE::parse),
+    Emulator("azaharplus", "AzaharPlus/AzaharPlus", Regex(".^"), Azahar.AZAHAR.files, Azahar.AZAHAR::parse, branch = "AzaharPlus"),
+    // Vita3K tags only `continuous`, its rolling build.
+    Emulator("vita3k", "Vita3K/Vita3K", Regex("^continuous$"), Vita3K.FILES, Vita3K::parse),
+    // Xenia Canary's builds come from its canary_experimental branch; its tags name commits, not releases.
+    Emulator("xenia", "xenia-canary/xenia-canary", Regex(".^"), emptyList(), Xenia::parse, branch = "canary_experimental", tree = Xenia.TREE),
+    // Citron: yuzu's code as Eden keeps it, its releases named by date (2026-04-27), on GitHub as citron-neo/emulator.
+    Emulator("citron", "citron-neo/emulator", Regex("""^\d{4}-\d{2}-\d{2}$"""), Eden.CITRON_FILES, { Eden.parse(it, Eden.CITRON_WORDS) }),
     // Eden is kept on its own Forgejo; its releases are v0.2.1 and the like (release candidates left out).
     Emulator(
         "eden", "eden-emu/eden", Regex("""^v\d+\.\d+\.\d+$"""), Eden.FILES, Eden::parse,
@@ -65,11 +79,17 @@ fun main(args: Array<String>) {
     val read = LinkedHashMap<Emulator, Pair<List<String>, List<Merged>>>()
     for (e in EMULATORS) {
         if (only != null && e.family !in only) continue
-        val tags = releases(tagsOf(e.git), e.release).take(RELEASES)
+        val head = e.branch?.let { b -> headOf(e.git, b) ?: error("${e.family}: no branch $b") }
+        val tags = if (head != null) listOf(head) else releases(tagsOf(e.git), e.release).take(RELEASES)
         require(tags.isNotEmpty()) { "${e.family}: no release tags found" }
-        val perTag = tags.associateWith { tag -> e.parse(e.files.mapNotNull { path -> fetch(e.raw(tag, path))?.let { path to it } }.toMap()) }
+        val perTag = tags.associateWith { tag ->
+            val files = e.tree?.let { treeFiles(e.git, tag, it) } ?: e.files.mapNotNull { path -> fetch(e.raw(tag, path))?.let { path to it } }.toMap()
+            e.parse(files)
+        }
         perTag.forEach { (tag, found) -> println("${e.family} $tag: ${found.size} settings") }
-        read[e] = tags to merge(tags, perTag)
+        // A branch's head is named by its commit's first ten digits, as a core's is.
+        val named = tags.map { if (head != null) it.take(10) else it }
+        read[e] = named to merge(named, perTag.mapKeys { (k, _) -> if (head != null) k.take(10) else k })
     }
     val fresh = read.map { (e, v) -> Triple(e.family, v.first, v.second) } + cores(only)
     if (only == null) {
@@ -223,6 +243,32 @@ private fun optionsFile(git: String, branch: String): CoreTree? {
     } finally {
         dir.deleteRecursively()
     }
+}
+
+/** The files matching [patterns] at [ref] (a tag or commit) in the repository at [git], from a shallow sparse checkout. */
+private fun treeFiles(git: String, ref: String, patterns: List<String>): Map<String, String> {
+    val dir = java.nio.file.Files.createTempDirectory("tune-tree").toFile()
+    try {
+        fun run(vararg a: String): Boolean {
+            val p = ProcessBuilder(listOf("git") + a).directory(dir).redirectErrorStream(true).start()
+            p.inputStream.bufferedReader().readText()
+            return p.waitFor() == 0
+        }
+        if (!run("init", "-q") || !run("remote", "add", "origin", git)) return emptyMap()
+        if (!run("fetch", "-q", "--depth", "1", "--filter=blob:none", "origin", ref)) return emptyMap()
+        if (!run("sparse-checkout", "set", "--no-cone", *patterns.toTypedArray()) || !run("checkout", "-q", "FETCH_HEAD")) return emptyMap()
+        return dir.walkTopDown().filter { it.isFile && ".git" !in it.relativeTo(dir).path.split(java.io.File.separatorChar) }
+            .associate { it.relativeTo(dir).invariantSeparatorsPath to it.readText() }
+    } finally {
+        dir.deleteRecursively()
+    }
+}
+
+/** The commit at the head of [branch] in the repository at [git]. */
+private fun headOf(git: String, branch: String): String? {
+    val p = ProcessBuilder("git", "ls-remote", git, "refs/heads/$branch").redirectErrorStream(true).start()
+    val text = p.inputStream.bufferedReader().readText()
+    return if (p.waitFor() == 0) text.lineSequence().firstOrNull { it.endsWith("refs/heads/$branch") }?.substringBefore('\t')?.trim() else null
 }
 
 /** The tag names of the repository at [git], as `git ls-remote` lists them. */

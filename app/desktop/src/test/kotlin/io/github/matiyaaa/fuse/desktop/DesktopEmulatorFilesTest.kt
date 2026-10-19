@@ -112,6 +112,39 @@ class DesktopEmulatorFilesTest {
     }
 
     @Test
+    fun xeniasStorageRootIsBesideItWhenPortableElseInTheDataFolder() = runBlocking {
+        val linux = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        val program = File(home, "Apps/xenia/xenia_canary").apply { parentFile.mkdirs(); writeText("") }
+        val xenia = InstalledEmulator(EmulatorId("linux.xenia"), "Xenia", Host.LINUX, program.absolutePath, platforms = setOf(PlatformId("xbox360")), detectedVia = "Folder")
+        val data = File(home, ".local/share/Xenia").apply { mkdirs() }
+        assertNull(linux.xeniaRoot(xenia), "not until Xenia has written its config")
+        File(data, "xenia-canary.config.toml").writeText("[GPU]\n")
+        assertEquals(p(data), linux.xeniaRoot(xenia))
+        // With portable.txt beside the program, its own folder.
+        File(program.parentFile, "portable.txt").writeText("")
+        File(program.parentFile, "xenia-canary.config.toml").writeText("[GPU]\n")
+        assertEquals(p(program.parentFile), linux.xeniaRoot(xenia))
+    }
+
+    @Test
+    fun azaharsFamilyAndCitronKeepTheirOwnFoldersNames() = runBlocking {
+        val linux = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        fun installed(id: String, via: String = "AppImage") = InstalledEmulator(EmulatorId("linux.$id"), id, Host.LINUX, "/opt/$id.AppImage", platforms = setOf(PlatformId("3ds")), detectedVia = via)
+        for ((id, folder) in listOf("lime3ds" to "lime3ds-emu", "mandarine" to "mandarine-emu", "azaharplus" to "azaharplus-emu")) {
+            val config = File(home, ".config/$folder").apply { mkdirs(); File(this, "qt-config.ini").writeText("") }
+            assertEquals(p(config), linux.azaharConfig(installed(id)), id)
+        }
+        val lime = File(home, ".var/app/io.github.lime3ds.Lime3DS/config/lime3ds-emu").apply { mkdirs(); File(this, "qt-config.ini").writeText("") }
+        assertEquals(p(lime), linux.azaharConfig(installed("lime3ds").copy(appId = "io.github.lime3ds.Lime3DS", detectedVia = "Flatpak")))
+        val windows = DesktopEmulatorFiles(DesktopOs.WINDOWS, env = mapOf("APPDATA" to File(home, "AppData/Roaming").absolutePath), home = home.absolutePath, backups = backups)
+        val roaming = File(home, "AppData/Roaming/Mandarine/config").apply { mkdirs(); File(this, "qt-config.ini").writeText("") }
+        assertEquals(p(roaming), windows.azaharConfig(installed("mandarine").copy(host = Host.WINDOWS, appId = "C:/Mandarine/mandarine-qt.exe", detectedVia = "Folder")))
+        // Citron: yuzu's paths under its own name.
+        val citron = File(home, ".config/citron").apply { mkdirs(); File(this, "qt-config.ini").writeText("") }
+        assertEquals(p(citron), linux.edenConfig(InstalledEmulator(EmulatorId("linux.citron"), "Citron", Host.LINUX, "/opt/citron.AppImage", platforms = setOf(PlatformId("switch")), detectedVia = "AppImage")))
+    }
+
+    @Test
     fun cemusFoldersAreWhereItsOwnPathsPutThemAndItsGameProfilesCanBeWritten() = runBlocking {
         val cemu = InstalledEmulator(EmulatorId("linux.cemu"), "Cemu", Host.LINUX, "/usr/bin/cemu", platforms = setOf(PlatformId("wiiu")), detectedVia = "PATH")
         val linux = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
