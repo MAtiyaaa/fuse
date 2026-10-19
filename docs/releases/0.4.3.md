@@ -216,6 +216,14 @@ the game page is calmer, and Linux looks and plays more the way Android does.
   entry) starts the port instead. Each port's Game Settings are every setting of its own, read from
   its code (DevilutionX's with its own names and descriptions), changed in its own file and put
   back exactly.
+- **PlayStation 5 games recompiled to run natively.** On Linux and Windows, a PS5 dump's Play With
+  list offers Recompile to Run Natively: Fuse fetches AnyPS5, checks its files against GitHub's own
+  checksums, and turns the game's code into a program of your computer's own, in Fuse's folder,
+  with your dump linked in and never changed. Play then starts it without an emulator, Steam
+  entries included, and its saves stay in Fuse's folder if you take the build out again. A dump
+  AnyPS5 can't read says why before anything is downloaded.
+- **KytyPS5**, the PlayStation 5 emulator, installs from the Store on Windows, Linux and the Mac,
+  and plays a dump's folder or a ZArchive dump.
 - **PS4 trophies before the first play.** A PS4 game's trophies show on its page before shadPS4
   has opened it, read from the game's own trophy file with the trophy key you gave shadPS4.
 - **Sign Emulators In**, in Settings, Accounts, once RetroAchievements is connected: type your

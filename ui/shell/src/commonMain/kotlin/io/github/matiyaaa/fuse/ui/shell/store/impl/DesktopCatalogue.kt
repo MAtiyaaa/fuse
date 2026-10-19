@@ -216,6 +216,20 @@ internal object DesktopCatalogue {
             EMULATORS, listOf("ps5"), repo = "https://github.com/sharpemu/sharpemu", emulator = "sharpemu", prereleases = true, hosts = setOf(Host.LINUX),
         ),
         DesktopEntry(
+            // Each build is a release of its own (KytyPS5-<date>-<commit>), with one file per system
+            // (.github/workflows/build.yml, "Release KytyPS5"); the Mac's is x86-64, Rosetta 2 on Apple silicon.
+            "kytyps5", "KytyPS5", "KytyPS5 team", "PlayStation 5, experimental: a few games play, Windows first.",
+            EMULATORS, listOf("ps5"), repo = "https://github.com/KytyPS5/KytyPS5", emulator = "kytyps5",
+            pick = { host, _, _ ->
+                when (host) {
+                    Host.LINUX -> Regex("-Linux-x86_64\\.tar\\.gz$")
+                    Host.WINDOWS -> Regex("-Windows-x64\\.zip$")
+                    Host.MACOS -> Regex("-macOS-x86_64\\.zip$")
+                    else -> null
+                }
+            },
+        ),
+        DesktopEntry(
             "mame", "MAME", "MAMEdev", "Arcade machines, thousands of them.",
             EMULATORS, listOf("arcade"), emulator = "mame", flathub = "org.mamedev.MAME", hosts = setOf(Host.LINUX),
         ),

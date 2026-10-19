@@ -81,19 +81,8 @@ object WindowsCatalog {
         port("xenia", "xenia.exe", "xenia_canary.exe"),
         port("shadps4", "shadPS4.exe", fromItsFolder = true),
         port("sharpemu", "SharpEmu.exe", fromItsFolder = true) { it.copy(source = LinuxCatalog.SHARPEMU_SOURCE) },
-        DesktopEmulatorDef(
-            LinuxEmulatorDef(
-                id = "$PREFIX.kytyps5", name = "KytyPS5", platforms = platforms("ps5"),
-                detection = LinuxDetection(),
-                modes = listOf(
-                    LaunchMode("Game", TargetKind.FILE, LinuxCommandSpec(listOf("--game", "{ROM}"), workingDir = "{EMUDIR}")),
-                ),
-                source = "KytyPS5's README: kyty_emulator.exe --game <game folder or eboot.bin>", confidence = Confidence.COMMUNITY,
-                homepage = "https://kytyps5.github.io/",
-                limitations = listOf("PlayStation 5 emulation is young: a few games play, many stop at a menu or loading screen."),
-            ),
-            DesktopFind(listOf("kyty_emulator.exe", "kyty_launcher.exe"), folders = listOf("kyty*")),
-        ),
+        // kyty_emulator.exe alone: kyty_launcher.exe beside it is its library window, which takes no game.
+        port("kytyps5", "kyty_emulator.exe", folders = listOf("kyty*")) { it.copy(source = LinuxCatalog.KYTYPS5_SOURCE) },
         port("mednafen", "mednafen.exe"),
         port("mame", "mame.exe", fromItsFolder = true),
         // %STARTDIR%=%EMUDIR% Supermodel.exe %ROM%: its Config folder is beside it.

@@ -7,6 +7,7 @@ import io.github.matiyaaa.fuse.integrations.ports.PortsClient
 import io.github.matiyaaa.fuse.integrations.ports.PortsIndexReader
 import io.github.matiyaaa.fuse.integrations.ports.PortsList
 import io.github.matiyaaa.fuse.integrations.ports.PortsSignature
+import io.github.matiyaaa.fuse.launch.ports.AnyPs5Recompile
 import io.github.matiyaaa.fuse.launch.ports.OverlayStep
 import io.github.matiyaaa.fuse.launch.ports.PortAdapter
 import io.github.matiyaaa.fuse.launch.ports.PortLayout
@@ -66,6 +67,9 @@ internal class PortsStore(
     /** What each port's chosen folders lack, by port then data id; and its game in the library. */
     private val lacks = MutableStateFlow<Map<String, Map<String, String>>>(emptyMap())
     private val games = MutableStateFlow<Map<String, GameId>>(emptyMap())
+
+    /** PlayStation 5 games recompiled with AnyPS5, each kept as a port of its own. */
+    private val recompiler = AnyPs5Recompiler(ctx, files, library, write, removePort = { remove(it) })
 
     init {
         ctx.scope.launch { ctx.settings.drop(1).collect { publish() } }
@@ -297,10 +301,22 @@ internal class PortsStore(
         val path = g.location.path.replace('\\', '/').trimEnd('/')
         val near = setOfNotNull(path, FsPath.parent(path))
         val s = ctx.settings.value.ports
-        return mutable.value.ports.filter { v ->
+        val listed = mutable.value.ports.filter { v ->
             v.ready && (s.copies[v.port.id] == game.value || s.folders[v.port.id].orEmpty().values.any { it in near } || TitleText.normalize(v.port.game) == name)
         }
+        // A build AnyPS5 made of this very game (it isn't in the list of ports).
+        val recompiled = s.installed.filter { (id, _) -> AnyPs5Recompile.isRecompiled(id) && s.copies[id] == game.value }.mapNotNull { (id, installed) ->
+            val launcherGame = runCatching { ctx.data.games.idByPath(layout(id).launcher) }.getOrNull() ?: return@mapNotNull null
+            PortView(installed.port, installed.build, null, installedVersion = installed.port.version, installedSha = installed.build.sha256, game = launcherGame)
+        }
+        return listed + recompiled
     }
+
+    override suspend fun recompileOffer(game: GameId) = recompiler.offer(game)
+
+    override suspend fun recompile(game: GameId, onStep: (String) -> Unit): String? = recompiler.recompile(game, onStep)
+
+    override suspend fun removeRecompiled(game: GameId): Boolean = recompiler.remove(game)
 
     override suspend fun setPlayWith(game: GameId, portId: String?) = write { s ->
         val key = game.value.toString()

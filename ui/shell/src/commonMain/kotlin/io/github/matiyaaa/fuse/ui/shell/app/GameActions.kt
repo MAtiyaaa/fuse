@@ -633,6 +633,58 @@ fun AppState.collectionPicker(game: GameId, title: String) {
     }
 }
 
+/**
+ * A PlayStation 5 dump's rows for AnyPS5 in Play With: recompiling it (again, with AnyPS5's newest
+ * release, once it has a build), or why it can't be here, and taking its build out.
+ */
+private fun AppState.recompileChoices(card: GameCard, offer: io.github.matiyaaa.fuse.ui.shell.store.RecompileOffer?): List<MenuAction> {
+    offer ?: return emptyList()
+    val built = offer.builtWith
+    return listOfNotNull(
+        MenuAction(
+            "recompile", if (built == null) "Recompile to Run Natively" else "Recompile Again", FuseIcons.Zap,
+            detail = offer.warning ?: if (built == null) {
+                "AnyPS5 makes a program of this computer's own from your dump, in Fuse's folder. Your dump isn't changed"
+            } else {
+                "Made with AnyPS5 $built. Made again with its newest release"
+            },
+            section = "AnyPS5",
+            enabled = offer.whyNot == null,
+            unavailableReason = offer.whyNot,
+            onSelect = { recompileGame(card) },
+        ),
+        built?.let {
+            MenuAction(
+                "recompile.remove", "Remove the Recompiled Build", FuseIcons.Trash,
+                detail = "Play goes back to the emulator. Its saves stay in Fuse's folder",
+                section = "AnyPS5",
+                onSelect = {
+                    choice = null
+                    scope.launch {
+                        if (store.ports.removeRecompiled(card.id)) toasts.show("${card.title}'s recompiled build is gone; its saves are kept", ToastKind.INFO, icon = FuseIcons.Trash)
+                        else toasts.show("Fuse couldn't take ${card.title}'s build out.", ToastKind.WARNING)
+                    }
+                },
+            )
+        },
+    )
+}
+
+/** Recompiles [card] with AnyPS5, saying when it downloads AnyPS5 and how it ended. */
+private fun AppState.recompileGame(card: GameCard) {
+    choice = null
+    scope.launch {
+        toasts.show("Recompiling ${card.title} with AnyPS5. A large game takes a few minutes", ToastKind.INFO, icon = FuseIcons.Zap, durationMs = 8_000L)
+        val said = HashSet<String>()
+        val problem = store.ports.recompile(card.id) { step ->
+            // Fetching AnyPS5 itself is said once; the recompiler's own lines aren't.
+            if (step.startsWith("Downloading AnyPS5") && said.add(step)) toasts.show(step, ToastKind.INFO, icon = FuseIcons.Download)
+        }
+        if (problem == null) toasts.show("${card.title} is recompiled, and Play starts it natively from now on", ToastKind.SUCCESS, icon = FuseIcons.CircleCheck)
+        else toasts.show(problem, ToastKind.WARNING, durationMs = 10_000L)
+    }
+}
+
 fun AppState.emulatorPicker(card: GameCard) {
     contextMenu = null
     scope.launch {
@@ -642,11 +694,17 @@ fun AppState.emulatorPicker(card: GameCard) {
         // The ports set up here that play this game (Play With): picked, they start in the emulator's place.
         val ports = if (store.ports.supported) store.ports.portsFor(card.id) else emptyList()
         val withPort = store.ports.playWith(card.id)
+        // A PlayStation 5 dump AnyPS5 can recompile into a program of this computer's own.
+        val recompile = if (store.ports.supported) store.ports.recompileOffer(card.id) else null
         fun noPort() { if (withPort != null) scope.launch { store.ports.setPlayWith(card.id, null) } }
         choice = ChoiceSpec(
             icon = FuseIcons.Chip,
-            title = if (ports.isEmpty()) "Emulator for ${card.title}" else "Play ${card.title} With",
-            message = if (ports.isEmpty()) "The system's choice is used unless you pick one here." else "An emulator, or a port of it rebuilt to run natively. The system's emulator is used unless you pick one here.",
+            title = if (ports.isEmpty() && recompile == null) "Emulator for ${card.title}" else "Play ${card.title} With",
+            message = when {
+                recompile != null -> "An emulator, or a build AnyPS5 recompiles from your dump to run natively. The system's emulator is used unless you pick one here."
+                ports.isEmpty() -> "The system's choice is used unless you pick one here."
+                else -> "An emulator, or a port of it rebuilt to run natively. The system's emulator is used unless you pick one here."
+            },
             options = listOf(
                 MenuAction("default", "Use the system's emulator", FuseIcons.Layers, onSelect = {
                     scope.launch { store.library.setEmulator(card.id, null) }
@@ -707,7 +765,7 @@ fun AppState.emulatorPicker(card: GameCard) {
                         }
                     },
                 )
-            },
+            } + recompileChoices(card, recompile),
         )
     }
 }

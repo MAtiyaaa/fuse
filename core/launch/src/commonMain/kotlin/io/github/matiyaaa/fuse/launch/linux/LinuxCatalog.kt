@@ -33,6 +33,13 @@ object LinuxCatalog {
     /** SharpEmu's README (github.com/sharpemu/sharpemu): `SharpEmu <path to eboot.bin>`. */
     internal const val SHARPEMU_SOURCE = "SharpEmu's README: SharpEmu \"<game>/eboot.bin\""
 
+    /**
+     * KytyPS5's README at e5f0ee7 ("Running"): `kyty_emulator --game <game directory, ELF file or
+     * ZArchive dump>`, the same on Windows, Linux and macOS; its release workflow
+     * (.github/workflows/build.yml) packs `kyty_emulator` at the top of each system's build.
+     */
+    internal const val KYTYPS5_SOURCE = "KytyPS5's README (e5f0ee7): kyty_emulator --game <game directory, ELF file or ZArchive dump>"
+
     private fun spec(args: Array<out String>, workingDir: String?) = LinuxCommandSpec(args.toList(), workingDir)
 
     private fun file(vararg args: String, ext: Set<String>? = null, workingDir: String? = null, platforms: Set<PlatformId>? = null, label: String = "File") =
@@ -358,6 +365,18 @@ object LinuxCatalog {
             detection = detect(bin = listOf("sharpemu", "SharpEmu"), appImage = listOf("sharpemu*.appimage"), dirBin = listOf("SharpEmu/SharpEmu", "sharpemu/SharpEmu", "SharpEmu/sharpemu")),
             modes = listOf(file("{ROM}", ext = setOf("bin"), workingDir = "{EMUDIR}", label = "eboot.bin")),
             source = SHARPEMU_SOURCE, confidence = Confidence.VERIFIED_SOURCE, homepage = "https://sharpemu.app/",
+            limitations = listOf("PlayStation 5 emulation is young: a few games play, many stop at a menu or loading screen."),
+        ),
+        LinuxEmulatorDef(
+            id = "linux.kytyps5", name = "KytyPS5", platforms = platforms("ps5"),
+            // The Store unpacks its build into a folder of its name (its files are at the build's top).
+            detection = detect(dirBin = listOf("KytyPS5/kyty_emulator", "kytyps5/kyty_emulator")),
+            modes = listOf(
+                // A folder dump by its folder (eboot.bin's), a ZArchive dump by its file; settings and saves beside the program.
+                file("--game", "{ROMDIR}", ext = setOf("bin"), workingDir = "{EMUDIR}", label = "Game folder"),
+                file("--game", "{ROM}", ext = setOf("zar"), workingDir = "{EMUDIR}", label = "ZArchive dump"),
+            ),
+            source = KYTYPS5_SOURCE, confidence = Confidence.VERIFIED_SOURCE, homepage = "https://kytyps5.github.io/",
             limitations = listOf("PlayStation 5 emulation is young: a few games play, many stop at a menu or loading screen."),
         ),
         LinuxEmulatorDef(

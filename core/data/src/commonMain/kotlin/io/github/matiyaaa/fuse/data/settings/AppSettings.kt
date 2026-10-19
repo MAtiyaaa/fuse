@@ -79,6 +79,8 @@ data class PortsSettings(
     val folders: Map<String, Map<String, String>> = emptyMap(),
     val copies: Map<String, Long> = emptyMap(),
     val playWith: Map<String, String> = emptyMap(),
+    /** The AnyPS5 release Fuse has, for recompiling PlayStation 5 games; null before the first. */
+    val anyPs5: String? = null,
 )
 
 /**

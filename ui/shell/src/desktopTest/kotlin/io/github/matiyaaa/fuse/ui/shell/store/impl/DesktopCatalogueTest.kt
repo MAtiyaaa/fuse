@@ -36,6 +36,18 @@ class DesktopCatalogueTest {
     }
 
     @Test
+    fun kytyPs5TakesEachComputersOwnFileFromABuild() {
+        val kyty = DesktopCatalogue.entries.single { it.key == "kytyps5" }
+        // The files of one build, as its release workflow names them.
+        val files = listOf("Windows-x64.zip", "macOS-x86_64.zip", "Linux-x86_64.tar.gz").map { "KytyPS5-2026-10-19-e5f0ee7-$it" }
+        for ((host, file) in listOf(Host.WINDOWS to files[0], Host.MACOS to files[1], Host.LINUX to files[2])) {
+            val rule = kyty.pick!!.invoke(host, false, null)!!
+            assertEquals(listOf(file), files.filter { rule.containsMatchIn(it) }, "$host")
+            assertTrue(kyty.sourceFor(host) != null, "$host installs it")
+        }
+    }
+
+    @Test
     fun theLeftOutAreRealEmulatorIds() {
         val ids = LinuxCatalog.defs.map { it.id.removePrefix("linux.") }.toSet()
         assertTrue(leftOut.keys.all { it in ids }, "an id in the left-out list no longer exists: ${leftOut.keys - ids}")

@@ -69,6 +69,22 @@ interface PortsOps {
     /** The library game Play starts for [game]: its port's, when one was chosen and is ready; else null. */
     suspend fun playTarget(game: GameId): GameId? = null
 
+    /**
+     * What recompiling [game] with AnyPS5 would do here ([io.github.matiyaaa.fuse.launch.ports.AnyPs5Recompile]),
+     * or null when it isn't a PlayStation 5 dump.
+     */
+    suspend fun recompileOffer(game: GameId): RecompileOffer? = null
+
+    /**
+     * Recompiles [game] with AnyPS5 into Fuse's folder (installing AnyPS5 first, or its newer
+     * release), adds the build to the library and has Play start it. [onStep] hears each step, in
+     * words. Null when done, else why not.
+     */
+    suspend fun recompile(game: GameId, onStep: (String) -> Unit = {}): String? = "Games are recompiled from Fuse on a computer."
+
+    /** Takes [game]'s recompiled build out (its saves stay in its home); Play goes back to its emulator. */
+    suspend fun removeRecompiled(game: GameId): Boolean = false
+
     object None : PortsOps {
         override val state: StateFlow<PortsState> = MutableStateFlow(PortsState())
     }
@@ -119,6 +135,14 @@ data class PortView(
     val update: Boolean get() = installedSha != null && build != null && installedSha != build.sha256
     val ready: Boolean get() = installed && missing.isEmpty() && game != null
 }
+
+/**
+ * Recompiling a PlayStation 5 game with AnyPS5 here: why it can't be ([whyNot]), the AnyPS5 release
+ * its build here was made with ([builtWith], null before it is recompiled), and what the person
+ * should know first ([warning]: a processor without an extension the game's code needs).
+ */
+@Immutable
+data class RecompileOffer(val whyNot: String? = null, val builtWith: String? = null, val warning: String? = null)
 
 /** A game of the library whose [folder] holds a port's game files. */
 @Immutable

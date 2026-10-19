@@ -52,6 +52,7 @@ and redact credentials from every error message (`redact()`, see
 | Store (Android): Obtainium Emulation Pack, app sources | Optionally a GitHub token | Requests for the pack's newest release on github.com, each app's releases (GitHub's API, or the download page the pack names), and the APK you install; your IP address and the User-Agent (or the one the pack sets for a download page) | The catalogue when the Store opens and is older than 6 hours, or on "Check now"; an app's releases when its page or card is shown, for installed apps a little after start (at most twice a day, can be turned off); downloads only when you press Install or Update |
 | Store (computer): each program's releases | Optionally a GitHub token (GitHub only) | Requests for a program's releases on GitHub, its own Forgejo or Gitea server, its download listing or Flathub, and the file you install; your IP address and the User-Agent | A program's releases when its page or card is shown, for installed programs a little after start; downloads only when you press Install, Update or Update All |
 | Fuse Ports (computer, off until you turn it on) | Your own copy of each game (its folder, chosen by you) | Requests for a newer signed list of ports (`index.json` and its `.sig` on the `ports` release of Fuse's GitHub repository), and each port's build from its project's own release when you install it; your IP address and the User-Agent. Your game's files and folders never leave the device: they are only linked into Fuse's copy | The list when Ports opens (at most every 6 hours) or on Look Again, only while Fuse carries the key it is signed with; a build only when you press Install or Update |
+| PS5 recompiling with AnyPS5 (Linux and Windows) | Nothing: your dump is read and linked on this computer | AnyPS5's newest release from GitHub's API, then its relinker and system libraries from that release; your IP address and the User-Agent (and the Store's GitHub token, when you gave one) | Only when you choose Recompile to Run Natively or Recompile Again on a PS5 game |
 | GameBanana | Nothing | A game's title (or the words you search with), the GameBanana game you chose and the mods you open, your IP address and the User-Agent; then the mod's file from GameBanana's own address | Only when you open GameBanana in a game's cheats, textures or mods, a mod there, or add one of its files; answers are kept a while |
 | Nexus Mods (computer, off until you add your key) | Your own personal API key from your Nexus Mods account | To api.nexusmods.com only: your key in the `apikey` header with "Fuse" and its version, the Nexus Mods game you chose for a game and the mods and files you open; for an account that isn't Premium, the one-time key and expiry of the Mod Manager Download link you paste. Then the file from the address Nexus Mods gives (https only). The key stays on this device: it is never shared with your household or Fuse Sync | Whose key it is when Settings, Accounts, Nexus Mods is shown (once a run per key); the games list when you choose a game (kept a week), a game's lists when you open Nexus Mods for it (kept an hour), a mod's files when you open it; downloads only when you add a file |
 | RPCS3 compatibility list (rpcs3.net) | Nothing | A PS3 game's title id (for example `BLUS30443`), your IP address and the User-Agent | Only when you choose How It Runs in RPCS3 in a PS3 game's options; the answer is kept a week |
@@ -878,6 +879,20 @@ Fallout 2 Community Edition must still be running after five seconds or end by i
 crash. The list is then marked with what passed, its revision raised, signed and put on the `ports`
 pre-release (never the latest release, and never taken as a version of Fuse). Windows builds aren't
 checked yet, so they never show as verified.
+
+**PlayStation 5 games recompiled with AnyPS5** (`core:launch` `AnyPs5Recompile`, `ui:shell`
+`AnyPs5Recompiler`; Linux and Windows): from a PS5 dump's Play With list, and only then. AnyPS5's
+newest release is read from GitHub's API (`repos/boykopovar/AnyPS5/releases/latest`, with the Store's
+GitHub token when one is given), and its relinker and system libraries for this computer
+(`relinker-<tag>`, `relinker-<tag>.exe`, `prx-<system>-<tag>.zip`) are downloaded from that release
+over HTTPS and compared with the SHA-256 GitHub gives for each: without one, nothing is downloaded.
+They are kept in `ports/anyps5/<tag>/` while a game's build uses that release. The dump is read
+(its top entries and the first bytes of `eboot.bin`) and linked, never copied or changed and never
+sent anywhere; the relinker runs on this computer, in the build's folder,
+`ports/anyps5-<title id>/build`, whose `app0/` is links to the dump and whose saves' folders are
+links into `ports/anyps5-<title id>/home`. On Linux, `/proc/cpuinfo` is read to say before it
+starts when the processor lacks an extension the game's code needs. The build plays as a port of
+its own, and Remove the Recompiled Build takes it out, its home (saves) kept.
 
 ## Steam and Windows launchers
 

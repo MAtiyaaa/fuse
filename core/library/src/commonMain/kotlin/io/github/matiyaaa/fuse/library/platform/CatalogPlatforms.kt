@@ -111,7 +111,8 @@ internal val catalogPlatforms: List<Platform> = listOf(
     ),
     platform(
         "ps5", "PlayStation 5", "PS5", CONSOLE, SONY, "Sony", 2020,
-        "ps5 desktop", "playstation5", 0xFFA9B4C8, aspect = BLU_RAY_CASE,
+        // A ZArchive dump (.zar) whose root holds eboot.bin, as KytyPS5 plays it (its README, "Running").
+        "ps5 desktop zar", "playstation5", 0xFFA9B4C8, aspect = BLU_RAY_CASE,
     ),
     platform(
         "psp", "PlayStation Portable", "PSP", HANDHELD, SONY, "Sony", 2004,

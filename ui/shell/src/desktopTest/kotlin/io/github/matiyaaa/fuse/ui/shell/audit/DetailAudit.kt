@@ -454,6 +454,32 @@ internal fun AuditDriver.detailScreens() {
         )
     }
 
+    /** The game's Play With list with [offer] standing in for what AnyPS5 would do with it. */
+    fun recompilePicker(offer: io.github.matiyaaa.fuse.ui.shell.store.RecompileOffer, until: String, shot: String) {
+        useLibrary()
+        val base = libraryStore
+        val ports = object : io.github.matiyaaa.fuse.ui.shell.store.PortsOps by base.ports {
+            override val supported = true
+            override suspend fun recompileOffer(game: io.github.matiyaaa.fuse.model.GameId) = offer
+        }
+        show(object : io.github.matiyaaa.fuse.ui.shell.store.FuseStore by base { override val ports = ports }, AuditPlatform(size, host = io.github.matiyaaa.fuse.model.Host.LINUX))
+        search("Waystation Nine")
+        tap(PadButton.START)
+        tap(PadButton.X)
+        tapText("Emulator")
+        waitFor(until)
+        settle(900)
+        shoot(shot, 1_200)
+    }
+
+    scenario("details", "recompile with anyps5") {
+        recompilePicker(io.github.matiyaaa.fuse.ui.shell.store.RecompileOffer(builtWith = "v0.1.3"), until = "Recompile Again", shot = "a PS5 dump recompiled, again or taken out")
+        recompilePicker(
+            io.github.matiyaaa.fuse.ui.shell.store.RecompileOffer(whyNot = "This dump's eboot.bin is still in its signed container (a SELF). AnyPS5 recompiles a dump whose eboot.bin is a plain ELF: unwrap it first (AnyPS5's tools/unwrap_self.py does for a decrypted one)."),
+            until = "Recompile to Run Natively", shot = "a dump AnyPS5 can't recompile, and why",
+        )
+    }
+
     scenario("details", "play together rooms and host codes") {
         // Azahar's rooms: its name and unlisted rooms still to set, then joined by address in its own window.
         playTogether(
