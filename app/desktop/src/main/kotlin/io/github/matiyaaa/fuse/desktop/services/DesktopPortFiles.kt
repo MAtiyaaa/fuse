@@ -220,6 +220,8 @@ internal class DesktopPortFiles(
         runCatching { Files.move(a, b, StandardCopyOption.ATOMIC_MOVE) }.recoverCatching { Files.move(a, b) }.isSuccess
     }
 
+    override suspend fun exists(path: String): Boolean = withContext(Dispatchers.IO) { Files.exists(File(path).toPath(), LinkOption.NOFOLLOW_LINKS) }
+
     override suspend fun readOnlyRunner(): String? = if (system == DesktopOs.LINUX) withContext(Dispatchers.IO) { findBwrap() } else null
 
     override suspend fun realPath(path: String): String = withContext(Dispatchers.IO) {

@@ -224,6 +224,9 @@ interface PortFiles {
     /** Moves [from] to [to], replacing nothing: false when [to] is there or it couldn't. */
     suspend fun move(from: String, to: String): Boolean
 
+    /** True when anything is at [path] (a file, a folder or a link, which isn't followed). */
+    suspend fun exists(path: String): Boolean
+
     /**
      * A program that starts another with a folder of the person's read-only for it alone (bubblewrap's
      * `bwrap`, on Linux), when it is installed; null where there is none.
@@ -262,9 +265,11 @@ suspend fun PortFiles.replace(stage: String, into: String): Boolean {
 
 /**
  * After Fuse stopped in the middle of [replace]: the copy waiting aside goes back to [into] when
- * nothing took its place, and goes when something did.
+ * nothing took its place, and goes only when something did (the new copy, which went in whole).
+ * When it can't go back (a file in use), it stays aside for the next time: it may be the only copy.
  */
 suspend fun PortFiles.recover(into: String) {
     val aside = "$into.old"
-    if (!move(aside, into)) remove(aside)
+    if (!exists(aside)) return
+    if (exists(into)) remove(aside) else move(aside, into)
 }

@@ -819,4 +819,5 @@ internal class AuditPortFiles(override val os: String) : io.github.matiyaaa.fuse
     override suspend fun isLink(path: String) = false
     override suspend fun remove(path: String) = false
     override suspend fun move(from: String, to: String) = false
+    override suspend fun exists(path: String) = false
 }

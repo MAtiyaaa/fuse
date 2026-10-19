@@ -218,7 +218,8 @@ the game page is calmer, and Linux looks and plays more the way Android does.
   the original game's page offers the port beside its emulators: pick it, and Play (and its Steam
   entry) starts the port instead. Each port's Game Settings are every setting of its own, read from
   its code (DevilutionX's with its own names and descriptions), changed in its own file and put
-  back exactly.
+  back exactly. An update replaces the copy you play only once the new one is in, and if Fuse
+  stops halfway, the copy you had goes back in place: it is never removed while it may be the only one.
 - **PlayStation 5 games recompiled to run natively.** On Linux and Windows, a PS5 dump's Play With
   list offers Recompile to Run Natively: Fuse fetches AnyPS5, checks its files against GitHub's own
   checksums, and turns the game's code into a program of your computer's own, in Fuse's folder.

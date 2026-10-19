@@ -27,6 +27,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.recover
 import io.github.matiyaaa.fuse.ui.shell.store.replace
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -232,6 +233,10 @@ internal class PortsStore(
             }
             write { s -> s.copy(ports = s.ports.copy(installed = s.ports.installed + (id to InstalledPort(port, build, emptyList(), ctx.now())))) }
             jobs.update { it - id }
+            // Installed, and shown so: setting it up is all that's left, which never makes an install
+            // asked for now (an update) do nothing. That one waits for it, then runs.
+            val self = currentCoroutineContext()[Job]
+            synchronized(running) { if (running[id] === self) running.remove(id) }
             val chosen = ctx.settings.value.ports.folders[id].orEmpty()
             if (port.data.all { it.id in chosen }) setUp(id)?.let { problem -> fail(id, problem) }
             recheck()

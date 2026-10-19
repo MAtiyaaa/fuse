@@ -142,6 +142,8 @@ class PortsStoreTest {
         override suspend fun move(from: String, to: String) =
             !refuse(from, to) && File(to).let { !Files.exists(it.toPath(), LinkOption.NOFOLLOW_LINKS) } &&
                 runCatching { Files.move(File(from).toPath(), File(to).toPath(), StandardCopyOption.ATOMIC_MOVE) }.isSuccess
+
+        override suspend fun exists(path: String) = Files.exists(File(path).toPath(), LinkOption.NOFOLLOW_LINKS)
     }
 
     private fun services(list: String = index(), body: ByteArray = build): Pair<FakeServices, TestPortFiles> {
@@ -406,11 +408,27 @@ class PortsStoreTest {
         assertEquals(program, File(root, "build/skyport").readText())
 
         // Fuse stopped between the two moves: the copy waiting aside goes back the next time Ports opens.
+        // When it can't yet (a file in use), it stays aside, never removed: it is the only copy there is.
         files.refuse = { _, _ -> false }
         assertTrue(files.move(File(root, "build").path, File(root, "build.old").path))
-        val again = PortsStore(StoreContext(services, scope, services.data.settings.current()), files, library = { error("not used") }, write = {}, publicKey = { null })
-        again.open()
-        withTimeout(20_000) { again.state.first { it.loaded } }
+        suspend fun reopen() {
+            val again = PortsStore(StoreContext(services, scope, services.data.settings.current()), files, library = { error("not used") }, write = {}, publicKey = { null })
+            again.open()
+            withTimeout(20_000) { again.state.first { it.loaded } }
+        }
+        files.refuse = { from, _ -> from.endsWith("/build.old") }
+        reopen()
+        assertEquals(program, File(root, "build.old/skyport").readText(), "the only copy is kept")
+        assertFalse(File(root, "build").exists())
+        files.refuse = { _, _ -> false }
+        reopen()
+        assertEquals(program, File(root, "build/skyport").readText())
+        assertFalse(File(root, "build.old").exists())
+
+        // Fuse stopped after the new copy went in whole: the one aside goes, the new one stays.
+        File(root, "build.old").mkdirs()
+        File(root, "build.old/skyport").writeText("the old build")
+        files.recover(File(root, "build").path)
         assertEquals(program, File(root, "build/skyport").readText())
         assertFalse(File(root, "build.old").exists())
 

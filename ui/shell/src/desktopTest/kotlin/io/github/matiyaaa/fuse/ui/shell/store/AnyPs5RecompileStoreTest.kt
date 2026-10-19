@@ -143,6 +143,8 @@ class AnyPs5RecompileStoreTest {
             !refuse(from, to) && !Files.exists(File(to).toPath(), LinkOption.NOFOLLOW_LINKS) &&
                 runCatching { Files.move(File(from).toPath(), File(to).toPath(), StandardCopyOption.ATOMIC_MOVE) }.isSuccess
 
+        override suspend fun exists(path: String) = Files.exists(File(path).toPath(), LinkOption.NOFOLLOW_LINKS)
+
         /** bubblewrap, when this computer has it. */
         var runner: String? = null
 
