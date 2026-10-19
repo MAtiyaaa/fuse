@@ -67,12 +67,16 @@ object RommWrites {
 
     /**
      * The next change to send, and the ones that go with it: play sessions go together (as many in
-     * a row as RomM takes at once), anything else alone. Empty when nothing waits.
+     * a row as RomM takes at once), anything else alone. Only changes the server [takes] (it has
+     * that part, as far as Fuse knows): the others stay waiting, in order, for a server that does.
+     * Each kind of change is one part of RomM, so each kind still goes in the order it was made.
+     * Empty when nothing it takes waits.
      */
-    fun next(queue: List<RommWrite>): List<RommWrite> {
-        val first = queue.firstOrNull() ?: return emptyList()
+    fun next(queue: List<RommWrite>, takes: (RommWrite) -> Boolean = { true }): List<RommWrite> {
+        val at = queue.indexOfFirst(takes).takeIf { it >= 0 } ?: return emptyList()
+        val first = queue[at]
         if (first !is RommWrite.Played) return listOf(first)
-        return queue.takeWhile { it is RommWrite.Played }.take(RommClient.MAX_SESSIONS)
+        return queue.drop(at).takeWhile { it is RommWrite.Played }.take(RommClient.MAX_SESSIONS)
     }
 
     /** [queue] without [sent] (each sent change once, as it was when taken). */

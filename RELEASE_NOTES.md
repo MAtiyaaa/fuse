@@ -127,8 +127,9 @@ the game page is calmer, and Linux looks and plays more the way Android does.
   saves of one file did. RomM shows each save in a slot named for what it is (PSP Save Data, PS2
   Memory Card), and with more than one person on a device each person's saves are their own.
 - **Saves wait for RomM.** A save that can't reach RomM (the server away, the device offline) waits
-  and goes by itself, in order, once RomM answers, even after Fuse restarts. Addons, RomM Saves says
-  how many wait, with Send Them Now.
+  and goes by itself, in order, once RomM answers, even after Fuse restarts. It waits for the person
+  who played and the server it was for: another person playing meanwhile, or another RomM server set
+  up, never sends it as theirs or lets it go. Addons, RomM Saves says how many wait, with Send Them Now.
 - **RomM, Then Fuse One**, in Save Sync on this device: RomM moves the saves of games from RomM, and
   Fuse One every other game's, never both for one game. Fuse One still counts the time you play
   the games RomM keeps.
@@ -139,7 +140,9 @@ the game page is calmer, and Linux looks and plays more the way Android does.
   first; the earlier folder stays as it is.
 - **Your changes go back to RomM**, when you turn on Settings, Addons, RomM, Send Changes to RomM:
   favourites (into RomM's own favourites), games you hide, and the time you play games from RomM.
-  Made while RomM is away, they wait and go in order once it answers. Needs RomM 5.4.
+  Made while RomM is away, they wait and go in order once it answers. Each goes once, and only to
+  the server it was made for: point Fuse at another RomM server and they wait for the first. Needs
+  RomM 5.4.
 - **Cloudflare Access.** A RomM server behind Cloudflare Access works from outside: add its service
   token in Settings, Addons, RomM, and Fuse sends it only to that address.
 - **See RomM's scan.** After an upload, RomM's status line shows how far its scan has come, and Fuse

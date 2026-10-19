@@ -11,6 +11,7 @@ import io.github.matiyaaa.fuse.launch.patches.RetroArchCfg
 import io.github.matiyaaa.fuse.launch.patches.RetroArchHome
 import io.github.matiyaaa.fuse.launch.settings.DolphinHome
 import io.github.matiyaaa.fuse.model.InstalledEmulator
+import io.github.matiyaaa.fuse.ui.shell.store.EmulatorFileCopies
 import io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles
 import io.github.matiyaaa.fuse.ui.shell.store.InstallerResult
 import io.github.matiyaaa.fuse.ui.shell.store.InstallerRun
@@ -49,6 +50,9 @@ class DesktopEmulatorFiles(
 ) : EmulatorFiles {
     private val roots: MutableSet<String> = Collections.synchronizedSet(mutableSetOf())
 
+    /** Single files found outside those folders that may be written too (never removed): RetroArch's `retroarch.cfg` beside its folders. */
+    private val singles: MutableSet<String> = Collections.synchronizedSet(mutableSetOf())
+
     override suspend fun pcsx2(installed: InstalledEmulator): Pcsx2Home? = withContext(Dispatchers.IO) {
         val flatpak = installed.detectedVia == "Flatpak"
         val program = if (flatpak) null else File(installed.appId).takeIf { it.isAbsolute }
@@ -66,9 +70,10 @@ class DesktopEmulatorFiles(
         roots += data.absolutePath
         Pcsx2Home(
             dataRoot = data.absolutePath.replace('\\', '/'),
-            gameSettings = folder("GameSettings", "gamesettings"),
-            patches = folder("Patches", "patches"),
-            cheats = folder("Cheats", "cheats"),
+            // The folders its own settings moved elsewhere are its too.
+            gameSettings = folder("GameSettings", "gamesettings").also { roots += File(it).absolutePath },
+            patches = folder("Patches", "patches").also { roots += File(it).absolutePath },
+            cheats = folder("Cheats", "cheats").also { roots += File(it).absolutePath },
             patchesZip = zipCandidates(appRoot, flatpak).firstOrNull { it.isFile && it.canRead() }?.absolutePath?.replace('\\', '/'),
             textures = folder("Textures", "textures").also { roots += File(it).absolutePath },
         )
@@ -120,9 +125,10 @@ class DesktopEmulatorFiles(
         roots += data.absolutePath
         DuckStationHome(
             dataRoot = data.absolutePath.replace('\\', '/'),
-            gameSettings = folder("GameSettings", "gamesettings"),
-            cheats = folder("Cheats", "cheats"),
-            patches = folder("Patches", "patches"),
+            // The folders its own settings moved elsewhere are its too.
+            gameSettings = folder("GameSettings", "gamesettings").also { roots += File(it).absolutePath },
+            cheats = folder("Cheats", "cheats").also { roots += File(it).absolutePath },
+            patches = folder("Patches", "patches").also { roots += File(it).absolutePath },
             cheatsZip = zip("cheats.zip"),
             patchesZip = zip("patches.zip"),
             textures = folder("Textures", "textures").also { roots += File(it).absolutePath },
@@ -273,6 +279,8 @@ class DesktopEmulatorFiles(
         val configDir = RetroArchCfg.folder(cfg["rgui_config_directory"], configDefault.replace('\\', '/'), homePath, programPath)
         roots += File(cheats).absolutePath
         roots += File(configDir).absolutePath
+        // Its own settings (and sign-in) are this one file beside those folders on Linux and Windows, not in them.
+        singles += config.absolutePath
         RetroArchHome(config.absolutePath.replace('\\', '/'), cheats, configDir)
     }
 
@@ -356,14 +364,15 @@ class DesktopEmulatorFiles(
 
     private suspend fun write(path: String, text: String, keepCopy: Boolean): Boolean = withContext(Dispatchers.IO) {
         val target = File(path).absoluteFile
-        val inside = roots.any { root -> target.normalize().path.startsWith(File(root).normalize().path + File.separator) }
+        val inside = roots.any { root -> target.normalize().path.startsWith(File(root).normalize().path + File.separator) } ||
+            synchronized(singles) { singles.any { File(it).normalize().path == target.normalize().path } }
         if (!inside) return@withContext false
         try {
-            // A copy of the file as it was before Fuse first changed it, kept with Fuse's own data.
+            // A copy of the file as it was before Fuse first changed it, kept with Fuse's own data at its whole path.
             if (keepCopy && target.isFile) {
-                val copy = File(backups, target.name)
+                val copy = File(backups, EmulatorFileCopies.below(target.normalize().path))
                 if (!copy.exists()) {
-                    backups.mkdirs()
+                    copy.parentFile.mkdirs()
                     Files.copy(target.toPath(), copy.toPath())
                 }
             }

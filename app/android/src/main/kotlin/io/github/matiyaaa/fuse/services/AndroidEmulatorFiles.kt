@@ -7,6 +7,7 @@ import io.github.matiyaaa.fuse.launch.patches.RetroArchCfg
 import io.github.matiyaaa.fuse.launch.patches.RetroArchHome
 import io.github.matiyaaa.fuse.model.InstalledEmulator
 import io.github.matiyaaa.fuse.sync.SaveEnvironment
+import io.github.matiyaaa.fuse.ui.shell.store.EmulatorFileCopies
 import io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles
 import java.io.File
 import java.io.IOException
@@ -24,8 +25,9 @@ import kotlinx.coroutines.withContext
  * keeps its files in its own private folder (`Android/data`: DuckStation, Eden, Dolphin, NetherSX2,
  * RetroArch from the Play Store) can't be reached by another app, so Fuse has none of its files.
  *
- * Writes go only inside the folders found here, each file kept as it was before Fuse first
- * changed it ([backups]) and replaced through a temporary file beside it.
+ * Writes go only inside the folders found here (and to RetroArch's own `retroarch.cfg`), each file
+ * kept as it was before Fuse first changed it ([backups], at its whole path: [EmulatorFileCopies])
+ * and replaced through a temporary file beside it.
  */
 internal class AndroidEmulatorFiles(
     private val env: SaveEnvironment,
@@ -33,6 +35,9 @@ internal class AndroidEmulatorFiles(
 ) : EmulatorFiles {
     /** The folders found, the only ones written to. */
     private val roots = CopyOnWriteArraySet<String>()
+
+    /** Single files found outside those folders that may be written too: RetroArch's settings beside its folders. */
+    private val singles = CopyOnWriteArraySet<String>()
 
     override suspend fun pcsx2(installed: InstalledEmulator): Pcsx2Home? = withContext(Dispatchers.IO) {
         val data = io.github.matiyaaa.fuse.sync.pcsx2DataFolder(env, null)?.let(::File) ?: return@withContext null
@@ -44,8 +49,7 @@ internal class AndroidEmulatorFiles(
             val value = settings?.values("Folders", key)?.lastOrNull()?.takeIf { it.isNotBlank() } ?: default
             return (File(value).takeIf { it.isAbsolute } ?: File(data, value)).absolutePath
         }
-        roots += data.absolutePath
-        Pcsx2Home(
+        val home = Pcsx2Home(
             dataRoot = data.absolutePath,
             gameSettings = folder("GameSettings", "gamesettings"),
             patches = folder("Patches", "patches"),
@@ -53,6 +57,10 @@ internal class AndroidEmulatorFiles(
             patchesZip = null,
             textures = folder("Textures", "textures"),
         )
+        // Its data folder, and the folders its own settings moved elsewhere (a cheats folder on the SD card).
+        roots += data.absolutePath
+        roots += listOf(home.gameSettings, home.patches, home.cheats, home.textures)
+        home
     }
 
     override suspend fun ppsspp(installed: InstalledEmulator): PpssppHome? = withContext(Dispatchers.IO) {
@@ -71,6 +79,8 @@ internal class AndroidEmulatorFiles(
         val configDir = RetroArchCfg.folder(cfg["rgui_config_directory"], "$base/config", env.home, null)
         roots += File(cheats).absolutePath
         roots += File(configDir).absolutePath
+        // Its own settings (and sign-in) are this one file beside those folders, not in them.
+        singles += config.absolutePath
         RetroArchHome(config.absolutePath, cheats, configDir)
     }
 
@@ -92,10 +102,13 @@ internal class AndroidEmulatorFiles(
 
     override suspend fun remove(path: String): Boolean = withContext(Dispatchers.IO) {
         val target = File(path).absoluteFile
-        inside(target) && target.isFile && target.delete()
+        // Only ever a file in the folders found: never one of the single settings files themselves.
+        inFolders(target) && target.isFile && target.delete()
     }
 
-    private fun inside(target: File): Boolean = roots.any { root -> target.normalize().path.startsWith(File(root).normalize().path + File.separator) }
+    private fun inFolders(target: File): Boolean = roots.any { root -> target.normalize().path.startsWith(File(root).normalize().path + File.separator) }
+
+    private fun inside(target: File): Boolean = inFolders(target) || singles.any { File(it).normalize().path == target.normalize().path }
 
     private suspend fun write(path: String, text: String, keepCopy: Boolean): Boolean = withContext(Dispatchers.IO) {
         val target = File(path).absoluteFile
@@ -103,9 +116,9 @@ internal class AndroidEmulatorFiles(
         try {
             // A copy of the file as it was before Fuse first changed it, kept with Fuse's own data.
             if (keepCopy && target.isFile) {
-                val copy = File(backups, target.name)
+                val copy = File(backups, EmulatorFileCopies.below(target.normalize().path))
                 if (!copy.exists()) {
-                    backups.mkdirs()
+                    copy.parentFile?.mkdirs()
                     target.copyTo(copy)
                 }
             }

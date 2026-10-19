@@ -108,6 +108,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import io.github.matiyaaa.fuse.romm.RommAccess
 import io.github.matiyaaa.fuse.romm.RommTask
+import io.github.matiyaaa.fuse.romm.RommServers
 import io.github.matiyaaa.fuse.romm.RommWrite
 import io.github.matiyaaa.fuse.romm.RommWrites
 import kotlinx.serialization.builtins.ListSerializer
@@ -165,6 +166,9 @@ internal class DefaultRommOps(
     override val state: StateFlow<RommState> = _state
 
     private var client: RommClient? = null
+
+    /** The server [client] was made for ([server] then): what goes through it is that server's alone. */
+    @kotlin.concurrent.Volatile private var clientServer: String? = null
     private var refreshJob: Job? = null
     private var loopJob: Job? = null
     private val connectLock = Mutex()
@@ -211,11 +215,17 @@ internal class DefaultRommOps(
         rommArtCache = RommArtCache(ctx, this::clientFor)
         transfers.let { t -> rommHandlers(ctx.services.http, host).forEach(t::register) }
         ctx.scope.launch {
+            var seen: FuseRommSettings? = null
             ctx.settings.map { it.romm }.distinctUntilChanged { a, b -> a.enabled == b.enabled && a.mode == b.mode && a.localAddress == b.localAddress && a.remoteAddress == b.remoteAddress }
                 .collect { s ->
+                    val before = seen
+                    seen = s
+                    // New addresses, wherever they were written: another server's are another key, before anything connects.
+                    if (before != null && (before.localAddress != s.localAddress || before.remoteAddress != s.remoteAddress)) serverChanged(before, s)
                     if (!s.enabled) {
                         loopJob?.cancel()
                         client = null
+                        clientServer = null
                         _state.value = RommState(RommLink.OFF)
                     } else {
                         connect()
@@ -299,7 +309,7 @@ internal class DefaultRommOps(
     }
 
     /** The client for [server] as set up now (the one in use), or null when off or signed out. */
-    internal fun clientFor(server: String): RommClient? = client?.takeIf { server == this.server && settings.enabled }
+    internal fun clientFor(server: String): RommClient? = client?.takeIf { server == this.server && clientServer == server && settings.enabled }
 
     /** How a game's save is found here, without a profile (set by the store from the library). */
     @kotlin.concurrent.Volatile internal var plainSaveQuery: suspend (GameId) -> io.github.matiyaaa.fuse.sync.SaveQuery? = { null }
@@ -333,9 +343,9 @@ internal class DefaultRommOps(
 
     override suspend fun sendWaitingSaves(): Int = saveService?.let { s -> runCatching { s.sendWaiting() }.getOrDefault(0) } ?: 0
 
-    /** The signed-in client when RomM and its save sync are on. */
+    /** The signed-in client when RomM and its save sync are on: the client of the server [serverKey] names, never one before it. */
     internal fun saveClient(): RommClient? = client?.takeIf { c ->
-        settings.enabled && settings.saveSync && settings.configured &&
+        clientServer == server && settings.enabled && settings.saveSync && settings.configured &&
             c.may(RommScopes.ASSETS_WRITE) && c.may(RommScopes.DEVICES_WRITE) && c.capabilities.saveSync
     }
 
@@ -369,6 +379,7 @@ internal class DefaultRommOps(
         access = loadAccess()
         val c = RommClient(ctx.services.http, routes(s), cred, ctx.services.appVersion, access)
         client = c
+        clientServer = server
         // The mirror shows at once, whatever the server says.
         _state.value = _state.value.copy(
             link = RommLink.CONNECTING, syncedAt = mirror.syncedAt(server), games = mirror.count(server),
@@ -540,23 +551,55 @@ internal class DefaultRommOps(
 
     // ------------------------------------------------------------------ the person's changes
 
-    /** Changes waiting to go to RomM, in the order made ([RommWrites]); read from Fuse's database once. */
-    private var changes: List<RommWrite>? = null
+    /**
+     * Changes waiting to go to RomM, in the order made ([RommWrites]), and the server they were made
+     * for: each server's own, kept under its key, read from Fuse's database once.
+     */
+    private var changes: Pair<String, List<RommWrite>>? = null
     private val changesLock = Mutex()
     private val changesJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
-    /** Under [changesLock]. */
-    private suspend fun loadChanges(): List<RommWrite> = changes ?: (
-        ctx.data.cache.getOrNull(NS, "changes:$server", ctx.now())?.let {
+    /** One send at a time: two at once would both take the same changes and send them twice. */
+    private val sendLock = Mutex()
+
+    /** Under [changesLock]: what waits for server [key]. */
+    private suspend fun loadChanges(key: String = server): List<RommWrite> = changes?.takeIf { it.first == key }?.second ?: (
+        ctx.data.cache.getOrNull(NS, "changes:$key", ctx.now())?.let {
             runCatching { changesJson.decodeFromString(ListSerializer(RommWrite.serializer()), it) }.getOrNull()
         } ?: emptyList()
-        ).also { changes = it }
+        ).also { changes = key to it }
 
-    /** Under [changesLock]. */
-    private suspend fun keepChanges(list: List<RommWrite>) {
-        changes = list
-        ctx.data.cache.put(NS, "changes:$server", changesJson.encodeToString(ListSerializer(RommWrite.serializer()), list), ctx.now(), ttlMs = null)
-        _state.update { it.copy(changesWaiting = list.size) }
+    /** Under [changesLock]: [list] is what waits for server [key] now. */
+    private suspend fun keepChanges(list: List<RommWrite>, key: String = server) {
+        changes = key to list
+        ctx.data.cache.put(NS, "changes:$key", changesJson.encodeToString(ListSerializer(RommWrite.serializer()), list), ctx.now(), ttlMs = null)
+        if (key == server) _state.update { it.copy(changesWaiting = list.size) }
+    }
+
+    /**
+     * The addresses went from [before]'s to [now]'s. When they are another server's ([RommServers]),
+     * it gets its own key, and what Fuse held for the one before is let go: its games' matches, where
+     * its downloads landed, its favourites collection, and the library's links to its games (they are
+     * found again on this server by their files). Nothing of one server is sent to or taken for
+     * another; what waits for the one before stays kept under its key, and goes if it is set up again.
+     */
+    private suspend fun serverChanged(before: FuseRommSettings, now: FuseRommSettings) {
+        val current = now.server.ifBlank { RommServers.FIRST }
+        val (key, known) = RommServers.after(current, listOf(before.localAddress, before.remoteAddress), listOf(now.localAddress, now.remoteAddress), now.servers)
+        if (key == current && known == now.servers) return
+        write { it.copy(server = key, servers = known) }
+        if (key == current) return
+        loopJob?.cancel()
+        client = null
+        clientServer = null
+        favourites = null
+        sameNames.clear()
+        landedAt.value = emptyMap()
+        matchLock.withLock {
+            matches.value = emptyMap()
+            for (row in ctx.data.games.matchRows()) if (row.rommRomId != null) ctx.data.games.updateLinks(row.id) { it.copy(rommRomId = null) }
+        }
+        changesLock.withLock { changes = null }
     }
 
     /** The server takes changes from apps (RomM 5.4) and the sign-in may send them. */
@@ -570,9 +613,13 @@ internal class DefaultRommOps(
      */
     internal fun changed(game: GameId, make: (Long) -> RommWrite) {
         if (!settings.enabled || !settings.sendChanges) return
+        // The server in use when the change was made is the one it is for.
+        val key = server
         ctx.scope.launch {
             val romId = romOf(game) ?: ctx.data.games.get(game)?.links?.rommRomId ?: return@launch
-            changesLock.withLock { keepChanges(RommWrites.add(loadChanges(), make(romId))) }
+            // Another server was set up meanwhile: that game's id is the one before's, never kept for this one.
+            if (server != key) return@launch
+            changesLock.withLock { keepChanges(RommWrites.add(loadChanges(key), make(romId)), key) }
             sendSoon()
         }
     }
@@ -596,32 +643,36 @@ internal class DefaultRommOps(
             )
         }
         write { it.copy(sendChanges = on) }
-        // Off: what waited is forgotten, so nothing goes later that the person no longer wants sent.
-        if (!on) changesLock.withLock { keepChanges(emptyList()) } else sendSoon()
+        // Off: what waited is forgotten, for every server, so nothing goes later that the person no longer wants sent.
+        if (!on) changesLock.withLock { for (key in settings.servers.values.toSet() + server) keepChanges(emptyList(), key) } else sendSoon()
     }
 
     override suspend fun sendChangesNow(): Int = runCatching { sendChanges() }.getOrDefault(0)
 
-    /** RomM's favourites collection for this server, once found or made. */
+    /** RomM's favourites collection, and the server it is on, once found or made. */
     private var favourites: Pair<String, Long>? = null
 
-    private suspend fun favouritesOf(c: RommClient): Long =
-        favourites?.takeIf { it.first == server }?.second ?: c.favourites().also { favourites = server to it }
+    private suspend fun favouritesOf(c: RommClient, key: String): Long =
+        favourites?.takeIf { it.first == key }?.second ?: c.favourites().also { favourites = key to it }
 
     /**
-     * Sends what waits, in order, while RomM takes it; how many went. A change RomM can't take now
-     * (away, busy, the sign-in not allowed) stays, and so does everything after it; one it never
-     * will (the game gone from RomM, a server without that part) is let go.
+     * Sends what waits for the server in use through its own client, in order, while RomM takes it;
+     * how many went. A change RomM can't take now (away, busy, the sign-in not allowed) stays, and so
+     * does everything after it; one it never will (the game gone from RomM) is let go, and never
+     * counted as sent. A change the server has no part for, as far as Fuse knows (its parts unread,
+     * an older RomM), is never sent and stays waiting. One send runs at a time.
      */
-    private suspend fun sendChanges(): Int {
-        val c = client ?: return 0
-        if (!settings.sendChanges || _state.value.link != RommLink.ONLINE) return 0
+    private suspend fun sendChanges(): Int = sendLock.withLock {
+        val c = client ?: return@withLock 0
+        val key = clientServer ?: return@withLock 0
+        if (key != server || !settings.sendChanges || _state.value.link != RommLink.ONLINE || !mayTakeChanges(c)) return@withLock 0
         var sent = 0
         while (true) {
-            val batch = changesLock.withLock { RommWrites.next(loadChanges()) }
+            val batch = changesLock.withLock { RommWrites.next(loadChanges(key)) { takes(c, it) } }
             if (batch.isEmpty()) break
+            var went = false
             val failed = try {
-                send(c, batch)
+                went = send(c, batch, key)
                 null
             } catch (e: CancellationException) {
                 throw e
@@ -632,27 +683,36 @@ internal class DefaultRommOps(
                 if (failed.forbidden) _state.update { it.copy(problem = "Your RomM sign-in may not send changes. Pair with RomM again to allow it.") }
                 break
             }
-            changesLock.withLock { keepChanges(RommWrites.without(loadChanges(), batch)) }
-            if (failed == null) sent += batch.size
+            changesLock.withLock { keepChanges(RommWrites.without(loadChanges(key), batch), key) }
+            if (went) sent += batch.size
         }
-        return sent
+        sent
     }
 
-    /** [batch] to RomM: a run of play sessions together, anything else alone. */
-    private suspend fun send(c: RommClient, batch: List<RommWrite>) {
-        when (val w = batch.first()) {
-            is RommWrite.Played -> if (c.capabilities.playSessions) c.playSessions(batch.filterIsInstance<RommWrite.Played>().map { it.session })
-            is RommWrite.Hidden -> if (c.capabilities.userProps) c.setHidden(w.romId, w.on)
-            is RommWrite.Trophies -> if (c.capabilities.notes) trophyNote(c, w.romId, w.game)
-            is RommWrite.Favourite -> if (c.capabilities.collectionRoms) {
-                try {
-                    c.collectionRoms(favouritesOf(c), listOf(w.romId), into = w.on)
-                } catch (e: RommException) {
-                    // The favourites collection went (deleted in RomM): found or made again, once.
-                    if (e.status != 404) throw e
-                    favourites = null
-                    c.collectionRoms(favouritesOf(c), listOf(w.romId), into = w.on)
-                }
+    /** Whether [c]'s server has the part of RomM [w] goes to ([RommClient.detect]). */
+    private fun takes(c: RommClient, w: RommWrite): Boolean = when (w) {
+        is RommWrite.Played -> c.capabilities.playSessions
+        is RommWrite.Hidden -> c.capabilities.userProps
+        is RommWrite.Trophies -> c.capabilities.notes
+        is RommWrite.Favourite -> c.capabilities.collectionRoms
+    }
+
+    /**
+     * [batch] to RomM, server [key] (one [takes]): a run of play sessions together, anything else
+     * alone. True when it went; false when there was nothing to send (RomM's trophy note already had it).
+     */
+    private suspend fun send(c: RommClient, batch: List<RommWrite>, key: String): Boolean = when (val w = batch.first()) {
+        is RommWrite.Played -> true.also { c.playSessions(batch.filterIsInstance<RommWrite.Played>().map { it.session }) }
+        is RommWrite.Hidden -> true.also { c.setHidden(w.romId, w.on) }
+        is RommWrite.Trophies -> trophyNote(c, w.romId, w.game)
+        is RommWrite.Favourite -> true.also {
+            try {
+                c.collectionRoms(favouritesOf(c, key), listOf(w.romId), into = w.on)
+            } catch (e: RommException) {
+                // The favourites collection went (deleted in RomM): found or made again, once.
+                if (e.status != 404) throw e
+                favourites = null
+                c.collectionRoms(favouritesOf(c, key), listOf(w.romId), into = w.on)
             }
         }
     }
@@ -673,7 +733,7 @@ internal class DefaultRommOps(
     internal suspend fun shareTrophies(game: GameId, news: Boolean) {
         if (!settings.enabled) return
         val romId = romOf(game) ?: ctx.data.games.get(game)?.links?.rommRomId ?: return
-        val c = client
+        val c = clientFor(server)
         if (c == null || _state.value.link != RommLink.ONLINE) {
             if (news) changed(game) { RommWrite.Trophies(it, game.value) }
             return
@@ -697,23 +757,24 @@ internal class DefaultRommOps(
     /**
      * Reads the person's trophy note on [romId] into library game [game]'s history, then adds to
      * it what the history has that the note doesn't (or has later), when changes may go to RomM.
-     * The note is made the first time there is something to put in it.
+     * The note is made the first time there is something to put in it. True when something was
+     * written to RomM; false when the note already had it all (or changes may not go).
      */
-    private suspend fun trophyNote(c: RommClient, romId: Long, game: Long) {
+    private suspend fun trophyNote(c: RommClient, romId: Long, game: Long): Boolean {
         val me = _state.value.account
         suspend fun mine() = c.notes(romId).firstOrNull { it.title == TrophyNote.TITLE && (me.isBlank() || it.username.equals(me, ignoreCase = true)) }
         val note = mine()
         val there = note?.let { TrophyNote.read(it.content) }.orEmpty()
         TrophyHistory.add(ctx.data, game, there)
-        if (!settings.sendChanges || !mayTakeChanges(c)) return
+        if (!settings.sendChanges || !mayTakeChanges(c)) return false
         val id = ThisDevice.id(ctx)
         val ours = TrophyHistory.read(ctx.data, game).map { if (it.device == ThisDevice.LEGACY) it.copy(device = id) else it }
         val before = TrophyNote.merge(there, emptyList())
         val after = TrophyNote.merge(there, ours)
-        if (after.isEmpty() || (note != null && after == before)) return
+        if (after.isEmpty() || (note != null && after == before)) return false
         if (note != null) {
             c.updateNote(romId, note.id, TrophyNote.write(after.values))
-            return
+            return true
         }
         try {
             c.addNote(romId, TrophyNote.TITLE, TrophyNote.write(after.values), listOf(TrophyNote.TAG))
@@ -724,6 +785,7 @@ internal class DefaultRommOps(
             TrophyHistory.add(ctx.data, game, all.values)
             c.updateNote(romId, made.id, TrophyNote.write(all.values))
         }
+        return true
     }
 
     // ------------------------------------------------------------------ scans
@@ -809,7 +871,7 @@ internal class DefaultRommOps(
     }
 
     override suspend fun startPairing(upload: Boolean): Result<RommDeviceCode> = runCatching {
-        val c = client ?: RommClient(ctx.services.http, routes(settings), null, ctx.services.appVersion, access).also { client = it }
+        val c = client ?: RommClient(ctx.services.http, routes(settings), null, ctx.services.appVersion, access).also { client = it; clientServer = server }
         if (c.capabilities.version.isEmpty()) c.detect()
         if (!c.capabilities.deviceAuth) throw RommException("This RomM server doesn't pair this way. Use a pairing code or a token from RomM instead.", code = "no-device-auth")
         c.startPairing(deviceId(), ctx.services.deviceName, ctx.host.name.lowercase(), (if (upload) RommScopes.UPLOAD_AND_SCAN else RommScopes.READ) + RommScopes.SAVES + RommScopes.CHANGES)
@@ -833,7 +895,7 @@ internal class DefaultRommOps(
     }
 
     override suspend fun usePairCode(code: String): Result<String> = runCatching {
-        val c = client ?: RommClient(ctx.services.http, routes(settings), null, access = access).also { client = it }
+        val c = client ?: RommClient(ctx.services.http, routes(settings), null, access = access).also { client = it; clientServer = server }
         signedIn(c.exchangeCode(code))
     }
 

@@ -651,8 +651,13 @@ data class FuseRommSettings(
     val mode: String = "AUTO",
     val localAddress: String = "",
     val remoteAddress: String = "",
-    /** The mirror's key for this server in Fuse's database. */
+    /**
+     * The key everything kept for this server goes under in Fuse (its mirror, the changes and saves
+     * waiting for it); a different server gets its own (`RommServers`).
+     */
     val server: String = "main",
+    /** Each address Fuse was set up with, normalised, to the key of the server it was ([server]). */
+    val servers: Map<String, String> = emptyMap(),
     /** Who Fuse is signed in as, to show (never a password or token). */
     val account: String = "",
     /** The RomM version last seen, to show. */

@@ -646,6 +646,18 @@ interface EmulatorFiles {
 }
 
 /**
+ * Where [EmulatorFiles] keeps the copy of an emulator's file as it was before Fuse first changed it:
+ * below its folder of copies at the file's whole path, so two files of one name (a game's settings
+ * under two cores, two installs' `PCSX2.ini`) each keep their own.
+ */
+object EmulatorFileCopies {
+    /** [path] (absolute, either slash) as a path below the folder of copies; a drive's colon dropped. */
+    fun below(path: String): String = path.replace('\\', '/').split('/')
+        .filter { it.isNotEmpty() && it != "." && it != ".." }
+        .joinToString("/") { it.replace(":", "") }
+}
+
+/**
  * A file, folder or archive someone chose to add, as Fuse read it: [entries] are paths below a folder
  * or in an archive (or the file's own name), [bytes] their size together, and [truncated] when there
  * were more than Fuse lists.

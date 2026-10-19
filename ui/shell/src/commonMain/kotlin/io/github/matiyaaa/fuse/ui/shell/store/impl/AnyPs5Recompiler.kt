@@ -15,6 +15,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.InstallerRun
 import io.github.matiyaaa.fuse.ui.shell.store.LibraryOps
 import io.github.matiyaaa.fuse.ui.shell.store.PortFiles
 import io.github.matiyaaa.fuse.ui.shell.store.RecompileOffer
+import io.github.matiyaaa.fuse.ui.shell.store.replace
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -110,9 +111,9 @@ internal class AnyPs5Recompiler(
                     (result.output.lineSequence().map { it.trim() }.lastOrNull { it.isNotEmpty() }?.let { ": ${it.take(240)}" } ?: ".")
             }
             if (runCatching { ctx.services.fs.stat(program) }.getOrNull() == null) return@withLock "AnyPS5 said it was done, but made no program."
-            // Only now is the build in use replaced; its home (saves) stays where it is.
-            files.remove(layout.install)
-            if (!files.move(stage, layout.install)) return@withLock "Fuse couldn't put ${game.displayTitle}'s build in place."
+            // Only now is the build in use replaced, and it is kept until the new one is in place; its
+            // home (saves) stays where it is.
+            if (!files.replace(stage, layout.install)) return@withLock "Fuse couldn't put ${game.displayTitle}'s build in place. The build you had is as it was."
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -200,8 +201,7 @@ internal class AnyPs5Recompiler(
                 }
             }
             if (runCatching { ctx.services.fs.list("$stage/prx/libs") }.getOrNull().isNullOrEmpty()) return Tool.Problem("AnyPS5 $tag's libraries had no libs folder, so it wasn't kept.")
-            files.remove(tool(tag))
-            if (!files.move(stage, tool(tag))) return Tool.Problem("Fuse couldn't put AnyPS5 in its folder.")
+            if (!files.replace(stage, tool(tag))) return Tool.Problem("Fuse couldn't put AnyPS5 in its folder.")
         } catch (e: CancellationException) {
             throw e
         } catch (e: DownloadException) {

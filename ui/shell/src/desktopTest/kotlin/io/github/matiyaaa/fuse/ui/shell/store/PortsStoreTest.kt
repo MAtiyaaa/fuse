@@ -136,7 +136,12 @@ class PortsStoreTest {
             Files.walk(p).use { s -> s.sorted(Comparator.reverseOrder()).forEach { Files.delete(it) } }
             return true
         }
-        override suspend fun move(from: String, to: String) = runCatching { Files.move(File(from).toPath(), File(to).toPath(), StandardCopyOption.ATOMIC_MOVE) }.isSuccess
+        /** A move this says no to fails, as one onto a full or failing disk would. */
+        var refuse: (from: String, to: String) -> Boolean = { _, _ -> false }
+
+        override suspend fun move(from: String, to: String) =
+            !refuse(from, to) && File(to).let { !Files.exists(it.toPath(), LinkOption.NOFOLLOW_LINKS) } &&
+                runCatching { Files.move(File(from).toPath(), File(to).toPath(), StandardCopyOption.ATOMIC_MOVE) }.isSuccess
     }
 
     private fun services(list: String = index(), body: ByteArray = build): Pair<FakeServices, TestPortFiles> {
@@ -367,6 +372,53 @@ class PortsStoreTest {
         assertTrue(swapped.readBytes().contentEquals(v64), "the person's file is untouched")
         assertTrue(rom.readBytes().contentEquals(z64))
         roms.deleteRecursively()
+    }
+
+    @Test
+    fun anUpdateThatCantGoInLeavesTheWorkingCopyAndAStoppedOneIsPutBack(): Unit = runBlocking {
+        File(game, "SKY.DAT").writeBytes(ByteArray(16) { 7 })
+        val (services, files) = services()
+        val store = createFuseStore(services, scope)
+        store.ports.open()
+        store.until("listed") { it.loaded }
+        assertNull(store.ports.chooseFolder("skyport", "game", game.absolutePath))
+        store.ports.install("skyport")
+        store.until("installed") { it.port("skyport")?.ready == true }
+        val root = File(files.folder, "skyport")
+        val program = File(root, "build/skyport").readText()
+
+        // The new build can't be moved in: the one in use stays, whole, and still plays.
+        files.refuse = { from, _ -> from.endsWith("/build.new") }
+        store.ports.install("skyport")
+        val failed = store.until("the update failed") { it.port("skyport")?.job is PortJob.Failed }.port("skyport")!!
+        assertTrue("as it was" in (failed.job as PortJob.Failed).message, (failed.job as PortJob.Failed).message)
+        assertEquals(program, File(root, "build/skyport").readText())
+        assertTrue(File(root, "build/engine.dat").isFile)
+        assertFalse(File(root, "build.old").exists() || File(root, "build.new").exists(), "nothing left beside it")
+        assertTrue(failed.installed)
+
+        // A copy in use that couldn't be moved aside (a file in use) is never taken out either.
+        store.ports.cancel("skyport")
+        store.until("the failure is cleared") { it.port("skyport")?.job == null }
+        files.refuse = { from, _ -> from.endsWith("/build") }
+        store.ports.install("skyport")
+        store.until("failed again") { it.port("skyport")?.job is PortJob.Failed }
+        assertEquals(program, File(root, "build/skyport").readText())
+
+        // Fuse stopped between the two moves: the copy waiting aside goes back the next time Ports opens.
+        files.refuse = { _, _ -> false }
+        assertTrue(files.move(File(root, "build").path, File(root, "build.old").path))
+        val again = PortsStore(StoreContext(services, scope, services.data.settings.current()), files, library = { error("not used") }, write = {}, publicKey = { null })
+        again.open()
+        withTimeout(20_000) { again.state.first { it.loaded } }
+        assertEquals(program, File(root, "build/skyport").readText())
+        assertFalse(File(root, "build.old").exists())
+
+        // And an update that goes in replaces it, with nothing left aside (the failure before is still shown until it does).
+        store.ports.install("skyport")
+        store.until("updated") { it.port("skyport")?.ready == true && it.port("skyport")?.job == null }
+        assertTrue(File(root, "build/skyport").isFile)
+        assertFalse(File(root, "build.old").exists())
     }
 
     @Test

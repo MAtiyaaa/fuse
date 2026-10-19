@@ -223,3 +223,31 @@ interface PortFiles {
     /** Moves [from] to [to], replacing nothing: false when [to] is there or it couldn't. */
     suspend fun move(from: String, to: String): Boolean
 }
+
+/**
+ * [stage] put at [into] in place of what is there, which waits aside as `[into].old` until the new one
+ * is in place and goes back when it couldn't be: a working copy is never taken out before its
+ * replacement is in. False when [stage] didn't go in (what was there is where it was).
+ */
+suspend fun PortFiles.replace(stage: String, into: String): Boolean {
+    val aside = "$into.old"
+    // What a replacing Fuse stopped in the middle of: put back, or gone once its replacement is in.
+    recover(into)
+    // Nothing was there, or it couldn't be moved (a file in use): then the new one can't go in over it.
+    val moved = move(into, aside)
+    if (move(stage, into)) {
+        if (moved) remove(aside)
+        return true
+    }
+    if (moved) move(aside, into)
+    return false
+}
+
+/**
+ * After Fuse stopped in the middle of [replace]: the copy waiting aside goes back to [into] when
+ * nothing took its place, and goes when something did.
+ */
+suspend fun PortFiles.recover(into: String) {
+    val aside = "$into.old"
+    if (!move(aside, into)) remove(aside)
+}

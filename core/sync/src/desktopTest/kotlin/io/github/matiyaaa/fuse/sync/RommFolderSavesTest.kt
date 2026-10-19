@@ -111,7 +111,9 @@ class RommFolderSavesTest {
         val rom = File(home, "Games/Some Game.iso").apply { parentFile.mkdirs(); writeBytes(ByteArray(64)) }
         val savedata = File(home, ".config/ppsspp/PSP/SAVEDATA").apply { mkdirs() }
         val query = SaveQuery(GameKey.of("psp", "ULUS10041", null, "Some Game"), "psp", rom.path, "linux.ppsspp", serial = "ULUS-10041", title = "Some Game")
-        fun saves() = JvmRommSaves(File(home, "fuse"), { FileSaveEnvironment("LINUX", home.path) { null } }, { client }, { base }, name, "linux", "test", person = { person })
+        /** Fuse's save sync on this device, with [who] playing and the server set up known as [server]. */
+        fun saves(who: String? = person, server: String = base) =
+            JvmRommSaves(File(home, "fuse"), { FileSaveEnvironment("LINUX", home.path) { null } }, { client }, { server }, name, "linux", "test", person = { who })
 
         fun play(data: String) {
             File(savedata, "ULUS10041DATA00").mkdirs()
@@ -176,6 +178,28 @@ class RommFolderSavesTest {
         assertEquals(1, stored.size)
         assertEquals(0, deck.saves().waiting)
         assertEquals(RommPack.contentHash(stored.single().bytes), RommPack.contentHash(Slots.of(deck.query.game, SaveSpot(SaveKind.SAVE, "psp.savedata", root = deck.savedata.path, folders = listOf("ULUS10041DATA00")))))
+    }
+
+    @Test
+    fun aWaitingSaveIsKeptForItsPersonAndServerAndGoesWhenTheyAreBack() = runBlocking {
+        val deck = Device("deck", person = "Mo")
+        deck.play("Mo's, offline")
+        away.set(true)
+        deck.saves().afterExit(deck.query, romId = 1)
+        assertEquals(1, deck.saves().waiting)
+        away.set(false)
+        // Sam plays on the Deck now: Mo's save is neither sent as Sam's nor let go.
+        assertEquals(0, deck.saves(who = "Sam").sendWaiting())
+        assertEquals(0, deck.saves(who = "Sam").waiting, "not Sam's to send")
+        // Another RomM server is set up meanwhile: it isn't sent there either.
+        assertEquals(0, deck.saves(server = "another-server").sendWaiting())
+        assertEquals(0, stored.size)
+        // Mo again, with that server: it goes, in Mo's own slot, and counts as sent.
+        assertEquals(1, deck.saves().waiting, "still kept")
+        assertEquals(1, deck.saves().sendWaiting())
+        assertEquals("PSP Save Data (Mo)", stored.single().slot)
+        assertEquals(0, deck.saves().waiting)
+        assertEquals(0, deck.saves().sendWaiting(), "nothing left to send is never counted")
     }
 
     @Test

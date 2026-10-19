@@ -15,6 +15,8 @@ import io.ktor.http.headersOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -56,27 +58,44 @@ class RommChangesStoreTest {
         cache.deleteRecursively()
     }
 
-    private data class Call(val method: HttpMethod, val path: String, val query: String, val body: String)
+    private data class Call(val method: HttpMethod, val path: String, val query: String, val body: String, val host: String = "romm.test")
 
     private val writes = CopyOnWriteArrayList<Call>()
     private val away = AtomicBoolean(false)
 
+    /** The servers that don't answer (503), by host. */
+    private val down: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    /** RomM's list of its parts can't be read (as when it answered slowly once): Fuse knows only its version. */
+    private val partsUnread = AtomicBoolean(false)
+
+    /** Play sessions are taken slowly, as by a busy server. */
+    private val slowSessions = AtomicBoolean(false)
+
     private fun services(): FakeServices = FakeServices(FuseData(DesktopDatabase.open(null)), cache).apply {
         web = { req ->
-            if (req.url.host != "romm.test") {
+            val host = req.url.host
+            if (host != "romm.test" && host != "other.test") {
                 null
             } else {
                 val path = req.url.encodedPath
                 val body = (req.body as? OutgoingContent.ByteArrayContent)?.bytes()?.decodeToString().orEmpty()
                 fun json(text: String, status: HttpStatusCode = HttpStatusCode.OK) = respond(text, status, headersOf(HttpHeaders.ContentType, "application/json"))
                 val reads = req.method == HttpMethod.Get
-                if (!reads) writes += Call(req.method, path, req.url.encodedQuery, body)
+                val answers = !away.get() && host !in down
+                // What RomM took: a request it didn't answer took nothing.
+                if (!reads && answers) writes += Call(req.method, path, req.url.encodedQuery, body, host)
                 when {
-                    away.get() -> respond("", HttpStatusCode.ServiceUnavailable)
+                    !answers -> respond("", HttpStatusCode.ServiceUnavailable)
                     path == "/api/heartbeat" -> json("""{"SYSTEM":{"VERSION":"5.4.0"}}""")
+                    path == "/openapi.json" && partsUnread.get() -> respond("", HttpStatusCode.InternalServerError)
                     path == "/openapi.json" -> json(
                         """{"paths":{"/api/roms/{id}/props":{},"/api/collections/{id}/roms":{},"/api/play-sessions":{},"/api/tasks/{task_id}":{},"/api/roms/identifiers":{}}}""",
                     )
+                    path == "/api/play-sessions" && slowSessions.get() -> {
+                        delay(1_500)
+                        json("""{"results":[],"created_count":1,"skipped_count":0}""", HttpStatusCode.Created)
+                    }
                     path == "/api/users/me" -> json("""{"username":"pat"}""")
                     path == "/api/collections" && reads -> json("""[]""")
                     path == "/api/collections" -> json("""{"id":41,"name":"Favourites","rom_ids":[],"is_favorite":true}""")
@@ -148,5 +167,65 @@ class RommChangesStoreTest {
         store.library.setFavorite(game.id, false)
         delay(4_000)
         assertEquals(before, writes.size)
+    }
+
+    @Test
+    fun aChangeGoesOnceToTheServerItWasMadeForAndOnlyWhenItWent(): Unit = runBlocking {
+        val services = services()
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        withTimeout(20_000) {
+            store.library.platforms.first { systems -> systems.sumOf { it.gameCount } == 1 }
+            store.sources.scan.first { it.phase == ScanPhase.DONE }
+        }
+        val game = store.library.games(GameQuery(platform = PlatformId("gba"))).first().single()
+        services.data.games.updateLinks(game.id) { it.copy(rommRomId = 7) }
+        val romm = store.romm
+        romm.setEnabled(true)
+        romm.setAddresses("http://romm.test", "", RouteMode.LOCAL)
+        romm.useToken("tok").getOrThrow()
+        withTimeout(20_000) { romm.state.first { it.link == RommLink.ONLINE && it.canSendChanges } }
+        romm.setSendChanges(true).getOrThrow()
+
+        // Two sends at once (the minute's, and Send Them Now): the session goes once.
+        down += "romm.test"
+        assertTrue(store.library.recordSteamSession(game.id, 1_760_000_000_000, 1_760_000_600_000))
+        withTimeout(10_000) { romm.state.first { it.changesWaiting == 1 } }
+        delay(4_000)
+        down -= "romm.test"
+        slowSessions.set(true)
+        val both = listOf(scope.async { romm.sendChangesNow() }, scope.async { romm.sendChangesNow() }).awaitAll()
+        assertEquals(listOf(0, 1), both.sorted(), "one sent it; the other found it gone")
+        assertEquals(1, writes.count { it.path == "/api/play-sessions" && it.method == HttpMethod.Post })
+        slowSessions.set(false)
+
+        // RomM's parts couldn't be read this time: what it takes isn't known, so nothing is sent, and nothing let go.
+        down += "romm.test"
+        store.library.setHidden(game.id, true)
+        withTimeout(10_000) { romm.state.first { it.changesWaiting == 1 } }
+        delay(4_000)
+        down -= "romm.test"
+        partsUnread.set(true)
+        romm.setAddresses("http://romm.test", "", RouteMode.AUTO)
+        withTimeout(20_000) { romm.state.first { it.link == RommLink.ONLINE && !it.canSendChanges } }
+        assertEquals(0, romm.sendChangesNow(), "never counted as sent")
+        assertEquals(1, romm.state.value.changesWaiting, "still waiting")
+        assertTrue(writes.none { it.path == "/api/roms/7/props" }, "$writes")
+
+        // Another server set up: the change waits for the one it was made for, never sent to this one.
+        partsUnread.set(false)
+        romm.setAddresses("http://other.test", "", RouteMode.LOCAL)
+        withTimeout(20_000) { romm.state.first { it.link == RommLink.ONLINE && it.canSendChanges } }
+        assertEquals(0, romm.state.value.changesWaiting)
+        assertEquals(0, romm.sendChangesNow())
+        assertTrue(writes.none { it.host == "other.test" && it.path.endsWith("/props") }, "$writes")
+        // The library's link was to the first server's game 7, not this one's.
+        withTimeout(10_000) { while (services.data.games.get(game.id)?.links?.rommRomId != null) delay(50) }
+
+        // Back to the first: it goes there.
+        romm.setAddresses("http://romm.test", "", RouteMode.LOCAL)
+        withTimeout(20_000) { while (writes.none { it.host == "romm.test" && it.path == "/api/roms/7/props" }) delay(100) }
+        assertEquals("""{"hidden":true}""", writes.single { it.path == "/api/roms/7/props" }.body)
+        withTimeout(10_000) { romm.state.first { it.changesWaiting == 0 } }
     }
 }

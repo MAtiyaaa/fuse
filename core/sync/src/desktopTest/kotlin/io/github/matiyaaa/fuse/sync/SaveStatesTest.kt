@@ -7,12 +7,20 @@ import kotlin.test.assertTrue
 /** Each emulator's save states, found where its own code keeps them, as each game's alone. */
 class SaveStatesTest {
     /** A device's files: text and folders ("" in [files]). */
-    private class FakeEnv(override val host: String, override val home: String, val files: Map<String, String> = emptyMap(), val vars: Map<String, String> = emptyMap()) : SaveEnvironment {
+    private class FakeEnv(
+        override val host: String,
+        override val home: String,
+        val files: Map<String, String> = emptyMap(),
+        val vars: Map<String, String> = emptyMap(),
+        /** Save folders chosen in Fuse, by emulator. */
+        val chosen: Map<String, String> = emptyMap(),
+    ) : SaveEnvironment {
         override fun exists(path: String) = path in files || files.keys.any { it.startsWith("$path/") }
         override fun isDirectory(path: String) = files.keys.any { it.startsWith("$path/") } || files[path] == ""
         override fun list(path: String) = files.keys.filter { it.startsWith("$path/") }.map { it.removePrefix("$path/").substringBefore('/') }.filter { it.isNotEmpty() }.distinct().sorted()
         override fun readText(path: String, limit: Int) = files[path]
         override fun env(name: String) = vars[name]
+        override fun saveFolder(emulator: String) = chosen[emulator]
     }
 
     private fun q(platform: String, rom: String, emulator: String, serial: String? = null) =
@@ -71,6 +79,24 @@ class SaveStatesTest {
         assertEquals("/states/ds/Mario Kart DS.ml1", moved.files.first().path)
         val mgba = states("linux.mgba", q("gba", "/roms/gba/Golden Sun.gba", "linux.mgba"), FakeEnv("LINUX", "/home/mo"))
         assertEquals((0..9).map { "/roms/gba/Golden Sun.ss$it" }, mgba.files.map { it.path })
+    }
+
+    @Test
+    fun aSaveFolderChosenInFuseKeepsTheStatesWhereTheEmulatorPutsThem() {
+        // The save goes to the chosen folder; the states stay where the emulator's own settings put them.
+        val melonEnv = FakeEnv(
+            "LINUX", "/home/mo",
+            mapOf("/saves/ds/" to "", "/home/mo/.config/melonDS/melonDS.toml" to "[Instance0]\nSavestatePath = \"/states/ds\"\n"),
+            chosen = mapOf("melonds" to "/saves/ds"),
+        )
+        val melon = SaveAdapters.forEmulator("linux.melonds")!!.locate(q("nds", "/roms/nds/Mario Kart DS.nds", "linux.melonds"), melonEnv)
+        assertEquals("/saves/ds/Mario Kart DS.sav", melon.single { it.kind == SaveKind.SAVE }.files.single().path)
+        assertEquals((1..8).map { "/states/ds/Mario Kart DS.ml$it" }, melon.single { it.kind == SaveKind.STATE }.files.map { it.path })
+
+        val mgbaEnv = FakeEnv("LINUX", "/home/mo", mapOf("/saves/gba/" to ""), chosen = mapOf("mgba" to "/saves/gba"))
+        val mgba = SaveAdapters.forEmulator("linux.mgba")!!.locate(q("gba", "/roms/gba/Golden Sun.gba", "linux.mgba"), mgbaEnv)
+        assertEquals("/saves/gba/Golden Sun.sav", mgba.single { it.kind == SaveKind.SAVE }.files.single().path)
+        assertEquals((0..9).map { "/roms/gba/Golden Sun.ss$it" }, mgba.single { it.kind == SaveKind.STATE }.files.map { it.path })
     }
 
     @Test

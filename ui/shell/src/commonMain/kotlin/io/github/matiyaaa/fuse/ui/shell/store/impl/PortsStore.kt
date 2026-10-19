@@ -23,6 +23,8 @@ import io.github.matiyaaa.fuse.ui.shell.store.PortJob
 import io.github.matiyaaa.fuse.ui.shell.store.PortView
 import io.github.matiyaaa.fuse.ui.shell.store.PortsOps
 import io.github.matiyaaa.fuse.ui.shell.store.PortsState
+import io.github.matiyaaa.fuse.ui.shell.store.recover
+import io.github.matiyaaa.fuse.ui.shell.store.replace
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -100,6 +102,8 @@ internal class PortsStore(
             val inside = files.bundledIndex()?.let { PortsIndexReader.read(it).getOrNull() }
             val kept = keptList()
             list = listOfNotNull(kept, inside).maxByOrNull { it.index.revision * 2 + if (it.signed) 1 else 0 }
+            // A copy an update was replacing when Fuse stopped goes back in place.
+            for (id in ctx.settings.value.ports.installed.keys) files.recover(layout(id).install)
         }
         publish()
     }
@@ -220,11 +224,11 @@ internal class PortsStore(
                 files.remove(stage)
                 return fail(id, "The download had no ${build.run} in it, so it wasn't installed.")
             }
-            // Only now is the copy in use replaced (its links go with it; setting up makes them again).
-            files.remove(layout.install)
-            if (!files.move(stage, layout.install)) {
+            // Only now is the copy in use replaced, and it is kept until the new one is in place (its
+            // links go with it; setting up makes them again).
+            if (!files.replace(stage, layout.install)) {
                 files.remove(stage)
-                return fail(id, "Fuse couldn't put ${port.name} in place.")
+                return fail(id, "Fuse couldn't put ${port.name} in place. The copy you had is as it was.")
             }
             write { s -> s.copy(ports = s.ports.copy(installed = s.ports.installed + (id to InstalledPort(port, build, emptyList(), ctx.now())))) }
             jobs.update { it - id }
@@ -261,6 +265,7 @@ internal class PortsStore(
         // Fuse's copy and its links go (a link is removed itself, never what it points at); the home stays.
         val ok = files.remove(layout.install) and files.remove(layout.launcher)
         files.remove("${layout.root}/build.new")
+        files.remove("${layout.install}.old")
         // Games played with it go back to their emulators.
         write { s -> s.copy(ports = s.ports.copy(installed = s.ports.installed - id, playWith = s.ports.playWith.filterValues { it != id })) }
         recheck()

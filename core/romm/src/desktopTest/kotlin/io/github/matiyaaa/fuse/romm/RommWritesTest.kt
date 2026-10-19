@@ -222,4 +222,40 @@ class RommWritesTest {
         val meanwhile = RommWrites.add(q, RommWrite.Hidden(9, true))
         assertEquals(listOf(RommWrite.Hidden(8, true), RommWrite.Favourite(7, false), RommWrite.Hidden(9, true)), RommWrites.without(meanwhile, sent))
     }
+
+    @Test
+    fun onlyWhatTheServerTakesIsSentAndTheRestWaitsInOrder() {
+        val q = listOf(RommWrite.Played(7, 0, 600_000), RommWrite.Played(7, 700_000, 900_000), RommWrite.Hidden(8, true), RommWrite.Favourite(7, false), RommWrite.Hidden(9, true))
+        // A server without play sessions (or whose parts Fuse couldn't read): they wait; the hides go, in order.
+        val noSessions: (RommWrite) -> Boolean = { it !is RommWrite.Played }
+        assertEquals(listOf(RommWrite.Hidden(8, true)), RommWrites.next(q, noSessions))
+        assertEquals(listOf(RommWrite.Favourite(7, false)), RommWrites.next(RommWrites.without(q, listOf(RommWrite.Hidden(8, true))), noSessions))
+        // Nothing it takes: nothing goes, and nothing is let go.
+        assertTrue(RommWrites.next(q) { false }.isEmpty())
+        // Sessions it takes go together from where they start.
+        val later = listOf(RommWrite.Hidden(8, true), RommWrite.Played(7, 0, 600_000), RommWrite.Played(7, 700_000, 900_000))
+        assertEquals(later.drop(1), RommWrites.next(later) { it is RommWrite.Played })
+    }
+
+    @Test
+    fun aServerKeepsItsKeyWhileAnAddressStaysAndAnotherGetsItsOwn() {
+        val first = RommServers.FIRST
+        // Set up for the first time: the key Fuse always had.
+        val (setUp, known) = RommServers.after(first, listOf("", ""), listOf("http://192.168.1.5:8080/", ""), emptyMap())
+        assertEquals(first, setUp)
+        // An outside address added, a trailing slash or capitals: the same server.
+        val (same, known2) = RommServers.after(first, listOf("http://192.168.1.5:8080/", ""), listOf("HTTP://192.168.1.5:8080", "https://romm.example.com"), known)
+        assertEquals(first, same)
+        // Another server altogether: a key of its own, the same one on every device.
+        val (other, known3) = RommServers.after(first, listOf("http://192.168.1.5:8080", "https://romm.example.com"), listOf("http://10.0.0.9", ""), known2)
+        assertTrue(other != first && other.startsWith("server-"))
+        assertEquals(other, RommServers.after(first, listOf("http://192.168.1.5:8080", "https://romm.example.com"), listOf("http://10.0.0.9/", ""), emptyMap()).first)
+        // Back to the first: its own key again, and what waits for it with it.
+        assertEquals(first, RommServers.after(other, listOf("http://10.0.0.9", ""), listOf("", "https://romm.example.com"), known3).first)
+        // Addresses cleared, then another server entered: still never the key before.
+        val (cleared, known4) = RommServers.after(first, listOf("http://192.168.1.5:8080", ""), listOf("", ""), known3)
+        assertEquals(first, cleared)
+        assertEquals(other, RommServers.after(cleared, listOf("", ""), listOf("http://10.0.0.9", ""), known4).first)
+        assertTrue(RommServers.after(cleared, listOf("", ""), listOf("http://172.16.0.2", ""), known4).first !in setOf(first, other))
+    }
 }

@@ -55,9 +55,38 @@ class JvmRommSaves(
     @Serializable
     private data class Agreed(val hash: String, val saveId: Long)
 
-    /** A save that couldn't reach RomM: it goes, in the order they waited, when RomM answers again. */
+    /**
+     * A save that couldn't reach RomM: it goes, in the order they waited, when RomM answers again,
+     * to the [server] it was for, as the save of the [person] who played (null when the device had
+     * one). Kept until then, whoever is playing and whichever server is set up meanwhile.
+     */
     @Serializable
-    private data class Waiting(val key: String, val romId: Long, val query: SaveQuery, val since: Long)
+    private data class Waiting(
+        val key: String,
+        val romId: Long,
+        val query: SaveQuery,
+        val since: Long,
+        val server: String? = null,
+        val person: String? = null,
+    ) {
+        /** The server it waits for: as kept, or from its key when it waited before that was kept. */
+        val forServer: String get() = server ?: key.substringBefore('|')
+
+        /** Who it waits for: as kept, or from its key ("server|rom|save|person") when it waited before. */
+        val forPerson: String? get() = if (server != null) person else key.split('|').getOrNull(3)
+    }
+
+    /** What sending a save did. */
+    private enum class Outcome {
+        /** It went up to RomM. */
+        SENT,
+
+        /** Nothing needed to go (in step already, nothing here, or RomM's changed too and the next start asks). */
+        SETTLED,
+
+        /** It couldn't go; it waits. */
+        WAITING,
+    }
 
     @Serializable
     private data class State(
@@ -191,7 +220,7 @@ class JvmRommSaves(
     }
 
     private suspend fun wait(key: String, romId: Long, query: SaveQuery) = lock.withLock {
-        if (state.waiting.none { it.key == key }) state = state.copy(waiting = state.waiting + Waiting(key, romId, query, clock()))
+        if (state.waiting.none { it.key == key }) state = state.copy(waiting = state.waiting + Waiting(key, romId, query, clock(), server(), person()))
         persist()
     }
 
@@ -270,22 +299,21 @@ class JvmRommSaves(
 
     /**
      * [held] up to RomM if it changed since they agreed and RomM didn't meanwhile; a save that
-     * can't reach RomM waits, in order, for the next time it answers. True when nothing is left
-     * waiting for it.
+     * can't reach RomM waits, in order, for the next time it answers.
      */
-    private suspend fun sendOne(c: RommClient, query: SaveQuery, romId: Long, held: Held, quiet: Boolean): Boolean = sending.withLock {
+    private suspend fun sendOne(c: RommClient, query: SaveQuery, romId: Long, held: Held, quiet: Boolean): Outcome = sending.withLock {
         val key = key(romId, held)
         val (here, agreed) = ledger(held, key)
         if (here == null || here.blank || agreed?.hash == here.hash) {
             drop(key)
-            return@withLock true
+            return@withLock Outcome.SETTLED
         }
         val latest = try {
             newest(c, romId, held)
         } catch (e: Exception) {
             wait(key, romId, query)
             if (!quiet) notSent(query, "RomM didn't answer. It goes by itself once RomM answers again.", e)
-            return@withLock false
+            return@withLock Outcome.WAITING
         }
         when (RommLedger.after(here, agreed, remote(latest))) {
             RommLedger.After.NOTHING -> drop(key)
@@ -294,10 +322,11 @@ class JvmRommSaves(
                 sendUp(c, query, romId, held, key)
                 log("RomM save sync: ${query.title}: sent")
                 _notices.tryEmit(RommSaveNotice.Sent(query.title))
+                return@withLock Outcome.SENT
             } catch (e: Exception) {
                 wait(key, romId, query)
                 if (!quiet) notSent(query, "RomM didn't take it (${e.message ?: "no answer"}). It goes by itself once RomM answers again.", e)
-                return@withLock false
+                return@withLock Outcome.WAITING
             }
             // RomM's changed meanwhile too: nothing is sent over it; the next start asks which to keep.
             RommLedger.After.LEAVE_FOR_NEXT_START -> {
@@ -305,27 +334,38 @@ class JvmRommSaves(
                 log("RomM save sync: ${query.title}: RomM's save changed too; the next launch asks which to keep")
             }
         }
-        true
+        Outcome.SETTLED
     }
 
-    /** Sends what waited to go, in the order it waited; stops at the first that still can't. Returns how many went. */
+    /**
+     * Sends what waited to go to the server in use as the save of whoever is playing, in the order
+     * it waited; stops at the first that still can't. A save that waits for another server or another
+     * person is kept for when it is theirs again (sent now, it would go as someone else's, or to the
+     * wrong RomM), and so is one whose save can't be found just now (its card out). Returns how many
+     * went up to RomM, not counting those that needed nothing sent.
+     */
     override suspend fun sendWaiting(): Int = withContext(Dispatchers.IO) {
         val c = client() ?: return@withContext 0
+        val here = server()
+        val who = person()
         var done = 0
         for (w in lock.withLock { state.waiting }) {
-            val held = heldOf(w.query)
-            if (held == null || key(w.romId, held) != w.key) {
-                drop(w.key)
-                continue
+            if (w.forServer != here || w.forPerson != who) continue
+            val held = heldOf(w.query) ?: continue
+            val outcome = sendOne(c, w.query, w.romId, held, quiet = true)
+            // Kept by another name before (the emulator keeps it differently now): what was sent, or waits, is under the new one.
+            if (key(w.romId, held) != w.key) drop(w.key)
+            when (outcome) {
+                Outcome.WAITING -> break
+                Outcome.SENT -> done++
+                Outcome.SETTLED -> Unit
             }
-            if (!sendOne(c, w.query, w.romId, held, quiet = true)) break
-            done++
         }
         done
     }
 
-    /** How many saves wait to go to RomM. */
-    override val waiting: Int get() = state.waiting.size
+    /** How many saves wait to go to the server in use, as the saves of whoever is playing (kept across restarts). */
+    override val waiting: Int get() = state.waiting.let { all -> val here = server(); val who = person(); all.count { it.forServer == here && it.forPerson == who } }
 
     override suspend fun settle(conflict: RommSaveConflict, keepHere: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {

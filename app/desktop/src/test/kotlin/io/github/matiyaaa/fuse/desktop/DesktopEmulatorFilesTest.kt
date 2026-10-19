@@ -75,7 +75,39 @@ class DesktopEmulatorFilesTest {
         assertFalse(files.write(File(home, "elsewhere.ini").absolutePath, "x"))
         assertTrue(files.write(settings.absolutePath, "[Patches]\nEnable = Mine\nEnable = 60 FPS\n"))
         assertTrue(files.write(settings.absolutePath, "[Patches]\nEnable = Mine\n"))
-        assertEquals("[Patches]\nEnable = Mine\n", File(backups, settings.name).readText())
+        assertEquals("[Patches]\nEnable = Mine\n", copyOf(settings).readText())
+    }
+
+    /** Where the copy of [f] as it was before Fuse first changed it is kept: at its whole path. */
+    private fun copyOf(f: File) = File(backups, io.github.matiyaaa.fuse.ui.shell.store.EmulatorFileCopies.below(f.absoluteFile.normalize().path))
+
+    @Test
+    fun foldersPcsx2sOwnSettingsMovedAndRetroArchsOwnSettingsAreWritten() = runBlocking {
+        val data = File(home, ".config/PCSX2").apply { File(this, "inis").mkdirs() }
+        val cheats = File(home, "srv/ps2-cheats").apply { mkdirs() }
+        File(data, "inis/PCSX2.ini").writeText("[Folders]\nCheats = ${p(cheats)}\n")
+        val files = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        files.pcsx2(pcsx2("/usr/bin/pcsx2-qt"))
+        assertTrue(files.write(File(cheats, "SLUS-20946_0C040404.pnach").absolutePath, "patch=1,EE,0,word,0\n"), "its cheats folder, where its settings put it")
+        assertFalse(files.write(File(home, "srv/other.ini").absolutePath, "x"), "but nothing beside it")
+
+        // RetroArch's retroarch.cfg sits beside its cheats and config folders, not in them.
+        val ra = File(home, ".config/retroarch").apply { mkdirs() }
+        val cfg = File(ra, "retroarch.cfg").apply { writeText("video_vsync = \"true\"\n") }
+        val retroArch = InstalledEmulator(EmulatorId("linux.retroarch"), "RetroArch", Host.LINUX, "/usr/bin/retroarch", platforms = emptySet(), detectedVia = "PATH")
+        assertEquals(p(cfg), files.retroArch(retroArch)!!.config)
+        assertTrue(files.write(cfg.absolutePath, "video_vsync = \"false\"\n"), "RetroArch's own settings")
+        assertEquals("video_vsync = \"true\"\n", copyOf(cfg).readText())
+        assertFalse(files.remove(cfg.absolutePath), "never removed")
+        assertTrue(cfg.isFile)
+        assertFalse(files.write(File(ra, "retroarch-core-options.cfg").absolutePath, "x"), "nothing else beside it")
+
+        // Two files of one name, each with its own copy.
+        val mgba = File(ra, "config/mGBA/Golden Sun.cfg").apply { parentFile.mkdirs(); writeText("mgba's\n") }
+        val vba = File(ra, "config/VBA-M/Golden Sun.cfg").apply { parentFile.mkdirs(); writeText("vba-m's\n") }
+        assertTrue(files.write(mgba.absolutePath, "changed\n") && files.write(vba.absolutePath, "changed\n"))
+        assertEquals("mgba's\n", copyOf(mgba).readText())
+        assertEquals("vba-m's\n", copyOf(vba).readText())
     }
 
     @Test
@@ -89,7 +121,7 @@ class DesktopEmulatorFilesTest {
         files.rpcs3Config(rpcs3)
         assertTrue(files.writePrivate(rpcn.absolutePath, "NPID: Ana_99\nPassword: E4F6\nToken: NEW\n"))
         assertEquals("NPID: Ana_99\nPassword: E4F6\nToken: NEW\n", rpcn.readText())
-        assertFalse(File(backups, "rpcn.yml").exists())
+        assertFalse(copyOf(rpcn).exists() || File(backups, "rpcn.yml").exists())
         assertFalse(files.writePrivate(File(home, "elsewhere.yml").absolutePath, "x"), "only inside a known emulator folder")
     }
 
