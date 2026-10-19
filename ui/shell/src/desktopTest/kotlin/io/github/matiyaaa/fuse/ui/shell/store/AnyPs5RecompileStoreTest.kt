@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse.ui.shell.store
 
 import io.github.matiyaaa.fuse.data.FuseData
 import io.github.matiyaaa.fuse.data.db.DesktopDatabase
+import io.github.matiyaaa.fuse.launch.ports.AnyPs5Recompile
 import io.github.matiyaaa.fuse.launch.ports.PortLauncher
 import io.github.matiyaaa.fuse.model.LaunchPlan
 import io.github.matiyaaa.fuse.model.LibrarySourceKind
@@ -135,7 +136,25 @@ class AnyPs5RecompileStoreTest {
             Files.walk(p).use { s -> s.sorted(Comparator.reverseOrder()).forEach { Files.delete(it) } }
             return true
         }
-        override suspend fun move(from: String, to: String) = runCatching { Files.move(File(from).toPath(), File(to).toPath(), StandardCopyOption.ATOMIC_MOVE) }.isSuccess
+        /** A move this says no to fails, as one onto a full disk would. */
+        var refuse: (from: String, to: String) -> Boolean = { _, _ -> false }
+
+        override suspend fun move(from: String, to: String) =
+            !refuse(from, to) && !Files.exists(File(to).toPath(), LinkOption.NOFOLLOW_LINKS) &&
+                runCatching { Files.move(File(from).toPath(), File(to).toPath(), StandardCopyOption.ATOMIC_MOVE) }.isSuccess
+
+        /** bubblewrap, when this computer has it. */
+        var runner: String? = null
+
+        override suspend fun readOnlyRunner() = runner
+
+        override suspend fun realPath(path: String): String = File(path).toPath().toRealPath().toString()
+
+        override suspend fun copy(from: String, to: String): String? {
+            if (File(to).exists()) return "already there"
+            File(from).copyRecursively(File(to))
+            return null
+        }
     }
 
     /** The person's dump: a plain ELF eboot.bin, its params, a module and a file of its own. */
@@ -149,6 +168,12 @@ class AnyPs5RecompileStoreTest {
         File(d, "assets.pak").writeBytes(ByteArray(32) { 3 })
         return d
     }
+
+    /** Whether bubblewrap can make its sandbox here (a system can keep programs from making one). */
+    @Volatile private var bwrapWorks = true
+
+    /** The relinker's runs, not bubblewrap's tries. */
+    private fun FakeServices.relinks() = installerRuns.filter { it.argv.first() != BWRAP }
 
     private fun services(release: String = release(), os: String = "linux"): Pair<FakeServices, Files_> {
         val services = FakeServices(FuseData(DesktopDatabase.open(File(cache, "fuse-${System.nanoTime()}.db").absolutePath)), cache)
@@ -164,12 +189,17 @@ class AnyPs5RecompileStoreTest {
             }
         }
         // AnyPS5's relinker, standing in: the program written where it was asked, and the game's module converted into app0.
+        // bubblewrap, tried with the dump read-only, says it works unless the test says it doesn't.
         services.contentInstaller = { run ->
-            val out = File(run.argv.last())
-            out.writeText("#!/bin/sh\necho native\n")
-            File(out.parentFile, "app0/sce_module").mkdirs()
-            File(out.parentFile, "app0/sce_module/libSceFios2.prx").writeText("converted")
-            InstallerResult(0, "Guest module: app0/sce_module/libSceFios2.prx")
+            if (run.argv.first() == BWRAP) {
+                InstallerResult(if (bwrapWorks) 0 else 1, if (bwrapWorks) "" else "bwrap: setting up uid map: Permission denied")
+            } else {
+                val out = File(run.argv.last())
+                out.writeText("#!/bin/sh\necho native\n")
+                File(out.parentFile, "app0/sce_module").mkdirs()
+                File(out.parentFile, "app0/sce_module/libSceFios2.prx").writeText("converted")
+                InstallerResult(0, "Guest module: app0/sce_module/libSceFios2.prx")
+            }
         }
         return services to files
     }
@@ -179,23 +209,31 @@ class AnyPs5RecompileStoreTest {
         return withTimeout(20_000) { library.games(GameQuery()).first { l -> l.any { it.platformId == PlatformId("ps5") } } }.single { it.platformId == PlatformId("ps5") }
     }
 
+    /** Every file below [d] by its path, with its bytes. */
+    private fun snapshot(d: File) = d.walkTopDown().filter { it.isFile }.associate { it.relativeTo(d).path to it.readBytes().toList() }
+
     @Test
-    fun aDumpIsRecompiledBesideItselfAndPlayedNatively(): Unit = runBlocking {
+    fun aDumpIsRecompiledBesideItselfAndPlayedNativelyWithTheDumpReadOnly(): Unit = runBlocking {
         val d = dump()
         val before = d.walkTopDown().filter { it.isFile }.associate { it.relativeTo(d).path to it.readBytes().toList() }
         val (services, files) = services()
+        files.runner = BWRAP
         val store = createFuseStore(services, scope)
         val game = store.ps5Game()
         val offer = assertNotNull(store.ports.recompileOffer(game.id))
         assertNull(offer.whyNot, offer.whyNot)
         assertNull(offer.builtWith)
+        assertFalse(offer.copies, "bubblewrap keeps the dump read-only: nothing is copied")
 
         val steps = mutableListOf<String>()
         assertNull(store.ports.recompile(game.id) { steps += it })
         assertTrue(steps.any { it.startsWith("Downloading AnyPS5 v0.1.3") }, "$steps")
+        // bubblewrap was tried with the dump read-only, at its own path, before anything was linked.
+        val real = d.toPath().toRealPath().toString()
+        assertEquals(AnyPs5Recompile.readOnly(BWRAP, real, real, listOf("true")), services.installerRuns.first().argv)
         // The relinker was given the dump's eboot.bin and the build's program, Linux's own.
         val root = File(files.folder, "anyps5-ppsa01234")
-        val run = services.installerRuns.single()
+        val run = services.relinks().single()
         assertEquals(listOf("${files.folder}/anyps5/v0.1.3/bin/relinker", "${d.absolutePath}/eboot.bin", "${root.path}/build.new/app.elf"), run.argv)
         val build = File(root, "build")
         assertTrue(File(build, "app.elf").isFile)
@@ -208,14 +246,14 @@ class AnyPs5RecompileStoreTest {
         // The dump is just as it was.
         assertEquals(before, d.walkTopDown().filter { it.isFile }.associate { it.relativeTo(d).path to it.readBytes().toList() })
 
-        // Play With has it, and Play starts the build from its folder.
+        // Play With has it, and Play starts the build from its folder, always inside bubblewrap with the dump read-only.
         assertEquals("v0.1.3", store.ports.recompileOffer(game.id)!!.builtWith)
         assertEquals(listOf("AnyPS5"), store.ports.portsFor(game.id).map { it.port.name })
         assertEquals("anyps5-ppsa01234", store.ports.playWith(game.id))
         val launcher = PortLauncher.decode(File(root, "anyps5-ppsa01234.fuseport").readText())!!
         assertIs<LaunchOutcome.Started>(store.library.launch(game.id))
         val plan = assertIs<LaunchPlan.Command>(services.launched.last().plan)
-        assertEquals(listOf("${build.path}/app.elf"), plan.argv)
+        assertEquals(AnyPs5Recompile.readOnly(BWRAP, real, build.path, listOf("${build.path}/app.elf")), plan.argv)
         assertEquals(launcher.cwd, plan.workingDir)
 
         // A save made, then the build taken out: the save stays, Play goes back to the emulator.
@@ -226,6 +264,79 @@ class AnyPs5RecompileStoreTest {
         assertNull(store.ports.playWith(game.id))
         assertNull(store.ports.recompileOffer(game.id)!!.builtWith)
         assertEquals(before, d.walkTopDown().filter { it.isFile }.associate { it.relativeTo(d).path to it.readBytes().toList() })
+    }
+
+    @Test
+    fun withoutBubblewrapTheBuildCopiesTheDumpAndPlayingNeverChangesIt(): Unit = runBlocking {
+        val d = dump()
+        val before = snapshot(d)
+        val (services, files) = services()
+        val store = createFuseStore(services, scope)
+        val game = store.ps5Game()
+        assertTrue(store.ports.recompileOffer(game.id)!!.copies, "said before it starts")
+        val steps = mutableListOf<String>()
+        assertNull(store.ports.recompile(game.id) { steps += it })
+        assertTrue(steps.any { it.startsWith("Copying Astro Bot") }, "$steps")
+        val build = File(files.folder, "anyps5-ppsa01234/build")
+        for (name in listOf("eboot.bin", "sce_sys", "assets.pak")) assertFalse(Files.isSymbolicLink(File(build, "app0/$name").toPath()), "$name is a copy, not a link")
+        fun theDumps(m: Map<String, List<Byte>>) = m.filterKeys { !it.startsWith("sce_module") }
+        assertEquals(theDumps(before), theDumps(snapshot(File(build, "app0"))))
+
+        // Played: the game writes over, into and out of everything it was given, and makes a save.
+        File(build, "app0/assets.pak").appendBytes(byteArrayOf(9, 9))
+        File(build, "app0/eboot.bin").writeBytes(ByteArray(0))
+        File(build, "app0/sce_sys/new.json").writeText("{}")
+        assertTrue(File(build, "app0/sce_sys/param.json").delete())
+        File(build, "_sd/SAVEDATA00").mkdirs()
+        File(build, "_sd/SAVEDATA00/sdimg").writeText("progress")
+        assertEquals(before, snapshot(d), "the dump is just as it was")
+        assertEquals("progress", File(files.folder, "anyps5-ppsa01234/home/_sd/SAVEDATA00/sdimg").readText(), "the save is in the build's home")
+        // Play starts the program itself.
+        assertIs<LaunchOutcome.Started>(store.library.launch(game.id))
+        assertEquals(listOf("${build.path}/app.elf"), assertIs<LaunchPlan.Command>(services.launched.last().plan).argv)
+        // On Windows there is no bubblewrap: a copy is said there too.
+        val (windows, _) = services(os = "windows")
+        val onWindows = createFuseStore(windows, scope)
+        assertTrue(onWindows.ports.recompileOffer(onWindows.ps5Game().id)!!.copies)
+    }
+
+    @Test
+    fun aSystemThatKeepsBubblewrapFromMakingASandboxGetsACopy(): Unit = runBlocking {
+        val d = dump()
+        val before = snapshot(d)
+        val (services, files) = services()
+        files.runner = BWRAP
+        bwrapWorks = false
+        val store = createFuseStore(services, scope)
+        val game = store.ps5Game()
+        assertNull(store.ports.recompile(game.id))
+        val build = File(files.folder, "anyps5-ppsa01234/build")
+        assertFalse(Files.isSymbolicLink(File(build, "app0/assets.pak").toPath()), "a copy, as bubblewrap can't keep the dump read-only here")
+        File(build, "app0/assets.pak").writeText("changed")
+        assertEquals(before, snapshot(d))
+        assertIs<LaunchOutcome.Started>(store.library.launch(game.id))
+        assertEquals(listOf("${build.path}/app.elf"), assertIs<LaunchPlan.Command>(services.launched.last().plan).argv, "never started in a sandbox that fails")
+    }
+
+    @Test
+    fun aRecompileAgainThatCantGoInLeavesTheBuildThatPlays(): Unit = runBlocking {
+        dump()
+        val (services, files) = services()
+        files.runner = BWRAP
+        val store = createFuseStore(services, scope)
+        val game = store.ps5Game()
+        assertNull(store.ports.recompile(game.id))
+        val root = File(files.folder, "anyps5-ppsa01234")
+        val program = File(root, "build/app.elf").readText()
+        // The new build can't be moved in: the one in use stays, whole, and still plays.
+        files.refuse = { from, _ -> from.endsWith("/build.new") }
+        val why = store.ports.recompile(game.id).orEmpty()
+        assertTrue("as it was" in why, why)
+        assertEquals(program, File(root, "build/app.elf").readText())
+        assertTrue(Files.isSymbolicLink(File(root, "build/app0/assets.pak").toPath()))
+        assertFalse(File(root, "build.old").exists() || File(root, "build.new").exists(), "nothing left beside it")
+        assertEquals("anyps5-ppsa01234", store.ports.playWith(game.id))
+        assertIs<LaunchOutcome.Started>(store.library.launch(game.id))
     }
 
     @Test
@@ -272,5 +383,10 @@ class AnyPs5RecompileStoreTest {
         val (mac, _) = services(os = "macos")
         val onMac = createFuseStore(mac, scope)
         assertTrue("Linux and Windows" in onMac.ports.recompileOffer(onMac.ps5Game().id)!!.whyNot.orEmpty())
+    }
+
+    private companion object {
+        /** bubblewrap's bwrap, where a test says this computer has it. */
+        const val BWRAP = "/usr/bin/bwrap"
     }
 }

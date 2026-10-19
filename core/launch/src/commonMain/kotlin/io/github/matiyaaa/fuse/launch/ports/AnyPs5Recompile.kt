@@ -28,8 +28,15 @@ import io.github.matiyaaa.fuse.model.PortFileKind
  *
  * Fuse makes each game's build in a folder of its own ([PortLayout] under its folder of ports, filed
  * with Fuse Ports): the relinked program, `libs/` linked to the libraries of the release that made
- * it, `app0/` made of links to the person's dump (never copied, never changed), and the folders the
- * game writes linked into the build's home, so a recompile or a removal never loses its saves.
+ * it, `app0/` with the person's dump in it, and the folders the game writes linked into the build's
+ * home, so a recompile or a removal never loses its saves.
+ *
+ * Nothing the game does can change the dump. AnyPS5 doesn't keep `/app0` read-only as the PS5 does
+ * (its `sceKernelOpen` opens a file for writing as asked, `core/libs/prx/libkernel/File/src/Open.cpp`;
+ * only a file from an `app0.zar` is refused, `ArchivedFile.cpp`), and a write through any link (a
+ * symbolic link, a hard link, a junction) is a write to the file it leads to. So where bubblewrap
+ * works, `app0/` is made of links to the dump and the game always starts with the dump read-only for
+ * it alone ([readOnly]); anywhere else `app0/` holds copies of the dump's files, never links.
  */
 object AnyPs5Recompile {
     const val OWNER = "boykopovar"
@@ -126,9 +133,25 @@ object AnyPs5Recompile {
         return EXTENSIONS.filter { (flag, _) -> flag !in flags }.map { it.second }
     }
 
-    /** How a game's build in [layout] starts: its program, from the build's folder (its `app0/` and save folders are there). */
-    fun launcher(layout: PortLayout, os: String, tag: String): PortLauncher =
-        PortLauncher(port = layout.id, version = tag, argv = listOf("${layout.install}/${program(os)}"), cwd = layout.install, saves = "${layout.home}/$SAVES")
+    /**
+     * [argv] started by bubblewrap's [runner] (`bwrap`, bwrap(1)) with [folder] read-only for it alone:
+     * everything else as it is, devices too (`--dev-bind / /`), [folder] bound over itself read-only
+     * (`--ro-bind`, later binds lying over earlier ones), started in [cwd] (`--chdir`), and ended with
+     * the launch Fuse waits on (`--die-with-parent`). A write into [folder], through a link or not,
+     * fails as a read-only file system's does, as a write to `/app0` does on a PS5.
+     */
+    fun readOnly(runner: String, folder: String, cwd: String, argv: List<String>): List<String> =
+        listOf(runner, "--dev-bind", "/", "/", "--ro-bind", folder, folder, "--chdir", cwd, "--die-with-parent", "--") + argv
+
+    /**
+     * How a game's build in [layout] starts: its program, from the build's folder (its `app0/` and save
+     * folders are there); through [runner] with the [dump] its `app0/` links to read-only, when there is one.
+     */
+    fun launcher(layout: PortLayout, os: String, tag: String, runner: String? = null, dump: String? = null): PortLauncher {
+        val program = listOf("${layout.install}/${program(os)}")
+        val argv = if (runner != null && dump != null) readOnly(runner, dump, layout.install, program) else program
+        return PortLauncher(port = layout.id, version = tag, argv = argv, cwd = layout.install, saves = "${layout.home}/$SAVES")
+    }
 
     /**
      * The build recorded as a port of its own ([id]) for [title]: AnyPS5 at [tag], its relinker for
@@ -145,7 +168,7 @@ object AnyPs5Recompile {
         builds = listOf(PortBuild(os = os, url = url, size = size, sha256 = sha256, kind = PortFileKind.FILE, run = program(os))),
         saves = SAVES,
         notes = listOf(
-            "Recompiled from your dump, which Fuse links in and never changes.",
+            "Recompiled from your dump, which nothing it does can change: read-only while it plays, or copied.",
             "Only some games play yet, as AnyPS5's own list of games says.",
         ),
         source = SOURCE,

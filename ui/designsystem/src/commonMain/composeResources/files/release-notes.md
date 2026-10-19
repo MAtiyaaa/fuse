@@ -221,8 +221,10 @@ the game page is calmer, and Linux looks and plays more the way Android does.
   back exactly.
 - **PlayStation 5 games recompiled to run natively.** On Linux and Windows, a PS5 dump's Play With
   list offers Recompile to Run Natively: Fuse fetches AnyPS5, checks its files against GitHub's own
-  checksums, and turns the game's code into a program of your computer's own, in Fuse's folder,
-  with your dump linked in and never changed. Play then starts it without an emulator, Steam
+  checksums, and turns the game's code into a program of your computer's own, in Fuse's folder.
+  Nothing the game does can change your dump: on Linux it plays with the dump read-only for it
+  (through bubblewrap, which SteamOS has), and elsewhere it plays from a copy of the dump's files,
+  which Fuse says before it starts. Play then starts it without an emulator, Steam
   entries included, and its saves stay in Fuse's folder if you take the build out again. A dump
   AnyPS5 can't read says why before anything is downloaded.
 - **KytyPS5**, the PlayStation 5 emulator, installs from the Store on Windows, Linux and the Mac,

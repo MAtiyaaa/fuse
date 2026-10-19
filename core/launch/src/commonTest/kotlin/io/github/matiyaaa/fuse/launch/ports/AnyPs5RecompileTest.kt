@@ -74,4 +74,22 @@ class AnyPs5RecompileTest {
         assertEquals(PortFileKind.FILE, port.builds.single().kind)
         assertEquals("app.elf", port.builds.single().run)
     }
+
+    @Test
+    fun withBubblewrapItStartsWithTheDumpReadOnlyForItAlone() {
+        val layout = PortLayout("/home/mo/.local/share/fuse/ports/anyps5-ppsa01234", "anyps5-ppsa01234")
+        val dump = "/run/media/mo/Games/PS5/Astro Bot [PPSA01234]"
+        // bwrap(1): everything bound as it is, devices too; the dump bound over itself read-only, later
+        // binds lying over earlier ones; started in the build's folder; gone with the launch Fuse waits on.
+        assertEquals(
+            listOf(
+                "/usr/bin/bwrap", "--dev-bind", "/", "/", "--ro-bind", dump, dump, "--chdir", layout.install, "--die-with-parent", "--",
+                "${layout.install}/app.elf",
+            ),
+            AnyPs5Recompile.launcher(layout, "linux", "v0.1.3", runner = "/usr/bin/bwrap", dump = dump).argv,
+        )
+        // Without it (a copy of the dump in the build), the program itself.
+        assertEquals(listOf("${layout.install}/app.elf"), AnyPs5Recompile.launcher(layout, "linux", "v0.1.3").argv)
+        assertEquals(listOf("${layout.install}/app.exe"), AnyPs5Recompile.launcher(layout, "windows", "v0.1.3").argv)
+    }
 }

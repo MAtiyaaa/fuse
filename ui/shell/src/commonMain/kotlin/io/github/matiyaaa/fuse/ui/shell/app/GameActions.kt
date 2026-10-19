@@ -644,7 +644,8 @@ private fun AppState.recompileChoices(card: GameCard, offer: io.github.matiyaaa.
         MenuAction(
             "recompile", if (built == null) "Recompile to Run Natively" else "Recompile Again", FuseIcons.Zap,
             detail = offer.warning ?: if (built == null) {
-                "AnyPS5 makes a program of this computer's own from your dump, in Fuse's folder. Your dump isn't changed"
+                if (offer.copies) "AnyPS5 makes a program of this computer's own from your dump, with a copy of its files in Fuse's folder, so your dump is never changed"
+                else "AnyPS5 makes a program of this computer's own from your dump, in Fuse's folder. Your dump stays read-only while it plays"
             } else {
                 "Made with AnyPS5 $built. Made again with its newest release"
             },

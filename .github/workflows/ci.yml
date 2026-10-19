@@ -48,6 +48,14 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      # A recompiled PS5 game plays inside bubblewrap with the dump read-only, as on SteamOS, which has
+      # it; DesktopPortFilesTest runs one there. Ubuntu lets only programs it knows make a sandbox.
+      - name: Install bubblewrap
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+
       # Shared modules have a JVM target named "desktop", so their commonTest and desktopTest
       # sources run in the desktopTest task (see build-logic/src/main/kotlin/fuse.kmp.library.gradle.kts).
       - name: Test everything, build the debug APK and check the release build shrinks

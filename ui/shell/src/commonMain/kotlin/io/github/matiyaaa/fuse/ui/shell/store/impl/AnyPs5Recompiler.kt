@@ -25,8 +25,9 @@ import kotlinx.coroutines.sync.withLock
  * with Fuse Ports' folder. AnyPS5 itself is fetched from its newest release on GitHub only when the
  * person asks to recompile a game, both its files checked against the SHA-256 GitHub gives for them,
  * and kept per release (`anyps5/<tag>/`) while any game's build uses it. Each game's build is made
- * beside the one in use and only put in place once AnyPS5 has made its program; the person's dump is
- * only ever read and linked to.
+ * beside the one in use and only put in place once AnyPS5 has made its program. Nothing the game
+ * does can change the person's dump: where bubblewrap works, the build links to it and the game
+ * always starts with it read-only; anywhere else the build holds a copy of its files.
  */
 internal class AnyPs5Recompiler(
     private val ctx: StoreContext,
@@ -63,7 +64,20 @@ internal class AnyPs5Recompiler(
             ?: return RecompileOffer(whyNot = "Fuse can't tell this game's title id (like PPSA01234), which its build is kept under. Name its folder with it, like Game [PPSA01234].")
         lacks(dump)?.let { return RecompileOffer(whyNot = it) }
         val built = ctx.settings.value.ports.installed[portId]?.port?.version
-        return RecompileOffer(builtWith = built, warning = processorWarning())
+        return RecompileOffer(builtWith = built, warning = processorWarning(), copies = files.os != "linux" || files.readOnlyRunner() == null)
+    }
+
+    /**
+     * bubblewrap and the dump's own path, when the game can start with [dump] read-only here: Linux
+     * with `bwrap`, tried once with the dump read-only (a system that keeps programs from making a
+     * sandbox refuses it). Null anywhere else, and the build takes a copy of the dump's files.
+     */
+    private suspend fun keepsReadOnly(dump: String, run: io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles): Pair<String, String>? {
+        if (files.os != "linux") return null
+        val runner = files.readOnlyRunner() ?: return null
+        val real = files.realPath(dump)
+        val tried = run.runInstaller(InstallerRun(AnyPs5Recompile.readOnly(runner, real, real, listOf("true")), workingDir = real, timeoutMs = TRY_MS)) ?: return null
+        return (runner to real).takeIf { tried.started && !tried.timedOut && tried.exitCode == 0 }
     }
 
     /** What [dump] lacks for the relinker, read from its top; null when it has it all. */
@@ -93,13 +107,16 @@ internal class AnyPs5Recompiler(
             is Tool.Ready -> t.tag to t
             is Tool.Problem -> return@withLock t.message
         }
-        onStep("Recompiling ${game.displayTitle}")
+        // The dump read-only for the game where bubblewrap works; anywhere else the build takes a copy.
+        val readOnly = keepsReadOnly(dump, run)
         val layout = layout(portId)
         val stage = "${layout.root}/build.new"
         files.remove(stage)
         if (!files.makeFolder(stage) || !files.makeFolder(layout.home)) return@withLock "Fuse couldn't make a folder for ${game.displayTitle}'s build."
         try {
-            prepare(stage, dump, layout, tag)?.let { return@withLock it }
+            if (readOnly == null) onStep("Copying ${game.displayTitle}'s files")
+            prepare(stage, dump, layout, tag, linked = readOnly != null)?.let { return@withLock it }
+            onStep("Recompiling ${game.displayTitle}")
             val program = "$stage/${AnyPs5Recompile.program(files.os)}"
             val argv = AnyPs5Recompile.argv("${tool(tag)}/bin/${AnyPs5Recompile.relinker(files.os)}", files.os, "$dump/eboot.bin", program)
             val result = run.runInstaller(InstallerRun(argv, workingDir = stage, timeoutMs = RELINK_MS)) { line -> line.trim().takeIf { it.isNotEmpty() }?.let { onStep(it.take(120)) } }
@@ -121,7 +138,7 @@ internal class AnyPs5Recompiler(
         } finally {
             files.remove(stage)
         }
-        val launcher = AnyPs5Recompile.launcher(layout, files.os, tag)
+        val launcher = AnyPs5Recompile.launcher(layout, files.os, tag, readOnly?.first, readOnly?.second)
         if (!files.writeText(layout.launcher, launcher.encode())) return@withLock "Fuse couldn't write how ${game.displayTitle}'s build starts."
         val port = AnyPs5Recompile.port(portId, game.displayTitle, tag, files.os, relinker.url, relinker.size, relinker.sha256)
         library().addGameFile(layout.launcher, PortAdapter.PLATFORM, title = game.displayTitle)
@@ -141,15 +158,19 @@ internal class AnyPs5Recompiler(
     }
 
     /**
-     * The build's folder before AnyPS5 runs: its libraries (the release's, linked), `app0/` of links
-     * to the dump's own entries but its module folders, and the folders the game writes linked into
-     * the home. Null when it is ready, else why not.
+     * The build's folder before AnyPS5 runs: its libraries (the release's, linked), `app0/` with the
+     * dump's own entries but its module folders (links to them when [linked], the dump kept read-only
+     * for the game; else copies of them), and the folders the game writes linked into the home. Null
+     * when it is ready, else why not.
      */
-    private suspend fun prepare(stage: String, dump: String, layout: PortLayout, tag: String): String? {
+    private suspend fun prepare(stage: String, dump: String, layout: PortLayout, tag: String, linked: Boolean): String? {
         files.link("${tool(tag)}/prx/libs", "$stage/libs")?.let { return it }
         if (!files.makeFolder("$stage/app0")) return "Fuse couldn't make the build's app0 folder."
         val names = runCatching { ctx.services.fs.list(dump) }.getOrNull()?.map { it.name } ?: return "Fuse can't read the dump's folder."
-        for (name in AnyPs5Recompile.app0Links(names)) files.link("$dump/$name", "$stage/app0/$name")?.let { return it }
+        for (name in AnyPs5Recompile.app0Links(names)) {
+            if (linked) files.link("$dump/$name", "$stage/app0/$name")?.let { return it }
+            else files.copy("$dump/$name", "$stage/app0/$name")?.let { return it }
+        }
         for (own in AnyPs5Recompile.OWN_FOLDERS) {
             if (!files.makeFolder("${layout.home}/$own")) return "Fuse couldn't make the build's $own folder."
             files.link("${layout.home}/$own", "$stage/$own")?.let { return it }
@@ -253,6 +274,9 @@ internal class AnyPs5Recompiler(
         const val RELINK_MS = 45 * 60 * 1000L
 
         const val CPUINFO_LIMIT = 256 * 1024
+
+        /** How long trying bubblewrap may take. */
+        const val TRY_MS = 15_000L
 
         const val SHA256 = "sha256:"
     }

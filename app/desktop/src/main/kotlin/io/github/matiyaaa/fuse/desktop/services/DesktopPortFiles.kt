@@ -39,6 +39,10 @@ internal class DesktopPortFiles(
     private val findUmu: () -> String? = ::umuOnThisComputer,
     /** The home folder Steam's Protons are looked for from. */
     private val home: String = System.getProperty("user.home").orEmpty(),
+    /** Where bubblewrap's bwrap is looked for; the PATH by default. */
+    private val findBwrap: () -> String? = { Processes.which("bwrap") },
+    /** Bytes free where [copy] writes; the disk's own by default. */
+    private val free: () -> Long? = { null },
 ) : PortFiles {
     private val root = File(dataDir, "ports")
     override val folder: String = root.absoluteFile.fusePath
@@ -216,6 +220,64 @@ internal class DesktopPortFiles(
         runCatching { Files.move(a, b, StandardCopyOption.ATOMIC_MOVE) }.recoverCatching { Files.move(a, b) }.isSuccess
     }
 
+    override suspend fun readOnlyRunner(): String? = if (system == DesktopOs.LINUX) withContext(Dispatchers.IO) { findBwrap() } else null
+
+    override suspend fun realPath(path: String): String = withContext(Dispatchers.IO) {
+        runCatching { File(path).toPath().toRealPath().toString().replace('\\', '/') }.getOrDefault(path)
+    }
+
+    override suspend fun copy(from: String, to: String): String? = withContext(Dispatchers.IO) {
+        val source = File(from).toPath()
+        val target = File(to).toPath()
+        if (!inside(target)) return@withContext "Fuse copies only into its own folder."
+        if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) return@withContext "Something is already at ${target.fileName} in Fuse's copy."
+        if (!Files.exists(source)) return@withContext "${source.fileName} isn't there to copy."
+        try {
+            val size = sizeOf(source)
+            val room = free() ?: freeBytes()
+            if (room != null && size + COPY_MARGIN > room) {
+                return@withContext "Copying ${source.fileName} needs ${gigabytes(size + COPY_MARGIN)} free, and ${gigabytes(room)} is."
+            }
+            copyTree(source, target)
+            null
+        } catch (e: IOException) {
+            remove(to)
+            "Fuse couldn't copy ${source.fileName}: ${e.message ?: "the disk said no"}."
+        }
+    }
+
+    /** Everything below [p] (or [p] itself), read where links lead. */
+    private fun sizeOf(p: Path): Long {
+        if (!Files.isDirectory(p)) return Files.size(p)
+        var total = 0L
+        Files.walkFileTree(p, setOf(java.nio.file.FileVisitOption.FOLLOW_LINKS), Int.MAX_VALUE, object : SimpleFileVisitor<Path>() {
+            override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult { total += attrs.size(); return FileVisitResult.CONTINUE }
+        })
+        return total
+    }
+
+    /** [from] copied to [to] as plain files and folders: what a link leads to is copied, never the link. */
+    private fun copyTree(from: Path, to: Path) {
+        if (!Files.isDirectory(from)) {
+            to.parent?.let { Files.createDirectories(it) }
+            Files.copy(from, to, StandardCopyOption.COPY_ATTRIBUTES)
+            return
+        }
+        Files.walkFileTree(from, setOf(java.nio.file.FileVisitOption.FOLLOW_LINKS), Int.MAX_VALUE, object : SimpleFileVisitor<Path>() {
+            override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
+                Files.createDirectories(to.resolve(from.relativize(dir).toString()))
+                return FileVisitResult.CONTINUE
+            }
+
+            override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                Files.copy(file, to.resolve(from.relativize(file).toString()), StandardCopyOption.COPY_ATTRIBUTES)
+                return FileVisitResult.CONTINUE
+            }
+        })
+    }
+
+    private fun gigabytes(bytes: Long) = "%.1f GB".format(java.util.Locale.ROOT, bytes / 1_000_000_000.0)
+
     /** Only paths in Fuse's own folder of ports are ever removed or moved. */
     private fun inside(p: Path): Boolean {
         val base = root.absoluteFile.toPath().normalize()
@@ -248,6 +310,9 @@ internal class DesktopPortFiles(
 
     companion object {
         private const val MAX_ENTRIES = 100_000
+
+        /** Room kept free beside a copy, so the disk is never filled to the last byte. */
+        private const val COPY_MARGIN = 1_000_000_000L
 
         /**
          * The Proton a Windows build gets here ([SteamProton]): from each Steam install on this

@@ -4,6 +4,7 @@ import io.github.matiyaaa.fuse.desktop.services.DesktopPortFiles
 import io.github.matiyaaa.fuse.desktop.system.DesktopOs
 import io.github.matiyaaa.fuse.desktop.system.fusePath
 import io.github.matiyaaa.fuse.integrations.ports.PortsIndexReader
+import io.github.matiyaaa.fuse.launch.ports.AnyPs5Recompile
 import io.github.matiyaaa.fuse.model.PortFileKind
 import kotlinx.coroutines.runBlocking
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
@@ -135,6 +136,71 @@ class DesktopPortFilesTest {
         assertFalse(f.remove(person.path), "nothing outside Fuse's folder of ports is ever removed")
         assertTrue(person.isDirectory)
         assertFalse(f.move(person.path, File(f.folder, "taken").path), "or moved")
+    }
+
+    /** Every file below [d] by its path, with its bytes. */
+    private fun snapshot(d: File) = d.walkTopDown().filter { it.isFile }.associate { it.relativeTo(d).path to it.readBytes().toList() }
+
+    @Test
+    fun aCopyIsOfWhatLinksLeadToAndNeverOverSomethingOrBeyondTheRoom(): Unit = runBlocking {
+        val f = files()
+        File(person, "DATA").mkdirs()
+        File(person, "DATA/level1.bin").writeBytes(ByteArray(64) { 5 })
+        File(person, "big.pak").writeBytes(ByteArray(128) { 6 })
+        val to = File(f.folder, "anyps5-ppsa01234/build.new/app0")
+        assertNull(f.copy(File(person, "DATA").path, File(to, "DATA").path))
+        assertNull(f.copy(File(person, "big.pak").path, File(to, "big.pak").path))
+        assertFalse(f.isLink(File(to, "DATA").path) || f.isLink(File(to, "big.pak").path), "copies, not links")
+        assertEquals(snapshot(File(person, "DATA")), snapshot(File(to, "DATA")))
+        assertTrue(File(to, "big.pak").readBytes().all { it == 6.toByte() })
+        assertNotNull(f.copy(File(person, "big.pak").path, File(to, "big.pak").path), "never over something already there")
+        assertNotNull(f.copy(File(person, "big.pak").path, File(dir, "outside.pak").path), "only into Fuse's folder")
+        assertFalse(File(dir, "outside.pak").exists())
+        // Not enough room: said with the sizes, and nothing left behind.
+        val small = DesktopPortFiles(data, File(dir, "downloads"), DesktopOs.current, findUmu = { null }, free = { 1_000L })
+        val why = assertNotNull(small.copy(File(person, "DATA").path, File(to, "DATA2").path))
+        assertTrue("GB free" in why, why)
+        assertFalse(File(to, "DATA2").exists())
+    }
+
+    @Test
+    fun aRecompiledGamesWritesNeverReachTheDump(): Unit = runBlocking {
+        val f = files()
+        val dump = File(dir, "PS5/Astro Bot [PPSA01234]").apply { mkdirs() }
+        File(dump, "assets.pak").writeText("the game's own data")
+        File(dump, "sce_sys").mkdirs()
+        File(dump, "sce_sys/param.json").writeText("""{"titleId":"PPSA01234"}""")
+        val before = snapshot(dump)
+        val build = File(f.folder, "anyps5-ppsa01234/build").apply { mkdirs() }
+        val saves = File(f.folder, "anyps5-ppsa01234/home/_sd").apply { mkdirs() }
+        val real = f.realPath(dump.path)
+        /** [argv] run in [cwd]: its exit code and what it printed. */
+        fun run(argv: List<String>, cwd: File): Pair<Int, String> = ProcessBuilder(argv).directory(cwd).redirectErrorStream(true).start().let { p ->
+            val out = p.inputStream.readBytes().decodeToString()
+            p.waitFor() to out
+        }
+        val runner = f.readOnlyRunner()?.takeIf { r -> run(AnyPs5Recompile.readOnly(r, real, real, listOf("true")), dump).first == 0 }
+        if (runner != null) {
+            // Linux with bubblewrap: app0 links to the dump, and the game, writing everywhere it can, runs
+            // as Fuse starts it, with the dump read-only for it.
+            for (name in listOf("assets.pak", "sce_sys")) assertNull(f.link(File(dump, name).path, File(build, "app0/$name").path))
+            assertNull(f.link(saves.path, File(build, "_sd").path))
+            // (Each in its own shell: sh leaves at a failed redirection on a special built-in such as `:`.)
+            val game = "echo changed >> app0/assets.pak; (: > app0/sce_sys/param.json); touch app0/sce_sys/new.txt; " +
+                "rm -f app0/sce_sys/param.json; echo progress > _sd/slot1"
+            val (_, said) = run(AnyPs5Recompile.readOnly(runner, real, build.path, listOf("/bin/sh", "-c", game)), build)
+            assertEquals("progress", File(saves, "slot1").takeIf { it.isFile }?.readText()?.trim(), "its own folders are written; it said: $said")
+            assertTrue("Read-only file system" in said, said)
+        } else {
+            // Anywhere else app0 holds copies: what the game does to them stays in Fuse's folder.
+            for (name in listOf("assets.pak", "sce_sys")) assertNull(f.copy(File(dump, name).path, File(build, "app0/$name").path))
+            File(build, "app0/assets.pak").appendText("changed")
+            File(build, "app0/sce_sys/param.json").writeText("")
+            File(build, "app0/sce_sys/new.txt").writeText("new")
+            assertTrue(File(build, "app0/sce_sys/param.json").delete())
+        }
+        assertEquals(before, snapshot(dump), "the dump is just as it was")
+        assertFalse(File(dump, "sce_sys/new.txt").exists())
     }
 
     @Test

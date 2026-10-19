@@ -138,11 +138,12 @@ data class PortView(
 
 /**
  * Recompiling a PlayStation 5 game with AnyPS5 here: why it can't be ([whyNot]), the AnyPS5 release
- * its build here was made with ([builtWith], null before it is recompiled), and what the person
- * should know first ([warning]: a processor without an extension the game's code needs).
+ * its build here was made with ([builtWith], null before it is recompiled), what the person should
+ * know first ([warning]: a processor without an extension the game's code needs), and whether its
+ * build takes a copy of the dump's files ([copies]: where the dump can't be kept read-only for it).
  */
 @Immutable
-data class RecompileOffer(val whyNot: String? = null, val builtWith: String? = null, val warning: String? = null)
+data class RecompileOffer(val whyNot: String? = null, val builtWith: String? = null, val warning: String? = null, val copies: Boolean = false)
 
 /** A game of the library whose [folder] holds a port's game files. */
 @Immutable
@@ -222,6 +223,22 @@ interface PortFiles {
 
     /** Moves [from] to [to], replacing nothing: false when [to] is there or it couldn't. */
     suspend fun move(from: String, to: String): Boolean
+
+    /**
+     * A program that starts another with a folder of the person's read-only for it alone (bubblewrap's
+     * `bwrap`, on Linux), when it is installed; null where there is none.
+     */
+    suspend fun readOnlyRunner(): String? = null
+
+    /**
+     * [from] (one of the person's files or folders, read where links lead) copied to [to] in Fuse's
+     * folder, which must not be there yet; nothing is ever written to [from]. Null when copied, else
+     * why not (not enough room said with the sizes); nothing is left at [to] when it wasn't.
+     */
+    suspend fun copy(from: String, to: String): String? = "Fuse can't copy files on this device."
+
+    /** [path] with its links resolved, as the system finds it; [path] itself when it can't be. */
+    suspend fun realPath(path: String): String = path
 }
 
 /**
