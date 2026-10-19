@@ -751,10 +751,10 @@ private fun BoxScope.TopLine(app: AppState, platform: PlatformUi, tabs: List<Des
  */
 @Composable
 private fun BoxScope.HintLine(app: AppState, hintFlash: HintFlash) {
-    // An options sheet or a choice over the page answers to Confirm and Back, wherever it was opened:
-    // its hints, not the page's under it.
+    // An options sheet, a choice, a problem or a question over the page answers to Confirm and Back,
+    // wherever it was opened: its hints, not the page's under it.
     val hints = when {
-        app.contextMenu != null || app.choice != null -> MENU_HINTS
+        app.contextMenu != null || app.choice != null || app.problem != null || app.confirm != null -> MENU_HINTS
         app.liftedTab != null -> LIFTED_TAB_HINTS
         else -> app.hints
     }

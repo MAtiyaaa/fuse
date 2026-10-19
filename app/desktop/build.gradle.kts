@@ -111,6 +111,14 @@ val deckyPlugin = tasks.register<Sync>("deckyPlugin") {
 
 sourceSets.named("main") { resources.srcDir(deckyPlugin.map { it.destinationDir.parentFile.parentFile }) }
 
+// Fuse Ports' list (ports/index.json), carried inside the build as the list Fuse starts from.
+val portsIndex = tasks.register<Sync>("portsIndex") {
+    from(rootProject.layout.projectDirectory.dir("ports")) { include("index.json") }
+    into(layout.buildDirectory.dir("generated/ports/ports"))
+}
+
+sourceSets.named("main") { resources.srcDir(portsIndex.map { it.destinationDir.parentFile }) }
+
 compose.desktop {
     application {
         mainClass = "io.github.matiyaaa.fuse.desktop.MainKt"

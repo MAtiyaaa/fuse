@@ -30,3 +30,11 @@ kotlin {
         }
     }
 }
+
+// A failing test says its message and the whole trace in the build's log (CI's too), not only the
+// exception's name, so a failure that won't happen again on purpose still says what it was.
+tasks.withType<Test>().configureEach {
+    testLogging {
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
+}

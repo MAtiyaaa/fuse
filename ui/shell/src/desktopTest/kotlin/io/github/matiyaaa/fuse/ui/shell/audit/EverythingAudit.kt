@@ -259,6 +259,16 @@ internal fun AuditDriver.everythingScreens() {
         waitFor("in DuckStation's settings")
         tap(PadButton.B)
         waitFor("Every DuckStation setting")
+        // A search that finds nothing says so, and what to try instead.
+        tapText("Search Every Setting")
+        waitFor("Search DuckStation's settings")
+        type("wobble")
+        router.textInput?.submit()
+        waitFor("Nothing called")
+        settle(600)
+        shoot("a search that found nothing, and what to try", 600)
+        tap(PadButton.B)
+        waitFor("Every DuckStation setting")
         // Opened from DuckStation's own picks: back to them.
         tap(PadButton.B)
         waitFor("settings for every game")

@@ -138,6 +138,10 @@ internal class AuditServices(
     override val desktopApps: io.github.matiyaaa.fuse.ui.shell.store.DesktopInstaller? =
         if (desktop) AuditDesktopInstaller(host, File(base.cacheDir, "store-desktop")) else null
 
+    /** Fuse Ports on a computer: the real list Fuse carries, and nothing ever written or run. */
+    override val portFiles: io.github.matiyaaa.fuse.ui.shell.store.PortFiles? =
+        if (desktop) AuditPortFiles(if (host == Host.WINDOWS) "windows" else "macos") else null
+
     /** The made-up Jellyfin server everywhere; the Store's catalogue where there is a Store. */
     override val http: io.ktor.client.HttpClient =
         io.ktor.client.HttpClient(io.ktor.client.engine.mock.MockEngine { request ->
@@ -775,4 +779,22 @@ internal object AuditHowLongToBeat {
             respond(body, io.ktor.http.HttpStatusCode.OK, io.ktor.http.headersOf(io.ktor.http.HttpHeaders.ContentType, "application/json"))
         }
     }
+}
+
+/** Fuse Ports' files on the audit's computer: the list from the repository's ports/index.json, nothing installed or changed. */
+internal class AuditPortFiles(override val os: String) : io.github.matiyaaa.fuse.ui.shell.store.PortFiles {
+    override val folder: String = if (os == "windows") "C:/Users/you/AppData/Roaming/Fuse/ports" else "~/Library/Application Support/Fuse/ports"
+    override val arch: String = "x86_64"
+    override fun bundledIndex(): String? =
+        generateSequence(File("").absoluteFile) { it.parentFile }.map { File(it, "ports/index.json") }.firstOrNull { it.isFile }?.readText()
+    override fun umuRun(): String? = null
+    override suspend fun newDownload(name: String): io.github.matiyaaa.fuse.ui.shell.store.DownloadSink? = null
+    override fun freeBytes(): Long? = 120L shl 30
+    override suspend fun unpack(archive: String, kind: io.github.matiyaaa.fuse.model.PortFileKind, name: String, into: String) = throw java.io.IOException("The audit installs nothing.")
+    override suspend fun link(target: String, at: String): String? = "The audit links nothing."
+    override suspend fun makeFolder(path: String) = false
+    override suspend fun writeText(path: String, text: String) = false
+    override suspend fun isLink(path: String) = false
+    override suspend fun remove(path: String) = false
+    override suspend fun move(from: String, to: String) = false
 }

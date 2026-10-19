@@ -84,6 +84,24 @@ fun addonsRows(app: AppState): List<MenuAction> {
                 }) + if (on) store.map { it.copy(id = "store.${it.id}", section = null) } else emptyList()
             })
         }
+        if (app.store.ports.supported) {
+            val on = prefs.portsEnabled
+            val ports = app.store.ports.state.collectAsState().value
+            val installed = ports.ports.count { it.installed }
+            addAll(app.group("addons.ports", "Fuse Ports", FuseIcons.Boxes, summary = if (!on) "Off" else if (installed > 0) "$installed installed" else "On", detail = "Games rebuilt to run natively, played with your own copy's files") {
+                listOfNotNull(
+                    toggleRow("ports.enabled", "Use Fuse Ports", FuseIcons.Power, on, if (on) "Ports in Addons, and a look for a newer signed list when it opens" else "Off: no Ports in Addons, and nothing is fetched") { v ->
+                        app.store.updatePrefs { it.copy(portsEnabled = v) }
+                    },
+                    if (on) infoRow(
+                        "ports.where",
+                        "Fuse keeps ports in ${ports.folder ?: "its own folder"}",
+                        detail = "Each port's copy, and its home with your saves and settings. Your game's own files stay where they are and are never changed",
+                        icon = FuseIcons.FolderOpen,
+                    ) else null,
+                )
+            })
+        }
         if (cartridge != null) {
             addAll(app.group("addons.cartridge", "Cartridge", FuseMarks.Cartridge, summary = if (prefs.cartridgeEnabled) "On" else "Off", detail = "Downloads from your RomM server, straight into your library") {
                 cartridge.map { it.copy(id = "cartridge.${it.id}", section = null) }

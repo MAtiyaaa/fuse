@@ -39,9 +39,12 @@ class AdapterRegistry(
     }
 
     companion object {
-        /** Every Android, Linux, Windows and macOS adapter. */
+        /** Every Android, Linux, Windows and macOS adapter, and Fuse Ports' on each computer. */
         val Default: AdapterRegistry by lazy {
-            AdapterRegistry(AndroidEmulatorCatalog.adapters + LinuxCatalog.adapters + WindowsCatalog.adapters + MacCatalog.adapters)
+            AdapterRegistry(
+                AndroidEmulatorCatalog.adapters + LinuxCatalog.adapters + WindowsCatalog.adapters + MacCatalog.adapters +
+                    io.github.matiyaaa.fuse.launch.ports.PortAdapter.all,
+            )
         }
     }
 }

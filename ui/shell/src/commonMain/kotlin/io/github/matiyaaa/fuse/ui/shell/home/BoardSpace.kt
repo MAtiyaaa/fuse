@@ -81,6 +81,12 @@ internal abstract class BoardSpace {
      */
     abstract fun columns(narrow: Boolean, small: Boolean, width: Dp): Int
 
+    /**
+     * The columns to use instead of [usual] when the board has room to spare: [fits] says whether
+     * every item still shows, unscrolled, with that many. The usual columns by default.
+     */
+    open fun fill(usual: Int, compact: Boolean, fits: (columns: Int) -> Boolean): Int = usual
+
     /** A cell's height for cells [cellW] wide, [gapX] apart side by side and [gapY] apart above and below. */
     abstract fun cellHeight(cellW: Dp, gapX: Dp, gapY: Dp, narrow: Boolean): Dp
 

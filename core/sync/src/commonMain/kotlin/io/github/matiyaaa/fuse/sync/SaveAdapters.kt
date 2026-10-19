@@ -134,7 +134,7 @@ object SaveAdapters {
     val all: List<SaveAdapter> = listOf(
         RetroArch, Lemuroid, DuckStation, Pcsx2, Ppsspp, Dolphin, MelonDs, NooDs, Mgba, SkyEmu, Mednafen, MyBoy, UnpublishedHandheld, Rpcs3, Vita3k, ShadPs4, Flycast,
         DraStic, ExAlpha, Mupen64, Redream, Epsxe, Fpse, PlayPs2, SaturnBackup, Mame, ScummVm,
-        ThreeDs, SwitchNand, Ryujinx, Cemu, Xenia, AnyPs5,
+        ThreeDs, SwitchNand, Ryujinx, Cemu, Xenia, AnyPs5, PortSaves,
     )
 
     /** The adapter for [emulatorId] (any host's id), or null when Fuse can't sync this one yet. */

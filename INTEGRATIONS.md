@@ -28,6 +28,7 @@ and redact credentials from every error message (`redact()`, see
 - [GitHub Releases](#github-releases)
 - [The Store: Obtainium Emulation Pack](#the-store-obtainium-emulation-pack)
 - [The Store on a computer](#the-store-on-a-computer)
+- [Fuse Ports](#fuse-ports)
 - [Steam and Windows launchers](#steam-and-windows-launchers)
 - [RPCS3 compatibility list](#rpcs3-compatibility-list)
 - [Jellyfin](#jellyfin)
@@ -50,6 +51,7 @@ and redact credentials from every error message (`redact()`, see
 | GitHub Releases | Nothing | A request for the latest release of Fuse or Cartridge, your IP address and the User-Agent with Fuse's version | Update checks (automatic check can be turned off) and "Install Cartridge"; downloads only after you confirm |
 | Store (Android): Obtainium Emulation Pack, app sources | Optionally a GitHub token | Requests for the pack's newest release on github.com, each app's releases (GitHub's API, or the download page the pack names), and the APK you install; your IP address and the User-Agent (or the one the pack sets for a download page) | The catalogue when the Store opens and is older than 6 hours, or on "Check now"; an app's releases when its page or card is shown, for installed apps a little after start (at most twice a day, can be turned off); downloads only when you press Install or Update |
 | Store (computer): each program's releases | Optionally a GitHub token (GitHub only) | Requests for a program's releases on GitHub, its own Forgejo or Gitea server, its download listing or Flathub, and the file you install; your IP address and the User-Agent | A program's releases when its page or card is shown, for installed programs a little after start; downloads only when you press Install, Update or Update All |
+| Fuse Ports (computer, off until you turn it on) | Your own copy of each game (its folder, chosen by you) | Requests for a newer signed list of ports (`index.json` and its `.sig` on the `ports` release of Fuse's GitHub repository), and each port's build from its project's own release when you install it; your IP address and the User-Agent. Your game's files and folders never leave the device: they are only linked into Fuse's copy | The list when Ports opens (at most every 6 hours) or on Look Again, only while Fuse carries the key it is signed with; a build only when you press Install or Update |
 | GameBanana | Nothing | A game's title (or the words you search with), the GameBanana game you chose and the mods you open, your IP address and the User-Agent; then the mod's file from GameBanana's own address | Only when you open GameBanana in a game's cheats, textures or mods, a mod there, or add one of its files; answers are kept a while |
 | Nexus Mods (computer, off until you add your key) | Your own personal API key from your Nexus Mods account | To api.nexusmods.com only: your key in the `apikey` header with "Fuse" and its version, the Nexus Mods game you chose for a game and the mods and files you open; for an account that isn't Premium, the one-time key and expiry of the Mod Manager Download link you paste. Then the file from the address Nexus Mods gives (https only). The key stays on this device: it is never shared with your household or Fuse Sync | Whose key it is when Settings, Accounts, Nexus Mods is shown (once a run per key); the games list when you choose a game (kept a week), a game's lists when you open Nexus Mods for it (kept an hour), a mod's files when you open it; downloads only when you add a file |
 | RPCS3 compatibility list (rpcs3.net) | Nothing | A PS3 game's title id (for example `BLUS30443`), your IP address and the User-Agent | Only when you choose How It Runs in RPCS3 in a PS3 game's options; the answer is kept a week |
@@ -762,6 +764,68 @@ of what was and wasn't updated.
 **Leaves the device.** Your IP address and User-Agent to the project's release host (GitHub with your
 token when you added one, the Forgejo or Gitea server, the listing or Flathub), and which project
 was asked; the download when you install.
+
+## Fuse Ports
+
+**What for.** On a computer, Addons, Ports lists games rebuilt to run natively (source ports), each
+the program its own project publishes, played with the person's own copy of the game: Diablo
+through DevilutionX, RollerCoaster Tycoon 2 through OpenRCT2, Fallout 2 through Fallout 2
+Community Edition. Off until turned on in Settings, Addons, Fuse Ports; nothing is fetched before.
+
+**The list** (`ports/index.json`, `core:model` `Ports.kt`, read by `core:integrations`
+`PortsIndexReader`): each port's builds (system, processor, HTTPS address, size, SHA-256, the kind of
+file and the program inside it), what it needs from the game (`needs`: names, any one of which will
+do, compared as the port itself compares them), how the game's files reach it (by their folder's
+path in its arguments, or an `overlay`), its arguments with `{install}`, `{home}` and `{data:<id>}`,
+where its saves are, and how the nightly check sees it start. Every fact about a port is cited in
+its `source`, from the port's own code and documentation at the version listed. A port that fails a
+check (an id, an address that isn't HTTPS, a missing digest, a path out of its folder, a placeholder
+Fuse doesn't fill) is left out; a list of another format is refused whole.
+
+**Signed.** The list inside Fuse is part of Fuse. A newer one is fetched from the `ports` release of
+Fuse's repository (`index.json` and `index.json.sig`) and believed only when its Ed25519 signature
+(RFC 8032, checked by the JDK's own `Ed25519`) verifies with the public key Fuse carries
+(`PortsSignature.PUBLIC_KEY`) and its revision is newer; a kept copy is checked again each time it
+is read. The private key is a repository secret the ports workflow signs with; until it exists,
+Fuse carries no key, fetches nothing, and shows no port as verified. **Verified** is shown only when
+a signed list says the nightly check saw exactly this build (by its SHA-256) install and start.
+
+**Installing** (`PortsStore`, `DesktopPortFiles`): the build for this computer is downloaded over
+HTTPS (each redirect followed by Fuse and checked), compared with the list's size and SHA-256 (any
+other file is deleted, never installed), unpacked by Fuse into a new folder beside the copy in use
+(an AppImage kept as it is and made runnable; zips and tarballs without links of their own, never
+outside their folder, nothing in them run), and only then put in place. Fuse's folder of ports is in
+its own data folder: `ports/<id>/build` (the copy, replaced by an update), `ports/<id>/home` (its
+saves and settings, kept from one version to the next and when the port is removed) and
+`ports/<id>/<id>.fuseport` (how it starts).
+
+**The game's files.** The folder the person chooses is checked for what the port needs and said by
+name when something lacks. Then either its path goes in the port's arguments (OpenRCT2's
+`--rct2-data-path`), or it is linked in (`overlay`): each entry of the folder is a link in Fuse's
+copy, where the port reads the game's files beside itself; the port's own paths (its settings, the
+folders its engine writes, `PortPlan.step`) are never linked, so nothing it writes reaches the
+person's folder: its own folders are links into its home instead. Nothing is copied, and the
+person's files are never changed; removing a port removes the links themselves, never what they
+point at. Windows makes symbolic links only in Developer Mode or for an administrator: a folder is
+joined with a junction instead, a file on the same drive with a hard link, and otherwise Fuse says
+to turn on Developer Mode.
+
+**Playing.** A set-up port is a game of the library (the Ports system), started by `PortAdapter`
+from its launcher exactly as written there, from the build's folder; Play, Fast Start, Steam entries
+and Direct entries all start the same command. Saves are its home's saves folder (`PortSaves`,
+format `port.<id>`), kept in step like any other game's and only ever put back into the same port.
+Ports keep no achievements Fuse can read. A Windows build marked to run through umu-launcher runs on
+Linux as `umu-run <program>` with `WINEPREFIX` (a prefix in the port's home) and `GAMEID=umu-default`
+(umu-launcher's README), and the paths it is given as Windows sees them through Proton (`Z:`); umu
+downloads Steam's runtime and Proton itself the first time. None of the ports listed now needs it.
+
+**The nightly check** (`.github/workflows/ports.yml`, `tools/ports/check.py`): every night on main
+each port's Linux build is downloaded, checked against the list, unpacked the same way and started
+without the game's files on a virtual screen: DevilutionX and OpenRCT2 print their versions,
+Fallout 2 Community Edition must still be running after five seconds or end by itself, never by a
+crash. The list is then marked with what passed, its revision raised, signed and put on the `ports`
+pre-release (never the latest release, and never taken as a version of Fuse). Windows builds aren't
+checked yet, so they never show as verified.
 
 ## Steam and Windows launchers
 

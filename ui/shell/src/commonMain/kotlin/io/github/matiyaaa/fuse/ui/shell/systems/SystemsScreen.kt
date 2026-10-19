@@ -267,6 +267,9 @@ internal class SystemsSpace(
     /** Whether the board was on a small screen when last shown at rest. */
     private var shownSmall: Boolean? = null
 
+    /** The columns a roomy board filled to when last shown at rest, kept while arranging. */
+    private var shownFill: Int? = null
+
     override fun shown(c: HomeLayoutConfig, page: Int) = c.boardWidgets(page).filter { it.visible && it.target in byId }
     override fun title(w: HomeWidget) = card(w)?.platform?.name ?: "System"
 
@@ -293,6 +296,27 @@ internal class SystemsSpace(
             p.systemsCardsSeen[key] ?: if (looks.flipped) SystemsBoard.FLIPPED_CARDS else SystemsBoard.cards(narrow, small, width)
         }
         return SystemsBoard.columns(cards, step)
+    }
+
+    /**
+     * Fewer, larger cards where the screen has room for them (a tall monitor, an ultrawide, a TV
+     * with a few systems): a card fewer across at a time, down to three, while every system still
+     * shows at once. Arranging keeps the cards the size they were, so nothing jumps as it starts
+     * or as a card grows. Never on a handheld or a phone, never for the other screen's look, and
+     * never when the person chose smaller systems (Settings, Systems, System size).
+     */
+    override fun fill(usual: Int, compact: Boolean, fits: (columns: Int) -> Boolean): Int {
+        val p = app.store.prefs.value
+        val step = if (looks.flipped) p.systemTileStepFlipped else p.systemTileStep
+        if (compact || step != 0 || looks.flipped != looks.flippedHere) return usual.also { shownFill = null }
+        if (looks.arranging) return shownFill?.coerceAtMost(usual) ?: usual
+        var best = usual
+        var next = usual - SystemsBoard.GRAIN
+        while (next >= SystemsBoard.GRAIN * SystemsBoard.MIN_FILL_CARDS && fits(next)) {
+            best = next
+            next -= SystemsBoard.GRAIN
+        }
+        return best.also { shownFill = it }
     }
 
     /**
@@ -471,6 +495,9 @@ internal object SystemsBoard {
 
     /** Cards across the lower screen until it has been seen: three, as a Thor's has. */
     const val FLIPPED_CARDS = 3
+
+    /** The fewest cards across a roomy screen's board takes to fill it (see [SystemsSpace.fill]). */
+    const val MIN_FILL_CARDS = 3
 
     /** The most cards a row can gain over its usual count (Settings, Systems, System size). */
     const val MAX_STEP = 2

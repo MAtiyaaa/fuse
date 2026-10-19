@@ -842,10 +842,12 @@ class ServiceTest {
         val notes = File(drive, "notes.txt").apply { writeText("keep") }
         pcSettings.update { it.copy(sync = it.sync.copy(hostDataDir = drive.path)) }
         pc.hostHere("Gaming PC", installService = false).getOrThrow()
-        // Its files go in a folder of their own there.
+        // Its files go in a folder of their own there, and never in the drive itself: not even from
+        // Fuse's own start, which runs while the host is being set up.
         val own = File(drive, JvmSyncService.HOST_FOLDER)
         assertEquals(own.path.replace('\\', '/'), pcSettings.current().sync.hostDataDir)
         assertTrue(File(own, "host.json").isFile)
+        assertEquals(setOf("Photos", "notes.txt", JvmSyncService.HOST_FOLDER), drive.list()!!.toSet())
         // Moved and then deleted: the drive's own things stay exactly where they were.
         val elsewhere = File(root, "elsewhere")
         pc.moveHostData(elsewhere.path).getOrThrow()

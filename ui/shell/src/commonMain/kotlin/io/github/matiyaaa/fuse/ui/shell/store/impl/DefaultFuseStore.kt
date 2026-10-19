@@ -92,6 +92,10 @@ internal class DefaultFuseStore private constructor(
     /** A computer's Store, where Fuse can put programs in place. */
     private val desktopStoreOps = if (appStoreOps == null) ctx.services.desktopApps?.let { DesktopAppStoreOps(ctx, it, afterUpdate = { key -> library.recheckTogether(key) }) { emulators.refresh() } } else null
     override val appStore: AppStoreOps = appStoreOps ?: desktopStoreOps ?: AppStoreOps.None
+    /** Fuse Ports, where the computer has a folder for them; made when Ports is first shown. */
+    override val ports: io.github.matiyaaa.fuse.ui.shell.store.PortsOps by lazy {
+        ctx.services.portFiles?.let { PortsStore(ctx, it, library = { library }, write = { t -> writeSettings(t) }) } ?: io.github.matiyaaa.fuse.ui.shell.store.PortsOps.None
+    }
     // Made when Fuse first shows or plays media, never by a Fast Start.
     override val jellyfin by lazy {
         io.github.matiyaaa.fuse.jellyfin.JellyfinService(

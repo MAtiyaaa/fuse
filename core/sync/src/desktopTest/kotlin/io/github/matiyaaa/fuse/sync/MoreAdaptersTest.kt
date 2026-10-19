@@ -10,6 +10,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class MoreAdaptersTest {
@@ -620,5 +621,24 @@ class MoreAdaptersTest {
         assertEquals(listOf("ULUS10041DATA00", "ULUS10041DATA01"), SaveAdapters.forEmulator("ppsspp")!!.locate(psp, taught).single().folders)
         assertEquals("$nand/52534245/data", SaveAdapters.forEmulator("dolphin")!!.locate(wii, taught).single().root)
         assertEquals("$users/$user/0100000000010000", SaveAdapters.forEmulator("eden")!!.locate(sw, taught).single().root)
+    }
+
+    @Test
+    fun aPortsSavesAreTheFolderItsLauncherNamesAndGoOnlyToTheSamePort() {
+        val launcher = "/home/ana/.local/share/fuse/ports/skyport/skyport.fuseport"
+        val game = q("ports", launcher, "linux.port", title = "Sky Racer")
+        val env = FakeEnv(
+            "LINUX", "/home/ana",
+            files = mapOf(launcher to """{"port":"skyport","version":"2.1","argv":["/p/skyport"],"cwd":"/p","saves":"/home/ana/.local/share/fuse/ports/skyport/home/saves"}"""),
+        )
+        val spot = SaveAdapters.forEmulator("linux.port")!!.locate(game, env).single()
+        assertEquals("/home/ana/.local/share/fuse/ports/skyport/home/saves", spot.root)
+        assertEquals("port.skyport", spot.format, "another port's engine never reads it")
+        assertEquals(SaveKind.SAVE, spot.kind)
+        assertSame(SaveAdapters.forEmulator("windows.port"), SaveAdapters.forEmulator("linux.port"), "the same on every computer")
+        // A port that keeps no saves of its own, and a launcher Fuse can't read, are said.
+        val none = FakeEnv("LINUX", "/home/ana", files = mapOf(launcher to """{"port":"skyport","version":"2.1","argv":["/p/skyport"],"cwd":"/p"}"""))
+        assertFalse(SaveAdapters.forEmulator("linux.port")!!.locate(game, none).single().available)
+        assertFalse(SaveAdapters.forEmulator("linux.port")!!.locate(game, FakeEnv("LINUX", "/home/ana")).single().available)
     }
 }

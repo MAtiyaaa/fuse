@@ -354,6 +354,12 @@ internal val catalogPlatforms: List<Platform> = listOf(
         "scummvm", "ScummVM", "ScummVM", PC_GAMES, PC, null, null,
         "scummvm svm", "", 0xFF6FA36F, policy = FolderPolicy.FOLDER_AS_GAME, aspect = BLU_RAY_CASE,
     ),
+    // Fuse Ports: games rebuilt to run natively, each started by the launcher file Fuse Ports writes
+    // for it in Fuse's own folder (ES-DE and the art pack call the system "ports").
+    platform(
+        "ports", "Ports", "Ports", PC_GAMES, PC, null, null,
+        "fuseport", "", 0xFF8C6BB1, layout = LibraryLayout.CAPSULE, aspect = STEAM_CAPSULE,
+    ),
     // PICO-8 carts are .p8 text or .p8.png pictures (ES-DE reads both).
     platform(
         "pico8", "PICO-8", "PICO-8", CONSOLE, OTHER, "Lexaloffle", 2015,

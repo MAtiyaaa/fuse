@@ -164,6 +164,12 @@ data class EmulatorChoice(
     val launchSummary: String?,
     val canLaunch: Boolean,
     val emulatorHomepage: String? = null,
+    /**
+     * What Play does, in one line, before it is pressed: where the game starts and with what (its
+     * core, frame generation), and its newest save put in place first where Fuse keeps saves in
+     * step. Null when nothing starts it here.
+     */
+    val playLine: String? = null,
 )
 
 @Immutable

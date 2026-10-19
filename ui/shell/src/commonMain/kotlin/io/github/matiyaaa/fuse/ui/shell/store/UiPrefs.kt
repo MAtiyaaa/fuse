@@ -174,6 +174,8 @@ data class UiPrefs(
     val storeAutoCheck: Boolean = true,
     /** The Store in Addons (Settings, Addons, Store); off, Addons has no Store and nothing is checked. */
     val storeEnabled: Boolean = true,
+    /** Fuse Ports in Addons, on a computer (Settings, Addons, Ports); off until turned on, and nothing is fetched before. */
+    val portsEnabled: Boolean = false,
 ) {
     /** The theme in use: a built-in one, else an added one, else Fuse (an added theme was removed). */
     val theme: ThemeSpec

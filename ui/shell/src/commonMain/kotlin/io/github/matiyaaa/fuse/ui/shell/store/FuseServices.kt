@@ -176,6 +176,9 @@ interface FuseServices {
     /** Where the Store puts programs on a computer; null on Android (which has [packages]) and in tests. */
     val desktopApps: io.github.matiyaaa.fuse.ui.shell.store.DesktopInstaller? get() = null
 
+    /** Fuse Ports' folder, downloads, unpacking and links on a computer; null on Android and in tests that don't need it. */
+    val portFiles: PortFiles? get() = null
+
     /**
      * Emulators' own settings files, for the few changes Fuse makes there when asked (PCSX2 patches).
      * Null where Fuse can't reach them (Android).

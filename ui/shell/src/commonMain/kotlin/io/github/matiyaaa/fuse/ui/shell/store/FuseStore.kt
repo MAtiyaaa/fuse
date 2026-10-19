@@ -85,6 +85,9 @@ interface FuseStore {
     /** The Store, where Fuse can install apps (Android); [AppStoreOps.None] elsewhere. */
     val appStore: AppStoreOps get() = AppStoreOps.None
 
+    /** Fuse Ports, on a computer; [PortsOps.None] elsewhere. */
+    val ports: PortsOps get() = PortsOps.None
+
     /** Jellyfin, an addon; idle until it is turned on in Settings, Addons, Jellyfin. */
     val jellyfin: io.github.matiyaaa.fuse.jellyfin.JellyfinService? get() = null
 
@@ -734,8 +737,11 @@ interface LibraryOps {
      */
     suspend fun setPlatform(id: GameId, platform: PlatformId?) = Unit
 
-    /** Adds the game file at [path], wherever it is on the device, to [platform]. Null when it can't be read. */
-    suspend fun addGameFile(path: String, platform: PlatformId): GameId? = null
+    /**
+     * Adds the game file at [path], wherever it is on the device, to [platform], named [title] when
+     * given (else by its file's name). Null when it can't be read.
+     */
+    suspend fun addGameFile(path: String, platform: PlatformId, title: String? = null): GameId? = null
 
     /**
      * Adds the game folder at [path] (a game with its updates, DLC and other parts, laid out the way

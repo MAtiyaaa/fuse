@@ -1364,8 +1364,8 @@ internal fun PictureViewer(shots: List<Any?>, start: Int, onIndex: (Int) -> Unit
 }
 
 /**
- * A line under the buttons when the launch is not simply "starts in X": no emulator yet (a
- * warning), or an emulator that opens a folder or only its own app (how it will go).
+ * The line under the buttons: what Play will do (its emulator, core, frame generation and saves),
+ * no emulator yet (a warning), or an emulator that opens a folder or only its own app.
  */
 @Composable
 private fun LaunchNote(d: GameDetail, modifier: Modifier, attention: String? = null) {
@@ -1402,8 +1402,12 @@ private fun LaunchNote(d: GameDetail, modifier: Modifier, attention: String? = n
     }
 }
 
-/** What [LaunchNote] says under the buttons, or null when the launch is simply "starts in X". */
+/**
+ * What [LaunchNote] says under the buttons: what Play does, in one line, before it is pressed
+ * (where it starts, with what, and the newest save first); or, where nothing starts it, why.
+ */
 private fun launchNote(d: GameDetail): String? {
+    d.emulator.playLine?.takeIf { d.emulator.selected != null }?.let { return it }
     val summary = d.emulator.launchSummary ?: return null
     return summary.takeIf { d.emulator.selected == null || !summary.startsWith("Starts") }
 }

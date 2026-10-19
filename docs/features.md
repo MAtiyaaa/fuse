@@ -86,6 +86,11 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
   household is hosting (Fuse One says who hosts what), and online play set up as each emulator keeps
   it: RPCS3 through RPCN with your account, PCSX2's network adapter, PPSSPP's wireless and Dolphin's
   NetPlay, each put back on request.
+- **Fuse Ports** (on a computer): games rebuilt to run natively, played with your own copy of the
+  game. Diablo through DevilutionX, RollerCoaster Tycoon 2 through OpenRCT2 and Fallout 2 through
+  Fallout 2 Community Edition install from their projects' own releases, checked against Fuse's
+  signed list, and your game's files are linked in, never copied or changed. Each becomes a game of
+  your library, with Steam entries and saves kept in step like the rest.
 - **Problems that explain themselves**: when a game can't start, Fuse says why, that nothing was
   changed, and offers the fix. If Fuse itself fails to start three times, it starts in **safe mode**.
 

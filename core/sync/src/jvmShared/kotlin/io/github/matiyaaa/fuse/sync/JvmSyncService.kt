@@ -181,12 +181,15 @@ class JvmSyncService(
 
     private val historyWrite = Mutex()
 
-    private suspend fun ensureDeviceId(): String {
+    /** One device id made at a time: Fuse's own start and setting up a host can both ask at once. */
+    private val idLock = Mutex()
+
+    private suspend fun ensureDeviceId(): String = idLock.withLock {
         val c = config()
-        if (c.deviceId.isNotEmpty()) return c.deviceId
+        if (c.deviceId.isNotEmpty()) return@withLock c.deviceId
         val id = "dev-" + SyncCrypto.token(12)
         saveConfig { it.copy(deviceId = id) }
-        return id
+        id
     }
 
     private suspend fun link(): HostLink? = secrets.get(LINK_KEY)?.let { runCatching { json.decodeFromString(HostLink.serializer(), it) }.getOrNull() }
@@ -1788,13 +1791,14 @@ class JvmSyncService(
     override suspend fun hostHere(name: String, installService: Boolean): Result<HostView> = withContext(Dispatchers.IO) {
         runCatching {
             require(canHost) { "This device can't be a host." }
-            saveConfig { it.copy(enabled = true, role = "HOST", hostName = name.trim().ifEmpty { defaultDeviceName }) }
             // A folder chosen for the host that already holds other things (a whole drive, say)
             // gets a folder of the host's own inside it, so the host's files never mix with them.
-            val chosen = cached.hostDataDir.ifBlank { null }?.let(::File)
-            if (chosen != null && chosen.isDirectory && !File(chosen, "host.json").isFile && HostFiles.holdsOthers(chosen)) {
-                saveConfig { it.copy(hostDataDir = File(chosen, HOST_FOLDER).path.replace('\\', '/')) }
-            }
+            // Decided before this device is the host, in the same change: Fuse's own start, running
+            // meanwhile, would otherwise start the host in the chosen folder itself.
+            val chosen = config().hostDataDir.ifBlank { null }?.let(::File)
+            val own = chosen?.takeIf { it.isDirectory && !File(it, "host.json").isFile && HostFiles.holdsOthers(it) }
+                ?.let { File(it, HOST_FOLDER).path.replace('\\', '/') }
+            saveConfig { it.copy(enabled = true, role = "HOST", hostName = name.trim().ifEmpty { defaultDeviceName }, hostDataDir = own ?: it.hostDataDir) }
             val c = config()
             ensureDeviceId()
             startHostServer(c)

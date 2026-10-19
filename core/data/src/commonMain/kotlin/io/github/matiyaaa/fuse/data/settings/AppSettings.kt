@@ -57,11 +57,38 @@ data class AppSettings(
     val romm: FuseRommSettings = FuseRommSettings(),
     val downloads: DownloadSettings = DownloadSettings(),
     val streaming: StreamingSettings = StreamingSettings(),
+    /** Fuse Ports on a computer (this device's own: its paths are this computer's). */
+    val ports: PortsSettings = PortsSettings(),
 ) {
     companion object {
         const val CURRENT_VERSION = 3
     }
 }
+
+/**
+ * Fuse Ports (Addons, Ports, on a computer): off until turned on in Settings, Addons, and nothing is
+ * fetched before. The ports installed here, and the folders the person chose for each one's game
+ * files (by port, then by the port's data id), kept when a port is removed so it comes back set up.
+ */
+@Serializable
+data class PortsSettings(
+    val enabled: Boolean = false,
+    val installed: Map<String, InstalledPort> = emptyMap(),
+    val folders: Map<String, Map<String, String>> = emptyMap(),
+)
+
+/**
+ * A port installed in Fuse's folder of ports: the list's entry and the build it was installed from
+ * (so it starts as that version does, whatever a newer list says), and the links Fuse made in its
+ * copy (relative to it), so a folder chosen again replaces exactly those.
+ */
+@Serializable
+data class InstalledPort(
+    val port: io.github.matiyaaa.fuse.model.Port,
+    val build: io.github.matiyaaa.fuse.model.PortBuild,
+    val links: List<String> = emptyList(),
+    val installedAt: Long = 0,
+)
 
 /**
  * Fuse Sync by Fuse (Settings, Addons, Fuse Sync): off until set up. Whether this device hosts or

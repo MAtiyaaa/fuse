@@ -193,6 +193,87 @@ internal fun AuditDriver.detailScreens() {
         }
     }
 
+    scenario("details", "ports on a computer") {
+        windowsStore.updatePrefs { it.copy(portsEnabled = true, addonsOrder = listOf("PORTS")) }
+        try {
+            show(windowsStore, windowsPlatform)
+            home()
+            // Addons is found by name: the Ports tab, moved first, opens with it.
+            repeat(6) { if (!hasText("Games rebuilt to run natively")) tap(PadButton.R1) }
+            waitFor("Games rebuilt to run natively")
+            settle(1_200)
+            shoot("Ports: the list inside Fuse, nothing installed")
+            tap(PadButton.DPAD_DOWN)
+            settle(600)
+            shoot("a port focused, Install its next step")
+            tap(PadButton.X)
+            waitFor("DevilutionX's Project Page")
+            settle(600)
+            shoot("a port's options: install, its game's files first, its project")
+            tap(PadButton.B)
+            waitGone("DevilutionX's Project Page")
+        } finally {
+            windowsStore.updatePrefs { it.copy(portsEnabled = false, addonsOrder = emptyList()) }
+        }
+    }
+
+    scenario("details", "ports while reading, empty, failing and in every stage") {
+        // Fuse's own list, dressed in each state Ports can show: the list being read, a list with no
+        // ports, a look for a newer list that failed, and each port somewhere between install and play.
+        val base = windowsStore
+        val real = runBlocking {
+            base.ports.open()
+            kotlinx.coroutines.withTimeout(10_000) { base.ports.state.first { it.loaded && it.ports.size >= 3 } }
+        }
+        val (dx, rct, fo) = real.ports
+        val fixed = kotlinx.coroutines.flow.MutableStateFlow(io.github.matiyaaa.fuse.ui.shell.store.PortsState())
+        val ops = object : io.github.matiyaaa.fuse.ui.shell.store.PortsOps by base.ports {
+            override val state = fixed
+            override fun open() = Unit
+        }
+        val store = object : io.github.matiyaaa.fuse.ui.shell.store.FuseStore by base { override val ports = ops }
+        base.updatePrefs { it.copy(portsEnabled = true, addonsOrder = listOf("PORTS")) }
+        fun installed(v: io.github.matiyaaa.fuse.ui.shell.store.PortView) = v.copy(installedVersion = v.port.version, installedSha = v.build?.sha256)
+        try {
+            show(store, windowsPlatform)
+            home()
+            repeat(6) { if (!hasText("Games rebuilt to run natively")) tap(PadButton.R1) }
+            waitFor("Reading the list of ports...")
+            settle(900)
+            shoot("Ports: the list being read, the shapes its cards will take")
+            fixed.value = io.github.matiyaaa.fuse.ui.shell.store.PortsState(loaded = true)
+            waitFor("No ports in the list yet")
+            settle(600)
+            shoot("a list with no ports in it")
+            fixed.value = real.copy(
+                signed = true, canCheck = true, revision = 4, problem = "GitHub didn't answer.",
+                ports = listOf(
+                    dx.copy(job = io.github.matiyaaa.fuse.ui.shell.store.PortJob.Downloading(0.42f, (dx.build?.size ?: 0) * 42 / 100, dx.build?.size)),
+                    rct.copy(job = io.github.matiyaaa.fuse.ui.shell.store.PortJob.Failed("The download didn't match the checksum its source published, so it was deleted.")),
+                    installed(fo).copy(folders = mapOf(fo.port.data.first().id to "D:/Games/Fallout 2"), missing = mapOf(fo.port.data.first().id to "That folder has no master.dat.")),
+                ),
+            )
+            waitFor("GitHub didn't answer. The list Fuse has is shown.")
+            tap(PadButton.DPAD_DOWN, 2)
+            settle(900)
+            shoot("a look for a newer list that failed; downloading, a download refused, a folder lacking a file")
+            fixed.value = real.copy(
+                signed = true, canCheck = true, revision = 4,
+                ports = listOf(
+                    installed(dx).copy(verified = "2026-10-17", folders = mapOf(dx.port.data.first().id to "D:/Games/Diablo"), missing = emptyMap(), game = io.github.matiyaaa.fuse.model.GameId(900_001L)),
+                    installed(rct).copy(installedVersion = "0.5.5", installedSha = "0".repeat(64), missing = emptyMap(), folders = mapOf(rct.port.data.first().id to "D:/Games/RCT2"), game = io.github.matiyaaa.fuse.model.GameId(900_002L)),
+                    fo.copy(build = null, whyNot = "${fo.port.name} isn't published for this computer."),
+                ),
+            )
+            waitFor("signed list, revision 4")
+            tap(PadButton.DPAD_UP)
+            settle(900)
+            shoot("a signed list: verified and ready, an update out, one not made for this computer")
+        } finally {
+            base.updatePrefs { it.copy(portsEnabled = false, addonsOrder = emptyList()) }
+        }
+    }
+
     scenario("details", "store channels, room and a link") {
         show(windowsStore, windowsPlatform)
         home()
@@ -373,6 +454,24 @@ internal fun AuditDriver.detailScreens() {
         )
     }
 
+    scenario("details", "play together alone and where it can't") {
+        // Nobody in the household hosting, and no Fuse One: hosting here and joining by address.
+        playTogether(
+            io.github.matiyaaa.fuse.ui.shell.store.TogetherView.Ready(
+                title = "Waystation Nine", emulator = "PPSSPP", way = io.github.matiyaaa.fuse.launch.online.TogetherWay.AD_HOC,
+                missing = emptyList(), canHost = true, hosts = emptyList(), household = false, rpcn = null, canPutBack = false,
+            ),
+            until = "Join by Address", shot = "nobody hosting yet: host here, or join by an address",
+        )
+        // An emulator Fuse doesn't know how to play together with: said, with where to look instead.
+        playTogether(
+            io.github.matiyaaa.fuse.ui.shell.store.TogetherView.Unavailable(
+                "Not with Mednafen", "Fuse doesn't know how Mednafen plays with others. Look in its own menus for multiplayer or netplay.",
+            ),
+            until = "Not with Mednafen", shot = "an emulator Fuse can't play together with",
+        )
+    }
+
     scenario("details", "mods from nexus mods") {
         // The same computer and PS2 disc, with the person's own Nexus Mods key (an account that isn't Premium).
         val dir = File(cache, "nexus-audit").apply { deleteRecursively() }
@@ -426,6 +525,23 @@ internal fun AuditDriver.detailScreens() {
         focusText("Your Nexus Mods Key")
         settle(900)
         shoot("Settings, Accounts: whose key, and where downloads come from", 1_200)
+        // Without a key, Nexus Mods is never asked: Fuse says where the key goes.
+        runBlocking { pc.credentials.remove(io.github.matiyaaa.fuse.data.settings.SecretKeys.NEXUS_API_KEY) }
+        controls.pcsx2 = io.github.matiyaaa.fuse.launch.patches.Pcsx2Home(home, "$home/gamesettings", "$home/patches", null, cheats = "$home/cheats", textures = "$home/textures")
+        try {
+            show(pc, AuditPlatform(size, host = io.github.matiyaaa.fuse.model.Host.LINUX))
+            search("Sky Racer")
+            tap(PadButton.START)
+            tap(PadButton.X)
+            tapText("Patches, Cheats and Textures")
+            waitFor("Find Mods on Nexus Mods")
+            tapText("Find Mods on Nexus Mods")
+            waitFor("Add your Nexus Mods key")
+            shoot("no key yet: where to add it", 1_200)
+            tap(PadButton.B)
+        } finally {
+            controls.pcsx2 = null
+        }
     }
 
     scenario("details", "a game with many facts") {

@@ -1,0 +1,70 @@
+# Fuse at a household's scale: a library of 20,000 games, made of files across eleven systems,
+# scanned from nothing by the real store and held to time and memory budgets (the scan, Home after
+# it, the whole library as a list, a search, the heap kept). The numbers are kept as an artifact to
+# compare weeks by; a budget missed fails the run. Every Sunday on main, and by hand.
+
+name: Proof
+
+on:
+  schedule:
+    - cron: "41 4 * * 0"
+  workflow_dispatch:
+    inputs:
+      games:
+        description: "How many games the library has"
+        default: "20000"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: proof-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  budget:
+    name: A household's library within budget
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Gradle configures every module, including the Android ones, so the test needs the SDK too.
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android platform 37
+        run: sdkmanager --install "platforms;android-37.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Scan the library and hold it to its budgets
+        env:
+          GAMES: ${{ github.event.inputs.games || '20000' }}
+        run: |
+          set -euo pipefail
+          ./gradlew --stacktrace :ui:shell:desktopPerf --tests '*LibraryBudget*' "-Pfuse.perf.dir=$PWD/build/budget" "-Pfuse.perf.games=$GAMES"
+
+      - name: Say the numbers
+        if: always()
+        run: |
+          if [ -f build/budget/budget.json ]; then
+            { echo '```json'; cat build/budget/budget.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Keep the numbers
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: library-budget
+          path: build/budget
+          if-no-files-found: warn
+          retention-days: 90

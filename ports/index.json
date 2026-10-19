@@ -1,0 +1,139 @@
+{
+  "format": 1,
+  "revision": 1,
+  "generated": "2026-10-18",
+  "ports": [
+    {
+      "id": "devilutionx",
+      "name": "DevilutionX",
+      "game": "Diablo",
+      "about": "Diablo and its Hellfire expansion, rebuilt to run natively, with the engine's bugs fixed and a controller, widescreen and quality of life options of its own.",
+      "homepage": "https://github.com/diasurgical/devilutionX",
+      "licence": "Sustainable Use License",
+      "version": "1.5.5",
+      "builds": [
+        {
+          "os": "linux",
+          "url": "https://github.com/diasurgical/devilutionX/releases/download/1.5.5/devilutionx-linux-x86_64.appimage",
+          "size": 14158328,
+          "sha256": "38a88b3e1f127ec8436949a1766937838ba6596a15686773c69c7e0482816c61",
+          "kind": "APPIMAGE",
+          "run": "devilutionx-linux-x86_64.appimage"
+        },
+        {
+          "os": "windows",
+          "url": "https://github.com/diasurgical/devilutionX/releases/download/1.5.5/devilutionx-windows-x86_64.zip",
+          "size": 10482049,
+          "sha256": "a20cfb62cd611f76aac78f9bf09a28f57794fbfe63ae6da9245deca446680b2b",
+          "kind": "ZIP",
+          "run": "devilutionx/devilutionx.exe"
+        }
+      ],
+      "data": [
+        {
+          "id": "game",
+          "name": "Diablo's game files",
+          "about": "The folder with DIABDAT.MPQ, from the Diablo CD or the GOG copy, or spawn.mpq for the shareware version. Hellfire's hellfire.mpq, hfmonk.mpq, hfmusic.mpq and hfvoice.mpq beside it add the expansion.",
+          "needs": [["DIABDAT.MPQ", "diabdat.mpq", "spawn.mpq"]],
+          "exact": true,
+          "overlay": { "into": "" }
+        }
+      ],
+      "args": ["--save-dir", "{home}/saves", "--config-dir", "{home}/config"],
+      "saves": "saves",
+      "check": { "args": ["--version"], "expect": "DevilutionX v1\\.5\\.5" },
+      "notes": [
+        "DevilutionX reads Diablo's own files from your folder, through links in Fuse's copy.",
+        "Your saves and settings are DevilutionX's own, kept by Fuse beside its copy."
+      ],
+      "source": "DevilutionX 1.5.5: README.md and docs/installing.md (the MPQ files and where they go); Source/diablo.cpp, the argument loop (--save-dir, --config-dir, --version); Source/init.cpp, GetMPQSearchPaths (the program's folder, then the folder it starts from) and LoadGameArchives (DIABDAT.MPQ, diabdat.mpq, spawn.mpq); Packaging/nix/AppImage.sh (devilutionx.mpq beside the program inside the AppImage)"
+    },
+    {
+      "id": "openrct2",
+      "name": "OpenRCT2",
+      "game": "RollerCoaster Tycoon 2",
+      "about": "RollerCoaster Tycoon 2 rebuilt to run natively, with its expansions, larger parks, more resolutions and multiplayer.",
+      "homepage": "https://openrct2.io/",
+      "licence": "GNU General Public License version 3",
+      "version": "0.5.6",
+      "builds": [
+        {
+          "os": "linux",
+          "url": "https://github.com/OpenRCT2/OpenRCT2/releases/download/v0.5.6/OpenRCT2-v0.5.6-linux-x86_64.AppImage",
+          "size": 103315960,
+          "sha256": "8198b5ef8b9b07685fc860f3f04ce88a5f07ce6c1e5a9e2badffa811ed0f2eba",
+          "kind": "APPIMAGE",
+          "run": "OpenRCT2-v0.5.6-linux-x86_64.AppImage"
+        },
+        {
+          "os": "windows",
+          "url": "https://github.com/OpenRCT2/OpenRCT2/releases/download/v0.5.6/OpenRCT2-v0.5.6-windows-portable-x64.zip",
+          "size": 82152808,
+          "sha256": "6c07393312a828f845c71c9c18cefe2da5b759fe2b17ee02fbb9e4540b396280",
+          "kind": "ZIP",
+          "run": "openrct2.exe"
+        }
+      ],
+      "data": [
+        {
+          "id": "rct2",
+          "name": "RollerCoaster Tycoon 2's game files",
+          "about": "The folder RollerCoaster Tycoon 2 is installed in (its Data folder inside), from the CD, GOG or Steam, or RollerCoaster Tycoon Classic's (its Assets folder inside).",
+          "needs": [["Data/g1.dat", "Assets/g1.dat"]]
+        }
+      ],
+      "args": ["--rct2-data-path", "{data:rct2}", "--user-data-path", "{home}/user"],
+      "saves": "user/save",
+      "check": { "args": ["--version"], "expect": "OpenRCT2, v0\\.5\\.6" },
+      "notes": [
+        "OpenRCT2 reads RollerCoaster Tycoon 2's files where they are; it never changes them.",
+        "Your parks, settings and screenshots are OpenRCT2's own, kept by Fuse beside its copy."
+      ],
+      "source": "OpenRCT2 v0.5.6: src/openrct2/command_line/RootCommands.cpp (--rct2-data-path, --user-data-path, --version) and CommandLine.cpp ParseLongOption (a value after the option); src/openrct2/platform/Platform.Common.cpp classifyGamePath (Data/g1.dat or Assets/g1.dat, letter case resolved); src/openrct2/PlatformEnvironment.cpp (save inside the user data folder); src/openrct2/Version.cpp (the version line)"
+    },
+    {
+      "id": "fallout2-ce",
+      "name": "Fallout 2 Community Edition",
+      "game": "Fallout 2",
+      "about": "Fallout 2 rebuilt to run natively, with the original game as it was, the engine's bugs fixed and some quality of life improvements.",
+      "homepage": "https://github.com/alexbatalov/fallout2-ce",
+      "licence": "Sustainable Use License",
+      "version": "1.3.0",
+      "builds": [
+        {
+          "os": "linux",
+          "url": "https://github.com/alexbatalov/fallout2-ce/releases/download/v1.3.0/fallout2-ce-linux-x64.tar.gz",
+          "size": 5360178,
+          "sha256": "6d7fcd57e07bdb135538179b89c28bf386d24408b2f03e67048bd6ed527a0899",
+          "kind": "TAR_GZ",
+          "run": "fallout2-ce"
+        },
+        {
+          "os": "windows",
+          "url": "https://github.com/alexbatalov/fallout2-ce/releases/download/v1.3.0/fallout2-ce-windows-x64.zip",
+          "size": 1407974,
+          "sha256": "44d47c87e19e8a9508e4ebe89be915f2fdff4a0b2b78c3b9dbad9fe8a89e8f8b",
+          "kind": "ZIP",
+          "run": "fallout2-ce.exe"
+        }
+      ],
+      "data": [
+        {
+          "id": "game",
+          "name": "Fallout 2's game files",
+          "about": "The folder Fallout 2 is installed in, with master.dat and critter.dat, from the CD, GOG, Epic or Steam.",
+          "needs": [["master.dat"], ["critter.dat"]],
+          "overlay": { "into": "", "own": ["fallout2.cfg", "data/SAVEGAME/", "data/MAPS/", "data/proto/"] }
+        }
+      ],
+      "saves": "data/SAVEGAME",
+      "check": { "stay": 5 },
+      "notes": [
+        "Fallout 2 is played from Fuse's copy, with your game's files linked in; what the engine writes stays in Fuse's copy.",
+        "Mods that change maps or protos in your game's data folder aren't carried over, and the saves of your own copy stay with it: the port's are its own.",
+        "On Linux it needs SDL2, which SteamOS and most desktops have."
+      ],
+      "source": "fallout2-ce v1.3.0: README.md (run from the game's folder, SDL2 on Linux); src/game_config.cc gameConfigInit (fallout2.cfg beside the program, master.dat, critter.dat and data as defaults); src/loadsave.cc (data/SAVEGAME), src/map.cc and src/proto.cc (data/MAPS and data/proto written while playing); src/platform_compat.cc compat_resolve_path (letter case ignored on Linux)"
+    }
+  ]
+}

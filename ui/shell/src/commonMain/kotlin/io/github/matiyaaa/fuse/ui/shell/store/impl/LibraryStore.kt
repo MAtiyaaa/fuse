@@ -440,6 +440,13 @@ internal class DefaultLibraryOps(
                 sessions.filter { it.endedAt != null && it.startedAt >= weekStart }.sumOf { it.durationSeconds ?: 0 } to ra
             },
         ) { media, installed, platformEmulator, cols, (week, ra) -> Detail(media, installed, platformEmulator, cols, week, ra) }
+            // The core and frame generation Play would use, so the line under Play follows them.
+            .combine(
+                combine(
+                    data.scopedSettings.observeResolved(ScopedSettings.RetroArchCore, game.platformId, id),
+                    data.scopedSettings.observeResolved(ScopedSettings.FrameGeneration, game.platformId, id),
+                ) { core, frames -> core.value to frames.value },
+            ) { parts, _ -> parts }
             .combine(ctx.offline) { parts, roots -> parts to roots.takeIf { game.appId == null }?.firstOrNull { it.holds(game.location.path) } }
             .map { (parts, away) ->
             val (media, installed, platformEmulator, cols, week, ra) = parts
@@ -449,12 +456,13 @@ internal class DefaultLibraryOps(
                 installed,
                 ctx.host,
             )
+            val choice = choiceOf(game, platform, resolved, installed)
             GameDetail(
                 game = game,
                 platform = platform,
                 media = media,
                 art = Art.from(media),
-                emulator = choiceOf(game, platform, resolved, installed),
+                emulator = choice.copy(playLine = playLine(game, resolved, choice.launchSummary)),
                 contentNotes = contentNotes(game, resolved),
                 achievements = ra,
                 collections = cols,
@@ -512,6 +520,34 @@ internal class DefaultLibraryOps(
             canLaunch = resolved.startsGame || resolved.plan is LaunchPlan.OpenAppOnly,
             emulatorHomepage = homepage,
         )
+    }
+
+    /**
+     * What Play does for [game], in one line (Pillar 11.2): [summary] ("Starts in DuckStation"), then
+     * what it starts with: the RetroArch core, frame generation, and the newest save put in place
+     * first where Fuse keeps this game's saves in step (Fuse One, or RomM for a game from RomM).
+     */
+    private suspend fun playLine(game: Game, resolved: ResolvedLaunch, summary: String?): String? {
+        val installed = resolved.installed ?: return null
+        if (summary == null || !resolved.startsGame) return null
+        val settings = data.scopedSettings
+        val with = buildList {
+            if (installed.id.value.substringAfter('.').startsWith("retroarch")) {
+                val chosen = settings.resolve(ScopedSettings.RetroArchCore, game.platformId, game.id).value.takeIf { it.isNotBlank() }
+                (chosen ?: RetroArchCores.defaultCore(ctx.host, game.platformId))?.let { add("the ${LaunchProblems.coreName(it)} core") }
+            }
+            if (frameGenerationReady()) {
+                settings.resolve(ScopedSettings.FrameGeneration, game.platformId, game.id).value.takeIf { it > 1 }?.let { add("frame generation at ${it}x") }
+            }
+            val keepsSaves = io.github.matiyaaa.fuse.sync.SaveAdapters.forEmulator(installed.id.value) != null &&
+                (sync != null || (game.links.rommRomId != null && rommSaves != null))
+            if (keepsSaves) add("your newest save put in place first")
+        }
+        return when (with.size) {
+            0 -> "$summary."
+            1 -> "$summary, with ${with[0]}."
+            else -> "$summary, with ${with.dropLast(1).joinToString(", ")} and ${with.last()}."
+        }
     }
 
     private fun contentNotes(game: Game, resolved: ResolvedLaunch): List<ContentNote> {
@@ -1484,7 +1520,7 @@ internal class DefaultLibraryOps(
         ctx.data.cache.remove(FILL_TRIED, id.value.toString())
     }
 
-    override suspend fun addGameFile(path: String, platform: PlatformId): GameId? {
+    override suspend fun addGameFile(path: String, platform: PlatformId, title: String?): GameId? {
         val fs = ctx.services.fs
         val entry = try {
             fs.stat(path)
@@ -1500,7 +1536,7 @@ internal class DefaultLibraryOps(
             path = entry.path,
             kind = LocationKind.FILE,
             launchPath = entry.path,
-            title = FsPath.stem(entry.name),
+            title = title?.takeIf { it.isNotBlank() } ?: FsPath.stem(entry.name),
             tags = FilenameParser.parse(entry.name).tags,
             sizeBytes = entry.sizeBytes,
             modifiedAt = entry.modifiedAt,

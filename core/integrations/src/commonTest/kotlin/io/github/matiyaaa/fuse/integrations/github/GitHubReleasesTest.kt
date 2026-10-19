@@ -86,6 +86,10 @@ class GitHubReleasesTest {
         assertEquals("v0.4.5", GitHubReleases.pick(ReleaseChannel.BETA, models)?.tag)
         assertEquals("v0.4.5", GitHubReleases.pick(ReleaseChannel.NIGHTLY, models)?.tag)
         assertEquals("v0.4.5", GitHubReleases.pick(ReleaseChannel.STABLE, models)?.tag)
+        // Fuse Ports' list rides on a release of its own, whatever it is named: never an update.
+        val ports = io.github.matiyaaa.fuse.model.ReleaseInfo("ports", "Fuse Ports 99.0", "", null, emptyList(), "", prerelease = true)
+        assertEquals("v0.4.5", GitHubReleases.pick(ReleaseChannel.NIGHTLY, models + ports)?.tag)
+        assertNull(GitHubReleases.pick(ReleaseChannel.BETA, listOf(ports, ports.copy(prerelease = false))))
         // A nightly whose name says no version is passed over, never guessed.
         assertNull(GitHubReleases.pick(ReleaseChannel.NIGHTLY, listOf(models[2].copy(name = "Nightly build"))))
     }

@@ -128,6 +128,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         storeVariant = store.variant,
         storeAutoCheck = store.autoCheck,
         storeEnabled = store.enabled,
+        portsEnabled = ports.enabled,
         romm = romm,
         streaming = streaming,
         downloads = downloads,
@@ -225,6 +226,8 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
         extensions = prefs.extensions,
         // What Fuse installed is kept as it is: only the Store writes it.
         store = store.copy(enabled = prefs.storeEnabled, variant = prefs.storeVariant, autoCheck = prefs.storeAutoCheck),
+        // Which ports are installed, and their folders, are Fuse Ports' to write: only whether it is on comes from here.
+        ports = ports.copy(enabled = prefs.portsEnabled),
         jellyfin = prefs.jellyfin,
         romm = prefs.romm,
         streaming = prefs.streaming,

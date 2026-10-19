@@ -123,6 +123,7 @@ object EmulatorPriority {
         listOf("xbox360") to ids("linux.xenia"),
         listOf("steam") to ids("linux.steam", "linux.steam-url", "linux.desktop"),
         listOf("win") to ids("linux.desktop", "linux.steam", "linux.steam-url", "linux.script"),
+        listOf("ports") to ids("linux.port"),
         listOf("dos") to ids(LRA, "linux.dosbox-staging", "linux.dosbox-x", LRAS),
         listOf("scummvm") to ids("linux.scummvm", LRA, LRAS),
         listOf("pico8") to ids("linux.pico8", LRA, LRAS),
@@ -163,6 +164,7 @@ object EmulatorPriority {
             expand(
                 listOf("win") to ids("windows.shortcut", "windows.steam"),
                 listOf("steam") to ids("windows.steam", "windows.shortcut"),
+                listOf("ports") to ids("windows.port"),
                 listOf("ps5") to ids("windows.anyps5", "windows.sharpemu", "windows.kytyps5"),
             ),
         )
@@ -175,6 +177,7 @@ object EmulatorPriority {
             expand(
                 listOf("steam") to ids("macos.steam-url", "macos.open"),
                 listOf("win") to ids("macos.open", "macos.steam-url"),
+                listOf("ports") to ids("macos.port"),
                 listOf("ps5") to ids("macos.anyps5", "macos.sharpemu"),
             ),
         )

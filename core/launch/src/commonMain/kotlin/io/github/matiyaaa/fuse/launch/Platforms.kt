@@ -34,7 +34,7 @@ object Platforms {
     fun isKnown(id: PlatformId): Boolean = id in known
 }
 
-private val DESKTOP_ONLY = listOf(PlatformId("ps5"))
+private val DESKTOP_ONLY = listOf(PlatformId("ps5"), PlatformId("ports"))
 
 /** Shorthand for sets of platform ids in catalogs. */
 internal fun platforms(vararg ids: String): Set<PlatformId> = ids.map(::PlatformId).toSet()

@@ -100,7 +100,8 @@ internal object LaunchProblems {
     )
 
     /** How RetroArch's core list names [core] ("mgba" -> "mGBA"). */
-    private fun coreName(core: String): String = CORE_NAMES[core] ?: core.replace('_', ' ').replaceFirstChar { it.uppercase() }
+    /** A RetroArch core as people know it ("Mupen64Plus-Next" for mupen64plus_next). */
+    internal fun coreName(core: String): String = CORE_NAMES[core] ?: core.replace('_', ' ').replaceFirstChar { it.uppercase() }
 
     private val CORE_NAMES = mapOf(
         "fceumm" to "FCEUmm", "nestopia" to "Nestopia", "mesen" to "Mesen", "mgba" to "mGBA", "gpsp" to "gpSP", "vbam" to "VBA-M",

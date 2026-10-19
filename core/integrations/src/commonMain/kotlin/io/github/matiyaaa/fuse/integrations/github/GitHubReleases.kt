@@ -22,8 +22,6 @@ data class RepoRef(val owner: String, val repo: String) {
     override fun toString(): String = "$owner/$repo"
 }
 
-/** Which build of a release the device needs. */
-/** Which build of a release this device takes. */
 /**
  * Which of Fuse's releases a device follows: published releases only, pre-releases too (Beta), or
  * also the rolling `nightly` pre-release a nightly job replaces (its version in its name, like
@@ -31,6 +29,7 @@ data class RepoRef(val owner: String, val repo: String) {
  */
 enum class ReleaseChannel { STABLE, BETA, NIGHTLY }
 
+/** Which build of a release this device takes. */
 enum class ReleasePlatform { ANDROID, LINUX_X86_64, WINDOWS_X64, MACOS_ARM64, MACOS_X64,
     /** Windows, run from the portable zip: it updates from the zip. */
     WINDOWS_X64_PORTABLE,
@@ -185,6 +184,8 @@ class GitHubReleases(
 
         /** The tag of the rolling nightly pre-release. */
         const val NIGHTLY_TAG = "nightly"
+        /** The release the ports job keeps Fuse Ports' signed list on (a pre-release, so never the latest). */
+        const val PORTS_TAG = "ports"
         private const val RECENT = 30
         private val NIGHTLY_VERSION = Regex("""\d+\.\d+\.\d+(?:\.\d+)?-nightly\.\d+""")
 
@@ -195,6 +196,8 @@ class GitHubReleases(
          */
         fun pick(channel: ReleaseChannel, releases: List<ReleaseInfo>): ReleaseInfo? = releases.mapNotNull { r ->
             when {
+                // Fuse Ports' signed list rides on a release of its own: never a version of Fuse.
+                r.tag == PORTS_TAG -> null
                 r.tag == NIGHTLY_TAG -> if (channel != ReleaseChannel.NIGHTLY) null
                     else NIGHTLY_VERSION.find(r.name)?.value?.let { v -> r.copy(tag = v) }
                 r.prerelease -> r.takeIf { channel != ReleaseChannel.STABLE }

@@ -13,6 +13,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.NexusModList
 import io.github.matiyaaa.fuse.ui.shell.store.NexusPage
 import io.github.matiyaaa.fuse.ui.shell.store.Problem
+import io.github.matiyaaa.fuse.ui.shell.store.ProblemAction
 import io.github.matiyaaa.fuse.ui.shell.store.ProblemKind
 import io.github.matiyaaa.fuse.ui.shell.store.Severity
 import kotlinx.coroutines.launch
@@ -32,7 +33,11 @@ internal fun AppState.nexusMods(card: GameCard) {
         when (val list = store.library.nexusMods(card.id)) {
             is NexusModList.Unavailable -> when {
                 list.needsGame -> nexusGamePicker(card)
-                else -> showProblem(Problem(list.title, list.reason, if (list.needsKey) ProblemKind.ACCOUNT else ProblemKind.NETWORK, Severity.INFO, reassurance = null))
+                // Without a key, the way to Settings, Accounts, where it goes.
+                else -> showProblem(Problem(
+                    list.title, list.reason, if (list.needsKey) ProblemKind.ACCOUNT else ProblemKind.NETWORK, Severity.INFO, reassurance = null,
+                    actions = if (list.needsKey) listOf(ProblemAction.OpenSettings("accounts", "Add Your Key")) else emptyList(),
+                ))
             }
             is NexusModList.Ready -> {
                 val seen = HashSet<Long>()

@@ -1,0 +1,111 @@
+# Fuse Ports' nightly check: every port's Linux build in ports/index.json is downloaded, compared
+# with the list's size and SHA-256, unpacked the way Fuse unpacks it, and started without the
+# game's files (tools/ports/check.py). Each night on main, the list is then marked with what
+# passed and signed with the Ed25519 key in the PORTS_SIGNING_KEY secret, and put on the `ports`
+# pre-release, where Fuse looks for it. Without the secret, nothing is signed or published, and the
+# summary says so. On a pull request that changes the list or the tool, only the check runs.
+
+name: Ports
+
+on:
+  schedule:
+    - cron: "23 2 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "ports/**"
+      - "tools/ports/**"
+      - ".github/workflows/ports.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ports-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Every port installs and starts
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      # A virtual screen for the ports that open a window, and SDL2, which fallout2-ce takes from the system.
+      - name: Install a virtual screen and SDL2
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y xvfb libsdl2-2.0-0 libsdl2-image-2.0-0
+
+      - name: Test the check itself
+        working-directory: tools/ports
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Check every port
+        run: |
+          set -euo pipefail
+          mkdir -p build/ports
+          xvfb-run -a python3 tools/ports/check.py check --index ports/index.json --out build/ports/results-linux.json
+          python3 - <<'EOF'
+          import json
+          r = json.load(open("build/ports/results-linux.json"))
+          lines = ["| Port | Started | What was seen |", "|---|---|---|"]
+          lines += [f"| {k} | {'yes' if v['passed'] else 'no'} | {v['detail'].replace('|', '/')} |" for k, v in sorted(r.items())]
+          open(__import__("os").environ["GITHUB_STEP_SUMMARY"], "a").write("\n".join(lines) + "\n")
+          EOF
+
+      - name: Keep the results
+        uses: actions/upload-artifact@v7
+        with:
+          name: ports-results
+          path: build/ports/results-linux.json
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Sign and publish the list
+    needs: check
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Get the results
+        uses: actions/download-artifact@v8
+        with:
+          name: ports-results
+          path: build/ports
+
+      - name: Mark and sign the list
+        id: sign
+        env:
+          PORTS_SIGNING_KEY: ${{ secrets.PORTS_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          python3 tools/ports/check.py publish --index ports/index.json --results build/ports/results-linux.json --out build/ports/out
+          if [ -f build/ports/out/index.json.sig ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "The PORTS_SIGNING_KEY secret isn't set, so the list wasn't signed or published. Fuse shows no port as verified until it is." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # A pre-release, never the latest: Fuse's own update checks pass the `ports` tag over.
+      - name: Put the list on the ports release
+        if: steps.sign.outputs.signed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! gh release view ports >/dev/null 2>&1; then
+            gh release create ports --prerelease --latest=false --title "Fuse Ports list" \
+              --notes "The signed list of ports Fuse checks for (made each night by the Ports workflow). Not a version of Fuse."
+          fi
+          gh release upload ports build/ports/out/index.json build/ports/out/index.json.sig --clobber

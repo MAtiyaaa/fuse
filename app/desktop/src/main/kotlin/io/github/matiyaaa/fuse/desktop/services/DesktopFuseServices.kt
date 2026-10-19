@@ -97,6 +97,11 @@ class DesktopFuseServices private constructor(
     override val desktopApps: io.github.matiyaaa.fuse.ui.shell.store.DesktopInstaller =
         DesktopStoreInstaller(os, File(dirs.home.toString()), File(dirs.cache, "store-downloads"), File(dirs.data, "previous-versions"))
 
+    /** Fuse Ports: its folder in Fuse's own data folder, downloads beside the Store's. */
+    override val portFiles: io.github.matiyaaa.fuse.ui.shell.store.PortFiles by lazy {
+        DesktopPortFiles(File(dirs.data), File(dirs.cache, "port-downloads"), os)
+    }
+
     /** No Apps section on a desktop: Fuse manages games there, not programs. */
     override val apps: AppsProvider? = null
     override val locations: DeviceLocations = DesktopLocations(folders)
