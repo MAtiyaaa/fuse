@@ -69,7 +69,7 @@ class SteamGamesTest {
 
     @Test
     fun anOlderEntryThatOpensFusesWindowMovesToFastStartKeepingThePersonsOptions() {
-        // Fuse 0.4.3 and before: `--play`, which opens Fuse's window and plays from it.
+        // Fuse 0.4.2 and before: `--play`, which opens Fuse's window and plays from it.
         val old = SteamShortcuts.add(theirs(), SteamShortcut(zelda.name, "\"$fuse\"", "\"/home/deck/Applications\"", launchOptions = "--play 12 --windowed"))!!
         assertEquals(mapOf(12L to SteamStart.THROUGH_WINDOW), SteamGames.starts(old, isFuse))
         assertEquals(listOf(SteamHealthIssue.Kind.THROUGH_WINDOW), SteamGames.health(old, fuse, setOf(12L), isFuse).map { it.kind })

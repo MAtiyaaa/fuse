@@ -4,11 +4,11 @@ package io.github.matiyaaa.fuse.sync.romm
  * The slot a save is kept in on RomM, named for what it is on its console (a PlayStation memory
  * card, a Switch game's save data), so RomM's own pages say what each one is. With more than one
  * person on a device, each has their own: the slot carries their name, and a person's saves come
- * only from their own slot. Saves Fuse sent before 0.4.4 are in `autosave`, and are still read when
+ * only from their own slot. Saves Fuse sent before 0.4.3 are in `autosave`, and are still read when
  * no one in particular is playing.
  */
 object RommSlots {
-    /** The slot Fuse sent every save to before 0.4.4. */
+    /** The slot Fuse sent every save to before 0.4.3. */
     const val LEGACY = "autosave"
 
     /** The most of a person's name a slot carries (RomM limits a slot's length). */

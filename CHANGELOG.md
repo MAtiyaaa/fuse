@@ -9,8 +9,7 @@ Versions follow `fuse.version` in `gradle.properties`, and every release is tagg
 
 | Version | Name | Notes |
 |---|---|---|
-| 0.4.4 | The Overdrive Update | [docs/releases/0.4.4.md](docs/releases/0.4.4.md) |
-| 0.4.3 | The Steady Update | [docs/releases/0.4.3.md](docs/releases/0.4.3.md) |
+| 0.4.3 | The Overdrive Update | [docs/releases/0.4.3.md](docs/releases/0.4.3.md) |
 | 0.4.2.27 | The Native Update | [docs/releases/0.4.2.27.md](docs/releases/0.4.2.27.md) |
 | 0.4.2.26 | The Native Update | [docs/releases/0.4.2.26.md](docs/releases/0.4.2.26.md) |
 | 0.4.2.25 | The Native Update | [docs/releases/0.4.2.25.md](docs/releases/0.4.2.25.md) |

@@ -173,7 +173,7 @@ run on real PCs and handheld PCs.
 
 ## Phase 3: More places to play
 
-- [x] SteamOS and Game Mode integration: Fast Start, Direct entries, shortcuts from other tools, changes through Steam itself with the Decky plugin, time in Direct entries, frame generation (0.4.4)
+- [x] SteamOS and Game Mode integration: Fast Start, Direct entries, shortcuts from other tools, changes through Steam itself with the Decky plugin, time in Direct entries, frame generation (0.4.3)
 
 ## Not planned
 

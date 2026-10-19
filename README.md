@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.4 is the <b>Overdrive Update</b>: Fuse in Steam's Game Mode, every emulator setting, RomM both ways, and Fuse Ports</sub><br>
+<sub>0.4.3 is the <b>Overdrive Update</b>: Fuse in Steam's Game Mode, every emulator setting, RomM both ways, and Fuse Ports</sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -430,13 +430,13 @@ Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.4.4 "The Overdrive Update"**: games added to Steam start through Fuse Fast Start (saves
+> **Fuse 0.4.3 "The Overdrive Update"**: games added to Steam start through Fuse Fast Start (saves
 > kept in step, time counted), and the Decky plugin changes Steam without a restart. Every setting of
 > an emulator is in Fuse (Fuse Tune), RomM keeps saves of every shape and your changes go back to it,
 > the Store looks after emulators (any earlier version, Codeberg and Forgejo), mods come from Nexus
 > Mods, games are played together as each emulator does it, and Fuse Ports installs games rebuilt to
-> run natively. 0.4.3 before it opened the Library quickly without a graphics card and found each
-> game's art once for the household. See [the release notes](docs/releases/0.4.4.md); every earlier
+> run natively. The Library also opens quickly without a graphics card, and each game's art is
+> found once for the household. See [the release notes](docs/releases/0.4.3.md); every earlier
 > release is in [CHANGELOG.md](CHANGELOG.md).
 
 Fuse runs on Android handhelds and phones, Linux (including SteamOS and its Game Mode), Windows and

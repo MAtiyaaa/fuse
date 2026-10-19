@@ -341,7 +341,7 @@ turning one on turns the other off in Fuse and keeps both set up.
   RomM's own hash of a zip's contents (`hash_zip_contents`, RomM 5.4: the MD5 of each file's
   `name:md5`, in name order). Slots are named for what the save is on its console (`PSP Save
   Data`, `PS2 Memory Card`), with the person's name added on a device with more than one person,
-  whose saves then come only from their own slot; saves sent before 0.4.4 are in `autosave` and
+  whose saves then come only from their own slot; saves sent before 0.4.3 are in `autosave` and
   are still read. A save that can't reach RomM waits, in order, in the device's own file and goes
   when RomM answers again, across restarts. Save states use `/api/states` the same way.
 - **Your changes** (off until you turn on Send Changes to RomM, RomM 5.4, and only what the server
@@ -964,7 +964,7 @@ Settings, Library, Steam, How Steam Starts Them picks how they start:
   Fast Start, and the question before writing says which and why. Elsewhere Steam doesn't read
   launch options through a shell, so every entry uses Fast Start, and Settings says so.
 
-An entry is Fuse's only by what it starts: Fuse with `--run <id>` (or `--play <id>`, as 0.4.3 and
+An entry is Fuse's only by what it starts: Fuse with `--run <id>` (or `--play <id>`, as 0.4.2 and
 before wrote them, which still work and become Fast Start the next time Fuse writes them), or a
 program whose launch options carry `FUSE_GAME=<id>` before `%command%`. Entries anyone else made
 are never changed, and a game another tool already put in Steam is never added twice. Switching an

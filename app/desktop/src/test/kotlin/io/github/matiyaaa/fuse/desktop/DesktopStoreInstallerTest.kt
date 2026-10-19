@@ -95,7 +95,7 @@ class DesktopStoreInstallerTest {
 
     @Test
     fun aVersionKeptBeforeShelvesHadTimesStillComesBack(): Unit = runBlocking {
-        // 0.4.3 kept one version as <kept>/<name>/<program>.
+        // 0.4.2 kept one version as <kept>/<name>/<program>.
         val old = File(kept, "Emu/Emu-0.9.AppImage").apply { parentFile.mkdirs(); writeText("0.9") }
         val current = installer.install("Emu", download("1.0"), "Emu-1.0.AppImage", DesktopAssetKind.APPIMAGE, null)
         val back = installer.restorePrevious(old.absolutePath, current)

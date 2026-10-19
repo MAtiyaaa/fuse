@@ -431,7 +431,7 @@ class JvmRommSaves(
     }
 
     companion object {
-        /** The slot Fuse kept every game's save in on RomM before 0.4.4; see [RommSlots]. */
+        /** The slot Fuse kept every game's save in on RomM before 0.4.3; see [RommSlots]. */
         const val SLOT = RommSlots.LEGACY
 
         /** How long a launch waits on RomM. */
