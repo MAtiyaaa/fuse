@@ -497,6 +497,14 @@ internal fun AuditDriver.steamGamesScreens() {
         tapText("Learned From Your Shortcuts", step = PadButton.DPAD_UP)
         waitFor("By system")
         shoot("learned from the person's own shortcuts, each system's way", 1_200)
+        tap(PadButton.B)
+        settle(600)
+        tapText("Your Collections", step = PadButton.DPAD_UP)
+        waitFor("Choose how each")
+        shoot("the person's own collections beside Fuse's", 1_200)
+        tapText("GBA")
+        waitFor("Put Fuse's Games in Yours")
+        shoot("one of theirs: apart, merged or renamed", 1_200)
     }
 }
 

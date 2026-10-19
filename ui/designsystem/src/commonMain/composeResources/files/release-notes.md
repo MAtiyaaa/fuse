@@ -38,6 +38,13 @@ together as each emulator does it, and Fuse Ports brings games rebuilt to run na
   as Fuse places it, unless you placed it yourself.
 - **Windows ports use your Proton.** A port's Windows build on Linux starts with the Proton you
   chose for every game in Steam, or the newest one you have, instead of one umu-launcher fetches.
+- **Your collections and Fuse's, together.** Fuse's Steam collections are named maker then console.
+  Settings, Library, Steam, Your Collections finds your own collections that are the same system
+  (GBA, PlayStation) and lets you keep both, put Fuse's games in yours, or rename yours Fuse's way;
+  yours are never deleted. If Steam Cloud drops Fuse's collections, they're back when Steam closes.
+- **Steam entries looked after.** Pictures are used only in the shape Steam shows them in, Direct
+  entries whose emulator updated or whose game moved are found and put right in place, and System
+  health says when a game's drive is out.
 - **See each entry before it goes into Steam.** Adding games to Steam now offers See Each Entry:
   what Steam will start for each one, from which folder, with which launch options, before
   anything changes.

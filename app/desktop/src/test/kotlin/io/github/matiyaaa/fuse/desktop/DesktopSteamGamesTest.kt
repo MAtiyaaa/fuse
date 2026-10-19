@@ -5,6 +5,7 @@ import io.github.matiyaaa.fuse.desktop.services.KnownFolders
 import io.github.matiyaaa.fuse.desktop.system.DesktopOs
 import io.github.matiyaaa.fuse.library.steam.BinaryVdf
 import io.github.matiyaaa.fuse.library.steam.SteamArt
+import io.github.matiyaaa.fuse.library.steam.SteamCollectionWay
 import io.github.matiyaaa.fuse.library.steam.SteamCollections
 import io.github.matiyaaa.fuse.library.steam.SteamDirect
 import io.github.matiyaaa.fuse.library.steam.SteamGameAction
@@ -134,6 +135,43 @@ class DesktopSteamGamesTest {
         // The emulator went away: looking them over says so.
         mgba.delete()
         assertEquals(listOf(SteamHealthIssue.Kind.EMULATOR_GONE), steam.gamesHealth(setOf(12L, 3L)).map { it.kind })
+    }
+
+    @Test
+    fun thePersonsCollectionTakesFusesGamesAndOnesSteamCloudDroppedComeBack(): Unit = runBlocking {
+        var open = false
+        val steam = DesktopSteam(KnownFolders(root.path, DesktopOs.LINUX), programPath = { fuse.path }, steamOpen = { open })
+        val cloud = File(config, "cloudstorage").apply { mkdirs() }
+        val namespace = File(cloud, "cloud-storage-namespace-1.json")
+        namespace.writeText("[[\"user-collections.uc-gba\",{\"key\":\"user-collections.uc-gba\",\"timestamp\":1,\"value\":\"{\\\"id\\\":\\\"uc-gba\\\",\\\"name\\\":\\\"GBA\\\",\\\"added\\\":[7]}\",\"version\":\"1\"}]]")
+        val gba = "Nintendo Game Boy Advance"
+        val fuseKey = "user-collections.${SteamCollections.idOf(gba)}"
+        steam.addGames(listOf(zelda.copy(collection = gba), metroid.copy(collection = gba)), emptyMap(), collections = true).getOrThrow()
+        assertTrue(fuseKey in namespace.readText())
+        assertEquals(listOf("GBA"), steam.theirCollections().map { it.name })
+
+        // Into theirs: one collection, with their game and Fuse's two; Fuse's own marked deleted.
+        steam.chooseCollection(gba, "uc-gba", SteamCollectionWay.INTO).getOrThrow()
+        assertEquals(3, SteamCollections.theirs(namespace.readText()).single().apps.size)
+        assertFalse(gba in SteamCollections.fuseNames(namespace.readText()))
+        assertEquals(mapOf(gba to "uc-gba"), steam.collectionChoices().into)
+
+        // Apart again: Fuse's own comes back, theirs keeps everything it has.
+        steam.chooseCollection(gba, "uc-gba", SteamCollectionWay.APART).getOrThrow()
+        assertTrue(gba in SteamCollections.fuseNames(namespace.readText()))
+        assertEquals(3, SteamCollections.theirs(namespace.readText()).single().apps.size)
+
+        // A Steam session in which Steam Cloud dropped Fuse's: back as soon as Steam closes.
+        open = true
+        var putBack = 0
+        val watching = launch(Dispatchers.IO) { steam.keepCollections { putBack = it } }
+        delay(500)
+        namespace.writeText("[]")
+        open = false
+        withTimeout(20_000) { while (putBack == 0) delay(100) }
+        watching.cancel()
+        assertEquals(1, putBack)
+        assertTrue(gba in SteamCollections.fuseNames(namespace.readText()))
     }
 
     @Test

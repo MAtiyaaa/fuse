@@ -289,6 +289,24 @@ interface SteamIntegration {
      */
     suspend fun playFromSteam(gameId: Long): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
 
+    /** The person's own collections in Steam (not Fuse's), for matching them to Fuse's. */
+    suspend fun theirCollections(): List<io.github.matiyaaa.fuse.library.steam.SteamCollection> = emptyList()
+
+    /** What the person chose for their collections beside Fuse's. */
+    suspend fun collectionChoices(): io.github.matiyaaa.fuse.library.steam.SteamCollectionChoices = io.github.matiyaaa.fuse.library.steam.SteamCollectionChoices()
+
+    /**
+     * How Fuse's collection [fuseName] and the person's [theirs] (by id) live together: apart, Fuse's
+     * games put into theirs, or theirs renamed [fuseName] with Fuse's games in it. Theirs never goes.
+     */
+    suspend fun chooseCollection(fuseName: String, theirs: String, how: io.github.matiyaaa.fuse.library.steam.SteamCollectionWay): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
+
+    /**
+     * Runs while Fuse does: each time Steam closes, Fuse's collections Steam Cloud dropped meanwhile
+     * are put back ([onPutBack] gets how many), as written before; ones the person deleted stay gone.
+     */
+    suspend fun keepCollections(onPutBack: (Int) -> Unit) = Unit
+
     /** How each of [games]'s entries starts once written: what Steam runs, its start folder and its launch options. */
     suspend fun entryStarts(games: List<io.github.matiyaaa.fuse.library.steam.SteamGameEntry>): Map<Long, Triple<String, String, String>> = emptyMap()
 

@@ -28,9 +28,16 @@ import kotlinx.coroutines.launch
  * in Steam is left alone; the last change can be undone from Settings, Library, Steam.
  */
 
+/** The name of [platform]'s collection in Steam: maker then console ("Nintendo Game Boy Advance"). */
+internal fun steamCollection(platform: io.github.matiyaaa.fuse.model.Platform): String =
+    io.github.matiyaaa.fuse.library.steam.SteamCollections.nameFor(platform.manufacturer, platform.name)
+
 /** A game as Steam's library would have it, and the pictures Fuse already keeps for it. */
 internal fun AppState.steamEntry(card: GameCard): Pair<SteamGameEntry, SteamArt> {
-    val system = store.library.platforms.value.firstOrNull { it.platform.id == card.platformId }?.platform?.name
+    val platform = store.library.platforms.value.firstOrNull { it.platform.id == card.platformId }?.platform
+    val system = platform?.let(::steamCollection)
+    // The name Fuse gave the system's collection before, taken off as the new one goes on.
+    val former = platform?.name?.takeIf { it != system }?.let(::setOf).orEmpty()
     // Only files Fuse keeps: nothing is fetched again for Steam.
     fun file(model: Any?): String? = (model as? String)?.takeIf { !it.contains("://") }
     val art = SteamArt(
@@ -40,7 +47,7 @@ internal fun AppState.steamEntry(card: GameCard): Pair<SteamGameEntry, SteamArt>
         logo = file(card.art.logo),
         icon = file(card.art.icon ?: card.art.square),
     )
-    return SteamGameEntry(card.id.value, card.title, system) to art
+    return SteamGameEntry(card.id.value, card.title, system, formerCollections = former) to art
 }
 
 /** Direct entries are chosen for every game, and Steam here can have them. */
@@ -118,7 +125,7 @@ internal suspend fun AppState.steamWays(): SteamWays? {
     if (!steam.directEntries || !store.prefs.value.steam.asTheirShortcuts) return null
     val files = runCatching { store.library.gameFiles() }.getOrDefault(emptyMap()).mapValues { it.value.value }
     if (files.isEmpty()) return null
-    val names = store.library.platforms.value.associate { it.platform.id to it.platform.name }
+    val names = store.library.platforms.value.associate { it.platform.id to steamCollection(it.platform) }
     val systems = store.library.games(GameQuery(includeHidden = true)).first().mapNotNull { c -> names[c.platformId]?.let { c.id.value to it } }.toMap()
     val habits = runCatching { steam.habits(files, systems) }.getOrDefault(emptyList())
     if (habits.isEmpty()) return null
@@ -498,7 +505,7 @@ internal fun AppState.learnedWaysSheet() {
     val steam = platform.steam ?: return
     scope.launch {
         val files = runCatching { store.library.gameFiles() }.getOrDefault(emptyMap()).mapValues { it.value.value }
-        val names = store.library.platforms.value.associate { it.platform.id to it.platform.name }
+        val names = store.library.platforms.value.associate { it.platform.id to steamCollection(it.platform) }
         val systems = store.library.games(GameQuery(includeHidden = true)).first().mapNotNull { c -> names[c.platformId]?.let { c.id.value to it } }.toMap()
         val habits = if (files.isEmpty()) emptyList() else runCatching { steam.habits(files, systems) }.getOrDefault(emptyList())
         val ids = names.entries.associate { (id, name) -> name to id }
@@ -554,6 +561,74 @@ internal fun AppState.learnedWaysSheet() {
                             onSelect = if (h.frameGeneration != null && frames) { { useFrames(h) { show() } } } else { {} },
                         ))
                     }
+                },
+            )
+        }
+        show()
+    }
+}
+
+/**
+ * Settings, Library, Steam, Your Collections: the person's own collections in Steam that are the one
+ * Fuse makes for a system by another name (its full name, its short name or a folder name for it),
+ * each with how the two live together: apart, Fuse's games put into theirs, or theirs renamed Fuse's
+ * way with Fuse's games in it. Theirs never goes, and none of their games is taken out.
+ */
+internal fun AppState.steamCollectionsSheet() {
+    val steam = platform.steam ?: return
+    scope.launch {
+        val theirs = runCatching { steam.theirCollections() }.getOrDefault(emptyList())
+        val choices = runCatching { steam.collectionChoices() }.getOrDefault(io.github.matiyaaa.fuse.library.steam.SteamCollectionChoices())
+        val platforms = store.library.platforms.value.map { it.platform }
+        val key = io.github.matiyaaa.fuse.library.steam.SteamCollections::key
+        val matches = theirs.mapNotNull { c ->
+            platforms.firstOrNull { p -> (listOf(p.name, p.shortName, steamCollection(p)) + p.folderAliases).any { key(it) == key(c.name) } }?.let { c to it }
+        }
+        fun choose(c: io.github.matiyaaa.fuse.library.steam.SteamCollection, p: io.github.matiyaaa.fuse.model.Platform, way: io.github.matiyaaa.fuse.library.steam.SteamCollectionWay) {
+            choice = null
+            scope.launch {
+                steam.chooseCollection(steamCollection(p), c.id, way)
+                    .onSuccess { toasts.show(it, icon = FuseIcons.Layers) }
+                    .onFailure { toasts.show(it.message ?: "Couldn't change Steam's collections", ToastKind.ERROR) }
+                steamCollectionsSheet()
+            }
+        }
+        fun pick(c: io.github.matiyaaa.fuse.library.steam.SteamCollection, p: io.github.matiyaaa.fuse.model.Platform, back: () -> Unit) {
+            val fuse = steamCollection(p)
+            choice = ChoiceSpec(
+                title = c.name,
+                icon = FuseIcons.Layers,
+                message = "Your collection, with ${c.apps.size} in it, is the one Fuse makes for ${p.name}. Yours stays whichever you choose, with everything in it.",
+                options = listOf(
+                    MenuAction("steam.coll.apart", "Keep Both Apart", FuseIcons.Layers, detail = "Yours as it is, and Fuse's own \"$fuse\" beside it", onSelect = { choose(c, p, io.github.matiyaaa.fuse.library.steam.SteamCollectionWay.APART) }),
+                    MenuAction("steam.coll.into", "Put Fuse's Games in Yours", FuseIcons.FolderInput, detail = "One collection, \"${c.name}\". Fuse makes none of its own for ${p.name}", onSelect = { choose(c, p, io.github.matiyaaa.fuse.library.steam.SteamCollectionWay.INTO) }),
+                    MenuAction("steam.coll.rename", "Rename Yours", FuseIcons.Pencil, detail = "Yours named \"$fuse\", with Fuse's games in it too", onSelect = { choose(c, p, io.github.matiyaaa.fuse.library.steam.SteamCollectionWay.RENAMED) })
+                        .takeIf { c.name != fuse },
+                ).filterNotNull(),
+                onBack = back,
+            )
+        }
+        fun show() {
+            choice = ChoiceSpec(
+                title = "Your Collections",
+                icon = FuseIcons.Layers,
+                message = if (matches.isEmpty()) {
+                    "None of your own collections in Steam is one Fuse makes for a system, so there's nothing to choose. Fuse names its own maker then console, like Nintendo Game Boy Advance."
+                } else {
+                    "These of your own collections in Steam are the ones Fuse makes for a system. Choose how each lives beside Fuse's. Yours are never deleted."
+                },
+                options = matches.map { (c, p) ->
+                    val fuse = steamCollection(p)
+                    MenuAction(
+                        "steam.coll.${c.id}", c.name, FuseIcons.Layers,
+                        detail = "${p.name}. " + when {
+                            choices.renamed[c.id] != null -> "Renamed Fuse's way, with Fuse's games in it"
+                            choices.into[fuse] == c.id -> "Fuse's games go in it"
+                            else -> "Kept apart from Fuse's \"$fuse\""
+                        },
+                        trailing = Trailing.Chevron,
+                        onSelect = { pick(c, p) { show() } },
+                    )
                 },
             )
         }

@@ -257,6 +257,58 @@ class SteamGamesTest {
     }
 
     @Test
+    fun thePersonsOwnCollectionsTakeFusesGamesAsTheyChoseAndNeverGo() {
+        val mine = """[["user-collections.uc-gba",{"key":"user-collections.uc-gba","timestamp":1,"value":"{\"id\":\"uc-gba\",\"name\":\"GBA\",\"added\":[7,8],\"removed\":[9]}","version":"1"}],""" +
+            """["user-collections.uc-old",{"key":"user-collections.uc-old","timestamp":1,"value":"{\"id\":\"uc-old\",\"name\":\"Gone\",\"added\":[]}","version":"1","is_deleted":true}]]"""
+        assertEquals(listOf(SteamCollection("uc-gba", "GBA", listOf(7L, 8L))), SteamCollections.theirs(mine), "a deleted one isn't theirs any more")
+        val fuseName = SteamCollections.nameFor("Nintendo", "Game Boy Advance")
+        assertEquals("Nintendo Game Boy Advance", fuseName)
+        assertEquals("Sega Saturn", SteamCollections.nameFor("Sega", "Sega Saturn"))
+        assertEquals("Arcade", SteamCollections.nameFor(null, "Arcade"))
+
+        // Into theirs: Fuse's games beside their own, what they took out staying out, and no collection of Fuse's for it.
+        val into = SteamCollectionChoices(into = mapOf(fuseName to "uc-gba"))
+        val merged = Json.parseToJsonElement(SteamCollections.write(mine, mapOf(fuseName to listOf(8L, 9L, 111L)), now = 100, into)!!).jsonArray
+        assertEquals(2, merged.size)
+        val theirs = Json.parseToJsonElement(merged[0].jsonArray[1].jsonObject["value"]!!.jsonPrimitive.content).jsonObject
+        assertEquals("GBA", theirs["name"]!!.jsonPrimitive.content)
+        assertEquals(listOf(7L, 8L, 111L), theirs["added"]!!.jsonArray.map { it.jsonPrimitive.content.toLong() })
+        assertEquals("100", merged[0].jsonArray[1].jsonObject["version"]!!.jsonPrimitive.content)
+
+        // Renamed Fuse's way: the same collection of theirs, under Fuse's name.
+        val renamed = into.copy(renamed = mapOf("uc-gba" to fuseName))
+        val r = Json.parseToJsonElement(SteamCollections.write(mine, mapOf(fuseName to listOf(111L)), now = 100, renamed)!!).jsonArray
+        assertEquals(fuseName, Json.parseToJsonElement(r[0].jsonArray[1].jsonObject["value"]!!.jsonPrimitive.content).jsonObject["name"]!!.jsonPrimitive.content)
+
+        // Theirs gone since: Fuse makes its own again.
+        val alone = Json.parseToJsonElement(SteamCollections.write("[]", mapOf(fuseName to listOf(111L)), now = 100, into)!!).jsonArray
+        assertEquals("user-collections.${SteamCollections.idOf(fuseName)}", alone.single().jsonArray[0].jsonPrimitive.content)
+    }
+
+    @Test
+    fun aCollectionSteamCloudDroppedIsToldFromOneThePersonDeleted() {
+        val written = SteamCollectionChoices(written = setOf("Nintendo Game Boy Advance", "Sony PlayStation"))
+        val text = SteamCollections.write(null, mapOf("Nintendo Game Boy Advance" to listOf(1L), "Sony PlayStation" to listOf(2L)), now = 1)!!
+        assertEquals(emptySet(), SteamCollections.dropped(text, written))
+        // The person deleted one in Steam (marked deleted, still there): it stays gone.
+        val deleted = SteamCollections.write(text, mapOf("Nintendo Game Boy Advance" to listOf(1L)), now = 2)!!
+        assertEquals(emptySet(), SteamCollections.dropped(deleted, written))
+        // Steam Cloud brought back a list without Fuse's at all: both dropped.
+        assertEquals(setOf("Nintendo Game Boy Advance", "Sony PlayStation"), SteamCollections.dropped("[]", written))
+        // One whose games go into the person's own is never missing.
+        assertEquals(setOf("Sony PlayStation"), SteamCollections.dropped("[]", written.copy(into = mapOf("Nintendo Game Boy Advance" to "uc-gba"))))
+    }
+
+    @Test
+    fun aSystemsCollectionMovesToItsNewNameOnEveryEntryOfFusesInIt() {
+        val old = SteamGames.write(null, fuse, listOf(zelda, metroid), isFuse)!!
+        assertEquals(setOf("Game Boy Advance"), entries(old).flatMap { (it["tags"] as BinaryVdf.Block).entries.map { t -> (t.second as BinaryVdf.Str).value } }.toSet())
+        // Only Zelda is written again, under the new name: Metroid's entry moves with it.
+        val now = SteamGames.write(old, fuse, listOf(zelda.copy(collection = "Nintendo Game Boy Advance", formerCollections = setOf("Game Boy Advance"))), isFuse)!!
+        assertEquals(listOf(listOf("Nintendo Game Boy Advance"), listOf("Nintendo Game Boy Advance")), entries(now).map { (it["tags"] as BinaryVdf.Block).entries.map { t -> (t.second as BinaryVdf.Str).value } })
+    }
+
+    @Test
     fun collectionsAreReadBackFromTheEntriesAndFromSteam() {
         val bytes = SteamGames.write(null, fuse, listOf(zelda, metroid, SteamGameEntry(3, "Chrono Trigger", "Super Nintendo")), isFuse)!!
         val by = SteamGames.byCollection(bytes, setOf("Game Boy Advance", "Super Nintendo", "Empty"), isFuse)

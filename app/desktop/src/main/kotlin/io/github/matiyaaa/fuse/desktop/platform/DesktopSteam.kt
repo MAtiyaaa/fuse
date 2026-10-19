@@ -7,6 +7,8 @@ import io.github.matiyaaa.fuse.desktop.system.GameMode
 import io.github.matiyaaa.fuse.desktop.system.Processes
 import io.github.matiyaaa.fuse.library.steam.SteamArt
 import io.github.matiyaaa.fuse.library.steam.SteamArtShape
+import io.github.matiyaaa.fuse.library.steam.SteamCollection
+import io.github.matiyaaa.fuse.library.steam.SteamCollectionChoices
 import io.github.matiyaaa.fuse.library.steam.SteamCollections
 import io.github.matiyaaa.fuse.library.steam.SteamGameAction
 import io.github.matiyaaa.fuse.library.steam.SteamGameEntry
@@ -678,16 +680,99 @@ internal class DesktopSteam(
      * written into the user's cloud storage file, where Steam keeps collections. Only Fuse's own
      * collections change. Nothing is written when Steam hasn't made the file yet.
      */
-    private fun writeCollections(dir: File, shortcuts: ByteArray?, names: Set<String>) {
-        val cloud = File(dir, "cloudstorage").takeIf { it.isDirectory } ?: return
+    private fun writeCollections(dir: File, shortcuts: ByteArray?, names: Set<String>): Set<String> {
+        val (file, text) = collectionsFile(dir) ?: return emptySet()
+        val choices = choices(dir)
+        // Fuse's own that Steam Cloud dropped (not ones the person deleted) come back with the rest.
+        val dropped = SteamCollections.dropped(text, choices)
+        val members = SteamGames.byCollection(shortcuts, SteamCollections.fuseNames(text) + names + dropped + choices.into.keys + choices.back, ::fuseProgram).filterValues { it.isNotEmpty() }
+        val out = SteamCollections.write(text, members, System.currentTimeMillis() / 1000, choices) ?: return emptySet()
+        val written = choices.written + members.keys.filter { it !in choices.into }
+        if (written != choices.written || choices.back.isNotEmpty()) saveChoices(dir, choices.copy(written = written, back = emptySet()))
+        if (out == text) return emptySet()
+        text?.let { File(file.parentFile, "${file.name}.before-fuse-games").writeText(it) }
+        replaceAtomically(file, out.encodeToByteArray())
+        return dropped.intersect(members.keys)
+    }
+
+    /** The namespace file Steam keeps this user's collections in, and what it holds (null for none yet); null without a cloud folder. */
+    private fun collectionsFile(dir: File): Pair<File, String?>? {
+        val cloud = File(dir, "cloudstorage").takeIf { it.isDirectory } ?: return null
         val namespace = SteamCollections.activeNamespace(File(cloud, "cloud-storage-namespaces.json").takeIf { it.isFile }?.readText())
         val file = File(cloud, "cloud-storage-namespace-$namespace.json")
-        val text = file.takeIf { it.isFile }?.readText()
-        val members = SteamGames.byCollection(shortcuts, SteamCollections.fuseNames(text) + names, ::fuseProgram).filterValues { it.isNotEmpty() }
-        val out = SteamCollections.write(text, members, System.currentTimeMillis() / 1000) ?: return
-        if (out == text) return
-        text?.let { File(cloud, "${file.name}.before-fuse-games").writeText(it) }
-        replaceAtomically(file, out.encodeToByteArray())
+        return file to file.takeIf { it.isFile }?.readText()
+    }
+
+    private val choicesJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
+    /** What the person chose for their collections in [dir] (Steam's `config` folder), kept beside Steam's files. */
+    private fun choices(dir: File): SteamCollectionChoices =
+        File(dir, CHOICES).takeIf { it.isFile }?.let { f -> runCatching { choicesJson.decodeFromString(SteamCollectionChoices.serializer(), f.readText()) }.getOrNull() }
+            ?: SteamCollectionChoices()
+
+    private fun saveChoices(dir: File, choices: SteamCollectionChoices) {
+        replaceAtomically(File(dir, CHOICES), choicesJson.encodeToString(SteamCollectionChoices.serializer(), choices).encodeToByteArray())
+    }
+
+    override suspend fun theirCollections(): List<SteamCollection> = withContext(Dispatchers.IO) {
+        userConfigDirs(create = false).flatMap { dir -> collectionsFile(dir)?.second?.let(SteamCollections::theirs).orEmpty() }.distinctBy { it.id }
+    }
+
+    override suspend fun collectionChoices(): SteamCollectionChoices = withContext(Dispatchers.IO) {
+        userConfigDirs(create = false).firstOrNull()?.let(::choices) ?: SteamCollectionChoices()
+    }
+
+    override suspend fun chooseCollection(fuseName: String, theirs: String, how: io.github.matiyaaa.fuse.library.steam.SteamCollectionWay): Result<String> = mutation.withLock {
+        withContext(Dispatchers.IO) {
+            for (dir in userConfigDirs(create = false)) {
+                val c = choices(dir)
+                saveChoices(
+                    dir,
+                    when (how) {
+                        io.github.matiyaaa.fuse.library.steam.SteamCollectionWay.APART -> c.copy(
+                            into = c.into - fuseName, renamed = c.renamed - theirs, kept = c.kept + theirs,
+                            back = if (c.into[fuseName] == theirs) c.back + fuseName else c.back,
+                        )
+                        io.github.matiyaaa.fuse.library.steam.SteamCollectionWay.INTO -> c.copy(into = c.into + (fuseName to theirs), renamed = c.renamed - theirs, kept = c.kept - theirs)
+                        io.github.matiyaaa.fuse.library.steam.SteamCollectionWay.RENAMED -> c.copy(into = c.into + (fuseName to theirs), renamed = c.renamed + (theirs to fuseName), kept = c.kept - theirs)
+                    },
+                )
+            }
+            // Steam writes its collections when it quits: written now when it's closed, else once it closes.
+            if (steamRunningNow()) {
+                addWhenClosed(emptyList(), emptyMap(), collections = true)
+                Result.success("Done when Steam next closes. Steam isn't closed for it.")
+            } else {
+                for (dir in userConfigDirs(create = false)) {
+                    runCatching { writeCollections(dir, File(dir, "shortcuts.vdf").takeIf { it.isFile }?.readBytes(), emptySet()) }
+                        .onFailure { Log.warn("could not write Steam collections in $dir", it) }
+                }
+                Result.success("Done. Start Steam to see it.")
+            }
+        }
+    }
+
+    override suspend fun keepCollections(onPutBack: (Int) -> Unit) {
+        var open = withContext(Dispatchers.IO) { steamRunningNow() }
+        while (true) {
+            delay(STEAM_POLL_MS)
+            val now = withContext(Dispatchers.IO) { steamRunningNow() }
+            // Steam just closed after a session: what Steam Cloud dropped of Fuse's collections goes back.
+            if (open && !now) {
+                val back = mutation.withLock {
+                    withContext(Dispatchers.IO) {
+                        userConfigDirs(create = false).sumOf { dir ->
+                            runCatching { writeCollections(dir, File(dir, "shortcuts.vdf").takeIf { it.isFile }?.readBytes(), emptySet()).size }.getOrDefault(0)
+                        }
+                    }
+                }
+                if (back > 0) {
+                    Log.info("Steam: put back $back of Fuse's collections Steam Cloud dropped")
+                    onPutBack(back)
+                }
+            }
+            open = now
+        }
     }
 
     /**
@@ -764,6 +849,9 @@ internal class DesktopSteam(
         }
 
         private const val STEAM_POLL_MS = 5_000L
+
+        /** What the person chose for their collections beside Fuse's, beside each user's Steam files. */
+        private const val CHOICES = "fuse-collections.json"
 
         /** Each Steam user's list as it was before Fuse's last change to its games, for Undo. */
         private const val GAMES_BACKUP = "shortcuts.vdf.before-fuse-games"

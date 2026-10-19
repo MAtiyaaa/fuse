@@ -24,6 +24,8 @@ data class SteamGameEntry(
     val name: String,
     val collection: String? = null,
     val direct: SteamDirect? = null,
+    /** Names Fuse gave its system's collection before, taken off the entry's tags so that collection goes. */
+    val formerCollections: Set<String> = emptySet(),
 )
 
 /**
@@ -318,10 +320,21 @@ object SteamGames {
             entry["DevkitOverrideAppID"] = entry["DevkitOverrideAppID"] ?: BinaryVdf.Int32(0)
             entry["LastPlayTime"] = entry["LastPlayTime"] ?: BinaryVdf.Int32(0)
             entry["FlatpakAppID"] = entry["FlatpakAppID"] ?: BinaryVdf.Str("")
-            val had = (entry["tags"] as? BinaryVdf.Block)?.entries?.mapNotNull { (it.second as? BinaryVdf.Str)?.value }.orEmpty()
+            val had = (entry["tags"] as? BinaryVdf.Block)?.entries?.mapNotNull { (it.second as? BinaryVdf.Str)?.value }.orEmpty() - g.formerCollections
             val tags = BinaryVdf.Block()
             (had + listOfNotNull(g.collection).filter { it !in had }).forEachIndexed { i, t -> tags.entries += i.toString() to BinaryVdf.Str(t) }
             entry["tags"] = tags
+        }
+        // A system's collection under its new name on every entry of Fuse's in it, not only those written now.
+        val renames = games.flatMap { g -> g.collection?.let { c -> g.formerCollections.map { it to c } }.orEmpty() }.toMap()
+        if (renames.isNotEmpty()) {
+            for (e in entries(root)) {
+                if (ours(e, isFuse) == null) continue
+                val had = (e.block["tags"] as? BinaryVdf.Block)?.entries?.mapNotNull { (it.second as? BinaryVdf.Str)?.value } ?: continue
+                val now = had.map { renames[it] ?: it }.distinct()
+                if (now == had) continue
+                e.block["tags"] = BinaryVdf.Block().also { b -> now.forEachIndexed { i, t -> b.entries += i.toString() to BinaryVdf.Str(t) } }
+            }
         }
         return BinaryVdf.write(root)
     }
@@ -508,13 +521,48 @@ object SteamGames {
     }
 }
 
+/** One of the person's own collections in Steam (not one of Fuse's): its id, its name and the apps in it. */
+data class SteamCollection(val id: String, val name: String, val apps: List<Long>)
+
+/** How Fuse's collection for a system and the person's own for it live together. */
+enum class SteamCollectionWay {
+    /** Both, apart. */
+    APART,
+
+    /** Fuse's games go into theirs, and Fuse keeps none of its own for that system. */
+    INTO,
+
+    /** As [INTO], with theirs given Fuse's name. */
+    RENAMED,
+}
+
+/**
+ * What the person chose for their own collections beside Fuse's, and the collections Fuse has
+ * written, kept beside Steam's own files (`fuse-collections.json` in the user's `config` folder) so
+ * every writer, Fuse or its helper while Steam restarts, follows them.
+ */
+@kotlinx.serialization.Serializable
+data class SteamCollectionChoices(
+    /** Fuse's collection, by name, to the id of the person's collection its games go into instead. */
+    val into: Map<String, String> = emptyMap(),
+    /** The person's collection, by id, to the name they chose to give it in Fuse's way. */
+    val renamed: Map<String, String> = emptyMap(),
+    /** The person's collections, by id, they chose to keep apart from Fuse's. */
+    val kept: Set<String> = emptySet(),
+    /** Fuse's own collections it has written, so one Steam Cloud dropped is told from one the person deleted. */
+    val written: Set<String> = emptySet(),
+    /** Fuse's own collections to make again at the next write: kept apart once more after their games went into the person's. */
+    val back: Set<String> = emptySet(),
+)
+
 /**
  * Steam's collections, as Steam keeps them for each user in `config/cloudstorage`: a JSON list of
  * `[key, record]` pairs, a collection being `user-collections.<id>` whose `value` is the collection
  * as JSON (`id`, `name`, `added`: the apps' ids). Steam must be closed while this is written, as it
- * writes the file when it quits. Only Fuse's own collections (ids starting `fuse-`) are changed;
- * every other record is kept exactly, and a Fuse collection no longer wanted is marked deleted
- * rather than dropped, as Steam does.
+ * writes the file when it quits. Fuse's own collections (ids starting `fuse-`) are Fuse's to change;
+ * a collection of the person's changes only as they chose ([SteamCollectionChoices]: Fuse's games
+ * put into it, its name), and never goes. Every other record is kept exactly, and a Fuse collection
+ * no longer wanted is marked deleted rather than dropped, as Steam does.
  */
 object SteamCollections {
     const val PREFIX = "fuse-"
@@ -525,16 +573,87 @@ object SteamCollections {
     fun idOf(name: String): String = PREFIX + name.encodeToByteArray().joinToString("") { ((it.toInt() and 0xFF) + 0x100).toString(16).substring(1) }
 
     /**
-     * [text] (the namespace file, or null for none yet) with Fuse's collections set to [wanted]
-     * (name to the apps' 32-bit ids). [now] is in seconds. Apps the person took out of a Fuse
-     * collection in Steam stay out. Null when [text] isn't Steam's list.
+     * A system's collection name, maker then console ("Nintendo Game Boy Advance"), or the console's
+     * alone where it already starts with its maker ("Sega Saturn") or the maker isn't known.
      */
-    fun write(text: String?, wanted: Map<String, List<Long>>, now: Long): String? {
+    fun nameFor(maker: String?, console: String): String =
+        if (maker.isNullOrBlank() || console.startsWith(maker, ignoreCase = true)) console else "$maker $console"
+
+    /** A name as collections are matched by: letter case, spaces and punctuation aside. */
+    fun key(name: String): String = name.lowercase().filter { it.isLetterOrDigit() }
+
+    /** The person's own collections in [text] (not Fuse's, not deleted), in the file's order. */
+    fun theirs(text: String?): List<SteamCollection> {
+        val list = text?.let { runCatching { json.parseToJsonElement(it).jsonArray }.getOrNull() } ?: return emptyList()
+        return list.mapNotNull { e ->
+            val pair = e as? JsonArray ?: return@mapNotNull null
+            val key = pair.getOrNull(0)?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+            if (!key.startsWith("user-collections.") || key.startsWith("user-collections.$PREFIX")) return@mapNotNull null
+            val rec = pair.getOrNull(1) as? JsonObject ?: return@mapNotNull null
+            if (rec["is_deleted"]?.jsonPrimitive?.booleanOrNull == true) return@mapNotNull null
+            val value = rec["value"]?.jsonPrimitive?.contentOrNull?.let { runCatching { json.parseToJsonElement(it).jsonObject }.getOrNull() } ?: return@mapNotNull null
+            val name = value["name"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+            val apps = (value["added"] as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull?.toLongOrNull() }.orEmpty()
+            SteamCollection(key.removePrefix("user-collections."), name, apps)
+        }
+    }
+
+    /**
+     * Fuse's collections it wrote ([written]) that aren't in [text] at all any more: Steam Cloud
+     * dropped them (a collection the person deleted is still there, marked deleted). One whose games
+     * now go into a collection of the person's is never missing.
+     */
+    fun dropped(text: String?, choices: SteamCollectionChoices): Set<String> {
+        val list = text?.let { runCatching { json.parseToJsonElement(it).jsonArray }.getOrNull() } ?: return emptySet()
+        val keys = list.mapNotNull { (it as? JsonArray)?.getOrNull(0)?.jsonPrimitive?.contentOrNull }.toSet()
+        return choices.written.filter { it !in choices.into && "user-collections.${idOf(it)}" !in keys }.toSet()
+    }
+
+    /**
+     * [text] (the namespace file, or null for none yet) with Fuse's collections set to [wanted]
+     * (name to the apps' 32-bit ids), as [choices] says: a name whose games go into a collection of
+     * the person's that is still there puts them there (beside theirs, never taking any out) under
+     * the name they chose, and Fuse keeps none of its own for it. [now] is in seconds. Apps the person
+     * took out of a collection in Steam stay out. Null when [text] isn't Steam's list.
+     */
+    fun write(text: String?, wanted: Map<String, List<Long>>, now: Long, choices: SteamCollectionChoices = SteamCollectionChoices()): String? {
         val list: MutableList<JsonElement> = if (text.isNullOrBlank()) mutableListOf() else runCatching { json.parseToJsonElement(text).jsonArray.toMutableList() }.getOrNull() ?: return null
         val index = HashMap<String, Int>()
         list.forEachIndexed { i, e -> (e as? JsonArray)?.getOrNull(0)?.jsonPrimitive?.contentOrNull?.let { index[it] = i } }
         val keep = HashSet<String>()
+        fun record(key: String, value: JsonObject) = JsonArray(
+            listOf(
+                JsonPrimitive(key),
+                JsonObject(
+                    mapOf(
+                        "key" to JsonPrimitive(key),
+                        "timestamp" to JsonPrimitive(now),
+                        "value" to JsonPrimitive(value.toString()),
+                        "version" to JsonPrimitive(now.toString()),
+                        "conflictResolutionMethod" to JsonPrimitive("custom"),
+                        "strMethodId" to JsonPrimitive("union-collections"),
+                    ),
+                ),
+            ),
+        )
+        fun liveValue(key: String): JsonObject? = index[key]?.let { list[it] as? JsonArray }?.getOrNull(1)?.let { it as? JsonObject }
+            ?.takeIf { it["is_deleted"]?.jsonPrimitive?.booleanOrNull != true }?.get("value")?.jsonPrimitive?.contentOrNull
+            ?.let { runCatching { json.parseToJsonElement(it).jsonObject }.getOrNull() }
+        fun longs(value: JsonObject?, field: String) = (value?.get(field) as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull?.toLongOrNull() }.orEmpty()
+        // The person's collections Fuse's games go into, under the name they chose; theirs are never taken out.
+        val into = wanted.keys.mapNotNull { name -> choices.into[name]?.let { theirs -> liveValue("user-collections.$theirs")?.let { name to theirs } } }.toMap()
+        for ((theirs, names) in into.entries.groupBy({ it.value }, { it.key })) {
+            val key = "user-collections.$theirs"
+            val old = liveValue(key) ?: continue
+            val removed = longs(old, "removed").toSet()
+            val had = longs(old, "added")
+            val added = (had + names.flatMap { wanted.getValue(it) }.filter { it !in removed && it !in had }).distinct()
+            val name = choices.renamed[theirs] ?: old["name"]?.jsonPrimitive?.contentOrNull ?: continue
+            if (added == had && name == old["name"]?.jsonPrimitive?.contentOrNull) continue
+            list[index.getValue(key)] = record(key, JsonObject(old + mapOf("name" to JsonPrimitive(name), "added" to JsonArray(added.map { JsonPrimitive(it) }))))
+        }
         for ((name, apps) in wanted) {
+            if (name in into) continue
             val id = idOf(name)
             val key = "user-collections.$id"
             keep += key
@@ -551,23 +670,8 @@ object SteamCollections {
                     "removed" to JsonArray(removed.map { JsonPrimitive(it) }),
                 ),
             )
-            val record = JsonArray(
-                listOf(
-                    JsonPrimitive(key),
-                    JsonObject(
-                        mapOf(
-                            "key" to JsonPrimitive(key),
-                            "timestamp" to JsonPrimitive(now),
-                            "value" to JsonPrimitive(value.toString()),
-                            "version" to JsonPrimitive(now.toString()),
-                            "conflictResolutionMethod" to JsonPrimitive("custom"),
-                            "strMethodId" to JsonPrimitive("union-collections"),
-                        ),
-                    ),
-                ),
-            )
             val at = index[key]
-            if (at != null) list[at] = record else list.add(record)
+            if (at != null) list[at] = record(key, value) else list.add(record(key, value))
         }
         // Fuse's collections no longer wanted: marked deleted.
         for ((key, at) in index) {

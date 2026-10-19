@@ -565,6 +565,13 @@ internal class AuditSteam(private val open: Boolean = false, override val closes
         ),
     )
 
+    // The person's own collections: two are the ones Fuse makes for a system, by another name.
+    override suspend fun theirCollections() = listOf(
+        io.github.matiyaaa.fuse.library.steam.SteamCollection("uc-gba", "GBA", listOf(1L, 2L, 3L)),
+        io.github.matiyaaa.fuse.library.steam.SteamCollection("uc-ps1", "PlayStation", listOf(4L)),
+        io.github.matiyaaa.fuse.library.steam.SteamCollection("uc-couch", "Couch Co-op", listOf(5L, 6L)),
+    )
+
     override val canUndoGames: Boolean get() = undo != null
     override suspend fun undoGames(): Result<String> {
         val back = undo ?: return Result.failure(IllegalStateException("There's no change of Fuse's to undo."))

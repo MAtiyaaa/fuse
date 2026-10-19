@@ -51,6 +51,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.addToSteam
 import io.github.matiyaaa.fuse.ui.shell.app.checkSteamGames
 import io.github.matiyaaa.fuse.ui.shell.app.learnSteamShortcuts
 import io.github.matiyaaa.fuse.ui.shell.app.learnedWaysSheet
+import io.github.matiyaaa.fuse.ui.shell.app.steamCollectionsSheet
 import io.github.matiyaaa.fuse.ui.shell.app.steamUndoHistory
 import io.github.matiyaaa.fuse.ui.shell.app.refreshSteamGames
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
@@ -1191,6 +1192,14 @@ private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.pla
     ) + listOfNotNull(
         // How Fuse's games start from Steam: Fast Start, or straight in the emulator where Steam can have that.
         steamStartRow(app, steam, live).takeIf { !steam.gameMode },
+        // The person's own collections beside the ones Fuse makes for each system.
+        MenuAction(
+            "steam.games.collections", "Your Collections", FuseIcons.Layers,
+            detail = "Your own collections in Steam beside Fuse's: kept apart, merged or renamed, never deleted",
+            trailing = Trailing.Chevron,
+            enabled = !live.busy,
+            onSelect = { app.steamCollectionsSheet() },
+        ).takeIf { !steam.gameMode },
         // How the person's own shortcuts start each system's games, which Direct entries copy.
         MenuAction(
             "steam.games.ways", "Learned From Your Shortcuts", FuseIcons.Import,

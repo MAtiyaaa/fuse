@@ -280,6 +280,13 @@ private fun FuseAppContent(
         delay(StartupGuard.SETTLE_MS)
         if (app.safeMode == null) runCatching { app.reportSteamHealth() }
     }
+    // Fuse's collections Steam Cloud drops during a Steam session go back each time Steam closes.
+    LaunchedEffect(Unit) {
+        if (app.safeMode != null) return@LaunchedEffect
+        app.platform.steam?.keepCollections { n ->
+            app.toasts.show(if (n == 1) "Steam Cloud had dropped one of Fuse's collections. It's back" else "Steam Cloud had dropped $n of Fuse's collections. They're back", icon = FuseIcons.Layers)
+        }
+    }
     // Keep Steam in Step (off until the person turns it on).
     LaunchedEffect(Unit) { if (app.safeMode == null) app.keepSteamInStep() }
     // An update Fuse went back from at this start, or a library brought back for this version: said once.

@@ -1013,6 +1013,21 @@ drives on most systems, and on Debian and Ubuntu) where they write it so; their 
 by either form. Before anything is written, See Each Entry shows what Steam will start for each
 entry, from where, with which launch options.
 
+**Collections** are one per system, named maker then console ("Nintendo Game Boy Advance"). **Your
+Collections** (Settings, Library, Steam) lists the person's own collections that are one of these
+by another name (the system's full name, short name or a folder name for it) and lets each be kept
+apart, given Fuse's games instead of Fuse making its own, or renamed Fuse's way with them in it;
+theirs is never deleted and nothing is taken out of it. The choices are kept beside Steam's files
+(`config/fuse-collections.json`), with the names of Fuse's own collections it has written: after
+each Steam session, one Steam Cloud dropped (not in Steam's list at all) is put back, while one the
+person deleted (still there, marked deleted) stays gone. Each picture is checked for the shape
+Steam shows it in (Steamworks' Library Assets: the capsule 600 by 900, the hero 3840 by 1240; Store
+Graphical Assets: the header 460 by 215; icons square), within 15%, and one far from it is left to
+Steam. Looking over Fuse's entries finds, besides games gone, doubles and old programs, Direct
+entries that no longer start their game as Play would (the emulator updated or moved, the game
+moved to another drive, the way of starting changed) and games whose drive is out; System health
+shows both, with Put Them Right writing the entries again where they are.
+
 **Leaves the device.** Nothing; Steam's files are on this device, and Fast Start's save rounds are
 Fuse One's own (see [docs/sync.md](docs/sync.md)).
 
