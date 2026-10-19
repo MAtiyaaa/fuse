@@ -861,8 +861,15 @@ set up for it beside its emulators; chosen, Play, Fast Start and its Direct entr
 game in its place. Each port's own settings file (`settings` in the list) is Fuse Tune's, read
 from the port's settings code by `tools/tune`. A Windows build marked to run through umu-launcher runs on
 Linux as `umu-run <program>` with `WINEPREFIX` (a prefix in the port's home) and `GAMEID=umu-default`
-(umu-launcher's README), and the paths it is given as Windows sees them through Proton (`Z:`); umu
-downloads Steam's runtime and Proton itself the first time. None of the ports listed now needs it.
+(umu-launcher's README), and the paths it is given as Windows sees them through Proton (`Z:`). As
+it starts, it gets the Proton the person uses as `PROTONPATH` (umu-launcher's README, a path to a
+Proton directory): Steam Play's tool for every other title (`CompatToolMapping`, entry `0`, in
+Steam's `config/config.vdf`, read only) when it is installed, else the newest Proton installed (a
+tool in `compatibilitytools.d`, named by its `compatibilitytool.vdf` as ValveSoftware/Proton's
+template writes it, or Valve's own in a library's `steamapps/common`), each counted only with its
+`proton` script there (`SteamProton`); with none, umu downloads Steam's runtime and Proton itself
+the first time. Read at every start, so a change in Steam counts at once. None of the ports listed
+now needs it.
 
 **The nightly check** (`.github/workflows/ports.yml`, `tools/ports/check.py`): every night on main
 each port's Linux build is downloaded, checked against the list, unpacked the same way and started
@@ -926,8 +933,14 @@ A game's options, or a system page's, can put Fuse's games in Steam's library as
 Undo), each with Fuse's art and in a Steam collection for its system (`SteamGames`,
 `DesktopSteam`). With the Fuse Decky plugin loaded, they go in while Steam runs instead, through
 Steam's own running client (bridge protocol 2, see
-[tools/decky/fuse/README.md](tools/decky/fuse/README.md)). Settings, Library, Steam, How Steam
-Starts Them picks how they start:
+[tools/decky/fuse/README.md](tools/decky/fuse/README.md)), with their pictures and the logo placed
+as Fuse's own game page places it (bottom left, `SetCustomLogoPositionForApp` as `@decky/ui`
+types it) unless the person placed it themselves; in Game Mode, Play From Steam in a game's options
+has Steam start Fuse's entry itself (`RunGame`), with Steam's overlay and the controller layout given
+to it. Collections still go in when Steam next closes: Steam's client has no typed way to change
+them. And the plugin never restarts Steam: a change it makes needs none, and one written to Steam's
+files must be written while Steam is closed, which a restart Steam starts itself doesn't wait for.
+Settings, Library, Steam, How Steam Starts Them picks how they start:
 
 - **Fuse Fast Start** (the default): the entry runs `Fuse --run <id>`. Fuse opens only what
   starting one game needs (its database, its secret store and Fuse One's rounds for the saves; no
@@ -980,6 +993,25 @@ shortcut's program or one of its arguments, read as a POSIX shell splits words; 
 Each can be taken over (all at once, or one by one) or left: taken over, the shortcut becomes Fuse's
 entry in the same place, starting as How Steam Starts Them says, and keeps its id (written out, so
 Steam's art for it stays), its name, icon and tags. Steam must be closed, and Undo puts the list back.
+
+**Learned From Your Shortcuts** (Settings, Library, Steam, with Direct entries) is what those same
+shortcuts show of how the person starts each system's games (`SteamLearn.habits`): the program
+(`Exe`), its start folder (`StartDir`) and the launch options before and after the game's file,
+each exactly as they write it, quotes and variables before `%command%` included; per system, the
+way most of their shortcuts do it. A Direct entry for that system then starts the same way, with
+Fuse's mark before their launch options (`SteamWritten`), while their program is still there (else
+as Play starts it); the switch Start Them as My Shortcuts Do turns it off. Only a shortcut whose
+program is a full path and whose launch options name a game's file is learned from. Three things
+are not copied: frame generation they add before `%command%` (lsfg-vk's `LSFGVK_` and earlier
+`LSFG_` variables, or a wrapper named for it such as `~/lsfg`) is set aside and offered as Fuse's
+own Frame Generation for that system; a start folder inside an AppImage's temporary mount
+(`/tmp/.mount_`, gone once it closes) becomes the AppImage's own folder; and a shortcut whose
+program is inside such a mount isn't learned from. A game's file is written the way they write
+theirs: in double quotes, single quotes or with backslashes, and with `/home` as `/var/home`
+(Fedora's atomic desktops link one to the other) or `/run/media` as `/media` (where udisks2 mounts
+drives on most systems, and on Debian and Ubuntu) where they write it so; their shortcuts are found
+by either form. Before anything is written, See Each Entry shows what Steam will start for each
+entry, from where, with which launch options.
 
 **Leaves the device.** Nothing; Steam's files are on this device, and Fast Start's save rounds are
 Fuse One's own (see [docs/sync.md](docs/sync.md)).

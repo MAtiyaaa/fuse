@@ -170,6 +170,16 @@ object PortPlan {
         }
     }
 
+    /**
+     * [plan] with the Proton at [protonPath] for a Windows build started through umu-launcher (one
+     * whose command has [UMU_GAME_ID] as its `GAMEID`): umu-launcher's README, "PROTONPATH", a path
+     * to a Proton directory. Any other plan, or one that names its own, as it is.
+     */
+    fun withProton(plan: io.github.matiyaaa.fuse.model.LaunchPlan, protonPath: String?): io.github.matiyaaa.fuse.model.LaunchPlan =
+        if (plan is io.github.matiyaaa.fuse.model.LaunchPlan.Command && protonPath != null && plan.env["GAMEID"] == UMU_GAME_ID && "PROTONPATH" !in plan.env) {
+            plan.copy(env = plan.env + ("PROTONPATH" to protonPath))
+        } else plan
+
     /** An N64 ROM's first four bytes in its own byte order (librecomp's `first_rom_bytes`). */
     private val ROM_START = byteArrayOf(0x80.toByte(), 0x37, 0x12, 0x40)
 

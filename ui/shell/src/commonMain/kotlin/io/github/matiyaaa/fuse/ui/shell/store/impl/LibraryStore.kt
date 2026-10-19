@@ -732,6 +732,10 @@ internal class DefaultLibraryOps(
             val multiplier = settings.resolve(ScopedSettings.FrameGeneration, game.platformId, id).value
             resolved = resolved.copy(plan = io.github.matiyaaa.fuse.launch.FrameGeneration.apply(resolved.plan, multiplier))
         }
+        // A port's Windows build, through umu-launcher, with the Proton the person uses in Steam (read now, so a change there counts).
+        if (game.platformId == io.github.matiyaaa.fuse.launch.ports.PortAdapter.PLATFORM) {
+            ctx.services.portFiles?.let { files -> resolved = resolved.copy(plan = io.github.matiyaaa.fuse.launch.ports.PortPlan.withProton(resolved.plan, files.protonPath())) }
+        }
         return PlayResolution.Ready(PlayPlan(game, platform, resolved, installedEmulator, usedCore, displayId))
     }
 

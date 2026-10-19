@@ -397,6 +397,17 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         // Steam's library (computers): the game starts through Fuse, with its art.
         if (platform.steam != null && !card.isApp) {
             if (card.id.value in steamGameIds) {
+                // In Game Mode, with the plugin there: Steam starts its entry, with Steam's overlay and the controller layout given to it.
+                if (platform.steam?.gameMode == true && platform.steam?.changesLive == true) {
+                    add(MenuAction("steamplay", "Play From Steam", FuseIcons.Play, detail = "As its Steam entry, with Steam's overlay and the controller layout you gave it", onSelect = {
+                        closeOverlays()
+                        scope.launch {
+                            platform.steam?.playFromSteam(card.id.value)
+                                ?.onSuccess { toasts.show(it, icon = FuseIcons.Play) }
+                                ?.onFailure { toasts.show(it.message ?: "Steam didn't start it", ToastKind.ERROR) }
+                        }
+                    }))
+                }
                 add(MenuAction("steam", "Remove from Steam", FuseIcons.Gamepad, detail = "Only the entry Fuse made", onSelect = { closeOverlays(); removeFromSteam(listOf(card), card.title) }))
             } else {
                 add(MenuAction("steam", "Add to Steam", FuseIcons.Gamepad, detail = "Starts with Fuse Fast Start, with its art", onSelect = { closeOverlays(); addToSteam(listOf(card), card.title) }))

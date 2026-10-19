@@ -836,6 +836,12 @@ data class SteamIntegrationSettings(
      */
     val directEntries: Boolean = false,
     /**
+     * A Direct entry for a system starts the way the person's own shortcuts start that system's
+     * games, where Fuse learned it from them (their program, start folder and launch options, as
+     * they write them). On by default; off, every Direct entry starts as Play would.
+     */
+    val asTheirShortcuts: Boolean = true,
+    /**
      * Keep Steam in Step: games that join Fuse's library go into Steam by themselves, and Fuse's
      * entries for games that leave it come out. Off until the person turns it on.
      */

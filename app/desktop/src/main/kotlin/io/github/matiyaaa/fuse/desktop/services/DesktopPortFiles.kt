@@ -3,6 +3,9 @@ package io.github.matiyaaa.fuse.desktop.services
 import io.github.matiyaaa.fuse.desktop.system.DesktopOs
 import io.github.matiyaaa.fuse.desktop.system.Processes
 import io.github.matiyaaa.fuse.desktop.system.fusePath
+import io.github.matiyaaa.fuse.library.steam.ProtonTool
+import io.github.matiyaaa.fuse.library.steam.SteamLibraryReader
+import io.github.matiyaaa.fuse.library.steam.SteamProton
 import io.github.matiyaaa.fuse.model.PortFileKind
 import io.github.matiyaaa.fuse.ui.shell.store.DownloadSink
 import io.github.matiyaaa.fuse.ui.shell.store.PortFiles
@@ -34,6 +37,8 @@ internal class DesktopPortFiles(
     private val system: DesktopOs = DesktopOs.current,
     /** Where umu-launcher's umu-run is looked for; the PATH and ~/.local/bin by default. */
     private val findUmu: () -> String? = ::umuOnThisComputer,
+    /** The home folder Steam's Protons are looked for from. */
+    private val home: String = System.getProperty("user.home").orEmpty(),
 ) : PortFiles {
     private val root = File(dataDir, "ports")
     override val folder: String = root.absoluteFile.fusePath
@@ -52,6 +57,8 @@ internal class DesktopPortFiles(
     override fun bundledIndex(): String? = DesktopPortFiles::class.java.getResourceAsStream("/ports/index.json")?.use { it.readBytes().decodeToString() }
 
     override fun umuRun(): String? = if (system == DesktopOs.LINUX) findUmu() else null
+
+    override suspend fun protonPath(): String? = if (system != DesktopOs.LINUX) null else withContext(Dispatchers.IO) { protonOnThisComputer(home) }
 
     override suspend fun newDownload(name: String): DownloadSink? = withContext(Dispatchers.IO) {
         if (!downloads.isDirectory && !downloads.mkdirs()) return@withContext null
@@ -241,6 +248,30 @@ internal class DesktopPortFiles(
 
     companion object {
         private const val MAX_ENTRIES = 100_000
+
+        /**
+         * The Proton a Windows build gets here ([SteamProton]): from each Steam install on this
+         * computer, Steam Play's default in its `config/config.vdf`, the tools in its
+         * `compatibilitytools.d`, and Valve's Protons in each of its libraries' `steamapps/common`.
+         * Only a folder with its `proton` script counts.
+         */
+        fun protonOnThisComputer(home: String): String? {
+            val roots = KnownFolders(home, DesktopOs.LINUX).steamPlaces().first
+            val default = roots.firstNotNullOfOrNull { r -> File(r, "config/config.vdf").takeIf { it.isFile }?.let { f -> runCatching { SteamProton.defaultTool(f.readText()) }.getOrNull() } }
+            val tools = ArrayList<ProtonTool>()
+            for (root in roots) {
+                File(root, "compatibilitytools.d").listFiles()?.sortedBy { it.name }?.forEach { d ->
+                    File(d, "compatibilitytool.vdf").takeIf { it.isFile }?.let { f -> runCatching { tools += SteamProton.declared(f.readText(), d.absoluteFile.fusePath) } }
+                }
+            }
+            val libraries = (roots + roots.flatMap { r ->
+                File(r, "steamapps/libraryfolders.vdf").takeIf { it.isFile }?.let { f -> runCatching { SteamLibraryReader.libraryPaths(f.readText()) }.getOrNull() }.orEmpty()
+            }).distinct()
+            for (library in libraries) {
+                File(library, "steamapps/common").listFiles()?.sortedBy { it.name }?.forEach { d -> SteamProton.valve(d.name, d.absoluteFile.fusePath)?.let(tools::add) }
+            }
+            return SteamProton.choose(tools.filter { File(it.folder, "proton").isFile }.distinctBy { it.folder }, default)?.folder
+        }
 
         /** umu-launcher's umu-run: on the PATH, or in ~/.local/bin where a user install puts it (its README). */
         fun umuOnThisComputer(): String? = Processes.which("umu-run")

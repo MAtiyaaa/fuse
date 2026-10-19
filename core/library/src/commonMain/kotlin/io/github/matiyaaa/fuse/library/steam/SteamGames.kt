@@ -35,7 +35,15 @@ data class SteamDirect(
     val argv: List<String>,
     val workingDir: String? = null,
     val env: Map<String, String> = emptyMap(),
+    /** The entry as the person's own shortcuts start its system's games ([SteamHabit]), in place of [argv] and [workingDir]. */
+    val written: SteamWritten? = null,
 )
+
+/**
+ * A Direct entry written as the person's own shortcuts write theirs: its `Exe` and `StartDir`
+ * exactly as they have them, and their launch options for this game (Fuse's mark goes before them).
+ */
+data class SteamWritten(val exe: String, val startDir: String, val options: String)
 
 /** How one of Fuse's entries in Steam starts its game. */
 enum class SteamStart {
@@ -131,7 +139,8 @@ object SteamGames {
     fun launchOptions(gameId: Long): String = "--run $gameId"
 
     /** Whether [direct] can be written as a Direct entry: a program, and variables a shell can set. */
-    fun canWrite(direct: SteamDirect): Boolean = direct.argv.firstOrNull()?.isNotBlank() == true && direct.env.keys.all { NAME.matches(it) }
+    fun canWrite(direct: SteamDirect): Boolean =
+        (direct.written?.exe?.isNotBlank() ?: (direct.argv.firstOrNull()?.isNotBlank() == true)) && direct.env.keys.all { NAME.matches(it) }
 
     /**
      * A Direct entry's launch options: Fuse's mark and the plan's variables, then `%command%` (the
@@ -140,8 +149,14 @@ object SteamGames {
     fun directOptions(gameId: Long, direct: SteamDirect): String = buildList {
         add("FUSE_GAME=$gameId")
         direct.env.forEach { (k, v) -> add("$k=${shell(v)}") }
-        add(COMMAND)
-        direct.argv.drop(1).forEach { add(shell(it)) }
+        val written = direct.written
+        if (written == null) {
+            add(COMMAND)
+            direct.argv.drop(1).forEach { add(shell(it)) }
+        } else {
+            // Their options as they write them; Steam puts the program after them when they don't say where.
+            add(if (COMMAND in written.options) written.options else "$COMMAND ${written.options}".trimEnd())
+        }
     }.joinToString(" ")
 
     /** [arg] as a POSIX shell reads it back: as it is when plain, else in single quotes. */
@@ -185,14 +200,21 @@ object SteamGames {
     /** The program [game]'s entry starts: the emulator for a Direct entry, else Fuse. */
     private fun program(fuseExe: String, game: SteamGameEntry): String = game.direct?.argv?.first() ?: fuseExe
 
+    /** [game]'s entry's `Exe` as written: the person's own for a Direct entry written their way, else its program in quotes. */
+    private fun exeOf(fuseExe: String, game: SteamGameEntry): String = game.direct?.written?.exe ?: quote(program(fuseExe, game))
+
+    /** [game]'s entry's `StartDir` as written. */
+    private fun startDirOf(fuseExe: String, game: SteamGameEntry): String =
+        game.direct?.written?.startDir ?: quote(game.direct?.workingDir ?: parentOf(program(fuseExe, game)))
+
     /** Whether [have] already starts [game] exactly as an entry written now would. */
     private fun upToDate(have: Found, start: SteamStart, fuseExe: String, game: SteamGameEntry): Boolean {
         val d = game.direct
         return if (d == null) {
             start == SteamStart.FAST_START && have.exe == quote(fuseExe)
         } else {
-            start == SteamStart.DIRECT && have.exe == quote(d.argv.first()) && have.options == directOptions(game.gameId, d) &&
-                have.startDir == quote(d.workingDir ?: parentOf(d.argv.first()))
+            start == SteamStart.DIRECT && have.exe == exeOf(fuseExe, game) && have.options == directOptions(game.gameId, d) &&
+                have.startDir == startDirOf(fuseExe, game)
         }
     }
 
@@ -232,7 +254,7 @@ object SteamGames {
             if (item.action == SteamGameAction.ELSEWHERE || item.action == SteamGameAction.UNCHANGED) continue
             val g = item.entry
             val d = g.direct
-            val exe = quote(program(fuseExe, g))
+            val exe = exeOf(fuseExe, g)
             val have = entries(root).firstOrNull { ours(it, isFuse)?.first == g.gameId }
             val entry = have?.block ?: BinaryVdf.Block().also { b ->
                 val next = (list.entries.mapNotNull { it.first.toIntOrNull() }.maxOrNull() ?: -1) + 1
@@ -247,7 +269,7 @@ object SteamGames {
             entry["appid"] = entry["appid"] ?: BinaryVdf.Int32(SteamShortcuts.appId(exe, g.name))
             keep("AppName", g.name)
             entry["Exe"] = BinaryVdf.Str(exe)
-            entry["StartDir"] = BinaryVdf.Str(quote(d?.workingDir ?: parentOf(program(fuseExe, g))))
+            entry["StartDir"] = BinaryVdf.Str(startDirOf(fuseExe, g))
             keep("icon", icons(g.gameId))
             entry["ShortcutPath"] = entry["ShortcutPath"] ?: BinaryVdf.Str("")
             val options = (entry["LaunchOptions"] as? BinaryVdf.Str)?.value
@@ -297,8 +319,8 @@ object SteamGames {
             val d = g.direct
             // Its id written out, so a new program doesn't give it a new one (and lose its art).
             b["appid"] = BinaryVdf.Int32(id.toInt())
-            b["Exe"] = BinaryVdf.Str(quote(program(fuseExe, g)))
-            b["StartDir"] = BinaryVdf.Str(quote(d?.workingDir ?: parentOf(program(fuseExe, g))))
+            b["Exe"] = BinaryVdf.Str(exeOf(fuseExe, g))
+            b["StartDir"] = BinaryVdf.Str(startDirOf(fuseExe, g))
             b["LaunchOptions"] = BinaryVdf.Str(if (d != null) directOptions(g.gameId, d) else launchOptions(g.gameId))
             val had = (b["tags"] as? BinaryVdf.Block)?.entries?.mapNotNull { (it.second as? BinaryVdf.Str)?.value }.orEmpty()
             if (g.collection != null && g.collection !in had) {
@@ -319,14 +341,13 @@ object SteamGames {
      */
     fun startOf(existing: ByteArray?, fuseExe: String, game: SteamGameEntry, isFuse: (String) -> Boolean): Triple<String, String, String> {
         val d = game.direct
-        val program = program(fuseExe, game)
         val have = entries(parse(existing)).firstOrNull { ours(it, isFuse)?.first == game.gameId }
         val options = when {
             d != null -> directOptions(game.gameId, d)
             have != null && isFuse(have.exe.trim('"')) && playId(have.options) == game.gameId -> fastStart(have.options, game.gameId)
             else -> launchOptions(game.gameId)
         }
-        return Triple(quote(program), quote(d?.workingDir ?: parentOf(program)), options)
+        return Triple(exeOf(fuseExe, game), startDirOf(fuseExe, game), options)
     }
 
     /** [options] (which start [gameId] through Fuse) starting it with Fast Start, the rest as it was. */
@@ -432,7 +453,7 @@ object SteamGames {
     private fun artId(e: Found): Long = ((e.block["appid"] as? BinaryVdf.Int32)?.value ?: SteamShortcuts.appId(e.exe, e.name)).toLong() and 0xFFFFFFFFL
 
     /** The art id a new entry for [game] gets, before it is written. */
-    fun newArtId(fuseExe: String, game: SteamGameEntry): Long = SteamShortcuts.appId(quote(program(fuseExe, game)), game.name).toLong() and 0xFFFFFFFFL
+    fun newArtId(fuseExe: String, game: SteamGameEntry): Long = SteamShortcuts.appId(exeOf(fuseExe, game), game.name).toLong() and 0xFFFFFFFFL
 
     private fun parse(bytes: ByteArray?): BinaryVdf.Block? = if (bytes == null || bytes.isEmpty()) BinaryVdf.Block() else BinaryVdf.parse(bytes)
 

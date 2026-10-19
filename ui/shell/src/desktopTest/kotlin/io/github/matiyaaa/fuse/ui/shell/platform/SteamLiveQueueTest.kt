@@ -79,4 +79,14 @@ class SteamLiveQueueTest {
         assertTrue(removing.await().single().ok)
         assertEquals(emptyMap(), queue.made())
     }
+
+    @Test
+    fun startingAnEntryChangesNothingInSteamsLibrary(): Unit = runBlocking {
+        val starting = async { queue.offer(listOf(SteamLiveChange(op = SteamLiveChange.Op.RUN, gameId = 3, appId = 99)), waitMs = 10_000) }
+        val r = withTimeout(5_000) { var got = queue.take(); while (got.isEmpty()) { delay(10); got = queue.take() }; got.single() }
+        assertEquals(SteamLiveChange.Op.RUN to 99L, r.op to r.appId)
+        queue.done(r.id, SteamLiveResult(true, appId = 99))
+        assertTrue(starting.await().single().ok)
+        assertEquals(emptyMap(), queue.made(), "a start isn't an entry made")
+    }
 }

@@ -511,7 +511,7 @@ internal class AuditDesktopInstaller(override val host: Host, private val dir: F
  * Steam on a Linux computer, with Fuse not yet in its library: closed, or [open] in Game Mode with
  * Fuse running inside it ([closesFuse]), where adding Fuse restarts Steam and Fuse with it.
  */
-internal class AuditSteam(private val open: Boolean = false, override val closesFuse: Boolean = false) : io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration {
+internal class AuditSteam(private val open: Boolean = false, override val closesFuse: Boolean = false, override val directEntries: Boolean = false) : io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration {
     @Volatile private var inLibrary = false
     override val gameMode: Boolean = closesFuse
     override suspend fun steamRunning(): Boolean = open
@@ -550,6 +550,21 @@ internal class AuditSteam(private val open: Boolean = false, override val closes
         if (gameIds == null) games.clear() else games -= gameIds
         return Result.success("Out of Steam's library.")
     }
+    override suspend fun entryStarts(games: List<io.github.matiyaaa.fuse.library.steam.SteamGameEntry>) =
+        games.associate { it.gameId to Triple("\"/home/deck/Applications/Fuse.AppImage\"", "\"/home/deck/Applications\"", "--run ${it.gameId}") }
+
+    // The person's own shortcuts: Game Boy Advance games through RetroArch's Flatpak, GameCube ones with frame generation.
+    override suspend fun habits(files: Map<String, Long>, systems: Map<Long, String>) = listOf(
+        io.github.matiyaaa.fuse.library.steam.SteamHabit(
+            "Game Boy Advance", "flatpak", "\"/usr/bin/flatpak\"", "\"/\"", "run org.libretro.RetroArch -L /home/deck/.var/app/org.libretro.RetroArch/config/retroarch/cores/mgba_libretro.so ", "",
+            io.github.matiyaaa.fuse.library.steam.SteamQuoting.DOUBLE, shortcuts = 12,
+        ),
+        io.github.matiyaaa.fuse.library.steam.SteamHabit(
+            "Nintendo GameCube", "dolphin-emu.sh", "\"/home/deck/Emulation/tools/launchers/dolphin-emu.sh\"", "\"/home/deck\"", "-b -e ", "",
+            io.github.matiyaaa.fuse.library.steam.SteamQuoting.SINGLE, frameGeneration = io.github.matiyaaa.fuse.library.steam.SteamFrameWrapper("LSFG_PROCESS=fuse ~/lsfg", null), shortcuts = 3,
+        ),
+    )
+
     override val canUndoGames: Boolean get() = undo != null
     override suspend fun undoGames(): Result<String> {
         val back = undo ?: return Result.failure(IllegalStateException("There's no change of Fuse's to undo."))

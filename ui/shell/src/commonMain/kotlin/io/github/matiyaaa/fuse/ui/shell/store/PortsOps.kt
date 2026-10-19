@@ -155,6 +155,13 @@ interface PortFiles {
     /** umu-launcher's `umu-run`, when it is installed (Linux). */
     fun umuRun(): String?
 
+    /**
+     * The Proton folder a Windows build gets through umu-launcher: the compatibility tool the person
+     * chose for every game in Steam, else the newest installed ([io.github.matiyaaa.fuse.library.steam.SteamProton]);
+     * null where there is none, and umu-launcher uses its own.
+     */
+    suspend fun protonPath(): String? = null
+
     /** A new file to download into, below Fuse's own cache. */
     suspend fun newDownload(name: String): DownloadSink?
 

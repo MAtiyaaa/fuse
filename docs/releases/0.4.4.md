@@ -25,6 +25,22 @@ together as each emulator does it, and Fuse Ports brings games rebuilt to run na
   EmuDeck or you made for games Fuse has, found by the game's own file (never by its name). Take
   them over, all at once or one by one, and each becomes Fuse's entry in the same place, keeping its
   name, art and collections; or leave them as they are. Undo puts Steam's library back.
+- **Direct entries start the way you do.** Fuse learns from your own shortcuts how you start each
+  system's games (the program, its folder and the launch options, exactly as you write them, quotes
+  and variables kept) and starts its Direct entries for that system the same way. Settings,
+  Library, Steam, Learned From Your Shortcuts lists each system's way, with a switch to start them
+  as Play would instead. Frame generation your shortcuts add is offered as Fuse's own Frame
+  Generation for that system rather than copied, and a start folder inside an AppImage that has
+  since closed becomes the AppImage's own folder.
+- **Play From Steam, and logos in place.** In Game Mode with the Fuse Decky plugin, a game's
+  options have Play From Steam, which starts its Steam entry the way Steam's own Play does, with
+  Steam's overlay and the controller layout you gave it. Games the plugin adds get their logo placed
+  as Fuse places it, unless you placed it yourself.
+- **Windows ports use your Proton.** A port's Windows build on Linux starts with the Proton you
+  chose for every game in Steam, or the newest one you have, instead of one umu-launcher fetches.
+- **See each entry before it goes into Steam.** Adding games to Steam now offers See Each Entry:
+  what Steam will start for each one, from which folder, with which launch options, before
+  anything changes.
 - **No more Steam restarts with the Decky plugin.** With the Fuse Decky plugin loaded, games you add
   to Steam from Fuse (and ones you take out) go in at once through Steam itself, with their art,
   while Steam stays open; their collections follow when Steam next closes. Without the plugin,

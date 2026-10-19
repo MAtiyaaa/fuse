@@ -186,6 +186,8 @@ const FuseMark = ({ size = 20 }) => (window.SP_REACT.createElement("svg", { widt
     window.SP_REACT.createElement("path", { d: "M28 70c14 0 16-36 36-36 3.2 0 5.2-1.5 6-4", stroke: "currentColor", strokeWidth: 10, strokeLinecap: "round" }),
     window.SP_REACT.createElement("circle", { cx: 70, cy: 30, r: 9, fill: "#FF6A3D" })));
 
+/** ELaunchSource._2ftLibraryDetails: as if Play were pressed on the entry's own page. */
+const FROM_DETAILS = 100;
 const ASSET = { capsule: 0, hero: 1, logo: 2, header: 3, icon: 4 };
 const EVERY_MS = 2000;
 /** Makes [c] in Steam; the entry's id in Steam, or throws with why it couldn't. */
@@ -202,6 +204,7 @@ async function make(c) {
             apps.SetShortcutName(appId, c.name);
             apps.SetShortcutLaunchOptions(appId, c.launchOptions);
             await pictures(c, appId);
+            await logoPosition(c, appId);
             return appId;
         }
         case "UPDATE": {
@@ -218,6 +221,15 @@ async function make(c) {
             if (!c.appId)
                 throw new Error("No entry to take out");
             apps.RemoveShortcut(c.appId);
+            return c.appId;
+        }
+        case "RUN": {
+            if (!c.appId)
+                throw new Error("No entry to start");
+            const gameId = appStore?.GetAppOverviewByAppID?.(c.appId)?.gameid;
+            if (typeof gameId !== "string" || !gameId)
+                throw new Error("Steam doesn't have this entry yet");
+            apps.RunGame(gameId, "", -1, FROM_DETAILS);
             return c.appId;
         }
     }
@@ -238,6 +250,20 @@ async function pictures(c, appId) {
         catch {
             // The entry stays; its picture can be given again from Fuse.
         }
+    }
+}
+/** Places the entry's logo as Fuse sends it, unless the person placed it themselves; a refusal doesn't undo the entry. */
+async function logoPosition(c, appId) {
+    if (!c.logo || !c.art?.logo)
+        return;
+    try {
+        const overview = appStore?.GetAppOverviewByAppID?.(appId);
+        if (overview && appDetailsStore?.GetCustomLogoPosition?.(overview))
+            return;
+        await SteamClient.Apps.SetCustomLogoPositionForApp(appId, JSON.stringify({ nVersion: 1, logoPosition: c.logo }));
+    }
+    catch {
+        // The logo stays where Steam puts it.
     }
 }
 let busy = false;

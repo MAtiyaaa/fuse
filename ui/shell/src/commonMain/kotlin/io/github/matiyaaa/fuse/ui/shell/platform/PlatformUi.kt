@@ -272,6 +272,23 @@ interface SteamIntegration {
     suspend fun learnShortcuts(files: Map<String, Long>): List<io.github.matiyaaa.fuse.library.steam.SteamLearned> = emptyList()
 
     /**
+     * How the person's own shortcuts here start each system's games
+     * ([io.github.matiyaaa.fuse.library.steam.SteamLearn.habits]), learned from those that play one
+     * of Fuse's games ([files], each to its game; [systems], each game's system).
+     */
+    suspend fun habits(files: Map<String, Long>, systems: Map<Long, String>): List<io.github.matiyaaa.fuse.library.steam.SteamHabit> = emptyList()
+
+    /**
+     * Starts Fuse's entry for [gameId] through Steam itself, as if it were chosen in Steam's library
+     * (with Steam's overlay and the controller layout the person gave that entry), through the Fuse
+     * Decky plugin. Fails where the plugin isn't there or the game has no entry.
+     */
+    suspend fun playFromSteam(gameId: Long): Result<String> = Result.failure(UnsupportedOperationException("Not on this system"))
+
+    /** How each of [games]'s entries starts once written: what Steam runs, its start folder and its launch options. */
+    suspend fun entryStarts(games: List<io.github.matiyaaa.fuse.library.steam.SteamGameEntry>): Map<Long, Triple<String, String, String>> = emptyMap()
+
+    /**
      * Makes each of [takes] (a shortcut [learnShortcuts] found, and Fuse's entry for its game) Fuse's,
      * in its place, keeping its name, art and collections. Steam must be closed; Undo puts it back.
      */

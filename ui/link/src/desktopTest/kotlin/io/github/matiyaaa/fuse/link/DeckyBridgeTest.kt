@@ -143,7 +143,7 @@ class DeckyBridgeTest {
 
             val offered = async {
                 live.offer(
-                    listOf(SteamLiveChange(op = SteamLiveChange.Op.ADD, gameId = 12, name = "Minish Cap", exe = "\"/a/Fuse.AppImage\"", startDir = "\"/a\"", launchOptions = "--run 12", art = mapOf("capsule" to capsule.path, "hero" to notAPicture.path))),
+                    listOf(SteamLiveChange(op = SteamLiveChange.Op.ADD, gameId = 12, name = "Minish Cap", exe = "\"/a/Fuse.AppImage\"", startDir = "\"/a\"", launchOptions = "--run 12", art = mapOf("capsule" to capsule.path, "hero" to notAPicture.path), logo = io.github.matiyaaa.fuse.ui.shell.platform.SteamLogo.FUSE)),
                     waitMs = 20_000,
                 )
             }
@@ -155,6 +155,8 @@ class DeckyBridgeTest {
             val change = changes(body).single()
             assertEquals("ADD", change.getValue("op").jsonPrimitive.content)
             assertEquals("--run 12", change.getValue("launchOptions").jsonPrimitive.content)
+            // The logo's place as Steam's LogoPosition has it.
+            assertEquals(mapOf("pinnedPosition" to "BottomLeft", "nWidthPct" to "70", "nHeightPct" to "35"), change.getValue("logo").jsonObject.mapValues { it.value.jsonPrimitive.content })
             // Pictures by kind and format only, never by path; a file that isn't a picture isn't offered.
             assertEquals(mapOf("capsule" to "png"), change.getValue("art").jsonObject.mapValues { it.value.jsonPrimitive.content })
             assertFalse(capsule.path in body)

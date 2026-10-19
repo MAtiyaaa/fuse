@@ -50,6 +50,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.emulatorSignInSheet
 import io.github.matiyaaa.fuse.ui.shell.app.addToSteam
 import io.github.matiyaaa.fuse.ui.shell.app.checkSteamGames
 import io.github.matiyaaa.fuse.ui.shell.app.learnSteamShortcuts
+import io.github.matiyaaa.fuse.ui.shell.app.learnedWaysSheet
 import io.github.matiyaaa.fuse.ui.shell.app.steamUndoHistory
 import io.github.matiyaaa.fuse.ui.shell.app.refreshSteamGames
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
@@ -1190,6 +1191,14 @@ private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.pla
     ) + listOfNotNull(
         // How Fuse's games start from Steam: Fast Start, or straight in the emulator where Steam can have that.
         steamStartRow(app, steam, live).takeIf { !steam.gameMode },
+        // How the person's own shortcuts start each system's games, which Direct entries copy.
+        MenuAction(
+            "steam.games.ways", "Learned From Your Shortcuts", FuseIcons.Import,
+            detail = if (app.store.prefs.value.steam.asTheirShortcuts) "Direct entries start each system's games as your own shortcuts do" else "Off. Direct entries start as Play would",
+            trailing = Trailing.Chevron,
+            enabled = !live.busy,
+            onSelect = { app.learnedWaysSheet() },
+        ).takeIf { !steam.gameMode && steam.directEntries },
         // Games joining or leaving the library go into or out of Steam by themselves: off until chosen.
         MenuAction(
             "steam.games.auto", "Keep Steam in Step", FuseIcons.RefreshCcw,

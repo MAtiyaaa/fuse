@@ -137,6 +137,34 @@ class DesktopSteamGamesTest {
     }
 
     @Test
+    fun aSystemsGamesStartAsThePersonsOwnShortcutsStartThemWhileTheirProgramIsThere(): Unit = runBlocking {
+        assumeTrue(DesktopOs.current == DesktopOs.LINUX)
+        val retroarch = File(root, "Emulation/tools/launchers/retroarch.sh").apply { parentFile.mkdirs(); writeText("#!/bin/sh"); setExecutable(true) }
+        val metroidRom = "${root.path}/ROMs/gba/Metroid Fusion (USA).gba"
+        val zeldaRom = "${root.path}/ROMs/gba/Minish Cap (USA).gba"
+        // Their shortcut, as an EmuDeck launcher writes one: frame generation before it, the game in double quotes.
+        File(config, "shortcuts.vdf").writeBytes(
+            SteamShortcuts.add(null, SteamShortcut("Metroid Fusion", "\"${retroarch.path}\"", "\"/tmp/.mount_RetroAx1/usr/bin\"", launchOptions = "LSFG_PROCESS=fuse ~/lsfg %command% -L mgba \"$metroidRom\""))!!,
+        )
+        val learned = steam.habits(mapOf(metroidRom to 15L, zeldaRom to 12L), mapOf(15L to "Game Boy Advance", 12L to "Game Boy Advance")).single()
+        assertEquals("retroarch.sh", learned.program)
+        assertEquals("\"${retroarch.parent}\"", learned.startDir, "the AppImage's own folder, not its mount")
+        assertEquals("LSFG_PROCESS=fuse ~/lsfg", learned.frameGeneration?.words)
+
+        val mgba = File(root, "Applications/mGBA.AppImage").apply { writeText("#!/bin/sh"); setExecutable(true) }
+        val theirWay = zelda.copy(direct = SteamDirect(listOf(mgba.path, zeldaRom), written = learned.forGame(zeldaRom)))
+        val starts = steam.entryStarts(listOf(theirWay)).getValue(12L)
+        assertEquals(Triple("\"${retroarch.path}\"", "\"${retroarch.parent}\"", "FUSE_GAME=12 %command% -L mgba \"$zeldaRom\""), starts)
+        steam.addGames(listOf(theirWay), emptyMap(), collections = false).getOrThrow()
+        assertEquals(SteamStart.DIRECT, steam.gameStarts()[12L])
+        assertTrue(steam.gamesHealth(setOf(12L)).isEmpty())
+
+        // Their program gone: the entry is written as Play starts the game instead.
+        retroarch.delete()
+        assertEquals(Triple("\"${mgba.path}\"", "\"${mgba.parent}\"", "FUSE_GAME=12 %command% '$zeldaRom'"), steam.entryStarts(listOf(theirWay)).getValue(12L))
+    }
+
+    @Test
     fun withSteamOpenTheFusePluginPutsGamesInThroughSteamItself(): Unit = runBlocking {
         assumeTrue(DesktopOs.current == DesktopOs.LINUX)
         seed()

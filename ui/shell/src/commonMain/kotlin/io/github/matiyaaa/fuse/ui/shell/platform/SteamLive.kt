@@ -9,9 +9,11 @@ import kotlinx.serialization.Serializable
 /**
  * One change to Steam's library made through Steam's own running client by the Fuse Decky plugin
  * (bridge protocol 2), so Steam needn't close or restart for it. [appId] is the entry's id in Steam
- * (unsigned 32-bit) for an update or a removal. [art] names Fuse's own picture files by Steam's
- * asset type (`capsule`, `hero`, `logo`, `header`, `icon`); the plugin fetches each through the
- * bridge, never by path.
+ * (unsigned 32-bit) for an update, a removal or a start ([Op.RUN]: Steam starts the entry as if it
+ * were chosen in its library). [art] names Fuse's own picture files by Steam's asset type
+ * (`capsule`, `hero`, `logo`, `header`, `icon`); the plugin fetches each through the bridge, never
+ * by path. [logo] is where the logo sits over the hero, set only on an entry with no position of
+ * the person's own.
  */
 @Serializable
 data class SteamLiveChange(
@@ -24,8 +26,21 @@ data class SteamLiveChange(
     val startDir: String = "",
     val launchOptions: String = "",
     val art: Map<String, String> = emptyMap(),
+    val logo: SteamLogo? = null,
 ) {
-    enum class Op { ADD, UPDATE, REMOVE }
+    enum class Op { ADD, UPDATE, REMOVE, RUN }
+}
+
+/**
+ * Where an entry's logo sits over its hero, as Steam's client takes it (`LogoPosition` in
+ * `@decky/ui`'s App.d.ts: `pinnedPosition` and its size as percentages of the hero).
+ */
+@Serializable
+data class SteamLogo(val pinned: String, val widthPct: Int, val heightPct: Int) {
+    companion object {
+        /** As Fuse's own game page places a logo over its picture: pinned bottom left, up to 70% of its width and about a third of its height. */
+        val FUSE = SteamLogo("BottomLeft", 70, 35)
+    }
 }
 
 /** How the plugin says one change went: the entry's id in Steam (a new entry's, for an add), or why it failed. */
@@ -95,6 +110,7 @@ class SteamLiveQueue(private val now: () -> Long) {
             when (change.op) {
                 SteamLiveChange.Op.ADD, SteamLiveChange.Op.UPDATE -> (result.appId ?: change.appId)?.let { madeHere[change.gameId] = it }
                 SteamLiveChange.Op.REMOVE -> madeHere.remove(change.gameId)
+                SteamLiveChange.Op.RUN -> Unit
             }
         }
         deferred.complete(result)

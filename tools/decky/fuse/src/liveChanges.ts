@@ -3,8 +3,8 @@ import { changeArt, changeDone, failure, played, steamChanges, SteamChange, watc
 
 /*
  * Bridge protocol 2: Fuse's changes to Steam's library (its games added, brought up to date or taken
- * out, with their pictures) made through Steam's own running client, so Steam needn't close or
- * restart for them. Fuse queues them; this asks every couple of seconds while Steam runs, makes each
+ * out, with their pictures and the logo's position) made through Steam's own running client, so
+ * Steam needn't close or restart for them, and Fuse's entries started through Steam itself. Fuse queues them; this asks every couple of seconds while Steam runs, makes each
  * with SteamClient.Apps and says how it went. Steam then writes them into its library file itself
  * when it quits.
  *
@@ -12,8 +12,12 @@ import { changeArt, changeDone, failure, played, steamChanges, SteamChange, watc
  * AddShortcut(appName, executablePath, directory, launchOptions): Promise<number>, SetShortcutName,
  * SetShortcutExe, SetShortcutStartDir, SetShortcutLaunchOptions, RemoveShortcut(appId), and
  * SetCustomArtworkForApp(appId, base64, "jpg" | "png", assetType) with ELibraryAssetType
- * Capsule 0, Hero 1, Logo 2, Header 3, Icon 4. Each is guarded: when Steam changes its internals a
- * change fails and is reported, and Fuse goes the usual way (written when Steam closes).
+ * Capsule 0, Hero 1, Logo 2, Header 3, Icon 4, SetCustomLogoPositionForApp(appId, details) with a
+ * LogoPositionForApp ({ nVersion, logoPosition }) as JSON, and RunGame(gameId, launchOptions,
+ * -1, ELaunchSource) with the entry's gameid from appStore.GetAppOverviewByAppID (globals/stores.d.ts),
+ * whose appDetailsStore.GetCustomLogoPosition says whether the person placed the logo themselves.
+ * Each is guarded: when Steam changes its internals a change fails and is reported, and Fuse goes
+ * the usual way (written when Steam closes).
  *
  * Time in Fuse's Direct entries (which start the emulator with no Fuse to count it): Steam says when
  * an app starts and stops through SteamClient.GameSessions.RegisterForAppLifetimeNotifications
@@ -22,6 +26,11 @@ import { changeArt, changeDone, failure, played, steamChanges, SteamChange, watc
  */
 
 declare const SteamClient: any;
+declare const appStore: any;
+declare const appDetailsStore: any;
+
+/** ELaunchSource._2ftLibraryDetails: as if Play were pressed on the entry's own page. */
+const FROM_DETAILS = 100;
 
 const ASSET: Record<string, number> = { capsule: 0, hero: 1, logo: 2, header: 3, icon: 4 };
 const EVERY_MS = 2_000;
@@ -38,6 +47,7 @@ async function make(c: SteamChange): Promise<number | undefined> {
       apps.SetShortcutName(appId, c.name);
       apps.SetShortcutLaunchOptions(appId, c.launchOptions);
       await pictures(c, appId);
+      await logoPosition(c, appId);
       return appId;
     }
     case "UPDATE": {
@@ -52,6 +62,13 @@ async function make(c: SteamChange): Promise<number | undefined> {
     case "REMOVE": {
       if (!c.appId) throw new Error("No entry to take out");
       apps.RemoveShortcut(c.appId);
+      return c.appId;
+    }
+    case "RUN": {
+      if (!c.appId) throw new Error("No entry to start");
+      const gameId = appStore?.GetAppOverviewByAppID?.(c.appId)?.gameid;
+      if (typeof gameId !== "string" || !gameId) throw new Error("Steam doesn't have this entry yet");
+      apps.RunGame(gameId, "", -1, FROM_DETAILS);
       return c.appId;
     }
   }
@@ -70,6 +87,18 @@ async function pictures(c: SteamChange, appId: number) {
     } catch {
       // The entry stays; its picture can be given again from Fuse.
     }
+  }
+}
+
+/** Places the entry's logo as Fuse sends it, unless the person placed it themselves; a refusal doesn't undo the entry. */
+async function logoPosition(c: SteamChange, appId: number) {
+  if (!c.logo || !c.art?.logo) return;
+  try {
+    const overview = appStore?.GetAppOverviewByAppID?.(appId);
+    if (overview && appDetailsStore?.GetCustomLogoPosition?.(overview)) return;
+    await SteamClient.Apps.SetCustomLogoPositionForApp(appId, JSON.stringify({ nVersion: 1, logoPosition: c.logo }));
+  } catch {
+    // The logo stays where Steam puts it.
   }
 }
 

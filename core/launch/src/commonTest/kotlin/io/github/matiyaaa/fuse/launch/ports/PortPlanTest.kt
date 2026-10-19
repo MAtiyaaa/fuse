@@ -82,6 +82,14 @@ class PortPlanTest {
         assertEquals("/home/ana/ports/winport/build/bin/winport.exe", launcher.argv[1], "umu-run is given the Linux path of the program")
         assertEquals(listOf("--data-dir", "Z:\\home\\ana\\Games\\Sky Racer", "--save-dir", "Z:\\home\\ana\\ports\\winport\\home\\saves"), launcher.argv.subList(2, 6))
         assertEquals(mapOf("WINEPREFIX" to "/home/ana/ports/winport/home/prefix", "GAMEID" to "umu-default"), launcher.env)
+
+        // At its start: the Proton the person uses, for umu-launcher's PROTONPATH; nothing else changes.
+        val plan = io.github.matiyaaa.fuse.model.LaunchPlan.Command(io.github.matiyaaa.fuse.model.EmulatorId("port"), launcher.argv, launcher.cwd, launcher.env, io.github.matiyaaa.fuse.model.LaunchTarget.File("/g/winport.fuseport"))
+        val proton = "/home/ana/.local/share/Steam/compatibilitytools.d/GE-Proton9-20"
+        assertEquals(launcher.env + ("PROTONPATH" to proton), (PortPlan.withProton(plan, proton) as io.github.matiyaaa.fuse.model.LaunchPlan.Command).env)
+        assertEquals(plan, PortPlan.withProton(plan, null), "none found: umu-launcher's own")
+        val native = plan.copy(env = emptyMap())
+        assertEquals(native, PortPlan.withProton(native, proton), "only a build through umu-launcher")
     }
 
     @Test

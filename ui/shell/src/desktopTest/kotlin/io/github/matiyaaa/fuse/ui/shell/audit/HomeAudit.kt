@@ -455,7 +455,7 @@ internal fun AuditDriver.discoverScreens() {
  */
 internal fun AuditDriver.steamGamesScreens() {
     scenario("library", "steam games") {
-        val platform = AuditPlatform(size, steam = AuditSteam(), host = io.github.matiyaaa.fuse.model.Host.LINUX)
+        val platform = AuditPlatform(size, steam = AuditSteam(directEntries = true), host = io.github.matiyaaa.fuse.model.Host.LINUX)
         useLibrary(platform)
         tab(Destination.SYSTEMS)
         tap(PadButton.A)
@@ -468,9 +468,17 @@ internal fun AuditDriver.steamGamesScreens() {
         tapText("Add all to Steam")
         waitFor("to Steam?")
         shoot("what will happen, before anything is written", 1_200)
-        tap(PadButton.A)
+        tapText("See Each Entry")
+        waitFor("Each Entry")
+        shoot("each entry: what Steam starts, from where, with which launch options", 1_200)
+        tap(PadButton.B)
+        waitFor("to Steam?")
+        tapText("Add")
         waitFor("added")
         shoot("added, said in a notice", 1_200)
+        // The first add offers Keep Steam in Step, once.
+        waitFor("Keep Steam in Step?")
+        tapText("Not Now")
         settle(2_000)
         tap(PadButton.X)
         waitFor("Remove from Steam")
@@ -483,6 +491,12 @@ internal fun AuditDriver.steamGamesScreens() {
         tapText("Your games in Steam")
         waitFor("Look them over")
         shoot("Settings, Library: Fuse's games in Steam", 1_200)
+        tap(PadButton.B)
+        settle(600)
+        // Above Your Games in Steam, under How Steam Starts Them.
+        tapText("Learned From Your Shortcuts", step = PadButton.DPAD_UP)
+        waitFor("By system")
+        shoot("learned from the person's own shortcuts, each system's way", 1_200)
     }
 }
 

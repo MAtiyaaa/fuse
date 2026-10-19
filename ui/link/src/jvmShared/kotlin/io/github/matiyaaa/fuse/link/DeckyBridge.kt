@@ -312,6 +312,7 @@ class DeckyBridge(
                     put("startDir", c.startDir)
                     put("launchOptions", c.launchOptions)
                     putJsonObject("art") { for ((kind, path) in c.art) imageFormat(path)?.let { put(kind, it) } }
+                    c.logo?.let { l -> putJsonObject("logo") { put("pinnedPosition", l.pinned); put("nWidthPct", l.widthPct); put("nHeightPct", l.heightPct) } }
                 })
             }
         }

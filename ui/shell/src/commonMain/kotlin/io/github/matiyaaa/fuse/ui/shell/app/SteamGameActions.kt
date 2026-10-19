@@ -104,17 +104,73 @@ private fun AppState.offerKeepInStep() {
 }
 
 /**
- * [entry] starting the way the person chose: with [direct], its emulator's own command, as Play
- * would start it; a game that can't start on its own keeps Fast Start, and [why] gets the reason.
+ * How the person's own shortcuts start each system's games ([bySystem], by the name its
+ * collection has), with each game's files, so a Direct entry can start the same way.
  */
-private suspend fun AppState.startingAsChosen(entry: SteamGameEntry, everyGame: Boolean, why: MutableMap<Long, String>? = null): SteamGameEntry {
+internal class SteamWays(val bySystem: Map<String, io.github.matiyaaa.fuse.library.steam.SteamHabit>, val files: Map<Long, Set<String>>)
+
+/**
+ * What [SteamWays] the person's own shortcuts here show, read from them now: null where Steam can't
+ * have Direct entries, where they turned Start Them as My Shortcuts Do off, or where none is learned.
+ */
+internal suspend fun AppState.steamWays(): SteamWays? {
+    val steam = platform.steam ?: return null
+    if (!steam.directEntries || !store.prefs.value.steam.asTheirShortcuts) return null
+    val files = runCatching { store.library.gameFiles() }.getOrDefault(emptyMap()).mapValues { it.value.value }
+    if (files.isEmpty()) return null
+    val names = store.library.platforms.value.associate { it.platform.id to it.platform.name }
+    val systems = store.library.games(GameQuery(includeHidden = true)).first().mapNotNull { c -> names[c.platformId]?.let { c.id.value to it } }.toMap()
+    val habits = runCatching { steam.habits(files, systems) }.getOrDefault(emptyList())
+    if (habits.isEmpty()) return null
+    return SteamWays(habits.associateBy { it.system }, files.entries.groupBy({ it.value }, { it.key }).mapValues { it.value.toSet() })
+}
+
+/** Fuse's own Frame Generation variables, the only ones of a game's command that go on a Direct entry written the person's way. */
+private val FRAME_VARIABLES = io.github.matiyaaa.fuse.launch.FrameGeneration.env(io.github.matiyaaa.fuse.launch.FrameGeneration.MULTIPLIERS.first()).keys
+
+/**
+ * [entry] starting the way the person chose: with [direct], its emulator's own command, as Play
+ * would start it, or as their own shortcuts start its system's games ([ways]) when Fuse learned
+ * that; a game that can't start on its own keeps Fast Start, and [why] gets the reason.
+ */
+private suspend fun AppState.startingAsChosen(entry: SteamGameEntry, everyGame: Boolean, why: MutableMap<Long, String>? = null, ways: SteamWays? = null): SteamGameEntry {
     // A game's own choice wins over the one for every game, where Steam can have Direct entries.
     val direct = platform.steam?.directEntries == true && (store.prefs.value.steam.startOverrides[entry.gameId] ?: everyGame)
     if (!direct) return entry
     return when (val c = runCatching { store.library.directCommand(io.github.matiyaaa.fuse.model.GameId(entry.gameId)) }.getOrElse { DirectCommand.Unavailable("It can't start here") }) {
-        is DirectCommand.Ready -> entry.copy(direct = SteamDirect(c.argv, c.workingDir, c.env))
+        is DirectCommand.Ready -> {
+            // Their way needs the game's file in it, as Fuse's own command names it.
+            val habit = ways?.bySystem?.get(entry.collection)
+            val file = habit?.let { c.argv.drop(1).firstOrNull { a -> a in ways.files[entry.gameId].orEmpty() } }
+            entry.copy(
+                direct = if (habit != null && file != null) SteamDirect(c.argv, c.workingDir, c.env.filterKeys { it in FRAME_VARIABLES }, habit.forGame(file))
+                else SteamDirect(c.argv, c.workingDir, c.env),
+            )
+        }
         is DirectCommand.Unavailable -> entry.also { why?.set(it.gameId, c.why) }
     }
+}
+
+/**
+ * Each of [plan]'s new and changed entries as it will start ([starts]: what Steam runs, from where,
+ * with which launch options), before anything changes. Back (or choosing one) goes to [back].
+ */
+private fun AppState.eachEntry(plan: List<io.github.matiyaaa.fuse.library.steam.SteamGamePlanItem>, starts: Map<Long, Triple<String, String, String>>, back: () -> Unit) {
+    val shown = plan.filter { it.action == SteamGameAction.CREATE || it.action == SteamGameAction.UPDATE }
+    choice = ChoiceSpec(
+        title = "Each Entry",
+        icon = FuseIcons.ListChecks,
+        message = "What Steam starts for each, in which folder and with which launch options. Nothing has changed yet.",
+        options = shown.map { item ->
+            val (exe, folder, options) = starts[item.entry.gameId] ?: Triple("", "", "")
+            MenuAction(
+                "steam.each.${item.entry.gameId}", item.entry.name, if (item.entry.direct != null) FuseIcons.Joystick else FuseIcons.Zap,
+                detail = listOf("$exe $options".trim(), "In $folder").filter { it.isNotBlank() && it != "In " }.joinToString("\n"),
+                onSelect = back,
+            )
+        },
+        onBack = back,
+    )
 }
 
 /** The games Fuse put in Steam here, by id, as last read. */
@@ -136,7 +192,8 @@ internal fun AppState.addToSteam(cards: List<GameCard>, what: String) {
     }
     scope.launch {
         val why = HashMap<Long, String>()
-        val pairs = games.map { steamEntry(it) }.map { (entry, art) -> startingAsChosen(entry, directChosen(), why) to art }
+        val ways = steamWays()
+        val pairs = games.map { steamEntry(it) }.map { (entry, art) -> startingAsChosen(entry, directChosen(), why, ways) to art }
         // Direct for this add when any of them was to start straight in its emulator.
         val direct = games.any { startsDirect(it) }
         val plan = runCatching { steam.planGames(pairs.map { it.first }) }.getOrNull()
@@ -175,36 +232,61 @@ internal fun AppState.addToSteam(cards: List<GameCard>, what: String) {
                 .onFailure { toasts.show(it.message ?: "Couldn't add them to Steam", ToastKind.ERROR) }
             refreshSteamGames()
         }
+        val theirWay = plan.count { it.entry.direct?.written != null }
         val how = if (direct) {
             "Each starts straight in its emulator, as Play starts it, with Fuse's own art. Fuse isn't there while it runs, " +
-                "so it doesn't put saves in place or send them, count play time or follow profiles for these."
+                "so it doesn't put saves in place or send them, count play time or follow profiles for these." +
+                if (theirWay > 0) " ${if (theirWay == 1) "One starts" else "$theirWay start"} as your own shortcuts start its system's games." else ""
         } else {
             "Each starts with Fuse Fast Start: no Fuse window, with its emulator, saves and play time as in Fuse, and Fuse's own art."
         }
         val message = (lines + listOf("$how Systems become Steam collections, and Settings, Library, Steam can undo it.")).joinToString("\n\n")
+        // How each will start, for the person to see first.
+        val starts = runCatching { steam.entryStarts(plan.filter { it.action == SteamGameAction.CREATE || it.action == SteamGameAction.UPDATE }.map { it.entry }) }.getOrDefault(emptyMap())
+        lateinit var ask: () -> Unit
+        val each = MenuAction("steam.games.each", "See Each Entry", FuseIcons.ListChecks, detail = "What Steam starts for each, from where, with which launch options", onSelect = { eachEntry(plan, starts) { ask() } })
+            .takeIf { starts.isNotEmpty() }
         // Steam closed, or open with the Fuse Decky plugin there to put them in through Steam itself.
         if (!open || steam.changesLive) {
             val live = if (open) "\n\nSteam is open, so the Fuse plugin puts them in through Steam now; their collections follow when Steam next closes." else ""
-            confirm = ConfirmSpec(title = "Add $what to Steam?", message = message + live, confirmLabel = "Add") { add { steam.addGames(games, art, collections = true) } }
+            ask = {
+                choice = ChoiceSpec(
+                    title = "Add $what to Steam?",
+                    message = message + live,
+                    icon = FuseIcons.Gamepad,
+                    options = listOfNotNull(
+                        MenuAction("steam.games.add", "Add", FuseIcons.Plus, detail = if (create.size + update.size == 1) "One entry" else "${create.size + update.size} entries", onSelect = {
+                            choice = null
+                            add { steam.addGames(games, art, collections = true) }
+                        }),
+                        each,
+                    ),
+                )
+            }
+            ask()
             return@launch
         }
         // Steam is open: it writes its library when it quits. Restart it now (asked here, never
         // during a game), or wait for it to close by itself.
-        choice = ChoiceSpec(
-            title = "Add $what to Steam?",
-            message = message + "\n\nSteam is open." + if (steam.closesFuse) " Restarting it closes Fuse too; Fuse opens again right here." else "",
-            icon = FuseIcons.Gamepad,
-            options = listOf(
-                MenuAction("steam.games.restart", "Restart Steam and Add", FuseIcons.RotateCcw, detail = "Never while a game is running", onSelect = {
-                    choice = null
-                    add { steam.addGamesRestartingSteam(games, art, collections = true) }
-                }),
-                MenuAction("steam.games.wait", "Add When Steam Closes", FuseIcons.Clock, detail = "Steam isn't closed for it", onSelect = {
-                    choice = null
-                    add { steam.addGames(games, art, collections = true) }
-                }),
-            ),
-        )
+        ask = {
+            choice = ChoiceSpec(
+                title = "Add $what to Steam?",
+                message = message + "\n\nSteam is open." + if (steam.closesFuse) " Restarting it closes Fuse too; Fuse opens again right here." else "",
+                icon = FuseIcons.Gamepad,
+                options = listOfNotNull(
+                    MenuAction("steam.games.restart", "Restart Steam and Add", FuseIcons.RotateCcw, detail = "Never while a game is running", onSelect = {
+                        choice = null
+                        add { steam.addGamesRestartingSteam(games, art, collections = true) }
+                    }),
+                    MenuAction("steam.games.wait", "Add When Steam Closes", FuseIcons.Clock, detail = "Steam isn't closed for it", onSelect = {
+                        choice = null
+                        add { steam.addGames(games, art, collections = true) }
+                    }),
+                    each,
+                ),
+            )
+        }
+        ask()
     }
 }
 
@@ -263,7 +345,8 @@ internal fun AppState.checkSteamGames() {
                 val again = setOf(SteamHealthIssue.Kind.PROGRAM_MOVED, SteamHealthIssue.Kind.THROUGH_WINDOW, SteamHealthIssue.Kind.EMULATOR_GONE)
                 val moved = library.filter { c -> fix.any { it.kind in again && it.gameId == c.id.value } }
                 val direct = directChosen()
-                val pairs = moved.map { steamEntry(it) }.map { (entry, art) -> startingAsChosen(entry, direct) to art }
+                val ways = steamWays()
+                val pairs = moved.map { steamEntry(it) }.map { (entry, art) -> startingAsChosen(entry, direct, ways = ways) to art }
                 steam.repairGames(ids, pairs.map { it.first }, pairs.associate { it.first.gameId to it.second })
                     .onSuccess { toasts.show(it, icon = FuseIcons.CircleCheck) }
                     .onFailure { toasts.show(it.message ?: "Couldn't change Steam's library", ToastKind.ERROR) }
@@ -295,7 +378,8 @@ internal fun AppState.learnSteamShortcuts() {
             if (chosen.isEmpty()) return
             scope.launch {
                 val direct = directChosen()
-                val takes = chosen.map { (learned, card) -> learned to startingAsChosen(steamEntry(card).first, direct) }
+                val ways = steamWays()
+                val takes = chosen.map { (learned, card) -> learned to startingAsChosen(steamEntry(card).first, direct, ways = ways) }
                 steam.takeOver(takes)
                     .onSuccess { toasts.show(it, icon = FuseIcons.Gamepad) }
                     .onFailure { toasts.show(it.message ?: "Couldn't change Steam's library", ToastKind.ERROR) }
@@ -329,6 +413,79 @@ internal fun AppState.learnSteamShortcuts() {
                 MenuAction("steam.learn.none", "Leave Them", FuseIcons.Close, detail = "Nothing changes", onSelect = { choice = null }),
             ),
         )
+    }
+}
+
+/**
+ * Settings, Library, Steam, Learned From Your Shortcuts: how the person's own shortcuts in Steam
+ * start each system's games, which Direct entries for those systems copy (their program, folder
+ * and launch options as they write them), with a switch to start them as Play would instead.
+ * Frame generation their shortcuts add is offered as Fuse's own setting for that system, never copied.
+ */
+internal fun AppState.learnedWaysSheet() {
+    val steam = platform.steam ?: return
+    scope.launch {
+        val files = runCatching { store.library.gameFiles() }.getOrDefault(emptyMap()).mapValues { it.value.value }
+        val names = store.library.platforms.value.associate { it.platform.id to it.platform.name }
+        val systems = store.library.games(GameQuery(includeHidden = true)).first().mapNotNull { c -> names[c.platformId]?.let { c.id.value to it } }.toMap()
+        val habits = if (files.isEmpty()) emptyList() else runCatching { steam.habits(files, systems) }.getOrDefault(emptyList())
+        val ids = names.entries.associate { (id, name) -> name to id }
+        val frames = platform.features.frameGeneration && store.library.frameGenerationReady()
+        fun useFrames(h: io.github.matiyaaa.fuse.library.steam.SteamHabit, back: () -> Unit) {
+            val wrapper = h.frameGeneration ?: return
+            val id = ids[h.system] ?: return
+            val multiplier = wrapper.multiplier?.takeIf { it in io.github.matiyaaa.fuse.launch.FrameGeneration.MULTIPLIERS } ?: io.github.matiyaaa.fuse.launch.FrameGeneration.MULTIPLIERS.first()
+            confirm = ConfirmSpec(
+                title = "Frame Generation for ${h.system}?",
+                message = "Your shortcuts start these with ${wrapper.words}. Fuse doesn't copy that into its entries: its own Frame Generation does the same, at ${multiplier}x, " +
+                    "for ${h.system} games started from Fuse, by Fast Start and by Direct entries. A game can have its own in its options.",
+                confirmLabel = "Turn On",
+            ) {
+                scope.launch {
+                    store.settings.set(io.github.matiyaaa.fuse.model.ScopedSettings.FrameGeneration, io.github.matiyaaa.fuse.model.ScopeRef.platform(id), multiplier)
+                    toasts.show("Frame Generation is on for ${h.system}", icon = FuseIcons.Layers2)
+                    back()
+                }
+            }
+        }
+        fun show() {
+            val on = store.prefs.value.steam.asTheirShortcuts
+            choice = ChoiceSpec(
+                title = "Learned From Your Shortcuts",
+                icon = FuseIcons.Import,
+                message = if (habits.isEmpty()) {
+                    "None of your own shortcuts in Steam starts a game you have in Fuse, so there's nothing to learn from yet. Direct entries start as Play would."
+                } else {
+                    "How your own shortcuts in Steam start each system's games. Direct entries for these systems start the same way, with the program, folder and launch options as you write them."
+                },
+                options = buildList {
+                    if (habits.isEmpty()) return@buildList
+                    add(MenuAction(
+                        "steam.ways.on", "Start Them as My Shortcuts Do", FuseIcons.Joystick,
+                        detail = if (on) "Direct entries for these systems copy your way" else "Off. Direct entries start as Play would",
+                        trailing = Trailing.Switch(on),
+                        onSelect = {
+                            scope.launch {
+                                store.updatePrefs { p -> p.copy(steam = p.steam.copy(asTheirShortcuts = !on)) }
+                                show()
+                            }
+                        },
+                    ))
+                    for (h in habits) {
+                        val from = if (h.shortcuts == 1) "one of your shortcuts" else "${h.shortcuts} of your shortcuts"
+                        val options = (h.before + "<game>" + h.after).trim()
+                        val frame = h.frameGeneration?.let { if (frames) " With frame generation, which Fuse's own setting does: select to turn it on." else " With frame generation, which Fuse's own setting does once lsfg-vk is set up here." }.orEmpty()
+                        add(MenuAction(
+                            "steam.ways.${h.system}", h.system, FuseIcons.Gamepad,
+                            detail = "${h.program} $options, from $from.$frame",
+                            section = "By system",
+                            onSelect = if (h.frameGeneration != null && frames) { { useFrames(h) { show() } } } else { {} },
+                        ))
+                    }
+                },
+            )
+        }
+        show()
     }
 }
 
@@ -409,7 +566,8 @@ internal suspend fun AppState.keepSteamInStep() {
                 val joined = (ids - before - inSteam).mapNotNull(cards::get).filter { !it.dimmed }
                 if (joined.isEmpty()) return@collect
                 val direct = directChosen()
-                val pairs = joined.map { steamEntry(it) }.map { (entry, art) -> startingAsChosen(entry, direct) to art }
+                val ways = steamWays()
+                val pairs = joined.map { steamEntry(it) }.map { (entry, art) -> startingAsChosen(entry, direct, ways = ways) to art }
                 steam.addGames(pairs.map { it.first }, pairs.associate { it.first.gameId to it.second }, collections = true)
                     .onSuccess { toasts.show(if (joined.size == 1) "${joined.first().title} is in Steam too" else "${joined.size} new games are in Steam too", icon = FuseIcons.Gamepad) }
                 refreshSteamGames()

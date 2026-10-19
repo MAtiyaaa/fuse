@@ -11,6 +11,7 @@ import io.github.matiyaaa.fuse.library.steam.SteamGameAction
 import io.github.matiyaaa.fuse.library.steam.SteamGameEntry
 import io.github.matiyaaa.fuse.library.steam.SteamGamePlanItem
 import io.github.matiyaaa.fuse.library.steam.SteamGames
+import io.github.matiyaaa.fuse.library.steam.SteamHabit
 import io.github.matiyaaa.fuse.library.steam.SteamHealthIssue
 import io.github.matiyaaa.fuse.library.steam.SteamLearn
 import io.github.matiyaaa.fuse.library.steam.SteamLearned
@@ -20,6 +21,7 @@ import io.github.matiyaaa.fuse.library.steam.SteamStart
 import io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration
 import io.github.matiyaaa.fuse.ui.shell.platform.SteamLiveChange
 import io.github.matiyaaa.fuse.ui.shell.platform.SteamLiveQueue
+import io.github.matiyaaa.fuse.ui.shell.platform.SteamLogo
 import io.github.matiyaaa.fuse.ui.shell.platform.SteamUndoStep
 import java.io.File
 import java.nio.file.Files
@@ -75,13 +77,16 @@ internal class DesktopSteam(
 
     /**
      * [games] as this computer's Steam can have them: a Direct entry's program as a full path (a plan
-     * may name one Steam finds on `PATH`, such as `flatpak`), and a game whose Direct entry can't be
-     * made here (another system, a program not found) through Fast Start instead.
+     * may name one Steam finds on `PATH`, such as `flatpak`), one written the person's own way only
+     * while their program is still there (else as Play starts it), and a game whose Direct entry
+     * can't be made here (another system, a program not found) through Fast Start instead.
      */
     private fun prepared(games: List<SteamGameEntry>): List<SteamGameEntry> = games.map { g ->
         val d = g.direct ?: return@map g
+        val theirs = d.written?.takeIf { w -> SteamLearn.words(w.exe).firstOrNull()?.let { File(it).isFile } == true }
+        if (directEntries && theirs != null && SteamGames.canWrite(d)) return@map g
         val program = d.argv.firstOrNull()?.let { p -> if (File(p).isAbsolute) p.takeIf { File(it).exists() } else Processes.which(p) }
-        val ready = program?.let { d.copy(argv = listOf(it) + d.argv.drop(1)) }
+        val ready = program?.let { d.copy(argv = listOf(it) + d.argv.drop(1), written = null) }
         if (directEntries && ready != null && SteamGames.canWrite(ready)) g.copy(direct = ready) else g.copy(direct = null)
     }
 
@@ -340,7 +345,10 @@ internal class DesktopSteam(
             val (program, dir, options) = SteamGames.startOf(lists.firstOrNull { SteamGames.inSteam(it, ::fuseProgram).containsKey(g.gameId) }, exe, g, ::fuseProgram)
             val pictures = art[g.gameId]?.let(::liveArt).orEmpty()
             changes += if (appId == null) {
-                SteamLiveChange(op = SteamLiveChange.Op.ADD, gameId = g.gameId, name = g.name, exe = program, startDir = dir, launchOptions = options, art = pictures)
+                SteamLiveChange(
+                    op = SteamLiveChange.Op.ADD, gameId = g.gameId, name = g.name, exe = program, startDir = dir, launchOptions = options, art = pictures,
+                    logo = SteamLogo.FUSE.takeIf { "logo" in pictures },
+                )
             } else {
                 SteamLiveChange(op = SteamLiveChange.Op.UPDATE, gameId = g.gameId, appId = appId, name = g.name, exe = program, startDir = dir, launchOptions = options)
             }
@@ -533,6 +541,25 @@ internal class DesktopSteam(
 
     override suspend fun learnShortcuts(files: Map<String, Long>): List<SteamLearned> = withContext(Dispatchers.IO) {
         userLists().flatMap { f -> SteamLearn.find(runCatching { f.readBytes() }.getOrNull(), ::fuseProgram, files) }.distinctBy { it.appId to it.gameId }
+    }
+
+    override suspend fun playFromSteam(gameId: Long): Result<String> {
+        val queue = live?.takeIf { it.connected } ?: return Result.failure(IllegalStateException("Starting a game through Steam needs the Fuse plugin for Decky, with Steam open."))
+        val appId = queue.made()[gameId] ?: withContext(Dispatchers.IO) {
+            userLists().firstNotNullOfOrNull { f -> SteamGames.inSteam(runCatching { f.readBytes() }.getOrNull(), ::fuseProgram)[gameId] }
+        } ?: return Result.failure(IllegalStateException("It isn't in Steam's library yet. Add it to Steam first."))
+        val result = queue.offer(listOf(SteamLiveChange(op = SteamLiveChange.Op.RUN, gameId = gameId, appId = appId))).single()
+        return if (result.ok) Result.success("Starting through Steam") else Result.failure(IllegalStateException(result.message ?: "Steam didn't start it"))
+    }
+
+    override suspend fun habits(files: Map<String, Long>, systems: Map<Long, String>): List<SteamHabit> = withContext(Dispatchers.IO) {
+        SteamLearn.habits(userLists().map { f -> runCatching { f.readBytes() }.getOrNull() }, ::fuseProgram, files, systems::get)
+    }
+
+    override suspend fun entryStarts(games: List<SteamGameEntry>): Map<Long, Triple<String, String, String>> = withContext(Dispatchers.IO) {
+        val exe = program() ?: return@withContext emptyMap()
+        val bytes = userLists().firstOrNull()?.let { f -> runCatching { f.readBytes() }.getOrNull() }
+        prepared(games).associate { it.gameId to SteamGames.startOf(bytes, exe, it, ::fuseProgram) }
     }
 
     override suspend fun takeOver(takes: List<Pair<SteamLearned, SteamGameEntry>>): Result<String> = mutation.withLock {

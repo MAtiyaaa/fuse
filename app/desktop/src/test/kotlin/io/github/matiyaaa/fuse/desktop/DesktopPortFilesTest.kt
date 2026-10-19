@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse.desktop
 
 import io.github.matiyaaa.fuse.desktop.services.DesktopPortFiles
 import io.github.matiyaaa.fuse.desktop.system.DesktopOs
+import io.github.matiyaaa.fuse.desktop.system.fusePath
 import io.github.matiyaaa.fuse.integrations.ports.PortsIndexReader
 import io.github.matiyaaa.fuse.model.PortFileKind
 import kotlinx.coroutines.runBlocking
@@ -145,5 +146,31 @@ class DesktopPortFilesTest {
         assertFalse(File(f.folder, "openrct2/.openrct2.fuseport.part").exists())
         assertNull(DesktopPortFiles(data, File(dir, "downloads"), DesktopOs.WINDOWS, findUmu = { "/usr/bin/umu-run" }).umuRun(), "umu-launcher runs Windows builds on Linux only")
         assertEquals("/usr/bin/umu-run", DesktopPortFiles(data, File(dir, "downloads"), DesktopOs.LINUX, findUmu = { "/usr/bin/umu-run" }).umuRun())
+    }
+
+    @Test
+    fun aWindowsBuildGetsTheProtonThePersonUsesInSteamElseTheNewest(): Unit = runBlocking {
+        val home = File(dir, "home")
+        val steam = File(home, ".local/share/Steam")
+        fun proton(folder: File) = folder.apply { mkdirs(); File(this, "proton").writeText("#!/usr/bin/env python3\n") }
+        val valve9 = proton(File(steam, "steamapps/common/Proton 9.0 (Beta)"))
+        proton(File(steam, "steamapps/common/Proton 8.0"))
+        // Another library, as libraryfolders.vdf lists it.
+        val other = File(dir, "games/SteamLibrary")
+        val valve10 = proton(File(other, "steamapps/common/Proton 10.0"))
+        File(steam, "steamapps/libraryfolders.vdf").writeText("\"libraryfolders\"\n{\n\t\"0\"\n\t{\n\t\t\"path\"\t\t\"${steam.path}\"\n\t}\n\t\"1\"\n\t{\n\t\t\"path\"\t\t\"${other.path}\"\n\t}\n}\n")
+        val ge = proton(File(steam, "compatibilitytools.d/GE-Proton9-20"))
+        File(ge, "compatibilitytool.vdf").writeText("\"compatibilitytools\"\n{\n  \"compat_tools\"\n  {\n    \"GE-Proton9-20\"\n    {\n      \"install_path\" \".\"\n    }\n  }\n}\n")
+        val linux = DesktopPortFiles(data, File(dir, "downloads"), DesktopOs.LINUX, findUmu = { null }, home = home.path)
+
+        // Nothing chosen in Steam: the newest.
+        assertEquals(valve10.absoluteFile.fusePath, linux.protonPath())
+        // Steam Play's tool for every other title.
+        File(steam, "config").mkdirs()
+        File(steam, "config/config.vdf").writeText("\"InstallConfigStore\" { \"Software\" { \"Valve\" { \"Steam\" { \"CompatToolMapping\" { \"0\" { \"name\" \"GE-Proton9-20\" } } } } } }")
+        assertEquals(ge.absoluteFile.fusePath, linux.protonPath())
+        File(steam, "config/config.vdf").writeText("\"InstallConfigStore\" { \"Software\" { \"Valve\" { \"Steam\" { \"CompatToolMapping\" { \"0\" { \"name\" \"proton_9\" } } } } } }")
+        assertEquals(valve9.absoluteFile.fusePath, linux.protonPath())
+        assertNull(DesktopPortFiles(data, File(dir, "downloads"), DesktopOs.WINDOWS, findUmu = { null }, home = home.path).protonPath(), "Linux only")
     }
 }

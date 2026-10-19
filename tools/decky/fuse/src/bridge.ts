@@ -85,7 +85,7 @@ export interface Emulators extends Failure {
 /** A change Fuse asks Steam's running client to make (bridge protocol 2). */
 export interface SteamChange {
   id: number;
-  op: "ADD" | "UPDATE" | "REMOVE";
+  op: "ADD" | "UPDATE" | "REMOVE" | "RUN";
   gameId: number;
   appId?: number | null;
   name: string;
@@ -94,6 +94,8 @@ export interface SteamChange {
   launchOptions: string;
   /** The pictures Fuse has for it: each kind (capsule, hero, logo, header, icon) to its format, fetched with [changeArt]. */
   art?: Record<string, string>;
+  /** Where its logo sits over the hero, as Steam's LogoPosition has it; set only where the person has no position of their own. */
+  logo?: { pinnedPosition: "BottomLeft" | "UpperLeft" | "CenterCenter" | "UpperCenter" | "BottomCenter"; nWidthPct: number; nHeightPct: number };
 }
 
 export interface SteamChanges extends Failure {

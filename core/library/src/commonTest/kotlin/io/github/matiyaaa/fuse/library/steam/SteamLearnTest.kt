@@ -80,6 +80,94 @@ class SteamLearnTest {
         assertEquals(mapOf(21L to SteamStart.DIRECT), SteamGames.starts(SteamGames.takeOver(theirs(), fuse, mapOf(found.appId to direct), isFuse), isFuse))
     }
 
+    private val minishCap = "/home/deck/ROMs/gba/Minish Cap.gba"
+    private val systems = mapOf(15L to "Game Boy Advance", 30L to "Game Boy Advance", 31L to "Game Boy Advance", 21L to "GameCube", 3L to "Super Nintendo")
+
+    /** A list of [shortcuts] as Steam keeps it, two with one program as they can be (not merged, as Fuse's own entry is). */
+    private fun raw(vararg shortcuts: SteamShortcut): ByteArray {
+        val list = BinaryVdf.Block()
+        shortcuts.forEachIndexed { i, s ->
+            list.entries += i.toString() to BinaryVdf.Block().also { b ->
+                b["AppName"] = BinaryVdf.Str(s.name)
+                b["Exe"] = BinaryVdf.Str(s.exe)
+                b["StartDir"] = BinaryVdf.Str(s.startDir)
+                b["LaunchOptions"] = BinaryVdf.Str(s.launchOptions)
+            }
+        }
+        return BinaryVdf.write(BinaryVdf.Block().also { it["shortcuts"] = list })
+    }
+
+    /** Each system's games started the person's own way: two through RetroArch's Flatpak, one through mGBA; others with frame generation, an AppImage's mount and another way of writing /home. */
+    private fun habits(): ByteArray = raw(
+        SteamShortcut("Metroid Fusion", "\"/usr/bin/flatpak\"", "\"/\"", launchOptions = "run org.libretro.RetroArch -L /cores/mgba_libretro.so \"$metroid\""),
+        SteamShortcut("Minish Cap", "\"/usr/bin/flatpak\"", "\"/\"", launchOptions = "run org.libretro.RetroArch -L /cores/mgba_libretro.so \"$minishCap\""),
+        SteamShortcut("Golden Sun", "\"/usr/bin/mgba-qt\"", "\"/usr/bin\"", launchOptions = "-f \"$goldenSun\""),
+        SteamShortcut(
+            "Wind Waker", "\"/home/deck/Applications/Dolphin.AppImage\"", "\"/tmp/.mount_DolphiAbC123/usr/bin\"",
+            launchOptions = "LSFGVK_ENV=1 LSFGVK_MULTIPLIER=3 QT_QPA_PLATFORM=xcb %command% -b -e '$windWaker'",
+        ),
+        SteamShortcut("Chrono Trigger", "\"/usr/bin/snes9x-gtk\"", "\"/usr/bin\"", launchOptions = "/var/home/deck/ROMs/snes/Chrono\\ Trigger.sfc"),
+        // A program inside an AppImage's mount is gone once it closes: nothing to learn from.
+        SteamShortcut("Mario Kart", "\"/tmp/.mount_DolphiAbC123/usr/bin/dolphin-emu\"", "\"/\"", launchOptions = "-e '$windWaker'"),
+    )
+
+    @Test
+    fun eachSystemsWayIsLearnedExactlyAsTheirShortcutsWriteIt() {
+        val all = files + (minishCap to 31L)
+        val learned = SteamLearn.habits(listOf(habits()), isFuse, all, systems::get).associateBy { it.system }
+        assertEquals(setOf("Game Boy Advance", "GameCube", "Super Nintendo"), learned.keys)
+
+        // The way most of a system's shortcuts start it, quotes and all.
+        val gba = learned.getValue("Game Boy Advance")
+        assertEquals("flatpak" to 2, gba.program to gba.shortcuts)
+        assertEquals("\"/usr/bin/flatpak\"" to "\"/\"", gba.exe to gba.startDir)
+        assertEquals("run org.libretro.RetroArch -L /cores/mgba_libretro.so " to "", gba.before to gba.after)
+        assertEquals(SteamQuoting.DOUBLE, gba.quoting)
+        assertEquals(SteamWritten("\"/usr/bin/flatpak\"", "\"/\"", "run org.libretro.RetroArch -L /cores/mgba_libretro.so \"$goldenSun\""), gba.forGame(goldenSun))
+
+        // Frame generation set aside (offered as Fuse's own), the other variables kept, the AppImage's own folder for the mount.
+        val gc = learned.getValue("GameCube")
+        assertEquals(SteamFrameWrapper("LSFGVK_ENV=1 LSFGVK_MULTIPLIER=3", 3), gc.frameGeneration)
+        assertEquals("QT_QPA_PLATFORM=xcb %command% -b -e ", gc.before)
+        assertEquals(SteamQuoting.SINGLE, gc.quoting)
+        assertEquals("\"/home/deck/Applications\"", gc.startDir)
+
+        // /home written as /var/home, the game's file with backslashes as they write it.
+        val snes = learned.getValue("Super Nintendo")
+        assertEquals(mapOf("/home/" to "/var/home/"), snes.paths)
+        assertEquals(SteamQuoting.PLAIN, snes.quoting)
+        assertEquals("/var/home/deck/ROMs/snes/Secret\\ of\\ Mana\\ \\(USA\\).sfc", snes.forGame("/home/deck/ROMs/snes/Secret of Mana (USA).sfc").options)
+        // Found by its file written that other way too.
+        assertEquals("/var/home/deck/ROMs/snes/Chrono Trigger.sfc", SteamLearn.find(habits(), isFuse, all).single { it.gameId == 3L }.path)
+    }
+
+    @Test
+    fun aGamesFileIsWrittenSoTheShellReadsItBackExactly() {
+        val odd = "/roms/it's \"odd\" \$HOME `x` \\ (1).gba"
+        for (q in SteamQuoting.entries) {
+            val h = SteamHabit("GBA", "x", "\"/x\"", "\"/\"", "-f ", " --go", q)
+            assertEquals(listOf("-f", odd, "--go"), SteamLearn.words(h.forGame(odd).options), q.name)
+        }
+    }
+
+    @Test
+    fun aDirectEntryIsWrittenTheirWayWithFusesMarkFirst() {
+        val gba = SteamLearn.habits(listOf(habits()), isFuse, files + (minishCap to 31L), systems::get).single { it.system == "Game Boy Advance" }
+        val gc = SteamLearn.habits(listOf(habits()), isFuse, files + (minishCap to 31L), systems::get).single { it.system == "GameCube" }
+        val golden = SteamGameEntry(30, "Golden Sun", "Game Boy Advance", direct = SteamDirect(listOf("/usr/bin/mgba-qt", goldenSun), env = mapOf("LSFGVK_ENV" to "1", "LSFGVK_MULTIPLIER" to "2"), written = gba.forGame(goldenSun)))
+        val zelda = SteamGameEntry(21, "Wind Waker", "GameCube", direct = SteamDirect(listOf("/usr/bin/dolphin-emu", windWaker), written = gc.forGame(windWaker)))
+        val after = SteamGames.write(null, fuse, listOf(golden, zelda), isFuse)!!
+        val (g, z) = entries(after)
+        assertEquals("\"/usr/bin/flatpak\"" to "\"/\"", g.str("Exe") to g.str("StartDir"))
+        assertEquals("FUSE_GAME=30 LSFGVK_ENV=1 LSFGVK_MULTIPLIER=2 %command% run org.libretro.RetroArch -L /cores/mgba_libretro.so \"$goldenSun\"", g.str("LaunchOptions"))
+        assertEquals("FUSE_GAME=21 QT_QPA_PLATFORM=xcb %command% -b -e '$windWaker'", z.str("LaunchOptions"))
+        assertEquals(mapOf(30L to SteamStart.DIRECT, 21L to SteamStart.DIRECT), SteamGames.starts(after, isFuse))
+        // Written again, nothing changes.
+        assertEquals(listOf(SteamGameAction.UNCHANGED, SteamGameAction.UNCHANGED), SteamGames.plan(after, fuse, listOf(golden, zelda), isFuse)!!.map { it.action })
+        // Fuse's own entries are never learned from.
+        assertTrue(SteamLearn.habits(listOf(after), isFuse, files, systems::get).isEmpty())
+    }
+
     @Test
     fun wordsAreSplitAsAShellSplitsThem() {
         assertEquals(listOf("run", "org.x", "/a b/c.gba"), SteamLearn.words("run org.x \"/a b/c.gba\""))
