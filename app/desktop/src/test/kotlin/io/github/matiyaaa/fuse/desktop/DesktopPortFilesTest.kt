@@ -158,7 +158,9 @@ class DesktopPortFilesTest {
         // Another library, as libraryfolders.vdf lists it.
         val other = File(dir, "games/SteamLibrary")
         val valve10 = proton(File(other, "steamapps/common/Proton 10.0"))
-        File(steam, "steamapps/libraryfolders.vdf").writeText("\"libraryfolders\"\n{\n\t\"0\"\n\t{\n\t\t\"path\"\t\t\"${steam.path}\"\n\t}\n\t\"1\"\n\t{\n\t\t\"path\"\t\t\"${other.path}\"\n\t}\n}\n")
+        // Paths as Steam writes them in a VDF: a backslash (Windows') escaped.
+        fun vdf(f: File) = f.path.replace("\\", "\\\\")
+        File(steam, "steamapps/libraryfolders.vdf").writeText("\"libraryfolders\"\n{\n\t\"0\"\n\t{\n\t\t\"path\"\t\t\"${vdf(steam)}\"\n\t}\n\t\"1\"\n\t{\n\t\t\"path\"\t\t\"${vdf(other)}\"\n\t}\n}\n")
         val ge = proton(File(steam, "compatibilitytools.d/GE-Proton9-20"))
         File(ge, "compatibilitytool.vdf").writeText("\"compatibilitytools\"\n{\n  \"compat_tools\"\n  {\n    \"GE-Proton9-20\"\n    {\n      \"install_path\" \".\"\n    }\n  }\n}\n")
         val linux = DesktopPortFiles(data, File(dir, "downloads"), DesktopOs.LINUX, findUmu = { null }, home = home.path)

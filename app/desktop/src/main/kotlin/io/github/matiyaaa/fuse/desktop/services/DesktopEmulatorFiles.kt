@@ -552,7 +552,8 @@ class DesktopEmulatorFiles(
                 atGame?.isDirectory == true -> atGame
                 installed.detectedVia == "Flatpak" -> File(home, ".var/app/${installed.appId}/config/supermodel/Config")
                 File(home, ".supermodel").isDirectory -> File(home, ".supermodel/Config")
-                !File(home, ".config/supermodel").isDirectory && env["XDG_CONFIG_HOME"]?.startsWith("/") == true -> File(env.getValue("XDG_CONFIG_HOME"), "supermodel/Config")
+                // $XDG_CONFIG_HOME only when it is a whole path, as the XDG specification takes it.
+                !File(home, ".config/supermodel").isDirectory && env["XDG_CONFIG_HOME"]?.let { File(it).isAbsolute } == true -> File(env.getValue("XDG_CONFIG_HOME"), "supermodel/Config")
                 else -> File(home, ".config/supermodel/Config")
             }
         } ?: return@withContext null
