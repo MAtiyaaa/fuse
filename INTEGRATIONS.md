@@ -1163,9 +1163,14 @@ exactly.
   change the emulator's own settings files, for every game or for one game: PCSX2
   (`inis/PCSX2.ini`, `gamesettings/SERIAL_CRC.ini`), DuckStation (`settings.ini`,
   `gamesettings/SERIAL.ini`), PPSSPP (`PSP/SYSTEM/ppsspp.ini`, `PSP/SYSTEM/GAMEID_ppsspp.ini`), Dolphin (`Dolphin.ini`
-  and `GFX.ini`, a game's `GameSettings/GAMEID.ini` under its own section names) and RPCS3
+  and `GFX.ini`, a game's `GameSettings/GAMEID.ini` under its own section names), RPCS3
   (`config.yml`, a game's `custom_configs/config_<title id>.yml`, in RPCS3's `config` folder on
-  Windows, as `fs::get_config_dir(true)` has it). Every Setting is all of an emulator's settings,
+  Windows, as `fs::get_config_dir(true)` has it), RetroArch (`retroarch.cfg`, a game's override
+  `config/<core's library name>/<content>.cfg`, as `config_load_override` in `configuration.c`
+  finds it) and Eden (`qt-config.ini`, a game's `custom/<title id>.ini`, in its config folder as
+  `src/common/fs/path_util.cpp` and `fs_paths.h` put it: `user\config` beside the program or
+  `%APPDATA%\eden\config` on Windows, `$XDG_CONFIG_HOME/eden` or `~/.config/eden` elsewhere,
+  inside `~/.var/app/dev.eden_emu.eden` for the Flatpak). Every Setting is all of an emulator's settings,
   read by Fuse Tune (`tools/tune`) from the emulator's own settings code at its last four release
   tags, never typed in by hand: PCSX2's `SettingsWrap*` calls in `pcsx2/Pcsx2Config.cpp` with types
   and defaults from `pcsx2/Config.h` and each options' constructor; DuckStation's `si.Get*Value`
@@ -1173,13 +1178,25 @@ exactly.
   PPSSPP's `ConfigSetting` tables in `Core/Config.cpp` (only those flagged `PER_GAME` for a game,
   none flagged `DONT_SAVE`); Dolphin's `Info<T>` declarations in `Core/Config/*Settings.cpp`, with
   `GameConfigLoader.cpp`'s table of a game's sections; RPCS3's `cfg::node` tree in
-  `rpcs3/Emu/system_config.h`, with the words for its choices from `system_config_types.cpp`. Only
+  `rpcs3/Emu/system_config.h`, with the words for its choices from `system_config_types.cpp`;
+  RetroArch's `SETTING_*` lists in `configuration.c` (paths and folders, this computer's own,
+  left out) with defaults from `config.def.h`, and each setting's name, description, range and tab
+  from its menu entry in `menu/menu_setting.c` and the English words in `intl/msg_hash_us.h`;
+  Eden's `Setting` and `SwitchableSetting` declarations in `src/common/settings.h` (only a
+  switchable one for a game, none not saved), its categories' sections from `TranslateCategory`
+  in `settings.cpp`, its enums from `settings_enums.h` (written as each member's number) and the
+  names and descriptions its Qt frontend gives them in `src/qt_common/config/shared_translation.cpp`,
+  read from Eden's own Forgejo (`git.eden-emu.dev`). Only
   names, kinds, ranges, choices and defaults are taken, no code. The installed version decides
   which settings show (the newest release read that is no newer than it), a choice a system's
   build hasn't got (DuckStation's Direct3D on Linux) isn't offered, and a value the emulator
   wouldn't read (a number out of its range) is refused before anything is written. Files are
-  edited in place: every other line, comment and spacing stays, an ini file through `IniText` and
-  RPCS3's YAML through `YamlText`. Fuse keeps what each key held before it first changed it, and
+  edited in place: every other line, comment and spacing stays, an ini file through `IniText`,
+  RPCS3's YAML through `YamlText` and RetroArch's cfg through `CfgText`. Eden keeps each value in
+  two or three keys, `key\default` beside `key` and, in a game's file, `key\use_global` first
+  (`Config::WriteSettingGeneric` in `src/frontend_common/config.cpp`), and reads them back
+  together (`Config::ReadSettingGeneric`): Fuse reads them the same way and writes each one Eden
+  reads (`EdenConfig`), without spaces as Eden's SimpleIni does. Fuse keeps what each key held before it first changed it, and
   Put Back What Fuse Changed restores exactly that (a key changed in the emulator since stays); a
   game's own file Fuse made is taken away again once nothing it set is left. RPCS3 gives a game
   with its own settings file none of the settings from its own database

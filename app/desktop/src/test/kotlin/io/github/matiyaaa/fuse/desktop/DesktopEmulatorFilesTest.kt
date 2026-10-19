@@ -94,6 +94,29 @@ class DesktopEmulatorFilesTest {
     }
 
     @Test
+    fun edensConfigFolderIsWhereItsOwnPathsPutIt() = runBlocking {
+        val linux = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        val eden = InstalledEmulator(EmulatorId("linux.eden"), "Eden", Host.LINUX, "/usr/bin/eden", platforms = setOf(PlatformId("switch")), detectedVia = "PATH")
+        val config = File(home, ".config/eden").apply { mkdirs() }
+        assertNull(linux.edenConfig(eden), "not until Eden has written its qt-config.ini")
+        File(config, "qt-config.ini").writeText("[Renderer]\n")
+        assertEquals(p(config), linux.edenConfig(eden))
+        assertTrue(linux.write(File(config, "custom/0100F2C0115B6000.ini").absolutePath, "[Renderer]\n"), "a game's own file may be written there")
+        // The Flatpak's, inside its own folder.
+        val flatpak = File(home, ".var/app/dev.eden_emu.eden/config/eden").apply { mkdirs(); File(this, "qt-config.ini").writeText("") }
+        assertEquals(p(flatpak), linux.edenConfig(eden.copy(appId = "dev.eden_emu.eden", detectedVia = "Flatpak")))
+        // Windows: a `user` folder beside the program, else its own folder in AppData.
+        val program = File(home, "Eden/eden.exe").apply { parentFile.mkdirs(); writeText("") }
+        val appData = File(home, "AppData/Roaming").apply { File(this, "eden/config").mkdirs(); File(this, "eden/config/qt-config.ini").writeText("") }
+        val windows = DesktopEmulatorFiles(DesktopOs.WINDOWS, env = mapOf("APPDATA" to appData.absolutePath), home = home.absolutePath, backups = backups)
+        val onWindows = InstalledEmulator(EmulatorId("windows.eden"), "Eden", Host.WINDOWS, program.absolutePath, platforms = setOf(PlatformId("switch")), detectedVia = "Folder")
+        assertEquals(p(File(appData, "eden/config")), windows.edenConfig(onWindows))
+        File(program.parentFile, "user/config").mkdirs()
+        File(program.parentFile, "user/config/qt-config.ini").writeText("")
+        assertEquals(p(File(program.parentFile, "user/config")), windows.edenConfig(onWindows))
+    }
+
+    @Test
     fun rpcs3StorageFollowsVfsYml() = runBlocking {
         val config = File(home, ".config/rpcs3").apply { File(this, "config").mkdirs() }
         val files = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)

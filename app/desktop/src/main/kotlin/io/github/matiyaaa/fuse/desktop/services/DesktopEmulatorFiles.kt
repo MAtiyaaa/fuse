@@ -445,6 +445,28 @@ class DesktopEmulatorFiles(
     }
 
     /**
+     * Eden's config folder, as its PathManagerImpl::Reinitialize (src/common/fs/path_util.cpp) and
+     * fs_paths.h have it: on Windows `user\config` beside the program when that `user` folder is
+     * there, else %APPDATA%\eden\config; elsewhere $XDG_CONFIG_HOME/eden or ~/.config/eden (inside
+     * ~/.var/app for the Flatpak). The `user` folder Linux and macOS builds look for is in the folder
+     * they start from, which is Fuse's own when Fuse starts them, so it isn't looked for there. Only a
+     * folder Eden has written its `qt-config.ini` in is returned.
+     */
+    override suspend fun edenConfig(installed: InstalledEmulator): String? = withContext(Dispatchers.IO) {
+        val flatpak = installed.detectedVia == "Flatpak"
+        val program = if (flatpak) null else File(installed.appId).takeIf { it.isAbsolute }
+        val config = when (os) {
+            DesktopOs.WINDOWS -> program?.parentFile?.let { File(it, "user") }?.takeIf { it.isDirectory }?.let { File(it, "config") }
+                ?: env["APPDATA"]?.let { File(it, "eden/config") }
+            else -> if (flatpak) File(home, ".var/app/$EDEN_FLATPAK/config/eden")
+            else env["XDG_CONFIG_HOME"]?.takeIf { it.startsWith("/") }?.let { File(it, "eden") } ?: File(home, ".config/eden")
+        } ?: return@withContext null
+        if (!File(config, io.github.matiyaaa.fuse.launch.settings.EdenConfig.GLOBAL).isFile) return@withContext null
+        roots += config.absolutePath
+        config.absolutePath.replace('\\', '/').trimEnd('/')
+    }
+
+    /**
      * shadPS4's user folder (common/path_util.cpp): `user` beside the program when it is there, else
      * $XDG_DATA_HOME/shadPS4 or ~/.local/share/shadPS4 on Linux (inside ~/.var/app for the Flatpak),
      * ~/Library/Application Support/shadPS4 on macOS and %APPDATA%\shadPS4 on Windows.
@@ -965,6 +987,7 @@ class DesktopEmulatorFiles(
         const val MAX_TAIL = 16 * 1024
         const val STOP_GRACE_MS = 800L
         const val DUCKSTATION_FLATPAK = "org.duckstation.DuckStation"
+        const val EDEN_FLATPAK = "dev.eden_emu.eden"
         const val DOLPHIN_FLATPAK = "org.DolphinEmu.dolphin-emu"
         val VFS_HDD0 = Regex("^\\s*/dev_hdd0/\\s*:\\s*(.+?)\\s*$", RegexOption.MULTILINE)
         val PREF_PATH = Regex("^pref-path:\\s*(.+)$", RegexOption.MULTILINE)

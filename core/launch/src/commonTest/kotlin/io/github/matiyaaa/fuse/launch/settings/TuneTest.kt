@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 class TuneTest {
     @Test
     fun everyEmulatorReadHasItsReleasesAndASettingsCountLikeItsOwn() {
-        assertEquals(setOf("dolphin", "duckstation", "ppsspp", "pcsx2", "rpcs3", "devilutionx", "openrct2", "fallout2-ce"), Tune.families)
+        assertEquals(setOf("dolphin", "duckstation", "ppsspp", "pcsx2", "rpcs3", "devilutionx", "openrct2", "fallout2-ce", "retroarch", "eden"), Tune.families)
         // Each has as many as its own settings show; a reader that broke would find a handful.
         val least = mapOf("devilutionx" to 40, "fallout2-ce" to 40)
         for (family in Tune.families) {
@@ -39,6 +39,25 @@ class TuneTest {
         assertEquals("true", assertNotNull(Tune.find("openrct2", null, "general", "use_vsync")).default)
         assertEquals(listOf("IMPERIAL", "METRIC", "SI"), assertNotNull(Tune.find("openrct2", null, "general", "measurement_format")).choices.map { it.value })
         assertEquals(TuneKind.NUMBER, assertNotNull(Tune.find("fallout2-ce", null, "preferences", "game_difficulty")).kind)
+    }
+
+    @Test
+    fun retroArchsAndEdensSettingsComeWithTheNamesTheirMenusGiveThem() {
+        // RetroArch's file has no sections; its menu's tabs group them, and any can be a game's override.
+        val vsync = assertNotNull(Tune.find("retroarch", null, "", "video_vsync"))
+        assertEquals(TuneKind.SWITCH, vsync.kind)
+        assertEquals("Vertical Sync (VSync)", vsync.label)
+        assertEquals("Video", vsync.tab)
+        assertTrue(Tune.forEmulator("retroarch").all { it.perGame && it.section.isEmpty() })
+        val swap = assertNotNull(Tune.find("retroarch", null, "", "video_swap_interval"))
+        assertEquals(0L to 4L, swap.min to swap.max)
+        // Eden's are kept under its categories' sections, an enum as its member's number.
+        val resolution = assertNotNull(Tune.find("eden", null, "Renderer", "resolution_setup"))
+        assertEquals("Resolution", resolution.label)
+        assertEquals("3", resolution.default)
+        assertEquals("1X (720p/1080p)", resolution.choices.single { it.value == "3" }.shown)
+        assertTrue(resolution.perGame, "a SwitchableSetting can be set for one game")
+        assertEquals(false, Tune.find("eden", null, "Debugging", "use_gdbstub")?.perGame, "a plain Setting only for every game")
     }
 
     @Test

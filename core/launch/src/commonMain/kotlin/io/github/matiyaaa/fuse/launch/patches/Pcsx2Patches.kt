@@ -69,9 +69,11 @@ object Pnach {
 /**
  * An INI file edited without disturbing anything else in it: comments, order, spacing and every
  * other key stay exactly as they were. Sections and keys match ignoring case, as PCSX2's SimpleIni
- * does; a key can repeat, which is how PCSX2 keeps lists (`Enable = name` once per patch).
+ * does; a key can repeat, which is how PCSX2 keeps lists (`Enable = name` once per patch). A file
+ * with no keys yet gets `key = value`, or `key=value` when not [spaced] (Eden's, SimpleIni's
+ * `SetSpaces(false)`).
  */
-class IniText(text: String) : io.github.matiyaaa.fuse.launch.settings.SettingsText {
+class IniText(text: String, private val spaced: Boolean = true) : io.github.matiyaaa.fuse.launch.settings.SettingsText {
     private val lines: MutableList<String> = text.replace("\r\n", "\n").split('\n').toMutableList().also {
         // A file's final newline isn't a line of its own.
         if (it.size > 1 && it.last().isEmpty()) it.removeAt(it.lastIndex)
@@ -111,9 +113,9 @@ class IniText(text: String) : io.github.matiyaaa.fuse.launch.settings.SettingsTe
         return true
     }
 
-    /** How this file writes `=`: as its first key does, else with a space each side. */
+    /** How this file writes `=`: as its first key does, else with a space each side (unless not [spaced]). */
     private fun separator(): String {
-        val first = lines.firstOrNull { entry(it) != null } ?: return " = "
+        val first = lines.firstOrNull { entry(it) != null } ?: return if (spaced) " = " else "="
         val eq = first.indexOf('=')
         return if (eq > 0 && first[eq - 1] != ' ' && first.getOrNull(eq + 1) != ' ') "=" else " = "
     }

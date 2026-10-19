@@ -63,8 +63,20 @@ object NativeSettings {
     /** The emulators Fuse changes settings in, by their family (`pcsx2`, from `linux.pcsx2`). */
     val families = setOf("pcsx2", "duckstation", "ppsspp", "dolphin")
 
-    /** The emulators whose settings Fuse changes: these, and RPCS3, whose come only as Every Setting (see [Tune]). */
-    val changeable: Set<String> = families + "rpcs3"
+    /** The emulators whose settings Fuse changes: these, and RPCS3, RetroArch and Eden, whose come only as Every Setting (see [Tune]). */
+    val changeable: Set<String> = families + setOf("rpcs3", "retroarch", "eden")
+
+    /**
+     * The family an emulator's id keeps its settings as (`linux.pcsx2` is `pcsx2`): Steam's RetroArch
+     * is RetroArch, and Eden's nightly builds keep Eden's own folders (src/common/fs/fs_paths.h).
+     */
+    fun familyOf(id: String): String = id.substringAfter('.').let { f ->
+        when (f) {
+            "retroarch-steam" -> "retroarch"
+            "eden-nightly" -> "eden"
+            else -> f
+        }
+    }
 
     /** Dolphin's graphics settings file (GFX.ini), beside Dolphin.ini. */
     const val DOLPHIN_GFX = "GFX"

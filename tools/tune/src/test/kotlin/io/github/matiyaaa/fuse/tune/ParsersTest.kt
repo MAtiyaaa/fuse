@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse.tune
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -637,5 +638,182 @@ class ParsersTest {
         assertEquals("english", found.at("system", "language").default)
         assertEquals(Kind.INT, found.at("preferences", "game_difficulty").kind)
         assertEquals("1.0", found.at("preferences", "brightness").default)
+    }
+
+    @Test
+    fun retroArchsKeysWithTheMenusNamesRangesAndTabs() {
+        val config = """
+            static struct config_bool_setting *populate_settings_bool(settings_t *settings, int *size)
+            {
+               SETTING_BOOL("video_vsync",                   &settings->bools.video_vsync, true, DEFAULT_VSYNC, false);
+               SETTING_BOOL("video_hard_sync",               &settings->bools.video_hard_sync, true, DEFAULT_HARD_SYNC, false);
+            }
+            static struct config_uint_setting *populate_settings_uint(settings_t *settings, int *size)
+            {
+               SETTING_UINT("video_swap_interval",           &settings->uints.video_swap_interval, true, DEFAULT_SWAP_INTERVAL, false);
+               SETTING_UINT("video_rotation",                &settings->uints.video_rotation, true, ORIENTATION_NORMAL, false);
+            }
+            static struct config_float_setting *populate_settings_float(settings_t *settings, int *size)
+            {
+               SETTING_FLOAT("audio_volume",                 &settings->floats.audio_volume, true, DEFAULT_AUDIO_VOLUME, false);
+            }
+            static struct config_array_setting *populate_settings_array(settings_t *settings, int *size)
+            {
+               SETTING_ARRAY("video_driver",                 settings->arrays.video_driver, false, NULL, true);
+            }
+            static struct config_path_setting *populate_settings_path(settings_t *settings, int *size)
+            {
+               SETTING_PATH("libretro_directory",            settings->paths.directory_libretro, false, NULL, false);
+            }
+        """.trimIndent()
+        val defaults = """
+            #define DEFAULT_VSYNC true
+            #define DEFAULT_SWAP_INTERVAL 1
+            #define DEFAULT_AUDIO_VOLUME 0.0
+            #if defined(HAVE_X)
+            #define DEFAULT_HARD_SYNC true
+            #else
+            #define DEFAULT_HARD_SYNC false
+            #endif
+        """.trimIndent()
+        val menu = """
+            START_GROUP(list, list_info, &group_info, msg_hash_to_str(MENU_ENUM_LABEL_VALUE_VIDEO_SETTINGS), parent_group);
+            CONFIG_BOOL(
+                  list, list_info,
+                  &settings->bools.video_vsync,
+                  MENU_ENUM_LABEL_VIDEO_VSYNC,
+                  MENU_ENUM_LABEL_VALUE_VIDEO_VSYNC,
+                  DEFAULT_VSYNC,
+                  MENU_ENUM_LABEL_VALUE_OFF,
+                  MENU_ENUM_LABEL_VALUE_ON,
+                  &group_info, &subgroup_info, parent_group, general_write_handler, general_read_handler, SD_FLAG_NONE);
+            CONFIG_UINT(
+                  list, list_info,
+                  &settings->uints.video_swap_interval,
+                  MENU_ENUM_LABEL_VIDEO_SWAP_INTERVAL,
+                  MENU_ENUM_LABEL_VALUE_VIDEO_SWAP_INTERVAL,
+                  DEFAULT_SWAP_INTERVAL,
+                  &group_info, &subgroup_info, parent_group, general_write_handler, general_read_handler);
+            menu_settings_list_current_add_range(list, list_info, 0, 4, 1, true, true);
+            START_GROUP(list, list_info, &group_info, msg_hash_to_str(MENU_ENUM_LABEL_VALUE_AUDIO_SETTINGS), parent_group);
+            CONFIG_FLOAT(
+                  list, list_info,
+                  &settings->floats.audio_volume,
+                  MENU_ENUM_LABEL_AUDIO_VOLUME,
+                  MENU_ENUM_LABEL_VALUE_AUDIO_VOLUME,
+                  DEFAULT_AUDIO_VOLUME,
+                  "%.1f", &group_info, &subgroup_info, parent_group, general_write_handler, general_read_handler);
+            menu_settings_list_current_add_range(list, list_info, -80, 12, 1.0, true, true);
+        """.trimIndent()
+        val words = """
+            MSG_HASH(
+               MENU_ENUM_LABEL_VALUE_VIDEO_SETTINGS,
+               "Video"
+               )
+            MSG_HASH(
+               MENU_ENUM_LABEL_VALUE_AUDIO_SETTINGS,
+               "Audio"
+               )
+            MSG_HASH(
+               MENU_ENUM_LABEL_VALUE_VIDEO_VSYNC,
+               "VSync"
+               )
+            MSG_HASH(
+               MENU_ENUM_SUBLABEL_VIDEO_VSYNC,
+               "Synchronize the graphics card's video output "
+               "to the screen refresh rate."
+               )
+            MSG_HASH(
+               MENU_ENUM_LABEL_VALUE_VIDEO_SWAP_INTERVAL,
+               "VSync Swap Interval"
+               )
+            MSG_HASH(
+               MENU_ENUM_LABEL_VALUE_AUDIO_VOLUME,
+               "Volume Gain (dB)"
+               )
+        """.trimIndent()
+        val found = RetroArch.parse(mapOf(RetroArch.CONFIG to config, RetroArch.DEFAULTS to defaults, RetroArch.MENU to menu, RetroArch.WORDS to words))
+        assertEquals(listOf("video_vsync", "video_hard_sync", "video_swap_interval", "video_rotation", "audio_volume", "video_driver"), found.map { it.key }, "a computer's own paths are left out")
+        val vsync = found.single { it.key == "video_vsync" }
+        assertEquals(Kind.BOOL, vsync.kind)
+        assertEquals("true", vsync.default)
+        assertEquals("VSync", vsync.label)
+        assertEquals("Synchronize the graphics card's video output to the screen refresh rate.", vsync.about)
+        assertEquals("Video", vsync.tab)
+        assertEquals(null, found.single { it.key == "video_hard_sync" }.default, "a default that depends on the build")
+        val swap = found.single { it.key == "video_swap_interval" }
+        assertEquals(0L to 4L, swap.min to swap.max)
+        assertEquals("1", swap.default)
+        assertEquals(null, found.single { it.key == "video_rotation" }.default, "a constant from elsewhere")
+        val volume = found.single { it.key == "audio_volume" }
+        assertEquals(Kind.FLOAT, volume.kind)
+        assertEquals("Audio", volume.tab)
+        assertEquals(-80L to 12L, volume.min to volume.max)
+        assertEquals(Kind.STRING, found.single { it.key == "video_driver" }.kind)
+        assertEquals("", found.single { it.key == "video_driver" }.default)
+        assertTrue(found.all { it.section.isEmpty() && it.perGame }, "retroarch.cfg has no sections, and a game's override may hold any of them")
+    }
+
+    @Test
+    fun edensSettingsByTheirSectionsWithWhatItsQtSettingsCallThem() {
+        val settings = """
+            struct Values {
+                SwitchableSetting<bool> use_vsync{linkage, true, "use_vsync", Category::Renderer};
+                SwitchableSetting<VSyncMode, true> vsync_mode{linkage, VSyncMode::Fifo, VSyncMode::Immediate, VSyncMode::FifoRelaxed, "use_vsync_mode", Category::Renderer, Specialization::RuntimeList, true, true};
+                SwitchableSetting<int, true> resolution_scale{linkage, 100, 25, 800, "resolution_scale", Category::RendererAdvanced};
+                Setting<bool> use_multi_core{linkage, true, "use_multi_core", Category::Core};
+                Setting<bool> never_saved{linkage, false, "never_saved", Category::Core, Specialization::Default, false};
+                SwitchableSetting<AudioEngine> sink_id{linkage, AudioEngine::Auto, "output_engine", Category::Audio, Specialization::RuntimeList};
+                Setting<std::string> title{linkage, "", "title", Category::Ui};
+            };
+        """.trimIndent()
+        val categories = """
+            const char* TranslateCategory(Category category) {
+                switch (category) {
+                case Category::Audio:
+                    return "Audio";
+                case Category::Core:
+                    return "Core";
+                case Category::Renderer:
+                case Category::RendererAdvanced:
+                    return "Renderer";
+                case Category::MaxEnum:
+                    break;
+                }
+                return "Miscellaneous";
+            }
+        """.trimIndent()
+        val enums = """
+            ENUM(VSyncMode, Immediate, Mailbox, Fifo, FifoRelaxed);
+            enum class AudioEngine : u32 { Auto, Cubeb, Sdl2, Null, Oboe, };
+        """.trimIndent()
+        val words = """
+            INSERT(Settings, use_vsync, tr("Use VSync:"), tr("Waits for the screen."));
+            INSERT(Settings, vsync_mode, tr("VSync Mode:"), tr("FIFO (VSync) does not drop frames "
+                                                                "or exhibit tearing."));
+            INSERT(Settings, resolution_scale, tr("Resolution:"), QString());
+            translations->insert({Settings::EnumMetadata<Settings::VSyncMode>::Index(),
+                                  {
+                                      PAIR(VSyncMode, Immediate, tr("Immediate (no synchronization)")),
+                                      PAIR(VSyncMode, Fifo, tr("FIFO (VSync)")),
+                                  }});
+        """.trimIndent()
+        val found = Eden.parse(mapOf(Eden.SETTINGS to settings, Eden.CATEGORIES to categories, Eden.ENUMS to enums, Eden.WORDS to words))
+        assertEquals(listOf("use_vsync", "use_vsync_mode", "resolution_scale", "use_multi_core", "output_engine"), found.map { it.key }, "one never saved, and one of a category with no section, are left out")
+        val vsync = found.single { it.key == "use_vsync" }
+        assertEquals("Renderer" to "true", vsync.section to vsync.default)
+        assertEquals("Use VSync", vsync.label)
+        assertTrue(vsync.perGame)
+        val mode = found.single { it.key == "use_vsync_mode" }
+        assertEquals(Kind.ENUM, mode.kind)
+        assertEquals("2", mode.default, "written as the member's number")
+        assertEquals(listOf("Immediate (no synchronization)", "Mailbox", "FIFO (VSync)", "FifoRelaxed"), mode.choices.map { it.label })
+        assertEquals("FIFO (VSync) does not drop frames or exhibit tearing.", mode.about)
+        val scale = found.single { it.key == "resolution_scale" }
+        assertEquals(25L to 800L, scale.min to scale.max)
+        assertEquals("Renderer", scale.section)
+        assertEquals("Renderer Advanced", scale.tab)
+        assertFalse(found.single { it.key == "use_multi_core" }.perGame, "a plain Setting is for every game only")
+        assertEquals(listOf("0", "1", "2", "3", "4"), found.single { it.key == "output_engine" }.choices.map { it.value })
     }
 }

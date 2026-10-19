@@ -448,7 +448,7 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
                 add(MenuAction("together", "Play Together", FuseIcons.Users, detail = "Host it for your household or join someone's game, as its emulator plays with others", trailing = Trailing.Chevron, onSelect = { playTogetherSheet(card) }))
             }
             // The emulator's own settings for this game, where Fuse can change them.
-            if (card.platformId.value in setOf("ps2", "psx", "psp", "ngc", "wii", "ps3")) {
+            if (card.platformId.value in setOf("ps2", "psx", "psp", "ngc", "wii", "ps3", "switch") || retroArch && io.github.matiyaaa.fuse.launch.RetroArchCores.coresFor(platform.host, card.platformId).isNotEmpty()) {
                 add(MenuAction("emusettings", "Emulator Settings", FuseIcons.Sliders, detail = "Resolution, renderer and every other setting for this game, in its emulator's own settings", trailing = Trailing.Chevron, onSelect = { emulatorSettingsSheet(card) }))
             }
             // A port's own settings, as its code names them, in its own file.
@@ -710,7 +710,7 @@ fun AppState.showEmulator(id: io.github.matiyaaa.fuse.model.EmulatorId) {
                     contextMenu = null
                     scope.launch { store.emulators.openEmulator(id) }
                 }))
-                if (id.value.substringAfter('.') in io.github.matiyaaa.fuse.launch.settings.NativeSettings.changeable && platform.host != io.github.matiyaaa.fuse.model.Host.ANDROID) {
+                if (io.github.matiyaaa.fuse.launch.settings.NativeSettings.familyOf(id.value) in io.github.matiyaaa.fuse.launch.settings.NativeSettings.changeable && platform.host != io.github.matiyaaa.fuse.model.Host.ANDROID) {
                     add(MenuAction("settings", "Settings for Every Game", FuseIcons.Sliders, detail = "Resolution, renderer and every other setting, in its own settings", trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Chevron, onSelect = {
                         emulatorSettingsSheet(null, id)
                     }))

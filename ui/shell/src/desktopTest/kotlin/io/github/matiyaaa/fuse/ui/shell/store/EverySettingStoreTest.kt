@@ -143,4 +143,89 @@ class EverySettingStoreTest {
         assertFalse(own.exists())
         assertEquals("[Settings]\nInternalResolution = 2\n", gfx.readText())
     }
+
+    @Test
+    fun retroArchsGameSettingsGoInItsOverrideForTheCoreThatPlaysIt(): Unit = runBlocking {
+        val installed = InstalledEmulator(EmulatorId("linux.retroarch"), "RetroArch", Host.LINUX, "/usr/bin/retroarch", version = "1.22.2", platforms = setOf(PlatformId("gba")), detectedVia = "PATH")
+        val services = services("retroarch.db", installed)
+        val base = File(emu, "retroarch").apply { mkdirs() }
+        val cfg = File(base, "retroarch.cfg")
+        val text = "video_vsync = \"true\"\nvideo_swap_interval = \"1\"\n"
+        cfg.writeText(text)
+        services.retroArchHome = io.github.matiyaaa.fuse.launch.patches.RetroArchHome(cfg.absolutePath, "${base.absolutePath}/cheats", "${base.absolutePath}/config")
+        File(root, "gba").mkdirs()
+        File(root, "gba/Golden Sun (USA).gba").writeBytes(ByteArray(64))
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = withTimeout(20_000) { store.library.games(GameQuery()).first { it.size == 1 } }.single()
+
+        // For every game: retroarch.cfg, grouped by the tabs of RetroArch's own menu.
+        val every = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(null, installed.id))
+        assertEquals("v1.22.2", every.release)
+        val vsync = every.value("", "video_vsync")
+        assertEquals("Vertical Sync (VSync)", vsync.setting.label)
+        assertEquals("true", vsync.value)
+        assertEquals(SettingSource.EVERY_GAME, vsync.source)
+        assertTrue(every.sections.single { it.title == "Video" }.values.any { it.setting.key == "video_vsync" })
+        val swap = every.value("", "video_swap_interval").setting
+        assertFalse(store.library.setEveryEmulatorSetting(null, installed.id, swap.id, "9"), "past the menu's own range")
+
+        // A game's own: the override RetroArch reads for it, under the core that plays it.
+        val override = File(base, "config/mGBA/Golden Sun (USA).cfg")
+        val forGame = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(game.id))
+        assertEquals(SettingSource.EVERY_GAME, forGame.value("", "video_vsync").source)
+        assertTrue(store.library.setEveryEmulatorSetting(game.id, null, vsync.setting.id, "false"))
+        assertEquals("video_vsync = \"false\"\n", override.readText())
+        val after = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(game.id)).value("", "video_vsync")
+        assertEquals("false" to SettingSource.GAME, after.value to after.source)
+        assertEquals("true", after.everyGame)
+        assertEquals(text, cfg.readText(), "every game's stay as they were")
+
+        // Put Back: the override Fuse made goes again.
+        assertTrue(store.library.restoreEmulatorSettings(game.id, null))
+        assertFalse(override.exists())
+    }
+
+    @Test
+    fun edensValuesAreItsKeysTogetherAndAGamesOwnFileIsItsTitleIds(): Unit = runBlocking {
+        val installed = InstalledEmulator(EmulatorId("linux.eden"), "Eden", Host.LINUX, "/usr/bin/eden", version = "0.2.1", platforms = setOf(PlatformId("switch")), detectedVia = "PATH")
+        val services = services("eden.db", installed)
+        val config = File(emu, "eden").apply { mkdirs() }
+        val qt = File(config, "qt-config.ini")
+        val text = "[Renderer]\nresolution_setup\\default=false\nresolution_setup=6\nuse_vsync\\default=true\nuse_vsync=0\n"
+        qt.writeText(text)
+        services.edenConfigDir = config.absolutePath
+        File(root, "switch").mkdirs()
+        File(root, "switch/Tears of the Kingdom [0100F2C0115B6000][v0].nsp").writeBytes(ByteArray(64))
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = withTimeout(20_000) { store.library.games(GameQuery()).first { it.size == 1 } }.single()
+
+        // For every game: a value counts only where it isn't marked as Eden's default.
+        val every = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(null, installed.id))
+        assertEquals("v0.2.1", every.release)
+        val resolution = every.value("Renderer", "resolution_setup")
+        assertEquals("Resolution", resolution.setting.label)
+        assertEquals("6" to SettingSource.EVERY_GAME, resolution.value to resolution.source)
+        val vsync = every.value("Renderer", "use_vsync")
+        assertEquals("2" to SettingSource.DEFAULT, vsync.value to vsync.source, "marked the default, whatever the key holds")
+        assertTrue(store.library.setEveryEmulatorSetting(null, installed.id, vsync.setting.id, "1"))
+        assertEquals(text.replace("use_vsync\\default=true\nuse_vsync=0", "use_vsync\\default=false\nuse_vsync=1"), qt.readText())
+
+        // A game's own: custom/<title id>.ini, written as Eden writes it, its own only where it says so.
+        val own = File(config, "custom/0100F2C0115B6000.ini")
+        val forGame = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(game.id))
+        assertEquals("6" to SettingSource.EVERY_GAME, forGame.value("Renderer", "resolution_setup").let { it.value to it.source })
+        assertTrue(store.library.setEveryEmulatorSetting(game.id, null, resolution.setting.id, "3"))
+        assertEquals("[Renderer]\nresolution_setup\\use_global=false\nresolution_setup\\default=true\nresolution_setup=3\n", own.readText())
+        val after = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(game.id)).value("Renderer", "resolution_setup")
+        assertEquals("3" to SettingSource.GAME, after.value to after.source)
+        assertEquals("6", after.everyGame)
+
+        // Put Back: each of Eden's keys as it was, and the game's file Fuse made goes.
+        assertTrue(store.library.restoreEmulatorSettings(game.id, null))
+        assertFalse(own.exists())
+        assertTrue(store.library.restoreEmulatorSettings(null, installed.id))
+        assertEquals(text, qt.readText())
+    }
 }

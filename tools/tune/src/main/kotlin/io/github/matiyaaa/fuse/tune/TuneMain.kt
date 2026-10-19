@@ -6,7 +6,8 @@ import java.net.URI
 
 /**
  * An emulator Fuse Tune reads: its repository, which of its tags are releases (and how they sort),
- * the files its settings code is in, and how to read them.
+ * the files its settings code is in, and how to read them. A repository on GitHub by default; one
+ * elsewhere gives its git address and how a file at a tag is fetched there ([raw]).
  */
 class Emulator(
     val family: String,
@@ -14,6 +15,8 @@ class Emulator(
     val release: Regex,
     val files: List<String>,
     val parse: (Map<String, String>) -> List<Found>,
+    val git: String = "https://github.com/$repo",
+    val raw: (tag: String, path: String) -> String = { tag, path -> "https://raw.githubusercontent.com/$repo/$tag/$path" },
 )
 
 val EMULATORS = listOf(
@@ -29,6 +32,14 @@ val EMULATORS = listOf(
     Emulator("devilutionx", "diasurgical/devilutionX", Regex("""^\d+\.\d+\.\d+$"""), DevilutionX.FILES, DevilutionX::parse),
     Emulator("openrct2", "OpenRCT2/OpenRCT2", Regex("""^v\d+\.\d+\.\d+$"""), OpenRct2.FILES, OpenRct2::parse),
     Emulator("fallout2-ce", "alexbatalov/fallout2-ce", Regex("""^v\d+\.\d+\.\d+$"""), Fallout2Ce.FILES, Fallout2Ce::parse),
+    // RetroArch's own settings, for a game's override file.
+    Emulator("retroarch", "libretro/RetroArch", Regex("""^v\d+\.\d+\.\d+$"""), RetroArch.FILES, RetroArch::parse),
+    // Eden is kept on its own Forgejo; its releases are v0.2.1 and the like (release candidates left out).
+    Emulator(
+        "eden", "eden-emu/eden", Regex("""^v\d+\.\d+\.\d+$"""), Eden.FILES, Eden::parse,
+        git = "https://git.eden-emu.dev/eden-emu/eden",
+        raw = { tag, path -> "https://git.eden-emu.dev/eden-emu/eden/raw/tag/$tag/$path" },
+    ),
 )
 
 /** How many releases back each emulator is read. */
@@ -48,9 +59,9 @@ fun main(args: Array<String>) {
     val read = LinkedHashMap<Emulator, Pair<List<String>, List<Merged>>>()
     for (e in EMULATORS) {
         if (only != null && e.family !in only) continue
-        val tags = releases(tagsOf(e.repo), e.release).take(RELEASES)
+        val tags = releases(tagsOf(e.git), e.release).take(RELEASES)
         require(tags.isNotEmpty()) { "${e.family}: no release tags found" }
-        val perTag = tags.associateWith { tag -> e.parse(e.files.mapNotNull { path -> fetch(e.repo, tag, path)?.let { path to it } }.toMap()) }
+        val perTag = tags.associateWith { tag -> e.parse(e.files.mapNotNull { path -> fetch(e.raw(tag, path))?.let { path to it } }.toMap()) }
         perTag.forEach { (tag, found) -> println("${e.family} $tag: ${found.size} settings") }
         read[e] = tags to merge(tags, perTag)
     }
@@ -102,24 +113,24 @@ object VersionOrder : Comparator<String> {
     }
 }
 
-/** The repository's tag names, as `git ls-remote` lists them. */
-private fun tagsOf(repo: String): List<String> {
-    val p = ProcessBuilder("git", "ls-remote", "--tags", "https://github.com/$repo").redirectErrorStream(true).start()
+/** The tag names of the repository at [git], as `git ls-remote` lists them. */
+private fun tagsOf(git: String): List<String> {
+    val p = ProcessBuilder("git", "ls-remote", "--tags", git).redirectErrorStream(true).start()
     val text = p.inputStream.bufferedReader().readText()
-    check(p.waitFor() == 0) { "git ls-remote $repo failed: $text" }
+    check(p.waitFor() == 0) { "git ls-remote $git failed: $text" }
     return text.lines().mapNotNull { it.substringAfter("refs/tags/", "").takeIf { t -> t.isNotEmpty() && !t.endsWith("^{}") } }
 }
 
-/** One file of [repo] at [tag], or null when that release hasn't got it. */
-private fun fetch(repo: String, tag: String, path: String): String? {
-    val c = URI("https://raw.githubusercontent.com/$repo/$tag/$path").toURL().openConnection() as HttpURLConnection
+/** The file at [url] (one file of a repository at a tag), or null when that release hasn't got it. */
+private fun fetch(url: String): String? {
+    val c = URI(url).toURL().openConnection() as HttpURLConnection
     c.connectTimeout = 20_000
     c.readTimeout = 60_000
     return try {
         when (c.responseCode) {
             200 -> c.inputStream.bufferedReader().readText()
             404 -> null
-            else -> error("$repo $tag $path: HTTP ${c.responseCode}")
+            else -> error("$url: HTTP ${c.responseCode}")
         }
     } finally {
         c.disconnect()

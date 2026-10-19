@@ -29,7 +29,8 @@ import io.github.matiyaaa.fuse.ui.shell.store.TuneValue
 
 /**
  * An emulator's own settings, for every game or for one game, read and changed in the emulator's own
- * files (PCSX2, DuckStation, PPSSPP, Dolphin, and RPCS3 for Every Setting): a game's file holds only
+ * files (PCSX2, DuckStation, PPSSPP, Dolphin, and RPCS3, RetroArch and Eden for Every Setting): a
+ * game's file holds only
  * what differs for it, the rest comes from the emulator's settings for every game. Every key Fuse
  * changes is recorded with what it held before, so Fuse can put back exactly that (see
  * [SettingsEdit]). Fuse's own picks ([NativeSettings]) come with words of Fuse's; Every Setting is
@@ -48,6 +49,8 @@ internal class NativeSettingsStore(
     private val changeSettings: suspend ((AppSettings) -> AppSettings) -> Unit = {},
     /** A PS3 game's title id (BLUS30443), which RPCS3 keeps its own settings under. */
     private val ps3TitleId: suspend (Game) -> String? = { null },
+    /** The RetroArch core and content a game starts with, for its override file. */
+    private val retroArchRun: suspend (Game) -> NativePatches.RetroArchRun? = { null },
 ) {
     private val data = ctx.data
     private val fs get() = ctx.services.fs
@@ -64,6 +67,10 @@ internal class NativeSettingsStore(
         val globals: Map<String, String> = emptyMap(),
         /** Its files are YAML (RPCS3's), not ini. */
         val yaml: Boolean = false,
+        /** Its files are RetroArch's `key = "value"` config, not ini. */
+        val cfg: Boolean = false,
+        /** Its files are Eden's, each value kept in two or three keys ([io.github.matiyaaa.fuse.launch.settings.EdenConfig]). */
+        val eden: Boolean = false,
         /** The installed version, for which of every setting it has. */
         val version: String? = null,
         /** How its files are changed: the emulator's own folders, or a port's in Fuse's folder of ports. */
@@ -72,7 +79,22 @@ internal class NativeSettingsStore(
         val forGame: Boolean get() = gamePath != null
 
         /** A file of this emulator's, to edit in place. */
-        fun text(content: String?): SettingsText = if (yaml) YamlText(content ?: "") else IniText(content ?: "")
+        fun text(content: String?): SettingsText = when {
+            yaml -> YamlText(content ?: "")
+            cfg -> io.github.matiyaaa.fuse.launch.settings.CfgText(content ?: "")
+            else -> IniText(content ?: "", spaced = !eden)
+        }
+
+        /** What [file] holds for [key] as the emulator reads it: Eden's from its keys together, every other's as written. */
+        fun valueIn(file: SettingsText?, section: String, key: String, game: Boolean, default: String?): String? = when {
+            file == null -> null
+            eden -> io.github.matiyaaa.fuse.launch.settings.EdenConfig.value(file, section, key, game, default)
+            else -> file.values(section, key).lastOrNull()
+        }
+
+        /** The keys one change writes (Eden's two or three, every other's one), each with its value; null takes it out. */
+        fun keys(section: String, key: String, value: String?, game: Boolean, default: String?): List<Triple<String, String, String?>> =
+            if (eden) io.github.matiyaaa.fuse.launch.settings.EdenConfig.writes(section, key, value, game, default) else listOf(Triple(section, key, value))
 
         /** The file the every-setting [setting] is changed in by this view. */
         fun pathOf(setting: TuneSetting): String = gamePath ?: setting.file?.let { globals[it] } ?: globalPath
@@ -187,6 +209,27 @@ internal class NativeSettingsStore(
                     "$dir/custom_configs/config_$titleId.yml"
                 } else null
                 Target(family, name, files, "$dir/config.yml", gamePath, game?.titles?.original, yaml = true, version = version) to null
+            }
+            "retroarch" -> {
+                val home = files.retroArch(installed) ?: return notSetUp()
+                val config = home.config ?: return notSetUp()
+                // config_load_override (configuration.c): <config folder>/<core's library name>/<content>.cfg.
+                val gamePath = if (game != null) {
+                    val run = retroArchRun(game) ?: return no("Fuse can't tell which core plays this", "RetroArch keeps a game's own settings under the core that plays it. Choose a core for this system first.")
+                    val core = io.github.matiyaaa.fuse.sync.retroArchLibraryName(run.core)
+                        ?: return no("Fuse doesn't know this core's name", "RetroArch keeps a game's own settings under the core's own name, which Fuse doesn't know for ${run.core}. Change them in RetroArch's Quick Menu, Overrides.")
+                    io.github.matiyaaa.fuse.launch.patches.RetroArchCheats.overrideFile(home.configDir, core, io.github.matiyaaa.fuse.launch.patches.RetroArchCheats.contentName(run.content))
+                } else null
+                Target(family, name, files, config, gamePath, game?.titles?.original, cfg = true, version = version) to null
+            }
+            "eden" -> {
+                val config = files.edenConfig(installed) ?: return notSetUp()
+                val gamePath = if (game != null) {
+                    val titleId = game.tags.serial?.let(io.github.matiyaaa.fuse.library.parse.Serials::switchBaseTitleId)
+                        ?: return no("Fuse can't tell which game this is", "Eden keeps a game's own settings under its title id, which Fuse reads from the file name, like [0100F2C0115B6000]. Change this game's settings in Eden: right-click it, then Properties.")
+                    io.github.matiyaaa.fuse.launch.settings.EdenConfig.gameFile(config, titleId)
+                } else null
+                Target(family, name, files, io.github.matiyaaa.fuse.launch.settings.EdenConfig.globalFile(config), gamePath, game?.titles?.original, eden = true, version = version) to null
             }
             else -> no("Fuse can't change ${installed.name}'s settings", "$SUPPORTED Change ${installed.name}'s in ${installed.name}.")
         }
@@ -324,12 +367,13 @@ internal class NativeSettingsStore(
             read(t, f?.let { t.globals[it] } ?: t.globalPath)
         }
         val game = read(t, t.gamePath)
-        val sections = all.groupBy { it.file to it.section }.map { (where, settings) ->
+        // Grouped as the emulator's own settings group them: its tabs where its file has no sections (RetroArch's).
+        val sections = all.groupBy { it.file to (it.tab?.takeIf { _ -> it.section.isEmpty() } ?: it.section) }.map { (where, settings) ->
             val (file, section) = where
             TuneSection(
                 id = "${file.orEmpty()}|$section",
-                title = sectionTitle(t.family, file, settings.first().path),
-                values = settings.map { valueOf(it, if (t.forGame) game else null, files[it.file]) },
+                title = if (settings.first().section.isEmpty()) section.ifEmpty { "Other" } else sectionTitle(t.family, file, settings.first().path),
+                values = settings.map { valueOf(t, it, if (t.forGame) game else null, files[it.file]) },
             )
         }
         return EverySettingView.Ready(
@@ -408,17 +452,18 @@ internal class NativeSettingsStore(
         val path = t.pathOf(s)
         val before = fs.readText(path, MAX_TEXT)
         val file = t.text(before)
-        val records = SettingsEdit.change(file, data.owned.get(KIND, path), s.sectionIn(t.forGame), s.key, written)
+        var records = data.owned.get(KIND, path)
+        for ((section, key, v) in t.keys(s.sectionIn(t.forGame), s.key, written, t.forGame, s.default)) records = SettingsEdit.change(file, records, section, key, v)
         if (!t.writer.write(path, file.toString())) return false
         data.owned.set(KIND, path, records)
         if (before == null) data.owned.set(KIND, "$path#made", setOf("file"))
         return true
     }
 
-    private fun valueOf(s: TuneSetting, game: SettingsText?, global: SettingsText?): TuneValue {
+    private fun valueOf(t: Target, s: TuneSetting, game: SettingsText?, global: SettingsText?): TuneValue {
         fun shown(v: String?) = if (s.kind == TuneKind.SWITCH) Tune.switchShown(s.family, v) else v
-        val every = shown(global?.values(s.section, s.key)?.lastOrNull())
-        val own = shown(if (s.perGame) game?.values(s.sectionIn(game = true), s.key)?.lastOrNull() else null)
+        val every = shown(t.valueIn(global, s.section, s.key, game = false, s.default))
+        val own = shown(if (s.perGame) t.valueIn(game, s.sectionIn(game = true), s.key, game = true, s.default) else null)
         val everyGame = every ?: shown(s.default)
         return when {
             own != null -> TuneValue(s, own, SettingSource.GAME, everyGame)
@@ -459,15 +504,15 @@ internal class NativeSettingsStore(
         const val TOGETHER = "emulator.together"
 
         /** The emulator a system's games are changed in when they don't start in one Fuse knows. */
-        val PLATFORM_FAMILY = mapOf("ps2" to "pcsx2", "psx" to "duckstation", "psp" to "ppsspp", "ngc" to "dolphin", "wii" to "dolphin", "ps3" to "rpcs3")
+        val PLATFORM_FAMILY = mapOf("ps2" to "pcsx2", "psx" to "duckstation", "psp" to "ppsspp", "ngc" to "dolphin", "wii" to "dolphin", "ps3" to "rpcs3", "switch" to "eden")
 
         val FAMILIES = NativeSettings.changeable
 
-        const val SUPPORTED = "Fuse changes settings in PCSX2, DuckStation, PPSSPP, Dolphin and RPCS3."
+        const val SUPPORTED = "Fuse changes settings in PCSX2, DuckStation, PPSSPP, Dolphin, RPCS3, RetroArch and Eden."
 
         /** What making a game's own RPCS3 file changes besides (rpcs3/Emu/System.cpp: "Found custom config. Ignoring database config"). */
         const val RPCS3_GAME_FILE = "A game's own RPCS3 settings take the place of the settings RPCS3's own database gives that game."
 
-        fun family(e: InstalledEmulator): String = e.id.value.substringAfter('.')
+        fun family(e: InstalledEmulator): String = NativeSettings.familyOf(e.id.value)
     }
 }

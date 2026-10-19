@@ -502,6 +502,9 @@ interface EmulatorFiles {
     /** RPCS3's config folder for [installed] (where `patches/` and its settings are); null until it has one. */
     suspend fun rpcs3Config(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
 
+    /** Eden's config folder for [installed] (where `qt-config.ini` and `custom/` are); null until it has a `qt-config.ini`. */
+    suspend fun edenConfig(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
+
     /** shadPS4's user folder for [installed] (where `patches/` is); null until it has one. */
     suspend fun shadPs4User(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
 

@@ -52,6 +52,11 @@ together as each emulator does it, and Fuse Ports brings games rebuilt to run na
 - **RPCS3's settings in Fuse.** RPCS3 joins the emulators whose settings Fuse changes, through
   Every Setting, for every game and for one game (its file kept under the game's title id). Fuse
   says first that a game's own RPCS3 settings take the place of those RPCS3's database gives it.
+- **RetroArch's and Eden's settings in Fuse.** Every Setting now has RetroArch's own settings,
+  named, described and grouped as its menu has them, for every game and for one game, kept in the
+  override RetroArch reads for that game with the core that plays it. Eden's are there too, for
+  every game and for a Switch game by its title id, written as Eden writes its own so it reads
+  each one back exactly; Put Back undoes either.
 - **RomM keeps saves made of folders.** A PSP, PS3, Vita or Switch save (or any save of several
   files) now goes to RomM as one zip and comes back whole on your other devices, where before only
   saves of one file did. RomM shows each save in a slot named for what it is (PSP Save Data, PS2

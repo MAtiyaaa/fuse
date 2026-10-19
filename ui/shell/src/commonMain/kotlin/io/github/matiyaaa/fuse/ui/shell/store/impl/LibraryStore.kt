@@ -1200,7 +1200,7 @@ internal class DefaultLibraryOps(
     private val nativePatches by lazy { NativePatches(ctx, { emulators.detectNow() }, ::discIdentity, ::pspGameId, ::retroArchRun) }
 
     /** The emulator settings Fuse changes, for a game or for every game. */
-    private val nativeSettings by lazy { NativeSettingsStore(ctx, { emulators.detectNow() }, ::discIdentity, ::pspGameId, nintendoGameId = ::nintendoGameId, startsIn = { startsWith(it).first.installed }, changeSettings = changeSettings, ps3TitleId = ::ps3TitleId) }
+    private val nativeSettings by lazy { NativeSettingsStore(ctx, { emulators.detectNow() }, ::discIdentity, ::pspGameId, nintendoGameId = ::nintendoGameId, startsIn = { startsWith(it).first.installed }, changeSettings = changeSettings, ps3TitleId = ::ps3TitleId, retroArchRun = ::retroArchRun) }
 
     override suspend fun emulatorSettings(id: GameId?, emulator: EmulatorId?) = nativeSettings.view(id, emulator)
 
