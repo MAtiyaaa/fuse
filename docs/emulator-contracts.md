@@ -119,7 +119,7 @@ Version 1. Generated from Fuse's code by `EmulatorContractsTest`; do not edit by
 
 | Emulator | Id | Systems | Saves | Settings | Cheats | Firmware |
 | --- | --- | --- | --- | --- | --- | --- |
-| Azahar | `linux.azahar` | 3ds, new-nintendo-3ds | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
+| Azahar | `linux.azahar` | 3ds, new-nintendo-3ds | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
 | AzaharPlus | `linux.azaharplus` | 3ds, new-nintendo-3ds | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
 | Cemu | `linux.cemu` | wiiu | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
 | Citra | `linux.citra` | 3ds, new-nintendo-3ds | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
@@ -160,7 +160,7 @@ Version 1. Generated from Fuse's code by `EmulatorContractsTest`; do not edit by
 
 | Emulator | Id | Systems | Saves | Settings | Cheats | Firmware |
 | --- | --- | --- | --- | --- | --- | --- |
-| Azahar | `windows.azahar` | 3ds, new-nintendo-3ds | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
+| Azahar | `windows.azahar` | 3ds, new-nintendo-3ds | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
 | AzaharPlus | `windows.azaharplus` | 3ds, new-nintendo-3ds | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
 | Cemu | `windows.cemu` | wiiu | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
 | Citra | `windows.citra` | 3ds, new-nintendo-3ds | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
@@ -201,7 +201,7 @@ Version 1. Generated from Fuse's code by `EmulatorContractsTest`; do not edit by
 
 | Emulator | Id | Systems | Saves | Settings | Cheats | Firmware |
 | --- | --- | --- | --- | --- | --- | --- |
-| Azahar | `macos.azahar` | 3ds, new-nintendo-3ds | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
+| Azahar | `macos.azahar` | 3ds, new-nintendo-3ds | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
 | Cemu | `macos.cemu` | wiiu | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
 | Citra | `macos.citra` | 3ds, new-nintendo-3ds | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
 | Dolphin | `macos.dolphin` | ngc, wii | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |

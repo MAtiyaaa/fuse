@@ -708,6 +708,8 @@ data class TuneValue(
     val source: io.github.matiyaaa.fuse.launch.settings.SettingSource,
     /** What every game has (for a game's own view), the same way. */
     val everyGame: String?,
+    /** Why it can't be changed here: the installed version is unknown and only some releases have it. */
+    val locked: String? = null,
 )
 
 /** Every setting in one part of the emulator's settings, in the order its code lists them. */
@@ -725,6 +727,8 @@ sealed interface EverySettingView {
         val canRestore: Boolean,
         /** Said before a game's own settings file is made, when making it changes something else (RPCS3's database settings). */
         val gameFileNote: String? = null,
+        /** Fuse can't tell which version is installed: every release's settings are shown, those only some have locked. */
+        val versionUnknown: Boolean = false,
     ) : EverySettingView {
         val count: Int get() = sections.sumOf { it.values.size }
     }
@@ -756,7 +760,15 @@ sealed interface FamilyMovePreview {
 }
 
 /** One setting profile a game can be given: [active] when every value in it is the game's now. */
-data class SettingProfileView(val id: String, val name: String, val about: String, val own: Boolean, val active: Boolean)
+data class SettingProfileView(
+    val id: String,
+    val name: String,
+    val about: String,
+    val own: Boolean,
+    val active: Boolean,
+    /** For a profile made for a device: how many lines its screen shows. */
+    val lines: Int? = null,
+)
 
 /** What RPCS3's compatibility list says about a PS3 game, asked for by the user. */
 sealed interface CompatibilityAnswer {

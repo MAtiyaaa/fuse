@@ -445,6 +445,36 @@ class DesktopEmulatorFiles(
     }
 
     /**
+     * Azahar's config folder, as its FileUtil::SetUserPath (src/common/file_util.cpp, 2126.2) and
+     * common_paths.h have it: on Windows `user\config` beside the program when that `user` folder is
+     * there, else %APPDATA%\Azahar\config; on macOS $XDG_CONFIG_HOME/azahar-emu when it was made
+     * before, else ~/Library/Application Support/Azahar/config; elsewhere $XDG_CONFIG_HOME/azahar-emu
+     * or ~/.config/azahar-emu (inside ~/.var/app for the Flatpak). As with Eden, the `user` folder
+     * Linux and macOS builds look for is in the folder they start from, Fuse's own, so it isn't
+     * looked for there. Only a folder with its `qt-config.ini` is returned.
+     */
+    override suspend fun azaharConfig(installed: InstalledEmulator): String? = withContext(Dispatchers.IO) {
+        val flatpak = installed.detectedVia == "Flatpak"
+        val program = if (flatpak) null else File(installed.appId).takeIf { it.isAbsolute }
+        val xdg = env["XDG_CONFIG_HOME"]?.takeIf { it.startsWith("/") }?.let { File(it, "azahar-emu") } ?: File(home, ".config/azahar-emu")
+        val candidates = when (os) {
+            DesktopOs.WINDOWS -> listOfNotNull(
+                program?.parentFile?.let { File(it, "user") }?.takeIf { it.isDirectory }?.let { File(it, "config") },
+                env["APPDATA"]?.let { File(it, "Azahar/config") },
+            ).take(1)
+            DesktopOs.MACOS -> listOf(xdg, File(home, "Library/Application Support/Azahar/config"))
+            else -> listOf(if (flatpak) File(home, ".var/app/$AZAHAR_FLATPAK/config/azahar-emu") else xdg)
+        }
+        val config = candidates.firstOrNull { File(it, io.github.matiyaaa.fuse.launch.settings.AzaharConfig.GLOBAL).isFile } ?: return@withContext null
+        roots += config.absolutePath
+        config.absolutePath.replace('\\', '/').trimEnd('/')
+    }
+
+    override suspend fun threeDsTitleId(path: String, serial: String?): String? = withContext(Dispatchers.IO) {
+        runCatching { io.github.matiyaaa.fuse.sync.threeDsTitleId(serial, path, saveEnv()) }.getOrNull()
+    }
+
+    /**
      * Eden's config folder, as its PathManagerImpl::Reinitialize (src/common/fs/path_util.cpp) and
      * fs_paths.h have it: on Windows `user\config` beside the program when that `user` folder is
      * there, else %APPDATA%\eden\config; elsewhere $XDG_CONFIG_HOME/eden or ~/.config/eden (inside
@@ -988,6 +1018,7 @@ class DesktopEmulatorFiles(
         const val STOP_GRACE_MS = 800L
         const val DUCKSTATION_FLATPAK = "org.duckstation.DuckStation"
         const val EDEN_FLATPAK = "dev.eden_emu.eden"
+        const val AZAHAR_FLATPAK = "org.azahar_emu.Azahar"
         const val DOLPHIN_FLATPAK = "org.DolphinEmu.dolphin-emu"
         val VFS_HDD0 = Regex("^\\s*/dev_hdd0/\\s*:\\s*(.+?)\\s*$", RegexOption.MULTILINE)
         val PREF_PATH = Regex("^pref-path:\\s*(.+)$", RegexOption.MULTILINE)

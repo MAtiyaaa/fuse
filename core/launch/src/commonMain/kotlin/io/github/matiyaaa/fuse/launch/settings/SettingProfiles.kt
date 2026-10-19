@@ -13,7 +13,15 @@ data class SettingProfile(
     val about: String,
     val values: Map<String, String>,
     val own: Boolean = false,
+    /** For a profile made for a device: how many lines its screen shows. */
+    val lines: Int? = null,
 )
+
+/**
+ * A kind of device a profile is fitted to: its name, how many lines its screen shows, and whether
+ * it is held and runs on its battery (where drawing more than the screen shows costs play time).
+ */
+data class DeviceClass(val id: String, val name: String, val lines: Int, val handheld: Boolean)
 
 /**
  * The profiles Fuse offers for each emulator it changes settings in. They are starting points, not
@@ -27,7 +35,72 @@ object SettingProfiles {
     const val QUALITY = "quality"
     const val BATTERY = "battery"
 
-    fun builtIn(family: String, host: Host): List<SettingProfile> {
+    /** The start of a device profile's id (`device.steam-deck`). */
+    const val DEVICE = "device."
+
+    /**
+     * The devices Fuse fits profiles to, by their makers' own specifications: the Steam Deck's
+     * 1280 by 800 screen (LCD and OLED alike), the ROG Ally's 1920 by 1080 (Ally and Ally X), and a
+     * 4K TV's 3840 by 2160. An Android handheld isn't among them: on Android Fuse doesn't change
+     * emulators' files, which they keep in their own storage.
+     */
+    val DEVICES = listOf(
+        DeviceClass("steam-deck", "Steam Deck", 800, handheld = true),
+        DeviceClass("rog-ally", "ROG Ally", 1080, handheld = true),
+        DeviceClass("tv-4k", "4K TV", 2160, handheld = false),
+    )
+
+    /**
+     * Each emulator's internal resolution setting, the lines one step of it is (as the emulator's
+     * own menu names its steps: PCSX2's "3x Native (~1080px/FHD)" and Dolphin's "3x Native
+     * (1920x1584) for 1080p" make a step about 360 lines, DuckStation's 240 and PPSSPP's 272 the
+     * consoles' own), and its vertical sync switch, on as each writes it.
+     */
+    private class Fit(val resolution: String, val linesPerStep: Int, val vsync: Pair<String, String>?, val console: String)
+
+    private val FITS = mapOf(
+        "pcsx2" to Fit("pcsx2.upscale", 360, "pcsx2.vsync" to "true", "PS2"),
+        "dolphin" to Fit("dolphin.resolution", 360, "dolphin.vsync" to "True", "console"),
+        "duckstation" to Fit("duckstation.scale", 240, "duckstation.vsync" to "true", "PlayStation"),
+        "ppsspp" to Fit("ppsspp.resolution", 272, null, "PSP"),
+    )
+
+    /**
+     * A profile per device in [DEVICES] for [family]: the internal resolution fitted to the
+     * device's lines, and frames paced to its screen. In the hand, the step nearest the screen's
+     * lines (the lower of two as near), since drawing what the screen can't show only spends the
+     * battery; on a TV, the first step that fills it, for the sharpest picture. Each choice is said.
+     */
+    fun forDevices(family: String, host: Host): List<SettingProfile> {
+        val fit = FITS[family] ?: return emptyList()
+        val settings = NativeSettings.forEmulator(family, host)
+        val resolution = settings.firstOrNull { it.id == fit.resolution && it.perGame } ?: return emptyList()
+        val steps = resolution.choices.mapNotNull { c -> c.value.toIntOrNull()?.takeIf { it > 0 }?.let { it to c } }
+        if (steps.isEmpty()) return emptyList()
+        val vsync = fit.vsync?.takeIf { (id, v) -> settings.any { s -> s.id == id && s.perGame && s.choices.any { it.value == v } } }
+        return DEVICES.map { d ->
+            val (step, choice) = if (d.handheld) {
+                steps.minWith(compareBy<Pair<Int, SettingChoice>> { kotlin.math.abs(it.first * fit.linesPerStep - d.lines) }.thenBy { it.first })
+            } else {
+                steps.firstOrNull { it.first * fit.linesPerStep >= d.lines } ?: steps.last()
+            }
+            val why = if (d.handheld) {
+                "the step nearest its ${d.lines} lines, so nothing is drawn that the screen can't show and the battery lasts"
+            } else {
+                "the first step that fills its ${d.lines} lines, for the sharpest picture"
+            }
+            val about = buildString {
+                append("For a ${d.name}: ${choice.label}, $why.")
+                if (step == 1) append(" That is the ${fit.console}'s own resolution.")
+                if (vsync != null) append(" Frames paced to the screen: no tearing, and no frames drawn that it never shows.")
+            }
+            SettingProfile(DEVICE + d.id, d.name, about, listOfNotNull(fit.resolution to choice.value, vsync).toMap(), lines = d.lines)
+        }
+    }
+
+    fun builtIn(family: String, host: Host): List<SettingProfile> = fuseOwn(family, host) + forDevices(family, host)
+
+    private fun fuseOwn(family: String, host: Host): List<SettingProfile> {
         val offered = NativeSettings.forEmulator(family, host).filter { it.perGame }
         fun profile(id: String, name: String, about: String, vararg values: Pair<String, String>): SettingProfile? {
             // Only what this emulator has and accepts.

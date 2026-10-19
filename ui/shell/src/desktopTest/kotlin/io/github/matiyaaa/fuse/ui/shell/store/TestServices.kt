@@ -234,6 +234,9 @@ internal class FakeServices(
     /** The fake Eden's config folder (where its qt-config.ini and custom are); null when it isn't set up. */
     @Volatile var edenConfigDir: String? = null
 
+    /** The fake Azahar's config folder; null when it isn't set up. */
+    @Volatile var azaharConfigDir: String? = null
+
     override val emulatorFiles = object : EmulatorFiles {
         override suspend fun pcsx2(installed: InstalledEmulator) = pcsx2Home
         override suspend fun duckstation(installed: InstalledEmulator) = duckstationHome
@@ -243,11 +246,14 @@ internal class FakeServices(
         override suspend fun dolphin(installed: InstalledEmulator) = dolphinHome
         override suspend fun rpcs3Config(installed: InstalledEmulator) = rpcs3ConfigDir
         override suspend fun edenConfig(installed: InstalledEmulator) = edenConfigDir
+        override suspend fun azaharConfig(installed: InstalledEmulator) = azaharConfigDir
+        // The real one reads the file's header; the fake's files say it in their names.
+        override suspend fun threeDsTitleId(path: String, serial: String?) = Regex("""\[(00040000[0-9A-Fa-f]{8})]""").find(path)?.groupValues?.get(1)?.uppercase()
         override suspend fun remove(path: String): Boolean = inside(path) && File(path).delete()
         override suspend fun zipText(zip: String, entry: String): String? =
             java.util.zip.ZipFile(zip).use { z -> z.getEntry(entry)?.let { e -> z.getInputStream(e).use { it.readBytes().decodeToString() } } }
         private fun inside(path: String): Boolean =
-            listOfNotNull(pcsx2Home?.dataRoot, duckstationHome?.dataRoot, ppssppHome?.memstick, retroArchHome?.cheats, retroArchHome?.configDir, dolphinHome?.config, dolphinHome?.gameSettings, rpcs3ConfigDir, edenConfigDir)
+            listOfNotNull(pcsx2Home?.dataRoot, duckstationHome?.dataRoot, ppssppHome?.memstick, retroArchHome?.cheats, retroArchHome?.configDir, dolphinHome?.config, dolphinHome?.gameSettings, rpcs3ConfigDir, edenConfigDir, azaharConfigDir)
                 .any { path.startsWith("$it/") }
 
         override suspend fun write(path: String, text: String): Boolean {

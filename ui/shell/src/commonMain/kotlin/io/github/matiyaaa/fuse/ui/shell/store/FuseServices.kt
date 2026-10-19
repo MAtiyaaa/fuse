@@ -502,6 +502,12 @@ interface EmulatorFiles {
     /** RPCS3's config folder for [installed] (where `patches/` and its settings are); null until it has one. */
     suspend fun rpcs3Config(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
 
+    /** Azahar's config folder for [installed] (where `qt-config.ini` and `custom/` are); null until it has a `qt-config.ini`. */
+    suspend fun azaharConfig(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
+
+    /** A 3DS game's title id from its serial or its file's own header ([io.github.matiyaaa.fuse.sync.threeDsTitleId]); null when unreadable. */
+    suspend fun threeDsTitleId(path: String, serial: String?): String? = null
+
     /** Eden's config folder for [installed] (where `qt-config.ini` and `custom/` are); null until it has a `qt-config.ini`. */
     suspend fun edenConfig(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
 

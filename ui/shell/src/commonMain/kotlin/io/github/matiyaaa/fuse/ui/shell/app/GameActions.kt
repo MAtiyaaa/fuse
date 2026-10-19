@@ -459,7 +459,7 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
                 add(MenuAction("together", "Play Together", FuseIcons.Users, detail = "Host it for your household or join someone's game, as its emulator plays with others", trailing = Trailing.Chevron, onSelect = { playTogetherSheet(card) }))
             }
             // The emulator's own settings for this game, where Fuse can change them.
-            if (card.platformId.value in setOf("ps2", "psx", "psp", "ngc", "wii", "ps3", "switch") || retroArch && io.github.matiyaaa.fuse.launch.RetroArchCores.coresFor(platform.host, card.platformId).isNotEmpty()) {
+            if (card.platformId.value in setOf("ps2", "psx", "psp", "ngc", "wii", "ps3", "switch", "3ds", "new-nintendo-3ds") || retroArch && io.github.matiyaaa.fuse.launch.RetroArchCores.coresFor(platform.host, card.platformId).isNotEmpty()) {
                 add(MenuAction("emusettings", "Emulator Settings", FuseIcons.Sliders, detail = "Resolution, renderer and every other setting for this game, in its emulator's own settings", trailing = Trailing.Chevron, onSelect = { emulatorSettingsSheet(card) }))
             }
             // A port's own settings, as its code names them, in its own file.
@@ -1078,12 +1078,18 @@ private fun AppState.settingProfilesSheet(
         }
     }
     val own = view.profiles.filter { it.own }
+    // The device whose screen this one's matches, by its shorter side.
+    val here = minOf(platform.device.screenWidthPx, platform.device.screenHeightPx)
     val rows = view.profiles.map { p ->
         MenuAction(
             "profile.${p.id}", p.name, if (p.own) FuseIcons.Bookmark else profileIcon(p.id),
-            detail = p.about,
+            detail = if (p.lines != null && p.lines == here) "Fits this screen. ${p.about}" else p.about,
             trailing = Trailing.Check(p.active),
-            section = if (p.own) "Your Own" else "From Fuse",
+            section = when {
+                p.own -> "Your Own"
+                p.lines != null -> "For a Device"
+                else -> "From Fuse"
+            },
             onSelect = { apply(p) },
         )
     }
@@ -1148,7 +1154,9 @@ private fun profileIcon(id: String) = when (id) {
     io.github.matiyaaa.fuse.launch.settings.SettingProfiles.PERFORMANCE -> FuseIcons.Gauge
     io.github.matiyaaa.fuse.launch.settings.SettingProfiles.QUALITY -> FuseIcons.Sparkles
     io.github.matiyaaa.fuse.launch.settings.SettingProfiles.BATTERY -> FuseIcons.BatteryMedium
-    else -> FuseIcons.Layers
+    io.github.matiyaaa.fuse.launch.settings.SettingProfiles.DEVICE + "tv-4k" -> FuseIcons.Tv
+    // A handheld's.
+    else -> if (id.startsWith(io.github.matiyaaa.fuse.launch.settings.SettingProfiles.DEVICE)) FuseIcons.Joystick else FuseIcons.Layers
 }
 
 /** The values one setting can take, with the one in use checked; for a game, following every game's comes first. */

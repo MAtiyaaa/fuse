@@ -75,11 +75,25 @@ together as each emulator does it, and Fuse Ports brings games rebuilt to run na
 - **RPCS3's settings in Fuse.** RPCS3 joins the emulators whose settings Fuse changes, through
   Every Setting, for every game and for one game (its file kept under the game's title id). Fuse
   says first that a game's own RPCS3 settings take the place of those RPCS3's database gives it.
-- **RetroArch's and Eden's settings in Fuse.** Every Setting now has RetroArch's own settings,
-  named, described and grouped as its menu has them, for every game and for one game, kept in the
-  override RetroArch reads for that game with the core that plays it. Eden's are there too, for
-  every game and for a Switch game by its title id, written as Eden writes its own so it reads
-  each one back exactly; Put Back undoes either.
+- **RetroArch's, Eden's and Azahar's settings in Fuse.** Every Setting now has RetroArch's own
+  settings, named, described and grouped as its menu has them, for every game and for one game,
+  kept in the override RetroArch reads for that game with the core that plays it. Eden's are there
+  too, for every game and for a Switch game by its title id, and Azahar's, for every game and for a
+  3DS game by the title id in its own file, each written as the emulator writes its own so it
+  reads every value back exactly; Put Back undoes any of them.
+- **A game's core options.** A RetroArch game's page now has its core's own options too (85 cores,
+  from Snes9x and mGBA to Beetle PSX, SwanStation, Flycast and Mupen64Plus-Next), named and grouped
+  as the core names them. Changing one gives the game its own options file, made as RetroArch's
+  Quick Menu makes it, with every option as the game had it, so nothing else about the game
+  changes; Put Back takes the file away again.
+- **Settings for your device.** Beside Vanilla, Performance, Visual Quality and Battery Saver, a
+  game in PCSX2, Dolphin, DuckStation or PPSSPP can be given Steam Deck, ROG Ally or 4K TV: the
+  resolution fitted to that screen (in the hand, the step nearest the screen, to spare the battery;
+  on a TV, the first that fills it), frames paced to the screen, and each choice said. The one that
+  fits this screen says so.
+- **When Fuse can't tell the version.** An emulator whose version Fuse can't read shows every
+  release's settings, and one that only some releases have is locked, saying which, rather than
+  written to a version that may not read it.
 - **RomM keeps saves made of folders.** A PSP, PS3, Vita or Switch save (or any save of several
   files) now goes to RomM as one zip and comes back whole on your other devices, where before only
   saves of one file did. RomM shows each save in a slot named for what it is (PSP Save Data, PS2

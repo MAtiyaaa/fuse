@@ -23,13 +23,23 @@ object TuneWriter {
             family, f.file ?: NONE, f.section, f.key, f.kind.name, f.default ?: NONE,
             f.min?.toString() ?: NONE, f.max?.toString() ?: NONE, f.choices.joinToString(JOIN, transform = ::choice),
             if (f.perGame) "1" else "0", f.gameSection ?: NONE, m.tags.joinToString(","),
-            f.label ?: NONE, f.about ?: NONE, f.tab ?: NONE,
+            f.label?.let(::words) ?: NONE, f.about?.let(::words) ?: NONE, f.tab?.let(::words) ?: NONE,
         ).joinToString("\t") { it.replace('\t', ' ').replace('\n', ' ') }
     }
 
+    /**
+     * An emulator's words as Fuse shows them: a dash between words becomes a comma (`Modern –
+     * Balanced` is `Modern, Balanced`) and one between numbers a hyphen. Values and keys are never
+     * changed, being what the emulator reads.
+     */
+    fun words(text: String): String = text
+        .replace(Regex("""\s+[\u2013\u2014]\s+"""), ", ")
+        .replace(Regex("""(?<=\d)[\u2013\u2014](?=\d)"""), "-")
+        .replace(Regex("""[\u2013\u2014]"""), ", ")
+
     fun choice(c: Choice): String = buildString {
         append(c.value)
-        c.label?.let { append(LABEL).append(it) }
+        c.label?.let { append(LABEL).append(words(it)) }
         c.hosts?.let { append(HOSTS).append(it.sorted().joinToString("+")) }
     }
 

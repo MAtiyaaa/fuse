@@ -52,6 +52,13 @@ class WithSaveFolders(
     override fun learned(game: String, format: String): List<String> = learnedFolders(game, format)
 }
 
+/**
+ * A Nintendo 3DS game's title id (`0004000000055D00`), as Fuse reads it for its saves: its [serial]
+ * when that is one, else what the file at [path] says (a cartridge image's or an NCCH's header, a
+ * CIA's title metadata). Null for a file whose header is compressed.
+ */
+fun threeDsTitleId(serial: String?, path: String, env: SaveEnvironment): String? = ThreeDs.titleId(serial, path, env)
+
 /** The game whose saves are wanted, and what it is played with here. */
 @kotlinx.serialization.Serializable
 data class SaveQuery(

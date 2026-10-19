@@ -63,8 +63,8 @@ object NativeSettings {
     /** The emulators Fuse changes settings in, by their family (`pcsx2`, from `linux.pcsx2`). */
     val families = setOf("pcsx2", "duckstation", "ppsspp", "dolphin")
 
-    /** The emulators whose settings Fuse changes: these, and RPCS3, RetroArch and Eden, whose come only as Every Setting (see [Tune]). */
-    val changeable: Set<String> = families + setOf("rpcs3", "retroarch", "eden")
+    /** The emulators whose settings Fuse changes: these, and RPCS3, RetroArch, Eden and Azahar, whose come only as Every Setting (see [Tune]). */
+    val changeable: Set<String> = families + setOf("rpcs3", "retroarch", "eden", "azahar")
 
     /**
      * The family an emulator's id keeps its settings as (`linux.pcsx2` is `pcsx2`): Steam's RetroArch

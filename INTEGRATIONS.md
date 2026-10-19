@@ -1217,7 +1217,18 @@ exactly.
   finds it) and Eden (`qt-config.ini`, a game's `custom/<title id>.ini`, in its config folder as
   `src/common/fs/path_util.cpp` and `fs_paths.h` put it: `user\config` beside the program or
   `%APPDATA%\eden\config` on Windows, `$XDG_CONFIG_HOME/eden` or `~/.config/eden` elsewhere,
-  inside `~/.var/app/dev.eden_emu.eden` for the Flatpak). Every Setting is all of an emulator's settings,
+  inside `~/.var/app/dev.eden_emu.eden` for the Flatpak) and Azahar (`qt-config.ini`, a game's
+  `custom/<title id>.ini` as `ConfigurePerGame` names it, in its config folder as
+  `src/common/file_util.cpp` puts it: `user\config` beside the program when that folder is there or
+  `%APPDATA%\Azahar\config` on Windows, `$XDG_CONFIG_HOME/azahar-emu` on Linux,
+  `~/.var/app/org.azahar_emu.Azahar/config/azahar-emu` for the Flatpak, and on macOS the same XDG
+  folder when Azahar made one, else `~/Library/Application Support/Azahar/config`), with a game's
+  title id read from its own header as for its saves. A RetroArch game's core options are in
+  `config/<core>/<content>.opt` (`runloop_init_core_options_path` in `runloop.c`), which RetroArch
+  reads alone when it is there, so Fuse makes it as RetroArch's Quick Menu does, with every option
+  as the game has it now from the folder's `.opt`, the core's own `<core>.opt`, or
+  `retroarch-core-options.cfg` (`core_options_path`) with `global_core_options` on, and offers none
+  when `game_specific_options` is off. Every Setting is all of an emulator's settings,
   read by Fuse Tune (`tools/tune`) from the emulator's own settings code at its last four release
   tags, never typed in by hand: PCSX2's `SettingsWrap*` calls in `pcsx2/Pcsx2Config.cpp` with types
   and defaults from `pcsx2/Config.h` and each options' constructor; DuckStation's `si.Get*Value`
@@ -1233,9 +1244,19 @@ exactly.
   switchable one for a game, none not saved), its categories' sections from `TranslateCategory`
   in `settings.cpp`, its enums from `settings_enums.h` (written as each member's number) and the
   names and descriptions its Qt frontend gives them in `src/qt_common/config/shared_translation.cpp`,
-  read from Eden's own Forgejo (`git.eden-emu.dev`). Only
+  read from Eden's own Forgejo (`git.eden-emu.dev`); Azahar's `SwitchableSetting` and `Setting`
+  declarations in `src/common/settings.h`, the group each is kept under and which a game's file
+  holds from `QtConfig`'s `Read*Values` in `src/citra_qt/configuration/config.cpp` (read outside
+  `if (global)`), and the names, descriptions and choices' names its Android app's settings
+  screens give them (`SettingsFragmentPresenter.kt`, with `strings.xml` and `arrays.xml`); and each
+  RetroArch core's own `libretro_core_options.h` (`option_defs_us`, or `option_defs` where a core
+  fills that in when it starts, and its categories `option_cats_us`) at the head of the branch
+  libretro-super's build recipe names (`recipes/linux/cores-linux-x64-generic`), a key made of
+  macros read through the `#define`s of the core's other headers, its sources and the headers they
+  include, as the recipe's build flags define them. Only
   names, kinds, ranges, choices and defaults are taken, no code. The installed version decides
-  which settings show (the newest release read that is no newer than it), a choice a system's
+  which settings show (the newest release read that is no newer than it; when Fuse can't tell the
+  version, every release's, those not every release has locked with which have them), a choice a system's
   build hasn't got (DuckStation's Direct3D on Linux) isn't offered, and a value the emulator
   wouldn't read (a number out of its range) is refused before anything is written. Files are
   edited in place: every other line, comment and spacing stays, an ini file through `IniText`,
@@ -1243,7 +1264,10 @@ exactly.
   two or three keys, `key\default` beside `key` and, in a game's file, `key\use_global` first
   (`Config::WriteSettingGeneric` in `src/frontend_common/config.cpp`), and reads them back
   together (`Config::ReadSettingGeneric`): Fuse reads them the same way and writes each one Eden
-  reads (`EdenConfig`), without spaces as Eden's SimpleIni does. Fuse keeps what each key held before it first changed it, and
+  reads (`EdenConfig`), without spaces as Eden's SimpleIni does. Azahar's Qt ini keeps
+  `key\default` beside `key` in the file for every game and `key\use_global=false` beside it in a
+  game's (`QtConfig::WriteBasicSetting` and `WriteGlobalSetting`), a group with a space written as
+  `%20`: Fuse reads and writes each as Azahar does (`AzaharConfig`). Fuse keeps what each key held before it first changed it, and
   Put Back What Fuse Changed restores exactly that (a key changed in the emulator since stays); a
   game's own file Fuse made is taken away again once nothing it set is left. RPCS3 gives a game
   with its own settings file none of the settings from its own database

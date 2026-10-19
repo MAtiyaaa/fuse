@@ -3,6 +3,7 @@ package io.github.matiyaaa.fuse.tune
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -429,6 +430,14 @@ class ParsersTest {
     }
 
     @Test
+    fun anEmulatorsWordsAreWrittenWithoutDashesAndItsValuesAsTheyAre() {
+        val f = Found(null, "", "core_palette", Kind.ENUM, "modern\u2013balanced", choices = listOf(Choice("modern\u2013balanced", "Modern \u2013 Balanced")), label = "Range 0\u2013100", about = "Fast\u2014or not")
+        val line = TuneWriter.line("core.x", Merged(f, listOf("abc")))
+        assertTrue("Modern, Balanced" in line && "Range 0-100" in line && "Fast, or not" in line, line)
+        assertTrue("modern\u2013balanced" in line, "the value the core reads stays")
+    }
+
+    @Test
     fun onlyTheLinesABuildCompilesAreKept() {
         val text = """
             a
@@ -755,6 +764,126 @@ class ParsersTest {
     }
 
     @Test
+    fun azaharsSettingsByTheGroupsItsQtConfigReadsThemIn() {
+        val settings = """
+            enum class GraphicsAPI {
+                Software = 0,
+                OpenGL = 1,
+                Vulkan = 2,
+            };
+            struct Values {
+                SwitchableSetting<s32, true> cpu_clock_percentage{100, 5, 400, Keys::cpu_clock_percentage};
+                SwitchableSetting<bool> is_new_3ds{true, Keys::is_new_3ds};
+                Setting<bool> use_cpu_jit{true, Keys::use_cpu_jit};
+                SwitchableSetting<GraphicsAPI, true> graphics_api{GraphicsAPI::OpenGL, GraphicsAPI::Software, GraphicsAPI::Vulkan, Keys::graphics_api};
+                Setting<bool> use_virtual_sd{true, Keys::use_virtual_sd};
+                SwitchableSetting<bool> dump_textures{false, Keys::dump_textures};
+                Setting<std::string> never_read{"", Keys::never_read};
+            };
+        """.trimIndent()
+        val config = """
+            void QtConfig::ReadValues() {
+                if (global) {
+                    ReadDataStorageValues();
+                }
+                ReadCoreValues();
+                ReadRendererValues();
+            }
+            void QtConfig::ReadCoreValues() {
+                qt_config->beginGroup(QStringLiteral("Core"));
+                ReadGlobalSetting(Settings::values.cpu_clock_percentage);
+                if (global) {
+                    ReadBasicSetting(Settings::values.use_cpu_jit);
+                    ReadGlobalSetting(Settings::values.is_new_3ds);
+                }
+                qt_config->endGroup();
+            }
+            void QtConfig::ReadRendererValues() {
+                qt_config->beginGroup(QStringLiteral("Renderer"));
+                ReadGlobalSetting(Settings::values.graphics_api);
+                qt_config->endGroup();
+            }
+            void QtConfig::ReadDataStorageValues() {
+                qt_config->beginGroup(QStringLiteral("Data Storage"));
+                ReadBasicSetting(Settings::values.use_virtual_sd);
+                ReadGlobalSetting(Settings::values.dump_textures);
+                qt_config->endGroup();
+            }
+        """.trimIndent()
+        val screens = """
+            add(
+                SwitchSetting(
+                    BooleanSetting.NEW_3DS,
+                    R.string.new_3ds,
+                    0,
+                    BooleanSetting.NEW_3DS.key,
+                    BooleanSetting.NEW_3DS.defaultValue
+                )
+            )
+            add(
+                SingleChoiceSetting(
+                    IntSetting.GRAPHICS_API,
+                    R.string.graphics_api,
+                    R.string.graphics_api_description,
+                    R.array.graphicsApiNames,
+                    R.array.graphicsApiValues,
+                    IntSetting.GRAPHICS_API.key,
+                    IntSetting.GRAPHICS_API.defaultValue
+                )
+            )
+        """.trimIndent()
+        val booleans = """
+            enum class BooleanSetting(override val key: String, override val section: String, override val defaultValue: Boolean) {
+                NEW_3DS(SettingKeys.is_new_3ds(), Settings.SECTION_SYSTEM, true),
+            }
+        """.trimIndent()
+        val ints = "enum class IntSetting {\n    GRAPHICS_API(SettingKeys.graphics_api(), Settings.SECTION_RENDERER, 1),\n}"
+        val strings = """
+            <resources>
+                <string name="new_3ds">New 3DS Mode</string>
+                <string name="graphics_api">Graphics API</string>
+                <string name="graphics_api_description">Azahar\'s renderer &amp; its backend.</string>
+                <string name="software">Software</string>
+            </resources>
+        """.trimIndent()
+        val arrays = """
+            <resources>
+                <string-array name="graphicsApiNames">
+                    <item>@string/software</item>
+                    <item>OpenGL ES</item>
+                    <item>Vulkan</item>
+                </string-array>
+                <!-- the numbers settings.h gives them -->
+                <integer-array name="graphicsApiValues">
+                    <item>0</item>
+                    <item>1</item>
+                    <item>2</item>
+                </integer-array>
+            </resources>
+        """.trimIndent()
+        val words = mapOf(Azahar.SCREENS to screens, Azahar.MODELS[0] to booleans, Azahar.MODELS[1] to ints, Azahar.STRINGS to strings, Azahar.ARRAYS to arrays)
+        val found = Azahar.parse(mapOf(Azahar.SETTINGS to settings, Azahar.CONFIG to config) + words).associateBy { it.key }
+        assertEquals("New 3DS Mode", found.getValue("is_new_3ds").label)
+        assertNull(found.getValue("is_new_3ds").about)
+        assertEquals("Graphics API" to "Azahar's renderer & its backend.", found.getValue("graphics_api").let { it.label to it.about })
+        assertEquals(listOf("Software", "OpenGL ES", "Vulkan"), found.getValue("graphics_api").choices.map { it.label }, "as its screens name them")
+        assertNull(found.getValue("use_cpu_jit").label, "on no screen")
+        assertEquals(setOf("cpu_clock_percentage", "is_new_3ds", "use_cpu_jit", "graphics_api", "use_virtual_sd", "dump_textures"), found.keys, "only what the Qt config reads")
+        val clock = found.getValue("cpu_clock_percentage")
+        assertEquals("Core" to (5L to 400L), clock.section to (clock.min to clock.max))
+        assertEquals("100", clock.default)
+        assertTrue(clock.perGame)
+        assertFalse(found.getValue("is_new_3ds").perGame, "read only for every game")
+        assertFalse(found.getValue("use_cpu_jit").perGame, "a plain Setting")
+        assertFalse(found.getValue("dump_textures").perGame, "in a group read only for every game")
+        val api = found.getValue("graphics_api")
+        assertEquals(Kind.ENUM, api.kind)
+        assertEquals("1", api.default)
+        assertEquals(listOf("0" to "Software", "1" to "OpenGL ES", "2" to "Vulkan"), api.choices.map { it.value to it.label })
+        assertEquals("Data%20Storage" to "Data Storage", found.getValue("use_virtual_sd").let { it.section to it.tab }, "as QSettings writes a group with a space")
+    }
+
+    @Test
     fun edensSettingsByTheirSectionsWithWhatItsQtSettingsCallThem() {
         val settings = """
             struct Values {
@@ -815,5 +944,142 @@ class ParsersTest {
         assertEquals("Renderer Advanced", scale.tab)
         assertFalse(found.single { it.key == "use_multi_core" }.perGame, "a plain Setting is for every game only")
         assertEquals(listOf("0", "1", "2", "3", "4"), found.single { it.key == "output_engine" }.choices.map { it.value })
+    }
+
+    @Test
+    fun aCoresOptionsWithTheirChoicesDefaultsAndCategories() {
+        val v2 = """
+            #define CORE_NAME "snes9x"
+            #ifdef HAVE_OPENGL
+            #define RENDER "Hardware"
+            #endif
+            struct retro_core_option_v2_category option_cats_us[] = {
+               { "video", "Video", "Change how the picture looks." },
+               { NULL, NULL, NULL },
+            };
+            struct retro_core_option_v2_definition option_defs_us[] = {
+               {
+                  CORE_NAME "_region",
+                  "Console Region (Reload Core)",
+                  NULL,
+                  "Which region the system is from. "
+                  "'PAL' is 50 Hz.",
+                  NULL,
+                  NULL,
+                  {
+                     { "auto", "Auto" },
+                     { "ntsc", "NTSC" },
+                     { "pal",  "PAL" },
+                     { NULL, NULL },
+                  },
+                  "auto"
+               },
+               {
+                  CORE_NAME "_overscan",
+                  "Crop Overscan",
+                  "Crop",
+                  NULL,
+                  NULL,
+                  "video",
+                  {
+                     { "enabled",  NULL },
+                     { "disabled", NULL },
+                     { NULL, NULL },
+                  },
+                  "missing"
+               },
+               { NULL, NULL, NULL, NULL, NULL, NULL, {{0}}, NULL },
+            };
+        """.trimIndent()
+        val found = CoreOptions.parse(v2)
+        assertEquals(listOf("snes9x_region", "snes9x_overscan"), found.map { it.key }, "keys made of the core's name and the rest")
+        val region = found.first()
+        assertEquals(Kind.ENUM, region.kind)
+        assertEquals("auto", region.default)
+        assertEquals(listOf("auto" to "Auto", "ntsc" to "NTSC", "pal" to "PAL"), region.choices.map { it.value to it.label })
+        assertEquals("Console Region (Reload Core)", region.label)
+        assertEquals("Which region the system is from. 'PAL' is 50 Hz.", region.about)
+        assertTrue(region.perGame, "RetroArch keeps any core option in a game's own .opt file")
+        val overscan = found.last()
+        assertEquals("enabled", overscan.default, "a default that isn't one of the values is the first")
+        assertEquals("Video", overscan.tab, "the category's name")
+        assertEquals(listOf<String?>(null, null), overscan.choices.map { it.label }, "a value with no label of its own")
+
+        val v1 = """
+            struct retro_core_option_definition option_defs_us[] = {
+               {
+                  "gambatte_gb_colorization",
+                  "GB Colorization",
+                  "Enables colorization of Game Boy games.",
+                  {
+                     { "disabled", NULL },
+                     { "auto",     "Auto" },
+                     { NULL, NULL },
+                  },
+                  "disabled"
+               },
+               { NULL, NULL, NULL, {{0}}, NULL },
+            };
+        """.trimIndent()
+        val old = CoreOptions.parse(v1).single()
+        assertEquals("gambatte_gb_colorization" to "disabled", old.key to old.default)
+        assertEquals("Enables colorization of Game Boy games.", old.about)
+        assertEquals(null, old.tab)
+    }
+
+    @Test
+    fun aCoresKeysMadeOfMacrosAreReadAsItsBuildDefinesThem() {
+        // A define with nothing after it is one line, not the next one's value (ParaLLEl N64's header).
+        val own = """
+            #define LIBRETRO_CORE_OPTIONS_H__
+
+            #include <libretro.h>
+            #define CORE_NAME "parallel-n64"
+            struct retro_core_option_v2_definition option_defs[] = {
+               { CORE_NAME "-upscaling", "Upscaling", NULL, NULL, NULL, NULL, { { "1x", NULL }, { "2x", NULL }, { NULL, NULL } }, "1x" },
+               { NULL, NULL, NULL, NULL, NULL, NULL, {{0}}, NULL },
+            };
+            struct retro_core_option_v2_definition option_defs_us[MAX_CORE_OPTIONS];
+        """.trimIndent()
+        assertEquals(listOf("parallel-n64-upscaling"), CoreOptions.parse(own).map { it.key }, "the entries of option_defs, which the core copies when it starts")
+
+        // Beetle PSX names its keys with a macro from another header, which its HW build defines its own way.
+        val header = """
+            struct retro_core_option_v2_definition option_defs_us[] = {
+               { BEETLE_OPT(renderer), "Renderer", NULL, NULL, NULL, "video", { { "hardware", "Hardware" }, { "software", "Software" }, { NULL, NULL } }, "hardware" },
+               { NULL, NULL, NULL, NULL, NULL, NULL, {{0}}, NULL },
+            };
+        """.trimIndent()
+        val options = """
+            #ifdef HAVE_HW
+            #define BEETLE_OPT(_o) ("beetle_psx_hw_" # _o)
+            #else
+            #define BEETLE_OPT(_o) ("beetle_psx_" # _o)
+            #endif
+        """.trimIndent()
+        assertEquals(setOf("BEETLE_OPT"), CoreOptions.unknown(header))
+        assertEquals(listOf("beetle_psx_hw_renderer"), CoreOptions.parse(header, CoreOptions.defines(options, setOf("HAVE_HW"))).map { it.key })
+        assertEquals(listOf("beetle_psx_renderer"), CoreOptions.parse(header, CoreOptions.defines(options)).map { it.key })
+        assertTrue(CoreOptions.parse(header).isEmpty(), "a key whose macro isn't known is left out")
+
+        val recipe = coreRecipes("""
+            mednafen_psx_hw libretro-beetle_psx_hw https://github.com/libretro/beetle-psx-libretro.git master YES GENERIC Makefile . HAVE_HW=1 HAVE_LIGHTREC=1
+            flycast libretro-flycast https://github.com/flyinghead/flycast master YES CMAKE Makefile build -DLIBRETRO=ON -DCMAKE_BUILD_TYPE=Release
+        """.trimIndent())
+        assertEquals(setOf("HAVE_HW", "HAVE_LIGHTREC"), recipe.getValue("mednafen_psx_hw").flags)
+        assertEquals(setOf("LIBRETRO"), recipe.getValue("flycast").flags)
+        assertEquals("https://github.com/flyinghead/flycast" to "master", recipe.getValue("flycast").let { it.url to it.branch })
+    }
+
+    @Test
+    fun theCoresFuseStartsGamesWithAreItsQuotedNamesThatArentSystems() {
+        val source = """
+            private val shared = mapOf(
+                "psx" to listOf("swanstation", "pcsx_rearmed"),
+                "gb" to GB,
+            )
+            private val GB = listOf("gambatte", "sameboy", "swanstation")
+        """.trimIndent()
+        assertEquals(listOf("gambatte", "pcsx_rearmed", "sameboy", "swanstation"), coreNames(source))
     }
 }

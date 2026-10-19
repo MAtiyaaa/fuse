@@ -80,6 +80,7 @@ private fun AppState.everySettingParts(place: Place, view: EverySettingView.Read
             append("All ${view.count} of them, by the names ${view.emulator}'s own code gives them")
             view.release?.let { append(", as its release $it has them") }
             append(". Changes apply the next time it starts. Put Back undoes any of them.")
+            if (view.versionUnknown) append(" Fuse can't tell which version of ${view.emulator} this is, so a setting only some of its releases have is locked.")
             view.gameFileNote?.let { append(' ').append(it) }
         },
         options = listOf(search) + parts,
@@ -172,9 +173,10 @@ private fun AppState.row(
     val on = v.value?.lowercase() == "true"
     val instant = s.kind == TuneKind.SWITCH && !forGame && v.value != null
     return MenuAction(
-        "tune.${s.id}", settingName(s), kindIcon(s.kind),
+        "tune.${s.id}", settingName(s), if (v.locked != null) FuseIcons.Lock else kindIcon(s.kind),
         detail = detail,
         trailing = if (instant) Trailing.Switch(on) else Trailing.Value(shown(s, v.value).let { if (it.length > MAX_SHOWN) it.take(MAX_SHOWN - 1) + "…" else it }),
+        unavailableReason = v.locked,
         section = section,
         onSelect = {
             when {

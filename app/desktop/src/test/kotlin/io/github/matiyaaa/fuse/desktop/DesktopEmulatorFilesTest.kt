@@ -94,6 +94,24 @@ class DesktopEmulatorFilesTest {
     }
 
     @Test
+    fun azaharsConfigFolderIsWhereItsOwnPathsPutIt() = runBlocking {
+        val azahar = InstalledEmulator(EmulatorId("linux.azahar"), "Azahar", Host.LINUX, "/usr/bin/azahar", platforms = setOf(PlatformId("3ds")), detectedVia = "PATH")
+        val linux = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        val config = File(home, ".config/azahar-emu").apply { mkdirs() }
+        assertNull(linux.azaharConfig(azahar), "not until Azahar has written its qt-config.ini")
+        File(config, "qt-config.ini").writeText("[Core]\n")
+        assertEquals(p(config), linux.azaharConfig(azahar))
+        val flatpak = File(home, ".var/app/org.azahar_emu.Azahar/config/azahar-emu").apply { mkdirs(); File(this, "qt-config.ini").writeText("") }
+        assertEquals(p(flatpak), linux.azaharConfig(azahar.copy(appId = "org.azahar_emu.Azahar", detectedVia = "Flatpak")))
+        // macOS: its Application Support folder unless the XDG one was made first.
+        val support = File(home, "Library/Application Support/Azahar/config").apply { mkdirs(); File(this, "qt-config.ini").writeText("") }
+        val mac = DesktopEmulatorFiles(DesktopOs.MACOS, env = emptyMap(), home = home.absolutePath, backups = backups)
+        assertEquals(p(config), mac.azaharConfig(azahar))
+        File(config, "qt-config.ini").delete()
+        assertEquals(p(support), mac.azaharConfig(azahar))
+    }
+
+    @Test
     fun edensConfigFolderIsWhereItsOwnPathsPutIt() = runBlocking {
         val linux = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
         val eden = InstalledEmulator(EmulatorId("linux.eden"), "Eden", Host.LINUX, "/usr/bin/eden", platforms = setOf(PlatformId("switch")), detectedVia = "PATH")

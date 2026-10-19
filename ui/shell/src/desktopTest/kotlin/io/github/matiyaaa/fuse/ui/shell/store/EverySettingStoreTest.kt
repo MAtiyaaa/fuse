@@ -187,6 +187,117 @@ class EverySettingStoreTest {
     }
 
     @Test
+    fun withTheVersionUnknownASettingOnlySomeReleasesHaveIsLockedWithTheReason(): Unit = runBlocking {
+        // Found on the PATH with no version Fuse can read.
+        val installed = InstalledEmulator(EmulatorId("linux.pcsx2"), "PCSX2", Host.LINUX, "/usr/bin/pcsx2-qt", version = "git", platforms = setOf(PlatformId("ps2")), detectedVia = "PATH")
+        val services = services("unknown.db", installed)
+        val home = File(emu, "PCSX2").apply { mkdirs() }
+        services.pcsx2Home = io.github.matiyaaa.fuse.launch.patches.Pcsx2Home(home.absolutePath, "${home.absolutePath}/gamesettings", "${home.absolutePath}/patches", null)
+        val ini = File(services.pcsx2Home!!.settingsFile).apply { parentFile.mkdirs(); writeText("[EmuCore/GS]\nupscale_multiplier = 2\n") }
+        val store = createFuseStore(services, scope)
+
+        val view = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(null, installed.id))
+        assertTrue(view.versionUnknown)
+        assertNull(view.release)
+        assertEquals(Tune.forEmulator("pcsx2").size, view.count, "every release's settings")
+        val newer = Tune.forEmulator("pcsx2").first { it.releases.size < Tune.releases("pcsx2").size && Tune.releases("pcsx2").first() in it.releases }
+        val bold = view.sections.flatMap { it.values }.single { it.setting.id == newer.id }
+        assertEquals("Locked: only in PCSX2 ${newer.releases.last()} and later, and Fuse can't tell which version this is", bold.locked)
+        assertFalse(store.library.setEveryEmulatorSetting(null, installed.id, newer.id, newer.default ?: "true"), "the installed one may not read it")
+        // One every release has stays open.
+        val scale = view.value("EmuCore/GS", "upscale_multiplier")
+        assertNull(scale.locked)
+        assertTrue(store.library.setEveryEmulatorSetting(null, installed.id, scale.setting.id, "3"))
+        assertEquals("[EmuCore/GS]\nupscale_multiplier = 3\n", ini.readText())
+    }
+
+    @Test
+    fun aGamesCoreOptionsGoInItsOwnOptFileMadeWithEveryOptionAsRetroArchMakesIt(): Unit = runBlocking {
+        val installed = InstalledEmulator(EmulatorId("linux.retroarch"), "RetroArch", Host.LINUX, "/usr/bin/retroarch", version = "1.22.2", platforms = setOf(PlatformId("gba")), detectedVia = "PATH")
+        val services = services("cores.db", installed)
+        val base = File(emu, "retroarch").apply { mkdirs() }
+        val cfg = File(base, "retroarch.cfg").apply { writeText("video_vsync = \"true\"\n") }
+        services.retroArchHome = io.github.matiyaaa.fuse.launch.patches.RetroArchHome(cfg.absolutePath, "${base.absolutePath}/cheats", "${base.absolutePath}/config")
+        val perCore = File(base, "config/mGBA/mGBA.opt").apply { parentFile.mkdirs() }
+        val coreText = "mgba_skip_bios = \"ON\"\n"
+        perCore.writeText(coreText)
+        File(root, "gba").mkdirs()
+        File(root, "gba/Golden Sun (USA).gba").writeBytes(ByteArray(64))
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = withTimeout(20_000) { store.library.games(GameQuery()).first { it.size == 1 } }.single()
+        val options = Tune.forEmulator("core.mgba")
+        assertTrue(options.isNotEmpty(), "Fuse Tune read mGBA's options")
+
+        // Beside RetroArch's own: the core's, by its own categories, each as the core's file for every game has it.
+        val view = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(game.id))
+        val skip = view.sections.filter { it.title.startsWith("mGBA Core") }.flatMap { it.values }.single { it.setting.key == "mgba_skip_bios" }
+        assertEquals("ON" to SettingSource.EVERY_GAME, skip.value to skip.source)
+        val other = options.first { it.key != "mgba_skip_bios" }
+        assertEquals(SettingSource.DEFAULT, view.sections.flatMap { it.values }.single { it.setting.id == other.id }.source)
+
+        // The game's own file is made with every option as the game has it now, RetroArch reading it alone.
+        val own = File(base, "config/mGBA/Golden Sun (USA).opt")
+        assertTrue(store.library.setEveryEmulatorSetting(game.id, null, skip.setting.id, "OFF"))
+        val written = io.github.matiyaaa.fuse.launch.settings.CfgText(own.readText())
+        assertEquals("OFF", written.values("", "mgba_skip_bios").single())
+        assertEquals(other.default, written.values("", other.key).single())
+        assertTrue(options.all { written.values("", it.key).isNotEmpty() })
+        val after = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(game.id)).sections.flatMap { it.values }
+        val skipAfter = after.single { it.setting.id == skip.setting.id }
+        assertEquals(Triple("OFF", SettingSource.GAME, "ON"), Triple(skipAfter.value, skipAfter.source, skipAfter.everyGame))
+        assertFalse(store.library.setEveryEmulatorSetting(game.id, null, skip.setting.id, "MAYBE"), "not a value mGBA has")
+        // Same as Every Game: the core's value for every game, written, since RetroArch reads the game's file alone.
+        assertTrue(store.library.setEveryEmulatorSetting(game.id, null, skip.setting.id, null))
+        assertEquals("ON", io.github.matiyaaa.fuse.launch.settings.CfgText(own.readText()).values("", "mgba_skip_bios").single())
+        assertEquals(coreText, perCore.readText(), "every game's stay as they were")
+
+        // Put Back: every key Fuse wrote goes, so the file Fuse made does too.
+        assertTrue(store.library.restoreEmulatorSettings(game.id, null))
+        assertFalse(own.exists())
+
+        // With a game's own options turned off in RetroArch, it reads none, so Fuse offers none.
+        cfg.writeText("game_specific_options = \"false\"\n")
+        assertTrue(assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(game.id)).sections.none { it.title.startsWith("mGBA Core") })
+    }
+
+    @Test
+    fun azaharsGameFileIsItsTitleIdsAndItsGroupsAreQtsOwn(): Unit = runBlocking {
+        val installed = InstalledEmulator(EmulatorId("linux.azahar"), "Azahar", Host.LINUX, "/usr/bin/azahar", version = "2126.2", platforms = setOf(PlatformId("3ds")), detectedVia = "PATH")
+        val services = services("azahar.db", installed)
+        val config = File(emu, "azahar-emu").apply { mkdirs() }
+        val qt = File(config, "qt-config.ini")
+        val text = "[Core]\ncpu_clock_percentage\\default=true\ncpu_clock_percentage=100\n\n[Data%20Storage]\nuse_virtual_sd\\default=true\nuse_virtual_sd=true\n"
+        qt.writeText(text)
+        services.azaharConfigDir = config.absolutePath
+        File(root, "3ds").mkdirs()
+        File(root, "3ds/Kirby [0004000000183600].3ds").writeBytes(ByteArray(64))
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = withTimeout(20_000) { store.library.games(GameQuery()).first { it.size == 1 } }.single()
+
+        val every = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(null, installed.id))
+        val clock = every.value("Core", "cpu_clock_percentage")
+        assertEquals("100" to SettingSource.DEFAULT, clock.value to clock.source)
+        assertTrue(every.sections.any { it.title == "Data Storage" }, "Qt's %20 read as a space")
+        assertTrue(store.library.setEveryEmulatorSetting(null, installed.id, clock.setting.id, "150"))
+        assertEquals(text.replace("cpu_clock_percentage\\default=true\ncpu_clock_percentage=100", "cpu_clock_percentage\\default=false\ncpu_clock_percentage=150"), qt.readText())
+
+        // A game's own: custom/<title id>.ini, as Azahar writes it.
+        val own = File(config, "custom/0004000000183600.ini")
+        assertTrue(store.library.setEveryEmulatorSetting(game.id, null, clock.setting.id, "200"))
+        assertEquals("[Core]\ncpu_clock_percentage\\use_global=false\ncpu_clock_percentage=200\n", own.readText())
+        val after = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(game.id)).value("Core", "cpu_clock_percentage")
+        assertEquals("200" to SettingSource.GAME, after.value to after.source)
+        assertEquals("150", after.everyGame)
+
+        assertTrue(store.library.restoreEmulatorSettings(game.id, null))
+        assertFalse(own.exists())
+        assertTrue(store.library.restoreEmulatorSettings(null, installed.id))
+        assertEquals(text, qt.readText())
+    }
+
+    @Test
     fun edensValuesAreItsKeysTogetherAndAGamesOwnFileIsItsTitleIds(): Unit = runBlocking {
         val installed = InstalledEmulator(EmulatorId("linux.eden"), "Eden", Host.LINUX, "/usr/bin/eden", version = "0.2.1", platforms = setOf(PlatformId("switch")), detectedVia = "PATH")
         val services = services("eden.db", installed)

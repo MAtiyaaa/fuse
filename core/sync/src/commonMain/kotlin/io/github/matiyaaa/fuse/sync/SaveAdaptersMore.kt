@@ -276,9 +276,11 @@ internal object ThreeDs : SaveAdapter {
      * image's NCSD header, an NCCH's program id, a CIA's title metadata). Null for files whose header
      * is compressed (`.zcci`, `.zcxi`): their id is learned from the first play instead.
      */
-    internal fun titleId(q: SaveQuery, env: SaveEnvironment): String? {
-        q.serial?.uppercase()?.takeIf { HEX16.matches(it) && it.startsWith("00040000") }?.let { return it }
-        val b = env.readBytes(q.romPath, 0x100, 0x20)
+    internal fun titleId(q: SaveQuery, env: SaveEnvironment): String? = titleId(q.serial, q.romPath, env)
+
+    internal fun titleId(serial: String?, romPath: String, env: SaveEnvironment): String? {
+        serial?.uppercase()?.takeIf { HEX16.matches(it) && it.startsWith("00040000") }?.let { return it }
+        val b = env.readBytes(romPath, 0x100, 0x20)
         if (b != null && b.size >= 0x20) {
             when (b.decodeToString(0, 4)) {
                 // Cartridge image: the media id at 0x108.
@@ -287,7 +289,7 @@ internal object ThreeDs : SaveAdapter {
                 "NCCH" -> return leHex(b, 0x18, 8).takeIf { it.startsWith("00040000") }
             }
         }
-        return ciaTitle(env, q.romPath)?.let { "00040000" + it.takeLast(8) }
+        return ciaTitle(env, romPath)?.let { "00040000" + it.takeLast(8) }
     }
 
     /**

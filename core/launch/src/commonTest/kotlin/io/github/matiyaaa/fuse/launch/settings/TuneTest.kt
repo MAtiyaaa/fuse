@@ -10,14 +10,33 @@ import kotlin.test.assertTrue
 class TuneTest {
     @Test
     fun everyEmulatorReadHasItsReleasesAndASettingsCountLikeItsOwn() {
-        assertEquals(setOf("dolphin", "duckstation", "ppsspp", "pcsx2", "rpcs3", "devilutionx", "openrct2", "fallout2-ce", "retroarch", "eden"), Tune.families)
+        // RetroArch's cores are read as families of their own (`core.snes9x`), at one commit each.
+        val emulators = Tune.families.filterNot { it.startsWith(CoreOptionFiles.family("")) }.toSet()
+        assertEquals(setOf("dolphin", "duckstation", "ppsspp", "pcsx2", "rpcs3", "devilutionx", "openrct2", "fallout2-ce", "retroarch", "eden", "azahar"), emulators)
         // Each has as many as its own settings show; a reader that broke would find a handful.
-        val least = mapOf("devilutionx" to 40, "fallout2-ce" to 40)
-        for (family in Tune.families) {
+        val least = mapOf("devilutionx" to 40, "fallout2-ce" to 40, "azahar" to 90)
+        for (family in emulators) {
             assertEquals(4, Tune.releases(family).size, family)
             assertTrue(Tune.forEmulator(family).size > (least[family] ?: 150), "$family: ${Tune.forEmulator(family).size}")
             assertTrue(Tune.forEmulator(family).all { it.releases.isNotEmpty() }, family)
         }
+    }
+
+    @Test
+    fun retroArchsCoresOptionsAreReadAtOneCommitEachAsChoicesAnyGameCanHave() {
+        val cores = Tune.families.filter { it.startsWith(CoreOptionFiles.family("")) }
+        assertTrue(cores.size > 60, "${cores.size} cores")
+        for (family in cores) {
+            assertEquals(1, Tune.releases(family).size, family)
+            assertTrue(Tune.forEmulator(family).all { it.kind == TuneKind.CHOICE && it.perGame && it.section.isEmpty() && it.default != null }, family)
+            assertTrue(Tune.forEmulator(family).all { s -> s.choices.any { it.value == s.default } }, "$family: every default one of its values")
+        }
+        // Keys made of the cores' own macros, read as each build has them.
+        assertNotNull(Tune.find(CoreOptionFiles.family("mednafen_psx_hw"), null, "", "beetle_psx_hw_renderer"))
+        assertNotNull(Tune.find(CoreOptionFiles.family("mednafen_psx"), null, "", "beetle_psx_cpu_freq_scale"))
+        val rdp = assertNotNull(Tune.find(CoreOptionFiles.family("mupen64plus_next"), null, "", "mupen64plus-rdp-plugin"))
+        assertEquals("RDP Plugin", rdp.label)
+        assertEquals("System", Tune.find(CoreOptionFiles.family("mgba"), null, "", "mgba_skip_bios")?.tab, "its category's name")
     }
 
     @Test
@@ -58,6 +77,13 @@ class TuneTest {
         assertEquals("1X (720p/1080p)", resolution.choices.single { it.value == "3" }.shown)
         assertTrue(resolution.perGame, "a SwitchableSetting can be set for one game")
         assertEquals(false, Tune.find("eden", null, "Debugging", "use_gdbstub")?.perGame, "a plain Setting only for every game")
+        // Azahar's, under the groups its Qt config keeps them in, with its own screens' words.
+        val api = assertNotNull(Tune.find("azahar", null, "Renderer", "graphics_api"))
+        assertEquals("Graphics API", api.label)
+        assertEquals(TuneKind.CHOICE, api.kind)
+        assertTrue(api.perGame)
+        assertEquals(false, Tune.find("azahar", null, "Data%20Storage", "use_virtual_sd")?.perGame, "a group written with Qt's %20, for every game")
+        assertEquals(0L to 18L, Tune.find("azahar", null, "Renderer", "resolution_factor")?.let { it.min to it.max })
     }
 
     @Test
@@ -104,7 +130,8 @@ class TuneTest {
 
     @Test
     fun theInstalledVersionDecidesWhichSettingsShow() {
-        for (family in Tune.families) {
+        // A core's one release is the commit read, not a version a core says it is.
+        for (family in Tune.families.filterNot { it.startsWith(CoreOptionFiles.family("")) }) {
             val read = Tune.releases(family)
             assertEquals(read.first(), Tune.releaseFor(family, null), "unknown: the newest")
             val newer = TuneVersions.numbers(read.first()).let { listOf(it[0] + 1) + it.drop(1) }.joinToString(".")
