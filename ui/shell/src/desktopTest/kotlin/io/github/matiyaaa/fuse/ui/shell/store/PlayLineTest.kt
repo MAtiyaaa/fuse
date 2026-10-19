@@ -46,12 +46,14 @@ class PlayLineTest {
     fun theLineSaysWhereItStartsWithItsCoreAndFrameGeneration(): Unit = runBlocking {
         val duck = InstalledEmulator(EmulatorId("linux.duckstation"), "DuckStation", Host.LINUX, "/usr/bin/duckstation-qt", platforms = setOf(PlatformId("psx")), detectedVia = "PATH")
         val ra = InstalledEmulator(EmulatorId("linux.retroarch"), "RetroArch", Host.LINUX, "/usr/bin/retroarch", platforms = setOf(PlatformId("gba")), detectedVia = "PATH")
-        val services = FakeServices(FuseData(DesktopDatabase.open(File(cache, "fuse.db").absolutePath)), cache, installedEmulators = listOf(duck, ra))
+        val steam = InstalledEmulator(EmulatorId("linux.steam"), "Steam", Host.LINUX, "/usr/bin/steam", platforms = setOf(PlatformId("steam")), detectedVia = "PATH")
+        val services = FakeServices(FuseData(DesktopDatabase.open(File(cache, "fuse.db").absolutePath)), cache, installedEmulators = listOf(duck, ra, steam))
         File(root, "psx").mkdirs()
         File(root, "psx/Crash Racer (USA).cue").writeText("FILE \"Crash Racer (USA).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n")
         File(root, "psx/Crash Racer (USA).bin").writeBytes(ByteArray(2352))
         File(root, "gba").mkdirs()
         File(root, "gba/Sky Racer (USA).gba").writeBytes(ByteArray(512))
+
         val store = createFuseStore(services, scope)
         store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
         val games = withTimeout(20_000) { store.library.games(GameQuery()).first { it.size >= 2 } }
@@ -60,6 +62,18 @@ class PlayLineTest {
 
         assertEquals("Starts in DuckStation.", line("Crash Racer"))
         assertEquals("Starts in RetroArch, with the mGBA core.", line("Sky Racer"))
+        // A game of Steam's own library starts through Steam by its app id.
+        val lib = File(root.parentFile, "${root.name}-steam")
+        File(lib, "steamapps/common/Portal/Portal.exe").apply { parentFile.mkdirs() }.writeBytes(ByteArray(64))
+        File(lib, "steamapps/appmanifest_400.acf").writeText("\"AppState\"\n{\n\t\"appid\"\t\"400\"\n\t\"name\"\t\"Portal\"\n\t\"StateFlags\"\t\"4\"\n\t\"installdir\"\t\"Portal\"\n}\n")
+        services.steamPlaces = io.github.matiyaaa.fuse.ui.shell.store.SteamPlaces(roots = listOf(lib.absolutePath))
+        store.sources.addSteamGames(store.sources.findSteamGames())
+        val portal = withTimeout(20_000) { store.library.games(GameQuery()).first { l -> l.any { it.title == "Portal" } } }.single { it.title == "Portal" }
+        assertEquals(
+            "Starts through Steam, which keeps the game's own saves and play time.",
+            withTimeout(10_000) { store.library.game(portal.id).first { it?.emulator?.playLine != null } }!!.emulator.playLine,
+        )
+        lib.deleteRecursively()
         // Frame generation where lsfg-vk is set up and chosen.
         services.frameGeneration = true
         store.settings.set(ScopedSettings.FrameGeneration, ScopeRef.platform(PlatformId("gba")), 2)

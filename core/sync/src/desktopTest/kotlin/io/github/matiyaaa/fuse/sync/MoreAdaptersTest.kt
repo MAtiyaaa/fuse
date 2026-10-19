@@ -49,9 +49,9 @@ class MoreAdaptersTest {
         val mama = q("nds", "/storage/emulated/0/Emulation/roms/nds/Cooking Mama.nds", "melonds")
         // melonDS with its save folder set in the person's storage.
         val melon = FakeEnv("ANDROID", "/storage/emulated/0", files = mapOf("/storage/emulated/0/melonDS/saves/Cooking Mama.sav" to "x"))
-        assertEquals("/storage/emulated/0/melonDS/saves/Cooking Mama.sav", SaveAdapters.forEmulator("melonds")!!.locate(mama, melon).single().files.single().path)
+        assertEquals("/storage/emulated/0/melonDS/saves/Cooking Mama.sav", SaveAdapters.forEmulator("melonds")!!.locate(mama, melon).single { it.kind != SaveKind.STATE }.files.single().path)
         // Nothing found: the note names melonDS's own settings, not only Fuse's.
-        val nothing = SaveAdapters.forEmulator("melonds")!!.locate(mama, FakeEnv("ANDROID", "/storage/emulated/0")).single()
+        val nothing = SaveAdapters.forEmulator("melonds")!!.locate(mama, FakeEnv("ANDROID", "/storage/emulated/0")).single { it.kind != SaveKind.STATE }
         assertTrue("ROM search folders" in nothing.note!! && "save folder" in nothing.note!!, nothing.note)
         // DraStic's folder on an SD card.
         val card = "/storage/1234-ABCD"
@@ -388,7 +388,7 @@ class MoreAdaptersTest {
     fun supermodelsNvramIsWhereItsFileSystemPathPutsIt() {
         val sm = SaveAdapters.forEmulator("linux.supermodel")!!
         val game = q("model3", "/roms/model3/daytona2.zip", "linux.supermodel")
-        fun path(env: FakeEnv, query: SaveQuery = game) = sm.locate(query, env).single().files.single().path
+        fun path(env: FakeEnv, query: SaveQuery = game) = sm.locate(query, env).single { it.kind != SaveKind.STATE }.files.single().path
         // Nothing of its own yet: the data folder, ~/.local/share/supermodel/NVRAM.
         assertEquals("/home/mo/.local/share/supermodel/NVRAM/daytona2.nv", path(FakeEnv("LINUX", "/home/mo")))
         // ~/.supermodel before that, and a Config folder in the game's folder (where it starts) before everything.
@@ -458,7 +458,7 @@ class MoreAdaptersTest {
 
             val pcEnv = FileSaveEnvironment("LINUX", root.path, variables = { null })
             val pcQuery = SaveQuery(game, "nds", File(pcRoms, "Pokemon Platinum.nds").path, "melonds")
-            val pcSlot = { Slots.of(game, SaveAdapters.forEmulator("melonds")!!.locate(pcQuery, pcEnv).single()) }
+            val pcSlot = { Slots.of(game, SaveAdapters.forEmulator("melonds")!!.locate(pcQuery, pcEnv).single { it.kind != SaveKind.STATE }) }
             assertIs<PrepareResult.Updated>(pc.prepare(pcClient, p, pcSlot()))
             // melonDS gets the raw save, without DraStic's footer.
             assertContentEquals(raw, File(pcRoms, "Pokemon Platinum.sav").readBytes())
@@ -622,8 +622,8 @@ class MoreAdaptersTest {
         val user = "0123456789ABCDEF0123456789ABCDEF"
         val files = mapOf("$stick/" to "", "$nand/" to "", "$users/$user/" to "")
         val blank = FakeEnv("LINUX", home, files = files)
-        assertEquals(stick, SaveAdapters.forEmulator("ppsspp")!!.locate(psp, blank).single().learnIn)
-        assertEquals(nand, SaveAdapters.forEmulator("dolphin")!!.locate(wii, blank).single().learnIn)
+        assertEquals(stick, SaveAdapters.forEmulator("ppsspp")!!.locate(psp, blank).single { it.kind != SaveKind.STATE }.learnIn)
+        assertEquals(nand, SaveAdapters.forEmulator("dolphin")!!.locate(wii, blank).single { it.kind != SaveKind.STATE }.learnIn)
         assertEquals("$users/$user", SaveAdapters.forEmulator("eden")!!.locate(sw, blank).single().learnIn)
         val taught = FakeEnv(
             "LINUX", home, files = files,
@@ -633,8 +633,8 @@ class MoreAdaptersTest {
                 "${sw.game.id}|switch.savedata" to listOf("0100000000010000"),
             ),
         )
-        assertEquals(listOf("ULUS10041DATA00", "ULUS10041DATA01"), SaveAdapters.forEmulator("ppsspp")!!.locate(psp, taught).single().folders)
-        assertEquals("$nand/52534245/data", SaveAdapters.forEmulator("dolphin")!!.locate(wii, taught).single().root)
+        assertEquals(listOf("ULUS10041DATA00", "ULUS10041DATA01"), SaveAdapters.forEmulator("ppsspp")!!.locate(psp, taught).single { it.kind != SaveKind.STATE }.folders)
+        assertEquals("$nand/52534245/data", SaveAdapters.forEmulator("dolphin")!!.locate(wii, taught).single { it.kind != SaveKind.STATE }.root)
         assertEquals("$users/$user/0100000000010000", SaveAdapters.forEmulator("eden")!!.locate(sw, taught).single().root)
     }
 

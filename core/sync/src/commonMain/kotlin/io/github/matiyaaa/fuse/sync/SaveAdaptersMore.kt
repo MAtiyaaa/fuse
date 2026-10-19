@@ -184,6 +184,7 @@ internal object SaturnBackup : SaveAdapter {
  */
 internal object Mame : SaveAdapter {
     override val emulators = setOf("mame", "mame4droid", "mame4droid-current")
+    override val keepsStates = true
 
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
         val base = SaveAdapters.chosen(env, q) ?: when (env.host) {
@@ -192,15 +193,21 @@ internal object Mame : SaveAdapter {
             "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/mame", "${env.home}/.mame")
             else -> SaveAdapters.firstDir(env, "${env.home}/.mame", "${env.home}/.var/app/org.mamedev.MAME/.mame")
         } ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "mame.nvram", "MAME's folder wasn't found here."))
+        val set = SaveAdapters.stem(q.romPath)
         val nvram = nvramDir(env, base) ?: "$base/nvram"
-        return listOf(SaveSpot(SaveKind.SAVE, "mame.nvram", root = nvram, folders = listOf(SaveAdapters.stem(q.romPath))))
+        // Its states: a folder per system in state_directory (sta unless moved), each slot a file in it.
+        val states = SaveSpot(SaveKind.STATE, "mame.state", root = directory(env, base, "state_directory") ?: "$base/sta", folders = listOf(set))
+        return listOf(SaveSpot(SaveKind.SAVE, "mame.nvram", root = nvram, folders = listOf(set)), states)
     }
 
     /** `nvram_directory` from [base]'s mame.ini (or `ini/mame.ini`), with `$HOME` and `~` filled in. */
-    internal fun nvramDir(env: SaveEnvironment, base: String): String? {
+    internal fun nvramDir(env: SaveEnvironment, base: String): String? = directory(env, base, "nvram_directory")
+
+    /** A folder option from [base]'s mame.ini (or `ini/mame.ini`), with `$HOME` and `~` filled in. */
+    private fun directory(env: SaveEnvironment, base: String, option: String): String? {
         val text = env.readText("$base/mame.ini") ?: env.readText("$base/ini/mame.ini") ?: return null
-        val value = text.lineSequence().map { it.trim() }.firstOrNull { it.startsWith("nvram_directory") && it.getOrNull(15)?.isWhitespace() == true }
-            ?.substring(15)?.trim()?.trim('"')?.substringBefore(';')?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val value = text.lineSequence().map { it.trim() }.firstOrNull { it.startsWith(option) && it.getOrNull(option.length)?.isWhitespace() == true }
+            ?.substring(option.length)?.trim()?.trim('"')?.substringBefore(';')?.trim()?.takeIf { it.isNotEmpty() } ?: return null
         val path = value.replace("\$HOME", env.home).replace('\\', '/').let { if (it.startsWith("~")) env.home + it.drop(1) else it }.trimEnd('/')
         return if (path.startsWith("/") || (path.length > 1 && path[1] == ':')) path else "$base/$path"
     }
@@ -216,24 +223,34 @@ internal object Mame : SaveAdapter {
  */
 internal object Supermodel : SaveAdapter {
     override val emulators = setOf("supermodel")
+    override val keepsStates = true
 
-    override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
+    /** One of Supermodel's folders ([kind]: NVRAM, Saves) for [q], as FileSystemPath.cpp names it. */
+    private fun folder(q: SaveQuery, env: SaveEnvironment, kind: String): String? {
         val romDir = SaveAdapters.parent(q.romPath)
         val local = "${env.home}/.local/share/supermodel"
-        val dir = SaveAdapters.chosen(env, q) ?: when (env.host) {
-            "WINDOWS" -> q.emulatorPath?.let { "${SaveAdapters.parent(it)}/NVRAM" }
-            "MACOS" -> "$romDir/NVRAM"
+        return when (env.host) {
+            "WINDOWS" -> q.emulatorPath?.let { "${SaveAdapters.parent(it)}/$kind" }
+            "MACOS" -> "$romDir/$kind"
             "ANDROID" -> null
             else -> when {
-                env.isDirectory("$romDir/Config") -> "$romDir/NVRAM"
-                env.isDirectory("${env.home}/.supermodel") -> "${env.home}/.supermodel/NVRAM"
-                env.isDirectory(local) -> "$local/NVRAM"
-                env.isDirectory("${env.home}/.var/app/com.supermodel3.Supermodel/data/supermodel") -> "${env.home}/.var/app/com.supermodel3.Supermodel/data/supermodel/NVRAM"
-                else -> "${SaveAdapters.xdgData(env)}/supermodel/NVRAM"
+                env.isDirectory("$romDir/Config") -> "$romDir/$kind"
+                env.isDirectory("${env.home}/.supermodel") -> "${env.home}/.supermodel/$kind"
+                env.isDirectory(local) -> "$local/$kind"
+                env.isDirectory("${env.home}/.var/app/com.supermodel3.Supermodel/data/supermodel") -> "${env.home}/.var/app/com.supermodel3.Supermodel/data/supermodel/$kind"
+                else -> "${SaveAdapters.xdgData(env)}/supermodel/$kind"
             }
-        } ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "model3.nvram", "Supermodel's folder wasn't found here. It keeps its files beside its program."))
-        val name = "${SaveAdapters.stem(q.romPath)}.nv"
-        return listOf(SaveSpot(SaveKind.SAVE, "model3.nvram", listOf(SpotFile(name, "$dir/$name"))))
+        }
+    }
+
+    override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
+        val set = SaveAdapters.stem(q.romPath)
+        val dir = SaveAdapters.chosen(env, q) ?: folder(q, env, "NVRAM")
+            ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "model3.nvram", "Supermodel's folder wasn't found here. It keeps its files beside its program."))
+        val name = "$set.nv"
+        // Its states (Main.cpp SaveState): `<ROM set>.st0` to `.st9` in its Saves folder.
+        val states = folder(q, env, "Saves")?.let { saves -> SaveSpot(SaveKind.STATE, "supermodel.state", (0..9).map { n -> SpotFile("$set.st$n", "$saves/$set.st$n") }) }
+        return listOfNotNull(SaveSpot(SaveKind.SAVE, "model3.nvram", listOf(SpotFile(name, "$dir/$name"))), states)
     }
 }
 
@@ -274,6 +291,7 @@ internal object ScummVm : SaveAdapter {
  */
 internal object ThreeDs : SaveAdapter {
     override val emulators = setOf("azahar", "azaharplus", "citra", "citra-canary", "citra-mmj", "lime3ds", "mandarine")
+    override val keepsStates = true
 
     private const val FORMAT = "3ds.savedata"
 

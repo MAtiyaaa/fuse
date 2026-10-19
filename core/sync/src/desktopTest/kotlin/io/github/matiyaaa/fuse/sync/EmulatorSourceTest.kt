@@ -111,19 +111,19 @@ class EmulatorSourceTest {
         val data = "/home/mo/.local/share/flycast"
         val gdi = "3\n1 0 4 2352 track01.bin 0\n2 600 0 2352 track02.raw 0\n3 45000 4 2352 track03.bin 0\n"
         val env = FakeEnv("LINUX", "/home/mo", files = mapOf("$data/" to "", "/roms/dc/Sonic/Sonic.gdi" to gdi), bin = mapOf("/roms/dc/Sonic/track03.bin" to track3("MK-51000")))
-        val spot = SaveAdapters.forEmulator("flycast")!!.locate(q("dc", "/roms/dc/Sonic/Sonic.gdi", "flycast"), env).single()
+        val spot = SaveAdapters.forEmulator("flycast")!!.locate(q("dc", "/roms/dc/Sonic/Sonic.gdi", "flycast"), env).single { it.kind != SaveKind.STATE }
         assertEquals("$data/MK-51000_vmu_save_A1.bin", spot.pathFor("vmu_save_A1.bin"))
         // Never mixed with a VMU every game shares.
         assertEquals("dc.vmu.game", spot.format)
 
         // With Per-game VMU off, the one shared VMU, the same kind as Redream's.
         val shared = FakeEnv("LINUX", "/home/mo", files = mapOf("$data/" to "", "/home/mo/.config/flycast/emu.cfg" to "[config]\nPerGameVmu = no\n"))
-        val s = SaveAdapters.forEmulator("flycast")!!.locate(q("dc", "/roms/dc/Sonic/Sonic.chd", "flycast"), shared).single()
+        val s = SaveAdapters.forEmulator("flycast")!!.locate(q("dc", "/roms/dc/Sonic/Sonic.chd", "flycast"), shared).single { it.kind != SaveKind.STATE }
         assertEquals("$data/vmu_save_A1.bin", s.pathFor("vmu_save_A1.bin"))
         assertEquals("dc.vmu", s.format)
 
         // A CHD's header can't be read: it says so rather than guessing a name.
-        assertFalse(SaveAdapters.forEmulator("flycast")!!.locate(q("dc", "/roms/dc/Sonic.chd", "flycast"), FakeEnv("LINUX", "/home/mo", files = mapOf("$data/" to ""))).single().available)
+        assertFalse(SaveAdapters.forEmulator("flycast")!!.locate(q("dc", "/roms/dc/Sonic.chd", "flycast"), FakeEnv("LINUX", "/home/mo", files = mapOf("$data/" to ""))).single { it.kind != SaveKind.STATE }.available)
     }
 
     @Test
@@ -132,9 +132,9 @@ class EmulatorSourceTest {
             "/Users/mo/Library/Application Support/Flycast/emu.cfg" to "[config]\nDreamcast.VMUPath = /Volumes/Cards\nPerGameVmu = no\n",
             "/Volumes/Cards/" to "",
         ))
-        assertEquals("/Volumes/Cards/vmu_save_A1.bin", SaveAdapters.forEmulator("flycast")!!.locate(q("dc", "/x.chd", "flycast"), env).single().pathFor("vmu_save_A1.bin"))
+        assertEquals("/Volumes/Cards/vmu_save_A1.bin", SaveAdapters.forEmulator("flycast")!!.locate(q("dc", "/x.chd", "flycast"), env).single { it.kind != SaveKind.STATE }.pathFor("vmu_save_A1.bin"))
         val mac = FakeEnv("MACOS", "/Users/mo", files = mapOf("/Users/mo/Library/Application Support/Flycast/data/" to "", "/Users/mo/Library/Application Support/Flycast/emu.cfg" to "[config]\nPerGameVmu = no\n"))
-        assertEquals("/Users/mo/Library/Application Support/Flycast/data/vmu_save_A1.bin", SaveAdapters.forEmulator("flycast")!!.locate(q("dc", "/x.chd", "flycast"), mac).single().pathFor("vmu_save_A1.bin"))
+        assertEquals("/Users/mo/Library/Application Support/Flycast/data/vmu_save_A1.bin", SaveAdapters.forEmulator("flycast")!!.locate(q("dc", "/x.chd", "flycast"), mac).single { it.kind != SaveKind.STATE }.pathFor("vmu_save_A1.bin"))
     }
 
     @Test
@@ -209,7 +209,7 @@ class EmulatorSourceTest {
     @Test
     fun mameReadsItsNvramFolderFromMameIni() {
         val env = FakeEnv("LINUX", "/home/mo", files = mapOf("/home/mo/.mame/mame.ini" to "#\n# CORE SEARCH PATH OPTIONS\n#\nnvram_directory          \$HOME/.mame/nv\n"))
-        val spot = SaveAdapters.forEmulator("mame")!!.locate(q("arcade", "/roms/arcade/pacman.zip", "mame"), env).single()
+        val spot = SaveAdapters.forEmulator("mame")!!.locate(q("arcade", "/roms/arcade/pacman.zip", "mame"), env).single { it.kind != SaveKind.STATE }
         assertEquals("/home/mo/.mame/nv", spot.root)
         assertEquals(listOf("pacman"), spot.folders)
     }

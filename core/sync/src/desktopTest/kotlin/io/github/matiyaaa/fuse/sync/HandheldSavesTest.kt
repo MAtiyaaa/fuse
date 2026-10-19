@@ -20,7 +20,7 @@ class HandheldSavesTest {
     private val platinum = GameKey.of("nds", null, null, "Pokemon Platinum")
     private val ruby = GameKey.of("gba", null, null, "Pokemon Ruby")
 
-    private fun one(emulator: String, q: SaveQuery, env: SaveEnvironment) = SaveAdapters.forEmulator(emulator)!!.locate(q, env).single()
+    private fun one(emulator: String, q: SaveQuery, env: SaveEnvironment) = SaveAdapters.forEmulator(emulator)!!.locate(q, env).single { it.kind != SaveKind.STATE }
 
     @Test
     fun `melonDS on a computer follows SaveFilePath in its config, else saves beside the game`() {

@@ -386,6 +386,17 @@ internal class DefaultLibraryOps(
         .distinctUntilChanged()
         .flowOn(Dispatchers.Default)
 
+    override fun systemActivity(platform: PlatformId, shown: Int): Flow<io.github.matiyaaa.fuse.ui.shell.store.SystemActivity> {
+        // The totals from every game, the art only for the few shown.
+        val picked = summaries(GameQuery(platform = platform)).map { systemPick(it, shown) }.distinctUntilChanged()
+        return picked.flatMapLatest { p ->
+            ctx.cards(kotlinx.coroutines.flow.flowOf(p.recent + p.most)).map { cards ->
+                val byId = cards.associateBy { it.id }
+                io.github.matiyaaa.fuse.ui.shell.store.SystemActivity(p.seconds, p.played, p.recent.mapNotNull { byId[it.id] }, p.most.mapNotNull { byId[it.id] })
+            }
+        }.distinctUntilChanged().flowOn(Dispatchers.Default)
+    }
+
     override fun gameIds(query: GameQuery): Flow<List<io.github.matiyaaa.fuse.model.GameId>> = summaries(query)
         .map { list -> list.map { it.id } }
         .distinctUntilChanged()
@@ -539,11 +550,16 @@ internal class DefaultLibraryOps(
     /**
      * What Play does for [game], in one line (Pillar 11.2): [summary] ("Starts in DuckStation"), then
      * what it starts with: the RetroArch core, frame generation, and the newest save put in place
-     * first where Fuse keeps this game's saves in step (Fuse One, or RomM for a game from RomM).
+     * first where Fuse keeps this game's saves in step (Fuse One, or RomM for a game from RomM), its
+     * save states too where Fuse One keeps them; a Steam game, that it goes through Steam.
      */
     private suspend fun playLine(game: Game, resolved: ResolvedLaunch, summary: String?): String? {
         val installed = resolved.installed ?: return null
         if (summary == null || !resolved.startsGame) return null
+        // A Steam game goes through Steam, which keeps its saves and time itself.
+        if (io.github.matiyaaa.fuse.launch.settings.NativeSettings.familyOf(installed.id.value) in setOf("steam", "steam-url")) {
+            return "Starts through Steam, which keeps the game's own saves and play time."
+        }
         val settings = data.scopedSettings
         val with = buildList {
             if (installed.id.value.substringAfter('.').startsWith("retroarch")) {
@@ -553,9 +569,11 @@ internal class DefaultLibraryOps(
             if (frameGenerationReady()) {
                 settings.resolve(ScopedSettings.FrameGeneration, game.platformId, game.id).value.takeIf { it > 1 }?.let { add("frame generation at ${it}x") }
             }
-            val keepsSaves = io.github.matiyaaa.fuse.sync.SaveAdapters.forEmulator(installed.id.value) != null &&
-                (sync != null || (game.links.rommRomId != null && rommSaves != null))
-            if (keepsSaves) add("your newest save put in place first")
+            val adapter = io.github.matiyaaa.fuse.sync.SaveAdapters.forEmulator(installed.id.value)
+            val keepsSaves = adapter != null && (sync != null || (game.links.rommRomId != null && rommSaves != null))
+            // Save states travel through Fuse One, where Save States is on and the emulator keeps them where Fuse finds them.
+            val keepsStates = adapter?.keepsStates == true && sync != null && ctx.settings.value.sync.let { it.states && it.saves }
+            if (keepsStates) add("your newest save and save states put in place first") else if (keepsSaves) add("your newest save put in place first")
         }
         return when (with.size) {
             0 -> "$summary."
@@ -1739,3 +1757,21 @@ private val ARCHIVES = setOf("zip", "7z", "rar", "gz", "chd", "rvz", "cso", "zso
 
 /** Emulators finish writing a moment after they close: RomM's save sync waits that long. */
 private const val ROMM_SETTLE_MS = 1_500L
+
+/** A system's play picked from its games: the time in all, how many played, and the [SystemActivity]'s few. */
+internal data class SystemPick(
+    val seconds: Long,
+    val played: Int,
+    val recent: List<io.github.matiyaaa.fuse.data.repo.GameSummary>,
+    val most: List<io.github.matiyaaa.fuse.data.repo.GameSummary>,
+)
+
+/** [list]'s play: every game's time added up, the [shown] played last (newest first) and the [shown] played most. */
+internal fun systemPick(list: List<io.github.matiyaaa.fuse.data.repo.GameSummary>, shown: Int): SystemPick {
+    val played = list.filter { it.lastPlayedAt != null }
+    return SystemPick(
+        list.sumOf { it.totalSeconds }, played.size,
+        played.sortedWith(SortOrder.RECENTLY_PLAYED.comparator()).take(shown),
+        list.filter { it.totalSeconds > 0 }.sortedWith(SortOrder.MOST_PLAYED.comparator()).take(shown),
+    )
+}

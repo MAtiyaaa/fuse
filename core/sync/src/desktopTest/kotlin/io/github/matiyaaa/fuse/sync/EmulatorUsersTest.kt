@@ -49,7 +49,7 @@ class EmulatorUsersTest {
         assertEquals("$ux0/user/01/savedata", SaveAdapters.forEmulator("vita3k")!!.locate(vq, vita).single().root)
         val psp = Env("WINDOWS", mapOf("C:/Emu/PPSSPP/installed.txt" to "D:/PSP Stick\n", "D:/PSP Stick/PSP/SAVEDATA/" to "", "C:/Emu/PPSSPP/memstick/PSP/" to ""))
         val pq = SaveQuery(GameKey.of("psp", "ULUS10041", null, "Game"), "psp", "C:/roms/game.iso", "ppsspp", emulatorPath = "C:/Emu/PPSSPP/PPSSPPWindows64.exe", serial = "ULUS10041")
-        assertEquals("D:/PSP Stick/PSP/SAVEDATA", SaveAdapters.forEmulator("ppsspp")!!.locate(pq, psp).single().root)
+        assertEquals("D:/PSP Stick/PSP/SAVEDATA", SaveAdapters.forEmulator("ppsspp")!!.locate(pq, psp).single { it.kind != SaveKind.STATE }.root)
     }
 
     @Test

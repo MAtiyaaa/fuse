@@ -87,6 +87,14 @@ together as each emulator does it, and Fuse Ports brings games rebuilt to run na
   the emulator writes its own, so it reads every value back exactly. A Wii U game's Cemu profile is there as well, made as a copy of
   the one Cemu ships for the game, and a Vita game's own file is made with every setting it holds,
   so nothing else about the game changes. Put Back undoes any of them.
+- **Save states for more emulators.** With Save States on, PCSX2's, PPSSPP's, Dolphin's, melonDS's,
+  mGBA's, Mednafen's, Flycast's, MAME's and Supermodel's save states are kept in step too, beside
+  RetroArch's, DuckStation's and Azahar's: each game's own, found where the emulator keeps them,
+  and the game page's Play line says so. For a game of Steam's own, the line says it starts
+  through Steam, which keeps its saves and play time.
+- **Systems tell what you play.** The Systems page now says, for the system in focus, how long you
+  have played it, how many of its games, the one played most, and shows the covers of those played
+  last.
 - **No sign-ins in Every Setting.** Passwords, tokens and keys an emulator keeps among its
   settings (RetroArch's RetroAchievements and WebDAV sign-ins, Flycast's RetroAchievements token,
   Azahar's and Citron's web service tokens) are never shown or written by Fuse.

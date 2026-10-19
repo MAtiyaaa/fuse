@@ -144,6 +144,9 @@ interface SaveAdapter {
     /** Emulator ids it knows, without a host prefix (`retroarch`, `duckstation`). */
     val emulators: Set<String>
     fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot>
+
+    /** Whether it finds a game's save states as well as its saves (kept in step when Save States is on). */
+    val keepsStates: Boolean get() = false
 }
 
 /**
@@ -258,6 +261,7 @@ internal fun parseCfg(text: String): Map<String, String> = text.lineSequence().m
  */
 internal object RetroArch : SaveAdapter {
     override val emulators = setOf("retroarch", "retroarch-steam")
+    override val keepsStates = true
 
     private fun configs(env: SaveEnvironment, emuPath: String?): List<String> = when (env.host) {
         "WINDOWS" -> listOfNotNull(emuPath?.let { SaveAdapters.join(SaveAdapters.parent(it), "retroarch.cfg") }, "${SaveAdapters.appData(env)}/RetroArch/retroarch.cfg")
@@ -411,6 +415,7 @@ internal object CoreNames {
  */
 internal object DuckStation : SaveAdapter {
     override val emulators = setOf("duckstation")
+    override val keepsStates = true
 
     // Where DuckStation keeps its data, as its Core::SetDataRoot decides: beside the program when
     // portable.txt or settings.ini is there; on Windows Documents\DuckStation for older installs,
@@ -486,10 +491,13 @@ internal object DuckStation : SaveAdapter {
 
 /**
  * PCSX2: memory cards are shared by every game on them (Mcd001.ps2 and Mcd002.ps2, or folder
- * cards), so they sync as the profile's cards, not one game's; states are per game.
+ * cards), so they sync as the profile's cards, not one game's. States are each game's own:
+ * `<serial> (<CRC>).<slot>.p2s` and `.resume.p2s` (VMManager::GetSaveStateFileName) in the folder
+ * `[Folders] Savestates` names, `sstates` in its data folder unless moved; this game's by its serial.
  */
 internal object Pcsx2 : SaveAdapter {
     override val emulators = setOf("pcsx2", "nethersx2", "nethersx2-turnip", "nethersx2-turnip-classic", "armsx1", "armsx2", "armsx3", "aethersx2")
+    override val keepsStates = true
 
     private fun dataDir(env: SaveEnvironment, emuPath: String?): String? = when (env.host) {
         "WINDOWS" -> SaveAdapters.firstDir(env, emuPath?.let { SaveAdapters.parent(it) }?.takeIf { env.exists("$it/portable.ini") || env.exists("$it/portable.txt") }, "${SaveAdapters.documents(env)}/PCSX2")
@@ -515,15 +523,25 @@ internal object Pcsx2 : SaveAdapter {
             // A folder card is a folder of its games' saves (it has PCSX2's superblock file).
             if (env.isDirectory(path)) folders[logical] = path else files += SpotFile(logical, path)
         }
-        if (folders.isEmpty()) return listOf(SaveSpot(SaveKind.MEMORY_CARD, "ps2.card", files))
+        val states = q.serial?.trim()?.takeIf { it.isNotEmpty() }?.let { serial ->
+            val dirStates = ini["Folders/Savestates"]?.takeIf { it.isNotBlank() }?.let { SaveAdapters.resolve(dir, it) } ?: "$dir/sstates"
+            SaveSpot(SaveKind.STATE, "pcsx2.state", root = dirStates, only = "$serial (")
+        }
         // Folder cards aren't file cards: their own format, so neither is ever put where the other is read.
-        return listOf(SaveSpot(SaveKind.MEMORY_CARD, "ps2.foldercard", files, root = "$cards/.fuse-cards", mounts = folders))
+        val card = if (folders.isEmpty()) SaveSpot(SaveKind.MEMORY_CARD, "ps2.card", files)
+        else SaveSpot(SaveKind.MEMORY_CARD, "ps2.foldercard", files, root = "$cards/.fuse-cards", mounts = folders)
+        return listOfNotNull(card, states)
     }
 }
 
-/** PPSSPP: each game's save folders in SAVEDATA, named from its game id (ULUS10041...); states by id. */
+/**
+ * PPSSPP: each game's save folders in SAVEDATA, named from its game id (ULUS10041...); its states
+ * in PSP/PPSSPP_STATE as `<game id>_<disc version>_<slot>.ppst`, with a picture of each
+ * (Core/SaveState.cpp GenerateSaveSlotFilename), this game's by its id.
+ */
 internal object Ppsspp : SaveAdapter {
     override val emulators = setOf("ppsspp")
+    override val keepsStates = true
 
     /**
      * PPSSPP's memory stick (Windows/main.cpp, Core/Config.cpp): on Windows, installed.txt beside
@@ -566,16 +584,21 @@ internal object Ppsspp : SaveAdapter {
             return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "psp.savedata", SaveAdapters.PLAY_ONCE, learnIn = savedata))
         }
         val folders = env.list(savedata).filter { it.uppercase().startsWith(id) }
-        return listOf(SaveSpot(SaveKind.SAVE, "psp.savedata", root = savedata, folders = folders.ifEmpty { listOf(id) }))
+        return listOf(
+            SaveSpot(SaveKind.SAVE, "psp.savedata", root = savedata, folders = folders.ifEmpty { listOf(id) }),
+            SaveSpot(SaveKind.STATE, "ppsspp.state", root = "$root/PSP/PPSSPP_STATE", only = "${id}_"),
+        )
     }
 }
 
 /**
  * Dolphin: Wii saves in its NAND by title (from the game's id); GameCube saves on its memory card
- * files per region. Paths by host.
+ * files per region. Paths by host. Its states, `<game id>.s01` to `.s10` in StateSaves
+ * (Core/State.cpp MakeStateFilename), are each game's by its six-character id.
  */
 internal object Dolphin : SaveAdapter {
     override val emulators = setOf("dolphin", "dolphin-mmjr", "dolphin-mmjr2")
+    override val keepsStates = true
 
     /**
      * Dolphin's user folder (UICommon::SetUserDirectory): DOLPHIN_EMU_USERPATH when set; on Windows
@@ -608,6 +631,11 @@ internal object Dolphin : SaveAdapter {
             ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "dolphin", if (env.host == "ANDROID") SaveAdapters.androidPrivateNote("Dolphin", "Use its Export user data, then choose that folder in Fuse, Settings, Save folders.") else "Dolphin's folder wasn't found here."))
         val ini = config(env, user)
         val id = q.serial?.uppercase()?.takeIf { it.length >= 4 }
+        val states = id?.takeIf { it.length == 6 }?.let { SaveSpot(SaveKind.STATE, "dolphin.state", root = "$user/StateSaves", only = "$it.s") }
+        return listOfNotNull(*saves(q, env, user, ini, id).toTypedArray(), states)
+    }
+
+    private fun saves(q: SaveQuery, env: SaveEnvironment, user: String, ini: Map<String, String>, id: String?): List<SaveSpot> {
         if (q.platform == "wii") {
             // The NAND: [General] NANDRootPath when set, else Wii in the user folder.
             val nand = ini["General/NANDRootPath"]?.takeIf { it.isNotBlank() }?.replace('\\', '/')?.trimEnd('/') ?: "$user/Wii"
@@ -827,6 +855,7 @@ internal object ShadPs4 : SaveAdapter {
  */
 internal object Flycast : SaveAdapter {
     override val emulators = setOf("flycast")
+    override val keepsStates = true
 
     internal fun configFolder(env: SaveEnvironment, emuPath: String?): String? = configDirs(env, emuPath).firstOrNull { env.exists("$it/emu.cfg") }
 
@@ -851,12 +880,27 @@ internal object Flycast : SaveAdapter {
         val dir = SaveAdapters.chosen(env, q) ?: vmuPath ?: dataDir(env, q.emulatorPath)
             ?: return listOf(SaveAdapters.unavailable(SaveKind.MEMORY_CARD, "dc.vmu", if (env.host == "ANDROID") SaveAdapters.androidPrivateNote("Flycast", "Use its save data export, then choose that folder in Fuse, Settings, Save folders.") else "Flycast's folder wasn't found here."))
         val perGame = HandheldSaves.setting(config, "config", "PerGameVmu")?.lowercase()?.let { it == "yes" || it == "true" || it == "1" } ?: true
-        if (!perGame) return listOf(SaveSpot(SaveKind.MEMORY_CARD, "dc.vmu", listOf(SpotFile("vmu_save_A1.bin", "$dir/vmu_save_A1.bin"))))
+        val states = states(q, env, config)
+        if (!perGame) return listOfNotNull(SaveSpot(SaveKind.MEMORY_CARD, "dc.vmu", listOf(SpotFile("vmu_save_A1.bin", "$dir/vmu_save_A1.bin"))), states)
         val id = DreamcastDisc.productNumber(env, q.romPath) ?: q.serial?.trim()?.takeIf { it.isNotEmpty() }
-            ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "dc.vmu.game", "Flycast names this game's own VMU after its product number, which Fuse reads from GDI games. For CHD and CDI games, turn off Per-game VMU A1 in Flycast to keep one shared VMU in step."))
+            ?: return listOfNotNull(SaveAdapters.unavailable(SaveKind.SAVE, "dc.vmu.game", "Flycast names this game's own VMU after its product number, which Fuse reads from GDI games. For CHD and CDI games, turn off Per-game VMU A1 in Flycast to keep one shared VMU in step."), states)
         val name = id.map { if (it in VMU_INVALID) '_' else it }.joinToString("") + "_vmu_save_A1.bin"
-        return listOf(SaveSpot(SaveKind.SAVE, "dc.vmu.game", listOf(SpotFile("vmu_save_A1.bin", "$dir/$name"))))
+        return listOfNotNull(SaveSpot(SaveKind.SAVE, "dc.vmu.game", listOf(SpotFile("vmu_save_A1.bin", "$dir/$name"))), states)
     }
+
+    /**
+     * Its states (core/oslib/oslib.cpp getSavestatePath): `<game file's name>.state` for the first
+     * slot and `<name>_<n>.state` for the others, in the first folder `Dreamcast.SavestatePath`
+     * names, else its data folder.
+     */
+    private fun states(q: SaveQuery, env: SaveEnvironment, config: String?): SaveSpot? {
+        val chosen = HandheldSaves.setting(config, "config", "Dreamcast.SavestatePath")?.split(';')?.firstOrNull()?.trim()?.trimEnd('/')?.takeIf { it.isNotEmpty() }
+        val dir = chosen ?: dataDir(env, q.emulatorPath) ?: return null
+        val stem = SaveAdapters.stem(q.romPath)
+        return SaveSpot(SaveKind.STATE, "flycast.state", (0..STATE_SLOTS).map { n -> (if (n == 0) "$stem.state" else "${stem}_$n.state").let { SpotFile(it, "$dir/$it") } })
+    }
+
+    private const val STATE_SLOTS = 10
 
     /** The characters Flycast swaps for `_` in a VMU's name. */
     private const val VMU_INVALID = " /\\:*?|<>\""

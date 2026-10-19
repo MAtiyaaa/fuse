@@ -220,6 +220,10 @@ internal object DesktopCatalogue {
             EMULATORS, listOf("arcade"), emulator = "mame", flathub = "org.mamedev.MAME", hosts = setOf(Host.LINUX),
         ),
         DesktopEntry(
+            "supermodel", "Supermodel", "The Supermodel Team", "Sega Model 3 arcade games: Daytona USA 2, Virtua Fighter 3, Scud Race.",
+            EMULATORS, listOf("model3"), emulator = "supermodel", flathub = "com.supermodel3.Supermodel", hosts = setOf(Host.LINUX),
+        ),
+        DesktopEntry(
             "mednafen", "Mednafen", "Mednafen team", "Many older systems, accurately: PlayStation, Saturn, PC Engine and more.",
             EMULATORS, listOf("psx", "saturn", "tg16"), emulator = "mednafen", flathub = "com.github.AmatCoder.mednaffe", hosts = setOf(Host.LINUX),
         ),

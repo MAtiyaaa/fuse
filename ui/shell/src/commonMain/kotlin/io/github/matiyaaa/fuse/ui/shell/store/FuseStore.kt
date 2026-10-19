@@ -450,6 +450,17 @@ data class LocalSaves(
 /** How many games a view holds ([LibraryOps.counts]), and how many of them are favourites and were played. */
 data class GameCounts(val total: Int = 0, val favorites: Int = 0, val played: Int = 0)
 
+/**
+ * A system's play on this device, for the Systems page: the time played in all, how many of its
+ * games have been played, and the few played last and played most.
+ */
+data class SystemActivity(
+    val seconds: Long = 0,
+    val played: Int = 0,
+    val recent: List<GameCard> = emptyList(),
+    val mostPlayed: List<GameCard> = emptyList(),
+)
+
 interface LibraryOps {
     val home: StateFlow<HomeFeed>
 
@@ -472,6 +483,20 @@ interface LibraryOps {
     fun counts(query: GameQuery): Flow<GameCounts> = games(query).map { list ->
         GameCounts(list.size, list.count { it.favorite }, list.count { it.lastPlayedAt != null })
     }
+
+    /**
+     * [platform]'s play here ([SystemActivity]): worked out from its games without their art, the
+     * art read only for the [shown] played last and the [shown] played most.
+     */
+    fun systemActivity(platform: io.github.matiyaaa.fuse.model.PlatformId, shown: Int = 4): Flow<SystemActivity> =
+        games(GameQuery(platform = platform)).map { list ->
+            val played = list.filter { it.lastPlayedAt != null }
+            SystemActivity(
+                list.sumOf { it.playSeconds }, played.size,
+                played.sortedByDescending { it.lastPlayedAt }.take(shown),
+                list.filter { it.playSeconds > 0 }.sortedByDescending { it.playSeconds }.take(shown),
+            )
+        }
 
     /** The ids of the games [query] lists, in its order, without their art: for code that only needs which games there are. */
     fun gameIds(query: GameQuery): Flow<List<GameId>> = games(query).map { list -> list.map { it.id } }
