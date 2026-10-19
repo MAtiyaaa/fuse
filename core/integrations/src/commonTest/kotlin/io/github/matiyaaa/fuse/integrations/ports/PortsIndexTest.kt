@@ -10,6 +10,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -39,7 +40,18 @@ class PortsIndexTest {
         assertFalse(PortsSignature.verify((SIGNED + "\n").encodeToByteArray(), signature, testKey), "even a line added at the end")
         assertFalse(PortsSignature.verify(SIGNED.encodeToByteArray(), signature, "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"), "a key that isn't Base64 of 32 bytes")
         assertFalse(PortsSignature.verify(SIGNED.encodeToByteArray(), "not a signature", testKey))
-        assertNull(PortsSignature.PUBLIC_KEY, "until the project's signing key exists, Fuse carries none")
+    }
+
+    @Test
+    fun fuseCarriesTheProjectsOwnKeyAndBelievesWhatItSigned() {
+        val key = assertNotNull(PortsSignature.PUBLIC_KEY)
+        // A sentence signed once with the project's key as the ports job signs (openssl pkeyutl -sign -rawin),
+        // never a list of ports, so its signature can't stand for one.
+        val message = "Fuse Ports: signed with the project's own key, never a list of ports"
+        val signed = "diHDLCh/xNM5czKHFl5gIXAxykOQZSh49EcM+VxXgbXFEME4ut4GgTAdI6uY+b2Y7dSVZZCuWnPwyHVzbn+fBQ=="
+        assertTrue(PortsSignature.verify(message.encodeToByteArray(), signed, key))
+        assertFalse(PortsSignature.verify((message + ".").encodeToByteArray(), signed, key))
+        assertFalse(PortsSignature.verify(message.encodeToByteArray(), signed, testKey), "and with no other key")
     }
 
     @Test
@@ -105,6 +117,16 @@ class PortsIndexTest {
         val before = http.requests.size
         PortsClient(http.client, publicKey = { null }).fetch(newerThan = 0)
         assertEquals(before, http.requests.size, "and nothing is even asked for")
+    }
+
+    @Test
+    fun beforeTheFirstListIsPublishedTheOneInsideFuseStandsWithNoProblem() = runTest {
+        val http = TestHttp { text("Not Found", HttpStatusCode.NotFound) }
+        val nothing = assertIs<ApiResult.Success<PortsList?>>(PortsClient(http.client, publicKey = { testKey }).fetch(newerThan = 3))
+        assertNull(nothing.value)
+        // Any other failure is still said.
+        val down = TestHttp { text("", HttpStatusCode.ServiceUnavailable) }
+        assertIs<ApiResult.Failure>(PortsClient(down.client, publicKey = { testKey }).fetch(newerThan = 3))
     }
 
     private fun hex(s: String) = ByteArray(s.length / 2) { s.substring(it * 2, it * 2 + 2).toInt(16).toByte() }

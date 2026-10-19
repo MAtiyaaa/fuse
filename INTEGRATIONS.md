@@ -816,8 +816,9 @@ Fuse doesn't fill) is left out; a list of another format is refused whole.
 Fuse's repository (`index.json` and `index.json.sig`) and believed only when its Ed25519 signature
 (RFC 8032, checked by the JDK's own `Ed25519`) verifies with the public key Fuse carries
 (`PortsSignature.PUBLIC_KEY`) and its revision is newer; a kept copy is checked again each time it
-is read. The private key is a repository secret the ports workflow signs with; until it exists,
-Fuse carries no key, fetches nothing, and shows no port as verified. **Verified** is shown only when
+is read. The private key is only the repository secret `PORTS_SIGNING_KEY` the ports workflow signs
+with; Fuse carries the public key. Until the workflow has published a signed list (the `ports`
+release isn't there yet), the list inside Fuse stands and nothing is said. **Verified** is shown only when
 a signed list says the nightly check saw exactly this build (by its SHA-256) install and start.
 
 **Installing** (`PortsStore`, `DesktopPortFiles`): the build for this computer is downloaded over

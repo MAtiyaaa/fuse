@@ -113,13 +113,13 @@ object PortsIndexReader {
 }
 
 /**
- * Checks the index's Ed25519 signature (RFC 8032) with the public key Fuse carries. The key is
- * [PUBLIC_KEY]: null until the project's signing key exists (a repository secret the ports job
- * signs with), and while it is null nothing fetched is believed and no port shows as verified.
+ * Checks the index's Ed25519 signature (RFC 8032) with the public key Fuse carries, [PUBLIC_KEY]:
+ * the project's signing key, whose private half is only the repository secret `PORTS_SIGNING_KEY`
+ * the ports job signs with (`tools/ports/check.py publish`). A list it doesn't verify is never believed.
  */
 object PortsSignature {
-    /** Base64 of the raw 32-byte Ed25519 public key the published index is signed with; null until there is one. */
-    val PUBLIC_KEY: String? = null
+    /** Base64 of the raw 32-byte Ed25519 public key the published index is signed with. */
+    val PUBLIC_KEY: String? = "8M/UoVY406Ritfva7PVr/xOn3xsTasxo0nQdb/QQM3Q="
 
     /** True when [signature] (Base64 of 64 bytes) is [publicKey]'s (Base64 of 32 bytes) over exactly [message]. */
     fun verify(message: ByteArray, signature: String, publicKey: String): Boolean {
@@ -149,6 +149,8 @@ class PortsClient(
         val key = publicKey() ?: return ApiResult.NotConfigured("This Fuse carries no key to check a newer list of ports with.")
         val text = when (val r = get(indexUrl)) {
             is ApiResult.Success -> r.value
+            // None published yet (before the ports job first signs one): the list inside Fuse stands.
+            is ApiResult.HttpError -> if (r.code == 404) return ApiResult.Success(null) else return r
             is ApiResult.Failure -> return r
         }
         val signature = when (val r = get("$indexUrl.sig")) {
