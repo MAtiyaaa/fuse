@@ -475,6 +475,25 @@ class DesktopEmulatorFiles(
     }
 
     /**
+     * Cemu's folders as its CemuApp.cpp (v2.6) sets them, the same Fuse finds its saves by
+     * ([io.github.matiyaaa.fuse.sync.cemuFolders]): a `portable` folder beside the program; on
+     * Windows the program's own folder when a settings.xml is there, else Cemu in Application Data;
+     * on Linux Cemu in the XDG data and config folders (inside ~/.var/app for the Flatpak); on a Mac
+     * Cemu in Application Support. Only once it has a settings.xml.
+     */
+    override suspend fun cemu(installed: InstalledEmulator): io.github.matiyaaa.fuse.launch.settings.CemuHome? = withContext(Dispatchers.IO) {
+        val program = installed.appId.takeIf { installed.detectedVia != "Flatpak" && File(it).isAbsolute }
+        val (data, config) = runCatching { io.github.matiyaaa.fuse.sync.cemuFolders(saveEnv(), program) }.getOrNull() ?: return@withContext null
+        if (!File(config, "settings.xml").isFile) return@withContext null
+        roots += File(config).absolutePath
+        io.github.matiyaaa.fuse.launch.settings.CemuHome(data.replace('\\', '/').trimEnd('/'), config.replace('\\', '/').trimEnd('/'))
+    }
+
+    override suspend fun wiiUTitleId(path: String, serial: String?): String? = withContext(Dispatchers.IO) {
+        runCatching { io.github.matiyaaa.fuse.sync.wiiUTitleId(serial, path, saveEnv()) }.getOrNull()
+    }
+
+    /**
      * Eden's config folder, as its PathManagerImpl::Reinitialize (src/common/fs/path_util.cpp) and
      * fs_paths.h have it: on Windows `user\config` beside the program when that `user` folder is
      * there, else %APPDATA%\eden\config; elsewhere $XDG_CONFIG_HOME/eden or ~/.config/eden (inside

@@ -646,10 +646,12 @@ internal object Cemu : SaveAdapter {
     override val emulators = setOf("cemu")
     private val TITLE = Regex("<title_id[^>]*>([0-9A-Fa-f]{16})</title_id>")
 
-    internal fun titleId(q: SaveQuery, env: SaveEnvironment): String? {
-        q.serial?.uppercase()?.takeIf { HEX16.matches(it) && it.startsWith("00050000") }?.let { return it }
+    internal fun titleId(q: SaveQuery, env: SaveEnvironment): String? = titleId(q.serial, q.romPath, env)
+
+    internal fun titleId(serial: String?, romPath: String, env: SaveEnvironment): String? {
+        serial?.uppercase()?.takeIf { HEX16.matches(it) && it.startsWith("00050000") }?.let { return it }
         // A game folder: code/<name>.rpx, with meta/meta.xml beside code.
-        val game = SaveAdapters.parent(SaveAdapters.parent(q.romPath))
+        val game = SaveAdapters.parent(SaveAdapters.parent(romPath))
         return env.readText("$game/meta/meta.xml")?.let { TITLE.find(it)?.groupValues?.get(1)?.uppercase() }
     }
 

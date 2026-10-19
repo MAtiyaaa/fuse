@@ -34,4 +34,7 @@ interface LinuxEnvironment {
 
     /** [length] bytes of [path] from [offset] (fewer at its end), or null when it can't be read. */
     fun readBytes(path: String, offset: Long, length: Int): ByteArray? = null
+
+    /** What the program at [path] prints when run with [flag] alone (it exits at once), or null. */
+    fun versionOutput(path: String, flag: String): String? = null
 }

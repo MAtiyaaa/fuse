@@ -459,7 +459,7 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
                 add(MenuAction("together", "Play Together", FuseIcons.Users, detail = "Host it for your household or join someone's game, as its emulator plays with others", trailing = Trailing.Chevron, onSelect = { playTogetherSheet(card) }))
             }
             // The emulator's own settings for this game, where Fuse can change them.
-            if (card.platformId.value in setOf("ps2", "psx", "psp", "ngc", "wii", "ps3", "switch", "3ds", "new-nintendo-3ds") || retroArch && io.github.matiyaaa.fuse.launch.RetroArchCores.coresFor(platform.host, card.platformId).isNotEmpty()) {
+            if (card.platformId.value in setOf("ps2", "psx", "psp", "ngc", "wii", "ps3", "switch", "3ds", "new-nintendo-3ds", "wiiu", "ps4") || retroArch && io.github.matiyaaa.fuse.launch.RetroArchCores.coresFor(platform.host, card.platformId).isNotEmpty()) {
                 add(MenuAction("emusettings", "Emulator Settings", FuseIcons.Sliders, detail = "Resolution, renderer and every other setting for this game, in its emulator's own settings", trailing = Trailing.Chevron, onSelect = { emulatorSettingsSheet(card) }))
             }
             // A port's own settings, as its code names them, in its own file.

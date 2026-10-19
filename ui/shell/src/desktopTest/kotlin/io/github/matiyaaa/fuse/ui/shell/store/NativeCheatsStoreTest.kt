@@ -430,16 +430,18 @@ class NativeCheatsStoreTest {
         val own = File(emu, "ppsspp/PSP/SYSTEM/ULUS10041_ppsspp.ini")
 
         val view = assertIs<EmulatorSettingsView.Ready>(store.library.emulatorSettings(game.id))
-        assertEquals(listOf("vanilla", "performance", "quality", "battery"), view.profiles.map { it.id })
+        // Fuse's four, then one per device.
+        assertEquals(listOf("vanilla", "performance", "quality", "battery", "device.steam-deck", "device.rog-ally", "device.tv-4k"), view.profiles.map { it.id })
         // What it has already (2x, no texture upscaling, hardware transform on) is Performance's.
-        assertEquals("performance", view.profiles.single { it.active }.id)
+        assertEquals(listOf("performance"), view.profiles.filter { it.active }.map { it.id })
 
         // Visual Quality: every value of it in one change of the game's own file.
         assertTrue(store.library.applySettingProfile(game.id, null, "quality"))
         val text = own.readText()
         assertTrue("InternalResolution = 4" in text && "AnisotropyLevel = 4" in text && "TextureFiltering = 4" in text && "HardwareTransform = True" in text)
         val after = assertIs<EmulatorSettingsView.Ready>(store.library.emulatorSettings(game.id))
-        assertEquals("quality", after.profiles.single { it.active }.id)
+        // ROG Ally's (4x, all it sets for PPSSPP) is had too.
+        assertEquals(listOf("quality", "device.rog-ally"), after.profiles.filter { it.active }.map { it.id })
         assertFalse(store.library.applySettingProfile(game.id, null, "nonsense"))
 
         // Kept as their own: in their settings (which go with them through Fuse One), and given at once.

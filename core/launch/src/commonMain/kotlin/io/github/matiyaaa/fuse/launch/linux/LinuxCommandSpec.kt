@@ -37,6 +37,11 @@ data class LinuxDetection(
     val appImageExcludes: List<String> = emptyList(),
     val dirBinaries: List<String> = emptyList(),
     val requiredFiles: List<String> = emptyList(),
+    /**
+     * The flag each of its programs (by file name) prints its version for and exits at once,
+     * before it opens anything: run only when nothing else says the version.
+     */
+    val versionFlags: Map<String, String> = emptyMap(),
 )
 
 /** One Linux emulator or launcher, as data. [LinuxCommandAdapter] turns it into an adapter. */

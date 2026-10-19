@@ -54,7 +54,8 @@ object LinuxCatalog {
         dirBin: List<String> = emptyList(),
         flatpakCommand: String? = null,
         required: List<String> = emptyList(),
-    ) = LinuxDetection(bin, flatpak, flatpakCommand, appImage, exclude, dirBin, required)
+        version: Map<String, String> = emptyMap(),
+    ) = LinuxDetection(bin, flatpak, flatpakCommand, appImage, exclude, dirBin, required, version)
 
     private fun caps(
         folders: FolderSupport = FolderSupport.RESOLVES_FILE,
@@ -82,7 +83,8 @@ object LinuxCatalog {
         LinuxEmulatorDef(
             id = "linux.retroarch", name = "RetroArch",
             platforms = RetroArchCores.linux.keys,
-            detection = detect(bin = listOf("retroarch"), flatpak = listOf("org.libretro.RetroArch"), appImage = listOf("*retroarch*.appimage")),
+            // retroarch.c (v1.22.2): `--version` prints "Version: 1.22.2" and exits (`RA_OPT_VERSION`).
+            detection = detect(bin = listOf("retroarch"), flatpak = listOf("org.libretro.RetroArch"), appImage = listOf("*retroarch*.appimage"), version = mapOf("retroarch" to "--version")),
             modes = listOf(file("-L", "{CORE_PATH}", "{ROM}")),
             source = esde("RETROARCH rule and core paths; %EMULATOR_RETROARCH% -L %CORE_RETROARCH%/<core>_libretro.so %ROM%"),
             confidence = VERIFIED_ESDE, homepage = "https://www.retroarch.com/",
@@ -135,7 +137,11 @@ object LinuxCatalog {
         ),
         LinuxEmulatorDef(
             id = "linux.ppsspp", name = "PPSSPP", platforms = platforms("psp"),
-            detection = detect(bin = listOf("ppsspp", "PPSSPPSDL", "PPSSPPQt"), flatpak = listOf("org.ppsspp.PPSSPP"), appImage = listOf("*ppsspp*.appimage")),
+            // SDL/SDLMain.cpp (v1.20.4): the SDL build's `--version` prints PPSSPP_GIT_VERSION and returns before anything starts.
+            detection = detect(
+                bin = listOf("ppsspp", "PPSSPPSDL", "PPSSPPQt"), flatpak = listOf("org.ppsspp.PPSSPP"), appImage = listOf("*ppsspp*.appimage"),
+                version = mapOf("PPSSPPSDL" to "--version"),
+            ),
             modes = listOf(file("{ROM}")),
             source = esde("PPSSPP"), confidence = VERIFIED_ESDE, homepage = "https://www.ppsspp.org/",
             capabilities = caps(installed = true),

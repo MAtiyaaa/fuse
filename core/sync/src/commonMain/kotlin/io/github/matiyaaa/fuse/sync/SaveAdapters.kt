@@ -59,6 +59,15 @@ class WithSaveFolders(
  */
 fun threeDsTitleId(serial: String?, path: String, env: SaveEnvironment): String? = ThreeDs.titleId(serial, path, env)
 
+/**
+ * A Wii U game's title id (`0005000010145D00`), as Fuse reads it for its saves: its [serial] when
+ * that is one, else the `<title_id>` of the `meta/meta.xml` a game folder has beside its `code`.
+ */
+fun wiiUTitleId(serial: String?, path: String, env: SaveEnvironment): String? = Cemu.titleId(serial, path, env)
+
+/** Cemu's data folder and the folder its settings.xml is in, as its CemuApp.cpp sets them; null when neither is there. */
+fun cemuFolders(env: SaveEnvironment, emulatorPath: String?): Pair<String, String>? = Cemu.folders(env, emulatorPath)
+
 /** The game whose saves are wanted, and what it is played with here. */
 @kotlinx.serialization.Serializable
 data class SaveQuery(

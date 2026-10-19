@@ -75,12 +75,14 @@ together as each emulator does it, and Fuse Ports brings games rebuilt to run na
 - **RPCS3's settings in Fuse.** RPCS3 joins the emulators whose settings Fuse changes, through
   Every Setting, for every game and for one game (its file kept under the game's title id). Fuse
   says first that a game's own RPCS3 settings take the place of those RPCS3's database gives it.
-- **RetroArch's, Eden's and Azahar's settings in Fuse.** Every Setting now has RetroArch's own
-  settings, named, described and grouped as its menu has them, for every game and for one game,
-  kept in the override RetroArch reads for that game with the core that plays it. Eden's are there
-  too, for every game and for a Switch game by its title id, and Azahar's, for every game and for a
-  3DS game by the title id in its own file, each written as the emulator writes its own so it
-  reads every value back exactly; Put Back undoes any of them.
+- **RetroArch's, Eden's, Azahar's, Cemu's and shadPS4's settings in Fuse.** Every Setting now has
+  RetroArch's own settings, named, described and grouped as its menu has them, for every game and
+  for one game, kept in the override RetroArch reads for that game with the core that plays it.
+  Eden's are there too, for every game and for a Switch game by its title id, Azahar's, for every
+  game and for a 3DS game by the title id in its own file, and shadPS4's, for every game and for a
+  PS4 game by its serial, each written as the emulator writes its own so it reads every value back
+  exactly. A Wii U game's Cemu profile is there as well, made as a copy of the one Cemu ships for
+  the game so nothing else about it changes. Put Back undoes any of them.
 - **A game's core options.** A RetroArch game's page now has its core's own options too (85 cores,
   from Snes9x and mGBA to Beetle PSX, SwanStation, Flycast and Mupen64Plus-Next), named and grouped
   as the core names them. Changing one gives the game its own options file, made as RetroArch's
@@ -91,9 +93,11 @@ together as each emulator does it, and Fuse Ports brings games rebuilt to run na
   resolution fitted to that screen (in the hand, the step nearest the screen, to spare the battery;
   on a TV, the first that fills it), frames paced to the screen, and each choice said. The one that
   fits this screen says so.
-- **When Fuse can't tell the version.** An emulator whose version Fuse can't read shows every
-  release's settings, and one that only some releases have is locked, saying which, rather than
-  written to a version that may not read it.
+- **When Fuse can't tell the version.** Fuse now reads more emulators' versions without starting
+  them: a Flatpak's from its own files even where the `flatpak` command can't be asked, and a
+  distribution package's from what the package says, with RetroArch and PPSSPP asked themselves.
+  An emulator whose version Fuse still can't read shows every release's settings, and one that only
+  some releases have is locked, saying which, rather than written to a version that may not read it.
 - **RomM keeps saves made of folders.** A PSP, PS3, Vita or Switch save (or any save of several
   files) now goes to RomM as one zip and comes back whole on your other devices, where before only
   saves of one file did. RomM shows each save in a slot named for what it is (PSP Save Data, PS2

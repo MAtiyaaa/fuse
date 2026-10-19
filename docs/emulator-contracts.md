@@ -121,7 +121,7 @@ Version 1. Generated from Fuse's code by `EmulatorContractsTest`; do not edit by
 | --- | --- | --- | --- | --- | --- | --- |
 | Azahar | `linux.azahar` | 3ds, new-nintendo-3ds | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
 | AzaharPlus | `linux.azaharplus` | 3ds, new-nintendo-3ds | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
-| Cemu | `linux.cemu` | wiiu | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
+| Cemu | `linux.cemu` | wiiu | Yes | Yes: for one game (its profile) | No: changed in the emulator | Not needed |
 | Citra | `linux.citra` | 3ds, new-nintendo-3ds | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
 | Citron | `linux.citron` | switch | Yes | No: changed in the emulator | No: changed in the emulator | Yes: installed inside it: checked to be there |
 | Dolphin | `linux.dolphin` | ngc, wii | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
@@ -150,7 +150,7 @@ Version 1. Generated from Fuse's code by `EmulatorContractsTest`; do not edit by
 | Ruffle | `linux.ruffle` | flash | No: Flash games keep their saves in Ruffle's own storage by site; Fuse doesn't keep it in step yet. | No: changed in the emulator | No: changed in the emulator | Not needed |
 | Ryujinx | `linux.ryujinx` | switch | Yes | No: changed in the emulator | No: changed in the emulator | Yes: installed inside it: checked to be there |
 | ScummVM | `linux.scummvm` | scummvm | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
-| shadPS4 | `linux.shadps4` | ps4 | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
+| shadPS4 | `linux.shadps4` | ps4 | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
 | SharpEmu | `linux.sharpemu` | ps5 | No: This emulator is early, and where it keeps saves still changes between versions. | No: changed in the emulator | No: changed in the emulator | Not needed |
 | Vita3K | `linux.vita3k` | psvita | Yes | No: changed in the emulator | No: changed in the emulator | Yes: installed inside it: checked to be there |
 | xemu | `linux.xemu` | xbox | No: xemu keeps saves inside its hard disk image, which Fuse can't open safely. | No: changed in the emulator | No: changed in the emulator | Yes: BIOS folders, by name and checksum |
@@ -162,7 +162,7 @@ Version 1. Generated from Fuse's code by `EmulatorContractsTest`; do not edit by
 | --- | --- | --- | --- | --- | --- | --- |
 | Azahar | `windows.azahar` | 3ds, new-nintendo-3ds | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
 | AzaharPlus | `windows.azaharplus` | 3ds, new-nintendo-3ds | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
-| Cemu | `windows.cemu` | wiiu | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
+| Cemu | `windows.cemu` | wiiu | Yes | Yes: for one game (its profile) | No: changed in the emulator | Not needed |
 | Citra | `windows.citra` | 3ds, new-nintendo-3ds | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
 | Citron | `windows.citron` | switch | Yes | No: changed in the emulator | No: changed in the emulator | Yes: installed inside it: checked to be there |
 | Dolphin | `windows.dolphin` | ngc, wii | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
@@ -191,7 +191,7 @@ Version 1. Generated from Fuse's code by `EmulatorContractsTest`; do not edit by
 | Ruffle | `windows.ruffle` | flash | No: Flash games keep their saves in Ruffle's own storage by site; Fuse doesn't keep it in step yet. | No: changed in the emulator | No: changed in the emulator | Not needed |
 | Ryujinx | `windows.ryujinx` | switch | Yes | No: changed in the emulator | No: changed in the emulator | Yes: installed inside it: checked to be there |
 | ScummVM | `windows.scummvm` | scummvm | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
-| shadPS4 | `windows.shadps4` | ps4 | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
+| shadPS4 | `windows.shadps4` | ps4 | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
 | SharpEmu | `windows.sharpemu` | ps5 | No: This emulator is early, and where it keeps saves still changes between versions. | No: changed in the emulator | No: changed in the emulator | Not needed |
 | Vita3K | `windows.vita3k` | psvita | Yes | No: changed in the emulator | No: changed in the emulator | Yes: installed inside it: checked to be there |
 | xemu | `windows.xemu` | xbox | No: xemu keeps saves inside its hard disk image, which Fuse can't open safely. | No: changed in the emulator | No: changed in the emulator | Yes: BIOS folders, by name and checksum |
@@ -202,7 +202,7 @@ Version 1. Generated from Fuse's code by `EmulatorContractsTest`; do not edit by
 | Emulator | Id | Systems | Saves | Settings | Cheats | Firmware |
 | --- | --- | --- | --- | --- | --- | --- |
 | Azahar | `macos.azahar` | 3ds, new-nintendo-3ds | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
-| Cemu | `macos.cemu` | wiiu | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
+| Cemu | `macos.cemu` | wiiu | Yes | Yes: for one game (its profile) | No: changed in the emulator | Not needed |
 | Citra | `macos.citra` | 3ds, new-nintendo-3ds | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
 | Dolphin | `macos.dolphin` | ngc, wii | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
 | DOSBox Staging | `macos.dosbox-staging` | dos | No: DOS games save inside their own folders; keep those folders in step with Syncthing. | No: changed in the emulator | No: changed in the emulator | Not needed |
@@ -229,7 +229,7 @@ Version 1. Generated from Fuse's code by `EmulatorContractsTest`; do not edit by
 | Ruffle | `macos.ruffle` | flash | No: Flash games keep their saves in Ruffle's own storage by site; Fuse doesn't keep it in step yet. | No: changed in the emulator | No: changed in the emulator | Not needed |
 | Ryujinx | `macos.ryujinx` | switch | Yes | No: changed in the emulator | No: changed in the emulator | Yes: installed inside it: checked to be there |
 | ScummVM | `macos.scummvm` | scummvm | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
-| shadPS4 | `macos.shadps4` | ps4 | Yes | No: changed in the emulator | No: changed in the emulator | Not needed |
+| shadPS4 | `macos.shadps4` | ps4 | Yes | Yes: for every game and for one game | No: changed in the emulator | Not needed |
 | SharpEmu | `macos.sharpemu` | ps5 | No: This emulator is early, and where it keeps saves still changes between versions. | No: changed in the emulator | No: changed in the emulator | Not needed |
 | Vita3K | `macos.vita3k` | psvita | Yes | No: changed in the emulator | No: changed in the emulator | Yes: installed inside it: checked to be there |
 | xemu | `macos.xemu` | xbox | No: xemu keeps saves inside its hard disk image, which Fuse can't open safely. | No: changed in the emulator | No: changed in the emulator | Yes: BIOS folders, by name and checksum |

@@ -47,6 +47,58 @@ object LinuxDetector {
         return Regex("(?<![A-Za-z0-9])v?(\\d+(?:\\.\\d+)+)(?![0-9])").findAll(name).map { it.groupValues[1] }.lastOrNull()
     }
 
+    /**
+     * Where Flatpak installs apps: system-wide and for the person (its own `FLATPAK_DIR`s), each app
+     * in `app/<id>`, its deployment in use at `current/active`.
+     */
+    fun flatpakRoots(env: LinuxEnvironment): List<String> = listOf("/var/lib/flatpak/app", "${env.homeDir.trimEnd('/')}/.local/share/flatpak/app")
+
+    /**
+     * Installed Flatpak apps by their folders, for when the `flatpak` command can't answer (it isn't
+     * there, or Fuse runs where it can't be started): each id with a deployment in use.
+     */
+    fun flatpakFolders(env: LinuxEnvironment): Set<String> = flatpakRoots(env).flatMap { root ->
+        env.listFiles(root).filter { id -> id.count { it == '.' } >= 2 && env.exists("$root/$id/current/active") }
+    }.toSet()
+
+    /**
+     * The version an AppStream file gives its newest release: the first `<release version="...">`
+     * of its `<releases>`, which the AppStream specification lists newest first.
+     */
+    fun metainfoVersion(xml: String): String? {
+        val releases = xml.substringAfter("<releases", "").ifEmpty { return null }
+        return Regex("""<release\b[^>]*?\bversion\s*=\s*["']([^"']+)["']""").find(releases)?.groupValues?.get(1)?.trim()?.takeIf { it.any(Char::isDigit) }
+    }
+
+    /** The AppStream file an app [id] installs under a `share` folder: `metainfo/<id>.metainfo.xml`, or the older `appdata` names. */
+    private fun metainfo(env: LinuxEnvironment, share: String, id: String): String? =
+        listOf("metainfo/$id.metainfo.xml", "metainfo/$id.appdata.xml", "appdata/$id.appdata.xml").firstNotNullOfOrNull { env.readText("$share/$it") }
+
+    /** An installed Flatpak's version from the AppStream file in its deployment, where `flatpak list` gave none. */
+    fun flatpakMetainfoVersion(env: LinuxEnvironment, id: String): String? =
+        flatpakRoots(env).firstNotNullOfOrNull { root -> metainfo(env, "$root/$id/current/active/files/share", id) }?.let(::metainfoVersion)
+
+    /**
+     * A program on the PATH or in a folder: the version in the AppStream file its package put beside
+     * it (`<prefix>/share/metainfo/<id>.metainfo.xml` for `<prefix>/bin/<program>`), by the ids its
+     * Flatpak goes by (an AppStream id is the same), else what the program prints for its version
+     * flag ([LinuxDetection.versionFlags]), else null.
+     */
+    fun programVersion(env: LinuxEnvironment, def: LinuxEmulatorDef, path: String): String? {
+        val prefix = path.substringBeforeLast("/bin/", "").takeIf { it.isNotEmpty() }
+        prefix?.let { p -> def.detection.flatpakIds.firstNotNullOfOrNull { id -> metainfo(env, "$p/share", id) }?.let(::metainfoVersion) }?.let { return it }
+        val flag = def.detection.versionFlags[path.substringAfterLast('/')] ?: return null
+        return env.versionOutput(path, flag)?.let(::versionInOutput)
+    }
+
+    /**
+     * The version a program printed: the first version-shaped part of its first line that has one
+     * ("Version: 1.22.2 (Git abc)" is 1.22.2, "v1.20.4-12-gabc" is 1.20.4).
+     */
+    fun versionInOutput(output: String): String? = output.lineSequence().firstNotNullOfOrNull { line ->
+        Regex("""(?<![A-Za-z0-9.])v?(\d+(?:\.\d+)+)""").find(line)?.groupValues?.get(1)
+    }
+
     /** Absolute path of [binary] on `$PATH`, or null. */
     fun findOnPath(env: LinuxEnvironment, binary: String): String? =
         env.pathDirectories().map { "${it.trimEnd('/')}/$binary" }.firstOrNull(env::isExecutable)
@@ -110,8 +162,9 @@ object LinuxDetector {
         defs: List<LinuxEmulatorDef> = LinuxCatalog.defs,
         extraDirs: List<String> = emptyList(),
     ): List<InstalledEmulator> {
-        val flatpaks = env.flatpakApps()
-        val versions = if (flatpaks.isEmpty()) emptyMap() else env.flatpakVersions()
+        val listed = env.flatpakApps()
+        val flatpaks = listed + flatpakFolders(env)
+        val versions = if (listed.isEmpty()) emptyMap() else env.flatpakVersions()
         val dirs = searchDirs(env, extraDirs)
         val identified = identifyAppImages(env, dirs, defs)
         val emuDeck = LinuxSuites.emuDeckHere(env)
@@ -119,8 +172,9 @@ object LinuxDetector {
             locate(env, def, flatpaks, dirs, identified)?.let { f ->
                 // What version is installed, where it can be told without running it: the Store compares it with the latest release.
                 val version = when (f.kind) {
-                    LinuxInstallKind.FLATPAK -> versions[f.appId]
+                    LinuxInstallKind.FLATPAK -> versions[f.appId] ?: flatpakMetainfoVersion(env, f.appId)
                     LinuxInstallKind.APPIMAGE -> versionInName(f.appId) ?: identified[f.appId]?.let(::versionInName)
+                    LinuxInstallKind.PATH, LinuxInstallKind.FOLDER -> programVersion(env, def, f.appId)
                     else -> null
                 }
                 toInstalled(def, f).copy(version = version, installedBy = LinuxSuites.ownerOf(env, f, emuDeck))

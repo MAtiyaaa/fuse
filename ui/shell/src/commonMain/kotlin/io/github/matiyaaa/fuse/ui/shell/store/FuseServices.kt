@@ -508,6 +508,12 @@ interface EmulatorFiles {
     /** A 3DS game's title id from its serial or its file's own header ([io.github.matiyaaa.fuse.sync.threeDsTitleId]); null when unreadable. */
     suspend fun threeDsTitleId(path: String, serial: String?): String? = null
 
+    /** Cemu's data and config folders for [installed]; null until it has a settings.xml. */
+    suspend fun cemu(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): io.github.matiyaaa.fuse.launch.settings.CemuHome? = null
+
+    /** A Wii U game's title id from its serial or its folder's meta.xml ([io.github.matiyaaa.fuse.sync.wiiUTitleId]); null when unknown. */
+    suspend fun wiiUTitleId(path: String, serial: String?): String? = null
+
     /** Eden's config folder for [installed] (where `qt-config.ini` and `custom/` are); null until it has a `qt-config.ini`. */
     suspend fun edenConfig(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): String? = null
 

@@ -69,6 +69,8 @@ internal class NativeSettingsStore(
         val yaml: Boolean = false,
         /** Its files are RetroArch's `key = "value"` config, not ini. */
         val cfg: Boolean = false,
+        /** Its files are JSON of groups (shadPS4's), not ini. */
+        val json: Boolean = false,
         /** Its files are Eden's, each value kept in two or three keys ([io.github.matiyaaa.fuse.launch.settings.EdenConfig]). */
         val eden: Boolean = false,
         /** Its files are Azahar's, each value kept in two keys ([io.github.matiyaaa.fuse.launch.settings.AzaharConfig]). */
@@ -77,6 +79,13 @@ internal class NativeSettingsStore(
         val version: String? = null,
         /** How its files are changed: the emulator's own folders, or a port's in Fuse's folder of ports. */
         val writer: Writer = EmulatorWriter(files),
+        /**
+         * The emulator reads a game's own file alone, in place of [globalPath] (Cemu's profile in
+         * place of the one it ships), so a file Fuse makes starts as a copy of that one, beginning
+         * with [madeAs]; and with a file of its own, a setting it hasn't got is the emulator's default.
+         */
+        val alone: Boolean = false,
+        val madeAs: String = "",
         /** A RetroArch game's core options, beside RetroArch's own settings. */
         val core: CoreTarget? = null,
     ) {
@@ -86,6 +95,8 @@ internal class NativeSettingsStore(
         fun text(content: String?): SettingsText = when {
             yaml -> YamlText(content ?: "")
             cfg -> io.github.matiyaaa.fuse.launch.settings.CfgText(content ?: "")
+            // A text setting is written as a JSON string, whatever it holds.
+            json -> io.github.matiyaaa.fuse.launch.settings.JsonText(content ?: "") { section, key -> Tune.find(family, null, section, key)?.kind == TuneKind.TEXT }
             else -> IniText(content ?: "", spaced = !(eden || azahar))
         }
 
@@ -251,6 +262,28 @@ internal class NativeSettingsStore(
                     io.github.matiyaaa.fuse.launch.settings.AzaharConfig.gameFile(config, titleId)
                 } else null
                 Target(family, name, files, io.github.matiyaaa.fuse.launch.settings.AzaharConfig.globalFile(config), gamePath, game?.titles?.original, azahar = true, version = version) to null
+            }
+            "shadps4" -> {
+                // EmulatorSettingsImpl::Save (src/core/emulator_settings.cpp): config.json in its user folder, a game's custom_configs/<serial>.json.
+                val user = files.shadPs4User(installed)?.takeIf { fs.readText("$it/config.json", MAX_TEXT) != null } ?: return notSetUp()
+                val gamePath = if (game != null) {
+                    val serial = game.tags.serial?.uppercase()?.filter { it.isLetterOrDigit() }?.takeIf { it.startsWith("CUSA") || it.startsWith("PPSA") }
+                        ?: return no("Fuse can't tell which game this is", "shadPS4 keeps a game's own settings under its serial (like CUSA00900), which Fuse reads from the game's folder or file name. Change this game's settings in shadPS4.")
+                    "$user/custom_configs/$serial.json"
+                } else null
+                Target(family, name, files, "$user/config.json", gamePath, game?.titles?.original, json = true, version = version) to null
+            }
+            "cemu" -> {
+                if (game == null) return no("Cemu's settings for every game are in Cemu", "Cemu keeps them in its own Options. Fuse changes a Wii U game's own profile: open a game's Emulator Settings.")
+                val home = files.cemu(installed) ?: return notSetUp()
+                val titleId = files.wiiUTitleId(game.location.path, game.tags.serial)
+                    ?: return no("Fuse can't tell which game this is", "Cemu keeps a game's profile under its title id, which Fuse reads from a game folder's meta/meta.xml (beside its code folder). Change this game's profile in Cemu: right-click it, then Edit Game Profile.")
+                val title = game.titles.original
+                Target(
+                    family, name, files, io.github.matiyaaa.fuse.launch.settings.CemuProfile.shippedFile(home.data, titleId),
+                    io.github.matiyaaa.fuse.launch.settings.CemuProfile.gameFile(home.config, titleId), title, version = version,
+                    alone = true, madeAs = io.github.matiyaaa.fuse.launch.settings.CemuProfile.header(title),
+                ) to null
             }
             "eden" -> {
                 val config = files.edenConfig(installed) ?: return notSetUp()
@@ -438,7 +471,12 @@ internal class NativeSettingsStore(
             release = if (known) Tune.releaseFor(t.family, t.version) else null,
             sections = sections + coreSections(t),
             canRestore = t.paths.any { data.owned.get(KIND, it).isNotEmpty() },
-            gameFileNote = if (t.forGame && t.family == "rpcs3" && fs.readText(t.gamePath!!, MAX_TEXT) == null) RPCS3_GAME_FILE else null,
+            gameFileNote = when {
+                !t.forGame || fs.readText(t.gamePath!!, MAX_TEXT) != null -> null
+                t.family == "rpcs3" -> RPCS3_GAME_FILE
+                t.alone && fs.readText(t.globalPath, MAX_TEXT) != null -> "Until this game has a profile of its own, ${t.emulator} reads the one it ships for it, shown here as every game's; Fuse makes the game's own as a copy of it."
+                else -> null
+            },
             versionUnknown = !known && Tune.releases(t.family).size > 1,
         )
     }
@@ -583,6 +621,17 @@ internal class NativeSettingsStore(
         val before = fs.readText(path, MAX_TEXT)
         val file = t.text(before)
         var records = data.owned.get(KIND, path)
+        if (before == null && t.alone && t.forGame) {
+            // Made as a copy of what the emulator read until now, every key of it recorded.
+            val from = read(t, t.globalPath)
+            val made = t.text(t.madeAs)
+            for (o in offered(t).map { it.first }) from?.values(o.section, o.key)?.lastOrNull()?.let { records = SettingsEdit.change(made, records, o.sectionIn(true), o.key, it) }
+            for ((section, key, v) in t.keys(s.sectionIn(true), s.key, written, true, s.default)) records = SettingsEdit.change(made, records, section, key, v)
+            if (!t.writer.write(path, made.toString())) return false
+            data.owned.set(KIND, path, records)
+            data.owned.set(KIND, "$path#made", setOf("file"))
+            return true
+        }
         for ((section, key, v) in t.keys(s.sectionIn(t.forGame), s.key, written, t.forGame, s.default)) records = SettingsEdit.change(file, records, section, key, v)
         if (!t.writer.write(path, file.toString())) return false
         data.owned.set(KIND, path, records)
@@ -597,6 +646,8 @@ internal class NativeSettingsStore(
         val everyGame = every ?: shown(s.default)
         return when {
             own != null -> TuneValue(s, own, SettingSource.GAME, everyGame)
+            // Read alone: what its own file hasn't got is the emulator's default, not the other file's.
+            t.alone && game != null -> TuneValue(s, shown(s.default), SettingSource.DEFAULT, everyGame)
             every != null -> TuneValue(s, every, SettingSource.EVERY_GAME, everyGame)
             else -> TuneValue(s, shown(s.default), SettingSource.DEFAULT, everyGame)
         }
@@ -635,11 +686,11 @@ internal class NativeSettingsStore(
         const val TOGETHER = "emulator.together"
 
         /** The emulator a system's games are changed in when they don't start in one Fuse knows. */
-        val PLATFORM_FAMILY = mapOf("ps2" to "pcsx2", "psx" to "duckstation", "psp" to "ppsspp", "ngc" to "dolphin", "wii" to "dolphin", "ps3" to "rpcs3", "switch" to "eden", "3ds" to "azahar", "new-nintendo-3ds" to "azahar")
+        val PLATFORM_FAMILY = mapOf("ps2" to "pcsx2", "psx" to "duckstation", "psp" to "ppsspp", "ngc" to "dolphin", "wii" to "dolphin", "ps3" to "rpcs3", "switch" to "eden", "3ds" to "azahar", "new-nintendo-3ds" to "azahar", "wiiu" to "cemu", "ps4" to "shadps4")
 
         val FAMILIES = NativeSettings.changeable
 
-        const val SUPPORTED = "Fuse changes settings in PCSX2, DuckStation, PPSSPP, Dolphin, RPCS3, RetroArch, Eden and Azahar."
+        const val SUPPORTED = "Fuse changes settings in PCSX2, DuckStation, PPSSPP, Dolphin, RPCS3, RetroArch, Eden, Azahar, Cemu and shadPS4."
 
         /** What making a game's own RPCS3 file changes besides (rpcs3/Emu/System.cpp: "Found custom config. Ignoring database config"). */
         const val RPCS3_GAME_FILE = "A game's own RPCS3 settings take the place of the settings RPCS3's own database gives that game."

@@ -112,6 +112,25 @@ class DesktopEmulatorFilesTest {
     }
 
     @Test
+    fun cemusFoldersAreWhereItsOwnPathsPutThemAndItsGameProfilesCanBeWritten() = runBlocking {
+        val cemu = InstalledEmulator(EmulatorId("linux.cemu"), "Cemu", Host.LINUX, "/usr/bin/cemu", platforms = setOf(PlatformId("wiiu")), detectedVia = "PATH")
+        val linux = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        val data = File(home, ".local/share/Cemu").apply { mkdirs() }
+        val config = File(home, ".config/Cemu").apply { mkdirs() }
+        assertNull(linux.cemu(cemu), "not until Cemu has written its settings.xml")
+        File(config, "settings.xml").writeText("<content/>")
+        assertEquals(io.github.matiyaaa.fuse.launch.settings.CemuHome(p(data), p(config)), linux.cemu(cemu))
+        // A game's own profile goes in its config folder, which Fuse may write once it found it.
+        val profile = io.github.matiyaaa.fuse.launch.settings.CemuProfile.gameFile(p(config), "0005000010145D00")
+        assertEquals("${p(config)}/gameProfiles/0005000010145d00.ini", profile)
+        assertTrue(linux.write(profile, "# Mario Kart 8\n\n[CPU]\ncpuMode = Auto\n"))
+        // A game folder's title id, from the meta.xml beside its code folder.
+        val game = File(home, "wiiu/Mario Kart 8").apply { File(this, "code").mkdirs(); File(this, "meta").mkdirs() }
+        File(game, "meta/meta.xml").writeText("<menu><title_id type=\"hexBinary\" length=\"8\">0005000010145D00</title_id></menu>")
+        assertEquals("0005000010145D00", linux.wiiUTitleId(File(game, "code/Turbo.rpx").absolutePath, null))
+    }
+
+    @Test
     fun edensConfigFolderIsWhereItsOwnPathsPutIt() = runBlocking {
         val linux = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
         val eden = InstalledEmulator(EmulatorId("linux.eden"), "Eden", Host.LINUX, "/usr/bin/eden", platforms = setOf(PlatformId("switch")), detectedVia = "PATH")

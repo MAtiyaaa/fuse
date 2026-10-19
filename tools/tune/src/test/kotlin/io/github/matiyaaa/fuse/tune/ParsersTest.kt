@@ -947,6 +947,170 @@ class ParsersTest {
     }
 
     @Test
+    fun shadPs4sGroupsWithWhatAGamesOwnFileCanHold() {
+        val header = """
+            enum GpuReadbacksMode : int {
+                Disabled,
+                Relaxed,
+                Precise,
+            };
+            struct GameInstallDir { std::filesystem::path path; bool enabled; };
+            struct GPUSettings {
+                Setting<u32> window_width{1280};
+                Setting<u32> readbacks_mode{GpuReadbacksMode::Disabled};
+                Setting<bool> fsr_enabled{true};
+                Setting<double> rcas_attenuation{0.25};
+                Setting<bool> never_saved{false};
+                std::vector<OverrideItem> GetOverrideableFields() const {
+                    return std::vector<OverrideItem>{
+                        make_override<GPUSettings>("readbacks_mode", &GPUSettings::readbacks_mode),
+                        make_override<GPUSettings>("fsr_enabled", &GPUSettings::fsr_enabled)};
+                }
+            };
+            NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(GPUSettings, window_width, readbacks_mode, fsr_enabled, rcas_attenuation)
+            struct LogSettings {
+                Setting<u32> max_skip_duration{5'000};
+                Setting<std::string> filter{""};
+            #ifdef _WIN32
+                Setting<std::string> type{"wincolor"};
+            #endif
+            };
+            #ifdef _WIN32
+            NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LogSettings, max_skip_duration, filter, type)
+            #else
+            NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LogSettings, max_skip_duration, filter)
+            #endif
+            class EmulatorSettingsImpl {
+                GPUSettings m_gpu{};
+                LogSettings m_log;
+            };
+        """.trimIndent()
+        val save = """
+            bool EmulatorSettingsImpl::Save(const std::string& serial) {
+                json j;
+                j["GPU"] = m_gpu;
+                j["Log"] = m_log;
+            }
+        """.trimIndent()
+        val found = ShadPs4.parse(mapOf(ShadPs4.SETTINGS to header, ShadPs4.SAVE to save))
+        assertEquals(listOf("window_width", "readbacks_mode", "fsr_enabled", "rcas_attenuation", "max_skip_duration", "filter"), found.map { it.key }, "only what each group writes, as a Linux build has it")
+        val readbacks = found.single { it.key == "readbacks_mode" }
+        assertEquals(Triple("GPU", Kind.ENUM, "0"), Triple(readbacks.section, readbacks.kind, readbacks.default))
+        assertEquals(listOf("0" to "Disabled", "1" to "Relaxed", "2" to "Precise"), readbacks.choices.map { it.value to it.label })
+        assertTrue(readbacks.perGame && found.single { it.key == "fsr_enabled" }.perGame)
+        assertFalse(found.single { it.key == "window_width" }.perGame, "not one a game's file overrides")
+        assertEquals("5000", found.single { it.key == "max_skip_duration" }.default)
+        assertEquals(Kind.FLOAT to "0.25", found.single { it.key == "rcas_attenuation" }.let { it.kind to it.default })
+        assertEquals("" to "Log", found.single { it.key == "filter" }.let { it.default to it.section })
+    }
+
+    @Test
+    fun cemusGameProfileByTheSectionsItsLoadReadsAndTheWordsItsSaveWrites() {
+        val cpp = """
+            bool gameProfile_loadBooleanOption2(IniParser& iniParser, const char* optionName, bool& option) { return true; }
+            bool GameProfile::Load(uint64_t title_id)
+            {
+                IniParser iniParser(*profileContents, _pathToUtf8(gameProfilePath));
+                while (iniParser.NextSection())
+                {
+                    if (boost::iequals(iniParser.GetCurrentSectionName(), "General"))
+                    {
+                        gameProfile_loadBooleanOption2(iniParser, "startWithPadView", m_startWithPadView);
+                    }
+                    else if (boost::iequals(iniParser.GetCurrentSectionName(), "Graphics"))
+                    {
+                        gameProfileIntegerOption_t graphicsApi;
+                        gameProfile_loadIntegerOption(&iniParser, "graphics_api", &graphicsApi, -1, 0, 1);
+                        if (graphicsApi.value != -1)
+                            m_graphics_api = (GraphicAPI)graphicsApi.value;
+                        auto option_precompiledShaders = iniParser.FindOption("precompiledShaders");
+                        if (option_precompiledShaders)
+                            m_precompiledShaders = PrecompiledShaderOption::Enable;
+                    }
+                    else if (boost::iequals(iniParser.GetCurrentSectionName(), "CPU"))
+                    {
+                        gameProfile_loadIntegerOption(iniParser, "threadQuantum", m_threadQuantum, 1000U, 536870912U);
+                        if (!gameProfile_loadEnumOption(iniParser, "cpuMode", m_cpuMode))
+                        {
+                            std::optional<CPUModeLegacy> cpu_mode_legacy;
+                            gameProfile_loadEnumOption(iniParser, "cpuMode", cpu_mode_legacy);
+                        }
+                    }
+                    else if (boost::iequals(iniParser.GetCurrentSectionName(), "Controller"))
+                    {
+                        for (int i = 0; i < 2; ++i)
+                        {
+                            auto option_value = iniParser.FindOption(fmt::format("controller{}", (i + 1)));
+                        }
+                    }
+                }
+                return true;
+            }
+        """.trimIndent()
+        val header = """
+            class GameProfile {
+                static const uint32 kThreadQuantumDefault = 45000;
+                bool m_startWithPadView = false;
+                std::optional<GraphicAPI> m_graphics_api{};
+                std::optional<PrecompiledShaderOption> m_precompiledShaders{};
+                uint32 m_threadQuantum = kThreadQuantumDefault; // values: 20000 45000
+                std::optional<CPUMode> m_cpuMode{};
+                std::array< std::optional<std::string>, 8> m_controllerProfile{};
+            };
+        """.trimIndent()
+        val config = """
+            enum GraphicAPI
+            {
+                kOpenGL = 0,
+                kVulkan,
+                kMetal,
+            };
+            enum class PrecompiledShaderOption { Auto, Enable, Disable, };
+            enum class CPUMode
+            {
+                SinglecoreInterpreter = 0,
+                DualcoreRecompiler = 2, // deprecated and not used anymore
+                Auto = 4,
+            };
+            template <>
+            struct fmt::formatter<const PrecompiledShaderOption> : formatter<string_view> {
+                auto format(const PrecompiledShaderOption c, FormatContext &ctx) const {
+                    switch (c)
+                    {
+                    case PrecompiledShaderOption::Auto: name = "auto"; break;
+                    case PrecompiledShaderOption::Enable: name = "true"; break;
+                    case PrecompiledShaderOption::Disable: name = "false"; break;
+                    }
+                }
+            };
+            template <>
+            struct fmt::formatter<const CPUMode> : formatter<string_view> {
+                auto format(const CPUMode c, FormatContext &ctx) const {
+                    switch (c)
+                    {
+                    case CPUMode::SinglecoreInterpreter: name = "Single-core interpreter"; break;
+                    case CPUMode::DualcoreRecompiler: name = "Dual-core recompiler"; break;
+                    case CPUMode::Auto: name = "Auto"; break;
+                    }
+                }
+            };
+        """.trimIndent()
+        val found = Cemu.parse(mapOf(Cemu.PROFILE to cpp, Cemu.PROFILE_HEADER to header, Cemu.CONFIG to config))
+        assertEquals(listOf("startWithPadView", "graphics_api", "precompiledShaders", "threadQuantum", "cpuMode", "controller1", "controller2"), found.map { it.key })
+        val pad = found[0]
+        assertEquals(Triple("General", Kind.BOOL, "false"), Triple(pad.section, pad.kind, pad.default))
+        val api = found.single { it.key == "graphics_api" }
+        assertEquals(listOf("0" to "OpenGL", "1" to "Vulkan"), api.choices.map { it.value to it.label }, "only the numbers its range reads")
+        assertNull(api.default, "an optional one follows Cemu's own")
+        assertEquals(listOf("auto", "true", "false"), found.single { it.key == "precompiledShaders" }.choices.map { it.value })
+        val quantum = found.single { it.key == "threadQuantum" }
+        assertEquals(listOf("45000", "1000", "536870912"), listOf(quantum.default, quantum.min?.toString(), quantum.max?.toString()))
+        assertEquals(listOf("Single-core interpreter", "Auto"), found.single { it.key == "cpuMode" }.choices.map { it.value }, "as Save writes them, the deprecated one left out")
+        assertEquals(Kind.STRING to "Controller", found.last().let { it.kind to it.section })
+        assertTrue(found.all { it.perGame })
+    }
+
+    @Test
     fun aCoresOptionsWithTheirChoicesDefaultsAndCategories() {
         val v2 = """
             #define CORE_NAME "snes9x"

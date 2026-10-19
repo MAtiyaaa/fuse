@@ -12,9 +12,9 @@ class TuneTest {
     fun everyEmulatorReadHasItsReleasesAndASettingsCountLikeItsOwn() {
         // RetroArch's cores are read as families of their own (`core.snes9x`), at one commit each.
         val emulators = Tune.families.filterNot { it.startsWith(CoreOptionFiles.family("")) }.toSet()
-        assertEquals(setOf("dolphin", "duckstation", "ppsspp", "pcsx2", "rpcs3", "devilutionx", "openrct2", "fallout2-ce", "retroarch", "eden", "azahar"), emulators)
+        assertEquals(setOf("dolphin", "duckstation", "ppsspp", "pcsx2", "rpcs3", "devilutionx", "openrct2", "fallout2-ce", "retroarch", "eden", "azahar", "cemu", "shadps4"), emulators)
         // Each has as many as its own settings show; a reader that broke would find a handful.
-        val least = mapOf("devilutionx" to 40, "fallout2-ce" to 40, "azahar" to 90)
+        val least = mapOf("devilutionx" to 40, "fallout2-ce" to 40, "azahar" to 90, "cemu" to 10, "shadps4" to 80)
         for (family in emulators) {
             assertEquals(4, Tune.releases(family).size, family)
             assertTrue(Tune.forEmulator(family).size > (least[family] ?: 150), "$family: ${Tune.forEmulator(family).size}")

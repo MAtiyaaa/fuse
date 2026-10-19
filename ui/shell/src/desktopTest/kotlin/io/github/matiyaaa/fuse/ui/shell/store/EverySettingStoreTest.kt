@@ -262,6 +262,80 @@ class EverySettingStoreTest {
     }
 
     @Test
+    fun shadPs4sJsonIsChangedInPlaceAndAGamesOwnFileIsKeptUnderItsSerial(): Unit = runBlocking {
+        val installed = InstalledEmulator(EmulatorId("linux.shadps4"), "shadPS4", Host.LINUX, "/opt/shadps4/Shadps4-sdl.AppImage", version = "0.20.0", platforms = setOf(PlatformId("ps4")), detectedVia = "AppImage")
+        val services = services("shadps4.db", installed)
+        val user = File(emu, "shadPS4").apply { mkdirs() }
+        val config = File(user, "config.json")
+        val text = "{\n  \"GPU\": {\n    \"readbacks_mode\": 0,\n    \"fsr_enabled\": true\n  },\n  \"General\": {\n    \"install_dirs\": [\n      {\n        \"enabled\": true,\n        \"path\": \"/games\"\n      }\n    ]\n  }\n}\n"
+        config.writeText(text)
+        services.shadPs4UserDir = user.absolutePath
+        File(root, "ps4/Bloodborne [CUSA00900]").mkdirs()
+        File(root, "ps4/Bloodborne [CUSA00900]/eboot.bin").writeBytes(ByteArray(64))
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = withTimeout(20_000) { store.library.games(GameQuery()).first { it.isNotEmpty() } }.first()
+
+        val every = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(null, installed.id))
+        val fsr = every.value("GPU", "fsr_enabled")
+        assertEquals("true" to SettingSource.EVERY_GAME, fsr.value to fsr.source)
+        assertTrue(store.library.setEveryEmulatorSetting(null, installed.id, fsr.setting.id, "false"))
+        assertEquals(text.replace("\"fsr_enabled\": true", "\"fsr_enabled\": false"), config.readText(), "in place, the rest as it was")
+
+        // A game's own: custom_configs/<serial>.json, holding only what is its own.
+        val forGame = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(game.id))
+        assertTrue(forGame.sections.flatMap { it.values }.all { it.setting.perGame })
+        val readbacks = forGame.value("GPU", "readbacks_mode").setting
+        assertTrue(store.library.setEveryEmulatorSetting(game.id, null, readbacks.id, "2"))
+        val own = File(user, "custom_configs/CUSA00900.json")
+        assertEquals("{\n  \"GPU\": {\n    \"readbacks_mode\": 2\n  }\n}\n", own.readText())
+        val after = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(game.id)).value("GPU", "readbacks_mode")
+        assertEquals("2" to SettingSource.GAME, after.value to after.source)
+
+        assertTrue(store.library.restoreEmulatorSettings(game.id, null))
+        assertFalse(own.exists())
+        assertTrue(store.library.restoreEmulatorSettings(null, installed.id))
+        assertEquals(text, config.readText())
+    }
+
+    @Test
+    fun cemusGameProfileIsMadeAsACopyOfTheOneItShipsSinceItReadsOnlyOne(): Unit = runBlocking {
+        val installed = InstalledEmulator(EmulatorId("linux.cemu"), "Cemu", Host.LINUX, "/usr/bin/cemu", version = "2.6", platforms = setOf(PlatformId("wiiu")), detectedVia = "PATH")
+        val services = services("cemu.db", installed)
+        val data = File(emu, "Cemu/data").apply { mkdirs() }
+        val config = File(emu, "Cemu/config").apply { mkdirs() }
+        services.cemuHome = io.github.matiyaaa.fuse.launch.settings.CemuHome(data.absolutePath, config.absolutePath)
+        // The profile Cemu ships for the game, which it reads while the game has none of its own.
+        val shipped = File(data, "gameProfiles/default/0005000010145d00.ini").apply { parentFile.mkdirs(); writeText("# Mario Kart 8\n\n[Graphics]\naccurateShaderMul = false\n") }
+        File(root, "wiiu/Mario Kart 8 [0005000010145D00]/code").mkdirs()
+        File(root, "wiiu/Mario Kart 8 [0005000010145D00]/code/Turbo.rpx").writeBytes(ByteArray(64))
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val game = withTimeout(20_000) { store.library.games(GameQuery()).first { it.isNotEmpty() } }.first()
+
+        assertIs<EverySettingView.Unavailable>(store.library.everyEmulatorSetting(null, installed.id), "Cemu's settings for every game stay in Cemu")
+        val view = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(game.id))
+        assertNotNull(view.gameFileNote, "says the shipped profile is read until the game has its own")
+        val mul = view.value("Graphics", "accurateShaderMul")
+        assertEquals("false" to SettingSource.EVERY_GAME, mul.value to mul.source)
+        val cpu = view.value("CPU", "cpuMode").setting
+        assertTrue(store.library.setEveryEmulatorSetting(game.id, null, cpu.id, "Auto"))
+        val own = File(config, "gameProfiles/0005000010145d00.ini")
+        val text = own.readText()
+        assertTrue(text.startsWith("# "), "its name first, as Cemu writes it")
+        assertTrue("accurateShaderMul = false" in text && "cpuMode = Auto" in text, text)
+        val after = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(game.id))
+        assertEquals(SettingSource.GAME, after.value("Graphics", "accurateShaderMul").source, "copied, so the game reads what it did")
+        // With a profile of its own, what it hasn't got is Cemu's own default.
+        val pad = after.value("General", "startWithPadView")
+        assertEquals("false" to SettingSource.DEFAULT, pad.value to pad.source)
+
+        assertTrue(store.library.restoreEmulatorSettings(game.id, null))
+        assertFalse(own.exists(), "every key Fuse wrote went, so the file did too")
+        assertTrue(shipped.isFile, "Cemu's own never touched")
+    }
+
+    @Test
     fun azaharsGameFileIsItsTitleIdsAndItsGroupsAreQtsOwn(): Unit = runBlocking {
         val installed = InstalledEmulator(EmulatorId("linux.azahar"), "Azahar", Host.LINUX, "/usr/bin/azahar", version = "2126.2", platforms = setOf(PlatformId("3ds")), detectedVia = "PATH")
         val services = services("azahar.db", installed)

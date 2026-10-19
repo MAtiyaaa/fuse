@@ -24,6 +24,59 @@ class LinuxVersionsTest {
         assertNull(LinuxDetector.versionInName("DuckStation-x64.AppImage"))
     }
 
+    /** A home with [files] (path to text), [programs] runnable, and what each prints for its version flag. */
+    private fun home(files: Map<String, String> = emptyMap(), programs: Set<String> = emptySet(), printed: Map<String, String> = emptyMap(), listed: Set<String> = emptySet()) = object : LinuxEnvironment {
+        override val homeDir = "/home/deck"
+        override fun pathDirectories() = listOf("/usr/bin")
+        override fun isExecutable(path: String) = path in programs
+        override fun exists(path: String) = path in programs || files.keys.any { it == path || it.startsWith("$path/") }
+        override fun listFiles(dir: String) = files.keys.filter { it.startsWith("$dir/") }.map { it.removePrefix("$dir/").substringBefore('/') }.distinct()
+        override fun flatpakApps() = listed
+        override fun readText(path: String): String? = files[path]
+        override fun versionOutput(path: String, flag: String): String? = printed["$path $flag"]
+    }
+
+    private val dolphinInfo = """
+        <component type="desktop-application">
+          <id>org.DolphinEmu.dolphin-emu</id>
+          <releases>
+            <release version="2609a" date="2026-09-20"/>
+            <release version="2609" date="2026-09-01"/>
+          </releases>
+        </component>
+    """.trimIndent()
+
+    @Test
+    fun aFlatpakIsFoundByItsFolderWithTheVersionItsOwnAppStreamFileGives() {
+        // No flatpak command to ask: the deployment in use, and its AppStream file.
+        val root = "/var/lib/flatpak/app/org.DolphinEmu.dolphin-emu/current/active"
+        val env = home(files = mapOf("$root/metadata" to "[Application]", "$root/files/share/metainfo/org.DolphinEmu.dolphin-emu.metainfo.xml" to dolphinInfo))
+        assertEquals(setOf("org.DolphinEmu.dolphin-emu"), LinuxDetector.flatpakFolders(env))
+        val dolphin = LinuxDetector.detect(env).single { it.id == EmulatorId("linux.dolphin") }
+        assertEquals("Flatpak" to "2609a", dolphin.detectedVia to dolphin.version, "the newest release, listed first")
+    }
+
+    @Test
+    fun aPackagedProgramsVersionIsInTheAppStreamFileItsPackagePutBesideIt() {
+        val env = home(files = mapOf("/usr/share/metainfo/org.DolphinEmu.dolphin-emu.metainfo.xml" to dolphinInfo), programs = setOf("/usr/bin/dolphin-emu"))
+        val dolphin = LinuxDetector.detect(env).single { it.id == EmulatorId("linux.dolphin") }
+        assertEquals("PATH" to "2609a", dolphin.detectedVia to dolphin.version)
+    }
+
+    @Test
+    fun elseTheProgramSaysItsVersionWhereItPrintsItAndExits() {
+        val env = home(
+            programs = setOf("/usr/bin/retroarch", "/usr/bin/dolphin-emu"),
+            printed = mapOf("/usr/bin/retroarch --version" to "RetroArch - libretro frontend\nVersion: 1.22.2 (Git 1a2b3c4)"),
+        )
+        val found = LinuxDetector.detect(env)
+        assertEquals("1.22.2", found.single { it.id == EmulatorId("linux.retroarch") }.version)
+        // Dolphin starts its window toolkit before it reads its flags, so it is never run to ask.
+        assertNull(found.single { it.id == EmulatorId("linux.dolphin") }.version)
+        assertEquals("1.20.4", LinuxDetector.versionInOutput("v1.20.4-12-gabcdef"))
+        assertNull(LinuxDetector.metainfoVersion("<component><release version=\"1.0\"/></component>"), "a release outside <releases> isn't one")
+    }
+
     @Test
     fun aFlatpakAzaharIsFoundWithItsVersion() {
         val env = object : LinuxEnvironment {

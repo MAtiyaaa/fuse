@@ -34,6 +34,10 @@ val EMULATORS = listOf(
     Emulator("fallout2-ce", "alexbatalov/fallout2-ce", Regex("""^v\d+\.\d+\.\d+$"""), Fallout2Ce.FILES, Fallout2Ce::parse),
     // RetroArch's own settings, for a game's override file.
     Emulator("retroarch", "libretro/RetroArch", Regex("""^v\d+\.\d+\.\d+$"""), RetroArch.FILES, RetroArch::parse),
+    // shadPS4's releases are v.0.20.0 and the like.
+    Emulator("shadps4", "shadps4-emu/shadPS4", Regex("""^v\.\d+\.\d+\.\d+$"""), ShadPs4.FILES, ShadPs4::parse),
+    // Cemu's releases are v2.6 and the like; its v2.0-95 builds before them were previews.
+    Emulator("cemu", "cemu-project/Cemu", Regex("""^v\d+\.\d+$"""), Cemu.FILES, Cemu::parse),
     // Azahar's releases are numbered by year and week (2126.2, 2126.1.2); alphas and release candidates left out.
     Emulator("azahar", "azahar-emu/azahar", Regex("""^\d{4}(?:\.\d+)*$"""), Azahar.FILES, Azahar::parse),
     // Eden is kept on its own Forgejo; its releases are v0.2.1 and the like (release candidates left out).
