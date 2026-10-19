@@ -74,6 +74,15 @@ fun flycastConfig(env: SaveEnvironment, emulatorPath: String?): String? = Flycas
 /** Cemu's data folder and the folder its settings.xml is in, as its CemuApp.cpp sets them; null when neither is there. */
 fun cemuFolders(env: SaveEnvironment, emulatorPath: String?): Pair<String, String>? = Cemu.folders(env, emulatorPath)
 
+/** PPSSPP's memory stick here (the folder with PSP in it), as Fuse finds it for its saves; null when not found. */
+fun ppssppMemstick(env: SaveEnvironment, emulatorPath: String?): String? = Ppsspp.memstickOf(env, emulatorPath)
+
+/** PCSX2's data folder here (ARMSX2's on Android, the one chosen in it), as Fuse finds it for its saves; null when not found. */
+fun pcsx2DataFolder(env: SaveEnvironment, emulatorPath: String?): String? = Pcsx2.dataFolder(env, emulatorPath)
+
+/** RetroArch's retroarch.cfg here, as Fuse finds it for its saves; null when none is found. */
+fun retroArchConfigFile(env: SaveEnvironment, emulatorPath: String?): String? = RetroArch.configFile(env, emulatorPath)
+
 /** The game whose saves are wanted, and what it is played with here. */
 @kotlinx.serialization.Serializable
 data class SaveQuery(
@@ -292,10 +301,12 @@ internal object RetroArch : SaveAdapter {
         return "$base/saves" to "$base/states"
     }
 
+    internal fun configFile(env: SaveEnvironment, emuPath: String?): String? = configs(env, emuPath).firstOrNull(env::exists)
+        // On Android, its folder may be anywhere the person moved it.
+        ?: DataFolders.find(env, "retroarch", listOf("retroarch")) { d -> "$d/retroarch.cfg".takeIf(env::exists) }.firstOrNull()
+
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
-        val config = configs(env, q.emulatorPath).firstOrNull(env::exists)
-            // On Android, its folder may be anywhere the person moved it.
-            ?: DataFolders.find(env, "retroarch", listOf("retroarch")) { d -> "$d/retroarch.cfg".takeIf(env::exists) }.firstOrNull()
+        val config = configFile(env, q.emulatorPath)
         val base = config?.let { env.readText(it) }?.let(::parseCfg).orEmpty()
         val (defSaves, defStates) = defaults(env, config, q.emulatorPath, q.emulatorId)
         val content = SaveAdapters.parent(q.romPath)
@@ -499,6 +510,8 @@ internal object Pcsx2 : SaveAdapter {
     override val emulators = setOf("pcsx2", "nethersx2", "nethersx2-turnip", "nethersx2-turnip-classic", "armsx1", "armsx2", "armsx3", "aethersx2")
     override val keepsStates = true
 
+    internal fun dataFolder(env: SaveEnvironment, emuPath: String?): String? = dataDir(env, emuPath)
+
     private fun dataDir(env: SaveEnvironment, emuPath: String?): String? = when (env.host) {
         "WINDOWS" -> SaveAdapters.firstDir(env, emuPath?.let { SaveAdapters.parent(it) }?.takeIf { env.exists("$it/portable.ini") || env.exists("$it/portable.txt") }, "${SaveAdapters.documents(env)}/PCSX2")
         "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/PCSX2")
@@ -566,6 +579,8 @@ internal object Ppsspp : SaveAdapter {
             }.firstOrNull()
         else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgConfig(env)}/ppsspp", "${env.home}/.var/app/org.ppsspp.PPSSPP/config/ppsspp")
     }
+
+    internal fun memstickOf(env: SaveEnvironment, emuPath: String?): String? = memstick(env, emuPath, null)
 
     /** A memory stick chosen in PPSSPP itself, named by memstick_dir.txt in its own folder. */
     private fun memstickChosen(env: SaveEnvironment, emuPath: String?): String? {

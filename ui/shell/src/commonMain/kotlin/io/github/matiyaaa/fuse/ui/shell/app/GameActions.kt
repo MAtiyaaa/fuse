@@ -467,6 +467,13 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
                 add(MenuAction("emusettings", "Game Settings", FuseIcons.Sliders, detail = "Every setting of the port's own, as its code names them, in its own file", trailing = Trailing.Chevron, onSelect = { emulatorSettingsSheet(card) }))
             }
         }
+        // On Android, the settings of an emulator whose files are in shared storage (PPSSPP, ARMSX2, RetroArch).
+        if (!card.isApp && platform.host == io.github.matiyaaa.fuse.model.Host.ANDROID) {
+            val retroArch = store.emulators.installed.value.any { it.id.value.substringAfter('.').startsWith("retroarch") }
+            if (card.platformId.value in setOf("ps2", "psp") || retroArch && io.github.matiyaaa.fuse.launch.RetroArchCores.coresFor(platform.host, card.platformId).isNotEmpty()) {
+                add(MenuAction("emusettings", "Emulator Settings", FuseIcons.Sliders, detail = "Resolution, renderer and every other setting for this game, in its emulator's own settings", trailing = Trailing.Chevron, onSelect = { emulatorSettingsSheet(card) }))
+            }
+        }
         if (!card.isApp && card.platformId.value == "ps3") {
             add(MenuAction("compat", "How It Runs in RPCS3", FuseIcons.Gauge, detail = "From RPCS3's compatibility list. Asks rpcs3.net with the game's title id", trailing = Trailing.Chevron, onSelect = { showCompatibility(card) }))
         }
@@ -721,7 +728,11 @@ fun AppState.showEmulator(id: io.github.matiyaaa.fuse.model.EmulatorId) {
                     contextMenu = null
                     scope.launch { store.emulators.openEmulator(id) }
                 }))
-                if (io.github.matiyaaa.fuse.launch.settings.NativeSettings.familyOf(id.value) in io.github.matiyaaa.fuse.launch.settings.NativeSettings.changeable && platform.host != io.github.matiyaaa.fuse.model.Host.ANDROID) {
+                val family = io.github.matiyaaa.fuse.launch.settings.NativeSettings.familyOf(id.value)
+                // On Android, those whose files can be in shared storage.
+                if (family in io.github.matiyaaa.fuse.launch.settings.NativeSettings.changeable &&
+                    (platform.host != io.github.matiyaaa.fuse.model.Host.ANDROID || family in io.github.matiyaaa.fuse.launch.settings.NativeSettings.onAndroid)
+                ) {
                     add(MenuAction("settings", "Settings for Every Game", FuseIcons.Sliders, detail = "Resolution, renderer and every other setting, in its own settings", trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Chevron, onSelect = {
                         emulatorSettingsSheet(null, id)
                     }))

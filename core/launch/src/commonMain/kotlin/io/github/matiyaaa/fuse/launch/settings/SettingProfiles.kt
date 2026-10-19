@@ -40,15 +40,20 @@ object SettingProfiles {
 
     /**
      * The devices Fuse fits profiles to, by their makers' own specifications: the Steam Deck's
-     * 1280 by 800 screen (LCD and OLED alike), the ROG Ally's 1920 by 1080 (Ally and Ally X), and a
-     * 4K TV's 3840 by 2160. An Android handheld isn't among them: on Android Fuse doesn't change
-     * emulators' files, which they keep in their own storage.
+     * 1280 by 800 screen (LCD and OLED alike), the ROG Ally's 1920 by 1080 (Ally and Ally X), an
+     * Android handheld's 1920 by 1080 (the Retroid Pocket 5 and AYN Odin 2, and those like them),
+     * and a 4K TV's 3840 by 2160.
      */
     val DEVICES = listOf(
         DeviceClass("steam-deck", "Steam Deck", 800, handheld = true),
         DeviceClass("rog-ally", "ROG Ally", 1080, handheld = true),
+        DeviceClass("android-handheld", "Android Handheld", 1080, handheld = true),
         DeviceClass("tv-4k", "4K TV", 2160, handheld = false),
     )
+
+    /** The devices offered on [host]: on Android its handhelds and a TV, on a computer the PC handhelds and a TV. */
+    fun devicesFor(host: Host): List<DeviceClass> =
+        DEVICES.filter { d -> if (host == Host.ANDROID) d.id == "android-handheld" || !d.handheld else d.id != "android-handheld" }
 
     /**
      * Each emulator's internal resolution setting, the lines one step of it is (as the emulator's
@@ -78,7 +83,7 @@ object SettingProfiles {
         val steps = resolution.choices.mapNotNull { c -> c.value.toIntOrNull()?.takeIf { it > 0 }?.let { it to c } }
         if (steps.isEmpty()) return emptyList()
         val vsync = fit.vsync?.takeIf { (id, v) -> settings.any { s -> s.id == id && s.perGame && s.choices.any { it.value == v } } }
-        return DEVICES.map { d ->
+        return devicesFor(host).map { d ->
             val (step, choice) = if (d.handheld) {
                 steps.minWith(compareBy<Pair<Int, SettingChoice>> { kotlin.math.abs(it.first * fit.linesPerStep - d.lines) }.thenBy { it.first })
             } else {

@@ -46,6 +46,16 @@ class SettingProfilesTest {
     }
 
     @Test
+    fun androidHasItsHandheldAndATvAndComputersTheirs() {
+        assertEquals(listOf("steam-deck", "rog-ally", "tv-4k"), SettingProfiles.devicesFor(Host.LINUX).map { it.id })
+        assertEquals(listOf("android-handheld", "tv-4k"), SettingProfiles.devicesFor(Host.ANDROID).map { it.id })
+        val handheld = SettingProfiles.forDevices("ppsspp", Host.ANDROID).single { it.id == SettingProfiles.DEVICE + "android-handheld" }
+        assertEquals("4", handheld.values["ppsspp.resolution"], "1088 lines, nearest a 1080-line screen")
+        assertTrue("Android Handheld" in handheld.about && "1080 lines" in handheld.about, handheld.about)
+        assertEquals("3", SettingProfiles.forDevices("pcsx2", Host.ANDROID).single { it.id == SettingProfiles.DEVICE + "android-handheld" }.values["pcsx2.upscale"])
+    }
+
+    @Test
     fun aGameHasAProfileWhenEveryValueInItMatches() {
         val settings = NativeSettings.forEmulator("pcsx2", Host.LINUX)
         val quality = SettingProfiles.builtIn("pcsx2", Host.LINUX).single { it.id == SettingProfiles.QUALITY }

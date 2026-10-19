@@ -324,6 +324,30 @@ class EverySettingStoreTest {
     }
 
     @Test
+    fun onAndroidOnlyEmulatorsWithTheirFilesInSharedStorageAreChanged(): Unit = runBlocking {
+        val duck = InstalledEmulator(EmulatorId("duckstation"), "DuckStation", Host.ANDROID, "com.github.stenzek.duckstation", platforms = setOf(PlatformId("psx")), detectedVia = "Package")
+        val psp = InstalledEmulator(EmulatorId("ppsspp"), "PPSSPP", Host.ANDROID, "org.ppsspp.ppsspp", version = "1.19.3", platforms = setOf(PlatformId("psp")), detectedVia = "Package")
+        val services = FakeServices(FuseData(DesktopDatabase.open(File(cache, "android.db").absolutePath)), cache, host = Host.ANDROID, installedEmulators = listOf(duck, psp))
+        val stick = File(emu, "storage").apply { File(this, "PSP/SYSTEM").mkdirs() }
+        val ini = File(stick, "PSP/SYSTEM/ppsspp.ini")
+        ini.writeText("[Graphics]\nInternalResolution = 1\n")
+        services.ppssppHome = io.github.matiyaaa.fuse.launch.patches.PpssppHome(stick.absolutePath)
+        val store = createFuseStore(services, scope)
+
+        // DuckStation's are in its private Android/data folder.
+        val no = assertIs<EverySettingView.Unavailable>(store.library.everyEmulatorSetting(null, duck.id))
+        assertEquals("Fuse can't reach DuckStation's settings here", no.title)
+        // PPSSPP's memory stick is in shared storage.
+        val every = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(null, psp.id))
+        val res = every.value("Graphics", "InternalResolution")
+        assertEquals("1", res.value)
+        assertTrue(store.library.setEveryEmulatorSetting(null, psp.id, res.setting.id, "2"))
+        assertEquals("[Graphics]\nInternalResolution = 2\n", ini.readText())
+        assertTrue(store.library.restoreEmulatorSettings(null, psp.id))
+        assertEquals("[Graphics]\nInternalResolution = 1\n", ini.readText())
+    }
+
+    @Test
     fun melonDsHasEveryGamesSettingsOnlyInItsTomlWithAFloatWrittenAsOne(): Unit = runBlocking {
         val installed = InstalledEmulator(EmulatorId("linux.melonds"), "melonDS", Host.LINUX, "/usr/bin/melonDS", version = "1.1", platforms = setOf(PlatformId("nds")), detectedVia = "PATH")
         val services = services("melonds.db", installed)

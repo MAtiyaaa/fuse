@@ -157,6 +157,10 @@ class AndroidFuseServices(
         return service
     }
 
+    // Emulator Settings for the emulators whose files are in shared storage; their other files stay a computer's to change.
+    override val settingsFiles: io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles =
+        AndroidEmulatorFiles(io.github.matiyaaa.fuse.sync.FileSaveEnvironment("ANDROID"), java.io.File(appContext.filesDir, "emulator-settings-backups"))
+
     override val emulators: EmulatorDetector = AndroidEmulatorDetector(appContext, storageVolumes)
 
     // Android keeps other apps private: Intelligence only remembers each emulator's install here,

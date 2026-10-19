@@ -185,6 +185,13 @@ interface FuseServices {
      */
     val emulatorFiles: EmulatorFiles? get() = null
 
+    /**
+     * The emulators' files Emulator Settings changes: [emulatorFiles] on a computer; on Android, only
+     * those in shared storage, where Fuse reaches them. The rest of [emulatorFiles]' work (installers,
+     * mods, sign-ins) stays a computer's.
+     */
+    val settingsFiles: EmulatorFiles? get() = emulatorFiles
+
     /** This device's addresses on the home network, the likeliest first, for another device to reach a game hosted here. */
     fun homeAddresses(): List<String> = emptyList()
 

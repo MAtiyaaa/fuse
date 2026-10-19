@@ -203,7 +203,7 @@ internal class NativeSettingsStore(
     }
 
     private suspend fun target(id: GameId?, emulator: EmulatorId?): Pair<Target?, EmulatorSettingsView.Unavailable?> {
-        val files = ctx.services.emulatorFiles ?: return no("Not on this device", "Emulator settings can be changed from Fuse on a computer. On this device, change them in the emulator.")
+        val files = ctx.services.settingsFiles ?: return no("Not on this device", "Emulator settings can be changed from Fuse on a computer. On this device, change them in the emulator.")
         if (ctx.installed.value.isEmpty()) detectNow()
         val game = id?.let { data.games.get(it) ?: return no("Game not found", "This game is no longer in the library.") }
         if (game != null && game.platformId == io.github.matiyaaa.fuse.launch.ports.PortAdapter.PLATFORM) return portTarget(game, files)
@@ -220,7 +220,12 @@ internal class NativeSettingsStore(
         }
         val family = family(installed)
         val name = installed.name
-        val version = installed.version
+        // On Android, only an emulator whose files are in shared storage; the others' are in their own private folders.
+        if (ctx.host == io.github.matiyaaa.fuse.model.Host.ANDROID && family !in NativeSettings.onAndroid) {
+            return no("Fuse can't reach $name's settings here", "$name keeps its settings in its own private folder on Android, which no other app can open; change them in $name. ${NativeSettings.ON_ANDROID}")
+        }
+        // ARMSX2 numbers its own releases, not PCSX2's: which of PCSX2's it follows isn't known.
+        val version = installed.version.takeUnless { installed.id.value.substringAfter('.') in NativeSettings.ownVersions }
         fun notSetUp() = no("$name isn't set up yet", "Start $name once and finish its first-run setup, then come back.")
         fun unreadable(what: String) = no("Fuse can't tell which game this is", "$name keeps a game's own settings under its $what, which Fuse reads from ISO and BIN images (and EBOOT.PBP files for PSP). Compressed images (CHD, CSO) aren't read; change this game's settings in $name.")
         return when (family) {

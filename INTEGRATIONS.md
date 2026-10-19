@@ -1205,7 +1205,10 @@ exactly.
   shown and never changed. The file as it was is kept in Fuse's data (`emulator-backups/`) the first
   time Fuse changes it, and every write is atomic. Rules from PCSX2's `pcsx2/Patch.cpp`,
   `pcsx2/VMManager.cpp` and `pcsx2/Pcsx2Config.cpp`.
-- **Emulator settings, and Every Setting (Fuse Tune)** (Linux, Windows, macOS). Fuse's own picks
+- **Emulator settings, and Every Setting (Fuse Tune)** (Linux, Windows, macOS; on Android, PPSSPP,
+  ARMSX2 and RetroArch where their files are in the device's storage: PPSSPP's memory stick,
+  the data folder chosen in ARMSX2, RetroArch's own `RetroArch` folder, read and written with All
+  Files Access and nowhere else). Fuse's own picks
   (renderer, resolution, aspect ratio and the like, with Fuse's words for them) and Every Setting
   change the emulator's own settings files, for every game or for one game: PCSX2
   (`inis/PCSX2.ini`, `gamesettings/SERIAL_CRC.ini`), DuckStation (`settings.ini`,

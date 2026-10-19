@@ -77,9 +77,24 @@ object NativeSettings {
         when (f) {
             "retroarch-steam" -> "retroarch"
             "eden-nightly" -> "eden"
+            // PCSX2 for Android: its files laid out as PCSX2's, in the data folder chosen in it.
+            "armsx2" -> "pcsx2"
             else -> f
         }
     }
+
+    /**
+     * The families Fuse changes on Android: those whose files can be in shared storage (PPSSPP's
+     * memory stick, ARMSX2's data folder, RetroArch's own folder). The others keep theirs in their
+     * private `Android/data` folders, which no other app can open.
+     */
+    val onAndroid: Set<String> = setOf("pcsx2", "ppsspp", "retroarch")
+
+    /** Said where Android can't reach an emulator's settings. */
+    const val ON_ANDROID = "On Android, Fuse changes PPSSPP's, ARMSX2's and RetroArch's settings, where their files are in your storage."
+
+    /** Emulators of a family whose versions are their own, not the family's (ARMSX2's against PCSX2's). */
+    val ownVersions: Set<String> = setOf("armsx2")
 
     /** Dolphin's graphics settings file (GFX.ini), beside Dolphin.ini. */
     const val DOLPHIN_GFX = "GFX"

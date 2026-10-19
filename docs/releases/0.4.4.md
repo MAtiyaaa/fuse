@@ -95,6 +95,10 @@ together as each emulator does it, and Fuse Ports brings games rebuilt to run na
 - **Systems tell what you play.** The Systems page now says, for the system in focus, how long you
   have played it, how many of its games, the one played most, and shows the covers of those played
   last.
+- **Emulator Settings on Android.** On Android, Fuse now changes PPSSPP's, ARMSX2's and RetroArch's
+  settings for every game and for one game, where their files are in your storage, with an
+  Android Handheld preset beside the 4K TV. An emulator that keeps its files in its own private
+  folder says so.
 - **No sign-ins in Every Setting.** Passwords, tokens and keys an emulator keeps among its
   settings (RetroArch's RetroAchievements and WebDAV sign-ins, Flycast's RetroAchievements token,
   Azahar's and Citron's web service tokens) are never shown or written by Fuse.
