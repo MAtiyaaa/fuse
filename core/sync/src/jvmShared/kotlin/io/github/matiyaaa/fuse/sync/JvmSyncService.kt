@@ -629,9 +629,11 @@ class JvmSyncService(
         // (everything here stays as it is) and asks who is playing.
         if (e.code == "locked" && active.isNotEmpty() && _profiles.value.isNotEmpty() && _profiles.value.none { it.id == active }) {
             scope.launch(Dispatchers.IO) {
-                if (cached.activeProfile != active) return@launch
-                runCatching { switchTo(null) }
-                log("The profile in use here was deleted on another device. Choose who's playing.", kind = SyncActivity.PROFILE)
+                // A switch to it the host is still checking knows who was here before: it goes back there.
+                if (active in checking) return@launch
+                if (runCatching { leave(active) }.getOrDefault(false)) {
+                    log("The profile in use here was deleted on another device. Choose who's playing.", kind = SyncActivity.PROFILE)
+                }
             }
             return
         }
@@ -2073,7 +2075,14 @@ class JvmSyncService(
                 (!known.protected || people.pins[id] != null)
             ) {
                 if (known.protected) checkOfflinePin(id, known.name, pin)
-                arrive(d, before, id)
+                // Being checked from before it arrives, so nothing else sends this device away from it meanwhile.
+                checking += id
+                try {
+                    arrive(d, before, id)
+                } catch (e: Throwable) {
+                    checking -= id
+                    throw e
+                }
                 log("Switched to ${known.name} in ${clock() - began} ms", kind = SyncActivity.PROFILE)
                 scope.launch(Dispatchers.IO) { catchUp(c, d, id, pin, before, check = true) }
                 return@runCatching
@@ -2141,13 +2150,32 @@ class JvmSyncService(
      * Puts [id] in place from what this device keeps of them: what changed under [before] stays
      * with [before], then [id]'s records, settings and Home become the library's. Local only.
      */
-    private suspend fun arrive(d: SyncDevice, before: String, id: String) = profileLock.withLock {
+    private suspend fun arrive(d: SyncDevice, before: String, id: String, onlyIfStill: Boolean = false): Boolean = profileLock.withLock {
+        // [onlyIfStill]: only while [before] is still the one playing; a switch made meanwhile stands.
+        if (onlyIfStill && cached.activeProfile != before) return@withLock false
         if (before.isNotEmpty()) captureChanges(before)
         saveConfig { it.copy(activeProfile = id) }
         layInPlace(d, id)
         d.useProfile(id)
         _active.value = _profiles.value.firstOrNull { it.id == id }
+        true
     }
+
+    /**
+     * This device stops using [id] when it is still the profile in use, decided under the same lock
+     * as every switch, so a switch made meanwhile (back to who was here) is never undone. Its changes
+     * stay with it. True when it did.
+     */
+    private suspend fun leave(id: String): Boolean = profileLock.withLock {
+        if (cached.activeProfile != id) return@withLock false
+        captureChanges(id)
+        saveConfig { it.copy(activeProfile = "") }
+        _active.value = null
+        true
+    }
+
+    /** Profiles just switched to from what is kept here, which the host is still checking ([catchUp]). */
+    private val checking: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
 
     /**
      * After a switch: the host checks the person (a PIN changed elsewhere, a profile deleted
@@ -2164,14 +2192,18 @@ class JvmSyncService(
                 rememberPin(id, pin)
             } catch (e: SyncException) {
                 if (e.code == "offline" || e.code == "rate") return
-                if (cached.activeProfile != id) return
                 val back = before.takeIf { b -> b.isNotEmpty() && _profiles.value.any { it.id == b } }
-                if (back != null) arrive(d, id, back) else runCatching { switchTo(null) }
-                log(
-                    (e.message ?: "The host didn't accept that profile.") + if (back != null) " Switched back." else " Choose who's playing.",
-                    kind = SyncActivity.PROFILE,
-                )
+                // Only while [id] is still the one playing: a switch made meanwhile stands.
+                val moved = if (back != null) arrive(d, id, back, onlyIfStill = true) else leave(id)
+                if (moved) {
+                    log(
+                        (e.message ?: "The host didn't accept that profile.") + if (back != null) " Switched back." else " Choose who's playing.",
+                        kind = SyncActivity.PROFILE,
+                    )
+                }
                 return
+            } finally {
+                checking -= id
             }
         }
         work.withLock {
