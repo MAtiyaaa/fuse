@@ -15,6 +15,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
+import org.junit.Assume.assumeTrue
 
 /**
  * Recomps the person installed, found where their builds go, and their folders touched only where
@@ -99,6 +100,55 @@ class RecompFilesTest {
         assertTrue(f.copy("${f.profiles}/zelda64recomp/Deck.json", "${home.invariantSeparatorsPath}/.config/Zelda64Recompiled/controls.json"))
         assertTrue(f.remove("$mods/Rando.nrm"))
         assertFalse(File(mods, "Rando.nrm").exists())
+    }
+
+    /** A symbolic link at [at] to [to]; Windows makes one only in Developer Mode or as an administrator. */
+    private fun link(at: File, to: File) {
+        at.parentFile.mkdirs()
+        val made = runCatching { Files.createSymbolicLink(at.toPath(), to.toPath()) }.isSuccess
+        assumeTrue("This system doesn't let the tests make symbolic links", made)
+    }
+
+    @Test
+    fun aLinkInARecompsFolderNeverReachesPastIt(): Unit = runBlocking {
+        val f = files()
+        val zelda = File(home, ".config/Zelda64Recompiled").apply { mkdirs() }
+        val outside = File(home, "private").apply { mkdirs() }
+        val secret = File(outside, "id_ed25519").apply { writeText("secret") }
+
+        // A file in the recomp's folder that is a link to one outside it.
+        link(File(zelda, "graphics.json"), secret)
+        assertNull(f.readText(File(zelda, "graphics.json").path), "a linked file outside isn't read")
+        assertFalse(f.writeText(File(zelda, "graphics.json").path, "{}"), "nor written")
+        assertEquals("secret", secret.readText())
+        assertFalse(f.copy(File(zelda, "graphics.json").path, "${f.profiles}/zelda64recomp/Deck.json"), "nor copied out")
+
+        // A folder in it that is a link to one outside: nothing is listed, made or taken away through it.
+        link(File(zelda, "mods"), outside)
+        assertNull(f.list(File(zelda, "mods").path))
+        assertFalse(f.writeText(File(zelda, "mods/new.json").path, "{}"))
+        assertFalse(File(outside, "new.json").exists())
+        assertFalse(f.remove(File(zelda, "mods/id_ed25519").path))
+        assertTrue(secret.isFile)
+        val mod = File(home, "Download/Rando.nrm").apply { parentFile.mkdirs(); writeText("nrm") }
+        assertTrue(f.addMods(mod.path, File(zelda, "mods").path).isFailure)
+        assertFalse(File(outside, "Rando.nrm").exists())
+
+        // A link that leads nowhere is refused, not followed.
+        link(File(zelda, "gone"), File(home, "nowhere/at/all"))
+        assertFalse(f.writeText(File(zelda, "gone/file.json").path, "{}"))
+    }
+
+    @Test
+    fun aRecompsFolderThatIsItselfALinkStillCounts(): Unit = runBlocking {
+        // ~/.config kept elsewhere and linked in, as dotfiles managers do.
+        val real = File(home, "dotfiles/config").apply { mkdirs() }
+        link(File(home, ".config"), real)
+        val f = files()
+        assertTrue(f.writeText("${home.invariantSeparatorsPath}/.config/Zelda64Recompiled/graphics.json", "{}"))
+        assertEquals("{}", File(real, "Zelda64Recompiled/graphics.json").readText())
+        assertEquals("{}", f.readText("${home.invariantSeparatorsPath}/.config/Zelda64Recompiled/graphics.json"))
+        assertFalse(f.writeText("${home.invariantSeparatorsPath}/.config/other/x.json", "{}"), "only the recomp's own folder in it")
     }
 
     @Test
