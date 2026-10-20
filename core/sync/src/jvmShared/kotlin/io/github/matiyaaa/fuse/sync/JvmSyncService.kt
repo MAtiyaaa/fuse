@@ -2285,6 +2285,15 @@ class JvmSyncService(
         work.withLock { saveImporter.discard(plan) }
     }
 
+    override suspend fun assignSaveImport(plan: SaveImportPlan, entry: String, game: SaveQuery): Result<SaveImportPlan> = withContext(Dispatchers.IO) {
+        work.withLock {
+            runCatching {
+                config()
+                saveImporter.assign(plan, entry, game, saveEnv)
+            }
+        }
+    }
+
     override suspend fun importSaves(plan: SaveImportPlan, choices: List<SaveImportChoice>, profile: String): Result<SaveImportResult> = withContext(Dispatchers.IO) {
         work.withLock {
             runCatching {

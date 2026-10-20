@@ -5,6 +5,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -112,7 +116,19 @@ internal class SwitchImport(val source: String, val path: String = "") {
             Regex("^[A-Za-z]:/").containsMatchIn(p) && !p.startsWith("C:", ignoreCase = true)
     }
 
-    enum class Step { SCOPE, READING, GAME, PEOPLE, CHECKING, CONFLICT, REVIEW, IMPORTING, DONE }
+    enum class Step { SCOPE, READING, WHICH, GAME, PEOPLE, CHECKING, CONFLICT, REVIEW, IMPORTING, DONE }
+
+    /**
+     * A game Fuse found backups of but couldn't tell which of the person's games it is ([entries], each
+     * with nowhere to go yet): asked about, "What game is this?", before the games Fuse knows.
+     */
+    class Unknown(val key: String, val entries: List<SaveImportEntry>) {
+        /** What the backups say: the newest's tool, name, title id, user and time. */
+        val sw: io.github.matiyaaa.fuse.sync.SwitchSource get() = entries.maxBy { it.switch?.savedAt ?: 0L }.switch!!
+    }
+
+    /** One of the person's Switch games, to answer "What game is this?" with; [here] false: on Fuse One only. */
+    class Answer(val card: GameCard?, val query: io.github.matiyaaa.fuse.sync.SaveQuery, val title: String, val here: Boolean)
 
     /**
      * One game's backups from the dump, newest first, and what the person chose for it. A game's
@@ -161,6 +177,66 @@ internal class SwitchImport(val source: String, val path: String = "") {
     /** Starts reading once the choice of games is made; set by [startSwitchImport]. */
     var read: (Boolean) -> Unit = {}
     val game: Game? get() = games.getOrNull(index)
+
+    /** The games Fuse couldn't tell, asked about one at a time, and the person's games to answer with. */
+    var unknowns by mutableStateOf<List<Unknown>>(emptyList())
+    var unknownIndex by mutableIntStateOf(0)
+    var answers by mutableStateOf<List<Answer>>(emptyList())
+    /** Every game is listed, not only the likeliest. */
+    var everyAnswer by mutableStateOf(false)
+    /** An answer is being put in the plan. */
+    var assigning by mutableStateOf(false)
+    /** Goes on to the games Fuse knows, once each unknown one is answered or left out. */
+    var afterUnknowns: () -> Unit = {}
+    val unknown: Unknown? get() = unknowns.getOrNull(unknownIndex)
+
+    /**
+     * Reads [plan] for backups Fuse couldn't place (a Switch save with nowhere to go): when there are
+     * any, asks about each with [answers] ([Step.WHICH]); then, or straight away, [then].
+     */
+    fun ask(plan: SaveImportPlan, answers: List<Answer>, then: () -> Unit) {
+        this.plan = plan
+        this.answers = answers
+        afterUnknowns = then
+        unknowns = plan.entries.filter { it.switch != null && it.targets.isEmpty() }
+            .groupBy { e ->
+                val sw = e.switch!!
+                sw.titleId?.uppercase()?.takeIf(SwitchIdsUi::real)?.let(SwitchIdsUi::program)
+                    ?: sw.game?.lowercase()?.filter { it.isLetterOrDigit() }?.ifEmpty { null } ?: e.id
+            }
+            .map { (key, list) -> Unknown(key, list) }
+            // With no Switch game to answer with, there is nothing to ask.
+            .takeIf { answers.isNotEmpty() }.orEmpty()
+        unknownIndex = 0
+        everyAnswer = false
+        if (unknowns.isEmpty()) then() else step = Step.WHICH
+    }
+
+    /** On to the next game Fuse couldn't tell, or to the games it knows. */
+    fun nextUnknown() {
+        everyAnswer = false
+        if (unknownIndex < unknowns.lastIndex) unknownIndex++ else afterUnknowns()
+    }
+
+    /** The answers for [u], the likeliest first (by the name its backups carry), then by name. */
+    fun ranked(u: Unknown): List<Answer> {
+        val words = u.sw.game?.let(::words).orEmpty()
+        fun score(a: Answer): Int = if (words.isEmpty()) 0 else words.count { it in words(a.title) } * 100 / words.size
+        return answers.sortedWith(compareByDescending<Answer> { score(it) }.thenBy { !it.here }.thenBy { it.title.lowercase() })
+    }
+
+    /** The answers shown for the current game: the likeliest few, or every one. */
+    val shownAnswers: List<Answer> get() = unknown?.let { u -> ranked(u).let { if (everyAnswer) it else it.take(LIKELY) } }.orEmpty()
+
+    private fun words(text: String): Set<String> =
+        text.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length > 1 && it !in SMALL_WORDS }.toSet()
+
+    companion object {
+        /** How many games are offered before Show Every Game. */
+        const val LIKELY = 6
+
+        private val SMALL_WORDS = setOf("the", "of", "and", "a", "an", "for", "to", "in", "on")
+    }
 
     /** A Switch emulator ([emulator], its save folder setting's key) Fuse has no way into yet, named [name]. */
     class Unreachable(val emulator: String, val name: String)
@@ -238,12 +314,15 @@ internal fun startSwitchImport(app: AppState, path: String, fromPhone: Boolean =
                         // The reading card stays long enough to be read, however quick the dump was.
                         val left = MIN_READING_MS - (kotlin.time.Clock.System.now().toEpochMilliseconds() - started)
                         if (left > 0) delay(left)
-                        if (plan.entries.none { it.switch != null }) {
+                        val placed = plan.entries.any { it.switch != null && it.targets.isNotEmpty() }
+                        // The usual reason on Android nothing could be placed: the Switch emulator keeps its saves in
+                        // its own private folder, so no game has anywhere for a save to go until one is chosen.
+                        val blocked = if (placed) null else runCatching { app.store.sync.saveFolders() }.getOrDefault(emptyList())
+                            .firstOrNull { "switch" in it.systems && it.state == io.github.matiyaaa.fuse.sync.EmulatorSaves.State.NOT_FOUND && it.canChoose }
+                        // Saves Fuse found but couldn't tell the game of are asked about, when there is somewhere for them to go.
+                        val unknown = blocked == null && plan.entries.any { it.switch != null && it.targets.isEmpty() }
+                        if (!placed && !unknown) {
                             service.discardSaveImport(plan)
-                            // The usual reason on Android: the Switch emulator keeps its saves in its own
-                            // private folder, so no game has anywhere for a save to go until one is chosen.
-                            val blocked = runCatching { app.store.sync.saveFolders() }.getOrDefault(emptyList())
-                                .firstOrNull { "switch" in it.systems && it.state == io.github.matiyaaa.fuse.sync.EmulatorSaves.State.NOT_FOUND && it.canChoose }
                             flow.unreachable = blocked?.let { SwitchImport.Unreachable(it.emulator, emulatorName(it.emulatorId)) }
                             val name = blocked?.let { emulatorName(it.emulatorId) }
                             flow.problem = if (blocked != null && blocked.chosen != null) {
@@ -257,8 +336,11 @@ internal fun startSwitchImport(app: AppState, path: String, fromPhone: Boolean =
                             else "None of these saves are of a Switch game on this device. Choose Every Game to bring in saves for games on Fuse One too."
                             flow.step = SwitchImport.Step.DONE
                         } else {
-                            flow.take(plan, allCards, service.activeProfile.value?.id, elsewhere = if (everywhere) extra.map { it.first.game.id }.toSet() else emptySet())
-                            mineFor(app, flow)
+                            val away = if (everywhere) extra.map { it.first.game.id }.toSet() else emptySet()
+                            flow.ask(plan, answersFor(asked, allCards, away)) {
+                                flow.take(flow.plan ?: plan, allCards, service.activeProfile.value?.id, elsewhere = away)
+                                mineFor(app, flow)
+                            }
                         }
                     }
                     .onFailure { e ->
@@ -271,11 +353,20 @@ internal fun startSwitchImport(app: AppState, path: String, fromPhone: Boolean =
     }
 }
 
-/** Shows a plan already read (from Import Saves' file or folder) as the Switch import. */
-internal fun showSwitchImport(app: AppState, plan: SaveImportPlan, cards: Map<String, GameCard>) {
+/** Shows a plan already read (from Import Saves' file or folder) as the Switch import, read for [queries]. */
+internal fun showSwitchImport(app: AppState, plan: SaveImportPlan, cards: Map<String, GameCard>, queries: List<io.github.matiyaaa.fuse.sync.SaveQuery>) {
     val service = app.store.sync.service ?: return
-    app.switchImport = SwitchImport(plan.sourceName).also { it.take(plan, cards, service.activeProfile.value?.id); mineFor(app, it) }
+    val flow = SwitchImport(plan.sourceName)
+    app.switchImport = flow
+    flow.ask(plan, answersFor(queries.filter { it.platform == "switch" }, cards, emptySet())) {
+        flow.take(flow.plan ?: plan, cards, service.activeProfile.value?.id)
+        mineFor(app, flow)
+    }
 }
+
+/** The person's Switch games, as answers to "What game is this?"; [away]: the ones on Fuse One, not here. */
+private fun answersFor(queries: List<io.github.matiyaaa.fuse.sync.SaveQuery>, cards: Map<String, GameCard>, away: Set<String>): List<SwitchImport.Answer> =
+    queries.distinctBy { it.game.id }.map { q -> SwitchImport.Answer(cards[q.game.id], q, cards[q.game.id]?.title ?: q.title, here = q.game.id !in away) }
 
 /** Finds, game by game, whether the person using Fuse already has a save of it, so each card can say. */
 private fun mineFor(app: AppState, flow: SwitchImport) {
@@ -347,6 +438,37 @@ internal fun SwitchImportOverlay(app: AppState) {
         }
     }
 
+    /**
+     * The answer to "What game is this?": each backup of it goes where [a]'s saves go. A part that
+     * can't go there (a device save, for an emulator that keeps none) is left out; when none can, why.
+     */
+    fun answer(f: SwitchImport, a: SwitchImport.Answer) {
+        val u = f.unknown ?: return
+        val start = f.plan ?: return
+        if (service == null || f.assigning) return
+        f.assigning = true
+        app.scope.launch {
+            var plan = start
+            var problem: String? = null
+            var placed = 0
+            for (e in u.entries) {
+                service.assignSaveImport(plan, e.id, a.query)
+                    .onSuccess { plan = it; placed++ }
+                    .onFailure { problem = it.message }
+            }
+            f.plan = plan
+            f.assigning = false
+            if (app.switchImport !== f) return@launch
+            if (placed == 0) {
+                app.toasts.show(problem ?: "Fuse couldn't put that save with ${a.title}", ToastKind.ERROR)
+                app.platform.sounds.play(SoundCue.ERROR)
+            } else {
+                app.platform.sounds.play(SoundCue.SELECT)
+                f.nextUnknown()
+            }
+        }
+    }
+
     /** Puts back every save the import replaced, from the backups made just before. */
     fun undo(f: SwitchImport) {
         val replaced = f.result?.replaced.orEmpty()
@@ -380,12 +502,29 @@ internal fun SwitchImportOverlay(app: AppState) {
 
     // Controller: a row of choices per step, moved through with left and right (and up and down
     // between the people and the buttons).
-    var focus by remember(flow?.step, flow?.index) { mutableIntStateOf(-1) }
+    var focus by remember(flow?.step, flow?.index, flow?.unknownIndex, flow?.everyAnswer) { mutableIntStateOf(-1) }
     if (flow != null) {
         InputLayer(priority = LayerPriority.DIALOG + 1, modal = true) { e ->
             val f = flow
             val g = f.game
             val actions = actionsOf(f, profiles, me, ::check, ::import, ::undo, ::chooseFolder, ::close)
+            if (f.step == SwitchImport.Step.WHICH) {
+                // "What game is this?": the games in a column (up and down), then the buttons (left and right).
+                val rows = f.shownAnswers.size
+                if (focus < 0) focus = if (rows > 0) 0 else rows + actions.indexOfFirst { it.primary }.coerceAtLeast(0)
+                return@InputLayer when (e.action) {
+                    NavAction.UP -> if (focus in 1 until rows) { focus--; NavResult.MOVED } else if (focus >= rows && rows > 0) { focus = rows - 1; NavResult.MOVED } else NavResult.BLOCKED
+                    NavAction.DOWN -> if (focus < rows - 1) { focus++; NavResult.MOVED } else if (focus == rows - 1) { focus = rows + actions.indexOfFirst { it.primary }.coerceAtLeast(0); NavResult.MOVED } else NavResult.BLOCKED
+                    NavAction.LEFT -> if (focus > rows) { focus--; NavResult.MOVED } else NavResult.BLOCKED
+                    NavAction.RIGHT -> if (focus >= rows && focus < rows + actions.size - 1) { focus++; NavResult.MOVED } else NavResult.BLOCKED
+                    NavAction.SELECT -> {
+                        if (focus < rows) f.shownAnswers.getOrNull(focus)?.let { answer(f, it) } else actions.getOrNull(focus - rows)?.run()
+                        NavResult.ACTIVATED
+                    }
+                    NavAction.BACK -> { back(f, ::close); NavResult.CONSUMED }
+                    else -> NavResult.CONSUMED
+                }
+            }
             val people = if (f.step == SwitchImport.Step.PEOPLE) profiles.size + 1 else 0
             val count = people + actions.size
             if (focus < 0) focus = people + actions.indexOfFirst { it.primary }.coerceAtLeast(0)
@@ -425,6 +564,7 @@ internal fun SwitchImportOverlay(app: AppState) {
                     when (f.step) {
                         SwitchImport.Step.SCOPE -> Scope(f)
                         SwitchImport.Step.READING -> Reading(f.source)
+                        SwitchImport.Step.WHICH -> f.unknown?.let { u -> WhichStep(f, u, focus.takeIf { it in f.shownAnswers.indices }) { a -> answer(f, a) } }
                         SwitchImport.Step.GAME -> f.game?.let { GameStep(it, compact) }
                         SwitchImport.Step.PEOPLE, SwitchImport.Step.CHECKING -> f.game?.let { g -> PeopleStep(g, profiles, me, focus.takeIf { it in 0..profiles.size }) { i -> togglePerson(g, profiles, i) } }
                         SwitchImport.Step.CONFLICT -> f.game?.let { g -> ConflictStep(g, profiles) }
@@ -435,7 +575,11 @@ internal fun SwitchImportOverlay(app: AppState) {
                     val actions = actionsOf(f, profiles, me, ::check, ::import, ::undo, ::chooseFolder, ::close)
                     if (actions.isNotEmpty()) {
                         Spacer(Modifier.height(if (compact) Space.l else Space.xl))
-                        val people = if (f.step == SwitchImport.Step.PEOPLE) profiles.size + 1 else 0
+                        val people = when (f.step) {
+                            SwitchImport.Step.PEOPLE -> profiles.size + 1
+                            SwitchImport.Step.WHICH -> f.shownAnswers.size
+                            else -> 0
+                        }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.m, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
                             actions.forEachIndexed { i, a ->
                                 FuseButton(
@@ -463,6 +607,11 @@ private fun actionsOf(f: SwitchImport, profiles: List<ProfileInfo>, me: String?,
             Action("Every Game", FuseIcons.Library, primary = true) { f.read(true) },
         )
         SwitchImport.Step.READING -> listOf(Action("Cancel", run = close))
+        SwitchImport.Step.WHICH -> buildList {
+            val u = f.unknown ?: return@buildList
+            add(Action("Leave It Out", FuseIcons.CircleSlash, enabled = !f.assigning) { f.nextUnknown() })
+            if (!f.everyAnswer && f.ranked(u).size > SwitchImport.LIKELY) add(Action("Show Every Game", FuseIcons.Library) { f.everyAnswer = true })
+        }
         SwitchImport.Step.GAME -> buildList {
             if (g == null) return@buildList
             add(Action("Not This Game", FuseIcons.CircleSlash) { g.included = false; next(f) })
@@ -516,6 +665,8 @@ private fun back(f: SwitchImport, close: () -> Unit) = when (f.step) {
     SwitchImport.Step.GAME -> if (f.index > 0) { f.index--; f.step = SwitchImport.Step.PEOPLE } else close()
     SwitchImport.Step.REVIEW -> { f.index = f.games.lastIndex; f.step = SwitchImport.Step.PEOPLE }
     SwitchImport.Step.IMPORTING -> Unit
+    // An answer already given stays given: going back from a later question closes nothing.
+    SwitchImport.Step.WHICH -> if (f.unknownIndex == 0) close() else Unit
     else -> close()
 }
 
@@ -543,6 +694,8 @@ private fun Header(f: SwitchImport) {
         val n = f.games.size
         if (n > 1 && f.step in setOf(SwitchImport.Step.GAME, SwitchImport.Step.PEOPLE, SwitchImport.Step.CHECKING, SwitchImport.Step.CONFLICT)) {
             Steps(n, f.index)
+        } else if (f.step == SwitchImport.Step.WHICH && f.unknowns.size > 1) {
+            Steps(f.unknowns.size, f.unknownIndex)
         }
     }
 }
@@ -625,6 +778,94 @@ private fun Reading(source: String) {
         FText(words, Fuse.type.title, align = TextAlign.Center, maxLines = 2)
         Spacer(Modifier.height(Space.xs))
         FText("JKSV and Checkpoint backups are both understood. Nothing is changed until you say so.", Fuse.type.body, color = c.textMuted, align = TextAlign.Center, maxLines = 3)
+    }
+}
+
+/**
+ * "What game is this?": what the backups say about the game (the name in their folder, the title
+ * id, whose and when), then the person's games that could be it, the likeliest first. Choosing one
+ * puts the saves with it; Leave It Out passes them over.
+ */
+@Composable
+private fun WhichStep(f: SwitchImport, u: SwitchImport.Unknown, focused: Int?, onPick: (SwitchImport.Answer) -> Unit) {
+    val c = Fuse.colors
+    val sw = u.sw
+    key(u.key) {
+        Appear(visible = true, enter = slideInHorizontally(Fuse.motion.tween(Durations.SLOW, Curves.Enter)) { it / 14 } + fadeIn(Fuse.motion.tween(Durations.BASE, Curves.Fade))) {
+            Column {
+                FText("What game is this?", Fuse.type.title, maxLines = 1)
+                Spacer(Modifier.height(Space.xs))
+                FText(
+                    "Fuse found ${if (u.entries.size == 1) "a backup" else "${u.entries.size} backups"} of a game on your card, but couldn't tell which of your games it is.",
+                    Fuse.type.body, color = c.textMuted, maxLines = 3,
+                )
+                Spacer(Modifier.height(Space.l))
+                // What the backups say about it.
+                Row(
+                    Modifier.fillMaxWidth().clip(SquircleShape.fraction(0.18f)).background(c.surfaceRaised.copy(alpha = 0.7f)).padding(Space.m),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(40.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+                        FuseIcon(FuseIcons.CircleHelp, size = 20.dp, tint = c.accent)
+                    }
+                    Spacer(Modifier.width(Space.m))
+                    Column(Modifier.weight(1f)) {
+                        FText(sw.game ?: "A game without a name in its backup", Fuse.type.bodyStrong, maxLines = 2)
+                        val who = if (sw.device) "Everyone's on the console" else sw.user?.let { "$it's" }
+                        val tool = if (sw.tool.equals("CHECKPOINT", ignoreCase = true)) "Checkpoint" else "JKSV"
+                        FText(
+                            listOfNotNull(sw.titleId?.let { "Title id $it" }, who, sw.savedAt?.let(::whenText), tool).joinToString("  ·  "),
+                            Fuse.type.caption, color = c.textMuted, maxLines = 2,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(Space.l))
+                FText(if (f.assigning) "Putting the save with it" else "Is it one of these?", Fuse.type.label, color = c.textMuted, maxLines = 1)
+                Spacer(Modifier.height(Space.s))
+                Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
+                    f.shownAnswers.forEachIndexed { i, a ->
+                        AnswerRow(a, focused = focused == i, enabled = !f.assigning) { onPick(a) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** One of the person's games, as an answer: its cover, its name and where its saves go. */
+@Composable
+private fun AnswerRow(a: SwitchImport.Answer, focused: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    val c = Fuse.colors
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    val lit = focused || hovered
+    val glow by fuselineFloat(if (lit) 1f else 0f, Fuse.motion.focusSpring(), label = "answerGlow")
+    val shape = remember { SquircleShape.fraction(0.18f) }
+    val into = remember { BringIntoViewRequester() }
+    LaunchedEffect(focused) { if (focused) runCatching { into.bringIntoView() } }
+    Row(
+        Modifier.fillMaxWidth()
+            .bringIntoViewRequester(into)
+            .clip(shape)
+            .background(c.surfaceRaised.copy(alpha = 0.55f + 0.3f * glow))
+            .then(if (focused) Modifier.border(2.dp, c.focus, shape) else Modifier)
+            .hoverable(interaction)
+            .clickable(interaction, indication = null, enabled = enabled, onClick = onClick)
+            .graphicsLayer { alpha = if (enabled) 1f else 0.5f }
+            .padding(Space.m),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Cover(a.card, a.title, 40.dp)
+        Spacer(Modifier.width(Space.m))
+        Column(Modifier.weight(1f)) {
+            FText(a.title, Fuse.type.bodyStrong, maxLines = 1)
+            FText(
+                listOfNotNull(emulatorName(a.query.emulatorId), if (a.here) null else "On Fuse One, not on this device").joinToString("  ·  "),
+                Fuse.type.caption, color = c.textMuted, maxLines = 1,
+            )
+        }
+        Spacer(Modifier.width(Space.m))
+        FuseIcon(FuseIcons.ChevronRight, size = 18.dp, tint = if (lit) c.text else c.textMuted)
     }
 }
 
@@ -760,17 +1001,21 @@ private fun Poster(g: SwitchImport.Game, width: Dp, accent: Color, modifier: Mod
 private const val POSTER_ASPECT = 0.72f
 
 @Composable
-private fun Cover(g: SwitchImport.Game, width: Dp) {
-    val accent = g.card?.accent?.toColor() ?: Fuse.colors.accent
+private fun Cover(g: SwitchImport.Game, width: Dp) = Cover(g.card, g.title, width)
+
+/** A game's box art at [width], over its own colour; a made-up cover with its name where it has none. */
+@Composable
+private fun Cover(card: GameCard?, title: String, width: Dp) {
+    val accent = card?.accent?.toColor() ?: Fuse.colors.accent
     val shape = remember { SquircleShape.fraction(0.08f) }
     Box(Modifier.width(width).aspectRatio(POSTER_ASPECT).clip(shape).background(accent.copy(alpha = 0.2f))) {
-        val art = g.card?.art
+        val art = card?.art
         Artwork(
             model = art?.boxart ?: art?.grid ?: art?.square ?: art?.icon,
             modifier = Modifier.matchParentSize(),
             contentScale = ContentScale.Crop,
             // Small covers take the icon form, so a made-up cover's name never gets squeezed.
-            fallback = { GeneratedArt(g.title, accent, slot = if (width < 64.dp) ArtSlot.ICON else ArtSlot.BOX) },
+            fallback = { GeneratedArt(title, accent, slot = if (width < 64.dp) ArtSlot.ICON else ArtSlot.BOX) },
         )
     }
 }
@@ -924,6 +1169,11 @@ private fun Done(f: SwitchImport, profiles: List<ProfileInfo>) {
                     FText(f.unreachable?.let { "Choose where ${it.name} keeps its saves" } ?: "Nothing imported", Fuse.type.title, maxLines = 2)
                     Spacer(Modifier.height(Space.xs))
                     FText(f.problem!!, Fuse.type.body, color = c.textMuted, maxLines = 8)
+                }
+                r == null && f.unknowns.isNotEmpty() -> {
+                    FText("Nothing to import", Fuse.type.title, maxLines = 1)
+                    Spacer(Modifier.height(Space.xs))
+                    FText("Every save on this card was left out. Your Switch's files stay as they are.", Fuse.type.body, color = c.textMuted, maxLines = 3)
                 }
                 r == null -> FText("No games from this card are in your library", Fuse.type.title, maxLines = 2)
                 else -> {
