@@ -150,8 +150,9 @@ compose.desktop {
             description = "Controller-first game launcher"
             vendor = "Fuse"
             // SQLite JDBC (java.sql), coroutines and Skiko (jdk.unsupported), Ktor DNS and TLS
-            // (java.naming, jdk.crypto.ec), restart and memory stats (java.management).
-            modules("java.sql", "jdk.unsupported", "java.naming", "jdk.crypto.ec", "java.management")
+            // (java.naming, jdk.crypto.ec), restart and memory stats (java.management), downloads
+            // and Steam's client (java.net.http). RuntimeModulesTest checks nothing is left out.
+            modules("java.sql", "jdk.unsupported", "java.naming", "jdk.crypto.ec", "java.management", "java.net.http")
             // CPU and memory numbers on Windows and macOS (com.sun.management).
             if (packagingOs != "linux") modules("jdk.management")
             linux {
