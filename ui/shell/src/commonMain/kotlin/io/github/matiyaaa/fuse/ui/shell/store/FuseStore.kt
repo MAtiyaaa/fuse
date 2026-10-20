@@ -97,6 +97,9 @@ interface FuseStore {
     /** Games, updates, DLC and licences installed into RPCS3 and Vita3K by Fuse itself. */
     val content: ContentOps get() = ContentOps.None
 
+    /** What installed emulators can be given beyond their games (graphic packs, patches, firmware, Pretendo). */
+    val extras: ExtrasOps get() = ExtrasOps.None
+
     /**
      * Starts what Fuse does by itself (scans, art fills, Cartridge, achievements, update checks)
      * when the store was created in safe mode, which holds it back. Does nothing otherwise.
@@ -711,6 +714,16 @@ interface LibraryOps {
 
     /** Signs RPCS3 out of RPCN (its user name stays). */
     suspend fun signOutRpcn(id: GameId): Boolean = false
+
+    /**
+     * Makes an RPCN account as [user] with [password] and [email] for [id]'s emulator (RPCS3), as
+     * RPCS3's own dialog makes it, and signs RPCS3 in with it; RPCN then emails a token for
+     * [rpcnToken]. Null when made, else why not.
+     */
+    suspend fun createRpcn(id: GameId, user: String, password: String, email: String): String? = "RPCN is set up from Fuse on a computer."
+
+    /** Gives RPCS3's RPCN account the [token] RPCN emailed. Null when done, else why not. */
+    suspend fun rpcnToken(id: GameId, token: String): String? = "RPCN is set up from Fuse on a computer."
 
     /** What EmuCoreX's public catalogues have for [id] (a PS2 game): texture packs by its serial, pnach files by its CRC. */
     suspend fun emuCoreX(id: GameId): EmuCoreXFinds = EmuCoreXFinds(null, null, emptyList(), emptyList(), "EmuCoreX's packs and cheats can be added from Fuse on a computer.")

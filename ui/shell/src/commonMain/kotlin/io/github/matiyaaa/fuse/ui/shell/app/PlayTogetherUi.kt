@@ -100,8 +100,10 @@ private fun AppState.togetherRows(card: GameCard, v: TogetherView.Ready): List<M
     ))
     if (v.way == TogetherWay.ONLINE_SERVICE && v.family != SHADPS4) {
         val signedIn = v.rpcn
-        if (signedIn == null) add(MenuAction("rpcn", "Sign In to RPCN", FuseIcons.Globe, detail = "Your RPCN user name, password and the token RPCN emailed you", section = "Setup", onSelect = { rpcnSignIn(card) }))
-        else {
+        if (signedIn == null) {
+            add(MenuAction("rpcn", "Sign In to RPCN", FuseIcons.Globe, detail = "Your RPCN user name, password and the token RPCN emailed you", section = "Setup", onSelect = { rpcnSignIn(card) }))
+            add(MenuAction("rpcn.create", "Create an RPCN Account", FuseIcons.UserPlus, detail = "As RPCS3 makes one: a user name, a password and your email, where RPCN sends its token", section = "Setup", onSelect = { rpcnCreate(card) }))
+        } else {
             add(MenuAction("rpcn", "RPCN", FuseIcons.Globe, detail = "RPCS3 signs in with this account. Choose to sign in with another", trailing = Trailing.Value(signedIn), section = "Setup", onSelect = { rpcnSignIn(card) }))
             add(MenuAction("rpcn.out", "Sign Out of RPCN", FuseIcons.LogOut, detail = "Your user name stays; the password and token leave RPCS3", section = "Setup", onSelect = {
                 scope.launch {
@@ -186,7 +188,7 @@ private val WAITS_IN_EMULATOR = setOf(TogetherWay.NETPLAY_WINDOW, TogetherWay.RO
 private fun AppState.rpcnSignIn(card: GameCard) {
     choice = null
     textInput = TextInputSpec("RPCN user name", "", placeholder = "Up to 16 letters, digits, - or _", capitalize = false, doneLabel = "Next",
-        message = "Made in RPCS3: Configuration, RPCN. Fuse signs RPCS3 in with it.") { user ->
+        message = "Made in RPCS3 or with Create an RPCN Account here. Fuse signs RPCS3 in with it.") { user ->
         textInput = TextInputSpec("RPCN password", "", secret = true, capitalize = false, doneLabel = "Next",
             message = "Used once, as RPCS3 uses it, and kept nowhere") { password ->
             textInput = TextInputSpec("RPCN token", "", placeholder = "From RPCN's email", capitalize = false, doneLabel = "Sign In",
@@ -197,6 +199,44 @@ private fun AppState.rpcnSignIn(card: GameCard) {
                     if (problem == null) toasts.show("RPCS3 signs in to RPCN as ${user.trim()} from now on", ToastKind.SUCCESS, icon = FuseIcons.CircleCheck)
                     else toasts.show(problem, ToastKind.WARNING, durationMs = 8_000L)
                     playTogetherSheet(card)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A new RPCN account, asked as RPCS3's own Create Account asks it: a user name, a password and an
+ * email address, then the token RPCN emails, which can also wait for later.
+ */
+private fun AppState.rpcnCreate(card: GameCard) {
+    choice = null
+    textInput = TextInputSpec("New RPCN user name", "", placeholder = "Up to 16 letters, digits, - or _", capitalize = false, doneLabel = "Next",
+        message = "The name others see you as. It can't be changed later, and capitals count.") { user ->
+        textInput = TextInputSpec("Choose an RPCN password", "", secret = true, capitalize = false, doneLabel = "Next",
+            message = "Stretched as RPCS3 does before it leaves this device, and kept nowhere as typed") { password ->
+            textInput = TextInputSpec("Your email address", "", capitalize = false, doneLabel = "Create Account",
+                message = "RPCN sends the token that switches the account on here, and nothing else") { email ->
+                scope.launch {
+                    toasts.show("Making your RPCN account", ToastKind.INFO, icon = FuseIcons.Globe)
+                    val problem = store.library.createRpcn(card.id, user, password, email)
+                    if (problem != null) {
+                        toasts.show(problem, ToastKind.WARNING, durationMs = 8_000L)
+                        return@launch
+                    }
+                    textInput = TextInputSpec("RPCN token", "", placeholder = "From RPCN's email", capitalize = false, doneLabel = "Sign In",
+                        message = "Your account is made and RPCS3 signs in with it. Type the token RPCN emailed you, or leave it for Sign In to RPCN later") { token ->
+                        scope.launch {
+                            if (token.isBlank()) {
+                                toasts.show("RPCS3 has your account. Add RPCN's token with Sign In to RPCN when it arrives", ToastKind.INFO, durationMs = 8_000L)
+                            } else {
+                                val tokenProblem = store.library.rpcnToken(card.id, token)
+                                if (tokenProblem == null) toasts.show("RPCS3 signs in to RPCN as ${user.trim()} from now on", ToastKind.SUCCESS, icon = FuseIcons.CircleCheck)
+                                else toasts.show(tokenProblem, ToastKind.WARNING, durationMs = 8_000L)
+                            }
+                            playTogetherSheet(card)
+                        }
+                    }
                 }
             }
         }

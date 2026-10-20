@@ -51,6 +51,8 @@ class AndroidFuseServices(
     override val cacheDir: String = appContext.cacheDir.absolutePath
     override val dataDir: String = appContext.filesDir.absolutePath
 
+    override val archives: io.github.matiyaaa.fuse.ui.shell.store.Archives = AndroidArchives()
+
     /** The shared Movies folder when Fuse may write there, so other apps see the films too; else Fuse's own. */
     override val mediaDir: String
         get() = if (storageVolumes.hasFullAccess()) {

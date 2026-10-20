@@ -284,6 +284,56 @@ class DesktopEmulatorFiles(
         RetroArchHome(config.absolutePath.replace('\\', '/'), cheats, configDir)
     }
 
+    override suspend fun firmwareFolder(installed: InstalledEmulator, platform: String): String? {
+        val family = installed.id.value.substringAfter('.')
+        val folder = when {
+            family == "duckstation" && platform == "psx" -> duckstation(installed)?.let { h ->
+                withContext(Dispatchers.IO) { io.github.matiyaaa.fuse.launch.extras.BiosPlacement.duckStation(h.dataRoot, File(h.dataRoot, "settings.ini").takeIf { it.isFile }?.readText()) }
+            }
+            family == "pcsx2" && platform == "ps2" -> pcsx2(installed)?.let { h ->
+                withContext(Dispatchers.IO) { io.github.matiyaaa.fuse.launch.extras.BiosPlacement.pcsx2(h.dataRoot, File(h.dataRoot, "inis/PCSX2.ini").takeIf { it.isFile }?.readText()) }
+            }
+            family.startsWith("retroarch") -> retroArchSystem(installed)?.let { io.github.matiyaaa.fuse.launch.extras.BiosPlacement.retroArch(it, platform) }
+            (family == "eden" || family == "citron") && platform == "switch" -> switchUser(installed, family)?.let { "$it/${io.github.matiyaaa.fuse.launch.extras.SwitchFirmware.REGISTERED}" }
+            else -> null
+        } ?: return null
+        roots += File(folder).absolutePath
+        return folder.replace('\\', '/')
+    }
+
+    /**
+     * The user folder of an emulator of the yuzu line (Eden, Citron), where its NAND is: `user` beside
+     * the program when that is there (portable), else its own data folder; the first that has a `nand`.
+     */
+    private fun switchUser(installed: InstalledEmulator, family: String): String? {
+        val program = File(installed.appId).takeIf { it.isAbsolute && installed.detectedVia != "Flatpak" }?.parentFile
+        val data = env["XDG_DATA_HOME"]?.takeIf { it.startsWith("/") } ?: "$home/.local/share"
+        val candidates = listOfNotNull(
+            program?.let { File(it, "user") },
+            when (os) {
+                DesktopOs.LINUX -> File(data, family)
+                DesktopOs.WINDOWS -> env["APPDATA"]?.let { File(it, family) }
+                DesktopOs.MACOS -> File(home, "Library/Application Support/$family")
+            },
+            if (os == DesktopOs.LINUX && family == "eden") File(home, ".var/app/dev.eden_emu.eden/data/eden") else null,
+        )
+        val user = candidates.firstOrNull { File(it, "nand").isDirectory } ?: return null
+        roots += user.absolutePath
+        return user.absolutePath.replace('\\', '/').trimEnd('/')
+    }
+
+    /** RetroArch's system folder: `system_directory` in its retroarch.cfg, else `system` beside its settings. */
+    private suspend fun retroArchSystem(installed: InstalledEmulator): String? {
+        val config = retroArch(installed)?.config?.let(::File) ?: return null
+        return withContext(Dispatchers.IO) {
+            val cfg = runCatching { RetroArchCfg.parse(config.readText()) }.getOrDefault(emptyMap())
+            val program = File(installed.appId).takeIf { it.isAbsolute && !it.path.endsWith(".app") }?.parentFile?.absolutePath?.replace('\\', '/')
+            val base = (if (os == DesktopOs.WINDOWS) program ?: config.parentFile.absolutePath else config.parentFile.absolutePath).replace('\\', '/')
+            val default = if (os == DesktopOs.MACOS) File(home, "Library/Application Support/RetroArch/system").absolutePath.replace('\\', '/') else "$base/system"
+            RetroArchCfg.folder(cfg["system_directory"], default, home.replace('\\', '/'), program)
+        }
+    }
+
     override suspend fun remove(path: String): Boolean = withContext(Dispatchers.IO) {
         val target = File(path).absoluteFile
         val inside = roots.any { root -> target.normalize().path.startsWith(File(root).normalize().path + File.separator) }
@@ -497,6 +547,8 @@ class DesktopEmulatorFiles(
         val (data, config) = runCatching { io.github.matiyaaa.fuse.sync.cemuFolders(saveEnv(), program) }.getOrNull() ?: return@withContext null
         if (!File(config, "settings.xml").isFile) return@withContext null
         roots += File(config).absolutePath
+        // Its user data too, where its graphic packs are (ActiveSettings::GetUserDataPath).
+        roots += File(data).absolutePath
         io.github.matiyaaa.fuse.launch.settings.CemuHome(data.replace('\\', '/').trimEnd('/'), config.replace('\\', '/').trimEnd('/'))
     }
 
@@ -616,8 +668,10 @@ class DesktopEmulatorFiles(
             DesktopOs.WINDOWS -> File(env["USERPROFILE"] ?: home, "Documents")
             else -> env["XDG_DATA_HOME"]?.takeIf { it.startsWith("/") }?.let(::File) ?: File(home, ".local/share")
         }
-        val root = program?.parentFile?.takeIf { File(it, "portable.txt").isFile } ?: File(user, "Xenia")
-        if (!File(root, "xenia-canary.config.toml").isFile) return@withContext null
+        // Portable beside the program on Windows, where Xenia's builds are portable unless told not
+        // to be (xenia_main.cc, `portable` true on Win32), and wherever portable.txt is beside it.
+        val portable = program?.parentFile?.takeIf { os == DesktopOs.WINDOWS || File(it, "portable.txt").isFile }
+        val root = listOfNotNull(portable, File(user, "Xenia")).firstOrNull { File(it, "xenia-canary.config.toml").isFile } ?: return@withContext null
         roots += root.absolutePath
         root.absolutePath.replace('\\', '/').trimEnd('/')
     }
@@ -1043,6 +1097,71 @@ class DesktopEmulatorFiles(
         }
     }
 
+    override suspend fun replaceFolder(folder: String, source: String?, files: List<PlannedFile>, texts: Map<String, String>, restorePoint: String): Boolean = withContext(Dispatchers.IO) {
+        val id = restorePoint.filter { it.isLetterOrDigit() || it == '-' }
+        if (id.isEmpty() || id != restorePoint) return@withContext false
+        val dir = File(folder).absoluteFile
+        if (!allowed(dir)) return@withContext false
+        if (files.isNotEmpty() && source == null) return@withContext false
+        // Every destination below the folder, each once.
+        val inside = (files.map { it.to } + texts.keys).map { File(it).absoluteFile }
+        if (inside.distinctBy { it.path }.size != inside.size) return@withContext false
+        if (!inside.all { it.path.startsWith(dir.path + File.separator) }) return@withContext false
+        val point = File(restorePoints, id)
+        if (point.exists()) return@withContext false
+        val aside = File(point, "folder")
+        try {
+            point.mkdirs()
+            val manifest = StringBuilder()
+            if (dir.exists()) {
+                if (!dir.isDirectory) throw IOException("${dir.path} is a file")
+                moveTree(dir, aside)
+                manifest.append("F\t").append(dir.path).append('\n')
+            } else {
+                manifest.append("M\t").append(dir.path).append('\n')
+            }
+            rootOf(dir.parentFile ?: dir)?.let { manifest.append("A\t").append(it).append('\n') }
+            File(point, MANIFEST).writeText(manifest.toString())
+            dir.mkdirs()
+            val from = source?.let(::File)
+            for (planned in files) {
+                val dest = File(planned.to).absoluteFile
+                dest.parentFile.mkdirs()
+                val stream = if (planned.from.isEmpty()) from!!.inputStream() else open(from!!, planned.from)
+                (stream ?: throw IOException("${planned.from} is not in ${from.name}")).use { input -> Files.copy(input, dest.toPath(), StandardCopyOption.REPLACE_EXISTING) }
+            }
+            for ((path, text) in texts) {
+                val dest = File(path).absoluteFile
+                dest.parentFile.mkdirs()
+                dest.writeText(text)
+            }
+            true
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            putBack(point, emptySet())
+            throw e
+        } catch (e: Exception) {
+            putBack(point, emptySet())
+            false
+        }
+    }
+
+    override suspend fun names(folder: String): Set<String>? = withContext(Dispatchers.IO) {
+        val dir = File(folder)
+        if (!allowed(dir) && !allowed(File(dir, "x"))) return@withContext null
+        dir.list()?.toSet() ?: emptySet()
+    }
+
+    /** [from] moved to [to] (renamed when it can be, else copied and removed). */
+    private fun moveTree(from: File, to: File) {
+        to.parentFile.mkdirs()
+        try {
+            Files.move(from.toPath(), to.toPath(), StandardCopyOption.ATOMIC_MOVE)
+        } catch (e: IOException) {
+            if (!from.copyRecursively(to, overwrite = true)) throw IOException("${from.path} couldn't be set aside")
+            if (!from.deleteRecursively()) throw IOException("${from.path} couldn't be cleared")
+        }
+    }
+
     override suspend fun undo(restorePoint: String, keep: Set<String>): Boolean = withContext(Dispatchers.IO) {
         val id = restorePoint.filter { it.isLetterOrDigit() || it == '-' }
         if (id.isEmpty() || id != restorePoint) return@withContext false
@@ -1061,6 +1180,18 @@ class DesktopEmulatorFiles(
         var ok = true
         val lines = manifest.readLines().map { it.split('\t') }
         val recorded = lines.filter { it[0] == "A" }.mapNotNull { it.getOrNull(1) }
+        // A folder replaced whole ([replaceFolder]): what is there now goes, and the old one comes back.
+        for (p in lines.filter { it[0] == "F" || it[0] == "M" }) {
+            val dir = File(p.getOrNull(1) ?: continue)
+            if (dir.path in keep || !allowed(dir, recorded)) continue
+            try {
+                if (dir.exists() && !dir.deleteRecursively()) { ok = false; continue }
+                val aside = File(point, "folder")
+                if (p[0] == "F" && aside.exists()) moveTree(aside, dir)
+            } catch (e: IOException) {
+                ok = false
+            }
+        }
         for (p in lines) {
             if (p[0] == "A") continue
             val dest = File(p.getOrNull(1) ?: continue)

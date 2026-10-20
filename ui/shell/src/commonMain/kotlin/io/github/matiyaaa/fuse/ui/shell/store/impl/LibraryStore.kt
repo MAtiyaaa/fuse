@@ -1336,6 +1336,8 @@ internal class DefaultLibraryOps(
     override suspend fun readyTogether(id: GameId, together: io.github.matiyaaa.fuse.ui.shell.store.Together) = togetherStore.ready(id, together)
     override suspend fun signInRpcn(id: GameId, user: String, password: String, token: String) = togetherStore.signIn(id, user, password, token)
     override suspend fun signOutRpcn(id: GameId) = togetherStore.signOut(id)
+    override suspend fun createRpcn(id: GameId, user: String, password: String, email: String) = togetherStore.create(id, user, password, email)
+    override suspend fun rpcnToken(id: GameId, token: String) = togetherStore.token(id, token)
 
     private val emuCoreX by lazy { EmuCoreXMods(ctx, nativeEnhancements, ::discIdentity) }
 

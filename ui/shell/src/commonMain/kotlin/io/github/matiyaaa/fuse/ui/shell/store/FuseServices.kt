@@ -185,6 +185,9 @@ interface FuseServices {
      */
     val emulatorFiles: EmulatorFiles? get() = null
 
+    /** Unpacks zip, 7z and (where a program for it is here) rar archives; null where nothing can. */
+    val archives: Archives? get() = null
+
     /**
      * The emulators' files Emulator Settings changes: [emulatorFiles] on a computer; on Android, only
      * those in shared storage, where Fuse reaches them. The rest of [emulatorFiles]' work (installers,
@@ -594,6 +597,25 @@ interface EmulatorFiles {
     suspend fun install(source: String?, files: List<io.github.matiyaaa.fuse.launch.patches.PlannedFile>, texts: Map<String, String>, restorePoint: String): Boolean = false
 
     /**
+     * Makes [folder] (inside a known emulator folder) hold exactly [files] from [source] (a folder or
+     * a `.zip`) and [texts]: what was in it goes aside whole under [restorePoint] first, so [undo]
+     * puts the folder back as it was. All or nothing: on any failure the old folder is back in place.
+     * For things an emulator replaces whole (Cemu's downloaded graphic packs, Xenia's patches, a
+     * Switch emulator's system firmware).
+     */
+    suspend fun replaceFolder(folder: String, source: String?, files: List<io.github.matiyaaa.fuse.launch.patches.PlannedFile>, texts: Map<String, String>, restorePoint: String): Boolean = false
+
+    /** The names in [folder] (inside a known emulator folder), or null when it can't be read. */
+    suspend fun names(folder: String): Set<String>? = null
+
+    /**
+     * Where [installed] reads [platform]'s firmware ([io.github.matiyaaa.fuse.launch.extras.BiosPlacement]:
+     * DuckStation's and PCSX2's BIOS folders, RetroArch's system folder), then open to [install];
+     * null when it reads none from a folder here.
+     */
+    suspend fun firmwareFolder(installed: io.github.matiyaaa.fuse.model.InstalledEmulator, platform: String): String? = null
+
+    /**
      * Puts back what [install] changed under [restorePoint]: new files are removed (and the folders made
      * for them, once empty), files that were replaced get their earlier copy back. Destinations in
      * [keep] are left as they are. The restoration point goes too. False when it is not there.
@@ -708,4 +730,24 @@ interface RommHomeHost {
 
     /** Whether its containers run now. */
     suspend fun running(): Boolean
+}
+
+/**
+ * Archives unpacked on this device: zip and 7z by Fuse itself, rar through a program the system
+ * has for it (unrar, 7-Zip, unar or bsdtar). Every entry lands below the folder it is unpacked into,
+ * never above it, and nothing in an archive is run.
+ */
+interface Archives {
+    /** The kinds this device can unpack ("zip", "7z", "rar"). */
+    suspend fun kinds(): Set<String>
+
+    /** The files in [archive], each with its size when known; null when it can't be read. */
+    suspend fun list(archive: String): List<Pair<String, Long?>>?
+
+    /**
+     * Unpacks [archive] into [folder] (made for it, and not there before): first into a folder
+     * beside it, then moved into place whole, so a half-unpacked folder is never seen. The paths
+     * written, or why it couldn't be.
+     */
+    suspend fun unpack(archive: String, folder: String, onProgress: (Float) -> Unit = {}): Result<List<String>>
 }

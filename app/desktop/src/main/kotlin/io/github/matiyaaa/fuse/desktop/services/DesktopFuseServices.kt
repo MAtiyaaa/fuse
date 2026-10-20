@@ -109,6 +109,8 @@ class DesktopFuseServices private constructor(
     override val emulatorFiles: io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles =
         DesktopEmulatorFiles(os, backups = java.io.File(dirs.data, "emulator-backups"))
 
+    override val archives: io.github.matiyaaa.fuse.ui.shell.store.Archives = DesktopArchives()
+
     /** The home network's addresses as Fuse One gives them to the household: no container's, VPNs last. */
     override fun homeAddresses(): List<String> = io.github.matiyaaa.fuse.sync.LanAddresses.list()
 

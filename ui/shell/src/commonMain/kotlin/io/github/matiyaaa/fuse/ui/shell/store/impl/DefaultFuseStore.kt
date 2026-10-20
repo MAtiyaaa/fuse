@@ -118,6 +118,10 @@ internal class DefaultFuseStore private constructor(
             .stateIn(ctx.scope, kotlinx.coroutines.flow.SharingStarted.Eagerly, library.home.value)
     }
     override val content = DefaultContentOps(ctx, emulators) { engine.drives.volumes.value }
+
+    override val extras: io.github.matiyaaa.fuse.ui.shell.store.ExtrasOps by lazy {
+        ExtrasStore(ctx, detect = { emulators.detectNow() }, bios = { engine.bios.value }, refreshBios = { engine.refreshBios() })
+    }
     override val backup = DefaultBackupOps(ctx) { restore ->
         // A restored backup replaces everything: nothing shown before it is carried over.
         writeLock.withLock { restore().also { storedPrefs = null; reloadLocked() } }
