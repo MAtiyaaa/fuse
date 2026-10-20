@@ -1,93 +1,22 @@
-# Fuse 0.4.3.1 - The Overdrive Update
+# Fuse 0.4.3.2 - The Overdrive Update
+
+A theme you choose stays chosen on every device.
 
 ## New
 
-- **Change Steam while it runs, with no plugin.** Settings, Library, Steam, Change Steam While It
-  Runs: Fuse puts the file in Steam's folder that makes Steam open its debug port on this computer
-  when it starts (as Decky Loader's installer does), then adds, changes, takes out and starts its
-  games in Steam through Steam's own client, with their pictures and where their logo sits, while
-  Steam runs. No Decky plugin, no restart, and no waiting for Steam to close. It works on Linux,
-  Windows and macOS, and on a Steam Deck where Decky already opened the port it works straight
-  away. With the Fuse plugin there too, each change is made once, by whichever reaches it first.
-- **Extras for your emulators.** An installed emulator's page in the Store has Extras, each done as
-  the emulator itself does it, and each can be put back:
-  - Cemu: the community graphic packs, fetched as its own download fetches them and kept up to
-    date by their version; and the Pretendo Network for the account it plays as.
-  - RPCS3: the latest patch file from rpcs3.net, checked against its checksum, with the old one
-    kept as `patch.yml.old` as RPCS3 keeps it.
-  - Xenia Canary: the community game patches, with every patch you turned on still on in the new
-    files.
-  - Eden and Citron: system firmware from a zip, a 7z or a folder you dumped from your own Switch,
-    put into their system memory as their own Install Firmware does.
-  - DuckStation, PCSX2 and RetroArch: the BIOS Fuse found, copied into each one's own BIOS folder
-    (the one set in its settings), never over a file already there.
-- **Make an RPCN account from Fuse.** Play Together for a PlayStation 3 game has Create an RPCN
-  Account: a user name, a password and your email, sent as RPCS3's own dialog sends them, the
-  password stretched before it leaves the device. RPCS3 signs in with it, and the token RPCN emails
-  can go in straight away or later.
-- **Recomps beside your emulators.** Fuse finds the N64 recomps you installed yourself (Zelda 64,
-  Banjo, Star Fox 64 and Goemon 64: Recompiled), as a Flatpak, an AppImage or the program, and
-  knows which game each plays by your ROM. The game's Play With offers it beside its emulator; once
-  chosen, the game stays one entry and starts the recomp as you installed it. Its saves are kept in
-  step with every device that plays it with the same recomp, Fuse's own copy included, and never
-  mixed with an emulator's. On that game, Recomp Mods and Settings adds and takes out mods and
-  texture packs (one file or a zip of them), changes its graphics settings, keeps its controls as
-  profiles you swap between (one for a pad, one for a handheld), and checks for its newest release,
-  updating a Flatpak for you. Banjo: Recompiled joins Zelda in Addons, Ports on Linux, made from
-  your own ROM, and Ports lists the recomps you installed.
-- **PlayStation games rebuilt for PC, found and played from your library.** Fuse finds the
-  Bloodborne PC Port, SpartanPort (God of War III Remastered), the Uncharted: The Nathan Drake
-  Collection PC Port and the P.T. PC Port when you installed them, and offers each in the Play With
-  of your own dump of that game, known by its title id. Chosen, the game stays one entry and starts
-  the port as its project starts it; its saves are kept in step with your other devices that play
-  it the same way (for P.T. only its two save slots, not its settings or caches). Each night Fuse's
-  own check reads every project's newest release and flags one that moved its files, so Fuse keeps
-  finding it. No port of inFAMOUS exists yet.
-- **Themes that move and resize things.** A theme can now put the bar (sections, Search,
-  Settings and the status) in a dock along the bottom, with pages and hints above it, make game
-  and system tiles smaller or larger, space them closer or wider, and choose what a second screen
-  shows for the system you're on. The Theme Studio has a Layout step for all of it, and its preview
-  shows the theme as it will be laid out. Two new themes use it, inspired by dual-screen handhelds:
-  Twin (rounded squares breathing behind tiles rimmed in light, one lit in coral, the bar in a
-  dock, and each system set out whole on the second screen) and Viewfinder (covers packed close,
-  framed by violet corner brackets). There is a new Blocks background, Prism tiles and a Brackets
-  focus for any theme to use.
-- **Disc games from RomM arrive ready to play.** A PlayStation, PlayStation 2, GameCube, Wii,
-  Saturn or other disc game that comes as a zip, 7z or rar is unpacked into its own folder once it
-  lands, and the archive goes, since their emulators can't open it. Cartridge games and arcade
-  sets stay as they are. A computer unpacks rar with unrar, 7-Zip, unar or bsdtar when one is
-  installed; Android unpacks zip.
+- Nothing new in this release.
 
 ## Changed
 
-- **Setup looks the part.** The welcome lights Fuse's mark the way your first profile's welcome
-  does: the fuse traces the frame, burns down to the spark and bursts, then embers drift up from it.
-  The emulator and BIOS checks come in row by row with a check or a warning at the end of each. The
-  choices for where your games come from and how your saves move show the way that leads as one
-  card, with the others as small pills under it; they no longer overlap and cut each other's words
-  off.
-- **Steam games during setup on Android.** Setup on a phone or handheld now offers GameNative for
-  your Steam and Windows games, says how to appear offline in it (it starts as Online), and where to
-  export its games so they show up in Fuse's Steam system with their achievements.
-- **Switch profiles during setup.** With profiles here, Who's playing offers Choose Who's Playing
-  (or Switch Profile once one is chosen) beside Add Someone, so you can change who you are before
-  going on, not only add someone.
-- **Systems keeps still as you move through it.** The system in focus no longer shows the covers
-  of its games played last: moving between systems with and without them moved the whole grid. Its
-  one line of what you played stays, and keeps its place while it loads, as a firmware warning
-  does on a phone held upright, so every system's header is the same height.
+- A device that hasn't got the theme you chose (an older Fuse without Twin or Viewfinder, or a
+  theme you added that it can't read) shows Fuse's own look until it has, and its Themes page marks
+  Fuse as the one on screen.
 
 ## Fixed
 
-- **Xenia's patches and settings on Windows.** Xenia's Windows builds keep their files beside the
-  program unless told otherwise; Fuse now looks there first, as Xenia does, instead of only in
-  Documents.
-- **RetroArch cores and add-ons download on Linux, Windows and macOS.** The Java runtime packed
-  with Fuse left out the part these downloads use, so they failed in the AppImage and the
-  installers (they worked only when Fuse was run from its source). It is packed now, and a test
-  checks that every part Fuse's code reaches is.
-- **A blank save never starts your game over your real one.** When an emulator made its save
-  memory again (blank, before the game saves), Fuse One kept it from replacing your real save on
-  the host, but the game could still start from the blank one on that device, and Fuse said so
-  again every five minutes. Your real save now goes back in place before the game starts, the
-  blank one is said once, and it is never kept in your save history.
+- A theme you chose went back to Fuse a few seconds later when Fuse One keeps your profile in step
+  across your devices. A device that hadn't got that theme showed Fuse instead, and the next time
+  it saved anything (which it does before every round with Fuse One) it sent Fuse to all your
+  devices as your newest choice. Fuse now keeps the theme you chose everywhere, showing Fuse only on
+  a device that hasn't got it. A device on an older Fuse still does this for a theme it hasn't got,
+  so update each one: on 0.4.3.1 or newer, every device has Twin and Viewfinder.
