@@ -33,9 +33,9 @@ import kotlinx.coroutines.withTimeout
 
 /**
  * A recomp the person installed themselves, end to end: offered for the game it plays beside its
- * emulator, chosen, played as one entry exactly as they installed it, its saves named for Fuse Sync
- * as every copy of that recomp's, and its mods, graphics, controls profiles and updates in its own
- * folder.
+ * emulator (only for its own ROM, or said to be unchecked when Fuse can't read the ROM), chosen,
+ * played as one entry exactly as they installed it, its saves named for Fuse Sync as every copy of
+ * that recomp's, and its mods, graphics, controls profiles and updates in its own folder.
  */
 class RecompStoreTest {
     private lateinit var cache: File
@@ -84,6 +84,8 @@ class RecompStoreTest {
         override val profiles = File(data, "recomp-profiles").absolutePath
         override suspend fun find() = listOf(
             FoundRecomp("banjorecomp", "Flatpak", "io.github.banjorecomp.banjorecomp", listOf("flatpak", "run", "io.github.banjorecomp.banjorecomp"), home.absolutePath, folder, "1.0.1"),
+            // The Bloodborne PC Port, unpacked into ~/Games.
+            FoundRecomp("bloodborne-pc", "Program", "${home.absolutePath}/Games/BloodbornePC/bloodborne", listOf("${home.absolutePath}/Games/BloodbornePC/bloodborne"), "${home.absolutePath}/Games/BloodbornePC", "${home.absolutePath}/Games/BloodbornePC"),
         )
         override suspend fun readText(path: String) = File(path).takeIf { it.isFile }?.readText()
         override suspend fun writeText(path: String, text: String) = runCatching { File(path).apply { parentFile.mkdirs() }.writeText(text) }.isSuccess
@@ -112,12 +114,53 @@ class RecompStoreTest {
         return services to yours
     }
 
-    private suspend fun FuseStore.banjo(): GameCard {
-        // An N64 ROM by its first bytes, named as the game: not the very ROM, so it is known by its name.
+    /** An N64 cartridge's first bytes (big-endian), as a ROM of the game would start: not the very ROM. */
+    private fun notTheRom() = ByteArray(4096).also { it[0] = 0x80.toByte(); it[1] = 0x37; it[2] = 0x12; it[3] = 0x40 }
+
+    /** Banjo-Kazooie in the library as [file], holding [bytes]. */
+    private suspend fun FuseStore.banjo(file: String = "Banjo-Kazooie (USA).7z", bytes: ByteArray = "7z archive".toByteArray()): GameCard {
         File(roms, "n64").mkdirs()
-        File(roms, "n64/Banjo-Kazooie (USA).z64").writeBytes(ByteArray(4096).also { it[0] = 0x80.toByte(); it[1] = 0x37; it[2] = 0x12; it[3] = 0x40 })
+        File(roms, "n64/$file").writeBytes(bytes)
         sources.add(roms.absolutePath, LibrarySourceKind.ROMS_ROOT)
         return withTimeout(20_000) { library.games(GameQuery()).first { l -> l.any { it.platformId == PlatformId("n64") } } }.single { it.platformId == PlatformId("n64") }
+    }
+
+    private fun zipOf(name: String, bytes: ByteArray): ByteArray = java.io.ByteArrayOutputStream().also { out ->
+        java.util.zip.ZipOutputStream(out).use { z -> z.putNextEntry(java.util.zip.ZipEntry(name)); z.write(bytes); z.closeEntry() }
+    }.toByteArray()
+
+    @Test
+    fun aPlayStationPortIsOfferedForItsOwnTitleIdsAndByNameOnlyAsUnchecked(): Unit = runBlocking {
+        val (services, _) = services()
+        val store = createFuseStore(services, scope)
+        File(roms, "ps4").mkdirs()
+        File(roms, "ps4/Bloodborne [CUSA03173].ps4").writeText("dump")
+        File(roms, "ps4/Bloodborne [CUSA00900].ps4").writeText("dump")
+        File(roms, "ps4/Bloodborne.ps4").writeText("dump")
+        store.sources.add(roms.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val games = withTimeout(20_000) { store.library.games(GameQuery()).first { l -> l.count { it.platformId == PlatformId("ps4") } == 3 } }
+        suspend fun offered(file: String) = store.ports.yourRecompsFor(games.single { it.platformId == PlatformId("ps4") && file in (services.data.games.get(it.id)?.location?.path ?: "") }.id)
+        assertEquals(listOf(null), offered("CUSA03173").map { it.unverified }, "its own title id: offered, checked")
+        assertEquals(emptyList(), offered("CUSA00900"), "a title id it isn't made for")
+        val byName = offered("Bloodborne.ps4").single()
+        assertTrue("CUSA03173" in assertNotNull(byName.unverified), "no title id to check: offered by its name, said to be unchecked")
+    }
+
+    @Test
+    fun aRomThatIsntTheRecompsOwnIsntOfferedOne(): Unit = runBlocking {
+        // Read and hashed: another revision, region or a hack. The recomp takes only its own ROM.
+        val (services, _) = services()
+        val store = createFuseStore(services, scope)
+        val card = store.banjo("Banjo-Kazooie (Europe).z64", notTheRom())
+        assertEquals(emptyList(), store.ports.yourRecompsFor(card.id))
+    }
+
+    @Test
+    fun aZippedRomIsCheckedInsideItsArchive(): Unit = runBlocking {
+        val (services, _) = services()
+        val store = createFuseStore(services, scope)
+        val card = store.banjo("Banjo-Kazooie (Europe).zip", zipOf("Banjo-Kazooie (Europe).z64", notTheRom()))
+        assertEquals(emptyList(), store.ports.yourRecompsFor(card.id), "the ROM inside is read and isn't Banjo: Recompiled's")
     }
 
     @Test
@@ -126,8 +169,11 @@ class RecompStoreTest {
         val store = createFuseStore(services, scope)
         val card = store.banjo()
 
+        // In an archive Fuse can't open: offered by its name, and said plainly to be unchecked.
         val offered = store.ports.yourRecompsFor(card.id)
         assertEquals(listOf("banjorecomp"), offered.map { it.id })
+        val unverified = assertNotNull(offered.single().unverified)
+        assertTrue("North American 1.0" in unverified && "Banjo: Recompiled" in unverified, unverified)
         assertNull(store.ports.playWithYours(card.id, offered.single()))
         assertEquals("yours:banjorecomp", store.ports.playWith(card.id))
 
