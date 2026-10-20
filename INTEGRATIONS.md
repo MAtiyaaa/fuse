@@ -929,6 +929,28 @@ Fuse's `recomp-profiles/<id>/` to swap between, and asks GitHub for its newest r
 (`repos/<repo>/releases/latest`); a Flatpak is updated with `flatpak update` for the installation
 it is in. Fuse reads and writes only in a recomp's own folder, Fuse's ports and its profiles.
 
+**PlayStation games' native ports the person installed** (`core:launch` `PsPorts`, the same
+`RecompKeeper` and `DesktopRecompFiles`; a computer): projects that rebuild a PS4 game to run on a
+computer from the person's own dump, each fact cited in `PsPorts.all`: the Bloodborne PC Port
+(Mrsuss60, Windows), SpartanPort (God of War III Remastered, Windows and Linux), the Uncharted: The
+Nathan Drake Collection PC Port (Windows) and the P.T. PC Port (Windows and Linux). Fuse doesn't
+install them: each is found by the files its release puts in its folder (`BloodborneLauncher.exe`
+and `run.bat`; `SpartanPort.exe` and `Play SpartanPort.exe`, or `spartanport-x86_64.AppImage`;
+`Uncharted Launcher.exe`; `pt` or `pt.exe` with the `chunk1.psarc` its installer copies beside it)
+in the same places as recomps. A PS4 game of the library is offered the ones made for its title id
+(read from its own files, else its folder's name) in Play With; chosen, it starts as its project
+says (Bloodborne's `run.bat` with the dump's folder; SpartanPort's `--play` and Uncharted's
+launcher, which use the game folder chosen in them, else open to choose it; P.T.'s program), and
+the game stays one entry. Its saves are its own, where its code keeps them: `user/savedata` beside
+it (SpartanPort's Linux build under `$XDG_DATA_HOME/spartanport`, or `~/.local/share/spartanport`),
+Uncharted's `analysis/uncharted-user/savedata`, and P.T.'s two slots `PT_Save_Data0` and
+`PT_Save_Data1` in its `data` folder (the launcher's `saveFiles`, so its settings and caches stay
+put); they are kept in step only with the same port. Each night the Ports workflow's native job
+(`tools/ports/native_check.py`, `ports/native.json`) reads every project's newest release from
+GitHub's API and checks its builds are still there by name and that a zip still holds the files
+Fuse finds the port by, reading only the zip's listing by HTTP ranges; a night that finds one
+changed opens an issue labelled `native-port-changed`. No port of inFAMOUS was found.
+
 ## Steam and Windows launchers
 
 Fuse does not run Windows games itself. It starts them through the launcher you use, with a per-game

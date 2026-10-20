@@ -22,7 +22,8 @@ data class PortLayout(val root: String, val id: String) {
 /**
  * How one installed port starts, written as [PortLayout.launcher] when it is installed or its game
  * files are chosen, and read back by [PortAdapter]: Play, Fast Start and a Steam entry all start
- * exactly this. [saves] is the folder its saves are in, for keeping them in step.
+ * exactly this. [saves] is the folder its saves are in, for keeping them in step ([saveFiles]
+ * when only some files there are).
  */
 @Serializable
 data class PortLauncher(
@@ -32,6 +33,8 @@ data class PortLauncher(
     val cwd: String,
     val env: Map<String, String> = emptyMap(),
     val saves: String? = null,
+    /** When only these files in [saves] are its saves (the rest is its settings and caches). */
+    val saveFiles: List<String> = emptyList(),
 ) {
     fun encode(): String = json.encodeToString(serializer(), this)
 

@@ -7,8 +7,9 @@ import kotlinx.serialization.json.jsonObject
 /**
  * Games from Fuse Ports: each port keeps its saves in its own home in Fuse's folder of ports, named
  * in the launcher file Fuse wrote for it (the game's own file in the library, its `saves`). The
- * folder is the one game's alone, so all of it is the save, and it only ever goes to the same port
- * (`port.<id>`): another port's engine never reads it.
+ * folder is the one game's alone, so all of it is the save (or only the files its launcher names,
+ * where the folder also holds settings), and it only ever goes to the same port (`port.<id>`):
+ * another port's engine never reads it.
  */
 internal object PortSaves : SaveAdapter {
     override val emulators = setOf("port")
@@ -21,6 +22,11 @@ internal object PortSaves : SaveAdapter {
         val port = (launcher["port"] as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() }
         val saves = (launcher["saves"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.replace('\\', '/')?.trimEnd('/')
         if (port == null || saves.isNullOrEmpty()) return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "port", "This port keeps no saves of its own for Fuse to keep in step."))
+        // Only these files when the folder also holds its settings and caches (P.T.'s two save slots).
+        val named = (launcher["saveFiles"] as? kotlinx.serialization.json.JsonArray)
+            ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content?.takeIf { n -> n.isNotBlank() && '/' !in n && '\\' !in n } }
+            .orEmpty()
+        if (named.isNotEmpty()) return listOf(SaveSpot(SaveKind.SAVE, "port.$port", files = named.map { SpotFile(it, "$saves/$it") }))
         return listOf(SaveSpot(SaveKind.SAVE, "port.$port", root = saves))
     }
 }

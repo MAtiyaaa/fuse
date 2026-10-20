@@ -361,7 +361,7 @@ internal class PortsStore(
         val target = playTarget(game) ?: return null
         val portId = playWith(game) ?: return null
         if (portId.startsWith(RecompKeeper.YOURS_PREFIX)) {
-            return target to (io.github.matiyaaa.fuse.launch.ports.Recomps.byId(portId.removePrefix(RecompKeeper.YOURS_PREFIX))?.name ?: return null)
+            return target to (io.github.matiyaaa.fuse.launch.ports.NativePorts.name(portId.removePrefix(RecompKeeper.YOURS_PREFIX)) ?: return null)
         }
         return target to (ctx.settings.value.ports.installed[portId]?.port?.name ?: return null)
     }

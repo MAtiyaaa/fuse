@@ -1,0 +1,35 @@
+{
+  "format": 1,
+  "about": "PlayStation games rebuilt to run natively by their own projects, which the person installs and Fuse finds and plays beside their emulators (core:launch PsPorts). Each night tools/ports/native_check.py reads each project's newest release and checks it still ships the files Fuse finds it by.",
+  "ports": [
+    {
+      "id": "bloodborne-pc",
+      "repo": "Mrsuss60/bloodborne_pc_windows_port",
+      "builds": [
+        { "os": "windows", "asset": "\\.zip$", "has": ["BloodborneLauncher.exe", "run.bat"] }
+      ]
+    },
+    {
+      "id": "spartanport",
+      "repo": "FelipePrado0/SpartanPort",
+      "builds": [
+        { "os": "windows", "asset": "^spartanport-windows\\.zip$", "has": ["SpartanPort.exe", "Play SpartanPort.exe"] },
+        { "os": "linux", "asset": "^spartanport-x86_64\\.AppImage$" }
+      ]
+    },
+    {
+      "id": "uncharted-ndc-pc",
+      "repo": "bc160201983/Uncharted-The-Nathan-Drake-Collection-PC-port",
+      "builds": [
+        { "os": "windows", "asset": "^Uncharted-windows\\.zip$", "has": ["Uncharted Launcher.exe"] }
+      ]
+    },
+    {
+      "id": "pt-pc",
+      "repo": "LoreanXavier/pt-pc",
+      "builds": [
+        { "os": "windows", "asset": "^pt-port-.*\\.zip$", "has": ["pt.exe"] }
+      ]
+    }
+  ]
+}

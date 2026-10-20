@@ -2,13 +2,16 @@ package io.github.matiyaaa.fuse.ui.shell.store.impl
 
 import io.github.matiyaaa.fuse.data.TitleText
 import io.github.matiyaaa.fuse.data.settings.InstalledPort
+import io.github.matiyaaa.fuse.launch.ports.NativePorts
 import io.github.matiyaaa.fuse.launch.ports.PortAdapter
 import io.github.matiyaaa.fuse.launch.ports.PortLauncher
 import io.github.matiyaaa.fuse.launch.ports.PortLayout
 import io.github.matiyaaa.fuse.launch.ports.RecompChoice
 import io.github.matiyaaa.fuse.launch.ports.RecompSetting
 import io.github.matiyaaa.fuse.launch.ports.RecompSettings
+import io.github.matiyaaa.fuse.launch.ports.PsPorts
 import io.github.matiyaaa.fuse.launch.ports.Recomps
+import io.github.matiyaaa.fuse.library.identity.Ids
 import io.github.matiyaaa.fuse.model.Game
 import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.ui.shell.store.FoundRecomp
@@ -65,7 +68,15 @@ internal class RecompKeeper(
         if (mine.isEmpty()) return emptyList()
         val fromRom = madeFrom(g)
         val name = TitleText.normalize(g.displayTitle)
+        // A PlayStation dump is known by its title id, from its own files or its folder's name.
+        val titleId = if (PsPorts.all.any { it.system == g.platformId.value }) {
+            Ids.psId(g.tags.serial.orEmpty()) ?: Ids.psId(g.location.path)
+        } else {
+            null
+        }
         return mine.filter { f ->
+            val ps = PsPorts.byId(f.id)
+            if (ps != null) return@filter ps.system == g.platformId.value && (titleId?.let { it in ps.titleIds } ?: (TitleText.normalize(ps.game) == name))
             val r = Recomps.byId(f.id) ?: return@filter false
             r.id == fromRom || (fromRom == null && r.system == g.platformId.value && TitleText.normalize(r.game) == name)
         }
@@ -86,17 +97,22 @@ internal class RecompKeeper(
     }
 
     suspend fun playWithYours(game: GameId, recomp: FoundRecomp, layout: (String) -> PortLayout): String? {
-        val r = Recomps.byId(recomp.id) ?: return "Fuse doesn't know this recomp."
+        val name = NativePorts.name(recomp.id) ?: return "Fuse doesn't know this port."
+        val g = runCatching { ctx.data.games.get(game) }.getOrNull() ?: return "That game isn't in the library any more."
+        // A PlayStation port is handed the dump's own folder (the one holding eboot.bin).
+        val launch = g.location.launchPath.replace('\\', '/')
+        val gameFolder = if (launch.substringAfterLast('/').equals("eboot.bin", ignoreCase = true)) launch.substringBeforeLast('/') else g.location.path.replace('\\', '/')
         val l = layout(yoursId(recomp.id))
         if (!ports.makeFolder(l.root)) return "Fuse couldn't make a place for how it starts."
         val launcher = PortLauncher(
-            port = recomp.id, version = YOURS, argv = recomp.argv, cwd = recomp.cwd,
-            saves = "${recomp.folder}/${Recomps.SAVES}",
+            port = recomp.id, version = YOURS, argv = recomp.argv.map { it.replace(PsPorts.GAME, gameFolder) }, cwd = recomp.cwd,
+            saves = recomp.saves ?: "${recomp.folder}/${Recomps.SAVES}",
+            saveFiles = recomp.saveFiles,
         )
-        if (!ports.writeText(l.launcher, launcher.encode())) return "Fuse couldn't write how ${r.name} starts."
+        if (!ports.writeText(l.launcher, launcher.encode())) return "Fuse couldn't write how $name starts."
         val id = runCatching { ctx.data.games.idByPath(l.launcher) }.getOrNull()
-            ?: library().addGameFile(l.launcher, PortAdapter.PLATFORM, title = r.game)
-            ?: return "Fuse couldn't add ${r.name} to the library."
+            ?: library().addGameFile(l.launcher, PortAdapter.PLATFORM, title = NativePorts.game(recomp.id) ?: name)
+            ?: return "Fuse couldn't add $name to the library."
         // One entry: the game chosen is the one shown; this one only says how it starts.
         library().setHidden(id, true)
         setPlayWith(game, "$YOURS_PREFIX${recomp.id}")

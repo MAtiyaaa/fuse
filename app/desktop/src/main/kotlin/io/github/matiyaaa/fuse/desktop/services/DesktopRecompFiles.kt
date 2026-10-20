@@ -4,6 +4,7 @@ import io.github.matiyaaa.fuse.desktop.system.DesktopOs
 import io.github.matiyaaa.fuse.desktop.system.Processes
 import io.github.matiyaaa.fuse.desktop.system.fusePath
 import io.github.matiyaaa.fuse.launch.ports.Recomp
+import io.github.matiyaaa.fuse.launch.ports.PsPorts
 import io.github.matiyaaa.fuse.launch.ports.Recomps
 import io.github.matiyaaa.fuse.ui.shell.store.FoundRecomp
 import io.github.matiyaaa.fuse.ui.shell.store.RecompFiles
@@ -15,7 +16,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Recomps on a computer: the ones the person installed found where their own builds go (a Flatpak,
+ * Recomps, and PlayStation games' native ports, on a computer: the ones the person installed found
+ * where their own builds go (for a recomp a Flatpak,
  * the program on the PATH, or in the folders people keep programs and AppImages in), and their
  * files read and written only in a recomp's own folder, Fuse's folder of ports ([ports], where its
  * own copies keep theirs) and Fuse's folder of controls profiles ([profiles]).
@@ -64,7 +66,43 @@ internal class DesktopRecompFiles(
                 )
             }
         }
+        // PlayStation games' native ports: a folder holding the files its release puts there.
+        for (p in PsPorts.all) {
+            val marks = p.marks[os] ?: continue
+            for (dir in installs(marks)) {
+                val install = dir.absoluteFile.fusePath
+                val argv = PsPorts.argv(p, os, install, PsPorts.GAME) ?: continue
+                val saves = PsPorts.saves(p, os, install, PsPorts.dataHome(home, env)) ?: continue
+                out += FoundRecomp(
+                    id = p.id,
+                    how = if (marks.first().lowercase().endsWith(".appimage")) "AppImage" else "Program",
+                    path = File(dir, marks.first()).absoluteFile.fusePath,
+                    argv = argv,
+                    cwd = install,
+                    folder = install,
+                    version = versionIn(dir.name),
+                    saves = saves,
+                    saveFiles = p.saveFiles,
+                )
+            }
+        }
         out.distinctBy { it.id to it.path }
+    }
+
+    /** The folders, in the places people keep programs and a level or two into them, holding every one of [marks]. */
+    private fun installs(marks: List<String>): List<File> {
+        fun has(dir: File) = marks.all { File(dir, it).isFile }
+        val found = LinkedHashSet<File>()
+        for (root in roots()) {
+            if (!root.isDirectory) continue
+            if (has(root)) found += root
+            for (a in root.listFiles().orEmpty()) {
+                if (!a.isDirectory) continue
+                if (has(a)) found += a
+                for (b in a.listFiles().orEmpty()) if (b.isDirectory && has(b)) found += b
+            }
+        }
+        return found.toList()
     }
 
     /** [r]'s Flatpak, the person's own or the system's, started through flatpak itself. */

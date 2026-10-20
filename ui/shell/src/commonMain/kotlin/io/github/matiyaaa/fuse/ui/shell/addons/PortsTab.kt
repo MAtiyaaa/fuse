@@ -164,7 +164,7 @@ fun PortsTab(app: AppState, active: Boolean, topPadding: Dp) {
             if (yours.isNotEmpty()) {
                 item("yours-head") {
                     FText(
-                        "Recomps you installed".uppercase(), Fuse.type.overline, color = Fuse.colors.textMuted, maxLines = 1,
+                        "Ports and recomps you installed".uppercase(), Fuse.type.overline, color = Fuse.colors.textMuted, maxLines = 1,
                         modifier = Modifier.padding(start = Space.gutter, top = Space.m),
                     )
                 }
@@ -276,18 +276,19 @@ private fun PortCard(v: PortView, selected: Boolean, compact: Boolean, onClick: 
 @Composable
 private fun YourRecompCard(y: io.github.matiyaaa.fuse.ui.shell.store.FoundRecomp, compact: Boolean) {
     val c = Fuse.colors
-    val r = io.github.matiyaaa.fuse.launch.ports.Recomps.byId(y.id) ?: return
+    val name = io.github.matiyaaa.fuse.launch.ports.NativePorts.name(y.id) ?: return
+    val game = io.github.matiyaaa.fuse.launch.ports.NativePorts.game(y.id) ?: return
     Row(
         Modifier.padding(horizontal = Space.gutter).widthIn(max = 960.dp).fillMaxWidth().clip(RoundedCornerShape(Fuse.geometry.panel))
             .background(c.surfaceRaised.copy(alpha = 0.6f))
             .padding(if (compact) Space.s else Space.m),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Monogram(r.game, if (compact) 40.dp else 48.dp)
+        Monogram(game, if (compact) 40.dp else 48.dp)
         Spacer(Modifier.width(Space.m))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            FText(r.game, Fuse.type.bodyStrong, maxLines = 1)
-            FText(listOfNotNull(r.name, "Your ${y.how}", y.version).joinToString("  ·  "), Fuse.type.caption, color = c.textMuted, maxLines = 1)
+            FText(game, Fuse.type.bodyStrong, maxLines = 1)
+            FText(listOfNotNull(name, "Your ${y.how}", y.version).joinToString("  ·  "), Fuse.type.caption, color = c.textMuted, maxLines = 1)
             FText("Choose it in the game's Play With, beside its emulator. Its saves are kept in step on every device.", Fuse.type.caption, color = c.textMuted, maxLines = if (compact) 1 else 2)
         }
         Spacer(Modifier.width(Space.m))

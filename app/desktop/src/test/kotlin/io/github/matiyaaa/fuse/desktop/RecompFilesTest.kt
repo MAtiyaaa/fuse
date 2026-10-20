@@ -116,6 +116,30 @@ class RecompFilesTest {
     }
 
     @Test
+    fun playStationPortsAreFoundByTheFilesTheirReleasesPutThere(): Unit = runBlocking {
+        // SpartanPort's AppImage in ~/Games; P.T. installed into ~/Games/PT with its game archives beside it.
+        File(home, "Games").mkdirs()
+        File(home, "Games/spartanport-x86_64.AppImage").writeText("appimage")
+        val pt = File(home, "Games/PT").apply { mkdirs() }
+        File(pt, "pt").writeText("elf")
+        File(pt, "chunk1.psarc").writeText("archive")
+        // A folder with a program called pt but none of P.T.'s archives isn't it.
+        File(home, "Applications/other").mkdirs()
+        File(home, "Applications/other/pt").writeText("something else")
+
+        val found = files().find().filter { it.id in setOf("spartanport", "pt-pc") }.associateBy { it.id }
+        val spartan = assertNotNull(found["spartanport"])
+        assertEquals("AppImage", spartan.how)
+        assertEquals(listOf("${home.absolutePath}/Games/spartanport-x86_64.AppImage", "--play"), spartan.argv)
+        assertEquals("${home.absolutePath}/.local/share/spartanport/user/savedata", spartan.saves)
+        val p = assertNotNull(found["pt-pc"])
+        assertEquals(listOf("${pt.absolutePath}/pt"), p.argv)
+        assertEquals("${pt.absolutePath}/data", p.saves)
+        assertEquals(listOf("PT_Save_Data0", "PT_Save_Data1"), p.saveFiles)
+        assertEquals(1, files().find().count { it.id == "pt-pc" })
+    }
+
+    @Test
     fun aVersionIsReadFromTheNameItCameWith() {
         assertEquals("1.2.2", DesktopRecompFiles.versionIn("Zelda64Recompiled-v1.2.2-Linux-X64"))
         assertEquals("1.0.3", DesktopRecompFiles.versionIn("Starfox64Recompiled-1.0.3.AppImage"))

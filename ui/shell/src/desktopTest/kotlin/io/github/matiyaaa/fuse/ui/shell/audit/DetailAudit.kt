@@ -274,7 +274,7 @@ internal fun AuditDriver.detailScreens() {
             tap(PadButton.DPAD_UP)
             settle(900)
             shoot("a signed list: verified and ready, an update out, one not made for this computer")
-            waitFor("Recomps you installed".uppercase())
+            waitFor("Ports and recomps you installed".uppercase())
             tap(PadButton.DPAD_DOWN, 2)
             settle(900)
             shoot("recomps you installed yourself, under the list")

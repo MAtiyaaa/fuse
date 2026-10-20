@@ -733,16 +733,17 @@ fun AppState.emulatorPicker(card: GameCard) {
                     },
                 )
             } + yours.map { y ->
-                val r = io.github.matiyaaa.fuse.launch.ports.Recomps.byId(y.id)
+                val name = io.github.matiyaaa.fuse.launch.ports.NativePorts.name(y.id) ?: y.id
+                val how = if (io.github.matiyaaa.fuse.launch.ports.NativePorts.isRecomp(y.id)) "recompiled to run natively" else "rebuilt to run natively from your dump"
                 MenuAction(
-                    "yours.${y.id}", r?.name ?: y.id, FuseIcons.Boxes,
-                    detail = "Your ${y.how}${y.version?.let { " ($it)" }.orEmpty()}: recompiled to run natively. Its saves are kept in step with every device that plays it with ${r?.name ?: "it"}",
+                    "yours.${y.id}", name, FuseIcons.Boxes,
+                    detail = "Your ${y.how}${y.version?.let { " ($it)" }.orEmpty()}: $how. Its saves are kept in step with every device that plays it with $name",
                     trailing = Trailing.Check(withPort == "yours:${y.id}"),
                     onSelect = {
                         choice = null
                         scope.launch {
                             val problem = store.ports.playWithYours(card.id, y)
-                            if (problem == null) toasts.show("${card.title} plays with ${r?.name ?: "your recomp"} from now on", ToastKind.SUCCESS, icon = FuseIcons.Boxes)
+                            if (problem == null) toasts.show("${card.title} plays with $name from now on", ToastKind.SUCCESS, icon = FuseIcons.Boxes)
                             else toasts.show(problem, ToastKind.WARNING)
                         }
                     },

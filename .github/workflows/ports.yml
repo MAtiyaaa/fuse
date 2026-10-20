@@ -5,7 +5,8 @@
 # pre-release, where Fuse looks for it. Without the secret, nothing is signed or published, and the
 # summary says so. When a port didn't start (or the check didn't finish), the night's run opens an
 # issue labelled ports-broken, or adds to the one open, and closes it once every port starts again.
-# On a pull request that changes the list or the tool, only the check runs.
+# On a pull request that changes the list or the tool, only the check runs. The native job checks
+# the PlayStation ports Fuse finds (ports/native.json) the same nights.
 
 name: Ports
 
@@ -66,6 +67,61 @@ jobs:
           path: build/ports/results-linux.json
           if-no-files-found: error
           retention-days: 14
+
+  # The PlayStation games' native ports Fuse finds (ports/native.json): each project's newest release
+  # still has its builds by name, and its zips still hold the files Fuse finds the port by. Apart
+  # from the list above: nothing of theirs is installed by Fuse, signed or published. A night that
+  # finds one changed opens an issue labelled native-port-changed, closed once every one checks again.
+  native:
+    name: The PlayStation ports Fuse finds are where it looks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Check every project's newest release
+        id: native
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          mkdir -p build/ports
+          python3 tools/ports/native_check.py --list ports/native.json --out build/ports/native.json
+          status=$?
+          python3 - <<'EOF'
+          import json
+          r = json.load(open("build/ports/native.json"))
+          lines = ["| Port | Found as expected | Newest release |", "|---|---|---|"]
+          lines += [f"| {k} | {'yes' if v['passed'] else 'no'} | {v['detail'].replace('|', '/')} |" for k, v in sorted(r.items())]
+          open(__import__("os").environ["GITHUB_STEP_SUMMARY"], "a").write("\n".join(lines) + "\n")
+          EOF
+          echo "failed=$([ $status -eq 0 ] && echo false || echo true)" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Open, add to or close the issue
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          FAILED: ${{ steps.native.outputs.failed }}
+        run: |
+          set -euo pipefail
+          open=$(gh issue list --state open --label native-port-changed --json number --jq '.[0].number // empty')
+          if [ "$FAILED" = "true" ]; then
+            body="A project's newest release no longer matches how Fuse finds it (ports/native.json, core:launch PsPorts): $RUN_URL"
+            if [ -n "$open" ]; then
+              gh issue comment "$open" --body "$body"
+            else
+              gh label create native-port-changed --color D93F0B --description "A native port's release changed from what Fuse finds" 2>/dev/null || true
+              gh issue create --title "A native port's release changed" --label native-port-changed --body "$body"
+            fi
+          elif [ -n "$open" ]; then
+            gh issue close "$open" --comment "Every native port is found as expected again: $RUN_URL"
+          fi
 
   report:
     name: Open an issue when a port breaks

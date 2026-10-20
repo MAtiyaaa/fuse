@@ -4,14 +4,15 @@ import androidx.compose.runtime.Immutable
 import io.github.matiyaaa.fuse.launch.ports.Recomp
 
 /**
- * A recomp the person installed themselves (not through Fuse Ports), found where its own builds
- * go: [how] in a word ("Flatpak", "AppImage", "Program"), [path] the program (or the Flatpak's
- * id), how it starts ([argv] in [cwd], the folder its assets are read from), [folder] where it
- * keeps its saves, mods and settings, and its [version] where that can be told.
+ * A recomp, or a PlayStation game's native port, the person installed themselves (not through Fuse
+ * Ports), found where its own builds go: [how] in a word ("Flatpak", "AppImage", "Program"),
+ * [path] the program (or the Flatpak's id), how it starts ([argv] in [cwd], the folder its assets
+ * are read from; `{game}` stands for the game's own folder), [folder] where it keeps its files,
+ * and its [version] where that can be told.
  */
 @Immutable
 data class FoundRecomp(
-    /** [Recomp.id]. */
+    /** [Recomp.id] or [io.github.matiyaaa.fuse.launch.ports.PsPort.id]. */
     val id: String,
     val how: String,
     val path: String,
@@ -19,6 +20,10 @@ data class FoundRecomp(
     val cwd: String,
     val folder: String,
     val version: String? = null,
+    /** Where its saves are, when not its folder's `saves` (a PlayStation port's own save folder). */
+    val saves: String? = null,
+    /** When only some files in [saves] are saves (P.T.'s two slots), their names. */
+    val saveFiles: List<String> = emptyList(),
 )
 
 /**
