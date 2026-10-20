@@ -9,7 +9,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 
-/** Changes waiting for the Fuse Decky plugin: made and reported, or taken back when it doesn't answer. */
+/** Changes waiting for Steam's running client: made and reported, or taken back when it doesn't answer. */
 class SteamLiveQueueTest {
     private var clock = 1_000_000L
     private val queue = SteamLiveQueue { clock }
@@ -88,5 +88,24 @@ class SteamLiveQueueTest {
         queue.done(r.id, SteamLiveResult(true, appId = 99))
         assertTrue(starting.await().single().ok)
         assertEquals(emptyMap(), queue.made(), "a start isn't an entry made")
+    }
+
+    @Test
+    fun eachChangeIsHandedOutOnceSoThePluginAndFuseNeverBothMakeIt(): Unit = runBlocking {
+        val offered = async { queue.offer(listOf(add(4)), waitMs = 10_000) }
+        val first = withTimeout(5_000) { var got = queue.take(); while (got.isEmpty()) { delay(10); got = queue.take() }; got.single() }
+        // The other asker (the plugin, or Fuse through Steam's debug port) gets nothing to make.
+        assertEquals(emptyList(), queue.take())
+        assertTrue(queue.connected)
+        queue.done(first.id, SteamLiveResult(true, appId = 77))
+        assertTrue(offered.await().single().ok)
+        assertEquals(mapOf(4L to 77L), queue.made())
+    }
+
+    @Test
+    fun beingReachableNeedsNoTaking(): Unit = runBlocking {
+        assertFalse(queue.connected)
+        queue.reachable()
+        assertTrue(queue.connected)
     }
 }
