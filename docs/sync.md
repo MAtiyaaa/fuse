@@ -389,7 +389,12 @@ setting); both are read, a ZIP zipped with its folder too, and a backup kept bot
 once. `AUTO - <user> - <date>` (JKSV's copy before a restore) is that user's, and `Device - <date>`
 is the game's device save. Each backup is matched to a game by its title id, or by its folder's
 name when an old JKSV backup has no meta file (then the import asks to check it); the newest of
-each Switch user's backups is chosen. Fuse then asks, one game at a time, whether it is that game
+each Switch user's backups is chosen. A backup Fuse can't match to any of the games (another
+title id, and a name in its folder that isn't the library's) isn't passed over: first the import
+asks "What game is this?", showing what the backup says (its folder's name, title id, whose and
+when) above the person's Switch games, the likeliest first, with Show Every Game for the rest.
+Chosen, its saves go where the emulator keeps that game's (by the game's own title id, else the
+backup's); Leave It Out passes them over. Fuse then asks, one game at a time, whether it is that game
 and whose save it is: one person, several or everyone, each getting their own copy. When anyone
 chosen already has a save of that game (in the emulator now, kept on this device for them,
 waiting to go to Fuse One, or in Fuse One), it says so and asks Override or Skip; Skip leaves
