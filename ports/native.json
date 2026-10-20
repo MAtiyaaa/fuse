@@ -28,7 +28,8 @@
       "id": "pt-pc",
       "repo": "LoreanXavier/pt-pc",
       "builds": [
-        { "os": "windows", "asset": "^pt-port-.*\\.zip$", "has": ["pt.exe"] }
+        { "os": "windows", "asset": "^P\\.T\\.PC\\.Port-portable-windows\\.zip$", "has": ["pt.exe"] },
+        { "os": "linux", "asset": "^P\\.T\\.PC\\.Port-portable-linux\\.zip$", "has": ["pt"] }
       ]
     }
   ]
