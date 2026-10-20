@@ -153,6 +153,28 @@ class ThemeCodecTest {
     }
 
     @Test
+    fun fuseStaysAsItIsAndNewLooksAreNewThemes() {
+        val fuse = ThemePresets.Fuse
+        // Fuse, the default, keeps its own room, tiles and focus, with the bar along the top.
+        assertEquals(BackgroundStyle.HERO, fuse.background)
+        assertEquals(CornerFamily.SOFT, fuse.geometry)
+        assertEquals(io.github.matiyaaa.fuse.model.TileLook.PLAIN, fuse.tiles)
+        assertEquals(io.github.matiyaaa.fuse.model.FocusStyle.GLOW, fuse.focus)
+        assertEquals(io.github.matiyaaa.fuse.model.ThemeLayout(), fuse.layout)
+        val chrome = Chrome.of(fuse.layout)
+        assertEquals(Chrome(top = 64.dp, bottom = 44.dp, dock = false), chrome)
+        assertEquals(0.dp, chrome.dockRoom)
+        val base = TileMetrics.forHeight(720.dp, 1280.dp)
+        assertEquals(base, base.scaled(fuse.layout.tileScale, fuse.layout.spacing), "its tiles at their own size")
+        // The looks layouts brought are worn only by the themes made for them.
+        val new = ThemePresets.all.filter {
+            it.layout != io.github.matiyaaa.fuse.model.ThemeLayout() || it.background == BackgroundStyle.BLOCKS ||
+                it.tiles == io.github.matiyaaa.fuse.model.TileLook.PRISM || it.focus == io.github.matiyaaa.fuse.model.FocusStyle.BRACKETS
+        }
+        assertEquals(setOf("twin", "viewfinder"), new.map { it.id }.toSet())
+    }
+
+    @Test
     fun pitchIsATrueBlackRoomThatNeverMoves() {
         val pitch = ThemePresets.Pitch
         assertEquals(0xFF000000, pitch.palette.background)

@@ -137,7 +137,9 @@ lights the room instead.
 "layout": { "bar": "dock", "tileScale": 1.12, "spacing": "airy", "secondScreen": "showcase" }
 ```
 
-A theme can move and resize things, not only colour them. Each key may be left out.
+A theme can move and resize things, not only colour them. Each key may be left out. Fuse's own
+theme stays as it is: the bar along the top, tiles at their own size, comfortable spacing. A new
+look is a new theme (Twin and Viewfinder), never a change to Fuse.
 
 | Key | What it is | Values |
 |---|---|---|
