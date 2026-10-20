@@ -6,7 +6,7 @@
       "id": "bloodborne-pc",
       "repo": "Mrsuss60/bloodborne_pc_windows_port",
       "builds": [
-        { "os": "windows", "asset": "\\.zip$", "has": ["BloodborneLauncher.exe", "run.bat"] }
+        { "os": "windows", "asset": "\\.zip$", "has": ["BloodborneLauncher.exe"] }
       ]
     },
     {

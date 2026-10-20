@@ -934,13 +934,13 @@ it is in. Fuse reads and writes only in a recomp's own folder, Fuse's ports and 
 computer from the person's own dump, each fact cited in `PsPorts.all`: the Bloodborne PC Port
 (Mrsuss60, Windows), SpartanPort (God of War III Remastered, Windows and Linux), the Uncharted: The
 Nathan Drake Collection PC Port (Windows) and the P.T. PC Port (Windows and Linux). Fuse doesn't
-install them: each is found by the files its release puts in its folder (`BloodborneLauncher.exe`
-and `run.bat`; `SpartanPort.exe` and `Play SpartanPort.exe`, or `spartanport-x86_64.AppImage`;
+install them: each is found by the files its release puts in its folder (`BloodborneLauncher.exe`;
+`SpartanPort.exe` and `Play SpartanPort.exe`, or `spartanport-x86_64.AppImage`;
 `Uncharted Launcher.exe`; `pt` or `pt.exe` with the `chunk1.psarc` its installer copies beside it)
 in the same places as recomps. A PS4 game of the library is offered the ones made for its title id
 (read from its own files, else its folder's name) in Play With; chosen, it starts as its project
-says (Bloodborne's `run.bat` with the dump's folder; SpartanPort's `--play` and Uncharted's
-launcher, which use the game folder chosen in them, else open to choose it; P.T.'s program), and
+says (Bloodborne's and Uncharted's launchers and SpartanPort's `--play`, which use the game folder
+chosen in them, else open to choose it; P.T.'s program), and
 the game stays one entry. Its saves are its own, where its code keeps them: `user/savedata` beside
 it (SpartanPort's Linux build under `$XDG_DATA_HOME/spartanport`, or `~/.local/share/spartanport`),
 Uncharted's `analysis/uncharted-user/savedata`, and P.T.'s two slots `PT_Save_Data0` and

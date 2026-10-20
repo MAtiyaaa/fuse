@@ -141,7 +141,7 @@ A theme can move and resize things, not only colour them. Each key may be left o
 
 | Key | What it is | Values |
 |---|---|---|
-| `bar` | Where the sections, Search, Settings and the status go | `top` (along the top, as Fuse has them), `dock` (in a pill in its own band along the bottom, with pages and hints above it) |
+| `bar` | Where the sections, Search, Settings and the status go | `top` (along the top, as Fuse has them), `dock` (in a pill in its own band along the bottom, with pages and hints above it; a controller reaches it by going down past a page) |
 | `tileScale` | How big game and system tiles are | 0.8 to 1.3; 1 is Fuse's own size |
 | `spacing` | The room between tiles | `compact`, `comfortable`, `airy` |
 | `secondScreen` | What a second screen shows for the system you're on | `art` (its art and logo), `showcase` (the system set out whole: its logo, who made it and when, and how much of it is here), `nothing` (only the room) |

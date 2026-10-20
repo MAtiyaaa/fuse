@@ -24,7 +24,8 @@ class PsPortsTest {
 
     @Test
     fun eachStartsAsItsProjectSaysWithTheDumpInPlace() {
-        assertEquals(listOf("cmd.exe", "/c", "run.bat", "D:/Games/CUSA03173"), PsPorts.argv(bloodborne, "windows", "D:/Ports/Bloodborne/", "D:/Games/CUSA03173"))
+        assertEquals(listOf("D:/Ports/Bloodborne/BloodborneLauncher.exe"), PsPorts.argv(bloodborne, "windows", "D:/Ports/Bloodborne/", "D:/Games/CUSA03173"), "its launcher keeps the game folder chosen in it")
+        assertEquals(listOf("/opt/pt/pt"), PsPorts.argv(PsPorts.byId("pt-pc")!!, "linux", "/opt/pt", "/games/pt"))
         assertNull(PsPorts.argv(bloodborne, "linux", "/opt/bb", "/games/bb"), "no Linux build of its own")
         assertEquals(listOf("/home/ana/Games/spartanport-x86_64.AppImage", "--play"), PsPorts.argv(spartan, "linux", "/home/ana/Games", "/x"))
         assertEquals(listOf("D:/SpartanPort/Play SpartanPort.exe"), PsPorts.argv(spartan, "windows", "D:/SpartanPort", "/x"))

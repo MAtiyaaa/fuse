@@ -575,6 +575,7 @@ private fun FuseAppContent(
                 // The theme's own sizes and places: tiles scaled, gaps as it spaces them, the bar where it puts it.
                 val layout = spec.layout
                 val chrome = io.github.matiyaaa.fuse.ui.designsystem.theme.Chrome.of(layout)
+                androidx.compose.runtime.SideEffect { app.barDocked = chrome.dock }
                 // Tiles sized for the room pages have: above the dock, when the theme docks the bar.
                 val pageHeight = maxHeight - chrome.dockRoom
                 val metrics = remember(maxWidth, pageHeight, layout.tileScale, layout.spacing) { TileMetrics.forHeight(pageHeight, maxWidth).scaled(layout.tileScale, layout.spacing) }
@@ -1174,9 +1175,9 @@ private fun ShellInput(app: AppState) {
                 }
                 NavAction.SELECT -> if (button != null) { leave(); app.runHudButton(button); NavResult.ACTIVATED } else leave()
                 NavAction.REORDER -> if (button == null && active != null) { app.liftTab(active); NavResult.ACTIVATED } else NavResult.BLOCKED
-                NavAction.DOWN -> leave()
+                // Back to the page the way it lies: down from the top line, up from a dock under it.
+                NavAction.UP, NavAction.DOWN -> if (leavesBar(e.action, app.barDocked)) leave() else NavResult.BLOCKED
                 NavAction.BACK -> { leave(); NavResult.CONSUMED }
-                NavAction.UP -> NavResult.BLOCKED
                 NavAction.PREVIOUS_SECTION -> cycle(-1)
                 NavAction.NEXT_SECTION -> cycle(1)
                 NavAction.QUICK_MENU -> { app.quickMenuOpen = true; NavResult.ACTIVATED }
@@ -1190,10 +1191,13 @@ private fun ShellInput(app: AppState) {
         when (e.action) {
             // Up past the top of any page reaches the top line, a pushed page (a system, Search)
             // included: on Search or Settings their own button is the one chosen.
-            NavAction.UP -> {
+            // Down past the bottom reaches it instead when the theme docks it under the page.
+            NavAction.UP, NavAction.DOWN -> if (reachesBar(e.action, app.barDocked)) {
                 app.focusZone = FocusZone.TABS
                 app.hudButton = page
                 NavResult.MOVED
+            } else {
+                NavResult.BLOCKED
             }
             NavAction.PREVIOUS_SECTION -> when (page) {
                 null -> cycle(-1)
@@ -1213,11 +1217,17 @@ private fun ShellInput(app: AppState) {
                 active != Destination.HOME -> { app.selectTab(Destination.HOME); NavResult.CONSUMED }
                 else -> NavResult.BLOCKED
             }
-            NavAction.LEFT, NavAction.RIGHT, NavAction.DOWN -> NavResult.BLOCKED
+            NavAction.LEFT, NavAction.RIGHT -> NavResult.BLOCKED
             else -> NavResult.IGNORED
         }
     }
 }
+
+/** Whether [action], past the edge of a page, reaches the top line: up to it, or down to a dock under the page. */
+internal fun reachesBar(action: NavAction, docked: Boolean): Boolean = action == if (docked) NavAction.DOWN else NavAction.UP
+
+/** Whether [action] on the top line goes back to the page: down from the top, up from a dock. */
+internal fun leavesBar(action: NavAction, docked: Boolean): Boolean = action == if (docked) NavAction.UP else NavAction.DOWN
 
 private fun AppState.runHudButton(button: HudButton) = when (button) {
     // Opening Downloads keeps the page underneath: Back returns to it as it was.

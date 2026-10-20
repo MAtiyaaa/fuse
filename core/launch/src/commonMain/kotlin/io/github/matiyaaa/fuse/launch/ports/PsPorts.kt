@@ -37,11 +37,12 @@ object PsPorts {
             system = "ps4",
             titleIds = setOf("CUSA03173"),
             repo = "Mrsuss60/bloodborne_pc_windows_port",
-            marks = mapOf("windows" to listOf("BloodborneLauncher.exe", "run.bat")),
-            // Started in its own folder (run.bat moves there itself), so the script is named as it is there.
-            start = mapOf("windows" to listOf("cmd.exe", "/c", "run.bat", GAME)),
+            // Its launcher, which keeps the game folder chosen in it (run.bat, which takes the folder, is
+            // documented for a build from source, so a release isn't counted on to carry it).
+            marks = mapOf("windows" to listOf("BloodborneLauncher.exe")),
+            start = mapOf("windows" to listOf("$INSTALL/BloodborneLauncher.exe")),
             saves = mapOf("windows" to "$INSTALL/user/savedata"),
-            source = "Mrsuss60/bloodborne_pc_windows_port v0.6.3: README.md (CUSA03173 version 1.09, BloodborneLauncher.exe, run.bat with the game folder, saves in user/); run.bat (BB_DATA_DIR defaults to its own folder); src/probe.c (the user folder, user by default); src/runtime_savedata.c (<user>/savedata/<user id>/<title id>)",
+            source = "Mrsuss60/bloodborne_pc_windows_port v0.6.3: README.md (CUSA03173 version 1.09, BloodborneLauncher.exe in the release folder and the game folder chosen in it, saves in user/, release archives with their own Python); run.bat (BB_DATA_DIR, where user/ is, defaults to its own folder); src/probe.c (the user folder, user by default); src/runtime_savedata.c (<user>/savedata/<user id>/<title id>)",
         ),
         PsPort(
             id = "spartanport",
