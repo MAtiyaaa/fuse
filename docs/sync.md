@@ -401,7 +401,13 @@ title id, and a name in its folder that isn't the library's) isn't passed over: 
 asks "What game is this?", showing what the backup says (its folder's name, title id, whose and
 when) above the person's Switch games, the likeliest first, with Show Every Game for the rest.
 Chosen, its saves go where the emulator keeps that game's (by the game's own title id, else the
-backup's); Leave It Out passes them over. Fuse then asks, one game at a time, whether it is that game
+backup's); Leave It Out passes them over. Where Fuse can't reach the emulator's saves on this device
+(Android keeps Eden's in its own folder until one is chosen in Eden and in Fuse, Settings, Save
+folders; an emulator no one has played in yet has no user's folder) and Fuse One keeps this
+device's saves, a game's backup still counts as that game's, and goes to Fuse One as the chosen
+person's newest, made from their newest there (whose other part, account or device, it keeps). A
+device that can reach the emulator's saves has it in place before the game starts there. The import
+says why it couldn't go in on this device, and what to change for it to. Fuse then asks, one game at a time, whether it is that game
 and whose save it is: one person, several or everyone, each getting their own copy. When anyone
 chosen already has a save of that game (in the emulator now, kept on this device for them,
 waiting to go to Fuse One, or in Fuse One), it says so and asks Override or Skip; Skip leaves

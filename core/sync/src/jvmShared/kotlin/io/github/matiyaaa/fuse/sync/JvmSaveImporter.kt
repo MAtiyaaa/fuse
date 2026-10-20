@@ -14,8 +14,11 @@ import java.util.zip.ZipInputStream
  */
 class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits()) {
     data class Limits(val files: Int = 32_000, val bytes: Long = 1024L * 1024 * 1024, val fileBytes: Long = 256L * 1024 * 1024)
-    /** [part]: the part of a Switch save the files are; the rest stays as the owner has it (see [SyncDevice.importSave]). */
-    internal data class Binding(val query: SaveQuery, val spot: SaveSpot, val files: Map<String, File>, val part: SavePart = SavePart.WHOLE)
+    /**
+     * [part]: the part of a Switch save the files are; the rest stays as the owner has it (see
+     * [SyncDevice.importSave]). [fuseOne]: no folder for it here, it goes to Fuse One ([SaveImportTarget.fuseOne]).
+     */
+    internal data class Binding(val query: SaveQuery, val spot: SaveSpot, val files: Map<String, File>, val part: SavePart = SavePart.WHOLE, val fuseOne: Boolean = false)
     /**
      * [files]: the staged copy, by path in the source. [unknown]: Switch backups of a game none of the
      * asked games is, by their entry, until the person says which game each is ([assign]).
@@ -26,8 +29,13 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
     )
     private val sessions = LinkedHashMap<String, Session>()
 
-    /** Copies and validates the entire source before discovering any destinations. */
-    fun scan(source: File, games: List<SaveQuery>, env: SaveEnvironment): SaveImportPlan {
+    /**
+     * Copies and validates the entire source before discovering any destinations. [fuseOne]: Fuse
+     * One keeps this device's saves, so a Switch game whose save folder can't be reached here (an
+     * Android emulator's private folder, an emulator with no user yet) still takes its backups, to
+     * go to Fuse One.
+     */
+    fun scan(source: File, games: List<SaveQuery>, env: SaveEnvironment, fuseOne: Boolean = false): SaveImportPlan {
         require(source.exists()) { "That save source is no longer available" }
         require(!Files.isSymbolicLink(source.toPath())) { "Choose the actual save, rather than a symbolic link" }
         // Previews cannot survive a process restart and are bounded within one process.
@@ -136,6 +144,18 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
                     }
                 }
             }
+            // A Switch game none of whose emulators' save folders can be reached here: its backups are
+            // still known as its, and go to Fuse One (never "What game is this?" for a game Fuse knows).
+            if (fuseOne && switch.isNotEmpty()) {
+                for ((id, asked) in games.groupBy { it.game.id }) {
+                    if (entries.values.any { e -> e.targets.any { it.query.game.id == id && !it.fuseOne } }) continue
+                    val q = withSwitchId(asked.first(), switch, env)
+                    val located = asked.flatMap { a -> SaveAdapters.forEmulator(a.emulatorId)?.locate(withSwitchId(a, switch, env), env).orEmpty() }
+                        .filter { it.format == SWITCH && it.kind != SaveKind.STATE }
+                    if (located.isEmpty() || located.any { it.available }) continue
+                    addSwitch(entries, bindings, used, q, FUSE_ONE, 0, switch, files, env, why = located.firstNotNullOfOrNull { it.note })
+                }
+            }
             // A backup of a game none of the asked games is stays in the plan with nowhere to go yet,
             // so the person is asked which game it is instead of the save being passed over.
             val unknown = LinkedHashMap<String, SwitchDumps.Backup>()
@@ -157,19 +177,22 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
         }
     }
 
+    /** [why]: set for a save going to Fuse One ([FUSE_ONE]), why it can't go in place here. */
     private fun add(entries: MutableMap<String, SaveImportEntry>, bindings: MutableMap<String, Binding>, used: MutableSet<String>, source: String,
         format: String, query: SaveQuery, spot: SaveSpot, mapped: Map<String, File>, original: Set<String>, confidence: SaveImportConfidence, index: Int,
-        switch: SwitchSource? = null, part: SavePart = SavePart.WHOLE) {
+        switch: SwitchSource? = null, part: SavePart = SavePart.WHOLE, why: String? = null) {
         if (mapped.isEmpty() || mapped.keys.any { !SavePath.isSafe(it) }) return
         val key = "$source|$format"
-        val targetId = "$key|${query.game.id}|${query.emulatorId}|$index"
-        val target = SaveImportTarget(targetId, query, spot.kind, spot.format, spot.root ?: spot.files.joinToString { it.path }, format != spot.format, confidence)
+        val fuseOne = spot === FUSE_ONE
+        val targetId = "$key|${query.game.id}|${query.emulatorId}|${if (fuseOne) "fuse-one" else index}"
+        val target = SaveImportTarget(targetId, query, spot.kind, spot.format, if (fuseOne) "Fuse One" else spot.root ?: spot.files.joinToString { it.path }, format != spot.format, confidence,
+            fuseOne = fuseOne, note = why)
         val old = entries[key]
         val targets = old?.targets.orEmpty() + target
         val confident = targets.filter { it.confidence != SaveImportConfidence.MANUAL }
         entries[key] = SaveImportEntry(key, switch?.backup ?: source.ifEmpty { "Selected save folder" }, format, mapped.values.sumOf { it.length() }, targets,
             selectedTarget = confident.singleOrNull()?.id, switch = switch ?: old?.switch)
-        bindings[targetId] = Binding(query, spot, mapped, part)
+        bindings[targetId] = Binding(query, spot, mapped, part, fuseOne)
         // Unknown names remain visible for manual selection, but are still understood save bytes.
         used += original
     }
@@ -184,19 +207,21 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
     /**
      * The person said a Switch backup Fuse couldn't place ([entry], one with no destination) is a
      * save of [game]: it goes where the emulator keeps that game's saves (by the game's own title id,
-     * else the backup's), chosen. The plan as it is now, to import from.
+     * else the backup's), chosen. Where that can't be reached here, it goes to Fuse One when [fuseOne]
+     * (see [scan]). The plan as it is now, to import from.
      */
-    fun assign(plan: SaveImportPlan, entry: String, game: SaveQuery, env: SaveEnvironment): SaveImportPlan {
+    fun assign(plan: SaveImportPlan, entry: String, game: SaveQuery, env: SaveEnvironment, fuseOne: Boolean = false): SaveImportPlan {
         val session = sessions[plan.id] ?: error("This import preview expired. Choose the source again")
         require(session.plan == plan) { "The import preview changed" }
         val b = session.unknown[entry] ?: error("Fuse already knows which game that save is")
         val q = if (SwitchIds.of(game, env) == null && b.titleId != null) game.copy(serial = b.titleId.uppercase()) else game
-        val spots = SaveAdapters.forEmulator(q.emulatorId)?.locate(q, env).orEmpty()
-            .filter { it.available && it.kind != SaveKind.STATE && it.format == "switch.savedata" }
-            .filter { b.kind != SwitchDumps.Kind.DEVICE || SwitchNand.DEVICE in it.mounts }
-        require(spots.isNotEmpty()) { "Fuse can't reach where ${game.title}'s saves go on this device" }
+        val located = SaveAdapters.forEmulator(q.emulatorId)?.locate(q, env).orEmpty().filter { it.kind != SaveKind.STATE && it.format == SWITCH }
+        val spots = located.filter { it.available }.filter { b.kind != SwitchDumps.Kind.DEVICE || SwitchNand.DEVICE in it.mounts }
+        val why = located.firstNotNullOfOrNull { it.note.takeUnless { _ -> it.available } }
+        require(spots.isNotEmpty() || fuseOne) { "Fuse can't reach where ${game.title}'s saves go on this device." + (why?.let { " $it" } ?: "") }
         val entries = LinkedHashMap(plan.entries.associateBy { it.id })
         val bindings = HashMap(session.bindings)
+        if (spots.isEmpty()) addBackup(entries, bindings, HashSet(), q, FUSE_ONE, 0, b, session.files, SaveImportConfidence.MANUAL, why = why ?: "Fuse can't reach where ${game.title}'s saves go on this device.")
         for ((index, spot) in spots.withIndex()) addBackup(entries, bindings, HashSet(), q, spot, index, b, session.files, SaveImportConfidence.MANUAL)
         val placed = entries.getValue(entry)
         entries[entry] = placed.copy(selectedTarget = placed.targets.firstOrNull()?.id)
@@ -403,7 +428,7 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
      * it is ([SavePart]), never read here from whoever's save is in the folder now.
      */
     private fun addSwitch(entries: MutableMap<String, SaveImportEntry>, bindings: MutableMap<String, Binding>, used: MutableSet<String>,
-        q: SaveQuery, spot: SaveSpot, index: Int, backups: List<SwitchDumps.Backup>, files: Map<String, File>, env: SaveEnvironment) {
+        q: SaveQuery, spot: SaveSpot, index: Int, backups: List<SwitchDumps.Backup>, files: Map<String, File>, env: SaveEnvironment, why: String? = null) {
         val id = SwitchIds.of(q, env)
         for (b in backups) {
             if (b.kind == SwitchDumps.Kind.OTHER) continue
@@ -415,19 +440,19 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
                 named -> SaveImportConfidence.EXACT_NAME
                 else -> continue
             }
-            addBackup(entries, bindings, used, q, spot, index, b, files, confidence)
+            addBackup(entries, bindings, used, q, spot, index, b, files, confidence, why)
         }
     }
 
     /** [b] as a save of [q]'s game in [spot]: its account's part, or the device's. */
     private fun addBackup(entries: MutableMap<String, SaveImportEntry>, bindings: MutableMap<String, Binding>, used: MutableSet<String>,
-        q: SaveQuery, spot: SaveSpot, index: Int, b: SwitchDumps.Backup, files: Map<String, File>, confidence: SaveImportConfidence) {
+        q: SaveQuery, spot: SaveSpot, index: Int, b: SwitchDumps.Backup, files: Map<String, File>, confidence: SaveImportConfidence, why: String? = null) {
         val prefix = if (b.root.isEmpty()) "" else b.root + "/"
         val device = b.kind == SwitchDumps.Kind.DEVICE
         if (device && SwitchNand.DEVICE !in spot.mounts) return
         val own = b.files.associate { f -> (if (device) "${SwitchNand.DEVICE}/$f" else f) to files.getValue(prefix + f) }
-        add(entries, bindings, used, b.root, "switch.savedata", q, spot, own, b.files.map { prefix + it }.toSet() + (prefix + SwitchDumps.META), confidence, index,
-            sourceOf(b), if (device) SavePart.SWITCH_DEVICE else SavePart.SWITCH_ACCOUNT)
+        add(entries, bindings, used, b.root, SWITCH, q, spot, own, b.files.map { prefix + it }.toSet() + (prefix + SwitchDumps.META), confidence, index,
+            sourceOf(b), if (device) SavePart.SWITCH_DEVICE else SavePart.SWITCH_ACCOUNT, why)
     }
 
     private fun sourceOf(b: SwitchDumps.Backup) =
@@ -443,6 +468,14 @@ class JvmSaveImporter(private val dir: File, private val limits: Limits = Limits
     }
 
     private companion object {
+        const val SWITCH = "switch.savedata"
+
+        /**
+         * A Switch save's place on Fuse One, for a game whose save folder can't be reached here: its
+         * account part and its device part, as a Switch emulator's save holds them.
+         */
+        val FUSE_ONE = SaveSpot(SaveKind.SAVE, SWITCH, available = false, mounts = mapOf(SwitchNand.DEVICE to ""))
+
         val SRAM_SYSTEMS = setOf("nes", "snes", "gb", "gbc", "gba", "nds", "megadrive", "genesis", "mastersystem", "gamegear", "pce", "neogeo", "wonderswan", "wonderswancolor", "ngp", "ngpc")
     }
 }

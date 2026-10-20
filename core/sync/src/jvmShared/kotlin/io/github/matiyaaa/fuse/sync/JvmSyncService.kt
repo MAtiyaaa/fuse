@@ -2285,10 +2285,13 @@ class JvmSyncService(
         work.withLock {
             runCatching {
                 config()
-                saveImporter.scan(File(source), games, saveEnv)
+                saveImporter.scan(File(source), games, saveEnv, fuseOne = savesToFuseOne())
             }
         }
     }
+
+    /** Fuse One keeps this device's saves: one with no folder here can go to it (see [JvmSaveImporter.scan]). */
+    private fun savesToFuseOne(): Boolean = cached.enabled && cached.role.isNotEmpty() && cached.saves
 
     override suspend fun discardSaveImport(plan: SaveImportPlan) = withContext(Dispatchers.IO) {
         work.withLock { saveImporter.discard(plan) }
@@ -2298,7 +2301,7 @@ class JvmSyncService(
         work.withLock {
             runCatching {
                 config()
-                saveImporter.assign(plan, entry, game, saveEnv)
+                saveImporter.assign(plan, entry, game, saveEnv, fuseOne = savesToFuseOne())
             }
         }
     }
@@ -2310,17 +2313,41 @@ class JvmSyncService(
                 require(_nowPlaying.value == null) { "Close the running game before importing saves" }
                 require(profile.isNotBlank() && profiles.value.any { it.id == profile }) { "Choose whose saves these are before importing" }
                 require(choices.isNotEmpty() && choices.map { it.entry }.distinct().size == choices.size) { "Choose each save destination once" }
-                val resolved = resolveImport(plan, choices)
+                // Saves going to Fuse One have no folder here to look up again; the rest do.
+                val bindings = choices.map { saveImporter.binding(plan, it) }
+                require(bindings.map { it.query.game.id + "|" + it.spot.kind + "|" + it.part }.distinct().size == bindings.size) { "Choose only one source save for each game at a time" }
+                val here = choices.indices.filterNot { bindings[it].fuseOne }
+                val resolved = here.zip(resolveImport(plan, here.map { choices[it] })).toMap()
                 val d = device ?: newDevice(ensureDeviceId(), cached.deviceName.ifBlank { defaultDeviceName }).also { device = it }
                 // A Switch game's account save and its device save are two parts of one slot, each imported in turn.
-                require(resolved.map { (binding, _, slot) -> slot.key + "|" + binding.part }.distinct().size == resolved.size) { "Choose one import for each shared memory card" }
+                require(resolved.values.map { (binding, _, slot) -> slot.key + "|" + binding.part }.distinct().size == resolved.size) { "Choose one import for each shared memory card" }
                 val failures = ArrayList<SaveImportFailure>()
                 val everyone = choices.flatMap { it.profiles.ifEmpty { listOf(profile) } }.toSet()
                 require(everyone.all { p -> profiles.value.any { it.id == p } }) { "Choose whose saves these are before importing" }
                 var imported = 0
                 val replaced = ArrayList<ReplacedSave>()
-                val revisions = resolved.flatMapIndexed { index, (binding, query, slot) ->
+                val revisions = choices.indices.flatMap { index ->
                     val entry = plan.entries.first { e -> e.id == choices[index].entry }
+                    val local = resolved[index]
+                    if (local == null) {
+                        // No folder for it here: it goes to Fuse One, for a device that can reach one.
+                        val binding = bindings[index]
+                        val query = canonical(binding.query)
+                        return@flatMap try {
+                            val c = client ?: error("Fuse One isn't connected, so ${query.title}'s save couldn't go to it. Import it again once it is.")
+                            val owners = choices[index].profiles.ifEmpty { listOf(profile) }.map { if (query.game.id in cached.sharedGames) SHARED_SAVES else it }.distinct()
+                            owners.map { o ->
+                                val head = runCatching { c.revisions(o, query.game.id, binding.spot.kind).firstOrNull { it.canBeNewest } }
+                                    .getOrElse { throw IllegalStateException("Fuse One can't be reached just now, so ${query.title}'s save couldn't go to it. Import it again once it can.") }
+                                d.importToFuseOne(c, o, query.game, binding.spot.kind, entry.sourceFormat, binding.files, head, query.title, binding.part).id
+                            }.also { imported++ }
+                        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                        catch (e: Exception) {
+                            failures += SaveImportFailure(entry.id, entry.name, e.message ?: "The save could not be imported")
+                            emptyList()
+                        }
+                    }
+                    val (binding, query, slot) = local
                     // Each chosen person gets their own copy, and no one else's save is touched: the
                     // folder is written only for whoever's save is in it (see SyncDevice.importFor).
                     val owners = choices[index].profiles.ifEmpty { listOf(profile) }.map { ownerOf(query, slot, it) }.distinct()
@@ -2368,11 +2395,26 @@ class JvmSyncService(
             runCatching {
                 config()
                 val d = device ?: return@runCatching emptyMap<String, Map<String, ExistingSave>>()
-                resolveImport(plan, choices).mapIndexedNotNull { index, (_, query, slot) ->
-                    val choice = choices[index]
+                val (away, here) = choices.partition { saveImporter.binding(plan, it).fuseOne }
+                val inFolders = resolveImport(plan, here).mapIndexedNotNull { index, (_, query, slot) ->
+                    val choice = here[index]
                     val found = choice.profiles.ifEmpty { listOf(profile) }.mapNotNull { p -> d.existingSave(ownerOf(query, slot, p), slot)?.let { p to it } }.toMap()
                     found.takeIf { it.isNotEmpty() }?.let { choice.entry to it }
                 }.toMap()
+                // Going to Fuse One: what each person has there now, or waiting here to go to it.
+                val onFuseOne = away.mapNotNull { choice ->
+                    val binding = saveImporter.binding(plan, choice)
+                    val query = canonical(binding.query)
+                    val found = choice.profiles.ifEmpty { listOf(profile) }.mapNotNull { p ->
+                        val owner = if (query.game.id in cached.sharedGames) SHARED_SAVES else p
+                        val save = d.waitingSave(owner, query.game, binding.spot.kind)?.let { ExistingSave(ExistingSave.Where.WAITING, it) }
+                            ?: client?.let { c -> runCatching { c.revisions(owner, query.game.id, binding.spot.kind).firstOrNull { it.canBeNewest } }.getOrNull() }
+                                ?.let { ExistingSave(ExistingSave.Where.SYNCED, it.at.millis) }
+                        save?.let { p to it }
+                    }.toMap()
+                    found.takeIf { it.isNotEmpty() }?.let { choice.entry to it }
+                }.toMap()
+                inFolders + onFuseOne
             }.getOrDefault(emptyMap())
         }
     }

@@ -296,6 +296,52 @@ class SwitchSaveImportTest {
         assertEquals(File(space, "account/$user/0100000000099000/0").path, placed.targets.single().destination)
     }
 
+    @Test fun aGameWhoseSavesCantBeReachedHereStillKnowsItsBackupsAndSendsThemToFuseOne() = temp { root ->
+        // No Eden folder on this device (as on Android before its folder is chosen in Fuse).
+        val saves = File(root, "sd/switch/Checkpoint/saves")
+        backup(File(saves, "0x$title Super Mario Odyssey/2026-10-01 12-00-00 Matt"), mapOf("file1" to "cp"))
+        val importer = JvmSaveImporter(File(root, "stage"))
+        // Without Fuse One keeping this device's saves, there is nowhere for it.
+        assertTrue(importer.scan(saves, listOf(query()), env(root)).entries.all { it.targets.isEmpty() })
+        val plan = importer.scan(saves, listOf(query()), env(root), fuseOne = true)
+        val e = plan.entries.single()
+        val target = e.targets.single()
+        assertTrue(target.fuseOne)
+        assertEquals(SaveImportConfidence.TITLE_ID, target.confidence, "still known as its game, never asked which game it is")
+        assertEquals(target.id, e.selectedTarget)
+        assertEquals("The Switch emulator's folder wasn't found here.", target.note)
+        val binding = importer.binding(plan, SaveImportChoice(e.id, target.id))
+        assertTrue(binding.fuseOne)
+        assertEquals("cp", binding.files.getValue("file1").readText())
+    }
+
+    @Test fun anEmulatorWithNoUserYetSaysSoAndTheSaveGoesToFuseOne() = temp { root ->
+        // Eden's save space, but no one has played in it yet: no user's folder for the save.
+        File(root, ".local/share/eden/nand/user/save/account").mkdirs()
+        val saves = File(root, "sd/switch/Checkpoint/saves")
+        backup(File(saves, "0x$title Super Mario Odyssey/2026-10-01 12-00-00 Matt"), mapOf("file1" to "cp"))
+        val target = JvmSaveImporter(File(root, "stage")).scan(saves, listOf(query()), env(root), fuseOne = true).entries.single().targets.single()
+        assertTrue(target.fuseOne)
+        assertTrue(target.note.orEmpty().startsWith("Play a game once in the emulator"), target.note)
+    }
+
+    @Test fun theAnswerToWhatGameIsThisGoesToFuseOneWhenItsSavesCantBeReachedHere() = temp { root ->
+        val jksv = File(root, "sd/JKSV")
+        backup(File(jksv, "Mario Odyssey/Matt - 2026.10.01 @ 12.00.00"), mapOf("file1" to "theirs"), metaOf("0100000000099000", at = 1_790_000_000L))
+        val importer = JvmSaveImporter(File(root, "stage"))
+        val plan = importer.scan(jksv, listOf(query()), env(root), fuseOne = true)
+        val e = plan.entries.single()
+        assertTrue(e.targets.isEmpty(), "another game's id and name: still asked which game it is")
+        // Without Fuse One it says why there is nowhere for it.
+        val refused = runCatching { importer.assign(plan, e.id, query(), env(root)) }.exceptionOrNull()?.message.orEmpty()
+        assertEquals("Fuse can't reach where Super Mario Odyssey's saves go on this device. The Switch emulator's folder wasn't found here.", refused)
+        val placed = importer.assign(plan, e.id, query(), env(root), fuseOne = true).entries.single()
+        val target = placed.targets.single()
+        assertTrue(target.fuseOne)
+        assertEquals(target.id, placed.selectedTarget)
+        assertEquals(SaveImportConfidence.MANUAL, target.confidence)
+    }
+
     @Test fun oneSaveForTwoProfilesLeavesEachTheirOwnCopy(): Unit = runBlocking {
         temp { root -> runBlocking {
             val dest = File(root, "dest").apply { mkdirs() }

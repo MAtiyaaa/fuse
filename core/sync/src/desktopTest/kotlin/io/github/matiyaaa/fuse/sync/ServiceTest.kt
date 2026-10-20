@@ -981,6 +981,44 @@ class ServiceTest {
     }
 
     /**
+     * A Switch save imported on a device that can't reach the emulator's saves (the Thor, before
+     * Eden's folder is chosen in Fuse) goes to Fuse One as the person's newest, and is in place on the
+     * PC, whose Eden folder Fuse can reach, before the game starts there.
+     */
+    @Test
+    fun aSwitchSaveWithNoFolderOnThisDeviceGoesToFuseOneAndIntoPlaceWhereItIsPlayed(): Unit = runBlocking {
+        val title = "0100000000010000"
+        val user = "00112233445566778899aabbccddeeff"
+        val pcHome = File(root, "pc-home").apply { File(this, ".local/share/eden/nand/user/save/account/$user").mkdirs() }
+        val thorHome = File(root, "thor-home").apply { mkdirs() }
+        val (pc, _) = service("Gaming PC", Library(), home = pcHome)
+        val (thor, _) = service("AYN Thor", Library(), home = thorHome)
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        thor.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        thor.switchTo(mo.id).getOrThrow()
+        pc.switchTo(mo.id).getOrThrow()
+        val q = SaveQuery(GameKey.of("switch", null, null, "Super Mario Odyssey"), "switch", "/games/Super Mario Odyssey [$title].nsp", "linux.eden", title = "Super Mario Odyssey")
+        val saves = File(root, "sd/switch/Checkpoint/saves")
+        File(saves, "0x$title Super Mario Odyssey/2026-10-01 12-00-00 Matt/file1").apply { parentFile.mkdirs(); writeText("from the switch") }
+
+        val plan = thor.previewSaveImport(saves.path, listOf(q)).getOrThrow()
+        val entry = plan.entries.single()
+        val target = entry.targets.single()
+        assertTrue(target.fuseOne, "nowhere for it on the Thor")
+        val result = thor.importSaves(plan, listOf(SaveImportChoice(entry.id, target.id)), mo.id).getOrThrow()
+        assertEquals(1, result.imported, result.failures.toString())
+        assertFalse(result.queued, "it went to Fuse One straight away")
+
+        // On the PC it is in Eden's folder before the game starts.
+        assertIs<LaunchGate.Go>(pc.beforeLaunch(q))
+        assertEquals("from the switch", File(pcHome, ".local/share/eden/nand/user/save/account/$user/$title/0/file1").readText())
+        assertEquals("Imported to Fuse One", pc.versions(q, SaveKind.SAVE).first { it.current }.provenance)
+        thor.stop()
+        pc.stop()
+    }
+
+    /**
      * The host updates itself once a device runs a newer Fuse, a minute or two after it connects: the
      * device shows what it runs now within a minute, not ten, and the host's own answer to Update the
      * Fuse One Host ("already the newest") is what it shows straight away.
