@@ -27,6 +27,30 @@ object UnsavedChoices {
         return runCatching { json.decodeFromJsonElement(AppSettings.serializer(), root) }.getOrNull()
     }
 
+    /**
+     * [written] (what an interface shows, written over the settings) with what changed in storage
+     * since it last read or wrote them ([read] to [now]) put back as storage has it: someone else's
+     * (Fuse One bringing the profile's in, another Fuse open on the same settings). A setting the
+     * interface changed too ([before] to [after], its own settings written over [read] before and
+     * after the person's changes) stays as written: it is the person's newest. Null when nothing
+     * changed in storage since.
+     */
+    fun keepOthers(written: AppSettings, read: AppSettings, now: AppSettings, before: AppSettings, after: AppSettings): AppSettings? {
+        val json = AppSettingsCodec.json
+        fun encoded(s: AppSettings) = json.encodeToJsonElement(AppSettings.serializer(), s)
+        val theirs = ArrayList<Pair<List<String>, JsonElement?>>()
+        diff(emptyList(), encoded(read), encoded(now), theirs)
+        if (theirs.isEmpty()) return null
+        val mine = ArrayList<Pair<List<String>, JsonElement?>>()
+        diff(emptyList(), encoded(before), encoded(after), mine)
+        fun overlap(a: List<String>, b: List<String>) = a.size <= b.size && b.subList(0, a.size) == a || b.size < a.size && a.subList(0, b.size) == b
+        val kept = theirs.filter { (path, _) -> path.firstOrNull() !in OWNED_ELSEWHERE && mine.none { (m, _) -> overlap(m, path) } }
+        if (kept.isEmpty()) return null
+        var root = encoded(written).jsonObject
+        for ((path, value) in kept) root = if (value == null) remove(root, path) else set(root, path, value)
+        return runCatching { json.decodeFromJsonElement(AppSettings.serializer(), root) }.getOrNull()
+    }
+
     private val OWNED_ELSEWHERE = setOf("sync", "version")
 
     /**

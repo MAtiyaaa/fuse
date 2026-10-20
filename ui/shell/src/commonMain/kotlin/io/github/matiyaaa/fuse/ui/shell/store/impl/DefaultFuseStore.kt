@@ -63,6 +63,9 @@ internal class DefaultFuseStore private constructor(
      * storage a moment ago: a choice made before anything is written is then known as one.
      */
     @kotlin.concurrent.Volatile private var storedPrefs: UiPrefs? = initialPrefs
+
+    /** The settings as storage held them when [storedPrefs] was: what changed in storage since is someone else's ([shownOver]). */
+    @kotlin.concurrent.Volatile private var storedSettings: io.github.matiyaaa.fuse.data.settings.AppSettings? = ctx.settings.value
     override val prefs: StateFlow<UiPrefs> = prefsState
     private val writes = Channel<UiPrefs>(Channel.CONFLATED)
     private val writeLock = Mutex()
@@ -223,17 +226,22 @@ internal class DefaultFuseStore private constructor(
     }
 
     /**
-     * [onto] with what the interface shows that isn't saved yet: each setting [shown] has otherwise
-     * than [storedPrefs] (what this Fuse last read or wrote), and nothing more. What storage holds
-     * otherwise than the interface shows, changed there by something else (Fuse One bringing the
-     * profile's in, another Fuse open on this computer), stays as storage has it: written back as
-     * shown, it went to every device as the person's newest choice, and their theme went back to the
-     * one this Fuse last saw a few seconds after they chose another.
+     * [shown] written over [onto], as the interface always writes it, except what changed in storage
+     * since this Fuse last read or wrote it ([storedSettings]) and the person didn't change here: that
+     * is someone else's (Fuse One bringing the profile's in, another Fuse open on the same settings)
+     * and stays as storage has it. Written back as shown, a setting from a moment ago went to every
+     * device as the person's newest choice: their theme went back to the one this Fuse last saw, a few
+     * seconds after they chose another. True beside it when something of someone else's was kept,
+     * so the interface shows what is stored.
      */
-    private fun unsaved(onto: io.github.matiyaaa.fuse.data.settings.AppSettings, shown: UiPrefs): io.github.matiyaaa.fuse.data.settings.AppSettings {
-        val base = storedPrefs ?: return onto.withUiPrefs(shown)
-        if (base == shown) return onto
-        return io.github.matiyaaa.fuse.data.settings.UnsavedChoices.carry(onto, onto.withUiPrefs(base), onto.withUiPrefs(shown)) ?: onto
+    private fun shownOver(onto: io.github.matiyaaa.fuse.data.settings.AppSettings, shown: UiPrefs): Pair<io.github.matiyaaa.fuse.data.settings.AppSettings, Boolean> {
+        val written = onto.withUiPrefs(shown)
+        val read = storedSettings
+        val base = storedPrefs
+        if (read == null || base == null || read == onto) return written to false
+        val kept = io.github.matiyaaa.fuse.data.settings.UnsavedChoices.keepOthers(written, read, onto, read.withUiPrefs(base), read.withUiPrefs(shown))
+            ?: return written to false
+        return kept to (kept != written)
     }
 
     /**
@@ -244,10 +252,13 @@ internal class DefaultFuseStore private constructor(
         val current = data.settings.current()
         if (prefsProfile != current.sync.activeProfile) return@withLock current
         val shown = prefsState.value
-        val written = if (unsaved(current, shown) != current) data.settings.update { unsaved(it, shown) } else current
-        // Everything the interface changed is stored now.
+        var others = false
+        val next = shownOver(current, shown).let { (s, kept) -> others = kept; s }
+        val written = if (next == current) current else data.settings.update { now -> shownOver(now, shown).let { (s, kept) -> others = kept; s } }
         storedPrefs = shown
-        if (written.toUiPrefs(globalScoped(ctx)) != shown) reloadLocked() else ctx.settings.value = written
+        storedSettings = written
+        ctx.settings.value = written
+        if (others) reloadLocked()
         ctx.settings.value
     }
 
@@ -256,25 +267,30 @@ internal class DefaultFuseStore private constructor(
         val before = data.settings.current()
         val shown = prefsState.value
         var wroteShown = false
-        val after = data.settings.update { if (prefsProfile == it.sync.activeProfile) { wroteShown = true; transform(unsaved(it, shown)) } else transform(it) }
+        var others = false
+        val after = data.settings.update {
+            if (prefsProfile == it.sync.activeProfile) { wroteShown = true; transform(shownOver(it, shown).let { (s, kept) -> others = kept; s }) } else transform(it)
+        }
         // What was written is what is stored now, before the reload: a choice made since is newer
         // than it, and is carried over rather than replaced by it.
-        if (wroteShown) storedPrefs = shown
-        if (after != before) reloadLocked()
+        if (wroteShown) { storedPrefs = shown; storedSettings = after }
+        if (after != before || others) reloadLocked()
     }
 
     /** Commit pending UI edits before comparing host revisions, then reload without restamping them. */
     private suspend fun writeProfileSettings(profile: String, values: Map<String, io.github.matiyaaa.fuse.data.settings.ProfileSettingValue>) = writeLock.withLock {
         val before = data.settings.current()
+        var others = false
         // A profile switch changes the persisted owner before the old UI preferences are reloaded.
         // Those old preferences must not become a local edit belonging to the next person.
         if (prefsProfile == before.sync.activeProfile) {
             val shown = prefsState.value
-            if (unsaved(before, shown) != before) data.settings.update { unsaved(it, shown) }
+            val next = shownOver(before, shown).let { (s, kept) -> others = kept; s }
+            storedSettings = if (next == before) before else data.settings.update { now -> shownOver(now, shown).let { (s, kept) -> others = kept; s } }
             storedPrefs = shown
         }
         val after = data.settings.mergeProfileValues(profile, values)
-        if (after != before || prefsState.value != after.toUiPrefs(globalScoped(ctx))) reloadLocked()
+        if (after != before || others || prefsState.value != after.toUiPrefs(globalScoped(ctx))) reloadLocked()
     }
 
     override val media get() = mediaOps
@@ -470,9 +486,13 @@ internal class DefaultFuseStore private constructor(
         // A newer value replaced this one (a later change, or a restore reloading everything): it is written instead.
         if (prefs != prefsState.value) return@withLock
         if (prefsProfile != data.settings.current().sync.activeProfile) { reloadLocked(); return@withLock }
-        // Only what changed here: the rest stays as storage has it (see unsaved).
-        ctx.settings.value = data.settings.update { unsaved(it, prefs) }
+        // Someone else's change since this Fuse last read stays (see shownOver), and is shown.
+        var others = false
+        val written = data.settings.update { now -> shownOver(now, prefs).let { (s, kept) -> others = kept; s } }
+        ctx.settings.value = written
         storedPrefs = prefs
+        storedSettings = written
+        if (others) reloadLocked()
         val scoped = data.scopedSettings
         val global = ScopeRef.Global
         if (scoped.resolve(ScopedSettings.Layout, null, null).value != prefs.defaultLayout) scoped.set(ScopedSettings.Layout, global, prefs.defaultLayout)
@@ -504,6 +524,7 @@ internal class DefaultFuseStore private constructor(
         val scoped = globalScoped(ctx)
         val loaded = settings.toUiPrefs(scoped)
         storedPrefs = loaded
+        storedSettings = settings
         // A choice can be made while this runs ([updatePrefs] doesn't wait for it): it is newer than
         // anything read here, so it stays, laid over what came in, and is written.
         while (true) {

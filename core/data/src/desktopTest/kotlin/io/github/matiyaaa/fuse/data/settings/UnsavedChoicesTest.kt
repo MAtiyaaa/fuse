@@ -33,6 +33,24 @@ class UnsavedChoicesTest {
     }
 
     @Test
+    fun whatSomeoneElseChangedSinceStaysUnlessThePersonChangedItToo() {
+        val read = AppSettings().let { it.copy(appearance = it.appearance.copy(themeId = "fuse", textScale = 1f)) }
+        // Since the interface read its settings, another Fuse chose Twin and a larger text size.
+        val now = read.copy(appearance = read.appearance.copy(themeId = "twin", textScale = 1.2f))
+        // Here the person turned video previews off and chose a larger text size still.
+        val before = read
+        val after = read.copy(videoPreview = read.videoPreview.copy(enabled = false), appearance = read.appearance.copy(textScale = 1.4f))
+        // What the interface writes: everything it shows, its theme the one it last read.
+        val written = now.copy(videoPreview = after.videoPreview, appearance = now.appearance.copy(themeId = "fuse", textScale = 1.4f))
+        val result = assertNotNull(UnsavedChoices.keepOthers(written, read, now, before, after))
+        assertEquals("twin", result.appearance.themeId, "the other Fuse's theme isn't put back")
+        assertEquals(false, result.videoPreview.enabled, "the person's change is written")
+        assertEquals(1.4f, result.appearance.textScale, "changed in both: the person's here is the newest")
+        // Nothing changed in storage since: nothing to keep.
+        assertNull(UnsavedChoices.keepOthers(written, now, now, before, after))
+    }
+
+    @Test
     fun nothingChangedCarriesNothing() {
         val saved = AppSettings()
         assertNull(UnsavedChoices.carry(saved, saved, saved))
