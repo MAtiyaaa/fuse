@@ -123,21 +123,76 @@ class SteamCefTest {
         assertEquals("Steam doesn't have this entry yet", result.message)
     }
 
+    private fun client(roots: List<File>, decky: Boolean = false, choice: File? = File(dir, "fuse-data/steam-client-port")) =
+        DesktopSteamClient({ roots }, SteamLiveQueue(System::currentTimeMillis), SteamCef("http://127.0.0.1:1"), choice = choice, deckyLoader = { decky })
+
     @Test
     fun thePortIsThePersonsChoiceAndSteamTakesItWhenItStarts(): Unit = runBlocking {
         val second = File(dir, "flatpak").apply { mkdirs() }
-        val client = DesktopSteamClient({ listOf(dir, second) }, SteamLiveQueue(System::currentTimeMillis), SteamCef("http://127.0.0.1:1"))
+        val client = client(listOf(dir, second))
         assertFalse(client.allowed())
         val on = client.allow(true)
         assertTrue(on.isSuccess)
         assertTrue(File(dir, SteamCef.FLAG).isFile && File(second, SteamCef.FLAG).isFile)
+        assertEquals(SteamCef.MARK, File(dir, SteamCef.FLAG).readText(), "Fuse marks the flag it writes")
         assertTrue("next time it starts" in on.getOrThrow(), on.getOrThrow())
         assertTrue(client.allowed())
         assertFalse(client.listening(), "nothing listens on that port")
         assertTrue(client.allow(false).isSuccess)
-        assertFalse(File(dir, SteamCef.FLAG).exists() || File(second, SteamCef.FLAG).exists())
+        assertFalse(File(dir, SteamCef.FLAG).exists() || File(second, SteamCef.FLAG).exists(), "Fuse takes away the flags it wrote")
         assertFalse(client.allowed())
         assertTrue(DesktopSteamClient({ emptyList() }, SteamLiveQueue(System::currentTimeMillis)).allow(true).isFailure, "no Steam here")
+    }
+
+    @Test
+    fun aFlagDeckysInstallerMadeStaysWhenFuseTurnsItOff(): Unit = runBlocking {
+        // Decky Loader's installer touches the file: it is there, empty, before Fuse is asked.
+        val flag = File(dir, SteamCef.FLAG).apply { writeText("") }
+        val client = client(listOf(dir))
+        assertTrue(client.allow(true).isSuccess)
+        assertEquals("", flag.readText(), "Fuse leaves a flag it didn't write as it is")
+        val off = client.allow(false).getOrThrow()
+        assertTrue(flag.isFile, "the flag Decky's installer made is still there")
+        assertTrue("To close it, remove ${flag.path}" in off, off)
+        assertFalse(client.allowed(), "off is off for Fuse, though Steam's port stays open")
+    }
+
+    @Test
+    fun withDeckyLoaderInstalledEvenFusesOwnFlagStays(): Unit = runBlocking {
+        val client = client(listOf(dir), decky = true)
+        assertTrue(client.allow(true).isSuccess)
+        val flag = File(dir, SteamCef.FLAG)
+        assertEquals(SteamCef.MARK, flag.readText())
+        val off = client.allow(false).getOrThrow()
+        assertTrue(flag.isFile, "Decky Loader uses the port, so the flag stays whoever wrote it")
+        assertTrue("for Decky Loader" in off, off)
+        assertFalse(client.allowed())
+    }
+
+    @Test
+    fun theChoiceIsKeptAcrossRunsAndAnOlderFusesFlagReadsAsOn(): Unit = runBlocking {
+        val choice = File(dir, "fuse-data/steam-client-port")
+        // Turned on by 0.4.3.1 or 0.4.3.2: an empty flag, and no choice kept yet.
+        File(dir, SteamCef.FLAG).writeText("")
+        assertTrue(client(listOf(dir), choice = choice).allowed(), "a flag from before the choice was kept reads as on")
+        assertTrue(client(listOf(dir), choice = choice).allow(false).isSuccess)
+        assertTrue(File(dir, SteamCef.FLAG).isFile, "an unmarked flag is never taken away")
+        assertFalse(client(listOf(dir), choice = choice).allowed(), "a new run reads the kept choice, not the flag")
+        assertTrue(client(listOf(dir), choice = choice).allow(true).isSuccess)
+        assertTrue(client(listOf(dir), choice = choice).allowed())
+    }
+
+    @Test
+    fun deckyLoaderIsFoundByItsProgramOrItsService(): Unit = runBlocking {
+        val home = File(dir, "home").apply { mkdirs() }
+        val systemd = File(dir, "systemd").apply { mkdirs() }
+        assertFalse(deckyLoaderInstalled(home, systemd))
+        File(home, "homebrew/services").mkdirs()
+        File(home, "homebrew/services/PluginLoader").writeText("")
+        assertTrue(deckyLoaderInstalled(home, systemd))
+        File(home, "homebrew/services/PluginLoader").delete()
+        File(systemd, "plugin_loader.service").writeText("")
+        assertTrue(deckyLoaderInstalled(home, systemd))
     }
 }
 

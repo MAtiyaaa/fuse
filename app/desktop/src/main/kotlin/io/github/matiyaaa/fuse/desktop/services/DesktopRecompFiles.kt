@@ -160,17 +160,36 @@ internal class DesktopRecompFiles(
         }
     }
 
-    /** The folders Fuse may read and write in: every recomp's own, its own copies', and its profiles. */
+    /**
+     * The folders Fuse may read and write in: every recomp's own, its own copies', and its profiles.
+     * Both sides are compared where they really are, every symbolic link followed, so a link inside a
+     * recomp's folder never lets a read or a write reach past it (and a folder that is itself a link,
+     * as a dotfiles manager makes, still counts as the folder it points at).
+     */
     private fun allowed(path: String): Boolean {
-        val p = File(path).absoluteFile.toPath().normalize()
+        val p = real(path) ?: return false
         val bases = buildList {
             add(ports.absoluteFile.fusePath)
             add(profiles)
             Recomps.all.forEach { r -> Recomps.folder(r, os, home, env)?.let(::add); Recomps.folder(r, os, home, env - "APP_FOLDER_PATH")?.let(::add) }
             addAll(portable)
         }
-        return bases.any { b -> val base = File(b).absoluteFile.toPath().normalize(); p.startsWith(base) && p != base }
+        return bases.any { b -> val base = real(b) ?: return@any false; p.startsWith(base) && p != base }
     }
+
+    /**
+     * [path] where it really is: the part that exists with every symbolic link followed, then the
+     * rest as written (a file about to be made). Null when a link in it leads nowhere.
+     */
+    private fun real(path: String): java.nio.file.Path? = runCatching {
+        var p = File(path).absoluteFile.toPath().normalize()
+        val rest = ArrayDeque<java.nio.file.Path>()
+        while (!Files.exists(p, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            rest.addFirst(p.fileName ?: return null)
+            p = p.parent ?: return null
+        }
+        rest.fold(p.toRealPath()) { r, name -> r.resolve(name) }
+    }.getOrNull()
 
     override suspend fun readText(path: String): String? = withContext(Dispatchers.IO) {
         val f = File(path)

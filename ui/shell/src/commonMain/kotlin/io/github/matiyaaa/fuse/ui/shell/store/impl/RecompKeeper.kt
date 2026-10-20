@@ -11,6 +11,7 @@ import io.github.matiyaaa.fuse.launch.ports.RecompSetting
 import io.github.matiyaaa.fuse.launch.ports.RecompSettings
 import io.github.matiyaaa.fuse.launch.ports.PsPorts
 import io.github.matiyaaa.fuse.launch.ports.Recomps
+import io.github.matiyaaa.fuse.library.content.ZipReader
 import io.github.matiyaaa.fuse.library.identity.Ids
 import io.github.matiyaaa.fuse.model.Game
 import io.github.matiyaaa.fuse.model.GameId
@@ -50,9 +51,20 @@ internal class RecompKeeper(
     @kotlin.concurrent.Volatile private var found: List<FoundRecomp>? = null
     @kotlin.concurrent.Volatile private var foundAt = 0L
 
-    /** The recomp each ROM is made into, by its path and size, so a ROM is read once. */
-    private val made = HashMap<String, String>()
-    private val none = HashSet<String>()
+    /** What each ROM says about the recomps, by its path and size, so a ROM is read once. */
+    private val roms = HashMap<String, Rom>()
+
+    /** What a game's ROM says about the recomps. */
+    private sealed interface Rom {
+        /** Its hash is [id]'s: the very ROM that recomp is made from. */
+        data class Made(val id: String) : Rom
+
+        /** Read and hashed, and no recomp is made from it (another revision or region, or a hack). */
+        data object Other : Rom
+
+        /** Not an N64 cartridge Fuse could read (an archive it can't open, a disk image): which ROM it is can't be told. */
+        data object Unread : Rom
+    }
 
     suspend fun yours(fresh: Boolean = false): List<FoundRecomp> {
         val f = files ?: return emptyList()
@@ -66,7 +78,7 @@ internal class RecompKeeper(
         if (g.platformId == PortAdapter.PLATFORM) return emptyList()
         val mine = yours(fresh = true)
         if (mine.isEmpty()) return emptyList()
-        val fromRom = madeFrom(g)
+        val rom = romOf(g)
         val name = TitleText.normalize(g.displayTitle)
         // A PlayStation dump is known by its title id, from its own files or its folder's name.
         val titleId = if (PsPorts.all.any { it.system == g.platformId.value }) {
@@ -74,26 +86,61 @@ internal class RecompKeeper(
         } else {
             null
         }
-        return mine.filter { f ->
+        return mine.mapNotNull { f ->
             val ps = PsPorts.byId(f.id)
-            if (ps != null) return@filter ps.system == g.platformId.value && (titleId?.let { it in ps.titleIds } ?: (TitleText.normalize(ps.game) == name))
-            val r = Recomps.byId(f.id) ?: return@filter false
-            r.id == fromRom || (fromRom == null && r.system == g.platformId.value && TitleText.normalize(r.game) == name)
+            if (ps != null) {
+                if (ps.system != g.platformId.value) return@mapNotNull null
+                return@mapNotNull when {
+                    titleId != null -> f.takeIf { titleId in ps.titleIds }
+                    // No title id to check: offered by its name, and said to be unchecked.
+                    TitleText.normalize(ps.game) == name -> f.copy(
+                        unverified = "Fuse couldn't read this dump's title id to check it is ${ps.game} (${ps.titleIds.joinToString(", ")}).",
+                    )
+                    else -> null
+                }
+            }
+            val r = Recomps.byId(f.id) ?: return@mapNotNull null
+            when (rom) {
+                // The very ROM it is made from.
+                is Rom.Made -> f.takeIf { r.id == rom.id }
+                // Another revision, region or a hack: the recomp itself takes only its own ROM.
+                Rom.Other -> null
+                Rom.Unread -> f.takeIf { r.system == g.platformId.value && TitleText.normalize(r.game) == name }?.copy(
+                    unverified = "Fuse couldn't read this ROM to check it is the ${r.rom} one ${r.name} is made from. ${r.name} checks the ROM you give it.",
+                )
+            }
         }
     }
 
-    /** The recomp [g]'s ROM is made into, by its hash; null when it is none of them or can't be read. */
-    private suspend fun madeFrom(g: Game): String? {
-        if (Recomps.all.none { it.system == g.platformId.value }) return null
+    /** What [g]'s ROM says about the recomps, by its hash; a zipped ROM is read from inside its archive. */
+    private suspend fun romOf(g: Game): Rom {
+        if (Recomps.all.none { it.system == g.platformId.value }) return Rom.Other
+        val fs = ctx.services.fs
         val path = g.location.launchPath
-        val st = runCatching { ctx.services.fs.stat(path) }.getOrNull()?.takeIf { !it.isDirectory && it.sizeBytes in 1..MAX_ROM } ?: return null
+        val st = runCatching { fs.stat(path) }.getOrNull()?.takeIf { !it.isDirectory && it.sizeBytes > 0 } ?: return Rom.Unread
         val key = "$path|${st.sizeBytes}"
-        made[key]?.let { return it }
-        if (key in none) return null
-        val bytes = runCatching { ctx.services.fs.readBytes(path, 0, st.sizeBytes.toInt()) }.getOrNull()
-        val id = bytes?.let { Recomps.of(it)?.id }
-        if (id == null) none += key else made[key] = id
-        return id
+        roms[key]?.let { return it }
+        val bytes = runCatching {
+            if (path.substringAfterLast('.').equals("zip", ignoreCase = true)) {
+                val zip = ZipReader(fs)
+                val entry = zip.entries(path)?.firstOrNull { e ->
+                    e.name.substringAfterLast('.').lowercase() in ROM_EXTENSIONS && e.size in 1..MAX_ROM
+                }
+                entry?.let { zip.read(path, it, MAX_ROM.toInt()) }
+            } else if (st.sizeBytes <= MAX_ROM) {
+                fs.readBytes(path, 0, st.sizeBytes.toInt())
+            } else {
+                null
+            }
+        }.getOrNull()
+        // Only an N64 cartridge says which ROM it is; anything else (a 7z, a disk image) can't be told.
+        val cartridge = bytes?.let { io.github.matiyaaa.fuse.launch.ports.PortPlan.bigEndianRom(it) }
+        val rom = when (cartridge) {
+            null -> Rom.Unread
+            else -> Recomps.byHash(io.github.matiyaaa.fuse.launch.ports.Xxh3.hex(cartridge))?.let { Rom.Made(it.id) } ?: Rom.Other
+        }
+        roms[key] = rom
+        return rom
     }
 
     suspend fun playWithYours(game: GameId, recomp: FoundRecomp, layout: (String) -> PortLayout): String? {
@@ -254,6 +301,9 @@ internal class RecompKeeper(
 
         /** An N64 cartridge holds 64 MB at most; anything larger isn't one. */
         private const val MAX_ROM = 128L * 1024 * 1024
+
+        /** The cartridge ROM files a zip may hold, in any of the three byte orders the runtime takes. */
+        private val ROM_EXTENSIONS = setOf("z64", "n64", "v64")
         private const val MAX_LAUNCHER = 64 * 1024
     }
 }

@@ -24,7 +24,7 @@ internal fun openSaveImporter(app: AppState) {
             val (cards, queries) = cardsByGame(app)
             service.previewSaveImport(source, queries).onSuccess { plan ->
                 // Saves copied off a Switch go through its own import, one game at a time.
-                if (plan.entries.any { it.switch != null }) showSwitchImport(app, plan, cards) else SaveImportPreview(app, plan).show()
+                if (plan.entries.any { it.switch != null }) showSwitchImport(app, plan, cards, queries) else SaveImportPreview(app, plan).show()
             }
                 .onFailure { app.toasts.show(it.message ?: "Couldn't inspect that save source", ToastKind.ERROR) }
         }

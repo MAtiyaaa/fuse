@@ -913,9 +913,12 @@ Desktop, Downloads and Games; on a Mac `/Applications` and the person's own). It
 one its `get_app_folder_path` finds: beside the program with a `portable.txt` there, else
 `APP_FOLDER_PATH` (Linux, macOS), `%LOCALAPPDATA%\<program id>`, `~/Library/Application
 Support/<program id>` or `~/.config/<program id>` (its Flatpak manifest gives it the whole home
-folder, so the same). A game of the library is offered the ones made from its ROM (the XXH3-64 of
-its big-endian form, as the runtime checks it) or, when that can't be read, of the same game by
-name, in Play With beside its emulators. Chosen, Fuse writes how it starts as a port's launcher in
+folder, so the same). A game of the library is offered, in Play With beside its emulators, the
+one made from its ROM: the XXH3-64 of its big-endian form, as the runtime checks it, read from
+inside a zip too. A cartridge read and hashed as another revision, region or hack is offered none
+(each recomp takes only its own ROM). When Fuse can't read the ROM as a cartridge (a 7z, a disk
+image), the recomp of the same game by name is offered marked Unverified, naming the cartridge it
+is made from (`Recomp.rom`, from its game id). Chosen, Fuse writes how it starts as a port's launcher in
 `ports/yours-<id>/` (started in the program's own folder, where it reads its assets) and keeps
 that launcher's own library entry hidden, so the game stays one entry; its saves are the recomp's
 own `saves` folder (`saves/<game id>.bin`, librecomp `pi.cpp`), kept in step as `port.<id>`, the
@@ -927,7 +930,9 @@ RecompFrontend's for the newer, where downsampling's Off is 0 rather than 1, the
 is `Expand` and 8x antialiasing isn't offered), keeps its `controls.json` as named profiles in
 Fuse's `recomp-profiles/<id>/` to swap between, and asks GitHub for its newest release
 (`repos/<repo>/releases/latest`); a Flatpak is updated with `flatpak update` for the installation
-it is in. Fuse reads and writes only in a recomp's own folder, Fuse's ports and its profiles.
+it is in. Fuse reads and writes only in a recomp's own folder, Fuse's ports and its profiles,
+each compared where it really is (every symbolic link followed), so a link inside a recomp's folder
+never reaches past it.
 
 **PlayStation games' native ports the person installed** (`core:launch` `PsPorts`, the same
 `RecompKeeper` and `DesktopRecompFiles`; a computer): projects that rebuild a PS4 game to run on a
@@ -938,7 +943,8 @@ install them: each is found by the files its release puts in its folder (`Bloodb
 `SpartanPort.exe` and `Play SpartanPort.exe`, or `spartanport-x86_64.AppImage`;
 `Uncharted Launcher.exe`; `pt` or `pt.exe` with the `chunk1.psarc` its installer copies beside it)
 in the same places as recomps. A PS4 game of the library is offered the ones made for its title id
-(read from its own files, else its folder's name) in Play With; chosen, it starts as its project
+(read from its own files, else its folder's name) in Play With, and when no title id can be read,
+the one made for the same game by name, marked Unverified with the title ids it is made for; chosen, it starts as its project
 says (Bloodborne's and Uncharted's launchers and SpartanPort's `--play`, which use the game folder
 chosen in them, else open to choose it; P.T.'s program), and
 the game stays one entry. Its saves are its own, where its code keeps them: `user/savedata` beside
@@ -1012,6 +1018,12 @@ has Steam start Fuse's entry itself (`RunGame`), with Steam's overlay and the co
 to it. Collections still go in when Steam next closes: Steam's client has no typed way to change
 them. And the plugin never restarts Steam: a change it makes needs none, and one written to Steam's
 files must be written while Steam is closed, which a restart Steam starts itself doesn't wait for.
+Without the plugin, Settings, Library, Steam, Change Steam While It Runs makes the same changes
+through Steam's local debug port (`SteamCef`, `DesktopSteamClient`): Fuse writes
+`.cef-enable-remote-debugging` into each Steam folder that hasn't got it, as Decky Loader's
+installer does, with Fuse's mark inside (Steam only checks the file is there), and keeps the
+person's choice in its own data. Turning it off takes away only a flag carrying that mark, and none
+while Decky Loader is installed, since Decky needs the port whoever wrote the flag.
 Settings, Library, Steam, How Steam Starts Them picks how they start:
 
 - **Fuse Fast Start** (the default): the entry runs `Fuse --run <id>`. Fuse opens only what

@@ -23,6 +23,8 @@ data class Recomp(
     val xxh3: String,
     /** The runtime's game id: its ROM is kept as `<gameId>.z64` and its save as `saves/<gameId>.bin`. */
     val gameId: String,
+    /** The cartridge [xxh3] is, as people name it ("North American 1.0"), read from [gameId]. */
+    val rom: String,
     /** The program's name, and its folder's in the person's own folders. */
     val program: String,
     val flatpak: String?,
@@ -62,6 +64,7 @@ object Recomps {
             system = "n64",
             xxh3 = "ef18b4a9e2386169",
             gameId = "mm.n64.us.1.0",
+            rom = "North American 1.0",
             program = "Zelda64Recompiled",
             flatpak = "io.github.zelda64recomp.zelda64recomp",
             repo = "Zelda64Recomp/Zelda64Recomp",
@@ -76,6 +79,7 @@ object Recomps {
             system = "n64",
             xxh3 = "1b67585d56e07f8c",
             gameId = "bk.n64.us.1.0",
+            rom = "North American 1.0",
             program = "BanjoRecompiled",
             flatpak = "io.github.banjorecomp.banjorecomp",
             repo = "BanjoRecomp/BanjoRecomp",
@@ -90,6 +94,7 @@ object Recomps {
             system = "n64",
             xxh3 = "163fd3fc3813f54e",
             gameId = "sf64.n64.us.1.1",
+            rom = "North American 1.1",
             program = "Starfox64Recompiled",
             flatpak = "io.github.starfox64recomp.starfox64recomp",
             repo = "sonicdcer/Starfox64Recomp",
@@ -104,6 +109,7 @@ object Recomps {
             system = "n64",
             xxh3 = "db1bc7ee0e6beba1",
             gameId = "mnsg.us",
+            rom = "North American",
             program = "Goemon64Recompiled",
             flatpak = "io.github.klorfmorf.goemon64recomp",
             repo = "klorfmorf/Goemon64Recomp",

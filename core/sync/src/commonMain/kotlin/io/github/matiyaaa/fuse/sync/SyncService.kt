@@ -592,6 +592,13 @@ interface SyncService {
     /** Analyze a source without changing emulator saves; every destination is shown before importing. */
     suspend fun previewSaveImport(source: String, games: List<SaveQuery>): Result<SaveImportPlan> = Result.failure(UnsupportedOperationException("Save importing isn't available here"))
 
+    /**
+     * The person's answer to "What game is this?": [entry], a Switch backup the preview couldn't
+     * place (it has no destination), is a save of [game]. The plan with it placed, to import from.
+     */
+    suspend fun assignSaveImport(plan: SaveImportPlan, entry: String, game: SaveQuery): Result<SaveImportPlan> =
+        Result.failure(UnsupportedOperationException("Save importing isn't available here"))
+
     /** Copies the selected saves for an explicitly chosen profile and queues normal history revisions. */
     suspend fun importSaves(plan: SaveImportPlan, choices: List<SaveImportChoice>, profile: String): Result<SaveImportResult> = Result.failure(UnsupportedOperationException("Save importing isn't available here"))
 

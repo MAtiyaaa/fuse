@@ -24,6 +24,11 @@ data class FoundRecomp(
     val saves: String? = null,
     /** When only some files in [saves] are saves (P.T.'s two slots), their names. */
     val saveFiles: List<String> = emptyList(),
+    /**
+     * Offered for one game ([PortsOps.yourRecompsFor]) by its name alone, since Fuse couldn't check
+     * the game's ROM or dump is the one this is made from: why, and which one that is. Null when checked.
+     */
+    val unverified: String? = null,
 )
 
 /**

@@ -124,6 +124,9 @@ internal class SteamCef(
         /** The file in Steam's folder that makes it open the port when it starts (as Decky Loader's installer writes it). */
         const val FLAG = ".cef-enable-remote-debugging"
 
+        /** What Fuse writes in [FLAG] so it knows the file as its own; Steam only looks for the file. */
+        const val MARK = "Written by Fuse (Change Steam While It Runs). Steam only checks that this file is here.\n"
+
         /** The shared page's titles, as Decky Loader knows them across Steam's versions. */
         val SHARED = listOf("SharedJSContext", "Steam Shared Context presented by Valve™", "Steam", "SP")
 
@@ -238,29 +241,63 @@ internal object SteamCefScripts {
  * every couple of seconds while Steam listens. The Fuse Decky plugin can be there too; each change
  * is handed out once ([SteamLiveQueue.take]), so the two never both make it.
  *
- * The port is the person's choice ([allow]): Fuse writes or removes [SteamCef.FLAG] in each Steam
- * folder here, and Steam reads it when it starts.
+ * The port is the person's choice ([allow]), kept in [choice]: Fuse writes [SteamCef.FLAG] in each
+ * Steam folder here that hasn't got it, and Steam reads it when it starts. Decky Loader's installer
+ * puts the same file there and Decky needs it, so turning this off takes away only a flag Fuse wrote
+ * ([SteamCef.MARK]), and none while Decky Loader is installed.
  */
 internal class DesktopSteamClient(
     /** Steam's folders on this computer (where its library and the flag file live). */
     private val roots: () -> List<File>,
     private val queue: SteamLiveQueue,
     private val cef: SteamCef = SteamCef(),
+    /** Where the person's choice is kept, in Fuse's own data; null keeps it for this run only. */
+    private val choice: File? = null,
+    /** Decky Loader is installed here, and needs Steam's port whoever wrote the flag. */
+    private val deckyLoader: () -> Boolean = { deckyLoaderInstalled(File(System.getProperty("user.home"))) },
 ) : SteamClientLink {
     private fun flags(): List<File> = roots().map { File(it, SteamCef.FLAG) }.distinctBy { runCatching { it.canonicalPath }.getOrDefault(it.path) }
 
-    override suspend fun allowed(): Boolean = withContext(Dispatchers.IO) { flags().any { it.isFile } }
+    @Volatile private var chosen: Boolean? = null
+
+    /**
+     * The person's choice. Before it was kept (0.4.3.1 and 0.4.3.2), turning this on only wrote the
+     * flag, so a flag that is there stands for "on" until the person chooses again.
+     */
+    private fun choiceNow(): Boolean =
+        chosen ?: choice?.takeIf { it.isFile }?.let { runCatching { it.readText().trim() == ON }.getOrNull() } ?: flags().any { it.isFile }
+
+    private fun remember(on: Boolean) {
+        chosen = on
+        choice?.let { f -> f.parentFile?.mkdirs(); f.writeText(if (on) ON else OFF) }
+    }
+
+    /** Fuse wrote [flag]: it starts with Fuse's mark (a flag Decky Loader's installer makes is empty). */
+    private fun fuses(flag: File): Boolean = runCatching {
+        flag.isFile && flag.length() <= SteamCef.MARK.length * 2 && flag.readText().startsWith(SteamCef.MARK)
+    }.getOrDefault(false)
+
+    override suspend fun allowed(): Boolean = withContext(Dispatchers.IO) { choiceNow() }
 
     override suspend fun allow(on: Boolean): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val flags = flags()
             if (flags.isEmpty()) error("Fuse didn't find Steam's folder on this computer.")
-            for (f in flags) {
-                if (on) {
-                    if (!f.isFile) f.writeText("")
-                } else if (f.exists() && !f.delete()) error("Fuse couldn't take ${f.path} away.")
+            val decky = !on && deckyLoader()
+            val kept = mutableListOf<File>()
+            if (on) {
+                for (f in flags) if (!f.exists()) f.writeText(SteamCef.MARK)
+            } else {
+                for (f in flags.filter { it.exists() }) {
+                    if (decky || !fuses(f)) kept += f
+                    else if (!f.delete()) error("Fuse couldn't take ${f.path} away.")
+                }
             }
+            remember(on)
             when {
+                !on && decky -> "Off. Fuse no longer changes Steam through its port. Steam keeps it open for Decky Loader, which uses it."
+                !on && kept.isNotEmpty() -> "Off. Fuse no longer changes Steam through its port. Steam keeps it open, since Fuse didn't mark the file that opens it " +
+                    "(Decky Loader's installer, another program or an older Fuse put it there). To close it, remove ${kept.joinToString(" and ") { it.path }}."
                 !on -> "Off. Steam closes its port the next time it starts; until then, changes wait for Steam to close."
                 listening() -> "On. Steam's library changes right away while Steam runs."
                 else -> "On. Steam opens its port the next time it starts; until then, changes wait for Steam to close."
@@ -319,6 +356,10 @@ internal class DesktopSteamClient(
     companion object {
         const val ROUND_MS = 2_000L
         const val IDLE_MS = 6_000L
+
+        /** The person's choice, as [choice] keeps it. */
+        private const val ON = "on"
+        private const val OFF = "off"
 
         /** The largest picture handed to Steam's client, as through the Decky bridge. */
         const val MAX_ART_BYTES = 12L * 1024 * 1024

@@ -736,15 +736,20 @@ fun AppState.emulatorPicker(card: GameCard) {
                 val name = io.github.matiyaaa.fuse.launch.ports.NativePorts.name(y.id) ?: y.id
                 val how = if (io.github.matiyaaa.fuse.launch.ports.NativePorts.isRecomp(y.id)) "recompiled to run natively" else "rebuilt to run natively from your dump"
                 MenuAction(
-                    "yours.${y.id}", name, FuseIcons.Boxes,
-                    detail = "Your ${y.how}${y.version?.let { " ($it)" }.orEmpty()}: $how. Its saves are kept in step with every device that plays it with $name",
+                    "yours.${y.id}", name, if (y.unverified != null) FuseIcons.ShieldAlert else FuseIcons.Boxes,
+                    // Offered by the game's name alone: said plainly, with the ROM or dump it is made from.
+                    detail = y.unverified?.let { "Unverified. $it" }
+                        ?: "Your ${y.how}${y.version?.let { " ($it)" }.orEmpty()}: $how. Its saves are kept in step with every device that plays it with $name",
                     trailing = Trailing.Check(withPort == "yours:${y.id}"),
                     onSelect = {
                         choice = null
                         scope.launch {
                             val problem = store.ports.playWithYours(card.id, y)
-                            if (problem == null) toasts.show("${card.title} plays with $name from now on", ToastKind.SUCCESS, icon = FuseIcons.Boxes)
-                            else toasts.show(problem, ToastKind.WARNING)
+                            when {
+                                problem != null -> toasts.show(problem, ToastKind.WARNING)
+                                y.unverified != null -> toasts.show("${card.title} plays with $name from now on, unverified for this game's file", ToastKind.INFO, icon = FuseIcons.ShieldAlert)
+                                else -> toasts.show("${card.title} plays with $name from now on", ToastKind.SUCCESS, icon = FuseIcons.Boxes)
+                            }
                         }
                     },
                 )

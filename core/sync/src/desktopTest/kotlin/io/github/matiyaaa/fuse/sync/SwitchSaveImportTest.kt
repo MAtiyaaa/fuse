@@ -256,6 +256,46 @@ class SwitchSaveImportTest {
         assertEquals(setOf("${SwitchNand.DEVICE}/d.bin"), binding.files.keys)
     }
 
+    /** A backup's meta file for [id], another game's than [title]. */
+    private fun metaOf(id: String, at: Long): ByteArray = meta(at = at).also { b -> for (i in 0 until 8) b[5 + i] = (id.toLong(16) ushr (8 * i)).toByte() }
+
+    @Test fun aBackupOfAGameFuseCantTellIsKeptToBeAskedAbout() = temp { root ->
+        val space = eden(root)
+        val jksv = File(root, "sd/JKSV")
+        // Saved by JKSV under the game's own name on the Switch, which isn't how the library names it.
+        backup(File(jksv, "Mario Odyssey/Matt - 2026.10.01 @ 12.00.00"), mapOf("file1" to "theirs"), metaOf("0100000000099000", at = 1_790_000_000L))
+        val importer = JvmSaveImporter(File(root, "stage"))
+        val plan = importer.scan(jksv, listOf(query()), env(root))
+        val e = plan.entries.single()
+        assertTrue(e.targets.isEmpty(), "nowhere to go until the person says which game it is")
+        assertEquals("Mario Odyssey", e.switch?.game)
+        assertEquals("0100000000099000", e.switch?.titleId)
+        assertTrue(plan.unmatched.isEmpty(), "its files are a save, waiting for an answer, not unmatched content")
+
+        // "What game is this?" Super Mario Odyssey: it goes where Eden keeps that game's saves.
+        val answered = importer.assign(plan, e.id, query(), env(root))
+        val placed = answered.entries.single()
+        val target = placed.targets.single { it.id == placed.selectedTarget }
+        assertEquals(SaveImportConfidence.MANUAL, target.confidence)
+        assertEquals(File(space, "account/$user/$title/0").path, target.destination)
+        assertEquals("theirs", importer.binding(answered, SaveImportChoice(placed.id, target.id)).files.getValue("file1").readText())
+        assertTrue(runCatching { importer.assign(answered, e.id, query(), env(root)) }.isFailure, "answered once")
+    }
+
+    @Test fun aGameWithoutATitleIdTakesTheBackupsWhenItIsTheAnswer() = temp { root ->
+        val space = eden(root)
+        val jksv = File(root, "sd/JKSV")
+        backup(File(jksv, "0100000000099000/Matt - 2026.10.01 @ 12.00.00"), mapOf("file1" to "theirs"), metaOf("0100000000099000", at = 1_790_000_000L))
+        // An XCI with no id in its name: the save goes where Eden looks for the backup's id.
+        val noId = SaveQuery(GameKey.of("switch", null, null, "Kirby"), "switch", "/games/Kirby.xci", "linux.eden", title = "Kirby")
+        val importer = JvmSaveImporter(File(root, "stage"))
+        val plan = importer.scan(jksv, listOf(noId), env(root))
+        val e = plan.entries.single()
+        assertTrue(e.targets.isEmpty())
+        val placed = importer.assign(plan, e.id, noId, env(root)).entries.single()
+        assertEquals(File(space, "account/$user/0100000000099000/0").path, placed.targets.single().destination)
+    }
+
     @Test fun oneSaveForTwoProfilesLeavesEachTheirOwnCopy(): Unit = runBlocking {
         temp { root -> runBlocking {
             val dest = File(root, "dest").apply { mkdirs() }

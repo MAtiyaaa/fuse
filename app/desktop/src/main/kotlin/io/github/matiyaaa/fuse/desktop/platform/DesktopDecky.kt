@@ -13,6 +13,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
+/** Decky Loader is installed for [home]: its program in `~/homebrew/services`, or its service. */
+internal fun deckyLoaderInstalled(home: File, systemd: File = File("/etc/systemd/system")): Boolean =
+    File(home, "homebrew/services/PluginLoader").exists() || File(systemd, "plugin_loader.service").exists()
+
 /**
  * Decky Loader and the Fuse Decky plugin on Linux. Decky lives in `~/homebrew` and keeps its
  * plugins in `~/homebrew/plugins`, which belongs to the system account; its service is
@@ -45,7 +49,7 @@ internal class DesktopDecky(
     }
 
     override suspend fun state(): DeckyState = withContext(Dispatchers.IO) {
-        val loader = File(homebrew, "services/PluginLoader").exists() || File("/etc/systemd/system/plugin_loader.service").exists()
+        val loader = deckyLoaderInstalled(home)
         val installed = File(target, "plugin.json").isFile
         DeckyState(
             loader = loader,

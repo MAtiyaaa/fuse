@@ -10,6 +10,7 @@ import io.github.matiyaaa.fuse.sync.SaveQuery
 import io.github.matiyaaa.fuse.sync.SwitchSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class SwitchImportTest {
     private fun query(title: String, emulator: String = "linux.eden") =
@@ -62,6 +63,49 @@ class SwitchImportTest {
         val f = SwitchImport("JKSV").apply { take(plan, emptyMap(), "mo") }
         assertEquals(1, f.games.size)
         assertEquals(listOf("two", "one"), f.games.single().backups.map { it.first.id })
+    }
+
+    /** A backup Fuse couldn't place: no destination, only what it says about its game. */
+    private fun unknown(name: String, game: String?, id: String?, at: Long, device: Boolean = false) =
+        SaveImportEntry(name, name, "switch.savedata", 10, emptyList(), null, SwitchSource("JKSV", name, "Matt", at, id, game, device))
+
+    @Test fun aGameFuseCouldntTellIsAskedAboutFirstOnceForAllItsBackups() {
+        val mario = query("Super Mario Odyssey")
+        val zelda = query("The Legend of Zelda: Tears of the Kingdom")
+        val id = "0100F2C0115B6000"
+        val plan = SaveImportPlan("p", "JKSV", listOf(
+            entry(mario, "m", 50),
+            unknown("account", "Zelda Tears Kingdom", id, 200),
+            unknown("device", "Zelda Tears Kingdom", id, 200, device = true),
+        ), emptyList(), 0)
+        val answers = listOf(mario, zelda).map { SwitchImport.Answer(null, it, it.title, here = true) }
+        var went = false
+        val f = SwitchImport("JKSV").apply { ask(plan, answers) { went = true } }
+        assertEquals(SwitchImport.Step.WHICH, f.step)
+        assertEquals(1, f.unknowns.size, "a game's account and device backups are one question")
+        assertEquals(setOf("account", "device"), f.unknown!!.entries.map { it.id }.toSet())
+        // The likeliest answer first, by the name its backups carry.
+        assertEquals("The Legend of Zelda: Tears of the Kingdom", f.shownAnswers.first().title)
+        f.nextUnknown()
+        assertTrue(went, "after the last question, on to the games Fuse knows")
+    }
+
+    @Test fun withNothingUnknownTheGamesComeStraightAway() {
+        val mario = query("Super Mario Odyssey")
+        var went = false
+        SwitchImport("JKSV").apply { ask(SaveImportPlan("p", "JKSV", listOf(entry(mario, "m", 50)), emptyList(), 0), listOf(SwitchImport.Answer(null, mario, mario.title, true))) { went = true } }
+        assertTrue(went)
+    }
+
+    @Test fun manyGamesShowTheLikeliestFirstThenEveryOne() {
+        val games = (1..10).map { query("Game $it") } + query("Metroid Dread")
+        val f = SwitchImport("JKSV").apply {
+            ask(SaveImportPlan("p", "JKSV", listOf(unknown("x", "Metroid Dread (EU)", null, 1)), emptyList(), 0), games.map { SwitchImport.Answer(null, it, it.title, true) }) {}
+        }
+        assertEquals(SwitchImport.LIKELY, f.shownAnswers.size)
+        assertEquals("Metroid Dread", f.shownAnswers.first().title)
+        f.everyAnswer = true
+        assertEquals(11, f.shownAnswers.size)
     }
 
     @Test fun nothingForTheLibraryEndsAtOnce() {

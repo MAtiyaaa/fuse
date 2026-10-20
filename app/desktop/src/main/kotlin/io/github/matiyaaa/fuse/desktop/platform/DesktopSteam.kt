@@ -331,7 +331,11 @@ internal class DesktopSteam(
         (folders.steamPlaces().first.map(::File) + File(folders.homePath, ".var/app/com.valvesoftware.Steam/data/Steam"))
             .filter { it.isDirectory }
 
-    private val steamClient = DesktopSteamClient(::steamRoots, live)
+    private val steamClient = DesktopSteamClient(
+        ::steamRoots, live,
+        choice = dataDir?.let { File(it, "steam-client-port") },
+        deckyLoader = { deckyLoaderInstalled(File(folders.homePath)) },
+    )
     override val client: io.github.matiyaaa.fuse.ui.shell.platform.SteamClientLink = steamClient
 
     /**
