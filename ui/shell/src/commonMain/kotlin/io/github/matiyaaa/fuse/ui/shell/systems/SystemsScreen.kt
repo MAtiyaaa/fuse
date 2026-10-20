@@ -33,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
@@ -144,7 +145,8 @@ fun SystemsScreen(app: AppState) {
     // What has been played on the chosen system here, named with it so another system's never shows.
     val currentId = current?.platform?.id?.takeIf { it != STREAM_SYSTEM }
     val played by remember(app.store, currentId) {
-        currentId?.let { id -> app.store.library.systemActivity(id).map { id to it } } ?: kotlinx.coroutines.flow.flowOf(null)
+        // Only the one played most is named, so only one of each is read.
+        currentId?.let { id -> app.store.library.systemActivity(id, shown = 1).map { id to it } } ?: kotlinx.coroutines.flow.flowOf(null)
     }.collectAsState(null)
     // On a two-screen device the board is kept once with the menus on top and once with them below.
     val twoScreens = app.platform.features.secondScreen || app.menusOnSecondScreen
@@ -174,6 +176,7 @@ fun SystemsScreen(app: AppState) {
                 SystemHeader(
                     current, compactHeader, Modifier.padding(horizontal = Space.gutter).reveal(reveal, 0), widthFraction = headerWidth,
                     activity = played?.takeIf { it.first == currentId }?.second,
+                    playLine = true,
                 )
             }
             if (systems.isEmpty()) {
@@ -747,7 +750,9 @@ private fun firmwareProblem(card: PlatformCard): String? = when (card.bios.state
  * hides it), for a system's page scrolled down its games.
  *
  * With [showMeta] (the Systems screen) the name sits in a slot as tall as a logo, so moving between
- * systems with and without a logo never moves the grid below.
+ * systems with and without a logo never moves the grid below. Every line under it keeps its place
+ * the same way: a firmware warning on its own line, and with [playLine] the play line, kept while
+ * it loads and for a system with none, so the header is one height for every system.
  */
 @Composable
 internal fun SystemHeader(
@@ -762,8 +767,10 @@ internal fun SystemHeader(
     nameStyle: TextStyle = if (compact) Fuse.type.title else Fuse.type.display,
     /** Said in place of the maker line while the system is being moved ("Moving, place 3 of 11"). */
     moving: String? = null,
-    /** What has been played on it here, told under its emulator where there is room. */
+    /** What has been played on it here, told under its emulator. */
     activity: io.github.matiyaaa.fuse.ui.shell.store.SystemActivity? = null,
+    /** Keeps a line for [activity] even before it is known (the Systems screen), so nothing below moves. */
+    playLine: Boolean = false,
 ) {
     val c = Fuse.colors
     val motion = Fuse.motion
@@ -814,10 +821,10 @@ internal fun SystemHeader(
             if (showMeta) BoxWithConstraints(Modifier.fillMaxWidth()) {
                 // Only firmware Fuse knows is missing is told; one it can't check is never a warning.
                 val problem = firmwareProblem(s)
-                // Where the line would crowd (a phone held upright), the firmware gets its own line.
-                val apart = problem != null && maxWidth < Size.touch * 8
-                // Covers of the games played last only where they have the room.
-                val roomy = maxWidth >= Size.touch * 8
+                // Where the line would crowd (a phone held upright), the firmware gets its own line,
+                // kept for every system there so moving between them never moves the grid.
+                val narrow = maxWidth < Size.touch * 8
+                val apart = problem != null && narrow
                 Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                         FText(s.countText(), Fuse.type.bodyStrong.tabular(), color = c.text, maxLines = 1)
@@ -834,8 +841,15 @@ internal fun SystemHeader(
                             FirmwareProblem(problem)
                         }
                     }
-                    if (problem != null && apart) FirmwareProblem(problem)
-                    if (activity != null) SystemPlay(s, activity, covers = roomy && !compact)
+                    if (problem != null && apart) {
+                        FirmwareProblem(problem)
+                    } else if (narrow && playLine) {
+                        Box(Modifier.alpha(0f)) { FirmwareProblem("Firmware") }
+                    }
+                    when {
+                        activity != null -> SystemPlay(s, activity)
+                        playLine -> Box(Modifier.alpha(0f)) { SystemPlay(s, io.github.matiyaaa.fuse.ui.shell.store.SystemActivity()) }
+                    }
                 }
             }
         }
@@ -843,45 +857,27 @@ internal fun SystemHeader(
 }
 
 /**
- * What has been played on a system here: the time in all, how many of its games, the one played
- * most, and the covers of those played last (with [covers], where the header has the room); or
- * that none has been yet.
+ * What has been played on a system here, in one line: the time in all, how many of its games, and
+ * the one played most; or that none has been yet. Always one line, whatever was played, so moving
+ * between systems never moves what is below it.
  */
 @Composable
-private fun SystemPlay(card: PlatformCard, a: io.github.matiyaaa.fuse.ui.shell.store.SystemActivity, covers: Boolean) {
+private fun SystemPlay(card: PlatformCard, a: io.github.matiyaaa.fuse.ui.shell.store.SystemActivity) {
     val c = Fuse.colors
-    if (a.played == 0) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+        if (a.played == 0) {
             FuseIcon(FuseIcons.Clock, size = Size.iconS, tint = c.textFaint)
             FText("None of its games played yet", Fuse.type.body, color = c.textFaint, maxLines = 1)
+            return@Row
         }
-        return
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-            FuseIcon(FuseIcons.Clock, size = Size.iconS, tint = c.textMuted)
-            FText(if (a.seconds >= 60) "${io.github.matiyaaa.fuse.ui.shell.components.playtimeText(a.seconds)} played" else "Played", Fuse.type.bodyStrong.tabular(), color = c.text, maxLines = 1)
+        FuseIcon(FuseIcons.Clock, size = Size.iconS, tint = c.textMuted)
+        FText(if (a.seconds >= 60) "${io.github.matiyaaa.fuse.ui.shell.components.playtimeText(a.seconds)} played" else "Played", Fuse.type.bodyStrong.tabular(), color = c.text, maxLines = 1)
+        FText("·", Fuse.type.body, color = c.textFaint)
+        FText("${a.played} of ${card.gameCount} played", Fuse.type.body.tabular(), color = c.textMuted, maxLines = 1)
+        a.mostPlayed.firstOrNull()?.let { top ->
             FText("·", Fuse.type.body, color = c.textFaint)
-            FText("${a.played} of ${card.gameCount} played", Fuse.type.body.tabular(), color = c.textMuted, maxLines = 1)
-            a.mostPlayed.firstOrNull()?.let { top ->
-                FText("·", Fuse.type.body, color = c.textFaint)
-                FuseIcon(FuseIcons.TrendingUp, size = Size.iconS, tint = c.textMuted)
-                FText("Most played: ${top.title}", Fuse.type.body, color = c.textMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
-            }
-        }
-        if (covers && a.recent.isNotEmpty()) {
-            // The games played last, newest first: covers only, their names a tile away on the Library.
-            val shape = remember { SquircleShape.fraction(0.22f) }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                FuseIcon(FuseIcons.History, size = Size.iconS, tint = c.textMuted)
-                for (g in a.recent) {
-                    io.github.matiyaaa.fuse.ui.shell.components.SquareGameArt(
-                        g.art,
-                        Modifier.size(Size.touch).clip(shape),
-                        fallback = { GeneratedArt(g.title, g.accent.toColor(), slot = ArtSlot.ICON) },
-                    )
-                }
-            }
+            FuseIcon(FuseIcons.TrendingUp, size = Size.iconS, tint = c.textMuted)
+            FText("Most played: ${top.title}", Fuse.type.body, color = c.textMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
         }
     }
 }
