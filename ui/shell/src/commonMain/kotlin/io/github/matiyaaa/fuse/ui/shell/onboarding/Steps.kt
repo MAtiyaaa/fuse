@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -464,14 +465,21 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                 "Everyone who plays here gets their own saves, play time, favourites and theme. Add someone now, or any time in Settings, Profiles."
             },
             optional = true, icon = FuseIcons.UserRound, chapter = Chapters.CONNECT,
-            actions = if (profiles.isEmpty()) {
-                listOf(
+            // With profiles here (a household's, signed in just before), the person picks which one is
+            // theirs, and can change their mind before going on: choosing is never only adding.
+            actions = when {
+                profiles.isEmpty() -> listOf(
                     StepAction("Create Your Profile", primary = true) { app.whoAreYou = io.github.matiyaaa.fuse.ui.shell.sync.WhoMode.ADD },
                     StepAction("Skip", run = next),
                 )
-            } else {
-                listOf(
+                playing == null -> listOf(
+                    StepAction("Choose Who's Playing", primary = true) { app.whoAreYou = io.github.matiyaaa.fuse.ui.shell.sync.WhoMode.SWITCH },
+                    StepAction("Add Someone") { app.whoAreYou = io.github.matiyaaa.fuse.ui.shell.sync.WhoMode.ADD },
+                    StepAction("Skip", run = next),
+                )
+                else -> listOf(
                     StepAction("Continue", primary = true, run = next),
+                    StepAction("Switch Profile") { app.whoAreYou = io.github.matiyaaa.fuse.ui.shell.sync.WhoMode.SWITCH },
                     StepAction("Add Another") { app.whoAreYou = io.github.matiyaaa.fuse.ui.shell.sync.WhoMode.ADD },
                 )
             },
@@ -794,14 +802,34 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
 
 @Composable
 internal fun StatusList(rows: List<Triple<Boolean?, String, String>>) {
+    val c = Fuse.colors
+    val motion = Fuse.motion
+    // The rows arrive one after another, each a little after the last, rather than all at once.
+    val shown = remember(rows.size) { FuselineValue(if (motion.reduced) 1f else 0f) }
+    LaunchedEffect(rows.size) { shown.animateTo(1f, tween(360 + rows.size * 70, easing = Curves.Enter)) }
     Panel(Modifier.widthIn(max = 520.dp).fillMaxWidth()) {
-        Column(Modifier.padding(horizontal = Space.xl, vertical = Space.l), verticalArrangement = Arrangement.spacedBy(Space.s)) {
-            for ((ok, name, word) in rows) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+        Column(Modifier.padding(horizontal = Space.l, vertical = Space.s)) {
+            rows.forEachIndexed { i, (ok, name, word) ->
+                val from = i / (rows.size + 2f)
+                Row(
+                    Modifier.fillMaxWidth().graphicsLayer {
+                        val p = ((shown.value - from) * 3f).coerceIn(0f, 1f)
+                        alpha = p
+                        translationY = (1f - p) * 10.dp.toPx()
+                    }.padding(vertical = Space.s + Space.xxs),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Space.m),
+                ) {
                     StatusDot(ok)
-                    FText(name, Fuse.type.bodyStrong, maxLines = 1, modifier = Modifier.width(88.dp))
-                    FText(word, Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 2)
+                    FText(name, Fuse.type.bodyStrong, maxLines = 1, modifier = Modifier.width(96.dp))
+                    FText(word, Fuse.type.body, color = if (ok == false) c.warning else c.textMuted, maxLines = 2, modifier = Modifier.weight(1f))
+                    when (ok) {
+                        true -> FuseIcon(FuseIcons.Check, size = Size.iconS, tint = c.success)
+                        false -> FuseIcon(FuseIcons.Warning, size = Size.iconS, tint = c.warning)
+                        null -> Unit
+                    }
                 }
+                if (i < rows.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(c.hairline))
             }
         }
     }
@@ -871,37 +899,122 @@ private fun SteamList(games: List<io.github.matiyaaa.fuse.library.steam.SteamGam
 @Composable
 internal fun Ignition(lit: Boolean = false) {
     val c = Fuse.colors
-    val trace = remember { FuselineValue(if (lit) 1f else 0f) }
-    val spark = remember { FuselineValue(if (lit) 1f else 0f) }
+    val motion = Fuse.motion
+    // Lit already (setup's last step), or under reduced motion: the mark stands lit from the start.
+    val done = lit || motion.reduced
+    val trace = remember { FuselineValue(if (done) 1f else 0f) }
+    val burn = remember { FuselineValue(if (done) 1f else 0f) }
+    val burst = remember { FuselineValue(if (done) 1f else 0f) }
     LaunchedEffect(Unit) {
-        trace.animateTo(1f, tween(1100, easing = Curves.Standard))
-        spark.animateTo(1f, tween(420, easing = Curves.Enter))
+        if (trace.value >= 1f) return@LaunchedEffect
+        trace.animateTo(1f, tween(900, easing = Curves.Standard))
+        burn.animateTo(1f, tween(560, easing = Curves.Standard))
+        burst.animateTo(1f, tween(900, easing = Curves.Enter))
     }
-    Box(Modifier.size(260.dp), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.size(200.dp)) {
-            val unit = size.width / BrandArt.MARK
-            withTransform({ scale(unit, unit, pivot = Offset.Zero) }) {
-                val t = trace.value
-                // The frame traces itself over the first two thirds, the fuse line over the last half.
-                val frame = PathMeasure().apply { setPath(BrandArt.frame, false) }
-                val drawnFrame = Path()
-                frame.getSegment(0f, frame.length * (t / 0.66f).coerceIn(0f, 1f), drawnFrame, true)
-                drawPath(drawnFrame, c.text, style = Stroke(BrandArt.MARK_STROKE))
-                val fuse = PathMeasure().apply { setPath(BrandArt.fuse, false) }
-                val drawnFuse = Path()
-                fuse.getSegment(0f, fuse.length * ((t - 0.5f) * 2f).coerceIn(0f, 1f), drawnFuse, true)
-                drawPath(drawnFuse, c.text, style = Stroke(BrandArt.MARK_STROKE, cap = StrokeCap.Round))
-                val s = spark.value
-                if (s > 0f) {
-                    // A flash a little larger than the glow, settling to the logo's own spark.
-                    val flash = (1f - s) * 0.8f
-                    drawCircle(BrandArt.glow(c.accent), radius = BrandArt.GLOW_R * (1f + flash), center = BrandArt.SPARK, alpha = s)
-                    drawCircle(BrandArt.core(c.accent), radius = BrandArt.CORE_R * s, center = BrandArt.SPARK)
+    // Once lit, the glow breathes and embers rise from below, as long as the step is shown.
+    val ambient = motion.ambient
+    val clock = io.github.matiyaaa.fuse.ui.fuseline.rememberLoopClock("ignition")
+    val breath = if (ambient) {
+        clock.animateFloat(0f, 1f, io.github.matiyaaa.fuse.ui.fuseline.infiniteRepeatable(tween(3_200, easing = Curves.Linear), io.github.matiyaaa.fuse.ui.fuseline.RepeatMode.Reverse), "breath").value
+    } else {
+        0.5f
+    }
+    val rise = if (ambient) {
+        clock.animateFloat(0f, 1f, io.github.matiyaaa.fuse.ui.fuseline.infiniteRepeatable(tween(11_000, easing = Curves.Linear), io.github.matiyaaa.fuse.ui.fuseline.RepeatMode.Restart), "rise").value
+    } else {
+        0f
+    }
+    Box(Modifier.size(300.dp), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val accent = c.accent
+            val markSize = 196.dp.toPx()
+            val origin = Offset((size.width - markSize) / 2f, (size.height - markSize) / 2f)
+            val unit = markSize / BrandArt.MARK
+            val spark = origin + BrandArt.SPARK * unit
+            val settled = burst.value
+            // The room behind it: a pool of the accent that blooms when it lights and then breathes.
+            val pool = size.minDimension * (0.34f + 0.1f * settled + 0.025f * breath * settled)
+            drawCircle(
+                Brush.radialGradient(listOf(accent.copy(alpha = 0.08f + 0.2f * settled), accent.copy(alpha = 0.03f * settled), Color.Transparent), center, pool),
+                pool, center,
+            )
+            // Embers rising from under the mark once it is lit: each its own way up, fading as it goes.
+            if (settled > 0f) {
+                for (k in 0 until EMBERS) {
+                    val phase = (rise + k * 0.618f) % 1f
+                    val sway = kotlin.math.sin(phase * 6.283f + k) * 10.dp.toPx()
+                    val x = center.x + kotlin.math.sin(k * 2.399f) * size.width * 0.3f + sway
+                    val y = size.height * 0.92f - phase * size.height * 0.78f
+                    val a = kotlin.math.sin(phase * kotlin.math.PI.toFloat()) * 0.55f * settled
+                    val tint = when (k % 3) { 0 -> Color.White; 1 -> Color(0xFFFFD27A); else -> accent }
+                    drawCircle(tint.copy(alpha = a), (1.2f + (k % 4) * 0.5f).dp.toPx(), Offset(x, y))
                 }
+            }
+            // Where the trace and the burn have reached, and the white-hot head with its sparks.
+            val frame = PathMeasure().apply { setPath(BrandArt.frame, false) }
+            val fuse = PathMeasure().apply { setPath(BrandArt.fuse, false) }
+            val t = trace.value
+            val b = burn.value
+            val ink = c.text
+            withTransform({
+                translate(origin.x, origin.y)
+                scale(unit, unit, pivot = Offset.Zero)
+            }) {
+                val drawnFrame = Path()
+                frame.getSegment(0f, frame.length * t, drawnFrame, true)
+                drawPath(drawnFrame, ink, style = Stroke(BrandArt.MARK_STROKE, cap = StrokeCap.Round))
+                val drawnFuse = Path()
+                fuse.getSegment(0f, fuse.length * b, drawnFuse, true)
+                drawPath(drawnFuse, ink, style = Stroke(BrandArt.MARK_STROKE, cap = StrokeCap.Round))
+            }
+            fun head(measure: PathMeasure, p: Float) {
+                if (p <= 0f || p >= 1f) return
+                val at = origin + measure.getPosition(measure.length * p) * unit
+                // Sparks shed along the way: each flies off from where the head was and dies.
+                for (k in 0 until SPARKS) {
+                    val born = (k + 0.5f) / SPARKS
+                    val age = (p - born) * 5f
+                    if (age <= 0f || age >= 1f) continue
+                    val from = origin + measure.getPosition(measure.length * born) * unit
+                    val angle = k * 2.3999f
+                    val pos = from + Offset(kotlin.math.cos(angle), kotlin.math.sin(angle)) * (age * 30.dp.toPx()) + Offset(0f, age * age * 16.dp.toPx())
+                    drawCircle((if (k % 3 == 0) Color.White else Color(0xFFFFD27A)).copy(alpha = 1f - age), (2f * (1f - age) + 0.5f).dp.toPx(), pos)
+                }
+                val flicker = 0.88f + 0.12f * kotlin.math.sin(p * 70f)
+                val r = 20.dp.toPx() * flicker
+                drawCircle(Brush.radialGradient(listOf(Color.White, accent.copy(alpha = 0.6f), Color.Transparent), at, r), r, at)
+                drawCircle(Color.White, 3.dp.toPx(), at)
+            }
+            head(frame, t)
+            head(fuse, b)
+            // The ignition: a ring of light and rays from the spark, then the logo's own spark stays lit.
+            if (settled > 0f) {
+                if (settled < 1f) {
+                    val fade = 1f - settled
+                    for (k in 0 until RAYS) {
+                        val a = k * (2f * kotlin.math.PI.toFloat() / RAYS) + 0.3f
+                        val dir = Offset(kotlin.math.cos(a), kotlin.math.sin(a))
+                        val inner = (18f + 40f * settled).dp.toPx()
+                        val outer = inner + (14f + 70f * settled).dp.toPx()
+                        drawLine(Color.White.copy(alpha = 0.75f * fade), spark + dir * inner, spark + dir * outer, strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+                    }
+                    drawCircle(Color.White.copy(alpha = 0.85f * fade), (16f + 120f * settled).dp.toPx(), spark, style = Stroke((6f * fade + 0.5f).dp.toPx()))
+                }
+                val glow = BrandArt.GLOW_R * unit * (1f + 0.08f * breath)
+                drawCircle(
+                    Brush.radialGradient(listOf(accent.copy(alpha = 0.85f), accent.copy(alpha = 0.25f), Color.Transparent), spark, glow * (1f + (1f - settled) * 0.8f)),
+                    glow * (1f + (1f - settled) * 0.8f), spark, alpha = settled,
+                )
+                drawCircle(Brush.radialGradient(listOf(Color.White, accent), spark, BrandArt.CORE_R * unit), BrandArt.CORE_R * unit * settled, spark)
             }
         }
     }
 }
+
+/** Sparks a burning head sheds, rays the ignition throws, and embers that rise once it is lit. */
+private const val SPARKS = 18
+private const val RAYS = 12
+private const val EMBERS = 14
 
 /**
  * Live view of what the controller sends, so users can confirm their layout, on a whole controller

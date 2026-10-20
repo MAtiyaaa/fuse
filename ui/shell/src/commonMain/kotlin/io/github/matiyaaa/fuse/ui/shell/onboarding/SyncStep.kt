@@ -26,11 +26,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.ProfileAvatar
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
@@ -38,10 +36,9 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.fuseline.RepeatMode
-import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 import io.github.matiyaaa.fuse.ui.fuseline.infiniteRepeatable
 import io.github.matiyaaa.fuse.ui.fuseline.rememberLoopClock
-import io.github.matiyaaa.fuse.ui.fuseline.spring
+import io.github.matiyaaa.fuse.ui.fuseline.togetherWith
 import io.github.matiyaaa.fuse.ui.fuseline.tween
 
 /** Where each device sits around the host on the stage, as offsets from its centre. */
@@ -123,93 +120,126 @@ private fun Device(icon: ImageVector, name: String, spot: Offset, size: Dp = 64.
 }
 
 /**
- * The stage when there is a choice: the ways this device's saves can move, side by side. Fuse One
- * stands in front, lit in the accent and marked as the one Fuse recommends; RomM and Syncthing sit
- * beside it, smaller, each in its own colour. All float gently. Once one is on, it comes forward
- * with a check and the others step back.
+ * The stage when there is a choice: the way this device's saves move, told as one card, with the
+ * others under it as small pills. Fuse One leads, lit in the accent and marked as the one Fuse
+ * recommends, until another way is on; then that one leads with a check. Nothing overlaps (the
+ * cards once fanned out behind each other and cut each other's words off).
  */
 @Composable
 internal fun SyncChoiceStage(fuseSync: Boolean, syncthing: Boolean, hasFuseSync: Boolean, romm: Boolean = false, hasRomm: Boolean = false) {
     val c = Fuse.colors
-    val still = Fuse.motion.reduced
-    val clock = rememberLoopClock("sync choice stage")
-    val drift by clock.animateFloat(-1f, 1f, infiniteRepeatable(tween(4600), RepeatMode.Reverse), "drift")
-    val drift2 by clock.animateFloat(1f, -1f, infiniteRepeatable(tween(5300), RepeatMode.Reverse), "drift2")
-    val breathe by clock.animateFloat(0f, 1f, infiniteRepeatable(tween(2800), RepeatMode.Reverse), "breathe")
     val teal = io.github.matiyaaa.fuse.ui.shell.sync.SYNCTHING_TINT
     val rommTint = Color(0xFF8B7CF6)
-    // Which card leads: the one that is on, else Fuse One (Syncthing when it is the only one here).
-    val leader = when {
+    val ways = buildList {
+        if (hasFuseSync) add(Way(0, "Fuse One", if (fuseSync) "On" else "Recommended", c.accent, FuseIcons.RefreshCcw,
+            listOf(FuseIcons.Save to "Saves, by game", FuseIcons.Clock to "Play time", FuseIcons.Users to "Saves per person"), fuseSync, filled = true))
+        if (hasRomm) add(Way(1, "RomM", if (romm) "On" else "Your server", rommTint, FuseIcons.Server,
+            listOf(FuseIcons.Save to "Saves, by game", FuseIcons.LibraryBig to "Games from RomM", FuseIcons.Server to "Your RomM"), romm, filled = false))
+        add(Way(2, "Syncthing", if (syncthing) "On" else "Bring your own", teal, FuseIcons.FolderSync,
+            listOf(FuseIcons.FolderOpen to "Save folders", FuseIcons.Users to "One save for all", FuseIcons.Link2 to "Your Syncthing"), syncthing, filled = false))
+    }
+    // Which leads: the one that is on, else Fuse One (Syncthing when it is the only one here).
+    val leadKey = when {
         syncthing -> 2
         romm && hasRomm -> 1
         hasFuseSync -> 0
         else -> 2
     }
-    val leadFuse by fuselineFloat(if (leader == 0) 1f else 0f, spring(dampingRatio = 0.8f, stiffness = 260f), label = "leadFuse")
-    val leadRomm by fuselineFloat(if (leader == 1) 1f else 0f, spring(dampingRatio = 0.8f, stiffness = 260f), label = "leadRomm")
-    val leadThing by fuselineFloat(if (leader == 2) 1f else 0f, spring(dampingRatio = 0.8f, stiffness = 260f), label = "leadThing")
-    // Where each card sits: three across, or two when one isn't here.
-    val three = hasFuseSync && hasRomm
-    val xFuse = if (three) (-96).dp else (-76).dp
-    val xRomm = if (three) 0.dp else if (hasFuseSync) 92.dp else (-76).dp
-    val xThing = if (three) 96.dp else if (hasFuseSync || hasRomm) 92.dp else 0.dp
-    fun Modifier.card(lead: Float, x: androidx.compose.ui.unit.Dp, y: androidx.compose.ui.unit.Dp, wobble: Float, tilt: Float) =
-        offset(x, y).zIndex(lead).graphicsLayer {
-            val s = 0.82f + 0.18f * lead
-            scaleX = s; scaleY = s
-            alpha = 0.55f + 0.45f * lead
-            translationY = if (still) 0f else wobble * 4.dp.toPx()
-            rotationZ = tilt * (1f - lead)
-            shadowElevation = (6f + 18f * lead).dp.toPx()
-            shape = RoundedCornerShape(22.dp)
-        }
+    LeadStage(
+        ways, leadKey,
+        when {
+            fuseSync -> "Fuse One is on"
+            romm && hasRomm -> "RomM is on"
+            syncthing -> "Syncthing is on"
+            else -> "One moves your saves"
+        },
+        label = "sync choice stage",
+    )
+}
+
+/**
+ * A choice told on a stage: the way that leads as one card, glowing in its colour and drifting a
+ * little, the others under it as small pills, then one line. A new lead fades in over the old one;
+ * nothing overlaps, so every word can be read. Reduced Motion keeps the card still.
+ */
+@Composable
+internal fun LeadStage(ways: List<Way>, leadKey: Int, line: String, label: String) {
+    val motion = Fuse.motion
+    val still = motion.reduced
+    val clock = rememberLoopClock(label)
+    val drift by clock.animateFloat(-1f, 1f, infiniteRepeatable(tween(4600), RepeatMode.Reverse), "drift")
+    val breathe by clock.animateFloat(0f, 1f, infiniteRepeatable(tween(2800), RepeatMode.Reverse), "breathe")
+    val lead = ways.firstOrNull { it.key == leadKey } ?: ways.first()
+    val tint by io.github.matiyaaa.fuse.ui.fuseline.fuselineColor(lead.tint, tween(motion.ms(io.github.matiyaaa.fuse.ui.fuseline.Durations.SLOW)), label = "leadTint")
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(if (three) 380.dp else 340.dp, 250.dp), contentAlignment = Alignment.Center) {
-            // The glow behind whichever leads.
+        Box(Modifier.size(340.dp, 204.dp), contentAlignment = Alignment.Center) {
+            // The glow behind the one that leads.
             Canvas(Modifier.matchParentSize()) {
-                val xs = listOf(xFuse, xRomm, xThing).map { size.width / 2f + it.toPx() }
-                val leads = listOf(leadFuse, leadRomm, leadThing)
-                val total = leads.sum().coerceAtLeast(0.001f)
-                val centre = Offset(xs.indices.sumOf { (xs[it] * leads[it]).toDouble() }.toFloat() / total, size.height / 2f)
-                val tint = lerp(lerp(teal, rommTint, leadRomm / (leadRomm + leadThing).coerceAtLeast(0.001f)), c.accent, leadFuse)
-                drawCircle(
-                    Brush.radialGradient(listOf(tint.copy(alpha = 0.22f + 0.08f * breathe), Color.Transparent), centre, 150.dp.toPx()),
-                    150.dp.toPx(), centre,
+                val centre = Offset(size.width / 2f, size.height / 2f)
+                val r = 150.dp.toPx()
+                drawCircle(Brush.radialGradient(listOf(tint.copy(alpha = 0.22f + 0.08f * breathe), Color.Transparent), centre, r), r, centre)
+            }
+            io.github.matiyaaa.fuse.ui.fuseline.Swap(
+                targetState = lead.key,
+                transitionSpec = {
+                    io.github.matiyaaa.fuse.ui.fuseline.fadeIn(motion.enter(io.github.matiyaaa.fuse.ui.fuseline.Durations.BASE)) togetherWith
+                        io.github.matiyaaa.fuse.ui.fuseline.fadeOut(motion.exit(io.github.matiyaaa.fuse.ui.fuseline.Durations.FAST))
+                },
+                contentAlignment = Alignment.Center,
+                label = "lead way",
+            ) { key ->
+                val w = ways.firstOrNull { it.key == key } ?: lead
+                ChoiceCard(
+                    name = w.name, tag = w.tag, tint = w.tint, mark = w.mark, lines = w.lines, on = w.on, filled = w.filled,
+                    width = 224.dp,
+                    modifier = Modifier.graphicsLayer {
+                        translationY = if (still) 0f else drift * 4.dp.toPx()
+                        shadowElevation = 24.dp.toPx()
+                        shape = RoundedCornerShape(22.dp)
+                    },
                 )
             }
-            if (hasRomm) {
-                ChoiceCard(
-                    name = "RomM", tag = if (romm) "On" else "Your server", tint = rommTint, mark = FuseIcons.Server,
-                    lines = listOf(FuseIcons.Save to "Saves, by game", FuseIcons.LibraryBig to "Games from RomM", FuseIcons.Server to "Your RomM"),
-                    on = romm, filled = false,
-                    modifier = Modifier.card(leadRomm, xRomm, (-10).dp, drift2, 0f),
-                )
-            }
-            ChoiceCard(
-                name = "Syncthing", tag = if (syncthing) "On" else "Bring your own", tint = teal, mark = FuseIcons.FolderSync,
-                lines = listOf(FuseIcons.FolderOpen to "Save folders", FuseIcons.Users to "One save for all", FuseIcons.Link2 to "Your Syncthing"),
-                on = syncthing, filled = false,
-                modifier = Modifier.card(leadThing, xThing, 8.dp, drift2, 4f),
-            )
-            if (hasFuseSync) {
-                ChoiceCard(
-                    name = "Fuse One", tag = if (fuseSync) "On" else "Recommended", tint = c.accent, mark = FuseIcons.RefreshCcw,
-                    lines = listOf(FuseIcons.Save to "Saves, by game", FuseIcons.Clock to "Play time", FuseIcons.Users to "Saves per person"),
-                    on = fuseSync, filled = true,
-                    modifier = Modifier.card(leadFuse, xFuse, 0.dp, drift, -3f),
-                )
+        }
+        // The others, small and side by side, so each can be read in full.
+        val others = ways.filter { it.key != lead.key }
+        if (others.isNotEmpty()) {
+            Spacer(Modifier.height(Space.s))
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                for (w in others) WayPill(w)
             }
         }
         Spacer(Modifier.height(Space.m))
-        FText(
-            when {
-                fuseSync -> "Fuse One is on"
-                romm && hasRomm -> "RomM is on"
-                syncthing -> "Syncthing is on"
-                else -> "One moves your saves"
-            },
-            Fuse.type.bodyStrong, maxLines = 1,
-        )
+        FText(line, Fuse.type.bodyStrong, maxLines = 1)
+    }
+}
+
+/** A way to choose on a [LeadStage]. */
+internal data class Way(
+    val key: Int,
+    val name: String,
+    val tag: String,
+    val tint: Color,
+    val mark: ImageVector,
+    val lines: List<Pair<ImageVector, String>>,
+    val on: Boolean,
+    val filled: Boolean,
+)
+
+/** One of the ways that doesn't lead: its mark in its own colour and its name, in a quiet pill. */
+@Composable
+internal fun WayPill(w: Way) {
+    val c = Fuse.colors
+    Row(
+        Modifier.clip(RoundedCornerShape(50)).background(c.surfaceOverlay.copy(alpha = 0.85f))
+            .padding(start = Space.xs, end = Space.m, top = Space.xs, bottom = Space.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(28.dp).clip(RoundedCornerShape(50)).background(w.tint.copy(alpha = 0.2f)),
+            contentAlignment = Alignment.Center,
+        ) { FuseIcon(if (w.on) FuseIcons.Check else w.mark, size = 14.dp, tint = w.tint) }
+        Spacer(Modifier.width(Space.s))
+        FText(w.name, Fuse.type.label, maxLines = 1)
     }
 }
 
