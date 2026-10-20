@@ -1,36 +1,31 @@
-# Fuse 0.4.3.3 - The Overdrive Update
+# Fuse 0.4.3.4 - The Overdrive Update
 
-A question for Switch saves of a game Fuse can't tell, recomps offered only for their own ROM,
-Decky's Steam port left alone, and recomp folders that can't be reached past.
+Your theme stays chosen even beside an older Fuse, and a device says which Fuse the host runs now.
 
 ## New
 
-- **"What game is this?" for Switch saves.** When a JKSV or Checkpoint backup is of a game Fuse
-  can't match to any of yours (another title id, and a name in its folder that isn't your
-  library's), the import no longer passes it over. It asks which game it is first, showing what the
-  backup says (its folder's name, its title id, whose it is and when it was made) above your Switch
-  games, the likeliest first, with Show Every Game for the rest. Choose one and its saves go where
-  the emulator keeps that game's; Leave It Out skips them.
+- Nothing new in this release.
 
 ## Changed
 
-- **Recomps are offered for their own ROM.** Play With offers an N64 recomp only for the very ROM it
-  is made from, known by its hash as the recomp checks it, now read from inside a zip too. A ROM
-  that is another revision, another region or a hack is offered none. When Fuse can't read the ROM
-  (a 7z, a disk image), the recomp of the same game is offered marked Unverified, naming the
-  cartridge it is made from (Zelda 64: Recompiled is made from the North American 1.0 Majora's
-  Mask). A PlayStation port offered by the game's name, with no title id to check, is marked the
-  same way.
+- A Fuse writes only what you changed in it. Before, each time it saved its settings it wrote
+  everything it was showing, so a Fuse showing settings from a moment ago (one open beside another
+  on the same computer, like a game Steam started with Fast Start next to the open Fuse) put them
+  back, and Fuse One sent them to every device as your newest choices. What changed in Fuse's
+  settings by any other way is now shown, and never written over.
 
 ## Fixed
 
-- **Turning off Change Steam While It Runs closed Decky's port.** Fuse took away the file that
-  opens Steam's debug port even when Decky Loader's installer had put it there, and Decky uses that
-  port too. Fuse now marks the file it writes, takes away only that one, and none while Decky
-  Loader is installed. Off still means Fuse stops using the port; when the port stays open for
-  Decky or another program, Fuse says so, with the file to remove if you want it closed.
-- **A recomp's folder can't be used to reach past it.** Fuse reads and writes a recomp's settings,
-  mods and controls only in that recomp's own folder, but a symbolic link inside the folder that
-  pointed elsewhere could take a read or a write past it. Folders are now compared where they
-  really are, every link followed, and a recomp folder that is itself a link (as dotfiles managers
-  make) still works.
+- Twin or Viewfinder went back to Fuse a few seconds after you chose it, even on 0.4.3.2 and
+  0.4.3.3. A device in the household on a Fuse from before 0.4.3.1 hasn't got those themes, shows
+  Fuse instead, and before 0.4.3.2 it sent Fuse to all your devices as your newest choice every
+  time it saved its settings. 0.4.3.2 stopped new devices doing this, but it couldn't change the
+  older ones. Now the host leaves out Fuse sent by a Fuse from before 0.4.3.2 over a theme that
+  Fuse hasn't got; everything else that device sends still counts. The host updates itself once a
+  device runs 0.4.3.4 (Docker hosts with docker compose pull). Choose your theme once more after it
+  has, and it stays.
+- About said the host already runs the newest Fuse while Fuse One said it runs an older one. The
+  host updates itself a minute or two after a device with a newer Fuse connects, but a device
+  asked it which Fuse it runs only every ten minutes. A device now asks every minute while the
+  host's Fuse is older than its own, and Update the Fuse One Host shows the Fuse the host answers
+  with straight away.
