@@ -187,6 +187,10 @@ class AppState(
 
     /** Search or Settings in the top line has controller focus (only while [focusZone] is TABS). */
     var hudButton by mutableStateOf<HudButton?>(null)
+
+    /** The theme puts the top line in a dock under the page: the page reaches it going down, not up. */
+    var barDocked by mutableStateOf(false)
+
     var quickMenuOpen by mutableStateOf(false)
     /** Counts the times Start + Select held reset the controls, so a screen part way through changing them lets go. */
     var controlsResets by mutableStateOf(0)

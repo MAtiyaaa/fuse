@@ -102,12 +102,19 @@ class DesktopFuseServices private constructor(
         DesktopPortFiles(File(dirs.data), File(dirs.cache, "port-downloads"), os)
     }
 
+    /** Recomps the person installed, and their own folders: Fuse's ports folder and its controls profiles beside it. */
+    override val recompFiles: io.github.matiyaaa.fuse.ui.shell.store.RecompFiles by lazy {
+        DesktopRecompFiles(os, File(dirs.data, "ports"), File(dirs.data, "recomp-profiles"))
+    }
+
     /** No Apps section on a desktop: Fuse manages games there, not programs. */
     override val apps: AppsProvider? = null
     override val locations: DeviceLocations = DesktopLocations(folders)
     override val volumes: VolumeMonitor = io.github.matiyaaa.fuse.desktop.platform.DesktopVolumes(os)
     override val emulatorFiles: io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles =
         DesktopEmulatorFiles(os, backups = java.io.File(dirs.data, "emulator-backups"))
+
+    override val archives: io.github.matiyaaa.fuse.ui.shell.store.Archives = DesktopArchives()
 
     /** The home network's addresses as Fuse One gives them to the household: no container's, VPNs last. */
     override fun homeAddresses(): List<String> = io.github.matiyaaa.fuse.sync.LanAddresses.list()

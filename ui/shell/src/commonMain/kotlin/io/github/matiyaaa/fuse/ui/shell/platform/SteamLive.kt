@@ -7,8 +7,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 
 /**
- * One change to Steam's library made through Steam's own running client by the Fuse Decky plugin
- * (bridge protocol 2), so Steam needn't close or restart for it. [appId] is the entry's id in Steam
+ * One change to Steam's library made through Steam's own running client, by the Fuse Decky plugin
+ * (bridge protocol 2) or by Fuse itself through Steam's local debug port ([SteamClientLink]), so
+ * Steam needn't close or restart for it. [appId] is the entry's id in Steam
  * (unsigned 32-bit) for an update, a removal or a start ([Op.RUN]: Steam starts the entry as if it
  * were chosen in its library). [art] names Fuse's own picture files by Steam's asset type
  * (`capsule`, `hero`, `logo`, `header`, `icon`); the plugin fetches each through the bridge, never
@@ -43,37 +44,40 @@ data class SteamLogo(val pinned: String, val widthPct: Int, val heightPct: Int) 
     }
 }
 
-/** How the plugin says one change went: the entry's id in Steam (a new entry's, for an add), or why it failed. */
+/** How one change went: the entry's id in Steam (a new entry's, for an add), or why it failed. */
 data class SteamLiveResult(val ok: Boolean, val appId: Long? = null, val message: String? = null)
 
 /**
- * Changes waiting for the Fuse Decky plugin to make them in Steam's running client, and what was
- * made this way while Steam has been running (Steam writes its library file only when it quits, so
- * until then the file doesn't show them; [made] does). The plugin takes the waiting changes when it
- * asks ([take], which also says it is there), makes each, and reports ([done]).
+ * Changes waiting to be made in Steam's running client, and what was made this way while Steam has
+ * been running (Steam writes its library file only when it quits, so until then the file doesn't
+ * show them; [made] does). Whatever makes them (the Fuse Decky plugin, or Fuse through Steam's
+ * local debug port) takes the waiting changes when it asks ([take], which also says it is there),
+ * makes each, and reports ([done]). Each change is handed out once, so the two can never both make
+ * it.
  *
- * The plugin counts as there ([connected]) for a few seconds after it last asked: it asks every
- * couple of seconds while Steam runs. Changes it doesn't make in time are taken back ([offer] gives
- * up on them), and Fuse goes the usual way: written when Steam closes.
+ * Steam's client counts as reachable ([connected]) for a few seconds after something last asked:
+ * each asks every couple of seconds while Steam runs. Changes not made in time are taken back
+ * ([offer] gives up on them), and Fuse goes the usual way: written when Steam closes.
  */
 class SteamLiveQueue(private val now: () -> Long) {
     private val lock = Mutex()
     private val waiting = LinkedHashMap<Long, Pair<SteamLiveChange, CompletableDeferred<SteamLiveResult>>>()
+    private val handedOut = HashSet<Long>()
     private val madeHere = HashMap<Long, Long>()
     private val notices = ArrayDeque<String>()
     private var next = 1L
 
     @kotlin.concurrent.Volatile private var lastAsked = Long.MIN_VALUE / 2
 
-    /** The plugin asked recently, so changes can go through Steam's running client. */
+    /** Something asked recently, so changes can go through Steam's running client. */
     val connected: Boolean get() = now() - lastAsked < CONNECTED_MS
 
-    /** Fuse's entries made or changed through the plugin since Steam started: game id to the entry's id in Steam. */
+    /** Fuse's entries made or changed in Steam's running client since Steam started: game id to the entry's id in Steam. */
     suspend fun made(): Map<Long, Long> = lock.withLock { HashMap(madeHere) }
 
     /**
-     * Queues [changes] for the plugin and waits up to [waitMs] for it to make them. The results are
-     * in the same order; a change the plugin didn't make in time is taken back and comes back as not
+     * Queues [changes] for Steam's running client and waits up to [waitMs] for them to be made. The
+     * results are in the same order; a change not made in time is taken back and comes back as not
      * done, so nothing is half made by both ways.
      */
     suspend fun offer(changes: List<SteamLiveChange>, waitMs: Long = OFFER_WAIT_MS): List<SteamLiveResult> {
@@ -87,24 +91,33 @@ class SteamLiveQueue(private val now: () -> Long) {
         }
         return queued.map { (id, result) ->
             withTimeoutOrNull(waitMs) { result.await() } ?: run {
-                // Taken back, unless the plugin reported it meanwhile (then its answer is in).
-                val takenBack = lock.withLock { waiting.remove(id) != null }
-                if (takenBack) SteamLiveResult(false, message = "The Fuse plugin didn't answer in time") else result.await()
+                // Taken back, unless it was reported meanwhile (then its answer is in).
+                val takenBack = lock.withLock { (waiting.remove(id) != null).also { handedOut.remove(id) } }
+                if (takenBack) SteamLiveResult(false, message = "Steam didn't answer in time") else result.await()
             }
         }
     }
 
-    /** The changes waiting, for the plugin to make; asking also says the plugin is there. */
+    /**
+     * The changes waiting that nobody has taken yet, to make; each is handed out once. Asking also
+     * says Steam's client is reachable.
+     */
     suspend fun take(): List<SteamLiveChange> = lock.withLock {
         lastAsked = now()
-        waiting.values.map { it.first }
+        waiting.entries.filter { handedOut.add(it.key) }.map { it.value.first }
+    }
+
+    /** Says Steam's client is reachable without taking anything (for what asks only to keep that true). */
+    fun reachable() {
+        lastAsked = now()
     }
 
     /** A waiting change, by its id (for its pictures). */
     suspend fun change(id: Long): SteamLiveChange? = lock.withLock { waiting[id]?.first }
 
-    /** The plugin made (or couldn't make) change [id]. False for a change no longer waiting. */
+    /** Change [id] was made (or couldn't be). False for a change no longer waiting. */
     suspend fun done(id: Long, result: SteamLiveResult): Boolean = lock.withLock {
+        handedOut.remove(id)
         val (change, deferred) = waiting.remove(id) ?: return@withLock false
         if (result.ok) {
             when (change.op) {
@@ -137,13 +150,31 @@ class SteamLiveQueue(private val now: () -> Long) {
     suspend fun steamClosed() = lock.withLock { madeHere.clear() }
 
     companion object {
-        /** How long after the plugin last asked it still counts as there. */
+        /** How long after something last asked Steam's client still counts as reachable. */
         const val CONNECTED_MS = 10_000L
 
-        /** How long a change waits for the plugin before Fuse goes the usual way. */
+        /** How long a change waits to be made before Fuse goes the usual way. */
         const val OFFER_WAIT_MS = 15_000L
 
         /** The most notices kept for Steam to show. */
         const val MAX_NOTICES = 4
     }
+}
+
+/**
+ * Steam's own running client, reached through the local debug port Steam opens when a file named
+ * `.cef-enable-remote-debugging` is in its folder (as Decky Loader's installer sets it up). Through
+ * it Fuse makes [SteamLiveQueue]'s changes itself, with the same calls the Fuse Decky plugin makes,
+ * so Steam's library changes while Steam runs with no plugin at all. Off until the person turns it
+ * on: the port lets programs on this computer reach Steam's client.
+ */
+interface SteamClientLink {
+    /** Steam is set to open its local debug port when it starts. */
+    suspend fun allowed(): Boolean
+
+    /** Sets it [on] (or off) for every Steam here; Steam takes either the next time it starts. */
+    suspend fun allow(on: Boolean): Result<String>
+
+    /** Steam's running client answers on the port right now. */
+    suspend fun listening(): Boolean
 }

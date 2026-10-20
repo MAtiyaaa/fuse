@@ -133,6 +133,10 @@ private fun StorePage(app: AppState, state: StoreState, item: StoreApp) {
                 )
             })
         }
+        // Graphic packs, patches, firmware and online services for the emulator, as it gets them itself.
+        if (installed != null && state.desktop && key in EXTRAS_EMULATORS && (job == null || !job.active)) {
+            add(PageButton("Extras", FuseIcons.Sparkles, ButtonKind.SECONDARY) { app.extrasSheet(key, item.name) })
+        }
         installed?.record?.earlier?.takeIf { it.isNotEmpty() && (job == null || !job.active) }?.let { earlier ->
             val label = if (earlier.size == 1) "Go Back to ${earlier.single().version ?: "the Version You Had"}" else "Go Back to an Earlier Version"
             add(PageButton(label, FuseIcons.Undo, ButtonKind.SECONDARY) { goBack(app, key, item.name, installed.versionName, earlier) })

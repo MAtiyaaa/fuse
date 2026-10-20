@@ -656,4 +656,18 @@ class MoreAdaptersTest {
         assertFalse(SaveAdapters.forEmulator("linux.port")!!.locate(game, none).single().available)
         assertFalse(SaveAdapters.forEmulator("linux.port")!!.locate(game, FakeEnv("LINUX", "/home/ana")).single().available)
     }
+
+    @Test
+    fun aPortWhoseFolderHoldsMoreThanSavesKeepsOnlyTheFilesItsLauncherNames() {
+        val launcher = "/home/ana/.local/share/fuse/ports/yours-pt-pc/yours-pt-pc.fuseport"
+        val game = q("ports", launcher, "linux.port", title = "P.T.")
+        val env = FakeEnv(
+            "LINUX", "/home/ana",
+            files = mapOf(launcher to """{"port":"pt-pc","version":"yours","argv":["/home/ana/Games/PT/pt"],"cwd":"/home/ana/Games/PT","saves":"/home/ana/Games/PT/data","saveFiles":["PT_Save_Data0","PT_Save_Data1","../escape"]}"""),
+        )
+        val spot = SaveAdapters.forEmulator("linux.port")!!.locate(game, env).single()
+        assertEquals(null, spot.root, "not the whole folder: its settings, logs and caches stay")
+        assertEquals(listOf("PT_Save_Data0" to "/home/ana/Games/PT/data/PT_Save_Data0", "PT_Save_Data1" to "/home/ana/Games/PT/data/PT_Save_Data1"), spot.files.map { it.name to it.path })
+        assertEquals("port.pt-pc", spot.format)
+    }
 }

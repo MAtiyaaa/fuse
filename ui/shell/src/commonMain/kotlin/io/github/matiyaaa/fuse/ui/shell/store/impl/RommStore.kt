@@ -1423,13 +1423,16 @@ internal class DefaultRommOps(
                 return
             }
             val r = mirror.rom(job.server, job.romId) ?: return
+            // A game that came as an archive its emulators can't open is unpacked first, beside where it
+            // landed, and the archive Fuse just fetched goes once the files are whole.
+            val files = if (job.newFolder || r.multi) paths else unpackIfNeeded(r.platformSlug, r.name, paths)
             val gamePath = item.place?.let { p -> TransferPlaces.resolve(p, engine.drives.volumes.value) } ?: return
             // The folder a game landed in is one Fuse reads: a system folder outside every library is added.
             val inLibrary = ctx.data.sources.all().any { it.enabled && FsPath.isWithin(FsPath.normalize(gamePath), FsPath.normalize(it.path)) }
             if (!inLibrary) FsPath.parent(gamePath)?.let { engine.add(it, LibrarySourceKind.PLATFORM_FOLDER) }
             // The game made from these files takes what was already found for the RomM game.
             // Only the game's own file or folder, never a system folder other games share.
-            val landed = if (job.newFolder || r.multi) gamePath else paths.firstOrNull()
+            val landed = if (job.newFolder || r.multi) gamePath else files.firstOrNull()
             if (landed != null) landedAt.update { it + (FsPath.normalize(landed) to r.id) }
             if (settings.scanAfterDownload) {
                 engine.rescan(ScanScope.PLATFORM, ctx.platforms.resolveFolder(r.platformSlug)?.id)
@@ -1438,7 +1441,7 @@ internal class DefaultRommOps(
                     kotlinx.coroutines.withTimeoutOrNull(120_000) {
                         engine.scan.first { it.phase == io.github.matiyaaa.fuse.model.ScanPhase.DONE || it.phase == io.github.matiyaaa.fuse.model.ScanPhase.FAILED }
                     }
-                    val lead = paths.firstOrNull()
+                    val lead = files.firstOrNull()
                     val target = if (job.newFolder || r.multi) gamePath else lead ?: gamePath
                     // A picture that can't be had leaves the game without it, never the download failed.
                     suspend fun picture(path: String?): String? = path?.let { p -> runCatching { rommArtCache?.file(job.server, p) }.getOrNull() }
@@ -1456,6 +1459,32 @@ internal class DefaultRommOps(
         }
 
         override fun scanStarted(taskId: String) = followScan(taskId)
+
+        /**
+         * [paths] as they are, or, for one archive of a system whose emulators can't open it
+         * ([io.github.matiyaaa.fuse.launch.extras.Unpacking]), the folder it was unpacked into.
+         */
+        private suspend fun unpackIfNeeded(slug: String, name: String, paths: List<String>): List<String> {
+            val archive = paths.singleOrNull() ?: return paths
+            val platform = ctx.platforms.resolveFolder(slug) ?: return paths
+            if (!io.github.matiyaaa.fuse.launch.extras.Unpacking.needed(platform, archive)) return paths
+            val archives = ctx.services.archives ?: return paths
+            if (io.github.matiyaaa.fuse.launch.extras.Unpacking.kind(archive) !in archives.kinds()) {
+                noticeFlow.tryEmit("$name came as a ${io.github.matiyaaa.fuse.launch.extras.Unpacking.kind(archive)} file, which ${platform.shortName} emulators can't open, and Fuse can't unpack it here. Unpack it, then scan again.")
+                return paths
+            }
+            val folder = io.github.matiyaaa.fuse.launch.extras.Unpacking.folder(archive)
+            return archives.unpack(archive, folder).fold(
+                onSuccess = {
+                    ctx.services.fs.delete(archive)
+                    listOf(folder)
+                },
+                onFailure = { e ->
+                    noticeFlow.tryEmit("$name couldn't be unpacked (${e.message ?: "it may be damaged"}). The archive is kept as it came.")
+                    paths
+                },
+            )
+        }
 
         override suspend fun uploaded(job: RommUploadJob, item: TransferItem, romId: Long?) {
             if (job.skipped.isNotEmpty()) noticeFlow.tryEmit(if (job.skipped.size == job.files.size) "RomM already had ${item.title}" else "Sent ${item.title} to RomM (it already had some of it)")

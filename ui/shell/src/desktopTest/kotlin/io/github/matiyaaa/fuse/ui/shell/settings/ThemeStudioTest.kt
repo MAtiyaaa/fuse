@@ -101,7 +101,7 @@ class ThemeStudioTest {
     fun simpleKeepsTheMainChoicesAndAdvancedHasEveryOne() {
         val s = StudioState.of(ThemePresets.byId("fuse"), custom = false, file = null, advanced = false)
         assertTrue(s.simple)
-        assertEquals(listOf(StudioStep.ROOM, StudioStep.ACCENT, StudioStep.SHAPE, StudioStep.SCENE, StudioStep.EFFECTS, StudioStep.SAVE), s.steps())
+        assertEquals(listOf(StudioStep.ROOM, StudioStep.ACCENT, StudioStep.SHAPE, StudioStep.LAYOUT, StudioStep.SCENE, StudioStep.EFFECTS, StudioStep.SAVE), s.steps())
         fun rows() = s.lines().mapNotNull { (it as? StudioLine.Main)?.row }
         assertEquals(listOf(StudioRow.DEPTH, StudioRow.MODE, StudioRow.NEXT), rows(), "no room colours to fine-tune in Simple")
         s.go(StudioStep.EFFECTS)

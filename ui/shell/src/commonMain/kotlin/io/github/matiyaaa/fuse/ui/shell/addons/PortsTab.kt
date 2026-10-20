@@ -88,6 +88,8 @@ fun PortsTab(app: AppState, active: Boolean, topPadding: Dp) {
     val state by ops.state.collectAsState()
     val focused = active && app.focusZone == FocusZone.CONTENT && !app.overlayOpen
     LaunchedEffect(Unit) { ops.open() }
+    // Recomps the person installed themselves: shown here, chosen from each game's Play With.
+    val yours by androidx.compose.runtime.produceState(emptyList<io.github.matiyaaa.fuse.ui.shell.store.FoundRecomp>(), state.loaded) { value = ops.yourRecomps() }
     val actions = buildList {
         if (state.canCheck) add(TopAction("Look Again", FuseIcons.RefreshCcw) { ops.refresh() })
         add(TopAction("Settings", FuseIcons.Settings) { app.go(Route.Settings("addons")) })
@@ -158,6 +160,15 @@ fun PortsTab(app: AppState, active: Boolean, topPadding: Dp) {
                         })
                     }
                 }
+            }
+            if (yours.isNotEmpty()) {
+                item("yours-head") {
+                    FText(
+                        "Ports and recomps you installed".uppercase(), Fuse.type.overline, color = Fuse.colors.textMuted, maxLines = 1,
+                        modifier = Modifier.padding(start = Space.gutter, top = Space.m),
+                    )
+                }
+                for (y in yours) item("yours-${y.id}-${y.path}") { YourRecompCard(y, compact) }
             }
         }
     }
@@ -255,6 +266,33 @@ private fun PortCard(v: PortView, selected: Boolean, compact: Boolean, onClick: 
                 }
             }
         }
+    }
+}
+
+/**
+ * A recomp the person installed themselves: what it is, how it was installed, and where to choose
+ * it (the game's own Play With, beside its emulator).
+ */
+@Composable
+private fun YourRecompCard(y: io.github.matiyaaa.fuse.ui.shell.store.FoundRecomp, compact: Boolean) {
+    val c = Fuse.colors
+    val name = io.github.matiyaaa.fuse.launch.ports.NativePorts.name(y.id) ?: return
+    val game = io.github.matiyaaa.fuse.launch.ports.NativePorts.game(y.id) ?: return
+    Row(
+        Modifier.padding(horizontal = Space.gutter).widthIn(max = 960.dp).fillMaxWidth().clip(RoundedCornerShape(Fuse.geometry.panel))
+            .background(c.surfaceRaised.copy(alpha = 0.6f))
+            .padding(if (compact) Space.s else Space.m),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Monogram(game, if (compact) 40.dp else 48.dp)
+        Spacer(Modifier.width(Space.m))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            FText(game, Fuse.type.bodyStrong, maxLines = 1)
+            FText(listOfNotNull(name, "Your ${y.how}", y.version).joinToString("  ·  "), Fuse.type.caption, color = c.textMuted, maxLines = 1)
+            FText("Choose it in the game's Play With, beside its emulator. Its saves are kept in step on every device.", Fuse.type.caption, color = c.textMuted, maxLines = if (compact) 1 else 2)
+        }
+        Spacer(Modifier.width(Space.m))
+        Chip(FuseIcons.Check, "Found", c.success)
     }
 }
 

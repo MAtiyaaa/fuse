@@ -627,11 +627,54 @@ private fun FocusedCollection(store: FuseStore, id: CollectionId) {
     }
 }
 
-/** A system: its logo in white, large and centred over its room, exactly like a game's. */
+/**
+ * A system: its logo in white, large and centred over its room, exactly like a game's; or, in a
+ * theme whose second screen is a showcase ([io.github.matiyaaa.fuse.model.SecondScreenLook.SHOWCASE]),
+ * the system set out as a handheld's top screen shows it: its logo at the start, who made it and
+ * when, and how much of it is here, over its room.
+ */
 @Composable
 private fun FocusedPlatform(card: PlatformCard?) {
     card ?: return
-    GameLogo(card.art.logo, card.platform.name, tint = Color.White)
+    if (Fuse.look.spec.layout.secondScreen == io.github.matiyaaa.fuse.model.SecondScreenLook.SHOWCASE) SystemShowcase(card)
+    else GameLogo(card.art.logo, card.platform.name, tint = Color.White)
+}
+
+@Composable
+private fun SystemShowcase(card: PlatformCard) {
+    val p = card.platform
+    BoxWithConstraints(Modifier.fillMaxSize().padding(start = Space.xl, end = Space.xl, top = CompanionTopBar, bottom = CompanionDotsBar + Space.s)) {
+        val maxW = maxWidth
+        // A shade from the start, where the words are, so they read over any art.
+        Box(
+            Modifier.fillMaxSize().ditheredBackground(
+                Brush.horizontalGradient(listOf(Fuse.colors.ink.copy(alpha = 0.72f), Fuse.colors.ink.copy(alpha = 0.3f), Color.Transparent)),
+            ),
+        )
+        Column(Modifier.align(Alignment.CenterStart).widthIn(max = maxW * 0.62f)) {
+            Artwork(
+                card.art.logo,
+                Modifier.width(maxW * 0.46f).height(maxW * 0.12f),
+                contentScale = ContentScale.Fit,
+                focusX = 0f,
+                tint = Color.White,
+                fadeIn = true,
+                fallback = { FText(p.name, Fuse.type.display, maxLines = 2) },
+            )
+            Spacer(Modifier.height(Space.m))
+            val made = listOfNotNull(p.manufacturer, p.releaseYear?.toString()).joinToString("  ·  ")
+            if (made.isNotEmpty()) FText(made, Fuse.type.titleSmall, color = Fuse.colors.text, maxLines = 1)
+            Spacer(Modifier.height(Space.xs))
+            FText(
+                when (card.gameCount) {
+                    0 -> "No games here yet"
+                    1 -> "1 game"
+                    else -> "${card.gameCount} games"
+                } + (card.emulatorName?.let { "  ·  plays in $it" } ?: ""),
+                Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 2,
+            )
+        }
+    }
 }
 
 /** The game being played: its logo over its room, how long this session has run, and its achievements. */

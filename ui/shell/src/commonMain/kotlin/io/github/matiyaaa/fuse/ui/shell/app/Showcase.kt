@@ -164,7 +164,7 @@ fun ShowcaseApp(store: FuseStore, platform: PlatformUi, displaySession: io.githu
                             val motion = Fuse.motion
                             Swap(
                                 targetState = ShowcaseContent(target, direction),
-                                modifier = Modifier.fillMaxSize().padding(top = Size.hudHeight, bottom = SHOWCASE_DOTS),
+                                modifier = Modifier.fillMaxSize().padding(top = Size.hudLine, bottom = SHOWCASE_DOTS),
                                 transitionSpec = {
                                     val dir = targetState.direction
                                     val enter = fadeIn(motion.fade(Durations.SLOW))
@@ -205,8 +205,8 @@ fun ShowcaseApp(store: FuseStore, platform: PlatformUi, displaySession: io.githu
                             }
                         }
                     }
-                    1 -> Box(Modifier.fillMaxSize().padding(top = Size.hudHeight - CompanionTopBar + Space.s)) { StatusPage(store, platform, status) }
-                    else -> Box(Modifier.fillMaxSize().padding(top = Size.hudHeight - CompanionTopBar + Space.s)) { ControlsPage(store, platform) }
+                    1 -> Box(Modifier.fillMaxSize().padding(top = Size.hudLine - CompanionTopBar + Space.s)) { StatusPage(store, platform, status) }
+                    else -> Box(Modifier.fillMaxSize().padding(top = Size.hudLine - CompanionTopBar + Space.s)) { ControlsPage(store, platform) }
                 }
             }
             // The top line over every page (but not over a film filling the screen).
@@ -214,7 +214,7 @@ fun ShowcaseApp(store: FuseStore, platform: PlatformUi, displaySession: io.githu
             if (!filmHere) {
                 // The mark at the start, the page's name in the middle of the screen (cross-fading
                 // with the swipe), the status at the end.
-                Box(Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = Space.l).height(Size.hudHeight - Space.l)) {
+                Box(Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = Space.l).height(Size.hudLine - Space.l)) {
                     FuseMark(Modifier.align(Alignment.CenterStart).size(28.dp))
                     listOf("Fuse", "Status", "Controls").forEachIndexed { i, title ->
                         FText(

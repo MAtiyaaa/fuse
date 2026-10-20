@@ -255,7 +255,7 @@ internal fun AppState.addToSteam(cards: List<GameCard>, what: String) {
             .takeIf { starts.isNotEmpty() }
         // Steam closed, or open with the Fuse Decky plugin there to put them in through Steam itself.
         if (!open || steam.changesLive) {
-            val live = if (open) "\n\nSteam is open, so the Fuse plugin puts them in through Steam now; their collections follow when Steam next closes." else ""
+            val live = if (open) "\n\nSteam is open, so they go in through Steam now; their collections follow when Steam next closes." else ""
             ask = {
                 choice = ChoiceSpec(
                     title = "Add $what to Steam?",

@@ -29,6 +29,8 @@ internal class TogetherStore(
     private val startsIn: suspend (Game) -> InstalledEmulator?,
     private val sync: () -> SyncLaunch?,
     private val saveQuery: suspend (GameId) -> SaveQuery?,
+    /** Makes an RPCN account over the network ([RpcnNetwork.create]); a test's own in tests. */
+    private val rpcnNetwork: suspend (host: String, npid: String, derived: String, email: String) -> String? = { h, n, d, e -> io.github.matiyaaa.fuse.launch.online.RpcnNetwork.create(h, n, d, e) },
 ) {
     private val data = ctx.data
 
@@ -257,6 +259,38 @@ internal class TogetherStore(
         // RPCS3's network through RPCN too, if it isn't yet: an account alone doesn't take its games online.
         settings.setTogether(installed.id, PlayTogether.rpcs3)
         return null
+    }
+
+    /**
+     * Makes an RPCN account from Fuse, as RPCS3's own dialog makes it (Configuration, RPCN, Create
+     * Account): the password stretched as RPCS3 does, then RPCS3 signed in with it, waiting only for
+     * the token RPCN emails ([rpcnToken]). Null when made, else why not.
+     */
+    suspend fun create(id: GameId, user: String, password: String, email: String): String? {
+        val installed = installedFor(id)?.takeIf { family(it) == "rpcs3" } ?: return "This game doesn't start in RPCS3 here."
+        val name = user.trim()
+        val mail = email.trim()
+        if (!Rpcn.validUser(name)) return "An RPCN user name is up to 16 letters, digits, - or _."
+        if (password.length < 3) return "Choose a longer RPCN password."
+        if (!Rpcn.validEmail(mail)) return "That isn't an email address RPCN takes."
+        val (files, path) = settings.rpcnPath(installed.id) ?: return "Start RPCS3 once so it sets up its folders, then try again."
+        val current = ctx.services.fs.readText(path, MAX_TEXT)
+        val host = Rpcn.account(current)?.host ?: Rpcn.HOST
+        val derived = withContext(Dispatchers.Default) { Rpcn.derivePassword(password) }
+        rpcnNetwork(host, name, derived, mail)?.let { return it }
+        // Made: RPCS3 signs in with it once the token is in, as after its own dialog.
+        if (!files.writePrivate(path, Rpcn.signIn(current, name, derived, ""))) return "The account was made, but Fuse couldn't write RPCS3's RPCN settings. Sign in with it."
+        settings.setTogether(installed.id, PlayTogether.rpcs3)
+        return null
+    }
+
+    /** RPCS3's RPCN account given the [token] RPCN emailed. Null when done, else why not. */
+    suspend fun token(id: GameId, token: String): String? {
+        val installed = installedFor(id)?.takeIf { family(it) == "rpcs3" } ?: return "This game doesn't start in RPCS3 here."
+        if (!Rpcn.validToken(token.trim())) return "The token is the code RPCN sent to your email, up to 16 letters and digits."
+        val (files, path) = settings.rpcnPath(installed.id) ?: return "Start RPCS3 once so it sets up its folders, then try again."
+        val text = ctx.services.fs.readText(path, MAX_TEXT) ?: return "RPCS3 has no RPCN account yet."
+        return if (files.writePrivate(path, Rpcn.withToken(text, token.trim()))) null else "Fuse couldn't write RPCS3's RPCN settings."
     }
 
     suspend fun signOut(id: GameId): Boolean {

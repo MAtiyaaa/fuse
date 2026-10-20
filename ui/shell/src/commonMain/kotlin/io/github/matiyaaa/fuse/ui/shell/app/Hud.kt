@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse.ui.shell.app
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -182,7 +183,7 @@ fun Hud(
     BoxWithConstraints(
         modifier
             .fillMaxWidth()
-            .height(Size.hudHeight)
+            .height(Size.hudLine)
             .onGloballyPositioned { anchors.setLine(it.positionInRoot().x) },
     ) {
         // Room for every label: about 120dp per tab plus the mark, the LB/RB glyphs, buttons and status.
@@ -859,12 +860,22 @@ private fun Tab(label: String, icon: ImageVector, selected: Boolean, focused: Bo
     }
 }
 
+/** The pill the top line sits in when a theme docks it, in its own band along the foot of the screen. */
+@Composable
+internal fun Modifier.dockPill(): Modifier {
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(50)
+    return padding(horizontal = Space.gutter, vertical = io.github.matiyaaa.fuse.ui.designsystem.theme.Chrome.DockGap)
+        .clip(shape)
+        .background(Fuse.colors.surfaceOverlay.copy(alpha = 0.9f))
+        .border(Size.stroke, Fuse.colors.hairline, shape)
+}
+
 /**
  * A soft band of the room's colour behind the top line, so its tabs, buttons and status read over
  * any art in every theme: dark art under a bright theme's dark text, or bright art under a dark
  * theme's white text. It is strongest behind the line and gone a little below it, and it eases in
  * and out with [art] (whether a game's or system's art fills the room). Content scrolled up under
- * the line fades into it the same way.
+ * the line fades into it the same way. A docked line goes without it.
  */
 @Composable
 fun HudScrim(art: Boolean, modifier: Modifier = Modifier) {
@@ -876,7 +887,7 @@ fun HudScrim(art: Boolean, modifier: Modifier = Modifier) {
     Spacer(
         modifier
             .fillMaxWidth()
-            .height(Size.hudHeight + Space.xxl)
+            .height(Size.hudLine + Space.xxl)
             .drawWithCache {
                 // Full behind the line, then a long eased tail, so it never reads as a bar.
                 val brush = Brush.verticalGradient(

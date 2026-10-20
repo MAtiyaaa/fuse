@@ -352,7 +352,7 @@ private class OnboardingLayout(
                 gutter = gutter,
                 top = if (short) Space.l else Space.x3,
                 // Room for the fuse line and the hints under it.
-                bottom = Size.hintHeight + Space.x3 + Space.s,
+                bottom = Size.hintLine + Space.x3 + Space.s,
             )
         }
     }

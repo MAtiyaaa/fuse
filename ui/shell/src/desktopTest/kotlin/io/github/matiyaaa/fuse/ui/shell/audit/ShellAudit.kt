@@ -906,6 +906,14 @@ internal fun AuditDriver.lookScreens() {
         }
     }
 
+    // A theme that moves the bar: pages and hints above the dock, and a page with no art over the room.
+    scenario("themes", "Twin docked") {
+        useLibrary { it.copy(themeId = ThemePresets.Twin.id) }
+        waitFor("Continue playing")
+        openSettings()
+        shoot("Settings over the blocks", 2_000)
+    }
+
     themeScreens()
 
     scenario("effects", "performance overlay") {

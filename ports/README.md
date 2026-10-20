@@ -47,3 +47,11 @@ openssl pkey -in ports-signing.pem -pubout -outform DER | tail -c 32 | base64
 Keep the private key out of the repository. From then on, the Ports workflow signs the list each
 night and puts `index.json` and `index.json.sig` on the `ports` pre-release, and a Fuse carrying
 the public key shows the ports that passed as verified.
+
+## PlayStation games' native ports
+
+`native.json` lists the PlayStation games rebuilt to run natively that Fuse finds when the person
+installed them (`core:launch` `PsPorts`), and the files each release must still hold. Each night
+`tools/ports/native_check.py` checks them against each project's newest release; a change opens an
+issue labelled `native-port-changed`. Keep each entry the same as its `PsPorts` entry: a test
+compares them.

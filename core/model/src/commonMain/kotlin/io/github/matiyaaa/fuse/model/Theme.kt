@@ -33,7 +33,43 @@ data class ThemeSpec(
     val widgets: WidgetLook = WidgetLook.LIT,
     /** How game and system tiles are framed. */
     val tiles: TileLook = TileLook.PLAIN,
+    /** Where things are and how big they are: the bar, the tiles, the room between them, the second screen. */
+    val layout: ThemeLayout = ThemeLayout(),
 )
+
+/**
+ * Where a theme puts things and how big it makes them, so a theme changes the shape of Fuse and
+ * not only its colours:
+ *
+ * - [bar]: the sections, buttons and status along the top (Fuse's own), or in a dock along the
+ *   bottom, as a handheld's home screen keeps them under the thumbs.
+ * - [tileScale]: game and system tiles, from small (0.8) to large (1.3), against Fuse's own (1).
+ * - [spacing]: the room between tiles and rows.
+ * - [secondScreen]: what a second screen shows on a device with two (a dual-screen handheld):
+ *   the focused game's or system's art, a showcase of the system with its story, or nothing.
+ */
+@Serializable
+data class ThemeLayout(
+    val bar: BarPlacement = BarPlacement.TOP,
+    val tileScale: Float = 1f,
+    val spacing: Spacing = Spacing.COMFORTABLE,
+    val secondScreen: SecondScreenLook = SecondScreenLook.ART,
+) {
+    companion object {
+        const val MIN_SCALE = 0.8f
+        const val MAX_SCALE = 1.3f
+    }
+}
+
+@Serializable
+enum class BarPlacement { TOP, DOCK }
+
+@Serializable
+enum class Spacing { COMPACT, COMFORTABLE, AIRY }
+
+/** What a second screen shows (see [ThemeLayout.secondScreen]). */
+@Serializable
+enum class SecondScreenLook { ART, SHOWCASE, NOTHING }
 
 /**
  * How game and system tiles are framed, so a theme's tiles look like its own and not only coloured
@@ -42,10 +78,11 @@ data class ThemeSpec(
  * breathes; [PANEL] is a flat card with a thin grey frame, like a handheld's menu cards; [INK] draws a
  * firm outline in the theme's text colour, like a printed card; [NEON] lines the tile in its accent,
  * glowing faintly at rest and brightly once lifted; [MAT] mounts the art in a border of the panel
- * colour, like a print.
+ * colour, like a print; [PRISM] rims the tile in light running from its own colour to the theme's
+ * accent, like the lit frames of a handheld's system tiles, brightest on the one you're on.
  */
 @Serializable
-enum class TileLook { PLAIN, GLOSS, PANEL, INK, NEON, MAT }
+enum class TileLook { PLAIN, GLOSS, PANEL, INK, NEON, MAT, PRISM }
 
 /**
  * How Home's widgets are drawn: [LIT] is the raised panel with a soft light of the widget's own
@@ -145,7 +182,10 @@ enum class BackgroundStyle {
     /** Warm dunes under a high sun, each crest casting a thin shadow. */
     DUNES,
     /** Fusi's room: a pink cartoon sky over a mint hill, where Fusi the pixel dog plays. */
-    FUSI;
+    FUSI,
+
+    /** Rounded squares scattered and breathing, one lit in the accent, as a handheld's menu draws them. */
+    BLOCKS;
 
     /** False for the backgrounds that never move (flat colour, and the room behind game art). */
     val moves: Boolean get() = this != SOLID && this != HERO
@@ -162,6 +202,9 @@ enum class FocusStyle {
     GLOW,
     /** Scale only with a bar underneath (no colour needed to read it). */
     BAR,
+
+    /** Corner brackets close in around the tile in the accent, as a camera frames its subject. */
+    BRACKETS,
 }
 
 @Serializable

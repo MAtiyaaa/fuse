@@ -94,7 +94,7 @@ internal class DefaultFuseStore private constructor(
     override val appStore: AppStoreOps = appStoreOps ?: desktopStoreOps ?: AppStoreOps.None
     /** Fuse Ports, where the computer has a folder for them; made when Ports is first shown. */
     override val ports: io.github.matiyaaa.fuse.ui.shell.store.PortsOps by lazy {
-        ctx.services.portFiles?.let { PortsStore(ctx, it, library = { library }, write = { t -> writeSettings(t) }) } ?: io.github.matiyaaa.fuse.ui.shell.store.PortsOps.None
+        ctx.services.portFiles?.let { PortsStore(ctx, it, library = { library }, write = { t -> writeSettings(t) }, recompFiles = ctx.services.recompFiles) } ?: io.github.matiyaaa.fuse.ui.shell.store.PortsOps.None
     }
     // Made when Fuse first shows or plays media, never by a Fast Start.
     override val jellyfin by lazy {
@@ -118,6 +118,10 @@ internal class DefaultFuseStore private constructor(
             .stateIn(ctx.scope, kotlinx.coroutines.flow.SharingStarted.Eagerly, library.home.value)
     }
     override val content = DefaultContentOps(ctx, emulators) { engine.drives.volumes.value }
+
+    override val extras: io.github.matiyaaa.fuse.ui.shell.store.ExtrasOps by lazy {
+        ExtrasStore(ctx, detect = { emulators.detectNow() }, bios = { engine.bios.value }, refreshBios = { engine.refreshBios() })
+    }
     override val backup = DefaultBackupOps(ctx) { restore ->
         // A restored backup replaces everything: nothing shown before it is carried over.
         writeLock.withLock { restore().also { storedPrefs = null; reloadLocked() } }

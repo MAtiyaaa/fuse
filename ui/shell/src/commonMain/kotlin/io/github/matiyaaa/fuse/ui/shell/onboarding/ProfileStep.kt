@@ -93,8 +93,8 @@ internal fun ProfilesStage(profiles: List<ProfileInfo>, playing: ProfileInfo?) {
                             FuseIcon(FuseIcons.Plus, size = 28.dp, tint = c.textMuted)
                         }
                         Spacer(Modifier.height(Space.s))
-                        FText("Someone else", Fuse.type.bodyStrong, color = c.textMuted, maxLines = 1, align = TextAlign.Center)
-                        FText(" ", Fuse.type.caption, maxLines = 1)
+                        FText("Add", Fuse.type.bodyStrong, color = c.textMuted, maxLines = 1, align = TextAlign.Center)
+                        FText("Someone new", Fuse.type.caption, color = c.textFaint, maxLines = 1, align = TextAlign.Center)
                     }
                 }
             }

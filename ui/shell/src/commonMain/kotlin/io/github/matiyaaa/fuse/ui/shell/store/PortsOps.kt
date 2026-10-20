@@ -85,6 +85,55 @@ interface PortsOps {
     /** Takes [game]'s recompiled build out (its saves stay in its home); Play goes back to its emulator. */
     suspend fun removeRecompiled(game: GameId): Boolean = false
 
+    /** Recomps the person installed themselves on this computer (a Flatpak, an AppImage, a program). */
+    suspend fun yourRecomps(): List<FoundRecomp> = emptyList()
+
+    /** The person's own recomps that play [game]: made from its very ROM (by its hash), or of the same game by name. */
+    suspend fun yourRecompsFor(game: GameId): List<FoundRecomp> = emptyList()
+
+    /**
+     * Play starts [game] with the person's own [recomp] from now on: one entry, started as they
+     * installed it, its saves kept in step with every device's copy of the same recomp. Null when
+     * done, else why not.
+     */
+    suspend fun playWithYours(game: GameId, recomp: FoundRecomp): String? = "Recomps are played from Fuse on a computer."
+
+    /** The recomp Play starts [game] with (Fuse's copy or the person's own), with its folder; null when it starts with an emulator. */
+    suspend fun recompFor(game: GameId): RecompPlace? = null
+
+    /** The mods and texture packs in [place]'s mods folder. */
+    suspend fun recompMods(place: RecompPlace): List<RecompMod> = emptyList()
+
+    /** Adds the mods in [file] (a mod, a texture pack or a zip of them); null when added, else why not. */
+    suspend fun addRecompMod(place: RecompPlace, file: String): String? = "Mods are added from Fuse on a computer."
+
+    /** Takes the mod [name] out of [place]'s mods folder. */
+    suspend fun removeRecompMod(place: RecompPlace, name: String): Boolean = false
+
+    /** [place]'s graphics settings with the choice each has now (null when its file doesn't say). */
+    suspend fun recompGraphics(place: RecompPlace): List<Pair<io.github.matiyaaa.fuse.launch.ports.RecompSetting, io.github.matiyaaa.fuse.launch.ports.RecompChoice?>> = emptyList()
+
+    /** Sets one graphics setting in [place]'s own file; false when the file couldn't be read or written. */
+    suspend fun setRecompGraphic(place: RecompPlace, key: String, choice: io.github.matiyaaa.fuse.launch.ports.RecompChoice): Boolean = false
+
+    /** The controls profiles Fuse keeps for [place]'s recomp, by name. */
+    suspend fun recompProfiles(place: RecompPlace): List<String> = emptyList()
+
+    /** Keeps [place]'s controls as they are now as the profile [name]; null when kept, else why not. */
+    suspend fun saveRecompProfile(place: RecompPlace, name: String): String? = "Profiles are kept from Fuse on a computer."
+
+    /** Puts the profile [name]'s controls in place for [place]; null when done, else why not. */
+    suspend fun useRecompProfile(place: RecompPlace, name: String): String? = "Profiles are kept from Fuse on a computer."
+
+    /** Forgets the profile [name]. */
+    suspend fun removeRecompProfile(place: RecompPlace, name: String): Boolean = false
+
+    /** [place]'s recomp's newest release, from its project; null when it couldn't be asked. */
+    suspend fun recompRelease(place: RecompPlace): RecompRelease? = null
+
+    /** Updates the person's own Flatpak of [place]'s recomp; null when done, else why not. */
+    suspend fun updateYourRecomp(place: RecompPlace): String? = "Only a Flatpak is updated from Fuse."
+
     object None : PortsOps {
         override val state: StateFlow<PortsState> = MutableStateFlow(PortsState())
     }

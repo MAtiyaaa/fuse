@@ -850,9 +850,10 @@ reference library), as N64: Recompiled's runtime checks it (librecomp `select_ro
 `check_stored_rom`: padded to four bytes, `.v64` and `.n64` orders turned round). The ROM goes where
 the port looks for it in its home: a link to the person's file when it is already in that form,
 else a copy turned into it in the home; the person's file never changes. Its variables
-(`env`, `APP_FOLDER_PATH={home}` for Zelda 64: Recompiled, `src/game/config.cpp`) keep its
-settings, mods and saves in its home. Its Linux build is a tarball inside the release's zip
-(`ZIP_TAR_GZ`). On Windows it keeps its files in the person's own AppData, so it is Linux only.
+(`env`, `APP_FOLDER_PATH={home}` for Zelda 64: Recompiled, `src/game/config.cpp`, and Banjo:
+Recompiled, RecompFrontend's `get_app_folder_path`) keep its settings, mods and saves in its home.
+Zelda's Linux build is a tarball inside the release's zip (`ZIP_TAR_GZ`); Banjo's is a plain tarball
+(`TAR_GZ`). On Windows each keeps its files in the person's own AppData, so they are Linux only.
 
 **Playing.** A set-up port is a game of the library (the Ports system), started by `PortAdapter`
 from its launcher exactly as written there, from the build's folder; Play, Fast Start, Steam entries
@@ -899,6 +900,56 @@ make its sandbox) `app0/` holds a copy of the dump's files, the room checked fir
 Run Natively says so before it starts. On Linux, `/proc/cpuinfo` is read to say before it
 starts when the processor lacks an extension the game's code needs. The build plays as a port of
 its own, and Remove the Recompiled Build takes it out, its home (saves) kept.
+
+**Recomps the person installed themselves** (`core:launch` `Recomps` and `RecompSettings`,
+`ui:shell` `RecompKeeper`, `app:desktop` `DesktopRecompFiles`; a computer): N64: Recompiled
+projects Fuse knows by their own code (Zelda 64: Recompiled, Banjo: Recompiled, Starfox 64:
+Recompiled and Goemon 64: Recompiled, each fact cited in `Recomps.all`). Each is found where its
+builds go: its Flatpak (`~/.local/share/flatpak/app/<id>` or `/var/lib/flatpak/app/<id>`, started
+as `flatpak run <id>`, its version from `flatpak info`), its program on the PATH, or its program,
+app or AppImage a level or two into `~/Applications`, `~/Games`, `~/Apps`, `~/.local/bin`,
+`~/Desktop`, `~/Downloads` and `/opt` (on Windows `%LOCALAPPDATA%\Programs`, Program Files,
+Desktop, Downloads and Games; on a Mac `/Applications` and the person's own). Its folder is the
+one its `get_app_folder_path` finds: beside the program with a `portable.txt` there, else
+`APP_FOLDER_PATH` (Linux, macOS), `%LOCALAPPDATA%\<program id>`, `~/Library/Application
+Support/<program id>` or `~/.config/<program id>` (its Flatpak manifest gives it the whole home
+folder, so the same). A game of the library is offered the ones made from its ROM (the XXH3-64 of
+its big-endian form, as the runtime checks it) or, when that can't be read, of the same game by
+name, in Play With beside its emulators. Chosen, Fuse writes how it starts as a port's launcher in
+`ports/yours-<id>/` (started in the program's own folder, where it reads its assets) and keeps
+that launcher's own library entry hidden, so the game stays one entry; its saves are the recomp's
+own `saves` folder (`saves/<game id>.bin`, librecomp `pi.cpp`), kept in step as `port.<id>`, the
+same as Fuse's own copy of that recomp, and with nothing else. On that game, Recomp Mods and
+Settings adds `.nrm` mods and `.rtz` texture packs (or every one inside a zip, each by its own
+file name) to its `mods` folder and takes them out, changes its `graphics.json` one setting at a
+time with the values its settings code writes (ultramodern's names for the older projects,
+RecompFrontend's for the newer, where downsampling's Off is 0 rather than 1, the HUD's full width
+is `Expand` and 8x antialiasing isn't offered), keeps its `controls.json` as named profiles in
+Fuse's `recomp-profiles/<id>/` to swap between, and asks GitHub for its newest release
+(`repos/<repo>/releases/latest`); a Flatpak is updated with `flatpak update` for the installation
+it is in. Fuse reads and writes only in a recomp's own folder, Fuse's ports and its profiles.
+
+**PlayStation games' native ports the person installed** (`core:launch` `PsPorts`, the same
+`RecompKeeper` and `DesktopRecompFiles`; a computer): projects that rebuild a PS4 game to run on a
+computer from the person's own dump, each fact cited in `PsPorts.all`: the Bloodborne PC Port
+(Mrsuss60, Windows), SpartanPort (God of War III Remastered, Windows and Linux), the Uncharted: The
+Nathan Drake Collection PC Port (Windows) and the P.T. PC Port (Windows and Linux). Fuse doesn't
+install them: each is found by the files its release puts in its folder (`BloodborneLauncher.exe`;
+`SpartanPort.exe` and `Play SpartanPort.exe`, or `spartanport-x86_64.AppImage`;
+`Uncharted Launcher.exe`; `pt` or `pt.exe` with the `chunk1.psarc` its installer copies beside it)
+in the same places as recomps. A PS4 game of the library is offered the ones made for its title id
+(read from its own files, else its folder's name) in Play With; chosen, it starts as its project
+says (Bloodborne's and Uncharted's launchers and SpartanPort's `--play`, which use the game folder
+chosen in them, else open to choose it; P.T.'s program), and
+the game stays one entry. Its saves are its own, where its code keeps them: `user/savedata` beside
+it (SpartanPort's Linux build under `$XDG_DATA_HOME/spartanport`, or `~/.local/share/spartanport`),
+Uncharted's `analysis/uncharted-user/savedata`, and P.T.'s two slots `PT_Save_Data0` and
+`PT_Save_Data1` in its `data` folder (the launcher's `saveFiles`, so its settings and caches stay
+put); they are kept in step only with the same port. Each night the Ports workflow's native job
+(`tools/ports/native_check.py`, `ports/native.json`) reads every project's newest release from
+GitHub's API and checks its builds are still there by name and that a zip still holds the files
+Fuse finds the port by, reading only the zip's listing by HTTP ranges; a night that finds one
+changed opens an issue labelled `native-port-changed`. No port of inFAMOUS was found.
 
 ## Steam and Windows launchers
 

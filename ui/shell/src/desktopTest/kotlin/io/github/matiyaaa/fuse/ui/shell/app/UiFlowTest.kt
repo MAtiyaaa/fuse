@@ -375,6 +375,12 @@ class UiFlowTest {
         pumpUntil { app.profileArrival == null && shows("Hi, Mo") }
         assertEquals(listOf("Mo"), svc.profiles.value.map { it.name })
         assertTrue(shows("Add Another"))
+        // Switching to another profile is there too, not only adding one.
+        onAllNodesWithText("Switch Profile", useUnmergedTree = true).onFirst().performClick()
+        mainClock.advanceTimeBy(120)
+        assertEquals(io.github.matiyaaa.fuse.ui.shell.sync.WhoMode.SWITCH, app.whoAreYou)
+        app.whoAreYou = null
+        mainClock.advanceTimeBy(600)
         // Off to set up Fuse Sync (a page of its own) and back: the same step, not the beginning.
         app.go(Route.SyncSetup(host = true))
         pumpUntil { shows("Somewhere else") }

@@ -276,7 +276,7 @@ class DesktopPlatformUi(
 
     override fun clearCrashReport() = crashLog.clear()
 
-    private val desktopSteam = DesktopSteam(io.github.matiyaaa.fuse.desktop.services.KnownFolders(dirs.home, os), dataDir = dirs.data)
+    private val desktopSteam = DesktopSteam(io.github.matiyaaa.fuse.desktop.services.KnownFolders(dirs.home, os), dataDir = dirs.data, clientLink = true)
     override val manuals: io.github.matiyaaa.fuse.ui.shell.platform.ManualReader = DesktopManuals()
 
     override val steam: io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration = desktopSteam

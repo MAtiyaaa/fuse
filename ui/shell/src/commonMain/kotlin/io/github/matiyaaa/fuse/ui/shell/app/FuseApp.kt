@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.BackgroundStyle
 import io.github.matiyaaa.fuse.model.Destination
@@ -571,9 +572,18 @@ private fun FuseAppContent(
                 // still fills the whole screen around it.
                 val ultrawide = ((maxWidth - maxHeight * MAX_ASPECT) / 2).coerceAtLeast(0.dp)
                 BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = maxWidth * margin + ultrawide, vertical = maxHeight * margin)) {
-                val metrics = remember(maxWidth, maxHeight) { TileMetrics.forHeight(maxHeight, maxWidth) }
+                // The theme's own sizes and places: tiles scaled, gaps as it spaces them, the bar where it puts it.
+                val layout = spec.layout
+                val chrome = io.github.matiyaaa.fuse.ui.designsystem.theme.Chrome.of(layout)
+                androidx.compose.runtime.SideEffect { app.barDocked = chrome.dock }
+                // Tiles sized for the room pages have: above the dock, when the theme docks the bar.
+                val pageHeight = maxHeight - chrome.dockRoom
+                val metrics = remember(maxWidth, pageHeight, layout.tileScale, layout.spacing) { TileMetrics.forHeight(pageHeight, maxWidth).scaled(layout.tileScale, layout.spacing) }
                 val borders = rememberTileBorders(store)
-                CompositionLocalProvider(LocalTileMetrics provides metrics, LocalTileBorders provides borders, LocalGameArt provides prefs.gameArt) {
+                CompositionLocalProvider(
+                    LocalTileMetrics provides metrics, LocalTileBorders provides borders, LocalGameArt provides prefs.gameArt,
+                    io.github.matiyaaa.fuse.ui.designsystem.theme.LocalChrome provides chrome,
+                ) {
                     ArtWarmup(app)
                     ShellInput(app)
                     val tabs = rememberTabs(app, prefs)
@@ -583,8 +593,9 @@ private fun FuseAppContent(
                         val root = app.navigator.root?.destination
                         if (root != null && root !in tabs && app.navigator.stack.size == 1) app.selectTab(Destination.HOME)
                     }
-                    Pages(app, tabs)
-                    Box(Modifier.fillMaxSize().unseenUnderOpening(app)) { TopLine(app, platform, tabs, prefs) }
+                    // A docked bar has its own band along the foot of the screen: pages and hints sit above it.
+                    Box(Modifier.fillMaxSize().padding(bottom = chrome.dockRoom)) { Pages(app, tabs) }
+                    if (!chrome.dock) Box(Modifier.fillMaxSize().unseenUnderOpening(app)) { TopLine(app, platform, tabs, prefs) }
                     if (prefs.performanceOverlay) {
                         val metrics by platform.performance.collectAsState()
                         // Under the status it extends, where it covers the least of any page.
@@ -599,7 +610,9 @@ private fun FuseAppContent(
                         )
                     }
                     app.gallery?.let { g -> io.github.matiyaaa.fuse.ui.shell.game.PictureViewer(g.pictures, g.start, g.onIndex, g.onClose) }
-                    HintLine(app, hintFlash)
+                    HintLine(app, hintFlash, chrome.dockRoom)
+                    // Docked, the bar sits over the fade that runs down under it (a picture open covers it).
+                    if (chrome.dock && app.gallery == null) Box(Modifier.fillMaxSize().unseenUnderOpening(app)) { TopLine(app, platform, tabs, prefs) }
                     QuickMenu(app)
                     OverlayHost(app)
                     CalibrationOverlay(app)
@@ -732,8 +745,12 @@ private fun BoxScope.TopLine(app: AppState, platform: PlatformUi, tabs: List<Des
     val status by platform.status.collectAsState()
     // Settings or Search open is where you are, not the tab underneath them.
     val page = hudPage(app.navigator.stack)
-    HudScrim(art = prefs.showHero && app.hero != null)
+    // A theme with its bar in a dock: the same line, in a pill in its own band along the bottom.
+    val docked = io.github.matiyaaa.fuse.ui.designsystem.theme.LocalChrome.current.dock
+    if (!docked) HudScrim(art = prefs.showHero && app.hero != null)
     Hud(
+        modifier = if (!docked) Modifier else Modifier.align(Alignment.BottomCenter).dockPill(),
+        gutter = if (docked) Space.l else Space.gutter,
         destinations = tabs,
         sections = app.sections,
         active = if (page == null) app.navigator.root?.destination else null,
@@ -762,7 +779,7 @@ private fun BoxScope.TopLine(app: AppState, platform: PlatformUi, tabs: List<Des
  * scope: every page sets its hints as it is shown, and only this redraws for it.
  */
 @Composable
-private fun BoxScope.HintLine(app: AppState, hintFlash: HintFlash) {
+private fun BoxScope.HintLine(app: AppState, hintFlash: HintFlash, dockRoom: Dp) {
     // An options sheet, a choice, a problem or a question over the page answers to Confirm and Back,
     // wherever it was opened: its hints, not the page's under it.
     val hints = when {
@@ -770,17 +787,18 @@ private fun BoxScope.HintLine(app: AppState, hintFlash: HintFlash) {
         app.liftedTab != null -> LIFTED_TAB_HINTS
         else -> app.hints
     }
-    // Content fades out under the hint line, so hints never sit on top of tiles.
+    // Content fades out under the hint line, so hints never sit on top of tiles; with a dock, on
+    // down under it, so its band and the page meet without an edge.
     if (hints.isNotEmpty()) {
         Box(
             Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .height(Size.hintHeight + Space.xxl)
+                .height(Size.hintHeight + Space.xxl + dockRoom)
                 .ditheredBackground(Brush.verticalGradient(0f to Color.Transparent, 0.55f to Fuse.colors.ink.copy(alpha = 0.78f), 1f to Fuse.colors.ink.copy(alpha = 0.94f))),
         )
     }
-    HintBar(hints, Modifier.align(Alignment.BottomEnd).padding(horizontal = Space.gutter, vertical = Space.s), flash = hintFlash)
+    HintBar(hints, Modifier.align(Alignment.BottomEnd).padding(bottom = dockRoom).padding(horizontal = Space.gutter, vertical = Space.s), flash = hintFlash)
 }
 
 private val MENU_HINTS = listOf(Hint(HintButton.CONFIRM, "Select"), Hint(HintButton.BACK, "Back"))
@@ -1157,9 +1175,9 @@ private fun ShellInput(app: AppState) {
                 }
                 NavAction.SELECT -> if (button != null) { leave(); app.runHudButton(button); NavResult.ACTIVATED } else leave()
                 NavAction.REORDER -> if (button == null && active != null) { app.liftTab(active); NavResult.ACTIVATED } else NavResult.BLOCKED
-                NavAction.DOWN -> leave()
+                // Back to the page the way it lies: down from the top line, up from a dock under it.
+                NavAction.UP, NavAction.DOWN -> if (leavesBar(e.action, app.barDocked)) leave() else NavResult.BLOCKED
                 NavAction.BACK -> { leave(); NavResult.CONSUMED }
-                NavAction.UP -> NavResult.BLOCKED
                 NavAction.PREVIOUS_SECTION -> cycle(-1)
                 NavAction.NEXT_SECTION -> cycle(1)
                 NavAction.QUICK_MENU -> { app.quickMenuOpen = true; NavResult.ACTIVATED }
@@ -1173,10 +1191,13 @@ private fun ShellInput(app: AppState) {
         when (e.action) {
             // Up past the top of any page reaches the top line, a pushed page (a system, Search)
             // included: on Search or Settings their own button is the one chosen.
-            NavAction.UP -> {
+            // Down past the bottom reaches it instead when the theme docks it under the page.
+            NavAction.UP, NavAction.DOWN -> if (reachesBar(e.action, app.barDocked)) {
                 app.focusZone = FocusZone.TABS
                 app.hudButton = page
                 NavResult.MOVED
+            } else {
+                NavResult.BLOCKED
             }
             NavAction.PREVIOUS_SECTION -> when (page) {
                 null -> cycle(-1)
@@ -1196,11 +1217,17 @@ private fun ShellInput(app: AppState) {
                 active != Destination.HOME -> { app.selectTab(Destination.HOME); NavResult.CONSUMED }
                 else -> NavResult.BLOCKED
             }
-            NavAction.LEFT, NavAction.RIGHT, NavAction.DOWN -> NavResult.BLOCKED
+            NavAction.LEFT, NavAction.RIGHT -> NavResult.BLOCKED
             else -> NavResult.IGNORED
         }
     }
 }
+
+/** Whether [action], past the edge of a page, reaches the top line: up to it, or down to a dock under the page. */
+internal fun reachesBar(action: NavAction, docked: Boolean): Boolean = action == if (docked) NavAction.DOWN else NavAction.UP
+
+/** Whether [action] on the top line goes back to the page: down from the top, up from a dock. */
+internal fun leavesBar(action: NavAction, docked: Boolean): Boolean = action == if (docked) NavAction.UP else NavAction.DOWN
 
 private fun AppState.runHudButton(button: HudButton) = when (button) {
     // Opening Downloads keeps the page underneath: Back returns to it as it was.

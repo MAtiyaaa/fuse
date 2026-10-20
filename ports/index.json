@@ -1,7 +1,7 @@
 {
   "format": 1,
-  "revision": 2,
-  "generated": "2026-10-19",
+  "revision": 3,
+  "generated": "2026-10-20",
   "ports": [
     {
       "id": "devilutionx",
@@ -174,6 +174,43 @@
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
       "source": "Zelda64Recomp v1.2.2: README.md (the North American ROM, other formats converted, portable.txt); src/main/main.cpp supported_games (rom_hash 0xEF18B4A9E2386169, game_id mm.n64.us.1.0); src/game/config.cpp get_app_folder_path (APP_FOLDER_PATH on Linux, LocalAppData on Windows); N64ModernRuntime df7e820 librecomp/src/recomp.cpp (select_rom, check_rom_start, byteswap_data, check_stored_rom: the ROM kept as <game_id>.z64 in that folder, checked by XXH3-64) and src/pi.cpp get_save_file_path (saves in that folder); .github/workflows/validate.yml (the Linux build, a tarball the release zips)"
+    },
+    {
+      "id": "banjorecomp",
+      "name": "Banjo: Recompiled",
+      "game": "Banjo-Kazooie",
+      "about": "Banjo-Kazooie recompiled from the N64 cartridge's own code to run natively, at any resolution and frame rate, with widescreen and mods, made from your own ROM as it starts.",
+      "homepage": "https://github.com/BanjoRecomp/BanjoRecomp",
+      "licence": "GPL-3.0",
+      "version": "1.0.2",
+      "builds": [
+        {
+          "os": "linux",
+          "url": "https://github.com/BanjoRecomp/BanjoRecomp/releases/download/v1.0.2/BanjoRecompiled-v1.0.2-Linux-X64.tar.gz",
+          "size": 8380240,
+          "sha256": "a34a4d361221171ea638e0165301fff817c53b9cd46167c5affd37867cfc7ad0",
+          "kind": "TAR_GZ",
+          "run": "BanjoRecompiled"
+        }
+      ],
+      "data": [
+        {
+          "id": "rom",
+          "name": "Banjo-Kazooie's ROM",
+          "about": "The ROM of the North American 1.0 N64 cartridge (.z64, .n64 or .v64), the only one it is made from.",
+          "needs": [],
+          "rom": { "system": "n64", "xxh3": "1b67585d56e07f8c", "place": "bk.n64.us.1.0.z64" }
+        }
+      ],
+      "env": { "APP_FOLDER_PATH": "{home}" },
+      "saves": "saves",
+      "check": { "stay": 5 },
+      "notes": [
+        "It is made from the North American 1.0 ROM of Banjo-Kazooie only; Fuse puts yours where it looks for it, linked or as a copy in the form it reads, and never changes your file.",
+        "Its saves, settings and mods are its own, kept by Fuse in its home.",
+        "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
+      ],
+      "source": "BanjoRecomp v1.0.2: README.md (the North American 1.0 ROM, other formats converted, portable.txt, saves); src/main/main.cpp supported_games (rom_hash 0x1B67585D56E07F8C, game_id bk.n64.us.1.0); include/banjo_config.h program_id; RecompFrontend d0d90ba recompui/src/util/file.cpp get_app_folder_path (APP_FOLDER_PATH on Linux, LocalAppData on Windows); N64ModernRuntime ca568b6 librecomp/src/recomp.cpp (stored_filename: <game_id>.z64 in that folder, checked by XXH3-64) and src/pi.cpp set_save_file_path (saves in that folder); .github/workflows/validate.yml (the Linux build: BanjoRecompiled, assets and recompcontrollerdb.txt in a tarball)"
     }
   ]
 }

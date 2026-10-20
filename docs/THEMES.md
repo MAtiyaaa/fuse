@@ -1,8 +1,9 @@
 # Themes
 
 A Fuse theme is a small JSON file. It names a built-in theme to start from and changes what it
-likes: colours, the background, corners, focus, motion, sounds, glass and the CRT effect. Anyone
-can write one, share it as a link, and anyone can add it in **Settings, Appearance, Theme**.
+likes: colours, the background, corners, focus, motion, sounds, glass, the CRT effect, and where
+the bar goes and how big tiles are. Anyone can write one, share it as a link, and anyone can add
+it in **Settings, Appearance, Theme**.
 
 ## Add a theme
 
@@ -23,10 +24,12 @@ theme's options). It goes step by step, and the shoulder buttons move between st
 3. **Accent**: the accent (curated swatches, or any colour) and the text on it.
 4. **Focus and signals**: the focus outline, and the colours for done, careful and wrong.
 5. **Shape**: corners and the focus style.
-6. **Background**: the scene, its brightness and movement, and its second colour.
-7. **Effects**: glass panels (blur and cover) and the CRT effect (scanlines and glow).
-8. **Motion and sound**.
-9. **Save**.
+6. **Layout**: the bar along the top or in a dock, the tiles' size, the room between them, and
+   what a second screen shows.
+7. **Background**: the scene, its brightness and movement, and its second colour.
+8. **Effects**: glass panels (blur and cover) and the CRT effect (scanlines and glow).
+9. **Motion and sound**.
+10. **Save**.
 
 Every colour opens into hue, saturation and lightness, takes a typed colour code, and shows how
 well it reads where it sits ("Reads well" or "Hard to read", with the contrast ratio). When it is
@@ -65,14 +68,15 @@ out).
 | `colors` | See [Colours](#colours) | |
 | `background` | A style name, or an object: see [Background](#background) | |
 | `corners` | How round tiles and panels are | `soft`, `round`, `sharp`, `pill` |
-| `focus` | How the chosen tile is shown | `glow` (a halo in its colour), `ring` (an outline), `bar` (a bar under it) |
+| `focus` | How the chosen tile is shown | `glow` (a halo in its colour), `ring` (an outline), `bar` (a bar under it), `brackets` (corner brackets closing in on it, as a viewfinder frames its subject) |
 | `motion` | How much moves | `reduced`, `minimal`, `standard`, `enhanced` |
 | `sound` | Navigation sounds | `off`, `soft`, `click`, `chime` |
 | `quickMenu` | How the quick menu's tiles and widgets are drawn | `soft` (faint tint), `solid` (raised panel colour), `outlined` (edges only), `glass` (a light across the top) |
 | `widgets` | How Home's widgets are drawn | `lit` (the panel lit from a corner in the widget's colour), `tinted` (washed in its own colour), `glass` (frosted over the room, a light across the top) |
-| `tiles` | How game and system tiles are framed | `plain` (the art edge to edge), `gloss` (a rounded white or silver frame with a gloss across the top, and a focus ring that breathes), `panel` (a thin grey frame), `ink` (a firm outline in the text colour), `neon` (lined in the accent, glowing as you land on it), `mat` (mounted in a border of the panel colour) |
+| `tiles` | How game and system tiles are framed | `plain` (the art edge to edge), `gloss` (a rounded white or silver frame with a gloss across the top, and a focus ring that breathes), `panel` (a thin grey frame), `ink` (a firm outline in the text colour), `neon` (lined in the accent, glowing as you land on it), `mat` (mounted in a border of the panel colour), `prism` (rimmed in light running from each tile's own colour to the accent, brighter as you land on it) |
 | `glass` | Frosted panels | `true`, `false`, or `{ "enabled", "blur" (0 to 48), "opacity" (0.3 to 1) }` |
 | `crt` | The CRT effect | `true`, `false`, or `{ "enabled", "scanlines" (0 to 0.6), "bloom", "curvature", "chromatic", "vignette" (0 to 1) }` |
+| `layout` | Where things go and how big they are: see [Layout](#layout) | |
 
 ### Colours
 
@@ -125,6 +129,24 @@ lights the room instead.
 | `mesh` | Pastel lights blending like mother of pearl | One of the lights |
 | `contours` | The contour lines of a quiet landscape, drawn in the text colour | Not used |
 | `dunes` | Warm dunes under a high sun | The sand |
+| `blocks` | Rounded squares breathing over a dark room, some outlined and some filled, with one lit in the accent that moves from square to square | The squares |
+
+### Layout
+
+```json
+"layout": { "bar": "dock", "tileScale": 1.12, "spacing": "airy", "secondScreen": "showcase" }
+```
+
+A theme can move and resize things, not only colour them. Each key may be left out. Fuse's own
+theme stays as it is: the bar along the top, tiles at their own size, comfortable spacing. A new
+look is a new theme (Twin and Viewfinder), never a change to Fuse.
+
+| Key | What it is | Values |
+|---|---|---|
+| `bar` | Where the sections, Search, Settings and the status go | `top` (along the top, as Fuse has them), `dock` (in a pill in its own band along the bottom, with pages and hints above it; a controller reaches it by going down past a page) |
+| `tileScale` | How big game and system tiles are | 0.8 to 1.3; 1 is Fuse's own size |
+| `spacing` | The room between tiles | `compact`, `comfortable`, `airy` |
+| `secondScreen` | What a second screen shows for the system you're on | `art` (its art and logo), `showcase` (the system set out whole: its logo, who made it and when, and how much of it is here), `nothing` (only the room) |
 
 ## Built-in themes
 
@@ -145,6 +167,8 @@ Each built-in theme can be named in `extends`. They are listed as the gallery sh
 | `blades` | Blades | Bold panels, sharp edges, green light | `aurora` |
 | `sundown` | Sundown | A neon sun over an endless grid | `horizon` |
 | `crt` | CRT | Scanlines and phosphor glow | `grid` |
+| `twin` | Twin | A dual-screen home: lit tiles, a dock below, blocks behind | `blocks` |
+| `viewfinder` | Viewfinder | Covers packed close, framed by corner brackets | `solid` |
 | `daylight` | Daylight (bright) | Fuse in a bright room | `hero` |
 | `paper-mint` | Paper Mint (bright) | A bright desk with a cool green accent | `stripes` |
 | `channels` | Fused (bright) | Bright tiles you arrange yourself | `stripes` |

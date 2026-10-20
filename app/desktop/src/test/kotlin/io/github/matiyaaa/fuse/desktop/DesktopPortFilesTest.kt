@@ -41,7 +41,7 @@ class DesktopPortFilesTest {
         val text = assertNotNull(files().bundledIndex(), "ports/index.json is in the build")
         val list = PortsIndexReader.read(text).getOrThrow()
         assertEquals(emptyMap(), list.skipped, "no port in Fuse's own list fails a check")
-        assertEquals(listOf("devilutionx", "openrct2", "fallout2-ce", "zelda64recomp"), list.index.ports.map { it.id })
+        assertEquals(listOf("devilutionx", "openrct2", "fallout2-ce", "zelda64recomp", "banjorecomp"), list.index.ports.map { it.id })
         for (p in list.index.ports) {
             assertTrue(p.builds.any { it.os == "linux" }, "${p.id} runs on Linux")
             // Windows too, unless the port keeps its files where Fuse doesn't set it up there, and says so.

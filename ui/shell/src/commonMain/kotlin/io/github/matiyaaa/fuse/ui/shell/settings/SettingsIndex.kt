@@ -68,6 +68,7 @@ object SettingsIndex {
         SettingTopic("library", "Library opens on", "start installed all default tab"),
         SettingTopic("library", "Add Fuse to Steam", "steam game mode shortcut non-steam steamos", steam = true),
         SettingTopic("library", "Remove Fuse from Steam", "steam shortcut uninstall", steam = true),
+        SettingTopic("library", "Change Steam While It Runs", "steam live running restart debug port cef no plugin decky library", steam = true),
         SettingTopic("library", "Fuse plugin for Decky", "decky loader plugin steam gaming mode steamos", decky = true),
         SettingTopic("library", "Decky bridge", "decky plugin connection", decky = true),
         SettingTopic("addons", null, "addons jellyfin media server films movies shows tv music store cartridge"),

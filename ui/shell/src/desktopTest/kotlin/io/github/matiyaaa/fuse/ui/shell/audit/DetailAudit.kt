@@ -230,6 +230,11 @@ internal fun AuditDriver.detailScreens() {
         val ops = object : io.github.matiyaaa.fuse.ui.shell.store.PortsOps by base.ports {
             override val state = fixed
             override fun open() = Unit
+            // Recomps the person installed themselves, listed under the ports.
+            override suspend fun yourRecomps() = listOf(
+                io.github.matiyaaa.fuse.ui.shell.store.FoundRecomp("starfox64recomp", "Program", "D:/Games/Starfox64Recompiled/Starfox64Recompiled.exe", listOf("D:/Games/Starfox64Recompiled/Starfox64Recompiled.exe"), "D:/Games/Starfox64Recompiled", "C:/Users/you/AppData/Local/Starfox64Recompiled", "1.0.3"),
+                io.github.matiyaaa.fuse.ui.shell.store.FoundRecomp("zelda64recomp", "Program", "D:/Games/Zelda/Zelda64Recompiled.exe", listOf("D:/Games/Zelda/Zelda64Recompiled.exe"), "D:/Games/Zelda", "D:/Games/Zelda"),
+            )
         }
         val store = object : io.github.matiyaaa.fuse.ui.shell.store.FuseStore by base { override val ports = ops }
         base.updatePrefs { it.copy(portsEnabled = true, addonsOrder = listOf("PORTS")) }
@@ -269,6 +274,10 @@ internal fun AuditDriver.detailScreens() {
             tap(PadButton.DPAD_UP)
             settle(900)
             shoot("a signed list: verified and ready, an update out, one not made for this computer")
+            waitFor("Ports and recomps you installed".uppercase())
+            tap(PadButton.DPAD_DOWN, 2)
+            settle(900)
+            shoot("recomps you installed yourself, under the list")
         } finally {
             base.updatePrefs { it.copy(portsEnabled = false, addonsOrder = emptyList()) }
         }

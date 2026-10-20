@@ -145,6 +145,32 @@ class ServiceTest {
     }
 
     @Test
+    fun aBlankSaveTheEmulatorMadeAgainNeverStartsTheGameOverTheRealOne(): Unit = runBlocking {
+        val (pc, _) = service("Gaming PC", Library())
+        val (deck, _) = service("Steam Deck", Library())
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        deck.switchTo(mo.id).getOrThrow()
+        val roms = File(root, "deck-roms").apply { mkdirs() }
+        val q = SaveQuery(ct, "gba", File(roms, "ruby.gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby")
+        val sav = File(roms, "ruby.sav")
+        val real = ByteArray(8192) { if (it < 16) (it + 1).toByte() else 0 }
+        sav.writeBytes(real)
+        deck.afterExit(q, 0, 30 * 60_000)
+        // The emulator made its save memory again (all 0xFF): no progress, and never sent.
+        sav.writeBytes(ByteArray(8192) { 0xFF.toByte() })
+        deck.afterExit(q, 0, 60_000)
+        // The next play puts the real save back in place before the game starts, with nothing to choose.
+        assertIs<LaunchGate.Go>(deck.beforeLaunch(q))
+        assertTrue(sav.readBytes().contentEquals(real), "the real save is in place")
+        // The blank one wasn't kept in the history as a copy for safety: it held nothing.
+        val versions = deck.versions(q, SaveKind.SAVE)
+        assertTrue(versions.none { it.reason == RevisionReason.BEFORE_RESTORE }, versions.toString())
+        pc.stop()
+    }
+
+    @Test
     fun aTestRunTeachesWhereAGameSavesAndPutsThePersonsOwnSaveThere(): Unit = runBlocking {
         val (pc, pcSettings) = service("Gaming PC", Library())
         val (deck, _) = service("Steam Deck", Library())

@@ -1,0 +1,51 @@
+{
+  "fuseTheme": 1,
+  "name": "Twin",
+  "id": "twin",
+  "tagline": "A dual-screen home: lit tiles, a dock below, blocks behind",
+  "extends": "twin",
+  "dark": true,
+  "colors": {
+    "background": "#0C0D1C",
+    "surface": "#15172C",
+    "surfaceRaised": "#1E2140",
+    "accent": "#FF4A5C",
+    "accentSoft": "#FF4A5C33",
+    "onAccent": "#2A0309",
+    "text": "#F4F4FF",
+    "textMuted": "#B0B3D8",
+    "focus": "#8FE9FF"
+  },
+  "background": {
+    "style": "blocks",
+    "intensity": 1.0,
+    "speed": 1.0,
+    "secondary": "#8C8FE8"
+  },
+  "corners": "round",
+  "focus": "glow",
+  "motion": "enhanced",
+  "sound": "click",
+  "quickMenu": "glass",
+  "widgets": "glass",
+  "tiles": "prism",
+  "layout": {
+    "bar": "dock",
+    "tileScale": 1.0,
+    "spacing": "comfortable",
+    "secondScreen": "showcase"
+  },
+  "glass": {
+    "enabled": false,
+    "blur": 24.0,
+    "opacity": 0.72
+  },
+  "crt": {
+    "enabled": false,
+    "scanlines": 0.35,
+    "bloom": 0.15,
+    "curvature": 0.08,
+    "chromatic": 0.1,
+    "vignette": 0.3
+  }
+}

@@ -1229,6 +1229,8 @@ private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.pla
                 }
             },
         ).takeIf { !steam.gameMode },
+        // Steam's library changed while Steam runs, through Steam's own debug port: no plugin needed.
+        steam.client?.let { steamClientRow(app, it, live) },
         // Games Fuse put in Steam: look them over, take them out, undo.
         MenuAction(
             "steam.games.fuse", "Your games in Steam", FuseIcons.LibraryBig,
@@ -1337,15 +1339,65 @@ private fun steamStartRow(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell
     )
 }
 
+/**
+ * Change Steam While It Runs: Steam opens its local debug port when it starts (a file Fuse puts in
+ * its folder, as Decky Loader's installer does), and Fuse makes its changes to Steam's library through
+ * Steam's own client, with no plugin and no restart. Asked first, because other programs on this
+ * computer can reach Steam's client through that port too.
+ */
+private fun steamClientRow(app: AppState, client: io.github.matiyaaa.fuse.ui.shell.platform.SteamClientLink, live: SteamLive): MenuAction {
+    val on = live.clientAllowed == true
+    fun set(v: Boolean) = app.scope.launch {
+        live.busy = true
+        client.allow(v)
+            .onSuccess { app.toasts.show(it) }
+            .onFailure { app.toasts.show(it.message ?: "Fuse couldn't change that", ToastKind.ERROR) }
+        live.refresh(app)
+        live.busy = false
+    }
+    return MenuAction(
+        "steam.client", "Change Steam While It Runs", FuseIcons.PlugZap,
+        detail = when {
+            live.clientAllowed == null -> "Looking for Steam"
+            !on -> "Off. With Steam open, changes wait for it to close, unless the Fuse plugin for Decky is there"
+            live.clientListening -> "On. Steam's library changes right away, with no plugin and no restart"
+            else -> "On. Steam opens its port the next time it starts"
+        },
+        trailing = Trailing.Switch(on),
+        enabled = !live.busy && live.clientAllowed != null,
+        onSelect = {
+            if (on) {
+                set(false)
+            } else {
+                app.confirm = ConfirmSpec(
+                    "Change Steam While It Runs?",
+                    "Fuse puts a file in Steam's folder that makes Steam open a debug port on this computer when it starts, as Decky Loader does. " +
+                        "Fuse then adds, changes and starts its games in Steam through Steam itself while it runs, with no plugin and no restart. " +
+                        "Other programs on this computer can reach Steam through that port too. Steam takes it the next time it starts; turn it off here any time.",
+                    "Turn On",
+                ) { set(true) }
+            }
+        },
+    )
+}
+
 /** What Steam and Decky say right now, read when Settings opens and again after each change. */
 internal class SteamLive {
     var inSteam by mutableStateOf<Boolean?>(null)
     var decky by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.platform.DeckyState?>(null)
     var busy by mutableStateOf(false)
 
+    /** Steam is set to open its debug port for Fuse, and whether it listens on it right now. */
+    var clientAllowed by mutableStateOf<Boolean?>(null)
+    var clientListening by mutableStateOf(false)
+
     suspend fun refresh(app: AppState) {
         inSteam = app.platform.steam?.let { runCatching { it.added() }.getOrNull() }
         decky = app.platform.decky?.let { runCatching { it.state() }.getOrNull() }
+        app.platform.steam?.client?.let { c ->
+            clientAllowed = runCatching { c.allowed() }.getOrNull()
+            clientListening = clientAllowed == true && runCatching { c.listening() }.getOrDefault(false)
+        }
     }
 }
 

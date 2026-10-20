@@ -10,6 +10,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import androidx.compose.ui.unit.dp
 
 class ThemeCodecTest {
     private fun parse(text: String) = ThemeCodec.parse(text, ThemePresets::find, ThemePresets.Fuse)
@@ -152,6 +153,28 @@ class ThemeCodecTest {
     }
 
     @Test
+    fun fuseStaysAsItIsAndNewLooksAreNewThemes() {
+        val fuse = ThemePresets.Fuse
+        // Fuse, the default, keeps its own room, tiles and focus, with the bar along the top.
+        assertEquals(BackgroundStyle.HERO, fuse.background)
+        assertEquals(CornerFamily.SOFT, fuse.geometry)
+        assertEquals(io.github.matiyaaa.fuse.model.TileLook.PLAIN, fuse.tiles)
+        assertEquals(io.github.matiyaaa.fuse.model.FocusStyle.GLOW, fuse.focus)
+        assertEquals(io.github.matiyaaa.fuse.model.ThemeLayout(), fuse.layout)
+        val chrome = Chrome.of(fuse.layout)
+        assertEquals(Chrome(top = 64.dp, bottom = 44.dp, dock = false), chrome)
+        assertEquals(0.dp, chrome.dockRoom)
+        val base = TileMetrics.forHeight(720.dp, 1280.dp)
+        assertEquals(base, base.scaled(fuse.layout.tileScale, fuse.layout.spacing), "its tiles at their own size")
+        // The looks layouts brought are worn only by the themes made for them.
+        val new = ThemePresets.all.filter {
+            it.layout != io.github.matiyaaa.fuse.model.ThemeLayout() || it.background == BackgroundStyle.BLOCKS ||
+                it.tiles == io.github.matiyaaa.fuse.model.TileLook.PRISM || it.focus == io.github.matiyaaa.fuse.model.FocusStyle.BRACKETS
+        }
+        assertEquals(setOf("twin", "viewfinder"), new.map { it.id }.toSet())
+    }
+
+    @Test
     fun pitchIsATrueBlackRoomThatNeverMoves() {
         val pitch = ThemePresets.Pitch
         assertEquals(0xFF000000, pitch.palette.background)
@@ -201,5 +224,36 @@ class ThemeCodecTest {
         assertEquals("https://gist.githubusercontent.com/someone/abc123/raw", ThemeLinks.normalize("https://gist.github.com/someone/abc123"))
         assertEquals("https://example.com/t.json", ThemeLinks.normalize(" https://example.com/t.json "))
         assertNull(ThemeLinks.normalize("http://example.com/t.json"))
+    }
+
+    @Test
+    fun aThemeCarriesWhereThingsAreAndHowBigTheyAre() {
+        val t = ok("""{"name": "Handheld", "extends": "twin", "layout": {"tileScale": 1.25, "spacing": "airy"}}""")
+        // From Twin: the bar in a dock, the system shown whole on a second screen.
+        assertEquals(io.github.matiyaaa.fuse.model.BarPlacement.DOCK, t.spec.layout.bar)
+        assertEquals(io.github.matiyaaa.fuse.model.SecondScreenLook.SHOWCASE, t.spec.layout.secondScreen)
+        assertEquals(1.25f, t.spec.layout.tileScale)
+        assertEquals(io.github.matiyaaa.fuse.model.Spacing.AIRY, t.spec.layout.spacing)
+        // Written and read again, it is the same.
+        val again = ok(ThemeCodec.encode(t.spec))
+        assertEquals(t.spec.layout, again.spec.layout)
+        // A size beyond what Fuse draws is kept to the nearest it does, and said.
+        val big = ok("""{"name": "Huge", "layout": {"tileScale": 3, "bar": "sideways"}}""")
+        assertEquals(io.github.matiyaaa.fuse.model.ThemeLayout.MAX_SCALE, big.spec.layout.tileScale)
+        assertEquals(io.github.matiyaaa.fuse.model.BarPlacement.TOP, big.spec.layout.bar)
+        assertTrue(big.notes.isNotEmpty())
+        // A theme file from before layouts is laid out as Fuse is.
+        assertEquals(io.github.matiyaaa.fuse.model.ThemeLayout(), ok("""{"name": "Old"}""").spec.layout)
+    }
+
+    @Test
+    fun tilesScaleAndSpaceAsTheThemeSays() {
+        val base = TileMetrics.forHeight(720.dp, 1280.dp)
+        assertEquals(base, base.scaled(1f, io.github.matiyaaa.fuse.model.Spacing.COMFORTABLE))
+        val big = base.scaled(1.3f, io.github.matiyaaa.fuse.model.Spacing.AIRY)
+        assertTrue(big.icon > base.icon && big.coverWidth > base.coverWidth && big.gap > base.gap)
+        val small = base.scaled(0.5f, io.github.matiyaaa.fuse.model.Spacing.COMPACT)
+        assertEquals(base.icon * io.github.matiyaaa.fuse.model.ThemeLayout.MIN_SCALE, small.icon, "never smaller than Fuse draws")
+        assertTrue(small.gap < base.gap)
     }
 }

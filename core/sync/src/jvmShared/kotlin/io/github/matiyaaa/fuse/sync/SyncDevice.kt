@@ -95,6 +95,8 @@ internal data class SlotState(
     val base: String? = null,
     /** The fingerprint of the files as they were then. */
     val fingerprint: String? = null,
+    /** A blank save already told about (its fingerprint): the same one found again says nothing. */
+    val blank: String? = null,
 )
 
 /** Something waiting to go to the host: a revision (files already in the device's store) or records. */
@@ -278,6 +280,9 @@ class SyncDevice(
 
     // ---------------------------------------------------------------- saves
 
+    /** True when every file of a save holds nothing (see [Slots.blank]). */
+    private fun allBlank(hashed: List<Pair<LocalFile, String>>): Boolean = hashed.isNotEmpty() && hashed.all { (lf, _) -> Slots.blank(lf.file) }
+
     private fun fingerprintOf(slot: LocalSlot): Pair<SaveManifest, List<Pair<LocalFile, String>>> {
         val hashed = slot.files.filter { it.file.isFile && SavePath.isSafe(it.path) }.map { lf -> lf to lf.file.inputStream().use { SyncCrypto.sha256(it) } }
         val manifest = SaveManifest(slot.format, hashed.map { (lf, h) -> SaveFile(lf.path, h, lf.file.length()) }.sortedBy { it.path }, slot.folders.filter(SavePath::isSafe).sorted())
@@ -300,9 +305,14 @@ class SyncDevice(
             state.outbox.any { o -> o.revision?.let { it.profile == profile && it.game == slot.game.id && it.kind == slot.kind } == true }
         // A blank save never goes anywhere: save memory an emulator just made (all zeros or all
         // 0xFF) holds no progress, and sent as the first save it stood as the newest, so a real
-        // save from another device then came back as a conflict with nothing.
-        if (hashed.all { (lf, _) -> Slots.blank(lf.file) }) {
-            if (hadOne) onBlank?.invoke(slot)
+        // save from another device then came back as a conflict with nothing. It is told once:
+        // the look for saves made outside Fuse finds the same file every few minutes.
+        if (allBlank(hashed)) {
+            if (hadOne && slotState.blank != manifest.fingerprint) {
+                state = state.copy(slots = state.slots + (keyOf(profile, slot) to slotState.copy(blank = manifest.fingerprint)))
+                persist()
+                onBlank?.invoke(slot)
+            }
             return@withLock null
         }
         // Saved again while the last one still waits to go (played on, offline or mid-session): the
@@ -835,7 +845,7 @@ class SyncDevice(
         } catch (e: SyncException) {
             if (e.code == "offline") return PrepareResult.Offline else throw e
         } ?: return if (client == null) PrepareResult.Offline else PrepareResult.Ready
-        val (manifest, _) = fingerprintOf(slot)
+        val (manifest, hashed) = fingerprintOf(slot)
         val slotState = state.slots[keyOf(profile, slot)] ?: SlotState()
         if (!SaveSlotFormats.compatible(head.manifest.format, slot.format)) {
             // Seen, though it can't be used here: this device's save stays as it is, and the next
@@ -860,9 +870,20 @@ class SyncDevice(
             }
             return PrepareResult.Incompatible(head)
         }
-        val localChanged = manifest.files.isNotEmpty() && manifest.fingerprint != slotState.fingerprint
         // This person's saves queued from here and not yet sent are their newest (never anyone else's).
         val queued = state.outbox.lastOrNull { it.profile == profile && it.revision?.game == slot.game.id && it.revision.kind == slot.kind && it.revision.canBeNewest }?.revision
+        // A blank save here (save memory the emulator made again) is no progress made here: the
+        // host's real one goes in place, so the game never starts from nothing beside it.
+        val blankHere = allBlank(hashed)
+        if (blankHere && queued == null) {
+            mutex.withLock {
+                state = state.copy(awaiting = state.awaiting + (keyOf(profile, slot) to Awaited(head.id, head.deviceName, head.at.millis)))
+                persist()
+            }
+            place(client!!, slot, head)
+            return PrepareResult.Updated(head)
+        }
+        val localChanged = manifest.files.isNotEmpty() && !blankHere && manifest.fingerprint != slotState.fingerprint
         return when (SyncRules.decide(slotState.base, localChanged || queued != null, head.id, sameContent = manifest.fingerprint == head.manifest.fingerprint)) {
             SyncDecision.UpToDate -> {
                 // What is here stays the fingerprint to compare with: when it came from a save kept
@@ -952,7 +973,8 @@ class SyncDevice(
             // What is here now is kept first, so taking another save never loses this one.
             val (current, hashed) = fingerprintOf(slot)
             val alreadyGoing = state.outbox.any { o -> o.revision?.let { it.profile == owner && it.game == slot.game.id && it.kind == slot.kind && it.manifest.fingerprint == current.fingerprint } == true }
-            if (current.files.isNotEmpty() && current.fingerprint != incoming.fingerprint && !alreadyGoing) {
+            // A blank one holds nothing to keep (and would only clutter the history).
+            if (current.files.isNotEmpty() && current.fingerprint != incoming.fingerprint && !alreadyGoing && !allBlank(hashed)) {
                 for ((lf, h) in hashed) if (!store.has(h)) lf.file.inputStream().use { store.put(it, expected = h) }
                 val kept = SaveRevision(
                     id = SyncCrypto.token(12), profile = owner, game = slot.game.id, kind = slot.kind,

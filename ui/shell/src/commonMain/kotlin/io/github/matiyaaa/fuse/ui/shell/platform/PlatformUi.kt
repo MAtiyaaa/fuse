@@ -205,13 +205,17 @@ interface SteamIntegration {
     val directEntries: Boolean get() = false
 
     /**
-     * Changes to Steam's library that the Fuse Decky plugin makes through Steam's running client
-     * (bridge protocol 2), so Steam needn't close or restart; null where there is no plugin to do it.
+     * Changes to Steam's library made through Steam's running client, so Steam needn't close or
+     * restart: by the Fuse Decky plugin (bridge protocol 2), or by Fuse through Steam's debug port
+     * ([client]). Null where neither can be.
      */
     val live: SteamLiveQueue? get() = null
 
-    /** The plugin is there right now, so a change goes into Steam at once with Steam open. */
+    /** Steam's running client can be reached right now, so a change goes into Steam at once with Steam open. */
     val changesLive: Boolean get() = live?.connected == true
+
+    /** Steam's client through its local debug port, with no plugin; null where Fuse can't use it. */
+    val client: SteamClientLink? get() = null
 
     /**
      * What putting [games] in Steam's library would do, game by game, over this computer's Steam
