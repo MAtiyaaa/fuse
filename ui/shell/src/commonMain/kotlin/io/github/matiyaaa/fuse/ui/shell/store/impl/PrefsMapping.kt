@@ -41,7 +41,8 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         onboardingDone = onboarding.completed,
         rommAnswer = onboarding.romm,
         onboardingStep = onboarding.stepId,
-        themeId = theme.id,
+        // Kept as chosen; UiPrefs.theme shows Fuse for one this Fuse hasn't got (a newer Fuse's, or a retired one).
+        themeId = appearance.themeId.ifBlank { theme.id },
         customThemes = custom,
         motion = appearance.motion,
         glass = appearance.glass ?: theme.glass,
@@ -148,7 +149,9 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
         onboarding = onboarding.copy(completed = prefs.onboardingDone, romm = prefs.rommAnswer, stepId = prefs.onboardingStep),
         home = home.copy(layout = prefs.home, systemsBoard = prefs.systemsBoard, systemsBoardFlipped = prefs.systemsBoardFlipped, systemTileStep = prefs.systemTileStep, systemTileStepFlipped = prefs.systemTileStepFlipped, systemsCardsSeen = prefs.systemsCardsSeen, destinations = destinations, continueDismissed = prefs.continueDismissed, addonsOrder = prefs.addonsOrder, quickMenu = prefs.quickMenu),
         appearance = appearance.copy(
-            themeId = theme.id,
+            // The chosen id as it is, even one this Fuse hasn't got (shown as Fuse): written as Fuse,
+            // it went to every device as a new choice and replaced the person's theme there too.
+            themeId = prefs.themeId.ifBlank { theme.id },
             motion = prefs.motion,
             glass = prefs.glass.takeIf { it != theme.glass },
             crt = prefs.crt.takeIf { it != theme.crt },
