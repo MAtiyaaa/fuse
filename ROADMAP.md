@@ -174,6 +174,7 @@ run on real PCs and handheld PCs.
 ## Phase 3: More places to play
 
 - [x] SteamOS and Game Mode integration: Fast Start, Direct entries, shortcuts from other tools, changes through Steam itself with the Decky plugin, time in Direct entries, frame generation (0.4.3)
+- [ ] Fuse Native on Android: a GameNative fork Fuse drives completely, chosen as a Steam game's emulator and downloaded when chosen, signed in through Fuse, straight into the game, every game and container setting edited in Fuse, and GameNative's containers understood and moved over (docs/plans/fuse-native.md)
 
 ## Not planned
 

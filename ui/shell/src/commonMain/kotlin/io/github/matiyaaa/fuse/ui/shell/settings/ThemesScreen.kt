@@ -188,11 +188,11 @@ private class ThemesView(focused: String) {
 @Composable
 fun ThemesScreen(app: AppState) {
     val prefs by app.store.prefs.collectAsState()
-    val view = rememberRouteState(app.navigator, "themes") { ThemesView(prefs.themeId) }
+    val view = rememberRouteState(app.navigator, "themes") { ThemesView(prefs.theme.id) }
     val customs = prefs.customThemes
     val items = remember(view.filter, customs) { itemsFor(view.filter, customs) }
     val found = items.indexOfFirst { it.key == view.focusedKey }
-    val focusIndex = if (found >= 0) found else items.indexOfFirst { it.key == prefs.themeId }.coerceAtLeast(0)
+    val focusIndex = if (found >= 0) found else items.indexOfFirst { it.key == prefs.theme.id }.coerceAtLeast(0)
     val current = items.getOrNull(focusIndex)
     LaunchedEffect(current?.key) { current?.let { if (view.focusedKey != it.key) view.focusedKey = it.key } }
     val studio = view.studio
@@ -269,7 +269,7 @@ fun ThemesScreen(app: AppState) {
         )
     }
 
-    val inUse = (current as? ThemeItem.Of)?.spec?.id == prefs.themeId
+    val inUse = (current as? ThemeItem.Of)?.spec?.id == prefs.theme.id
     LaunchedEffect(current?.key, view.inFilters, inUse, studio == null) {
         app.hero = null
         if (view.studio != null) return@LaunchedEffect
@@ -331,7 +331,7 @@ fun ThemesScreen(app: AppState) {
             current is ThemeItem.Of -> factsOf(
                 current.spec,
                 line = listOfNotNull(current.spec.author?.let { "by $it" }, current.spec.tagline.takeIf { it.isNotBlank() }).joinToString("  ·  "),
-                inUse = current.spec.id == prefs.themeId,
+                inUse = current.spec.id == prefs.theme.id,
                 yours = current.custom,
             )
             current == ThemeItem.Make -> factsOf(
@@ -412,7 +412,7 @@ fun ThemesScreen(app: AppState) {
                     focusIndex = if (shown) focusIndex else -1,
                     columns = columns,
                     gap = gap,
-                    inUseId = prefs.themeId,
+                    inUseId = prefs.theme.id,
                     reveal = reveal,
                     revealFrom = revealFrom,
                     onOpen = { open(it) },

@@ -776,7 +776,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             content = { HomeStylePreview(if (state.button == 1) HomeMode.FLOW else HomeMode.CHANNELS) },
         ))
         val themes = ThemePresets.all
-        val themeIndex = themes.indexOfFirst { it.id == prefs.themeId }.coerceAtLeast(0)
+        val themeIndex = themes.indexOfFirst { it.id == prefs.theme.id }.coerceAtLeast(0)
         add(Step(
             "theme", "Look", themes[themeIndex].name,
             themes[themeIndex].tagline + ". Use up and down to try themes; they apply right away.",
