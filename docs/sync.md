@@ -284,6 +284,13 @@ setting nobody chose on a device (Fuse's own default, or one kept from before se
 is no choice: it only fills what the profile hasn't got, and never replaces a choice made on
 another device, whichever device reaches the host first.
 
+A Fuse writes only what was changed in it: a setting that differs because it changed by another
+way (Fuse One bringing the profile's in, another Fuse open on the same computer) is shown, never
+written back as a new choice. A device that hasn't got the theme chosen (one from a newer Fuse, or
+an added theme it can't read) shows Fuse's own look and keeps the choice. A Fuse from before 0.4.3.2
+sent Fuse instead, as the person's newest choice: the host leaves that out (from 0.4.3.4), and
+takes everything else that device sends.
+
 ### This device's own Home
 
 While arranging Home, a switch beside **Add widget** and **Done** chooses whose Home it is:

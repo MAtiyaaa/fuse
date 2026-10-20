@@ -149,6 +149,38 @@ class ThemeStaysTest {
         phone.sync.stop()
     }
 
+    /**
+     * Two Fuses open on one computer's settings (the window, and a game Steam started with Fast
+     * Start): a theme chosen in one isn't put back by the other, which still shows the one before,
+     * when something else is changed there. Only what the person changed in a Fuse is written by it.
+     */
+    @Test
+    fun anotherFuseOnTheSameSettingsDoesntPutTheThemeBack(): Unit = runBlocking {
+        val db = File(root, "fuse.db").absolutePath
+        fun open(name: String): FakeServices {
+            val cache = File(root, "cache-$name").apply { mkdirs() }
+            return FakeServices(FuseData(DesktopDatabase.open(db)), cache)
+        }
+        val windowServices = open("window")
+        val window = createFuseStore(windowServices, scope)
+        val runServices = open("run")
+        val run = createFuseStore(runServices, scope)
+        assertEquals("fuse", run.prefs.value.themeId)
+
+        window.updatePrefs { it.withTheme(theme("twin")) }
+        withTimeout(10_000) { while (windowServices.data.settings.current().appearance.themeId != "twin") delay(20) }
+        val chosen = windowServices.data.settings.profileValues().getValue("appearance.themeId").revision
+
+        // The other Fuse still shows Fuse; a setting is changed there.
+        val video = run.prefs.value.videoPreview
+        run.updatePrefs { it.copy(videoPreview = !video) }
+        withTimeout(10_000) { while (runServices.data.settings.current().videoPreview.enabled == video) delay(20) }
+        delay(500)
+        val stored = runServices.data.settings.current()
+        assertEquals("twin", stored.appearance.themeId, "the other Fuse didn't put Fuse back")
+        assertEquals(chosen, runServices.data.settings.profileValues().getValue("appearance.themeId").revision, "nor sent it as a new choice")
+    }
+
     @Test
     fun aThemeChosenStaysWithEveryClockInStep(): Unit = runBlocking { household(0) }
 

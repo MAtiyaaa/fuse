@@ -222,12 +222,33 @@ internal class DefaultFuseStore private constructor(
         )
     }
 
-    /** The settings with anything still on its way to the database written first. */
+    /**
+     * [onto] with what the interface shows that isn't saved yet: each setting [shown] has otherwise
+     * than [storedPrefs] (what this Fuse last read or wrote), and nothing more. What storage holds
+     * otherwise than the interface shows, changed there by something else (Fuse One bringing the
+     * profile's in, another Fuse open on this computer), stays as storage has it: written back as
+     * shown, it went to every device as the person's newest choice, and their theme went back to the
+     * one this Fuse last saw a few seconds after they chose another.
+     */
+    private fun unsaved(onto: io.github.matiyaaa.fuse.data.settings.AppSettings, shown: UiPrefs): io.github.matiyaaa.fuse.data.settings.AppSettings {
+        val base = storedPrefs ?: return onto.withUiPrefs(shown)
+        if (base == shown) return onto
+        return io.github.matiyaaa.fuse.data.settings.UnsavedChoices.carry(onto, onto.withUiPrefs(base), onto.withUiPrefs(shown)) ?: onto
+    }
+
+    /**
+     * The settings with anything still on its way to the database written first. What differs only
+     * because storage changed meanwhile is shown, not written over.
+     */
     private suspend fun settingsNow() = writeLock.withLock {
         val current = data.settings.current()
+        if (prefsProfile != current.sync.activeProfile) return@withLock current
         val shown = prefsState.value
-        val next = if (prefsProfile == current.sync.activeProfile) current.withUiPrefs(shown) else current
-        if (next == current) current else data.settings.update { it.withUiPrefs(shown) }.also { ctx.settings.value = it; storedPrefs = shown }
+        val written = if (unsaved(current, shown) != current) data.settings.update { unsaved(it, shown) } else current
+        // Everything the interface changed is stored now.
+        storedPrefs = shown
+        if (written.toUiPrefs(globalScoped(ctx)) != shown) reloadLocked() else ctx.settings.value = written
+        ctx.settings.value
     }
 
     /** Changes the settings (Fuse Sync bringing in a profile's) and has the interface follow at once. */
@@ -235,7 +256,7 @@ internal class DefaultFuseStore private constructor(
         val before = data.settings.current()
         val shown = prefsState.value
         var wroteShown = false
-        val after = data.settings.update { if (prefsProfile == it.sync.activeProfile) { wroteShown = true; transform(it.withUiPrefs(shown)) } else transform(it) }
+        val after = data.settings.update { if (prefsProfile == it.sync.activeProfile) { wroteShown = true; transform(unsaved(it, shown)) } else transform(it) }
         // What was written is what is stored now, before the reload: a choice made since is newer
         // than it, and is carried over rather than replaced by it.
         if (wroteShown) storedPrefs = shown
@@ -247,9 +268,9 @@ internal class DefaultFuseStore private constructor(
         val before = data.settings.current()
         // A profile switch changes the persisted owner before the old UI preferences are reloaded.
         // Those old preferences must not become a local edit belonging to the next person.
-        if (prefsProfile == before.sync.activeProfile && prefsState.value != before.toUiPrefs(globalScoped(ctx))) {
+        if (prefsProfile == before.sync.activeProfile) {
             val shown = prefsState.value
-            data.settings.update { it.withUiPrefs(shown) }
+            if (unsaved(before, shown) != before) data.settings.update { unsaved(it, shown) }
             storedPrefs = shown
         }
         val after = data.settings.mergeProfileValues(profile, values)
@@ -449,7 +470,8 @@ internal class DefaultFuseStore private constructor(
         // A newer value replaced this one (a later change, or a restore reloading everything): it is written instead.
         if (prefs != prefsState.value) return@withLock
         if (prefsProfile != data.settings.current().sync.activeProfile) { reloadLocked(); return@withLock }
-        ctx.settings.value = data.settings.update { it.withUiPrefs(prefs) }
+        // Only what changed here: the rest stays as storage has it (see unsaved).
+        ctx.settings.value = data.settings.update { unsaved(it, prefs) }
         storedPrefs = prefs
         val scoped = data.scopedSettings
         val global = ScopeRef.Global
