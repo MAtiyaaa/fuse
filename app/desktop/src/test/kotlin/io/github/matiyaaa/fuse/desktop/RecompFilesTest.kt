@@ -32,7 +32,7 @@ class RecompFilesTest {
 
     private fun files(flatpakVersion: String? = null, calls: MutableList<List<String>> = ArrayList()) = DesktopRecompFiles(
         DesktopOs.LINUX, File(data, "ports"), File(data, "recomp-profiles"),
-        home = home.absolutePath, env = emptyMap(), which = { null },
+        home = home.invariantSeparatorsPath, env = emptyMap(), which = { null },
         run = { argv, _ -> calls += argv; Processes.Output(0, flatpakVersion?.let { "Ref: app/x\nVersion: $it\n" }.orEmpty()) },
     )
 
@@ -52,17 +52,17 @@ class RecompFilesTest {
         val found = files(flatpakVersion = "1.0.2").find().associateBy { it.id }
         val zelda = assertNotNull(found["zelda64recomp"])
         assertEquals("Program", zelda.how)
-        assertEquals(zeldaDir.absolutePath, zelda.folder, "portable: beside the program")
-        assertEquals(zeldaDir.absolutePath, zelda.cwd, "started in its own folder, where its assets are")
+        assertEquals(zeldaDir.invariantSeparatorsPath, zelda.folder, "portable: beside the program")
+        assertEquals(zeldaDir.invariantSeparatorsPath, zelda.cwd, "started in its own folder, where its assets are")
         assertEquals("1.2.2", zelda.version)
         val banjo = assertNotNull(found["banjorecomp"])
         assertEquals("Flatpak", banjo.how)
         assertEquals(listOf("flatpak", "run", "io.github.banjorecomp.banjorecomp"), banjo.argv)
-        assertEquals("${home.absolutePath}/.config/BanjoRecompiled", banjo.folder)
+        assertEquals("${home.invariantSeparatorsPath}/.config/BanjoRecompiled", banjo.folder)
         assertEquals("1.0.2", banjo.version)
         val starfox = assertNotNull(found["starfox64recomp"])
         assertEquals("AppImage", starfox.how)
-        assertEquals("${home.absolutePath}/.config/Starfox64Recompiled", starfox.folder)
+        assertEquals("${home.invariantSeparatorsPath}/.config/Starfox64Recompiled", starfox.folder)
         assertNull(found["goemon64recomp"])
     }
 
@@ -79,7 +79,7 @@ class RecompFilesTest {
     @Test
     fun modsGoInWholeByTheirOwnNamesAndNothingLandsElsewhere(): Unit = runBlocking {
         val f = files()
-        val mods = "${home.absolutePath}/.config/Zelda64Recompiled/mods"
+        val mods = "${home.invariantSeparatorsPath}/.config/Zelda64Recompiled/mods"
         val single = File(home, "Download/Rando.nrm").apply { parentFile.mkdirs(); writeText("nrm") }
         assertEquals(listOf("Rando.nrm"), f.addMods(single.path, mods).getOrThrow())
         val pack = zip("pack.zip", mapOf("MMRecompRando/mods/extra.nrm" to "a", "textures/HD.rtz" to "b", "README.txt" to "c", "../escape.nrm" to "d", "lib/native.so" to "e"))
@@ -89,14 +89,14 @@ class RecompFilesTest {
         assertTrue(File(mods).listFiles()!!.none { it.name.endsWith(".part") }, "nothing half-written is left")
 
         // Only a recomp's own folders, Fuse's ports and its profiles.
-        assertTrue(f.addMods(single.path, "${home.absolutePath}/Documents/mods").isFailure)
-        assertFalse(f.writeText("${home.absolutePath}/.bashrc", "no"))
+        assertTrue(f.addMods(single.path, "${home.invariantSeparatorsPath}/Documents/mods").isFailure)
+        assertFalse(f.writeText("${home.invariantSeparatorsPath}/.bashrc", "no"))
         assertFalse(f.remove(single.path), "the person's own file stays")
         assertTrue(single.isFile)
-        assertNull(f.readText("${home.absolutePath}/.ssh/id_ed25519"))
-        assertTrue(f.writeText("${home.absolutePath}/.config/Zelda64Recompiled/graphics.json", "{}"))
+        assertNull(f.readText("${home.invariantSeparatorsPath}/.ssh/id_ed25519"))
+        assertTrue(f.writeText("${home.invariantSeparatorsPath}/.config/Zelda64Recompiled/graphics.json", "{}"))
         assertTrue(f.writeText("${f.profiles}/zelda64recomp/Deck.json", "{}"))
-        assertTrue(f.copy("${f.profiles}/zelda64recomp/Deck.json", "${home.absolutePath}/.config/Zelda64Recompiled/controls.json"))
+        assertTrue(f.copy("${f.profiles}/zelda64recomp/Deck.json", "${home.invariantSeparatorsPath}/.config/Zelda64Recompiled/controls.json"))
         assertTrue(f.remove("$mods/Rando.nrm"))
         assertFalse(File(mods, "Rando.nrm").exists())
     }
@@ -106,7 +106,7 @@ class RecompFilesTest {
         val calls = ArrayList<List<String>>()
         val f = DesktopRecompFiles(
             DesktopOs.LINUX, File(data, "ports"), File(data, "recomp-profiles"),
-            home = home.absolutePath, env = emptyMap(), which = { if (it == "flatpak") "/usr/bin/flatpak" else null },
+            home = home.invariantSeparatorsPath, env = emptyMap(), which = { if (it == "flatpak") "/usr/bin/flatpak" else null },
             run = { argv, _ -> calls += argv; Processes.Output(0, "") },
         )
         File(home, ".local/share/flatpak/app/io.github.zelda64recomp.zelda64recomp/current").mkdirs()
@@ -130,11 +130,11 @@ class RecompFilesTest {
         val found = files().find().filter { it.id in setOf("spartanport", "pt-pc") }.associateBy { it.id }
         val spartan = assertNotNull(found["spartanport"])
         assertEquals("AppImage", spartan.how)
-        assertEquals(listOf("${home.absolutePath}/Games/spartanport-x86_64.AppImage", "--play"), spartan.argv)
-        assertEquals("${home.absolutePath}/.local/share/spartanport/user/savedata", spartan.saves)
+        assertEquals(listOf("${home.invariantSeparatorsPath}/Games/spartanport-x86_64.AppImage", "--play"), spartan.argv)
+        assertEquals("${home.invariantSeparatorsPath}/.local/share/spartanport/user/savedata", spartan.saves)
         val p = assertNotNull(found["pt-pc"])
-        assertEquals(listOf("${pt.absolutePath}/pt"), p.argv)
-        assertEquals("${pt.absolutePath}/data", p.saves)
+        assertEquals(listOf("${pt.invariantSeparatorsPath}/pt"), p.argv)
+        assertEquals("${pt.invariantSeparatorsPath}/data", p.saves)
         assertEquals(listOf("PT_Save_Data0", "PT_Save_Data1"), p.saveFiles)
         assertEquals(1, files().find().count { it.id == "pt-pc" })
     }
