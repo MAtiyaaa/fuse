@@ -78,6 +78,7 @@ import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
 import io.github.matiyaaa.fuse.ui.fuseline.animate
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 import io.github.matiyaaa.fuse.ui.fuseline.tween
+import io.github.matiyaaa.fuse.ui.shell.app.openStore
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.BrandArt
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
@@ -317,6 +318,28 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                         steamGames.isEmpty() -> StepEmblem(FuseIcons.FolderSearch)
                         else -> SteamList(steamGames, steamChosen, steamSel)
                     }
+                },
+            ))
+        }
+        if (!desktop) {
+            // Windows and Steam games on Android: GameNative signs into Steam and runs them; its
+            // exported games are Fuse's Steam system. It starts appearing Online: Invisible is one tap.
+            val gameNative = installed.any { it.id.value.substringAfter('.') == "gamenative" }
+            val storeKey = io.github.matiyaaa.fuse.ui.shell.apps.storeAppFor("GameNative", store.appStore.state.value.catalogue?.apps.orEmpty())?.key
+            add(Step(
+                "windows", "Steam games", if (gameNative) "Your Steam games, here too" else "Play your Steam games here?",
+                if (gameNative) {
+                    "GameNative is on this device. In it, sign in to Steam and pick Invisible in your profile to appear offline (it starts as Online). " +
+                        "Then Export for Frontend into your games folder's steam folder: your games show up in Fuse's Steam system and play from here, achievements and all."
+                } else {
+                    "GameNative signs into your Steam account and runs Windows games on this device, Steam's achievements included. " +
+                        "Fuse starts its games from its Steam system. Pick Invisible in its profile to appear offline: it starts as Online."
+                },
+                optional = true, icon = FuseIcons.Gamepad, chapter = Chapters.GAMES,
+                actions = when {
+                    gameNative -> listOf(StepAction("Continue", primary = true, run = next))
+                    storeKey != null -> listOf(StepAction("Get GameNative", primary = true) { app.openStore(storeKey) }, StepAction("Not now", run = next))
+                    else -> listOf(StepAction("Continue", primary = true, run = next))
                 },
             ))
         }
