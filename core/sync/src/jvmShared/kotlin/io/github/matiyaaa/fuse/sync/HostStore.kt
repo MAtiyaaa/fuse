@@ -669,10 +669,13 @@ class HostStore(
 
     fun meta(profile: String): MetaState = synchronized(lock) { MetaState(metas[profile] ?: ProfileMeta(), seq) }
 
-    /** Merges a device's records into the profile's; returns the merged whole. */
+    /**
+     * Merges a device's records into the profile's; returns the merged whole. A Fuse from before
+     * 0.4.3.2 sends Fuse for a theme it hasn't got: that is left out ([OlderFuseThemes]).
+     */
     fun mergeMeta(profile: String, device: String, incoming: ProfileMeta): MetaState = synchronized(lock) {
         val before = metas[profile] ?: ProfileMeta()
-        val merged = before.merge(incoming)
+        val merged = before.merge(OlderFuseThemes.keep(before, incoming, devices[device]?.fuseVersion.orEmpty()))
         if (merged != before) {
             metas[profile] = merged
             writeAtomically(File(profileDir(profile), "meta.json"), json.encodeToString(ProfileMeta.serializer(), merged).toByteArray())

@@ -148,6 +148,9 @@ enum class SavePart { WHOLE, SWITCH_ACCOUNT, SWITCH_DEVICE }
 /** How many backups from before imports each save keeps on a device. */
 internal const val KEEP_IMPORT_BACKUPS = 5
 
+/** What a save imported straight to Fuse One says it is ([SyncDevice.importToFuseOne]). */
+internal const val TO_FUSE_ONE = "Imported to Fuse One"
+
 /** How urgent a transfer is: the save for a game about to start goes before everything else. */
 enum class Priority(val rank: Int) { LAUNCH(0), PROFILE(1), SAVE(2), RECORDS(3), ARTWORK(4), GAME_FILES(5) }
 
@@ -382,6 +385,35 @@ class SyncDevice(
         require(state.holders[slot.key] != profile) { "This save's folder is already this profile's" }
         setAside(profile, slot, withRest(imported(slot, format, files), part, state.parked[keyOf(profile, slot)]), title, "Imported")
     }
+
+    /**
+     * An imported save of [game] for [profile] that has no folder on this device (the emulator's
+     * can't be reached here): it goes to Fuse One as their newest, made from [head] (the host's
+     * newest, so it follows it rather than conflicting), whose other part a Switch backup's one part
+     * keeps ([SavePart]). A device that can reach the emulator's folder puts it in place.
+     */
+    suspend fun importToFuseOne(client: SyncClient, profile: String, game: GameKey, kind: SaveKind, format: String, files: Map<String, File>,
+        head: SaveRevision?, title: String = "", part: SavePart = SavePart.WHOLE): SaveRevision {
+        require(profile.isNotBlank()) { "Choose whose save this is" }
+        require(files.isNotEmpty() && files.keys.all(SavePath::isSafe)) { "This save has no safe files" }
+        // The other part kept from the host's newest has to be here to go with it.
+        if (part != SavePart.WHOLE && head != null) SyncClient.inParallel(head.manifest.files.map { it.hash }.distinct().filterNot(store::has)) { client.download(it, store) }
+        return mutex.withLock {
+            val incoming = SaveManifest(format, files.map { (name, f) ->
+                require(f.isFile) { "The imported save is no longer available" }
+                SaveFile(name, f.inputStream().use { store.put(it) }, f.length())
+            }.sortedBy { it.path })
+            val revision = SaveRevision(SyncCrypto.token(12), profile, game.id, kind, head?.id, deviceId, deviceName, hlc.now(), withRest(incoming, part, head?.manifest?.takeIf { it.format == format }),
+                playSeconds = meta(profile).game(game).totalSeconds, title = title, provenance = TO_FUSE_ONE)
+            state = state.copy(outbox = state.outbox + Outgoing(revision.id, Priority.SAVE.rank, profile, revision))
+            persist()
+            revision
+        }
+    }
+
+    /** [profile]'s save of [game] waiting here to go to the host, made when it was (ms); null when none is. */
+    fun waitingSave(profile: String, game: GameKey, kind: SaveKind): Long? =
+        state.outbox.lastOrNull { it.revision?.let { r -> r.profile == profile && r.game == game.id && r.kind == kind && r.canBeNewest } == true }?.revision?.at?.millis
 
     /** [incoming] (in the store) written into [slot]'s folder for [profile]; see [importSave]. Under [mutex]. */
     private fun putInFolder(profile: String, slot: LocalSlot, incoming: SaveManifest, title: String, provenance: String, unowned: Boolean = false): SaveRevision {
@@ -1107,7 +1139,9 @@ class SyncDevice(
             mutex.withLock {
                 state = state.copy(outbox = state.outbox.filterNot { it.id == next.id })
                 val key = "${rev.profile}|${rev.game}|${rev.kind.name}"
-                if (result?.accepted == true && rev.reason != RevisionReason.BEFORE_RESTORE) {
+                // A save that went to Fuse One without a folder here was never in this device's
+                // folder: what is there stays unagreed, so it can never be taken for newer than it.
+                if (result?.accepted == true && rev.reason != RevisionReason.BEFORE_RESTORE && rev.provenance != TO_FUSE_ONE) {
                     state = state.copy(slots = state.slots + (key to SlotState(rev.id, rev.manifest.fingerprint)))
                 }
                 // One saved while this was on its way was made from the same base: it now follows this one.

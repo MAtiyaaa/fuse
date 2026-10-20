@@ -9,7 +9,11 @@ data class SaveImportPlan(
     val totalBytes: Long,
 )
 
-/** A possible destination is derived from the same adapter used by normal save synchronization. */
+/**
+ * A possible destination is derived from the same adapter used by normal save synchronization.
+ * [fuseOne]: the emulator's save folder can't be reached on this device ([note] says why), so the
+ * save goes to Fuse One as the person's newest, put in place by a device that can reach it.
+ */
 data class SaveImportTarget(
     val id: String,
     val query: SaveQuery,
@@ -18,6 +22,8 @@ data class SaveImportTarget(
     val destination: String,
     val conversion: Boolean,
     val confidence: SaveImportConfidence,
+    val fuseOne: Boolean = false,
+    val note: String? = null,
 )
 
 enum class SaveImportConfidence { TITLE_ID, EXACT_NAME, MANUAL }

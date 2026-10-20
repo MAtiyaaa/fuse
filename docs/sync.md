@@ -284,6 +284,13 @@ setting nobody chose on a device (Fuse's own default, or one kept from before se
 is no choice: it only fills what the profile hasn't got, and never replaces a choice made on
 another device, whichever device reaches the host first.
 
+A Fuse writes only what was changed in it: a setting that differs because it changed by another
+way (Fuse One bringing the profile's in, another Fuse open on the same computer) is shown, never
+written back as a new choice. A device that hasn't got the theme chosen (one from a newer Fuse, or
+an added theme it can't read) shows Fuse's own look and keeps the choice. A Fuse from before 0.4.3.2
+sent Fuse instead, as the person's newest choice: the host leaves that out (from 0.4.3.4), and
+takes everything else that device sends.
+
 ### This device's own Home
 
 While arranging Home, a switch beside **Add widget** and **Done** chooses whose Home it is:
@@ -394,7 +401,13 @@ title id, and a name in its folder that isn't the library's) isn't passed over: 
 asks "What game is this?", showing what the backup says (its folder's name, title id, whose and
 when) above the person's Switch games, the likeliest first, with Show Every Game for the rest.
 Chosen, its saves go where the emulator keeps that game's (by the game's own title id, else the
-backup's); Leave It Out passes them over. Fuse then asks, one game at a time, whether it is that game
+backup's); Leave It Out passes them over. Where Fuse can't reach the emulator's saves on this device
+(Android keeps Eden's in its own folder until one is chosen in Eden and in Fuse, Settings, Save
+folders; an emulator no one has played in yet has no user's folder) and Fuse One keeps this
+device's saves, a game's backup still counts as that game's, and goes to Fuse One as the chosen
+person's newest, made from their newest there (whose other part, account or device, it keeps). A
+device that can reach the emulator's saves has it in place before the game starts there. The import
+says why it couldn't go in on this device, and what to change for it to. Fuse then asks, one game at a time, whether it is that game
 and whose save it is: one person, several or everyone, each getting their own copy. When anyone
 chosen already has a save of that game (in the emulator now, kept on this device for them,
 waiting to go to Fuse One, or in Fuse One), it says so and asks Override or Skip; Skip leaves

@@ -934,13 +934,21 @@ private fun GameStep(g: SwitchImport.Game, compact: Boolean) {
                 // What the backup is, beside the poster and under the banner.
                 Column(Modifier.padding(start = beside, top = banner + Space.m).fillMaxWidth()) {
                     Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                        if (!g.here) Chip("Fuse One", icon = FuseIcons.Cloud)
+                        if (!g.here || g.target.fuseOne) Chip("Fuse One", icon = FuseIcons.Cloud)
                         sw?.tool?.let { Chip(if (it == "CHECKPOINT") "Checkpoint" else "JKSV", icon = FuseIcons.SdCard) }
                         sw?.user?.let { Chip(it, icon = FuseIcons.UserRound) }
                     }
                     Spacer(Modifier.height(Space.s))
                     FText(listOfNotNull(sw?.savedAt?.let(::whenText), sw?.titleId).joinToString("  ·  ").ifEmpty { g.entry.name }, Fuse.type.caption, color = c.textMuted, maxLines = 2)
-                    if (!g.here) {
+                    if (g.target.fuseOne) {
+                        // No folder for it here: it goes to Fuse One, and a device that can reach the emulator's saves puts it in place.
+                        Spacer(Modifier.height(Space.s))
+                        FText("Goes to Fuse One. Fuse can't reach where ${emulatorName(g.target.query.emulatorId)} keeps its saves on this device, so a device that can puts it in place when the game is played there.", Fuse.type.caption, color = c.accent, maxLines = 4)
+                        g.target.note?.let { why ->
+                            Spacer(Modifier.height(Space.xs))
+                            FText(why, Fuse.type.caption, color = c.textMuted, maxLines = 4)
+                        }
+                    } else if (!g.here) {
                         Spacer(Modifier.height(Space.s))
                         FText("On Fuse One, not on this device yet. The save is put where ${emulatorName(g.target.query.emulatorId)} looks for it, ready when you play it here.", Fuse.type.caption, color = c.accent, maxLines = 3)
                     }
@@ -1261,6 +1269,7 @@ private fun names(profiles: List<ProfileInfo>, ids: Collection<String>): String 
 
 /** Where a save goes, short enough for one line: the emulator, then the end of its folder. */
 private fun where(t: SaveImportTarget): String {
+    if (t.fuseOne) return "Fuse One, for ${emulatorName(t.query.emulatorId)}"
     val tail = t.destination.replace('\\', '/').trimEnd('/').split('/').takeLast(2).joinToString("/")
     return "${emulatorName(t.query.emulatorId)}  ·  …/$tail"
 }
