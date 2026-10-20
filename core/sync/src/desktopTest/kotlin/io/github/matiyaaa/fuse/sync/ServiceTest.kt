@@ -979,4 +979,50 @@ class ServiceTest {
         assertEquals(1, notices.filterIsInstance<SyncNotice.NotSynced>().size, notices.toString())
         pc.stop()
     }
+
+    /**
+     * The host updates itself once a device runs a newer Fuse, a minute or two after it connects: the
+     * device shows what it runs now within a minute, not ten, and the host's own answer to Update the
+     * Fuse One Host ("already the newest") is what it shows straight away.
+     */
+    @Test
+    fun aDeviceShowsTheFuseTheHostRunsNow(): Unit = runBlocking {
+        val hostDir = File(root, "host")
+        fun host(version: String) = SyncHost(HostStore(hostDir, hostName = "Gaming PC"), port, version, bind = "127.0.0.1", callsPerMinute = 100_000).start()
+        var running = host("0.4.3.1")
+        var now = System.currentTimeMillis()
+        val settings = SettingsStore(DesktopDatabase.open(null))
+        settings.update { it.copy(sync = it.sync.copy(enabled = true, hostPort = port, deviceName = "AYN Thor")) }
+        val thor = JvmSyncService(File(root, "thor"), settings, Secrets(), Library(), "ANDROID", "AYN Thor", "0.4.3.4", NoHostLifetime("test"), scope, clock = { now })
+        try {
+            thor.connect("127.0.0.1:$port", running.newPairingCode()).getOrThrow()
+            thor.syncNow().getOrThrow()
+            withTimeout(10_000) { while (thor.hostFuse.value != "0.4.3.1") kotlinx.coroutines.delay(20) }
+
+            // Asked to update, the host says it already runs the newest: that is what the device shows.
+            running.onUpdateAsked = { HostUpdate(false, "The host already runs Fuse 0.4.3.3, the newest.", "0.4.3.3") }
+            assertFalse(thor.updateHost().getOrThrow().started)
+            assertEquals("0.4.3.3", thor.hostFuse.value)
+
+            // The host goes back to 0.4.3.1 and then starts again on 0.4.3.4 by itself: a minute later
+            // the device knows, while the host's version is older than its own. (A round just as the
+            // host starts again may find it gone: the next one asks.)
+            suspend fun restartedOn(version: String) {
+                running.stop()
+                running = host(version)
+                now += 61_000
+                repeat(3) { thor.syncNow() }
+            }
+            restartedOn("0.4.3.1")
+            assertEquals("0.4.3.1", thor.hostFuse.value)
+            restartedOn("0.4.3.4")
+            assertEquals("0.4.3.4", thor.hostFuse.value)
+            // Up to date, it is asked only every ten minutes again.
+            restartedOn("0.4.3.5")
+            assertEquals("0.4.3.4", thor.hostFuse.value)
+        } finally {
+            thor.stop()
+            running.stop()
+        }
+    }
 }

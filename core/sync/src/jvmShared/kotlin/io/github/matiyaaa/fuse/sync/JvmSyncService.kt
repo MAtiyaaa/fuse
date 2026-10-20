@@ -1771,9 +1771,13 @@ class JvmSyncService(
      * typed another here): set once on the host, every device can reach it from away.
      */
     private suspend fun adoptOutside(c: SyncClient) {
-        if (clock() - helloAt < HELLO_EVERY_MS) return
-        helloAt = clock()
+        // A host on an older Fuse than this one is often updating itself just then (it does once a
+        // device runs a newer Fuse): asked again each minute, so what it runs is never long out of date.
+        val every = if (olderThanThis(_hostFuse.value) && _hostFuse.value.isNotEmpty()) HELLO_UPDATING_MS else HELLO_EVERY_MS
+        if (clock() - helloAt < every) return
+        // Counted from an answer: a host starting again just then is asked on the next round.
         val hello = runCatching { c.status().hello }.getOrNull() ?: return
+        helloAt = clock()
         _hostFuse.value = hello.fuseVersion
         val outside = hello.outside.takeIf { it.isNotBlank() } ?: return
         val cfg = cached
@@ -1929,6 +1933,11 @@ class JvmSyncService(
         runCatching { c.updateHost() }.recoverCatching { e ->
             // A host from before 0.4.2.23 has no such call: it is updated once on its computer.
             if (e is SyncException && e.status == 404) throw SyncException("The host runs a Fuse from before it could be updated from here. Update Fuse once on the host's computer.", "old-host", 404) else throw e
+        }.onSuccess { answer ->
+            // Not updating: it says the Fuse it runs now, which is what this device shows from here on.
+            // Updating: it is asked again on the next round, and each minute until it runs the new one.
+            if (!answer.started && answer.version.isNotBlank()) _hostFuse.value = answer.version
+            if (answer.started) helloAt = 0
         }
     }
 
@@ -3292,6 +3301,9 @@ class JvmSyncService(
         /** How often a device playing says so to the host (see [PLAYING_ASK_MS]). */
         const val PRESENCE_EVERY_MS = 60_000L
         const val HELLO_EVERY_MS = 10 * 60_000L
+
+        /** How often a host on an older Fuse than this device is asked which it runs now. */
+        const val HELLO_UPDATING_MS = 60_000L
         const val FORGET_WAIT_MS = 5_000L
         const val HOST_RELEASE_MS = 1_500L
 
