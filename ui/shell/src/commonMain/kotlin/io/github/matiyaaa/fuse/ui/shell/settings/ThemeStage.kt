@@ -101,6 +101,7 @@ import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.Hud
 import io.github.matiyaaa.fuse.ui.shell.app.HudScrim
+import io.github.matiyaaa.fuse.ui.shell.app.dockPill
 import io.github.matiyaaa.fuse.ui.shell.app.offers
 import io.github.matiyaaa.fuse.ui.shell.app.sections
 import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
@@ -262,8 +263,9 @@ internal fun ThemeStage(
             VirtualScreen(Modifier.fillMaxSize()) {
                 FuseTheme(spec = s, motion = scene.motion, quality = quality, glyphs = glyphs, highContrastFocus = contrast, colorVision = vision) {
                     CompositionLocalProvider(
-                        LocalTileMetrics provides TileMetrics.forHeight(VirtualHeight, VirtualWidth),
+                        LocalTileMetrics provides TileMetrics.forHeight(VirtualHeight, VirtualWidth).scaled(s.layout.tileScale, s.layout.spacing),
                         LocalGameArt provides scene.gameArt,
+                        io.github.matiyaaa.fuse.ui.designsystem.theme.LocalChrome provides io.github.matiyaaa.fuse.ui.designsystem.theme.Chrome.of(s.layout),
                     ) {
                         MiniHome(s, scene, spotlight)
                     }
@@ -324,8 +326,16 @@ private fun MiniHome(spec: ThemeSpec, scene: StageScene, spotlight: Spotlight? =
             fps = 24,
         )
         spec.wallpaper?.let { io.github.matiyaaa.fuse.ui.shell.app.WallpaperLayer(it, Modifier.fillMaxSize()) }
-        HudScrim(art = art)
-        Box(Modifier.fillMaxWidth().height(Size.hudHeight).spot(targets, SpotPart.TOP_LINE)) { Hud(
+        // The bar where the theme puts it: along the top, or in a dock along the bottom.
+        val docked = spec.layout.bar == io.github.matiyaaa.fuse.model.BarPlacement.DOCK
+        if (!docked) HudScrim(art = art)
+        // Docked, Home and the hints sit above the dock's own band, as they do on the real screen.
+        val dockRoom = io.github.matiyaaa.fuse.ui.designsystem.theme.LocalChrome.current.dockRoom
+        Box(
+            if (!docked) Modifier.fillMaxWidth().height(Size.hudLine).spot(targets, SpotPart.TOP_LINE)
+            else Modifier.align(Alignment.BottomCenter).dockPill().spot(targets, SpotPart.TOP_LINE),
+        ) { Hud(
+            gutter = if (docked) Space.l else Space.gutter,
             destinations = scene.tabs,
             sections = scene.sections,
             active = Destination.HOME,
@@ -337,7 +347,7 @@ private fun MiniHome(spec: ThemeSpec, scene: StageScene, spotlight: Spotlight? =
             onSelect = {},
             onStatusClick = {},
         ) }
-        Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().padding(bottom = dockRoom)) {
             Spacer(Modifier.height(Size.hudHeight))
             Box(
                 Modifier.fillMaxWidth().height(VirtualHeight * HOME_STAGE_SHARE).padding(horizontal = Space.gutter),
@@ -381,11 +391,12 @@ private fun MiniHome(spec: ThemeSpec, scene: StageScene, spotlight: Spotlight? =
         Box(
             Modifier
                 .align(Alignment.BottomCenter)
+                .padding(bottom = dockRoom)
                 .fillMaxWidth()
                 .height(Size.hintHeight + Space.xxl)
                 .ditheredBackground(Brush.verticalGradient(0f to Color.Transparent, 0.55f to c.ink.copy(alpha = 0.78f), 1f to c.ink.copy(alpha = 0.94f))),
         )
-        HintBar(MINI_HINTS, Modifier.align(Alignment.BottomEnd).padding(horizontal = Space.gutter, vertical = Space.s).spot(targets, SpotPart.HINTS))
+        HintBar(MINI_HINTS, Modifier.align(Alignment.BottomEnd).padding(bottom = dockRoom).padding(horizontal = Space.gutter, vertical = Space.s).spot(targets, SpotPart.HINTS))
         // In the studio a panel stands on Home too, so panels, buttons and signals can be seen at work.
         if (spotlight?.sheet == true) MiniSheet(targets, Modifier.align(Alignment.TopEnd).padding(top = Size.hudHeight + Space.x5 + Space.xl, end = Space.gutter))
         if (spotlight?.quick == true) MiniQuick(targets, Modifier.align(Alignment.TopEnd).padding(top = Size.hudHeight + Space.x5 + Space.xl, end = Space.gutter))
@@ -624,6 +635,7 @@ internal fun BackgroundStyle.label(): String = when (this) {
     BackgroundStyle.CONTOURS -> "Contours"
     BackgroundStyle.DUNES -> "Dunes"
     BackgroundStyle.FUSI -> "Fusi"
+    BackgroundStyle.BLOCKS -> "Blocks"
 }
 
 internal fun BackgroundStyle.icon(): ImageVector = when (this) {
@@ -644,6 +656,7 @@ internal fun BackgroundStyle.icon(): ImageVector = when (this) {
     BackgroundStyle.CONTOURS -> FuseIcons.Mountain
     BackgroundStyle.DUNES -> FuseIcons.SunDim
     BackgroundStyle.FUSI -> FuseIcons.PawPrint
+    BackgroundStyle.BLOCKS -> FuseIcons.Boxes
 }
 
 internal fun CornerFamily.label(): String = when (this) {
@@ -657,12 +670,14 @@ internal fun FocusStyle.label(): String = when (this) {
     FocusStyle.GLOW -> "Glow"
     FocusStyle.RING -> "Ring"
     FocusStyle.BAR -> "Bar"
+    FocusStyle.BRACKETS -> "Brackets"
 }
 
 internal fun FocusStyle.icon(): ImageVector = when (this) {
     FocusStyle.GLOW -> FuseIcons.Sparkle
     FocusStyle.RING -> FuseIcons.CircleDot
     FocusStyle.BAR -> FuseIcons.Minus
+    FocusStyle.BRACKETS -> FuseIcons.Maximize
 }
 
 /** The same names Settings, Accessibility, Motion uses. */
@@ -714,6 +729,7 @@ internal fun io.github.matiyaaa.fuse.model.TileLook.label(): String = when (this
     io.github.matiyaaa.fuse.model.TileLook.INK -> "Ink"
     io.github.matiyaaa.fuse.model.TileLook.NEON -> "Neon"
     io.github.matiyaaa.fuse.model.TileLook.MAT -> "Mounted"
+    io.github.matiyaaa.fuse.model.TileLook.PRISM -> "Prism"
 }
 
 internal fun io.github.matiyaaa.fuse.model.TileLook.note(): String = when (this) {
@@ -723,7 +739,47 @@ internal fun io.github.matiyaaa.fuse.model.TileLook.note(): String = when (this)
     io.github.matiyaaa.fuse.model.TileLook.INK -> "A firm outline in the text colour, like a printed card"
     io.github.matiyaaa.fuse.model.TileLook.NEON -> "Lined in the accent, glowing brighter when you're on it"
     io.github.matiyaaa.fuse.model.TileLook.MAT -> "Mounted in a border of the panel colour, like a print"
+    io.github.matiyaaa.fuse.model.TileLook.PRISM -> "Rimmed in light from each tile's own colour to the accent, like a handheld's system tiles"
 }
+
+internal fun io.github.matiyaaa.fuse.model.BarPlacement.label(): String = when (this) {
+    io.github.matiyaaa.fuse.model.BarPlacement.TOP -> "Along the Top"
+    io.github.matiyaaa.fuse.model.BarPlacement.DOCK -> "Dock at the Bottom"
+}
+
+internal fun io.github.matiyaaa.fuse.model.BarPlacement.note(): String = when (this) {
+    io.github.matiyaaa.fuse.model.BarPlacement.TOP -> "Sections, Search, Settings and the status across the top, as Fuse has them"
+    io.github.matiyaaa.fuse.model.BarPlacement.DOCK -> "All of them in a pill along the bottom, under your thumbs, as a handheld's home keeps them"
+}
+
+internal fun io.github.matiyaaa.fuse.model.Spacing.label(): String = when (this) {
+    io.github.matiyaaa.fuse.model.Spacing.COMPACT -> "Compact"
+    io.github.matiyaaa.fuse.model.Spacing.COMFORTABLE -> "Comfortable"
+    io.github.matiyaaa.fuse.model.Spacing.AIRY -> "Airy"
+}
+
+internal fun io.github.matiyaaa.fuse.model.SecondScreenLook.label(): String = when (this) {
+    io.github.matiyaaa.fuse.model.SecondScreenLook.ART -> "Art"
+    io.github.matiyaaa.fuse.model.SecondScreenLook.SHOWCASE -> "Showcase"
+    io.github.matiyaaa.fuse.model.SecondScreenLook.NOTHING -> "Nothing"
+}
+
+internal fun io.github.matiyaaa.fuse.model.SecondScreenLook.note(): String = when (this) {
+    io.github.matiyaaa.fuse.model.SecondScreenLook.ART -> "The focused game's or system's art and logo"
+    io.github.matiyaaa.fuse.model.SecondScreenLook.SHOWCASE -> "A system set out whole: its logo, who made it and when, and how much of it is here"
+    io.github.matiyaaa.fuse.model.SecondScreenLook.NOTHING -> "Only the room, quiet"
+}
+
+/** A tile size, as the studio names it. */
+internal fun tileSizeLabel(scale: Float): String = when {
+    scale < 0.88f -> "Small"
+    scale < 1.04f -> "Standard"
+    scale < 1.2f -> "Large"
+    else -> "Largest"
+}
+
+/** The tile sizes the studio offers, smallest first. */
+internal val TILE_SIZES = listOf(0.8f, 1f, 1.12f, 1.3f)
 
 internal fun SoundProfile.icon(): ImageVector = if (this == SoundProfile.OFF) FuseIcons.VolumeOff else FuseIcons.Volume
 

@@ -470,11 +470,71 @@ object ThemePresets {
     )
 
     /**
+     * A dual-screen handheld's home: rounded squares breathing over a deep indigo room with one lit
+     * in red, square system tiles rimmed in light from their own colour to the accent, the sections
+     * and status in a pill dock along the bottom, and on a second screen each system shown whole
+     * with its story. Lavender squares, coral light.
+     */
+    val Twin = ThemeSpec(
+        id = "twin",
+        name = "Twin",
+        tagline = "A dual-screen home: lit tiles, a dock below, blocks behind",
+        palette = ThemePalette(
+            dark = true,
+            background = 0xFF0C0D1C, surface = 0xFF15172C, surfaceRaised = 0xFF1E2140,
+            accent = 0xFFFF4A5C, accentSoft = 0x33FF4A5C, onAccent = 0xFF2A0309,
+            textPrimary = 0xFFF4F4FF, textSecondary = 0xFFB0B3D8, focusRing = 0xFF8FE9FF,
+        ),
+        background = BackgroundStyle.BLOCKS,
+        geometry = CornerFamily.ROUND,
+        quickMenu = QuickMenuLook.GLASS,
+        widgets = io.github.matiyaaa.fuse.model.WidgetLook.GLASS,
+        tiles = TileLook.PRISM,
+        focus = FocusStyle.GLOW,
+        motion = MotionProfile.ENHANCED,
+        sound = SoundProfile.CLICK,
+        ambient = AmbientSpec(secondary = 0xFF8C8FE8),
+        layout = io.github.matiyaaa.fuse.model.ThemeLayout(
+            bar = io.github.matiyaaa.fuse.model.BarPlacement.DOCK,
+            tileScale = 1f,
+            spacing = io.github.matiyaaa.fuse.model.Spacing.COMFORTABLE,
+            secondScreen = io.github.matiyaaa.fuse.model.SecondScreenLook.SHOWCASE,
+        ),
+    )
+
+    /**
+     * Covers framed as a camera frames its subject: corner brackets close in on the game you're on,
+     * in violet, over a near-black room, with small tiles packed close and the bar along the top.
+     */
+    val Viewfinder = ThemeSpec(
+        id = "viewfinder",
+        name = "Viewfinder",
+        tagline = "Covers packed close, framed by corner brackets",
+        palette = ThemePalette(
+            dark = true,
+            background = 0xFF0A0A0F, surface = 0xFF14141C, surfaceRaised = 0xFF1C1C27,
+            accent = 0xFFB061FF, accentSoft = 0x33B061FF, onAccent = 0xFF1C0533,
+            textPrimary = 0xFFF5F2FF, textSecondary = 0xFFA9A3BF, focusRing = 0xFFB061FF,
+        ),
+        background = BackgroundStyle.SOLID,
+        geometry = CornerFamily.ROUND,
+        quickMenu = QuickMenuLook.SOLID,
+        tiles = TileLook.PANEL,
+        focus = FocusStyle.BRACKETS,
+        motion = MotionProfile.STANDARD,
+        sound = SoundProfile.SOFT,
+        layout = io.github.matiyaaa.fuse.model.ThemeLayout(
+            tileScale = 0.9f,
+            spacing = io.github.matiyaaa.fuse.model.Spacing.COMPACT,
+        ),
+    )
+
+    /**
      * Every built-in theme in the order the gallery shows them: Fuse first (the default), then the
      * dark rooms from the plainest to the most decorated, then the bright ones.
      */
     val all: List<ThemeSpec> = listOf(
-        Fuse, Glass, Pitch, Starlight, Orbital, Crossbar, Wave, Blossom, Lagoon, Canopy, Blades, Sundown, Crt,
+        Fuse, Glass, Pitch, Starlight, Orbital, Crossbar, Wave, Blossom, Lagoon, Canopy, Blades, Sundown, Crt, Twin, Viewfinder,
         Daylight, PaperMint, Channels, Opal, Noon, Ridge, Olive, Fusi,
     )
 

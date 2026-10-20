@@ -106,7 +106,7 @@ fun HintBar(hints: List<Hint>, modifier: Modifier = Modifier, flash: HintFlash? 
         shown.addAll(next)
     }
     Row(
-        modifier.height(Size.hintHeight),
+        modifier.height(Size.hintLine),
         horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically,
     ) {

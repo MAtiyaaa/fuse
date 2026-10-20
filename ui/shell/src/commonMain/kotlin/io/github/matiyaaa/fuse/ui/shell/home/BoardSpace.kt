@@ -73,7 +73,7 @@ internal abstract class BoardSpace {
     abstract fun title(w: HomeWidget): String
 
     /** Room above the board, under the top line. */
-    open val top: Dp get() = Size.hudHeight
+    open val top: Dp @Composable get() = Size.hudHeight
 
     /**
      * Columns of a board this [width] (dp); [narrow] for a phone held upright or a very thin screen,

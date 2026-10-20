@@ -1,6 +1,9 @@
 package io.github.matiyaaa.fuse.ui.designsystem.theme
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -48,11 +51,20 @@ object Size {
     /** Minimum touch target. */
     val touch: Dp = 48.dp
 
-    /** Top HUD line (tabs + status). */
-    val hudHeight: Dp = 64.dp
+    /**
+     * Room above a page for the top line (tabs and status). A theme with its bar in a dock along
+     * the bottom ([LocalChrome]) leaves only a little air here.
+     */
+    val hudHeight: Dp @Composable @ReadOnlyComposable get() = LocalChrome.current.top
 
-    /** Bottom hint line. */
-    val hintHeight: Dp = 44.dp
+    /** Room below a page for the hint line ([LocalChrome]); a dock has its own band under the page. */
+    val hintHeight: Dp @Composable @ReadOnlyComposable get() = LocalChrome.current.bottom
+
+    /** The top line's own height, wherever it sits. */
+    val hudLine: Dp = 64.dp
+
+    /** The hint line's own height. */
+    val hintLine: Dp = 44.dp
 
     /** Row height in menus and settings lists. */
     val row: Dp = 56.dp
@@ -191,4 +203,49 @@ data class TileMetrics(
             return TileMetrics(icon, capsule, cover, system, gap = (icon * 0.18f).coerceIn(12.dp, 24.dp))
         }
     }
+
+    /**
+     * These metrics with tiles [scale] times their size (a theme's [io.github.matiyaaa.fuse.model.ThemeLayout.tileScale])
+     * and the gaps between them as [spacing] has them.
+     */
+    fun scaled(scale: Float, spacing: io.github.matiyaaa.fuse.model.Spacing): TileMetrics {
+        val s = scale.coerceIn(io.github.matiyaaa.fuse.model.ThemeLayout.MIN_SCALE, io.github.matiyaaa.fuse.model.ThemeLayout.MAX_SCALE)
+        val g = when (spacing) {
+            io.github.matiyaaa.fuse.model.Spacing.COMPACT -> 0.6f
+            io.github.matiyaaa.fuse.model.Spacing.COMFORTABLE -> 1f
+            io.github.matiyaaa.fuse.model.Spacing.AIRY -> 1.5f
+        }
+        if (s == 1f && g == 1f) return this
+        return TileMetrics(icon * s, capsuleWidth * s, coverWidth * s, systemCardWidth * s, gap = (gap * s * g).coerceIn(6.dp, 40.dp))
+    }
 }
+
+/**
+ * The room the shell's own lines take around a page: [top] above it and [bottom] below it. With
+ * the bar along the top (Fuse's own) that is the top line and the hint line; with the bar in a dock
+ * ([dock]), the top keeps only a slim status line and the bottom holds the dock over the hints.
+ */
+@Immutable
+data class Chrome(val top: Dp = Size.hudLine, val bottom: Dp = Size.hintLine, val dock: Boolean = false) {
+    /** The band along the foot of the screen the dock takes; pages and the hint line sit above it. */
+    val dockRoom: Dp get() = if (dock) DockHeight + DockGap * 2 else 0.dp
+
+    companion object {
+        /** The dock's own height. */
+        val DockHeight: Dp = 64.dp
+
+        /** Room above and below the dock in its band. */
+        val DockGap: Dp = 8.dp
+
+        /** What is left above a page while the bar is docked: a little air under the screen's edge. */
+        val DockedTop: Dp = 44.dp
+
+        val Docked = Chrome(top = DockedTop, dock = true)
+
+        /** The room a theme's [layout] leaves around a page. */
+        fun of(layout: io.github.matiyaaa.fuse.model.ThemeLayout): Chrome =
+            if (layout.bar == io.github.matiyaaa.fuse.model.BarPlacement.DOCK) Docked else Chrome()
+    }
+}
+
+val LocalChrome = staticCompositionLocalOf { Chrome() }

@@ -41,6 +41,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
@@ -918,7 +919,18 @@ private fun MiniChrome(modifier: Modifier = Modifier) {
                     drawPath(lifted, edge, style = edgeStroke)
                 }
                 if (ring) translate(fx - ringGap, fy - ringGap) { drawPath(ringPath, focus, style = ringStroke) }
-                if (style != FocusStyle.RING) {
+                if (style == FocusStyle.BRACKETS) {
+                    // Corner arms just outside the lifted tile, as a viewfinder frames it.
+                    val o = ringGap * 2
+                    val arm = minOf(liftedW, liftedH) * 0.2f
+                    val sw = thick(3f)
+                    for ((cx, dx) in listOf(fx - o to 1f, fx + liftedW + o to -1f)) {
+                        for ((cy, dy) in listOf(fy - o to 1f, fy + liftedH + o to -1f)) {
+                            drawLine(accent, Offset(cx, cy), Offset(cx + dx * arm, cy), strokeWidth = sw, cap = StrokeCap.Round)
+                            drawLine(accent, Offset(cx, cy), Offset(cx, cy + dy * arm), strokeWidth = sw, cap = StrokeCap.Round)
+                        }
+                    }
+                } else if (style != FocusStyle.RING) {
                     val bw = 28f * u * 2.2f * (if (style == FocusStyle.BAR) 1.4f else 1f)
                     drawRoundRect(accent, Offset(gutter + wideW / 2 - bw / 2, fy + liftedH + maxOf(7f * u, hair * 2f)), androidx.compose.ui.geometry.Size(bw, barH), CornerRadius(barH / 2))
                 }

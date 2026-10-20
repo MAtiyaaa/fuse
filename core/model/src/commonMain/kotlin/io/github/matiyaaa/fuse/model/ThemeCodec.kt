@@ -146,6 +146,16 @@ object ThemeCodec {
             }
         } ?: start.wallpaper
 
+        // Where things are and how big: the bar, the tiles, the room between them, the second screen.
+        val layout = (root["layout"] as? JsonObject)?.let { l ->
+            ThemeLayout(
+                bar = enumOf(l.string("bar"), start.layout.bar, "layout bar", notes),
+                tileScale = l.float("tileScale", start.layout.tileScale, ThemeLayout.MIN_SCALE, ThemeLayout.MAX_SCALE, notes),
+                spacing = enumOf(l.string("spacing"), start.layout.spacing, "layout spacing", notes),
+                secondScreen = enumOf(l.string("secondScreen"), start.layout.secondScreen, "layout second screen", notes),
+            )
+        } ?: start.layout
+
         val id = CUSTOM_PREFIX + slug(root.string("id")?.removePrefix(CUSTOM_PREFIX) ?: name).ifEmpty { "theme" }
         val spec = start.copy(
             id = id,
@@ -165,6 +175,7 @@ object ThemeCodec {
             quickMenu = enumOf(root.string("quickMenu"), start.quickMenu, "quick menu", notes),
             widgets = enumOf(root.string("widgets"), start.widgets, "widgets", notes),
             tiles = enumOf(root.string("tiles"), start.tiles, "tiles", notes),
+            layout = layout,
         )
         return Imported(spec, notes.distinct())
     }
@@ -207,6 +218,13 @@ object ThemeCodec {
             put("quickMenu", spec.quickMenu.name.lowercase())
             put("widgets", spec.widgets.name.lowercase())
             put("tiles", spec.tiles.name.lowercase())
+            // Only a theme that moves or resizes things says so: every other theme's file stays as it was.
+            if (spec.layout != ThemeLayout()) put("layout", buildJsonObject {
+                put("bar", spec.layout.bar.name.lowercase())
+                put("tileScale", spec.layout.tileScale)
+                put("spacing", spec.layout.spacing.name.lowercase())
+                put("secondScreen", spec.layout.secondScreen.name.lowercase())
+            })
             put("glass", buildJsonObject {
                 put("enabled", spec.glass.enabled)
                 put("blur", spec.glass.blur)

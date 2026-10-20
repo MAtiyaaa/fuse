@@ -636,7 +636,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val layout = GameLayout.of(maxWidth, maxHeight)
+        val layout = GameLayout.of(maxWidth, maxHeight, Size.hudHeight)
         // The page scrolls below the top line, softening into it and into the hint line.
         Column(
             Modifier
@@ -937,13 +937,13 @@ private data class GameLayout(
     val stackActions: Boolean,
 ) {
     companion object {
-        fun of(width: Dp, height: Dp): GameLayout {
+        fun of(width: Dp, height: Dp, hud: Dp = Size.hudLine): GameLayout {
             val content = width - Space.gutter * 2
             // A handheld's upper screen at its largest text (about 360dp tall): the title, its two
             // lines and Play must all show above the hint line, so the art above gets less.
             val short = height < Size.touch * 9
             return GameLayout(
-                top = Size.hudHeight + if (short) Space.s else (height * 0.1f).coerceIn(Space.l, Space.x5),
+                top = hud + if (short) Space.s else (height * 0.1f).coerceIn(Space.l, Space.x5),
                 cover = if (width > Size.touch * 17) (height * 0.3f).coerceIn(Size.touch * 2, Size.touch * 5) else null,
                 compact = height < Size.touch * 12 || width < Size.touch * 13,
                 logoHeight = if (short) Size.touch + Space.s else (height * 0.19f).coerceIn(Size.touch + Space.l, Size.touch * 3),
@@ -1653,7 +1653,7 @@ private fun InfoPanel(
 @Composable
 private fun GameSkeleton() {
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val layout = GameLayout.of(maxWidth, maxHeight)
+        val layout = GameLayout.of(maxWidth, maxHeight, Size.hudHeight)
         val style = if (layout.compact) Fuse.type.display else Fuse.type.hero
         val titleHeight = with(LocalDensity.current) { style.lineHeight.toDp() }
         Column(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {

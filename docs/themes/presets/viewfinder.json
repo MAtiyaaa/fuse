@@ -1,0 +1,50 @@
+{
+  "fuseTheme": 1,
+  "name": "Viewfinder",
+  "id": "viewfinder",
+  "tagline": "Covers packed close, framed by corner brackets",
+  "extends": "viewfinder",
+  "dark": true,
+  "colors": {
+    "background": "#0A0A0F",
+    "surface": "#14141C",
+    "surfaceRaised": "#1C1C27",
+    "accent": "#B061FF",
+    "accentSoft": "#B061FF33",
+    "onAccent": "#1C0533",
+    "text": "#F5F2FF",
+    "textMuted": "#A9A3BF",
+    "focus": "#B061FF"
+  },
+  "background": {
+    "style": "solid",
+    "intensity": 1.0,
+    "speed": 1.0
+  },
+  "corners": "round",
+  "focus": "brackets",
+  "motion": "standard",
+  "sound": "soft",
+  "quickMenu": "solid",
+  "widgets": "lit",
+  "tiles": "panel",
+  "layout": {
+    "bar": "top",
+    "tileScale": 0.9,
+    "spacing": "compact",
+    "secondScreen": "art"
+  },
+  "glass": {
+    "enabled": false,
+    "blur": 24.0,
+    "opacity": 0.72
+  },
+  "crt": {
+    "enabled": false,
+    "scanlines": 0.35,
+    "bloom": 0.15,
+    "curvature": 0.08,
+    "chromatic": 0.1,
+    "vignette": 0.3
+  }
+}

@@ -157,6 +157,7 @@ fun Tile(
         io.github.matiyaaa.fuse.model.TileLook.INK -> colors.text
         io.github.matiyaaa.fuse.model.TileLook.NEON -> colors.accent
         io.github.matiyaaa.fuse.model.TileLook.MAT -> colors.surfaceRaised
+        io.github.matiyaaa.fuse.model.TileLook.PRISM -> colors.accent
         io.github.matiyaaa.fuse.model.TileLook.PLAIN -> Color.Transparent
     }
     val bevelColor = if (colors.isDark) Color.Black.copy(alpha = 0.35f) else GLOSS_BEVEL
@@ -176,7 +177,9 @@ fun Tile(
 
     val style = look.focusStyle
     val ring = style == FocusStyle.RING || look.highContrastFocus
-    val spark = showSpark && style != FocusStyle.RING
+    val spark = showSpark && style != FocusStyle.RING && style != FocusStyle.BRACKETS
+    // BRACKETS: four corners close in around the tile as it lifts, in the accent.
+    val brackets = style == FocusStyle.BRACKETS
     val focusScale = motion.focusScale
     val hoverScale = (focusScale - 1f) * HOVER_SHARE
     val pressDepth = 1f - motion.pressScale
@@ -300,11 +303,24 @@ fun Tile(
                     io.github.matiyaaa.fuse.model.TileLook.PANEL -> maxOf(short * PANEL_FRAME_SHARE, 2f)
                     io.github.matiyaaa.fuse.model.TileLook.INK -> maxOf(short * INK_FRAME_SHARE, 2.5f)
                     io.github.matiyaaa.fuse.model.TileLook.NEON -> maxOf(Size.stroke.toPx() * 1.5f, 1.5f)
+                    io.github.matiyaaa.fuse.model.TileLook.PRISM -> maxOf(short * PRISM_FRAME_SHARE, 2.5f)
                     // Drawn on the outline, half of it falls outside the clipped art: twice the mount.
                     io.github.matiyaaa.fuse.model.TileLook.MAT -> short * MAT_SHARE * 2f
                     io.github.matiyaaa.fuse.model.TileLook.PLAIN -> 0f
                 })
                 val neonHalo = Stroke(frameStroke.width * NEON_HALO)
+                // PRISM: light running from the tile's own colour, through white, to the accent.
+                val prism = Brush.linearGradient(
+                    0f to lerp(glow, Color.White, 0.25f),
+                    0.5f to lerp(glow, accent, 0.5f),
+                    1f to lerp(accent, Color.White, 0.15f),
+                    start = Offset.Zero,
+                    end = Offset(w, h),
+                )
+                // BRACKETS: each corner's arm, and how far out they sit at full lift.
+                val arm = short * BRACKET_ARM
+                val bracketStroke = Stroke(Size.focusStroke.toPx() * 1.6f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                val bracketOut = Size.focusGap.toPx() * 1.8f
                 val bevelStroke = Stroke(Size.stroke.toPx())
                 val bevelInset = frameStroke.width / 2 + bevelStroke.width / 2
                 val bevelPath = if (gloss) squirclePath(w - bevelInset * 2, h - bevelInset * 2, (corner - bevelInset).coerceAtLeast(0f), SMOOTHING) else null
@@ -343,6 +359,11 @@ fun Tile(
                             drawPath(outline, frameColor, alpha = NEON_REST * (1f - lit) * 0.5f + 0.5f * lit, style = neonHalo)
                             drawPath(outline, frameColor, alpha = NEON_REST + (1f - NEON_REST) * lit, style = frameStroke)
                         }
+                        io.github.matiyaaa.fuse.model.TileLook.PRISM -> {
+                            // Lit at rest, brighter and haloed once lifted, as a handheld's system tiles glow.
+                            drawPath(outline, prism, alpha = PRISM_HALO * (0.35f + 0.65f * lit), style = neonHalo)
+                            drawPath(outline, prism, alpha = PRISM_REST + (1f - PRISM_REST) * lit, style = frameStroke)
+                        }
                         io.github.matiyaaa.fuse.model.TileLook.INK -> drawPath(outline, frameColor, alpha = INK_ALPHA, style = frameStroke)
                         // Inside the tile only: the mount covers the art's edge and never spills into the gap.
                         io.github.matiyaaa.fuse.model.TileLook.MAT -> clipPath(outline) { drawPath(outline, frameColor, style = frameStroke) }
@@ -379,6 +400,24 @@ fun Tile(
                                 drawPath(ringPath, focusColor, alpha = (l * breath).coerceIn(0f, 1f), style = ringStroke)
                             }
                         }
+                    }
+                    if (brackets && l > 0.01f) {
+                        // From the tile's own corners out to just beyond them as it lifts.
+                        val o = bracketOut * l
+                        val a = (l * 1.4f).coerceIn(0f, 1f)
+                        val left = -o
+                        val top = -o
+                        val right = w + o
+                        val bottom = h + o
+                        val len = arm * (0.6f + 0.4f * l)
+                        fun corner(cx: Float, cy: Float, dx: Float, dy: Float) {
+                            drawLine(accent, Offset(cx, cy), Offset(cx + dx * len, cy), strokeWidth = bracketStroke.width, cap = bracketStroke.cap, alpha = a)
+                            drawLine(accent, Offset(cx, cy), Offset(cx, cy + dy * len), strokeWidth = bracketStroke.width, cap = bracketStroke.cap, alpha = a)
+                        }
+                        corner(left, top, 1f, 1f)
+                        corner(right, top, -1f, 1f)
+                        corner(left, bottom, 1f, -1f)
+                        corner(right, bottom, -1f, -1f)
                     }
                     val b = bar.value
                     if (spark && b > 0.01f) {
@@ -429,6 +468,14 @@ private val BREATHE_CURVE = io.github.matiyaaa.fuse.ui.fuseline.CubicCurve(0.45f
 private const val INK_ALPHA = 0.88f
 private const val NEON_REST = 0.45f
 private const val NEON_HALO = 4f
+
+/** PRISM's frame as a share of the tile's short side, its halo's strength and its brightness at rest. */
+private const val PRISM_FRAME_SHARE = 0.022f
+private const val PRISM_HALO = 0.5f
+private const val PRISM_REST = 0.7f
+
+/** BRACKETS: each corner's arm as a share of the tile's short side. */
+private const val BRACKET_ARM = 0.2f
 
 /** How long the sweep waits for the lift to get going. */
 private const val SWEEP_DELAY_MS = 30L

@@ -228,7 +228,7 @@ internal class SystemsSpace(
     override val key = "systems"
     override val name = "Systems"
     override val item = "system"
-    override val top: Dp get() = Space.xs
+    override val top: Dp @Composable get() = Space.xs
 
     private fun card(w: HomeWidget?): PlatformCard? = w?.target?.let(byId::get)
 
