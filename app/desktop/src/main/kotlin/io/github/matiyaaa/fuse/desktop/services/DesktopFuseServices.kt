@@ -102,6 +102,11 @@ class DesktopFuseServices private constructor(
         DesktopPortFiles(File(dirs.data), File(dirs.cache, "port-downloads"), os)
     }
 
+    /** Recomps the person installed, and their own folders: Fuse's ports folder and its controls profiles beside it. */
+    override val recompFiles: io.github.matiyaaa.fuse.ui.shell.store.RecompFiles by lazy {
+        DesktopRecompFiles(os, File(dirs.data, "ports"), File(dirs.data, "recomp-profiles"))
+    }
+
     /** No Apps section on a desktop: Fuse manages games there, not programs. */
     override val apps: AppsProvider? = null
     override val locations: DeviceLocations = DesktopLocations(folders)

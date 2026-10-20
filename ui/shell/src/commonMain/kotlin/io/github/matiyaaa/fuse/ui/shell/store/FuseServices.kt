@@ -179,6 +179,9 @@ interface FuseServices {
     /** Fuse Ports' folder, downloads, unpacking and links on a computer; null on Android and in tests that don't need it. */
     val portFiles: PortFiles? get() = null
 
+    /** The recomps the person installed on a computer, and their own folders; null on Android and in tests that don't need it. */
+    val recompFiles: RecompFiles? get() = null
+
     /**
      * Emulators' own settings files, for the few changes Fuse makes there when asked (PCSX2 patches).
      * Null where Fuse can't reach them (Android).

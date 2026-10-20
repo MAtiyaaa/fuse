@@ -466,6 +466,10 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
             if (card.platformId == io.github.matiyaaa.fuse.launch.ports.PortAdapter.PLATFORM) {
                 add(MenuAction("emusettings", "Game Settings", FuseIcons.Sliders, detail = "Every setting of the port's own, as its code names them, in its own file", trailing = Trailing.Chevron, onSelect = { emulatorSettingsSheet(card) }))
             }
+            // A game played with a recomp: its mods, graphics, controls and updates, in the recomp's own files.
+            if (store.ports.supported && recompPlays(card)) {
+                add(MenuAction("recomp", "Recomp Mods and Settings", FuseIcons.Boxes, detail = "Mods, graphics, controls profiles and updates, in the recomp's own files", trailing = Trailing.Chevron, onSelect = { recompSheet(card) }))
+            }
         }
         // On Android, the settings of an emulator whose files are in shared storage (PPSSPP, ARMSX2, RetroArch).
         if (!card.isApp && platform.host == io.github.matiyaaa.fuse.model.Host.ANDROID) {
@@ -694,16 +698,18 @@ fun AppState.emulatorPicker(card: GameCard) {
         val streamed = store.prefs.value.streaming.games[card.id.value.toString()]?.host
         // The ports set up here that play this game (Play With): picked, they start in the emulator's place.
         val ports = if (store.ports.supported) store.ports.portsFor(card.id) else emptyList()
+        // Recomps the person installed themselves that play this game, offered beside Fuse's own.
+        val yours = if (store.ports.supported) store.ports.yourRecompsFor(card.id) else emptyList()
         val withPort = store.ports.playWith(card.id)
         // A PlayStation 5 dump AnyPS5 can recompile into a program of this computer's own.
         val recompile = if (store.ports.supported) store.ports.recompileOffer(card.id) else null
         fun noPort() { if (withPort != null) scope.launch { store.ports.setPlayWith(card.id, null) } }
         choice = ChoiceSpec(
             icon = FuseIcons.Chip,
-            title = if (ports.isEmpty() && recompile == null) "Emulator for ${card.title}" else "Play ${card.title} With",
+            title = if (ports.isEmpty() && yours.isEmpty() && recompile == null) "Emulator for ${card.title}" else "Play ${card.title} With",
             message = when {
                 recompile != null -> "An emulator, or a build AnyPS5 recompiles from your dump to run natively. The system's emulator is used unless you pick one here."
-                ports.isEmpty() -> "The system's choice is used unless you pick one here."
+                ports.isEmpty() && yours.isEmpty() -> "The system's choice is used unless you pick one here."
                 else -> "An emulator, or a port of it rebuilt to run natively. The system's emulator is used unless you pick one here."
             },
             options = listOf(
@@ -723,6 +729,21 @@ fun AppState.emulatorPicker(card: GameCard) {
                         scope.launch {
                             store.ports.setPlayWith(card.id, v.port.id)
                             toasts.show("${card.title} plays with ${v.port.name} from now on", ToastKind.SUCCESS, icon = FuseIcons.Boxes)
+                        }
+                    },
+                )
+            } + yours.map { y ->
+                val r = io.github.matiyaaa.fuse.launch.ports.Recomps.byId(y.id)
+                MenuAction(
+                    "yours.${y.id}", r?.name ?: y.id, FuseIcons.Boxes,
+                    detail = "Your ${y.how}${y.version?.let { " ($it)" }.orEmpty()}: recompiled to run natively. Its saves are kept in step with every device that plays it with ${r?.name ?: "it"}",
+                    trailing = Trailing.Check(withPort == "yours:${y.id}"),
+                    onSelect = {
+                        choice = null
+                        scope.launch {
+                            val problem = store.ports.playWithYours(card.id, y)
+                            if (problem == null) toasts.show("${card.title} plays with ${r?.name ?: "your recomp"} from now on", ToastKind.SUCCESS, icon = FuseIcons.Boxes)
+                            else toasts.show(problem, ToastKind.WARNING)
                         }
                     },
                 )

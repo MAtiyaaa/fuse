@@ -75,6 +75,8 @@ internal class FakeServices(
     override val desktopApps: DesktopInstaller? get() = desktop
     @Volatile var ports: PortFiles? = null
     override val portFiles: PortFiles? get() = ports
+    @Volatile var recomps: RecompFiles? = null
+    override val recompFiles: RecompFiles? get() = recomps
 
     override val http = HttpClient(MockEngine { request ->
         requestHosts += request.url.host

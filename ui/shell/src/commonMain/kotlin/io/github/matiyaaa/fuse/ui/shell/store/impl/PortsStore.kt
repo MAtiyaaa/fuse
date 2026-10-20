@@ -51,6 +51,8 @@ internal class PortsStore(
     private val library: () -> LibraryOps,
     private val write: suspend ((AppSettings) -> AppSettings) -> Unit,
     private val publicKey: () -> String? = { PortsSignature.PUBLIC_KEY },
+    /** Where the person's own recomps are found and their folders read; null where there are none. */
+    recompFiles: io.github.matiyaaa.fuse.ui.shell.store.RecompFiles? = null,
 ) : PortsOps {
     override val supported: Boolean = true
 
@@ -73,6 +75,14 @@ internal class PortsStore(
 
     /** PlayStation 5 games recompiled with AnyPS5, each kept as a port of its own. */
     private val recompiler = AnyPs5Recompiler(ctx, files, library, write, removePort = { remove(it) })
+
+    /** Recomps: the person's own beside Fuse's, and every one's mods, graphics and controls. */
+    private val recomps = RecompKeeper(
+        ctx, files, recompFiles, library,
+        installed = { ctx.settings.value.ports.installed },
+        playWith = { playWith(it) },
+        setPlayWith = { game, id -> setPlayWith(game, id) },
+    )
 
     init {
         ctx.scope.launch { ctx.settings.drop(1).collect { publish() } }
@@ -341,6 +351,7 @@ internal class PortsStore(
      */
     override suspend fun playTarget(game: GameId): GameId? {
         val portId = playWith(game) ?: return null
+        if (portId.startsWith(RecompKeeper.YOURS_PREFIX)) return recomps.yoursTarget(game, ::layout)
         if (portId !in ctx.settings.value.ports.installed) return null
         return runCatching { ctx.data.games.idByPath(layout(portId).launcher) }.getOrNull()?.takeIf { it != game }
     }
@@ -349,8 +360,42 @@ internal class PortsStore(
     suspend fun playTargetNamed(game: GameId): Pair<GameId, String>? {
         val target = playTarget(game) ?: return null
         val portId = playWith(game) ?: return null
+        if (portId.startsWith(RecompKeeper.YOURS_PREFIX)) {
+            return target to (io.github.matiyaaa.fuse.launch.ports.Recomps.byId(portId.removePrefix(RecompKeeper.YOURS_PREFIX))?.name ?: return null)
+        }
         return target to (ctx.settings.value.ports.installed[portId]?.port?.name ?: return null)
     }
+
+    override suspend fun yourRecomps() = recomps.yours(fresh = true)
+
+    override suspend fun yourRecompsFor(game: GameId) = recomps.yoursFor(game)
+
+    override suspend fun playWithYours(game: GameId, recomp: io.github.matiyaaa.fuse.ui.shell.store.FoundRecomp) = recomps.playWithYours(game, recomp, ::layout)
+
+    override suspend fun recompFor(game: GameId) = recomps.placeFor(game, ::layout)
+
+    override suspend fun recompMods(place: io.github.matiyaaa.fuse.ui.shell.store.RecompPlace) = recomps.mods(place)
+
+    override suspend fun addRecompMod(place: io.github.matiyaaa.fuse.ui.shell.store.RecompPlace, file: String) = recomps.addMod(place, file)
+
+    override suspend fun removeRecompMod(place: io.github.matiyaaa.fuse.ui.shell.store.RecompPlace, name: String) = recomps.removeMod(place, name)
+
+    override suspend fun recompGraphics(place: io.github.matiyaaa.fuse.ui.shell.store.RecompPlace) = recomps.graphics(place)
+
+    override suspend fun setRecompGraphic(place: io.github.matiyaaa.fuse.ui.shell.store.RecompPlace, key: String, choice: io.github.matiyaaa.fuse.launch.ports.RecompChoice) =
+        recomps.setGraphic(place, key, choice)
+
+    override suspend fun recompProfiles(place: io.github.matiyaaa.fuse.ui.shell.store.RecompPlace) = recomps.profiles(place)
+
+    override suspend fun saveRecompProfile(place: io.github.matiyaaa.fuse.ui.shell.store.RecompPlace, name: String) = recomps.saveProfile(place, name)
+
+    override suspend fun useRecompProfile(place: io.github.matiyaaa.fuse.ui.shell.store.RecompPlace, name: String) = recomps.useProfile(place, name)
+
+    override suspend fun removeRecompProfile(place: io.github.matiyaaa.fuse.ui.shell.store.RecompPlace, name: String) = recomps.removeProfile(place, name)
+
+    override suspend fun recompRelease(place: io.github.matiyaaa.fuse.ui.shell.store.RecompPlace) = recomps.release(place)
+
+    override suspend fun updateYourRecomp(place: io.github.matiyaaa.fuse.ui.shell.store.RecompPlace) = recomps.updateYours(place)
 
     /**
      * Sets [id] up with the folders chosen: the overlay's links made again, its saves' folder there,
