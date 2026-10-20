@@ -169,6 +169,9 @@ class BlankSaveTest {
                 assertNull(device.capture("mo", slot(), 180))
             }
             assertEquals(3, told)
+            // Found again by the look for saves made outside Fuse, every few minutes: told once, not each time.
+            repeat(3) { assertNull(device.capture("mo", slot(), 180)) }
+            assertEquals(3, told, "the same blank save is told once")
             assertTrue(Slots.blank(sav))
             sav.writeBytes(byteArrayOf(0, 0, 0, 1))
             assertFalse(Slots.blank(sav))

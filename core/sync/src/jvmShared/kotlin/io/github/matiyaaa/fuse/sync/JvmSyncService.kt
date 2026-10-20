@@ -2784,7 +2784,7 @@ class JvmSyncService(
     /** This device's sync state, telling the person when a blank save was kept from replacing a real one. */
     private fun newDevice(id: String, name: String): SyncDevice = SyncDevice(File(dir, "device"), id, name).also { d ->
         d.onBlank = { slot ->
-            log("A blank ${slot.kind.label.lowercase()} was found where a real one was; Fuse kept the real one and didn't send the blank one", slot.game.id, SyncActivity.FAILED)
+            log("A blank ${slot.kind.label.lowercase()} (as the emulator makes it before the game saves) is where your real one was. It wasn't sent, and your real one goes back in place the next time you play it from Fuse", slot.game.id, SyncActivity.FAILED)
         }
     }
 
