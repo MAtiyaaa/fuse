@@ -141,6 +141,13 @@ internal class DefaultLibraryOps(
      */
     @kotlin.concurrent.Volatile var portPlay: (suspend (GameId) -> Pair<GameId, String>?)? = null
 
+    /**
+     * Android: the app a game plays as, a recomp or port attached to it (its app id and name), which
+     * Play starts in the emulator's place, the time and the game page staying the game's own. Null
+     * when none was chosen or it isn't installed.
+     */
+    @kotlin.concurrent.Volatile var androidPort: (suspend (GameId) -> Pair<String, String>?)? = null
+
     /** What runs after a game ends (its saves sent, its session counted), for [awaitPlayed]. */
     private val afterGame = mutableListOf<kotlinx.coroutines.Job>()
 
@@ -171,8 +178,13 @@ internal class DefaultLibraryOps(
 
     // Platforms ------------------------------------------------------------------------------------
 
+    /** How many games each system lists: its own, and the port's games shown in the Ports or Android system too. */
+    private val shownCounts: Flow<Map<PlatformId, Int>> = combine(data.games.platformCounts(), ctx.portPlaces) { counts, places ->
+        if (places.isEmpty()) counts else counts.toMutableMap().also { m -> places.values.groupingBy { it }.eachCount().forEach { (p, n) -> m[p] = (m[p] ?: 0) + n } }
+    }.distinctUntilChanged()
+
     /** The platform-level emulator choice and layout for each platform that has games. */
-    private val platformChoices: Flow<Map<PlatformId, Pair<String, LibraryLayout>>> = data.games.platformCounts()
+    private val platformChoices: Flow<Map<PlatformId, Pair<String, LibraryLayout>>> = shownCounts
         .map { it.keys.sortedBy(PlatformId::value) }
         .distinctUntilChanged()
         .flatMapLatest { ids ->
@@ -190,7 +202,7 @@ internal class DefaultLibraryOps(
             }
         }
 
-    private val platformArt: Flow<Map<PlatformId, Art>> = data.games.platformCounts()
+    private val platformArt: Flow<Map<PlatformId, Art>> = shownCounts
         .map { it.keys }
         .distinctUntilChanged()
         .flatMapLatest { ids ->
@@ -215,7 +227,7 @@ internal class DefaultLibraryOps(
     }
 
     override val platforms: StateFlow<List<PlatformCard>> = combine(
-        data.games.platformCounts(),
+        shownCounts,
         ctx.installed,
         combine(biosShown, engine.platformFolders, ::Pair),
         platformChoices,
@@ -239,13 +251,15 @@ internal class DefaultLibraryOps(
                 val effective = chosenId ?: candidates.firstOrNull { it.id in installedIds && !it.opensAppOnly }?.id
                     ?: candidates.firstOrNull { it.id in installedIds }?.id
                 val effectiveInstalled = installed.firstOrNull { it.id == effective }
+                // On Android the Ports system lists games played with their ports: there is no emulator to get for it.
+                val portsHere = p.id == io.github.matiyaaa.fuse.launch.ports.PortAdapter.PLATFORM && candidates.isEmpty()
                 PlatformCard(
                     // A brand colour from the system art pack replaces Fuse's generated accent.
                     platform = colors[p.id.value]?.let { p.copy(accent = it) } ?: p,
                     gameCount = counts[p.id] ?: 0,
                     art = art[p.id] ?: Art.None,
-                    emulatorName = effectiveInstalled?.name ?: effective?.let { ctx.registry[it]?.name },
-                    emulatorInstalled = effectiveInstalled != null || effective in installedIds,
+                    emulatorName = if (portsHere) "Each game's port" else effectiveInstalled?.name ?: effective?.let { ctx.registry[it]?.name },
+                    emulatorInstalled = portsHere || effectiveInstalled != null || effective in installedIds,
                     installedEmulators = candidates.count { it.id in installedIds },
                     bios = bios[p.id] ?: if (p.bios == null) BiosStatus.NotRequired else BiosStatus(io.github.matiyaaa.fuse.model.BiosState.UNKNOWN),
                     layout = layout,
@@ -379,7 +393,24 @@ internal class DefaultLibraryOps(
 
     // Lists and search ------------------------------------------------------------------------------
 
-    override fun games(query: GameQuery): Flow<List<GameCard>> = ctx.cards(summaries(query))
+    override fun games(query: GameQuery): Flow<List<GameCard>> {
+        val cards = ctx.cards(summaries(query))
+        val platform = query.platform ?: return cards
+        // In the system a port's game also shows in, it plays with the port; in its own, with its emulator.
+        return combine(cards, ctx.portPlaces) { list, places ->
+            if (places.isEmpty()) {
+                list
+            } else {
+                list.map { c ->
+                    when (places[c.id]) {
+                        null -> c
+                        platform -> c.copy(via = io.github.matiyaaa.fuse.ui.shell.store.PlayVia.PORT)
+                        else -> if (c.platformId == platform) c.copy(via = io.github.matiyaaa.fuse.ui.shell.store.PlayVia.EMULATOR) else c
+                    }
+                }
+            }
+        }.distinctUntilChanged()
+    }
 
     override fun counts(query: GameQuery): Flow<io.github.matiyaaa.fuse.ui.shell.store.GameCounts> = summaries(query)
         .map { list -> io.github.matiyaaa.fuse.ui.shell.store.GameCounts(list.size, list.count { it.favorite }, list.count { it.lastPlayedAt != null }) }
@@ -422,13 +453,26 @@ internal class DefaultLibraryOps(
         val summaries = when {
             query.collection != null -> data.collections.observeGames(CollectionKey.Manual(query.collection))
             query.favoritesOnly -> games.observeFavorites()
-            query.platform != null -> games.observeByPlatform(query.platform, query.sort, query.includeHidden)
+            query.platform != null -> withPlaced(query.platform, games.observeByPlatform(query.platform, query.sort, query.includeHidden), query.sort)
             else -> games.observeAll(query.sort, query.includeHidden)
         }
         return if (query.collection != null || query.favoritesOnly) {
             summaries.map { list -> list.filter { query.platform == null || it.platformId == query.platform }.sortedWith(query.sort.comparator()) }
         } else {
             summaries
+        }
+    }
+
+    /**
+     * A system's [own] games, with the games played with a port that show in it too (the Ports or
+     * Android system, [ScopedSettings.PortShowsIn]), in [sort]'s order.
+     */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private fun withPlaced(platform: PlatformId, own: Flow<List<io.github.matiyaaa.fuse.data.repo.GameSummary>>, sort: io.github.matiyaaa.fuse.model.SortOrder): Flow<List<io.github.matiyaaa.fuse.data.repo.GameSummary>> {
+        val placed = ctx.portPlaces.map { places -> places.filterValues { it == platform }.keys.sortedBy { it.value } }.distinctUntilChanged()
+            .flatMapLatest { ids -> if (ids.isEmpty()) flowOf(emptyList()) else data.games.observeSummariesInOrder(ids) }
+        return combine(own, placed) { mine, theirs ->
+            if (theirs.isEmpty()) mine else (mine + theirs.filter { t -> mine.none { it.id == t.id } && !t.hidden }).sortedWith(sort.comparator())
         }
     }
 
@@ -445,7 +489,11 @@ internal class DefaultLibraryOps(
     // Game page -------------------------------------------------------------------------------------
 
     // A RomM game Fuse doesn't have is the RomM store's to describe (the second screen shows it too).
-    override fun game(id: GameId): Flow<GameDetail?> = ctx.remoteDetail(id) ?: data.games.observe(id).flatMapLatest { record ->
+    override fun game(id: GameId): Flow<GameDetail?> = detail(id, io.github.matiyaaa.fuse.ui.shell.store.PlayVia.DEFAULT)
+
+    override fun game(id: GameId, via: io.github.matiyaaa.fuse.ui.shell.store.PlayVia): Flow<GameDetail?> = detail(id, via)
+
+    private fun detail(id: GameId, via: io.github.matiyaaa.fuse.ui.shell.store.PlayVia): Flow<GameDetail?> = ctx.remoteDetail(id) ?: data.games.observe(id).flatMapLatest { record ->
         val game = record?.game ?: return@flatMapLatest flowOf(null)
         val platform = ctx.platform(game.platformId) ?: return@flatMapLatest flowOf(null)
         val weekStart = ctx.weekStart()
@@ -467,7 +515,9 @@ internal class DefaultLibraryOps(
             ) { parts, _ -> parts }
             .combine(ctx.offline) { parts, roots -> parts to roots.takeIf { game.appId == null }?.firstOrNull { it.holds(game.location.path) } }
             // Play With a port, chosen or taken back, changes what Play says.
-            .combine(ctx.settings.map { it.ports.playWith[id.value.toString()] }.distinctUntilChanged()) { parts, _ -> parts }
+            .combine(ctx.settings.map { it.ports.playWith[id.value.toString()] to it.ports.androidPlayWith[id.value.toString()] }.distinctUntilChanged()) { parts, _ -> parts }
+            // Where a port's game shows too, which says how Play starts it from here.
+            .combine(ctx.portPlaces.map { it[id] }.distinctUntilChanged()) { parts, _ -> parts }
             .map { (parts, away) ->
             val (media, installed, platformEmulator, cols, week, ra) = parts
             val resolved = ctx.resolver.resolve(
@@ -477,7 +527,16 @@ internal class DefaultLibraryOps(
                 ctx.host,
             )
             val choice = choiceOf(game, platform, resolved, installed)
-            val port = portPlay?.invoke(id)?.second
+            // From its own system, when it shows in Ports or Android too, it plays with its emulator.
+            val ownSystem = via == io.github.matiyaaa.fuse.ui.shell.store.PlayVia.EMULATOR
+            val port = if (ownSystem) null else portPlay?.invoke(id)?.second
+            val app = if (port == null && !ownSystem) androidPort?.invoke(id)?.second else null
+            val elsewhere = if (ownSystem) androidPort?.invoke(id)?.second?.let { name ->
+                val where = ctx.portPlaces.value[id]?.let { ctx.platform(it)?.name } ?: "Ports"
+                "From $where, it starts in $name."
+            } else {
+                null
+            }
             GameDetail(
                 game = game,
                 platform = platform,
@@ -485,8 +544,10 @@ internal class DefaultLibraryOps(
                 art = Art.from(media),
                 emulator = if (port != null) {
                     choice.copy(launchSummary = "Starts in $port", playLine = "Starts in $port, the port you chose to play it with, its saves and time kept with the port's.", canLaunch = true, port = port)
+                } else if (app != null) {
+                    choice.copy(launchSummary = "Starts in $app", playLine = "Starts in $app, the port you chose to play it with. Its saves stay in the app.", canLaunch = true, port = app)
                 } else {
-                    choice.copy(playLine = playLine(game, resolved, choice.launchSummary))
+                    choice.copy(playLine = listOfNotNull(playLine(game, resolved, choice.launchSummary), elsewhere).joinToString(" ").ifEmpty { null })
                 },
                 contentNotes = contentNotes(game, resolved),
                 achievements = ra,
@@ -627,10 +688,14 @@ internal class DefaultLibraryOps(
         }
     }
 
-    override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, skipSaveCheck: Boolean, playAnyway: Boolean, together: io.github.matiyaaa.fuse.ui.shell.store.Together?, onStage: (io.github.matiyaaa.fuse.ui.shell.store.LaunchStage) -> Unit): LaunchOutcome {
-        // A game the person plays with a port starts as the port's own game (its saves and time there).
-        val target = if (emulator == null && discPath == null && together == null) portPlay?.invoke(id)?.first ?: id else id
-        return launchGame(target, emulator, discPath, display, skipSaveCheck, playAnyway, together, onStage).also { outcome ->
+    override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, skipSaveCheck: Boolean, playAnyway: Boolean, together: io.github.matiyaaa.fuse.ui.shell.store.Together?, via: io.github.matiyaaa.fuse.ui.shell.store.PlayVia, onStage: (io.github.matiyaaa.fuse.ui.shell.store.LaunchStage) -> Unit): LaunchOutcome {
+        // A game the person plays with a port starts as the port's own game (its saves and time there);
+        // on Android, as the port's app attached to it (the time the game's own). From its own system,
+        // when it shows in Ports or Android too, it starts with its emulator.
+        val plain = emulator == null && discPath == null && together == null && via != io.github.matiyaaa.fuse.ui.shell.store.PlayVia.EMULATOR
+        val target = if (plain) portPlay?.invoke(id)?.first ?: id else id
+        val asApp = if (plain && target == id) androidPort?.invoke(id)?.first else null
+        return launchGame(target, emulator, discPath, display, skipSaveCheck, playAnyway, together, onStage, asApp).also { outcome ->
             if (outcome is LaunchOutcome.Problem) ctx.recordProblem(outcome.problem)
         }
     }
@@ -656,9 +721,15 @@ internal class DefaultLibraryOps(
         class Stopped(val outcome: LaunchOutcome) : PlayResolution
     }
 
-    private suspend fun resolveForPlay(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?): PlayResolution {
+    private suspend fun resolveForPlay(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, asApp: String? = null): PlayResolution {
         fun stop(problem: io.github.matiyaaa.fuse.ui.shell.store.Problem) = PlayResolution.Stopped(LaunchOutcome.Problem(problem))
         var stored = data.games.get(id) ?: return stop(LaunchProblems.gone())
+        // Played as the port's app ([asApp]): started as the app, which keeps the game's files itself,
+        // so a drive that is out or a file moved doesn't stop it.
+        if (asApp != null) {
+            val path = io.github.matiyaaa.fuse.model.AppGames.path(asApp)
+            stored = stored.copy(location = stored.location.copy(path = path, launchPath = path, kind = LocationKind.FILE), discs = emptyList(), content = emptyList())
+        }
         // A computer's Steam game still kept as a shortcut file that went away moves onto Steam's library.
         if (stored.location.launchPath.endsWith(".steam", ignoreCase = true) && !exists(stored.location.launchPath) && engine.moveSteamShortcutsToLibraries()) {
             stored = data.games.get(id) ?: stored
@@ -766,8 +837,9 @@ internal class DefaultLibraryOps(
         playAnyway: Boolean = false,
         together: io.github.matiyaaa.fuse.ui.shell.store.Together? = null,
         onStage: (io.github.matiyaaa.fuse.ui.shell.store.LaunchStage) -> Unit = {},
+        asApp: String? = null,
     ): LaunchOutcome {
-        val ready = when (val r = resolveForPlay(id, emulator, discPath, display)) {
+        val ready = when (val r = resolveForPlay(id, emulator, discPath, display, asApp)) {
             is PlayResolution.Stopped -> return r.outcome
             is PlayResolution.Ready -> r.plan
         }

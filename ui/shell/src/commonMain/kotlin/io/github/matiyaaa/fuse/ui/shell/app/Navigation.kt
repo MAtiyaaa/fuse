@@ -23,7 +23,8 @@ sealed interface Route {
     data object Storage : Route
     /** Phone Link pairing: the QR code, sign-in and signed-in phones. */
     data object PhoneLink : Route
-    data class GameInfo(val game: GameId) : Route
+    /** A game's page; [via]: how its Play starts it, as the list it was opened from says (a port's game in Ports, or in its own system). */
+    data class GameInfo(val game: GameId, val via: io.github.matiyaaa.fuse.ui.shell.store.PlayVia = io.github.matiyaaa.fuse.ui.shell.store.PlayVia.DEFAULT) : Route
     /** Manage media; [identify] opens Identify game straight away (a game a fill couldn't name). */
     data class Media(val owner: MediaOwner, val title: String, val identify: Boolean = false) : Route
     /** Settings at [section], with the row labelled [row] chosen (from search). */

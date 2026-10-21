@@ -71,6 +71,10 @@ internal class FakeServices(
     /** The Store's view of the system, when a test gives it one (Android has one; desktop doesn't). */
     override var packages: PackageBridge? = null
 
+    /** The lists of Android ports inside "Fuse", for a test of them. */
+    var portLists: AndroidPortLists? = null
+    override val androidPortLists: AndroidPortLists? get() = portLists
+
     @Volatile var desktop: DesktopInstaller? = null
     override val desktopApps: DesktopInstaller? get() = desktop
     @Volatile var ports: PortFiles? = null

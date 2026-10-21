@@ -69,6 +69,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
 import io.github.matiyaaa.fuse.ui.shell.app.appKindPicker
 import io.github.matiyaaa.fuse.ui.shell.app.appScreenPicker
 import io.github.matiyaaa.fuse.ui.shell.app.hasTwoScreens
+import io.github.matiyaaa.fuse.ui.shell.app.makeAppAPort
 import io.github.matiyaaa.fuse.ui.shell.app.openApp
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
@@ -321,8 +322,13 @@ fun AppState.appMenu(app: AppCard): ContextMenuSpec {
                     AppKind.EMULATOR -> FuseIcons.Chip
                     AppKind.STREAMING -> FuseIcons.Cast
                     AppKind.TOOL -> FuseIcons.Wrench
+                    AppKind.PORT -> FuseIcons.Boxes
                 },
-                detail = if (store.apps.gamesInLibrary) "Game, app, emulator, streaming or tool. Games join the Android system" else "Game, app, emulator, streaming or tool",
+                detail = when {
+                    store.ports.androidApps -> "Game, recomp or port, app, emulator, streaming or tool. Games join the Android system"
+                    store.apps.gamesInLibrary -> "Game, app, emulator, streaming or tool. Games join the Android system"
+                    else -> "Game, app, emulator, streaming or tool"
+                },
                 trailing = Trailing.Value(
                     when (app.entry.kind) {
                         AppKind.GAME -> "Game"
@@ -330,10 +336,34 @@ fun AppState.appMenu(app: AppCard): ContextMenuSpec {
                         AppKind.EMULATOR -> "Emulator"
                         AppKind.STREAMING -> "Streaming"
                         AppKind.TOOL -> "Tool"
+                        AppKind.PORT -> "Recomp or Port"
                     },
                 ),
                 onSelect = { appKindPicker(app) },
             ),
+        ) + listOfNotNull(
+            // A recomp or port: the game it plays, which Play on that game starts it for.
+            if (app.entry.kind == AppKind.PORT) {
+                MenuAction(
+                    "plays", if (app.entry.plays == null) "Choose Its Game" else "Change Its Game", FuseIcons.Gamepad,
+                    detail = if (app.entry.plays == null) "The game in your library it plays" else "Play on the game it plays starts it",
+                    onSelect = {
+                        closeOverlays()
+                        makeAppAPort(app.entry.id, app.entry.displayTitle, app.entry.packageName, ask = true)
+                    },
+                )
+            } else {
+                null
+            },
+            if (app.entry.kind == AppKind.PORT && app.entry.plays != null) {
+                MenuAction("detach", "Detach From Its Game", FuseIcons.Unlink, detail = "The game plays with its emulator again", onSelect = {
+                    closeOverlays()
+                    scope.launch { ops.setPlays(app.entry.id, null); store.ports.detach(app.entry.id) }
+                })
+            } else {
+                null
+            },
+        ) + listOf(
             MenuAction("pin", if (app.entry.pinned) "Unpin" else "Pin", FuseIcons.Pin, onSelect = {
                 closeOverlays(); scope.launch { ops.setPinned(app, !app.entry.pinned) }
             }),

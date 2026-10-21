@@ -1,40 +1,38 @@
-# Fuse 0.4.3.4 - The Overdrive Update
+# Fuse 0.4.3.5 - The Overdrive Update
 
-Your theme stays chosen even beside an older Fuse, Switch saves go to Fuse One when they can't go
-in on this device, and a device says which Fuse the host runs now.
+Ports and recomps on Android, each attached to its game, and a Ports system that lists them beside
+their own systems, one game with one time played wherever you start it.
 
 ## New
 
-- Nothing new in this release.
+- Ports on Android. A port there is an app: a game rebuilt for Android that its project publishes
+  as an APK, and that takes your game's files itself the first time it starts. A game's Play With
+  now lists the ports that play it, Fuse's checked ones first, then those Open Ports Games lists
+  (shown as unchecked). Picking one installs it from its project's GitHub releases, as the Store
+  installs apps, and attaches it to the game. From then on Play starts the app in the emulator's
+  place, and the time played and Continue Playing stay the game's own. Fuse's checked list starts
+  with 13: Gen1Recomp (Pokémon Red to Emerald), Bloodborne-Android, Zelda 64: Recompiled for
+  Android, 2 Ship 2 Harkinian, Ship of Harkinian, Starship, SpaghettiKart, Ghostship, Perfect Dark,
+  the Goemon 64 and Donkey Kong 64 recomps, Animal Crossing and Zelda 3.
+- Recomp or Port, a new Type in Apps. An app you installed yourself can be marked one, and Fuse
+  works out which game it plays (by its package, or its whole name), or asks "What game is this?"
+  with the likeliest games first. A port Fuse knows by its package is attached by itself when your
+  library has one copy of its game. An APK added from Add a Game says which port it is before it
+  installs, or asks what it is.
+- Addons, Ports on Android: every Android port, with search, a system filter and In Your Library,
+  Installed, Checked by Fuse and Everything, and Install, Attach, Play, Open and Uninstall.
+- The Ports system. A game played with a port shows in Ports too, with the Ports art on Systems,
+  and is still one game: one time played, one set of achievements, one page. Started from Ports,
+  it plays with the port; from its own system, with the emulator you chose for that system (or for
+  the game). Ports can be Android instead, or off, so the game is only in its own system and plays
+  as Play With says. It is one setting for every game (Settings, Addons, Ports), with its own
+  value for each system (in the system's settings) and each game (Shows In, in its options).
 
 ## Changed
 
-- A Fuse writes only what you changed in it. Before, each time it saved its settings it wrote
-  everything it was showing, so a Fuse showing settings from a moment ago (one open beside another
-  on the same computer, like a game Steam started with Fast Start next to the open Fuse) put them
-  back, and Fuse One sent them to every device as your newest choices. What changed in Fuse's
-  settings by any other way is now shown, and never written over.
+- The Games filter in Apps lists Recomp or Port apps too. A port's menu there has Change, for the
+  game it plays, and Detach, which gives the game back to its emulator (as uninstalling it does).
 
 ## Fixed
 
-- Twin or Viewfinder went back to Fuse a few seconds after you chose it, even on 0.4.3.2 and
-  0.4.3.3. A device in the household on a Fuse from before 0.4.3.1 hasn't got those themes, shows
-  Fuse instead, and before 0.4.3.2 it sent Fuse to all your devices as your newest choice every
-  time it saved its settings. 0.4.3.2 stopped new devices doing this, but it couldn't change the
-  older ones. Now the host leaves out Fuse sent by a Fuse from before 0.4.3.2 over a theme that
-  Fuse hasn't got; everything else that device sends still counts. The host updates itself once a
-  device runs 0.4.3.4 (Docker hosts with docker compose pull). Choose your theme once more after it
-  has, and it stays.
-- Switch saves from JKSV or Checkpoint had nowhere to go on a device where Fuse can't reach the
-  emulator's saves. On Android, Eden keeps them in its own private folder until one is chosen in Eden
-  and in Fuse (Settings, Save folders), and an emulator no one has played in yet has no user's folder
-  for them. The import then asked "What game is this?" even for games it knew, and choosing a game,
-  on this device or on Fuse One, only said Fuse can't reach where its saves go. Now such a save goes
-  to Fuse One as that person's newest, and is in place before the game starts on a device that can
-  reach the emulator's saves. The import says why it couldn't go in on this device and what to do
-  about it, and asks "What game is this?" only for a game it can't tell.
-- About said the host already runs the newest Fuse while Fuse One said it runs an older one. The
-  host updates itself a minute or two after a device with a newer Fuse connects, but a device
-  asked it which Fuse it runs only every ten minutes. A device now asks every minute while the
-  host's Fuse is older than its own, and Update the Fuse One Host shows the Fuse the host answers
-  with straight away.
+- Nothing fixed in this release.

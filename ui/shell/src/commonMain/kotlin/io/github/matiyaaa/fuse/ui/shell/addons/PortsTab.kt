@@ -84,6 +84,11 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun PortsTab(app: AppState, active: Boolean, topPadding: Dp) {
+    // On Android, ports are apps: installed from their projects and attached to their games.
+    if (app.store.ports.androidApps) {
+        AndroidPortsTab(app, active, topPadding)
+        return
+    }
     val ops = app.store.ports
     val state by ops.state.collectAsState()
     val focused = active && app.focusZone == FocusZone.CONTENT && !app.overlayOpen
@@ -298,7 +303,7 @@ private fun YourRecompCard(y: io.github.matiyaaa.fuse.ui.shell.store.FoundRecomp
 
 /** The game's initials on the accent, standing in for art the list doesn't carry. */
 @Composable
-private fun Monogram(game: String, size: Dp) {
+internal fun Monogram(game: String, size: Dp) {
     val c = Fuse.colors
     val letters = game.split(' ', '-', ':').filter { it.isNotBlank() && it.first().isLetterOrDigit() }.take(2).joinToString("") { it.first().uppercase() }
     Box(
@@ -311,7 +316,7 @@ private fun Monogram(game: String, size: Dp) {
 }
 
 @Composable
-private fun Chip(icon: ImageVector, text: String, color: Color) {
+internal fun Chip(icon: ImageVector, text: String, color: Color) {
     Row(
         Modifier.clip(CircleShape).background(color.copy(alpha = 0.14f)).padding(horizontal = Space.s, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -323,7 +328,7 @@ private fun Chip(icon: ImageVector, text: String, color: Color) {
 }
 
 @Composable
-private fun Progress(p: Float) {
+internal fun Progress(p: Float) {
     val c = Fuse.colors
     Box(Modifier.padding(top = Space.xs).fillMaxWidth().height(4.dp).clip(CircleShape).background(c.text.copy(alpha = 0.08f))) {
         Box(Modifier.fillMaxHeight().fillMaxWidth(p.coerceIn(0f, 1f)).clip(CircleShape).background(c.accent))
@@ -332,7 +337,7 @@ private fun Progress(p: Float) {
 
 /** The list being read for the first time: the shapes the cards will take. */
 @Composable
-private fun Waiting(compact: Boolean) {
+internal fun Waiting(compact: Boolean) {
     val c = Fuse.colors
     Column(Modifier.padding(horizontal = Space.gutter), verticalArrangement = Arrangement.spacedBy(Space.m)) {
         repeat(3) {
@@ -342,7 +347,7 @@ private fun Waiting(compact: Boolean) {
 }
 
 @Composable
-private fun Note(icon: ImageVector, title: String, detail: String) {
+internal fun Note(icon: ImageVector, title: String, detail: String) {
     val c = Fuse.colors
     Row(Modifier.padding(horizontal = Space.gutter), verticalAlignment = Alignment.CenterVertically) {
         FuseIcon(icon, size = Size.iconM, tint = c.textMuted)
@@ -354,7 +359,7 @@ private fun Note(icon: ImageVector, title: String, detail: String) {
     }
 }
 
-private enum class Tone { GOOD, WAIT, NEEDS, QUIET }
+internal enum class Tone { GOOD, WAIT, NEEDS, QUIET }
 
 /** How [v] stands here, in a few words. */
 private fun status(v: PortView): Pair<String, Tone> {

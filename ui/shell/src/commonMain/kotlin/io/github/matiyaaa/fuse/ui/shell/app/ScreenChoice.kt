@@ -153,6 +153,35 @@ fun AppState.frameGenerationPicker(card: GameCard) {
     }
 }
 
+/** Game options, Shows In: for a game played with a port, its own system only, or Ports or Android too. */
+fun AppState.portPlacePicker(card: GameCard) {
+    closeOverlays()
+    scope.launch {
+        val resolved = store.settings.observe(ScopedSettings.PortShowsIn, card.platformId, card.id).first()
+        val own = resolved.value.takeIf { resolved.from == SettingScope.GAME }
+        val system = store.library.platforms.value.firstOrNull { it.platform.id == card.platformId }?.platform?.name ?: card.platformShort
+        val places = io.github.matiyaaa.fuse.ui.shell.settings.PORT_PLACES
+        val inherited = places.firstOrNull { it.first == resolved.value }?.second
+        fun pick(value: io.github.matiyaaa.fuse.model.PortPlace?) {
+            choice = null
+            scope.launch {
+                if (value == null) store.settings.clear(ScopedSettings.PortShowsIn, ScopeRef.game(card.id))
+                else store.settings.set(ScopedSettings.PortShowsIn, ScopeRef.game(card.id), value)
+            }
+        }
+        choice = ChoiceSpec(
+            icon = FuseIcons.Boxes,
+            title = "Where ${card.title} Shows",
+            message = "One game either way, with the same time, saves and achievements. In $system it starts with its emulator; in Ports or Android, with the port.",
+            options = listOf(
+                MenuAction("inherit", "Use the $system setting", FuseIcons.Layers, detail = if (own == null) inherited else null, trailing = Trailing.Check(own == null), onSelect = { pick(null) }),
+            ) + places.map { (v, name) ->
+                MenuAction("showin.${v.name}", name, null, trailing = Trailing.Check(own == v), section = "Just this game", onSelect = { pick(v) })
+            },
+        )
+    }
+}
+
 /** App options, Screen: where this app opens, or the setting for all apps. */
 fun AppState.appScreenPicker(app: AppCard) {
     closeOverlays()

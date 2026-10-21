@@ -95,9 +95,16 @@ internal class DefaultFuseStore private constructor(
     /** A computer's Store, where Fuse can put programs in place. */
     private val desktopStoreOps = if (appStoreOps == null) ctx.services.desktopApps?.let { DesktopAppStoreOps(ctx, it, afterUpdate = { key -> library.recheckTogether(key) }) { emulators.refresh() } } else null
     override val appStore: AppStoreOps = appStoreOps ?: desktopStoreOps ?: AppStoreOps.None
-    /** Fuse Ports, where the computer has a folder for them; made when Ports is first shown. */
+    /**
+     * Fuse Ports, where the computer has a folder for them; made when Ports is first shown. On
+     * Android, ports published as apps, installed like the Store's and attached to their games.
+     */
     override val ports: io.github.matiyaaa.fuse.ui.shell.store.PortsOps by lazy {
-        ctx.services.portFiles?.let { PortsStore(ctx, it, library = { library }, write = { t -> writeSettings(t) }, recompFiles = ctx.services.recompFiles) } ?: io.github.matiyaaa.fuse.ui.shell.store.PortsOps.None
+        ctx.services.portFiles?.let { PortsStore(ctx, it, library = { library }, write = { t -> writeSettings(t) }, recompFiles = ctx.services.recompFiles) }
+            ?: ctx.services.packages?.takeIf { ctx.host == io.github.matiyaaa.fuse.model.Host.ANDROID }?.let { bridge ->
+                AndroidPortsStore(ctx, bridge, ctx.services.androidPortLists, apps, write = { t -> writeSettings(t) })
+            }
+            ?: io.github.matiyaaa.fuse.ui.shell.store.PortsOps.None
     }
     // Made when Fuse first shows or plays media, never by a Fast Start.
     override val jellyfin by lazy {
@@ -215,6 +222,8 @@ internal class DefaultFuseStore private constructor(
         achievements.trophyShare = { id, news -> romm.shareTrophies(id, news) }
         // A game played with a port (Play With) starts as the port's game; Ports is made only for one.
         library.portPlay = { id -> if (ctx.settings.value.ports.playWith.containsKey(id.value.toString())) (ports as? PortsStore)?.playTargetNamed(id) else null }
+        // On Android, as the port's app attached to it (Play With).
+        library.androidPort = { id -> if (ctx.settings.value.ports.androidPlayWith.containsKey(id.value.toString())) (ports as? AndroidPortsStore)?.playApp(id) else null }
         romm.plainSaveQuery = { id -> library.plainSaveQueryFor(id) }
         reach = DefaultReachOps(
             ctx, engine, transferEngine, sync.service, romm,
@@ -780,6 +789,8 @@ internal class DefaultFuseStore private constructor(
             emulators.detectNow()
             collections.start()
             apps.start()
+            // Android: the ports are read now, so Apps knows an installed recomp or port as one.
+            if (ctx.services.portFiles == null && ctx.services.packages != null) ports
             if (!safe) startAutomatic()
         }
     }

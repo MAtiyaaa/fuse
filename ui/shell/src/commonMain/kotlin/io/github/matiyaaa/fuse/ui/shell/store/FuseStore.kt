@@ -504,6 +504,9 @@ interface LibraryOps {
     /** The ids of the games [query] lists, in its order, without their art: for code that only needs which games there are. */
     fun gameIds(query: GameQuery): Flow<List<GameId>> = games(query).map { list -> list.map { it.id } }
     fun game(id: GameId): Flow<GameDetail?>
+
+    /** [game] as its page shows it when opened from a list that plays it [via] its port or its emulator. */
+    fun game(id: GameId, via: PlayVia): Flow<GameDetail?> = game(id)
     fun search(query: String): Flow<SearchResults>
 
     /** [display] overrides the screen settings for this launch (the user just picked one). */
@@ -521,6 +524,8 @@ interface LibraryOps {
         playAnyway: Boolean = false,
         /** Played with others: hosting it here, or joining someone's (see [together]). */
         together: Together? = null,
+        /** With its port, or its emulator, as the list it was started from says ([PlayVia]). */
+        via: PlayVia = PlayVia.DEFAULT,
         /** Told as the launch moves on: checking the save first (when Fuse Sync or Syncthing does), then starting. */
         onStage: (LaunchStage) -> Unit = {},
     ): LaunchOutcome
@@ -1129,6 +1134,15 @@ interface AppOps {
 
     /** Says what the app with [appId] is: a game joins the Android system, an emulator lists under Emulators. Null lets Fuse decide. */
     suspend fun setKind(appId: String, kind: AppKind?) = Unit
+
+    /** Attaches the app [appId], a recomp or port, to the library [game] it plays (null: to none). */
+    suspend fun setPlays(appId: String, game: GameId?) = Unit
+
+    /**
+     * What the app [packageName] is ([kind], and for a port the [plays] game): at once when it is
+     * installed, else once Android has installed it.
+     */
+    suspend fun expect(packageName: String, kind: AppKind, plays: GameId? = null) = Unit
 
     /**
      * Hands the APK at [path] to Android's installer (which asks the user) and makes the app a game

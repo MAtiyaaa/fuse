@@ -134,6 +134,12 @@ internal class StoreContext(
     /** Systems Fuse shows without having games for them (a RomM server's), so they get system art too. */
     val shownPlatforms = MutableStateFlow<Set<PlatformId>>(emptySet())
 
+    /**
+     * Games with a port attached that show in another system too (Ports or Android, [io.github.matiyaaa.fuse.model.ScopedSettings.PortShowsIn]),
+     * by game: that system. Set by the Android ports.
+     */
+    val portPlaces = MutableStateFlow<Map<GameId, PlatformId>>(emptyMap())
+
     /** Games Fuse shows but doesn't have (RomM's and other devices', by negative id), set by the stores that keep them. */
     @kotlin.concurrent.Volatile var remoteGames: RemoteGames? = null
 

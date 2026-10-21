@@ -111,6 +111,13 @@ fun <T> AppState.scopedRow(
     })
 }
 
+/** Where a game played with a port shows: its own system only, or the Ports or Android system too. */
+internal val PORT_PLACES: List<Pair<io.github.matiyaaa.fuse.model.PortPlace, String>> = listOf(
+    io.github.matiyaaa.fuse.model.PortPlace.OWN_SYSTEM to "Its Own System Only",
+    io.github.matiyaaa.fuse.model.PortPlace.PORTS to "Ports Too",
+    io.github.matiyaaa.fuse.model.PortPlace.ANDROID to "Android Too",
+)
+
 /** Frame generation's choices: off, or lsfg-vk's multiplier. */
 internal val FRAME_GENERATION: List<Pair<Int, String>> =
     listOf(0 to "Off") + io.github.matiyaaa.fuse.launch.FrameGeneration.MULTIPLIERS.map { it to "${it}x" }
@@ -192,6 +199,13 @@ fun PlatformSettingsScreen(app: AppState, platformId: PlatformId) {
             add(app.scopedRow(ScopedSettings.LaunchScreen, platformId, "Games open on", FuseIcons.DualScreen, LaunchDisplay.entries.map { it to screenName(it) }, detail = "Where this system's games start. A game can have its own in its options").copy(section = playing))
         }
         add(app.scopedRow(ScopedSettings.GenerateM3u, platformId, "Disc playlists", FuseIcons.Disc, on, detail = "Multi-disc games get a playlist in Fuse's storage (never in your folder)").copy(section = playing))
+        // Android: where its games played with a port show, and so how Play starts them from each list.
+        if (app.store.ports.androidApps && platformId != io.github.matiyaaa.fuse.model.AppGames.PLATFORM && platformId != io.github.matiyaaa.fuse.launch.ports.PortAdapter.PLATFORM) {
+            add(app.scopedRow(
+                ScopedSettings.PortShowsIn, platformId, "Its ports show in", FuseIcons.Boxes, PORT_PLACES,
+                detail = "A game played with a port: in ${p.shortName} it starts with its emulator, in Ports or Android with the port. A game can have its own in its options",
+            ).copy(section = playing))
+        }
         if (app.platform.features.frameGeneration) {
             val ready = app.store.library.frameGenerationReady()
             add(app.scopedRow(

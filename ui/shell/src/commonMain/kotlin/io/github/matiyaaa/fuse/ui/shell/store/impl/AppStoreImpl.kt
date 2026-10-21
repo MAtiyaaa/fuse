@@ -99,7 +99,8 @@ internal class DefaultAppStoreOps(
     private val fetching = Mutex()
     private val downloads = Semaphore(MAX_DOWNLOADS)
     private val checks = Semaphore(MAX_CHECKS)
-    private val installer = Mutex()
+    // One install at a time, shared with Android ports (Android shows one confirmation at once).
+    private val installer = SystemInstaller.turn
     private val permission = MutableStateFlow(bridge.canInstall())
 
     /** GitHub said its limit is used up until then (epoch millis); GitHub checks wait till then. */

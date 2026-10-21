@@ -1,0 +1,5782 @@
+{
+ "schema": "openportsgames/catalog",
+ "version": 2,
+ "generatedAt": "2026-10-18",
+ "site": "https://openportsgames.com/",
+ "licence": "CC BY 4.0",
+ "ports": [
+  {
+   "id": "2-ship-2-harkinian-2s2h",
+   "kind": "game",
+   "title": "2 Ship 2 Harkinian (2s2h)",
+   "game": "The Legend of Zelda: Majora's Mask",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "The Legend of Zelda: Majora's Mask (Nintendo, 2000) for Android (source port). Latest release: android-5.0.1. Needs your own copy of the game (Legend of Zelda, The - Majora's Mask (USA).z64).",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Jameriquiah/2ship2harkinian"
+   ],
+   "license": {
+    "spdx": "CC0-1.0"
+   }
+  },
+  {
+   "id": "2-ship-2-harkinian-android",
+   "kind": "game",
+   "title": "2 Ship 2 Harkinian (Android)",
+   "game": "The Legend of Zelda: Majora's Mask",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "The Legend of Zelda: Majora's Mask (Nintendo, 2000) for Android (source port). Latest release: v5.0.1-android.2. Needs your own copy of the game (Legend of Zelda, The - Majora's Mask (USA).z64).",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/linkzenic/2ship2harkinian-Android"
+   ],
+   "license": {
+    "spdx": "CC0-1.0"
+   }
+  },
+  {
+   "id": "2-ship-2-harkinian-outdated",
+   "kind": "game",
+   "title": "2 Ship 2 Harkinian (Outdated)",
+   "game": "The Legend of Zelda: Majora's Mask",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "The Legend of Zelda: Majora's Mask (Nintendo, 2000) for Android (source port). Latest release: v1.1.2P1. Needs your own copy of the game (Legend of Zelda, The - Majora's Mask (USA).z64).",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Waterdish/2ship2harkinian-Android"
+   ],
+   "license": {
+    "spdx": "CC0-1.0"
+   }
+  },
+  {
+   "id": "abuse-android",
+   "kind": "game",
+   "title": "Abuse (Android)",
+   "game": "Abuse",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Native Android port of the 1996 dark sci-fi platformer Abuse by Crack dot Com, built on top of apancik/Abuse_2025. Latest release: v1.1.",
+   "originalSystems": [
+    "MS-DOS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/ShadowPilotX/Abuse-Android"
+   ],
+   "license": {
+    "spdx": "GPL-2.0"
+   }
+  },
+  {
+   "id": "ac3-decomp",
+   "kind": "game",
+   "title": "Ac3-Decomp",
+   "game": "Ace Combat 3: Electrosphere",
+   "portType": "decompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Ace Combat 3: Electrosphere (Namco, 1999) for Android (decompilation). Needs your own copy of the game.",
+   "originalSystems": [
+    "PlayStation"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/vzepec/ac3-decomp"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "aerogauge-recomp",
+   "kind": "game",
+   "title": "AeroGauge",
+   "game": "AeroGauge",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Static recompilation of AeroGauge (N64) with N64Recomp and the RT64 renderer. It requires your own game files.",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/alondero/aerogauge-recomp"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "alabaster-dawn-android",
+   "kind": "game",
+   "title": "Alabaster Dawn (Android)",
+   "game": "Alabaster Dawn",
+   "portType": "runtime-port",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Unofficial Android WebView port of Alabaster Dawn (Radical Fish Games) plus a desktop controller fix. No game files included: you need your own copy. Latest release: v0.9.0.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/moronigranja/alabaster-android"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "am2r-android",
+   "kind": "game",
+   "title": "AM2R (Android)",
+   "game": "Another Metroid 2 Remake",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android tool that patches the fan remake AM2R 1.1 into a modern Android build. It works with your own copy of the AM2R files.",
+   "originalSystems": [
+    "Game Boy"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/am2r-android/AM2R-Autopatcher-Android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "amphitere",
+   "kind": "game",
+   "title": "Amphitere (NetHack)",
+   "game": "NetHack",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android port of NetHack focused on dual-screen devices. It is a standalone build that does not need the original game.",
+   "originalSystems": [
+    "MS-DOS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/fancypantalons/Amphitere"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "animal-crossing-gc-android",
+   "kind": "game",
+   "title": "Animal Crossing (Android)",
+   "game": "Animal Crossing",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Android port of the Animal Crossing (GameCube) PC port. The README states it was built with Z.ai, OpenAI Codex and Claude. Bring your own disc. Latest release: v0.5.0.",
+   "originalSystems": [
+    "GameCube"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/zwaetschge/ACGC-Android-Port"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "augustus",
+   "kind": "game",
+   "title": "Augustus",
+   "game": "Caesar III",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Caesar III (Sierra On-Line, 1998) for Android (source port). Latest release: v4.0.0. Needs your own copy of the game (Game Files).",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Keriew/augustus"
+   ],
+   "license": {
+    "spdx": "AGPL-3.0"
+   }
+  },
+  {
+   "id": "automobili-lamborghini-recomp",
+   "kind": "game",
+   "title": "Automobili Lamborghini",
+   "game": "Automobili Lamborghini",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Static recompilation of Automobili Lamborghini (N64) with N64Recomp and the RT64 renderer. It requires a copy of the game.",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/alondero/automobililamborghini-recomp"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "barony-android",
+   "kind": "game",
+   "title": "Barony Android Port",
+   "game": "Barony",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android fork of the Barony source, published with the developer's permission. The APK contains engine code only and needs an owned Barony v5.0.2 installation for its data.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/DifferentNet/barony-android-port"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "bloodborne-android",
+   "kind": "game",
+   "title": "Bloodborne Android",
+   "game": "Bloodborne",
+   "portType": "runtime-port",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Experimental Android port of Bloodborne (PS4, CUSA03173 v1.09) for Snapdragon devices, built on the bbport project. The runtime and renderer run natively on ARM64 while the game's original x86-64 code is translated at runtime with FEXCore. It boots, loads saves and renders properly, but is still an alpha. Requires your own decrypted copy of Bloodborne updated to v1.09.",
+   "originalSystems": [
+    "PlayStation 4"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/ducvd89/Bloodborne-Android"
+   ],
+   "license": {
+    "spdx": "GPL-2.0"
+   }
+  },
+  {
+   "id": "blue-droid",
+   "kind": "game",
+   "title": "Blue Dragon (BlueDroid)",
+   "game": "Blue Dragon",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Android recompilation of Blue Dragon (Xbox 360), separate from the desktop reblue project. It is an early build that needs your own game files.",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/RedZeroGotcha/BlueDroid"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "bluewake",
+   "kind": "game",
+   "title": "BlueWake (The Wind Waker)",
+   "game": "The Legend of Zelda: The Wind Waker",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "BlueWake: The Legend of Zelda: The Wind Waker (GameCube, 2002) recompiled natively for macOS, iOS, Windows, Linux and Android. Bring your own game disc. Latest release: v0.8.0.",
+   "originalSystems": [
+    "GameCube"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/chrissotraidis/bluewake"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "broforce-android",
+   "kind": "game",
+   "title": "Broforce (Android)",
+   "game": "Broforce",
+   "portType": "runtime-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Unofficial Android port of Broforce designed for gamepads. It ships no game files and needs your own Steam copy.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/BelmanteGu/BroforceAndroid"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "buckshot-roulette-mobile",
+   "kind": "game",
+   "title": "Buckshot Roulette Mobile",
+   "game": "Buckshot Roulette",
+   "portType": "runtime-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Mobile port of Buckshot Roulette for Android and iOS. It needs your own game data and is a community project.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/officialmelon/Buckshot-Roulette-Mobile"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "call-of-duty-mw2-android",
+   "kind": "game",
+   "title": "Call of Duty: Modern Warfare 2 (Android)",
+   "game": "Call of Duty: Modern Warfare 2",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Call of Duty: Modern Warfare 2 (2009, Xbox 360) recompiled ahead-of-time into native code for Android (ARM64), Linux and Windows (x86-64), with Vulkan rendering, touchscreen and controller input. Not an emulator; it requires user-supplied game files. Experimental. Latest release: v0.0.2 (APK).",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/OpenPort-Labs/mw2-android"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "castlevania-legacy-of-darkness-recomp",
+   "kind": "game",
+   "title": "Castlevania: Legacy of Darkness (PC)",
+   "game": "Castlevania: Legacy of Darkness",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Castlevania: Legacy of Darkness (Nintendo 64, 1999) recompiled into a native executable with N64Recomp, with Windows and Android builds. Bring your own ROM. Latest release: v0.2.31.",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sergiomanzur/cvlod_recomp"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "castlevania-revamped",
+   "kind": "game",
+   "title": "Castlevania ReVamped",
+   "game": "Castlevania",
+   "portType": "reimplementation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android reimplementation of the original Castlevania, distributed as an open-source build. It uses the game's original assets from your own copy.",
+   "originalSystems": [
+    "Nintendo Entertainment System"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/eboody/Castlevania-ReVamped-Open-Source-Edition"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "castlevania-sotn-recomp-sergiomanzur",
+   "kind": "game",
+   "title": "SymphonyRecomp (Symphony of the Night, sergiomanzur)",
+   "game": "Castlevania: Symphony of the Night",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Recompilation project for Castlevania: Symphony of the Night (PS1, 1997) with Windows and Android builds. Bring your own disc. Latest release: android-v0.10.1b.",
+   "originalSystems": [
+    "PlayStation"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sergiomanzur/SymphonyRecomp"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "cbfd-recompiled-android-evolved",
+   "kind": "game",
+   "title": "CBFD Recompiled Android Evolved",
+   "game": "Conker's Bad Fur Day",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Conker's Bad Fur Day (Rare, 2001) for Android (static recompilation). Latest release: android-v0.2.15. Needs your own copy of the game.",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/codepdbh/CBFD-Recompiled-Android-Evolved"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "celeste-android",
+   "kind": "game",
+   "title": "Celeste (Android)",
+   "game": "Celeste",
+   "portType": "runtime-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Native Android port of Celeste that runs your own PC copy, built with .NET, FNA and SDL3 and rendered with Vulkan. It includes a launcher to import the game.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/BelmanteGu/CelesteAndroid"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "chaotix-recompiled",
+   "kind": "game",
+   "title": "Knuckles' Chaotix (Chaotix Recompiled)",
+   "game": "Knuckles' Chaotix",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Static recompilation of Knuckles' Chaotix (Sega 32X) to native C++, with true widescreen. It builds for Windows, Linux, macOS and Android and requires your own ROM.",
+   "originalSystems": [
+    "Sega 32X"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/YuutaTsubasa/ChaotixRecompiled"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "chex-quest-classic-core-engines",
+   "kind": "game",
+   "title": "Chex Quest (Classic Core Engines)",
+   "game": "Chex Quest",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Chex Quest (Digital Café, 1996) for Android (source port). Latest release: 3.5.0. Needs your own copy of the game (CHEX.WAD).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sandstranger/com.mobilerpgpack.phone"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "corsixth-android",
+   "kind": "game",
+   "title": "CorsixTH Android",
+   "game": "Theme Hospital",
+   "portType": "source-port",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Theme Hospital (Electronic Arts, 1997) for Android (source port). Needs your own copy of the game (HOSP folder).",
+   "originalSystems": [
+    "MS-DOS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/alanwoolley/CorsixTH-Android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "crash-bandicoot",
+   "kind": "game",
+   "title": "Crash Bandicoot Launcher",
+   "game": "Crash Bandicoot",
+   "portType": "recompilation",
+   "status": "stable",
+   "verified": true,
+   "notes": "Native PC port of Crash Bandicoot (PS1) produced via the RecompOne static recompilation stack, distributed as versioned releases. Requires your own PS1 disc dump. The project is not affiliated with the original developer.",
+   "originalSystems": [
+    "PlayStation"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Matteo842/CrashBandicoot-Launcher"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "crt-native-ds-dual-screen",
+   "kind": "game",
+   "title": "CRT Native DS (Dual Screen)",
+   "game": "CTR: Crash Team Racing",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "CTR: Crash Team Racing (Sony Computer Entertainment, 1999) for Android (source port). Latest release: v0.1.0. Needs your own copy of the game (CTR - Crash Team Racing (USA)).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/igawa6/ctr-native-android"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "cs16-client",
+   "kind": "game",
+   "title": "CS16Client",
+   "game": "Counter-Strike",
+   "portType": "reimplementation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Reverse-engineered client for Counter-Strike 1.6 aimed at mobile and other unsupported platforms. It runs the original game data and ships builds for Android, Windows and Linux.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Velaron/cs16-client"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "ctr-native-android",
+   "kind": "game",
+   "title": "Crash Team Racing (Android)",
+   "game": "Crash Team Racing",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Android port of the Crash Team Racing decompilation project (PS1, 1999). Bring your own disc. Latest release: Android-Build4.",
+   "originalSystems": [
+    "PlayStation"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Simon358/ctr-native-android"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "daggerfall-unity-android",
+   "kind": "game",
+   "title": "Daggerfall Unity (Android)",
+   "game": "The Elder Scrolls II: Daggerfall",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "The Elder Scrolls II: DaggerFall (Bethesda Softworks, 1996) for Android (source port). Latest release: v1.1.1.9. Needs your own copy of the game (DaggerfallGameFiles.zip).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Vwing/daggerfall-unity-android"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "dbz-burst-limit-android",
+   "kind": "game",
+   "title": "DBZ Burst Limit Android",
+   "game": "Dragon Ball Z: Burst Limit",
+   "portType": "source-port",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Dragon Ball Z: Burst Limit (Bandai Namco, 2008) for Android (source port). Needs your own copy of the game.",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/nahalewski/DBZBL-Android-LAN"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "dead-or-alive-xtreme-beach-volleyball-android",
+   "kind": "game",
+   "title": "Dead or Alive Xtreme Beach Volleyball · Android",
+   "game": "Dead or Alive: Xtreme Beach Volleyball",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Dead or Alive: Xtreme Beach Volleyball (Tecmo, 2003) for Android (source port). Latest release: v0.4.2-ru-USA6-Beach. Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Wannamingo/DoAXBV"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "descent-2-android",
+   "kind": "game",
+   "title": "Descent II (Android)",
+   "game": "Descent II",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Source port of Descent II (MS-DOS) for Android, with touch controls, add-on mission packs and optional redbook music support. It needs the player's own copy of the game files.",
+   "originalSystems": [
+    "MS-DOS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/wootbeer/Descent2-Android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "descent-2-mobile",
+   "kind": "game",
+   "title": "Descent 2 Mobile",
+   "game": "Descent II",
+   "portType": "source-port",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Descent II (Interplay Entertainment, 1996) for Android (source port). Needs your own copy of the game.",
+   "originalSystems": [
+    "MS-DOS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/devint1/Descent2-Mobile"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "descent-android",
+   "kind": "game",
+   "title": "Descent (Android)",
+   "game": "Descent",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Source port of Descent (MS-DOS) for Android, forked from Descent Mobile, with on-screen touch controls, gyro support and add-on mission packs. It needs the player's own copy of the game files.",
+   "originalSystems": [
+    "MS-DOS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/wootbeer/Descent-Android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "descent-mobile",
+   "kind": "game",
+   "title": "Descent Mobile",
+   "game": "Descent",
+   "portType": "source-port",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Descent (Interplay Entertainment, 1995) for Android (source port). Needs your own copy of the game.",
+   "originalSystems": [
+    "MS-DOS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/devint1/Descent-Mobile"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "devilutionx",
+   "kind": "game",
+   "title": "DevilutionX",
+   "game": "Diablo",
+   "portType": "reimplementation",
+   "status": "stable",
+   "verified": true,
+   "notes": "Reverse-engineered engine for Diablo and the Hellfire expansion, rebuilt for modern systems. Requires the original Diablo 1 and Hellfire data files.",
+   "originalSystems": [
+    "MS-DOS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/diasurgical/devilutionX"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "dishsoap",
+   "kind": "game",
+   "title": "DishSoap",
+   "game": "The Dishwasher: Dead Samurai",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Community Android port of The Dishwasher: Dead Samurai (Xbox 360). It needs the original game.",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Hdmaniak/DishSoap"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "dk64-recomp-android",
+   "kind": "game",
+   "title": "Donkey Kong 64 (Android)",
+   "game": "Donkey Kong 64",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Android port (NDK) of Donkey Kong 64: Recompiled, with RT64/Vulkan, N64ModernRuntime and SDL2. Bring your own NTSC-U 1.0 ROM. Latest release: v1.0.3-android-r7.",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/deivid22srk/dk64-recomp-android"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "doom-3-bfg-edition-classic-core-engines",
+   "kind": "game",
+   "title": "Doom 3 BFG Edition (Classic Core Engines)",
+   "game": "Doom 3 BFG Edition",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Doom 3 BFG Edition (id Software, 2012) for Android (source port). Latest release: 3.5.0. Needs your own copy of the game (base folder).",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sandstranger/com.mobilerpgpack.phone"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "doom-64-remastered-classic-core-engines",
+   "kind": "game",
+   "title": "Doom 64 Remastered (Classic Core Engines)",
+   "game": "Doom 64 Remastered",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Doom 64 Remastered (id Software, 2020) for Android (source port). Latest release: 3.5.0. Needs your own copy of the game (DOOM64.WAD, DOOMSND.DLS, Doom64.kpf).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sandstranger/com.mobilerpgpack.phone"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "doom-classic-core-engines",
+   "kind": "game",
+   "title": "Doom (Classic Core Engines)",
+   "game": "Doom",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Doom (id Software, 1993) for Android (source port). Latest release: 3.5.0. Needs your own copy of the game (DOOM.WAD).",
+   "originalSystems": [
+    "MS-DOS",
+    "Super Nintendo",
+    "PlayStation"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sandstranger/com.mobilerpgpack.phone"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "doom-ii-classic-core-engines",
+   "kind": "game",
+   "title": "Doom II (Classic Core Engines)",
+   "game": "Doom II",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Doom II (id Software, 1994) for Android (source port). Latest release: 3.5.0. Needs your own copy of the game (DOOM2.WAD).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sandstranger/com.mobilerpgpack.phone"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "doom-playstation-classic-core-engines",
+   "kind": "game",
+   "title": "Doom (PlayStation, Classic Core Engines)",
+   "game": "Doom (Playstation)",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Doom (Playstation) (id Software, 1995) for Android (source port). Latest release: 3.5.0. Needs your own copy of the game (.bin and .cue files).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sandstranger/com.mobilerpgpack.phone"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "dora64-3",
+   "kind": "game",
+   "title": "Dora64-3",
+   "game": "Doraemon 3: Nobita no Machi SOS!",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Doraemon 3: Nobita no Machi SOS! (Epoch, 2000) for Android (source port). Latest release: v1.0.0. Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/citrongames/Dora64-3"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "doukutsu-rs",
+   "kind": "game",
+   "title": "doukutsu-rs",
+   "game": "Cave Story",
+   "portType": "reimplementation",
+   "status": "stable",
+   "verified": true,
+   "notes": "Unofficial open source port of Cave Story. The original freeware game data is required and is not distributed with the repository.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/doukutsu-rs/doukutsu-rs"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "dragon-ball-raging-blast-2-android",
+   "kind": "game",
+   "title": "Dragon Ball: Raging Blast 2 (Android)",
+   "game": "Dragon Ball: Raging Blast 2",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android (arm64) port of RB2 Recompiled: Dragon Ball: Raging Blast 2 recompiled with the ReXGlue SDK, packaged as an Android APK. No game data included; you need your own legally dumped copy. Latest release: v1.2.3 (APK).",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/moddedrounds/RB2-Android"
+   ],
+   "license": {
+    "spdx": "BSD-3-Clause"
+   }
+  },
+  {
+   "id": "dragon-ball-z-super-saiya-densetsu-snes-decomp",
+   "kind": "game",
+   "title": "Dragon Ball Z: Super Saiya Densetsu SNES Decomp",
+   "game": "Dragon Ball Z: Super Saiya Densetsu",
+   "portType": "decompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Dragon Ball Z: Super Saiya Densetsu (Bandai, 1992) for Android (decompilation). Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/JackRushante/DBZ-Super-Saiya-Densetsu-Rust"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "dusklight",
+   "kind": "game",
+   "title": "Dusklight",
+   "game": "The Legend of Zelda: Twilight Princess",
+   "portType": "reimplementation",
+   "status": "beta",
+   "verified": true,
+   "notes": "From-scratch reimplementation of The Legend of Zelda: Twilight Princess that reads the game's assets from a legally dumped copy of the game disc. Ships official builds for every catalog platform, with the Android build compiled for ARM64; some platforms are supported on a best-effort basis.",
+   "originalSystems": [
+    "GameCube"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/TwilitRealm/dusklight"
+   ],
+   "license": {
+    "spdx": "CC0-1.0"
+   }
+  },
+  {
+   "id": "dw-2003-dual-screen",
+   "kind": "game",
+   "title": "DW 2003 (Dual Screen)",
+   "game": "Digimon World 3",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Digimon World 3 (Bandai, 2002) for Android (source port). Latest release: v1.4.0. Needs your own copy of the game.",
+   "originalSystems": [
+    "PlayStation"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/rsigristc/DW3-DS-Android"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "elfen-lied-fighting-android",
+   "kind": "game",
+   "title": "Elfen Lied Fighting (Android)",
+   "game": "Elfen Lied Fighting",
+   "portType": "source-port",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Unofficial native Android port of the fan-made Elfen Lied Fighting PC game: offline play, touch controls and Japanese, English and Russian languages. Android 10+. Latest tag: v1.0.0-rc1.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/yugenmagan/elfen-lied-fighting-android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "endless-sky-android",
+   "kind": "game",
+   "title": "Endless Mobile (Endless Sky, Android)",
+   "game": "Endless Sky",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Endless Mobile: fork of the open-source game Endless Sky that adds Android support plus touchscreen and interface changes. Distributed through F-Droid as com.github.thewierdnut.endless_mobile; CI also publishes debug APKs. The game itself is free software, so no commercial copy is required.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/thewierdnut/endless-mobile"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "eternal-sonata-reprise",
+   "kind": "game",
+   "title": "Eternal Sonata: Reprise",
+   "game": "Eternal Sonata",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Static recompilation of Eternal Sonata (Xbox 360) with ReXGlue. It converts the PPC executable to native x86_64 and wraps it in a small host runtime with overlays and hooks for mods; builds for Windows, Linux, macOS and Android.",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/birabittoh/EternalSonataReprise"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "exult",
+   "kind": "game",
+   "title": "Exult",
+   "game": "Ultima VII",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Open source engine for the Ultima VII and VIII games. Published GitHub releases are prereleases only, so no stable version is recorded.",
+   "originalSystems": [
+    "MS-DOS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/exult/exult"
+   ],
+   "license": {
+    "spdx": "GPL-2.0"
+   }
+  },
+  {
+   "id": "far-cry-nearchuckle",
+   "kind": "game",
+   "title": "NearChuckle (Far Cry)",
+   "game": "Far Cry",
+   "portType": "runtime-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android and Linux port of Far Cry (CryEngine 1) via SDL3, based on NearChuckle and using Mesa Zink for OpenGL over Vulkan. Note: it relies on the leaked Far Cry source and needs the game itself.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Player124413/NearChuckle-android-edition"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "fear-and-hunger-android",
+   "kind": "game",
+   "title": "Fear & Hunger (Android)",
+   "game": "Fear & Hunger",
+   "portType": "runtime-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android version of Fear & Hunger that runs the game without an emulator. It is a community port distributed as an app and needs a copy of the game.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Chokage/Fear-And-Hunger-Android-Application"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "fear-and-hunger-termina-android",
+   "kind": "game",
+   "title": "Fear & Hunger 2: Termina (Android)",
+   "game": "Fear & Hunger 2: Termina",
+   "portType": "runtime-port",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Ongoing community project to bring Fear & Hunger 2: Termina to Android. It runs the game without an emulator and needs your own copy.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Chokage/Fear-and-Hunger-2-Termina-Mobile"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "fh2",
+   "kind": "game",
+   "title": "fh2",
+   "game": "Heroes of Might and Magic II",
+   "portType": "reimplementation",
+   "status": "stable",
+   "verified": false,
+   "notes": "Engine reimplementation for Heroes of Might and Magic II, written from scratch in C++. Ships official Android builds on Google Play plus Windows, macOS and Linux releases.",
+   "originalSystems": [
+    "MS-DOS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/ihhub/fheroes2"
+   ],
+   "license": {
+    "spdx": "GPL-2.0"
+   }
+  },
+  {
+   "id": "final-doom-playstation-classic-core-engines",
+   "kind": "game",
+   "title": "Final Doom (PlayStation, Classic Core Engines)",
+   "game": "Final Doom (Playstation)",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Final Doom (Playstation) (id Software, 1996) for Android (source port). Latest release: 3.5.0. Needs your own copy of the game (.bin and .cue files).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sandstranger/com.mobilerpgpack.phone"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "fire-emblem-sacred-stones-recomp",
+   "kind": "game",
+   "title": "Fire Emblem: The Sacred Stones (Recompiled)",
+   "game": "Fire Emblem: The Sacred Stones",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Playable Windows and Android ARM64 static recompilation of Fire Emblem: The Sacred Stones (Game Boy Advance, 2004). Still early, but playable. Latest release: v0.1.20.",
+   "originalSystems": [
+    "Game Boy Advance"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Lordingard/SacredStonesRecomp"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "forza-horizon-2-android",
+   "kind": "game",
+   "title": "FH2 Recompiled",
+   "game": "Forza Horizon 2",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Unofficial static recompilation of Forza Horizon 2 (Xbox 360, 2014) for Android and Linux. It ships no game files and does nothing without files extracted from your own legally obtained copy. Non-commercial fan project, not affiliated with Microsoft/Xbox Game Studios/Playground Games/Turn 10.",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Gabrick75/fh2-recompiled"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "freespace",
+   "kind": "game",
+   "title": "FreeSpace",
+   "game": "Freespace 2",
+   "portType": "source-port",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Freespace 2 (Interplay Entertainment, 1999) for Android (source port). Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/lubomyr/freespace2"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "ftl-pocket-wormhole",
+   "kind": "game",
+   "title": "Pocket Wormhole (FTL)",
+   "game": "FTL: Faster Than Light",
+   "portType": "reimplementation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Native Android port of Project Wormhole, the open-source FTL engine implementation. It runs FTL: Faster Than Light on Android using your own game files.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/adamkulik/pocket-wormhole"
+   ],
+   "license": {
+    "spdx": "GPL-2.0"
+   }
+  },
+  {
+   "id": "ftta-recomp",
+   "kind": "game",
+   "title": "FTTA Recomp",
+   "game": "Final Fantasy Tactics Advance",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Final Fantasy Tactics Advance (Square, 2003) for Android (static recompilation). Latest release: v1.6. Needs your own copy of the game.",
+   "originalSystems": [
+    "Game Boy Advance"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/james2doyle/ffta-recomp"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "galaxy-on-fire-2-unity-remake",
+   "kind": "game",
+   "title": "Galaxy On Fire 2 Unity Remake",
+   "game": "Galaxy on Fire 2™ Full HD",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Galaxy on Fire 2™ Full HD (Fishlabs, 2009) for Android (source port). Latest release: 2026.10.18. Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/JoppieToppie/Galaxy-on-Fire-2-Unity-Remake"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "gdroid",
+   "kind": "game",
+   "title": "GDroid",
+   "game": "Garry's Mod",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Garry's Mod (Facepunch Studios, 2006) for Android (source port). Latest release: 0.1.29. Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/tinsarfal/GDroid"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "gen1recomp",
+   "kind": "game",
+   "title": "Gen1Recomp (Pokémon Red)",
+   "game": "Pokémon Red",
+   "portType": "reimplementation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Native Lua/LÖVE2D recreation of the first-generation Pokémon games, also covering later generations. It builds for desktop and mobile and uses your own game data.",
+   "originalSystems": [
+    "Game Boy"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/bryanthaboi/gen1recomp"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "gen2recomp",
+   "kind": "game",
+   "title": "Gen2Recomp (Pokémon Gold)",
+   "game": "Pokémon Gold",
+   "portType": "reimplementation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Recompilation project for the second-generation Pokémon games, forked from Gen1Recomp. It runs on desktop and Android with your own game data.",
+   "originalSystems": [
+    "Game Boy",
+    "Game Boy Color"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/UNDERdecoded/Gen2Recomped"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "generalszh-android-port",
+   "kind": "game",
+   "title": "GeneralsZH Android Port",
+   "game": "Command & Conquer: Generals: Zero Hour",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Command & Conquer: Generals: Zero Hour (Electronic Arts, 2003) for Android (source port). Latest release: v1.4.0. Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/MYSOREZ/GeneralsZH-Android-Port"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "ghostship",
+   "kind": "game",
+   "title": "Ghostship",
+   "game": "Super Mario 64",
+   "portType": "decompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Native port of Super Mario 64 from the decompilation, by the HarbourMasters team. Uses the game's data from your own legally obtained ROM. Multiplatform, including Android, iOS and Switch.",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/HarbourMasters/Ghostship"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "ghostship-android",
+   "kind": "game",
+   "title": "Ghostship (Android)",
+   "game": "Super Mario 64",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Super Mario 64 (Nintendo, 1996) for Android (source port). Latest release: 1.0.1. Needs your own copy of the game (Ghostship folder).",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/izzy2lost/Ghostship"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "gish",
+   "kind": "game",
+   "title": "Gish (Android)",
+   "game": "Gish",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android port of the physics platformer Gish, built on SDL2, OpenAL and GL4ES. It uses the game's released source and needs the original data files.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/EXL/Gish"
+   ],
+   "license": {
+    "spdx": "GPL-2.0"
+   }
+  },
+  {
+   "id": "gloom-android",
+   "kind": "game",
+   "title": "ZGloom (Gloom)",
+   "game": "Gloom",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Modern source port of the Amiga FPS Gloom with an improved renderer, focused on Android. It needs the original game data.",
+   "originalSystems": [
+    "MS-DOS",
+    "Amiga"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Andiweli/ZGloom-Android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "god-of-thunder-android",
+   "kind": "game",
+   "title": "God of Thunder (Android)",
+   "game": "God of Thunder",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Source port of the 1993 DOS game God of Thunder for Android, with extra quality-of-life features. It needs the original game files, whose license is free.",
+   "originalSystems": [
+    "MS-DOS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/wootbeer/gotandroid"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "god-of-war-3-android",
+   "kind": "game",
+   "title": "God of War III Remastered (Android)",
+   "game": "God of War III Remastered",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Native Android (ARM64) port of God of War III Remastered (PS4), powered by FEXCore, Vulkan/Turnip and a game-specific runtime. Work in progress; you need your own copy of the game. Latest release: v2.1.6-android4 (APK).",
+   "originalSystems": [
+    "PlayStation 4"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/zFitness/gow3_android"
+   ],
+   "license": {
+    "spdx": "GPL-2.0"
+   }
+  },
+  {
+   "id": "goemon-64-recompiled-android",
+   "kind": "game",
+   "title": "Goemon 64 Recompiled (Android)",
+   "game": "Mystical Ninja Starring Goemon",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android port of Goemon 64: Recompiled: plays Mystical Ninja Starring Goemon (Nintendo 64) natively on phone or handheld, using RT64 for Vulkan rendering. Packaging/port layer on top of the upstream recompilation (built on N64: Recompiled). The APK does not include the game; you need your own ROM. Latest release: v1.0.8 (APK).",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/ogdanimal/Goemon64Recomp-Android"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "golden-eye-recomp-dual-screen",
+   "kind": "game",
+   "title": "Golden Eye Recomp (Dual Screen)",
+   "game": "GoldenEye 007: Reloaded",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "GoldenEye 007: Reloaded (Microsoft Game Studios, 2010) for Android (static recompilation). Latest release: v1.7.1. Needs your own copy of the game (Golden Eye 007 Remaster folder).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/jeffory/GoldenEye-Recomp"
+   ],
+   "license": {
+    "spdx": "Unlicense"
+   }
+  },
+  {
+   "id": "golden-sun-android",
+   "kind": "game",
+   "title": "Golden Sun (Android)",
+   "game": "Golden Sun",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android recompiled port of Golden Sun (Game Boy Advance), based on GSRecomp and brought over with the Descore framework. The player supplies their own legally obtained ROM; the app contains no game code, ROM or assets.",
+   "originalSystems": [
+    "Game Boy Advance"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/wootbeer/gsrandroid"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "gta-iv-liberty-recomp",
+   "kind": "game",
+   "title": "Liberty Recompiled",
+   "game": "Grand Theft Auto IV",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Recompilation of the Xbox 360 Grand Theft Auto IV with a ReXGlue SDK fork, in early development. It targets Windows, Linux, macOS and Android (plus iOS and Switch) to bring the game to platforms it never reached.",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/OZORDI/LibertyRecomp"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "gzdoom",
+   "kind": "game",
+   "title": "GZDoom",
+   "game": "Doom",
+   "portType": "source-port",
+   "status": "stable",
+   "verified": true,
+   "notes": "Feature-centric source port for all Doom-engine games, with an official Android build. Requires an IWAD (the freedoom project provides assets).",
+   "originalSystems": [
+    "MS-DOS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/ZDoom/gzdoom"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "gzselaco-android-dual-screen",
+   "kind": "game",
+   "title": "GZSelaco Android (Dual Screen)",
+   "game": "Selaco",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Selaco (Altered Orbit Studios, 2024) for Android (source port). Latest release: v0.2.0. Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/danillogical/GZSelaco-android"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "hacx-classic-core-engines",
+   "kind": "game",
+   "title": "HacX (Classic Core Engines)",
+   "game": "HacX",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "HacX (Banjo Software, 1997) for Android (source port). Latest release: 3.5.0. Needs your own copy of the game (HACX.WAD).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sandstranger/com.mobilerpgpack.phone"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "halo-1-decomp",
+   "kind": "game",
+   "title": "Halo 1 Decomp",
+   "game": "Halo: Combat Evolved",
+   "portType": "decompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Halo: Combat Evolved (Microsoft Game Studios, 2001) for Android (decompilation). Latest release: build-232. Needs your own copy of the game.",
+   "originalSystems": [
+    "Xbox"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/cybersecurity/halo-ce-universal"
+   ],
+   "license": {
+    "spdx": "CC0-1.0"
+   }
+  },
+  {
+   "id": "halo-1-decomp-fork",
+   "kind": "game",
+   "title": "Halo 1 Decomp Fork",
+   "game": "Halo: Combat Evolved",
+   "portType": "decompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Halo: Combat Evolved (Microsoft Game Studios, 2001) for Android (decompilation). Latest release: build-103. Needs your own copy of the game.",
+   "originalSystems": [
+    "Xbox"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/thelinkin3000/halo-ce-universal"
+   ],
+   "license": {
+    "spdx": "CC0-1.0"
+   }
+  },
+  {
+   "id": "halo-1-touch-control-fork",
+   "kind": "game",
+   "title": "Halo 1 Touch Control Fork",
+   "game": "Halo: Combat Evolved",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Halo: Combat Evolved (Microsoft Game Studios, 2001) for Android (source port). Latest release: 4.0. Needs your own copy of the game.",
+   "originalSystems": [
+    "Xbox"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/theLlamaNet/halo-ce-android"
+   ],
+   "license": {
+    "spdx": "CC0-1.0"
+   }
+  },
+  {
+   "id": "halo-ce-universal",
+   "kind": "game",
+   "title": "Halo: Combat Evolved Universal",
+   "game": "Halo: Combat Evolved",
+   "portType": "decompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Decompilation-based native port of Halo: Combat Evolved (Xbox) for Windows, Linux and Android. The player supplies their own legally obtained Xbox disc image; the repository ships no game content. The Android build targets arm64 with OpenGL ES 3 and SDL3, needs Android 9 or later and plays best with a Bluetooth or USB gamepad; system-link multiplayer works across Windows, Linux and Android.",
+   "originalSystems": [
+    "Xbox"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/OpenCommunityEdition/OpenCE"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "harvest-moon-64-android",
+   "kind": "game",
+   "title": "Harvest Moon 64 (Android)",
+   "game": "Harvest Moon 64",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Android port of Harvest Moon 64 (Nintendo 64, 1999) made with N64: Recompiled. Bring your own ROM. Latest release: v0.2.0.",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/igawa6/HarvestMoon64Recomp"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "heretic-classic-core-engines",
+   "kind": "game",
+   "title": "Heretic (Classic Core Engines)",
+   "game": "Heretic: Shadow of the Serpent Riders",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Heretic: Shadow of the Serpent Riders (Raven Software, 1994) for Android (source port). Latest release: 3.5.0. Needs your own copy of the game (HERETIC.WAD).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sandstranger/com.mobilerpgpack.phone"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "hexen-classic-core-engines",
+   "kind": "game",
+   "title": "Hexen (Classic Core Engines)",
+   "game": "Hexen: Beyond Heretic",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Hexen: Beyond Heretic (Raven Software, 1995) for Android (source port). Latest release: 3.5.0. Needs your own copy of the game (HEXEN.WAD).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sandstranger/com.mobilerpgpack.phone"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "hexen-ii-classic-core-engines",
+   "kind": "game",
+   "title": "Hexen II (Classic Core Engines)",
+   "game": "Hexen II",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Hexen II (Raven Software, 1997) for Android (source port). Latest release: 3.5.0. Needs your own copy of the game (data1 folder).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sandstranger/com.mobilerpgpack.phone"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "hexen-ii-portal-of-praevus-classic-core-engines",
+   "kind": "game",
+   "title": "Hexen II: Portal of Praevus (Classic Core Engines)",
+   "game": "Hexen II: Mission Pack, Portal of Praevus",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Hexen II: Mission Pack, Portal of Praevus (Raven Software, 1997) for Android (source port). Latest release: 3.5.0. Needs your own copy of the game (portals folder).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sandstranger/com.mobilerpgpack.phone"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "hollow-knight-android",
+   "kind": "game",
+   "title": "Hollow Knight (Android)",
+   "game": "Hollow Knight",
+   "portType": "runtime-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Unofficial Android port of Hollow Knight with dual-screen support, aimed at handhelds. It needs the game itself.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/igawa6/dualsouls"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "hunters-recomp-dual-screen",
+   "kind": "game",
+   "title": "Hunters Recomp (Dual Screen)",
+   "game": "Metroid Prime: Hunters",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Metroid Prime: Hunters (Nintendo, 2006) for Android (static recompilation). Latest release: v0.2.5. Needs your own copy of the game (Metroid Prime Hunters (USA) 1.0 NDS).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/aabrole/HuntersRecomp"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "hybrid-heaven-recompiled",
+   "kind": "game",
+   "title": "Hybrid Heaven Recompiled",
+   "game": "Hybrid Heaven",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Hybrid Heaven (Konami, 1999) for Android (static recompilation). Latest release: v1.0.1. Needs your own copy of the game (Need USA Rom).",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/ogdanimal/HybridHeaven-Recomp"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "ico-pc",
+   "kind": "game",
+   "title": "ICO PC",
+   "game": "Ico",
+   "portType": "decompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Native port of Ico built from the PlayStation 2 decompilation, for Windows, Linux, macOS and Android. It needs your own copy of the game.",
+   "originalSystems": [
+    "PlayStation 2"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/nathanialf/ico-pc"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "infinite-blade-2-android",
+   "kind": "game",
+   "title": "Infinite Blade II (Android)",
+   "game": "Infinite Blade II",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Infinite Blade II (Infinite Blade, 2019) for Android (source port). Latest release: ib3. Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/jelqedagain/ib-2-3-android"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "isaac-rebirth-android",
+   "kind": "game",
+   "title": "The Binding of Isaac: Rebirth (Android)",
+   "game": "The Binding of Isaac: Rebirth",
+   "portType": "reimplementation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Clean-room C++17 engine for The Binding of Isaac: Rebirth/Repentance that reads your own Steam install at runtime and ships no game assets. Mobile-first (arm64 Android), then Linux x86_64.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/caos-obliquo/tboi-recomp"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "isle-portable",
+   "kind": "game",
+   "title": "Isle Portable",
+   "game": "LEGO Island",
+   "portType": "source-port",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Source-based reimplementation of LEGO Island. The only GitHub release is a rolling continuous build rather than a numbered version.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/isledecomp/isle-portable"
+   ],
+   "license": {
+    "spdx": "LGPL-3.0"
+   }
+  },
+  {
+   "id": "issd-native",
+   "kind": "game",
+   "title": "ISS Deluxe (Native)",
+   "game": "International Superstar Soccer Deluxe",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Native recompilation project for International Superstar Soccer Deluxe (SNES), with an AI-assisted workflow. It targets Android and needs your own ROM.",
+   "originalSystems": [
+    "Super Nintendo"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sergiomanzur/issd-native"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "ja2-stracciatella",
+   "kind": "game",
+   "title": "Ja2Stracciatella",
+   "game": "Jagged Alliance 2",
+   "portType": "source-port",
+   "status": "stable",
+   "verified": true,
+   "notes": "Open source reimplementation of Jagged Alliance 2. The repository carries an SFI Source Code license agreement rather than a standard SPDX license.",
+   "originalSystems": [
+    "MS-DOS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/ja2-stracciatella/ja2-stracciatella"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "jazz-2-ressurection",
+   "kind": "game",
+   "title": "Jazz 2 Ressurection",
+   "game": "Jazz Jackrabbit 2",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Jazz Jackrabbit 2 (Epic MegaGames, 1998) for Android (source port). Latest release: 3.9.0. Needs your own copy of the game (Game Files).",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/deathkiller/jazz2"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "jazz2-native",
+   "kind": "game",
+   "title": "Jazz² Resurrection",
+   "game": "Jazz Jackrabbit 2",
+   "portType": "reimplementation",
+   "status": "stable",
+   "verified": false,
+   "notes": "Open-source reimplementation of Jazz Jackrabbit 2 in C++, covering the shareware demo, Holiday Hare '98, The Secret Files and Christmas Chronicles, with some JJ2+ and MLLE features. Builds run on Windows, Linux, macOS and Android and use your own game files.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/deathkiller/jazz2-native"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "jet-set-radio-future-unleashed",
+   "kind": "game",
+   "title": "Jet Set Radio Future Unleashed",
+   "game": "Jet Set Radio Future",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Jet Set Radio Future (Xbox, 2002) running natively on PC and Android. Bring your own copy of the game. Latest release: v0.4.7.",
+   "originalSystems": [
+    "Xbox"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/JuMatt/JetSetRadioFuture-Unleashed"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "jill-of-the-jungle-android",
+   "kind": "game",
+   "title": "Jill of the Jungle (Android)",
+   "game": "Jill of the Jungle",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Source port of Jill of the Jungle (MS-DOS) for Android with quality-of-life features and on-screen touch controls, built on the Descore framework. It needs the player's own copy of the game files.",
+   "originalSystems": [
+    "MS-DOS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/wootbeer/jillandroid"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "julius",
+   "kind": "game",
+   "title": "Julius",
+   "game": "Caesar III",
+   "portType": "reimplementation",
+   "status": "stable",
+   "verified": true,
+   "notes": "Open-source re-implementation of Caesar III that runs with the original game files. On top of the stable releases, the project publishes continuous (weekly) builds.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/bvschaik/julius"
+   ],
+   "license": {
+    "spdx": "AGPL-3.0"
+   }
+  },
+  {
+   "id": "kartpad",
+   "kind": "game",
+   "title": "KartPad (Mario Kart Wii)",
+   "game": "Mario Kart Wii",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Mario Kart Wii and Retro Rewind running natively on iPhone, iPad, Apple TV, Mac and Android. Built on the Wii decompilation work, not an emulator. Bring your own game. Latest release: v0.8.3.",
+   "originalSystems": [
+    "Wii"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/chrissotraidis/kartpad"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "kokororecomp",
+   "kind": "game",
+   "title": "KokoroRecomp",
+   "game": "KoroKoro Postnin",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "KoroKoro Postnin (Nintendo, 2000) for Android (static recompilation). Latest release: v0.1. Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/elprogramadorloco-arch/korokoro-recomp"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "libertyrecompandroid",
+   "kind": "game",
+   "title": "LibertyRecompAndroid",
+   "game": "Grand Theft Auto IV",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Grand Theft Auto IV (Rockstar Games, 2008) for Android (static recompilation). Latest release: v0.5.9.3. Needs your own copy of the game.",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/vaduur/LibertyRecompAndroid"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "lighthouse-android",
+   "kind": "game",
+   "title": "Lighthouse (Android)",
+   "game": "Banjo-Kazooie",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Banjo-Kazooie (Nintendo, 1998) for Android (source port). Latest release: 1.0.2. Needs your own copy of the game (Banjo-Kazooie (USA) (Rev 1).z64).",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/izzy2lost/Lighthouse"
+   ],
+   "license": {
+    "spdx": "CC0-1.0"
+   }
+  },
+  {
+   "id": "look-outside-android",
+   "kind": "game",
+   "title": "Look Outside (Android)",
+   "game": "Look Outside",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Look Outside (Kowloon Nights, 2024) for Android (static recompilation). Latest release: v0.12.2. Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Guixs232/Look-Outside-Recomp"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "marathon-android",
+   "kind": "game",
+   "title": "Marathon (Android)",
+   "game": "Marathon",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android port of the Aleph One engine, used to run the Marathon games with their original data. It builds on the open-source Aleph One codebase.",
+   "originalSystems": [
+    "Macintosh"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/daniele-rapagnani/alephone-android"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "marathon-recompiled",
+   "kind": "game",
+   "title": "Marathon Recompiled",
+   "game": "Sonic The Hedgehog (2006)",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Sonic The Hedgehog (2006) (Sega, 2006) for Android (static recompilation). Latest release: Third. Needs your own copy of the game (Sonic 2006 ISO).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Player124413/MarathonRecomp_android-test-edition"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "mario-kart-wii-android",
+   "kind": "game",
+   "title": "DriftDroid",
+   "game": "Mario Kart Wii",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Native Android port of Mario Kart Wii (built on WiiCompiled, a static recompilation), adding touch controls, motion steering, a mobile settings sidebar, a launcher and an in-app way to build an install from your own game disc. No emulator, interpreter or JIT: the game runs as native ARM64 code. No Nintendo code or assets included. Latest release: v1.3.0.",
+   "originalSystems": [
+    "Wii"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/dorPXP/driftdroid"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "mbhaxe",
+   "kind": "game",
+   "title": "MBHaxe",
+   "game": "Marble Blast Gold",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Haxe port of Marble Blast Gold that keeps the original physics, with online multiplayer. It runs in the browser and on Windows, macOS, Linux, iOS and Android, and needs your own game files.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/RandomityGuy/MBHaxe"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "megaman-64-recomp-mobile",
+   "kind": "game",
+   "title": "Megaman 64 Recomp Mobile",
+   "game": "Mega Man 64",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Mega Man 64 (Capcom, 1997) for Android (static recompilation). Latest release: v0.9.1-mobile.1. Needs your own copy of the game.",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/DevZer0D4Y/MegaMan64Recompiled-Mobile"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "minish-cap-android",
+   "kind": "game",
+   "title": "Minish Cap (Android, dual screen)",
+   "game": "The Legend of Zelda: The Minish Cap",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Minish Cap dual-screen mod for the AYN Thor, with a bottom-screen map, quest status and touch inventory decoded from the game. Latest release: v1.2.",
+   "originalSystems": [
+    "Game Boy Advance"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/samyost1/tmc-android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "mkvdcu-android",
+   "kind": "game",
+   "title": "MKVDCU Android",
+   "game": "Mortal Kombat vs. DC Universe",
+   "portType": "source-port",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Mortal Kombat vs. DC Universe (Midway Games, 2008) for Android (source port). Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/lemooz/MKVDCU-Android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "moon-pearl",
+   "kind": "game",
+   "title": "Moon Pearl",
+   "game": "The Legend of Zelda: A Link to the Past",
+   "portType": "reimplementation",
+   "status": "beta",
+   "verified": false,
+   "notes": "The Legend of Zelda: A Link to the Past (Nintendo, 1991) for Android (reimplementation). Latest release: v1.0.0. Needs your own copy of the game (Legend of Zelda, The - A Link to the Past (USA).sfc).",
+   "originalSystems": [
+    "Super Nintendo"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/DoutorRaposo/moonpearl"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "mother-3-recomp-android",
+   "kind": "game",
+   "title": "MOTHER 3 Recompiled (PC/Android)",
+   "game": "MOTHER 3",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "MOTHER 3 (Game Boy Advance, 2006) for Windows, Linux and Android, with support for the fan translation patches. Bring your own ROM. Latest release: v1.0.6.",
+   "originalSystems": [
+    "Game Boy Advance"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/josiahg2502-glitch/Mother3Recomp"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "naruto-rise-of-a-ninja-recomp",
+   "kind": "game",
+   "title": "Naruto: Rise of a Ninja (Port)",
+   "game": "Naruto: Rise of a Ninja",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Naruto: Rise of a Ninja (Xbox 360, 2007) running natively on Android (ARM64) and PC (Windows x64) via static recompilation, no CPU emulator. Built by Masterllgod; no game files are included, you need your own copy. Latest release: v0.2.",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Masterllgod/naruto-rise-of-a-ninja-port-nativo"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "naruto-the-broken-bond-recomp",
+   "kind": "game",
+   "title": "Naruto: The Broken Bond (Port)",
+   "game": "Naruto: The Broken Bond",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Naruto: The Broken Bond (Xbox 360, 2008) running natively on Android (ARM64) and PC (Windows x64) via static recompilation, no CPU emulator. Built by Masterllgod; no game files are included, you need your own copy. Documentation only so far (no build yet).",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Masterllgod/naruto-the-broken-bond-port-nativo"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "naruto-ultimate-ninja-storm-2-recomp",
+   "kind": "game",
+   "title": "Naruto Shippuden: Ultimate Ninja Storm 2 (Port)",
+   "game": "Naruto Shippuden: Ultimate Ninja Storm 2",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Naruto Shippuden: Ultimate Ninja Storm 2 (Xbox 360, 2010) running natively on Android (ARM64) and PC (Windows x64) via static recompilation, no CPU emulator. Built by Masterllgod; no game files are included, you need your own copy. Documentation only so far (no build yet).",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Masterllgod/naruto-storm-2-port-nativo"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "naruto-ultimate-ninja-storm-3-full-burst-recomp",
+   "kind": "game",
+   "title": "Naruto Shippuden: Ultimate Ninja Storm 3 Full Burst (Port)",
+   "game": "Naruto Shippuden: Ultimate Ninja Storm 3 Full Burst",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Naruto Shippuden: Ultimate Ninja Storm 3 Full Burst (Xbox 360, 2013) running natively on Android (ARM64) and PC (Windows x64) via static recompilation, no CPU emulator. Built by Masterllgod; no game files are included, you need your own copy. Documentation only so far (no build yet).",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Masterllgod/naruto-storm-3-full-burst-port-nativo"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "naruto-ultimate-ninja-storm-generations-recomp",
+   "kind": "game",
+   "title": "Naruto Shippuden: Ultimate Ninja Storm Generations (Port)",
+   "game": "Naruto Shippuden: Ultimate Ninja Storm Generations",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Naruto Shippuden: Ultimate Ninja Storm Generations (Xbox 360, 2012) running natively on Android (ARM64) and PC (Windows x64) via static recompilation, no CPU emulator. Built by Masterllgod; no game files are included, you need your own copy. Latest release: v0.3.",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Masterllgod/naruto-storm-generations-port-nativo"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "naruto-ultimate-ninja-storm-revolution-recomp",
+   "kind": "game",
+   "title": "Naruto Shippuden: Ultimate Ninja Storm Revolution (Port)",
+   "game": "Naruto Shippuden: Ultimate Ninja Storm Revolution",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Naruto Shippuden: Ultimate Ninja Storm Revolution (Xbox 360, 2014) running natively on Android (ARM64) and PC (Windows x64) via static recompilation, no CPU emulator. Built by Masterllgod; no game files are included, you need your own copy. Documentation only so far (no build yet).",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Masterllgod/naruto-storm-revolution-port-nativo"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "naughty-bear-restuff-android-port",
+   "kind": "game",
+   "title": "Naughty Bear Restuff Android Port",
+   "game": "Naughty Bear",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Naughty Bear (505 Games, 2009) for Android (source port). Latest release: v1.1.0. Needs your own copy of the game (Naughty Bear Gold Edition ISO).",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/deivid22srk/naughtybear-restuff-android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "nethack-android",
+   "kind": "game",
+   "title": "NetHack (Android)",
+   "game": "NetHack",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android port of NetHack, the classic open-source roguelike. It is a standalone build that does not need the original game.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/gurrhack/NetHack-Android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "new-super-mario-bros-wii-recomp",
+   "kind": "game",
+   "title": "New Super Mario Bros. Wii Recompiled",
+   "game": "New Super Mario Bros. Wii",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Static recompilation of New Super Mario Bros. Wii built on WiiCompiled, running natively on Windows and Android, with multiplayer. It needs your own game data.",
+   "originalSystems": [
+    "Wii"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/WitherBlitz/NSMB-Wii-Multiplayer-Recompilation"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "nfs-most-wanted-android",
+   "kind": "game",
+   "title": "Need for Speed: Most Wanted (Android)",
+   "game": "Need for Speed: Most Wanted",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Need for Speed: Most Wanted (2005) running natively on Android through static recompilation. Bring your own game files. Latest release: v0.6.0.",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/codepdbh/nfsmw-android"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "nfs-most-wanted-recomp",
+   "kind": "game",
+   "title": "NFSMW Recompiled",
+   "game": "Need for Speed: Most Wanted (2005)",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Static recompilation of the Xbox 360 version of Need for Speed: Most Wanted (2005) built on the ReXGlue SDK. The PowerPC code of your own default.xex is translated to C++ and rendered with a native Vulkan renderer; it is not an emulator and ships no game files. Community ports extend it to Nintendo Switch (nfsmw-nx) and Android (NFSMW-Recompiled-Mobile); the PC build needs the PAL Spain disc, while the console and mobile builds cover more editions.",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/madelrandel-blip/NFSMW-Recompiled"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "nfs-underground-2-recompiled",
+   "kind": "game",
+   "title": "Need for Speed Underground 2 Recompiled",
+   "game": "Need for Speed: Underground 2",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Static recompilation of Need for Speed Underground 2's PC build (SPEED2.EXE x86-32 to C) with pcrecomp, with Android APKs (arm64-v8a and armeabi-v7a, Android 10+ / Vulkan 1.1+). It ships no game code or data: you supply your own copy. Latest release: v0.14.6.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/codepdbh/nfsu2-recompiled"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "nfs3-android",
+   "kind": "game",
+   "title": "Need for Speed III: Hot Pursuit (Android)",
+   "game": "Need for Speed III: Hot Pursuit",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Recompilation of Need for Speed III: Hot Pursuit that runs on Android. It needs your own game files.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/ZloiKILLER/nfs3recompiled-android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "nfsiise",
+   "kind": "game",
+   "title": "NFSIISE",
+   "game": "Need for Speed II SE",
+   "portType": "runtime-port",
+   "status": "stable",
+   "verified": false,
+   "notes": "Cross-platform wrapper that runs Need for Speed II SE with 3D acceleration and TCP networking, using the original game files. It builds for Windows, Linux, macOS and Android.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/zaps166/NFSIISE"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "open-enroth",
+   "kind": "game",
+   "title": "OpenEnroth",
+   "game": "Might and Magic VI-VIII",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Cross-platform engine covering several Might and Magic installments. The single GitHub release is a prerelease, so no stable version is recorded.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/OpenEnroth/OpenEnroth"
+   ],
+   "license": {
+    "spdx": "LGPL-3.0"
+   }
+  },
+  {
+   "id": "open-lara",
+   "kind": "game",
+   "title": "OpenLara",
+   "game": "Tomb Raider",
+   "portType": "reimplementation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Reverse-engineered engine for the original Tomb Raider. No numbered releases; builds track the repository. Requires Tomb Raider 1 data files (legally obtained).",
+   "originalSystems": [
+    "PlayStation",
+    "Sega Saturn"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/XProger/OpenLara"
+   ],
+   "license": {
+    "spdx": "BSD-2-Clause"
+   }
+  },
+  {
+   "id": "open-nectar",
+   "kind": "game",
+   "title": "Open Nectar (Pikmin)",
+   "game": "Pikmin",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Native port of Pikmin (GameCube) built on the projectPiki decompilation, with the GX graphics translated to OpenGL (no emulator). It runs on Windows, Linux and Android, and adds 30/60/120 FPS, widescreen, full audio, custom texture packs and local co-op.",
+   "originalSystems": [
+    "GameCube"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/SSunnKing/Open-Nectar---Pikmin-Native-PC-Mobile-Port"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "open-wheels",
+   "kind": "game",
+   "title": "Open Wheels",
+   "game": "Happy Wheels",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Happy Wheels (Jim Bonacci, 2010) for Android (source port). Latest release: v0.3.0. Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/officialmelon/OpenWheels"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "open-xcom-android",
+   "kind": "game",
+   "title": "Open XCom Android",
+   "game": "XCom: UFO Defense",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "XCom: UFO Defense (MicroProse, 1994) for Android (source port). Latest release: v0.2. Needs your own copy of the game (Game Files).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sfalexrog/openxcom-android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "openarena-classic-core-engines",
+   "kind": "game",
+   "title": "OpenArena (Classic Core Engines)",
+   "game": "OpenArena",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "OpenArena (OpenArena team, 2005) for Android (source port). Latest release: 3.5.0. Needs your own copy of the game (baseoa folder).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sandstranger/com.mobilerpgpack.phone"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "opence",
+   "kind": "game",
+   "title": "OpenCE (Halo: Combat Evolved)",
+   "game": "Halo: Combat Evolved",
+   "portType": "decompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Community-edition port of the Halo: Combat Evolved (Xbox) decompilation to Windows, Linux, Android and the web. Desktop builds are 32-bit x86 with OpenGL 4.5; Android is arm64 with OpenGL ES 3 (Android 9+); the browser build is WebAssembly with WebGL 2 and plays at halocombatevolved.com. The player supplies their own Xbox disc image; no game data is distributed. System-link multiplayer supports up to 128 players across Windows, Linux, Android and browsers.",
+   "originalSystems": [
+    "Xbox"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/OpenCommunityEdition/OpenCE"
+   ],
+   "license": {
+    "spdx": "CC0-1.0"
+   }
+  },
+  {
+   "id": "openjkdf2",
+   "kind": "game",
+   "title": "OpenJKDF2",
+   "game": "Star Wars Jedi Knight: Dark Forces II",
+   "portType": "reimplementation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Function-by-function reimplementation of Star Wars Jedi Knight: Dark Forces II in C, with 64-bit builds for Windows, macOS and Linux. It ships no game assets and requires a valid copy of the original.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/shinyquagsire23/OpenJKDF2"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "openmw",
+   "kind": "game",
+   "title": "OpenMW",
+   "game": "The Elder Scrolls III: Morrowind",
+   "portType": "reimplementation",
+   "status": "stable",
+   "verified": true,
+   "notes": "Recreation of the Morrowind engine with mod support and an official Android build. Requires the original Morrowind game files.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/OpenMW/openmw"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "openmw-android",
+   "kind": "game",
+   "title": "OpenMW Android",
+   "game": "The Elder Scrolls III: Morrowind",
+   "portType": "reimplementation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android port of OpenMW, the open-source Morrowind engine. It runs Morrowind with your own game data.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Sisah2/openmw-android"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "opennevada",
+   "kind": "game",
+   "title": "OpenNevada",
+   "game": "Fallout New Vegas",
+   "portType": "source-port",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Fallout New Vegas (Bethesda Softworks, 2010) for Android (source port). Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/RedZeroGotcha/OpenNevada-Android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "oraclesrecomp",
+   "kind": "game",
+   "title": "OraclesRecomp",
+   "game": "The Legend of Zelda: Oracle of Ages",
+   "portType": "decompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "The Legend of Zelda: Oracle of Ages (Nintendo, 2001) for Android (decompilation). Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/kirby-letsgo/oracles-decomp"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "p-t-for-android-dual-screen",
+   "kind": "game",
+   "title": "P.T. for Android (Dual Screen)",
+   "game": "P.T.",
+   "portType": "source-port",
+   "status": "alpha",
+   "verified": false,
+   "notes": "P.T. (Kojima Productions, 2014) for Android (source port). Needs your own copy of the game (P.T. .pkg).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/StoneColdOS/pt-pc"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "paperboat-android",
+   "kind": "game",
+   "title": "PaperBoat (Android)",
+   "game": "Paper Mario",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Paper Mario (Nintendo, 2000) for Android (source port). Latest release: v1.1.0-airx.1. Needs your own copy of the game.",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/chris43123/PaperBoat"
+   ],
+   "license": {
+    "spdx": "CC0-1.0"
+   }
+  },
+  {
+   "id": "perfect-dark-android",
+   "kind": "game",
+   "title": "Perfect Dark (Android)",
+   "game": "Perfect Dark",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android port of the n64decomp/perfect_dark port of Perfect Dark (Nintendo 64, 2000). Work in progress. Latest release: 2.0.0.",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/izzy2lost/perfect_dark"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "pinball-fantasies-android",
+   "kind": "game",
+   "title": "Pinball Fantasies (Android)",
+   "game": "Pinball Fantasies",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Decompilation and source port of the DOS pinball game Pinball Fantasies for Android, with touch controls. It requires the original game files.",
+   "originalSystems": [
+    "MS-DOS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/wootbeer/pbfandroid"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "pinyon-shift",
+   "kind": "game",
+   "title": "Pinyon Shift",
+   "game": "Forza Horizon",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": true,
+   "notes": "Playable preview of a static recompilation of Forza Horizon (Xbox 360) for PC, distributed as versioned releases. The port code is public (BSD-3-Clause), but the game itself is proprietary: you must supply your own Xbox 360 copy, and the repository ships no game content. Several similarly named forks exist; this is the original repository.",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/arcanite24/pinyon-shift"
+   ],
+   "license": {
+    "spdx": "BSD-3-Clause"
+   }
+  },
+  {
+   "id": "pokemon-emerald-dual-screen",
+   "kind": "game",
+   "title": "Pokémon Emerald (Dual Screen)",
+   "game": "Pokémon Emerald",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Static recompilation of Pokémon Emerald (GBA) with the gbarecomp framework. It requires the original game.",
+   "originalSystems": [
+    "Game Boy Advance"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Goldoire/pokeemerald-dualscreen"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "pokemon-reloaded-en-android",
+   "kind": "game",
+   "title": "Pokémon Reloaded en Android",
+   "game": "Pokemon Reloaded",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Pokemon Reloaded (Klisee, 2020) for Android (source port). Latest release: v0.3.1. Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Klisee/pokemon-reloaded-android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "pokemon-survivor-burst-android",
+   "kind": "game",
+   "title": "Pokémon Survivor Burst (Android)",
+   "game": "Pokémon Survivor Burst",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Pokemon Survivor Burst (TryTheSauceBoss, 2024) for Android (source port). Latest release: v9.0. Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/TryTheSauceBoss/pokemon-survivorburst-android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "pokerogue-app",
+   "kind": "game",
+   "title": "PokeRogue App",
+   "game": "PokeRogue",
+   "portType": "runtime-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android app that opens the PokeRogue web game in its own window. It is a wrapper around pokerogue.net and does not bundle the game.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Admiral-Billy/Pokerogue-App"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "pokewilds-android",
+   "kind": "game",
+   "title": "PokeWilds (Android)",
+   "game": "PokeWilds",
+   "portType": "runtime-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Native Android port of PokeWilds, the open-source creature-collecting fan game. It is a standalone build that does not need commercial assets.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/TryTheSauceBoss/Pokewilds-Godot"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "post-void-mobile",
+   "kind": "game",
+   "title": "Post Void (Android)",
+   "game": "Post Void",
+   "portType": "runtime-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Native ARM64 port of Post Void for Android, aiming to match the latest PC build. It needs your own game files.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/SanGraphic/PostVoidMobile"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "prison-architect-android",
+   "kind": "game",
+   "title": "Prison Architect (Android)",
+   "game": "Prison Architect",
+   "portType": "runtime-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android launcher for Prison Architect, based on the desktop game. It needs the game itself files.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/udarmolota/pridroid"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "project-picori",
+   "kind": "game",
+   "title": "Project Picori (Minish Cap PC)",
+   "game": "The Legend of Zelda: The Minish Cap",
+   "portType": "decompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Project Picori: native port of The Legend of Zelda: The Minish Cap (GBA, 2004) built on the game's decompilation, with SDL3, a vendored software PPU renderer and agbplay audio. Work in progress; release v0.9.5 ships Windows, Linux and macOS builds plus an Android APK. You need your own ROM.",
+   "originalSystems": [
+    "Game Boy Advance"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/999sian/tmc"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "project-zomboid-android",
+   "kind": "game",
+   "title": "Project Zomboid (Android)",
+   "game": "Project Zomboid",
+   "portType": "runtime-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Unofficial Android launcher for Project Zomboid. It needs a purchased copy of the desktop game and its files.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/udarmolota/zomdroid"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "project8recomp",
+   "kind": "game",
+   "title": "Project8Recomp",
+   "game": "Tony Hawk's Project 8",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Tony Hawk's Project 8 (Activision, 2007) for Android (static recompilation). Latest release: v1.2.4. Needs your own copy of the game.",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/moddedrounds/THP8-Android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "psp-recomp-msae",
+   "kind": "game",
+   "title": "PSP Recomp - MSAE",
+   "game": "MotorStorm: Arctic Edge",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "MotorStorm: Arctic Edge (Sony Computer Entertainment, 2009) for Android (static recompilation). Latest release: v0.2.0. Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/coole42-pixel/PSPRecomp-MSAE"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "psprecomp-liberty-city-stories",
+   "kind": "game",
+   "title": "PSPRecomp · Liberty City Stories",
+   "game": "Grand Theft Auto: Liberty City Stories",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Grand Theft Auto: Liberty City Stories (Rockstar Games, 2005) for Android (static recompilation). Needs your own copy of the game.",
+   "originalSystems": [
+    "PlayStation Portable"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/codepdbh/PSPRecomp-LCS-Android"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "psprecomp-vice-city-stories",
+   "kind": "game",
+   "title": "PSPRecomp · Vice City Stories",
+   "game": "Grand Theft Auto: Vice City Stories",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Grand Theft Auto: Vice City Stories (Rockstar Games, 2006) for Android (static recompilation). Needs your own copy of the game.",
+   "originalSystems": [
+    "PlayStation Portable"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/codepdbh/PSPRecomp-VCS-Android"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "pvz-fusion-android",
+   "kind": "game",
+   "title": "Plants vs. Zombies Fusion (Android)",
+   "game": "Plants vs. Zombies",
+   "portType": "runtime-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android version of Plants vs. Zombies Fusion, a fan mod of the original Plants vs. Zombies. It needs the original game files.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Teyliu/PVZF-Translation"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "pvz-portable",
+   "kind": "game",
+   "title": "PvZ Portable",
+   "game": "Plants vs Zombies",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Plants vs Zombies (PopCap Games, 2009) for Android (source port). Latest release: 0.2.5. Needs your own copy of the game (Needs Goty Edition).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/wszqkzqk/PvZ-Portable"
+   ],
+   "license": {
+    "spdx": "LGPL-3.0"
+   }
+  },
+  {
+   "id": "quake-classic-core-engines",
+   "kind": "game",
+   "title": "Quake (Classic Core Engines)",
+   "game": "Quake",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Quake (id Software, 1996) for Android (source port). Latest release: 3.5.0. Needs your own copy of the game (id1 folder by pabwrld).",
+   "originalSystems": [
+    "MS-DOS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sandstranger/com.mobilerpgpack.phone"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "quake-dissolution-of-eternity-classic-core-engines",
+   "kind": "game",
+   "title": "Quake: Dissolution of Eternity (Classic Core Engines)",
+   "game": "QUAKE Mission Pack 2: Dissolution of Eternity",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "QUAKE Mission Pack 2: Dissolution of Eternity (Rogue Entertainment, 1997) for Android (source port). Latest release: 3.5.0. Needs your own copy of the game (rogue folder).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sandstranger/com.mobilerpgpack.phone"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "quake-ii-classic-core-engines",
+   "kind": "game",
+   "title": "Quake II (Classic Core Engines)",
+   "game": "Quake II",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Quake II (id Software, 1997) for Android (source port). Latest release: 3.5.0. Needs your own copy of the game (baseq2 folder).",
+   "originalSystems": [
+    "PlayStation",
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sandstranger/com.mobilerpgpack.phone"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "quake-iii-arena-classic-core-engines",
+   "kind": "game",
+   "title": "Quake III Arena (Classic Core Engines)",
+   "game": "Quake III Arena",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Quake III Arena (id Software, 1999) for Android (source port). Latest release: 3.5.0. Needs your own copy of the game (baseq3 folder).",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sandstranger/com.mobilerpgpack.phone"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "quake-scourge-of-armagon-classic-core-engines",
+   "kind": "game",
+   "title": "Quake: Scourge of Armagon (Classic Core Engines)",
+   "game": "QUAKE Mission Pack 1: Scourge of Armagon",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "QUAKE Mission Pack 1: Scourge of Armagon (Rogue Entertainment, 1997) for Android (source port). Latest release: 3.5.0. Needs your own copy of the game (hipnotic folder).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sandstranger/com.mobilerpgpack.phone"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "re3-android-evolved",
+   "kind": "game",
+   "title": "Re3 Android Evolved",
+   "game": "Grand Theft Auto III",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Grand Theft Auto III (Rockstar Games, 2001) for Android (source port). Latest release: v1.0.7. Needs your own copy of the game.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/codepdbh/re3-android-port-evolved"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "rechan",
+   "kind": "game",
+   "title": "ReChan",
+   "game": "Jackie Chan: Stuntmaster",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Jackie Chan: Stuntmaster (Sony Computer Entertainment, 2000) for Android (source port). Latest release: build-44. Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/deivid22srk/ReChan-Android"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "recompiled-steel",
+   "kind": "game",
+   "title": "ReCompiled Steel",
+   "game": "Real Steel",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Real Steel (Zoo Entertainment, 2011) for Android (static recompilation). Latest release: v0.2.0. Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/tokeneffortports/ReCompiledSteel"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "regaiden-recomp",
+   "kind": "game",
+   "title": "Resident Evil Gaiden (Android)",
+   "game": "Resident Evil Gaiden",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Static recompilation of Resident Evil Gaiden (Game Boy Color) to native C/C++, with widescreen, dynamic 2D lighting and HD texture support. It needs your own game data.",
+   "originalSystems": [
+    "Game Boy",
+    "Game Boy Color"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sergiomanzur/regaiden-recomp"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "renut-android",
+   "kind": "game",
+   "title": "Renut Android",
+   "game": "Banjo-Kazooie: Nuts & Bolts",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Banjo-Kazooie: Nuts & Bolts (Microsoft Game Studios, 2008) for Android (source port). Latest release: 0.4.0. Needs your own copy of the game.",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Innersargento/Renut-Android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "repo-ev-r",
+   "kind": "game",
+   "title": "R.E.P.O. (Android)",
+   "game": "R.E.P.O.",
+   "portType": "runtime-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Unofficial Android and iOS port of R.E.P.O. with touch and smartphone-VR modes, and crossplay with Steam through EVRMod. It needs the original PC game files.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Zhes-20/R.E.P.O.E.V.R"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "revc-android-evolved",
+   "kind": "game",
+   "title": "REVC Android Evolved",
+   "game": "Grand Theft Auto: Vice City",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Grand Theft Auto: Vice City (Rockstar Games, 2002) for Android (source port). Latest release: v1.0.11. Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/codepdbh/revc-android-port-evolved"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "rimworld-android",
+   "kind": "game",
+   "title": "RimDroid",
+   "game": "RimWorld",
+   "portType": "runtime-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android launcher that runs RimWorld on phones and tablets. It requires the desktop game files from your own copy.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/udarmolota/rimdroid"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "ring-racers-android",
+   "kind": "game",
+   "title": "Dr. Robotnik's Ring Racers (Android)",
+   "game": "Dr. Robotnik's Ring Racers",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android build of Dr. Robotnik's Ring Racers, the free kart racer from Kart Krew based on Sonic Robo Blast 2. It is a standalone fangame with no original assets.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/bitten2up/RingRacers"
+   ],
+   "license": {
+    "spdx": "GPL-2.0"
+   }
+  },
+  {
+   "id": "rogue-squadron-64-recomp",
+   "kind": "game",
+   "title": "Star Wars: Rogue Squadron (PC)",
+   "game": "Star Wars: Rogue Squadron",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Fully playable AI-assisted static recompilation of Star Wars: Rogue Squadron (USA v1.0) for Windows 10, Linux and Android. No game files included.",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/MikeSemicolonD/RogueSquadron64Recomp"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "rott94",
+   "kind": "game",
+   "title": "ROTT94",
+   "game": "Rise of the Triad: Dark War",
+   "portType": "source-port",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Rise of the Triad: Dark War (Apogee Software, 1994) for Android (source port). Needs your own copy of the game (DARKWAR.RTC, DARKWAR.RTL, DARKWAR.WAD, REMOTE1.RTS, HUNTBGIN.RTL).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/h4mu/rott94"
+   ],
+   "license": {
+    "spdx": "GPL-2.0"
+   }
+  },
+  {
+   "id": "rsdkv3-decompilation",
+   "kind": "game",
+   "title": "Sonic CD Decompilation",
+   "game": "Sonic CD",
+   "portType": "decompilation",
+   "status": "stable",
+   "verified": true,
+   "notes": "Full decompilation of Retro Engine v3 behind the 2011 Sonic CD remake, maintained by the RSDK Modding team. Needs data.rsdk from your own copy of Sonic CD (2011); the Origins builds leave some features out.",
+   "originalSystems": [
+    "Sega CD / Mega-CD"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/RSDKModding/RSDKv3-Decompilation"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "sdlpal",
+   "kind": "game",
+   "title": "SDLPAL",
+   "game": "The Legend of Sword and Fairy",
+   "portType": "reimplementation",
+   "status": "stable",
+   "verified": false,
+   "notes": "SDL-based reimplementation of the Chinese RPG PAL (The Legend of Sword and Fairy). It runs the original data files on modern systems, with builds for Windows, Linux, macOS and Android.",
+   "originalSystems": [
+    "MS-DOS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sdlpal/sdlpal"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "serious-sam-android",
+   "kind": "game",
+   "title": "Serious Sam (Android)",
+   "game": "Serious Sam: The First Encounter",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android port of Serious Sam: The First Encounter and The Second Encounter, built on the released Serious Engine source. It needs the original game files.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Skyrimus/Serious-Sam-Android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "ship-of-harkinian",
+   "kind": "game",
+   "title": "Ship of Harkinian",
+   "game": "The Legend of Zelda: Ocarina of Time",
+   "portType": "decompilation",
+   "status": "stable",
+   "verified": true,
+   "notes": "Native port of Ocarina of Time from the decompilation project. Requires the original North American Ocarina of Time N64 ROM (legally obtained).",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/HarbourMasters/Shipwright"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "ship-of-harkinian-android",
+   "kind": "game",
+   "title": "Ship of Harkinian (Android)",
+   "game": "The Legend of Zelda: Ocarina of Time",
+   "portType": "decompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Unofficial Android fork of Ship of Harkinian, the native port of The Legend of Zelda: Ocarina of Time (Nintendo 64, 1998). Latest release: v9.3.0-android.1.",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/linkzenic/Shipwright-Android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "shipwright-android",
+   "kind": "game",
+   "title": "Shipwright Android",
+   "game": "The Legend of Zelda: Ocarina of Time",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "The Legend of Zelda: Ocarina of Time (Nintendo, 1998) for Android (source port). Latest release: v9.2.3-android.4.3. Needs your own copy of the game (ZELOOTD.z64 (Debug Build)).",
+   "originalSystems": [
+    "GameCube",
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/please-be-nice/Shipwright-android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "shipwright-android-outdated",
+   "kind": "game",
+   "title": "Shipwright Android (Outdated)",
+   "game": "The Legend of Zelda: Ocarina of Time",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "The Legend of Zelda: Ocarina of Time (Nintendo, 1998) for Android (source port). Latest release: v9.0.2P2. Needs your own copy of the game (ZELOOTD.z64 (Debug Build)).",
+   "originalSystems": [
+    "GameCube",
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Waterdish/Shipwright-Android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "showdown-ds-dual-screen",
+   "kind": "game",
+   "title": "Showdown DS (Dual Screen)",
+   "game": "Pokémon Showdown",
+   "portType": "source-port",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Pokémon Showdown (The Pokémon Company, 2016) for Android (source port). Needs your own copy of the game (??).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/castdrian/showdown-ds"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "silksongandroid-dual-scren",
+   "kind": "game",
+   "title": "SilksongAndroid (Dual Scren)",
+   "game": "Hollow Knight: Silksong",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Hollow Knight: Silksong (Team Cherry, 2025) for Android (source port). Latest release: v2.0.0. Needs your own copy of the game (Need Linux Game Files).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/jakobkhansen/SilksongAndroid"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "silksongandroidachievements-dual-screen",
+   "kind": "game",
+   "title": "SilksongAndroidAchievements (Dual Screen)",
+   "game": "Hollow Knight: Silksong",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Hollow Knight: Silksong (Team Cherry, 2025) for Android (source port). Latest release: v1.0.0. Needs your own copy of the game (Need Linux Game Files).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/OmegaUwUr/SilksongAndroid-Achievements"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "skate-3-android",
+   "kind": "game",
+   "title": "Skate 3 android",
+   "game": "Skate 3",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Skate 3 (Electronic Arts, 2010) for Android (source port). Latest release: v0.2.0. Needs your own copy of the game (Skate 3 ISO).",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/andrewnakas/skate3-android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "skate-3-mobile",
+   "kind": "game",
+   "title": "Skate 3 Mobile",
+   "game": "Skate 3",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Android port of the Skate 3 recompilation (ARM64 with the native Vulkan renderer), aimed at phones and handhelds. A developer build, first verified on an Anbernic RG406V.",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Buku313/Skate3-Mobile"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "skate-3-port",
+   "kind": "game",
+   "title": "Skate 3 Port",
+   "game": "Skate 3",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Skate 3 (Electronic Arts, 2010) for Android (source port). Latest release: v1.3.3. Needs your own copy of the game (Skate 3 ISO).",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/darchap/Skate3-Port"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "slashem-android",
+   "kind": "game",
+   "title": "SLASH'EM (Android)",
+   "game": "SLASH'EM",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android port of SLASH'EM, the NetHack variant known for its expanded classes and items. It is a standalone build that does not need the original game.",
+   "originalSystems": [
+    "MS-DOS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/gurrhack/SlashEM-Android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "slay-the-spire-2-android",
+   "kind": "game",
+   "title": "Slay the Spire 2 (Android)",
+   "game": "Slay the Spire 2",
+   "portType": "runtime-port",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Unofficial Android launcher for Slay the Spire 2, still in alpha. It needs the original game.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Ekyso/StS2-Launcher"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "slaytheamethyst",
+   "kind": "game",
+   "title": "SlayTheAmethyst",
+   "game": "Slay the Spire",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Slay the Spire (Humble Bundle, 2019) for Android (source port). Latest release: v1.6.3. Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/ModinMobileSTS/SlayTheAmethystModded"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "sm64coopdx-android",
+   "kind": "game",
+   "title": "sm64coopdx (Android)",
+   "game": "Super Mario 64",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Super Mario 64 (Nintendo, 1996) for Android (source port). Latest release: Av1.5.1. Needs your own copy of the game (Super Mario 64 (USA).z64).",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/ManIsCat2/sm64coopdx"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "sma-remastered-android",
+   "kind": "game",
+   "title": "Super Mario Bros. Remastered (Android)",
+   "game": "Super Mario Bros.",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android port of Super Mario Bros. Remastered by JoeMama and their team. Latest release: 9.",
+   "originalSystems": [
+    "Nintendo Entertainment System"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/mircowuffwuff/super-mario-bros.-remastered-android"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "sma3-recomp-android",
+   "kind": "game",
+   "title": "SMA3 Recomp Android",
+   "game": "Super Mario Advance 3: Yoshi's Island",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Super Mario Advance 3: Yoshi's Island (Nintendo, 2002) for Android (static recompilation). Latest release: Descarga. Needs your own copy of the game (Yoshi’s Island: Super Mario Advance 3 (USA)).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Edwin2929/sma3-recomp-android."
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "sonic-1-forever",
+   "kind": "game",
+   "title": "Sonic 1 Forever",
+   "game": "Sonic 1 Forever",
+   "portType": "decompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Sonic 1 Forever (Sega, 1991) for Android (decompilation). Latest release: 1.5.1. Needs your own copy of the game (Data.rsdk).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/ElspethThePict/S1Forever"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "sonic-3-air",
+   "kind": "game",
+   "title": "Sonic 3 Air",
+   "game": "Sonic the Hedgehog 3 & Knuckles",
+   "portType": "source-port",
+   "status": "stable",
+   "verified": true,
+   "notes": "Enhanced fork of Sonic Retro's engine for Sonic 3 and Sonic & Knuckles.",
+   "originalSystems": [
+    "Sega Mega Drive / Genesis"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Eukaryot/sonic3air"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "sonic-adventure-2-recomp",
+   "kind": "game",
+   "title": "Sonic Adventure 2 Recompiled",
+   "game": "Sonic Adventure 2",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "OpenSA2: native port of Sonic Adventure 2 by static recompilation for Linux, Windows and Android. Experimental source preview, no playable release yet.",
+   "originalSystems": [
+    "Dreamcast"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/kittycache9/OpenSA2"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "sonic-generations-recomp",
+   "kind": "game",
+   "title": "Sonic Generations Recompiled",
+   "game": "Sonic Generations",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Recompilation of Sonic Generations (Xbox 360) built with XenonRecomp and XenosRecomp, with Windows and Android builds. It needs a copy of the game.",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Player124413/Sonic-Generations-Recomp"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "sonic-mania-decompilation-android",
+   "kind": "game",
+   "title": "Sonic Mania Decompilation (Android)",
+   "game": "Sonic Mania Plus",
+   "portType": "decompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Sonic Mania Plus (Sega, 2017) for Android (decompilation). Latest release: v1.1.1. Needs your own copy of the game (Game Files).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/RSDKModding/RSDKv5-Decompilation"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "sonic-r-android",
+   "kind": "game",
+   "title": "Sonic R (Android)",
+   "game": "Sonic R",
+   "portType": "decompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Native Android port of the Sonic R PC decompilation, with a GLES2 renderer, 60 FPS and touch controls. It requires your own PC game files and includes no retail assets.",
+   "originalSystems": [
+    "Sega Saturn"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/ZinexDa/sonic-r-android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "space-station-14-mobile",
+   "kind": "game",
+   "title": "Space Station 14 Mobile",
+   "game": "Space Station 14",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Space Station 14 (Space Wizards Federation, 2023) for Android (source port). Latest release: v1.3.0. Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/SolomonNumb1/space-station-14-mobile"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "spaghettikart-android",
+   "kind": "game",
+   "title": "SpaghettiKart (Android)",
+   "game": "Mario Kart 64",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Mario Kart 64 (Nintendo, 1996) for Android (source port). Latest release: 2.0.0. Needs your own copy of the game (Mario Kart 64 (USA).z64).",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/izzy2lost/SpaghettiKart"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "srb2-android",
+   "kind": "game",
+   "title": "Sonic Robo Blast 2 (Android)",
+   "game": "Sonic Robo Blast 2",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android build of Sonic Robo Blast 2, the free 3D Sonic fangame based on a modified Doom Legacy engine. It is a standalone game and needs no original assets.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/bitten2up/SRB2-Android"
+   ],
+   "license": {
+    "spdx": "GPL-2.0"
+   }
+  },
+  {
+   "id": "starbound-android",
+   "kind": "game",
+   "title": "OpenStarbound Mobile",
+   "game": "Starbound",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "OpenStarbound port to mobile devices, bringing the Starbound sandbox to Android. It needs the game itself.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/RohanBhattacharyya/oSBM"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "stardew-cinderbox",
+   "kind": "game",
+   "title": "Cinderbox (Stardew Valley)",
+   "game": "Stardew Valley",
+   "portType": "runtime-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Native Android launcher for the desktop version of Stardew Valley, distributed as Cinderbox. It requires your own game data.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Ekyso/Cinderbox"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "starship-android",
+   "kind": "game",
+   "title": "Starship (Android)",
+   "game": "Star Fox 64",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Star Fox 64 (Nintendo, 1997) for Android (source port). Latest release: v2.0.0. Needs your own copy of the game (Star Fox 64 (USA) (Rev 1).z64).",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/izzy2lost/Starship"
+   ],
+   "license": {
+    "spdx": "CC0-1.0"
+   }
+  },
+  {
+   "id": "strikers-android",
+   "kind": "game",
+   "title": "Super Mario Strikers (Android)",
+   "game": "Super Mario Strikers",
+   "portType": "runtime-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Community Android port of Super Mario Strikers (GameCube). It needs the game itself and its files.",
+   "originalSystems": [
+    "GameCube"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/luisxl15/Strikers-Android-Port"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "super-mario-bros-remastered-android",
+   "kind": "game",
+   "title": "Super Mario Bros. Remastered (Android, mircey)",
+   "game": "Super Mario Bros.",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Super Mario Bros. (Nintendo, 1985) for Android (source port). Latest release: 9. Needs your own copy of the game (Super Mario Bros. (World).nes).",
+   "originalSystems": [
+    "Nintendo Entertainment System"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/mircey/super-mario-bros.-remastered-android"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "super-mario-bros-wonder-recomp",
+   "kind": "game",
+   "title": "Super Mario Bros. Wonder Recomp",
+   "game": "Super Mario Bros. Wonder",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Super Mario Bros. Wonder (Nintendo, 2023) for Android (static recompilation). Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/BelmanteGu/SuperMarioWonderRecomp"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "super-mario-galaxy-android",
+   "kind": "game",
+   "title": "Galaxy Android",
+   "game": "Super Mario Galaxy",
+   "portType": "decompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Native 100% ARM64 Android port of Super Mario Galaxy (Wii, 2007), compiled from reconstructed C++ source (built on the Petari decompilation). Vulkan 1.0 (OpenGL ES 3.2 fallback) and AAudio; it is not an emulator and needs your own game dump. Early version (graphical glitches possible). Latest release: v0.0.1cx.",
+   "originalSystems": [
+    "Wii"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/OpenPort-Labs/Galaxy-Android"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "super-mario-sunshine-android",
+   "kind": "game",
+   "title": "Super Mario Sunshine (Android)",
+   "game": "Super Mario Sunshine",
+   "portType": "decompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Native port of Super Mario Sunshine (GameCube) for Android (ARM64, OpenGLES 3.0) with on-screen touch controls. It requires your own game files.",
+   "originalSystems": [
+    "GameCube"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/jbcgames/sms-android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "super-metroid-dual-screen",
+   "kind": "game",
+   "title": "Super Metroid (Dual Screen)",
+   "game": "Super Metroid",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Super Metroid (Nintendo, 1994) for Android (source port). Latest release: v1.2. Needs your own copy of the game (Super Metroid (Japan, USA) (En, Ja).sfc).",
+   "originalSystems": [
+    "Super Nintendo"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Raekwon1603/super_metroid-android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "system-shock-android",
+   "kind": "game",
+   "title": "System Shock (Android)",
+   "game": "System Shock",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Native Android/ARM64 port of System Shock based on Shockolate, with reproducible builds and open engineering notes. Bring your own copy of the game. Latest release: v1.0.0.",
+   "originalSystems": [
+    "MS-DOS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/raposomiguel50/system-shock-android"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "tekken-3-expanded",
+   "kind": "game",
+   "title": "Tekken 3 Expanded",
+   "game": "Tekken 3",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Tekken 3 (Namco, 1997) for Android (source port). Latest release: v1.3.0. Needs your own copy of the game (Need PS1 ROM and arcade roms).",
+   "originalSystems": [
+    "PlayStation"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/omarma/tekken3-expanded"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "tekken-6-android",
+   "kind": "game",
+   "title": "Tekken 6 (Android, experimental)",
+   "game": "Tekken 6",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Azazel6: independent, unofficial research project towards a standalone native Android ARM64 port of Tekken 6 for PSP, translating the Allegrex/MIPS code ahead of time to C++ plus a PSP runtime. Not playable yet and no APK: users must supply their own game copy.",
+   "originalSystems": [
+    "PlayStation Portable"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/zxyandreay/azazel6"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "tenkaichi3decomp-android",
+   "kind": "game",
+   "title": "Tenkaichi3Decomp Android",
+   "game": "Dragon Ball Z: Budokai Tenkaichi 3",
+   "portType": "decompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Dragon Ball Z: Budokai Tenkaichi 3 (Bandai Namco, 2007) for Android (decompilation). Latest release: android-v0.7.3. Needs your own copy of the game.",
+   "originalSystems": [
+    "PlayStation 2"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/dfdx047/Tenkaichi3DecompAndroid"
+   ],
+   "license": {
+    "spdx": "AGPL-3.0"
+   }
+  },
+  {
+   "id": "tf15-client",
+   "kind": "game",
+   "title": "TF15-Client",
+   "game": "Team Fortress Classic",
+   "portType": "reimplementation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Reverse-engineered client for Team Fortress Classic, distributed for Android, Windows and Linux and run through Xash3D FWGS. It needs the original game data.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Velaron/tf15-client"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "the-force-engine-vr",
+   "kind": "game",
+   "title": "The Force Engine VR",
+   "game": "Star Wars: Dark Forces",
+   "portType": "reimplementation",
+   "status": "beta",
+   "verified": false,
+   "notes": "VR-oriented build of The Force Engine (a Jedi Engine replacement) that supports Dark Forces and its mods on Android. It needs the original game.",
+   "originalSystems": [
+    "MS-DOS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/SoVRHere/TheForceEngineVR"
+   ],
+   "license": {
+    "spdx": "GPL-2.0"
+   }
+  },
+  {
+   "id": "the-oracles-project",
+   "kind": "game",
+   "title": "The Oracles Project",
+   "game": "The Legend of Zelda: Oracle of Ages",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "The Legend of Zelda: Oracle of Ages (Nintendo, 2001) for Android (source port). Latest release: v1.2.0. Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/thibautbus/top"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "the-simpsons-hit-and-run-android",
+   "kind": "game",
+   "title": "The Simpsons: Hit & Run (Android)",
+   "game": "The Simpsons: Hit & Run",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "The Simpsons: Hit & Run (Vivendi Universal Games, 2003) for Android (source port). Latest release: v0.93. Needs your own copy of the game (Game Files).",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Carlox33/The-Simpsons-Hit-and-Run-Android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "therapy-with-dr-albert-krueger-android",
+   "kind": "game",
+   "title": "Therapy With Dr. Albert Krueger (Android)",
+   "game": "Therapy With Dr. Albert Krueger",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android version of the Ren'Py horror RPG Therapy With Dr. Albert Krueger, made with the original creator's and Ren'Py's open-source engine. Latest release: 1.0.2.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Unkzittys/TherapyWithDrAlbertKrueger_AndroidPort"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "titanic-godot-30th-anniversary-edition",
+   "kind": "game",
+   "title": "titanic-godot - 30th anniversary edition",
+   "game": "Titanic: Adventure Out of Time",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Titanic: Adventure Out of Time (Cyberflix, 1996) for Android (source port). Latest release: v0.6.0. Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/itskenny0/titanic-godot"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "tomba-recomp-ds-dual-screen",
+   "kind": "game",
+   "title": "Tomba Recomp DS (Dual Screen)",
+   "game": "Tomba! 2: The Evil Swine Return",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Tomba! 2: The Evil Swine Return (Sony Computer Entertainment, 1999) for Android (static recompilation). Latest release: v0.1.0. Needs your own copy of the game.",
+   "originalSystems": [
+    "PlayStation"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/igawa6/Tomba2RecompDS"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "touhou-6-android",
+   "kind": "game",
+   "title": "Touhou 6 (Android)",
+   "game": "Touhou 6: The Embodiment of Scarlet Devil",
+   "portType": "decompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android port based on the decompilation of Touhou 6: The Embodiment of Scarlet Devil (version 1.02h). It needs the original game files.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/cardanawandra/th06"
+   ],
+   "license": {
+    "spdx": "CC0-1.0"
+   }
+  },
+  {
+   "id": "ufo-50-android-unofficial",
+   "kind": "game",
+   "title": "UFO 50 Android Unofficial",
+   "game": "UFO 50",
+   "portType": "source-port",
+   "status": "alpha",
+   "verified": false,
+   "notes": "UFO 50 (Mossmouth, 2024) for Android (source port). Needs your own copy of the game.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/eboody/UFO50AndroidUnofficial"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "ufo50-android",
+   "kind": "game",
+   "title": "UFO 50 (Android)",
+   "game": "UFO 50",
+   "portType": "runtime-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Unofficial tool that builds an Android version of UFO 50. It requires the game itself to produce the data.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Skyline969/UFO50AndroidUnofficial"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "unciv",
+   "kind": "game",
+   "title": "Unciv",
+   "game": "Civilization V",
+   "portType": "reimplementation",
+   "status": "stable",
+   "verified": false,
+   "notes": "Open-source remake of Civilization V for Android and desktop, also available on iOS. It is a turn-based strategy game that does not use the original game's assets.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/yairm210/Unciv"
+   ],
+   "license": {
+    "spdx": "MPL-2.0"
+   }
+  },
+  {
+   "id": "undead-neighbor-eaters-android-native-port",
+   "kind": "game",
+   "title": "Undead Neighbor Eaters, Android Native Port",
+   "game": "Zombies Ate My Neighbors",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Zombies Ate My Neighbors (Konami, 1993) for Android (source port). Latest release: DROID. Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sirdankz/Undead-Neighbor-Eaters-Droid"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "unleashed-recomp",
+   "kind": "game",
+   "title": "Unleashed Recomp",
+   "game": "Sonic Unleashed",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Sonic Unleashed (Sega, 2008) for Android (static recompilation). Latest release: v0.6.1. Needs your own copy of the game (Sonic Unleashed ISO).",
+   "originalSystems": [
+    "Xbox 360"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/SansNope/UnleashedRecomp-Android"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "unnethack-android",
+   "kind": "game",
+   "title": "UnNetHack (Android)",
+   "game": "UnNetHack",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android port of UnNetHack, a variant of NetHack with extra content and tweaks. It is a standalone build that does not need the original game.",
+   "originalSystems": [
+    "MS-DOS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/gurrhack/UnNetHack-Android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "unreal-android",
+   "kind": "game",
+   "title": "Unreal (Android)",
+   "game": "Unreal",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Port of Unreal (1998, version 200) to Android 8+ (32/64-bit) and the OUYA console, with controller, touchscreen and keyboard/mouse support. You need your own copy of the game. Latest release: v2.2.1 (APK).",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Andiweli/Unreal-Android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "unreal-tournament-android",
+   "kind": "game",
+   "title": "Unreal Tournament (Android)",
+   "game": "Unreal Tournament",
+   "portType": "runtime-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android port of Unreal Tournament 99 (v400) for 32 and 64-bit devices, playable with a controller, touchscreen or keyboard and mouse. It needs the original game files.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Andiweli/UT99-Android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "uqm-megamod",
+   "kind": "game",
+   "title": "UQM MegaMod (Star Control II)",
+   "game": "Star Control II",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "UQM MegaMod packages The Ur-Quan Masters with extra content and runs it on Android. The repository is archived, so it is no longer updated. The upstream repository is archived (read-only).",
+   "originalSystems": [
+    "MS-DOS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/JHGuitarFreak/UQM-MegaMod-Archived"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "valdroid",
+   "kind": "game",
+   "title": "ValDroid",
+   "game": "Valheim",
+   "portType": "runtime-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Unofficial Android launcher for Valheim. It requires the desktop game files from your own copy.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/udarmolota/ValDroid"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "voyager-elite-force-android",
+   "kind": "game",
+   "title": "Star Trek: Voyager - Elite Force (Android)",
+   "game": "Star Trek: Voyager - Elite Force",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android single-player port of Star Trek: Voyager - Elite Force, built on idTech3/Quake3e with a Vulkan renderer. It needs the original game files.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/imjustadudegamer/VoyagerSP-Android"
+   ],
+   "license": {
+    "spdx": "GPL-2.0"
+   }
+  },
+  {
+   "id": "voyager-elite-force-holomatch",
+   "kind": "game",
+   "title": "Star Trek: Voyager - Elite Force Holomatch",
+   "game": "Star Trek: Voyager - Elite Force",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android port of the Holomatch multiplayer of Star Trek: Voyager - Elite Force, with Vulkan, touch controls and gamepad support. It needs the original game files.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/imjustadudegamer/VoyagerHM-Android"
+   ],
+   "license": {
+    "spdx": "GPL-2.0"
+   }
+  },
+  {
+   "id": "warcraft-orcs-and-humans-android",
+   "kind": "game",
+   "title": "Stratagus (Warcraft: Orcs & Humans)",
+   "game": "Warcraft: Orcs & Humans",
+   "portType": "reimplementation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android port of the Stratagus real-time strategy engine, aimed at running Warcraft: Orcs & Humans. It needs the original game data files.",
+   "originalSystems": [
+    "MS-DOS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/drodin/Stratagus"
+   ],
+   "license": {
+    "spdx": "GPL-2.0"
+   }
+  },
+  {
+   "id": "warioware-twisted-recomp",
+   "kind": "game",
+   "title": "WarioWare: Twisted!",
+   "game": "WarioWare: Twisted!",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Static recompilation of WarioWare: Twisted! (GBA) with the gbarecomp framework. It requires your own game files.",
+   "originalSystems": [
+    "Game Boy Advance"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/mstan/WarioWareTwistedRecomp"
+   ],
+   "license": {
+    "spdx": "PolyForm-Noncommercial-1.0.0"
+   }
+  },
+  {
+   "id": "wave-racer-64-recomp-for-android",
+   "kind": "game",
+   "title": "Wave Racer 64 recomp for android",
+   "game": "Wave Race 64",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Wave Race 64 (Nintendo, 1996) for Android (static recompilation). Needs your own copy of the game (Wave Race 64 - Kawasaki Jet Ski (USA) (Rev 1) Z64).",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/HLLArtyParty/WaveRace64RecompForAndroid"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "wind-waker-hd-android-plus",
+   "kind": "game",
+   "title": "Wind Waker HD Recompiled for Android (Plus)",
+   "game": "The Legend of Zelda: The Wind Waker HD",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "The Legend of Zelda: The Wind Waker HD running natively on Android phones and tablets: the game's PowerPC code becomes native ARM64 and its graphics run on Vulkan. Adds a built-in Brazilian Portuguese translation, HUD editor, .wua support and controller gyro. Bring your own game. Latest release: v1.11.1.",
+   "originalSystems": [
+    "Wii U"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Nycolazs/WindWakerHD-Android-Plus"
+   ],
+   "license": {
+    "spdx": "MPL-2.0"
+   }
+  },
+  {
+   "id": "wolfenstein-rpg-classic-core-engines",
+   "kind": "game",
+   "title": "Wolfenstein RPG (Classic Core Engines)",
+   "game": "Wolfenstein RPG",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Wolfenstein RPG (id Software, 2008) for Android (source port). Latest release: 3.5.0. Needs your own copy of the game (Wolfenstein RPG.ipa).",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/sandstranger/com.mobilerpgpack.phone"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "woodyre",
+   "kind": "game",
+   "title": "WoodyRE",
+   "game": "Woody Woodpecker: Escape from Buzz Buzzard Park",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Woody Woodpecker: Escape from Buzz Buzzard Park (Cryo Interactive, 2002) for Android (source port). Latest release: v1.0.11. Needs your own copy of the game.",
+   "originalSystems": [
+    "Unknown"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/jjmhalew/WoodyRE"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "xash3d-fwgs",
+   "kind": "game",
+   "title": "Xash3D FWGS",
+   "game": "Half-Life",
+   "portType": "reimplementation",
+   "status": "stable",
+   "verified": false,
+   "notes": "Open source reimplementation of the Half-Life engine, including a working Android build. Uses rolling 'continuous' releases. Requires the original Half-Life game files.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/FWGS/xash3d-fwgs"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "yakumo",
+   "kind": "game",
+   "title": "Yakumo (Monster Hunter Portable 3rd HD)",
+   "game": "Monster Hunter Portable 3rd HD",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Static recompilation of Monster Hunter Portable 3rd HD (PSP) into a native executable, using Vulkan and SDL3. It builds for desktop and Android and requires a copy of the game.",
+   "originalSystems": [
+    "PlayStation Portable"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/TeamGDB/Yakumo"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "zelda-3ds-android-triaevum",
+   "kind": "game",
+   "title": "Zelda 3DS Android (TriAevum)",
+   "game": "The Legend of Zelda: Ocarina of Time 3D",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "The Legend of Zelda: Ocarina of Time 3D (Nintendo, 2011) for Android (static recompilation). Latest release: v1.0.0-android. Needs your own copy of the game.",
+   "originalSystems": [
+    "Nintendo 3DS"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/WINDROID-EMU/RECOMP-ZELDA-3DS-ANDROID"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "zelda-ii-2p-splitscreen-android",
+   "kind": "game",
+   "title": "Zelda II 2P Splitscreen, Android",
+   "game": "Zelda II: The Adventure of Link",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Zelda II: The Adventure of Link (Nintendo, 1987) for Android (source port). Latest release: v0.1.0-android. Needs your own copy of the game.",
+   "originalSystems": [
+    "Nintendo Entertainment System"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/doctormajid7-ux/z2rs-android-2p-splitscreen"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "zelda-wwhd-recomp-android",
+   "kind": "game",
+   "title": "ZeldaWWHDRecompAndroid (GreenNaugahyde)",
+   "game": "The Legend of Zelda: The Wind Waker HD",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "The Legend of Zelda: The Wind Waker HD (Wii U, 2013) recompiled for Android. Bring your own game. Latest release: v0.9.4.",
+   "originalSystems": [
+    "Wii U"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/GreenNaugahyde/ZeldaWWHDRecompAndroid"
+   ],
+   "license": {
+    "spdx": "MPL-2.0"
+   }
+  },
+  {
+   "id": "zelda3-android",
+   "kind": "game",
+   "title": "Zelda3 (Android)",
+   "game": "The Legend of Zelda: A Link to the Past",
+   "portType": "reimplementation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Port of the zelda3 reimplementation of A Link to the Past (Super Nintendo, 1991) to Android. Bring your own ROM. Latest release: v2.0.",
+   "originalSystems": [
+    "Super Nintendo"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/samyost1/zelda3-android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "zelda3launcher",
+   "kind": "game",
+   "title": "Zelda3Launcher",
+   "game": "The Legend of Zelda: A Link to the Past",
+   "portType": "reimplementation",
+   "status": "beta",
+   "verified": false,
+   "notes": "The Legend of Zelda: A Link to the Past (Nintendo, 1991) for Android (reimplementation). Latest release: v1.0.1. Needs your own copy of the game (zelda3_assets.dat).",
+   "originalSystems": [
+    "Super Nintendo"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/Waterdish/zelda3-android"
+   ],
+   "license": {
+    "spdx": "NOASSERTION"
+   }
+  },
+  {
+   "id": "zelda64-recomp-android",
+   "kind": "game",
+   "title": "Zelda64 Recompiled (Android)",
+   "game": "The Legend of Zelda: Majora's Mask",
+   "portType": "recompilation",
+   "status": "beta",
+   "verified": false,
+   "notes": "Android port of Zelda64 Recompiled, the Majora's Mask (Nintendo 64, 2000) recompilation. Bring your own ROM. Latest release: 0.6.10.",
+   "originalSystems": [
+    "Nintendo 64"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/linkzenic/Zelda64Recomp-Android"
+   ],
+   "license": {
+    "spdx": "GPL-3.0"
+   }
+  },
+  {
+   "id": "zeldawwhdrecompandroid",
+   "kind": "game",
+   "title": "ZeldaWWHDRecompAndroid (Enhanced)",
+   "game": "The Legend of Zelda: The Wind Waker HD",
+   "portType": "recompilation",
+   "status": "alpha",
+   "verified": false,
+   "notes": "Wind Waker HD recompiled for Android (native ARM + Vulkan, no emulator), enhanced: native widescreen, fixed shadows, pinch-to-zoom camera, phone-made touch controls with in-game icons, 60 fps interpolation and performance work. Bring your own game dump.",
+   "originalSystems": [
+    "Wii U"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/SSunnKing/ZeldaWWHDRecompAndroid---ENHANCED"
+   ],
+   "license": {
+    "spdx": "MPL-2.0"
+   }
+  },
+  {
+   "id": "zomdroid-etonedemid",
+   "kind": "game",
+   "title": "Zomdroid (etonedemid)",
+   "game": "Project Zomboid",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Project Zomboid (The Indie Stone, 2013) for Android (source port). Latest release: v1.9.0. Needs your own copy of the game (Game Files - 41.78.16 by Cc Inno).",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/etonedemid/zomdroid-"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "zomdroid-liamelui",
+   "kind": "game",
+   "title": "Zomdroid (liamelui)",
+   "game": "Project Zomboid",
+   "portType": "source-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Project Zomboid (The Indie Stone, 2013) for Android (source port). Latest release: v1.2.0. Needs your own copy of the game (Game Files - 41.78.16 by Cc Inno).",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/liamelui/zomdroid"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  },
+  {
+   "id": "zuma-deluxe-android",
+   "kind": "game",
+   "title": "Zuma Deluxe (Android)",
+   "game": "Zuma Deluxe",
+   "portType": "runtime-port",
+   "status": "beta",
+   "verified": false,
+   "notes": "Unofficial Android build of Zuma Deluxe. It is distributed as an APK and needs the original game assets.",
+   "originalSystems": [
+    "Windows"
+   ],
+   "platforms": [
+    "android"
+   ],
+   "sources": [
+    "https://github.com/astola-studio/ZumaDeluxeAndroid"
+   ],
+   "license": {
+    "spdx": "MIT"
+   }
+  }
+ ]
+}

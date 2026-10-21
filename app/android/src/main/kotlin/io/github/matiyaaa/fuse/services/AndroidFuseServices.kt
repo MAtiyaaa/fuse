@@ -182,6 +182,16 @@ class AndroidFuseServices(
     private val releaseInstaller = AndroidReleaseInstaller(appContext, http, activities)
     override val installer: ReleaseInstaller = releaseInstaller
     override val packages: PackageBridge = AndroidPackageBridge(appContext, activities)
+
+    /** The lists of Android ports carried inside the app as resources (see app/android/build.gradle.kts, portsLists). */
+    override val androidPortLists: io.github.matiyaaa.fuse.ui.shell.store.AndroidPortLists = object : io.github.matiyaaa.fuse.ui.shell.store.AndroidPortLists {
+        override fun bundledIndex(): String? = resource("/ports/index.json")
+
+        override fun bundledListing(): String? = resource("/ports/android/openports.json")
+
+        private fun resource(path: String): String? =
+            runCatching { AndroidFuseServices::class.java.getResourceAsStream(path)?.use { it.readBytes().decodeToString() } }.getOrNull()
+    }
     override val apps: AppsProvider = AndroidAppsProvider(appContext, scope, activities, dualScreen, releaseInstaller::installLocal)
     override val locations: DeviceLocations = AndroidDeviceLocations(storageVolumes)
     override val volumes: VolumeMonitor = io.github.matiyaaa.fuse.storage.AndroidVolumes(appContext)

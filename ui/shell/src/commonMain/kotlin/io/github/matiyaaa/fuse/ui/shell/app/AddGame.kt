@@ -30,6 +30,7 @@ private fun AppKind.noun(): String = when (this) {
     AppKind.EMULATOR -> "an emulator"
     AppKind.STREAMING -> "a streaming app"
     AppKind.TOOL -> "a tool"
+    AppKind.PORT -> "a recomp or port"
 }
 
 /** What saying [kind] does to [title], for a message after the choice. */
@@ -39,6 +40,7 @@ private fun AppState.kindDone(title: String, kind: AppKind): String = when (kind
     AppKind.EMULATOR -> "$title is under Emulators in Apps"
     AppKind.STREAMING -> "$title is under Streaming in Apps"
     AppKind.TOOL -> "$title is under Tools in Apps"
+    AppKind.PORT -> "$title is a recomp or port"
 }
 
 /** "Type" in an app's options: a game joins the Android system, an emulator lists under Emulators. */
@@ -47,7 +49,11 @@ fun AppState.appKindPicker(app: AppCard) {
     val entry = app.entry
     fun pick(kind: AppKind?) {
         choice = null
-        scope.launch { store.apps.setKind(entry.id, kind) }
+        scope.launch {
+            store.apps.setKind(entry.id, kind)
+            // No longer a port: it plays no game, and Play goes back to the game's emulator.
+            if (entry.kind == AppKind.PORT && kind != AppKind.PORT && entry.plays != null) store.ports.detach(entry.id)
+        }
         toasts.show(kindDone(entry.displayTitle, kind ?: entry.detectedKind))
     }
     val gameDetail = if (store.apps.gamesInLibrary) "Joins the Android system with box art, details and play time" else "Lists under Games in Apps"
@@ -57,6 +63,17 @@ fun AppState.appKindPicker(app: AppCard) {
         message = if (entry.chosenKind == null) "Fuse took it for ${entry.detectedKind.noun()}." else "You said it's ${entry.kind.noun()}.",
         options = listOf(
             MenuAction("game", "Game", FuseIcons.Gamepad, detail = gameDetail, trailing = Trailing.Check(entry.kind == AppKind.GAME), onSelect = { pick(AppKind.GAME) }),
+        ) + listOfNotNull(
+            // Android: a recomp or port of a game in the library, which Play on that game starts.
+            if (store.ports.androidApps) {
+                MenuAction("port", "Recomp or Port", FuseIcons.Boxes, detail = "Of a game in your library: Play on that game starts it", trailing = Trailing.Check(entry.kind == AppKind.PORT), onSelect = {
+                    choice = null
+                    makeAppAPort(entry.id, entry.displayTitle, entry.packageName)
+                })
+            } else {
+                null
+            },
+        ) + listOf(
             MenuAction("app", "App", FuseIcons.AppWindow, detail = "Stays in Apps only", trailing = Trailing.Check(entry.kind == AppKind.APP), onSelect = { pick(AppKind.APP) }),
             MenuAction("emulator", "Emulator", FuseIcons.Chip, detail = "Lists under Emulators in Apps", trailing = Trailing.Check(entry.kind == AppKind.EMULATOR), onSelect = { pick(AppKind.EMULATOR) }),
             MenuAction("streaming", "Streaming", FuseIcons.Cast, detail = "Plays games from your PC or console. Lists under Streaming", trailing = Trailing.Check(entry.kind == AppKind.STREAMING), onSelect = { pick(AppKind.STREAMING) }),
@@ -226,25 +243,85 @@ private fun AppState.appGamePicker() {
     }
 }
 
-/** The picked APK: Android installs it after the user confirms, then it joins the Android system. */
+/**
+ * The picked APK: Android installs it after the user confirms. A port Fuse knows is said to be one
+ * and attached to its game; any other is a game unless the person says what it is ("What is it?").
+ */
 internal fun AppState.installApkGame(path: String) {
     val name = FsPath.name(path)
-    confirm = ConfirmSpec(
-        title = "Install $name?",
-        message = "Android asks you to confirm, and may ask to let Fuse install apps first. Once it's installed, Fuse adds it to the Android system with your games. The file stays where it is.",
-        confirmLabel = "Install",
-        onConfirm = {
-            scope.launch {
-                when (val r = store.apps.installGame(path)) {
-                    is ApkInstall.Started -> {
-                        navigator.pop()
-                        toasts.show("Installing ${r.label}. It joins your games once Android is done")
+    scope.launch {
+        val port = if (store.ports.androidApps) store.ports.apkPort(path) else null
+        val game = port?.games?.singleOrNull()
+        confirm = ConfirmSpec(
+            title = if (port != null) "Install ${port.port.name}?" else "Install $name?",
+            message = when {
+                port == null -> "Android asks you to confirm, and may ask to let Fuse install apps first. Once it's installed, Fuse asks what it is. The file stays where it is."
+                game != null -> "It's ${port.port.game}, ${port.port.madeLine().replaceFirstChar { it.lowercase() }}. Android asks you to confirm; then ${game.title} plays with it. The file stays where it is."
+                else -> "It's ${port.port.game}, ${port.port.madeLine().replaceFirstChar { it.lowercase() }}. Android asks you to confirm; then Fuse asks which game it plays. The file stays where it is."
+            },
+            confirmLabel = "Install",
+            onConfirm = {
+                scope.launch {
+                    when (val r = store.apps.installGame(path)) {
+                        is ApkInstall.Started -> {
+                            navigator.pop()
+                            when {
+                                game != null -> {
+                                    store.ports.attachOnceInstalled(r.packageName, game.id)
+                                    toasts.show("Installing ${r.label}. ${game.title} plays with it once Android is done", icon = FuseIcons.Boxes)
+                                }
+                                port != null -> portForInstall(r.label, r.packageName)
+                                else -> {
+                                    toasts.show("Installing ${r.label}")
+                                    whatIsNewApp(r.label, r.packageName)
+                                }
+                            }
+                        }
+                        is ApkInstall.Failed -> toasts.show(r.message, ToastKind.ERROR, durationMs = 6000)
                     }
-                    is ApkInstall.Failed -> toasts.show(r.message, ToastKind.ERROR, durationMs = 6000)
                 }
-            }
-        },
+            },
+        )
+    }
+}
+
+/** "What is it?" for an app Android is installing from an APK: a game unless the person says otherwise. */
+private fun AppState.whatIsNewApp(label: String, packageName: String) {
+    fun said(kind: AppKind) {
+        choice = null
+        scope.launch { store.apps.expect(packageName, kind) }
+        toasts.show(kindDone(label, kind))
+    }
+    choice = ChoiceSpec(
+        icon = FuseIcons.CircleHelp,
+        title = "What is $label?",
+        message = "Fuse takes it for a game. Its options in Apps change that later too.",
+        options = listOf(
+            MenuAction("game", "Game", FuseIcons.Gamepad, detail = if (store.apps.gamesInLibrary) "Joins the Android system with box art, details and play time" else "Lists under Games in Apps", trailing = Trailing.Check(true), onSelect = { said(AppKind.GAME) }),
+        ) + listOfNotNull(
+            if (store.ports.androidApps) {
+                MenuAction("port", "Recomp or Port", FuseIcons.Boxes, detail = "Of a game in your library: Play on that game starts it", onSelect = {
+                    choice = null
+                    portForInstall(label, packageName)
+                })
+            } else {
+                null
+            },
+        ) + listOf(
+            MenuAction("app", "App", FuseIcons.AppWindow, detail = "Stays in Apps only", onSelect = { said(AppKind.APP) }),
+            MenuAction("emulator", "Emulator", FuseIcons.Chip, detail = "Lists under Emulators in Apps", onSelect = { said(AppKind.EMULATOR) }),
+            MenuAction("streaming", "Streaming", FuseIcons.Cast, detail = "Plays games from your PC or console. Lists under Streaming", onSelect = { said(AppKind.STREAMING) }),
+            MenuAction("tool", "Tool", FuseIcons.Wrench, detail = "Frontends, drivers and other helpers. Lists under Tools", onSelect = { said(AppKind.TOOL) }),
+        ),
     )
+}
+
+/** "What game is this?" for a recomp or port Android is installing, attached to the game once it is in. */
+private fun AppState.portForInstall(label: String, packageName: String) {
+    pickPortGame(label, packageName) { g ->
+        store.ports.attachOnceInstalled(packageName, g.id)
+        toasts.show("${g.title} plays with $label once Android has installed it", ToastKind.SUCCESS, icon = FuseIcons.Boxes)
+    }
 }
 
 /** The picked game file: the system it belongs to, then it joins the library. */

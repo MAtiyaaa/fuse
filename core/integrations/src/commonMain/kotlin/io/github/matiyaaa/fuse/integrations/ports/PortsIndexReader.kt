@@ -51,7 +51,14 @@ object PortsIndexReader {
             if (problem != null) skipped[port.id] = problem
             problem == null
         }
-        return Result.success(PortsList(index.copy(ports = ports), skipped, signed = signature != null, text = text, signature = signature))
+        // Android ports Fuse checked: each is one of Fuse's own, whatever the entry says.
+        val androidSeen = HashSet<String>()
+        val android = index.android.mapNotNull { port ->
+            val problem = androidPortProblem(port) ?: if (!androidSeen.add(port.id)) "it is listed twice" else null
+            if (problem != null) skipped["android:${port.id}"] = problem
+            port.takeIf { problem == null }?.copy(checked = true, listedVerified = false)
+        }
+        return Result.success(PortsList(index.copy(ports = ports, android = android), skipped, signed = signature != null, text = text, signature = signature))
     }
 
     /** Why [port] can't be offered, or null when it can. */

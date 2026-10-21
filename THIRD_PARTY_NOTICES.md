@@ -112,6 +112,7 @@ but we credit every source:
 | Daijisho platform files, GlazedBelmont community ES-DE configs | No licence | Cross-checking facts only | Nothing copied |
 | [Obtainium](https://github.com/ImranR98/Obtainium) by Imran Remtulla | GPL-3.0 | How a source's settings choose a release and a file: link finding and natural sorting on download pages, release filters and sort methods, version extraction templates, the processor-type filter | Reimplemented in `core/integrations` `obtainium/` (`PackResolver`, `HtmlLinks`, `ApkPicker`, `VersionText`) so the pack's entries resolve as their authors intend; no Obtainium code is copied |
 | [Obtainium Emulation Pack](https://github.com/RJNY/Obtainium-Emulation-Pack) by RJNY | Public domain (Unlicense) | The Store's catalogue: each app, its source and the settings that find its releases | Downloaded at runtime and cached on the device. Copies of both editions (release v7.18.0) are test fixtures in `core/integrations/src/desktopTest/resources/obtainium`, with the links of a few apps' download pages saved there for the same tests |
+| [Open Ports Games](https://openportsgames.com/) catalogue ([Kymie131/openportsgames](https://github.com/Kymie131/openportsgames)) | Data CC BY 4.0 (code MIT) | The ports it lists for Android: each port's name, the game and system it plays, how it was made, its status, licence and project page | A trimmed snapshot of its Android entries is `ports/android/openports.json` (made by `tools/ports/openports.py`), carried inside the Android app and refreshed from the live catalogue at most once a day. Credited on the Ports page and in Settings, About, Licences. Fuse's own checked entries (`ports/index.json`, `android`) are read from each port's own source instead |
 
 ## Online services
 
@@ -132,6 +133,7 @@ cached on their device. None of it is part of Fuse's distribution.
 | HowLongToBeat | [howlongtobeat.com](https://howlongtobeat.com/). How long games take to beat, looked up by a game's name when its page opens (only the name is sent), kept for 30 days and credited with a link to the game on the site. Can be turned off in Settings, Art and details |
 | GitHub REST API | [Releases API](https://docs.github.com/en/rest/releases/releases), [GitHub Terms of Service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service) |
 | Apps in the Store | Each app comes from the source the Obtainium Emulation Pack names (its developers' GitHub releases or download page), under that app's own licence, downloaded by the user. Fuse distributes none of them |
+| Ports on Android | Each port's APK comes from its own project's GitHub releases, under that project's licence, downloaded by the user, and takes the game's files from the user's own copy. Fuse distributes none of them, and lists no port that ships a game's own files |
 
 ### Screenshots
 

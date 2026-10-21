@@ -2,6 +2,8 @@ package io.github.matiyaaa.fuse.ui.shell.settings
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import io.github.matiyaaa.fuse.jellyfin.JellyfinState
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
@@ -84,7 +86,27 @@ fun addonsRows(app: AppState): List<MenuAction> {
                 }) + if (on) store.map { it.copy(id = "store.${it.id}", section = null) } else emptyList()
             })
         }
-        if (app.store.ports.supported) {
+        if (app.store.ports.supported && app.store.ports.androidApps) {
+            // Android: ports are apps, installed from their projects and attached to their games.
+            val on = prefs.portsEnabled
+            val android = app.store.ports.android.collectAsState().value
+            val installed = android.ports.count { it.installed }
+            val placement = portPlacementRow(app)
+            addAll(app.group("addons.ports", "Ports", FuseIcons.Boxes, summary = if (!on) "Off" else if (installed > 0) "$installed installed" else "On", detail = "Games rebuilt for Android, each an app played in place of the emulator") {
+                listOfNotNull(
+                    toggleRow("ports.enabled", "Show Ports", FuseIcons.Power, on, if (on) "Ports in Addons, and a look for newer lists once a day when it opens" else "Off: no Ports in Addons. A game's Play With still offers its own") { v ->
+                        app.store.updatePrefs { it.copy(portsEnabled = v) }
+                    },
+                    placement,
+                    infoRow(
+                        "ports.how",
+                        "Each port is its project's own app",
+                        detail = "Installed from its releases, as the Store installs apps, then attached to your game. It takes your game's files itself the first time, and keeps its saves inside the app",
+                        icon = FuseIcons.Info,
+                    ),
+                )
+            })
+        } else if (app.store.ports.supported) {
             val on = prefs.portsEnabled
             val ports = app.store.ports.state.collectAsState().value
             val installed = ports.ports.count { it.installed }
@@ -310,4 +332,34 @@ private fun remoteLibraryRows(app: AppState, s: io.github.matiyaaa.fuse.data.set
             set { it.copy(showInRomm = v) }
         })
     }
+}
+
+/**
+ * Where games played with a port show, for every system unless one says otherwise: their own system
+ * only (the Ports system off), or the Ports or Android system too, where they start with the port.
+ */
+@Composable
+private fun portPlacementRow(app: AppState): MenuAction {
+    val key = io.github.matiyaaa.fuse.model.ScopedSettings.PortShowsIn
+    val resolved by remember { app.store.settings.observe(key, null, null) }.collectAsState(initial = null)
+    val now = resolved?.value ?: key.default
+    val name = PORT_PLACES.firstOrNull { it.first == now }?.second ?: ""
+    return MenuAction(
+        "ports.showin", "Ported games show in", FuseIcons.Layers,
+        detail = "Their own system starts them with its emulator; Ports or Android with the port. Each system and game can have its own",
+        trailing = Trailing.Value(name),
+        onSelect = {
+            app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+                title = "Ported games show in",
+                message = "One game either way, with its own time, saves and achievements. Its own system only turns the Ports system off.",
+                icon = FuseIcons.Boxes,
+                options = PORT_PLACES.map { (v, n) ->
+                    MenuAction("showin.${v.name}", n, null, trailing = Trailing.Check(v == now), onSelect = {
+                        app.choice = null
+                        app.scope.launch { app.store.settings.set(key, io.github.matiyaaa.fuse.model.ScopeRef.Global, v) }
+                    })
+                },
+            )
+        },
+    )
 }

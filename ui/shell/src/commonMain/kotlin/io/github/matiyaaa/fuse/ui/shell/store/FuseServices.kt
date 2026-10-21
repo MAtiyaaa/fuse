@@ -183,6 +183,12 @@ interface FuseServices {
     val recompFiles: RecompFiles? get() = null
 
     /**
+     * The lists of Android ports inside this build of Fuse (ports published as apps, installed with
+     * [packages]); null on a computer and in tests that don't need them.
+     */
+    val androidPortLists: AndroidPortLists? get() = null
+
+    /**
      * Emulators' own settings files, for the few changes Fuse makes there when asked (PCSX2 patches).
      * Null where Fuse can't reach them (Android).
      */

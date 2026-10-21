@@ -1,0 +1,3 @@
+-- Android ports: the library game an installed app plays (a recomp or port attached to the game,
+-- AppKind.PORT), so Play on that game starts the app.
+ALTER TABLE app_override ADD COLUMN plays_game INTEGER;

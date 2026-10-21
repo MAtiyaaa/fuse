@@ -81,6 +81,14 @@ data class PortsSettings(
     val playWith: Map<String, String> = emptyMap(),
     /** The AnyPS5 release Fuse has, for recompiling PlayStation 5 games; null before the first. */
     val anyPs5: String? = null,
+    /**
+     * Android: the app (package/activity) Play starts each game with, by game id: a recomp or port
+     * attached to it ([io.github.matiyaaa.fuse.model.AppKind.PORT]), where [playWith] names ports in
+     * Fuse's own folder.
+     */
+    val androidPlayWith: Map<String, String> = emptyMap(),
+    /** Android: the package each port Fuse installed was, by port id, so it is the same app ever after. */
+    val androidInstalled: Map<String, String> = emptyMap(),
 )
 
 /**

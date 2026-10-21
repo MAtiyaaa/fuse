@@ -94,6 +94,16 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
   your library, with Steam entries and saves kept in step like the rest. Majora's Mask plays through
   Zelda 64: Recompiled, made from your own ROM, and on Linux and Windows a PlayStation 5 dump can be
   recompiled with AnyPS5 into a program of your computer's own, from its Play With list.
+- **Ports on Android**: games rebuilt for Android, each its project's own app. A game's Play With
+  lists the ports that play it (Fuse's checked ones first, then those Open Ports Games lists), and
+  the one you pick installs from its project's releases and is attached to the game, so Play starts
+  it in the emulator's place with the time kept as the game's. Majora's Mask through Zelda 64:
+  Recompiled or 2 Ship 2 Harkinian, Pokémon Red to Emerald through Gen1Recomp, Bloodborne through
+  Bloodborne-Android and more. An app you installed yourself is a Recomp or Port in its Type, and
+  Fuse finds the game it plays, or asks. A ported game shows in the Ports system too (or Android,
+  or only its own system, for every game, each system or each game): one game with one time and
+  one set of achievements, started with the port from Ports and with its emulator from its own
+  system.
 - **Problems that explain themselves**: when a game can't start, Fuse says why, that nothing was
   changed, and offers the fix. If Fuse itself fails to start three times, it starts in **safe mode**.
 

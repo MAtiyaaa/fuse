@@ -33,7 +33,7 @@ internal const val SECOND_SCREEN_VEIL_MS = 900L
 
 /** What confirming a game tile does: play it, or open its page when the user chose that. */
 fun AppState.activateGame(card: GameCard) {
-    if (store.prefs.value.openGamePage) go(Route.GameInfo(card.id)) else play(card)
+    if (store.prefs.value.openGamePage) go(Route.GameInfo(card.id, card.via)) else play(card)
 }
 
 /** The hint for confirming on a game tile, following [activateGame]. */
@@ -85,7 +85,7 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
         }
     }
     job = scope.launch {
-        val outcome = store.library.launch(card.id, emulator, discPath, display, skipSaveCheck, playAnyway, together) { stage ->
+        val outcome = store.library.launch(card.id, emulator, discPath, display, skipSaveCheck, playAnyway, together, card.via) { stage ->
             launching = when (stage) {
                 io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.CHECKING_SAVE -> launching?.copy(status = "Checking your save", cancel = callOff)
                 io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.STARTING -> launching?.copy(status = null, cancel = null)
@@ -441,6 +441,10 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         add(MenuAction("system", "System", FuseIcons.Layers, detail = if (card.isApp) "Android, or back to being an app" else "If it landed in the wrong one", trailing = Trailing.Value(card.platformShort), onSelect = { systemPicker(card) }))
         // An Android game always starts as its app.
         if (!card.isApp) add(MenuAction("emulator", "Emulator", FuseIcons.Chip, trailing = Trailing.Chevron, onSelect = { emulatorPicker(card) }))
+        // On Android, a game played with a port: in its own system only, or in Ports or Android too.
+        if (!card.isApp && store.ports.androidApps && store.ports.androidPlayWith(card.id) != null) {
+            add(MenuAction("showin", "Shows In", FuseIcons.Boxes, detail = "Its own system only, or Ports or Android too, where it starts with the port", trailing = Trailing.Chevron, onSelect = { portPlacePicker(card) }))
+        }
         if (!card.isApp) add(MenuAction("parts", "Updates and DLC", FuseIcons.Puzzle, detail = "If this is an update or DLC of another game, or to give back one you added", trailing = Trailing.Chevron, onSelect = { partsPicker(card) }))
         // Patches and cheats in the emulator's own files, which Fuse changes on a computer.
         if (!card.isApp && platform.host != io.github.matiyaaa.fuse.model.Host.ANDROID) {
@@ -703,12 +707,21 @@ fun AppState.emulatorPicker(card: GameCard) {
         val withPort = store.ports.playWith(card.id)
         // A PlayStation 5 dump AnyPS5 can recompile into a program of this computer's own.
         val recompile = if (store.ports.supported) store.ports.recompileOffer(card.id) else null
-        fun noPort() { if (withPort != null) scope.launch { store.ports.setPlayWith(card.id, null) } }
+        // Android: ports published as apps, installed or not, and apps the person attached to the game.
+        val androidApps = store.ports.supported && store.ports.androidApps && !card.isApp
+        val android = if (androidApps) store.ports.androidPortsFor(card.id) else emptyList()
+        val withApp = if (androidApps) store.ports.androidPlayWith(card.id) else null
+        fun noPort() {
+            if (withPort != null) scope.launch { store.ports.setPlayWith(card.id, null) }
+            if (withApp != null) scope.launch { store.ports.setAndroidPlayWith(card.id, null) }
+        }
         choice = ChoiceSpec(
             icon = FuseIcons.Chip,
-            title = if (ports.isEmpty() && yours.isEmpty() && recompile == null) "Emulator for ${card.title}" else "Play ${card.title} With",
+            title = if (ports.isEmpty() && yours.isEmpty() && recompile == null && !androidApps) "Emulator for ${card.title}" else "Play ${card.title} With",
             message = when {
                 recompile != null -> "An emulator, or a build AnyPS5 recompiles from your dump to run natively. The system's emulator is used unless you pick one here."
+                android.isNotEmpty() -> "An emulator, or a port of the game rebuilt for Android. The system's emulator is used unless you pick one here."
+                androidApps -> "An emulator, or an app that plays it. The system's emulator is used unless you pick one here."
                 ports.isEmpty() && yours.isEmpty() -> "The system's choice is used unless you pick one here."
                 else -> "An emulator, or a port of it rebuilt to run natively. The system's emulator is used unless you pick one here."
             },
@@ -753,7 +766,7 @@ fun AppState.emulatorPicker(card: GameCard) {
                         }
                     },
                 )
-            } + streamChoices(streamed) { hostId ->
+            } + (if (androidApps) androidPortChoices(card, android) else emptyList()) + streamChoices(streamed) { hostId ->
                 setStreamPick(card, io.github.matiyaaa.fuse.data.settings.StreamPick(hostId))
                 choice = null
                 toasts.show("${card.title} streams with Moonlight from now on")

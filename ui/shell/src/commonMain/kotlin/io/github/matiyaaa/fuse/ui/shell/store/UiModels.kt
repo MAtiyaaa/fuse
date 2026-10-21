@@ -101,10 +101,18 @@ data class GameCard(
     val customTitle: Boolean = false,
     /** Pinned to Home (in its Pinned games). */
     val pinned: Boolean = false,
+    /** How Play starts it from the list it is in: with its port (in Ports or Android), its emulator (in its own system), or as chosen. */
+    val via: PlayVia = PlayVia.DEFAULT,
 ) {
     /** Drawn dimmed: its file is gone, or its drive can't be reached right now. */
     val dimmed: Boolean get() = missing || unavailable != null
 }
+
+/**
+ * How Play starts a game with a port attached: [PORT] from the Ports or Android system it also shows
+ * in, [EMULATOR] from its own system then, [DEFAULT] anywhere else (the port when one was chosen).
+ */
+enum class PlayVia { DEFAULT, PORT, EMULATOR }
 
 /** Why a game can't be reached right now, and on which drive it lives. */
 @Immutable

@@ -46,8 +46,17 @@ internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {
     /** Called after apps joined the library as games, so their art is looked for. */
     var onGamesAdded: (List<io.github.matiyaaa.fuse.model.GameId>) -> Unit = {}
 
-    /** Packages being installed from an APK the user added as a game. */
-    private val expectedGames = MutableStateFlow<Set<String>>(emptySet())
+    /** Packages being installed, and what each is once Android has installed it (a game, or a port of one). */
+    private val expected = MutableStateFlow<Map<String, Expected>>(emptyMap())
+
+    /** What an app being installed is: [kind], and for a port the library game it [plays]. */
+    private data class Expected(val kind: AppKind, val plays: io.github.matiyaaa.fuse.model.GameId? = null)
+
+    /**
+     * Whether an installed app (its package and its name) is a known recomp or port; set by the
+     * Android ports, which know them. Such an app is one until the person says otherwise.
+     */
+    val portIdentifier = MutableStateFlow<(String, String) -> Boolean> { _, _ -> false }
 
     /** Packages of the emulators Fuse detected; their apps are emulators unless the user says otherwise. */
     private val emulatorPackages: Flow<Set<String>> = ctx.installed
@@ -57,10 +66,11 @@ internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {
     private val entries: Flow<List<AppEntry>> = if (provider == null) {
         flowOf(emptyList())
     } else {
-        combine(provider.apps, overrides.observeAll(), emulatorPackages) { apps, o, emulators ->
+        combine(provider.apps, overrides.observeAll(), emulatorPackages, portIdentifier) { apps, o, emulators, isPort ->
             val detected = apps.map {
                 when {
                     it.packageName in emulators -> it.copy(detectedKind = AppKind.EMULATOR)
+                    isPort(it.packageName, it.label) -> it.copy(detectedKind = AppKind.PORT)
                     // Streaming apps and emulation tools from the Store get lists of their own.
                     else -> KnownApps.kindOf(it.packageName)?.let { kind -> it.copy(detectedKind = kind) } ?: it
                 }
@@ -70,6 +80,9 @@ internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {
     }
 
     private val all: StateFlow<List<AppEntry>> = entries.resilient().stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
+
+    /** Every installed app with the person's choices, as it is now. */
+    val installedApps: StateFlow<List<AppEntry>> get() = all
 
     /** Icons the user set for apps (Customise Artwork), by app id. They win over the app's own icon. */
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -92,7 +105,8 @@ internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {
         val visible = list.filterNot { it.hidden || (gamesInLibrary && it.kind == AppKind.GAME) }
         when (filter) {
             AppFilter.PINNED -> visible.filter { it.pinned }
-            AppFilter.GAMES -> visible.filter { it.kind == AppKind.GAME }.sortedBy { it.displayTitle.lowercase() }
+            // A recomp or port is listed with the games: the game it plays is in the library.
+            AppFilter.GAMES -> visible.filter { it.kind == AppKind.GAME || it.kind == AppKind.PORT }.sortedBy { it.displayTitle.lowercase() }
             AppFilter.EMULATORS -> visible.filter { it.kind == AppKind.EMULATOR }.sortedBy { it.displayTitle.lowercase() }
             AppFilter.STREAMING -> visible.filter { it.kind == AppKind.STREAMING }.sortedBy { it.displayTitle.lowercase() }
             AppFilter.TOOLS -> visible.filter { it.kind == AppKind.TOOL }.sortedBy { it.displayTitle.lowercase() }
@@ -132,6 +146,23 @@ internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {
 
     override suspend fun setKind(appId: String, kind: AppKind?) = overrides.setKind(appId, kind)
 
+    override suspend fun setPlays(appId: String, game: io.github.matiyaaa.fuse.model.GameId?) = overrides.setPlays(appId, game?.value)
+
+    override suspend fun expect(packageName: String, kind: AppKind, plays: io.github.matiyaaa.fuse.model.GameId?) {
+        val installed = all.value.filter { it.packageName == packageName }
+        // Already there (an update): it is what the person said at once. Else once Android has installed it.
+        if (installed.isEmpty()) {
+            expected.update { it + (packageName to Expected(kind, plays)) }
+            return
+        }
+        installed.forEach { apply(it.id, Expected(kind, plays)) }
+    }
+
+    private suspend fun apply(appId: String, e: Expected) {
+        setKind(appId, e.kind)
+        if (e.kind == AppKind.PORT) setPlays(appId, e.plays)
+    }
+
     override suspend fun openInfo(app: AppCard) {
         provider?.openInfo(app.entry)
     }
@@ -139,11 +170,8 @@ internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {
     override suspend fun installGame(path: String): ApkInstall {
         val p = provider ?: return ApkInstall.Failed("Apps can't be installed on this system.")
         val result = p.installApk(path)
-        if (result is ApkInstall.Started) {
-            val installed = all.value.filter { it.packageName == result.packageName }
-            // Already there (an update): it is a game from now on. Else once Android has installed it.
-            if (installed.isNotEmpty()) installed.forEach { setKind(it.id, AppKind.GAME) } else expectedGames.update { it + result.packageName }
-        }
+        // A game until the person says what it is ("What is it?" follows the install).
+        if (result is ApkInstall.Started) expect(result.packageName, AppKind.GAME, null)
         return result
     }
 
@@ -152,11 +180,11 @@ internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {
         if (!gamesInLibrary) return
         ctx.scope.launch {
             all.collect { list ->
-                val expected = expectedGames.value
-                if (expected.isEmpty()) return@collect
-                val arrived = list.filter { it.packageName in expected && it.chosenKind == null }
-                arrived.forEach { setKind(it.id, AppKind.GAME) }
-                if (arrived.isNotEmpty()) expectedGames.update { it - arrived.map { a -> a.packageName }.toSet() }
+                val waiting = expected.value
+                if (waiting.isEmpty()) return@collect
+                val arrived = list.filter { it.packageName in waiting }
+                arrived.forEach { a -> waiting[a.packageName]?.let { apply(a.id, it) } }
+                if (arrived.isNotEmpty()) expected.update { it - arrived.map { a -> a.packageName }.toSet() }
             }
         }
         ctx.scope.launch {
