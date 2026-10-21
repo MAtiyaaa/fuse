@@ -60,6 +60,36 @@ android {
     }
 }
 
+/**
+ * The lists of Android ports Fuse starts from, carried inside the app as resources: Fuse's own
+ * (ports/index.json, its `android` list) and Open Ports Games' snapshot (ports/android/openports.json).
+ */
+abstract class PortsLists : DefaultTask() {
+    @get:InputFile abstract val index: RegularFileProperty
+
+    @get:InputFile abstract val listing: RegularFileProperty
+
+    @get:OutputDirectory abstract val out: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val root = out.get().asFile
+        root.deleteRecursively()
+        index.get().asFile.copyTo(root.resolve("ports/index.json"))
+        listing.get().asFile.copyTo(root.resolve("ports/android/openports.json"))
+    }
+}
+
+val portsLists = tasks.register<PortsLists>("portsLists") {
+    index.set(rootProject.layout.projectDirectory.file("ports/index.json"))
+    listing.set(rootProject.layout.projectDirectory.file("ports/android/openports.json"))
+    out.set(layout.buildDirectory.dir("generated/portsLists"))
+}
+
+androidComponents {
+    onVariants { variant -> variant.sources.resources?.addGeneratedSourceDirectory(portsLists, PortsLists::out) }
+}
+
 dependencies {
     implementation(projects.ui.shell)
     implementation(projects.ui.link)

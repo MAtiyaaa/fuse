@@ -703,12 +703,21 @@ fun AppState.emulatorPicker(card: GameCard) {
         val withPort = store.ports.playWith(card.id)
         // A PlayStation 5 dump AnyPS5 can recompile into a program of this computer's own.
         val recompile = if (store.ports.supported) store.ports.recompileOffer(card.id) else null
-        fun noPort() { if (withPort != null) scope.launch { store.ports.setPlayWith(card.id, null) } }
+        // Android: ports published as apps, installed or not, and apps the person attached to the game.
+        val androidApps = store.ports.supported && store.ports.androidApps && !card.isApp
+        val android = if (androidApps) store.ports.androidPortsFor(card.id) else emptyList()
+        val withApp = if (androidApps) store.ports.androidPlayWith(card.id) else null
+        fun noPort() {
+            if (withPort != null) scope.launch { store.ports.setPlayWith(card.id, null) }
+            if (withApp != null) scope.launch { store.ports.setAndroidPlayWith(card.id, null) }
+        }
         choice = ChoiceSpec(
             icon = FuseIcons.Chip,
-            title = if (ports.isEmpty() && yours.isEmpty() && recompile == null) "Emulator for ${card.title}" else "Play ${card.title} With",
+            title = if (ports.isEmpty() && yours.isEmpty() && recompile == null && !androidApps) "Emulator for ${card.title}" else "Play ${card.title} With",
             message = when {
                 recompile != null -> "An emulator, or a build AnyPS5 recompiles from your dump to run natively. The system's emulator is used unless you pick one here."
+                android.isNotEmpty() -> "An emulator, or a port of the game rebuilt for Android. The system's emulator is used unless you pick one here."
+                androidApps -> "An emulator, or an app that plays it. The system's emulator is used unless you pick one here."
                 ports.isEmpty() && yours.isEmpty() -> "The system's choice is used unless you pick one here."
                 else -> "An emulator, or a port of it rebuilt to run natively. The system's emulator is used unless you pick one here."
             },
@@ -753,7 +762,7 @@ fun AppState.emulatorPicker(card: GameCard) {
                         }
                     },
                 )
-            } + streamChoices(streamed) { hostId ->
+            } + (if (androidApps) androidPortChoices(card, android) else emptyList()) + streamChoices(streamed) { hostId ->
                 setStreamPick(card, io.github.matiyaaa.fuse.data.settings.StreamPick(hostId))
                 choice = null
                 toasts.show("${card.title} streams with Moonlight from now on")

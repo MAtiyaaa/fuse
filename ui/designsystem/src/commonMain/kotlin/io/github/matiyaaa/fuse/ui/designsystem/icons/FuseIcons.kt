@@ -322,6 +322,7 @@ object FuseIcons {
     val TextSize: ImageVector by lazy { lineIcon("TextSize", "m15 16 2.536-7.328a1.02 1.02 1 0 1 1.928 0L22 16", "M15.697 14h5.606", "m2 16 4.039-9.69a.5.5 0 0 1 .923 0L11 16", "M3.304 13h6.392") }
     val Thermometer: ImageVector by lazy { lineIcon("Thermometer", "M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z") }
     val Timer: ImageVector by lazy { lineIcon("Timer", "M10 2L14 2", "M12 14L15 11", "M4 14a8 8 0 1 0 16 0a8 8 0 1 0 -16 0Z") }
+    val Unlink: ImageVector by lazy { lineIcon("Unlink", "m18.84 12.25 1.72-1.71h-.02a5.004 5.004 0 0 0-.12-7.07 5.006 5.006 0 0 0-6.95 0l-1.72 1.71", "m5.17 11.75-1.71 1.71a5.004 5.004 0 0 0 .12 7.07 5.006 5.006 0 0 0 6.95 0l1.71-1.71", "M8 2v3", "M2 8h3", "M16 19v3", "M19 16h3") }
     val UserPlus: ImageVector by lazy { lineIcon("UserPlus", "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", "M5 7a4 4 0 1 0 8 0a4 4 0 1 0 -8 0Z", "M19 8L19 14", "M22 11L16 11") }
     val UserCog: ImageVector by lazy { lineIcon("UserCog", "M10 15H6a4 4 0 0 0-4 4v2", "m14.305 16.53.923-.382", "m15.228 13.852-.923-.383", "m16.852 12.228-.383-.923", "m16.852 17.772-.383.924", "m19.148 12.228.383-.923", "m19.53 18.696-.382-.924", "m20.772 13.852.924-.383", "m20.772 16.148.924.383", "M15 15a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", "M5 7a4 4 0 1 0 8 0a4 4 0 1 0 -8 0Z") }
     val ArrowLeftRight: ImageVector by lazy { lineIcon("ArrowLeftRight", "M8 3 4 7l4 4", "M4 7h16", "m16 21 4-4-4-4", "M20 17H4") }

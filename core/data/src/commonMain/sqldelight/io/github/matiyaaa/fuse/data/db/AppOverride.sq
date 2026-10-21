@@ -7,7 +7,9 @@ CREATE TABLE app_override (
     sort_order INTEGER,
     last_used_at INTEGER,
     -- AppKind name, when the user said what the app is (else Fuse decides).
-    kind TEXT
+    kind TEXT,
+    -- The library game a recomp or port plays (AppKind.PORT), so Play on that game starts the app.
+    plays_game INTEGER
 );
 
 selectAll:
@@ -33,6 +35,9 @@ UPDATE app_override SET sort_order = :sortOrder WHERE app_id = :appId;
 
 setKind:
 UPDATE app_override SET kind = :kind WHERE app_id = :appId;
+
+setPlays:
+UPDATE app_override SET plays_game = :playsGame WHERE app_id = :appId;
 
 setLastUsed:
 UPDATE app_override SET last_used_at = :lastUsedAt WHERE app_id = :appId;

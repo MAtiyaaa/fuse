@@ -29,6 +29,7 @@ and redact credentials from every error message (`redact()`, see
 - [The Store: Obtainium Emulation Pack](#the-store-obtainium-emulation-pack)
 - [The Store on a computer](#the-store-on-a-computer)
 - [Fuse Ports](#fuse-ports)
+- [Ports on Android](#ports-on-android)
 - [Steam and Windows launchers](#steam-and-windows-launchers)
 - [RPCS3 compatibility list](#rpcs3-compatibility-list)
 - [Jellyfin](#jellyfin)
@@ -52,6 +53,7 @@ and redact credentials from every error message (`redact()`, see
 | Store (Android): Obtainium Emulation Pack, app sources | Optionally a GitHub token | Requests for the pack's newest release on github.com, each app's releases (GitHub's API, or the download page the pack names), and the APK you install; your IP address and the User-Agent (or the one the pack sets for a download page) | The catalogue when the Store opens and is older than 6 hours, or on "Check now"; an app's releases when its page or card is shown, for installed apps a little after start (at most twice a day, can be turned off); downloads only when you press Install or Update |
 | Store (computer): each program's releases | Optionally a GitHub token (GitHub only) | Requests for a program's releases on GitHub, its own Forgejo or Gitea server, its download listing or Flathub, and the file you install; your IP address and the User-Agent | A program's releases when its page or card is shown, for installed programs a little after start; downloads only when you press Install, Update or Update All |
 | Fuse Ports (computer, off until you turn it on) | Your own copy of each game (its folder, chosen by you) | Requests for a newer signed list of ports (`index.json` and its `.sig` on the `ports` release of Fuse's GitHub repository), and each port's build from its project's own release when you install it; your IP address and the User-Agent. Your game's files and folders never leave the device: they are only linked into Fuse's copy | The list when Ports opens (at most every 6 hours) or on Look Again, only while Fuse carries the key it is signed with; a build only when you press Install or Update |
+| Ports on Android | Nothing of yours: only which port you install | Open Ports Games' catalogue (`openportsgames.com/api/ports.json`) and Fuse's own signed list (`index.json` and its `.sig` on the `ports` release), once a day at most when Ports or a game's Play With opens; each port's GitHub releases and its APK when you install one; your IP address and the User-Agent. The port itself asks you for your game's files | The lists when Ports or Play With opens (at most once a day) or on Look Again; a release and its APK only when you press Install |
 | PS5 recompiling with AnyPS5 (Linux and Windows) | Nothing: your dump is read, and linked or copied, on this computer | AnyPS5's newest release from GitHub's API, then its relinker and system libraries from that release; your IP address and the User-Agent (and the Store's GitHub token, when you gave one) | Only when you choose Recompile to Run Natively or Recompile Again on a PS5 game |
 | GameBanana | Nothing | A game's title (or the words you search with), the GameBanana game you chose and the mods you open, your IP address and the User-Agent; then the mod's file from GameBanana's own address | Only when you open GameBanana in a game's cheats, textures or mods, a mod there, or add one of its files; answers are kept a while |
 | Nexus Mods (computer, off until you add your key) | Your own personal API key from your Nexus Mods account | To api.nexusmods.com only: your key in the `apikey` header with "Fuse" and its version, the Nexus Mods game you chose for a game and the mods and files you open; for an account that isn't Premium, the one-time key and expiry of the Mod Manager Download link you paste. Then the file from the address Nexus Mods gives (https only). The key stays on this device: it is never shared with your household or Fuse Sync | Whose key it is when Settings, Accounts, Nexus Mods is shown (once a run per key); the games list when you choose a game (kept a week), a game's lists when you open Nexus Mods for it (kept an hour), a mod's files when you open it; downloads only when you add a file |
@@ -957,6 +959,54 @@ GitHub's API and checks its builds are still there by name and that a zip still 
 Fuse finds the port by, reading only the zip's listing by HTTP ranges; a night that finds one
 changed opens an issue labelled `native-port-changed`. No port of inFAMOUS was found.
 
+
+## Ports on Android
+
+**What for.** On Android, ports are apps: each a game rebuilt for Android (a recompilation, a
+decompilation, a source port or a reimplementation) that its own project publishes as an APK, and
+that takes the game's files from the person's own copy itself, on its first start. Fuse finds the
+ports for the games in the library, installs one from its project's releases, and attaches it to its
+game (an app of the Type Recomp or Port, `AppKind.PORT`), so Play on the game starts the app in the
+emulator's place (Play With). The time played, Continue Playing and the game's page stay the game's
+own. An app the person installed themselves can be attached the same way.
+
+**Two lists.** Fuse's own checked entries are the `android` list of `ports/index.json` (signed with
+the rest, `core:model` `AndroidPort`, checked by `androidPortProblem`): each read from the port's own
+source, with its package (from its build file), which APK of a release (`asset`), what it asks for
+on its first start (`needs`), its other titles, and the ROMs it is made for where its source names
+them (by the same XXH3-64 as recompilations: Zelda64Recomp-Android, Goemon64Recomp-Android and
+dk64-recomp-android check theirs in `supported_games`). Beside them are the ports
+[Open Ports Games](https://openportsgames.com/) lists for Android (its data under CC BY 4.0,
+`OpenPorts`): a trimmed snapshot inside Fuse (`ports/android/openports.json`, made by
+`tools/ports/openports.py`) and the live catalogue at most once a day. A listing is shown as
+unchecked; a checked entry takes the place of a listing of the same project. Left out of the
+listings: launchers and other tools, entries whose source is gone, and any with a warning (one that
+ships a game's own files rather than playing the person's copy). apkports.com isn't used: it names
+no sources or licences.
+
+**Matching.** A port is a library game's when the game is of one of the port's systems
+(`OpenPorts.SYSTEMS` turns Open Ports Games' names into Fuse's) and one of its names (as shown, its
+metadata's, its file's name cleaned of tags) is the port's game or one of its titles, compared as
+`TitleText` compares titles with a leading "the" and a trailing "version" left out
+(`AndroidPortCatalog`). A ROM it is made for is said ("Made for your ROM"); a match by name alone
+is said as one. An installed app is a port by its package (Fuse's checked one, or the one Fuse saw
+it install as), else by its whole name, never by a part of one.
+
+**Installing** (`AndroidPortsStore`): as the Store installs apps, with the Store's own parts. The
+newest release with an APK for this device's processor is found on GitHub (`PackResolver`, older
+releases when the newest has none, such as a data release); the APK is downloaded over HTTPS,
+checked against GitHub's digest, read by Android's package manager, and handed to Android's
+installer, which asks the person (one install at a time, shared with the Store). The package it
+installs as is kept (`ports.androidInstalled`): a later download that is another app is refused.
+
+**Playing.** The app attached to a game is kept per game (`ports.androidPlayWith`, this device's
+own) and per app (`app_override.plays_game`). Play then plays the game as the app (`LibraryStore`
+`resolveForPlay`), which `NativeAppAdapter` starts with its launcher intent; a drive that is out or
+a moved file doesn't stop it, since the app keeps its own copy. Uninstalled, the game plays with its
+emulator again. When a port is chosen for a game, Fuse says what the app asks for on its first start
+and where the person's copy is, with Copy Path.
+
+**Saves.** A port keeps its saves inside its app, out of Fuse's reach, so Fuse One doesn't sync them.
 ## Steam and Windows launchers
 
 Fuse does not run Windows games itself. It starts them through the launcher you use, with a per-game

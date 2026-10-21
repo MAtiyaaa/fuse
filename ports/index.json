@@ -1,7 +1,7 @@
 {
   "format": 1,
-  "revision": 3,
-  "generated": "2026-10-20",
+  "revision": 4,
+  "generated": "2026-10-21",
   "ports": [
     {
       "id": "devilutionx",
@@ -211,6 +211,236 @@
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
       "source": "BanjoRecomp v1.0.2: README.md (the North American 1.0 ROM, other formats converted, portable.txt, saves); src/main/main.cpp supported_games (rom_hash 0x1B67585D56E07F8C, game_id bk.n64.us.1.0); include/banjo_config.h program_id; RecompFrontend d0d90ba recompui/src/util/file.cpp get_app_folder_path (APP_FOLDER_PATH on Linux, LocalAppData on Windows); N64ModernRuntime ca568b6 librecomp/src/recomp.cpp (stored_filename: <game_id>.z64 in that folder, checked by XXH3-64) and src/pi.cpp set_save_file_path (saves in that folder); .github/workflows/validate.yml (the Linux build: BanjoRecompiled, assets and recompcontrollerdb.txt in a tarball)"
+    }
+  ],
+  "android": [
+    {
+      "id": "gen1recomp",
+      "name": "Gen1Recomp",
+      "game": "Pokémon Red",
+      "titles": [
+        "Pokémon Blue",
+        "Pokémon Yellow",
+        "Pokémon Yellow Version: Special Pikachu Edition",
+        "Pokémon Gold",
+        "Pokémon Silver",
+        "Pokémon Crystal",
+        "Pokémon FireRed",
+        "Pokémon LeafGreen",
+        "Pokémon Ruby",
+        "Pokémon Sapphire",
+        "Pokémon Emerald"
+      ],
+      "systems": [
+        "gb",
+        "gbc",
+        "gba"
+      ],
+      "kind": "reimplementation",
+      "status": "beta",
+      "repo": "https://github.com/bryanthaboi/gen1recomp",
+      "about": "The Pokémon games from Red to Emerald recreated natively, their data made from your own ROM on the first start.",
+      "needs": "Your own US English ROM of the game (.gb, .gbc or .gba), chosen in the app on its first start. It checks the ROM and keeps none of it.",
+      "asset": "-android\\.apk$",
+      "source": "gen1recomp v0.3.95: README.md (Quick Start and the ROMs it accepts, by SHA-1); release v0.3.95 (gen1recomp-0.3.95-android.apk among other systems' builds)"
+    },
+    {
+      "id": "bloodborne-android",
+      "name": "Bloodborne-Android",
+      "game": "Bloodborne",
+      "systems": [
+        "ps4"
+      ],
+      "kind": "runtime-port",
+      "status": "alpha",
+      "repo": "https://github.com/ducvd89/Bloodborne-Android",
+      "licence": "GPL-2.0",
+      "about": "Bloodborne running natively on Android, for Snapdragon (Adreno) phones and handhelds. Mali isn't supported.",
+      "needs": "Your own extracted Bloodborne dump with the 1.09 update merged in (any region), copied to this device. Pick the folder with eboot.bin in the app; the first start takes a few minutes.",
+      "asset": "^Bloodborne-.*\\.apk$",
+      "source": "Bloodborne-Android android-1.2.0: README.md (install steps, devices, the 1.09 eboot.bin); LICENSE (GPL-2.0); release android-1.2.0 (Bloodborne-1.2.0.apk; data releases such as atlas-maps-2 hold no APK)"
+    },
+    {
+      "id": "zelda64recomp-android",
+      "name": "Zelda 64: Recompiled for Android",
+      "game": "The Legend of Zelda: Majora's Mask",
+      "systems": [
+        "n64"
+      ],
+      "kind": "recompilation",
+      "status": "beta",
+      "repo": "https://github.com/linkzenic/Zelda64Recomp-Android",
+      "licence": "GPL-3.0",
+      "needs": "Your Majora's Mask ROM, the North American 1.0 one, chosen in the app on its first start.",
+      "package": "io.github.zelda64recomp",
+      "asset": "^Zelda64-Recompiled-Android-App-.*\\.apk$",
+      "roms": [
+        "ef18b4a9e2386169"
+      ],
+      "source": "Zelda64Recomp-Android 0.6.10: src/main/main.cpp supported_games (rom_hash 0xEF18B4A9E2386169, mm.n64.us.1.0); android/app/build.gradle (zeldaApplicationId); LICENSE (GPL-3.0); release 0.6.10 (Zelda64-Recompiled-Android-App-0.6.10.apk)"
+    },
+    {
+      "id": "2ship2harkinian-android",
+      "name": "2 Ship 2 Harkinian",
+      "game": "The Legend of Zelda: Majora's Mask",
+      "systems": [
+        "n64"
+      ],
+      "kind": "source-port",
+      "status": "beta",
+      "repo": "https://github.com/linkzenic/2ship2harkinian-Android",
+      "licence": "CC0-1.0",
+      "needs": "Your Majora's Mask ROM (MM.z64), chosen when the app asks on its first start, to make its game data (mm.o2r).",
+      "asset": "\\.apk$",
+      "source": "2ship2harkinian-Android v5.0.1-android.2: README.md (install steps); LICENSE (CC0-1.0); release v5.0.1-android.2 (2Ship-Android-v5.0.1-android.2.apk)"
+    },
+    {
+      "id": "shipwright-android",
+      "name": "Ship of Harkinian",
+      "game": "The Legend of Zelda: Ocarina of Time",
+      "titles": [
+        "The Legend of Zelda: Ocarina of Time - Master Quest"
+      ],
+      "systems": [
+        "n64",
+        "ngc"
+      ],
+      "kind": "decompilation",
+      "status": "beta",
+      "repo": "https://github.com/linkzenic/Shipwright-Android",
+      "needs": "Your Ocarina of Time ROM, chosen when the app asks, to make its game data (.otr or .o2r). A Master Quest ROM can be added after.",
+      "package": "com.linkzenic.soh",
+      "asset": "^soh_release_.*\\.apk$",
+      "source": "Shipwright-Android v9.3.1-android.2: README.md (installation, editions); Android/app/build.gradle (sohApplicationId); release v9.3.1-android.2 (soh_release_v9.3.1-android.2.apk)"
+    },
+    {
+      "id": "starship-android",
+      "name": "Starship",
+      "game": "Star Fox 64",
+      "systems": [
+        "n64"
+      ],
+      "kind": "source-port",
+      "status": "beta",
+      "repo": "https://github.com/izzy2lost/Starship",
+      "licence": "CC0-1.0",
+      "needs": "Your Star Fox 64 ROM (US, .z64), chosen with the system's file picker on its first start. The app converts it on the device.",
+      "package": "com.starship.android",
+      "asset": "\\.apk$",
+      "source": "Starship v2.0.0: android/app/build.gradle (applicationId); LICENSE (CC0-1.0); release v2.0.0 (notes on the first start; starship-v2.0.0.apk)"
+    },
+    {
+      "id": "spaghettikart-android",
+      "name": "SpaghettiKart",
+      "game": "Mario Kart 64",
+      "systems": [
+        "n64"
+      ],
+      "kind": "source-port",
+      "status": "beta",
+      "repo": "https://github.com/izzy2lost/SpaghettiKart",
+      "package": "com.izzy.kart",
+      "asset": "\\.apk$",
+      "source": "SpaghettiKart 2.0.0: android/app/build.gradle.kts (applicationId); release 2.0.0 (app-release.apk, 64 and 32 bit)"
+    },
+    {
+      "id": "ghostship-android",
+      "name": "Ghostship",
+      "game": "Super Mario 64",
+      "systems": [
+        "n64"
+      ],
+      "kind": "source-port",
+      "status": "beta",
+      "repo": "https://github.com/izzy2lost/Ghostship",
+      "licence": "MIT",
+      "package": "com.ghostship.android",
+      "asset": "\\.apk$",
+      "source": "Ghostship 1.0.1: android/app/build.gradle.kts (applicationId); LICENSE (MIT); release 1.0.1 (app-release.apk)"
+    },
+    {
+      "id": "perfect-dark-android",
+      "name": "Perfect Dark",
+      "game": "Perfect Dark",
+      "systems": [
+        "n64"
+      ],
+      "kind": "source-port",
+      "status": "beta",
+      "repo": "https://github.com/izzy2lost/perfect_dark",
+      "licence": "MIT",
+      "needs": "Your Perfect Dark ROM, chosen when the app asks on its first start. The US 1.1 one (NTSC final) is the one it recommends.",
+      "package": "com.perfectdark.port",
+      "asset": "\\.apk$",
+      "source": "perfect_dark 2.0.0: android/app/build.gradle (applicationId); LICENSE (MIT); release 1.0 notes (the ROM prompt, US V1.1); release 2.0.0 (app-release.apk)"
+    },
+    {
+      "id": "goemon64recomp-android",
+      "name": "Goemon 64: Recompiled for Android",
+      "game": "Mystical Ninja Starring Goemon",
+      "systems": [
+        "n64"
+      ],
+      "kind": "recompilation",
+      "status": "beta",
+      "repo": "https://github.com/ogdanimal/Goemon64Recomp-Android",
+      "licence": "GPL-3.0",
+      "needs": "Your North American Mystical Ninja Starring Goemon ROM, imported in the app on its first start after choosing where it keeps its data.",
+      "package": "com.goemon64.recomp",
+      "asset": "\\.apk$",
+      "roms": [
+        "db1bc7ee0e6beba1"
+      ],
+      "source": "Goemon64Recomp-Android v1.0.8: src/main/main.cpp supported_games (rom_hash 0xDB1BC7EE0E6BEBA1, mnsg.us); android/app/build.gradle (applicationId); LICENSE (GPL-3.0); releases v1.0.0 and v1.0.1 (first run); release v1.0.8 (Goemon64Recomp-1.0.8-arm64-v8a.apk)"
+    },
+    {
+      "id": "dk64-recomp-android",
+      "name": "DK64: Recompiled for Android",
+      "game": "Donkey Kong 64",
+      "systems": [
+        "n64"
+      ],
+      "kind": "recompilation",
+      "status": "alpha",
+      "repo": "https://github.com/deivid22srk/dk64-recomp-android",
+      "licence": "GPL-3.0",
+      "needs": "Your Donkey Kong 64 ROM, the North American 1.0 one, chosen in the app on its first start.",
+      "package": "com.deivid22srk.dk64recomp",
+      "asset": "\\.apk$",
+      "roms": [
+        "4d876060f09b3fc5"
+      ],
+      "source": "dk64-recomp-android v1.0.3-android-r7: src/main/main.cpp supported_games (rom_hash 0x4D876060F09B3FC5); android/app/build.gradle.kts (applicationId); LICENSE (GPL-3.0); release v1.0.3-android-r7 (notes; dk64recomp-android-v1.0.3-android-r7.apk)"
+    },
+    {
+      "id": "acgc-android",
+      "name": "Animal Crossing for Android",
+      "game": "Animal Crossing",
+      "systems": [
+        "ngc"
+      ],
+      "kind": "recompilation",
+      "status": "alpha",
+      "repo": "https://github.com/zwaetschge/ACGC-Android-Port",
+      "needs": "Your own US Animal Crossing disc image (GAFE01) as .iso, .gcm, .ciso or NKit, chosen in the app.",
+      "package": "com.acpc.port",
+      "asset": "\\.apk$",
+      "source": "ACGC-Android-Port v0.5.0: app/build.gradle.kts (applicationId); releases v0.3.0 and v0.4.0 (the disc image it needs); release v0.5.0 (ACGC-Android-v0.5.0.apk)"
+    },
+    {
+      "id": "zelda3-android",
+      "name": "Zelda 3",
+      "game": "The Legend of Zelda: A Link to the Past",
+      "systems": [
+        "snes"
+      ],
+      "kind": "reimplementation",
+      "status": "beta",
+      "repo": "https://github.com/samyost1/zelda3-android",
+      "needs": "Your US A Link to the Past ROM, chosen when the app asks on its first start.",
+      "package": "com.dishii.zelda3",
+      "asset": "\\.apk$",
+      "source": "zelda3-android v2.0: app/src/main/AndroidManifest.xml (package); release v2.0 (first start; zelda3-dualscreen.apk)"
     }
   ]
 }

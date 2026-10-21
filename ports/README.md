@@ -55,3 +55,33 @@ installed them (`core:launch` `PsPorts`), and the files each release must still 
 `tools/ports/native_check.py` checks them against each project's newest release; a change opens an
 issue labelled `native-port-changed`. Keep each entry the same as its `PsPorts` entry: a test
 compares them.
+
+## Ports on Android
+
+The `android` list in `index.json` holds the ports published as Android apps that Fuse checked
+itself; `android/openports.json` is Open Ports Games' catalogue of the rest (its data under CC BY
+4.0), as Fuse carries it. What Fuse does with both is in
+[INTEGRATIONS.md, Ports on Android](../INTEGRATIONS.md#ports-on-android).
+
+A port belongs in the `android` list when its project publishes an APK in its GitHub releases and
+it plays a game from the person's own files (never one that ships the game's own). For each one:
+
+1. Read its own source at the release you list, and cite every fact in its `source`: its package
+   (`applicationId` in its build file, written as `package`), what it asks for on its first start
+   (`needs`, in words), and where it says which ROM it takes.
+2. Give the game it plays (`game`), its other names (`titles`) and the library's systems (`systems`,
+   Fuse's ids such as `n64`), its `kind` (`recompilation`, `decompilation`, `source-port`,
+   `runtime-port` or `reimplementation`) and `status` (`stable`, `beta` or `alpha`), and its
+   `licence` as its LICENSE file names it.
+3. Where a release holds more than one APK, say which in `asset` (a regular expression over the
+   file's name). Fuse takes the newest release with an APK for the device, older ones when the
+   newest has none.
+4. List the ROMs it is made for in `roms` only where its source names them by the XXH3-64 of the
+   big-endian ROM (`supported_games` in an N64: Recompiled port).
+5. Raise `revision`.
+
+To bring Open Ports Games' snapshot up to date:
+
+```sh
+python3 tools/ports/openports.py snapshot --out ports/android/openports.json
+```

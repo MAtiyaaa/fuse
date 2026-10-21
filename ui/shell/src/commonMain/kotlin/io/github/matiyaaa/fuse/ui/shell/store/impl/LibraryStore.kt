@@ -141,6 +141,13 @@ internal class DefaultLibraryOps(
      */
     @kotlin.concurrent.Volatile var portPlay: (suspend (GameId) -> Pair<GameId, String>?)? = null
 
+    /**
+     * Android: the app a game plays as, a recomp or port attached to it (its app id and name), which
+     * Play starts in the emulator's place, the time and the game page staying the game's own. Null
+     * when none was chosen or it isn't installed.
+     */
+    @kotlin.concurrent.Volatile var androidPort: (suspend (GameId) -> Pair<String, String>?)? = null
+
     /** What runs after a game ends (its saves sent, its session counted), for [awaitPlayed]. */
     private val afterGame = mutableListOf<kotlinx.coroutines.Job>()
 
@@ -467,7 +474,7 @@ internal class DefaultLibraryOps(
             ) { parts, _ -> parts }
             .combine(ctx.offline) { parts, roots -> parts to roots.takeIf { game.appId == null }?.firstOrNull { it.holds(game.location.path) } }
             // Play With a port, chosen or taken back, changes what Play says.
-            .combine(ctx.settings.map { it.ports.playWith[id.value.toString()] }.distinctUntilChanged()) { parts, _ -> parts }
+            .combine(ctx.settings.map { it.ports.playWith[id.value.toString()] to it.ports.androidPlayWith[id.value.toString()] }.distinctUntilChanged()) { parts, _ -> parts }
             .map { (parts, away) ->
             val (media, installed, platformEmulator, cols, week, ra) = parts
             val resolved = ctx.resolver.resolve(
@@ -478,6 +485,7 @@ internal class DefaultLibraryOps(
             )
             val choice = choiceOf(game, platform, resolved, installed)
             val port = portPlay?.invoke(id)?.second
+            val app = if (port == null) androidPort?.invoke(id)?.second else null
             GameDetail(
                 game = game,
                 platform = platform,
@@ -485,6 +493,8 @@ internal class DefaultLibraryOps(
                 art = Art.from(media),
                 emulator = if (port != null) {
                     choice.copy(launchSummary = "Starts in $port", playLine = "Starts in $port, the port you chose to play it with, its saves and time kept with the port's.", canLaunch = true, port = port)
+                } else if (app != null) {
+                    choice.copy(launchSummary = "Starts in $app", playLine = "Starts in $app, the port you chose to play it with. Its saves stay in the app.", canLaunch = true, port = app)
                 } else {
                     choice.copy(playLine = playLine(game, resolved, choice.launchSummary))
                 },
@@ -628,9 +638,12 @@ internal class DefaultLibraryOps(
     }
 
     override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, skipSaveCheck: Boolean, playAnyway: Boolean, together: io.github.matiyaaa.fuse.ui.shell.store.Together?, onStage: (io.github.matiyaaa.fuse.ui.shell.store.LaunchStage) -> Unit): LaunchOutcome {
-        // A game the person plays with a port starts as the port's own game (its saves and time there).
-        val target = if (emulator == null && discPath == null && together == null) portPlay?.invoke(id)?.first ?: id else id
-        return launchGame(target, emulator, discPath, display, skipSaveCheck, playAnyway, together, onStage).also { outcome ->
+        // A game the person plays with a port starts as the port's own game (its saves and time there);
+        // on Android, as the port's app attached to it (the time the game's own).
+        val plain = emulator == null && discPath == null && together == null
+        val target = if (plain) portPlay?.invoke(id)?.first ?: id else id
+        val asApp = if (plain && target == id) androidPort?.invoke(id)?.first else null
+        return launchGame(target, emulator, discPath, display, skipSaveCheck, playAnyway, together, onStage, asApp).also { outcome ->
             if (outcome is LaunchOutcome.Problem) ctx.recordProblem(outcome.problem)
         }
     }
@@ -656,9 +669,15 @@ internal class DefaultLibraryOps(
         class Stopped(val outcome: LaunchOutcome) : PlayResolution
     }
 
-    private suspend fun resolveForPlay(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?): PlayResolution {
+    private suspend fun resolveForPlay(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, asApp: String? = null): PlayResolution {
         fun stop(problem: io.github.matiyaaa.fuse.ui.shell.store.Problem) = PlayResolution.Stopped(LaunchOutcome.Problem(problem))
         var stored = data.games.get(id) ?: return stop(LaunchProblems.gone())
+        // Played as the port's app ([asApp]): started as the app, which keeps the game's files itself,
+        // so a drive that is out or a file moved doesn't stop it.
+        if (asApp != null) {
+            val path = io.github.matiyaaa.fuse.model.AppGames.path(asApp)
+            stored = stored.copy(location = stored.location.copy(path = path, launchPath = path, kind = LocationKind.FILE), discs = emptyList(), content = emptyList())
+        }
         // A computer's Steam game still kept as a shortcut file that went away moves onto Steam's library.
         if (stored.location.launchPath.endsWith(".steam", ignoreCase = true) && !exists(stored.location.launchPath) && engine.moveSteamShortcutsToLibraries()) {
             stored = data.games.get(id) ?: stored
@@ -766,8 +785,9 @@ internal class DefaultLibraryOps(
         playAnyway: Boolean = false,
         together: io.github.matiyaaa.fuse.ui.shell.store.Together? = null,
         onStage: (io.github.matiyaaa.fuse.ui.shell.store.LaunchStage) -> Unit = {},
+        asApp: String? = null,
     ): LaunchOutcome {
-        val ready = when (val r = resolveForPlay(id, emulator, discPath, display)) {
+        val ready = when (val r = resolveForPlay(id, emulator, discPath, display, asApp)) {
             is PlayResolution.Stopped -> return r.outcome
             is PlayResolution.Ready -> r.plan
         }

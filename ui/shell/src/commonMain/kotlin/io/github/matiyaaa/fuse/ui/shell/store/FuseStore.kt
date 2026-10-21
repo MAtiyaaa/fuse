@@ -1130,6 +1130,15 @@ interface AppOps {
     /** Says what the app with [appId] is: a game joins the Android system, an emulator lists under Emulators. Null lets Fuse decide. */
     suspend fun setKind(appId: String, kind: AppKind?) = Unit
 
+    /** Attaches the app [appId], a recomp or port, to the library [game] it plays (null: to none). */
+    suspend fun setPlays(appId: String, game: GameId?) = Unit
+
+    /**
+     * What the app [packageName] is ([kind], and for a port the [plays] game): at once when it is
+     * installed, else once Android has installed it.
+     */
+    suspend fun expect(packageName: String, kind: AppKind, plays: GameId? = null) = Unit
+
     /**
      * Hands the APK at [path] to Android's installer (which asks the user) and makes the app a game
      * once it is installed. The file itself is left where it is.

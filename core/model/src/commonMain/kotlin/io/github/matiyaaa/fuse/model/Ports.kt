@@ -19,6 +19,8 @@ data class PortsIndex(
     /** When it was made (ISO 8601), as said; never used to decide anything. */
     val generated: String? = null,
     val ports: List<Port>,
+    /** Ports published as Android apps that Fuse checked against their own source ([AndroidPort.checked]). */
+    val android: List<AndroidPort> = emptyList(),
 ) {
     companion object {
         const val FORMAT = 1

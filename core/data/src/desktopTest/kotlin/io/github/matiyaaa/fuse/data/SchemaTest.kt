@@ -19,13 +19,13 @@ import kotlinx.coroutines.runBlocking
 
 class SchemaTest {
     @Test
-    fun schemaIsVersionSix() {
-        assertEquals(7L, FuseDatabase.Schema.version)
+    fun schemaIsVersionEight() {
+        assertEquals(8L, FuseDatabase.Schema.version)
     }
 
     @Test
     fun freshDatabaseHasEveryTableAndForeignKeys() = TestDb().use { t ->
-        assertEquals(7L, DesktopDatabase.userVersion(t.driver))
+        assertEquals(8L, DesktopDatabase.userVersion(t.driver))
         val tables = t.driver.strings("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')").toSet()
         val expected = setOf(
             "library_source", "game", "game_summary", "game_content", "game_disc", "game_genre", "folder_state",
@@ -56,7 +56,7 @@ class SchemaTest {
             assertEquals(listOf("wal"), driver.strings("PRAGMA journal_mode"))
         }
         DesktopDatabase.openDriver(path).use { driver ->
-            assertEquals(7L, DesktopDatabase.userVersion(driver))
+            assertEquals(8L, DesktopDatabase.userVersion(driver))
             assertEquals(listOf("/roms"), FuseData(FuseDatabase(driver)).sources.all().map { it.path })
             assertEquals(listOf("1"), driver.strings("PRAGMA foreign_keys"))
         }
@@ -83,7 +83,7 @@ class SchemaTest {
             old.execute(null, "INSERT INTO app_override(app_id, pinned) VALUES ('com.example/.Main', 1)", 0)
         }
         DesktopDatabase.openDriver(path).use { driver ->
-            assertEquals(7L, DesktopDatabase.userVersion(driver))
+            assertEquals(8L, DesktopDatabase.userVersion(driver))
             assertEquals(listOf("snes"), driver.strings("SELECT platform_scanned FROM game"))
             assertEquals(listOf(""), driver.strings("SELECT platform_override FROM game"))
             assertEquals(listOf(""), driver.strings("SELECT kind FROM app_override"))
@@ -118,7 +118,7 @@ class SchemaTest {
             )
         }
         DesktopDatabase.openDriver(path).use { driver ->
-            assertEquals(7L, DesktopDatabase.userVersion(driver))
+            assertEquals(8L, DesktopDatabase.userVersion(driver))
             // A copy of the 0.1.6 library is kept from before the migration.
             val backup = File(DesktopDatabase.backupPath(path))
             assertTrue(backup.isFile && backup.length() > 0)
@@ -139,6 +139,34 @@ class SchemaTest {
     }
 
     @Test
+    fun aVersionSevenLibraryKeepsItsAppChoicesAndLearnsWhichGameAPortPlays() {
+        val dir = createTempDirectory("fuse-db").toFile()
+        val path = File(dir, "fuse.db").path
+        // 7.db is the schema 0.4.2.12 to 0.4.3.4 shipped with.
+        File("src/commonMain/sqldelight/databases/7.db").copyTo(File(path))
+        JdbcSqliteDriver("jdbc:sqlite:$path", Properties()).use { old ->
+            old.execute(null, "PRAGMA user_version = 7", 0)
+            old.execute(null, "INSERT INTO app_override(app_id, pinned, kind) VALUES ('com.example/.Main', 1, 'GAME')", 0)
+        }
+        DesktopDatabase.openDriver(path).use { driver ->
+            assertEquals(8L, DesktopDatabase.userVersion(driver))
+            val apps = FuseData(FuseDatabase(driver)).apps
+            runBlocking {
+                val kept = apps.get("com.example/.Main")!!
+                assertTrue(kept.pinned)
+                assertEquals(io.github.matiyaaa.fuse.model.AppKind.GAME, kept.kind)
+                assertEquals(null, kept.plays, "no game until one is attached")
+                apps.setKind("com.example/.Main", io.github.matiyaaa.fuse.model.AppKind.PORT)
+                apps.setPlays("com.example/.Main", 42)
+                assertEquals(42L, apps.get("com.example/.Main")!!.plays)
+                apps.setPlays("com.example/.Main", null)
+                assertEquals(null, apps.get("com.example/.Main")!!.plays)
+            }
+        }
+        dir.deleteRecursively()
+    }
+
+    @Test
     fun databaseFromNewerFuseIsRefused() {
         val dir = createTempDirectory("fuse-db").toFile()
         val path = File(dir, "fuse.db").path
@@ -151,29 +179,29 @@ class SchemaTest {
     fun goingBackFromAnUpdateBringsBackTheLibraryFromBeforeItAndKeepsTheNewerOne() = runBlocking {
         val dir = createTempDirectory("fuse-db").toFile()
         val path = File(dir, "fuse.db").path
-        // The library as this Fuse left it, then a newer Fuse's copy of it before updating it to 8.
+        // The library as this Fuse left it, then a newer Fuse's copy of it before updating it to 9.
         DesktopDatabase.openDriver(path).use { FuseData(FuseDatabase(it)).sources.add("/roms", "ROMs", LibrarySourceKind.ROMS_ROOT) }
-        File(path).copyTo(File(DesktopDatabase.backupPath(path, 8)))
+        File(path).copyTo(File(DesktopDatabase.backupPath(path, 9)))
         JdbcSqliteDriver("jdbc:sqlite:$path", Properties()).use {
             it.execute(null, "INSERT INTO library_source(path, label, kind, enabled) VALUES ('/newer', 'Newer', 'ROMS_ROOT', 1)", 0)
-            it.execute(null, "PRAGMA user_version = 8", 0)
+            it.execute(null, "PRAGMA user_version = 9", 0)
         }
         DesktopDatabase.restoredNote = null
         DesktopDatabase.openDriver(path).use { driver ->
-            assertEquals(7L, DesktopDatabase.userVersion(driver))
+            assertEquals(8L, DesktopDatabase.userVersion(driver))
             assertEquals(listOf("/roms"), FuseData(FuseDatabase(driver)).sources.all().map { it.path })
         }
         // The newer library is kept whole beside it, and the person is told.
-        val kept = File("$path.v8.kept")
+        val kept = File("$path.v9.kept")
         assertTrue(kept.isFile)
         JdbcSqliteDriver("jdbc:sqlite:${kept.path}", Properties()).use { assertEquals(listOf("/newer", "/roms"), it.strings("SELECT path FROM library_source ORDER BY path")) }
-        assertTrue("fuse.db.v8.kept" in DesktopDatabase.restoredNote!!)
+        assertTrue("fuse.db.v9.kept" in DesktopDatabase.restoredNote!!)
         // A copy in another form than this Fuse's is never put in its place.
         val other = File(dir, "other.db").path
-        JdbcSqliteDriver("jdbc:sqlite:$other", Properties()).use { it.execute(null, "PRAGMA user_version = 9", 0) }
-        JdbcSqliteDriver("jdbc:sqlite:${DesktopDatabase.backupPath(other, 9)}", Properties()).use { it.execute(null, "PRAGMA user_version = 8", 0) }
+        JdbcSqliteDriver("jdbc:sqlite:$other", Properties()).use { it.execute(null, "PRAGMA user_version = 10", 0) }
+        JdbcSqliteDriver("jdbc:sqlite:${DesktopDatabase.backupPath(other, 10)}", Properties()).use { it.execute(null, "PRAGMA user_version = 9", 0) }
         assertFailsWith<IllegalStateException> { DesktopDatabase.openDriver(other) }
-        assertTrue(File(other).isFile && !File("$other.v9.kept").exists())
+        assertTrue(File(other).isFile && !File("$other.v10.kept").exists())
         DesktopDatabase.restoredNote = null
         dir.deleteRecursively()
         Unit

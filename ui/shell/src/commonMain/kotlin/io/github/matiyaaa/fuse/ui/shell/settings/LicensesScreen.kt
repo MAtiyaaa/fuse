@@ -98,6 +98,17 @@ private val docs = listOf(
             "Software-use guidance: https://www.gametdb.com/Main/FAQ",
     ),
     LicenceDoc(
+        "openports", "Ports on Android", "Open Ports Games' catalogue, CC BY 4.0. The ports it lists for Android",
+        inline = "${io.github.matiyaaa.fuse.integrations.ports.OpenPorts.CREDIT}.\n\n" +
+            "Source: https://openportsgames.com/ (https://github.com/Kymie131/openportsgames)\n" +
+            "Licence: Creative Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/). Fuse carries " +
+            "a trimmed copy of the catalogue's Android entries (each port's name, the game and system it plays, how it " +
+            "was made, its status, licence and project page) and looks for a newer one at most once a day.\n\n" +
+            "The ports themselves are their projects' own apps, under their own licences, downloaded from their " +
+            "releases when you install one. Fuse distributes none of them. The entries Fuse marks Checked come " +
+            "from Fuse's own list, read from each port's own source.",
+    ),
+    LicenceDoc(
         "systematic", "System pictures", "RetroArch's Systematic icons, CC BY 4.0. Downloaded when used, not part of Fuse",
         inline = io.github.matiyaaa.fuse.integrations.systemart.SystemIcons.ATTRIBUTION + "\n\n" +
             "Source: ${io.github.matiyaaa.fuse.integrations.systemart.SystemIcons.REPO_URL}\n" +

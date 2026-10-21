@@ -27,6 +27,8 @@ data class AppOverride(
     val lastUsedAt: Long? = null,
     /** What the user says the app is, or null to let Fuse decide. */
     val kind: AppKind? = null,
+    /** The library game the app plays (a recomp or port attached to it), by its id. */
+    val plays: Long? = null,
 )
 
 /**
@@ -70,6 +72,9 @@ class AppOverrideRepository(
     /** Says what the app is (null lets Fuse decide again). */
     suspend fun setKind(appId: String, kind: AppKind?) = upsert(appId) { q.setKind(kind?.name, appId) }
 
+    /** Attaches the app to the library game [gameId] it plays (null: to none). */
+    suspend fun setPlays(appId: String, gameId: Long?) = upsert(appId) { q.setPlays(gameId, appId) }
+
     suspend fun markUsed(appId: String, now: Long) = upsert(appId) { q.setLastUsed(now, appId) }
 
     /** Orders pinned apps as in [ordered]. */
@@ -96,7 +101,7 @@ class AppOverrideRepository(
     }
 
     companion object {
-        /** Applies [overrides] to installed [entries] (title, pinned, hidden, last used, kind). */
+        /** Applies [overrides] to installed [entries] (title, pinned, hidden, last used, kind, the game it plays). */
         fun applyTo(entries: List<AppEntry>, overrides: Map<String, AppOverride>): List<AppEntry> = entries.map { entry ->
             val o = overrides[entry.id] ?: return@map entry
             entry.copy(
@@ -105,6 +110,7 @@ class AppOverrideRepository(
                 hidden = o.hidden,
                 lastUsedAt = o.lastUsedAt ?: entry.lastUsedAt,
                 chosenKind = o.kind,
+                plays = o.plays,
             )
         }
     }
@@ -118,4 +124,5 @@ private fun App_override.toModel() = AppOverride(
     sortOrder = sort_order?.toInt(),
     lastUsedAt = last_used_at,
     kind = enumOrNull<AppKind>(kind),
+    plays = plays_game,
 )

@@ -134,9 +134,124 @@ interface PortsOps {
     /** Updates the person's own Flatpak of [place]'s recomp; null when done, else why not. */
     suspend fun updateYourRecomp(place: RecompPlace): String? = "Only a Flatpak is updated from Fuse."
 
+    // Android: ports published as apps, attached to the games they play.
+
+    /** True where ports are Android apps (on Android): Ports shows [android]. */
+    val androidApps: Boolean get() = false
+
+    /** The Android ports, each as it stands here; empty where ports aren't apps (a computer). */
+    val android: StateFlow<AndroidPortsState> get() = NO_ANDROID_PORTS
+
+    /** The Android ports that play [game], installed or not, best first, with the one Play starts it with. For Play With. */
+    suspend fun androidPortsFor(game: GameId): List<AndroidPortOffer> = emptyList()
+
+    /**
+     * Installs the Android port [id] from its project's releases (Android asks the person), then
+     * attaches it to [forGame], or to its one game in the library, and plays that game with it.
+     */
+    fun installAndroid(id: String, forGame: GameId? = null) = Unit
+
+    /** Asks Android to uninstall the port [id]'s app (Android asks the person). */
+    fun uninstallAndroid(id: String) = Unit
+
+    /** Opens the port [id]'s app. */
+    fun openAndroid(id: String): Boolean = false
+
+    /** The installed app (package/activity) Play starts [game] with: a recomp or port attached to it; null: its emulator. */
+    fun androidPlayWith(game: GameId): String? = null
+
+    /** Plays [game] with the attached app [appId] from now on; null: with its emulator again. */
+    suspend fun setAndroidPlayWith(game: GameId, appId: String?) = Unit
+
+    /**
+     * Attaches the installed app [appId] to the library [game] as a recomp or port of it (its Type
+     * becomes Recomp or Port), and plays the game with it from now on. Null when done, else why not.
+     */
+    suspend fun attach(appId: String, game: GameId): String? = "Ports are attached to games on Android."
+
+    /** Detaches the app [appId] from its game; Play goes back to the emulator where it was the choice. */
+    suspend fun detach(appId: String) = Unit
+
+    /** Attaches the app [packageName] to [game] once Android has installed it (at once when it is). */
+    suspend fun attachOnceInstalled(packageName: String, game: GameId) = Unit
+
+    /**
+     * The library games an app ([packageName], named [label]) may be a recomp or port of, for "What
+     * game is this?": the port it is, when Fuse knows it, and the games it plays first; then the
+     * games most like its name, or like [query] when the person typed one.
+     */
+    suspend fun gamesForApp(packageName: String, label: String, query: String? = null): AppPortGuess = AppPortGuess()
+
+    /** What the APK at [path] is, when it is a port Fuse knows (read before it is installed). */
+    suspend fun apkPort(path: String): ApkPort? = null
+
     object None : PortsOps {
         override val state: StateFlow<PortsState> = MutableStateFlow(PortsState())
     }
+}
+
+private val NO_ANDROID_PORTS: StateFlow<AndroidPortsState> = MutableStateFlow(AndroidPortsState())
+
+/** How a library game was found to be a port's: by its ROM's hash, by its name alone, or because the person attached the app to it. */
+enum class PortMatch { ROM, NAME, ATTACHED }
+
+/**
+ * The Android ports as Ports shows them: Fuse's own checked entries beside Open Ports Games'
+ * listings ([listedAt]: the catalogue's date), each as it stands here.
+ */
+@Immutable
+data class AndroidPortsState(
+    val ports: List<AndroidPortView> = emptyList(),
+    val loaded: Boolean = false,
+    val refreshing: Boolean = false,
+    /** Why the last look for newer lists failed; null when it worked or wasn't made. */
+    val problem: String? = null,
+    val listedAt: String? = null,
+) {
+    fun port(id: String): AndroidPortView? = ports.firstOrNull { it.port.id == id }
+}
+
+/**
+ * One Android port here: its app when installed ([packageName], [appId] its launcher entry and
+ * [installedVersion]), the install in progress or failed, the library games it plays ([games]) and
+ * the ones it is attached to ([attachedTo]).
+ */
+@Immutable
+data class AndroidPortView(
+    val port: io.github.matiyaaa.fuse.model.AndroidPort,
+    val packageName: String? = null,
+    val appId: String? = null,
+    val installedVersion: String? = null,
+    val job: PortJob? = null,
+    val games: List<PortGameChoice> = emptyList(),
+    val attachedTo: List<PortGameChoice> = emptyList(),
+) {
+    val installed: Boolean get() = appId != null
+}
+
+/** An Android port for one game, as Play With offers it: how it is the game's, and whether Play starts the game with it. */
+@Immutable
+data class AndroidPortOffer(val view: AndroidPortView, val match: PortMatch, val chosen: Boolean)
+
+/** What an installed app may be a port of: the [port] Fuse knows it as, and the library's likeliest [games], best first. */
+@Immutable
+data class AppPortGuess(val port: io.github.matiyaaa.fuse.model.AndroidPort? = null, val games: List<PortGameChoice> = emptyList())
+
+/** A library game offered for "What game is this?"; [plays]: the known port plays it. */
+@Immutable
+data class PortGameChoice(val id: GameId, val title: String, val system: String, val plays: Boolean)
+
+/** An APK that is a port Fuse knows: its package and the library games it plays. */
+@Immutable
+data class ApkPort(val port: io.github.matiyaaa.fuse.model.AndroidPort, val packageName: String, val games: List<PortGameChoice>)
+
+/** The lists of Android ports inside Fuse: its own (`ports/index.json`) and Open Ports Games' snapshot. */
+interface AndroidPortLists {
+    /** Fuse's list of ports, whose `android` entries are its checked Android ports; null when it isn't there. */
+    fun bundledIndex(): String?
+
+    /** Open Ports Games' catalogue as Fuse carries it (`ports/android/openports.json`); null when it isn't there. */
+    fun bundledListing(): String?
 }
 
 /** Everything Ports shows. */
@@ -203,6 +318,9 @@ sealed interface PortJob {
     data class Downloading(val progress: Float?, val bytes: Long, val total: Long?) : PortJob
     data object Unpacking : PortJob
     data object SettingUp : PortJob
+
+    /** Android is installing an app: [waitingTurn] while another install has the system's installer. */
+    data class Installing(val waitingTurn: Boolean = false) : PortJob
     data class Failed(val message: String) : PortJob
 
     val active: Boolean get() = this !is Failed
