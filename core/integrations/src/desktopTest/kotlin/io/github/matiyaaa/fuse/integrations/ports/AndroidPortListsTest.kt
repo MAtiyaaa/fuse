@@ -24,6 +24,19 @@ class AndroidPortListsTest {
             assertTrue(p.checked && p.installable, p.id)
             assertTrue(p.systems.isNotEmpty(), "${p.id} plays a system of the library")
             assertTrue(!p.source.isNullOrBlank(), "${p.id} says where its facts come from")
+            assertTrue(p.cover?.startsWith("https://") == true && !p.coverCredit.isNullOrBlank(), "${p.id} has box art, credited")
+        }
+        for (p in list.index.ports) assertTrue(p.cover?.startsWith("https://") == true && !p.coverCredit.isNullOrBlank(), "${p.id} has box art, credited")
+    }
+
+    @Test
+    fun mostListingsHaveBoxArtAndEveryPictureIsOverHttps() {
+        val listing = OpenPorts.read(repoFile("ports/android/openports.json").readText()).getOrThrow()
+        val withArt = listing.ports.count { it.cover != null }
+        assertTrue(withArt * 3 >= listing.ports.size * 2, "$withArt of ${listing.ports.size} have box art")
+        for (p in listing.ports) {
+            for (picture in listOfNotNull(p.cover, p.screenshot)) assertTrue(picture.startsWith("https://"), "${p.id}: $picture")
+            p.year?.let { assertTrue(it in 1970..2030, "${p.id}: $it") }
         }
     }
 

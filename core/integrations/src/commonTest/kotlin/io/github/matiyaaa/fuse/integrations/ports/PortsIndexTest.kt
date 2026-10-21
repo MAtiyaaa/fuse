@@ -75,6 +75,18 @@ class PortsIndexTest {
     }
 
     @Test
+    fun aPortsBoxArtIsKeptOnlyOverHttps() {
+        fun cover(url: String) = PortsIndexReader.read(SIGNED.replace("\"id\":\"skyport\",", "\"id\":\"skyport\",\"cover\":\"$url\",\"coverCredit\":\"Wikipedia\",")).getOrThrow().index.ports.single()
+        val kept = cover("https://example.org/sky.png")
+        assertEquals("https://example.org/sky.png", kept.cover)
+        assertEquals("Wikipedia", kept.coverCredit)
+        val dropped = cover("http://example.org/sky.png")
+        assertEquals("skyport", dropped.id, "the port stays")
+        assertEquals(null, dropped.cover)
+        assertEquals(null, dropped.coverCredit)
+    }
+
+    @Test
     fun aRecompilationsRomItsVariablesAndASettingsFileAreChecked() {
         val build = io.github.matiyaaa.fuse.model.PortBuild("linux", url = "https://example.org/r.zip", size = 10, sha256 = "a".repeat(64), kind = PortFileKind.ZIP_TAR_GZ, run = "Recomp")
         val rom = io.github.matiyaaa.fuse.model.PortData("rom", "Its ROM", "The US one.", needs = emptyList(), rom = io.github.matiyaaa.fuse.model.PortRom("n64", "ef18b4a9e2386169", "mm.n64.us.1.0.z64"))

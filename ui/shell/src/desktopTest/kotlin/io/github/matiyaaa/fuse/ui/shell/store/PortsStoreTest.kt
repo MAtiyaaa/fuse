@@ -288,6 +288,40 @@ class PortsStoreTest {
     }
 
     @Test
+    fun withNoCopyHereThePersonsCopyOnRommIsOfferedBroughtAndUsedOnceIn(): Unit = runBlocking {
+        val (services, _) = services()
+        val store = createFuseStore(services, scope)
+        val asked = java.util.concurrent.CopyOnWriteArrayList<PortGameCopy>()
+        val landed = kotlinx.coroutines.flow.MutableStateFlow<io.github.matiyaaa.fuse.model.GameId?>(null)
+        val onRomm = PortGameCopy(io.github.matiyaaa.fuse.model.GameId(-5), "Sky Racer (1996)", PlatformId("dos"), CopyPlace.ROMM, "RomM", romId = 5)
+        (store.ports as io.github.matiyaaa.fuse.ui.shell.store.impl.PortsStore).sources = object : io.github.matiyaaa.fuse.ui.shell.store.impl.PortGameSources {
+            override suspend fun games(systems: Set<String>) = listOf(
+                onRomm,
+                PortGameCopy(io.github.matiyaaa.fuse.model.GameId(-6), "Sky Racer 2", PlatformId("dos"), CopyPlace.ROMM, "RomM", romId = 6),
+                PortGameCopy(io.github.matiyaaa.fuse.model.GameId(-7), "Sky Racer", PlatformId("n64"), CopyPlace.DEVICE, "Gaming PC"),
+            ).filter { it.platform.value in systems }
+            override suspend fun bring(copy: PortGameCopy): String? = null.also { asked += copy }
+            override fun arrived(copy: PortGameCopy) = landed
+        }
+        store.ports.open()
+        store.until("listed") { it.loaded }
+
+        // Not on this computer: the person's copy of its game, by its name, from a computer's systems.
+        assertTrue(store.ports.copiesInLibrary("skyport", "game").isEmpty())
+        assertEquals(listOf(onRomm), store.ports.copiesElsewhere("skyport", "game"))
+
+        // Brought here; once it is in the library, the port reads its files.
+        assertNull(store.ports.bringGame("skyport", onRomm))
+        assertEquals(listOf(onRomm), asked.toList())
+        File(game, "SKY.DAT").writeBytes(ByteArray(16) { 7 })
+        File(game, "SKYRACER.EXE").writeBytes(ByteArray(8))
+        val dos = assertNotNull(store.library.addGameFile(File(game, "SKYRACER.EXE").absolutePath, PlatformId("dos"), title = "Sky Racer"))
+        landed.value = dos
+        withTimeout(20_000) { while (services.data.settings.current().ports.copies["skyport"] != dos.value) kotlinx.coroutines.delay(25) }
+        assertEquals(game.absolutePath.replace('\\', '/'), services.data.settings.current().ports.folders["skyport"]?.get("game"))
+    }
+
+    @Test
     fun aPortsOwnSettingsAreChangedInItsFileAsItsCodeNamesThemAndPutBack(): Unit = runBlocking {
         File(game, "SKY.DAT").writeBytes(ByteArray(16) { 7 })
         // A port Fuse Tune has read (DevilutionX's settings, by its id), its settings file in its home.

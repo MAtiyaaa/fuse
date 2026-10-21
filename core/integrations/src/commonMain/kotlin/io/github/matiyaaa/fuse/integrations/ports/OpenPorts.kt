@@ -3,6 +3,7 @@ package io.github.matiyaaa.fuse.integrations.ports
 import io.github.matiyaaa.fuse.integrations.ApiResult
 import io.github.matiyaaa.fuse.integrations.FuseHttp
 import io.github.matiyaaa.fuse.integrations.ProviderHttp
+import io.github.matiyaaa.fuse.integrations.match.TitleNormalizer
 import io.github.matiyaaa.fuse.model.AndroidPort
 import io.github.matiyaaa.fuse.model.AndroidPortKind
 import io.github.matiyaaa.fuse.model.AndroidPortStatus
@@ -41,15 +42,32 @@ object OpenPorts {
         if (feed.schema != SCHEMA) return Result.failure(IllegalArgumentException("Open Ports Games' list isn't the catalogue Fuse reads."))
         if (feed.version > VERSION) return Result.failure(IllegalArgumentException("Open Ports Games' list is in a newer form than this Fuse reads."))
         val seen = HashSet<String>()
-        val ports = feed.ports.mapNotNull { p -> p.toPort()?.takeIf { seen.add(it.id) } }
+        val covers = coversByGame(feed.ports)
+        val ports = feed.ports.mapNotNull { p -> p.toPort(covers)?.takeIf { seen.add(it.id) } }
         return Result.success(Listing(ports, feed.generatedAt))
     }
 
-    private fun FeedPort.toPort(): AndroidPort? {
+    /**
+     * Box art by game, from every entry of the catalogue whatever it is for: a game's port for a
+     * computer often carries the cover its Android port doesn't.
+     */
+    private fun coversByGame(ports: List<FeedPort>): Map<String, FeedPicture> = buildMap {
+        for (p in ports) {
+            val src = AndroidPorts.picture(p.cover?.src) ?: continue
+            putIfAbsent(gameKey(p.game), FeedPicture(src, p.cover?.credit))
+        }
+    }
+
+    /** A game's name as two listings of one game are told apart: its words, in lower case. */
+    fun gameKey(game: String): String = TitleNormalizer.normalize(plain(game))
+
+    private fun FeedPort.toPort(covers: Map<String, FeedPicture>): AndroidPort? {
         if (ANDROID !in platforms || kind != "game") return null
         if (sourceDead == true || !warning.isNullOrBlank()) return null
         if (!ID.matches(id) || title.isBlank() || game.isBlank()) return null
         val repo = sources.firstOrNull { it.startsWith("https://") } ?: return null
+        // Its own box art, else another listing's of the same game.
+        val art = picture.takeIf { it.src != null } ?: covers[gameKey(game)] ?: FeedPicture(null, null)
         return AndroidPort(
             id = id,
             name = plain(title),
@@ -61,10 +79,22 @@ object OpenPorts {
             licence = license?.spdx?.takeIf { it.isNotBlank() && it != "NOASSERTION" },
             about = notes?.let(::plain)?.takeIf { it.isNotEmpty() },
             listedVerified = verified,
+            publisher = publisher?.let(::plain)?.takeIf { it.isNotEmpty() },
+            year = originalYear?.takeIf { it in 1950..2100 },
+            genre = genre?.trim()?.lowercase()?.takeIf { GENRE.matches(it) },
+            cover = art.src,
+            coverCredit = art.credit?.let(::plain)?.takeIf { it.isNotEmpty() },
+            screenshot = screenshots.firstNotNullOfOrNull { AndroidPorts.picture(it.src) },
         )
     }
 
+    private val FeedPort.picture: FeedPicture
+        get() = AndroidPorts.picture(cover?.src)?.let { FeedPicture(it, cover?.credit) } ?: FeedPicture(null, null)
+
     private const val ANDROID = "android"
+
+    /** A genre as the catalogue names them: a word or two of lower case letters ("action-adventure"). */
+    private val GENRE = Regex("^[a-z]{2,24}(-[a-z]{2,24}){0,2}$")
 
     /**
      * A listing's text as Fuse shows text: a dash between words becomes a comma, one between
@@ -160,10 +190,19 @@ object OpenPorts {
         val originalSystems: List<String> = emptyList(),
         val sourceDead: Boolean? = null,
         val warning: String? = null,
+        val publisher: String? = null,
+        val originalYear: Int? = null,
+        val genre: String? = null,
+        val cover: FeedPicture? = null,
+        val screenshots: List<FeedPicture> = emptyList(),
     )
 
     @Serializable
     private data class FeedLicence(val spdx: String? = null)
+
+    /** A picture a listing points to, and whom it credits for it. */
+    @Serializable
+    private data class FeedPicture(val src: String? = null, val credit: String? = null)
 }
 
 /**

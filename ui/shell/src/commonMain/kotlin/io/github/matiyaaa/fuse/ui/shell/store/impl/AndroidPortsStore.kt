@@ -35,9 +35,11 @@ import io.github.matiyaaa.fuse.ui.shell.store.AndroidPortView
 import io.github.matiyaaa.fuse.ui.shell.store.AndroidPortsState
 import io.github.matiyaaa.fuse.ui.shell.store.ApkPort
 import io.github.matiyaaa.fuse.ui.shell.store.AppPortGuess
+import io.github.matiyaaa.fuse.ui.shell.store.CopyPlace
 import io.github.matiyaaa.fuse.ui.shell.store.PackageBridge
 import io.github.matiyaaa.fuse.ui.shell.store.PackageOutcome
 import io.github.matiyaaa.fuse.ui.shell.store.PortGameChoice
+import io.github.matiyaaa.fuse.ui.shell.store.PortGameCopy
 import io.github.matiyaaa.fuse.ui.shell.store.PortJob
 import io.github.matiyaaa.fuse.ui.shell.store.PortMatch
 import io.github.matiyaaa.fuse.ui.shell.store.PortsOps
@@ -88,6 +90,10 @@ internal class AndroidPortsStore(
     private val apps: DefaultAppOps,
     private val write: suspend ((AppSettings) -> AppSettings) -> Unit,
     private val publicKey: () -> String? = { PortsSignature.PUBLIC_KEY },
+    /** Where a port's game may be besides this device: RomM and the household's other devices (a test's own). */
+    internal var sources: PortGameSources = PortGameSources.None,
+    /** Box art for a game by its name and system, from the sources the library's art comes from; null when none is found. */
+    internal var findCover: suspend (title: String, platform: PlatformId?) -> String? = { _, _ -> null },
 ) : PortsOps {
     override val supported: Boolean = true
     override val androidApps: Boolean = true
@@ -111,6 +117,25 @@ internal class AndroidPortsStore(
     /** Packages being installed for a game, attached to it once Android has installed them. */
     private val attachWhenIn = MutableStateFlow<Map<String, GameId>>(emptyMap())
 
+    /** Ports whose game came here before their app did, by port id: attached once the app is in. */
+    private val attachOnceApp = MutableStateFlow<Map<String, GameId>>(emptyMap())
+
+    /** The copy of each port's game Fuse is bringing here, by port id. */
+    private val bringing = MutableStateFlow<Map<String, PortGameCopy>>(emptyMap())
+
+    /** Box art found by name for the ports without their own, by port id. */
+    private val found = MutableStateFlow<Map<String, String>>(emptyMap())
+    @kotlin.concurrent.Volatile private var finding: Job? = null
+
+    /** The games on RomM and the household's other devices, by system and name, read again after a little while. */
+    @kotlin.concurrent.Volatile private var others: Pair<Long, AndroidPortCatalog.Games<PortGameCopy>>? = null
+
+    /** Ports was opened: only then are RomM's and the household's games read, never as Fuse starts. */
+    @kotlin.concurrent.Volatile private var opened = false
+
+    /** The wait for each port's brought game to come in, by port id, with the copy it waits for. */
+    private val waits = HashMap<String, Pair<GameId, Job>>()
+
     /** One look at what is here at a time (made before [init] starts the looks). */
     private val publishing = Mutex()
 
@@ -131,6 +156,7 @@ internal class AndroidPortsStore(
                 // One app that can't be attached never stops the next from being.
                 try {
                     attachArrivals(list)
+                    attachBrought(list)
                     attachFound(list)
                     publish()
                 } catch (e: CancellationException) {
@@ -141,6 +167,7 @@ internal class AndroidPortsStore(
             }
         }
         ctx.scope.launch { jobs.drop(1).collect { publish() } }
+        ctx.scope.launch { combine(found, bringing) { _, _ -> }.drop(1).collect { publish() } }
         ctx.scope.launch { places().collect { p -> ctx.portPlaces.value = p; if (p.isNotEmpty()) ctx.shownPlatforms.update { it + p.values } } }
         ctx.scope.launch {
             ctx.settings.map { it.ports.androidPlayWith to it.ports.androidInstalled }.distinctUntilChanged().drop(1).collect { publish() }
@@ -148,10 +175,13 @@ internal class AndroidPortsStore(
     }
 
     override fun open() {
+        opened = true
         ctx.scope.launch {
             library = null
+            others = null
             publish()
             look(force = false)
+            findCovers()
         }
     }
 
@@ -165,7 +195,9 @@ internal class AndroidPortsStore(
     private suspend fun load() {
         val inside = lists?.bundledIndex()?.let { PortsIndexReader.read(it).getOrNull() }?.index?.android.orEmpty()
         checked = keptSigned() ?: inside
+        // A listing kept by a Fuse that didn't read its pictures gives way to the one inside this Fuse.
         val kept = runCatching { ctx.data.cache.get(NS, LISTED, CachedListing.serializer(), ctx.now()) }.getOrNull()
+            ?.takeIf { k -> k.ports.any { it.cover != null } }
         if (kept != null) {
             listed = kept.ports
             listedAt = kept.generated
@@ -250,18 +282,30 @@ internal class AndroidPortsStore(
     /** The installed app that is [port]. */
     private fun appOf(port: AndroidPort, installed: List<AppEntry>): AppEntry? = appsByPort(installed)[port.id]
 
-    private suspend fun view(port: AndroidPort, installed: List<AppEntry>, games: AndroidPortCatalog.Games<GameSummary>?, app: AppEntry? = appOf(port, installed)): AndroidPortView {
+    private suspend fun view(
+        port: AndroidPort,
+        installed: List<AppEntry>,
+        games: AndroidPortCatalog.Games<GameSummary>?,
+        app: AppEntry? = appOf(port, installed),
+        elsewhere: AndroidPortCatalog.Games<PortGameCopy>? = null,
+    ): AndroidPortView {
         val version = app?.let { runCatching { bridge.installed(it.packageName) }.getOrNull()?.versionName }
+        val here = games?.of(port)?.map { choice(it, true) }.orEmpty()
+        val attached = installed.filter { a -> a.packageName == app?.packageName && a.plays != null }.mapNotNull { a ->
+            games?.byId(GameId(a.plays!!))?.let { choice(it, true) }
+        }
         return AndroidPortView(
             port = port,
             packageName = app?.packageName ?: ctx.settings.value.ports.androidInstalled[port.id] ?: port.packageName,
             appId = app?.id,
             installedVersion = version,
             job = jobs.value[port.id],
-            games = games?.of(port)?.map { choice(it, true) }.orEmpty(),
-            attachedTo = installed.filter { a -> a.packageName == app?.packageName && a.plays != null }.mapNotNull { a ->
-                games?.byId(GameId(a.plays!!))?.let { choice(it, true) }
-            },
+            games = here,
+            attachedTo = attached,
+            foundCover = found.value[port.id],
+            // Where else its game is, while this device hasn't got it.
+            elsewhere = if (here.isEmpty() && attached.isEmpty()) elsewhere?.of(port).orEmpty().sortedWith(COPY_ORDER) else emptyList(),
+            bringing = bringing.value[port.id],
         )
     }
 
@@ -270,8 +314,87 @@ internal class AndroidPortsStore(
         val installed = apps.installedApps.value
         val games = games()
         val byPort = appsByPort(installed)
-        val views = index.ports.map { view(it, installed, games, byPort[it.id]) }
+        val elsewhere = if (opened) elsewhere() else null
+        val views = index.ports.map { view(it, installed, games, byPort[it.id], elsewhere) }
         mutable.update { it.copy(ports = views, loaded = true, listedAt = listedAt) }
+    }
+
+    /** The games on RomM and the household's other devices of the ports' systems, read again after a little while. */
+    private suspend fun elsewhere(): AndroidPortCatalog.Games<PortGameCopy> {
+        others?.takeIf { ctx.now() - it.first < ELSEWHERE_FRESH_MS }?.let { return it.second }
+        val systems = index.ports.flatMap { it.systems }.toSet()
+        val copies = runCatching { sources.games(systems) }.getOrDefault(emptyList())
+        val g = copiesIndex(copies)
+        others = ctx.now() to g
+        return g
+    }
+
+    // Bringing a port's game here
+
+    override suspend fun bringGame(id: String, copy: PortGameCopy): String? {
+        loaded.first { it }
+        val port = index.byId[id] ?: return "Fuse doesn't know that port any more."
+        sources.bring(copy)?.let { return it }
+        bringing.update { it + (id to copy) }
+        synchronized(waits) {
+            val w = waits[id]
+            if (w != null && w.first == copy.id && w.second.isActive) return null
+            w?.second?.cancel()
+            waits[id] = copy.id to ctx.scope.launch {
+                // Once it is in the library, the port plays it: at once when its app is in, else once the app is.
+                val game = sources.arrived(copy).first { it != null }!!
+                library = null
+                others = null
+                val app = appOf(port, apps.installedApps.value)
+                if (app != null) attach(app.id, game) else attachOnceApp.update { it + (id to game) }
+                bringing.update { it - id }
+            }
+        }
+        return null
+    }
+
+    /** Attaches each port whose game came here before its app ([attachOnceApp]) once the app is in. */
+    private suspend fun attachBrought(list: List<AppEntry>) {
+        val waiting = attachOnceApp.value
+        if (waiting.isEmpty()) return
+        for ((id, game) in waiting) {
+            val app = index.byId[id]?.let { appOf(it, list) } ?: continue
+            attachOnceApp.update { it - id }
+            attach(app.id, game)
+        }
+    }
+
+    // Box art
+
+    /**
+     * Looks for box art by name for the ports whose listing has none, once while Fuse runs: the
+     * library's games' ports first, each answer kept for a while so it isn't asked for again.
+     */
+    private suspend fun findCovers() {
+        if (finding?.isActive == true) return
+        finding = ctx.scope.launch {
+            val wanted = mutable.value.ports.filter { it.cover == null }.sortedBy { if (it.here) 0 else 1 }
+            for (v in wanted) {
+                val p = v.port
+                val key = "cover:${p.systems.firstOrNull().orEmpty()}|${AndroidPortCatalog.key(p.game)}"
+                val kept = runCatching { ctx.data.cache.get(NS, key, FoundCover.serializer(), ctx.now()) }.getOrNull()
+                val url = if (kept != null) {
+                    kept.url
+                } else {
+                    // Asked again next time when no source answered (offline): only an answer is kept.
+                    val u = try {
+                        findCover(p.game, p.systems.firstOrNull()?.let(::PlatformId))?.let(AndroidPorts::picture)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        continue
+                    }
+                    runCatching { ctx.data.cache.put(NS, key, FoundCover(u), FoundCover.serializer(), ctx.now(), if (u != null) FOUND_KEEP_MS else NOT_FOUND_KEEP_MS) }
+                    u
+                }
+                if (url != null) found.update { it + (p.id to url) }
+            }
+        }
     }
 
     // Play With
@@ -612,12 +735,22 @@ internal class AndroidPortsStore(
     @Serializable
     private data class CachedSigned(val text: String, val signature: String)
 
+    /** Box art found for a game by its name; [url] null when none was. */
+    @Serializable
+    private data class FoundCover(val url: String? = null)
+
     private companion object {
         const val NS = "ports.android"
         const val LISTED = "listed"
         const val SIGNED = "signed"
         const val LOOK_EVERY_MS = 24L * 60 * 60 * 1000
         const val LIBRARY_FRESH_MS = 30_000L
+        const val ELSEWHERE_FRESH_MS = 2L * 60 * 1000
+        const val FOUND_KEEP_MS = 30L * 24 * 60 * 60 * 1000
+        const val NOT_FOUND_KEEP_MS = 7L * 24 * 60 * 60 * 1000
+
+        /** A port's game elsewhere: on a device that is on first, then RomM, then devices that are away. */
+        val COPY_ORDER: Comparator<PortGameCopy> = compareBy({ if (it.place == CopyPlace.DEVICE && it.online) 0 else if (it.place == CopyPlace.ROMM) 1 else 2 }, { it.from.lowercase() })
         const val PERMISSION_POLL_MS = 1_000L
         const val PERMISSION_WAIT_MS = 5L * 60 * 1000
         const val GUESSES = 8

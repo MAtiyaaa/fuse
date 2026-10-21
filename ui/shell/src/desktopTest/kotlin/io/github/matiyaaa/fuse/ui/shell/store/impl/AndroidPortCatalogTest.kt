@@ -62,6 +62,42 @@ class AndroidPortCatalogTest {
     }
 
     @Test
+    fun aCheckedEntryTakesItsGamesDetailsAndPicturesFromItsListing() {
+        val checked = listOf(
+            port("starship-android", "Star Fox 64", "n64", checked = true, repo = "https://github.com/izzy2lost/Starship"),
+            port("pd-android", "Perfect Dark", "n64", checked = true, repo = "https://github.com/izzy2lost/Perfect-Dark").copy(cover = "https://example.org/pd-own.png", coverCredit = "Box art"),
+        )
+        val listed = listOf(
+            // The same project: its game's details and its picture of the port.
+            port("starship-listed", "Star Fox 64", "n64", repo = "https://github.com/izzy2lost/Starship").copy(
+                publisher = "Nintendo", year = 1997, genre = "shooter", cover = "https://example.org/sf.png", coverCredit = "Wikipedia", screenshot = "https://example.org/starship.png",
+            ),
+            // Another project of the same game: its game's details, never its picture of another port.
+            port("pd-other", "Perfect Dark", "n64").copy(publisher = "Rare", year = 2000, cover = "https://example.org/pd.png", coverCredit = "Wikipedia", screenshot = "https://example.org/other.png"),
+        )
+        val merged = AndroidPortCatalog.merge(checked, listed).associateBy { it.id }
+        val sf = merged.getValue("starship-android")
+        assertEquals(listOf("Nintendo", "1997", "shooter"), listOf(sf.publisher, sf.year.toString(), sf.genre))
+        assertEquals("https://example.org/sf.png" to "Wikipedia", sf.cover to sf.coverCredit)
+        assertEquals("https://example.org/starship.png", sf.screenshot)
+        val pd = merged.getValue("pd-android")
+        assertEquals("https://example.org/pd-own.png" to "Box art", pd.cover to pd.coverCredit, "its own box art stays")
+        assertEquals("Rare", pd.publisher)
+        assertNull(pd.screenshot, "another port's picture isn't this one's")
+    }
+
+    @Test
+    fun aPortWithoutBoxArtTakesAnothersOfItsGameAndSystem() {
+        val ports = AndroidPortCatalog.shareCovers(listOf(
+            port("a", "The Legend of Zelda: Majora's Mask", "n64").copy(cover = "https://example.org/mm.png", coverCredit = "Wikipedia"),
+            port("b", "Legend of Zelda - Majora's Mask", "n64"),
+            port("c", "The Legend of Zelda: Majora's Mask", "3ds"),
+        )).associateBy { it.id }
+        assertEquals("https://example.org/mm.png" to "Wikipedia", ports.getValue("b").cover to ports.getValue("b").coverCredit)
+        assertNull(ports.getValue("c").cover, "another system's game has its own box")
+    }
+
+    @Test
     fun portsOfOneGameAreOfferedCheckedThenByTheRomThenSteadiest() {
         val ports = listOf(
             port("listed-stable", "x", "n64", status = AndroidPortStatus.STABLE) to PortMatch.NAME,

@@ -16,7 +16,8 @@ def port(pid, **extra):
         "developers": ["someone"], "portType": "recompilation", "platforms": ["windows", "android"],
         "status": "beta", "sources": ["https://github.com/someone/" + pid], "license": {"spdx": "MIT", "note": "x"},
         "verified": False, "notes": "Notes.", "notesEs": "Notas.", "originalSystems": ["Nintendo 64"],
-        "cover": {"src": "https://example.org/c.png"},
+        "publisher": "Someone", "originalYear": 1998, "genre": "platformer",
+        "cover": {"src": "https://example.org/c.png", "alt": "Box art", "credit": "Wikipedia"},
     }
     base.update(extra)
     return base
@@ -45,10 +46,23 @@ class SnapshotTest(unittest.TestCase):
         self.assertEqual(["android"], first["platforms"])
         self.assertEqual({"spdx": "MIT"}, first["license"])
         self.assertNotIn("notesEs", first)
-        self.assertNotIn("cover", first)
         self.assertNotIn("developers", first)
+        self.assertEqual({"src": "https://example.org/c.png", "credit": "Wikipedia"}, first["cover"])
+        self.assertEqual(("Someone", 1998, "platformer"), (first["publisher"], first["originalYear"], first["genre"]))
         self.assertEqual("2026-10-18", out["generatedAt"])
         self.assertEqual("CC BY 4.0", out["licence"])
+
+    def test_a_listing_without_box_art_takes_another_listings_of_its_game(self):
+        feed = dict(FEED, ports=[
+            port("bare", game="Star Fox 64", cover=None, screenshots=[{"src": "http://example.org/s.png"}, {"src": "https://example.org/s.png", "credit": "Its project"}]),
+            port("desktop", game="Star Fox 64", platforms=["windows"], cover={"src": "https://example.org/sf.png", "credit": "Box art"}),
+            port("insecure", game="Another Game", cover={"src": "http://example.org/a.png"}),
+        ])
+        out = {p["id"]: p for p in openports.snapshot(feed)["ports"]}
+        self.assertEqual({"src": "https://example.org/sf.png", "credit": "Box art"}, out["bare"]["cover"])
+        self.assertEqual([{"src": "https://example.org/s.png", "credit": "Its project"}], out["bare"]["screenshots"])
+        self.assertNotIn("cover", out["insecure"], "a picture not over HTTPS is left out")
+        self.assertNotIn("desktop", out)
 
     def test_dashes_in_a_listings_text_become_commas_or_hyphens(self):
         self.assertEqual("Undead Neighbor Eaters, Android Native Port", openports.plain("Undead Neighbor Eaters \u2014 Android Native Port"))

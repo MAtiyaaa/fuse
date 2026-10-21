@@ -34,9 +34,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import io.github.matiyaaa.fuse.model.GameId
+import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.PortRunner
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
@@ -52,6 +55,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.input.dragScroll
+import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
@@ -69,11 +73,13 @@ import io.github.matiyaaa.fuse.ui.shell.app.play
 import io.github.matiyaaa.fuse.ui.shell.components.subTabsRoom
 import io.github.matiyaaa.fuse.ui.shell.downloads.ActionPill
 import io.github.matiyaaa.fuse.ui.shell.downloads.TopAction
+import io.github.matiyaaa.fuse.ui.shell.store.Art
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import io.github.matiyaaa.fuse.ui.shell.store.PortJob
 import io.github.matiyaaa.fuse.ui.shell.store.PortView
 import io.github.matiyaaa.fuse.ui.shell.store.PortsState
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
 /**
@@ -155,7 +161,7 @@ fun PortsTab(app: AppState, active: Boolean, topPadding: Dp) {
                 }
                 else -> for ((i, v) in ports.withIndex()) {
                     item(v.port.id) {
-                        PortCard(v, selected = focused && sel.row == i + 1, compact = compact, onClick = {
+                        PortCard(app, v, selected = focused && sel.row == i + 1, compact = compact, onClick = {
                             app.focusZone = FocusZone.CONTENT
                             sel.row = i + 1
                             app.doNext(v)
@@ -173,7 +179,7 @@ fun PortsTab(app: AppState, active: Boolean, topPadding: Dp) {
                         modifier = Modifier.padding(start = Space.gutter, top = Space.m),
                     )
                 }
-                for (y in yours) item("yours-${y.id}-${y.path}") { YourRecompCard(y, compact) }
+                for (y in yours) item("yours-${y.id}-${y.path}") { YourRecompCard(app, y, state.ports.firstOrNull { it.port.id == y.id }?.port?.cover, compact) }
             }
         }
     }
@@ -216,7 +222,7 @@ private fun listLine(state: PortsState): Pair<String, Boolean> {
 }
 
 @Composable
-private fun PortCard(v: PortView, selected: Boolean, compact: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
+private fun PortCard(app: AppState, v: PortView, selected: Boolean, compact: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
     val c = Fuse.colors
     val shape = RoundedCornerShape(Fuse.geometry.panel)
     val border by fuselineColor(if (selected) c.focus else Color.Transparent, Fuse.motion.tween(Durations.FAST), label = "portCard")
@@ -236,7 +242,7 @@ private fun PortCard(v: PortView, selected: Boolean, compact: Boolean, onClick: 
             .padding(if (compact) Space.s else Space.m),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Monogram(v.port.game, if (compact) 48.dp else 64.dp)
+        PortCover(app, v.game, v.port.cover, v.port.game, if (compact) 56.dp else 76.dp)
         Spacer(Modifier.width(Space.m))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -279,7 +285,7 @@ private fun PortCard(v: PortView, selected: Boolean, compact: Boolean, onClick: 
  * it (the game's own Play With, beside its emulator).
  */
 @Composable
-private fun YourRecompCard(y: io.github.matiyaaa.fuse.ui.shell.store.FoundRecomp, compact: Boolean) {
+private fun YourRecompCard(app: AppState, y: io.github.matiyaaa.fuse.ui.shell.store.FoundRecomp, cover: String?, compact: Boolean) {
     val c = Fuse.colors
     val name = io.github.matiyaaa.fuse.launch.ports.NativePorts.name(y.id) ?: return
     val game = io.github.matiyaaa.fuse.launch.ports.NativePorts.game(y.id) ?: return
@@ -289,7 +295,7 @@ private fun YourRecompCard(y: io.github.matiyaaa.fuse.ui.shell.store.FoundRecomp
             .padding(if (compact) Space.s else Space.m),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Monogram(game, if (compact) 40.dp else 48.dp)
+        PortCover(app, null, cover, game, if (compact) 48.dp else 60.dp)
         Spacer(Modifier.width(Space.m))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             FText(game, Fuse.type.bodyStrong, maxLines = 1)
@@ -304,16 +310,44 @@ private fun YourRecompCard(y: io.github.matiyaaa.fuse.ui.shell.store.FoundRecomp
 /** The game's initials on the accent, standing in for art the list doesn't carry. */
 @Composable
 internal fun Monogram(game: String, size: Dp) {
+    MonogramBox(game, Modifier.size(size).clip(RoundedCornerShape(Fuse.geometry.control)))
+}
+
+/** [Monogram] filling [modifier]'s box, of any shape. */
+@Composable
+private fun MonogramBox(game: String, modifier: Modifier) {
     val c = Fuse.colors
     val letters = game.split(' ', '-', ':').filter { it.isNotBlank() && it.first().isLetterOrDigit() }.take(2).joinToString("") { it.first().uppercase() }
     Box(
-        Modifier.size(size).clip(RoundedCornerShape(Fuse.geometry.control))
-            .background(Brush.linearGradient(listOf(c.accent.copy(alpha = 0.55f), c.accent.copy(alpha = 0.18f)))),
+        modifier.background(Brush.linearGradient(listOf(c.accent.copy(alpha = 0.55f), c.accent.copy(alpha = 0.18f)))),
         contentAlignment = Alignment.Center,
     ) {
         FText(letters.ifEmpty { "?" }, Fuse.type.title, color = c.text, maxLines = 1)
     }
 }
+
+/**
+ * The box art of a port's game, [height] tall in a box's shape: the library's own art for it when
+ * [game] is in the library (so it looks as the library shows it), else [cover] (another copy's art,
+ * the port's listing's, or one found by its name), else the game's initials.
+ */
+@Composable
+internal fun PortCover(app: AppState, game: GameId?, cover: Any?, title: String, height: Dp) {
+    val media by remember(game) { game?.let { app.store.media.media(MediaOwner.OfGame(it)) } ?: flowOf(null) }.collectAsState(null)
+    val own = media?.let(Art::from)
+    val model = own?.boxart ?: cover ?: own?.square ?: own?.icon
+    val shape = RoundedCornerShape(Fuse.geometry.control)
+    Artwork(
+        model,
+        Modifier.height(height).width(height * BOX_ART).clip(shape).background(Fuse.colors.surfaceRaised).border(1.dp, Fuse.colors.hairline, shape),
+        contentScale = ContentScale.Crop,
+        focusY = 0.3f,
+        fallback = { MonogramBox(title, Modifier.fillMaxSize()) },
+    )
+}
+
+/** A game box's width for its height (portrait box art). */
+private const val BOX_ART = 0.72f
 
 @Composable
 internal fun Chip(icon: ImageVector, text: String, color: Color) {
@@ -433,20 +467,38 @@ private fun AppState.choosePortFolder(v: PortView, dataId: String) {
     }
     scope.launch {
         val copies = store.ports.copiesInLibrary(v.port.id, dataId)
-        if (copies.isEmpty()) {
+        // This computer's copy first; else the person's copy on RomM or another device, brought here.
+        val away = if (copies.isEmpty()) store.ports.copiesElsewhere(v.port.id, dataId) else emptyList()
+        if (copies.isEmpty() && away.isEmpty()) {
             pick()
             return@launch
         }
+        val elsewhere = if (away.isNotEmpty()) " Yours is on ${away.map { it.from }.distinct().joinToString(" and ")}: Fuse can bring it here, and ${v.port.name} reads it once it's in." else ""
         choice = ChoiceSpec(
             icon = FuseIcons.FolderOpen,
             title = "Choose ${data.name}",
-            message = if (data.rom != null) "Your copy in the library, or another ROM file. ${v.port.name} reads it where it is, or a copy Fuse makes in the form it reads; your file never changes."
-                else "Your copy in the library, or another folder. ${v.port.name} reads its files where they are; Fuse never changes them.",
+            message = (if (data.rom != null) "Your copy in the library, or another ROM file. ${v.port.name} reads it where it is, or a copy Fuse makes in the form it reads; your file never changes."
+                else "Your copy in the library, or another folder. ${v.port.name} reads its files where they are; Fuse never changes them.") + elsewhere,
             options = copies.map { c ->
                 MenuAction("copy.${c.game.value}", c.title, FuseIcons.Library, detail = "${c.system}  ·  ${c.folder}", onSelect = {
                     choice = null
                     scope.launch { said(store.ports.useCopy(v.port.id, dataId, c)) }
                 })
+            } + away.map { c ->
+                MenuAction(
+                    "away.${c.place.name}.${c.id.value}",
+                    if (c.place == io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.ROMM) "Get It From RomM" else "Get It From ${c.from}",
+                    if (c.place == io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.ROMM) FuseIcons.Server else FuseIcons.Monitor,
+                    detail = listOfNotNull(c.title, c.sizeBytes.takeIf { it > 0 }?.let(::size), if (!c.online) "Away now: it comes when it's back" else null).joinToString("  ·  "),
+                    onSelect = {
+                        choice = null
+                        scope.launch {
+                            val problem = store.ports.bringGame(v.port.id, c)
+                            if (problem != null) toasts.show(problem, ToastKind.WARNING)
+                            else toasts.show("Bringing ${v.port.game} here from ${c.from}. ${v.port.name} reads it once it's in", ToastKind.INFO, icon = FuseIcons.CloudDownload, durationMs = 6_000L)
+                        }
+                    },
+                )
             } + MenuAction("folder", if (data.rom != null) "Choose a ROM File" else "Choose a Folder", FuseIcons.FolderSearch, detail = data.about, onSelect = {
                 choice = null
                 pick()

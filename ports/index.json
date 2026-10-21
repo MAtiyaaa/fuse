@@ -1,12 +1,14 @@
 {
   "format": 1,
-  "revision": 4,
+  "revision": 5,
   "generated": "2026-10-21",
   "ports": [
     {
       "id": "devilutionx",
       "name": "DevilutionX",
       "game": "Diablo",
+      "cover": "https://upload.wikimedia.org/wikipedia/en/3/3a/Diablo_Coverart.png",
+      "coverCredit": "Wikipedia",
       "about": "Diablo and its Hellfire expansion, rebuilt to run natively, with the engine's bugs fixed and a controller, widescreen and quality of life options of its own.",
       "homepage": "https://github.com/diasurgical/devilutionX",
       "licence": "Sustainable Use License",
@@ -53,6 +55,8 @@
       "id": "openrct2",
       "name": "OpenRCT2",
       "game": "RollerCoaster Tycoon 2",
+      "cover": "https://upload.wikimedia.org/wikipedia/en/e/e4/RollerCoaster_Tycoon_2_%28boxart%29.jpg",
+      "coverCredit": "Wikipedia",
       "about": "RollerCoaster Tycoon 2 rebuilt to run natively, with its expansions, larger parks, more resolutions and multiplayer.",
       "homepage": "https://openrct2.io/",
       "licence": "GNU General Public License version 3",
@@ -97,6 +101,8 @@
       "id": "fallout2-ce",
       "name": "Fallout 2 Community Edition",
       "game": "Fallout 2",
+      "cover": "https://upload.wikimedia.org/wikipedia/en/c/c3/PC_Game_Fallout_2.jpg",
+      "coverCredit": "Wikipedia",
       "about": "Fallout 2 rebuilt to run natively, with the original game as it was, the engine's bugs fixed and some quality of life improvements.",
       "homepage": "https://github.com/alexbatalov/fallout2-ce",
       "licence": "Sustainable Use License",
@@ -142,6 +148,8 @@
       "id": "zelda64recomp",
       "name": "Zelda 64: Recompiled",
       "game": "The Legend of Zelda: Majora's Mask",
+      "cover": "https://upload.wikimedia.org/wikipedia/en/6/60/The_Legend_of_Zelda_-_Majora%27s_Mask_Box_Art.jpg",
+      "coverCredit": "Wikipedia",
       "about": "Majora's Mask recompiled from the N64 cartridge's own code to run natively, at any resolution and frame rate, with widescreen, gyro aiming and mods, made from your own ROM as it starts.",
       "homepage": "https://github.com/Zelda64Recomp/Zelda64Recomp",
       "licence": "GPL-3.0",
@@ -179,6 +187,8 @@
       "id": "banjorecomp",
       "name": "Banjo: Recompiled",
       "game": "Banjo-Kazooie",
+      "cover": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/Banjo-Kazooie%20(USA).png",
+      "coverCredit": "Box art",
       "about": "Banjo-Kazooie recompiled from the N64 cartridge's own code to run natively, at any resolution and frame rate, with widescreen and mods, made from your own ROM as it starts.",
       "homepage": "https://github.com/BanjoRecomp/BanjoRecomp",
       "licence": "GPL-3.0",
@@ -218,6 +228,8 @@
       "id": "gen1recomp",
       "name": "Gen1Recomp",
       "game": "Pokémon Red",
+      "cover": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy/Named_Boxarts/Pokemon%20-%20Red%20Version%20(USA,%20Europe)%20(SGB%20Enhanced).png",
+      "coverCredit": "Box art",
       "titles": [
         "Pokémon Blue",
         "Pokémon Yellow",
@@ -248,6 +260,8 @@
       "id": "bloodborne-android",
       "name": "Bloodborne-Android",
       "game": "Bloodborne",
+      "cover": "https://upload.wikimedia.org/wikipedia/en/6/68/Bloodborne_Cover_Wallpaper.jpg",
+      "coverCredit": "Wikipedia",
       "systems": [
         "ps4"
       ],
@@ -264,6 +278,8 @@
       "id": "zelda64recomp-android",
       "name": "Zelda 64: Recompiled for Android",
       "game": "The Legend of Zelda: Majora's Mask",
+      "cover": "https://upload.wikimedia.org/wikipedia/en/6/60/The_Legend_of_Zelda_-_Majora%27s_Mask_Box_Art.jpg",
+      "coverCredit": "Wikipedia",
       "systems": [
         "n64"
       ],
@@ -283,6 +299,8 @@
       "id": "2ship2harkinian-android",
       "name": "2 Ship 2 Harkinian",
       "game": "The Legend of Zelda: Majora's Mask",
+      "cover": "https://upload.wikimedia.org/wikipedia/en/6/60/The_Legend_of_Zelda_-_Majora%27s_Mask_Box_Art.jpg",
+      "coverCredit": "Wikipedia",
       "systems": [
         "n64"
       ],
@@ -298,6 +316,8 @@
       "id": "shipwright-android",
       "name": "Ship of Harkinian",
       "game": "The Legend of Zelda: Ocarina of Time",
+      "cover": "https://upload.wikimedia.org/wikipedia/en/7/7a/OcarinaofTime2026.jpeg",
+      "coverCredit": "Wikipedia",
       "titles": [
         "The Legend of Zelda: Ocarina of Time - Master Quest"
       ],
@@ -317,6 +337,8 @@
       "id": "starship-android",
       "name": "Starship",
       "game": "Star Fox 64",
+      "cover": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/Star%20Fox%2064%20(Japan).png",
+      "coverCredit": "Box art",
       "systems": [
         "n64"
       ],
@@ -333,6 +355,8 @@
       "id": "spaghettikart-android",
       "name": "SpaghettiKart",
       "game": "Mario Kart 64",
+      "cover": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/Mario%20Kart%2064%20(Europe)%20(Rev%201).png",
+      "coverCredit": "Box art",
       "systems": [
         "n64"
       ],
@@ -347,6 +371,8 @@
       "id": "ghostship-android",
       "name": "Ghostship",
       "game": "Super Mario 64",
+      "cover": "https://upload.wikimedia.org/wikipedia/en/e/e9/Super_Mario_64.png",
+      "coverCredit": "Wikipedia",
       "systems": [
         "n64"
       ],
@@ -362,6 +388,8 @@
       "id": "perfect-dark-android",
       "name": "Perfect Dark",
       "game": "Perfect Dark",
+      "cover": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/Perfect%20Dark%20(USA).png",
+      "coverCredit": "Box art",
       "systems": [
         "n64"
       ],
@@ -378,6 +406,8 @@
       "id": "goemon64recomp-android",
       "name": "Goemon 64: Recompiled for Android",
       "game": "Mystical Ninja Starring Goemon",
+      "cover": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/Mystical%20Ninja%20Starring%20Goemon%20(Europe).png",
+      "coverCredit": "Box art",
       "systems": [
         "n64"
       ],
@@ -397,6 +427,8 @@
       "id": "dk64-recomp-android",
       "name": "DK64: Recompiled for Android",
       "game": "Donkey Kong 64",
+      "cover": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/Donkey%20Kong%2064%20(USA).png",
+      "coverCredit": "Box art",
       "systems": [
         "n64"
       ],
@@ -416,6 +448,8 @@
       "id": "acgc-android",
       "name": "Animal Crossing for Android",
       "game": "Animal Crossing",
+      "cover": "https://thumbnails.libretro.com/Nintendo%20-%20GameCube/Named_Boxarts/Animal%20Crossing%20(USA).png",
+      "coverCredit": "Box art",
       "systems": [
         "ngc"
       ],
@@ -431,6 +465,8 @@
       "id": "zelda3-android",
       "name": "Zelda 3",
       "game": "The Legend of Zelda: A Link to the Past",
+      "cover": "https://thumbnails.libretro.com/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System/Named_Boxarts/Legend%20of%20Zelda%2C%20The%20-%20A%20Link%20to%20the%20Past%20(USA).png",
+      "coverCredit": "Box art",
       "systems": [
         "snes"
       ],

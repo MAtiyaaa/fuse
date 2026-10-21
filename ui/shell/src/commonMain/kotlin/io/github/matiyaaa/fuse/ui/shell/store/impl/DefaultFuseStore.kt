@@ -100,9 +100,15 @@ internal class DefaultFuseStore private constructor(
      * Android, ports published as apps, installed like the Store's and attached to their games.
      */
     override val ports: io.github.matiyaaa.fuse.ui.shell.store.PortsOps by lazy {
-        ctx.services.portFiles?.let { PortsStore(ctx, it, library = { library }, write = { t -> writeSettings(t) }, recompFiles = ctx.services.recompFiles) }
+        ctx.services.portFiles?.let {
+            PortsStore(ctx, it, library = { library }, write = { t -> writeSettings(t) }, recompFiles = ctx.services.recompFiles, sources = RommAndHousehold(romm, reach))
+        }
             ?: ctx.services.packages?.takeIf { ctx.host == io.github.matiyaaa.fuse.model.Host.ANDROID }?.let { bridge ->
-                AndroidPortsStore(ctx, bridge, ctx.services.androidPortLists, apps, write = { t -> writeSettings(t) })
+                AndroidPortsStore(
+                    ctx, bridge, ctx.services.androidPortLists, apps, write = { t -> writeSettings(t) },
+                    sources = RommAndHousehold(romm, reach),
+                    findCover = { title, platform -> mediaOps.coverFor(title, platform) },
+                )
             }
             ?: io.github.matiyaaa.fuse.ui.shell.store.PortsOps.None
     }
