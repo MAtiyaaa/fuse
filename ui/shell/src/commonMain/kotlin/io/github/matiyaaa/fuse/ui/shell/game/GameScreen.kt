@@ -173,7 +173,7 @@ private enum class InfoCard { STARTS, PLAY, EXTRAS, FILE }
  * selected one in view.
  */
 @Composable
-fun GameScreen(app: AppState, id: GameId) {
+fun GameScreen(app: AppState, id: GameId, via: io.github.matiyaaa.fuse.ui.shell.store.PlayVia = io.github.matiyaaa.fuse.ui.shell.store.PlayVia.DEFAULT) {
     // A RomM game Fuse doesn't have yet opens on the same page, from RomM's mirror; once it is
     // downloaded (or found here) the page is the library game's, with Play instead of Download.
     val romOnly = id.rommOnly
@@ -186,12 +186,12 @@ fun GameScreen(app: AppState, id: GameId) {
         }
     }.collectAsState(initial = null)
     val shown = local ?: id
-    val flow = remember(shown) { (shown.rommOnly?.let { app.store.romm.detail(it) } ?: app.store.library.game(shown)).map { d -> if (d == null) GameLoad.Gone else GameLoad.Ready(d) } }
+    val flow = remember(shown, via) { (shown.rommOnly?.let { app.store.romm.detail(it) } ?: app.store.library.game(shown, via)).map { d -> if (d == null) GameLoad.Gone else GameLoad.Ready(d) } }
     val load by flow.collectAsState(initial = GameLoad.Loading)
     // A short fade from the placeholder to the page, never a jump.
     Crossfade(load is GameLoad.Ready, animationSpec = Fuse.motion.fade(), label = "gameLoad") { ready ->
         when {
-            ready -> (load as? GameLoad.Ready)?.let { GameDetailContent(app, it.detail) }
+            ready -> (load as? GameLoad.Ready)?.let { GameDetailContent(app, it.detail, via) }
             load == GameLoad.Gone -> GameGone(app)
             else -> GameSkeleton()
         }
@@ -200,11 +200,11 @@ fun GameScreen(app: AppState, id: GameId) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun GameDetailContent(app: AppState, d: GameDetail) {
+private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiyaaa.fuse.ui.shell.store.PlayVia) {
     val c = Fuse.colors
     val motion = Fuse.motion
     val game = d.game
-    val card = remember(d) { d.toCard() }
+    val card = remember(d, via) { d.toCard().copy(via = via) }
     val accent = d.platform.accent.toColor()
     val sel = remember(game.id) { ShelfSelection() }
     val scroll = rememberScrollState()

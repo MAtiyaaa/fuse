@@ -33,7 +33,7 @@ internal const val SECOND_SCREEN_VEIL_MS = 900L
 
 /** What confirming a game tile does: play it, or open its page when the user chose that. */
 fun AppState.activateGame(card: GameCard) {
-    if (store.prefs.value.openGamePage) go(Route.GameInfo(card.id)) else play(card)
+    if (store.prefs.value.openGamePage) go(Route.GameInfo(card.id, card.via)) else play(card)
 }
 
 /** The hint for confirming on a game tile, following [activateGame]. */
@@ -85,7 +85,7 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
         }
     }
     job = scope.launch {
-        val outcome = store.library.launch(card.id, emulator, discPath, display, skipSaveCheck, playAnyway, together) { stage ->
+        val outcome = store.library.launch(card.id, emulator, discPath, display, skipSaveCheck, playAnyway, together, card.via) { stage ->
             launching = when (stage) {
                 io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.CHECKING_SAVE -> launching?.copy(status = "Checking your save", cancel = callOff)
                 io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.STARTING -> launching?.copy(status = null, cancel = null)
@@ -441,6 +441,10 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         add(MenuAction("system", "System", FuseIcons.Layers, detail = if (card.isApp) "Android, or back to being an app" else "If it landed in the wrong one", trailing = Trailing.Value(card.platformShort), onSelect = { systemPicker(card) }))
         // An Android game always starts as its app.
         if (!card.isApp) add(MenuAction("emulator", "Emulator", FuseIcons.Chip, trailing = Trailing.Chevron, onSelect = { emulatorPicker(card) }))
+        // On Android, a game played with a port: in its own system only, or in Ports or Android too.
+        if (!card.isApp && store.ports.androidApps && store.ports.androidPlayWith(card.id) != null) {
+            add(MenuAction("showin", "Shows In", FuseIcons.Boxes, detail = "Its own system only, or Ports or Android too, where it starts with the port", trailing = Trailing.Chevron, onSelect = { portPlacePicker(card) }))
+        }
         if (!card.isApp) add(MenuAction("parts", "Updates and DLC", FuseIcons.Puzzle, detail = "If this is an update or DLC of another game, or to give back one you added", trailing = Trailing.Chevron, onSelect = { partsPicker(card) }))
         // Patches and cheats in the emulator's own files, which Fuse changes on a computer.
         if (!card.isApp && platform.host != io.github.matiyaaa.fuse.model.Host.ANDROID) {

@@ -9,6 +9,9 @@ import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.Host
 import io.github.matiyaaa.fuse.model.LaunchTarget
 import io.github.matiyaaa.fuse.model.PlatformId
+import io.github.matiyaaa.fuse.model.PortPlace
+import io.github.matiyaaa.fuse.model.ScopeRef
+import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -219,6 +222,75 @@ class AndroidPortsStoreTest {
         val before = services.launched.size
         assertIs<LaunchOutcome.Problem>(store.library.launch(game))
         assertEquals(before, services.launched.size)
+    }
+
+    @Test
+    fun aGamePlayedWithAPortShowsInPortsOrAndroidTooAndPlaysAsItsListSays(): Unit = runBlocking {
+        val apps = FakeApps(emptyList())
+        val services = services(apps)
+        val store = createFuseStore(services, scope)
+        val game = majorasMask(store)
+        val n64 = PlatformId("n64")
+        val ports = PlatformId("ports")
+        val android = PlatformId("android")
+        apps.apps.value = listOf(twoship)
+        assertEquals(twoship.id, eventually("attached by itself") { store.ports.androidPlayWith(game) })
+
+        suspend fun via(platform: PlatformId): PlayVia? = store.library.games(GameQuery(platform = platform)).first().firstOrNull { it.id == game }?.via
+
+        // By default it shows in Ports too: one game, played with the port from there and its emulator from the N64.
+        assertEquals(PlayVia.PORT, eventually("in Ports") { via(ports) })
+        assertEquals(PlayVia.EMULATOR, via(n64))
+        assertNull(via(android))
+        val systems = eventually("Ports on Systems") { store.library.platforms.value.firstOrNull { it.platform.id == ports } }
+        assertEquals(1, systems.gameCount)
+        assertTrue(systems.emulatorInstalled, "nothing to get for Ports on Android: its games play with their ports")
+        assertEquals(1, store.library.platforms.value.single { it.platform.id == n64 }.gameCount)
+
+        // From Ports, Play starts the app; from the N64, the emulator (none here, so it says so) and never the app.
+        assertEquals(LaunchOutcome.Started, store.library.launch(game, via = PlayVia.PORT))
+        assertEquals(LaunchTarget.App(twoship.id), services.launched.last().target)
+        val before = services.launched.size
+        assertIs<LaunchOutcome.Problem>(store.library.launch(game, via = PlayVia.EMULATOR))
+        assertEquals(before, services.launched.size)
+
+        // Its page says the same, by where it was opened from.
+        val fromPorts = eventually("page from Ports") { store.library.game(game, PlayVia.PORT).first()?.takeIf { it.emulator.port != null } }
+        assertEquals("Starts in 2 Ship 2 Harkinian", fromPorts.emulator.launchSummary)
+        val fromN64 = eventually("page from the N64") { store.library.game(game, PlayVia.EMULATOR).first()?.takeIf { "From Ports" in it.emulator.playLine.orEmpty() } }
+        assertNull(fromN64.emulator.port)
+        assertTrue("it starts in 2 Ship 2 Harkinian" in fromN64.emulator.playLine.orEmpty(), fromN64.emulator.playLine)
+
+        // The N64's own setting: Android too, in place of Ports.
+        store.settings.set(ScopedSettings.PortShowsIn, ScopeRef.platform(n64), PortPlace.ANDROID)
+        assertEquals(PlayVia.PORT, eventually("in Android") { via(android) })
+        eventually("out of Ports") { store.library.games(GameQuery(platform = ports)).first().takeIf { l -> l.none { it.id == game } } }
+        assertEquals(PlayVia.EMULATOR, via(n64))
+
+        // The game's own: its system only, where Play starts it as Play With says.
+        store.settings.set(ScopedSettings.PortShowsIn, ScopeRef.game(game), PortPlace.OWN_SYSTEM)
+        assertEquals(PlayVia.DEFAULT, eventually("its own system only") { via(n64)?.takeIf { it == PlayVia.DEFAULT } })
+        assertNull(via(android))
+        assertNull(via(ports))
+        assertNull(store.library.platforms.value.firstOrNull { it.platform.id == android && it.gameCount > 0 })
+        assertEquals(LaunchOutcome.Started, store.library.launch(game))
+        assertEquals(LaunchTarget.App(twoship.id), services.launched.last().target)
+
+        // Back to its system's setting; then every game's, with the system's taken back too.
+        store.settings.clear(ScopedSettings.PortShowsIn, ScopeRef.game(game))
+        assertEquals(PlayVia.PORT, eventually("its system's again") { via(android) })
+        store.settings.clear(ScopedSettings.PortShowsIn, ScopeRef.platform(n64))
+        store.settings.set(ScopedSettings.PortShowsIn, ScopeRef.Global, PortPlace.OWN_SYSTEM)
+        eventually("its own system only, for every game") { via(n64)?.takeIf { it == PlayVia.DEFAULT } }
+        assertNull(via(android))
+        assertNull(via(ports))
+
+        // Detached, it is only its system's again, whatever the setting.
+        store.settings.set(ScopedSettings.PortShowsIn, ScopeRef.Global, PortPlace.PORTS)
+        eventually("in Ports again") { via(ports) }
+        store.ports.detach(twoship.id)
+        eventually("only the N64's") { via(n64)?.takeIf { it == PlayVia.DEFAULT } }
+        assertNull(via(ports))
     }
 
     @Test

@@ -14,6 +14,7 @@ import io.github.matiyaaa.fuse.integrations.ports.OpenPortsClient
 import io.github.matiyaaa.fuse.integrations.ports.PortsClient
 import io.github.matiyaaa.fuse.integrations.ports.PortsIndexReader
 import io.github.matiyaaa.fuse.integrations.ports.PortsSignature
+import io.github.matiyaaa.fuse.launch.ports.PortAdapter
 import io.github.matiyaaa.fuse.launch.ports.PortPlan
 import io.github.matiyaaa.fuse.launch.ports.Xxh3
 import io.github.matiyaaa.fuse.library.PlatformCatalog
@@ -21,9 +22,13 @@ import io.github.matiyaaa.fuse.library.content.ZipReader
 import io.github.matiyaaa.fuse.model.AndroidPort
 import io.github.matiyaaa.fuse.model.AndroidPorts
 import io.github.matiyaaa.fuse.model.AppEntry
+import io.github.matiyaaa.fuse.model.AppGames
 import io.github.matiyaaa.fuse.model.AppKind
 import io.github.matiyaaa.fuse.model.Game
 import io.github.matiyaaa.fuse.model.GameId
+import io.github.matiyaaa.fuse.model.PlatformId
+import io.github.matiyaaa.fuse.model.PortPlace
+import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.ui.shell.store.AndroidPortLists
 import io.github.matiyaaa.fuse.ui.shell.store.AndroidPortOffer
 import io.github.matiyaaa.fuse.ui.shell.store.AndroidPortView
@@ -40,12 +45,18 @@ import io.github.matiyaaa.fuse.ui.shell.store.PortsState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -115,7 +126,8 @@ internal class AndroidPortsStore(
             publish()
         }
         ctx.scope.launch {
-            apps.installedApps.collect { list ->
+            // Again once the lists are in, for the apps that were there before them.
+            combine(apps.installedApps, loaded) { list, _ -> list }.collect { list ->
                 // One app that can't be attached never stops the next from being.
                 try {
                     attachArrivals(list)
@@ -129,6 +141,7 @@ internal class AndroidPortsStore(
             }
         }
         ctx.scope.launch { jobs.drop(1).collect { publish() } }
+        ctx.scope.launch { places().collect { p -> ctx.portPlaces.value = p; if (p.isNotEmpty()) ctx.shownPlatforms.update { it + p.values } } }
         ctx.scope.launch {
             ctx.settings.map { it.ports.androidPlayWith to it.ports.androidInstalled }.distinctUntilChanged().drop(1).collect { publish() }
         }
@@ -293,6 +306,44 @@ internal class AndroidPortsStore(
         s.copy(ports = s.ports.copy(androidPlayWith = if (appId == null) s.ports.androidPlayWith - key else s.ports.androidPlayWith + (key to appId)))
     }
 
+    /**
+     * The games played with an installed port that show in another system too, by game: the Ports
+     * or the Android system, as each game's [ScopedSettings.PortShowsIn] (its own, its system's, or
+     * every game's) says.
+     */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private fun places(): Flow<Map<GameId, PlatformId>> = combine(
+        ctx.settings.map { it.ports.androidPlayWith }.distinctUntilChanged(),
+        apps.installedApps.map { list -> list.map { it.id }.toSet() }.distinctUntilChanged(),
+    ) { chosen, here -> chosen.filterValues { it in here }.keys.mapNotNull { k -> k.toLongOrNull()?.let(::GameId) }.sortedBy { it.value } }
+        .distinctUntilChanged()
+        .flatMapLatest { ids ->
+            if (ids.isEmpty()) {
+                flowOf(emptyMap())
+            } else {
+                combine(ids.map(::placeOf)) { all -> all.filterNotNull().toMap() }
+            }
+        }
+        .distinctUntilChanged()
+
+    /** Where [game] shows besides its own system, following its setting; null when only there. */
+    private fun placeOf(game: GameId): Flow<Pair<GameId, PlatformId>?> = flow {
+        val platform = runCatching { ctx.data.games.get(game) }.getOrNull()?.platformId
+        if (platform == null) {
+            emit(null)
+            return@flow
+        }
+        emitAll(
+            ctx.data.scopedSettings.observeResolved(ScopedSettings.PortShowsIn, platform, game).map { r ->
+                when (r.value) {
+                    PortPlace.OWN_SYSTEM -> null
+                    PortPlace.PORTS -> game to PortAdapter.PLATFORM
+                    PortPlace.ANDROID -> game to AppGames.PLATFORM
+                }
+            },
+        )
+    }
+
     /** The app Play starts [game] as, with its name: the one chosen, while it is installed. */
     fun playApp(game: GameId): Pair<String, String>? {
         val appId = androidPlayWith(game) ?: return null
@@ -327,6 +378,9 @@ internal class AndroidPortsStore(
         for (a in found) {
             val port = index.identify(a.packageName, "").singleOrNull() ?: continue
             val game = games.of(port).singleOrNull()?.id ?: continue
+            // The list can be older than what the person did since (attached it, or detached it): only an app still untouched.
+            val stored = runCatching { ctx.data.apps.get(a.id) }.getOrNull()
+            if (stored?.kind != null || stored?.plays != null) continue
             apps.setKind(a.id, AppKind.PORT)
             apps.setPlays(a.id, game)
             if (androidPlayWith(game) == null) setAndroidPlayWith(game, a.id)

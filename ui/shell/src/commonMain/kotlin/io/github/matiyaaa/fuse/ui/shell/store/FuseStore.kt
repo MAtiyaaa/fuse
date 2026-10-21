@@ -504,6 +504,9 @@ interface LibraryOps {
     /** The ids of the games [query] lists, in its order, without their art: for code that only needs which games there are. */
     fun gameIds(query: GameQuery): Flow<List<GameId>> = games(query).map { list -> list.map { it.id } }
     fun game(id: GameId): Flow<GameDetail?>
+
+    /** [game] as its page shows it when opened from a list that plays it [via] its port or its emulator. */
+    fun game(id: GameId, via: PlayVia): Flow<GameDetail?> = game(id)
     fun search(query: String): Flow<SearchResults>
 
     /** [display] overrides the screen settings for this launch (the user just picked one). */
@@ -521,6 +524,8 @@ interface LibraryOps {
         playAnyway: Boolean = false,
         /** Played with others: hosting it here, or joining someone's (see [together]). */
         together: Together? = null,
+        /** With its port, or its emulator, as the list it was started from says ([PlayVia]). */
+        via: PlayVia = PlayVia.DEFAULT,
         /** Told as the launch moves on: checking the save first (when Fuse Sync or Syncthing does), then starting. */
         onStage: (LaunchStage) -> Unit = {},
     ): LaunchOutcome

@@ -446,7 +446,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         when (button) {
             LibraryButton.SPOTLIGHT -> spotlight?.let { s ->
                 app.toasts.show(s.reason, icon = FuseIcons.Star)
-                app.go(Route.GameInfo(s.card.id))
+                app.go(Route.GameInfo(s.card.id, s.card.via))
             }
             LibraryButton.COLLECTIONS -> app.go(Route.Collections)
             LibraryButton.ADD_GAMES -> ownCollection?.let { app.addGamesPicker(it.id, it.name) }

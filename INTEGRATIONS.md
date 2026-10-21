@@ -1006,7 +1006,19 @@ a moved file doesn't stop it, since the app keeps its own copy. Uninstalled, the
 emulator again. When a port is chosen for a game, Fuse says what the app asks for on its first start
 and where the person's copy is, with Copy Path.
 
+**Where it shows.** A game played with a port is one game wherever it is listed, with one time
+played, one set of achievements and one page. Besides its own system, it shows in the Ports system
+(the art pack's Ports art) or the Android system, as the inheritable setting
+`ScopedSettings.PortShowsIn` says (`ports.showin`: Its Own System Only, Ports Too or Android Too).
+Every game's value is in Settings, Addons, Ports; each system's in its own settings; each game's in
+its options (Shows In). Ports Too is the default. The list a game is opened from decides how Play
+starts it (`PlayVia`): from Ports or Android, the port; from its own system, its emulator, as that
+system's emulator choice and the game's own say. The game's page says so ("From Ports, it starts
+in ..."). With Its Own System Only, it shows there alone and Play starts the port chosen in Play
+With, as before. A port that is detached or uninstalled takes the game out of Ports and Android.
+
 **Saves.** A port keeps its saves inside its app, out of Fuse's reach, so Fuse One doesn't sync them.
+
 ## Steam and Windows launchers
 
 Fuse does not run Windows games itself. It starts them through the launcher you use, with a per-game

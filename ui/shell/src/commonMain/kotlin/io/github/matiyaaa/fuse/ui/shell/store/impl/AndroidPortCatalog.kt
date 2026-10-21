@@ -149,7 +149,7 @@ internal object AndroidPortCatalog {
 
     private fun words(text: String): Set<String> = key(text).split(' ').filter { it.length > 1 && it !in SMALL_WORDS }.toSet()
 
-    private fun withoutBrackets(name: String) = name.replace(Regex("\\s*[(\\[][^)\\]]*[)\\]]"), "").trim()
+    private fun withoutBrackets(name: String) = name.replace(Regex("\\s*(\\([^)]*\\)|\\[[^\\]]*\\])"), "").trim()
 
     private const val MIN_NAME = 4
     private val SMALL_WORDS = setOf("the", "of", "and", "a", "an", "for", "android", "port", "recomp", "recompiled", "mobile")

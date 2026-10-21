@@ -1041,7 +1041,7 @@ private fun PushedPages(app: AppState, current: Route, direction: NavDirection, 
             Route.Collections -> io.github.matiyaaa.fuse.ui.shell.collections.CollectionsScreen(app)
             Route.Storage -> io.github.matiyaaa.fuse.ui.shell.settings.StorageScreen(app)
             Route.PhoneLink -> io.github.matiyaaa.fuse.ui.shell.settings.PhoneLinkScreen(app)
-            is Route.GameInfo -> GameScreen(app, route.game)
+            is Route.GameInfo -> GameScreen(app, route.game, route.via)
             is Route.Media -> MediaScreen(app, route.owner, route.title, route.identify)
             is Route.Settings -> SettingsScreen(app, route.section, route.row)
             is Route.PlatformSettings -> PlatformSettingsScreen(app, route.platform)

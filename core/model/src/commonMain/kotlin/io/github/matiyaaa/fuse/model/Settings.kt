@@ -67,12 +67,28 @@ object ScopedSettings {
      */
     val FrameGeneration = ScopedKey("launch.framegen", 0, Int.serializer(), setOf(SettingScope.PLATFORM, SettingScope.GAME))
 
+    /**
+     * Where a game with a port attached shows ([PortPlace]): in its own system only, or in the
+     * Ports or Android system too, where it starts with the port (in its own system, with its
+     * emulator). Per system, with each game's own choice over it.
+     */
+    val PortShowsIn = ScopedKey("ports.showin", PortPlace.PORTS, PortPlace.serializer())
+
     val all: List<ScopedKey<*>> = listOf(
         Layout, ShowHero, ShowLogo, PreferredCover, Border, Emulator, RetroArchCore, FolderMode,
         VideoPreview, VideoDelaySeconds, ScrapeEnabled, SearchTitle, Matching, LaunchScreen, GenerateM3u,
-        UpdatesFolder, DlcFolder, FrameGeneration,
+        UpdatesFolder, DlcFolder, FrameGeneration, PortShowsIn,
     )
 }
+
+/**
+ * Where a game with a port shows, beside the port's own choice of how it plays: [OWN_SYSTEM] its
+ * own system only (Play starts the port there); [PORTS] the Ports system too; [ANDROID] the Android
+ * system too. In the Ports or Android system it starts with the port, in its own with its emulator:
+ * one game either way, its time, saves and achievements its own.
+ */
+@Serializable
+enum class PortPlace { OWN_SYSTEM, PORTS, ANDROID }
 
 /** How strictly scraper results must match before Fuse accepts them without asking. */
 @Serializable
