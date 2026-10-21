@@ -28,7 +28,10 @@ and says so in its `notes`. For each one:
 6. Name its own settings file in `settings` (`{"file": "{home}/config/diablo.ini"}`, under
    `{home}` or `{install}`) and add a reader for its settings code to `tools/tune` with the port's
    id as its family, so Fuse Tune offers every setting the port reads.
-7. Raise `revision`. Leave `verified` out: only the nightly job writes it.
+7. Give its game's box art in `cover` (an HTTPS picture: the one Open Ports Games' entry for the
+   game points to, Wikipedia's or the libretro thumbnails' box) and whom it is from in
+   `coverCredit`.
+8. Raise `revision`. Leave `verified` out: only the nightly job writes it.
 
 `tools/ports/check.py check --out results.json` runs the same check on your computer.
 
@@ -78,9 +81,13 @@ it plays a game from the person's own files (never one that ships the game's own
    newest has none.
 4. List the ROMs it is made for in `roms` only where its source names them by the XXH3-64 of the
    big-endian ROM (`supported_games` in an N64: Recompiled port).
-5. Raise `revision`.
+5. Give its game's box art in `cover` and `coverCredit`, as for a computer's port. Its game's
+   publisher, year and genre come from Open Ports Games' listing of the same project or game.
+6. Raise `revision`.
 
-To bring Open Ports Games' snapshot up to date:
+The snapshot keeps each listing's box art (`cover`), its first picture (`screenshots`), and its
+game's publisher, year and genre; a listing without box art takes another listing's of the same
+game. To bring it up to date:
 
 ```sh
 python3 tools/ports/openports.py snapshot --out ports/android/openports.json

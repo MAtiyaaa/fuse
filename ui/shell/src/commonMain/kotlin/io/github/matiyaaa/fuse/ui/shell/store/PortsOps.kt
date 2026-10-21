@@ -55,6 +55,12 @@ interface PortsOps {
     suspend fun useCopy(id: String, dataId: String, copy: PortCopy): String? = chooseFolder(id, dataId, copy.folder)
 
     /**
+     * The port [id]'s game for its files [dataId] on RomM or the household's other devices, for
+     * when this device hasn't got it: brought here with [bringGame], and then read by the port.
+     */
+    suspend fun copiesElsewhere(id: String, dataId: String): List<PortGameCopy> = emptyList()
+
+    /**
      * The ports set up here that play [game]: one whose files were taken from it, or one of the
      * same game by name. For Play With on the game's page.
      */
@@ -185,6 +191,13 @@ interface PortsOps {
     /** What the APK at [path] is, when it is a port Fuse knows (read before it is installed). */
     suspend fun apkPort(path: String): ApkPort? = null
 
+    /**
+     * Brings [copy], the port [id]'s game on RomM or another of the household's devices, here, and
+     * attaches the port to it once it is in (once the port is installed, when it isn't yet). Null
+     * when it was asked for, else why not.
+     */
+    suspend fun bringGame(id: String, copy: PortGameCopy): String? = "Ports are attached to games on Android."
+
     object None : PortsOps {
         override val state: StateFlow<PortsState> = MutableStateFlow(PortsState())
     }
@@ -225,9 +238,44 @@ data class AndroidPortView(
     val job: PortJob? = null,
     val games: List<PortGameChoice> = emptyList(),
     val attachedTo: List<PortGameChoice> = emptyList(),
+    /** Box art for its game found by its name, when [port] has none of its own. */
+    val foundCover: String? = null,
+    /** Its game where this device hasn't got it (only while it has none here): on RomM, or on the household's other devices. */
+    val elsewhere: List<PortGameCopy> = emptyList(),
+    /** The copy of its game Fuse is bringing here, to attach it once it is in. */
+    val bringing: PortGameCopy? = null,
 ) {
     val installed: Boolean get() = appId != null
+
+    /** The box art of its game: its own, else one found by its name. */
+    val cover: String? get() = port.cover ?: foundCover
+
+    /** Its game is on this device. */
+    val here: Boolean get() = games.isNotEmpty() || attachedTo.isNotEmpty()
 }
+
+/**
+ * A port's game where this device hasn't got it: on RomM, or on another of the household's devices
+ * (Fuse One). Fuse can bring it here from there.
+ */
+@Immutable
+data class PortGameCopy(
+    /** The game as Fuse shows it: RomM's id for it, or the household's. */
+    val id: GameId,
+    val title: String,
+    val platform: io.github.matiyaaa.fuse.model.PlatformId,
+    /** On RomM, or on another device ([CopyPlace.DEVICE]). */
+    val place: CopyPlace,
+    /** Where it is, as the person reads it: "RomM", or the device's name. */
+    val from: String,
+    /** RomM's id for it, for a copy on RomM. */
+    val romId: Long? = null,
+    val sizeBytes: Long = 0,
+    /** A device that has it is on now (always for RomM). */
+    val online: Boolean = true,
+    /** Its art, as Fuse draws the game. */
+    val art: Art = Art.None,
+)
 
 /** An Android port for one game, as Play With offers it: how it is the game's, and whether Play starts the game with it. */
 @Immutable

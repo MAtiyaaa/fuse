@@ -79,10 +79,13 @@ import io.github.matiyaaa.fuse.ui.shell.app.word
 import io.github.matiyaaa.fuse.ui.shell.components.subTabsRoom
 import io.github.matiyaaa.fuse.ui.shell.downloads.ActionPill
 import io.github.matiyaaa.fuse.ui.shell.downloads.TopAction
+import io.github.matiyaaa.fuse.ui.shell.home.bytesText
 import io.github.matiyaaa.fuse.ui.shell.store.AndroidPortView
 import io.github.matiyaaa.fuse.ui.shell.store.AndroidPortsState
+import io.github.matiyaaa.fuse.ui.shell.store.CopyPlace
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import io.github.matiyaaa.fuse.ui.shell.store.PortGameChoice
+import io.github.matiyaaa.fuse.ui.shell.store.PortGameCopy
 import io.github.matiyaaa.fuse.ui.shell.store.PortJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -111,7 +114,7 @@ internal fun AndroidPortsTab(app: AppState, active: Boolean, topPadding: Dp) {
     var chosenFilter by remember { mutableStateOf<PortFilter?>(null) }
     var query by remember { mutableStateOf("") }
     var system by remember { mutableStateOf<String?>(null) }
-    val forLibrary = state.ports.count { it.games.isNotEmpty() }
+    val forLibrary = state.ports.count { it.here || it.elsewhere.isNotEmpty() }
     // The library's own ports first, until the person picks another list.
     val filter = chosenFilter ?: if (forLibrary > 0 || !state.loaded) PortFilter.LIBRARY else PortFilter.ALL
     val shown = remember(state, filter, query, system) { shownPorts(state, filter, query, system) }
@@ -197,7 +200,7 @@ internal fun AndroidPortsTab(app: AppState, active: Boolean, topPadding: Dp) {
                 shown.isEmpty() -> item("none") { Empty(filter, query, state.ports.size) }
                 else -> for ((i, v) in shown.withIndex()) {
                     item(v.port.id) {
-                        AndroidPortCard(v, selected = focused && sel.row == i + 2, compact = compact, onClick = {
+                        AndroidPortCard(app, v, selected = focused && sel.row == i + 2, compact = compact, onClick = {
                             app.focusZone = FocusZone.CONTENT
                             sel.row = i + 2
                             app.doNext(v)
@@ -219,7 +222,7 @@ private fun shownPorts(state: AndroidPortsState, filter: PortFilter, query: Stri
     return state.ports.filter { v ->
         val p = v.port
         when (filter) {
-            PortFilter.LIBRARY -> v.games.isNotEmpty() || v.attachedTo.isNotEmpty()
+            PortFilter.LIBRARY -> v.here || v.elsewhere.isNotEmpty() || v.bringing != null
             PortFilter.INSTALLED -> v.installed || v.job != null
             PortFilter.CHECKED -> p.checked
             PortFilter.ALL -> true
@@ -227,7 +230,8 @@ private fun shownPorts(state: AndroidPortsState, filter: PortFilter, query: Stri
             (q.isEmpty() || (listOf(p.game, p.name) + p.titles + p.systems.mapNotNull { PlatformCatalog.byId(PlatformId(it))?.name }).any { it.lowercase().contains(q) })
     }.sortedWith(
         compareBy(
-            { if (it.games.isNotEmpty() || it.attachedTo.isNotEmpty()) 0 else 1 },
+            // This device's games first, then those on RomM or another device.
+            { if (it.here) 0 else if (it.elsewhere.isNotEmpty() || it.bringing != null) 1 else 2 },
             { if (it.installed) 0 else 1 },
             { if (it.port.checked) 0 else 1 },
             { it.port.game.lowercase() },
@@ -237,7 +241,7 @@ private fun shownPorts(state: AndroidPortsState, filter: PortFilter, query: Stri
 }
 
 private fun counts(state: AndroidPortsState): Map<PortFilter, Int> = mapOf(
-    PortFilter.LIBRARY to state.ports.count { it.games.isNotEmpty() || it.attachedTo.isNotEmpty() },
+    PortFilter.LIBRARY to state.ports.count { it.here || it.elsewhere.isNotEmpty() || it.bringing != null },
     PortFilter.INSTALLED to state.ports.count { it.installed },
     PortFilter.CHECKED to state.ports.count { it.port.checked },
     PortFilter.ALL to state.ports.size,
@@ -311,7 +315,7 @@ private fun Filters(filters: List<PortFilter>, counts: Map<PortFilter, Int>, act
 }
 
 @Composable
-private fun AndroidPortCard(v: AndroidPortView, selected: Boolean, compact: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
+private fun AndroidPortCard(app: AppState, v: AndroidPortView, selected: Boolean, compact: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
     val c = Fuse.colors
     val p = v.port
     val shape = RoundedCornerShape(Fuse.geometry.panel)
@@ -324,16 +328,19 @@ private fun AndroidPortCard(v: AndroidPortView, selected: Boolean, compact: Bool
         Tone.QUIET -> c.textMuted
     }
     val systems = p.systems.mapNotNull { PlatformCatalog.byId(PlatformId(it))?.shortName }.distinct().joinToString(" / ")
+    val game = (v.attachedTo.firstOrNull() ?: v.games.firstOrNull())?.id
+    // The art Fuse already draws for its game elsewhere (RomM's, another device's), else the listing's.
+    val elsewhereArt = (v.bringing ?: v.elsewhere.firstOrNull())?.art?.let { it.boxart ?: it.square }
     Row(
         Modifier.padding(horizontal = Space.gutter).widthIn(max = 960.dp).fillMaxWidth().clip(shape)
             .background(c.surfaceRaised)
-            .ditheredBackground(Brush.horizontalGradient(listOf(c.accent.copy(alpha = if (v.games.isNotEmpty()) 0.14f else 0.06f), Color.Transparent)))
+            .ditheredBackground(Brush.horizontalGradient(listOf(c.accent.copy(alpha = if (v.here) 0.14f else 0.06f), Color.Transparent)))
             .border(2.dp, border, shape)
             .combinedClickable(remember { MutableInteractionSource() }, indication = null, onClick = onClick, onLongClick = onLongClick)
             .padding(if (compact) Space.s else Space.m),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Monogram(p.game, if (compact) 48.dp else 64.dp)
+        PortCover(app, game, elsewhereArt ?: v.cover, p.game, if (compact) 64.dp else 88.dp)
         Spacer(Modifier.width(Space.m))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -341,9 +348,13 @@ private fun AndroidPortCard(v: AndroidPortView, selected: Boolean, compact: Bool
                 Spacer(Modifier.width(Space.s))
                 if (p.checked) Chip(FuseIcons.ShieldCheck, "Checked", c.success) else Chip(FuseIcons.ShieldAlert, "Unchecked", c.warning)
             }
+            // The game: its system, year, publisher and genre.
+            val facts = listOfNotNull(systems.ifEmpty { null }, p.year?.toString(), p.publisher, p.genre?.let(::genreWord)).joinToString("  ·  ")
+            if (facts.isNotEmpty()) FText(facts, Fuse.type.caption, color = c.textMuted, maxLines = 1)
+            // The port: its name, how it was made, how far along it is, its licence.
             FText(
-                listOfNotNull(systems.ifEmpty { null }, p.name, "${p.madeLine()}, ${p.status.word()}", p.licence).joinToString("  ·  "),
-                Fuse.type.caption, color = c.textMuted, maxLines = 1,
+                listOfNotNull(p.name, "${p.madeLine()}, ${p.status.word()}", p.licence).joinToString("  ·  "),
+                Fuse.type.caption, color = c.textFaint, maxLines = 1,
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(8.dp).clip(CircleShape).background(toneColor))
@@ -366,6 +377,12 @@ private fun AndroidPortCard(v: AndroidPortView, selected: Boolean, compact: Bool
             }
         }
     }
+}
+
+/** A genre as the catalogue names it ("action-adventure"), as Fuse shows it ("Action adventure"). */
+private fun genreWord(genre: String): String = when (genre) {
+    "rpg" -> "RPG"
+    else -> genre.replace('-', ' ').replaceFirstChar { it.uppercase() }
 }
 
 /** The list being empty, said for the list chosen. */
@@ -398,17 +415,33 @@ private fun Credit() {
 private fun status(v: AndroidPortView): Pair<String, Tone> {
     val job = v.job
     val games = v.games.map { it.title }
+    val bringing = v.bringing
+    val away = v.elsewhere.firstOrNull()
     fun some(titles: List<String>) = titles.first() + if (titles.size > 1) " and ${titles.size - 1} more" else ""
     return when {
         job is PortJob.Downloading -> (job.progress?.let { "Downloading, ${(it * 100).toInt()}%" } ?: "Downloading...") to Tone.WAIT
         job is PortJob.Installing -> (if (job.waitingTurn) "Waiting for another install to finish..." else "Android is asking you to confirm...") to Tone.WAIT
         job is PortJob.Failed -> job.message to Tone.NEEDS
         v.installed && v.attachedTo.isNotEmpty() -> listOfNotNull("Installed", v.installedVersion, "plays ${some(v.attachedTo.map { it.title })}").joinToString("  ·  ") to Tone.GOOD
+        bringing != null -> "Getting your copy from ${bringing.from}  ·  ${if (v.installed) "it plays once it's in" else "install the port to play it"}" to Tone.WAIT
         v.installed && games.isNotEmpty() -> "Installed  ·  attach it to ${some(games)}" to Tone.NEEDS
+        v.installed && away != null -> "Installed  ·  your ${v.port.game} is ${where(v.elsewhere)}. Get it here to play" to Tone.NEEDS
         v.installed -> listOfNotNull("Installed", v.installedVersion).joinToString("  ·  ") to Tone.GOOD
         !v.port.installable -> "Get it from its project's page" to Tone.QUIET
         games.isNotEmpty() -> "Not installed  ·  for your ${some(games)}" to Tone.QUIET
+        away != null -> "Not installed  ·  your copy is ${where(v.elsewhere)}" to Tone.QUIET
         else -> "Not installed" to Tone.QUIET
+    }
+}
+
+/** Where [copies] of a game are, in a few words: "on RomM", "on Gaming PC and RomM". */
+private fun where(copies: List<PortGameCopy>): String {
+    val places = copies.map { it.from }.distinct()
+    return "on " + when (places.size) {
+        0 -> "another device"
+        1 -> places[0]
+        2 -> "${places[0]} and ${places[1]}"
+        else -> "${places[0]} and ${places.size - 1} other places"
     }
 }
 
@@ -422,6 +455,8 @@ private fun next(v: AndroidPortView): Pair<String, ImageVector>? {
         !v.installed -> "Install" to FuseIcons.Download
         v.attachedTo.isNotEmpty() -> "Play" to FuseIcons.Play
         v.games.isNotEmpty() -> "Attach" to FuseIcons.Link
+        v.bringing != null -> "Downloads" to FuseIcons.HardDriveDownload
+        v.elsewhere.isNotEmpty() -> "Get the Game" to FuseIcons.CloudDownload
         else -> "Open" to FuseIcons.External
     }
 }
@@ -436,9 +471,54 @@ private fun AppState.doNext(v: AndroidPortView) {
         !v.installed -> installPort(v)
         v.attachedTo.isNotEmpty() -> playAttached(v.attachedTo.first())
         v.games.isNotEmpty() -> attachPort(v)
+        v.bringing != null -> go(Route.Downloads)
+        v.elsewhere.isNotEmpty() -> offerGame(v, installing = false)
         else -> if (!ops.openAndroid(v.port.id)) toasts.show("${v.port.name} can't be opened.", ToastKind.WARNING)
     }
 }
+
+/**
+ * Asks whether to bring [v]'s game here from where it is (RomM, or another of the household's
+ * devices), and from where when it is in more than one place; [installing]: as the port installs.
+ * Once it is in, the port plays it.
+ */
+private fun AppState.offerGame(v: AndroidPortView, installing: Boolean) {
+    val copies = v.elsewhere
+    if (copies.isEmpty() || v.bringing != null) return
+    val p = v.port
+    val lead = if (installing) "${p.name} plays your own copy of ${p.game}, and this device hasn't got one." else "${p.game} isn't on this device yet."
+    val only = copies.singleOrNull()
+    if (only != null) {
+        val size = only.sizeBytes.takeIf { it > 0 }?.let { " (${bytesText(it)})" }.orEmpty()
+        val away = if (only.place == CopyPlace.DEVICE && !only.online) " ${only.from} is away now, so it comes when it's back." else ""
+        confirm = ConfirmSpec(
+            if (installing) "Get ${p.game} too?" else "Get ${p.game}?",
+            "$lead Yours is on ${only.from}. Fuse brings it here$size, and ${p.name} plays it once it's in.$away",
+            "Get It",
+        ) { offerFrom(v, only) }
+        return
+    }
+    choice = ChoiceSpec(
+        icon = FuseIcons.CloudDownload,
+        title = "Get ${p.game} from where?",
+        message = "$lead Yours is ${where(copies)}. Fuse brings it here from the one you choose, and ${p.name} plays it once it's in.",
+        options = copies.map { c -> copyRow(c) { choice = null; offerFrom(v, c) } } +
+            MenuAction("later", "Not Now", FuseIcons.Close, section = "", onSelect = { choice = null }),
+    )
+}
+
+/** One place a port's game is, as a row: RomM or a device, its size, and whether the device is on. */
+private fun copyRow(c: PortGameCopy, onSelect: () -> Unit): MenuAction = MenuAction(
+    "copy.${c.place.name}.${c.id.value}",
+    if (c.place == CopyPlace.ROMM) "From RomM" else "From ${c.from}",
+    if (c.place == CopyPlace.ROMM) FuseIcons.Server else FuseIcons.Monitor,
+    detail = listOfNotNull(
+        c.title,
+        c.sizeBytes.takeIf { it > 0 }?.let(::bytesText),
+        if (c.place == CopyPlace.DEVICE && !c.online) "Away now: it comes when it's back" else null,
+    ).joinToString("  ·  "),
+    onSelect = onSelect,
+)
 
 /** Installs [v], for its one game in the library, or for the copy the person picks when there are several. */
 private fun AppState.installPort(v: AndroidPortView) {
@@ -451,6 +531,8 @@ private fun AppState.installPort(v: AndroidPortView) {
     }
     if (v.games.size <= 1) {
         go(v.games.firstOrNull())
+        // Its game on RomM or another device, not here: offered as it installs.
+        if (v.games.isEmpty() && v.attachedTo.isEmpty()) offerGame(v, installing = true)
         return
     }
     choice = ChoiceSpec(
@@ -522,6 +604,21 @@ private fun AppState.pickPortSystem(state: AndroidPortsState, current: String?, 
     )
 }
 
+/** Brings [v]'s game here from [copy], and says so. */
+private fun AppState.offerFrom(v: AndroidPortView, copy: PortGameCopy) {
+    scope.launch {
+        val problem = store.ports.bringGame(v.port.id, copy)
+        if (problem != null) {
+            toasts.show(problem, ToastKind.WARNING)
+        } else {
+            toasts.show("Bringing ${v.port.game} here from ${copy.from}. ${v.port.name} plays it once it's in", ToastKind.INFO, icon = FuseIcons.CloudDownload, durationMs = 6_000L)
+        }
+    }
+}
+
+/** How many places a port's game is offered from in its menu. */
+private const val MAX_PLACES = 4
+
 /** Everything that can be done with [v]. */
 private fun AppState.portMenu(v: AndroidPortView): ContextMenuSpec {
     val ops = store.ports
@@ -544,6 +641,10 @@ private fun AppState.portMenu(v: AndroidPortView): ContextMenuSpec {
                 add(MenuAction("update", "Install Its Newest Release", FuseIcons.Download, detail = "From its project's releases. Its saves stay in the app", onSelect = { closeOverlays(); ops.installAndroid(p.id, v.attachedTo.firstOrNull()?.id) }))
             }
         }
+        // Its game on RomM or another device: brought here from the one chosen.
+        if (v.bringing == null && !v.here) {
+            for (c in v.elsewhere.take(MAX_PLACES)) add(copyRow(c) { closeOverlays(); offerFrom(v, c) })
+        }
         add(
             MenuAction(
                 "about", "Project Page", FuseIcons.External,
@@ -562,7 +663,12 @@ private fun AppState.portMenu(v: AndroidPortView): ContextMenuSpec {
     }
     return ContextMenuSpec(
         title = p.game,
-        subtitle = listOfNotNull(p.name, if (p.checked) "checked by Fuse" else "listed by Open Ports Games, unchecked", p.licence).joinToString("  ·  "),
+        subtitle = listOfNotNull(
+            p.name,
+            if (p.checked) "checked by Fuse" else "listed by Open Ports Games, unchecked",
+            p.licence,
+            v.cover?.let { _ -> p.coverCredit?.let { "box art: $it" } },
+        ).joinToString("  ·  "),
         icon = FuseIcons.Boxes,
         actions = acts,
     )

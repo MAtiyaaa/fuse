@@ -284,6 +284,39 @@ internal class DefaultMediaOps(
         return request to coordinator
     }
 
+    /**
+     * Box art for a game Fuse doesn't have (a port's), by its [title] and [platform] (a computer's
+     * when it has none): asked of the sources the library's art comes from, in the person's order,
+     * in the background, and taken only when the match is the game by its own name. Null when none
+     * is; throws when no source answered (offline), so the lack isn't remembered.
+     */
+    suspend fun coverFor(title: String, platform: PlatformId?): String? {
+        val (configured, coordinator) = coordinator()
+        val system = platform ?: PlatformId("win")
+        val settings = ctx.settings.value.scraping
+        val request = ScrapeRequest(
+            query = ScrapeQuery(
+                title = title,
+                platform = system,
+                platformName = ctx.platformName(system),
+                fileName = null,
+                preferredLanguage = settings.preferredLanguage,
+                preferredRegion = settings.preferredRegion,
+            ),
+            priority = settings.effectiveOrder(),
+            configured = configured,
+            artworkKinds = setOf(MediaKind.BOXART),
+            wantMetadata = false,
+            demand = io.github.matiyaaa.fuse.integrations.scrape.ScrapeDemand.BACKGROUND,
+        )
+        val outcome = coordinator.scrape(request, Guess.EXACT_TITLE)
+        if (outcome is ScrapeOutcome.ProviderErrors) throw IllegalStateException("No source of art answered.")
+        val found = outcome as? ScrapeOutcome.Accepted ?: return null
+        val same = io.github.matiyaaa.fuse.integrations.match.TitleNormalizer
+        if (same.normalize(found.candidate.title) != same.normalize(title)) return null
+        return found.artwork.firstOrNull { it.kind == MediaKind.BOXART }?.url
+    }
+
     // ------------------------------------------------------------------ the library's games, or a server's
 
     /** [id] as a game: the library's, or one a server has that Fuse shows without having ([RemoteGames]). */

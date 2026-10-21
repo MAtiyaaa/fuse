@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -53,6 +54,8 @@ internal class PortsStore(
     private val publicKey: () -> String? = { PortsSignature.PUBLIC_KEY },
     /** Where the person's own recomps are found and their folders read; null where there are none. */
     recompFiles: io.github.matiyaaa.fuse.ui.shell.store.RecompFiles? = null,
+    /** Where a port's game may be besides this computer: RomM and the household's other devices (a test's own). */
+    internal var sources: PortGameSources = PortGameSources.None,
 ) : PortsOps {
     override val supported: Boolean = true
 
@@ -314,6 +317,32 @@ internal class PortsStore(
         return problem
     }
 
+    override suspend fun copiesElsewhere(id: String, dataId: String): List<io.github.matiyaaa.fuse.ui.shell.store.PortGameCopy> {
+        if (list == null) lock.withLock { load() }
+        val port = list?.index?.ports?.firstOrNull { it.id == id } ?: return emptyList()
+        val data = port.data.firstOrNull { it.id == dataId } ?: return emptyList()
+        // By the game's name, on its ROM's system, or a computer's for a game's folder.
+        val name = AndroidPortCatalog.key(port.game)
+        return runCatching { sources.games(systemsOf(data)) }.getOrDefault(emptyList())
+            .filter { name in AndroidPortCatalog.titlesOf(io.github.matiyaaa.fuse.model.GameTitles(original = it.title)) }
+    }
+
+    override suspend fun bringGame(id: String, copy: io.github.matiyaaa.fuse.ui.shell.store.PortGameCopy): String? {
+        if (list == null) lock.withLock { load() }
+        val port = list?.index?.ports?.firstOrNull { it.id == id } ?: return "Fuse doesn't know that port any more."
+        val data = port.data.firstOrNull { copy.platform.value in systemsOf(it) } ?: return "${port.name} doesn't read that game's files."
+        sources.bring(copy)?.let { return it }
+        ctx.scope.launch {
+            // Once it is in the library, the port reads it, when its files are what the port needs.
+            val game = sources.arrived(copy).first { it != null }!!
+            copiesInLibrary(id, data.id).firstOrNull { it.game == game }?.let { useCopy(id, data.id, it) }
+        }
+        return null
+    }
+
+    /** The systems a port's game files [data] come from: its ROM's, else a computer's. */
+    private fun systemsOf(data: io.github.matiyaaa.fuse.model.PortData): Set<String> = data.rom?.let { setOf(it.system) } ?: COMPUTER_SYSTEMS
+
     override suspend fun portsFor(game: GameId): List<PortView> {
         val g = runCatching { ctx.data.games.get(game) }.getOrNull() ?: return emptyList()
         if (g.platformId == PortAdapter.PLATFORM) return emptyList()
@@ -554,5 +583,8 @@ internal class PortsStore(
 
         /** How often opening Ports looks for a newer signed list. */
         private const val LOOK_EVERY_MS = 6L * 60 * 60 * 1000
+
+        /** The systems a computer game's folder is found under, on RomM and other devices. */
+        private val COMPUTER_SYSTEMS = setOf("win", "dos", "win3x", "win9x")
     }
 }

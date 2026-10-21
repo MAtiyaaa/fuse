@@ -53,7 +53,7 @@ and redact credentials from every error message (`redact()`, see
 | Store (Android): Obtainium Emulation Pack, app sources | Optionally a GitHub token | Requests for the pack's newest release on github.com, each app's releases (GitHub's API, or the download page the pack names), and the APK you install; your IP address and the User-Agent (or the one the pack sets for a download page) | The catalogue when the Store opens and is older than 6 hours, or on "Check now"; an app's releases when its page or card is shown, for installed apps a little after start (at most twice a day, can be turned off); downloads only when you press Install or Update |
 | Store (computer): each program's releases | Optionally a GitHub token (GitHub only) | Requests for a program's releases on GitHub, its own Forgejo or Gitea server, its download listing or Flathub, and the file you install; your IP address and the User-Agent | A program's releases when its page or card is shown, for installed programs a little after start; downloads only when you press Install, Update or Update All |
 | Fuse Ports (computer, off until you turn it on) | Your own copy of each game (its folder, chosen by you) | Requests for a newer signed list of ports (`index.json` and its `.sig` on the `ports` release of Fuse's GitHub repository), and each port's build from its project's own release when you install it; your IP address and the User-Agent. Your game's files and folders never leave the device: they are only linked into Fuse's copy | The list when Ports opens (at most every 6 hours) or on Look Again, only while Fuse carries the key it is signed with; a build only when you press Install or Update |
-| Ports on Android | Nothing of yours: only which port you install | Open Ports Games' catalogue (`openportsgames.com/api/ports.json`) and Fuse's own signed list (`index.json` and its `.sig` on the `ports` release), once a day at most when Ports or a game's Play With opens; each port's GitHub releases and its APK when you install one; your IP address and the User-Agent. The port itself asks you for your game's files | The lists when Ports or Play With opens (at most once a day) or on Look Again; a release and its APK only when you press Install |
+| Ports on Android | Nothing of yours: only which port you install | Open Ports Games' catalogue (`openportsgames.com/api/ports.json`) and Fuse's own signed list (`index.json` and its `.sig` on the `ports` release), once a day at most when Ports or a game's Play With opens; each port's GitHub releases and its APK when you install one; each port's box art from where its listing points (mostly `upload.wikimedia.org` and `thumbnails.libretro.com`), and for a port without one the game's name to the art sources you set up; your IP address and the User-Agent. The port itself asks you for your game's files | The lists when Ports or Play With opens (at most once a day) or on Look Again; box art as Ports shows it, a lookup by name at most once a month per game; a release and its APK only when you press Install |
 | PS5 recompiling with AnyPS5 (Linux and Windows) | Nothing: your dump is read, and linked or copied, on this computer | AnyPS5's newest release from GitHub's API, then its relinker and system libraries from that release; your IP address and the User-Agent (and the Store's GitHub token, when you gave one) | Only when you choose Recompile to Run Natively or Recompile Again on a PS5 game |
 | GameBanana | Nothing | A game's title (or the words you search with), the GameBanana game you chose and the mods you open, your IP address and the User-Agent; then the mod's file from GameBanana's own address | Only when you open GameBanana in a game's cheats, textures or mods, a mod there, or add one of its files; answers are kept a while |
 | Nexus Mods (computer, off until you add your key) | Your own personal API key from your Nexus Mods account | To api.nexusmods.com only: your key in the `apikey` header with "Fuse" and its version, the Nexus Mods game you chose for a game and the mods and files you open; for an account that isn't Premium, the one-time key and expiry of the Mod Manager Download link you paste. Then the file from the address Nexus Mods gives (https only). The key stays on this device: it is never shared with your household or Fuse Sync | Whose key it is when Settings, Accounts, Nexus Mods is shown (once a run per key); the games list when you choose a game (kept a week), a game's lists when you open Nexus Mods for it (kept an hour), a mod's files when you open it; downloads only when you add a file |
@@ -843,7 +843,15 @@ point at. Windows makes symbolic links only in Developer Mode or for an administ
 joined with a junction instead, a file on the same drive with a hard link, and otherwise Fuse says
 to turn on Developer Mode. The copy can be the person's own already in the library
 (`copiesInLibrary`): the games of the port's game's name, offered only where the folder has what the
-port needs.
+port needs. With none here, Choose Files offers the person's copy on their RomM server or on another
+of the household's devices (Fuse One, `copiesElsewhere`): the game by its name, on its ROM's system
+or a computer's (`win`, `dos`). Chosen, it comes here as any download from there does, and once it
+is in the library the port reads it, when its files are what the port needs (`bringGame`).
+
+**Box art.** Each entry of the list carries its game's box art (`cover`, an HTTPS picture, and
+`coverCredit`), taken from Open Ports Games' catalogue: Wikipedia's or the libretro thumbnails' box.
+A picture not over HTTPS is left out, never the port. Ports draws it until the port's game is in the
+library, then the library's own art for that game.
 
 **Recompilations.** A recompilation is made from one ROM (`rom` in its `data`): the library's games
 of its system and name, or a file the person picks, are believed only by the XXH3-64 hash of the
@@ -1016,6 +1024,27 @@ starts it (`PlayVia`): from Ports or Android, the port; from its own system, its
 system's emulator choice and the game's own say. The game's page says so ("From Ports, it starts
 in ..."). With Its Own System Only, it shows there alone and Play starts the port chosen in Play
 With, as before. A port that is detached or uninstalled takes the game out of Ports and Android.
+
+**Box art and details.** Each port is drawn with its game's box art: the library's own art for
+it once the game is here; else the art Fuse draws for the person's copy on RomM or another device;
+else the listing's cover (Open Ports Games' `cover`, mostly Wikipedia's and the libretro thumbnails'
+boxes, credited in the port's menu), which a listing without one takes from another listing of the
+same game, whatever it is for (a computer's port often has the cover its Android port lacks); else
+one found by the game's name and system through the sources the library's art comes from (Settings,
+Art and Details, in the person's order, in the background when Ports opens), kept for a month, and
+taken only when the match is the game by its own name (`MediaStore.coverFor`). Fuse's checked
+entries carry their own (`cover`, `coverCredit`). The card says the game's system, year, publisher
+and genre, as the listing gives them; a checked entry takes those from the listing of the same
+project, else of the same game.
+
+**Where your game is.** For a port whose game isn't on this device, Ports says where the person's
+copy is: on their RomM server or on another of the household's devices (Fuse One's library), read
+only once Ports has been opened (`PortGameSources`: RomM's games not here, and the household's, of
+the ports' systems, matched to a port by name as the library's are). In Your Library lists them
+after this device's own. Install asks whether to bring the game here too; an installed port offers
+Get the Game, and its menu each place. The game comes as any download from there does (Downloads
+shows it), and once it is in the library the port is attached to it and plays it; when its app
+isn't installed yet, it is attached once the app is.
 
 **Saves.** A port keeps its saves inside its app, out of Fuse's reach, so Fuse One doesn't sync them.
 

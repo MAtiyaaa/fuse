@@ -61,6 +61,10 @@ data class Port(
     val source: String,
     /** Its own settings file, which Fuse Tune shows (read from the port's code as the family [id]); null when it doesn't. */
     val settings: PortSettings? = null,
+    /** The original game's box art: an HTTPS picture, shown before the port's game is in the library. */
+    val cover: String? = null,
+    /** Where [cover] comes from ("Wikipedia"). */
+    val coverCredit: String? = null,
 )
 
 /**

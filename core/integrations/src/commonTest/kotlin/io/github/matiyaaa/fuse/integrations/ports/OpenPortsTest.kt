@@ -40,6 +40,27 @@ class OpenPortsTest {
     }
 
     @Test
+    fun aListingsGameDetailsAndBoxArtAreRead() {
+        val ports = OpenPorts.read(FEED).getOrThrow().ports.associateBy { it.id }
+        val red = ports.getValue("gen1recomp")
+        assertEquals("Nintendo", red.publisher)
+        assertEquals(1996, red.year)
+        assertEquals("rpg", red.genre)
+        assertEquals("https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy/Named_Boxarts/Pokemon%20-%20Red.png", red.cover)
+        assertEquals("Box art", red.coverCredit)
+        assertEquals("https://example.org/red.png", red.screenshot, "the first picture over HTTPS")
+        // Majora's Mask has none of its own: another listing's of the same game, a computer's here.
+        val mm = ports.getValue("zelda64-recomp-android")
+        assertEquals("https://upload.wikimedia.org/wikipedia/en/6/60/Majora.jpg", mm.cover)
+        assertEquals("Wikipedia", mm.coverCredit)
+        assertNull(mm.screenshot)
+        val other = ports.getValue("unknown-system")
+        assertNull(other.cover, "a picture not over HTTPS is no picture")
+        assertNull(other.genre, "a genre that isn't a word or two")
+        assertNull(other.year, "a year no game came out in")
+    }
+
+    @Test
     fun toolsDeadSourcesWarningsAndOtherSystemsAreLeftOut() {
         val ids = OpenPorts.read(FEED).getOrThrow().ports.map { it.id }
         for (out in listOf("desktop-only", "a-launcher", "gone", "ships-the-game")) assertFalse(out in ids, out)
@@ -72,6 +93,22 @@ class OpenPortsTest {
     }
 
     @Test
+    fun fusesOwnListKeepsOnlyPicturesOverHttps() {
+        val text = """
+            {"format":1,"revision":5,"ports":[],"android":[
+              {"id":"starship-android","name":"Starship","game":"Star Fox 64","systems":["n64"],"repo":"https://github.com/izzy2lost/Starship","cover":"https://example.org/sf.png","coverCredit":"Box art"},
+              {"id":"perfect-dark-android","name":"Perfect Dark","game":"Perfect Dark","systems":["n64"],"repo":"https://github.com/izzy2lost/Perfect-Dark","cover":"http://example.org/pd.png","coverCredit":"Box art"}
+            ]}
+        """.trimIndent()
+        val android = PortsIndexReader.read(text).getOrThrow().index.android.associateBy { it.id }
+        assertEquals("https://example.org/sf.png", android.getValue("starship-android").cover)
+        assertEquals("Box art", android.getValue("starship-android").coverCredit)
+        val pd = android.getValue("perfect-dark-android")
+        assertNull(pd.cover, "a picture over plain HTTP is left out")
+        assertNull(pd.coverCredit)
+    }
+
+    @Test
     fun theSignedListsAndroidEntriesAreFusesOwnAndBadOnesAreLeftOut() {
         val text = """
             {"format":1,"revision":4,"ports":[],"android":[
@@ -100,10 +137,14 @@ class OpenPortsTest {
     private companion object {
         val FEED = """
             {"schema":"openportsgames/catalog","version":2,"generatedAt":"2026-10-18","site":"https://openportsgames.com/","ports":[
-              {"id":"zelda64-recomp-android","kind":"game","title":"Zelda64Recomp (Android)","game":"The Legend of Zelda: Majora's Mask","portType":"recompilation","platforms":["android"],"status":"beta","sources":["https://github.com/linkzenic/Zelda64Recomp-Android"],"license":{"spdx":"GPL-3.0"},"verified":false,"originalSystems":["Nintendo 64"],"notes":"Majora's Mask, recompiled."},
-              {"id":"gen1recomp","kind":"game","title":"Gen1Recomp (Pokémon Red)","game":"Pokémon Red","portType":"reimplementation","platforms":["windows","android"],"status":"beta","sources":["https://github.com/bryanthaboi/gen1recomp"],"license":{"spdx":"NOASSERTION","note":"none"},"verified":true,"originalSystems":["Game Boy"]},
-              {"id":"unknown-system","kind":"game","title":"Something","game":"Something","portType":"source-port","platforms":["android"],"status":"alpha","sources":["https://github.com/someone/something"],"license":{"spdx":"MIT"},"verified":false,"originalSystems":["Unknown"]},
-              {"id":"desktop-only","kind":"game","title":"Desktop","game":"Desktop","platforms":["windows"],"sources":["https://github.com/someone/desktop"],"originalSystems":["Nintendo 64"]},
+              {"id":"zelda64-recomp-android","kind":"game","title":"Zelda64Recomp (Android)","game":"The Legend of Zelda: Majora's Mask","portType":"recompilation","platforms":["android"],"status":"beta","sources":["https://github.com/linkzenic/Zelda64Recomp-Android"],"license":{"spdx":"GPL-3.0"},"verified":false,"originalSystems":["Nintendo 64"],"notes":"Majora's Mask, recompiled.","cover":null},
+              {"id":"gen1recomp","kind":"game","title":"Gen1Recomp (Pokémon Red)","game":"Pokémon Red","portType":"reimplementation","platforms":["windows","android"],"status":"beta","sources":["https://github.com/bryanthaboi/gen1recomp"],"license":{"spdx":"NOASSERTION","note":"none"},"verified":true,"originalSystems":["Game Boy"],
+               "publisher":"Nintendo","originalYear":1996,"genre":"rpg","cover":{"src":"https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy/Named_Boxarts/Pokemon%20-%20Red.png","alt":"Pokémon Red (box art)","credit":"Box art"},
+               "screenshots":[{"src":"http://example.org/insecure.png"},{"src":"https://example.org/red.png","credit":"Libretro"}]},
+              {"id":"unknown-system","kind":"game","title":"Something","game":"Something","portType":"source-port","platforms":["android"],"status":"alpha","sources":["https://github.com/someone/something"],"license":{"spdx":"MIT"},"verified":false,"originalSystems":["Unknown"],
+               "genre":"Not A Genre!","originalYear":12,"cover":{"src":"http://example.org/something.png"}},
+              {"id":"desktop-only","kind":"game","title":"Desktop","game":"The Legend of Zelda - Majora's Mask","platforms":["windows"],"sources":["https://github.com/someone/desktop"],"originalSystems":["Nintendo 64"],
+               "cover":{"src":"https://upload.wikimedia.org/wikipedia/en/6/60/Majora.jpg","credit":"Wikipedia"}},
               {"id":"a-launcher","kind":"tool","title":"Launcher","game":"Launcher","platforms":["android"],"sources":["https://github.com/someone/launcher"]},
               {"id":"gone","kind":"game","title":"Gone","game":"Gone","platforms":["android"],"sources":["https://github.com/someone/gone"],"sourceDead":true},
               {"id":"ships-the-game","kind":"game","title":"Ships It","game":"Ships It","platforms":["android"],"sources":["https://github.com/someone/ships"],"warning":"This Android port distributes the game's own files."}

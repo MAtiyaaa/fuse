@@ -3,6 +3,7 @@ package io.github.matiyaaa.fuse.integrations.ports
 import io.github.matiyaaa.fuse.integrations.ApiResult
 import io.github.matiyaaa.fuse.integrations.FuseHttp
 import io.github.matiyaaa.fuse.integrations.ProviderHttp
+import io.github.matiyaaa.fuse.model.AndroidPorts
 import io.github.matiyaaa.fuse.model.Port
 import io.github.matiyaaa.fuse.model.PortTokens
 import io.github.matiyaaa.fuse.model.PortsIndex
@@ -51,12 +52,21 @@ object PortsIndexReader {
             if (problem != null) skipped[port.id] = problem
             problem == null
         }
+            // A picture that isn't over HTTPS is left out, not the port.
+            .map { p -> AndroidPorts.picture(p.cover).let { c -> p.copy(cover = c, coverCredit = p.coverCredit.takeIf { c != null }) } }
         // Android ports Fuse checked: each is one of Fuse's own, whatever the entry says.
         val androidSeen = HashSet<String>()
         val android = index.android.mapNotNull { port ->
             val problem = androidPortProblem(port) ?: if (!androidSeen.add(port.id)) "it is listed twice" else null
             if (problem != null) skipped["android:${port.id}"] = problem
-            port.takeIf { problem == null }?.copy(checked = true, listedVerified = false)
+            val cover = AndroidPorts.picture(port.cover)
+            port.takeIf { problem == null }?.copy(
+                checked = true,
+                listedVerified = false,
+                cover = cover,
+                coverCredit = port.coverCredit.takeIf { cover != null },
+                screenshot = AndroidPorts.picture(port.screenshot),
+            )
         }
         return Result.success(PortsList(index.copy(ports = ports, android = android), skipped, signed = signature != null, text = text, signature = signature))
     }

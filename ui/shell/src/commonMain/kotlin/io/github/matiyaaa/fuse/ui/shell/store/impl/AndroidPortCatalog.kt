@@ -15,11 +15,47 @@ import io.github.matiyaaa.fuse.ui.shell.store.PortMatch
  * and which library games and installed apps each one is.
  */
 internal object AndroidPortCatalog {
-    /** [checked] and [listed] as one list: a checked entry takes the place of a listing of the same project. */
+    /**
+     * [checked] and [listed] as one list: a checked entry takes the place of a listing of the same
+     * project, and takes what it doesn't say of its game (publisher, year, genre, pictures) from that
+     * listing, else from a listing of the same game. Then a port without box art takes another's of
+     * its game.
+     */
     fun merge(checked: List<AndroidPort>, listed: List<AndroidPort>): List<AndroidPort> {
         val repos = checked.map { repoKey(it.repo) }.toSet()
         val ids = checked.map { it.id }.toSet()
-        return checked + listed.filter { repoKey(it.repo) !in repos && it.id !in ids }
+        val byRepo = listed.groupBy { repoKey(it.repo) }
+        val byGame = listed.groupBy { key(it.game) }
+        val filled = checked.map { c ->
+            val same = byRepo[repoKey(c.repo)]?.firstOrNull()
+            val game = byGame[key(c.game)]?.firstOrNull { l -> l.systems.any(c.systems::contains) }
+            c.withDetailsFrom(same, screenshot = true).withDetailsFrom(game, screenshot = false)
+        }
+        return shareCovers(filled + listed.filter { repoKey(it.repo) !in repos && it.id !in ids })
+    }
+
+    /** [this] with what it doesn't say of its game taken from [other]: its [screenshot] too when [other] is the same project. */
+    private fun AndroidPort.withDetailsFrom(other: AndroidPort?, screenshot: Boolean): AndroidPort = if (other == null) this else copy(
+        publisher = publisher ?: other.publisher,
+        year = year ?: other.year,
+        genre = genre ?: other.genre,
+        cover = cover ?: other.cover,
+        coverCredit = if (cover != null) coverCredit else other.coverCredit,
+        screenshot = this.screenshot ?: other.screenshot.takeIf { screenshot },
+    )
+
+    /** [ports], each without box art given another's of the same game and system. */
+    fun shareCovers(ports: List<AndroidPort>): List<AndroidPort> {
+        val covers = HashMap<String, AndroidPort>()
+        for (p in ports) if (p.cover != null) for (s in p.systems.ifEmpty { listOf("") }) covers.putIfAbsent("$s|${key(p.game)}", p)
+        return ports.map { p ->
+            if (p.cover != null) {
+                p
+            } else {
+                p.systems.ifEmpty { listOf("") }.firstNotNullOfOrNull { s -> covers["$s|${key(p.game)}"] }
+                    ?.let { o -> p.copy(cover = o.cover, coverCredit = o.coverCredit) } ?: p
+            }
+        }
     }
 
     /** A project's page, as two listings of it are told to be the same. */

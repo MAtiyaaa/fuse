@@ -1,37 +1,31 @@
-# Fuse 0.4.3.5 - The Overdrive Update
+# Fuse 0.4.3.6 - The Overdrive Update
 
-Ports and recomps on Android, each attached to its game, and a Ports system that lists them beside
-their own systems, one game with one time played wherever you start it.
+Ports show their games' box art and details, and say where your copy of each game is: on this
+device, on your RomM server, or on another of your devices, from where Fuse brings it here for you.
 
 ## New
 
-- Ports on Android. A port there is an app: a game rebuilt for Android that its project publishes
-  as an APK, and that takes your game's files itself the first time it starts. A game's Play With
-  now lists the ports that play it, Fuse's checked ones first, then those Open Ports Games lists
-  (shown as unchecked). Picking one installs it from its project's GitHub releases, as the Store
-  installs apps, and attaches it to the game. From then on Play starts the app in the emulator's
-  place, and the time played and Continue Playing stay the game's own. Fuse's checked list starts
-  with 13: Gen1Recomp (Pokémon Red to Emerald), Bloodborne-Android, Zelda 64: Recompiled for
-  Android, 2 Ship 2 Harkinian, Ship of Harkinian, Starship, SpaghettiKart, Ghostship, Perfect Dark,
-  the Goemon 64 and Donkey Kong 64 recomps, Animal Crossing and Zelda 3.
-- Recomp or Port, a new Type in Apps. An app you installed yourself can be marked one, and Fuse
-  works out which game it plays (by its package, or its whole name), or asks "What game is this?"
-  with the likeliest games first. A port Fuse knows by its package is attached by itself when your
-  library has one copy of its game. An APK added from Add a Game says which port it is before it
-  installs, or asks what it is.
-- Addons, Ports on Android: every Android port, with search, a system filter and In Your Library,
-  Installed, Checked by Fuse and Everything, and Install, Attach, Play, Open and Uninstall.
-- The Ports system. A game played with a port shows in Ports too, with the Ports art on Systems,
-  and is still one game: one time played, one set of achievements, one page. Started from Ports,
-  it plays with the port; from its own system, with the emulator you chose for that system (or for
-  the game). Ports can be Android instead, or off, so the game is only in its own system and plays
-  as Play With says. It is one setting for every game (Settings, Addons, Ports), with its own
-  value for each system (in the system's settings) and each game (Shows In, in its options).
+- Box art for every port's game. Ports draws each port with its game's box: the art your library
+  already has for it, else the art Fuse shows for your copy on RomM or another device, else the
+  cover Open Ports Games' listing points to (Wikipedia's or the libretro thumbnails' box, credited
+  in the port's menu). A listing without one takes another listing's of the same game, and the
+  rest are looked up by the game's name through the art sources you set up, once a month at most
+  and only when the match is that very game. 195 of the 262 Android listings, and every port Fuse
+  checked, now have their box. On a computer, Fuse Ports draws them the same way.
+- The game's details on each port: its system, year, publisher and genre.
+- Where your game is. When a port's game isn't on this device but is on your RomM server or on
+  another device of your household (Fuse One), Ports says so, and In Your Library lists it after
+  this device's own games. Installing the port asks whether to get the game too; an installed port
+  offers Get the Game, and its menu each place your copy is. It comes as any download from there
+  does, shown in Downloads, and once it is in, the port is attached to it and plays it, or as soon
+  as the port is installed.
+- On a computer, a port's Choose Files offers your copy of its game on RomM or another device when
+  this computer hasn't got one, and uses it once it is here.
 
 ## Changed
 
-- The Games filter in Apps lists Recomp or Port apps too. A port's menu there has Change, for the
-  game it plays, and Detach, which gives the game back to its emulator (as uninstalling it does).
+- Open Ports Games' list inside Fuse now keeps each listing's box art, first picture and game
+  details, and Fuse's own list of ports (revision 5) carries box art for every port in it.
 
 ## Fixed
 

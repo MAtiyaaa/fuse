@@ -21,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -291,6 +292,79 @@ class AndroidPortsStoreTest {
         store.ports.detach(twoship.id)
         eventually("only the N64's") { via(n64)?.takeIf { it == PlayVia.DEFAULT } }
         assertNull(via(ports))
+    }
+
+    /** RomM's and the household's other devices' games, as a test sets them, and what was asked of them. */
+    private class FakeSources : io.github.matiyaaa.fuse.ui.shell.store.impl.PortGameSources {
+        val copies = java.util.concurrent.CopyOnWriteArrayList<PortGameCopy>()
+        val asked = java.util.concurrent.CopyOnWriteArrayList<PortGameCopy>()
+        val landed = MutableStateFlow<GameId?>(null)
+        override suspend fun games(systems: Set<String>) = copies.filter { it.platform.value in systems }
+        override suspend fun bring(copy: PortGameCopy): String? = null.also { asked += copy }
+        override fun arrived(copy: PortGameCopy): kotlinx.coroutines.flow.Flow<GameId?> = landed
+    }
+
+    private val onRomm = PortGameCopy(GameId(-5), "Legend of Zelda, The - Majora's Mask (USA)", PlatformId("n64"), CopyPlace.ROMM, "RomM", romId = 5, sizeBytes = 33_554_432)
+    private val onPc = PortGameCopy(GameId(-9), "The Legend of Zelda: Majora's Mask", PlatformId("n64"), CopyPlace.DEVICE, "Gaming PC", online = false)
+
+    @Test
+    fun aPortsGameOnRommOrAnotherDeviceIsSaidAndBroughtHereThenPlaysWithIt(): Unit = runBlocking {
+        val apps = FakeApps(emptyList())
+        val services = services(apps)
+        val store = createFuseStore(services, scope)
+        val ports = store.ports as io.github.matiyaaa.fuse.ui.shell.store.impl.AndroidPortsStore
+        val sources = FakeSources().apply { copies += listOf(onRomm, onPc, onRomm.copy(id = GameId(-6), title = "Super Mario 64 (USA)", romId = 6)) }
+        ports.sources = sources
+        ports.open()
+
+        // Not on this device: where it is instead, a device that is on before RomM, RomM before one that's away.
+        val away = eventually("its game elsewhere") { store.ports.android.value.port("twoship")?.takeIf { it.elsewhere.isNotEmpty() } }
+        assertFalse(away.here)
+        assertEquals(listOf("RomM", "Gaming PC"), away.elsewhere.map { it.from })
+        assertTrue(store.ports.android.value.ports.none { v -> v.elsewhere.any { it.title.startsWith("Super Mario") } }, "only its own game")
+
+        // Brought here before the port is installed: asked of RomM, said while it comes.
+        assertNull(store.ports.bringGame("twoship", onRomm))
+        assertEquals(listOf(onRomm), sources.asked.toList())
+        assertEquals(onRomm, eventually("bringing") { store.ports.android.value.port("twoship")?.bringing })
+
+        // It lands in the library, then the port's app arrives: the game plays with it.
+        val game = majorasMask(store)
+        sources.landed.value = game
+        apps.apps.value = listOf(twoship)
+        assertEquals(twoship.id, eventually("attached") { store.ports.androidPlayWith(game) })
+        val done = eventually("here") { store.ports.android.value.port("twoship")?.takeIf { it.bringing == null && it.here } }
+        assertTrue(done.elsewhere.isEmpty(), "on this device, nowhere else is offered")
+    }
+
+    @Test
+    fun aPortWithoutBoxArtGetsOneFoundByItsGamesNameOnceAndKept(): Unit = runBlocking {
+        val apps = FakeApps(emptyList())
+        val services = services(apps)
+        val store = createFuseStore(services, scope)
+        val ports = store.ports as io.github.matiyaaa.fuse.ui.shell.store.impl.AndroidPortsStore
+        val asked = java.util.concurrent.CopyOnWriteArrayList<Pair<String, PlatformId?>>()
+        val offline = java.util.concurrent.atomic.AtomicBoolean(true)
+        ports.findCover = { title, platform ->
+            asked += title to platform
+            // Pokémon Red's look finds no source answering the first time (offline).
+            if (title == "Pokémon Red" && offline.get()) error("offline")
+            if ("Majora" in title) "https://example.org/mm.png" else null
+        }
+        ports.open()
+        val found = eventually("found") { store.ports.android.value.port("twoship")?.takeIf { it.foundCover != null } }
+        assertEquals("https://example.org/mm.png", found.cover)
+        // Asked once for each game and system, with the system its ports play.
+        eventually("every port asked") { asked.takeIf { a -> a.any { it.first == "Pokémon Red" } } }
+        assertEquals(1, asked.count { it.first == "The Legend of Zelda: Majora's Mask" })
+        assertEquals(PlatformId("n64"), asked.first { "Majora" in it.first }.second)
+
+        // Kept: opened again, only the game no source answered for is asked again.
+        offline.set(false)
+        ports.open()
+        eventually("asked again") { asked.takeIf { a -> a.count { it.first == "Pokémon Red" } == 2 } }
+        kotlinx.coroutines.delay(300)
+        assertEquals(1, asked.count { it.first == "The Legend of Zelda: Majora's Mask" })
     }
 
     @Test

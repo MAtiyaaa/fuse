@@ -17,6 +17,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2000,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -25,6 +28,10 @@
    ],
    "license": {
     "spdx": "CC0-1.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/6/60/The_Legend_of_Zelda_-_Majora%27s_Mask_Box_Art.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -39,6 +46,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2000,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -47,6 +57,10 @@
    ],
    "license": {
     "spdx": "CC0-1.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/6/60/The_Legend_of_Zelda_-_Majora%27s_Mask_Box_Art.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -61,6 +75,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2000,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -69,6 +86,10 @@
    ],
    "license": {
     "spdx": "CC0-1.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/6/60/The_Legend_of_Zelda_-_Majora%27s_Mask_Box_Art.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -83,6 +104,9 @@
    "originalSystems": [
     "MS-DOS"
    ],
+   "publisher": "Crack dot Com",
+   "originalYear": 1996,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -105,6 +129,9 @@
    "originalSystems": [
     "PlayStation"
    ],
+   "publisher": "Namco",
+   "originalYear": 1999,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -113,6 +140,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Sony%20-%20PlayStation/Named_Boxarts/Ace%20Combat%203%20-%20Electrosphere%20(Europe)%20(En,Fr,De,Es,It).png",
+    "credit": "Box art"
    }
   },
   {
@@ -127,6 +158,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "ASCII Entertainment",
+   "originalYear": 1997,
+   "genre": "racing",
    "platforms": [
     "android"
    ],
@@ -135,7 +169,17 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
-   }
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/AeroGauge%20(Europe)%20(En,Fr,De).png",
+    "credit": "Box art"
+   },
+   "screenshots": [
+    {
+     "src": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Snaps/AeroGauge%20(Europe)%20(En,Fr,De).png",
+     "credit": "Libretro"
+    }
+   ]
   },
   {
    "id": "alabaster-dawn-android",
@@ -149,6 +193,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Radical Fish Games",
+   "originalYear": 2025,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -171,6 +218,9 @@
    "originalSystems": [
     "Game Boy"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 1991,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -179,6 +229,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://randovania.org/assets/games/am2r.png",
+    "credit": "Randovania"
    }
   },
   {
@@ -193,6 +247,9 @@
    "originalSystems": [
     "MS-DOS"
    ],
+   "publisher": "NetHack DevTeam",
+   "originalYear": 1987,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -201,6 +258,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/commons/d/d6/NetHack.png",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -215,6 +276,9 @@
    "originalSystems": [
     "GameCube"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2001,
+   "genre": "simulation",
    "platforms": [
     "android"
    ],
@@ -223,6 +287,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20GameCube/Named_Boxarts/Animal%20Crossing%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -237,6 +305,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Sierra On-Line",
+   "originalYear": 1998,
+   "genre": "strategy",
    "platforms": [
     "android"
    ],
@@ -245,6 +316,10 @@
    ],
    "license": {
     "spdx": "AGPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/5/56/Caeser_III_Coverart.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -259,6 +334,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "Titus",
+   "originalYear": 1997,
+   "genre": "racing",
    "platforms": [
     "android"
    ],
@@ -267,7 +345,17 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
-   }
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/Automobili%20Lamborghini%20(Europe).png",
+    "credit": "Box art"
+   },
+   "screenshots": [
+    {
+     "src": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Snaps/Automobili%20Lamborghini%20(Europe).png",
+     "credit": "Libretro"
+    }
+   ]
   },
   {
    "id": "barony-android",
@@ -281,6 +369,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Turning Wheel LLC",
+   "originalYear": 2015,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -289,6 +380,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://cdn.cloudflare.steamstatic.com/steam/apps/371970/header.jpg",
+    "credit": "Steam"
    }
   },
   {
@@ -303,6 +398,9 @@
    "originalSystems": [
     "PlayStation 4"
    ],
+   "publisher": "Sony Computer Entertainment",
+   "originalYear": 2015,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -311,6 +409,10 @@
    ],
    "license": {
     "spdx": "GPL-2.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/6/68/Bloodborne_Cover_Wallpaper.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -325,6 +427,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Microsoft Game Studios",
+   "originalYear": 2006,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -333,6 +438,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/f/f7/Blue_Dragon_Box_Art.jpeg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -347,6 +456,9 @@
    "originalSystems": [
     "GameCube"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2002,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -355,6 +467,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20GameCube/Named_Boxarts/Legend%20of%20Zelda%2C%20The%20-%20The%20Wind%20Waker%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -369,6 +485,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Free Lives",
+   "originalYear": 2015,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -377,6 +496,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/9/9c/Broforce.png",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -391,6 +514,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Mike Klubnika",
+   "originalYear": 2023,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -399,6 +525,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/7/72/Buckshot_Roulette_Cover.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -413,6 +543,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Activision",
+   "originalYear": 2009,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -421,6 +554,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/5/52/Call_of_Duty_Modern_Warfare_2_%282009%29_cover.png",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -435,6 +572,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "Konami",
+   "originalYear": 1999,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -443,6 +583,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/Castlevania%20-%20Legacy%20of%20Darkness%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -457,6 +601,9 @@
    "originalSystems": [
     "Nintendo Entertainment System"
    ],
+   "publisher": "Konami",
+   "originalYear": 1986,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -465,7 +612,17 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
-   }
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%20Entertainment%20System/Named_Boxarts/Castlevania%20(Europe)%20(Virtual%20Console).png",
+    "credit": "Box art"
+   },
+   "screenshots": [
+    {
+     "src": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%20Entertainment%20System/Named_Snaps/Castlevania%20(Europe)%20(Virtual%20Console).png",
+     "credit": "Libretro"
+    }
+   ]
   },
   {
    "id": "castlevania-sotn-recomp-sergiomanzur",
@@ -479,6 +636,9 @@
    "originalSystems": [
     "PlayStation"
    ],
+   "publisher": "Konami",
+   "originalYear": 1997,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -487,6 +647,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Sony%20-%20PlayStation/Named_Boxarts/Castlevania%20-%20Symphony%20of%20the%20Night%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -501,6 +665,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "Rare",
+   "originalYear": 2001,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -509,6 +676,10 @@
    ],
    "license": {
     "spdx": "MIT"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/Conker's%20Bad%20Fur%20Day%20(Europe).png",
+    "credit": "Box art"
    }
   },
   {
@@ -523,6 +694,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Maddy Makes Games",
+   "originalYear": 2018,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -531,6 +705,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/commons/0/0f/Celeste_box_art_full.png",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -545,6 +723,9 @@
    "originalSystems": [
     "Sega 32X"
    ],
+   "publisher": "Sega",
+   "originalYear": 1995,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -553,7 +734,17 @@
    ],
    "license": {
     "spdx": "MIT"
-   }
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Sega%20-%2032X/Named_Boxarts/Knuckles'%20Chaotix%20(Europe).png",
+    "credit": "Box art"
+   },
+   "screenshots": [
+    {
+     "src": "https://thumbnails.libretro.com/Sega%20-%2032X/Named_Snaps/Knuckles'%20Chaotix%20(Europe).png",
+     "credit": "Libretro"
+    }
+   ]
   },
   {
    "id": "chex-quest-classic-core-engines",
@@ -567,6 +758,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Digital Café",
+   "originalYear": 1996,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -589,6 +783,9 @@
    "originalSystems": [
     "MS-DOS"
    ],
+   "publisher": "Electronic Arts",
+   "originalYear": 1997,
+   "genre": "simulation",
    "platforms": [
     "android"
    ],
@@ -597,6 +794,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/2/26/Theme_Hospital.front_cover.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -611,6 +812,9 @@
    "originalSystems": [
     "PlayStation"
    ],
+   "publisher": "Sony Computer Entertainment",
+   "originalYear": 1996,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -619,7 +823,17 @@
    ],
    "license": {
     "spdx": "MIT"
-   }
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Sony%20-%20PlayStation/Named_Boxarts/Crash%20Bandicoot%20(Europe).png",
+    "credit": "Box art"
+   },
+   "screenshots": [
+    {
+     "src": "https://github.com/user-attachments/assets/749a8631-fb87-4a33-8149-ccbb104d6412",
+     "credit": "Crash Bandicoot Launcher"
+    }
+   ]
   },
   {
    "id": "crt-native-ds-dual-screen",
@@ -633,6 +847,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Sony Computer Entertainment",
+   "originalYear": 1999,
+   "genre": "racing",
    "platforms": [
     "android"
    ],
@@ -655,6 +872,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Valve",
+   "originalYear": 2000,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -663,6 +883,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/6/67/Counter-Strike_Box.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -677,6 +901,9 @@
    "originalSystems": [
     "PlayStation"
    ],
+   "publisher": "Sony Computer Entertainment",
+   "originalYear": 1999,
+   "genre": "racing",
    "platforms": [
     "android"
    ],
@@ -685,6 +912,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Sony%20-%20PlayStation/Named_Boxarts/CTR%20-%20Crash%20Team%20Racing%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -699,6 +930,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Bethesda Softworks",
+   "originalYear": 1996,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -707,6 +941,10 @@
    ],
    "license": {
     "spdx": "MIT"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/a/a4/Daggerfall_Cover_art.gif",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -721,6 +959,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Bandai Namco",
+   "originalYear": 2008,
+   "genre": "fighting",
    "platforms": [
     "android"
    ],
@@ -729,6 +970,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/5/55/Dragon_Ball_Z_Burst_Limit.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -743,6 +988,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Tecmo",
+   "originalYear": 2003,
+   "genre": "sports",
    "platforms": [
     "android"
    ],
@@ -751,6 +999,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Microsoft%20-%20Xbox/Named_Boxarts/Dead%20or%20Alive%20Xtreme%20Beach%20Volleyball%20(Japan)%20(En,Ja).png",
+    "credit": "Box art"
    }
   },
   {
@@ -765,6 +1017,9 @@
    "originalSystems": [
     "MS-DOS"
    ],
+   "publisher": "Interplay Productions",
+   "originalYear": 1996,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -773,6 +1028,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/DOS/Named_Boxarts/Descent%20II%20(1996).png",
+    "credit": "Box art"
    }
   },
   {
@@ -787,6 +1046,9 @@
    "originalSystems": [
     "MS-DOS"
    ],
+   "publisher": "Interplay Entertainment",
+   "originalYear": 1996,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -795,6 +1057,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/a/a9/Descent_II_cover_art.png",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -809,6 +1075,9 @@
    "originalSystems": [
     "MS-DOS"
    ],
+   "publisher": "Interplay Productions",
+   "originalYear": 1995,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -817,6 +1086,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/DOS/Named_Boxarts/Descent%20(1995).png",
+    "credit": "Box art"
    }
   },
   {
@@ -831,6 +1104,9 @@
    "originalSystems": [
     "MS-DOS"
    ],
+   "publisher": "Interplay Entertainment",
+   "originalYear": 1995,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -839,6 +1115,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/5/5f/Descent_cover.png",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -853,6 +1133,9 @@
    "originalSystems": [
     "MS-DOS"
    ],
+   "publisher": "Blizzard Entertainment",
+   "originalYear": 1996,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -861,7 +1144,17 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
-   }
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/3/3a/Diablo_Coverart.png",
+    "credit": "Wikipedia"
+   },
+   "screenshots": [
+    {
+     "src": "https://github.com/user-attachments/assets/ee902926-6382-4ee5-b1c2-7947e8b434e9",
+     "credit": "DevilutionX"
+    }
+   ]
   },
   {
    "id": "dishsoap",
@@ -875,6 +1168,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Microsoft Game Studios",
+   "originalYear": 2009,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -883,6 +1179,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://raw.githubusercontent.com/Hdmaniak/DishSoap/refs/heads/master/docs/assets/icon-512.png",
+    "credit": "SteamGridDB"
    }
   },
   {
@@ -897,6 +1197,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 1999,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -905,6 +1208,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/Donkey%20Kong%2064%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -919,6 +1226,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "id Software",
+   "originalYear": 2012,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -927,6 +1237,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/4/4e/Doom3box.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -941,6 +1255,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "id Software",
+   "originalYear": 2020,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -965,6 +1282,9 @@
     "Super Nintendo",
     "PlayStation"
    ],
+   "publisher": "id Software",
+   "originalYear": 1993,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -973,6 +1293,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/5/57/Doom_cover_art.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -987,6 +1311,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "id Software",
+   "originalYear": 1994,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -1009,6 +1336,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "id Software",
+   "originalYear": 1995,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -1031,6 +1361,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Epoch",
+   "originalYear": 2000,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -1053,6 +1386,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Pixel",
+   "originalYear": 2004,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -1061,7 +1397,17 @@
    ],
    "license": {
     "spdx": "MIT"
-   }
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/8/83/Cave_Story_title_screen.png",
+    "credit": "Wikipedia"
+   },
+   "screenshots": [
+    {
+     "src": "https://i.imgur.com/3dJ7WMB.png",
+     "credit": "doukutsu-rs"
+    }
+   ]
   },
   {
    "id": "dragon-ball-raging-blast-2-android",
@@ -1075,6 +1421,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Bandai Namco",
+   "originalYear": 2010,
+   "genre": "fighting",
    "platforms": [
     "android"
    ],
@@ -1083,6 +1432,10 @@
    ],
    "license": {
     "spdx": "BSD-3-Clause"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/6/6f/Raging_Blast_2.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -1097,6 +1450,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Bandai",
+   "originalYear": 1992,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -1119,6 +1475,9 @@
    "originalSystems": [
     "GameCube"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2006,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -1127,7 +1486,17 @@
    ],
    "license": {
     "spdx": "CC0-1.0"
-   }
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/0/0e/The_Legend_of_Zelda_Twilight_Princess_Game_Cover.jpg",
+    "credit": "Wikipedia"
+   },
+   "screenshots": [
+    {
+     "src": "https://twilitrealm.dev/_astro/shot-platform.Cp2I0l-W_1nEglP.webp",
+     "credit": "Dusklight"
+    }
+   ]
   },
   {
    "id": "dw-2003-dual-screen",
@@ -1141,6 +1510,9 @@
    "originalSystems": [
     "PlayStation"
    ],
+   "publisher": "Bandai",
+   "originalYear": 2002,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -1163,6 +1535,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Fan-made",
+   "originalYear": 2025,
+   "genre": "fighting",
    "platforms": [
     "android"
    ],
@@ -1185,6 +1560,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Endless Sky contributors",
+   "originalYear": 2015,
+   "genre": "open-world",
    "platforms": [
     "android"
    ],
@@ -1207,6 +1585,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Bandai Namco",
+   "originalYear": 2007,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -1215,6 +1596,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/a/aa/Eternal_Sonata.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -1229,6 +1614,9 @@
    "originalSystems": [
     "MS-DOS"
    ],
+   "publisher": "Origin Systems",
+   "originalYear": 1992,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -1237,6 +1625,10 @@
    ],
    "license": {
     "spdx": "GPL-2.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/DOS/Named_Boxarts/Ultima%20VII%20-%20Part%201%20-%20The%20Black%20Gate%20%2B%20Forge%20of%20Virtue.png",
+    "credit": "Box art"
    }
   },
   {
@@ -1251,6 +1643,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Ubisoft",
+   "originalYear": 2004,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -1259,6 +1654,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/a/a5/Far_Cry_1_boxshot.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -1273,6 +1672,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Miro Haverinen",
+   "originalYear": 2018,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -1281,6 +1683,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/6/69/Fear_%26_Hunger.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -1295,6 +1701,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Miro Haverinen",
+   "originalYear": 2022,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -1303,6 +1712,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://cdn.cloudflare.steamstatic.com/steam/apps/2171440/header.jpg",
+    "credit": "Steam"
    }
   },
   {
@@ -1317,6 +1730,9 @@
    "originalSystems": [
     "MS-DOS"
    ],
+   "publisher": "The 3DO Company",
+   "originalYear": 1996,
+   "genre": "strategy",
    "platforms": [
     "android"
    ],
@@ -1325,7 +1741,17 @@
    ],
    "license": {
     "spdx": "GPL-2.0"
-   }
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/9/90/Heroes_2_cover.jpg",
+    "credit": "Wikipedia"
+   },
+   "screenshots": [
+    {
+     "src": "https://raw.githubusercontent.com/ihhub/fheroes2/master/docs/images/screenshots/screenshot_world_map.webp",
+     "credit": "fheroes2"
+    }
+   ]
   },
   {
    "id": "final-doom-playstation-classic-core-engines",
@@ -1339,6 +1765,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "id Software",
+   "originalYear": 1996,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -1361,6 +1790,9 @@
    "originalSystems": [
     "Game Boy Advance"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2004,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -1369,6 +1801,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/1/1e/Fire_Emblem_The_Sacred_Stones.JPG",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -1383,6 +1819,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Xbox Game Studios",
+   "originalYear": 2014,
+   "genre": "racing",
    "platforms": [
     "android"
    ],
@@ -1391,6 +1830,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/2/2e/Forza_Horizon_2_Cover_Art.png",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -1405,6 +1848,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Interplay Entertainment",
+   "originalYear": 1999,
+   "genre": "simulation",
    "platforms": [
     "android"
    ],
@@ -1413,6 +1859,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/0/0d/Freespace2box.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -1427,6 +1877,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Subset Games",
+   "originalYear": 2012,
+   "genre": "strategy",
    "platforms": [
     "android"
    ],
@@ -1435,6 +1888,10 @@
    ],
    "license": {
     "spdx": "GPL-2.0"
+   },
+   "cover": {
+    "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2a/FTL_Faster_Than_Light_Logo.svg/960px-FTL_Faster_Than_Light_Logo.svg.png",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -1449,6 +1906,9 @@
    "originalSystems": [
     "Game Boy Advance"
    ],
+   "publisher": "Square",
+   "originalYear": 2003,
+   "genre": "strategy",
    "platforms": [
     "android"
    ],
@@ -1471,6 +1931,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Fishlabs",
+   "originalYear": 2009,
+   "genre": "simulation",
    "platforms": [
     "android"
    ],
@@ -1493,6 +1956,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Facepunch Studios",
+   "originalYear": 2006,
+   "genre": "simulation",
    "platforms": [
     "android"
    ],
@@ -1515,6 +1981,9 @@
    "originalSystems": [
     "Game Boy"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 1996,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -1523,7 +1992,17 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
-   }
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy/Named_Boxarts/Pokemon%20-%20Red%20Version%20(USA,%20Europe)%20(SGB%20Enhanced).png",
+    "credit": "Box art"
+   },
+   "screenshots": [
+    {
+     "src": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy/Named_Snaps/Pokemon%20-%20Red%20Version%20(USA,%20Europe)%20(SGB%20Enhanced).png",
+     "credit": "Libretro"
+    }
+   ]
   },
   {
    "id": "gen2recomp",
@@ -1538,6 +2017,9 @@
     "Game Boy",
     "Game Boy Color"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 1999,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -1546,7 +2028,17 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
-   }
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy%20Color/Named_Boxarts/Pokemon%20-%20Gold%20Version%20(USA,%20Europe)%20(SGB%20Enhanced)%20(GB%20Compatible).png",
+    "credit": "Box art"
+   },
+   "screenshots": [
+    {
+     "src": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy%20Color/Named_Snaps/Pokemon%20-%20Gold%20Version%20(USA,%20Europe)%20(SGB%20Enhanced)%20(GB%20Compatible).png",
+     "credit": "Libretro"
+    }
+   ]
   },
   {
    "id": "generalszh-android-port",
@@ -1560,6 +2052,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Electronic Arts",
+   "originalYear": 2003,
+   "genre": "strategy",
    "platforms": [
     "android"
    ],
@@ -1568,6 +2063,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/2/20/Cncgzh-win-cover.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -1582,6 +2081,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 1996,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -1590,6 +2092,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://raw.githubusercontent.com/HarbourMasters/Ghostship/refs/heads/develop/nx-logo.jpg",
+    "credit": "SteamGridDB"
    }
   },
   {
@@ -1604,6 +2110,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 1996,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -1612,6 +2121,10 @@
    ],
    "license": {
     "spdx": "MIT"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/e/e9/Super_Mario_64.png",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -1626,6 +2139,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Chronic Logic",
+   "originalYear": 2004,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -1634,6 +2150,10 @@
    ],
    "license": {
     "spdx": "GPL-2.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/5/55/Gish_%28video_game%29.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -1649,6 +2169,9 @@
     "MS-DOS",
     "Amiga"
    ],
+   "publisher": "Guildhall",
+   "originalYear": 1995,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -1657,6 +2180,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/f/fb/Gloom_front.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -1671,6 +2198,9 @@
    "originalSystems": [
     "MS-DOS"
    ],
+   "publisher": "Software Creations",
+   "originalYear": 1993,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -1679,6 +2209,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/DOS/Named_Boxarts/God%20of%20Thunder%20(1993).png",
+    "credit": "Box art"
    }
   },
   {
@@ -1693,6 +2227,9 @@
    "originalSystems": [
     "PlayStation 4"
    ],
+   "publisher": "Sony Interactive Entertainment",
+   "originalYear": 2015,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -1701,6 +2238,10 @@
    ],
    "license": {
     "spdx": "GPL-2.0"
+   },
+   "cover": {
+    "src": "https://images.launchbox-app.com//1eb8d6bc-e4f2-4296-8e44-42c6e698528d.jpg",
+    "credit": "LaunchBox Games Database"
    }
   },
   {
@@ -1715,6 +2256,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "Konami",
+   "originalYear": 1997,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -1723,6 +2267,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/Mystical%20Ninja%20Starring%20Goemon%20(Europe).png",
+    "credit": "Box art"
    }
   },
   {
@@ -1737,6 +2285,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Microsoft Game Studios",
+   "originalYear": 2010,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -1759,6 +2310,9 @@
    "originalSystems": [
     "Game Boy Advance"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2001,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -1767,6 +2321,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy%20Advance/Named_Boxarts/Golden%20Sun%20(USA,%20Europe).png",
+    "credit": "Box art"
    }
   },
   {
@@ -1781,6 +2339,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Rockstar Games",
+   "originalYear": 2008,
+   "genre": "open-world",
    "platforms": [
     "android"
    ],
@@ -1789,6 +2350,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/b/b7/Grand_Theft_Auto_IV_cover.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -1803,6 +2368,9 @@
    "originalSystems": [
     "MS-DOS"
    ],
+   "publisher": "id Software",
+   "originalYear": 1993,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -1811,7 +2379,17 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
-   }
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/5/57/Doom_cover_art.jpg",
+    "credit": "Wikipedia"
+   },
+   "screenshots": [
+    {
+     "src": "https://raw.githubusercontent.com/ZDoom/gzdoom/master/src/posix/freedesktop/screenshot_doom.png",
+     "credit": "ZDoom/gzdoom"
+    }
+   ]
   },
   {
    "id": "gzselaco-android-dual-screen",
@@ -1825,6 +2403,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Altered Orbit Studios",
+   "originalYear": 2024,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -1847,6 +2428,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Banjo Software",
+   "originalYear": 1997,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -1869,6 +2453,9 @@
    "originalSystems": [
     "Xbox"
    ],
+   "publisher": "Microsoft Game Studios",
+   "originalYear": 2001,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -1877,6 +2464,10 @@
    ],
    "license": {
     "spdx": "CC0-1.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Microsoft%20-%20Xbox/Named_Boxarts/Halo%20-%20Combat%20Evolved%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -1891,6 +2482,9 @@
    "originalSystems": [
     "Xbox"
    ],
+   "publisher": "Microsoft Game Studios",
+   "originalYear": 2001,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -1899,6 +2493,10 @@
    ],
    "license": {
     "spdx": "CC0-1.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Microsoft%20-%20Xbox/Named_Boxarts/Halo%20-%20Combat%20Evolved%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -1913,6 +2511,9 @@
    "originalSystems": [
     "Xbox"
    ],
+   "publisher": "Microsoft Game Studios",
+   "originalYear": 2001,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -1921,6 +2522,10 @@
    ],
    "license": {
     "spdx": "CC0-1.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Microsoft%20-%20Xbox/Named_Boxarts/Halo%20-%20Combat%20Evolved%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -1935,6 +2540,9 @@
    "originalSystems": [
     "Xbox"
    ],
+   "publisher": "Microsoft Game Studios",
+   "originalYear": 2001,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -1943,6 +2551,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Microsoft%20-%20Xbox/Named_Boxarts/Halo%20-%20Combat%20Evolved%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -1957,6 +2569,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "Natsume",
+   "originalYear": 1999,
+   "genre": "simulation",
    "platforms": [
     "android"
    ],
@@ -1965,6 +2580,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/Harvest%20Moon%2064%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -1979,6 +2598,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Raven Software",
+   "originalYear": 1994,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -2001,6 +2623,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Raven Software",
+   "originalYear": 1995,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -2023,6 +2648,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Raven Software",
+   "originalYear": 1997,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -2045,6 +2673,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Raven Software",
+   "originalYear": 1997,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -2067,6 +2698,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Team Cherry",
+   "originalYear": 2017,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -2075,6 +2709,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/d/de/Hollow_Knight_2026_cover_art.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -2089,6 +2727,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2006,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -2097,6 +2738,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%20DS/Named_Boxarts/Metroid%20Prime%20-%20Hunters%20(Europe)%20(En,Fr,De,Es,It)%20(Rev%201).png",
+    "credit": "Box art"
    }
   },
   {
@@ -2111,6 +2756,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "Konami",
+   "originalYear": 1999,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -2119,6 +2767,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/d/db/Hybridheaven.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -2133,6 +2785,9 @@
    "originalSystems": [
     "PlayStation 2"
    ],
+   "publisher": "Sony Computer Entertainment",
+   "originalYear": 2001,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -2141,6 +2796,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Sony%20-%20PlayStation%202/Named_Boxarts/Ico%20(Europe)%20(En,Fr,De,Es,It).png",
+    "credit": "Box art"
    }
   },
   {
@@ -2155,6 +2814,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Infinite Blade",
+   "originalYear": 2019,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -2177,6 +2839,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Nicalis",
+   "originalYear": 2014,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -2199,6 +2864,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Mindscape",
+   "originalYear": 1997,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -2207,6 +2875,10 @@
    ],
    "license": {
     "spdx": "LGPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/a/a1/Lego-island.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -2221,6 +2893,9 @@
    "originalSystems": [
     "Super Nintendo"
    ],
+   "publisher": "Konami",
+   "originalYear": 1995,
+   "genre": "sports",
    "platforms": [
     "android"
    ],
@@ -2229,7 +2904,17 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
-   }
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System/Named_Boxarts/International%20Superstar%20Soccer%20Deluxe%20(Europe).png",
+    "credit": "Box art"
+   },
+   "screenshots": [
+    {
+     "src": "https://thumbnails.libretro.com/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System/Named_Snaps/International%20Superstar%20Soccer%20Deluxe%20(Europe).png",
+     "credit": "Libretro"
+    }
+   ]
   },
   {
    "id": "ja2-stracciatella",
@@ -2243,6 +2928,9 @@
    "originalSystems": [
     "MS-DOS"
    ],
+   "publisher": "TopWare",
+   "originalYear": 1999,
+   "genre": "strategy",
    "platforms": [
     "android"
    ],
@@ -2251,6 +2939,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/4/42/Jagged_Alliance_2_Coverart.png",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -2265,6 +2957,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Epic MegaGames",
+   "originalYear": 1998,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -2273,6 +2968,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/f/f0/Jazz_Jackrabbit_2.PNG",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -2287,6 +2986,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Epic MegaGames",
+   "originalYear": 1998,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -2295,6 +2997,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/f/f0/Jazz_Jackrabbit_2.PNG",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -2309,6 +3015,9 @@
    "originalSystems": [
     "Xbox"
    ],
+   "publisher": "Sega",
+   "originalYear": 2002,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -2317,6 +3026,10 @@
    ],
    "license": {
     "spdx": "MIT"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/7/7a/JetSetRadioFuturebox.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -2331,6 +3044,9 @@
    "originalSystems": [
     "MS-DOS"
    ],
+   "publisher": "Epic MegaGames",
+   "originalYear": 1992,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -2339,6 +3055,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/DOS/Named_Boxarts/Jill%20of%20the%20Jungle%20(1992).png",
+    "credit": "Box art"
    }
   },
   {
@@ -2353,6 +3073,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Sierra On-Line",
+   "originalYear": 1998,
+   "genre": "strategy",
    "platforms": [
     "android"
    ],
@@ -2361,6 +3084,10 @@
    ],
    "license": {
     "spdx": "AGPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/5/56/Caeser_III_Coverart.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -2375,6 +3102,9 @@
    "originalSystems": [
     "Wii"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2008,
+   "genre": "racing",
    "platforms": [
     "android"
    ],
@@ -2383,6 +3113,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Wii/Named_Boxarts/Mario%20Kart%20Wii%20(Europe).png",
+    "credit": "Box art"
    }
   },
   {
@@ -2397,6 +3131,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2000,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -2419,6 +3156,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Rockstar Games",
+   "originalYear": 2008,
+   "genre": "open-world",
    "platforms": [
     "android"
    ],
@@ -2427,6 +3167,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/b/b7/Grand_Theft_Auto_IV_cover.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -2441,6 +3185,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 1998,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -2449,6 +3196,10 @@
    ],
    "license": {
     "spdx": "CC0-1.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/Banjo-Kazooie%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -2463,6 +3214,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Kowloon Nights",
+   "originalYear": 2024,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -2485,6 +3239,9 @@
    "originalSystems": [
     "Macintosh"
    ],
+   "publisher": "Bungie",
+   "originalYear": 1994,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -2493,6 +3250,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/8/87/Marathon_%28video_game%29.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -2507,6 +3268,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Sega",
+   "originalYear": 2006,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -2515,6 +3279,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/d/d1/Sonic_the_Hedgehog_Next-Gen_Box_Art.JPG",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -2529,6 +3297,9 @@
    "originalSystems": [
     "Wii"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2008,
+   "genre": "racing",
    "platforms": [
     "android"
    ],
@@ -2537,6 +3308,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Wii/Named_Boxarts/Mario%20Kart%20Wii%20(Europe).png",
+    "credit": "Box art"
    }
   },
   {
@@ -2551,6 +3326,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "GarageGames",
+   "originalYear": 2003,
+   "genre": "puzzle",
    "platforms": [
     "android"
    ],
@@ -2559,6 +3337,10 @@
    ],
    "license": {
     "spdx": "MIT"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/a/a3/Marble_blast_gold.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -2573,6 +3355,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "Capcom",
+   "originalYear": 1997,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -2581,6 +3366,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/Mega%20Man%2064%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -2595,6 +3384,9 @@
    "originalSystems": [
     "Game Boy Advance"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2004,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -2603,6 +3395,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy%20Advance/Named_Boxarts/Legend%20of%20Zelda%2C%20The%20-%20The%20Minish%20Cap%20(USA)%20(Demo)%20(Kiosk).png",
+    "credit": "Box art"
    }
   },
   {
@@ -2617,6 +3413,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Midway Games",
+   "originalYear": 2008,
+   "genre": "fighting",
    "platforms": [
     "android"
    ],
@@ -2625,6 +3424,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/6/6b/Mortal_Kombat_vs._DC_Universe_Coverart.png",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -2639,6 +3442,9 @@
    "originalSystems": [
     "Super Nintendo"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 1991,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -2647,6 +3453,10 @@
    ],
    "license": {
     "spdx": "MIT"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System/Named_Boxarts/Legend%20of%20Zelda%2C%20The%20-%20A%20Link%20to%20the%20Past%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -2661,6 +3471,9 @@
    "originalSystems": [
     "Game Boy Advance"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2006,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -2669,6 +3482,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy%20Advance/Named_Boxarts/Mother%203%20(Japan)%20%5BT-En%20by%20Chewy,%20Jeffman%20and%20Tomato%5D.png",
+    "credit": "Box art"
    }
   },
   {
@@ -2683,6 +3500,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Ubisoft",
+   "originalYear": 2007,
+   "genre": "fighting",
    "platforms": [
     "android"
    ],
@@ -2705,6 +3525,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Ubisoft",
+   "originalYear": 2008,
+   "genre": "fighting",
    "platforms": [
     "android"
    ],
@@ -2727,6 +3550,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Bandai Namco",
+   "originalYear": 2010,
+   "genre": "fighting",
    "platforms": [
     "android"
    ],
@@ -2749,6 +3575,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Bandai Namco",
+   "originalYear": 2013,
+   "genre": "fighting",
    "platforms": [
     "android"
    ],
@@ -2771,6 +3600,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Bandai Namco",
+   "originalYear": 2012,
+   "genre": "fighting",
    "platforms": [
     "android"
    ],
@@ -2793,6 +3625,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Bandai Namco",
+   "originalYear": 2014,
+   "genre": "fighting",
    "platforms": [
     "android"
    ],
@@ -2815,6 +3650,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "505 Games",
+   "originalYear": 2009,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -2823,6 +3661,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/0/0f/Naughty_Bear.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -2837,6 +3679,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "NetHack DevTeam",
+   "originalYear": 1987,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -2845,6 +3690,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/commons/d/d6/NetHack.png",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -2859,6 +3708,9 @@
    "originalSystems": [
     "Wii"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2009,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -2867,6 +3719,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/8/8f/NewSuperMarioBrosWiiBoxart.png",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -2881,6 +3737,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Electronic Arts",
+   "originalYear": 2005,
+   "genre": "racing",
    "platforms": [
     "android"
    ],
@@ -2903,6 +3762,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Electronic Arts",
+   "originalYear": 2005,
+   "genre": "racing",
    "platforms": [
     "android"
    ],
@@ -2911,6 +3773,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/8/8e/Need_for_Speed_Most_Wanted_Box_Art.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -2925,6 +3791,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Electronic Arts",
+   "originalYear": 2004,
+   "genre": "racing",
    "platforms": [
     "android"
    ],
@@ -2947,6 +3816,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Electronic Arts",
+   "originalYear": 1998,
+   "genre": "racing",
    "platforms": [
     "android"
    ],
@@ -2955,6 +3827,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/a/a6/NFS_III_Hot_Pursuit_%28PC%2C_US%29_cover_art.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -2969,6 +3845,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Electronic Arts",
+   "originalYear": 1997,
+   "genre": "racing",
    "platforms": [
     "android"
    ],
@@ -2977,6 +3856,10 @@
    ],
    "license": {
     "spdx": "MIT"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/7/7b/NFS_II_%28PC%2C_US%29_cover_art.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -2991,6 +3874,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "New World Computing",
+   "originalYear": 1998,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -2999,7 +3885,13 @@
    ],
    "license": {
     "spdx": "LGPL-3.0"
-   }
+   },
+   "screenshots": [
+    {
+     "src": "https://user-images.githubusercontent.com/24377109/79051217-491a7800-7c2f-11ea-85c7-f9120b7d79dd.png",
+     "credit": "OpenEnroth"
+    }
+   ]
   },
   {
    "id": "open-lara",
@@ -3014,6 +3906,9 @@
     "PlayStation",
     "Sega Saturn"
    ],
+   "publisher": "Eidos Interactive",
+   "originalYear": 1996,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -3022,6 +3917,10 @@
    ],
    "license": {
     "spdx": "BSD-2-Clause"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/6/69/Tomb_Raider_%281996%29.png",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -3036,6 +3935,9 @@
    "originalSystems": [
     "GameCube"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2001,
+   "genre": "strategy",
    "platforms": [
     "android"
    ],
@@ -3044,6 +3946,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20GameCube/Named_Boxarts/Pikmin%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -3058,6 +3964,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Jim Bonacci",
+   "originalYear": 2010,
+   "genre": "simulation",
    "platforms": [
     "android"
    ],
@@ -3066,6 +3975,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/commons/7/76/Happy_Wheels_Logo.png?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=original",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -3080,6 +3993,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "MicroProse",
+   "originalYear": 1994,
+   "genre": "strategy",
    "platforms": [
     "android"
    ],
@@ -3102,6 +4018,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "OpenArena team",
+   "originalYear": 2005,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -3124,6 +4043,9 @@
    "originalSystems": [
     "Xbox"
    ],
+   "publisher": "Microsoft Game Studios",
+   "originalYear": 2001,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -3132,6 +4054,10 @@
    ],
    "license": {
     "spdx": "CC0-1.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Microsoft%20-%20Xbox/Named_Boxarts/Halo%20-%20Combat%20Evolved%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -3146,6 +4072,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "LucasArts",
+   "originalYear": 1997,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -3154,6 +4083,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/2/2f/JediKnight-cover.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -3168,6 +4101,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Bethesda Softworks",
+   "originalYear": 2002,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -3176,7 +4112,17 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
-   }
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/5/53/MorrowindCOVER.jpg",
+    "credit": "Wikipedia"
+   },
+   "screenshots": [
+    {
+     "src": "https://openmw.org/wp-content/uploads/2022/02/screenshot029-min.png",
+     "credit": "OpenMW"
+    }
+   ]
   },
   {
    "id": "openmw-android",
@@ -3190,6 +4136,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Bethesda Softworks",
+   "originalYear": 2002,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -3198,6 +4147,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/5/53/MorrowindCOVER.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -3212,6 +4165,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Bethesda Softworks",
+   "originalYear": 2010,
+   "genre": "open-world",
    "platforms": [
     "android"
    ],
@@ -3234,6 +4190,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2001,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -3256,6 +4215,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Kojima Productions",
+   "originalYear": 2014,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -3278,6 +4240,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2000,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -3286,6 +4251,10 @@
    ],
    "license": {
     "spdx": "CC0-1.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/Paper%20Mario%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -3300,6 +4269,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "Rare",
+   "originalYear": 2000,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -3308,6 +4280,10 @@
    ],
    "license": {
     "spdx": "MIT"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/Perfect%20Dark%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -3322,6 +4298,9 @@
    "originalSystems": [
     "MS-DOS"
    ],
+   "publisher": "21st Century Entertainment",
+   "originalYear": 1992,
+   "genre": "simulation",
    "platforms": [
     "android"
    ],
@@ -3330,6 +4309,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/d/d9/Amiga_Pinball_Fantasies_cover_art.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -3344,6 +4327,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Microsoft Studios",
+   "originalYear": 2012,
+   "genre": "racing",
    "platforms": [
     "android"
    ],
@@ -3352,6 +4338,10 @@
    ],
    "license": {
     "spdx": "BSD-3-Clause"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/7/77/Forza_Horizon_boxart.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -3366,6 +4356,9 @@
    "originalSystems": [
     "Game Boy Advance"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2004,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -3374,7 +4367,17 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
-   }
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy%20Advance/Named_Boxarts/Pokemon%20-%20Emerald%20Version%20(USA,%20Europe).png",
+    "credit": "Box art"
+   },
+   "screenshots": [
+    {
+     "src": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy%20Advance/Named_Snaps/Pokemon%20-%20Emerald%20Version%20(USA,%20Europe).png",
+     "credit": "Libretro"
+    }
+   ]
   },
   {
    "id": "pokemon-reloaded-en-android",
@@ -3388,6 +4391,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Klisee",
+   "originalYear": 2020,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -3410,6 +4416,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "TryTheSauceBoss",
+   "originalYear": 2024,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -3432,6 +4441,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "PokeRogue contributors",
+   "originalYear": 2023,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -3440,6 +4452,10 @@
    ],
    "license": {
     "spdx": "MIT"
+   },
+   "cover": {
+    "src": "https://pokerogue.net/logo512.png",
+    "credit": "PokeRogue"
    }
   },
   {
@@ -3454,6 +4470,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "PokeWilds contributors",
+   "originalYear": 2022,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -3462,6 +4481,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://raw.githubusercontent.com/SheerSt/pokewilds/main/github1.png",
+    "credit": "PokeWilds"
    }
   },
   {
@@ -3476,6 +4499,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "YCJY Games",
+   "originalYear": 2020,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -3484,6 +4510,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://cdn.cloudflare.steamstatic.com/steam/apps/1285670/header.jpg",
+    "credit": "Steam"
    }
   },
   {
@@ -3498,6 +4528,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Introversion Software",
+   "originalYear": 2015,
+   "genre": "simulation",
    "platforms": [
     "android"
    ],
@@ -3506,6 +4539,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/7/7b/Prison_Architect_Logo.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -3520,6 +4557,9 @@
    "originalSystems": [
     "Game Boy Advance"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2004,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -3528,6 +4568,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy%20Advance/Named_Boxarts/Legend%20of%20Zelda%2C%20The%20-%20The%20Minish%20Cap%20(USA)%20(Demo)%20(Kiosk).png",
+    "credit": "Box art"
    }
   },
   {
@@ -3542,6 +4586,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "The Indie Stone",
+   "originalYear": 2013,
+   "genre": "simulation",
    "platforms": [
     "android"
    ],
@@ -3550,6 +4597,10 @@
    ],
    "license": {
     "spdx": "MIT"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/0/0c/Boxshot_of_video_game_Project_zomboid.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -3564,6 +4615,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Activision",
+   "originalYear": 2007,
+   "genre": "sports",
    "platforms": [
     "android"
    ],
@@ -3572,6 +4626,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/8/8c/Tony_Hawk%27s_Project_8_cover.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -3586,6 +4644,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Sony Computer Entertainment",
+   "originalYear": 2009,
+   "genre": "racing",
    "platforms": [
     "android"
    ],
@@ -3608,6 +4669,9 @@
    "originalSystems": [
     "PlayStation Portable"
    ],
+   "publisher": "Rockstar Games",
+   "originalYear": 2005,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -3616,6 +4680,10 @@
    ],
    "license": {
     "spdx": "MIT"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Sony%20-%20PlayStation%20Portable/Named_Boxarts/Grand%20Theft%20Auto%20-%20Liberty%20City%20Stories%20(USA)%20(En%2CFr%2CDe%2CEs%2CIt)%20(v1.05).png",
+    "credit": "Box art"
    }
   },
   {
@@ -3630,6 +4698,9 @@
    "originalSystems": [
     "PlayStation Portable"
    ],
+   "publisher": "Rockstar Games",
+   "originalYear": 2006,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -3638,6 +4709,10 @@
    ],
    "license": {
     "spdx": "MIT"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Sony%20-%20PlayStation%20Portable/Named_Boxarts/Grand%20Theft%20Auto%20-%20Vice%20City%20Stories%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -3652,6 +4727,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "PopCap Games",
+   "originalYear": 2009,
+   "genre": "puzzle",
    "platforms": [
     "android"
    ],
@@ -3660,6 +4738,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/9/9c/PlantsvsZombiesCoverArt.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -3674,6 +4756,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "PopCap Games",
+   "originalYear": 2009,
+   "genre": "strategy",
    "platforms": [
     "android"
    ],
@@ -3682,6 +4767,10 @@
    ],
    "license": {
     "spdx": "LGPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/9/9c/PlantsvsZombiesCoverArt.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -3696,6 +4785,9 @@
    "originalSystems": [
     "MS-DOS"
    ],
+   "publisher": "id Software",
+   "originalYear": 1996,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -3704,6 +4796,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/4/4c/Quake1cover.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -3718,6 +4814,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Rogue Entertainment",
+   "originalYear": 1997,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -3741,6 +4840,9 @@
     "PlayStation",
     "Windows"
    ],
+   "publisher": "id Software",
+   "originalYear": 1997,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -3749,6 +4851,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/b/b5/Quake2box.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -3763,6 +4869,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "id Software",
+   "originalYear": 1999,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -3771,6 +4880,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/a/a1/Quake3Title.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -3785,6 +4898,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Rogue Entertainment",
+   "originalYear": 1997,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -3807,6 +4923,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Rockstar Games",
+   "originalYear": 2001,
+   "genre": "open-world",
    "platforms": [
     "android"
    ],
@@ -3815,6 +4934,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/b/be/GTA3boxcover.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -3829,6 +4952,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Sony Computer Entertainment",
+   "originalYear": 2000,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -3837,6 +4963,10 @@
    ],
    "license": {
     "spdx": "MIT"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Sony%20-%20PlayStation/Named_Boxarts/Jackie%20Chan%20Stuntmaster%20(Europe).png",
+    "credit": "Box art"
    }
   },
   {
@@ -3851,6 +4981,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Zoo Entertainment",
+   "originalYear": 2011,
+   "genre": "fighting",
    "platforms": [
     "android"
    ],
@@ -3874,6 +5007,9 @@
     "Game Boy",
     "Game Boy Color"
    ],
+   "publisher": "Capcom",
+   "originalYear": 2001,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -3882,7 +5018,17 @@
    ],
    "license": {
     "spdx": "MIT"
-   }
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy%20Color/Named_Boxarts/Resident%20Evil%20Gaiden%20(Europe)%20(En,Fr,De,Es,It).png",
+    "credit": "Box art"
+   },
+   "screenshots": [
+    {
+     "src": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy%20Color/Named_Snaps/Resident%20Evil%20Gaiden%20(Europe)%20(En,Fr,De,Es,It).png",
+     "credit": "Libretro"
+    }
+   ]
   },
   {
    "id": "renut-android",
@@ -3896,6 +5042,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Microsoft Game Studios",
+   "originalYear": 2008,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -3904,6 +5053,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/6/63/Banjo-Kazooie_Nuts_%26_Bolts_Game_Cover.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -3918,6 +5071,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "semiwork",
+   "originalYear": 2025,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -3926,6 +5082,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/1/12/R.E.P.O._cover.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -3940,6 +5100,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Rockstar Games",
+   "originalYear": 2002,
+   "genre": "open-world",
    "platforms": [
     "android"
    ],
@@ -3962,6 +5125,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Ludeon Studios",
+   "originalYear": 2018,
+   "genre": "simulation",
    "platforms": [
     "android"
    ],
@@ -3970,6 +5136,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://cdn.cloudflare.steamstatic.com/steam/apps/294100/header.jpg",
+    "credit": "Steam"
    }
   },
   {
@@ -3984,6 +5154,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Kart Krew",
+   "originalYear": 2024,
+   "genre": "racing",
    "platforms": [
     "android"
    ],
@@ -3992,6 +5165,10 @@
    ],
    "license": {
     "spdx": "GPL-2.0"
+   },
+   "cover": {
+    "src": "https://www.kartkrew.org/theme/images/kkd_logo_V3.svg",
+    "credit": "Kart Krew"
    }
   },
   {
@@ -4006,6 +5183,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "LucasArts",
+   "originalYear": 1998,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -4014,6 +5194,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/b/b6/Star-wars-rogue-squadron.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -4028,6 +5212,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Apogee Software",
+   "originalYear": 1994,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -4050,6 +5237,9 @@
    "originalSystems": [
     "Sega CD / Mega-CD"
    ],
+   "publisher": "Sega",
+   "originalYear": 1993,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -4058,7 +5248,17 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
-   }
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/e/e1/Sonic_CD_North_American_cover_art.jpg",
+    "credit": "Wikipedia"
+   },
+   "screenshots": [
+    {
+     "src": "https://raw.githubusercontent.com/RSDKModding/RSDKv3-Decompilation/master/header.png?raw=true",
+     "credit": "RSDK Modding"
+    }
+   ]
   },
   {
    "id": "sdlpal",
@@ -4072,6 +5272,9 @@
    "originalSystems": [
     "MS-DOS"
    ],
+   "publisher": "Softstar Entertainment",
+   "originalYear": 1995,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -4080,6 +5283,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/d/de/LSF_cover.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -4094,6 +5301,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Croteam",
+   "originalYear": 2001,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -4102,6 +5312,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/b/b4/Serious_Sam_-_The_First_Encounter.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -4116,6 +5330,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 1998,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -4124,7 +5341,17 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
-   }
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/7/7a/OcarinaofTime2026.jpeg",
+    "credit": "Wikipedia"
+   },
+   "screenshots": [
+    {
+     "src": "https://www.shipofharkinian.com/screenshot_saria.jpg",
+     "credit": "Ship of Harkinian"
+    }
+   ]
   },
   {
    "id": "ship-of-harkinian-android",
@@ -4138,6 +5365,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 1998,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -4146,6 +5376,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/7/7a/OcarinaofTime2026.jpeg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -4161,6 +5395,9 @@
     "GameCube",
     "Nintendo 64"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 1998,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -4169,6 +5406,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/7/7a/OcarinaofTime2026.jpeg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -4184,6 +5425,9 @@
     "GameCube",
     "Nintendo 64"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 1998,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -4192,6 +5436,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/7/7a/OcarinaofTime2026.jpeg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -4206,6 +5454,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "The Pokémon Company",
+   "originalYear": 2016,
+   "genre": "strategy",
    "platforms": [
     "android"
    ],
@@ -4228,6 +5479,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Team Cherry",
+   "originalYear": 2025,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -4250,6 +5504,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Team Cherry",
+   "originalYear": 2025,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -4272,6 +5529,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Electronic Arts",
+   "originalYear": 2010,
+   "genre": "sports",
    "platforms": [
     "android"
    ],
@@ -4280,6 +5540,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/8/84/Skate-3-Boxart.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -4294,6 +5558,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Electronic Arts",
+   "originalYear": 2010,
+   "genre": "sports",
    "platforms": [
     "android"
    ],
@@ -4302,6 +5569,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/8/84/Skate-3-Boxart.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -4316,6 +5587,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Electronic Arts",
+   "originalYear": 2010,
+   "genre": "sports",
    "platforms": [
     "android"
    ],
@@ -4324,6 +5598,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/8/84/Skate-3-Boxart.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -4338,6 +5616,9 @@
    "originalSystems": [
     "MS-DOS"
    ],
+   "publisher": "SLASH'EM DevTeam",
+   "originalYear": 1997,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -4346,7 +5627,17 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
-   }
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/commons/b/b2/Slash%27_EM.jpg",
+    "credit": "Wikipedia"
+   },
+   "screenshots": [
+    {
+     "src": "https://upload.wikimedia.org/wikipedia/commons/b/b2/Slash%27_EM.jpg",
+     "credit": "Wikimedia Commons"
+    }
+   ]
   },
   {
    "id": "slay-the-spire-2-android",
@@ -4360,6 +5651,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Mega Crit",
+   "originalYear": 2025,
+   "genre": "strategy",
    "platforms": [
     "android"
    ],
@@ -4368,6 +5662,10 @@
    ],
    "license": {
     "spdx": "MIT"
+   },
+   "cover": {
+    "src": "https://cdn.cloudflare.steamstatic.com/steam/apps/2868840/header.jpg",
+    "credit": "Steam"
    }
   },
   {
@@ -4382,6 +5680,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Humble Bundle",
+   "originalYear": 2019,
+   "genre": "strategy",
    "platforms": [
     "android"
    ],
@@ -4404,6 +5705,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 1996,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -4412,6 +5716,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/e/e9/Super_Mario_64.png",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -4426,6 +5734,9 @@
    "originalSystems": [
     "Nintendo Entertainment System"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 1985,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -4434,6 +5745,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%20Entertainment%20System/Named_Boxarts/Super%20Mario%20Bros.%20(Europe).png",
+    "credit": "Box art"
    }
   },
   {
@@ -4448,6 +5763,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2002,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -4470,6 +5788,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Sega",
+   "originalYear": 1991,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -4492,6 +5813,9 @@
    "originalSystems": [
     "Sega Mega Drive / Genesis"
    ],
+   "publisher": "Sega",
+   "originalYear": 1994,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -4500,6 +5824,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Sega%20-%20Mega%20Drive%20-%20Genesis/Named_Boxarts/Sonic%20_%20Knuckles%20%2B%20Sonic%20The%20Hedgehog%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -4514,6 +5842,9 @@
    "originalSystems": [
     "Dreamcast"
    ],
+   "publisher": "Sega",
+   "originalYear": 2001,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -4536,6 +5867,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Sega",
+   "originalYear": 2011,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -4544,6 +5878,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/7/7d/SonicGenerations.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -4558,6 +5896,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Sega",
+   "originalYear": 2017,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -4580,6 +5921,9 @@
    "originalSystems": [
     "Sega Saturn"
    ],
+   "publisher": "Sega",
+   "originalYear": 1997,
+   "genre": "racing",
    "platforms": [
     "android"
    ],
@@ -4588,7 +5932,17 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
-   }
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Sega%20-%20Saturn/Named_Boxarts/Sonic%20R%20(Europe).png",
+    "credit": "Box art"
+   },
+   "screenshots": [
+    {
+     "src": "https://thumbnails.libretro.com/Sega%20-%20Saturn/Named_Snaps/Sonic%20R%20(Europe).png",
+     "credit": "Libretro"
+    }
+   ]
   },
   {
    "id": "space-station-14-mobile",
@@ -4602,6 +5956,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Space Wizards Federation",
+   "originalYear": 2023,
+   "genre": "simulation",
    "platforms": [
     "android"
    ],
@@ -4624,6 +5981,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 1996,
+   "genre": "racing",
    "platforms": [
     "android"
    ],
@@ -4632,6 +5992,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/Mario%20Kart%2064%20(Europe)%20(Rev%201).png",
+    "credit": "Box art"
    }
   },
   {
@@ -4646,6 +6010,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Sonic Team Jr.",
+   "originalYear": 1998,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -4654,6 +6021,10 @@
    ],
    "license": {
     "spdx": "GPL-2.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/6/6d/Srb2_22_title.png",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -4668,6 +6039,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Chucklefish",
+   "originalYear": 2016,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -4676,6 +6050,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/commons/0/06/Starbound_Logo.png",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -4690,6 +6068,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "ConcernedApe",
+   "originalYear": 2016,
+   "genre": "simulation",
    "platforms": [
     "android"
    ],
@@ -4698,6 +6079,10 @@
    ],
    "license": {
     "spdx": "MIT"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/f/fd/Logo_of_Stardew_Valley.png",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -4712,6 +6097,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 1997,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -4720,6 +6108,10 @@
    ],
    "license": {
     "spdx": "CC0-1.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/Star%20Fox%2064%20(Japan).png",
+    "credit": "Box art"
    }
   },
   {
@@ -4734,6 +6126,9 @@
    "originalSystems": [
     "GameCube"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2005,
+   "genre": "sports",
    "platforms": [
     "android"
    ],
@@ -4742,7 +6137,17 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
-   }
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20GameCube/Named_Boxarts/Super%20Mario%20Strikers%20(Japan).png",
+    "credit": "Box art"
+   },
+   "screenshots": [
+    {
+     "src": "https://thumbnails.libretro.com/Nintendo%20-%20GameCube/Named_Snaps/Super%20Mario%20Strikers%20(Japan).png",
+     "credit": "Libretro"
+    }
+   ]
   },
   {
    "id": "super-mario-bros-remastered-android",
@@ -4756,6 +6161,9 @@
    "originalSystems": [
     "Nintendo Entertainment System"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 1985,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -4764,6 +6172,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%20Entertainment%20System/Named_Boxarts/Super%20Mario%20Bros.%20(Europe).png",
+    "credit": "Box art"
    }
   },
   {
@@ -4778,6 +6190,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2023,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -4800,6 +6215,9 @@
    "originalSystems": [
     "Wii"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2007,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -4808,6 +6226,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Wii/Named_Boxarts/Super%20Mario%20Galaxy%20(Europe).png",
+    "credit": "Box art"
    }
   },
   {
@@ -4822,6 +6244,9 @@
    "originalSystems": [
     "GameCube"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2002,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -4830,7 +6255,17 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
-   }
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20GameCube/Named_Boxarts/Super%20Mario%20Sunshine%20(Europe)%20(En,Fr,De,Es,It).png",
+    "credit": "Box art"
+   },
+   "screenshots": [
+    {
+     "src": "https://thumbnails.libretro.com/Nintendo%20-%20GameCube/Named_Snaps/Super%20Mario%20Sunshine%20(Europe)%20(En,Fr,De,Es,It).png",
+     "credit": "Libretro"
+    }
+   ]
   },
   {
    "id": "super-metroid-dual-screen",
@@ -4844,6 +6279,9 @@
    "originalSystems": [
     "Super Nintendo"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 1994,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -4852,6 +6290,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System/Named_Boxarts/Super%20Metroid%20-%20Redux%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -4866,6 +6308,9 @@
    "originalSystems": [
     "MS-DOS"
    ],
+   "publisher": "Origin Systems",
+   "originalYear": 1994,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -4874,6 +6319,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/6/6b/System_Shock_remake_cover.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -4888,6 +6337,9 @@
    "originalSystems": [
     "PlayStation"
    ],
+   "publisher": "Namco",
+   "originalYear": 1997,
+   "genre": "fighting",
    "platforms": [
     "android"
    ],
@@ -4896,6 +6348,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Sony%20-%20PlayStation/Named_Boxarts/Tekken%203%20(Europe)%20(Demo).png",
+    "credit": "Box art"
    }
   },
   {
@@ -4910,6 +6366,9 @@
    "originalSystems": [
     "PlayStation Portable"
    ],
+   "publisher": "Bandai Namco",
+   "originalYear": 2007,
+   "genre": "fighting",
    "platforms": [
     "android"
    ],
@@ -4932,6 +6391,9 @@
    "originalSystems": [
     "PlayStation 2"
    ],
+   "publisher": "Bandai Namco",
+   "originalYear": 2007,
+   "genre": "fighting",
    "platforms": [
     "android"
    ],
@@ -4940,6 +6402,10 @@
    ],
    "license": {
     "spdx": "AGPL-3.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Sony%20-%20PlayStation%202/Named_Boxarts/Dragon%20Ball%20Z%20-%20Budokai%20Tenkaichi%203%20(Europe,%20Australia)%20(En,Fr,De,Es,It).png",
+    "credit": "Box art"
    }
   },
   {
@@ -4954,6 +6420,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Valve",
+   "originalYear": 1999,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -4962,6 +6431,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/c/c2/Team_Fortress_Classic_box.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -4976,6 +6449,9 @@
    "originalSystems": [
     "MS-DOS"
    ],
+   "publisher": "LucasArts",
+   "originalYear": 1995,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -4984,6 +6460,10 @@
    ],
    "license": {
     "spdx": "GPL-2.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/4/4f/Dark_Forces_box_cover.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -4998,6 +6478,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2001,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -5020,6 +6503,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Vivendi Universal Games",
+   "originalYear": 2003,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -5028,6 +6514,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/5/5f/The_Simpsons_Hit_and_Run_cover.png",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -5042,6 +6532,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "dino999z",
+   "originalYear": 2020,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -5064,6 +6557,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Cyberflix",
+   "originalYear": 1996,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -5086,6 +6582,9 @@
    "originalSystems": [
     "PlayStation"
    ],
+   "publisher": "Sony Computer Entertainment",
+   "originalYear": 1999,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -5094,6 +6593,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Sony%20-%20PlayStation/Named_Boxarts/Tomba!%202%20-%20The%20Evil%20Swine%20Return%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -5108,6 +6611,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Team Shanghai Alice",
+   "originalYear": 2002,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -5116,6 +6622,10 @@
    ],
    "license": {
     "spdx": "CC0-1.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/8/8b/Th06cover.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -5130,6 +6640,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Mossmouth",
+   "originalYear": 2024,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -5138,6 +6651,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/a/a6/UFO_50_cover.png",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -5152,6 +6669,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Mossmouth",
+   "originalYear": 2024,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -5160,6 +6680,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/a/a6/UFO_50_cover.png",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -5174,6 +6698,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "2K Games",
+   "originalYear": 2010,
+   "genre": "strategy",
    "platforms": [
     "android"
    ],
@@ -5182,6 +6709,10 @@
    ],
    "license": {
     "spdx": "MPL-2.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/5/5c/CIVILIZATION-V-FRONT-OF-BOX.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -5196,6 +6727,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Konami",
+   "originalYear": 1993,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -5218,6 +6752,9 @@
    "originalSystems": [
     "Xbox 360"
    ],
+   "publisher": "Sega",
+   "originalYear": 2008,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -5226,6 +6763,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/a/a0/Sonic_unleashed_boxart.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -5240,6 +6781,9 @@
    "originalSystems": [
     "MS-DOS"
    ],
+   "publisher": "UnNetHack DevTeam",
+   "originalYear": 2009,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -5262,6 +6806,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Epic Games",
+   "originalYear": 1998,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -5284,6 +6831,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Epic Games",
+   "originalYear": 1999,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -5292,6 +6842,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/f/f4/Unrealtournament.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -5306,6 +6860,9 @@
    "originalSystems": [
     "MS-DOS"
    ],
+   "publisher": "Accolade",
+   "originalYear": 1992,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -5314,6 +6871,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/c/c3/Star_Control_II_cover.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -5328,6 +6889,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Iron Gate Studio",
+   "originalYear": 2021,
+   "genre": "open-world",
    "platforms": [
     "android"
    ],
@@ -5336,6 +6900,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/7/77/Valheim_2021_logo.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -5350,6 +6918,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Activision",
+   "originalYear": 2000,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -5358,6 +6929,10 @@
    ],
    "license": {
     "spdx": "GPL-2.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/4/48/Star_Trek_Voyager_Elite_Force.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -5372,6 +6947,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Activision",
+   "originalYear": 2000,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -5380,6 +6958,10 @@
    ],
    "license": {
     "spdx": "GPL-2.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/4/48/Star_Trek_Voyager_Elite_Force.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -5394,6 +6976,9 @@
    "originalSystems": [
     "MS-DOS"
    ],
+   "publisher": "Blizzard Entertainment",
+   "originalYear": 1994,
+   "genre": "strategy",
    "platforms": [
     "android"
    ],
@@ -5402,6 +6987,10 @@
    ],
    "license": {
     "spdx": "GPL-2.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/9/9c/Warcraft_-_Orcs_%26_Humans_Coverart.png",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -5416,6 +7005,9 @@
    "originalSystems": [
     "Game Boy Advance"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2004,
+   "genre": "puzzle",
    "platforms": [
     "android"
    ],
@@ -5424,7 +7016,17 @@
    ],
    "license": {
     "spdx": "PolyForm-Noncommercial-1.0.0"
-   }
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy%20Advance/Named_Boxarts/WarioWare%20-%20Twisted!%20(USA).png",
+    "credit": "Box art"
+   },
+   "screenshots": [
+    {
+     "src": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy%20Advance/Named_Snaps/WarioWare%20-%20Twisted!%20(USA).png",
+     "credit": "Libretro"
+    }
+   ]
   },
   {
    "id": "wave-racer-64-recomp-for-android",
@@ -5438,6 +7040,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 1996,
+   "genre": "racing",
    "platforms": [
     "android"
    ],
@@ -5446,6 +7051,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/Wave%20Race%2064%20-%20Kawasaki%20Jet%20Ski%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -5460,6 +7069,9 @@
    "originalSystems": [
     "Wii U"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2013,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -5468,6 +7080,10 @@
    ],
    "license": {
     "spdx": "MPL-2.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Wii%20U/Named_Boxarts/Legend%20of%20Zelda,%20The%20-%20The%20Wind%20Waker%20HD%20(USA,%20Asia)%20(En,Fr,Es).png",
+    "credit": "Box art"
    }
   },
   {
@@ -5482,6 +7098,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "id Software",
+   "originalYear": 2008,
+   "genre": "rpg",
    "platforms": [
     "android"
    ],
@@ -5490,6 +7109,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://raw.githubusercontent.com/Erick194/WolfensteinRPG-RE/refs/heads/main/src/appicon.ico",
+    "credit": "SteamGridDB"
    }
   },
   {
@@ -5504,6 +7127,9 @@
    "originalSystems": [
     "Unknown"
    ],
+   "publisher": "Cryo Interactive",
+   "originalYear": 2002,
+   "genre": "platformer",
    "platforms": [
     "android"
    ],
@@ -5526,6 +7152,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "Sierra On-Line",
+   "originalYear": 1998,
+   "genre": "shooter",
    "platforms": [
     "android"
    ],
@@ -5534,7 +7163,17 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
-   }
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/f/fa/Half-Life_Cover_Art.jpg",
+    "credit": "Wikipedia"
+   },
+   "screenshots": [
+    {
+     "src": "https://raw.githubusercontent.com/FWGS/xash3d-fwgs/master/Documentation/images/example1.jpg",
+     "credit": "Xash3D FWGS"
+    }
+   ]
   },
   {
    "id": "yakumo",
@@ -5548,6 +7187,9 @@
    "originalSystems": [
     "PlayStation Portable"
    ],
+   "publisher": "Capcom",
+   "originalYear": 2010,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -5556,6 +7198,10 @@
    ],
    "license": {
     "spdx": "MIT"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Sony%20-%20PlayStation%20Portable/Named_Boxarts/Monster%20Hunter%20Portable%203rd%20(Japan,%20Korea).png",
+    "credit": "Box art"
    }
   },
   {
@@ -5570,6 +7216,9 @@
    "originalSystems": [
     "Nintendo 3DS"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2011,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -5578,6 +7227,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/3/30/The_Legend_of_Zelda_Ocarina_of_Time_3D_box_art.png",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -5592,6 +7245,9 @@
    "originalSystems": [
     "Nintendo Entertainment System"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 1987,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -5600,6 +7256,10 @@
    ],
    "license": {
     "spdx": "MIT"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%20Entertainment%20System/Named_Boxarts/Zelda%20II%20-%20The%20Adventure%20of%20Link%20(Europe)%20(Rev%201).png",
+    "credit": "Box art"
    }
   },
   {
@@ -5614,6 +7274,9 @@
    "originalSystems": [
     "Wii U"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2013,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -5622,6 +7285,10 @@
    ],
    "license": {
     "spdx": "MPL-2.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Wii%20U/Named_Boxarts/Legend%20of%20Zelda,%20The%20-%20The%20Wind%20Waker%20HD%20(USA,%20Asia)%20(En,Fr,Es).png",
+    "credit": "Box art"
    }
   },
   {
@@ -5636,6 +7303,9 @@
    "originalSystems": [
     "Super Nintendo"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 1991,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -5644,6 +7314,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System/Named_Boxarts/Legend%20of%20Zelda%2C%20The%20-%20A%20Link%20to%20the%20Past%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -5658,6 +7332,9 @@
    "originalSystems": [
     "Super Nintendo"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 1991,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -5666,6 +7343,10 @@
    ],
    "license": {
     "spdx": "NOASSERTION"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System/Named_Boxarts/Legend%20of%20Zelda%2C%20The%20-%20A%20Link%20to%20the%20Past%20(USA).png",
+    "credit": "Box art"
    }
   },
   {
@@ -5680,6 +7361,9 @@
    "originalSystems": [
     "Nintendo 64"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2000,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -5688,6 +7372,10 @@
    ],
    "license": {
     "spdx": "GPL-3.0"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/6/60/The_Legend_of_Zelda_-_Majora%27s_Mask_Box_Art.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -5702,6 +7390,9 @@
    "originalSystems": [
     "Wii U"
    ],
+   "publisher": "Nintendo",
+   "originalYear": 2013,
+   "genre": "action-adventure",
    "platforms": [
     "android"
    ],
@@ -5710,6 +7401,10 @@
    ],
    "license": {
     "spdx": "MPL-2.0"
+   },
+   "cover": {
+    "src": "https://thumbnails.libretro.com/Nintendo%20-%20Wii%20U/Named_Boxarts/Legend%20of%20Zelda,%20The%20-%20The%20Wind%20Waker%20HD%20(USA,%20Asia)%20(En,Fr,Es).png",
+    "credit": "Box art"
    }
   },
   {
@@ -5724,6 +7419,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "The Indie Stone",
+   "originalYear": 2013,
+   "genre": "open-world",
    "platforms": [
     "android"
    ],
@@ -5732,6 +7430,10 @@
    ],
    "license": {
     "spdx": "MIT"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/0/0c/Boxshot_of_video_game_Project_zomboid.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -5746,6 +7448,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "The Indie Stone",
+   "originalYear": 2013,
+   "genre": "open-world",
    "platforms": [
     "android"
    ],
@@ -5754,6 +7459,10 @@
    ],
    "license": {
     "spdx": "MIT"
+   },
+   "cover": {
+    "src": "https://upload.wikimedia.org/wikipedia/en/0/0c/Boxshot_of_video_game_Project_zomboid.jpg",
+    "credit": "Wikipedia"
    }
   },
   {
@@ -5768,6 +7477,9 @@
    "originalSystems": [
     "Windows"
    ],
+   "publisher": "PopCap Games",
+   "originalYear": 2003,
+   "genre": "puzzle",
    "platforms": [
     "android"
    ],
@@ -5776,6 +7488,10 @@
    ],
    "license": {
     "spdx": "MIT"
+   },
+   "cover": {
+    "src": "https://cdn.cloudflare.steamstatic.com/steam/apps/3330/header.jpg",
+    "credit": "Steam"
    }
   }
  ]

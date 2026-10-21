@@ -103,7 +103,9 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
   Fuse finds the game it plays, or asks. A ported game shows in the Ports system too (or Android,
   or only its own system, for every game, each system or each game): one game with one time and
   one set of achievements, started with the port from Ports and with its emulator from its own
-  system.
+  system. Every port is drawn with its game's box art, year, publisher and genre, and when your
+  copy of its game is on your RomM server or another device of the household, Ports says so and
+  brings it here for you.
 - **Problems that explain themselves**: when a game can't start, Fuse says why, that nothing was
   changed, and offers the fix. If Fuse itself fails to start three times, it starts in **safe mode**.
 

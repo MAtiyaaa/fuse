@@ -46,6 +46,18 @@ data class AndroidPort(
     val checked: Boolean = false,
     /** True when Open Ports Games marks it verified. */
     val listedVerified: Boolean = false,
+    /** Who published the original game, as its listing names them ("Nintendo"). */
+    val publisher: String? = null,
+    /** The year the original game came out. */
+    val year: Int? = null,
+    /** The original game's genre, as its listing sorts it ("action-adventure"). */
+    val genre: String? = null,
+    /** The original game's box art: an HTTPS picture its listing or Fuse's list points to. */
+    val cover: String? = null,
+    /** Where [cover] comes from, as its listing credits it ("Wikipedia"). */
+    val coverCredit: String? = null,
+    /** A picture of the port being played: an HTTPS picture its listing points to. */
+    val screenshot: String? = null,
 ) {
     /** True when Fuse can install it: an HTTPS GitHub repository, whose releases hold the APK. */
     val installable: Boolean get() = AndroidPorts.githubRepo(repo) != null
@@ -71,6 +83,12 @@ enum class AndroidPortStatus {
 
 object AndroidPorts {
     private val GITHUB = Regex("^https://github\\.com/([A-Za-z0-9-]{1,39})/([A-Za-z0-9._-]{1,100})/?$")
+
+    /**
+     * [url] when it is a picture Fuse may show: an HTTPS address of a reasonable length with no
+     * spaces in it. Anything else (plain HTTP, a file, a data address) is no picture.
+     */
+    fun picture(url: String?): String? = url?.trim()?.takeIf { it.startsWith("https://") && it.length <= 2048 && it.none(Char::isWhitespace) }
 
     /** The owner and name of a GitHub repository's page, or null when [url] isn't one. */
     fun githubRepo(url: String): Pair<String, String>? {

@@ -14,12 +14,13 @@ import argparse
 import json
 import re
 import sys
+import unicodedata
 import urllib.request
 
 FEED_URL = "https://openportsgames.com/api/ports.json"
 SCHEMA = "openportsgames/catalog"
 VERSION = 2
-FIELDS = ("id", "kind", "title", "game", "portType", "status", "verified", "notes", "originalSystems")
+FIELDS = ("id", "kind", "title", "game", "portType", "status", "verified", "notes", "originalSystems", "publisher", "originalYear", "genre")
 
 
 def read_feed(source):
@@ -51,9 +52,40 @@ def plain(text):
     return re.sub(r"[\u200b-\u200d\u2060\ufeff]", "", text).strip()
 
 
-def trimmed(port):
+def picture(value):
+    """A listing's picture as Fuse keeps it ({src, credit}), or None when it isn't over HTTPS."""
+    if not isinstance(value, dict):
+        return None
+    src = (value.get("src") or "").strip()
+    if not src.startswith("https://") or len(src) > 2048 or any(c.isspace() for c in src):
+        return None
+    out = {"src": src}
+    credit = value.get("credit")
+    if isinstance(credit, str) and credit.strip():
+        out["credit"] = plain(credit)
+    return out
+
+
+def game_key(game):
+    """A game's name as two listings of one game are told apart: its words, in lower case."""
+    text = unicodedata.normalize("NFKD", plain(game or "")).encode("ascii", "ignore").decode().lower()
+    text = re.sub(r"[^a-z0-9]+", " ", text).strip()
+    return re.sub(r"^the ", "", text)
+
+
+def covers_by_game(ports):
+    """Box art by game, from every entry of the catalogue whatever it is for."""
+    covers = {}
+    for p in ports:
+        cover = picture(p.get("cover"))
+        if cover:
+            covers.setdefault(game_key(p.get("game")), cover)
+    return covers
+
+
+def trimmed(port, covers):
     out = {k: port[k] for k in FIELDS if k in port}
-    for k in ("title", "game", "notes"):
+    for k in ("title", "game", "notes", "publisher"):
         if isinstance(out.get(k), str):
             out[k] = plain(out[k])
     out["platforms"] = ["android"]
@@ -61,6 +93,12 @@ def trimmed(port):
     spdx = (port.get("license") or {}).get("spdx")
     if spdx:
         out["license"] = {"spdx": spdx}
+    cover = picture(port.get("cover")) or covers.get(game_key(port.get("game")))
+    if cover:
+        out["cover"] = cover
+    shots = [s for s in (picture(x) for x in port.get("screenshots") or []) if s]
+    if shots:
+        out["screenshots"] = shots[:1]
     return out
 
 
@@ -70,7 +108,8 @@ def snapshot(feed):
         raise ValueError("this isn't Open Ports Games' catalogue")
     if int(feed.get("version", 0)) > VERSION:
         raise ValueError("the catalogue is in a newer form than this script reads")
-    ports = sorted((trimmed(p) for p in feed.get("ports", []) if keep(p)), key=lambda p: p["id"])
+    covers = covers_by_game(feed.get("ports", []))
+    ports = sorted((trimmed(p, covers) for p in feed.get("ports", []) if keep(p)), key=lambda p: p["id"])
     return {
         "schema": SCHEMA,
         "version": feed.get("version"),
