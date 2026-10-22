@@ -224,6 +224,10 @@ def check(index_path, out_path, system=SYSTEM, arch="x86_64", allow_file=False):
             program = os.path.join(install, build["run"])
             if not os.path.isfile(program):
                 raise ValueError(f"no {build['run']} in it")
+            # The list names the program, so it is made runnable as Fuse makes it, whatever the archive said
+            # (a zip made on Windows keeps no Unix permissions).
+            if SYSTEM != "windows":
+                os.chmod(program, os.stat(program).st_mode | 0o755)
             how = port.get("check")
             # A system's own way where it differs (a Windows build that prints nothing to a console).
             if isinstance(how, dict) and isinstance(how.get(system), dict):

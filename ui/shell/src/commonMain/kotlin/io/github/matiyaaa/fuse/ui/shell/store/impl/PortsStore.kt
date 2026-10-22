@@ -238,6 +238,10 @@ internal class PortsStore(
                 files.remove(stage)
                 return fail(id, "The download had no ${build.run} in it, so it wasn't installed.")
             }
+            if (!files.makeRunnable("$stage/${build.run}")) {
+                files.remove(stage)
+                return fail(id, "Fuse couldn't make ${build.run} runnable, so it wasn't installed.")
+            }
             // What the port wrote in the copy in use (its saves and settings, beside itself) goes into the new one.
             val shipped = filesIn(stage)
             ctx.settings.value.ports.installed[id]?.let { old -> carryWritten(old, layout, stage) }

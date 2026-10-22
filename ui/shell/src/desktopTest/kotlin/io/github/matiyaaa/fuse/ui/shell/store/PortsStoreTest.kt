@@ -139,6 +139,11 @@ class PortsStoreTest {
         /** A move this says no to fails, as one onto a full or failing disk would. */
         var refuse: (from: String, to: String) -> Boolean = { _, _ -> false }
 
+        /** The programs made runnable; none is when [refuseRunnable], as on a disk that won't. */
+        val runnable = mutableListOf<String>()
+        var refuseRunnable = false
+        override suspend fun makeRunnable(path: String) = !refuseRunnable && runnable.add(path)
+
         override suspend fun move(from: String, to: String) =
             !refuse(from, to) && File(to).let { !Files.exists(it.toPath(), LinkOption.NOFOLLOW_LINKS) } &&
                 runCatching { Files.move(File(from).toPath(), File(to).toPath(), StandardCopyOption.ATOMIC_MOVE) }.isSuccess
@@ -180,6 +185,7 @@ class PortsStoreTest {
         assertEquals("2.1", ready.installedVersion)
         val root = File(files.folder, "skyport")
         assertTrue(File(root, "build/skyport").isFile && File(root, "build/engine.dat").isFile)
+        assertEquals(listOf("${root.path}/build.new/skyport"), files.runnable, "the list's program is made runnable, its zip having made it nothing")
         assertTrue(File(root, "home/saves").isDirectory, "its saves' folder is made in its home")
         val launcher = PortLauncher.decode(File(root, "skyport.fuseport").readText())!!
         assertEquals(listOf("${root.path}/build/skyport", "--data", game.absolutePath.replace('\\', '/'), "--home", "${root.path}/home/saves"), launcher.argv)
@@ -538,6 +544,20 @@ class PortsStoreTest {
         assertFalse(failed.installed)
         assertFalse(File(files.folder, "skyport/build").exists())
         assertTrue(File(cache, "dl").listFiles().orEmpty().isEmpty(), "the download is deleted")
+    }
+
+    @Test
+    fun aProgramThatCantBeMadeRunnableIsNeverInstalled(): Unit = runBlocking {
+        val (services, files) = services()
+        files.refuseRunnable = true
+        val store = createFuseStore(services, scope)
+        store.ports.open()
+        store.until("listed") { it.loaded }
+        store.ports.install("skyport")
+        val failed = store.until("failed") { it.port("skyport")?.job is PortJob.Failed }.port("skyport")!!
+        assertEquals("Fuse couldn't make skyport runnable, so it wasn't installed.", (failed.job as PortJob.Failed).message)
+        assertFalse(failed.installed)
+        assertFalse(File(files.folder, "skyport/build").exists() || File(files.folder, "skyport/build.new").exists())
     }
 
     @Test

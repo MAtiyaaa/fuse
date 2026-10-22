@@ -81,6 +81,11 @@ class CheckTest(unittest.TestCase):
         self.assertIn("libSDL2_mixer", results["unloadable"]["detail"])
         self.assertIn("can't run it", results["unloadable-version"]["detail"], "a missing library isn't a version it printed")
 
+    def test_the_lists_program_is_made_runnable_when_its_zip_kept_no_permissions(self):
+        windows_made = zip_with({"game": (b"#!/bin/sh\necho 'SkyPort v2.1'\n", 0o644)})
+        results = self.run_check([self.port("windows-made", windows_made, {"args": ["--version"], "expect": "SkyPort v2\\.1"})])
+        self.assertTrue(results["windows-made"]["passed"], results["windows-made"]["detail"])
+
     def test_an_archive_never_lands_outside_its_folder(self):
         sly = zip_with({"../../escaped": (b"x", 0o644)})
         results = self.run_check([self.port("sly", sly, {"stay": 1})])
