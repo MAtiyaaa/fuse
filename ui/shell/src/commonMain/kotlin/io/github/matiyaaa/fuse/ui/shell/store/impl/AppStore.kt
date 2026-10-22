@@ -188,16 +188,18 @@ internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {
             }
         }
         ctx.scope.launch {
-            all.map { list -> if (list.isEmpty()) null else list.filter { it.kind == AppKind.GAME } }
+            all.map { list -> if (list.isEmpty()) null else list.filter { it.kind == AppKind.GAME || it.standalonePort } }
                 .distinctUntilChanged()
                 .collect { games -> if (games != null) runCatching { syncGames(games) } }
         }
     }
 
     /**
-     * Files every game app under the Android system: new ones are added with their icon, renamed ones
-     * follow, and ones that were uninstalled or aren't games any more leave the lists (their play
-     * time and art are kept for when they come back).
+     * Files every game app under the Android system, and every recomp or port that plays no game of
+     * the library ([standalonePort]) under Ports, as a game of its own: new ones are added with their
+     * icon, renamed ones follow, one that becomes a port or a game again moves system as the same game
+     * (its play time and art with it), and ones that were uninstalled or aren't games any more leave
+     * the lists (their play time and art are kept for when they come back).
      */
     private suspend fun syncGames(games: List<AppEntry>) {
         val scan = PlatformFolderScan(
@@ -208,7 +210,7 @@ internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {
             games = games.map { app ->
                 val path = AppGames.path(app.id)
                 ScannedGame(
-                    platformId = AppGames.PLATFORM,
+                    platformId = if (app.standalonePort) io.github.matiyaaa.fuse.launch.ports.PortAdapter.PLATFORM else AppGames.PLATFORM,
                     sourceId = AppGames.SOURCE,
                     path = path,
                     kind = LocationKind.FILE,
@@ -224,3 +226,6 @@ internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {
         if (delta.addedIds.isNotEmpty()) onGamesAdded(delta.addedIds)
     }
 }
+
+/** A recomp or port that plays no game of the library: a game of its own, in Ports. */
+private val AppEntry.standalonePort: Boolean get() = kind == AppKind.PORT && plays == null

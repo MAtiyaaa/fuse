@@ -99,11 +99,12 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
   the one you pick installs from its project's releases and is attached to the game, so Play starts
   it in the emulator's place with the time kept as the game's. Majora's Mask through Zelda 64:
   Recompiled or 2 Ship 2 Harkinian, Pokémon Red to Emerald through Gen1Recomp, Bloodborne through
-  Bloodborne-Android and more. An app you installed yourself is a Recomp or Port in its Type, and
-  Fuse finds the game it plays, or asks. A ported game shows in the Ports system too (or Android,
-  or only its own system, for every game, each system or each game): one game with one time and
-  one set of achievements, started with the port from Ports and with its emulator from its own
-  system. Every port is drawn with its game's box art, year, publisher and genre, and when your
+  Bloodborne-Android and more. An app you installed yourself is a Recomp or Port in its Type:
+  Fuse attaches it to the game it plays when it knows which, and otherwise it is a game of its own
+  in the Ports system, attached to nothing. A ported game shows in the Ports system too (or
+  Android, or only its own system, for every game, each system or each game): one game with one
+  time and one set of achievements, started with the port from Ports, with its emulator from its
+  own system, and from the library with what played it last. Every port is drawn with its game's box art, year, publisher and genre, and when your
   copy of its game is on your RomM server or another device of the household, Ports says so and
   brings it here for you.
 - **Problems that explain themselves**: when a game can't start, Fuse says why, that nothing was

@@ -158,9 +158,9 @@ internal fun AppState.portFirstStart(card: GameCard, port: String, needs: String
 /**
  * "What game is this?" for the app [label] ([packageName]): the games the port Fuse knows it as
  * plays first, then the likeliest by its name (or by [query], typed), and a search. [onPick] gets
- * the game chosen.
+ * the game chosen; [alone], when given, is offered too: no game, the app a game of its own in Ports.
  */
-internal fun AppState.pickPortGame(label: String, packageName: String, query: String? = null, onPick: suspend (PortGameChoice) -> Unit) {
+internal fun AppState.pickPortGame(label: String, packageName: String, query: String? = null, alone: (suspend () -> Unit)? = null, onPick: suspend (PortGameChoice) -> Unit) {
     scope.launch {
         val guess = store.ports.gamesForApp(packageName, label, query)
         val rows = guess.games.map { g ->
@@ -175,9 +175,15 @@ internal fun AppState.pickPortGame(label: String, packageName: String, query: St
         }
         val search = MenuAction("search", "Search the Library", FuseIcons.Search, section = "", onSelect = {
             textInput = TextInputSpec("Search the library", query ?: label, doneLabel = "Search", message = "The game $label plays") { q ->
-                pickPortGame(label, packageName, q.trim().ifEmpty { null }, onPick)
+                pickPortGame(label, packageName, q.trim().ifEmpty { null }, alone, onPick)
             }
         })
+        val own = alone?.let { done ->
+            MenuAction("alone", "None: Its Own Game", FuseIcons.Boxes, section = "", detail = "It shows in Ports as a game of its own, played as itself", onSelect = {
+                choice = null
+                scope.launch { done() }
+            })
+        }
         choice = ChoiceSpec(
             icon = FuseIcons.Boxes,
             title = "What game is $label?",
@@ -187,14 +193,15 @@ internal fun AppState.pickPortGame(label: String, packageName: String, query: St
                 guess.port != null -> "Fuse knows it as ${guess.port.name}, a port of ${guess.port.game}. Play on the game you choose starts it."
                 else -> "The game it plays. Play on that game starts it from now on."
             },
-            options = rows + search,
+            options = rows + listOfNotNull(search, own),
         )
     }
 }
 
 /**
- * Makes the app [appId] ([label], [packageName]) a recomp or port, and finds the game it plays, or
- * asks ([ask]: always, to change it).
+ * Makes the app [appId] ([label], [packageName]) a recomp or port: attached to the game it plays when
+ * Fuse knows it for one game of the library, else a game of its own in Ports, which needs no game.
+ * [ask] (Choose Its Game) asks which game, or none.
  */
 internal fun AppState.makeAppAPort(appId: String, label: String, packageName: String, ask: Boolean = false) {
     scope.launch {
@@ -208,7 +215,15 @@ internal fun AppState.makeAppAPort(appId: String, label: String, packageName: St
             else toasts.show("$label plays ${only.title} from now on. Its options in Apps change that", ToastKind.SUCCESS, icon = FuseIcons.Boxes, durationMs = 6_000L)
             return@launch
         }
-        pickPortGame(label, packageName) { g ->
+        if (!ask) {
+            toasts.show("$label is in Ports as a game of its own. Choose Its Game in its options plays it in a game's place", ToastKind.SUCCESS, icon = FuseIcons.Boxes, durationMs = 6_000L)
+            return@launch
+        }
+        val alone: suspend () -> Unit = {
+            store.ports.detach(appId)
+            toasts.show("$label is in Ports as a game of its own", ToastKind.SUCCESS, icon = FuseIcons.Boxes)
+        }
+        pickPortGame(label, packageName, alone = alone) { g ->
             val problem = store.ports.attach(appId, g.id)
             if (problem != null) toasts.show(problem, ToastKind.WARNING)
             else toasts.show("${g.title} plays with $label from now on", ToastKind.SUCCESS, icon = FuseIcons.Boxes)

@@ -1012,7 +1012,12 @@ that takes the game's files from the person's own copy itself, on its first star
 ports for the games in the library, installs one from its project's releases, and attaches it to its
 game (an app of the Type Recomp or Port, `AppKind.PORT`), so Play on the game starts the app in the
 emulator's place (Play With). The time played, Continue Playing and the game's page stay the game's
-own. An app the person installed themselves can be attached the same way.
+own. An app the person installed themselves can be attached the same way, or be a game of its own:
+a Recomp or Port attached to no game (`AppEntry.plays` null) is filed under the Ports system as its
+own game, from the same `app:` path, so it keeps its play time and art when it moves between being
+an Android game, its own port and the way another game plays (`AppStore.syncGames`). Making an app a
+Recomp or Port attaches it only when Fuse knows it for exactly one game of the library; otherwise,
+and with None: Its Own Game in What game is this?, it stays its own game.
 
 **Two lists.** Fuse's own checked entries are the `android` list of `ports/index.json` (signed with
 the rest, `core:model` `AndroidPort`, checked by `androidPortProblem`): each read from the port's own
@@ -1063,9 +1068,13 @@ played, one set of achievements and one page. Besides its own system, it shows i
 Every game's value is in Settings, Addons, Ports; each system's in its own settings; each game's in
 its options (Shows In). Ports Too is the default. The list a game is opened from decides how Play
 starts it (`PlayVia`): from Ports or Android, the port; from its own system, its emulator, as that
-system's emulator choice and the game's own say. The game's page says so ("From Ports, it starts
-in ..."). With Its Own System Only, it shows there alone and Play starts the port chosen in Play
-With, as before. A port that is detached or uninstalled takes the game out of Ports and Android.
+system's emulator choice and the game's own say. Anywhere else (the library, Home, search, and its
+own system under Its Own System Only) it starts as it played the last time Fuse started it here,
+by that session's runner (`android-app` for the app), unless the app was chosen in Play With since
+(`androidPlayWithAt`), and with the app before it was ever played here (`LibraryStore.appFor`). The
+game's page asks the same function, so it always names what Play starts, and follows the app's
+install (`StoreContext.portApps`); it says where the app starts instead ("From Ports, it starts in
+..."). A port that is detached or uninstalled takes the game out of Ports and Android.
 
 **Box art and details.** Each port is drawn with its game's box art: the library's own art for
 it once the game is here; else the art Fuse draws for the person's copy on RomM or another device;

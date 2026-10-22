@@ -503,9 +503,9 @@ internal class DefaultLibraryOps(
             data.scopedSettings.observeResolved(ScopedSettings.Emulator, game.platformId, null),
             combine(data.collections.observeCollectionsOf(id), collections.collections) { ids, all -> all.filter { it.id in ids } },
             combine(data.playSessions.sessions(id), achievements.gameState(game)) { sessions, ra ->
-                sessions.filter { it.endedAt != null && it.startedAt >= weekStart }.sumOf { it.durationSeconds ?: 0 } to ra
+                Triple(sessions.filter { it.endedAt != null && it.startedAt >= weekStart }.sumOf { it.durationSeconds ?: 0 }, ra, lastPlay(sessions))
             },
-        ) { media, installed, platformEmulator, cols, (week, ra) -> Detail(media, installed, platformEmulator, cols, week, ra) }
+        ) { media, installed, platformEmulator, cols, (week, ra, last) -> Detail(media, installed, platformEmulator, cols, week, ra, last) }
             // The core and frame generation Play would use, so the line under Play follows them.
             .combine(
                 combine(
@@ -515,11 +515,13 @@ internal class DefaultLibraryOps(
             ) { parts, _ -> parts }
             .combine(ctx.offline) { parts, roots -> parts to roots.takeIf { game.appId == null }?.firstOrNull { it.holds(game.location.path) } }
             // Play With a port, chosen or taken back, changes what Play says.
-            .combine(ctx.settings.map { it.ports.playWith[id.value.toString()] to it.ports.androidPlayWith[id.value.toString()] }.distinctUntilChanged()) { parts, _ -> parts }
+            .combine(ctx.settings.map { Triple(it.ports.playWith[id.value.toString()], it.ports.androidPlayWith[id.value.toString()], it.ports.androidPlayWithAt[id.value.toString()]) }.distinctUntilChanged()) { parts, _ -> parts }
+            // The app it plays with installed or taken away changes it too.
+            .combine(ctx.portApps.map { it[id] }.distinctUntilChanged()) { parts, _ -> parts }
             // Where a port's game shows too, which says how Play starts it from here.
             .combine(ctx.portPlaces.map { it[id] }.distinctUntilChanged()) { parts, _ -> parts }
             .map { (parts, away) ->
-            val (media, installed, platformEmulator, cols, week, ra) = parts
+            val (media, installed, platformEmulator, cols, week, ra, last) = parts
             val resolved = ctx.resolver.resolve(
                 game,
                 platformEmulator.value.takeIf { it.isNotBlank() }?.let(::EmulatorId),
@@ -530,10 +532,16 @@ internal class DefaultLibraryOps(
             // From its own system, when it shows in Ports or Android too, it plays with its emulator.
             val ownSystem = via == io.github.matiyaaa.fuse.ui.shell.store.PlayVia.EMULATOR
             val port = if (ownSystem) null else portPlay?.invoke(id)?.second
-            val app = if (port == null && !ownSystem) androidPort?.invoke(id)?.second else null
-            val elsewhere = if (ownSystem) androidPort?.invoke(id)?.second?.let { name ->
-                val where = ctx.portPlaces.value[id]?.let { ctx.platform(it)?.name } ?: "Ports"
-                "From $where, it starts in $name."
+            // The same choice Play makes ([appFor]), so the page always says what Play starts.
+            val app = if (port == null) appFor(id, via, last)?.second else null
+            // Its app, when Play here starts the emulator: where, or how, it starts in the app instead.
+            val elsewhere = if (port == null && app == null) androidPort?.invoke(id)?.second?.let { name ->
+                val where = ctx.portPlaces.value[id]?.let { ctx.platform(it)?.name }
+                when {
+                    where != null -> "From $where, it starts in $name."
+                    ownSystem -> null
+                    else -> "It played with its emulator last; Play With starts it in $name again."
+                }
             } else {
                 null
             }
@@ -568,7 +576,32 @@ internal class DefaultLibraryOps(
         val cols: List<io.github.matiyaaa.fuse.model.GameCollection>,
         val week: Long,
         val ra: io.github.matiyaaa.fuse.model.AchievementState?,
+        val last: LastPlay?,
     )
+
+    /** The newest time Fuse started a game here: when, and whether as its port's app or with an emulator. */
+    private data class LastPlay(val at: Long, val asApp: Boolean)
+
+    private fun lastPlay(sessions: List<io.github.matiyaaa.fuse.model.PlaySession>): LastPlay? =
+        sessions.filter { it.source == io.github.matiyaaa.fuse.model.PlaySessionSource.FUSE_LAUNCH }.maxByOrNull { it.startedAt }
+            ?.let { LastPlay(it.startedAt, it.emulatorId == io.github.matiyaaa.fuse.launch.android.NativeAppAdapter.id) }
+
+    /**
+     * On Android, the app Play starts [id] with in its emulator's place (its id and name), from where
+     * it was opened ([via]); null for its emulator. From its own system (EMULATOR) never; from Ports or
+     * Android (PORT) always; from anywhere else (DEFAULT, the library, Home, search) what played it
+     * last here ([last], or [lastOf] read only when it is needed), unless the app was chosen since, and
+     * the app when it hasn't been played here yet.
+     */
+    private suspend fun appFor(id: GameId, via: io.github.matiyaaa.fuse.ui.shell.store.PlayVia, last: LastPlay?, lastOf: (suspend () -> LastPlay?)? = null): Pair<String, String>? {
+        if (via == io.github.matiyaaa.fuse.ui.shell.store.PlayVia.EMULATOR) return null
+        val app = androidPort?.invoke(id) ?: return null
+        if (via == io.github.matiyaaa.fuse.ui.shell.store.PlayVia.PORT) return app
+        val played = last ?: lastOf?.invoke() ?: return app
+        if (played.asApp) return app
+        val chosenAt = ctx.settings.value.ports.androidPlayWithAt[id.value.toString()] ?: return null
+        return app.takeIf { chosenAt > played.at }
+    }
 
     /** Which emulator would play [game] here, as its page says it (a RomM game not downloaded yet included). */
     internal suspend fun choiceFor(game: Game): EmulatorChoice {
@@ -694,7 +727,7 @@ internal class DefaultLibraryOps(
         // when it shows in Ports or Android too, it starts with its emulator.
         val plain = emulator == null && discPath == null && together == null && via != io.github.matiyaaa.fuse.ui.shell.store.PlayVia.EMULATOR
         val target = if (plain) portPlay?.invoke(id)?.first ?: id else id
-        val asApp = if (plain && target == id) androidPort?.invoke(id)?.first else null
+        val asApp = if (plain && target == id) appFor(id, via, null, lastOf = { lastPlay(data.playSessions.sessions(id).first()) })?.first else null
         return launchGame(target, emulator, discPath, display, skipSaveCheck, playAnyway, together, onStage, asApp).also { outcome ->
             if (outcome is LaunchOutcome.Problem) ctx.recordProblem(outcome.problem)
         }

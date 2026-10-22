@@ -34,6 +34,10 @@ No check plays a game, which needs your files.
 - A port whose build for one system can't run there as its project publishes it (it needs a newer
   system library than most have) is offered on the other system only, and says so. A port that
   takes a library from your system names it.
+- On Android, where you open a game decides what plays it: from its system's page, its emulator;
+  from Ports, its port; from your library, whatever played it last, until Play With picks again.
+- On Android, an app marked Recomp or Port needn't play one of your games. One that plays none is a
+  game of its own in Ports, and Choose Its Game in its options plays it in a game's place.
 
 ## Fixed
 
@@ -42,3 +46,5 @@ No check plays a game, which needs your files.
   names runnable when it installs it.
 - Opening Ports as Fuse started could read its list twice at once, each read putting back a copy an
   interrupted update had left aside. It is read once now.
+- On Android, a game with a port attached could name its emulator on the game page and start the
+  port anyway, or the other way round. The page now names what Play starts.

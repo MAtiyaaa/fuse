@@ -140,6 +140,9 @@ internal class StoreContext(
      */
     val portPlaces = MutableStateFlow<Map<GameId, PlatformId>>(emptyMap())
 
+    /** Android: the app each game plays with that is installed now, by name, by game. Set by the Android ports. */
+    val portApps = MutableStateFlow<Map<GameId, String>>(emptyMap())
+
     /** Games Fuse shows but doesn't have (RomM's and other devices', by negative id), set by the stores that keep them. */
     @kotlin.concurrent.Volatile var remoteGames: RemoteGames? = null
 

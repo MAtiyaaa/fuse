@@ -21,7 +21,7 @@ data class AppEntry(
     val chosenKind: AppKind? = null,
     /** What Fuse decided by itself: an emulator it detected, else a game when the app says it is one. */
     val detectedKind: AppKind = if (isGame) AppKind.GAME else AppKind.APP,
-    /** The library game a recomp or port ([AppKind.PORT]) plays, by its id; Play on it starts the app. */
+    /** The library game a recomp or port ([AppKind.PORT]) plays, by its id; Play on it starts the app. Null: a game of its own, in Ports. */
     val plays: Long? = null,
 ) {
     val displayTitle: String get() = customTitle ?: label
@@ -33,8 +33,8 @@ data class AppEntry(
 /**
  * What an installed app is to Fuse. Streaming apps (game streaming from a PC or console) and tools
  * (frontends, drivers, utilities for emulation) have lists of their own in Apps. A [PORT] is a
- * recomp or port of a game of the library: attached to that game ([AppEntry.plays]), it is how the
- * game plays, rather than a game of its own.
+ * recomp or port: attached to a game of the library ([AppEntry.plays]), it is how that game plays,
+ * rather than a game of its own; attached to none, it is a game of its own in the Ports system.
  */
 @Serializable
 enum class AppKind { GAME, APP, EMULATOR, STREAMING, TOOL, PORT }

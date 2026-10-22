@@ -87,6 +87,11 @@ data class PortsSettings(
      * Fuse's own folder.
      */
     val androidPlayWith: Map<String, String> = emptyMap(),
+    /**
+     * Android: when each game's app in [androidPlayWith] was chosen (epoch ms), by game id. Play from
+     * outside a system starts what played the game last, unless the app was chosen since.
+     */
+    val androidPlayWithAt: Map<String, Long> = emptyMap(),
     /** Android: the package each port Fuse installed was, by port id, so it is the same app ever after. */
     val androidInstalled: Map<String, String> = emptyMap(),
 )
