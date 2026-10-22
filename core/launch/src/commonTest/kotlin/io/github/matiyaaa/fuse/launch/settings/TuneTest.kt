@@ -229,7 +229,7 @@ class TuneTest {
 private val PORTS: Set<String> get() = N64_PORTS + setOf(
     "fallout1-ce", "shipwright", "2ship2harkinian", "starship", "spaghettikart", "ghostship", "lighthouse", "paperboat", "battleship",
     "dhewm3", "openq4", "quake3e", "lilium-voyager", "spearmint", "openmohaa", "iortcw", "openjk", "openjo",
-    "perfect-dark-remaster-recomp", "wet-recomp", "rsdkv3", "rsdkv4", "sm64coopdx",
+    "perfect-dark-remaster-recomp", "wet-recomp", "rsdkv3", "rsdkv4", "sm64coopdx", "arx-libertatis", "edge-classic", "perfect-dark-dabs-mod",
 )
 
 /** The N64 recompilations Fuse Ports lists, read by Fuse Tune at the release the list names. */
