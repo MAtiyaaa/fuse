@@ -474,6 +474,19 @@ def check_android(index_path, out_path, releases=github_releases, download_apk=f
     return results
 
 
+# A published list's revision: the list's own revision times this, plus when it was checked. Fuse
+# orders lists by the list's own revision first, so a list published before the one inside a newer
+# Fuse never stands in for it, however recently it was checked.
+PUBLISHED = 10 ** 10
+
+
+def published_revision(base, stamp):
+    """The revision a list of revision [base], checked at [stamp] (seconds), is published as."""
+    if base >= PUBLISHED:
+        base //= PUBLISHED
+    return base * PUBLISHED + stamp % PUBLISHED
+
+
 def mark(index, results_list, revision):
     """The list with each build verified only when a result for exactly its file passed, and each
     Android port only when tonight's check of its APK did."""
@@ -499,7 +512,7 @@ def mark(index, results_list, revision):
             port["verified"] = r["at"]
             if r.get("version"):
                 port["verifiedVersion"] = r["version"]
-    index["revision"] = max(int(index.get("revision", 0)) + 1, revision)
+    index["revision"] = published_revision(int(index.get("revision", 0)), revision)
     index["generated"] = datetime.date.today().isoformat()
     return index
 

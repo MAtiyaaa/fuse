@@ -124,7 +124,7 @@ internal class PortsStore(
                 val kept = keptList()
                 // A copy an update was replacing when Fuse stopped goes back in place.
                 for (id in ctx.settings.value.ports.installed.keys) files.recover(layout(id).install)
-                list = listOfNotNull(kept, inside).maxByOrNull { it.index.revision * 2 + if (it.signed) 1 else 0 }
+                list = listOfNotNull(kept, inside).maxWithOrNull(PortsList.ORDER)
             }
         }
         publish()
@@ -145,9 +145,10 @@ internal class PortsStore(
         if (!force && ctx.now() - lastLook < LOOK_EVERY_MS) return
         lastLook = ctx.now()
         mutable.update { it.copy(refreshing = true) }
-        val problem = when (val r = client.fetch(newerThan = list?.index?.revision ?: 0)) {
+        val problem = when (val r = client.fetch(newerThan = 0)) {
             is ApiResult.Success -> {
-                r.value?.let { fresh ->
+                // Only a newer list: one published before the list inside this Fuse never stands in for it.
+                r.value?.takeIf { fresh -> list.let { it == null || PortsList.ORDER.compare(fresh, it) > 0 } }?.let { fresh ->
                     list = fresh
                     files.makeFolder(files.folder)
                     files.writeText("${files.folder}/$INDEX", fresh.text)

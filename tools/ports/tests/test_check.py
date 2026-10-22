@@ -134,8 +134,9 @@ class CheckTest(unittest.TestCase):
         self.assertEqual("2026-10-18", marked["ports"][0]["builds"][0]["verified"])
         self.assertNotIn("verified", marked["ports"][0]["builds"][1], "a build nobody checked tonight isn't verified")
         self.assertNotIn("verified", marked["ports"][1]["builds"][0], "a pass for another file isn't this one's")
-        self.assertEqual(10, marked["revision"])
-        self.assertEqual(4, check.mark(json.loads(json.dumps(index)), [], revision=0)["revision"], "the revision always grows")
+        self.assertEqual(3 * check.PUBLISHED + 10, marked["revision"], "the list's own revision first, then when it was checked")
+        self.assertEqual(3 * check.PUBLISHED + 20, check.mark(json.loads(json.dumps(marked)), [], revision=20)["revision"], "marked again, it keeps the list's own revision")
+        self.assertGreater(check.mark({"format": 1, "revision": 4, "ports": []}, [], revision=1)["revision"], marked["revision"], "a newer list beats an older one checked later")
 
         if shutil.which("openssl") is None:
             self.skipTest("no openssl here")
@@ -157,7 +158,7 @@ class CheckTest(unittest.TestCase):
         subprocess.run(["openssl", "pkey", "-in", key, "-pubout", "-out", pub], check=True)
         ok = subprocess.run(["openssl", "pkeyutl", "-verify", "-pubin", "-inkey", pub, "-rawin", "-in", os.path.join(out, "index.json"), "-sigfile", sig], capture_output=True)
         self.assertEqual(0, ok.returncode, ok.stdout + ok.stderr)
-        self.assertEqual(20, check.read_json(os.path.join(out, "index.json"))["revision"])
+        self.assertEqual(3 * check.PUBLISHED + 20, check.read_json(os.path.join(out, "index.json"))["revision"])
         # Without the key nothing is signed.
         self.assertFalse(check.publish(src, [], os.path.join(self.dir, "unsigned")))
         self.assertFalse(os.path.exists(os.path.join(self.dir, "unsigned", "index.json.sig")))

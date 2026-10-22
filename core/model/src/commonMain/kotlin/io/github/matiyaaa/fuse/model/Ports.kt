@@ -14,7 +14,10 @@ import kotlinx.serialization.Serializable
 data class PortsIndex(
     /** The index's format; Fuse reads [FORMAT] and refuses a newer one rather than guess. */
     val format: Int,
-    /** Grows with every published index, so an older one never replaces a newer one. */
+    /**
+     * Grows with every list. A published one is the list's own revision times [PUBLISHED] plus when
+     * it was checked, so the list's own revision ([base]) orders lists first.
+     */
     val revision: Long,
     /** When it was made (ISO 8601), as said; never used to decide anything. */
     val generated: String? = null,
@@ -22,8 +25,25 @@ data class PortsIndex(
     /** Ports published as Android apps that Fuse checked against their own source ([AndroidPort.checked]). */
     val android: List<AndroidPort> = emptyList(),
 ) {
+    /**
+     * The list's own revision, which decides which of two lists is newer: a list published before
+     * the one inside a newer Fuse never stands in for it. Lists published before revisions carried
+     * it (a time alone) count as the oldest.
+     */
+    val base: Long get() = when {
+        revision >= PUBLISHED -> revision / PUBLISHED
+        revision >= OLD_STAMPS -> 0
+        else -> revision
+    }
+
     companion object {
         const val FORMAT = 1
+
+        /** See [revision]. */
+        const val PUBLISHED = 10_000_000_000L
+
+        /** Revisions this large and below [PUBLISHED] are times alone, from lists published before 0.4.3.9. */
+        private const val OLD_STAMPS = 1_000_000L
     }
 }
 

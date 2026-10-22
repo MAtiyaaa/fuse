@@ -106,6 +106,9 @@ internal class AndroidPortsStore(
 
     @kotlin.concurrent.Volatile private var index = AndroidPortCatalog.Index(emptyList())
     @kotlin.concurrent.Volatile private var checked: List<AndroidPort> = emptyList()
+
+    /** The list [checked] came from, so a fetched one replaces it only when it is newer ([PortsList.ORDER]). */
+    @kotlin.concurrent.Volatile private var checkedFrom: io.github.matiyaaa.fuse.integrations.ports.PortsList? = null
     @kotlin.concurrent.Volatile private var listed: List<AndroidPort> = emptyList()
     @kotlin.concurrent.Volatile private var listedAt: String? = null
     @kotlin.concurrent.Volatile private var lastLook = 0L
@@ -200,8 +203,11 @@ internal class AndroidPortsStore(
 
     /** Fuse's own entries and the listings it has: inside Fuse, else newer ones kept from before. */
     private suspend fun load() {
-        val inside = lists?.bundledIndex()?.let { PortsIndexReader.read(it).getOrNull() }?.index?.android.orEmpty()
-        checked = keptSigned() ?: inside
+        val inside = lists?.bundledIndex()?.let { PortsIndexReader.read(it).getOrNull() }
+        // The newer of the list inside Fuse and a signed one kept from before: one published before this Fuse never wins.
+        val best = listOfNotNull(keptSigned(), inside).maxWithOrNull(io.github.matiyaaa.fuse.integrations.ports.PortsList.ORDER)
+        checkedFrom = best
+        checked = best?.index?.android.orEmpty()
         // A listing kept by a Fuse that didn't read its pictures gives way to the one inside this Fuse.
         val kept = runCatching { ctx.data.cache.get(NS, LISTED, CachedListing.serializer(), ctx.now()) }.getOrNull()
             ?.takeIf { k -> k.ports.any { it.cover != null } }
@@ -218,12 +224,12 @@ internal class AndroidPortsStore(
         loaded.value = true
     }
 
-    /** The Android entries of the signed list kept from before, checked again; null when there is none (or it has none). */
-    private suspend fun keptSigned(): List<AndroidPort>? {
+    /** The signed list kept from before, checked again; null when there is none (or it has no Android ports). */
+    private suspend fun keptSigned(): io.github.matiyaaa.fuse.integrations.ports.PortsList? {
         val key = publicKey() ?: return null
         val kept = runCatching { ctx.data.cache.get(NS, SIGNED, CachedSigned.serializer(), ctx.now()) }.getOrNull() ?: return null
         if (!PortsSignature.verify(kept.text.encodeToByteArray(), kept.signature, key)) return null
-        return PortsIndexReader.read(kept.text, kept.signature).getOrNull()?.index?.android?.takeIf { it.isNotEmpty() }
+        return PortsIndexReader.read(kept.text, kept.signature).getOrNull()?.takeIf { it.index.android.isNotEmpty() }
     }
 
     private fun rebuild() {
@@ -250,8 +256,12 @@ internal class AndroidPortsStore(
         }
         if (publicKey() != null) {
             when (val r = signedClient.fetch(newerThan = 0)) {
-                is ApiResult.Success -> r.value?.takeIf { it.index.android.isNotEmpty() && it.signature != null }?.let { fresh ->
+                is ApiResult.Success -> r.value?.takeIf { fresh ->
+                    fresh.index.android.isNotEmpty() && fresh.signature != null &&
+                        checkedFrom.let { it == null || io.github.matiyaaa.fuse.integrations.ports.PortsList.ORDER.compare(fresh, it) > 0 }
+                }?.let { fresh ->
                     checked = fresh.index.android
+                    checkedFrom = fresh
                     runCatching { ctx.data.cache.put(NS, SIGNED, CachedSigned(fresh.text, fresh.signature!!), CachedSigned.serializer(), ctx.now(), null) }
                 }
                 is ApiResult.Failure -> Unit

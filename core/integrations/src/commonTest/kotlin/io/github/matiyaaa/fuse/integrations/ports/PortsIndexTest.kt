@@ -20,6 +20,22 @@ import kotlin.test.assertTrue
  * `openssl pkeyutl -sign -rawin`); only its public half is here, and it signs nothing else.
  */
 class PortsIndexTest {
+
+    @Test
+    fun aListPublishedBeforeTheOneInsideFuseNeverStandsInForIt() {
+        fun list(revision: Long, signed: Boolean) = PortsList(io.github.matiyaaa.fuse.model.PortsIndex(1, revision, ports = emptyList()), signed = signed)
+        val inside = list(7, signed = false)
+        // Published before revisions carried the list's own (a time alone): the oldest, however recent.
+        val stale = list(1_792_636_899, signed = true)
+        assertEquals(0, stale.index.base)
+        assertEquals(inside, listOf(stale, inside).maxWith(PortsList.ORDER))
+        // The same list, published and signed, wins; a later check of it wins again; a newer list beats both.
+        val published = list(7 * io.github.matiyaaa.fuse.model.PortsIndex.PUBLISHED + 1_792_700_000, signed = true)
+        val later = list(7 * io.github.matiyaaa.fuse.model.PortsIndex.PUBLISHED + 1_792_800_000, signed = true)
+        val newer = list(8, signed = false)
+        assertEquals(7, published.index.base)
+        assertEquals(listOf(stale, inside, published, later, newer), listOf(newer, later, stale, published, inside).sortedWith(PortsList.ORDER))
+    }
     private val testKey = "vGVgmIo2NSqKDoF0kzT5CgCsW/FbOuaBdXBG+AvCuPo="
     private val signature = "WyIyaANGY21QX/gIM5oYKZyUZcMIlj28tk5g14Ak8WnC+QHkvn8wgGVRhwZVvS8szHx36MFy/xH2o2qccHYQAg=="
 

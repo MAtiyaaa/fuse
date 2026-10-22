@@ -199,19 +199,26 @@ internal fun AuditDriver.detailScreens() {
             show(windowsStore, windowsPlatform)
             home()
             // Addons is found by name: the Ports tab, moved first, opens with it.
-            repeat(6) { if (!hasText("Games rebuilt to run natively")) tap(PadButton.R1) }
-            waitFor("Games rebuilt to run natively")
-            settle(1_200)
-            shoot("Ports: the list inside Fuse, nothing installed")
+            repeat(6) { if (!hasText("Not Installed")) tap(PadButton.R1) }
+            waitFor("Not Installed")
+            settle(1_500)
+            shoot("Ports: every port as box art, the first one told above them")
+            tap(PadButton.DPAD_RIGHT, 3)
             tap(PadButton.DPAD_DOWN)
-            settle(600)
-            shoot("a port focused, Install its next step")
+            settle(900)
+            shoot("further into the grid, the stage following")
+            tap(PadButton.DPAD_UP, 2)
+            tap(PadButton.DPAD_RIGHT)
+            settle(900)
+            shoot("the filters: Not Installed")
+            tap(PadButton.DPAD_LEFT)
+            tap(PadButton.DPAD_DOWN)
             tap(PadButton.X)
-            waitFor("DevilutionX's Project Page")
+            waitFor("Ape Escape Recompiled's Project Page")
             settle(600)
             shoot("a port's options: install, its game's files first, its project")
             tap(PadButton.B)
-            waitGone("DevilutionX's Project Page")
+            waitGone("Ape Escape Recompiled's Project Page")
         } finally {
             windowsStore.updatePrefs { it.copy(portsEnabled = false, addonsOrder = emptyList()) }
         }
@@ -242,7 +249,7 @@ internal fun AuditDriver.detailScreens() {
         try {
             show(store, windowsPlatform)
             home()
-            repeat(6) { if (!hasText("Games rebuilt to run natively")) tap(PadButton.R1) }
+            repeat(6) { if (!hasText("Reading the list of ports...")) tap(PadButton.R1) }
             waitFor("Reading the list of ports...")
             settle(900)
             shoot("Ports: the list being read, the shapes its cards will take")
@@ -251,7 +258,7 @@ internal fun AuditDriver.detailScreens() {
             settle(600)
             shoot("a list with no ports in it")
             fixed.value = real.copy(
-                signed = true, canCheck = true, revision = 4, problem = "GitHub didn't answer.",
+                signed = true, canCheck = true, revision = 4, refreshing = false, problem = "GitHub didn't answer.",
                 ports = listOf(
                     dx.copy(job = io.github.matiyaaa.fuse.ui.shell.store.PortJob.Downloading(0.42f, (dx.build?.size ?: 0) * 42 / 100, dx.build?.size)),
                     rct.copy(job = io.github.matiyaaa.fuse.ui.shell.store.PortJob.Failed("The download didn't match the checksum its source published, so it was deleted.")),
@@ -263,19 +270,19 @@ internal fun AuditDriver.detailScreens() {
             settle(900)
             shoot("a look for a newer list that failed; downloading, a download refused, a folder lacking a file")
             fixed.value = real.copy(
-                signed = true, canCheck = true, revision = 4,
+                signed = true, canCheck = true, revision = 4, refreshing = false, problem = null,
                 ports = listOf(
                     installed(dx).copy(verified = "2026-10-17", folders = mapOf(dx.port.data.first().id to "D:/Games/Diablo"), missing = emptyMap(), game = io.github.matiyaaa.fuse.model.GameId(900_001L)),
                     installed(rct).copy(installedVersion = "0.5.5", installedSha = "0".repeat(64), missing = emptyMap(), folders = mapOf(rct.port.data.first().id to "D:/Games/RCT2"), game = io.github.matiyaaa.fuse.model.GameId(900_002L)),
                     fo.copy(build = null, whyNot = "${fo.port.name} isn't published for this computer."),
                 ),
             )
-            waitFor("signed list, revision 4")
-            tap(PadButton.DPAD_UP)
+            waitFor("checked each night")
+            tap(PadButton.DPAD_LEFT, 2)
             settle(900)
             shoot("a signed list: verified and ready, an update out, one not made for this computer")
             waitFor("Ports and recomps you installed".uppercase())
-            tap(PadButton.DPAD_DOWN, 2)
+            tap(PadButton.DPAD_DOWN, 3)
             settle(900)
             shoot("recomps you installed yourself, under the list")
         } finally {

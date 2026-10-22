@@ -824,8 +824,11 @@ Fuse doesn't fill) is left out; a list of another format is refused whole.
 **Signed.** The list inside Fuse is part of Fuse. A newer one is fetched from the `ports` release of
 Fuse's repository (`index.json` and `index.json.sig`) and believed only when its Ed25519 signature
 (RFC 8032, checked by the JDK's own `Ed25519`) verifies with the public key Fuse carries
-(`PortsSignature.PUBLIC_KEY`) and its revision is newer; a kept copy is checked again each time it
-is read. The private key is only the repository secret `PORTS_SIGNING_KEY` the ports workflow signs
+(`PortsSignature.PUBLIC_KEY`) and it is newer; a kept copy is checked again each time it is read.
+Lists rank by the list's own revision first, then signed over not, then the newest check
+(`PortsList.ORDER`): a published revision is the list's own times 10^10 plus when it was checked
+(`PortsIndex.base`), so a list published before the one inside a newer Fuse never stands in for it.
+Revisions from before that (a time alone) rank as the oldest. The private key is only the repository secret `PORTS_SIGNING_KEY` the ports workflow signs
 with; Fuse carries the public key. Until the workflow has published a signed list (the `ports`
 release isn't there yet), the list inside Fuse stands and nothing is said. **Verified** is shown only when
 a signed list says the nightly check saw exactly this build (by its SHA-256) install and start.
@@ -924,7 +927,7 @@ port's APK, the one Fuse would install (the newest release with an APK for an ar
 must verify its signature, so Android installs it; aapt2 must read it as the list's `package`; and
 its native code, when it has any, must include arm64-v8a. The list is then marked with what passed
 (a build's `verified` for exactly its file, an Android port's `verified` and `verifiedVersion` for
-that night's APK), its revision raised, signed and put on the `ports` pre-release (never the latest
+that night's APK), its revision set to the list's own times 10^10 plus the time, signed and put on the `ports` pre-release (never the latest
 release, and never taken as a version of Fuse). A night when one system's check didn't finish
 publishes nothing, so the list before it stands, and the issue says which check it was.
 
