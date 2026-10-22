@@ -34,7 +34,16 @@ object PortSources {
     private fun quake3(id: String, vararg tree: String) = Port(id, Quake3::parse, tree.toList(), format = "seta", switches = "1" to "0")
     private val Q3 = arrayOf("/code/**/*.c", "/code/**/*.cpp", "/code/**/*.h")
 
+    private fun rexglue(id: String) = Port(id, Rexglue::parse, Rexglue.TREE, Rexglue.SUBMODULES, format = "toml")
+
     val PORTS: List<Port> = listOf(
+        Port("sm64coopdx", Sm64CoopDx::parse, Sm64CoopDx.TREE, format = "words-bare"),
+        // The Retro Engine decompilations: settings.ini as InitUserdata writes it, key=value without spaces.
+        Port("rsdkv3", Rsdk::parse, Rsdk.files("/RSDKv3"), format = "ini-tight"),
+        Port("rsdkv4", Rsdk::parse, Rsdk.files("/RSDKv4"), format = "ini-tight"),
+        // The ReXGlue recompilations that keep the SDK as a submodule: theirs and the SDK's cvars.
+        rexglue("perfect-dark-remaster-recomp"),
+        rexglue("wet-recomp"),
         // The Quake III engine's: each archived console variable it and its game modules make.
         quake3("quake3e", *Q3),
         quake3("lilium-voyager", *Q3),

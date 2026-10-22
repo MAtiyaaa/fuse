@@ -7,6 +7,7 @@ package io.github.matiyaaa.fuse.launch.settings
  *
  * - The Doom ports (Woof!, Nugget Doom, dsda-doom: `M_SaveDefaults`): `name   value`, the name
  *   padded, a number bare and text in double quotes. [command] is null.
+ * - sm64coopdx (`configfile_save`): `name value`, text as it is, never quoted ([bare]).
  * - The Quake engines (`Cvar_WriteVariables`): `seta name "value"`, every value in quotes. [command]
  *   is `seta`; a line set with `set` is read too.
  *
@@ -15,7 +16,12 @@ package io.github.matiyaaa.fuse.launch.settings
  * the engine writes one. These files have no sections: [section] must be empty. A value can't hold a
  * double quote or a line break, which neither engine reads back; [set] refuses one.
  */
-class WordsText(text: String, private val command: String? = null, private val isText: (String) -> Boolean = { false }) : SettingsText {
+class WordsText(
+    text: String,
+    private val command: String? = null,
+    private val bare: Boolean = false,
+    private val isText: (String) -> Boolean = { false },
+) : SettingsText {
     private val crlf = text.contains("\r\n")
     private val lines: MutableList<String> = text.replace("\r\n", "\n").split('\n').toMutableList().also {
         if (it.size > 1 && it.last().isEmpty()) it.removeAt(it.lastIndex)
@@ -71,7 +77,11 @@ class WordsText(text: String, private val command: String? = null, private val i
         require('"' !in value && '\n' !in value && '\r' !in value) { "The engine can't read a value with a quote or a line break back" }
         val at = indexOf(key)
         // Quoted as the engine writes it: every value for the Quake engines, text for the Doom ports.
-        val written = if (command != null || isText(key) || value.isEmpty() || value.any { it.isWhitespace() }) "\"$value\"" else value
+        val written = when {
+            bare -> value
+            command != null || isText(key) || value.isEmpty() || value.any { it.isWhitespace() } -> "\"$value\""
+            else -> value
+        }
         if (at >= 0) {
             val line = lines[at]
             val indent = line.takeWhile { it.isWhitespace() }

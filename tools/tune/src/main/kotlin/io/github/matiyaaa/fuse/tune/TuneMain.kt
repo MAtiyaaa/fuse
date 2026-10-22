@@ -51,6 +51,7 @@ private val BUILT_IN = listOf(
     Emulator("devilutionx", "diasurgical/devilutionX", Regex("""^\d+\.\d+\.\d+$"""), DevilutionX.FILES, DevilutionX::parse),
     Emulator("openrct2", "OpenRCT2/OpenRCT2", Regex("""^v\d+\.\d+\.\d+$"""), OpenRct2.FILES, OpenRct2::parse),
     Emulator("fallout2-ce", "alexbatalov/fallout2-ce", Regex("""^v\d+\.\d+\.\d+$"""), Fallout2Ce.FILES, Fallout2Ce::parse),
+    Emulator("fallout1-ce", "alexbatalov/fallout1-ce", Regex("""^v\d+\.\d+\.\d+$"""), Fallout2Ce.Fallout1.FILES, Fallout2Ce.Fallout1::parse),
     // RetroArch's own settings, for a game's override file.
     Emulator("retroarch", "libretro/RetroArch", Regex("""^v\d+\.\d+\.\d+$"""), RetroArch.FILES, RetroArch::parse),
     // shadPS4's releases are v.0.20.0 and the like.

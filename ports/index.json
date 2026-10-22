@@ -2752,7 +2752,8 @@
         "Mods that change maps or protos in your game's data folder aren't carried over, and the saves of your own copy stay with it: the port's are its own.",
         "On Linux it needs SDL2, which SteamOS and most desktops have."
       ],
-      "source": "fallout1-ce v1.1.0: README.md (copy fallout-ce into your Fallout folder, SDL2 on Linux); src/game/gconfig.cc, gconfig_init (fallout.cfg beside the program or in the folder it starts from; master.dat, critter.dat and data as defaults); src/game/loadsave.cc (SAVEGAME/SLOTnn), src/game/map.cc and src/game/proto.cc (MAPS and proto written while playing); src/platform_compat.cc, compat_resolve_path (letter case ignored on Linux); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "fallout1-ce v1.1.0: README.md (copy fallout-ce into your Fallout folder, SDL2 on Linux); src/game/gconfig.cc, gconfig_init (fallout.cfg beside the program or in the folder it starts from; master.dat, critter.dat and data as defaults); src/game/loadsave.cc (SAVEGAME/SLOTnn), src/game/map.cc and src/game/proto.cc (MAPS and proto written while playing); src/platform_compat.cc, compat_resolve_path (letter case ignored on Linux); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/game/gconfig.cc gconfig_init (every key of fallout.cfg given its default, read by Fuse Tune)",
+      "settings": { "file": "{install}/fallout.cfg" }
     },
     {
       "id": "ja2-stracciatella",
@@ -3775,7 +3776,8 @@
         "It asks for your own Super Mario 64 ROM (the US cartridge's, in .z64 form) on its first start: drop the file onto its window, and it keeps its own copy.",
         "Its saves, settings, mods and its copy of your ROM are its own, kept by Fuse in its home."
       ],
-      "source": "sm64coopdx v1.5.1: src/pc/cliopts.c (--savepath, the save and settings folder; --skip-update-check); src/pc/pc_main.c (fs_init with the save path); src/pc/rom_checker.cpp (a US ROM found by MD5 in the save folder or beside the program, or dropped on the window, copied into the save folder as baserom.us.z64); src/pc/loading.c render_rom_setup_screen (the drop prompt); src/pc/fs/fs.h (sm64_save_file.bin); src/pc/configfile.h (sm64config.txt); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "sm64coopdx v1.5.1: src/pc/cliopts.c (--savepath, the save and settings folder; --skip-update-check); src/pc/pc_main.c (fs_init with the save path); src/pc/rom_checker.cpp (a US ROM found by MD5 in the save folder or beside the program, or dropped on the window, copied into the save folder as baserom.us.z64); src/pc/loading.c render_rom_setup_screen (the drop prompt); src/pc/fs/fs.h (sm64_save_file.bin); src/pc/configfile.h (sm64config.txt); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/pc/configfile.c options and configfile_save (sm64config.txt in the save path, name value lines; read by Fuse Tune)",
+      "settings": { "file": "{home}/sm64config.txt" }
     },
     {
       "id": "perfect-dark-dabs-mod",
@@ -3865,7 +3867,8 @@
         "Its saves (SData.bin) and settings.ini are written in Fuse's copy, never in your folder, and carried into the new copy when Fuse updates it; its mods folder is kept in its home.",
         "On Linux it takes SDL2, GLEW and the Ogg, Vorbis and Theora libraries from your system."
       ],
-      "source": "RSDKv3-Decompilation 1.3.3: README.md (without assets from the official release it will not run; the Steam release or Sonic Origins); RSDKv3/RetroEngine.hpp (BASE_PATH empty: the folder it starts from); RSDKv3/Userdata.cpp (Data.rsdk, settings.ini and SData.bin in that folder); RSDKv3/ModAPI.cpp (mods/); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "RSDKv3-Decompilation 1.3.3: README.md (without assets from the official release it will not run; the Steam release or Sonic Origins); RSDKv3/RetroEngine.hpp (BASE_PATH empty: the folder it starts from); RSDKv3/Userdata.cpp (Data.rsdk, settings.ini and SData.bin in that folder); RSDKv3/ModAPI.cpp (mods/); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); RSDKv3/Userdata.cpp InitUserdata (settings.ini, every key with its default, key=value; read by Fuse Tune)",
+      "settings": { "file": "{install}/settings.ini" }
     },
     {
       "id": "rsdkv4",
@@ -3910,7 +3913,8 @@
         "Its saves (SData.bin) and settings.ini are written in Fuse's copy, never in your folder, and carried into the new copy when Fuse updates it; its mods folder is kept in its home.",
         "On Linux it takes SDL2, GLEW and the Ogg, Vorbis and Theora libraries from your system."
       ],
-      "source": "RSDKv4-Decompilation 1.3.3: README.md (without assets from the official releases it will not run; Sonic Origins or the mobile versions; SData.bin in the decompilation's folder); RSDKv4/RetroEngine.cpp (Data.rsdk in BASE_PATH, the folder it starts from); RSDKv4/Userdata.cpp (settings.ini, SData.bin and SGame.bin there); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "RSDKv4-Decompilation 1.3.3: README.md (without assets from the official releases it will not run; Sonic Origins or the mobile versions; SData.bin in the decompilation's folder); RSDKv4/RetroEngine.cpp (Data.rsdk in BASE_PATH, the folder it starts from); RSDKv4/Userdata.cpp (settings.ini, SData.bin and SGame.bin there); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); RSDKv4/Userdata.cpp InitUserdata (settings.ini, every key with its default, key=value; read by Fuse Tune)",
+      "settings": { "file": "{install}/settings.ini" }
     },
     {
       "id": "lain-psx",
@@ -5239,7 +5243,8 @@
         "Its saves and settings are its own, kept by Fuse in its home.",
         "Windows only for now: its Linux build needs a newer system than most have (glibc 2.43)."
       ],
-      "source": "PerfectDarkRemasterRecomp 1,4: README.md (Getting the game data: the extracted files with default.xex; --game_data_root); src/perfectdarkremasterrecomp_app.h, OnConfigurePaths (game_data_root, else assets beside the program; settings/hardware.toml); src/utils.h, SettingsDir; ReXGlue SDK src/ui/rex_app.cpp, ReXApp::SetupEnvironment, and src/system/runtime.cpp (the game_data_root and user_data_root options; without them the user folder is the system's own); src/core/cvar.cpp, Init (--name=value on the command line); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "PerfectDarkRemasterRecomp 1,4: README.md (Getting the game data: the extracted files with default.xex; --game_data_root); src/perfectdarkremasterrecomp_app.h, OnConfigurePaths (game_data_root, else assets beside the program; settings/hardware.toml); src/utils.h, SettingsDir; ReXGlue SDK src/ui/rex_app.cpp, ReXApp::SetupEnvironment, and src/system/runtime.cpp (the game_data_root and user_data_root options; without them the user folder is the system's own); src/core/cvar.cpp, Init (--name=value on the command line); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/utils.h SettingsDir and LoadSettingsFiles (settings/hardware.toml, flat TOML of the ReXGlue SDK's and the game's cvars, rewritten by its Save to config; read by Fuse Tune)",
+      "settings": { "file": "{install}/settings/hardware.toml" }
     },
     {
       "id": "wet-recomp",
@@ -5277,7 +5282,8 @@
         "Its saves and settings are its own, kept by Fuse in its home.",
         "Windows only for now: its Linux build needs a newer system than most have (glibc 2.43)."
       ],
-      "source": "WetRecomp 1.4: README.md (Game data: extract-xiso -x WET.iso, default.xex and the rest; Configuration: settings/hardware.toml and settings/mapping.toml); src/wetrecomp_app.h, OnConfigurePaths (game_data_root, else assets beside the program); ReXGlue SDK src/ui/rex_app.cpp, ReXApp::SetupEnvironment, and src/system/runtime.cpp (the game_data_root and user_data_root options; without them the user folder is the system's own); src/core/cvar.cpp, Init (--name=value on the command line); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "WetRecomp 1.4: README.md (Game data: extract-xiso -x WET.iso, default.xex and the rest; Configuration: settings/hardware.toml and settings/mapping.toml); src/wetrecomp_app.h, OnConfigurePaths (game_data_root, else assets beside the program); ReXGlue SDK src/ui/rex_app.cpp, ReXApp::SetupEnvironment, and src/system/runtime.cpp (the game_data_root and user_data_root options; without them the user folder is the system's own); src/core/cvar.cpp, Init (--name=value on the command line); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/utils.h SettingsDir and LoadSettingsFiles (settings/hardware.toml, flat TOML of the ReXGlue SDK's and the game's cvars, rewritten by its Save to config; read by Fuse Tune)",
+      "settings": { "file": "{install}/settings/hardware.toml" }
     },
     {
       "id": "gen2recomped",

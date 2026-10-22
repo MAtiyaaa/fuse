@@ -84,7 +84,9 @@ internal class NativeSettingsStore(
         val eden: Boolean = false,
         /** Its files are Azahar's, each value kept in two keys ([io.github.matiyaaa.fuse.launch.settings.AzaharConfig]). */
         val azahar: Boolean = false,
-        /** Its file is Supermodel.ini, its values read with their quotes and comments off ([io.github.matiyaaa.fuse.launch.settings.SupermodelIni]). */
+        /** Its ini has no spaces around `=` (the Retro Engine's settings.ini, which its reader needs so). */
+        val tight: Boolean = false,
+                /** Its file is Supermodel.ini, its values read with their quotes and comments off ([io.github.matiyaaa.fuse.launch.settings.SupermodelIni]). */
         val supermodel: Boolean = false,
         /** The installed version, for which of every setting it has. */
         val version: String? = null,
@@ -124,8 +126,8 @@ internal class NativeSettingsStore(
             json -> io.github.matiyaaa.fuse.launch.settings.JsonText(content ?: "") { section, key -> isText(section, key) }
             toml -> io.github.matiyaaa.fuse.launch.settings.TomlText(content ?: "") { section, key -> isText(section, key) }
             mameIni -> io.github.matiyaaa.fuse.launch.settings.MameIniText(content ?: "")
-            words != null -> io.github.matiyaaa.fuse.launch.settings.WordsText(content ?: "", words.ifEmpty { null }) { key -> isText("", key) }
-            else -> IniText(content ?: "", spaced = !(eden || azahar))
+            words != null -> io.github.matiyaaa.fuse.launch.settings.WordsText(content ?: "", words.takeIf { it.isNotEmpty() && it != BARE }, bare = words == BARE) { key -> isText("", key) }
+            else -> IniText(content ?: "", spaced = !(eden || azahar || tight))
         }
 
         /** Whether the setting at [section] and [key] (in any of the emulator's files) holds text. */
@@ -218,9 +220,12 @@ internal class NativeSettingsStore(
             id, port.name, files, path, null, port.game, globals = others,
             // As Fuse Tune read the port's code, whatever an older list says (it names only ini).
             json = Tune.format(id) == "json",
+            toml = Tune.format(id) == "toml",
+            tight = Tune.format(id) == "ini-tight",
             words = when (Tune.format(id)) {
                 "seta" -> "seta"
                 "words" -> ""
+                "words-bare" -> BARE
                 else -> null
             },
             version = port.version, writer = PortWriter(portFiles), byTab = true,
@@ -825,7 +830,10 @@ internal class NativeSettingsStore(
 
         val FAMILIES = NativeSettings.changeable
 
-        /** Those whose TOML reads a decimal only with its point. */
+        /** [Target.words] for a file whose text is written as it is, never quoted (sm64coopdx's). */
+        const val BARE = "\u0000bare"
+
+                /** Those whose TOML reads a decimal only with its point. */
         val TOML_POINT = setOf("melonds", "xenia")
 
         /** A Vita game's title id: four letters, five digits (PCSE00082). */

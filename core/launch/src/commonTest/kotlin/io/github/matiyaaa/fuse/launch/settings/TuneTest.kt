@@ -20,7 +20,7 @@ class TuneTest {
     @Test
     fun everyEmulatorReadHasItsReleasesAndASettingsCountLikeItsOwn() {
         // RetroArch's cores are read as families of their own (`core.snes9x`), at one commit each.
-        val emulators = Tune.families.filterNot { it.startsWith(CoreOptionFiles.family("")) || it in N64_PORTS }.toSet()
+        val emulators = Tune.families.filterNot { it.startsWith(CoreOptionFiles.family("")) || it in PORTS }.toSet()
         assertEquals(
             setOf(
                 "dolphin", "duckstation", "ppsspp", "pcsx2", "rpcs3", "devilutionx", "openrct2", "fallout2-ce", "retroarch", "eden", "citron",
@@ -28,6 +28,7 @@ class TuneTest {
             ),
             emulators,
         )
+        assertEquals(PORTS, Tune.families.filter { it in PORTS }.toSet(), "every port read")
         // Each has as many as its own settings show; a reader that broke would find a handful.
         val least = mapOf(
             "devilutionx" to 40, "fallout2-ce" to 40, "azahar" to 90, "azaharplus" to 90, "lime3ds" to 70, "mandarine" to 80, "cemu" to 10, "shadps4" to 80, "vita3k" to 70,
@@ -193,6 +194,8 @@ class TuneTest {
         // A core's one release is the commit read, not a version a core says it is; so is a project's that tags no releases.
         for (family in Tune.families.filterNot { it.startsWith(CoreOptionFiles.family("")) || it in ONE_BUILD }) {
             val read = Tune.releases(family)
+            // A port read at its one rolling build (Quake3e's `latest`) has no number to place a version by.
+            if (TuneVersions.numbers(read.first()).isEmpty()) continue
             assertEquals(read.first(), Tune.releaseFor(family, null), "unknown: the newest")
             val newer = TuneVersions.numbers(read.first()).let { listOf(it[0] + 1) + it.drop(1) }.joinToString(".")
             assertEquals(read.first(), Tune.releaseFor(family, newer), "newer than any read ($newer)")
@@ -221,6 +224,13 @@ class TuneTest {
         assertEquals("v0.1-11826", Tune.releaseFor("duckstation", "0.1-11830"))
     }
 }
+
+/** The ports Fuse Tune reads beside the emulators (DevilutionX, OpenRCT2 and Fallout 2 CE are read as those are). */
+private val PORTS: Set<String> get() = N64_PORTS + setOf(
+    "fallout1-ce", "shipwright", "2ship2harkinian", "starship", "spaghettikart", "ghostship", "lighthouse", "paperboat", "battleship",
+    "dhewm3", "openq4", "quake3e", "lilium-voyager", "spearmint", "openmohaa", "iortcw", "openjk", "openjo",
+    "perfect-dark-remaster-recomp", "wet-recomp", "rsdkv3", "rsdkv4", "sm64coopdx",
+)
 
 /** The N64 recompilations Fuse Ports lists, read by Fuse Tune at the release the list names. */
 private val N64_PORTS = setOf(
