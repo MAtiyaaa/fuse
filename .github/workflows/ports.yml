@@ -83,6 +83,20 @@ jobs:
         working-directory: tools/ports
         run: python -m unittest discover -s tests -v
 
+      # The runner has no graphics card, and Windows' own OpenGL on it is 1.1, which a port drawing
+      # with OpenGL 3 can't start on. Mesa's software OpenGL (llvmpipe), what the virtual screen gives
+      # the Linux check, is lent to each port the check starts (check.py lend_gl).
+      - name: Get Mesa's software OpenGL
+        run: |
+          set -euo pipefail
+          curl -sSL -o "$RUNNER_TEMP/mesa.7z" https://github.com/pal1000/mesa-dist-win/releases/download/26.2.2/mesa3d-26.2.2-release-msvc.7z
+          echo "0f21394d44036019bb5c07a3788dd278fd7b7b3469077a4686f0d639e8e874a1  $RUNNER_TEMP/mesa.7z" | sha256sum -c -
+          7z x "$RUNNER_TEMP/mesa.7z" -o"$RUNNER_TEMP/mesa" -y > /dev/null
+          mkdir -p "$RUNNER_TEMP/mesa-gl"
+          cp "$RUNNER_TEMP/mesa/x64/opengl32.dll" "$RUNNER_TEMP/mesa/x64/libgallium_wgl.dll" "$RUNNER_TEMP/mesa-gl/"
+          echo "FUSE_PORTS_GL=$RUNNER_TEMP/mesa-gl" >> "$GITHUB_ENV"
+          echo "GALLIUM_DRIVER=llvmpipe" >> "$GITHUB_ENV"
+
       - name: Check every port
         run: |
           set -euo pipefail

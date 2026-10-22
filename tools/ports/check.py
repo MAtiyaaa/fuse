@@ -169,6 +169,25 @@ def unpack(archive, kind, name, into):
         raise ValueError(f"a kind of file Fuse doesn't unpack ({kind})")
 
 
+def lend_gl(program, folder=None):
+    """On Windows, the DLLs of the OpenGL in FUSE_PORTS_GL put beside the program, where it brings none of its own.
+
+    A runner with no graphics card has only Windows' own OpenGL 1.1, which a port drawing with OpenGL 3
+    can't start on; the workflow lends it Mesa's software OpenGL instead, as the virtual screen does on
+    Linux. A person's computer has its graphics card's own.
+    """
+    folder = folder if folder is not None else os.environ.get("FUSE_PORTS_GL")
+    if SYSTEM != "windows" or not folder:
+        return []
+    here = os.path.dirname(program)
+    lent = []
+    for name in sorted(os.listdir(folder)):
+        if name.lower().endswith(".dll") and not os.path.exists(os.path.join(here, name)):
+            shutil.copyfile(os.path.join(folder, name), os.path.join(here, name))
+            lent.append(name)
+    return lent
+
+
 def started(program, check, cwd):
     """Starts program as its check says; returns (passed, what was seen)."""
     env = dict(os.environ, APPIMAGE_EXTRACT_AND_RUN="1")
@@ -235,6 +254,7 @@ def check(index_path, out_path, system=SYSTEM, arch="x86_64", allow_file=False):
             if how is None:
                 result.update(passed=False, detail="it has no check")
             else:
+                lend_gl(program)
                 ok, seen = started(program, how, install)
                 result.update(passed=ok, detail=seen)
         except Exception as e:  # every failure is this port's result, never the job's end

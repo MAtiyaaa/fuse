@@ -169,6 +169,41 @@ class EndingTest(unittest.TestCase):
             self.assertIsNone(check.failure_of(1, ""))
 
 
+class LentOpenGLTest(unittest.TestCase):
+    """The runner's software OpenGL, lent to a Windows port that brings none of its own."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp(prefix="fuse-ports-gl-")
+        self.gl = os.path.join(self.dir, "mesa")
+        os.makedirs(self.gl)
+        for name in ("opengl32.dll", "libgallium_wgl.dll", "README.txt"):
+            with open(os.path.join(self.gl, name), "w") as f:
+                f.write("mesa " + name)
+        self.build = os.path.join(self.dir, "build", "bin")
+        os.makedirs(self.build)
+        self.program = os.path.join(self.build, "game.exe")
+        open(self.program, "w").close()
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_its_dlls_go_beside_the_program_on_windows_and_its_own_are_kept(self):
+        with open(os.path.join(self.build, "opengl32.dll"), "w") as f:
+            f.write("its own")
+        with mock.patch.object(check, "SYSTEM", "windows"):
+            self.assertEqual(["libgallium_wgl.dll"], check.lend_gl(self.program, self.gl))
+        with open(os.path.join(self.build, "opengl32.dll")) as f:
+            self.assertEqual("its own", f.read(), "a port's own OpenGL is never replaced")
+        self.assertFalse(os.path.exists(os.path.join(self.build, "README.txt")), "only DLLs are lent")
+
+    def test_nothing_is_lent_on_linux_or_without_a_folder(self):
+        with mock.patch.object(check, "SYSTEM", "linux"):
+            self.assertEqual([], check.lend_gl(self.program, self.gl))
+        with mock.patch.object(check, "SYSTEM", "windows"), mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual([], check.lend_gl(self.program))
+        self.assertEqual(["game.exe"], os.listdir(self.build))
+
+
 def release(tag, *names, draft=False, prerelease=False):
     return {"tag": tag, "draft": draft, "prerelease": prerelease, "assets": [{"name": n, "url": f"https://github.com/o/r/releases/download/{tag}/{n}", "size": 10} for n in names]}
 
