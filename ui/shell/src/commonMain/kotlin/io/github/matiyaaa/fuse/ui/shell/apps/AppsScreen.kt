@@ -346,7 +346,7 @@ fun AppState.appMenu(app: AppCard): ContextMenuSpec {
             if (app.entry.kind == AppKind.PORT) {
                 MenuAction(
                     "plays", if (app.entry.plays == null) "Choose Its Game" else "Change Its Game", FuseIcons.Gamepad,
-                    detail = if (app.entry.plays == null) "The game in your library it plays" else "Play on the game it plays starts it",
+                    detail = if (app.entry.plays == null) "In Ports as a game of its own; or the game in your library it plays, in that game's place" else "Play on the game it plays starts it",
                     onSelect = {
                         closeOverlays()
                         makeAppAPort(app.entry.id, app.entry.displayTitle, app.entry.packageName, ask = true)
@@ -356,7 +356,7 @@ fun AppState.appMenu(app: AppCard): ContextMenuSpec {
                 null
             },
             if (app.entry.kind == AppKind.PORT && app.entry.plays != null) {
-                MenuAction("detach", "Detach From Its Game", FuseIcons.Unlink, detail = "The game plays with its emulator again", onSelect = {
+                MenuAction("detach", "Detach From Its Game", FuseIcons.Unlink, detail = "The game plays with its emulator again, and this is a game of its own in Ports", onSelect = {
                     closeOverlays()
                     scope.launch { ops.setPlays(app.entry.id, null); store.ports.detach(app.entry.id) }
                 })

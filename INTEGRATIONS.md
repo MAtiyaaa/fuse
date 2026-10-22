@@ -805,14 +805,18 @@ was asked; the download when you install.
 the program its own project publishes, played with the person's own copy of the game: Diablo
 through DevilutionX, RollerCoaster Tycoon 2 through OpenRCT2, Fallout 2 through Fallout 2
 Community Edition, and recompilations made from the person's own ROM: Majora's Mask through Zelda
-64: Recompiled. Off until turned on in Settings, Addons, Fuse Ports; nothing is fetched before.
+64: Recompiled. Well over a hundred, each with a build for Linux and for Windows where its project's
+build runs there as published. Off until turned on in Settings, Addons, Fuse Ports; nothing is
+fetched before.
 
 **The list** (`ports/index.json`, `core:model` `Ports.kt`, read by `core:integrations`
 `PortsIndexReader`): each port's builds (system, processor, HTTPS address, size, SHA-256, the kind of
 file and the program inside it), what it needs from the game (`needs`: names, any one of which will
 do, compared as the port itself compares them), how the game's files reach it (by their folder's
 path in its arguments, or an `overlay`), its arguments with `{install}`, `{home}` and `{data:<id>}`,
-where its saves are, and how the nightly check sees it start. Every fact about a port is cited in
+where its saves are, and how the nightly check sees it start. A port that asks for the game itself
+on its first start (a file picker or its own importer, as most recompilations do) has no `data`: its
+`notes` say what it asks for and where it keeps it. Every fact about a port is cited in
 its `source`, from the port's own code and documentation at the version listed. A port that fails a
 check (an id, an address that isn't HTTPS, a missing digest, a path out of its folder, a placeholder
 Fuse doesn't fill) is left out; a list of another format is refused whole.
@@ -830,7 +834,15 @@ a signed list says the nightly check saw exactly this build (by its SHA-256) ins
 HTTPS (each redirect followed by Fuse and checked), compared with the list's size and SHA-256 (any
 other file is deleted, never installed), unpacked by Fuse into a new folder beside the copy in use
 (an AppImage kept as it is and made runnable; zips and tarballs without links of their own, never
-outside their folder, nothing in them run), and only then put in place. Fuse's folder of ports is in
+outside their folder, nothing in them run; the program the list names made runnable, as a zip made
+on Windows keeps no Unix permissions), and only then put in place. An update carries what the port
+wrote in the copy in use into the new one (its `keep` files first, then each file its build didn't
+have, by the list of the build's own files kept at the install, `build.files`, or without one each
+file the new build doesn't have), every move checked; the copy in use is kept until the new one is
+in place, and when any of that fails, everything carried goes back before the new copy is removed,
+so nothing the port wrote goes with it, and no cancel stops it halfway (`carryAndReplace`). A `keep`
+folder is a link into the port's home; when the build has that folder itself, what it holds goes
+into the home, never over a file there, and the link takes its place. Fuse's folder of ports is in
 its own data folder: `ports/<id>/build` (the copy, replaced by an update), `ports/<id>/home` (its
 saves and settings, kept from one version to the next and when the port is removed) and
 `ports/<id>/<id>.fuseport` (how it starts).
@@ -888,12 +900,33 @@ the first time. Read at every start, so a change in Steam counts at once. None o
 now needs it.
 
 **The nightly check** (`.github/workflows/ports.yml`, `tools/ports/check.py`): every night on main
-each port's Linux build is downloaded, checked against the list, unpacked the same way and started
-without the game's files on a virtual screen: DevilutionX and OpenRCT2 print their versions,
-Fallout 2 Community Edition must still be running after five seconds or end by itself, never by a
-crash. The list is then marked with what passed, its revision raised, signed and put on the `ports`
-pre-release (never the latest release, and never taken as a version of Fuse). Windows builds aren't
-checked yet, so they never show as verified.
+each port's Linux build is downloaded on Linux and its Windows build on Windows, checked against the
+list, unpacked the same way and started without the game's files. On Linux it runs on a virtual
+screen with the libraries a desktop has that some ports take from the system (SDL2 and its image and
+mixer libraries, GLEW, OpenGL's own; each such port's notes name them). GitHub's Windows runner has
+no graphics card and only Windows' own OpenGL 1.1, so Mesa's software OpenGL (llvmpipe, from
+pal1000/mesa-dist-win at a pinned version and SHA-256) is put beside each program that brings none of
+its own, as the virtual screen gives it on Linux (`lend_gl`). What a program prints goes to a file,
+never a pipe, so a launcher's game left running never holds the check, and on Windows what a program
+started is ended with it. It
+must print what its entry's `check` expects (DevilutionX and OpenRCT2 print their versions), or still
+be running after the seconds it says, or end by itself. A crash (a signal, or a Windows crash code
+such as 0xC0000005), a library the system lacks (the loader's word, exit 127, or 0xC0000135 for a
+missing DLL) and a program the system can't run are failures, never an ending of its own; on Windows
+no error dialog waits for an answer (`SetErrorMode`). An ending of its own may be an error code: most
+ports end so without the game's files. So a pass says a build installs and starts where it is for,
+never that a game plays, which needs the person's files. On a pull request, a port that didn't pass
+fails its system's check (`check.py gate`); each night the results stand, and only what passed is
+marked verified. A check can say a system's own way where it
+differs (`check.windows`: DevilutionX's Windows build prints nothing to a console). Each Android
+port's APK, the one Fuse would install (the newest release with an APK for an arm64 device, by its
+`asset`, as `ApkPicker` chooses), is downloaded and read by the Android SDK's own tools: apksigner
+must verify its signature, so Android installs it; aapt2 must read it as the list's `package`; and
+its native code, when it has any, must include arm64-v8a. The list is then marked with what passed
+(a build's `verified` for exactly its file, an Android port's `verified` and `verifiedVersion` for
+that night's APK), its revision raised, signed and put on the `ports` pre-release (never the latest
+release, and never taken as a version of Fuse). A night when one system's check didn't finish
+publishes nothing, so the list before it stands, and the issue says which check it was.
 
 **PlayStation 5 games recompiled with AnyPS5** (`core:launch` `AnyPs5Recompile`, `ui:shell`
 `AnyPs5Recompiler`; Linux and Windows): from a PS5 dump's Play With list, and only then. AnyPS5's
@@ -979,7 +1012,12 @@ that takes the game's files from the person's own copy itself, on its first star
 ports for the games in the library, installs one from its project's releases, and attaches it to its
 game (an app of the Type Recomp or Port, `AppKind.PORT`), so Play on the game starts the app in the
 emulator's place (Play With). The time played, Continue Playing and the game's page stay the game's
-own. An app the person installed themselves can be attached the same way.
+own. An app the person installed themselves can be attached the same way, or be a game of its own:
+a Recomp or Port attached to no game (`AppEntry.plays` null) is filed under the Ports system as its
+own game, from the same `app:` path, so it keeps its play time and art when it moves between being
+an Android game, its own port and the way another game plays (`AppStore.syncGames`). Making an app a
+Recomp or Port attaches it only when Fuse knows it for exactly one game of the library; otherwise,
+and with None: Its Own Game in What game is this?, it stays its own game.
 
 **Two lists.** Fuse's own checked entries are the `android` list of `ports/index.json` (signed with
 the rest, `core:model` `AndroidPort`, checked by `androidPortProblem`): each read from the port's own
@@ -1010,6 +1048,12 @@ checked against GitHub's digest, read by Android's package manager, and handed t
 installer, which asks the person (one install at a time, shared with the Store). The package it
 installs as is kept (`ports.androidInstalled`): a later download that is another app is refused.
 
+**Verified.** A checked entry shows Verified when the signed list says the nightly check read its APK
+(see Fuse Ports, the nightly check): the app listed, signed so Android installs it, with code for an
+arm64 device, on that day and of that version; Checked otherwise, and a listing Unchecked. Only a
+signed list's word counts (`PortsIndexReader` drops it from any other), and Play With offers a
+game's verified ports first.
+
 **Playing.** The app attached to a game is kept per game (`ports.androidPlayWith`, this device's
 own) and per app (`app_override.plays_game`). Play then plays the game as the app (`LibraryStore`
 `resolveForPlay`), which `NativeAppAdapter` starts with its launcher intent; a drive that is out or
@@ -1024,9 +1068,15 @@ played, one set of achievements and one page. Besides its own system, it shows i
 Every game's value is in Settings, Addons, Ports; each system's in its own settings; each game's in
 its options (Shows In). Ports Too is the default. The list a game is opened from decides how Play
 starts it (`PlayVia`): from Ports or Android, the port; from its own system, its emulator, as that
-system's emulator choice and the game's own say. The game's page says so ("From Ports, it starts
-in ..."). With Its Own System Only, it shows there alone and Play starts the port chosen in Play
-With, as before. A port that is detached or uninstalled takes the game out of Ports and Android.
+system's emulator choice and the game's own say. Anywhere else (the library, Home, search, and its
+own system under Its Own System Only) it starts as it played the last time Fuse started it here,
+by that session's runner (`android-app` for the app), unless the app was chosen in Play With since
+(`androidPlayWithAt`), and with the app before it was ever played here (`LibraryStore.appFor`). The
+game's page asks the same function, so it always names what Play starts, and follows the app's
+install (`StoreContext.portApps`); it says where the app starts instead ("From Ports, it starts in
+..."). Its cards outside a system's own list (Home's widgets and shelves, the library, search) name
+the system it plays in by the same rule: Ports (or Android) while Play there starts the app, its own
+system while it starts the emulator (`StoreContext.playedAs`); a system's own list keeps its system. A port that is detached or uninstalled takes the game out of Ports and Android.
 
 **Box art and details.** Each port is drawn with its game's box art: the library's own art for
 it once the game is here; else the art Fuse draws for the person's copy on RomM or another device;

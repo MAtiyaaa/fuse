@@ -169,6 +169,13 @@ internal class AndroidPortsStore(
         ctx.scope.launch { jobs.drop(1).collect { publish() } }
         ctx.scope.launch { combine(found, bringing) { _, _ -> }.drop(1).collect { publish() } }
         ctx.scope.launch { places().collect { p -> ctx.portPlaces.value = p; if (p.isNotEmpty()) ctx.shownPlatforms.update { it + p.values } } }
+        // The app each game plays with, while it is installed, so what a game's page says follows it.
+        ctx.scope.launch {
+            combine(ctx.settings.map { it.ports.androidPlayWith }.distinctUntilChanged(), apps.installedApps) { chosen, installed ->
+                val byId = installed.associateBy { it.id }
+                chosen.mapNotNull { (k, appId) -> k.toLongOrNull()?.let(::GameId)?.let { g -> byId[appId]?.let { g to it.displayTitle } } }.toMap()
+            }.distinctUntilChanged().collect { ctx.portApps.value = it }
+        }
         ctx.scope.launch {
             ctx.settings.map { it.ports.androidPlayWith to it.ports.androidInstalled }.distinctUntilChanged().drop(1).collect { publish() }
         }
@@ -426,7 +433,13 @@ internal class AndroidPortsStore(
 
     override suspend fun setAndroidPlayWith(game: GameId, appId: String?) = write { s ->
         val key = game.value.toString()
-        s.copy(ports = s.ports.copy(androidPlayWith = if (appId == null) s.ports.androidPlayWith - key else s.ports.androidPlayWith + (key to appId)))
+        s.copy(
+            ports = s.ports.copy(
+                androidPlayWith = if (appId == null) s.ports.androidPlayWith - key else s.ports.androidPlayWith + (key to appId),
+                // When it was chosen: Play from outside a system starts it, though the game played with its emulator before.
+                androidPlayWithAt = if (appId == null) s.ports.androidPlayWithAt - key else s.ports.androidPlayWithAt + (key to ctx.now()),
+            ),
+        )
     }
 
     /**

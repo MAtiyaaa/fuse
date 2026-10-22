@@ -118,6 +118,12 @@ object PortPlan {
     /** The overlay's own folders, relative to where it goes (each made a link into the home, there or not in the person's folder). */
     fun ownFolders(own: List<String>): List<String> = own.filter { it.endsWith("/") }.map { it.trim('/') }
 
+    /** The folder [build]'s program is in, relative to its copy: empty when it is at the top. */
+    fun programFolder(build: PortBuild): String = build.run.substringBeforeLast('/', "")
+
+    /** [Port.keep]'s files (not its folders), carried from the old copy to the new one on an update. */
+    fun keptFiles(keep: List<String>): List<String> = keep.filter { !it.endsWith("/") }.map { it.trim('/') }
+
     /**
      * How [port]'s [build] starts in [layout] with the person's folders by data id ([folders]): the
      * program and its arguments with every placeholder filled, from the build's own folder (a port

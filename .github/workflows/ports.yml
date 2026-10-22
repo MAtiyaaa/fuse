@@ -1,12 +1,15 @@
-# Fuse Ports' nightly check: every port's Linux build in ports/index.json is downloaded, compared
-# with the list's size and SHA-256, unpacked the way Fuse unpacks it, and started without the
-# game's files (tools/ports/check.py). Each night on main, the list is then marked with what
-# passed and signed with the Ed25519 key in the PORTS_SIGNING_KEY secret, and put on the `ports`
-# pre-release, where Fuse looks for it. Without the secret, nothing is signed or published, and the
-# summary says so. When a port didn't start (or the check didn't finish), the night's run opens an
-# issue labelled ports-broken, or adds to the one open, and closes it once every port starts again.
-# On a pull request that changes the list or the tool, only the check runs. The native job checks
-# the PlayStation ports Fuse finds (ports/native.json) the same nights.
+# Fuse Ports' nightly check (tools/ports/check.py): every port's Linux build in ports/index.json on
+# Linux, and its Windows build on Windows, is downloaded, compared with the list's size and SHA-256,
+# unpacked the way Fuse unpacks it, and started without the game's files; every Android port's APK,
+# the one Fuse installs, is read by Android's own tools (its signature, its package, its code for
+# an arm64 device). Each night on main, the list is then marked with what passed and signed with
+# the Ed25519 key in the PORTS_SIGNING_KEY secret, and put on the `ports` pre-release, where Fuse
+# looks for it. Without the secret, nothing is signed or published, and the summary says so. When
+# a port didn't pass (or a check didn't finish), the night's run opens an issue labelled
+# ports-broken, or adds to the one open, and closes it once every port passes again. On a pull
+# request that changes the list or the tool, only the checks run, and each fails when any of its
+# ports didn't pass. The native job checks the PlayStation ports Fuse finds (ports/native.json) the
+# same nights.
 
 name: Ports
 
@@ -31,17 +34,23 @@ jobs:
   check:
     name: Every port installs and starts
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - name: Check out
         uses: actions/checkout@v7
 
-      # A virtual screen for the ports that open a window, and SDL2, which fallout2-ce takes from the system.
-      - name: Install a virtual screen and SDL2
+      # A virtual screen for the ports that open a window, with Mesa's software Vulkan beside its
+      # OpenGL (the Godot ports draw with Vulkan), and the libraries a desktop has that some ports
+      # take from the system (each such port's notes name them): SDL2 and its image and mixer
+      # libraries (fallout2-ce, fheroes2, Julius), GLEW and Theora (the RSDK decompilations), OpenAL
+      # (Arx Libertatis, dhewm 3, openQ4), X11's keyboard library (wc1-modern, wc2-modern) and
+      # OpenGL's own library (the recompilations' runtimes).
+      - name: Install a virtual screen and a desktop's libraries
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y xvfb libsdl2-2.0-0 libsdl2-image-2.0-0
+          sudo apt-get install -y xvfb mesa-vulkan-drivers libsdl2-2.0-0 libsdl2-image-2.0-0 libsdl2-mixer-2.0-0 \
+            libglew2.2 libtheora0 libopenal1 libxkbcommon-x11-0 libopengl0
 
       - name: Test the check itself
         working-directory: tools/ports
@@ -52,21 +61,104 @@ jobs:
           set -euo pipefail
           mkdir -p build/ports
           xvfb-run -a python3 tools/ports/check.py check --index ports/index.json --out build/ports/results-linux.json
-          python3 - <<'EOF'
-          import json
-          r = json.load(open("build/ports/results-linux.json"))
-          lines = ["| Port | Started | What was seen |", "|---|---|---|"]
-          lines += [f"| {k} | {'yes' if v['passed'] else 'no'} | {v['detail'].replace('|', '/')} |" for k, v in sorted(r.items())]
-          open(__import__("os").environ["GITHUB_STEP_SUMMARY"], "a").write("\n".join(lines) + "\n")
-          EOF
+          python3 tools/ports/summary.py build/ports/results-linux.json Started >> "$GITHUB_STEP_SUMMARY"
 
       - name: Keep the results
         uses: actions/upload-artifact@v7
         with:
-          name: ports-results
+          name: ports-results-linux
           path: build/ports/results-linux.json
           if-no-files-found: error
           retention-days: 14
+
+      # On a pull request every port must pass, so one that doesn't is fixed or taken out before the
+      # list merges; each night the results stand, and only what passed is marked verified.
+      - name: Every port passed
+        if: github.event_name == 'pull_request'
+        run: python3 tools/ports/check.py gate --results build/ports/results-linux.json
+
+  # The same check of every port's Windows build, on Windows.
+  check-windows:
+    name: Every port installs and starts on Windows
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Test the check itself
+        working-directory: tools/ports
+        run: python -m unittest discover -s tests -v
+
+      # The runner has no graphics card, and Windows' own OpenGL on it is 1.1, which a port drawing
+      # with OpenGL 3 can't start on. Mesa's software OpenGL (llvmpipe), what the virtual screen gives
+      # the Linux check, is lent to each port the check starts (check.py lend_gl).
+      - name: Get Mesa's software OpenGL
+        run: |
+          set -euo pipefail
+          curl -sSL -o "$RUNNER_TEMP/mesa.7z" https://github.com/pal1000/mesa-dist-win/releases/download/26.2.2/mesa3d-26.2.2-release-msvc.7z
+          echo "0f21394d44036019bb5c07a3788dd278fd7b7b3469077a4686f0d639e8e874a1  $RUNNER_TEMP/mesa.7z" | sha256sum -c -
+          7z x "$RUNNER_TEMP/mesa.7z" -o"$RUNNER_TEMP/mesa" -y > /dev/null
+          mkdir -p "$RUNNER_TEMP/mesa-gl"
+          cp "$RUNNER_TEMP/mesa/x64/opengl32.dll" "$RUNNER_TEMP/mesa/x64/libgallium_wgl.dll" "$RUNNER_TEMP/mesa-gl/"
+          echo "FUSE_PORTS_GL=$RUNNER_TEMP/mesa-gl" >> "$GITHUB_ENV"
+          echo "GALLIUM_DRIVER=llvmpipe" >> "$GITHUB_ENV"
+
+      - name: Check every port
+        run: |
+          set -euo pipefail
+          mkdir -p build/ports
+          python tools/ports/check.py check --index ports/index.json --out build/ports/results-windows.json
+          python tools/ports/summary.py build/ports/results-windows.json Started >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the results
+        uses: actions/upload-artifact@v7
+        with:
+          name: ports-results-windows
+          path: build/ports/results-windows.json
+          if-no-files-found: error
+          retention-days: 14
+
+      # On a pull request every port must pass, so one that doesn't is fixed or taken out before the
+      # list merges; each night the results stand, and only what passed is marked verified.
+      - name: Every port passed
+        if: github.event_name == 'pull_request'
+        run: python tools/ports/check.py gate --results build/ports/results-windows.json
+
+  # Every Android port's APK, the one Fuse installs, read by the Android SDK's aapt2 and apksigner.
+  check-android:
+    name: Every Android port's APK is the app Fuse lists
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Check every Android port
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/ports
+          python3 tools/ports/check.py android --index ports/index.json --out build/ports/results-android.json
+          python3 tools/ports/summary.py build/ports/results-android.json Passed >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the results
+        uses: actions/upload-artifact@v7
+        with:
+          name: ports-results-android
+          path: build/ports/results-android.json
+          if-no-files-found: error
+          retention-days: 14
+
+      # On a pull request every port must pass, so one that doesn't is fixed or taken out before the
+      # list merges; each night the results stand, and only what passed is marked verified.
+      - name: Every port passed
+        if: github.event_name == 'pull_request'
+        run: python3 tools/ports/check.py gate --results build/ports/results-android.json
 
   # The PlayStation games' native ports Fuse finds (ports/native.json): each project's newest release
   # still has its builds by name, and its zips still hold the files Fuse finds the port by. Apart
@@ -125,7 +217,7 @@ jobs:
 
   report:
     name: Open an issue when a port breaks
-    needs: check
+    needs: [check, check-windows, check-android]
     if: always() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -136,12 +228,13 @@ jobs:
       - name: Check out
         uses: actions/checkout@v7
 
-      # Missing when the check didn't finish, which the issue then says.
+      # A system's results are missing when its check didn't finish, which the issue then says.
       - name: Get the results
         continue-on-error: true
         uses: actions/download-artifact@v8
         with:
-          name: ports-results
+          pattern: ports-results-*
+          merge-multiple: true
           path: build/ports
 
       - name: Open, add to or close the issue
@@ -151,22 +244,23 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build/ports
-          python3 tools/ports/check.py report --results build/ports/results-linux.json --out build/ports/issue.md --run-url "$RUN_URL"
+          python3 tools/ports/check.py report --results build/ports/results-linux.json build/ports/results-windows.json build/ports/results-android.json --out build/ports/issue.md --run-url "$RUN_URL"
           open=$(gh issue list --state open --label ports-broken --json number --jq '.[0].number // empty')
           if [ -s build/ports/issue.md ]; then
             if [ -n "$open" ]; then
               gh issue comment "$open" --body-file build/ports/issue.md
             else
-              gh label create ports-broken --color B60205 --description "A port didn't start in the nightly check" 2>/dev/null || true
-              gh issue create --title "A port didn't start in the nightly check" --label ports-broken --body-file build/ports/issue.md
+              gh label create ports-broken --color B60205 --description "A port didn't pass the nightly check" 2>/dev/null || true
+              gh issue create --title "A port didn't pass the nightly check" --label ports-broken --body-file build/ports/issue.md
             fi
           elif [ -n "$open" ]; then
-            gh issue close "$open" --comment "Every port started again in the nightly check: $RUN_URL"
+            gh issue close "$open" --comment "Every port passed the nightly check again: $RUN_URL"
           fi
 
+  # Only when every system's check finished: a night one didn't keeps the list published before it.
   publish:
     name: Sign and publish the list
-    needs: check
+    needs: [check, check-windows, check-android]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -179,7 +273,8 @@ jobs:
       - name: Get the results
         uses: actions/download-artifact@v8
         with:
-          name: ports-results
+          pattern: ports-results-*
+          merge-multiple: true
           path: build/ports
 
       - name: Mark and sign the list
@@ -188,7 +283,7 @@ jobs:
           PORTS_SIGNING_KEY: ${{ secrets.PORTS_SIGNING_KEY }}
         run: |
           set -euo pipefail
-          python3 tools/ports/check.py publish --index ports/index.json --results build/ports/results-linux.json --out build/ports/out
+          python3 tools/ports/check.py publish --index ports/index.json --results build/ports/results-linux.json build/ports/results-windows.json build/ports/results-android.json --out build/ports/out
           if [ -f build/ports/out/index.json.sig ]; then
             echo "signed=true" >> "$GITHUB_OUTPUT"
           else

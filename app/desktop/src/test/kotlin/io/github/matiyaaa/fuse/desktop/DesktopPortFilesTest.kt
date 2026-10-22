@@ -41,13 +41,16 @@ class DesktopPortFilesTest {
         val text = assertNotNull(files().bundledIndex(), "ports/index.json is in the build")
         val list = PortsIndexReader.read(text).getOrThrow()
         assertEquals(emptyMap(), list.skipped, "no port in Fuse's own list fails a check")
-        assertEquals(listOf("devilutionx", "openrct2", "fallout2-ce", "zelda64recomp", "banjorecomp"), list.index.ports.map { it.id })
+        val ids = list.index.ports.map { it.id }
+        assertEquals(ids.distinct(), ids, "each port is listed once")
         for (p in list.index.ports) {
-            assertTrue(p.builds.any { it.os == "linux" }, "${p.id} runs on Linux")
-            // Windows too, unless the port keeps its files where Fuse doesn't set it up there, and says so.
+            // On Linux and Windows, unless one system's build can't run as it's published there, and the port says so.
+            assertTrue(p.builds.any { it.os == "linux" } || p.notes.any { "Windows only" in it }, "${p.id} runs on Linux or says why not")
             assertTrue(p.builds.any { it.os == "windows" } || p.notes.any { "Linux only" in it }, "${p.id} runs on Windows or says why not")
             assertTrue(p.builds.all { it.verified == null }, "only the nightly job says a build is verified")
-            assertTrue(p.source.isNotBlank() && p.data.isNotEmpty(), "${p.id} says where its facts are from and what it needs")
+            assertTrue(p.source.isNotBlank(), "${p.id} says where its facts are from")
+            // What it needs from the person: a folder or ROM Fuse hands it, or its own asking for them, in its notes.
+            assertTrue(p.data.isNotEmpty() || p.notes.any { "your" in it && ("asks" in it || "takes" in it || "needs" in it) }, "${p.id} says what it needs")
         }
     }
 

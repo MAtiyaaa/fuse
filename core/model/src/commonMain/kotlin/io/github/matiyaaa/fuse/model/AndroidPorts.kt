@@ -44,6 +44,14 @@ data class AndroidPort(
     val source: String? = null,
     /** True for an entry of Fuse's own list, read from the port's source. */
     val checked: Boolean = false,
+    /**
+     * The day Fuse's nightly check last read this port's APK, the one Fuse installs, and found it the
+     * app listed ([packageName]), signed so Android installs it, with code for an arm64 device; only
+     * believed from a signed list, as a computer's port's verified build is.
+     */
+    val verified: String? = null,
+    /** The version of the APK [verified] was for, as the app names it ("1.2.0"). */
+    val verifiedVersion: String? = null,
     /** True when Open Ports Games marks it verified. */
     val listedVerified: Boolean = false,
     /** Who published the original game, as its listing names them ("Nintendo"). */

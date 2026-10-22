@@ -54,6 +54,14 @@ data class Port(
     val env: Map<String, String> = emptyMap(),
     /** Where the port keeps its saves, relative to its home ([PortTokens.HOME]); null when it keeps none there. */
     val saves: String? = null,
+    /**
+     * What the port writes beside its own program, relative to the program's folder (a folder ends
+     * with `/`): each folder is a link to the same path in its home, so what it writes there (its
+     * saves, often) outlives an update and a reinstall; each file (its settings) is carried from the
+     * old copy to the new one on an update. For a port that keeps everything beside itself and takes
+     * no folder of the person's to lay its own paths over ([PortOverlay.own]).
+     */
+    val keep: List<String> = emptyList(),
     /** How the nightly check sees it start ([PortCheck]); null when it isn't checked. */
     val check: PortCheck? = null,
     /** What to know before playing, in the port's own terms. */
@@ -166,10 +174,17 @@ data class PortOverlay(val into: String = "", val own: List<String> = emptyList(
 /**
  * How the nightly check sees a port start without the game's files: run with [args], it prints
  * something matching [expect] (a regular expression) and ends; or, with [stay], it is still running
- * after that many seconds, or ended by itself without crashing.
+ * after that many seconds, or ended by itself without crashing. [linux] and [windows] are that
+ * system's own way where it differs (a Windows build that prints nothing to a console).
  */
 @Serializable
-data class PortCheck(val args: List<String> = emptyList(), val expect: String? = null, val stay: Int? = null)
+data class PortCheck(
+    val args: List<String> = emptyList(),
+    val expect: String? = null,
+    val stay: Int? = null,
+    val linux: PortCheck? = null,
+    val windows: PortCheck? = null,
+)
 
 /** The placeholders [Port.args] may use. */
 object PortTokens {

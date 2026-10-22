@@ -233,7 +233,7 @@ private fun shownPorts(state: AndroidPortsState, filter: PortFilter, query: Stri
             // This device's games first, then those on RomM or another device.
             { if (it.here) 0 else if (it.elsewhere.isNotEmpty() || it.bringing != null) 1 else 2 },
             { if (it.installed) 0 else 1 },
-            { if (it.port.checked) 0 else 1 },
+            { if (it.port.verified != null) 0 else if (it.port.checked) 1 else 2 },
             { it.port.game.lowercase() },
             { it.port.status.ordinal },
         ),
@@ -259,11 +259,15 @@ private fun Header(state: AndroidPortsState, actions: List<TopAction>, inHead: B
         Column(Modifier.weight(1f)) {
             FText("Games rebuilt for Android", if (compact) Fuse.type.titleSmall else Fuse.type.title, maxLines = 1)
             val checked = state.ports.count { it.port.checked }
+            val verified = state.ports.count { it.port.verified != null }
             val line = when {
                 !state.loaded -> "Reading the lists of ports..."
                 state.refreshing -> "Looking for newer lists..."
                 state.problem != null -> "${state.problem} The lists Fuse has are shown."
-                else -> listOfNotNull("${state.ports.size} ports", "$checked checked by Fuse", state.listedAt?.let { "Open Ports Games, $it" }).joinToString("  ·  ")
+                else -> listOfNotNull(
+                    "${state.ports.size} ports", "$checked checked by Fuse", verified.takeIf { it > 0 }?.let { "$it verified" },
+                    state.listedAt?.let { "Open Ports Games, $it" },
+                ).joinToString("  ·  ")
             }
             FText(line, Fuse.type.caption, color = if (state.problem != null) c.warning else c.textMuted, maxLines = 1)
         }
@@ -346,7 +350,11 @@ private fun AndroidPortCard(app: AppState, v: AndroidPortView, selected: Boolean
             Row(verticalAlignment = Alignment.CenterVertically) {
                 FText(p.game, if (compact) Fuse.type.bodyStrong else Fuse.type.titleSmall, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
                 Spacer(Modifier.width(Space.s))
-                if (p.checked) Chip(FuseIcons.ShieldCheck, "Checked", c.success) else Chip(FuseIcons.ShieldAlert, "Unchecked", c.warning)
+                when {
+                    p.verified != null -> Chip(FuseIcons.ShieldCheck, "Verified", c.success)
+                    p.checked -> Chip(FuseIcons.ShieldCheck, "Checked", c.accent)
+                    else -> Chip(FuseIcons.ShieldAlert, "Unchecked", c.warning)
+                }
             }
             // The game: its system, year, publisher and genre.
             val facts = listOfNotNull(systems.ifEmpty { null }, p.year?.toString(), p.publisher, p.genre?.let(::genreWord)).joinToString("  ·  ")
@@ -405,8 +413,8 @@ private fun Credit() {
         FuseIcon(FuseIcons.Info, size = Size.iconS, tint = c.textFaint)
         Spacer(Modifier.width(Space.s))
         FText(
-            "${OpenPorts.CREDIT}. Fuse checked the ones marked Checked against each project's own source; the rest are as listed. Each app comes from its own project's releases, and takes your game's files itself.",
-            Fuse.type.caption, color = c.textFaint, maxLines = 4,
+            "${OpenPorts.CREDIT}. Fuse checked the ones marked Checked against each project's own source, and each night reads the APK it would install of the ones marked Verified: the app listed, signed, made for this kind of device. The rest are as listed. Each app comes from its own project's releases, and takes your game's files itself.",
+            Fuse.type.caption, color = c.textFaint, maxLines = 5,
         )
     }
 }
@@ -665,7 +673,11 @@ private fun AppState.portMenu(v: AndroidPortView): ContextMenuSpec {
         title = p.game,
         subtitle = listOfNotNull(
             p.name,
-            if (p.checked) "checked by Fuse" else "listed by Open Ports Games, unchecked",
+            when {
+                p.verified != null -> "verified ${p.verified}" + (p.verifiedVersion?.let { ", version $it" } ?: "")
+                p.checked -> "checked by Fuse"
+                else -> "listed by Open Ports Games, unchecked"
+            },
             p.licence,
             v.cover?.let { _ -> p.coverCredit?.let { "box art: $it" } },
         ).joinToString("  ·  "),

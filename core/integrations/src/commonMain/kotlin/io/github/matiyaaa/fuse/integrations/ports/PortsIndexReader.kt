@@ -63,6 +63,9 @@ object PortsIndexReader {
             port.takeIf { problem == null }?.copy(
                 checked = true,
                 listedVerified = false,
+                // The nightly check's word is only a signed list's.
+                verified = port.verified.takeIf { signature != null },
+                verifiedVersion = port.verifiedVersion.takeIf { signature != null && port.verified != null },
                 cover = cover,
                 coverCredit = port.coverCredit.takeIf { cover != null },
                 screenshot = AndroidPorts.picture(port.screenshot),
@@ -102,6 +105,7 @@ object PortsIndexReader {
         }
         if (port.data.count { it.overlay != null } > 1) return "it links more than one folder in"
         port.saves?.let { if (it.isNotEmpty() && !safe(it)) return "its saves would go outside it" }
+        if (port.keep.any { !safe(it.trimEnd('/')) }) return "what it keeps would go outside it"
         if (port.env.keys.any { !ENV.matches(it) }) return "it names a variable oddly"
         for (arg in port.args + port.env.values) {
             for (m in PLACEHOLDER.findAll(arg)) {
@@ -111,7 +115,7 @@ object PortsIndexReader {
                 if (!known) return "its command names $token, which Fuse doesn't fill"
             }
         }
-        port.check?.expect?.let { if (runCatching { Regex(it) }.isFailure) return "its check can't be read" }
+        listOfNotNull(port.check, port.check?.linux, port.check?.windows).mapNotNull { it.expect }.forEach { if (runCatching { Regex(it) }.isFailure) return "its check can't be read" }
         port.settings?.let { st ->
             val inside = listOf(PortTokens.HOME, PortTokens.INSTALL).firstOrNull { st.file.startsWith("$it/") }?.let { st.file.removePrefix("$it/") }
             if (inside == null || !safe(inside)) return "its settings file would be outside it"

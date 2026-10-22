@@ -416,6 +416,12 @@ interface PortFiles {
     suspend fun unpack(archive: String, kind: PortFileKind, name: String, into: String)
 
     /**
+     * Makes [path], the program a build's list names, runnable where a system asks for it (an
+     * archive made on Windows keeps no Unix permissions); false when it couldn't.
+     */
+    suspend fun makeRunnable(path: String): Boolean = true
+
+    /**
      * Links [target] (one of the person's files or folders) at [at], in Fuse's folder. Null when
      * linked, else why it couldn't be (Windows lets programs link files only in Developer Mode).
      */

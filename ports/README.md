@@ -10,7 +10,11 @@ game. Fuse carries this file inside every build. What Fuse does with it is in
 A port belongs here when its project publishes builds for Linux and Windows (x86_64) and it plays
 a game from the person's own files, without them nothing; a recompilation made from one ROM (`rom`
 in its `data`) may be Linux only where it keeps its files in the person's own folders on Windows,
-and says so in its `notes`. For each one:
+and says so in its `notes` ("Linux only"). A port whose build for one system can't run as it is
+published there (a newer system library than most have) lists the other one and says so ("Windows
+only"). A build that starts only with a library most desktops have but its project doesn't ship
+(SDL2_mixer, GLEW) names it in its `notes`, and the library goes in the Linux check's packages in
+`.github/workflows/ports.yml`. For each one:
 
 1. Read the port's own code and documentation at the release you list, and cite every fact in its
    `source` (the file and function): where it reads the game's files, how it is given a folder,
@@ -21,7 +25,9 @@ and says so in its `notes`. For each one:
 3. Say what it needs from the game (`needs`, each a list of names any one of which will do; `exact`
    when the port reads the names exactly as written) and how they reach it: a placeholder
    `{data:<id>}` in `args` when it takes a folder by its path, else an `overlay` with every path it
-   writes in `own` (folders end with `/`).
+   writes in `own` (folders end with `/`). A port that asks for the game itself on its first start
+   (a file picker or its own importer, as most recompilations do) has no `data`: its `notes` say
+   what it asks for and where it keeps it.
 4. Keep its saves and settings in its home: `{home}/...` in `args`, and `saves` relative to it.
 5. Give it a `check` the nightly job can run without the game's files: `args` and the `expect`ed
    output (a regular expression), or `stay` seconds it keeps running.

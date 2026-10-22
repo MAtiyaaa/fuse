@@ -105,6 +105,11 @@ internal class DesktopPortFiles(
         }
     }
 
+    override suspend fun makeRunnable(path: String): Boolean = withContext(Dispatchers.IO) {
+        val file = File(path)
+        system == DesktopOs.WINDOWS || file.canExecute() || file.setExecutable(true, false)
+    }
+
     /** A zip unpacked as it is: each file keeps the runnable bit its zip gives it, and nothing lands outside [into]. */
     private fun unzip(zip: File, into: File) {
         val base = into.canonicalFile.toPath()

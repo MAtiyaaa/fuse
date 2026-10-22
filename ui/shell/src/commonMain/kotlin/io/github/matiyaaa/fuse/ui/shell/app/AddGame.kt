@@ -66,7 +66,7 @@ fun AppState.appKindPicker(app: AppCard) {
         ) + listOfNotNull(
             // Android: a recomp or port of a game in the library, which Play on that game starts.
             if (store.ports.androidApps) {
-                MenuAction("port", "Recomp or Port", FuseIcons.Boxes, detail = "Of a game in your library: Play on that game starts it", trailing = Trailing.Check(entry.kind == AppKind.PORT), onSelect = {
+                MenuAction("port", "Recomp or Port", FuseIcons.Boxes, detail = "A game of its own in Ports, or played in a game's place", trailing = Trailing.Check(entry.kind == AppKind.PORT), onSelect = {
                     choice = null
                     makeAppAPort(entry.id, entry.displayTitle, entry.packageName)
                 })
@@ -300,7 +300,7 @@ private fun AppState.whatIsNewApp(label: String, packageName: String) {
             MenuAction("game", "Game", FuseIcons.Gamepad, detail = if (store.apps.gamesInLibrary) "Joins the Android system with box art, details and play time" else "Lists under Games in Apps", trailing = Trailing.Check(true), onSelect = { said(AppKind.GAME) }),
         ) + listOfNotNull(
             if (store.ports.androidApps) {
-                MenuAction("port", "Recomp or Port", FuseIcons.Boxes, detail = "Of a game in your library: Play on that game starts it", onSelect = {
+                MenuAction("port", "Recomp or Port", FuseIcons.Boxes, detail = "A game of its own in Ports, or played in a game's place", onSelect = {
                     choice = null
                     portForInstall(label, packageName)
                 })
@@ -318,7 +318,11 @@ private fun AppState.whatIsNewApp(label: String, packageName: String) {
 
 /** "What game is this?" for a recomp or port Android is installing, attached to the game once it is in. */
 private fun AppState.portForInstall(label: String, packageName: String) {
-    pickPortGame(label, packageName) { g ->
+    val alone: suspend () -> Unit = {
+        store.apps.expect(packageName, AppKind.PORT, null)
+        toasts.show("$label is in Ports as a game of its own once Android has installed it", ToastKind.SUCCESS, icon = FuseIcons.Boxes)
+    }
+    pickPortGame(label, packageName, alone = alone) { g ->
         store.ports.attachOnceInstalled(packageName, g.id)
         toasts.show("${g.title} plays with $label once Android has installed it", ToastKind.SUCCESS, icon = FuseIcons.Boxes)
     }
