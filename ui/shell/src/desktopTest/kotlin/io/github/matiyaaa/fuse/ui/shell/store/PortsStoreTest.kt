@@ -282,7 +282,9 @@ class PortsStoreTest {
 
         // Nothing chosen: installing finds the one copy in the library and sets the port up with it.
         store.ports.install("skyport")
+        // Set up first, then the copy recorded as the game the port plays: both, before looking.
         store.until("set up by itself") { it.port("skyport")?.ready == true }
+        withTimeout(20_000) { while ("skyport" !in services.data.settings.current().ports.copies) delay(25) }
         assertEquals(dos.value, services.data.settings.current().ports.copies["skyport"])
         assertEquals(game.absolutePath.replace('\\', '/'), services.data.settings.current().ports.folders["skyport"]?.get("game"))
     }
