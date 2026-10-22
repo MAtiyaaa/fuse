@@ -616,7 +616,7 @@ private fun AppState.doNext(v: PortView) {
  * Asks for [v]'s game files [dataId] and sets the port up with them: the person's copy already in
  * the library, when one has what the port needs, or a folder they pick.
  */
-private fun AppState.choosePortFolder(v: PortView, dataId: String) {
+private fun AppState.choosePortFolder(v: PortView, dataId: String, ask: Boolean = false) {
     val data = v.port.data.firstOrNull { it.id == dataId } ?: return
     fun said(problem: String?) {
         if (problem == null) toasts.show("${v.port.game} reads its files from there", ToastKind.SUCCESS, icon = FuseIcons.FolderOpen)
@@ -633,6 +633,13 @@ private fun AppState.choosePortFolder(v: PortView, dataId: String) {
         val away = if (copies.isEmpty()) store.ports.copiesElsewhere(v.port.id, dataId) else emptyList()
         if (copies.isEmpty() && away.isEmpty()) {
             pick()
+            return@launch
+        }
+        // One copy in the library: used at once, nothing to choose (Options still picks another).
+        copies.singleOrNull()?.takeIf { away.isEmpty() && !ask }?.let { c ->
+            val problem = store.ports.useCopy(v.port.id, dataId, c)
+            if (problem == null) toasts.show("${v.port.game} uses your copy in the library: ${c.title}", ToastKind.SUCCESS, icon = FuseIcons.FolderOpen)
+            else toasts.show(problem, ToastKind.WARNING)
             return@launch
         }
         val elsewhere = if (away.isNotEmpty()) " Yours is on ${away.map { it.from }.distinct().joinToString(" and ")}: Fuse can bring it here, and ${v.port.name} reads it once it's in." else ""
@@ -689,7 +696,7 @@ private fun AppState.portMenu(v: PortView): ContextMenuSpec {
             if (next(v)?.first == "Choose Files" && chosen == null && v.port.data.size == 1) continue
             add(MenuAction("data.${d.id}", if (chosen == null) "Choose ${d.name}" else "Choose Another Folder", FuseIcons.FolderOpen, detail = chosen ?: d.about, onSelect = {
                 closeOverlays()
-                choosePortFolder(v, d.id)
+                choosePortFolder(v, d.id, ask = true)
             }))
         }
         v.game?.let { g -> add(MenuAction("page", "Open Its Page", FuseIcons.Info, detail = "Steam, play time and saves, as for every game", onSelect = { closeOverlays(); go(Route.GameInfo(g)) })) }

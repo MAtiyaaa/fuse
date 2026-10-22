@@ -66,12 +66,26 @@ fun rememberLoopClock(label: String = "LoopClock", decorative: Boolean = true): 
         // Time held still while the person is doing something ([FramePacing.decorationHeld]): the
         // loop carries on from where it paused, never jumping ahead.
         var held = 0L
-        var last = 0L
-        runFrames(Long.MAX_VALUE) { play ->
-            val step = play - last
-            last = play
-            if (clock.decorative && FramePacing.decorationHeld(source = source)) held += step
-            else if (!clock.decorative || FramePacing.shouldDrawDecoration(source)) clock.playNanos = from + play - held
+        var played = 0L
+        val scale = kotlin.coroutines.coroutineContext[androidx.compose.ui.MotionDurationScale]?.scaleFactor ?: 1f
+        if (scale == 0f) return@LaunchedEffect
+        var lastFrame = Long.MIN_VALUE
+        while (true) {
+            // A decorative loop paused by the app (a game running, Fuse behind another window, the
+            // device asleep) takes no frames at all: asking for every one only to skip it kept the
+            // processor waking at the screen's full rate under every game. It carries on from there.
+            if (clock.decorative && FramePacing.decorationRate == DecorationRate.PAUSED) {
+                FramePacing.awaitDecoration()
+                lastFrame = Long.MIN_VALUE
+            }
+            frame(true) { now ->
+                FramePacing.frameAt(now, source)
+                val step = if (lastFrame == Long.MIN_VALUE) 0L else ((now - lastFrame) / scale).toLong()
+                lastFrame = now
+                played += step
+                if (clock.decorative && FramePacing.decorationHeld(source = source)) held += step
+                else if (!clock.decorative || FramePacing.shouldDrawDecoration(source)) clock.playNanos = from + played - held
+            }
         }
     }
     return clock

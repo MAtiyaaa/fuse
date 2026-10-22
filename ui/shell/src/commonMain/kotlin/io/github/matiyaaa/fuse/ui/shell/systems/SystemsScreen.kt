@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -141,6 +142,8 @@ fun SystemsScreen(app: AppState) {
     val streamPrefs by remember(app.store) { app.store.prefs.map { it.streaming } }.collectAsState(app.store.prefs.value.streaming)
     val systems = platforms.filter { it.gameCount > 0 } + listOfNotNull(streamSystem(app, streamPrefs))
     var chosen by remember { mutableStateOf<String?>(null) }
+    // The row of the board the chosen system is on: past the first, a short screen folds the header.
+    var chosenRow by remember { mutableIntStateOf(0) }
     val current = systems.firstOrNull { it.platform.id.value == chosen } ?: systems.firstOrNull()
     // What has been played on the chosen system here, named with it so another system's never shows.
     val currentId = current?.platform?.id?.takeIf { it != STREAM_SYSTEM }
@@ -151,7 +154,7 @@ fun SystemsScreen(app: AppState) {
     // On a two-screen device the board is kept once with the menus on top and once with them below.
     val twoScreens = app.platform.features.secondScreen || app.menusOnSecondScreen
     val looks = remember(twoScreens, app.menusOnSecondScreen) { SystemsLooks(twoScreens, app.menusOnSecondScreen) }
-    val space = remember(systems, looks) { SystemsSpace(app, systems, looks) { w -> chosen = w?.target } }
+    val space = remember(systems, looks) { SystemsSpace(app, systems, looks) { w -> chosen = w?.target; chosenRow = w?.row ?: 0 } }
 
     // Logos and art panels of the systems are decoded ahead, so the header never waits.
     val index = systems.indexOf(current).coerceAtLeast(0)
@@ -167,6 +170,11 @@ fun SystemsScreen(app: AppState) {
         if (current?.art?.hero == null) SystemShowcase(current, Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(maxHeight * 0.46f))
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight + if (compactHeader) Space.s else Space.xl))
+            // On a short screen (a handheld's lower screen) the header shrinks to one line once you are
+            // past the board's first row, so more systems fit; back on the first row it opens again.
+            val headerFold by io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat(
+                if (compactHeader && chosenRow > 0) 1f else 0f, Fuse.motion.followSpring(), label = "systems header fold",
+            )
             // On a short screen the header folds away while systems are arranged, so the board has the room.
             io.github.matiyaaa.fuse.ui.fuseline.Appear(
                 !(compactHeader && looks.arranging),
@@ -175,6 +183,7 @@ fun SystemsScreen(app: AppState) {
             ) {
                 SystemHeader(
                     current, compactHeader, Modifier.padding(horizontal = Space.gutter).reveal(reveal, 0), widthFraction = headerWidth,
+                    collapse = headerFold,
                     activity = played?.takeIf { it.first == currentId }?.second,
                     playLine = true,
                 )

@@ -72,6 +72,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
 import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseColors
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
@@ -265,7 +266,8 @@ fun MenuRow(
         Column(Modifier.weight(1f).padding(vertical = Space.s), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
             FText(action.label, t.bodyStrong, color = if (selected) tint else tint.copy(alpha = 0.92f), maxLines = 2)
             val detail = action.unavailableReason ?: action.detail
-            if (detail != null) FText(detail, t.caption, color = c.textMuted, maxLines = 3)
+            // Figures at one width, so a count or a download's progress doesn't shift the line as it moves.
+            if (detail != null) FText(detail, t.caption.tabular(), color = c.textMuted, maxLines = 3)
         }
         Spacer(Modifier.width(Space.m))
         RowTrailing(action.trailing, selected = selected, available = available, sel = { sel })
@@ -319,7 +321,7 @@ private fun RowTrailing(trailing: Trailing, selected: Boolean, available: Boolea
             tint = if (selected) c.text else c.textMuted,
             modifier = Modifier.graphicsLayer { translationX = (if (motion.reduced) 0f else 2.dp.toPx()) * sel() },
         )
-        is Trailing.Value -> FText(trailing.text, t.label, color = if (selected) c.text else c.textMuted, maxLines = 1)
+        is Trailing.Value -> FText(trailing.text, t.label.tabular(), color = if (selected) c.text else c.textMuted, maxLines = 1)
         is Trailing.Switch -> Toggle(trailing.on, enabled = available)
         is Trailing.Check -> CheckMark(trailing.on)
         is Trailing.Inherited -> Chip(trailing.from, icon = FuseIcons.Layers, color = c.textMuted)

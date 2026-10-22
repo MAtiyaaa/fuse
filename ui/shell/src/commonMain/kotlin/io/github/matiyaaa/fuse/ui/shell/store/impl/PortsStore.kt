@@ -207,7 +207,11 @@ internal class PortsStore(
     override fun install(id: String) {
         synchronized(running) {
             if (running[id]?.isActive == true) return
-            running[id] = ctx.scope.launch { lock.withLock { runInstall(id) } }
+            running[id] = ctx.scope.launch {
+                lock.withLock { runInstall(id) }
+                // The game's files already in the library are used by themselves: nothing to choose.
+                if (id in ctx.settings.value.ports.installed) runCatching { useOwnCopies(id) }
+            }
         }
     }
 
@@ -327,6 +331,18 @@ internal class PortsStore(
         }
         val name = TitleText.normalize(port.game)
         return out.sortedByDescending { TitleText.normalize(it.title) == name }
+    }
+
+    /**
+     * For each of [id]'s game files not chosen yet, the one copy of it in the library, when there is
+     * exactly one, is used as if picked. Several or none are left to the person ([copiesInLibrary]).
+     */
+    private suspend fun useOwnCopies(id: String) {
+        val port = list?.index?.ports?.firstOrNull { it.id == id } ?: return
+        for (data in port.data) {
+            if (data.id in ctx.settings.value.ports.folders[id].orEmpty()) continue
+            copiesInLibrary(id, data.id).singleOrNull()?.let { useCopy(id, data.id, it) }
+        }
     }
 
     override suspend fun useCopy(id: String, dataId: String, copy: PortCopy): String? {
