@@ -44,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
@@ -607,6 +608,14 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             else -> state.grid.index >= columns
         }
         val collapse by fuselineFloat(if (folded) 1f else 0f, Fuse.motion.followSpring(), label = "system fold")
+        // The tabs and toolbar fold on a short screen once you are past the first row, and come back
+        // as you move up to them (the stage alone stays folded where the other screen shows the game).
+        val headerFolded = compactHeader && !list.isNullOrEmpty() && !state.inHeader && when {
+            touchScroll -> if (layout == LibraryLayout.COMPACT_LIST) listScrolled else gridScrolled
+            layout == LibraryLayout.COMPACT_LIST -> state.grid.index >= 3
+            else -> state.grid.index >= columns.coerceAtLeast(1)
+        }
+        val headerFold by fuselineFloat(if (headerFolded) 1f else 0f, Fuse.motion.followSpring(), label = "header fold")
         // Like the Systems screen: the art pack's panel on the right unless there is a background image.
         if (systemCard != null) {
             Appear(
@@ -635,7 +644,9 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         val density = LocalDensity.current
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight + if (systemCard != null) lerp(if (compactHeader) Space.xs else Space.m, Space.xxs, collapse) else 0.dp))
-            Box(Modifier.reveal(entry, 0).onSizeChanged { headerPx = it.height }) {
+            // On a short screen (a handheld's lower screen) the tabs and toolbar shrink and rise with
+            // the folding stage too, so three rows of games fit; moving back up brings them back.
+            Box(Modifier.reveal(entry, 0).shrinkFromTop(headerFold * (1f - FOLDED_HEADER)).onSizeChanged { headerPx = it.height }) {
                 LibraryHeader(
                     app = app,
                     scope = scope,
@@ -652,6 +663,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                     onButton = { i, b -> state.headerIndex = i; press(b) },
                     // The box art view's stage keeps room on its right for the toolbar once folded.
                     foldTools = foldTools,
+                    // Folded on a short screen, the toolbar's own line (on a narrow screen) folds away.
+                    foldStacked = headerFold,
                     counts = viewCounts,
                     spotlight = spotlight?.card?.title,
                 )
@@ -690,7 +703,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                         val foldedStage = logo + Space.xs
                         // The chosen row keeps clear of the grid's fading top edge, so that room counts too.
                         val rowsRoom = maxH - Size.hudHeight - header - foldedStage - Space.s - Size.hintHeight - Space.s - Space.xl - Space.s
-                        val fit = if (inSystem) 1f else (((rowsRoom / 3) - metrics.gap - Space.s) / tileH).coerceIn(MIN_FOLDED_TILE, 1f)
+                        // A system's page shrinks its tiles too on a short screen, where three rows are hard to fit.
+                        val fit = if (inSystem && !compactHeader) 1f else (((rowsRoom / 3) - metrics.gap - Space.s) / tileH).coerceIn(MIN_FOLDED_TILE, 1f)
                         val tileBase = base * (1f - (1f - fit) * collapse)
                         Box(
                             Modifier
@@ -1522,7 +1536,20 @@ private val STAGE_LOGO = 84.dp
  * The smallest a folded stage shrinks the Grid's tiles to, as a share of their size: barely
  * noticeable, since folding the stage away is what makes the room.
  */
-private const val MIN_FOLDED_TILE = 0.92f
+private const val MIN_FOLDED_TILE = 0.90f
+
+/** How small the library's tabs and toolbar get as the stage folds on a short screen. */
+private const val FOLDED_HEADER = 0.8f
+
+/**
+ * Draws the content [fraction] smaller from its top start corner, and reports that much less
+ * height, so what is below rises with it.
+ */
+private fun Modifier.shrinkFromTop(fraction: Float): Modifier = if (fraction <= 0f) this else this
+    .layout { measurable, constraints ->
+        val p = measurable.measure(constraints)
+        layout(p.width, (p.height * (1f - fraction)).toInt()) { p.placeWithLayer(0, 0) { scaleX = 1f - fraction; scaleY = 1f - fraction; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f) } }
+    }
 private val STAGE_LOGO_SHORT = 56.dp
 
 /** Logos ahead of the selection are decoded at this size, ready for the stage. */

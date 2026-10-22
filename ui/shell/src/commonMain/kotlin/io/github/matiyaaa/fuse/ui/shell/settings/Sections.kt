@@ -2041,15 +2041,21 @@ fun privacyRows(app: AppState): List<MenuAction> = listOf(
 
 private const val FUSE_RELEASES = "https://github.com/MAtiyaaa/fuse/releases/latest"
 
-/** "78 of 180 MB, 2.1 MB a second" for an update coming down, or null before anything is known. */
+/**
+ * "78 of 180 MB at 2.1 MB/s" for an update coming down, or null before anything is known. Every
+ * figure keeps one precision for the whole download (tenths only for a download under 10 MB), so
+ * the line keeps its length as the numbers grow and never wraps onto a second line and back.
+ */
 internal fun downloadedWords(st: UpdateState.Downloading): String? {
     val done = st.doneBytes ?: return null
     val total = st.totalBytes ?: return null
     val mib = 1024L * 1024
-    // Tenths of a megabyte below ten, whole ones above.
-    fun mb(b: Long): String = if (b >= 10 * mib) "${b / mib}" else ((b * 10 + mib / 2) / mib).let { "${it / 10}.${it % 10}" }
-    val speed = st.bytesPerSecond?.takeIf { it > 0 }?.let { s -> if (s >= mib) "${mb(s)} MB a second" else "${s / 1024} KB a second" }
-    return listOfNotNull("${mb(done)} of ${mb(total)} MB", speed).joinToString(", ")
+    val tenths = total < 10 * mib
+    fun mb(b: Long): String = if (!tenths) "${(b + mib / 2) / mib}" else ((b * 10 + mib / 2) / mib).let { "${it / 10}.${it % 10}" }
+    // The same width as the total, padded with figure spaces, so the line doesn't shift as it grows.
+    val shown = mb(done).padStart(mb(total).length, '\u2007')
+    val speed = st.bytesPerSecond?.takeIf { it > 0 }?.let { s -> ((s * 10 + mib / 2) / mib).let { " at ${it / 10}.${it % 10} MB/s" } }.orEmpty()
+    return "$shown of ${mb(total)} MB$speed"
 }
 
 @Composable
@@ -2079,8 +2085,9 @@ fun updateRows(app: AppState): List<MenuAction> {
             when (val st = state) {
                 is UpdateState.Downloading -> add(MenuAction(
                     "download", "Downloading ${r.name}", FuseIcons.Download,
-                    detail = listOfNotNull(downloadedWords(st), "You can keep using Fuse. Select to stop").joinToString(". "),
-                    trailing = Trailing.Value(st.progress?.let { "${(it * 100).toInt()}%" } ?: "Starting"),
+                    // One short line that keeps its length, so the row never grows and shrinks as it counts.
+                    detail = downloadedWords(st)?.let { "$it. Select to stop" } ?: "Starting. Select to stop",
+                    trailing = Trailing.Value(st.progress?.let { "${(it * 100).toInt()}%".padStart(4, '\u2007') } ?: "Starting"),
                     onSelect = { app.store.updates.cancelDownload() },
                 ))
                 is UpdateState.Ready, is UpdateState.Installing -> add(MenuAction(

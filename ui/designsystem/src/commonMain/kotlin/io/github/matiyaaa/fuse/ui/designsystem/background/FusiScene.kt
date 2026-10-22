@@ -11,7 +11,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -263,16 +262,10 @@ fun FusiPet(
     var tick by remember { mutableIntStateOf(0) }
     if (animate) {
         LaunchedEffect(fps) {
-            val frame = 1000L / fps.coerceAtLeast(1)
-            var last = 0L
-            while (true) {
-                withFrameMillis { now ->
-                    if (now - last >= frame) {
-                        last = now
-                        tick++
-                    }
-                }
-            }
+            // Paced like every other decoration: woken only when an update is due, and paused while a
+            // game runs, Fuse is behind another window or the device sleeps. Taking every frame of the
+            // display here kept the second screen drawing at its full rate under every game.
+            io.github.matiyaaa.fuse.ui.fuseline.decorationFrames(fps) { tick++ }
         }
     }
     val index = if (screen == FusiScreen.BOTTOM) 1 else 0

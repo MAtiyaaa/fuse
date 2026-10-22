@@ -124,7 +124,7 @@ internal class PortsStore(
                 val kept = keptList()
                 // A copy an update was replacing when Fuse stopped goes back in place.
                 for (id in ctx.settings.value.ports.installed.keys) files.recover(layout(id).install)
-                list = listOfNotNull(kept, inside).maxByOrNull { it.index.revision * 2 + if (it.signed) 1 else 0 }
+                list = listOfNotNull(kept, inside).maxWithOrNull(PortsList.ORDER)
             }
         }
         publish()
@@ -145,9 +145,10 @@ internal class PortsStore(
         if (!force && ctx.now() - lastLook < LOOK_EVERY_MS) return
         lastLook = ctx.now()
         mutable.update { it.copy(refreshing = true) }
-        val problem = when (val r = client.fetch(newerThan = list?.index?.revision ?: 0)) {
+        val problem = when (val r = client.fetch(newerThan = 0)) {
             is ApiResult.Success -> {
-                r.value?.let { fresh ->
+                // Only a newer list: one published before the list inside this Fuse never stands in for it.
+                r.value?.takeIf { fresh -> list.let { it == null || PortsList.ORDER.compare(fresh, it) > 0 } }?.let { fresh ->
                     list = fresh
                     files.makeFolder(files.folder)
                     files.writeText("${files.folder}/$INDEX", fresh.text)
@@ -206,7 +207,11 @@ internal class PortsStore(
     override fun install(id: String) {
         synchronized(running) {
             if (running[id]?.isActive == true) return
-            running[id] = ctx.scope.launch { lock.withLock { runInstall(id) } }
+            running[id] = ctx.scope.launch {
+                lock.withLock { runInstall(id) }
+                // The game's files already in the library are used by themselves: nothing to choose.
+                if (id in ctx.settings.value.ports.installed) runCatching { useOwnCopies(id) }
+            }
         }
     }
 
@@ -326,6 +331,18 @@ internal class PortsStore(
         }
         val name = TitleText.normalize(port.game)
         return out.sortedByDescending { TitleText.normalize(it.title) == name }
+    }
+
+    /**
+     * For each of [id]'s game files not chosen yet, the one copy of it in the library, when there is
+     * exactly one, is used as if picked. Several or none are left to the person ([copiesInLibrary]).
+     */
+    private suspend fun useOwnCopies(id: String) {
+        val port = list?.index?.ports?.firstOrNull { it.id == id } ?: return
+        for (data in port.data) {
+            if (data.id in ctx.settings.value.ports.folders[id].orEmpty()) continue
+            copiesInLibrary(id, data.id).singleOrNull()?.let { useCopy(id, data.id, it) }
+        }
     }
 
     override suspend fun useCopy(id: String, dataId: String, copy: PortCopy): String? {

@@ -21,7 +21,12 @@ data class PortsList(
     val signed: Boolean = false,
     val text: String = "",
     val signature: String? = null,
-)
+) {
+    companion object {
+        /** Lists by which is newer, the newest last: the list's own revision, then signed, then the newest check. */
+        val ORDER: Comparator<PortsList> = compareBy<PortsList>({ it.index.base }, { it.signed }, { it.index.revision })
+    }
+}
 
 /**
  * Reads Fuse Ports' index (`ports/index.json`, see INTEGRATIONS.md, Fuse Ports) and checks every

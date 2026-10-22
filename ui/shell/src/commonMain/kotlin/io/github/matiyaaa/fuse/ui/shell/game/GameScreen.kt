@@ -238,13 +238,14 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
     }
     val shownCopies = copies?.copies.orEmpty().takeIf { list -> reachState.supported || list.any { it.place == io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.DEVICE } }.orEmpty()
 
-    // Play first, then the emulator it starts in, then the quick actions, then everything else.
+    // Play first, then what it starts in (the port, when Play starts one from here), then the quick
+    // actions, then everything else.
     val actions = if (household) listOfNotNull(
         // Another device's game: Download brings it here from wherever is best.
         DetailAction(
             "download", if (copies?.transfer != null) "Downloading" else "Download", FuseIcons.Download, "Download", primary = true,
         ) { if (copies?.transfer != null) app.go(Route.Downloads) else app.reachDownload(game.id, game.displayTitle) },
-        DetailAction("emu", d.emulator.selected?.name ?: "Choose emulator", if (d.emulator.selected == null) FuseIcons.Warning else FuseIcons.Chip, "Choose emulator") {
+        DetailAction("emu", d.emulator.port ?: d.emulator.selected?.name ?: "Choose emulator", if (d.emulator.port == null && d.emulator.selected == null) FuseIcons.Warning else FuseIcons.Chip, "Choose emulator") {
             app.go(Route.PlatformSettings(game.platformId))
         },
         DetailAction("send", null, FuseIcons.Share, "Send to another device") { app.sendPicker(game.id, game.displayTitle) },
@@ -255,7 +256,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
         DetailAction(
             "download", if (romm?.transfer != null) "Downloading" else "Download", FuseIcons.Download, "Download", primary = true,
         ) { if (romm?.transfer != null) app.go(Route.Downloads) else app.rommDownload(remote, game.displayTitle) },
-        DetailAction("emu", d.emulator.selected?.name ?: "Choose emulator", if (d.emulator.selected == null) FuseIcons.Warning else FuseIcons.Chip, "Choose emulator") {
+        DetailAction("emu", d.emulator.port ?: d.emulator.selected?.name ?: "Choose emulator", if (d.emulator.port == null && d.emulator.selected == null) FuseIcons.Warning else FuseIcons.Chip, "Choose emulator") {
             app.go(Route.PlatformSettings(game.platformId))
         },
         romm?.takeIf { v -> v.parts.any { it.kind != io.github.matiyaaa.fuse.model.ContentKind.GAME && it.kind.holdsGameData } }?.let {
@@ -268,7 +269,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail, via: io.github.matiy
         // A game Fuse can't reach right now keeps its Play button (pressing it explains why), drawn
         // as not ready, so the page never promises a start it knows won't happen.
         DetailAction("play", "Play", if (d.unavailable != null) FuseIcons.HardDrive else FuseIcons.Play, "Play", primary = d.unavailable == null && !d.missing) { app.play(card) },
-        DetailAction("emu", d.emulator.selected?.name ?: "Choose emulator", if (d.emulator.selected == null) FuseIcons.Warning else FuseIcons.Chip, "Choose emulator") {
+        DetailAction("emu", d.emulator.port ?: d.emulator.selected?.name ?: "Choose emulator", if (d.emulator.port == null && d.emulator.selected == null) FuseIcons.Warning else FuseIcons.Chip, "Choose emulator") {
             app.emulatorPicker(card)
         },
         content?.let { v ->

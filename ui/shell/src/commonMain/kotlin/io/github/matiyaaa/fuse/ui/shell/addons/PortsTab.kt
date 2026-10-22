@@ -1,6 +1,26 @@
 package io.github.matiyaaa.fuse.ui.shell.addons
 
 import androidx.compose.foundation.background
+import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
+import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
+import io.github.matiyaaa.fuse.ui.designsystem.focus.GridSelection
+import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
+import io.github.matiyaaa.fuse.ui.designsystem.components.isSelected
+import io.github.matiyaaa.fuse.ui.designsystem.components.Tile
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import io.github.matiyaaa.fuse.ui.fuseline.togetherWith
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.Swap
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Aspect
+import androidx.compose.ui.draw.alpha
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -19,8 +39,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -47,8 +65,6 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
-import io.github.matiyaaa.fuse.ui.designsystem.effects.ditheredBackground
-import io.github.matiyaaa.fuse.ui.designsystem.focus.ShelfSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
@@ -105,83 +121,158 @@ fun PortsTab(app: AppState, active: Boolean, topPadding: Dp) {
         if (state.canCheck) add(TopAction("Look Again", FuseIcons.RefreshCcw) { ops.refresh() })
         add(TopAction("Settings", FuseIcons.Settings) { app.go(Route.Settings("addons")) })
     }
-    val ports = state.ports
-    val rows = listOf("head") + ports.map { it.port.id }
-    fun sizeOf(key: String) = if (key == "head") actions.size else 1
-    val sel = remember { ShelfSelection(initialRow = if (ports.isEmpty()) 0 else 1) }
-    sel.clamp(rows, ::sizeOf)
-    val row = rows.getOrNull(sel.row) ?: "head"
-    val col = sel.column(row)
-    val current = ports.firstOrNull { it.port.id == row }
+    var filter by remember { mutableStateOf(PortsFilter.ALL) }
+    val counts = remember(state.ports) { PortsFilter.entries.associateWith { f -> state.ports.count(f::keeps) } }
+    // Yours first (installed, then ready to install here), then the rest, each by its game's name.
+    val ports = remember(state.ports, filter) {
+        state.ports.filter(filter::keeps).sortedWith(compareBy<PortView>({ !it.installed }, { it.build == null }, { it.port.game.lowercase() }))
+    }
+    val filters = PortsFilter.entries.filter { it == PortsFilter.ALL || (counts[it] ?: 0) > 0 }
+    // Where the controller is: the page's actions, the filters, or the grid.
+    // Until the person moves, it is on the first port (or the filters while there are none).
+    var chosenZone by remember { mutableStateOf<Zone?>(null) }
+    val zone = chosenZone?.takeUnless { it == Zone.GRID && ports.isEmpty() } ?: if (ports.isEmpty()) Zone.FILTERS else Zone.GRID
+    var headCol by remember { mutableIntStateOf(0) }
+    val grid = remember { GridSelection() }
+    grid.clamp(ports.size)
+    headCol = headCol.coerceIn(0, (actions.size - 1).coerceAtLeast(0))
+    val current = if (zone == Zone.GRID) ports.getOrNull(grid.index) else null
+    // The grid's columns as last laid out, for moving through it (set by the layout, read by input).
+    val columns = remember { intArrayOf(1) }
 
-    PageEffect(focused, row, col, current) {
+    PageEffect(focused, zone, headCol, current, filter) {
         if (!focused) return@PageEffect
         app.hints = when {
-            row == "head" -> listOf(Hint(HintButton.CONFIRM, actions.getOrNull(col)?.label ?: "Choose"), Hint(HintButton.BACK, "Back"))
+            zone == Zone.HEAD -> listOf(Hint(HintButton.CONFIRM, actions.getOrNull(headCol)?.label ?: "Choose"), Hint(HintButton.BACK, "Back"))
+            zone == Zone.FILTERS -> listOf(Hint(HintButton.CONFIRM, "Show"), Hint(HintButton.BACK, "Back"))
             current != null -> listOfNotNull(next(current)?.let { Hint(HintButton.CONFIRM, it.first) }, Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.BACK, "Back"))
             else -> listOf(Hint(HintButton.BACK, "Back"))
         }
     }
     InputLayer(enabled = focused) { e ->
-        when (e.action) {
-            NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT -> sel.move(e.action, rows, ::sizeOf).let { r ->
-                if (r == NavResult.IGNORED && (e.action == NavAction.LEFT || e.action == NavAction.RIGHT)) NavResult.BLOCKED else r
+        when (zone) {
+            Zone.HEAD -> when (e.action) {
+                NavAction.LEFT -> if (headCol > 0) { headCol--; NavResult.MOVED } else NavResult.BLOCKED
+                NavAction.RIGHT -> if (headCol < actions.size - 1) { headCol++; NavResult.MOVED } else NavResult.BLOCKED
+                NavAction.DOWN -> { chosenZone = Zone.FILTERS; NavResult.MOVED }
+                NavAction.SELECT -> { actions.getOrNull(headCol)?.run?.invoke(); NavResult.ACTIVATED }
+                else -> NavResult.IGNORED
             }
-            NavAction.SELECT -> {
-                if (row == "head") actions.getOrNull(col)?.run?.invoke() else current?.let { app.doNext(it) }
-                NavResult.ACTIVATED
-            }
-            NavAction.CONTEXT -> { current?.let { app.openContextMenu(app.portMenu(it)) }; NavResult.ACTIVATED }
-            else -> NavResult.IGNORED
-        }
-    }
-    val list = rememberLazyListState()
-    io.github.matiyaaa.fuse.ui.designsystem.focus.GlideTo(list, sel.row.coerceAtLeast(0), settleMs = Durations.SLOW)
-    BoxWithConstraints(Modifier.fillMaxSize().testTag("ports")) {
-        val compact = maxHeight < 560.dp || maxWidth < 600.dp
-        val wide = maxWidth >= 900.dp
-        LazyColumn(
-            state = list,
-            modifier = Modifier.fillMaxSize().padding(top = topPadding).fadingEdges(list, top = Space.xl, bottom = Space.xl).dragScroll(list),
-            contentPadding = PaddingValues(top = subTabsRoom() + Space.s, bottom = Size.hintHeight + Space.l),
-            verticalArrangement = Arrangement.spacedBy(if (compact) Space.s else Space.m),
-        ) {
-            item("head") {
-                Header(state, actions, focused && row == "head", col, compact, wide) { i ->
-                    app.focusZone = FocusZone.CONTENT
-                    sel.row = 0
-                    sel.setColumn("head", i)
-                    actions[i].run()
+            Zone.FILTERS -> {
+                val at = filters.indexOf(filter).coerceAtLeast(0)
+                when (e.action) {
+                    NavAction.LEFT -> if (at > 0) { filter = filters[at - 1]; grid.index = 0; NavResult.MOVED } else NavResult.BLOCKED
+                    NavAction.RIGHT -> if (at < filters.size - 1) { filter = filters[at + 1]; grid.index = 0; NavResult.MOVED } else NavResult.BLOCKED
+                    NavAction.UP -> { chosenZone = Zone.HEAD; NavResult.MOVED }
+                    NavAction.DOWN -> if (ports.isNotEmpty()) { chosenZone = Zone.GRID; NavResult.MOVED } else NavResult.BLOCKED
+                    NavAction.SELECT -> { if (ports.isNotEmpty()) chosenZone = Zone.GRID; NavResult.ACTIVATED }
+                    else -> NavResult.IGNORED
                 }
             }
-            when {
-                !state.loaded -> item("loading") { Waiting(compact) }
-                ports.isEmpty() -> item("none") {
-                    Note(FuseIcons.Boxes, "No ports in the list yet", "The list inside Fuse has none for now; a newer one brings them here.")
-                }
-                else -> for ((i, v) in ports.withIndex()) {
-                    item(v.port.id) {
-                        PortCard(app, v, selected = focused && sel.row == i + 1, compact = compact, onClick = {
-                            app.focusZone = FocusZone.CONTENT
-                            sel.row = i + 1
-                            app.doNext(v)
-                        }, onLongClick = {
-                            sel.row = i + 1
-                            app.openContextMenu(app.portMenu(v))
-                        })
+            Zone.GRID -> when (e.action) {
+                NavAction.SELECT -> { current?.let { app.doNext(it) }; NavResult.ACTIVATED }
+                NavAction.CONTEXT -> { current?.let { app.openContextMenu(app.portMenu(it)) }; NavResult.ACTIVATED }
+                else -> grid.move(e.action, ports.size, columns[0]).let { r ->
+                    when {
+                        r == NavResult.IGNORED && e.action == NavAction.UP -> { chosenZone = Zone.FILTERS; NavResult.MOVED }
+                        r == NavResult.IGNORED && (e.action == NavAction.LEFT || e.action == NavAction.RIGHT) -> NavResult.BLOCKED
+                        else -> r
                     }
                 }
             }
-            if (yours.isNotEmpty()) {
-                item("yours-head") {
-                    FText(
-                        "Ports and recomps you installed".uppercase(), Fuse.type.overline, color = Fuse.colors.textMuted, maxLines = 1,
-                        modifier = Modifier.padding(start = Space.gutter, top = Space.m),
-                    )
+        }
+    }
+    val gridState = rememberLazyGridState()
+    // Another filter starts at its first port.
+    LaunchedEffect(filter) { gridState.scrollToItem(0) }
+    FollowSelection(gridState, { grid.index }, anchor = 0.1f, enabled = { zone == Zone.GRID })
+    BoxWithConstraints(Modifier.fillMaxSize().testTag("ports")) {
+        val compact = maxHeight < 560.dp || maxWidth < 600.dp
+        val wide = maxWidth >= 900.dp
+        val gap = if (compact) Space.s else Space.m
+        val tile = if (compact) 104.dp else 132.dp
+        val room = maxWidth - Space.gutter * 2
+        val cols = ((room + gap) / (tile + gap)).toInt().coerceAtLeast(2)
+        columns[0] = cols
+        val width = (room - gap * (cols - 1)) / cols
+        Column(Modifier.fillMaxSize().padding(top = topPadding + subTabsRoom())) {
+            Header(state, actions, focused && zone == Zone.HEAD, headCol, compact, wide) { i ->
+                app.focusZone = FocusZone.CONTENT
+                chosenZone = Zone.HEAD
+                headCol = i
+                actions[i].run()
+            }
+            PortStage(app, ports.getOrNull(grid.index).takeIf { state.loaded }, compact)
+            FilterRow(filters, filter, counts, focused && zone == Zone.FILTERS) { f ->
+                app.focusZone = FocusZone.CONTENT
+                filter = f
+                grid.index = 0
+                chosenZone = Zone.FILTERS
+            }
+            when {
+                !state.loaded -> Waiting(compact)
+                state.ports.isEmpty() -> Note(FuseIcons.Boxes, "No ports in the list yet", "The list inside Fuse has none for now; a newer one brings them here.")
+                ports.isEmpty() -> Note(FuseIcons.Boxes, "Nothing here", "No port is ${filter.empty}.")
+                else -> LazyVerticalGrid(
+                    columns = GridCells.Fixed(cols),
+                    state = gridState,
+                    modifier = Modifier.weight(1f).fadingEdges(gridState, top = Space.l, bottom = Space.xl).dragScroll(gridState),
+                    // Room above the first row for a chosen tile's lift, clear of the filters.
+                    contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.l + Space.s, bottom = Size.hintHeight + Space.xl),
+                    horizontalArrangement = Arrangement.spacedBy(gap),
+                    verticalArrangement = Arrangement.spacedBy(gap + Space.s),
+                ) {
+                    for ((i, v) in ports.withIndex()) {
+                        item(key = v.port.id) {
+                            PortTile(
+                                app, v, width,
+                                selected = isSelected { focused && zone == Zone.GRID && grid.index == i },
+                                onClick = {
+                                    app.focusZone = FocusZone.CONTENT
+                                    chosenZone = Zone.GRID
+                                    if (grid.index == i) app.doNext(v) else grid.index = i
+                                },
+                                onLongClick = {
+                                    chosenZone = Zone.GRID
+                                    grid.index = i
+                                    app.openContextMenu(app.portMenu(v))
+                                },
+                            )
+                        }
+                    }
+                    if (yours.isNotEmpty() && filter == PortsFilter.ALL) {
+                        item("yours-head", span = { GridItemSpan(maxLineSpan) }) {
+                            FText("Ports and recomps you installed".uppercase(), Fuse.type.overline, color = Fuse.colors.textMuted, maxLines = 1, modifier = Modifier.padding(top = Space.l))
+                        }
+                        for (y in yours) item("yours-${y.id}-${y.path}", span = { GridItemSpan(maxLineSpan) }) {
+                            YourRecompCard(app, y, state.ports.firstOrNull { it.port.id == y.id }?.port?.cover, compact)
+                        }
+                    }
                 }
-                for (y in yours) item("yours-${y.id}-${y.path}") { YourRecompCard(app, y, state.ports.firstOrNull { it.port.id == y.id }?.port?.cover, compact) }
             }
         }
+    }
+}
+
+private enum class Zone { HEAD, FILTERS, GRID }
+
+/** A port with no build for this computer: drawn faded, still there to read about. */
+private const val UNAVAILABLE_ALPHA = 0.45f
+
+/** The page's filters, each with what it keeps and how an empty one is said. */
+private enum class PortsFilter(val label: String, val empty: String) {
+    ALL("All", "in the list"),
+    INSTALLED("Installed", "installed"),
+    READY("Ready to Play", "ready to play"),
+    UPDATES("Updates", "waiting to update"),
+    AVAILABLE("Not Installed", "left to install for this computer");
+
+    fun keeps(v: PortView): Boolean = when (this) {
+        ALL -> true
+        INSTALLED -> v.installed
+        READY -> v.ready
+        UPDATES -> v.update
+        AVAILABLE -> !v.installed && v.build != null
     }
 }
 
@@ -189,13 +280,8 @@ fun PortsTab(app: AppState, active: Boolean, topPadding: Dp) {
 @Composable
 private fun Header(state: PortsState, actions: List<TopAction>, inHead: Boolean, col: Int, compact: Boolean, wide: Boolean, onAction: (Int) -> Unit) {
     val c = Fuse.colors
-    Row(Modifier.padding(horizontal = Space.gutter).widthIn(max = 960.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(if (compact) 36.dp else 44.dp).clip(RoundedCornerShape(Fuse.geometry.control)).background(c.accent.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
-            FuseIcon(FuseIcons.Boxes, size = Size.iconM, tint = c.accent)
-        }
-        Spacer(Modifier.width(Space.m))
+    Row(Modifier.padding(horizontal = Space.gutter).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            FText("Games rebuilt to run natively", if (compact) Fuse.type.titleSmall else Fuse.type.title, maxLines = 1)
             val (line, warn) = listLine(state)
             FText(line, Fuse.type.caption, color = if (warn) c.warning else c.textMuted, maxLines = 1)
         }
@@ -211,72 +297,148 @@ private fun Header(state: PortsState, actions: List<TopAction>, inHead: Boolean,
 /** Which list is shown, said in one line, and whether that needs the person's eye. */
 private fun listLine(state: PortsState): Pair<String, Boolean> {
     val count = "${state.ports.size} ${if (state.ports.size == 1) "port" else "ports"}"
+    val installed = state.ports.count { it.installed }.takeIf { it > 0 }?.let { "  ·  $it installed" }.orEmpty()
     return when {
         !state.loaded -> "Reading the list of ports..." to false
         state.refreshing -> "Looking for a newer list..." to false
         state.problem != null -> "${state.problem} The list Fuse has is shown." to true
-        state.signed -> "$count  ·  signed list, revision ${state.revision}" to false
-        !state.canCheck -> "$count  ·  the list inside Fuse; nothing is verified until Fuse carries the key that signs newer lists" to false
-        else -> "$count  ·  the list inside Fuse" to false
+        state.signed -> "$count$installed  ·  checked each night" to false
+        !state.canCheck -> "$count$installed  ·  the list inside Fuse" to false
+        else -> "$count$installed  ·  the list inside Fuse" to false
+    }
+}
+
+/**
+ * The selected port, told big above the grid: its game, the port and its version, how it stands
+ * here, and what it needs. A fixed height, so the grid never jumps as the selection moves.
+ */
+@Composable
+private fun PortStage(app: AppState, v: PortView?, compact: Boolean) {
+    val c = Fuse.colors
+    val motion = Fuse.motion
+    Box(Modifier.fillMaxWidth().height(if (compact) 80.dp else 104.dp).padding(horizontal = Space.gutter), contentAlignment = Alignment.BottomStart) {
+        Swap(
+            targetState = v,
+            contentKey = { it?.port?.id },
+            transitionSpec = {
+                fadeIn(motion.fade(Durations.BASE)) togetherWith fadeOut(motion.fade(Durations.INSTANT))
+            },
+            contentAlignment = Alignment.BottomStart,
+            label = "portStage",
+        ) { p ->
+            if (p == null) return@Swap
+            val (status, tone) = status(p)
+            Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                FText(
+                    listOfNotNull("${p.port.name} ${p.port.version}", p.port.licence).joinToString("  ·  ").uppercase(),
+                    Fuse.type.overline, color = c.textMuted, maxLines = 1,
+                )
+                FText(p.port.game, if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                    Box(Modifier.size(Size.dot).clip(CircleShape).background(toneColor(tone)))
+                    FText(status, Fuse.type.body, color = if (tone == Tone.QUIET) c.textMuted else c.text, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                    if (p.verified != null) Chip(FuseIcons.ShieldCheck, "Verified", c.success)
+                    if (p.build?.runner == PortRunner.UMU) Chip(FuseIcons.Layers, "Through Proton", c.textMuted)
+                }
+                (p.job as? PortJob.Downloading)?.progress?.let { pr -> Box(Modifier.widthIn(max = 420.dp)) { Progress(pr) } }
+            }
+        }
     }
 }
 
 @Composable
-private fun PortCard(app: AppState, v: PortView, selected: Boolean, compact: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
+private fun toneColor(tone: Tone): Color {
     val c = Fuse.colors
-    val shape = RoundedCornerShape(Fuse.geometry.panel)
-    val border by fuselineColor(if (selected) c.focus else Color.Transparent, Fuse.motion.tween(Durations.FAST), label = "portCard")
-    val (status, tone) = status(v)
-    val toneColor = when (tone) {
+    return when (tone) {
         Tone.GOOD -> c.success
         Tone.WAIT -> c.accent
         Tone.NEEDS -> c.warning
         Tone.QUIET -> c.textMuted
     }
-    Row(
-        Modifier.padding(horizontal = Space.gutter).widthIn(max = 960.dp).fillMaxWidth().clip(shape)
-            .background(c.surfaceRaised)
-            .ditheredBackground(Brush.horizontalGradient(listOf(c.accent.copy(alpha = 0.10f), Color.Transparent)))
-            .border(2.dp, border, shape)
-            .combinedClickable(remember { MutableInteractionSource() }, indication = null, onClick = onClick, onLongClick = onLongClick)
-            .padding(if (compact) Space.s else Space.m),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        PortCover(app, v.game, v.port.cover, v.port.game, if (compact) 56.dp else 76.dp)
-        Spacer(Modifier.width(Space.m))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                FText(v.port.game, if (compact) Fuse.type.bodyStrong else Fuse.type.titleSmall, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
-                if (v.verified != null) {
-                    Spacer(Modifier.width(Space.s))
-                    Chip(FuseIcons.ShieldCheck, "Verified", c.success)
-                }
-                if (v.build?.runner == PortRunner.UMU) {
-                    Spacer(Modifier.width(Space.s))
-                    Chip(FuseIcons.Layers, "Through Proton", c.textMuted)
-                }
-            }
-            FText(listOfNotNull("${v.port.name} ${v.port.version}", v.port.licence).joinToString("  ·  "), Fuse.type.caption, color = c.textMuted, maxLines = 1)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(8.dp).clip(CircleShape).background(toneColor))
-                Spacer(Modifier.width(Space.s))
-                FText(status, Fuse.type.caption, color = if (tone == Tone.QUIET) c.textMuted else c.text, maxLines = if (compact) 1 else 2)
-            }
-            (v.job as? PortJob.Downloading)?.progress?.let { p -> Progress(p) }
-        }
-        next(v)?.let { (label, icon) ->
-            Spacer(Modifier.width(Space.m))
+}
+
+/** The filters as one row of pills, the chosen one filled; each says how many it keeps. */
+@Composable
+private fun FilterRow(filters: List<PortsFilter>, chosen: PortsFilter, counts: Map<PortsFilter, Int>, focused: Boolean, onPick: (PortsFilter) -> Unit) {
+    val c = Fuse.colors
+    Row(Modifier.padding(horizontal = Space.gutter).padding(top = Space.m), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+        for (f in filters) {
+            val on = f == chosen
+            val bg by fuselineColor(
+                when {
+                    on && focused -> c.text
+                    on -> c.text.copy(alpha = 0.16f)
+                    else -> c.text.copy(alpha = 0.05f)
+                },
+                Fuse.motion.tween(Durations.FAST), label = "portFilter",
+            )
+            val fg = if (on && focused) c.ink else if (on) c.text else c.textMuted
             Row(
-                Modifier.height(36.dp).clip(CircleShape).background(if (selected) c.text else c.text.copy(alpha = 0.07f)).padding(horizontal = Space.m),
+                Modifier.height(32.dp).clip(CircleShape).background(bg)
+                    .combinedClickable(remember { MutableInteractionSource() }, indication = null, onClick = { onPick(f) })
+                    .padding(horizontal = Space.m),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                FuseIcon(icon, size = Size.iconS, tint = if (selected) c.ink else c.text)
-                if (!compact || selected) {
-                    Spacer(Modifier.width(Space.xs))
-                    FText(label, Fuse.type.label, color = if (selected) c.ink else c.text, maxLines = 1)
-                }
+                FText(f.label, Fuse.type.label, color = fg, maxLines = 1)
+                Spacer(Modifier.width(Space.xs))
+                FText("${counts[f] ?: 0}", Fuse.type.caption, color = fg.copy(alpha = 0.7f), maxLines = 1)
             }
         }
+    }
+}
+
+/**
+ * A port in the grid: its game's box art, as the library draws a game, with how it stands here in
+ * the corner (installed, an update, files it needs, a download under way).
+ */
+@Composable
+private fun PortTile(app: AppState, v: PortView, width: Dp, selected: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
+    val c = Fuse.colors
+    val media by remember(v.game) { v.game?.let { app.store.media.media(MediaOwner.OfGame(it)) } ?: flowOf(null) }.collectAsState(null)
+    val own = media?.let(Art::from)
+    val model = own?.boxart ?: v.port.cover ?: own?.square ?: own?.icon
+    val unavailable = v.build == null && !v.installed
+    // Several ports can play one game (five for Doom): each says which it is under its box.
+    // Clear of the line a chosen tile draws under itself.
+    Column(Modifier.width(width), verticalArrangement = Arrangement.spacedBy(Space.xl)) {
+    Tile(
+        selected = selected,
+        label = v.port.game,
+        modifier = Modifier.width(width).aspectRatio(Aspect.BOX),
+        onClick = onClick,
+        onLongClick = onLongClick,
+    ) {
+        Artwork(
+            model,
+            Modifier.fillMaxSize().then(if (unavailable) Modifier.alpha(UNAVAILABLE_ALPHA) else Modifier),
+            contentScale = ContentScale.Crop,
+            focusY = 0.3f,
+            // Art not found yet: the game's own drawn cover, as the library draws a game without art.
+            fallback = { GeneratedArt(v.port.game, c.accent, slot = ArtSlot.BOX) },
+        )
+        val job = v.job
+        val mark: Pair<ImageVector, Color>? = when {
+            job is PortJob.Failed -> FuseIcons.CircleX to c.warning
+            job != null && job.active -> null
+            v.update -> FuseIcons.Download to c.accent
+            v.installed && v.missing.isNotEmpty() -> FuseIcons.FolderOpen to c.warning
+            v.installed -> FuseIcons.Check to c.success
+            else -> null
+        }
+        if (mark != null) {
+            Box(
+                Modifier.align(Alignment.TopEnd).padding(Space.xs).size(Size.badge).clip(CircleShape).background(c.ink.copy(alpha = 0.72f)),
+                contentAlignment = Alignment.Center,
+            ) { FuseIcon(mark.first, size = Size.badgeIcon, tint = mark.second) }
+        }
+        if (job != null && job.active) {
+            val p = (job as? PortJob.Downloading)?.progress
+            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(Space.s).height(4.dp).clip(CircleShape).background(c.ink.copy(alpha = 0.6f))) {
+                Box(Modifier.fillMaxHeight().fillMaxWidth(p ?: 0.3f).clip(CircleShape).background(c.accent))
+            }
+        }
+    }
+    FText(v.port.name, Fuse.type.caption, color = if (selected) c.text else c.textMuted, maxLines = 1, modifier = Modifier.padding(horizontal = Space.xs))
     }
 }
 
@@ -290,7 +452,7 @@ private fun YourRecompCard(app: AppState, y: io.github.matiyaaa.fuse.ui.shell.st
     val name = io.github.matiyaaa.fuse.launch.ports.NativePorts.name(y.id) ?: return
     val game = io.github.matiyaaa.fuse.launch.ports.NativePorts.game(y.id) ?: return
     Row(
-        Modifier.padding(horizontal = Space.gutter).widthIn(max = 960.dp).fillMaxWidth().clip(RoundedCornerShape(Fuse.geometry.panel))
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(Fuse.geometry.panel))
             .background(c.surfaceRaised.copy(alpha = 0.6f))
             .padding(if (compact) Space.s else Space.m),
         verticalAlignment = Alignment.CenterVertically,
@@ -454,7 +616,7 @@ private fun AppState.doNext(v: PortView) {
  * Asks for [v]'s game files [dataId] and sets the port up with them: the person's copy already in
  * the library, when one has what the port needs, or a folder they pick.
  */
-private fun AppState.choosePortFolder(v: PortView, dataId: String) {
+private fun AppState.choosePortFolder(v: PortView, dataId: String, ask: Boolean = false) {
     val data = v.port.data.firstOrNull { it.id == dataId } ?: return
     fun said(problem: String?) {
         if (problem == null) toasts.show("${v.port.game} reads its files from there", ToastKind.SUCCESS, icon = FuseIcons.FolderOpen)
@@ -471,6 +633,13 @@ private fun AppState.choosePortFolder(v: PortView, dataId: String) {
         val away = if (copies.isEmpty()) store.ports.copiesElsewhere(v.port.id, dataId) else emptyList()
         if (copies.isEmpty() && away.isEmpty()) {
             pick()
+            return@launch
+        }
+        // One copy in the library: used at once, nothing to choose (Options still picks another).
+        copies.singleOrNull()?.takeIf { away.isEmpty() && !ask }?.let { c ->
+            val problem = store.ports.useCopy(v.port.id, dataId, c)
+            if (problem == null) toasts.show("${v.port.game} uses your copy in the library: ${c.title}", ToastKind.SUCCESS, icon = FuseIcons.FolderOpen)
+            else toasts.show(problem, ToastKind.WARNING)
             return@launch
         }
         val elsewhere = if (away.isNotEmpty()) " Yours is on ${away.map { it.from }.distinct().joinToString(" and ")}: Fuse can bring it here, and ${v.port.name} reads it once it's in." else ""
@@ -527,7 +696,7 @@ private fun AppState.portMenu(v: PortView): ContextMenuSpec {
             if (next(v)?.first == "Choose Files" && chosen == null && v.port.data.size == 1) continue
             add(MenuAction("data.${d.id}", if (chosen == null) "Choose ${d.name}" else "Choose Another Folder", FuseIcons.FolderOpen, detail = chosen ?: d.about, onSelect = {
                 closeOverlays()
-                choosePortFolder(v, d.id)
+                choosePortFolder(v, d.id, ask = true)
             }))
         }
         v.game?.let { g -> add(MenuAction("page", "Open Its Page", FuseIcons.Info, detail = "Steam, play time and saves, as for every game", onSelect = { closeOverlays(); go(Route.GameInfo(g)) })) }

@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -92,6 +93,8 @@ internal fun LibraryHeader(
     onView: (Int, LibrarySegment) -> Unit,
     onButton: (Int, LibraryButton) -> Unit,
     foldTools: Boolean = false,
+    /** On a narrow screen, how far the toolbar's own line has folded away (0..1). */
+    foldStacked: Float = 0f,
     /** Games in each view, shown on its tab (the active view shows [count]). */
     counts: Map<LibrarySegment, Int> = emptyMap(),
     /** The title of the system's game in the spotlight today, for its button. */
@@ -152,9 +155,9 @@ internal fun LibraryHeader(
         if (stacked) {
             Column(Modifier.fillMaxWidth().padding(top = if (platform != null) 0.dp else Space.xxs, bottom = Space.xxs)) {
                 Box(Modifier.fillMaxWidth().padding(end = Space.gutter)) { title() }
-                if (tools.isNotEmpty()) {
-                    Spacer(Modifier.height(Space.s))
-                    Box(Modifier.padding(start = Space.gutter - Space.xs)) { toolbar() }
+                if (tools.isNotEmpty() && foldStacked < 1f) {
+                    Spacer(Modifier.height(Space.s * (1f - foldStacked)))
+                    Box(Modifier.padding(start = Space.gutter - Space.xs).foldKeepingTop(foldStacked).graphicsLayer { alpha = 1f - foldStacked }) { toolbar() }
                 }
             }
         } else {

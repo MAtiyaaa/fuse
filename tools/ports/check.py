@@ -426,6 +426,12 @@ def signer(apk):
     return True, m.group(1) if m else ""
 
 
+# Asked this many times before a port's releases are taken to have no APK, waiting this many seconds
+# before the second try and twice as long before each after (an empty answer can last a minute).
+RELEASE_TRIES = 5
+RELEASE_RETRY_S = 5
+
+
 def check_android(index_path, out_path, releases=github_releases, download_apk=fetch, read=badging, verify=signer):
     """Each Android port's APK, the one Fuse installs, read as an app Android installs on an arm64 device."""
     index = read_json(index_path)
@@ -440,9 +446,19 @@ def check_android(index_path, out_path, releases=github_releases, download_apk=f
                 raise ValueError("its project isn't on GitHub, where Fuse installs from")
             if not port.get("package"):
                 raise ValueError("the list doesn't say its package")
-            release = release_of(releases(repo.group(1), repo.group(2).removesuffix(".git")), port.get("asset"))
+            # GitHub's API sometimes answers a project's releases without their files for a while
+            # (a different set of projects each time): asked again before the port is failed.
+            listed = []
+            release = None
+            for attempt in range(RELEASE_TRIES):
+                if attempt:
+                    time.sleep(RELEASE_RETRY_S * 2 ** (attempt - 1))
+                listed = releases(repo.group(1), repo.group(2).removesuffix(".git"))
+                release = release_of(listed, port.get("asset"))
+                if release is not None:
+                    break
             if release is None:
-                raise ValueError("no release has an APK Fuse would take")
+                raise ValueError(f"no release has an APK Fuse would take (GitHub listed {len(listed)} releases, asked {RELEASE_TRIES} times)")
             apk, why = apk_of(release, port.get("asset"))
             if apk is None:
                 raise ValueError(why)
@@ -474,6 +490,19 @@ def check_android(index_path, out_path, releases=github_releases, download_apk=f
     return results
 
 
+# A published list's revision: the list's own revision times this, plus when it was checked. Fuse
+# orders lists by the list's own revision first, so a list published before the one inside a newer
+# Fuse never stands in for it, however recently it was checked.
+PUBLISHED = 10 ** 10
+
+
+def published_revision(base, stamp):
+    """The revision a list of revision [base], checked at [stamp] (seconds), is published as."""
+    if base >= PUBLISHED:
+        base //= PUBLISHED
+    return base * PUBLISHED + stamp % PUBLISHED
+
+
 def mark(index, results_list, revision):
     """The list with each build verified only when a result for exactly its file passed, and each
     Android port only when tonight's check of its APK did."""
@@ -499,7 +528,7 @@ def mark(index, results_list, revision):
             port["verified"] = r["at"]
             if r.get("version"):
                 port["verifiedVersion"] = r["version"]
-    index["revision"] = max(int(index.get("revision", 0)) + 1, revision)
+    index["revision"] = published_revision(int(index.get("revision", 0)), revision)
     index["generated"] = datetime.date.today().isoformat()
     return index
 

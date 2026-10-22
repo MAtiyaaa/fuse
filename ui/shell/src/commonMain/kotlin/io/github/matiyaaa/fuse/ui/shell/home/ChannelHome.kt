@@ -220,7 +220,17 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
         val pages = (if (turns) listOf(Hint(HintButton.PAGE_PREV, ""), Hint(HintButton.PAGE_NEXT, "Browse")) else emptyList()) +
             if (paging.count > 1) listOf(Hint(HintButton.RIGHT_STICK, "Pages")) else emptyList()
         app.hints = when {
-            arranging && onBar != null -> listOfNotNull(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, if (onBar == 0) "Add a ${space.item}" else "Done"), Hint(HintButton.BACK, "Done").takeIf { onBar == 0 })
+            arranging && onBar != null -> {
+                val lead = barLead(ownHome, look)
+                val at = onBar ?: lead
+                val confirm = when {
+                    at == lead -> "Add a ${space.item}"
+                    at > lead -> "Done"
+                    ownHome != null && at < 2 -> if (at == 0) "This device's own ${space.name}" else "${space.name} on all devices"
+                    else -> look?.let { "Arrange the ${it.labels[at - (if (ownHome != null) 2 else 0)]} look" } ?: "Choose"
+                }
+                listOfNotNull(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, confirm), Hint(HintButton.BACK, "Done").takeIf { at != lead + 1 })
+            }
             arranging && onTools != null -> listOf(Hint(HintButton.CONFIRM, when (onTools) { 0 -> "Undo"; 1 -> space.resetLabel(page); 2 -> "New page"; else -> look?.let { "Arrange the ${it.labels[1 - it.editing]} look" } ?: if (ownHome == true) "${space.name} on all devices" else "This device's own ${space.name}" }), Hint(HintButton.BACK, "Done"))
             op is BoardOp.Carry -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Put down"), Hint(HintButton.BACK, "Cancel"))
             resizeLook -> listOf(Hint(HintButton.DPAD, "Resize"), Hint(HintButton.HOLD_OPTIONS, "Let go when done"))
@@ -416,13 +426,21 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
             }
             val bar = onBar
             if (arranging && bar != null && carried == null && e.modifier == null) {
+                // Along the bar: the switches' segments (whose Home, which screen's look), then Add, then Done.
+                val lead = barLead(ownHome, look)
+                val lookAt = if (ownHome != null) 2 else 0
                 return@InputLayer when (e.action) {
-                    NavAction.LEFT -> if (bar > 0) { onBar = 0; NavResult.MOVED } else NavResult.BLOCKED
-                    NavAction.RIGHT -> if (bar < 1) { onBar = 1; NavResult.MOVED } else NavResult.BLOCKED
+                    NavAction.LEFT -> if (bar > 0) { onBar = bar - 1; NavResult.MOVED } else NavResult.BLOCKED
+                    NavAction.RIGHT -> if (bar < lead + 1) { onBar = bar + 1; NavResult.MOVED } else NavResult.BLOCKED
                     NavAction.UP -> { onBar = null; NavResult.MOVED }
                     NavAction.DOWN -> NavResult.BLOCKED
                     NavAction.SELECT -> {
-                        if (bar == 0) { onBar = null; addPicker() } else stopArranging()
+                        when {
+                            ownHome != null && bar < 2 -> setOwnHome(bar == 0)
+                            look != null && bar - lookAt in 0..1 -> look.pick(bar - lookAt)
+                            bar == lead -> { onBar = null; addPicker() }
+                            else -> stopArranging()
+                        }
                         NavResult.ACTIVATED
                     }
                     NavAction.BACK -> { stopArranging(); NavResult.CONSUMED }
@@ -512,7 +530,7 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                             // Past the top row while arranging: Undo and Reset.
                             r != NavResult.MOVED && arranging && e.action == NavAction.UP -> { onTools = 0; NavResult.MOVED }
                             // Past the last row while arranging: Add and Done along the bottom.
-                            r != NavResult.MOVED && arranging && e.action == NavAction.DOWN && !resizeLook -> { onBar = 0; NavResult.MOVED }
+                            r != NavResult.MOVED && arranging && e.action == NavAction.DOWN && !resizeLook -> { onBar = barLead(ownHome, look); NavResult.MOVED }
                             // Past the board's side: the page beside it, when there is one.
                             r != NavResult.MOVED && (e.action == NavAction.LEFT || e.action == NavAction.RIGHT) && !e.isRepeat &&
                                 paging.turn(if (e.action == NavAction.RIGHT) 1 else -1, fromEdge = true) -> NavResult.MOVED

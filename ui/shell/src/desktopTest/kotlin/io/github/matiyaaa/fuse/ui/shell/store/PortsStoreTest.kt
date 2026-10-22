@@ -271,6 +271,25 @@ class PortsStoreTest {
     }
 
     @Test
+    fun installedWithTheGamesOneCopyInTheLibraryItIsUsedWithoutAsking(): Unit = runBlocking {
+        File(game, "SKY.DAT").writeBytes(ByteArray(16) { 7 })
+        File(game, "SKYRACER.EXE").writeBytes(ByteArray(8))
+        val (services, _) = services()
+        val store = createFuseStore(services, scope)
+        val dos = assertNotNull(store.library.addGameFile(File(game, "SKYRACER.EXE").absolutePath, PlatformId("dos"), title = "Sky Racer"))
+        store.ports.open()
+        store.until("listed") { it.loaded }
+
+        // Nothing chosen: installing finds the one copy in the library and sets the port up with it.
+        store.ports.install("skyport")
+        // Set up first, then the copy recorded as the game the port plays: both, before looking.
+        store.until("set up by itself") { it.port("skyport")?.ready == true }
+        withTimeout(20_000) { while ("skyport" !in services.data.settings.current().ports.copies) delay(25) }
+        assertEquals(dos.value, services.data.settings.current().ports.copies["skyport"])
+        assertEquals(game.absolutePath.replace('\\', '/'), services.data.settings.current().ports.folders["skyport"]?.get("game"))
+    }
+
+    @Test
     fun theCopyInTheLibraryIsTakenAndItsGamePlaysWithThePortUntilItIsRemoved(): Unit = runBlocking {
         File(game, "SKY.DAT").writeBytes(ByteArray(16) { 7 })
         File(game, "SKYRACER.EXE").writeBytes(ByteArray(8))

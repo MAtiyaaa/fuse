@@ -360,8 +360,9 @@ internal fun AddTile(selected: Boolean, shape: Shape, modifier: Modifier, label:
 
 /**
  * The toolbar floating over the board while it is arranged: what to do, and Add widget and Done.
- * A controller reaches the two buttons by moving down past the board's last row ([focused]: 0 Add,
- * 1 Done). On a narrow screen only the buttons.
+ * A controller reaches it by moving down past the board's last row. [focused] counts along it: the
+ * scope switch's two segments and the look switch's two (each only when shown, [barLead]), then Add,
+ * then Done. On a narrow screen only the buttons.
  */
 @Composable
 internal fun ArrangeBar(compact: Boolean, onAdd: () -> Unit, onDone: () -> Unit, ownHome: Boolean? = null, onOwnHome: (Boolean) -> Unit = {}, item: String = "widget", name: String = "Home", look: BoardLook? = null, focused: Int? = null) {
@@ -377,31 +378,44 @@ internal fun ArrangeBar(compact: Boolean, onAdd: () -> Unit, onDone: () -> Unit,
             }
             Row(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
                 // With Fuse Sync, whose Home this is: this device's own, or the profile's everywhere.
-                if (ownHome != null) HomeScopeSwitch(ownHome, compact, onOwnHome)
-                if (look != null) LookSwitch(look, compact)
-                FuseButton("Add $item", selected = focused == 0, onClick = onAdd, kind = ButtonKind.SECONDARY, icon = FuseIcons.Plus)
-                FuseButton("Done", selected = focused == 1, onClick = onDone, kind = ButtonKind.PRIMARY)
+                val lookAt = if (ownHome != null) 2 else 0
+                val lead = barLead(ownHome, look)
+                if (ownHome != null) HomeScopeSwitch(ownHome, compact, onOwnHome, focused = focused?.takeIf { it < 2 })
+                if (look != null) LookSwitch(look, compact, focused = focused?.minus(lookAt)?.takeIf { it in 0..1 })
+                FuseButton("Add $item", selected = focused == lead, onClick = onAdd, kind = ButtonKind.SECONDARY, icon = FuseIcons.Plus)
+                FuseButton("Done", selected = focused == lead + 1, onClick = onDone, kind = ButtonKind.PRIMARY)
             }
         }
     }
 }
+
+/** A switch segment the controller is on: ringed in the focus colour, as a focused button is. */
+@Composable
+private fun Modifier.segmentFocus(on: Boolean): Modifier {
+    val ring by fuselineColor(if (on) Fuse.colors.focus else Color.Transparent, Fuse.motion.tween(Durations.FAST), label = "segmentFocus")
+    return border(2.dp, ring, RoundedCornerShape(Radius.pill))
+}
+
+/** How many of [ArrangeBar]'s controller stops come before Add: two for each switch it shows. */
+internal fun barLead(ownHome: Boolean?, look: BoardLook?): Int = (if (ownHome != null) 2 else 0) + (if (look != null) 2 else 0)
 
 /**
  * Whose Home is being arranged, with Fuse Sync: "This Device" (its own, kept apart) or "All Devices"
  * on the profile. Two segments in a pill; the one in force is lit. Compact, the icons say it.
  */
 @Composable
-internal fun HomeScopeSwitch(own: Boolean, compact: Boolean, onChange: (Boolean) -> Unit) {
+internal fun HomeScopeSwitch(own: Boolean, compact: Boolean, onChange: (Boolean) -> Unit, focused: Int? = null) {
     val c = Fuse.colors
     Row(
         Modifier.clip(RoundedCornerShape(Radius.pill)).background(c.text.copy(alpha = 0.06f)).padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        for (mine in listOf(true, false)) {
+        for ((i, mine) in listOf(true, false).withIndex()) {
             val on = own == mine
             val bg by fuselineColor(if (on) c.accent else c.text.copy(alpha = 0f), Fuse.motion.tween(Durations.FAST), label = "scope")
             Row(
                 Modifier.height(40.dp).clip(RoundedCornerShape(Radius.pill)).background({ bg })
+                    .segmentFocus(focused == i)
                     .fuseClickable(shape = RoundedCornerShape(Radius.pill), scale = false, role = androidx.compose.ui.semantics.Role.RadioButton, onClickLabel = if (mine) "This device's Home" else "Home on all devices") { onChange(mine) }
                     .padding(horizontal = if (compact) Space.m else Space.l),
                 verticalAlignment = Alignment.CenterVertically,
@@ -421,7 +435,7 @@ internal fun HomeScopeSwitch(own: Boolean, compact: Boolean, onChange: (Boolean)
  * each with its screen's icon, the one being arranged lit. Compact, the icons say it.
  */
 @Composable
-internal fun LookSwitch(look: BoardLook, compact: Boolean) {
+internal fun LookSwitch(look: BoardLook, compact: Boolean, focused: Int? = null) {
     val c = Fuse.colors
     Row(
         Modifier.clip(RoundedCornerShape(Radius.pill)).background(c.text.copy(alpha = 0.06f)).padding(3.dp),
@@ -432,6 +446,7 @@ internal fun LookSwitch(look: BoardLook, compact: Boolean) {
             val bg by fuselineColor(if (on) c.accent else c.text.copy(alpha = 0f), Fuse.motion.tween(Durations.FAST), label = "look")
             Row(
                 Modifier.height(40.dp).clip(RoundedCornerShape(Radius.pill)).background({ bg })
+                    .segmentFocus(focused == i)
                     .fuseClickable(shape = RoundedCornerShape(Radius.pill), scale = false, role = androidx.compose.ui.semantics.Role.RadioButton, onClickLabel = "Arrange the $label look") { look.pick(i) }
                     .padding(horizontal = if (compact) Space.m else Space.l),
                 verticalAlignment = Alignment.CenterVertically,
