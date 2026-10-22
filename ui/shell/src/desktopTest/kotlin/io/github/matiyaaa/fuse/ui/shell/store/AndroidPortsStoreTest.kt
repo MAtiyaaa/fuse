@@ -346,6 +346,38 @@ class AndroidPortsStoreTest {
     }
 
     @Test
+    fun outsideASystemAGameIsNamedForWhatPlaysItThereItsPortOrItsOwnSystem(): Unit = runBlocking {
+        val apps = FakeApps(emptyList())
+        val retroArch = io.github.matiyaaa.fuse.model.InstalledEmulator(io.github.matiyaaa.fuse.model.EmulatorId("retroarch"), "RetroArch", Host.ANDROID, "com.retroarch", platforms = setOf(PlatformId("n64")), detectedVia = "Package")
+        val store = createFuseStore(services(apps, listOf(retroArch)), scope)
+        val game = majorasMask(store)
+        apps.apps.value = listOf(twoship)
+        assertEquals(twoship.id, eventually("attached by itself") { store.ports.androidPlayWith(game) })
+        suspend fun named(platform: PlatformId?) = store.library.games(GameQuery(platform = platform)).first().firstOrNull { it.id == game }?.platformShort
+        fun home(name: String) = store.library.home.value.takeIf { h -> h.recentlyPlayed.any { it.id == game && it.platformShort == name } && h.continuePlaying.any { it.id == game && it.platformShort == name } }
+        suspend fun play(via: PlayVia) = assertEquals(LaunchOutcome.Started, store.library.launch(game, via = via)).also { kotlinx.coroutines.delay(5) }
+
+        // Played as its port last: Home's widgets, the library and search name Ports, where it plays.
+        play(PlayVia.PORT)
+        eventually("Home names Ports") { home("Ports") }
+        assertEquals("Ports", eventually("the library names Ports") { named(null)?.takeIf { it == "Ports" } })
+        assertEquals("Ports", eventually("search names Ports") { store.library.search("Majora").first().games.firstOrNull { it.id == game }?.platformShort })
+        assertEquals("Ports", eventually("the game playing now") { store.library.home.value.playtime.currentGame?.takeIf { it.id == game }?.platformShort?.takeIf { it == "Ports" } })
+        // A system's own list keeps its system.
+        assertEquals("N64", named(PlatformId("n64")))
+
+        // Played with its emulator last: its own system again.
+        play(PlayVia.EMULATOR)
+        eventually("Home names the N64") { home("N64") }
+        assertEquals("N64", eventually("the library names the N64") { named(null)?.takeIf { it == "N64" } })
+
+        // The port chosen in Play With since: Play starts it from here, so it is named again.
+        store.ports.setAndroidPlayWith(game, twoship.id)
+        eventually("Home names Ports, the port chosen") { home("Ports") }
+        assertEquals("Ports", eventually("the library names Ports, the port chosen") { named(null)?.takeIf { it == "Ports" } })
+    }
+
+    @Test
     fun aRecompOrPortThatPlaysNoGameIsAGameOfItsOwnInPorts(): Unit = runBlocking {
         val apps = FakeApps(emptyList())
         val services = services(apps)
@@ -463,9 +495,9 @@ class AndroidPortsStoreTest {
         // The data release on top was passed over for the one with the APK.
         assertEquals(1, bridge.installs.size)
         assertEquals("com.example.mmrecomp", eventually("pinned") { services.data.settings.current().ports.androidInstalled["mmrecomp"] })
-        val view = eventually("installed") { store.ports.android.value.port("mmrecomp")?.takeIf { it.installed && it.attachedTo.isNotEmpty() } }
+        // Its install is over once it is attached too, so it shows no job then.
+        val view = eventually("installed") { store.ports.android.value.port("mmrecomp")?.takeIf { it.installed && it.attachedTo.isNotEmpty() && it.job == null } }
         assertEquals(listOf(game), view.attachedTo.map { it.id })
-        assertNull(view.job)
         eventually("a port") { store.apps.apps(AppFilter.ALL).first().firstOrNull { it.entry.id == appId && it.entry.kind == AppKind.PORT } }
 
         // A later download that is another app is never installed in its place.

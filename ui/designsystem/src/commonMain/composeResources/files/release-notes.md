@@ -36,6 +36,8 @@ No check plays a game, which needs your files.
   takes a library from your system names it.
 - On Android, where you open a game decides what plays it: from its system's page, its emulator;
   from Ports, its port; from your library, whatever played it last, until Play With picks again.
+  Home's widgets, the library and search name the system it plays in from there: Ports (or
+  Android) when that is its port, its own system when that is its emulator.
 - On Android, an app marked Recomp or Port needn't play one of your games. One that plays none is a
   game of its own in Ports, and Choose Its Game in its options plays it in a game's place.
 

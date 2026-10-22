@@ -1074,7 +1074,9 @@ by that session's runner (`android-app` for the app), unless the app was chosen 
 (`androidPlayWithAt`), and with the app before it was ever played here (`LibraryStore.appFor`). The
 game's page asks the same function, so it always names what Play starts, and follows the app's
 install (`StoreContext.portApps`); it says where the app starts instead ("From Ports, it starts in
-..."). A port that is detached or uninstalled takes the game out of Ports and Android.
+..."). Its cards outside a system's own list (Home's widgets and shelves, the library, search) name
+the system it plays in by the same rule: Ports (or Android) while Play there starts the app, its own
+system while it starts the emulator (`StoreContext.playedAs`); a system's own list keeps its system. A port that is detached or uninstalled takes the game out of Ports and Android.
 
 **Box art and details.** Each port is drawn with its game's box art: the library's own art for
 it once the game is here; else the art Fuse draws for the person's copy on RomM or another device;

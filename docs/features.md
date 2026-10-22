@@ -104,7 +104,8 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
   in the Ports system, attached to nothing. A ported game shows in the Ports system too (or
   Android, or only its own system, for every game, each system or each game): one game with one
   time and one set of achievements, started with the port from Ports, with its emulator from its
-  own system, and from the library with what played it last. Every port is drawn with its game's box art, year, publisher and genre, and when your
+  own system, and from the library with what played it last (Home's widgets and the library name
+  Ports when that was the port). Every port is drawn with its game's box art, year, publisher and genre, and when your
   copy of its game is on your RomM server or another device of the household, Ports says so and
   brings it here for you.
 - **Problems that explain themselves**: when a game can't start, Fuse says why, that nothing was

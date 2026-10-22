@@ -275,7 +275,8 @@ internal class DefaultLibraryOps(
         data.playSessions.totalSeconds(),
         data.playSessions.secondsSince(ctx.weekStart()),
         data.playSessions.dailyTotals(7, ctx.services.utcOffsetMillis()),
-        data.playSessions.openSession().mapLatest { open -> open?.let { ctx.card(it.gameId)?.to(it.startedAt) } },
+        // Following what it plays as too, which its start can change a moment after.
+        combine(data.playSessions.openSession(), ctx.playedAs) { open, _ -> open }.mapLatest { open -> open?.let { ctx.card(it.gameId)?.to(it.startedAt) } },
     ) { totals, week, daily, current ->
         PlaytimeSummary(totals.totalSeconds, week, daily.map { it.seconds }, current?.first, current?.second)
     }
@@ -394,8 +395,8 @@ internal class DefaultLibraryOps(
     // Lists and search ------------------------------------------------------------------------------
 
     override fun games(query: GameQuery): Flow<List<GameCard>> {
-        val cards = ctx.cards(summaries(query))
-        val platform = query.platform ?: return cards
+        val platform = query.platform ?: return ctx.cards(summaries(query))
+        val cards = ctx.cards(summaries(query), inSystem = true)
         // In the system a port's game also shows in, it plays with the port; in its own, with its emulator.
         return combine(cards, ctx.portPlaces) { list, places ->
             if (places.isEmpty()) {
@@ -421,7 +422,7 @@ internal class DefaultLibraryOps(
         // The totals from every game, the art only for the few shown.
         val picked = summaries(GameQuery(platform = platform)).map { systemPick(it, shown) }.distinctUntilChanged()
         return picked.flatMapLatest { p ->
-            ctx.cards(kotlinx.coroutines.flow.flowOf(p.recent + p.most)).map { cards ->
+            ctx.cards(kotlinx.coroutines.flow.flowOf(p.recent + p.most), inSystem = true).map { cards ->
                 val byId = cards.associateBy { it.id }
                 io.github.matiyaaa.fuse.ui.shell.store.SystemActivity(p.seconds, p.played, p.recent.mapNotNull { byId[it.id] }, p.most.mapNotNull { byId[it.id] })
             }
@@ -597,10 +598,32 @@ internal class DefaultLibraryOps(
         if (via == io.github.matiyaaa.fuse.ui.shell.store.PlayVia.EMULATOR) return null
         val app = androidPort?.invoke(id) ?: return null
         if (via == io.github.matiyaaa.fuse.ui.shell.store.PlayVia.PORT) return app
-        val played = last ?: lastOf?.invoke() ?: return app
-        if (played.asApp) return app
-        val chosenAt = ctx.settings.value.ports.androidPlayWithAt[id.value.toString()] ?: return null
-        return app.takeIf { chosenAt > played.at }
+        return app.takeIf { playsAsApp(last ?: lastOf?.invoke(), ctx.settings.value.ports.androidPlayWithAt[id.value.toString()]) }
+    }
+
+    /** From outside a system, whether a game with its app attached plays as it: see [appFor]. */
+    private fun playsAsApp(last: LastPlay?, chosenAt: Long?): Boolean =
+        last == null || last.asApp || (chosenAt != null && chosenAt > last.at)
+
+    init {
+        // The games that play as their app from outside a system, so their cards there (Home's
+        // widgets, the library, search) name where they play, Ports or Android, not their own system.
+        ctx.scope.launch {
+            ctx.portApps.map { it.keys.sortedBy(GameId::value) }.distinctUntilChanged().flatMapLatest { ids ->
+                if (ids.isEmpty()) {
+                    flowOf(emptyMap())
+                } else {
+                    combine(
+                        combine(ids.map { id -> data.playSessions.sessions(id).map { id to lastPlay(it) } }) { it.toList() },
+                        ctx.settings.map { it.ports.androidPlayWithAt }.distinctUntilChanged(),
+                        ctx.portPlaces,
+                    ) { lasts, chosenAt, places ->
+                        lasts.filter { (id, last) -> playsAsApp(last, chosenAt[id.value.toString()]) }
+                            .associate { (id, _) -> id to (places[id] ?: io.github.matiyaaa.fuse.launch.ports.PortAdapter.PLATFORM).let { p -> ctx.platform(p)?.shortName ?: "Ports" } }
+                    }
+                }
+            }.distinctUntilChanged().resilient().collect { ctx.playedAs.value = it }
+        }
     }
 
     /** Which emulator would play [game] here, as its page says it (a RomM game not downloaded yet included). */

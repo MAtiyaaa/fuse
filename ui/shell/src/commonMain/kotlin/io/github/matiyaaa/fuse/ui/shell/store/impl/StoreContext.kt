@@ -143,6 +143,13 @@ internal class StoreContext(
     /** Android: the app each game plays with that is installed now, by name, by game. Set by the Android ports. */
     val portApps = MutableStateFlow<Map<GameId, String>>(emptyMap())
 
+    /**
+     * Android: the games Play starts as their port from outside a system (Home, the library, search),
+     * by game, with the system a card names for them there (Ports, or Android) in place of their own.
+     * Set by the library.
+     */
+    val playedAs = MutableStateFlow<Map<GameId, String>>(emptyMap())
+
     /** Games Fuse shows but doesn't have (RomM's and other devices', by negative id), set by the stores that keep them. */
     @kotlin.concurrent.Volatile var remoteGames: RemoteGames? = null
 
@@ -186,14 +193,18 @@ internal class StoreContext(
         return (day - weekday) * DAY_MS - offset
     }
 
-    fun summaryToCard(summary: GameSummary, media: MediaSet?, offlineRoots: List<OfflineRoot> = offline.value): GameCard {
+    /**
+     * [summary] as a card. [playedAs] names the system it plays in from outside a system's own list,
+     * when that is its port's ([StoreContext.playedAs]); a system's list passes none.
+     */
+    fun summaryToCard(summary: GameSummary, media: MediaSet?, offlineRoots: List<OfflineRoot> = offline.value, playedAs: Map<GameId, String> = this.playedAs.value): GameCard {
         val platform = platform(summary.platformId)
         val away = if (offlineRoots.isEmpty() || summary.isApp) null else offlineRoots.firstOrNull { it.holds(summary.folderPath) }
         return GameCard(
             id = summary.id,
             platformId = summary.platformId,
             title = summary.displayTitle,
-            platformShort = platform?.shortName ?: summary.platformId.value.uppercase(),
+            platformShort = playedAs[summary.id] ?: platform?.shortName ?: summary.platformId.value.uppercase(),
             accent = platform?.accent ?: DEFAULT_ACCENT,
             art = media?.let(Art::from)?.let(::withAppIcon) ?: Art.None,
             favorite = summary.favorite,
@@ -220,16 +231,20 @@ internal class StoreContext(
         return art.copy(icon = model)
     }
 
-    /** Turns game summaries into cards with their artwork, following both games and media changes. */
+    /**
+     * Turns game summaries into cards with their artwork, following games, media changes and what a
+     * game plays as ([playedAs]); [inSystem] for a system's own list, whose cards keep their system.
+     */
     @OptIn(ExperimentalCoroutinesApi::class)
-    fun cards(summaries: Flow<List<GameSummary>>): Flow<List<GameCard>> = summaries
+    fun cards(summaries: Flow<List<GameSummary>>, inSystem: Boolean = false): Flow<List<GameCard>> = summaries
         .distinctUntilChanged()
         .flatMapLatest { list ->
             if (list.isEmpty()) {
                 flowOf(emptyList())
             } else {
-                combine(data.media.observeFor(list.map { MediaOwner.OfGame(it.id) }), offline) { media, roots ->
-                    list.map { summaryToCard(it, media[MediaOwner.OfGame(it.id)], roots) }
+                val theirs = if (inSystem) flowOf(emptyMap()) else playedAs.map { m -> list.mapNotNull { s -> m[s.id]?.let { s.id to it } }.toMap() }.distinctUntilChanged()
+                combine(data.media.observeFor(list.map { MediaOwner.OfGame(it.id) }), offline, theirs) { media, roots, named ->
+                    list.map { summaryToCard(it, media[MediaOwner.OfGame(it.id)], roots, named) }
                 }
             }
         }
