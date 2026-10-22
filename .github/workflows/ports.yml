@@ -39,13 +39,14 @@ jobs:
         uses: actions/checkout@v7
 
       # A virtual screen for the ports that open a window, and the libraries a desktop has that some
-      # ports take from the system: SDL2 and its image and mixer libraries (fallout2-ce, fheroes2,
-      # Julius) and OpenGL's own library (the recompilations' runtimes).
+      # ports take from the system (each such port's notes name them): SDL2 and its image and mixer
+      # libraries (fallout2-ce, fheroes2, Julius), GLEW (the RSDK decompilations) and OpenGL's own
+      # library (the recompilations' runtimes).
       - name: Install a virtual screen and a desktop's libraries
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y xvfb libsdl2-2.0-0 libsdl2-image-2.0-0 libsdl2-mixer-2.0-0 libopengl0
+          sudo apt-get install -y xvfb libsdl2-2.0-0 libsdl2-image-2.0-0 libsdl2-mixer-2.0-0 libglew2.2 libopengl0
 
       - name: Test the check itself
         working-directory: tools/ports
