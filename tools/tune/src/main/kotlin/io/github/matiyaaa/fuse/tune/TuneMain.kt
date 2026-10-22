@@ -25,9 +25,20 @@ class Emulator(
     val releaseName: (String) -> String = { it },
     /** How many releases back it is read; one for daily builds that all say the same version. */
     val reads: Int = RELEASES,
+    /**
+     * Code it takes from other repositories (git submodules), read at the commit the release
+     * names: each submodule's path to the files read inside it, as patterns, kept under that path.
+     */
+    val submodules: Map<String, List<String>> = emptyMap(),
+    /** How its settings file is written, where it isn't ini (`json`), as Fuse is told in [TuneWriter.kotlinOf]. */
+    val format: String = "ini",
+    /** How it writes a switch, on then off, where it isn't `true` and `false`. */
+    val switches: Pair<String, String>? = null,
 )
 
-val EMULATORS = listOf(
+val EMULATORS: List<Emulator> get() = BUILT_IN + PortSources.emulators()
+
+private val BUILT_IN = listOf(
     // Dolphin's releases are named by year and month (2609, then 2609a for a fix).
     Emulator("dolphin", "dolphin-emu/dolphin", Regex("""^\d{4}[a-z]?$"""), Dolphin.FILES, Dolphin::parse),
     // DuckStation's releases are its build numbers.
@@ -94,7 +105,7 @@ fun main(args: Array<String>) {
         val tags = if (head != null) listOf(head) else releases(tagsOf(e.git), e.release).take(e.reads)
         require(tags.isNotEmpty()) { "${e.family}: no release tags found" }
         val perTag = tags.associateWith { tag ->
-            val files = e.tree?.let { treeFiles(e.git, tag, it) } ?: e.files.mapNotNull { path -> fetch(e.raw(tag, path))?.let { path to it } }.toMap()
+            val files = e.tree?.let { treeFiles(e.git, tag, it, e.submodules) } ?: e.files.mapNotNull { path -> fetch(e.raw(tag, path))?.let { path to it } }.toMap()
             e.parse(files)
         }
         perTag.forEach { (tag, found) -> println("${e.family} $tag: ${found.size} settings") }
@@ -106,21 +117,30 @@ fun main(args: Array<String>) {
     // No sign-in is offered (see [Credentials]).
     val fresh = (read.map { (e, v) -> Triple(e.family, v.first, v.second) } + cores(only))
         .map { (family, tags, settings) -> Triple(family, tags, settings.filterNot { Credentials.held(it.found) }) }
+    val formats = EMULATORS.filter { it.format != "ini" }.associate { it.family to it.format }
+    val switches = EMULATORS.mapNotNull { e -> e.switches?.let { e.family to "${it.first}|${it.second}" } }.toMap()
     if (only == null) {
-        target.writeText(TuneWriter.kotlin(fresh))
+        target.writeText(TuneWriter.kotlin(fresh, formats, switches))
     } else {
-        target.writeText(keep(target.takeIf { it.isFile }?.readText(), fresh))
+        target.writeText(keep(target.takeIf { it.isFile }?.readText(), fresh, formats, switches))
     }
     println("Wrote ${target.path}")
 }
 
 /** The data file [before] with the families in [fresh] replaced (or added after the others). */
-fun keep(before: String?, fresh: List<Triple<String, List<String>, List<Merged>>>): String {
+fun keep(
+    before: String?,
+    fresh: List<Triple<String, List<String>, List<Merged>>>,
+    formats: Map<String, String> = emptyMap(),
+    switches: Map<String, String> = emptyMap(),
+): String {
     val (releases, lines) = before?.let(TuneWriter::readBack) ?: (emptyList<Pair<String, List<String>>>() to emptyList())
     val families = fresh.map { it.first }.toSet()
     val keptReleases = releases.filter { it.first !in families } + fresh.map { it.first to it.second }
     val keptLines = lines.filter { it.substringBefore('\t') !in families && !heldCredential(it) } + fresh.flatMap { (family, _, settings) -> settings.map { TuneWriter.line(family, it) } }
-    return TuneWriter.kotlinOf(keptReleases, keptLines)
+    // Each family's file and switches as the definitions say now, those not defined here as the file had them.
+    fun merged(name: String, now: Map<String, String>) = before.orEmpty().let { TuneWriter.readMap(it, name) }.filterKeys { it !in families && it !in now } + now
+    return TuneWriter.kotlinOf(keptReleases, keptLines, merged("TUNE_FORMATS", formats), merged("TUNE_SWITCHES", switches))
 }
 
 /** Whether a data line (family, file, section, key, kind, ...) is a sign-in's (see [Credentials]). */
@@ -262,23 +282,80 @@ private fun optionsFile(git: String, branch: String): CoreTree? {
     }
 }
 
-/** The files matching [patterns] at [ref] (a tag or commit) in the repository at [git], from a shallow sparse checkout. */
-private fun treeFiles(git: String, ref: String, patterns: List<String>): Map<String, String> {
+/**
+ * The files matching [patterns] at [ref] (a tag or commit) in the repository at [git], from a
+ * shallow sparse checkout; and of each of its [submodules] (path to patterns inside it), the files
+ * at the commit [ref] pins it to, from the address its `.gitmodules` gives, kept under its path.
+ */
+private fun treeFiles(git: String, ref: String, patterns: List<String>, submodules: Map<String, List<String>> = emptyMap()): Map<String, String> {
     val dir = java.nio.file.Files.createTempDirectory("tune-tree").toFile()
     try {
-        fun run(vararg a: String): Boolean {
-            val p = ProcessBuilder(listOf("git") + a).directory(dir).redirectErrorStream(true).start()
-            p.inputStream.bufferedReader().readText()
-            return p.waitFor() == 0
+        fun run(vararg a: String, at: java.io.File = dir): String? {
+            val p = ProcessBuilder(listOf("git") + a).directory(at).redirectErrorStream(true).start()
+            val text = p.inputStream.bufferedReader().readText()
+            return if (p.waitFor() == 0) text else null
         }
-        if (!run("init", "-q") || !run("remote", "add", "origin", git)) return emptyMap()
-        if (!run("fetch", "-q", "--depth", "1", "--filter=blob:none", "origin", ref)) return emptyMap()
-        if (!run("sparse-checkout", "set", "--no-cone", *patterns.toTypedArray()) || !run("checkout", "-q", "FETCH_HEAD")) return emptyMap()
-        return dir.walkTopDown().filter { it.isFile && ".git" !in it.relativeTo(dir).path.split(java.io.File.separatorChar) }
-            .associate { it.relativeTo(dir).invariantSeparatorsPath to it.readText() }
+        fun sparse(at: java.io.File, url: String, commit: String, wanted: List<String>): Boolean =
+            run("init", "-q", at = at) != null && run("remote", "add", "origin", url, at = at) != null &&
+                run("fetch", "-q", "--depth", "1", "--filter=blob:none", "origin", commit, at = at) != null &&
+                run("sparse-checkout", "set", "--no-cone", *wanted.toTypedArray(), at = at) != null &&
+                run("checkout", "-q", "FETCH_HEAD", at = at) != null
+        if (!sparse(dir, git, ref, patterns)) return emptyMap()
+        val out = dir.walkTopDown().filter { it.isFile && ".git" !in it.relativeTo(dir).path.split(java.io.File.separatorChar) }
+            .associate { it.relativeTo(dir).invariantSeparatorsPath to it.readText() }.toMutableMap()
+        if (submodules.isEmpty()) return out
+        val modules = gitmodules(run("show", "FETCH_HEAD:.gitmodules").orEmpty())
+        for ((path, wanted) in submodules) {
+            val commit = run("ls-tree", "FETCH_HEAD", path)?.let { Regex("""^160000 commit ([0-9a-f]{40})\t""").find(it.trim())?.groupValues?.get(1) }
+                ?: error("$git $ref: no submodule at $path")
+            val url = modules[path]?.let { resolveUrl(git, it) } ?: error("$git $ref: .gitmodules names no address for $path")
+            val sub = java.nio.file.Files.createTempDirectory("tune-sub").toFile()
+            try {
+                check(sparse(sub, url, commit, wanted)) { "$url: couldn't read $commit" }
+                sub.walkTopDown().filter { it.isFile && ".git" !in it.relativeTo(sub).path.split(java.io.File.separatorChar) }
+                    .forEach { out["$path/${it.relativeTo(sub).invariantSeparatorsPath}"] = it.readText() }
+            } finally {
+                sub.deleteRecursively()
+            }
+        }
+        return out
     } finally {
         dir.deleteRecursively()
     }
+}
+
+/** `.gitmodules`: each submodule's path to its address. */
+fun gitmodules(text: String): Map<String, String> {
+    val out = LinkedHashMap<String, String>()
+    var path: String? = null
+    var url: String? = null
+    fun flush() {
+        if (path != null && url != null) out[path!!] = url!!
+        path = null
+        url = null
+    }
+    for (raw in text.lines()) {
+        val line = raw.trim()
+        when {
+            line.startsWith("[submodule") -> flush()
+            line.startsWith("path") && '=' in line -> path = line.substringAfter('=').trim()
+            line.startsWith("url") && '=' in line -> url = line.substringAfter('=').trim()
+        }
+    }
+    flush()
+    return out
+}
+
+/** A submodule's address, a relative one (`../RecompFrontend.git`) read from the repository's own. */
+fun resolveUrl(base: String, url: String): String {
+    if (!url.startsWith("../") && !url.startsWith("./")) return url
+    var root = base.trimEnd('/').removeSuffix(".git")
+    var rest = url
+    while (rest.startsWith("../") || rest.startsWith("./")) {
+        if (rest.startsWith("../")) root = root.substringBeforeLast('/')
+        rest = rest.substringAfter('/')
+    }
+    return "$root/$rest"
 }
 
 /** The commit at the head of [branch] in the repository at [git]. */

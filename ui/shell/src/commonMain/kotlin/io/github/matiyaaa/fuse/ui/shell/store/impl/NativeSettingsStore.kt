@@ -114,11 +114,15 @@ internal class NativeSettingsStore(
             yaml -> YamlText(content ?: "")
             cfg -> io.github.matiyaaa.fuse.launch.settings.CfgText(content ?: "")
             // A text setting is written as a JSON string, whatever it holds.
-            json -> io.github.matiyaaa.fuse.launch.settings.JsonText(content ?: "") { section, key -> Tune.find(family, null, section, key)?.kind == TuneKind.TEXT }
-            toml -> io.github.matiyaaa.fuse.launch.settings.TomlText(content ?: "") { section, key -> Tune.find(family, null, section, key)?.kind == TuneKind.TEXT }
+            json -> io.github.matiyaaa.fuse.launch.settings.JsonText(content ?: "") { section, key -> isText(section, key) }
+            toml -> io.github.matiyaaa.fuse.launch.settings.TomlText(content ?: "") { section, key -> isText(section, key) }
             mameIni -> io.github.matiyaaa.fuse.launch.settings.MameIniText(content ?: "")
             else -> IniText(content ?: "", spaced = !(eden || azahar))
         }
+
+        /** Whether the setting at [section] and [key] (in any of the emulator's files) holds text. */
+        private fun isText(section: String, key: String): Boolean =
+            Tune.forEmulator(family).any { it.kind == TuneKind.TEXT && it.section.equals(section, ignoreCase = true) && it.key.equals(key, ignoreCase = true) }
 
         /** What [file] holds for [key] as the emulator reads it: Eden's from its keys together, every other's as written. */
         fun valueIn(file: SettingsText?, section: String, key: String, game: Boolean, default: String?): String? = when {
@@ -199,7 +203,15 @@ internal class NativeSettingsStore(
         val portFiles = ctx.services.portFiles ?: return no("Not on this device", "Ports' settings can be changed from Fuse on a computer.")
         val layout = io.github.matiyaaa.fuse.launch.ports.PortLayout(root, id)
         val path = own.file.replace(io.github.matiyaaa.fuse.model.PortTokens.HOME, layout.home).replace(io.github.matiyaaa.fuse.model.PortTokens.INSTALL, layout.install)
-        return Target(id, port.name, files, path, null, port.game, version = port.version, writer = PortWriter(portFiles)) to null
+        // A port that keeps a file per tab (the N64 recompilations' general.json, graphics.json) keeps them together, beside the one the list names.
+        val folder = path.substringBeforeLast('/')
+        val others = Tune.forEmulator(id).mapNotNull { it.file }.distinct().associateWith { "$folder/$it" }
+        return Target(
+            id, port.name, files, path, null, port.game, globals = others,
+            // As Fuse Tune read the port's code, whatever an older list says (it names only ini).
+            json = Tune.format(id) == "json",
+            version = port.version, writer = PortWriter(portFiles),
+        ) to null
     }
 
     private suspend fun target(id: GameId?, emulator: EmulatorId?): Pair<Target?, EmulatorSettingsView.Unavailable?> {

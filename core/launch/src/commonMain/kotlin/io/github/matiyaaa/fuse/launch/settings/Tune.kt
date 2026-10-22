@@ -116,6 +116,9 @@ object Tune {
         return read.firstOrNull { TuneVersions.compare(TuneVersions.numbers(it), numbers) <= 0 } ?: read.last()
     }
 
+    /** How [family]'s settings file is written: `ini`, or `json` where Fuse Tune read it so (a port's tabs). */
+    fun format(family: String): String = TUNE_FORMATS[family] ?: "ini"
+
     /** A setting by [TuneSetting.id]. */
     fun find(id: String): TuneSetting? = all[id.substringBefore('|')]?.firstOrNull { it.id == id }
 
@@ -159,10 +162,14 @@ object Tune {
      */
     private val SWITCH_WORDS = mapOf("devilutionx" to ("1" to "0"), "flycast" to ("yes" to "no"), "mame" to ("1" to "0"))
 
+    /** How [family] writes a switch, on then off: its own above, else as Fuse Tune read it. */
+    private fun switchWords(family: String): Pair<String, String>? =
+        SWITCH_WORDS[family] ?: TUNE_SWITCHES[family]?.split('|')?.takeIf { it.size == 2 }?.let { it[0] to it[1] }
+
     /** [value] of a switch as Fuse shows it (`true` or `false`), from what [family] writes (Supermodel's every way it reads one). */
     fun switchShown(family: String, value: String?): String? {
         if (family == "supermodel") return SupermodelIni.switch(value)
-        val (on, off) = SWITCH_WORDS[family] ?: return value
+        val (on, off) = switchWords(family) ?: return value
         return when (value?.trim()) {
             on -> "true"
             off -> "false"
@@ -171,7 +178,7 @@ object Tune {
     }
 
     /** A switch as [family] writes it, from `true` or `false`; null when it writes them as they are. */
-    fun switchWritten(family: String, on: Boolean): String? = SWITCH_WORDS[family]?.let { if (on) it.first else it.second }
+    fun switchWritten(family: String, on: Boolean): String? = switchWords(family)?.let { if (on) it.first else it.second }
 
     private fun host(name: String): Host? = when (name) {
         "windows" -> Host.WINDOWS

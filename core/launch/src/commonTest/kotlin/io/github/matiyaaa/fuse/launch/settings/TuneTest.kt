@@ -20,7 +20,7 @@ class TuneTest {
     @Test
     fun everyEmulatorReadHasItsReleasesAndASettingsCountLikeItsOwn() {
         // RetroArch's cores are read as families of their own (`core.snes9x`), at one commit each.
-        val emulators = Tune.families.filterNot { it.startsWith(CoreOptionFiles.family("")) }.toSet()
+        val emulators = Tune.families.filterNot { it.startsWith(CoreOptionFiles.family("")) || it in N64_PORTS }.toSet()
         assertEquals(
             setOf(
                 "dolphin", "duckstation", "ppsspp", "pcsx2", "rpcs3", "devilutionx", "openrct2", "fallout2-ce", "retroarch", "eden", "citron",
@@ -38,6 +38,31 @@ class TuneTest {
             assertTrue(Tune.forEmulator(family).size > (least[family] ?: 150), "$family: ${Tune.forEmulator(family).size}")
             assertTrue(Tune.forEmulator(family).all { it.releases.isNotEmpty() }, family)
         }
+    }
+
+    @Test
+    fun theN64RecompilationsAreReadAtTheReleaseTheListNamesATabAFile() {
+        for (family in N64_PORTS) {
+            assertEquals(1, Tune.releases(family).size, family)
+            assertEquals("json", Tune.format(family), family)
+            val settings = Tune.forEmulator(family)
+            assertTrue(settings.size >= 10, "$family: ${settings.size}")
+            // Each tab its own file beside the others, its keys at the top of it.
+            assertTrue(settings.all { it.file?.endsWith(".json") == true && it.section.isEmpty() && !it.perGame }, family)
+            assertTrue(settings.any { it.file == "graphics.json" }, family)
+        }
+        // RecompFrontend's options, with the game's own words and its choices' names.
+        val resolution = Tune.find("banjorecomp", "graphics.json", "", "res_option")!!
+        assertEquals(Triple(TuneKind.CHOICE, "Auto", "Resolution"), Triple(resolution.kind, resolution.default, resolution.label))
+        assertEquals(listOf("Original", "Original 2x", "Auto"), resolution.choices.map { it.shown })
+        val downsampling = Tune.find("banjorecomp", "graphics.json", "", "ds_option")!!
+        assertEquals(listOf("0", "2", "4"), downsampling.choices.map { it.value }, "written as its number, as the tab serializes it")
+        // The template's: ultramodern's words for the enum, the default from_json gives.
+        val msaa = Tune.find("zelda64recomp", "graphics.json", "", "msaa_option")!!
+        assertEquals("MSAA2X", msaa.default)
+        assertTrue("MSAA4X" in msaa.choices.map { it.value })
+        assertEquals(TuneKind.CHOICE, Tune.find("zelda64recomp", "graphics.json", "", "wm_option")!!.kind, "its type from GraphicsConfig, its default worked out as it runs")
+        assertEquals("ini", Tune.format("devilutionx"))
     }
 
     @Test
@@ -196,3 +221,10 @@ class TuneTest {
         assertEquals("v0.1-11826", Tune.releaseFor("duckstation", "0.1-11830"))
     }
 }
+
+/** The N64 recompilations Fuse Ports lists, read by Fuse Tune at the release the list names. */
+private val N64_PORTS = setOf(
+    "zelda64recomp", "dino-recomp", "megaman64-recomp", "bm64-recomp", "goemon64-recomp", "dnzh-recomp", "mariokart64-recomp", "starfox64-recomp",
+    "banjorecomp", "sssv-recomp", "harvestmoon64-recomp", "dk64-recomp", "lamborghini-recomp", "aerogauge-recomp", "snowboardkids2-recomp",
+    "battlezone-recomp", "dinotale",
+)

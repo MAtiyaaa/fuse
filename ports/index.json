@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "revision": 7,
+  "revision": 8,
   "generated": "2026-10-22",
   "ports": [
     {
@@ -181,7 +181,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "Zelda64Recomp v1.2.2: README.md (the North American ROM, other formats converted, portable.txt); src/main/main.cpp supported_games (rom_hash 0xEF18B4A9E2386169, game_id mm.n64.us.1.0); src/game/config.cpp get_app_folder_path (APP_FOLDER_PATH on Linux, LocalAppData on Windows); N64ModernRuntime df7e820 librecomp/src/recomp.cpp (select_rom, check_rom_start, byteswap_data, check_stored_rom: the ROM kept as <game_id>.z64 in that folder, checked by XXH3-64) and src/pi.cpp get_save_file_path (saves in that folder); .github/workflows/validate.yml (the Linux build, a tarball the release zips)"
+      "source": "Zelda64Recomp v1.2.2: README.md (the North American ROM, other formats converted, portable.txt); src/main/main.cpp supported_games (rom_hash 0xEF18B4A9E2386169, game_id mm.n64.us.1.0); src/game/config.cpp get_app_folder_path (APP_FOLDER_PATH on Linux, LocalAppData on Windows); N64ModernRuntime df7e820 librecomp/src/recomp.cpp (select_rom, check_rom_start, byteswap_data, check_stored_rom: the ROM kept as <game_id>.z64 in that folder, checked by XXH3-64) and src/pi.cpp get_save_file_path (saves in that folder); .github/workflows/validate.yml (the Linux build, a tarball the release zips); src/game/config.cpp save_general_config, save_graphics_config and save_sound_config (general.json, graphics.json and sound.json in that folder, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "banjorecomp",
@@ -220,7 +221,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "BanjoRecomp v1.0.2: README.md (the North American 1.0 ROM, other formats converted, portable.txt, saves); src/main/main.cpp supported_games (rom_hash 0x1B67585D56E07F8C, game_id bk.n64.us.1.0); include/banjo_config.h program_id; RecompFrontend d0d90ba recompui/src/util/file.cpp get_app_folder_path (APP_FOLDER_PATH on Linux, LocalAppData on Windows); N64ModernRuntime ca568b6 librecomp/src/recomp.cpp (stored_filename: <game_id>.z64 in that folder, checked by XXH3-64) and src/pi.cpp set_save_file_path (saves in that folder); .github/workflows/validate.yml (the Linux build: BanjoRecompiled, assets and recompcontrollerdb.txt in a tarball)"
+      "source": "BanjoRecomp v1.0.2: README.md (the North American 1.0 ROM, other formats converted, portable.txt, saves); src/main/main.cpp supported_games (rom_hash 0x1B67585D56E07F8C, game_id bk.n64.us.1.0); include/banjo_config.h program_id; RecompFrontend d0d90ba recompui/src/util/file.cpp get_app_folder_path (APP_FOLDER_PATH on Linux, LocalAppData on Windows); N64ModernRuntime ca568b6 librecomp/src/recomp.cpp (stored_filename: <game_id>.z64 in that folder, checked by XXH3-64) and src/pi.cpp set_save_file_path (saves in that folder); .github/workflows/validate.yml (the Linux build: BanjoRecompiled, assets and recompcontrollerdb.txt in a tarball); RecompFrontend recompui/src/config and the game's own add_*_option calls (each settings tab a <tab>.json in that folder, written by librecomp Config::save_config, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "ape-escape-recomp",
@@ -1142,7 +1144,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "SSSV_Recomp v0.2.0: src/main/main.cpp supported_games (rom_hash 0x912A068AADB0D0C5, game_id sssv.n64.us.1.0); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "SSSV_Recomp v0.2.0: src/main/main.cpp supported_games (rom_hash 0x912A068AADB0D0C5, game_id sssv.n64.us.1.0); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); RecompFrontend recompui/src/config and the game's own add_*_option calls (each settings tab a <tab>.json in that folder, written by librecomp Config::save_config, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "dino-recomp",
@@ -1181,7 +1184,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "dino-recomp v0.3.0: src/main/main.cpp supported_games (rom_hash 0xB231A00966BE1430, game_id dino); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "dino-recomp v0.3.0: src/main/main.cpp supported_games (rom_hash 0xB231A00966BE1430, game_id dino); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/game/config.cpp save_general_config, save_graphics_config and save_sound_config (general.json, graphics.json and sound.json in that folder, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "harvestmoon64-recomp",
@@ -1220,7 +1224,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "HarvestMoon64Recomp v1.2.2: src/main/main.cpp supported_games (rom_hash 0x68b2c3755c527305, game_id harvest_moon_64); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "HarvestMoon64Recomp v1.2.2: src/main/main.cpp supported_games (rom_hash 0x68b2c3755c527305, game_id harvest_moon_64); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); RecompFrontend recompui/src/config and the game's own add_*_option calls (each settings tab a <tab>.json in that folder, written by librecomp Config::save_config, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "megaman64-recomp",
@@ -1259,7 +1264,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "MegaMan64Recompiled v0.9.1: src/main/main.cpp supported_games (rom_hash 0x0c74c7489d01643b, game_id megaman.n64.us.1.0); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "MegaMan64Recompiled v0.9.1: src/main/main.cpp supported_games (rom_hash 0x0c74c7489d01643b, game_id megaman.n64.us.1.0); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/game/config.cpp save_general_config, save_graphics_config and save_sound_config (general.json, graphics.json and sound.json in that folder, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "dk64-recomp",
@@ -1298,7 +1304,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "Donkey-Kong-64-Recompiled v1.0.3: src/main/main.cpp supported_games (rom_hash 0x4d876060f09b3fc5, game_id DK64); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "Donkey-Kong-64-Recompiled v1.0.3: src/main/main.cpp supported_games (rom_hash 0x4d876060f09b3fc5, game_id DK64); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); RecompFrontend recompui/src/config and the game's own add_*_option calls (each settings tab a <tab>.json in that folder, written by librecomp Config::save_config, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "bm64-recomp",
@@ -1337,7 +1344,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "BM64Recomp v1.0.0: src/main/main.cpp supported_games (rom_hash 0xc4c0b74bbb696426, game_id bm64_us); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "BM64Recomp v1.0.0: src/main/main.cpp supported_games (rom_hash 0xc4c0b74bbb696426, game_id bm64_us); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/game/config.cpp save_general_config, save_graphics_config and save_sound_config (general.json, graphics.json and sound.json in that folder, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "goemon64-recomp",
@@ -1376,7 +1384,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "Goemon64Recomp v0.2.0-dev: src/main/main.cpp supported_games (rom_hash 0xDB1BC7EE0E6BEBA1, game_id mnsg.us); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "Goemon64Recomp v0.2.0-dev: src/main/main.cpp supported_games (rom_hash 0xDB1BC7EE0E6BEBA1, game_id mnsg.us); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/game/config.cpp save_general_config, save_graphics_config and save_sound_config (general.json, graphics.json and sound.json in that folder, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "lamborghini-recomp",
@@ -1415,7 +1424,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "automobililamborghini-recomp v0.9.0: src/main/main.cpp supported_games (rom_hash 0x525201d7279f34e3, game_id lamborghini.us); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "automobililamborghini-recomp v0.9.0: src/main/main.cpp supported_games (rom_hash 0x525201d7279f34e3, game_id lamborghini.us); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); RecompFrontend recompui/src/config and the game's own add_*_option calls (each settings tab a <tab>.json in that folder, written by librecomp Config::save_config, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "aerogauge-recomp",
@@ -1454,7 +1464,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "aerogauge-recomp v0.6.2: src/main/main.cpp supported_games (rom_hash 0x89ea0690f3e22201, game_id aerogauge.us; the Japanese Rev A beside it); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "aerogauge-recomp v0.6.2: src/main/main.cpp supported_games (rom_hash 0x89ea0690f3e22201, game_id aerogauge.us; the Japanese Rev A beside it); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); RecompFrontend recompui/src/config and the game's own add_*_option calls (each settings tab a <tab>.json in that folder, written by librecomp Config::save_config, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "snowboardkids2-recomp",
@@ -1493,7 +1504,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "snowboardkids2-recomp v2.0.2: src/main/main.cpp supported_games (rom_hash 0x81f434ff431162eb, game_id snowboardkids2.n64.us); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "snowboardkids2-recomp v2.0.2: src/main/main.cpp supported_games (rom_hash 0x81f434ff431162eb, game_id snowboardkids2.n64.us); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); RecompFrontend recompui/src/config and the game's own add_*_option calls (each settings tab a <tab>.json in that folder, written by librecomp Config::save_config, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "dnzh-recomp",
@@ -1532,7 +1544,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "DNZHRecomp 0.0.3: src/main/main.cpp supported_games (rom_hash 0xafc33da7101fec88, game_id dnzh.us); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "DNZHRecomp 0.0.3: src/main/main.cpp supported_games (rom_hash 0xafc33da7101fec88, game_id dnzh.us); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/game/config.cpp save_general_config, save_graphics_config and save_sound_config (general.json, graphics.json and sound.json in that folder, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "mariokart64-recomp",
@@ -1571,7 +1584,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "MarioKart64Recomp v0.9.2: src/main/main.cpp supported_games (rom_hash 0x54572403569b87c1, game_id mk64.us); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "MarioKart64Recomp v0.9.2: src/main/main.cpp supported_games (rom_hash 0x54572403569b87c1, game_id mk64.us); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/game/config.cpp save_general_config, save_graphics_config and save_sound_config (general.json, graphics.json and sound.json in that folder, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "starfox64-recomp",
@@ -1610,7 +1624,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "Starfox64Recomp 1.0.3: src/main/main.cpp supported_games (rom_hash 0x163fd3fc3813f54e, game_id sf64.n64.us.1.1); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "Starfox64Recomp 1.0.3: src/main/main.cpp supported_games (rom_hash 0x163fd3fc3813f54e, game_id sf64.n64.us.1.1); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/game/config.cpp save_general_config, save_graphics_config and save_sound_config (general.json, graphics.json and sound.json in that folder, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "battlezone-recomp",
@@ -1649,7 +1664,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "bzrecomp v0.1.0-beta: src/main/main.cpp supported_games (rom_hash 0xf5f240b373301b9d, game_id bz.n64.us.1.0); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "bzrecomp v0.1.0-beta: src/main/main.cpp supported_games (rom_hash 0xf5f240b373301b9d, game_id bz.n64.us.1.0); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); RecompFrontend recompui/src/config and the game's own add_*_option calls (each settings tab a <tab>.json in that folder, written by librecomp Config::save_config, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "dinotale",
@@ -1688,7 +1704,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "dinotale 0.1.6: src/main/main.cpp supported_games (rom_hash 0xf1d8a6737dda5b82, game_id yoshisstory.n64.us); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "dinotale 0.1.6: src/main/main.cpp supported_games (rom_hash 0xf1d8a6737dda5b82, game_id yoshisstory.n64.us); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); RecompFrontend recompui/src/config and the game's own add_*_option calls (each settings tab a <tab>.json in that folder, written by librecomp Config::save_config, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "trouble-makers-recomp",

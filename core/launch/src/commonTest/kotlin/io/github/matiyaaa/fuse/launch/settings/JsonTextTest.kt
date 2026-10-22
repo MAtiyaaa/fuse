@@ -95,4 +95,90 @@ class JsonTextTest {
         j.set("General", "name", "x \"y\"")
         assertEquals("{\"General\": {\"name\": \"x \\\"y\\\"\"}}", j.toString())
     }
+
+    /** graphics.json as an N64 recompilation writes it (nlohmann's `setw(4)`): keys alone, at the top. */
+    private val flat = """
+        {
+            "res_option": "Auto",
+            "msaa_option": "MSAA2X",
+            "rr_manual_value": 60,
+            "developer_mode": false
+        }
+
+    """.trimIndent()
+
+    @Test
+    fun aFileOfKeysAloneIsReadAndChangedAtTheTop() {
+        val j = JsonText(flat)
+        assertEquals(listOf("Auto"), j.values("", "res_option"))
+        assertEquals(listOf("60"), j.values("", "rr_manual_value"))
+        assertTrue(j.hasSection(""))
+        j.set("", "res_option", "Original2x")
+        j.set("", "rr_manual_value", "120")
+        j.set("", "ds_option", "2")
+        assertEquals(
+            """
+            {
+                "res_option": "Original2x",
+                "msaa_option": "MSAA2X",
+                "rr_manual_value": 120,
+                "developer_mode": false,
+                "ds_option": 2
+            }
+
+            """.trimIndent(),
+            j.toString(),
+            "changed in place, a new key last at the file's own indent",
+        )
+        assertTrue(j.removeKey("", "ds_option"))
+        assertEquals(flat.replace("\"Auto\"", "\"Original2x\"").replace(": 60", ": 120"), j.toString())
+        assertFalse(j.removeKey("", "ds_option"))
+    }
+
+    @Test
+    fun aNewFileOfKeysAloneIsMadeWithTheKeyAtTheTop() {
+        val j = JsonText("")
+        j.set("", "main_volume", "80")
+        assertEquals("{\n  \"main_volume\": 80\n}\n", j.toString())
+        assertEquals(listOf("80"), j.values("", "main_volume"))
+    }
+
+    @Test
+    fun aKeyInsideObjectsInsideObjectsIsFoundAndTheObjectsMadeWhenMissing() {
+        val j = JsonText(
+            """
+            {
+                "CVars": {
+                    "gSettings": {
+                        "Volume": 1.0
+                    }
+                }
+            }
+            """.trimIndent(),
+        )
+        assertEquals(listOf("1.0"), j.values("CVars/gSettings", "Volume"))
+        assertTrue(j.hasSection("CVars/gSettings"))
+        assertFalse(j.hasSection("CVars/gEnhancements"))
+        j.set("CVars/gEnhancements", "Widescreen", "1")
+        assertEquals(listOf("1"), j.values("CVars/gEnhancements", "Widescreen"))
+        assertEquals(
+            """
+            {
+                "CVars": {
+                    "gSettings": {
+                        "Volume": 1.0
+                    },
+                    "gEnhancements": {
+                        "Widescreen": 1
+                    }
+                }
+            }
+            """.trimIndent(),
+            j.toString(),
+        )
+        assertTrue(j.removeKey("CVars/gEnhancements", "Widescreen"))
+        assertTrue(j.removeEmptySection("CVars/gEnhancements", blankBefore = false))
+        assertFalse(j.hasSection("CVars/gEnhancements"))
+        assertEquals(listOf("1.0"), j.values("CVars/gSettings", "Volume"))
+    }
 }
