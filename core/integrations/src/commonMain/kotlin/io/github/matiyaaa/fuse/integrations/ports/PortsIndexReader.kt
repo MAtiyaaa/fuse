@@ -63,6 +63,9 @@ object PortsIndexReader {
             port.takeIf { problem == null }?.copy(
                 checked = true,
                 listedVerified = false,
+                // The nightly check's word is only a signed list's.
+                verified = port.verified.takeIf { signature != null },
+                verifiedVersion = port.verifiedVersion.takeIf { signature != null && port.verified != null },
                 cover = cover,
                 coverCredit = port.coverCredit.takeIf { cover != null },
                 screenshot = AndroidPorts.picture(port.screenshot),

@@ -98,9 +98,9 @@ internal object AndroidPortCatalog {
         return if (titlesOf(titles).any { it in names }) PortMatch.NAME else null
     }
 
-    /** The order ports of one game are offered in: Fuse's checked first, then by the ROM, then the steadiest. */
+    /** The order ports of one game are offered in: verified by the nightly check, then Fuse's checked, then by the ROM, then the steadiest. */
     fun order(port: AndroidPort, match: PortMatch?): Int =
-        (if (port.checked) 0 else 100) + (if (match == PortMatch.ROM) 0 else 10) + when (port.status) {
+        (if (port.verified != null) 0 else if (port.checked) 50 else 100) + (if (match == PortMatch.ROM) 0 else 10) + when (port.status) {
             AndroidPortStatus.STABLE -> 0
             AndroidPortStatus.BETA -> 1
             AndroidPortStatus.ALPHA -> 2

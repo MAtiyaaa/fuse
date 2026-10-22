@@ -98,15 +98,16 @@ class AndroidPortCatalogTest {
     }
 
     @Test
-    fun portsOfOneGameAreOfferedCheckedThenByTheRomThenSteadiest() {
+    fun portsOfOneGameAreOfferedVerifiedThenCheckedThenByTheRomThenSteadiest() {
         val ports = listOf(
             port("listed-stable", "x", "n64", status = AndroidPortStatus.STABLE) to PortMatch.NAME,
             port("checked-alpha", "x", "n64", checked = true, status = AndroidPortStatus.ALPHA) to PortMatch.NAME,
             port("checked-rom", "x", "n64", checked = true, status = AndroidPortStatus.BETA) to PortMatch.ROM,
+            port("verified-alpha", "x", "n64", checked = true, status = AndroidPortStatus.ALPHA).copy(verified = "2026-10-22") to PortMatch.NAME,
             port("listed-alpha", "x", "n64", status = AndroidPortStatus.ALPHA) to PortMatch.NAME,
         )
         assertEquals(
-            listOf("checked-rom", "checked-alpha", "listed-stable", "listed-alpha"),
+            listOf("verified-alpha", "checked-rom", "checked-alpha", "listed-stable", "listed-alpha"),
             ports.sortedBy { (p, m) -> AndroidPortCatalog.order(p, m) }.map { it.first.id },
         )
     }

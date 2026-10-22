@@ -87,6 +87,22 @@ class PortsIndexTest {
     }
 
     @Test
+    fun anAndroidPortIsVerifiedOnlyBySignedListsWord() {
+        val text = """{"format":1,"revision":30,"ports":[],"android":[{"id":"gen1recomp","name":"Gen1Recomp","game":"Pokémon Red","systems":["gb"],""" +
+            """"repo":"https://github.com/bryanthaboi/gen1recomp","package":"com.gen1recomp.app","verified":"2026-10-22","verifiedVersion":"0.3.95"}]}"""
+        val unsigned = PortsIndexReader.read(text).getOrThrow().index.android.single()
+        assertTrue(unsigned.checked)
+        assertNull(unsigned.verified, "the list inside Fuse, or any list not signed, verifies nothing")
+        assertNull(unsigned.verifiedVersion)
+        // A list given with its signature is one its caller checked first (PortsClient, the kept list).
+        val signed = PortsIndexReader.read(text, "c2lnbmVk").getOrThrow().index.android.single()
+        assertEquals("2026-10-22", signed.verified)
+        assertEquals("0.3.95", signed.verifiedVersion)
+        val noDay = PortsIndexReader.read(text.replace(""""verified":"2026-10-22",""", ""), "c2lnbmVk").getOrThrow().index.android.single()
+        assertNull(noDay.verifiedVersion, "a version without the day it was checked says nothing")
+    }
+
+    @Test
     fun aRecompilationsRomItsVariablesAndASettingsFileAreChecked() {
         val build = io.github.matiyaaa.fuse.model.PortBuild("linux", url = "https://example.org/r.zip", size = 10, sha256 = "a".repeat(64), kind = PortFileKind.ZIP_TAR_GZ, run = "Recomp")
         val rom = io.github.matiyaaa.fuse.model.PortData("rom", "Its ROM", "The US one.", needs = emptyList(), rom = io.github.matiyaaa.fuse.model.PortRom("n64", "ef18b4a9e2386169", "mm.n64.us.1.0.z64"))

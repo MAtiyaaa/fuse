@@ -1,12 +1,14 @@
-# Fuse Ports' nightly check: every port's Linux build in ports/index.json is downloaded, compared
-# with the list's size and SHA-256, unpacked the way Fuse unpacks it, and started without the
-# game's files (tools/ports/check.py). Each night on main, the list is then marked with what
-# passed and signed with the Ed25519 key in the PORTS_SIGNING_KEY secret, and put on the `ports`
-# pre-release, where Fuse looks for it. Without the secret, nothing is signed or published, and the
-# summary says so. When a port didn't start (or the check didn't finish), the night's run opens an
-# issue labelled ports-broken, or adds to the one open, and closes it once every port starts again.
-# On a pull request that changes the list or the tool, only the check runs. The native job checks
-# the PlayStation ports Fuse finds (ports/native.json) the same nights.
+# Fuse Ports' nightly check (tools/ports/check.py): every port's Linux build in ports/index.json on
+# Linux, and its Windows build on Windows, is downloaded, compared with the list's size and SHA-256,
+# unpacked the way Fuse unpacks it, and started without the game's files; every Android port's APK,
+# the one Fuse installs, is read by Android's own tools (its signature, its package, its code for
+# an arm64 device). Each night on main, the list is then marked with what passed and signed with
+# the Ed25519 key in the PORTS_SIGNING_KEY secret, and put on the `ports` pre-release, where Fuse
+# looks for it. Without the secret, nothing is signed or published, and the summary says so. When
+# a port didn't pass (or a check didn't finish), the night's run opens an issue labelled
+# ports-broken, or adds to the one open, and closes it once every port passes again. On a pull
+# request that changes the list or the tool, only the checks run. The native job checks the
+# PlayStation ports Fuse finds (ports/native.json) the same nights.
 
 name: Ports
 
@@ -31,7 +33,7 @@ jobs:
   check:
     name: Every port installs and starts
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - name: Check out
         uses: actions/checkout@v7
@@ -52,19 +54,70 @@ jobs:
           set -euo pipefail
           mkdir -p build/ports
           xvfb-run -a python3 tools/ports/check.py check --index ports/index.json --out build/ports/results-linux.json
-          python3 - <<'EOF'
-          import json
-          r = json.load(open("build/ports/results-linux.json"))
-          lines = ["| Port | Started | What was seen |", "|---|---|---|"]
-          lines += [f"| {k} | {'yes' if v['passed'] else 'no'} | {v['detail'].replace('|', '/')} |" for k, v in sorted(r.items())]
-          open(__import__("os").environ["GITHUB_STEP_SUMMARY"], "a").write("\n".join(lines) + "\n")
-          EOF
+          python3 tools/ports/summary.py build/ports/results-linux.json Started >> "$GITHUB_STEP_SUMMARY"
 
       - name: Keep the results
         uses: actions/upload-artifact@v7
         with:
-          name: ports-results
+          name: ports-results-linux
           path: build/ports/results-linux.json
+          if-no-files-found: error
+          retention-days: 14
+
+  # The same check of every port's Windows build, on Windows.
+  check-windows:
+    name: Every port installs and starts on Windows
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Test the check itself
+        working-directory: tools/ports
+        run: python -m unittest discover -s tests -v
+
+      - name: Check every port
+        run: |
+          set -euo pipefail
+          mkdir -p build/ports
+          python tools/ports/check.py check --index ports/index.json --out build/ports/results-windows.json
+          python tools/ports/summary.py build/ports/results-windows.json Started >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the results
+        uses: actions/upload-artifact@v7
+        with:
+          name: ports-results-windows
+          path: build/ports/results-windows.json
+          if-no-files-found: error
+          retention-days: 14
+
+  # Every Android port's APK, the one Fuse installs, read by the Android SDK's aapt2 and apksigner.
+  check-android:
+    name: Every Android port's APK is the app Fuse lists
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Check every Android port
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/ports
+          python3 tools/ports/check.py android --index ports/index.json --out build/ports/results-android.json
+          python3 tools/ports/summary.py build/ports/results-android.json Passed >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the results
+        uses: actions/upload-artifact@v7
+        with:
+          name: ports-results-android
+          path: build/ports/results-android.json
           if-no-files-found: error
           retention-days: 14
 
@@ -125,7 +178,7 @@ jobs:
 
   report:
     name: Open an issue when a port breaks
-    needs: check
+    needs: [check, check-windows, check-android]
     if: always() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -136,12 +189,13 @@ jobs:
       - name: Check out
         uses: actions/checkout@v7
 
-      # Missing when the check didn't finish, which the issue then says.
+      # A system's results are missing when its check didn't finish, which the issue then says.
       - name: Get the results
         continue-on-error: true
         uses: actions/download-artifact@v8
         with:
-          name: ports-results
+          pattern: ports-results-*
+          merge-multiple: true
           path: build/ports
 
       - name: Open, add to or close the issue
@@ -151,22 +205,23 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build/ports
-          python3 tools/ports/check.py report --results build/ports/results-linux.json --out build/ports/issue.md --run-url "$RUN_URL"
+          python3 tools/ports/check.py report --results build/ports/results-linux.json build/ports/results-windows.json build/ports/results-android.json --out build/ports/issue.md --run-url "$RUN_URL"
           open=$(gh issue list --state open --label ports-broken --json number --jq '.[0].number // empty')
           if [ -s build/ports/issue.md ]; then
             if [ -n "$open" ]; then
               gh issue comment "$open" --body-file build/ports/issue.md
             else
-              gh label create ports-broken --color B60205 --description "A port didn't start in the nightly check" 2>/dev/null || true
-              gh issue create --title "A port didn't start in the nightly check" --label ports-broken --body-file build/ports/issue.md
+              gh label create ports-broken --color B60205 --description "A port didn't pass the nightly check" 2>/dev/null || true
+              gh issue create --title "A port didn't pass the nightly check" --label ports-broken --body-file build/ports/issue.md
             fi
           elif [ -n "$open" ]; then
-            gh issue close "$open" --comment "Every port started again in the nightly check: $RUN_URL"
+            gh issue close "$open" --comment "Every port passed the nightly check again: $RUN_URL"
           fi
 
+  # Only when every system's check finished: a night one didn't keeps the list published before it.
   publish:
     name: Sign and publish the list
-    needs: check
+    needs: [check, check-windows, check-android]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -179,7 +234,8 @@ jobs:
       - name: Get the results
         uses: actions/download-artifact@v8
         with:
-          name: ports-results
+          pattern: ports-results-*
+          merge-multiple: true
           path: build/ports
 
       - name: Mark and sign the list
@@ -188,7 +244,7 @@ jobs:
           PORTS_SIGNING_KEY: ${{ secrets.PORTS_SIGNING_KEY }}
         run: |
           set -euo pipefail
-          python3 tools/ports/check.py publish --index ports/index.json --results build/ports/results-linux.json --out build/ports/out
+          python3 tools/ports/check.py publish --index ports/index.json --results build/ports/results-linux.json build/ports/results-windows.json build/ports/results-android.json --out build/ports/out
           if [ -f build/ports/out/index.json.sig ]; then
             echo "signed=true" >> "$GITHUB_OUTPUT"
           else

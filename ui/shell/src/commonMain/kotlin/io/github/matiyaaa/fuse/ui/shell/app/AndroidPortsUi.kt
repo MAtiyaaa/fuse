@@ -32,7 +32,11 @@ internal fun AndroidPortStatus.word(): String = when (this) {
 }
 
 /** Whose word [this] port's entry is. */
-internal fun AndroidPort.trustLine(): String = if (checked) "Checked by Fuse" else "Listed by Open Ports Games, unchecked"
+internal fun AndroidPort.trustLine(): String = when {
+    verified != null -> "Verified by Fuse's nightly check, $verified"
+    checked -> "Checked by Fuse"
+    else -> "Listed by Open Ports Games, unchecked"
+}
 
 /**
  * Play With's Android ports for [card] ([offers], best first): an installed one plays the game from
