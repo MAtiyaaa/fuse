@@ -672,7 +672,10 @@ edition on first use: Standard (`obtainium-emulation-pack-latest.json`) or Dual-
 a second screen, and companions only they use). Fuse reads the newest release's tag from where
 `github.com/RJNY/Obtainium-Emulation-Pack/releases/latest` redirects (no API quota) and downloads
 that release's file for the edition; when that fails it takes the same file from the project's
-main branch. A download only replaces the saved catalogue when it parses as a real pack (at least
+main branch. Since its version 8 (12 October 2026, "drop dual-screen release and ship one pack") the
+pack is one file for every device, its dual-screen builds in it, and neither its releases nor its
+main branch have a dual-screen file: the Dual-Screen edition then follows that one pack, as
+Standard does (`PackFetcher.editionsFor`). A download only replaces the saved catalogue when it parses as a real pack (at least
 five usable apps), and the last good one is kept, so the Store opens offline with a note of its age.
 It is refreshed when the Store opens and the copy is older than 6 hours, or on "Check now".
 

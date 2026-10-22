@@ -39,7 +39,7 @@ fun storeRows(app: AppState): List<MenuAction> {
                 StoreVariant.STANDARD to StoreVariant.STANDARD.title(),
                 (StoreVariant.DUAL_SCREEN to StoreVariant.DUAL_SCREEN.title()).takeIf { app.platform.features.secondScreen || s.variant == StoreVariant.DUAL_SCREEN },
             ),
-            detail = "Which edition of the Obtainium Emulation Pack the Store follows" + if (s.recommended == StoreVariant.DUAL_SCREEN) ". Dual-Screen suits this device" else "",
+            detail = "Which edition of the Obtainium Emulation Pack the Store follows. Since its version 8 the pack is one for every device, its dual-screen builds in it",
             optionDetail = { it?.detail() },
         ) { v -> if (v != null) app.scope.launch { ops.chooseVariant(v) } })
         val c = s.catalogue
