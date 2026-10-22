@@ -311,7 +311,7 @@ class AndroidTest(unittest.TestCase):
         self.assertEqual(3, len(asked), "asked again until the APK was listed")
         # Never listed: failed after the last try, saying what GitHub answered.
         failed = self.run_android([{"id": "none", "repo": "https://github.com/a/none", "package": "x"}], {}, facts, releases_fn=lambda o, n: [])
-        self.assertIn("GitHub listed 0 releases, asked 3 times", failed["none"]["detail"])
+        self.assertIn("GitHub listed 0 releases, asked 5 times", failed["none"]["detail"])
 
     def test_an_android_port_is_verified_only_by_tonights_pass(self):
         index = {"format": 1, "revision": 3, "ports": [], "android": [

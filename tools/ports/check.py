@@ -426,8 +426,9 @@ def signer(apk):
     return True, m.group(1) if m else ""
 
 
-# Asked this many times, this many seconds apart, before a port's releases are taken to have no APK.
-RELEASE_TRIES = 3
+# Asked this many times before a port's releases are taken to have no APK, waiting this many seconds
+# before the second try and twice as long before each after (an empty answer can last a minute).
+RELEASE_TRIES = 5
 RELEASE_RETRY_S = 5
 
 
@@ -451,7 +452,7 @@ def check_android(index_path, out_path, releases=github_releases, download_apk=f
             release = None
             for attempt in range(RELEASE_TRIES):
                 if attempt:
-                    time.sleep(RELEASE_RETRY_S)
+                    time.sleep(RELEASE_RETRY_S * 2 ** (attempt - 1))
                 listed = releases(repo.group(1), repo.group(2).removesuffix(".git"))
                 release = release_of(listed, port.get("asset"))
                 if release is not None:
