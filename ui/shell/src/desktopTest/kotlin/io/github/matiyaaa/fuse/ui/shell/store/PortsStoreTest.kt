@@ -162,6 +162,20 @@ class PortsStoreTest {
     private suspend fun FuseStore.until(what: String, ms: Long = 20_000, check: (PortsState) -> Boolean): PortsState =
         withTimeout(ms) { while (!check(ports.state.value)) delay(25); ports.state.value }.also { assertTrue(check(it), what) }
 
+    /**
+     * Updates [id] and waits for the new copy: install returns before its job shows, so "ready with no
+     * job" alone is also the state before it. The build's own engine.dat, changed in the copy first
+     * when it isn't already, is the build's again only once the new copy is in; [setUp] is what
+     * setting it up again makes (its links), done after the job is gone.
+     */
+    private suspend fun FuseStore.update(id: String, root: File, setUp: () -> Boolean = { true }): PortsState {
+        val engine = File(root, "build/engine.dat")
+        fun fresh() = runCatching { engine.readBytes() }.getOrNull()?.let { b -> b.size == 32 && b.all { it == 1.toByte() } } == true
+        if (fresh()) engine.writeText("changed in the copy")
+        ports.install(id)
+        return until("updated") { it.port(id)?.ready == true && it.port(id)?.job == null && fresh() && setUp() }
+    }
+
     @Test
     fun aPortIsInstalledCheckedSetUpWithThePersonsFolderAndPlayedAsItsLauncherSays(): Unit = runBlocking {
         File(game, "SKY.DAT").writeBytes(ByteArray(16) { 7 })
@@ -243,8 +257,7 @@ class PortsStoreTest {
         assertEquals(before, game.walkTopDown().filter { it.isFile }.associate { it.relativeTo(game).path to it.readText() }, "nothing in the person's folder changed")
 
         // An update carries what the port wrote, never what a link leads to: the person's folder stays whole.
-        store.ports.install("wasteport")
-        store.until("updated") { it.port("wasteport")?.ready == true && it.port("wasteport")?.job == null }
+        store.update("wasteport", File(files.folder, "wasteport")) { link("MASTER.DAT") && link("DATA/SAVEGAME") }
         assertEquals("the port's settings", Files.readString(copy.resolve("game.cfg")), "what it wrote beside itself is carried")
         assertTrue(link("MASTER.DAT") && link("DATA/SAVEGAME"), "the links are made again")
         assertEquals(before, game.walkTopDown().filter { it.isFile }.associate { it.relativeTo(game).path to it.readText() }, "nothing of the person's moved")
@@ -481,8 +494,7 @@ class PortsStoreTest {
         assertFalse(File(root, "build.old").exists())
 
         // And an update that goes in replaces it, with nothing left aside (the failure before is still shown until it does).
-        store.ports.install("skyport")
-        store.until("updated") { it.port("skyport")?.ready == true && it.port("skyport")?.job == null }
+        store.update("skyport", root)
         assertTrue(File(root, "build/skyport").isFile)
         assertFalse(File(root, "build.old").exists())
     }
@@ -519,8 +531,7 @@ class PortsStoreTest {
 
         // An update replaces the copy: the save stays in its home, the settings and what else it wrote
         // are carried into the new copy, and a file of the build's own comes new with it.
-        store.ports.install("keepport")
-        store.until("updated") { it.port("keepport")?.ready == true && it.port("keepport")?.job == null }
+        store.update("keepport", root) { Files.isSymbolicLink(copy.resolve("saves")) }
         assertEquals("fullscreen=1", Files.readString(copy.resolve("config.ini")))
         assertEquals("a screenshot", Files.readString(copy.resolve("shots/one.png")))
         assertTrue(Files.readAllBytes(copy.resolve("engine.dat")).all { it == 1.toByte() }, "the build's own file is the new build's")

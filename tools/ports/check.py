@@ -188,41 +188,45 @@ def lend_gl(program, folder=None):
     return lent
 
 
+def stop(p):
+    """Ends p and, on Windows, what it started (a launcher's game), so nothing of it outlives its check."""
+    if SYSTEM == "windows":
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(p.pid)], capture_output=True)
+    if p.poll() is None:
+        p.kill()
+    p.wait()
+
+
 def started(program, check, cwd):
-    """Starts program as its check says; returns (passed, what was seen)."""
+    """Starts program as its check says; returns (passed, what was seen).
+
+    What it prints goes to a file, never a pipe: a program it starts (a launcher's game) that outlives
+    it would hold a pipe open, and reading it would wait for as long as that one runs.
+    """
     env = dict(os.environ, APPIMAGE_EXTRACT_AND_RUN="1")
     args = [program] + list(check.get("args", []))
     expect = check.get("expect")
-    if expect is not None:
+    wait = 120 if expect is not None else int(check.get("stay", 5))
+    with tempfile.TemporaryFile() as log:
+        p = subprocess.Popen(args, cwd=cwd, env=env, stdout=log, stderr=subprocess.STDOUT)
         try:
-            r = subprocess.run(args, cwd=cwd, env=env, capture_output=True, timeout=120)
+            code = p.wait(timeout=wait)
         except subprocess.TimeoutExpired:
-            return False, "it didn't finish within two minutes"
-        out = (r.stdout + r.stderr).decode("utf-8", "replace")
-        broke = failure_of(r.returncode, out)
-        if broke:
-            return False, f"{broke}: {out.strip()[:200]}"
-        if re.search(expect, out):
-            return True, "printed " + re.search(expect, out).group(0)
-        return False, f"exit {r.returncode}, printed: {out.strip()[:200]}"
-    stay = int(check.get("stay", 5))
-    p = subprocess.Popen(args, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    try:
-        code = p.wait(timeout=stay)
-    except subprocess.TimeoutExpired:
-        p.kill()
-        p.wait()
-        if p.stdout:
-            p.stdout.close()
-        return True, f"still running after {stay} s"
-    out = p.stdout.read().decode("utf-8", "replace").strip()[:400] if p.stdout else ""
-    if p.stdout:
-        p.stdout.close()
+            stop(p)
+            if expect is not None:
+                return False, "it didn't finish within two minutes"
+            return True, f"still running after {wait} s"
+        log.seek(0)
+        out = log.read(1 << 20).decode("utf-8", "replace").strip()
     # A signal, a Windows crash code or the loader's word is never an ending of its own.
     broke = failure_of(code, out)
     if broke:
         return False, f"{broke}: {out[:200]}"
-    return True, f"ended by itself (exit {code}): {out[:200]}"
+    if expect is None:
+        return True, f"ended by itself (exit {code}): {out[:200]}"
+    if re.search(expect, out):
+        return True, "printed " + re.search(expect, out).group(0)
+    return False, f"exit {code}, printed: {out[:200]}"
 
 
 def check(index_path, out_path, system=SYSTEM, arch="x86_64", allow_file=False):

@@ -66,6 +66,9 @@ internal class PortsStore(
     private val client by lazy { PortsClient(ctx.services.http, publicKey = publicKey) }
     private val lock = Mutex()
 
+    /** The first read of the list, and the putting back of copies an update left aside, done once at a time. */
+    private val reading = Mutex()
+
     @kotlin.concurrent.Volatile private var list: PortsList? = null
     @kotlin.concurrent.Volatile private var umu: String? = null
     @kotlin.concurrent.Volatile private var lastLook = 0L
@@ -112,12 +115,15 @@ internal class PortsStore(
     /** The list Fuse has: the newest of the one inside it and a signed one kept from before. */
     private suspend fun load() {
         umu = files.umuRun()
-        if (list == null) {
-            val inside = files.bundledIndex()?.let { PortsIndexReader.read(it).getOrNull() }
-            val kept = keptList()
-            list = listOfNotNull(kept, inside).maxByOrNull { it.index.revision * 2 + if (it.signed) 1 else 0 }
-            // A copy an update was replacing when Fuse stopped goes back in place.
-            for (id in ctx.settings.value.ports.installed.keys) files.recover(layout(id).install)
+        // Opening Ports while the store's own first read runs reads and recovers once, never twice at the same time.
+        reading.withLock {
+            if (list == null) {
+                val inside = files.bundledIndex()?.let { PortsIndexReader.read(it).getOrNull() }
+                val kept = keptList()
+                // A copy an update was replacing when Fuse stopped goes back in place.
+                for (id in ctx.settings.value.ports.installed.keys) files.recover(layout(id).install)
+                list = listOfNotNull(kept, inside).maxByOrNull { it.index.revision * 2 + if (it.signed) 1 else 0 }
+            }
         }
         publish()
     }

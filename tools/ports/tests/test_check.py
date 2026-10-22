@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 import zipfile
 from unittest import mock
@@ -80,6 +81,19 @@ class CheckTest(unittest.TestCase):
         self.assertIn("can't run it", results["unloadable"]["detail"])
         self.assertIn("libSDL2_mixer", results["unloadable"]["detail"])
         self.assertIn("can't run it", results["unloadable-version"]["detail"], "a missing library isn't a version it printed")
+
+    def test_a_launcher_that_leaves_its_game_running_is_never_waited_on(self):
+        # It starts its game and ends; the game keeps what it was given to print to, as a pipe would stay open.
+        launcher = zip_with({"game": (b"#!/bin/sh\n(sleep 20; echo late) &\necho 'Launcher 1.0'\nexit 0\n", 0o755)})
+        began = time.monotonic()
+        results = self.run_check([
+            self.port("launcher", launcher, {"stay": 5}),
+            self.port("launcher-version", launcher, {"args": ["--version"], "expect": "Launcher 1\\.0"}),
+        ])
+        self.assertLess(time.monotonic() - began, 15, "neither check waited for the game it left running")
+        self.assertTrue(results["launcher"]["passed"], results["launcher"]["detail"])
+        self.assertIn("Launcher 1.0", results["launcher"]["detail"])
+        self.assertTrue(results["launcher-version"]["passed"], results["launcher-version"]["detail"])
 
     def test_the_lists_program_is_made_runnable_when_its_zip_kept_no_permissions(self):
         windows_made = zip_with({"game": (b"#!/bin/sh\necho 'SkyPort v2.1'\n", 0o644)})

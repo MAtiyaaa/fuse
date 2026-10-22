@@ -1925,7 +1925,8 @@
       "check": { "stay": 5 },
       "notes": [
         "Arx Libertatis reads Arx Fatalis' files where they are; it never changes them.",
-        "Your saves and settings are Arx Libertatis' own, kept by Fuse beside its copy."
+        "Your saves and settings are Arx Libertatis' own, kept by Fuse beside its copy.",
+        "On Linux it takes OpenAL from your system, which SteamOS and most desktops have."
       ],
       "source": "ArxLibertatis 1.2.1: src/io/fs/SystemPaths.cpp (the --data-dir, --user-dir and --config-dir options); README.md; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
     },
@@ -1971,7 +1972,8 @@
       "notes": [
         "dhewm 3 reads Doom 3's files where they are; it never changes them.",
         "Your saves and settings are dhewm 3's own, kept by Fuse beside its copy.",
-        "Its Windows build is 32-bit, which 64-bit Windows runs."
+        "Its Windows build is 32-bit, which 64-bit Windows runs.",
+        "On Linux it takes OpenAL from your system, which SteamOS and most desktops have."
       ],
       "source": "dhewm3 1.5.5: neo/framework/FileSystem.cpp (fs_basepath for the game's files, fs_savepath for what it writes, set with +set on the command line); README.md (no game data in the source release); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
     },
@@ -2671,7 +2673,8 @@
       "check": { "stay": 5 },
       "notes": [
         "openQ4 reads Quake 4's files where they are and its own game modules from beside itself; it never changes the game's files.",
-        "Your saves and settings are openQ4's own, kept by Fuse in its home."
+        "Your saves and settings are openQ4's own, kept by Fuse in its home.",
+        "On Linux it takes OpenAL from your system, which SteamOS and most desktops have."
       ],
       "source": "openQ4 v0.13.2: docs/user/getting-started.md (If Auto-Detection Fails: +set fs_basepath at the Quake 4 folder holding q4base); src/framework/FileSystem.cpp, idFileSystemLocal::Init (fs_basepath kept when it holds q4base/pak001.pk4, fs_homepath the writable root and fs_savepath following it, fs_cdpath the folder it starts from) and FS_HasGameFilesAtGameDirPath (pak001.pk4); src/framework/licensee.h (q4base, baseoq4); src/framework/Session.cpp (savegames/); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
     },
@@ -2962,7 +2965,8 @@
       "check": { "stay": 5 },
       "notes": [
         "It opens its launcher, already set to your game's files through links in Fuse's copy: choose the options and Launch WC1.",
-        "Your saves are kept in Fuse's copy, carried into the new one when Fuse updates it; its music and sound settings are in your own user folder (wc1-modern.cfg)."
+        "Your saves are kept in Fuse's copy, carried into the new one when Fuse updates it; its music and sound settings are in your own user folder (wc1-modern.cfg).",
+        "On Linux it takes the X11 keyboard library (libxkbcommon-x11) from your system, which every desktop has."
       ],
       "source": "wc1-re v0.0.13: README.md and packaging/README-modern.txt (the launcher when started without arguments, a folder holding GAMEDAT, the Kilrathi Saga's STREAMS); src/sdl/launcher.c SdlParsePortArguments (the launcher without arguments); src/sdl/slint/launcher.cpp (the launcher's folder, at first the working one) and launcher_paths.cpp validate_game_directory (GAMEDAT/MODULE.000, CAMP.000, INSTALL.DAT); src/main.c and src/logic.c (into gamedat); src/barracks.c (SAVEGAME.WLD); src/sdl/registry.c (wc1-modern.cfg in SDL's per-user folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
     },
@@ -3006,7 +3010,8 @@
       "check": { "stay": 5 },
       "notes": [
         "It opens its launcher, already set to your game's files through links in Fuse's copy: choose the options and launch the game.",
-        "Your saves are kept in Fuse's copy, carried into the new one when Fuse updates it; its sound settings are in your own user folder."
+        "Your saves are kept in Fuse's copy, carried into the new one when Fuse updates it; its sound settings are in your own user folder.",
+        "On Linux it takes the X11 keyboard library (libxkbcommon-x11) from your system, which every desktop has."
       ],
       "source": "wc2-re v0.0.14: README.md (the launcher when started without arguments; the game's folder as the working one; Kilrathi Saga or DOS data); src/sdl/launcher.c SdlParsePortArguments (the launcher without arguments) and SdlInitializeLauncherOptions (the launcher's folder, the working one); src/sdl/slint/launcher.cpp validate_game_directory (GAMEDAT/COCKPIT.VGA); src/main.c (into gamedat); src/personnel.c (savegame.wc2); src/logic.c (TEMPGLOB.000); src/globals.c and src/hudmsg.c (tape.tmp); src/sdl/registry.c (its settings in SDL's per-user folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
     },
@@ -5763,6 +5768,49 @@
         "Its builds need a processor with AVX2. On Linux its launcher needs Python 3.10 or newer on your system."
       ],
       "source": "TheSimpsonsGameRecomp v0.0.6.5: README.md (Requirements: the ISO, AVX2; Installation: Play.sh on Linux, simpsons-launcher.exe on Windows, the Install tab; Configuration: simpsons.toml next to the game executable; saves in ~/.local/share/simpsons or %LOCALAPPDATA%/simpsons); launcher/simpsons-launcher.sh (a system Python 3.10 to 3.14); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+    },
+    {
+      "id": "bstone",
+      "name": "BStone",
+      "game": "Blake Stone: Aliens of Gold",
+      "cover": "https://thumbnails.libretro.com/DOS/Named_Boxarts/Blake%20Stone%20-%20Aliens%20of%20Gold%20(1993).png",
+      "coverCredit": "Box art",
+      "about": "Blake Stone: Aliens of Gold and Planet Strike rebuilt to run natively, with high resolutions and widescreen.",
+      "homepage": "https://github.com/bibendovsky/bstone",
+      "version": "v1.3.4",
+      "builds": [
+        {
+          "os": "linux",
+          "url": "https://github.com/bibendovsky/bstone/releases/download/v1.3.4/bstone-1.3.4%2Be65a6b40-Linux.zip",
+          "size": 2242517,
+          "sha256": "a3f5d6dac7125e35226c7eb483d33cbf57fe77b474b052538b18d349536efbbf",
+          "kind": "ZIP",
+          "run": "bstone-1.3.4+e65a6b40-Linux/bstone"
+        },
+        {
+          "os": "windows",
+          "url": "https://github.com/bibendovsky/bstone/releases/download/v1.3.4/bstone-1.3.4%2Be65a6b40-win64.zip",
+          "size": 2081399,
+          "sha256": "4bfe5c0bef00395a667a2c594399b13a1faddf817da602a38bff2fa80e02cd45",
+          "kind": "ZIP",
+          "run": "bstone-1.3.4+e65a6b40-win64/bstone.exe"
+        }
+      ],
+      "data": [
+        {
+          "id": "game",
+          "name": "Blake Stone's game files",
+          "about": "The folder with Aliens of Gold (VSWAP.BS6, or the shareware VSWAP.BS1) or Planet Strike (VSWAP.VSI), from GOG, Steam or the CD.",
+          "needs": [["VSWAP.BS6", "VSWAP.BS1", "VSWAP.VSI"]]
+        }
+      ],
+      "args": ["--data_dir", "{data:game}", "--profile_dir", "{home}"],
+      "check": { "stay": 5 },
+      "notes": [
+        "BStone reads the game's files where they are; it never changes them.",
+        "Your saves and settings are BStone's own, kept by Fuse beside its copy."
+      ],
+      "source": "bstone v1.3.4: README.md (--data_dir, --profile_dir); src/bstone/src/3d_main.cpp (data_dir, profile_dir); src/bstone/src/id_ca.cpp (VSWAP.BS1, VSWAP.BS6, VSWAP.VSI); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
     }
   ],
   "android": [

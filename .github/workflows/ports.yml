@@ -38,15 +38,18 @@ jobs:
       - name: Check out
         uses: actions/checkout@v7
 
-      # A virtual screen for the ports that open a window, and the libraries a desktop has that some
-      # ports take from the system (each such port's notes name them): SDL2 and its image and mixer
-      # libraries (fallout2-ce, fheroes2, Julius), GLEW (the RSDK decompilations) and OpenGL's own
-      # library (the recompilations' runtimes).
+      # A virtual screen for the ports that open a window, with Mesa's software Vulkan beside its
+      # OpenGL (the Godot ports draw with Vulkan), and the libraries a desktop has that some ports
+      # take from the system (each such port's notes name them): SDL2 and its image and mixer
+      # libraries (fallout2-ce, fheroes2, Julius), GLEW and Theora (the RSDK decompilations), OpenAL
+      # (Arx Libertatis, dhewm 3, openQ4), X11's keyboard library (wc1-modern, wc2-modern) and
+      # OpenGL's own library (the recompilations' runtimes).
       - name: Install a virtual screen and a desktop's libraries
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y xvfb libsdl2-2.0-0 libsdl2-image-2.0-0 libsdl2-mixer-2.0-0 libglew2.2 libopengl0
+          sudo apt-get install -y xvfb mesa-vulkan-drivers libsdl2-2.0-0 libsdl2-image-2.0-0 libsdl2-mixer-2.0-0 \
+            libglew2.2 libtheora0 libopenal1 libxkbcommon-x11-0 libopengl0
 
       - name: Test the check itself
         working-directory: tools/ports

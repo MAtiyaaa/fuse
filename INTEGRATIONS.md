@@ -805,14 +805,18 @@ was asked; the download when you install.
 the program its own project publishes, played with the person's own copy of the game: Diablo
 through DevilutionX, RollerCoaster Tycoon 2 through OpenRCT2, Fallout 2 through Fallout 2
 Community Edition, and recompilations made from the person's own ROM: Majora's Mask through Zelda
-64: Recompiled. Off until turned on in Settings, Addons, Fuse Ports; nothing is fetched before.
+64: Recompiled. Well over a hundred, each with a build for Linux and for Windows where its project's
+build runs there as published. Off until turned on in Settings, Addons, Fuse Ports; nothing is
+fetched before.
 
 **The list** (`ports/index.json`, `core:model` `Ports.kt`, read by `core:integrations`
 `PortsIndexReader`): each port's builds (system, processor, HTTPS address, size, SHA-256, the kind of
 file and the program inside it), what it needs from the game (`needs`: names, any one of which will
 do, compared as the port itself compares them), how the game's files reach it (by their folder's
 path in its arguments, or an `overlay`), its arguments with `{install}`, `{home}` and `{data:<id>}`,
-where its saves are, and how the nightly check sees it start. Every fact about a port is cited in
+where its saves are, and how the nightly check sees it start. A port that asks for the game itself
+on its first start (a file picker or its own importer, as most recompilations do) has no `data`: its
+`notes` say what it asks for and where it keeps it. Every fact about a port is cited in
 its `source`, from the port's own code and documentation at the version listed. A port that fails a
 check (an id, an address that isn't HTTPS, a missing digest, a path out of its folder, a placeholder
 Fuse doesn't fill) is left out; a list of another format is refused whole.
@@ -830,7 +834,8 @@ a signed list says the nightly check saw exactly this build (by its SHA-256) ins
 HTTPS (each redirect followed by Fuse and checked), compared with the list's size and SHA-256 (any
 other file is deleted, never installed), unpacked by Fuse into a new folder beside the copy in use
 (an AppImage kept as it is and made runnable; zips and tarballs without links of their own, never
-outside their folder, nothing in them run), and only then put in place. Fuse's folder of ports is in
+outside their folder, nothing in them run; the program the list names made runnable, as a zip made
+on Windows keeps no Unix permissions), and only then put in place. Fuse's folder of ports is in
 its own data folder: `ports/<id>/build` (the copy, replaced by an update), `ports/<id>/home` (its
 saves and settings, kept from one version to the next and when the port is removed) and
 `ports/<id>/<id>.fuseport` (how it starts).
@@ -889,7 +894,12 @@ now needs it.
 
 **The nightly check** (`.github/workflows/ports.yml`, `tools/ports/check.py`): every night on main
 each port's Linux build is downloaded on Linux and its Windows build on Windows, checked against the
-list, unpacked the same way and started without the game's files (on Linux, on a virtual screen). It
+list, unpacked the same way and started without the game's files. On Linux it runs on a virtual
+screen with the libraries a desktop has that some ports take from the system (SDL2 and its image and
+mixer libraries, GLEW, OpenGL's own; each such port's notes name them). GitHub's Windows runner has
+no graphics card and only Windows' own OpenGL 1.1, so Mesa's software OpenGL (llvmpipe, from
+pal1000/mesa-dist-win at a pinned version and SHA-256) is put beside each program that brings none of
+its own, as the virtual screen gives it on Linux (`lend_gl`). It
 must print what its entry's `check` expects (DevilutionX and OpenRCT2 print their versions), or still
 be running after the seconds it says, or end by itself. A crash (a signal, or a Windows crash code
 such as 0xC0000005), a library the system lacks (the loader's word, exit 127, or 0xC0000135 for a
