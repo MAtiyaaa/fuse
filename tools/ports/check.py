@@ -426,6 +426,11 @@ def signer(apk):
     return True, m.group(1) if m else ""
 
 
+# Asked this many times, this many seconds apart, before a port's releases are taken to have no APK.
+RELEASE_TRIES = 3
+RELEASE_RETRY_S = 5
+
+
 def check_android(index_path, out_path, releases=github_releases, download_apk=fetch, read=badging, verify=signer):
     """Each Android port's APK, the one Fuse installs, read as an app Android installs on an arm64 device."""
     index = read_json(index_path)
@@ -440,9 +445,19 @@ def check_android(index_path, out_path, releases=github_releases, download_apk=f
                 raise ValueError("its project isn't on GitHub, where Fuse installs from")
             if not port.get("package"):
                 raise ValueError("the list doesn't say its package")
-            release = release_of(releases(repo.group(1), repo.group(2).removesuffix(".git")), port.get("asset"))
+            # GitHub's API sometimes answers a project's releases without their files for a while
+            # (a different set of projects each time): asked again before the port is failed.
+            listed = []
+            release = None
+            for attempt in range(RELEASE_TRIES):
+                if attempt:
+                    time.sleep(RELEASE_RETRY_S)
+                listed = releases(repo.group(1), repo.group(2).removesuffix(".git"))
+                release = release_of(listed, port.get("asset"))
+                if release is not None:
+                    break
             if release is None:
-                raise ValueError("no release has an APK Fuse would take")
+                raise ValueError(f"no release has an APK Fuse would take (GitHub listed {len(listed)} releases, asked {RELEASE_TRIES} times)")
             apk, why = apk_of(release, port.get("asset"))
             if apk is None:
                 raise ValueError(why)

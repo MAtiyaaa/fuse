@@ -228,6 +228,8 @@ class AndroidTest(unittest.TestCase):
 
     def setUp(self):
         self.dir = tempfile.mkdtemp(prefix="fuse-ports-android-")
+        # Asked again at once, not after a real pause.
+        check.RELEASE_RETRY_S = 0
 
     def tearDown(self):
         shutil.rmtree(self.dir, ignore_errors=True)
@@ -251,7 +253,7 @@ class AndroidTest(unittest.TestCase):
         self.assertIsNotNone(check.release_of([bundle], None))
         self.assertIsNone(check.apk_of(bundle, None)[0], "a split bundle isn't installed")
 
-    def run_android(self, ports, releases, facts, signed=(True, "ab" * 32)):
+    def run_android(self, ports, releases, facts, signed=(True, "ab" * 32), releases_fn=None):
         index = os.path.join(self.dir, "index.json")
         with open(index, "w") as f:
             json.dump({"format": 1, "revision": 3, "ports": [], "android": ports}, f)
@@ -262,7 +264,7 @@ class AndroidTest(unittest.TestCase):
                 f.write(url.encode())
             return path, 10, hashlib.sha256(url.encode()).hexdigest()
 
-        return check.check_android(index, os.path.join(self.dir, "android.json"), releases=lambda o, n: releases[f"{o}/{n}"],
+        return check.check_android(index, os.path.join(self.dir, "android.json"), releases=releases_fn or (lambda o, n: releases[f"{o}/{n}"]),
                                    download_apk=download, read=lambda p: facts[open(p).read().rsplit("/", 1)[-1]], verify=lambda p: signed)
 
     def test_each_apk_must_be_the_lists_app_signed_and_for_an_arm64_device(self):
@@ -295,6 +297,21 @@ class AndroidTest(unittest.TestCase):
         unsigned = self.run_android([port("good", "a/good")], releases, facts, signed=(False, "DOES NOT VERIFY"))
         self.assertFalse(unsigned["good"]["passed"])
         self.assertIn("wouldn't install it", unsigned["good"]["detail"])
+
+    def test_releases_listed_without_their_files_are_asked_for_again(self):
+        answers = iter([[], [release("v2", "data.zip")], [release("v2", "good.apk")]])
+        asked = []
+
+        def releases(o, n):
+            asked.append(n)
+            return next(answers)
+        facts = {"good.apk": {"package": "org.example.game", "versionName": "2.0", "abis": ["arm64-v8a"]}}
+        results = self.run_android([{"id": "good", "repo": "https://github.com/a/good", "package": "org.example.game"}], {}, facts, releases_fn=releases)
+        self.assertTrue(results["good"]["passed"], results["good"])
+        self.assertEqual(3, len(asked), "asked again until the APK was listed")
+        # Never listed: failed after the last try, saying what GitHub answered.
+        failed = self.run_android([{"id": "none", "repo": "https://github.com/a/none", "package": "x"}], {}, facts, releases_fn=lambda o, n: [])
+        self.assertIn("GitHub listed 0 releases, asked 3 times", failed["none"]["detail"])
 
     def test_an_android_port_is_verified_only_by_tonights_pass(self):
         index = {"format": 1, "revision": 3, "ports": [], "android": [
