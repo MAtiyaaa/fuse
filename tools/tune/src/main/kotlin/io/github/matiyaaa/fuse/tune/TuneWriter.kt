@@ -44,11 +44,23 @@ object TuneWriter {
         c.hosts?.let { append(HOSTS).append(it.sorted().joinToString("+")) }
     }
 
-    fun kotlin(emulators: List<Triple<String, List<String>, List<Merged>>>): String =
-        kotlinOf(emulators.map { it.first to it.second }, emulators.flatMap { (family, _, settings) -> settings.map { line(family, it) } })
+    fun kotlin(
+        emulators: List<Triple<String, List<String>, List<Merged>>>,
+        formats: Map<String, String> = emptyMap(),
+        switches: Map<String, String> = emptyMap(),
+    ): String = kotlinOf(emulators.map { it.first to it.second }, emulators.flatMap { (family, _, settings) -> settings.map { line(family, it) } }, formats, switches)
 
-    /** The Kotlin file for each family's [releases] and every setting's [lines], as [line] writes them. */
-    fun kotlinOf(releases: List<Pair<String, List<String>>>, lines: List<String>): String {
+    /**
+     * The Kotlin file for each family's [releases] and every setting's [lines], as [line] writes
+     * them; with how each family's file is written where it isn't ini ([formats]: `json`), and how
+     * it writes a switch where it isn't `true` and `false` ([switches]: `1|0`, on then off).
+     */
+    fun kotlinOf(
+        releases: List<Pair<String, List<String>>>,
+        lines: List<String>,
+        formats: Map<String, String> = emptyMap(),
+        switches: Map<String, String> = emptyMap(),
+    ): String {
         val chunks = ArrayList<String>()
         val cur = StringBuilder()
         var bytes = 0
@@ -71,6 +83,16 @@ object TuneWriter {
             appendLine("/** The releases Fuse Tune read for each emulator, newest first. */")
             appendLine("internal val TUNE_RELEASES: Map<String, List<String>> = mapOf(")
             for ((family, tags) in releases) appendLine("    ${quote(family)} to listOf(${tags.joinToString(", ") { quote(it) }}),")
+            appendLine(")")
+            appendLine()
+            appendLine("/** How a family's settings file is written, where it isn't ini. */")
+            appendLine("internal val TUNE_FORMATS: Map<String, String> = mapOf(")
+            for ((family, format) in formats.toSortedMap()) appendLine("    ${quote(family)} to ${quote(format)},")
+            appendLine(")")
+            appendLine()
+            appendLine("/** How a family writes a switch where it isn't `true` and `false`: on, then off, joined by `|`. */")
+            appendLine("internal val TUNE_SWITCHES: Map<String, String> = mapOf(")
+            for ((family, words) in switches.toSortedMap()) appendLine("    ${quote(family)} to ${quote(words)},")
             appendLine(")")
             appendLine()
             appendLine("/** Every setting, one per line, its fields separated by tabs (read by [Tune]). */")
@@ -100,6 +122,21 @@ object TuneWriter {
             }
         }
         return releases to lines
+    }
+
+    /** The `"a" to "b"` entries of the map [name] in a data file [kotlin] wrote ([TUNE_FORMATS], [TUNE_SWITCHES]). */
+    fun readMap(text: String, name: String): Map<String, String> {
+        val out = LinkedHashMap<String, String>()
+        var inside = false
+        for (l in text.lines()) {
+            val t = l.trim()
+            when {
+                t.startsWith("internal val $name") -> inside = true
+                inside && t == ")" -> return out
+                inside && t.startsWith("\"") -> literals(t).takeIf { it.size == 2 }?.let { out[it[0]] = it[1] }
+            }
+        }
+        return out
     }
 
     /** The string literals in one line of Kotlin, their escapes read (a scan, not a regex: the lines are long). */

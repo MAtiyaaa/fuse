@@ -1,45 +1,38 @@
-# Fuse 0.4.3.9 - The Overdrive Update
+# Fuse 0.4.3.10 - The Overdrive Update
 
-Ports shows every port in the list, all 146 on a computer and 116 on Android, as box art you can
-browse. 0.4.3.8 could show only the 5 ports of an older list.
+Fuse Tune changes the settings of 46 of the ports in Fuse Ports, up from 3: 5,155 settings in all,
+each read from the port's own code at the release Fuse installs, by the names, choices and ranges
+the port itself gives them.
 
 ## New
 
-- Filters on Ports: All, Installed, Ready to Play, Updates and Not Installed, each with how many
-  ports it holds.
-- A port finds your game by itself: when your library has exactly one copy of the files it needs,
-  installing it (or Choose Files) uses that copy without asking. With several, it still asks.
-- docs/heat.md: everything Fuse runs that costs power, asleep, opening, on a first start and while
-  a game runs, and what holds each back.
+- Fuse Tune reads these ports' settings, each from its own code:
+  - The N64 recompilations on N64ModernRuntime (17): Zelda 64, Banjo, Dinosaur Planet, Mega Man 64,
+    Donkey Kong 64, Bomberman 64, Goemon, Snowboard Kids 2, Mario Kart 64, Star Fox 64, Harvest
+    Moon 64, Space Station Silicon Valley, Lamborghini, Aero Gauge, Battlezone, Dinotale and Duke
+    Nukem: Zero Hour. Each tab is its own file (graphics.json, general.json, sound.json); those built
+    on RecompFrontend show the game's own words and descriptions.
+  - The Harbour Masters' ports and those on their libultraship (8): Ship of Harkinian, 2 Ship 2
+    Harkinian, Starship, SpaghettiKart, Ghostship, Lighthouse, PaperBoat and BattleShip, every
+    setting their menus show, under the menu's own sections, with its tooltip.
+  - id Tech 4 and the Quake III engine (9): dhewm 3, openQ4, Quake3e, OpenJK (Jedi Academy and Jedi
+    Outcast), iortcw, OpenMoHAA, Lilium Voyager and Spearmint, every console variable the engine
+    writes to its config, with its range and description where the code gives them.
+  - Two ReXGlue recompilations, Perfect Dark Remaster and Wet, with the SDK's own settings.
+  - Fallout 1 CE, Sonic CD, Sonic 1 and 2 (the Retro Engine decompilations), sm64coopdx, Arx
+    Libertatis, EDGE-Classic and the Perfect Dark port.
+- A port's settings are grouped as its own menus group them.
 
 ## Changed
 
-- Ports on a computer is a grid of box art, like the library. The port you're on is told above it:
-  its game, the port and its version, its licence, how it stands here and whether the nightly check
-  verified it. Under each box is the port's name, so the five ports of Doom tell apart. Installed ports
-  come first, and each box marks an installed port, an update, files it still needs
-  and a download under way.
-- A port without art found yet is drawn with the cover the library draws for a game without art.
+- tools/tune reads each port at the release ports/index.json names (the tag its downloads come
+  from), and the code a port takes from other projects (git submodules) at the commit that release
+  pins.
+- Fuse writes each port's file the way the port writes it: JSON with its keys at the top or inside
+  objects, `seta` lines, `name value` lines, TOML, and ini with or without spaces around `=`.
+  How a port's file is written comes from Fuse Tune's own data, so a list an older Fuse reads
+  never names a form it doesn't know.
 
 ## Fixed
 
-- Fuse kept the second screen of a two-screen handheld (the AYN Thor) drawing at its full rate under
-  every game. Fusi took every frame of the display through a loop the pause for games didn't reach,
-  and every paused decorative loop still asked for every frame only to skip it. Both now take no
-  frames at all while a game runs, Fuse is behind another window or the device sleeps, on every
-  system.
-- A game played with its port from Ports named its system's emulator (RetroArch, Zendroid) on its
-  page's emulator button. The button now names the port when Play starts it.
-- An update downloading in About grew and shrank as its numbers changed: the line now keeps its
-  length, and figures keep one width in every menu's details and values.
-- On a short screen (the Thor's lower one), the library's tabs and toolbar shrink and rise as you
-  move down past the first row, and the tiles shrink up to a tenth, so three rows fit; moving back
-  up brings them back. The Systems page's header folds to one line the same way past its first row.
-- Arranging Systems or Home, the switches beside Add (whose layout, and which screen's look) could
-  only be reached by touch. The controller now reaches them along the bar.
-
-- Ports showed 5 ports in place of the 146 in Fuse: the list the nightly check published before
-  0.4.3.8 counted as newer than the one inside Fuse, because a published list's revision was when it
-  was signed. A list now ranks by its own revision first, then whether it is signed, then when it was
-  checked, so a list published before the one inside your Fuse never stands in for it. The same went
-  for the Android ports.
+- Nothing fixed in this release.

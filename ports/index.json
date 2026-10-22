@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "revision": 7,
+  "revision": 8,
   "generated": "2026-10-22",
   "ports": [
     {
@@ -181,7 +181,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "Zelda64Recomp v1.2.2: README.md (the North American ROM, other formats converted, portable.txt); src/main/main.cpp supported_games (rom_hash 0xEF18B4A9E2386169, game_id mm.n64.us.1.0); src/game/config.cpp get_app_folder_path (APP_FOLDER_PATH on Linux, LocalAppData on Windows); N64ModernRuntime df7e820 librecomp/src/recomp.cpp (select_rom, check_rom_start, byteswap_data, check_stored_rom: the ROM kept as <game_id>.z64 in that folder, checked by XXH3-64) and src/pi.cpp get_save_file_path (saves in that folder); .github/workflows/validate.yml (the Linux build, a tarball the release zips)"
+      "source": "Zelda64Recomp v1.2.2: README.md (the North American ROM, other formats converted, portable.txt); src/main/main.cpp supported_games (rom_hash 0xEF18B4A9E2386169, game_id mm.n64.us.1.0); src/game/config.cpp get_app_folder_path (APP_FOLDER_PATH on Linux, LocalAppData on Windows); N64ModernRuntime df7e820 librecomp/src/recomp.cpp (select_rom, check_rom_start, byteswap_data, check_stored_rom: the ROM kept as <game_id>.z64 in that folder, checked by XXH3-64) and src/pi.cpp get_save_file_path (saves in that folder); .github/workflows/validate.yml (the Linux build, a tarball the release zips); src/game/config.cpp save_general_config, save_graphics_config and save_sound_config (general.json, graphics.json and sound.json in that folder, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "banjorecomp",
@@ -220,7 +221,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "BanjoRecomp v1.0.2: README.md (the North American 1.0 ROM, other formats converted, portable.txt, saves); src/main/main.cpp supported_games (rom_hash 0x1B67585D56E07F8C, game_id bk.n64.us.1.0); include/banjo_config.h program_id; RecompFrontend d0d90ba recompui/src/util/file.cpp get_app_folder_path (APP_FOLDER_PATH on Linux, LocalAppData on Windows); N64ModernRuntime ca568b6 librecomp/src/recomp.cpp (stored_filename: <game_id>.z64 in that folder, checked by XXH3-64) and src/pi.cpp set_save_file_path (saves in that folder); .github/workflows/validate.yml (the Linux build: BanjoRecompiled, assets and recompcontrollerdb.txt in a tarball)"
+      "source": "BanjoRecomp v1.0.2: README.md (the North American 1.0 ROM, other formats converted, portable.txt, saves); src/main/main.cpp supported_games (rom_hash 0x1B67585D56E07F8C, game_id bk.n64.us.1.0); include/banjo_config.h program_id; RecompFrontend d0d90ba recompui/src/util/file.cpp get_app_folder_path (APP_FOLDER_PATH on Linux, LocalAppData on Windows); N64ModernRuntime ca568b6 librecomp/src/recomp.cpp (stored_filename: <game_id>.z64 in that folder, checked by XXH3-64) and src/pi.cpp set_save_file_path (saves in that folder); .github/workflows/validate.yml (the Linux build: BanjoRecompiled, assets and recompcontrollerdb.txt in a tarball); RecompFrontend recompui/src/config and the game's own add_*_option calls (each settings tab a <tab>.json in that folder, written by librecomp Config::save_config, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "ape-escape-recomp",
@@ -1142,7 +1144,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "SSSV_Recomp v0.2.0: src/main/main.cpp supported_games (rom_hash 0x912A068AADB0D0C5, game_id sssv.n64.us.1.0); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "SSSV_Recomp v0.2.0: src/main/main.cpp supported_games (rom_hash 0x912A068AADB0D0C5, game_id sssv.n64.us.1.0); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); RecompFrontend recompui/src/config and the game's own add_*_option calls (each settings tab a <tab>.json in that folder, written by librecomp Config::save_config, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "dino-recomp",
@@ -1181,7 +1184,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "dino-recomp v0.3.0: src/main/main.cpp supported_games (rom_hash 0xB231A00966BE1430, game_id dino); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "dino-recomp v0.3.0: src/main/main.cpp supported_games (rom_hash 0xB231A00966BE1430, game_id dino); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/game/config.cpp save_general_config, save_graphics_config and save_sound_config (general.json, graphics.json and sound.json in that folder, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "harvestmoon64-recomp",
@@ -1220,7 +1224,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "HarvestMoon64Recomp v1.2.2: src/main/main.cpp supported_games (rom_hash 0x68b2c3755c527305, game_id harvest_moon_64); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "HarvestMoon64Recomp v1.2.2: src/main/main.cpp supported_games (rom_hash 0x68b2c3755c527305, game_id harvest_moon_64); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); RecompFrontend recompui/src/config and the game's own add_*_option calls (each settings tab a <tab>.json in that folder, written by librecomp Config::save_config, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "megaman64-recomp",
@@ -1259,7 +1264,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "MegaMan64Recompiled v0.9.1: src/main/main.cpp supported_games (rom_hash 0x0c74c7489d01643b, game_id megaman.n64.us.1.0); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "MegaMan64Recompiled v0.9.1: src/main/main.cpp supported_games (rom_hash 0x0c74c7489d01643b, game_id megaman.n64.us.1.0); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/game/config.cpp save_general_config, save_graphics_config and save_sound_config (general.json, graphics.json and sound.json in that folder, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "dk64-recomp",
@@ -1298,7 +1304,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "Donkey-Kong-64-Recompiled v1.0.3: src/main/main.cpp supported_games (rom_hash 0x4d876060f09b3fc5, game_id DK64); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "Donkey-Kong-64-Recompiled v1.0.3: src/main/main.cpp supported_games (rom_hash 0x4d876060f09b3fc5, game_id DK64); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); RecompFrontend recompui/src/config and the game's own add_*_option calls (each settings tab a <tab>.json in that folder, written by librecomp Config::save_config, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "bm64-recomp",
@@ -1337,7 +1344,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "BM64Recomp v1.0.0: src/main/main.cpp supported_games (rom_hash 0xc4c0b74bbb696426, game_id bm64_us); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "BM64Recomp v1.0.0: src/main/main.cpp supported_games (rom_hash 0xc4c0b74bbb696426, game_id bm64_us); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/game/config.cpp save_general_config, save_graphics_config and save_sound_config (general.json, graphics.json and sound.json in that folder, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "goemon64-recomp",
@@ -1376,7 +1384,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "Goemon64Recomp v0.2.0-dev: src/main/main.cpp supported_games (rom_hash 0xDB1BC7EE0E6BEBA1, game_id mnsg.us); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "Goemon64Recomp v0.2.0-dev: src/main/main.cpp supported_games (rom_hash 0xDB1BC7EE0E6BEBA1, game_id mnsg.us); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/game/config.cpp save_general_config, save_graphics_config and save_sound_config (general.json, graphics.json and sound.json in that folder, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "lamborghini-recomp",
@@ -1415,7 +1424,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "automobililamborghini-recomp v0.9.0: src/main/main.cpp supported_games (rom_hash 0x525201d7279f34e3, game_id lamborghini.us); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "automobililamborghini-recomp v0.9.0: src/main/main.cpp supported_games (rom_hash 0x525201d7279f34e3, game_id lamborghini.us); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); RecompFrontend recompui/src/config and the game's own add_*_option calls (each settings tab a <tab>.json in that folder, written by librecomp Config::save_config, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "aerogauge-recomp",
@@ -1454,7 +1464,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "aerogauge-recomp v0.6.2: src/main/main.cpp supported_games (rom_hash 0x89ea0690f3e22201, game_id aerogauge.us; the Japanese Rev A beside it); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "aerogauge-recomp v0.6.2: src/main/main.cpp supported_games (rom_hash 0x89ea0690f3e22201, game_id aerogauge.us; the Japanese Rev A beside it); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); RecompFrontend recompui/src/config and the game's own add_*_option calls (each settings tab a <tab>.json in that folder, written by librecomp Config::save_config, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "snowboardkids2-recomp",
@@ -1493,7 +1504,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "snowboardkids2-recomp v2.0.2: src/main/main.cpp supported_games (rom_hash 0x81f434ff431162eb, game_id snowboardkids2.n64.us); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "snowboardkids2-recomp v2.0.2: src/main/main.cpp supported_games (rom_hash 0x81f434ff431162eb, game_id snowboardkids2.n64.us); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); RecompFrontend recompui/src/config and the game's own add_*_option calls (each settings tab a <tab>.json in that folder, written by librecomp Config::save_config, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "dnzh-recomp",
@@ -1532,7 +1544,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "DNZHRecomp 0.0.3: src/main/main.cpp supported_games (rom_hash 0xafc33da7101fec88, game_id dnzh.us); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "DNZHRecomp 0.0.3: src/main/main.cpp supported_games (rom_hash 0xafc33da7101fec88, game_id dnzh.us); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/game/config.cpp save_general_config, save_graphics_config and save_sound_config (general.json, graphics.json and sound.json in that folder, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "mariokart64-recomp",
@@ -1571,7 +1584,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "MarioKart64Recomp v0.9.2: src/main/main.cpp supported_games (rom_hash 0x54572403569b87c1, game_id mk64.us); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "MarioKart64Recomp v0.9.2: src/main/main.cpp supported_games (rom_hash 0x54572403569b87c1, game_id mk64.us); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/game/config.cpp save_general_config, save_graphics_config and save_sound_config (general.json, graphics.json and sound.json in that folder, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "starfox64-recomp",
@@ -1610,7 +1624,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "Starfox64Recomp 1.0.3: src/main/main.cpp supported_games (rom_hash 0x163fd3fc3813f54e, game_id sf64.n64.us.1.1); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "Starfox64Recomp 1.0.3: src/main/main.cpp supported_games (rom_hash 0x163fd3fc3813f54e, game_id sf64.n64.us.1.1); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/game/config.cpp save_general_config, save_graphics_config and save_sound_config (general.json, graphics.json and sound.json in that folder, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "battlezone-recomp",
@@ -1649,7 +1664,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "bzrecomp v0.1.0-beta: src/main/main.cpp supported_games (rom_hash 0xf5f240b373301b9d, game_id bz.n64.us.1.0); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "bzrecomp v0.1.0-beta: src/main/main.cpp supported_games (rom_hash 0xf5f240b373301b9d, game_id bz.n64.us.1.0); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); RecompFrontend recompui/src/config and the game's own add_*_option calls (each settings tab a <tab>.json in that folder, written by librecomp Config::save_config, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "dinotale",
@@ -1688,7 +1704,8 @@
         "Its saves, settings and mods are its own, kept by Fuse in its home.",
         "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
       ],
-      "source": "dinotale 0.1.6: src/main/main.cpp supported_games (rom_hash 0xf1d8a6737dda5b82, game_id yoshisstory.n64.us); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "dinotale 0.1.6: src/main/main.cpp supported_games (rom_hash 0xf1d8a6737dda5b82, game_id yoshisstory.n64.us); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); RecompFrontend recompui/src/config and the game's own add_*_option calls (each settings tab a <tab>.json in that folder, written by librecomp Config::save_config, read by Fuse Tune)",
+      "settings": { "file": "{home}/general.json" }
     },
     {
       "id": "trouble-makers-recomp",
@@ -1889,7 +1906,8 @@
         "Your saves and settings are Arx Libertatis' own, kept by Fuse beside its copy.",
         "On Linux it takes OpenAL from your system, which SteamOS and most desktops have."
       ],
-      "source": "ArxLibertatis 1.2.1: src/io/fs/SystemPaths.cpp (the --data-dir, --user-dir and --config-dir options); README.md; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "ArxLibertatis 1.2.1: src/io/fs/SystemPaths.cpp (the --data-dir, --user-dir and --config-dir options); README.md; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/core/ArxGame.cpp (cfg.ini in the config folder) and src/core/Config.cpp Config::init (each key with its default; read by Fuse Tune)",
+      "settings": { "file": "{home}/config/cfg.ini" }
     },
     {
       "id": "dhewm3",
@@ -1936,7 +1954,8 @@
         "Its Windows build is 32-bit, which 64-bit Windows runs.",
         "On Linux it takes OpenAL from your system, which SteamOS and most desktops have."
       ],
-      "source": "dhewm3 1.5.5: neo/framework/FileSystem.cpp (fs_basepath for the game's files, fs_savepath for what it writes, set with +set on the command line); README.md (no game data in the source release); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "dhewm3 1.5.5: neo/framework/FileSystem.cpp (fs_basepath for the game's files, fs_savepath for what it writes, set with +set on the command line); README.md (no game data in the source release); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); neo/framework/Licensee.h CONFIG_FILE and BASE_GAMEDIR; neo/framework/CVarSystem.cpp WriteFlaggedVariables (seta lines of the archived variables) (its settings in base/dhewm.cfg under the folder it writes to, read by Fuse Tune)",
+      "settings": { "file": "{home}/base/dhewm.cfg" }
     },
     {
       "id": "corsixth",
@@ -2016,7 +2035,8 @@
         "OpenJK reads Jedi Academy's files where they are; it never changes them.",
         "Your saves and settings are OpenJK's own, kept by Fuse beside its copy."
       ],
-      "source": "OpenJK latest: shared/sys/sys_main.cpp (its game modules from beside the program, then fs_basepath); qcommon/files.cpp (fs_basepath for the game's files, fs_homepath for what it writes); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "OpenJK latest: shared/sys/sys_main.cpp (its game modules from beside the program, then fs_basepath); qcommon/files.cpp (fs_basepath for the game's files, fs_homepath for what it writes); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); code/qcommon/q_shared.h Q3CONFIG_NAME (PRODUCT_NAME openjk_sp) and BASEGAME; code/qcommon/cvar.cpp Cvar_WriteVariables (its settings in base/openjk_sp.cfg under the folder it writes to, read by Fuse Tune)",
+      "settings": { "file": "{home}/base/openjk_sp.cfg" }
     },
     {
       "id": "openjo",
@@ -2061,7 +2081,8 @@
         "OpenJO reads Jedi Outcast's files where they are; it never changes them.",
         "Your saves and settings are OpenJO's own, kept by Fuse beside its copy."
       ],
-      "source": "OpenJK latest: shared/sys/sys_main.cpp (its game modules from beside the program, then fs_basepath); code/qcommon/files.cpp (fs_basepath, fs_homepath); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "OpenJK latest: shared/sys/sys_main.cpp (its game modules from beside the program, then fs_basepath); code/qcommon/files.cpp (fs_basepath, fs_homepath); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); code/qcommon/q_shared.h Q3CONFIG_NAME (PRODUCT_NAME openjo_sp, JK2_MODE) and BASEGAME; code/qcommon/cvar.cpp Cvar_WriteVariables (its settings in base/openjo_sp.cfg under the folder it writes to, read by Fuse Tune)",
+      "settings": { "file": "{home}/base/openjo_sp.cfg" }
     },
     {
       "id": "iortcw",
@@ -2107,7 +2128,8 @@
         "iortcw reads the game's files from beside itself, through links in Fuse's copy, beside its own game modules.",
         "Your saves and settings are iortcw's own, kept by Fuse beside its copy."
       ],
-      "source": "iortcw 1.51c: SP/code/qcommon/files.c (fs_basepath, the folder it starts from, and fs_homepath for what it writes); the release (its own game modules in Main beside the program); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "iortcw 1.51c: SP/code/qcommon/files.c (fs_basepath, the folder it starts from, and fs_homepath for what it writes); the release (its own game modules in Main beside the program); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); SP/code/qcommon/qcommon.h Q3CONFIG_CFG, SP/code/qcommon/q_shared.h BASEGAME; SP/code/qcommon/cvar.c Cvar_WriteVariables (its settings in Main/wolfconfig.cfg under the folder it writes to, read by Fuse Tune)",
+      "settings": { "file": "{home}/Main/wolfconfig.cfg" }
     },
     {
       "id": "openmohaa",
@@ -2152,7 +2174,8 @@
         "OpenMoHAA reads Medal of Honor's files where they are; it never changes them.",
         "Your saves and settings are OpenMoHAA's own, kept by Fuse beside its copy."
       ],
-      "source": "openmohaa v0.82.1: code/qcommon/files.cpp (fs_basepath for the game's files, fs_homepath for what it writes); the release (its game and cgame modules beside the program); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "openmohaa v0.82.1: code/qcommon/files.cpp (fs_basepath for the game's files, fs_homepath for what it writes); the release (its game and cgame modules beside the program); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); code/qcommon/qcommon.h Q3CONFIG_CFG, code/qcommon/q_shared.h BASEGAME; code/qcommon/cvar.c Cvar_WriteVariables (its settings in main/q3config.cfg under the folder it writes to, read by Fuse Tune)",
+      "settings": { "file": "{home}/main/q3config.cfg" }
     },
     {
       "id": "quake3e",
@@ -2196,7 +2219,8 @@
         "Quake3e reads Quake III Arena's files where they are; it never changes them.",
         "Its settings are its own, kept by Fuse beside its copy."
       ],
-      "source": "Quake3e latest: code/qcommon/files.c (fs_basepath for the game's files, fs_homepath for what it writes); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "Quake3e latest: code/qcommon/files.c (fs_basepath for the game's files, fs_homepath for what it writes); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); code/qcommon/qcommon.h Q3CONFIG_CFG, code/qcommon/q_shared.h BASEGAME; code/qcommon/cvar.c Cvar_WriteVariables (seta lines of the archived variables) (its settings in baseq3/q3config.cfg under the folder it writes to, read by Fuse Tune)",
+      "settings": { "file": "{home}/baseq3/q3config.cfg" }
     },
     {
       "id": "lilium-voyager",
@@ -2240,7 +2264,8 @@
         "Lilium Voyager reads Elite Force's files where they are; it never changes them.",
         "Its settings are its own, kept by Fuse beside its copy."
       ],
-      "source": "lilium-voyager v1.40: code/qcommon/files.c (fs_basepath, fs_homepath, ioquake3's); README; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "lilium-voyager v1.40: code/qcommon/files.c (fs_basepath, fs_homepath, ioquake3's); README; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); code/qcommon/qcommon.h Q3CONFIG_CFG (ELITEFORCE), code/qcommon/q_shared.h BASEGAME; code/qcommon/cvar.c Cvar_WriteVariables (its settings in baseEF/hmconfig.cfg under the folder it writes to, read by Fuse Tune)",
+      "settings": { "file": "{home}/baseEF/hmconfig.cfg" }
     },
     {
       "id": "woof",
@@ -2519,7 +2544,8 @@
         "EDGE-Classic finds the IWAD in your folder by its contents; it never changes it.",
         "Your saves, settings and screenshots are EDGE-Classic's own, kept by Fuse in its home."
       ],
-      "source": "EDGE-classic 1.53: source_files/edge/e_main.cc, InitializeDirectories (-home for its config, cache, savegame and screenshot folders, unless -portable or a config beside the program) and CollectSearchPaths (DOOMWADDIR and DOOMWADPATH searched); source_files/edge/w_wad.cc (the games it knows by their lumps: Doom, Doom II, Plutonia, TNT, Heretic, Freedoom, Chex Quest and more); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "EDGE-classic 1.53: source_files/edge/e_main.cc, InitializeDirectories (-home for its config, cache, savegame and screenshot folders, unless -portable or a config beside the program) and CollectSearchPaths (DOOMWADDIR and DOOMWADPATH searched); source_files/edge/w_wad.cc (the games it knows by their lumps: Doom, Doom II, Plutonia, TNT, Heretic, Freedoom, Chex Quest and more); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); source_files/edge/con_var.cc WriteConsoleVariables (each archived console variable, /name and its value in edge-classic.cfg; read by Fuse Tune)",
+      "settings": { "file": "{home}/edge-classic.cfg" }
     },
     {
       "id": "psydoom",
@@ -2637,7 +2663,8 @@
         "Your saves and settings are openQ4's own, kept by Fuse in its home.",
         "On Linux it takes OpenAL from your system, which SteamOS and most desktops have."
       ],
-      "source": "openQ4 v0.13.2: docs/user/getting-started.md (If Auto-Detection Fails: +set fs_basepath at the Quake 4 folder holding q4base); src/framework/FileSystem.cpp, idFileSystemLocal::Init (fs_basepath kept when it holds q4base/pak001.pk4, fs_homepath the writable root and fs_savepath following it, fs_cdpath the folder it starts from) and FS_HasGameFilesAtGameDirPath (pak001.pk4); src/framework/licensee.h (q4base, baseoq4); src/framework/Session.cpp (savegames/); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "openQ4 v0.13.2: docs/user/getting-started.md (If Auto-Detection Fails: +set fs_basepath at the Quake 4 folder holding q4base); src/framework/FileSystem.cpp, idFileSystemLocal::Init (fs_basepath kept when it holds q4base/pak001.pk4, fs_homepath the writable root and fs_savepath following it, fs_cdpath the folder it starts from) and FS_HasGameFilesAtGameDirPath (pak001.pk4); src/framework/licensee.h (q4base, baseoq4); src/framework/Session.cpp (savegames/); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/framework/licensee.h CONFIG_FILE; src/framework/Common.cpp WriteConfigToFile; src/framework/CVarSystem.cpp (seta lines of the archived variables) (its settings in baseoq4/openQ4Config.cfg under the folder it writes to, read by Fuse Tune)",
+      "settings": { "file": "{home}/baseoq4/openQ4Config.cfg" }
     },
     {
       "id": "spearmint",
@@ -2681,7 +2708,8 @@
         "Spearmint reads Quake III's files where they are, below its own game code beside itself; it never changes them.",
         "Your settings and downloads are Spearmint's own, kept by Fuse in its home."
       ],
-      "source": "spearmint release-1.0.3: code/qcommon/files.c, FS_Startup (fs_cdpath, fs_basepath the program's folder, fs_homepath for what it writes) and FS_AddGame (cdpath, then basepath, then homepath, in rising priority); code/sys/sys_main.c (DEFAULT_BASEDIR, the program's folder); the release (its game code in baseq3/spearmint-baseq3-1.0.3.pk3 beside the program); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "spearmint release-1.0.3: code/qcommon/files.c, FS_Startup (fs_cdpath, fs_basepath the program's folder, fs_homepath for what it writes) and FS_AddGame (cdpath, then basepath, then homepath, in rising priority); code/sys/sys_main.c (DEFAULT_BASEDIR, the program's folder); the release (its game code in baseq3/spearmint-baseq3-1.0.3.pk3 beside the program); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); code/qcommon/qcommon.h Q3CONFIG_CFG and BASEGAME; code/qcommon/cvar.c Cvar_WriteVariables (its settings in baseq3/config.cfg under the folder it writes to, read by Fuse Tune)",
+      "settings": { "file": "{home}/baseq3/config.cfg" }
     },
     {
       "id": "fallout1-ce",
@@ -2726,7 +2754,8 @@
         "Mods that change maps or protos in your game's data folder aren't carried over, and the saves of your own copy stay with it: the port's are its own.",
         "On Linux it needs SDL2, which SteamOS and most desktops have."
       ],
-      "source": "fallout1-ce v1.1.0: README.md (copy fallout-ce into your Fallout folder, SDL2 on Linux); src/game/gconfig.cc, gconfig_init (fallout.cfg beside the program or in the folder it starts from; master.dat, critter.dat and data as defaults); src/game/loadsave.cc (SAVEGAME/SLOTnn), src/game/map.cc and src/game/proto.cc (MAPS and proto written while playing); src/platform_compat.cc, compat_resolve_path (letter case ignored on Linux); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "fallout1-ce v1.1.0: README.md (copy fallout-ce into your Fallout folder, SDL2 on Linux); src/game/gconfig.cc, gconfig_init (fallout.cfg beside the program or in the folder it starts from; master.dat, critter.dat and data as defaults); src/game/loadsave.cc (SAVEGAME/SLOTnn), src/game/map.cc and src/game/proto.cc (MAPS and proto written while playing); src/platform_compat.cc, compat_resolve_path (letter case ignored on Linux); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/game/gconfig.cc gconfig_init (every key of fallout.cfg given its default, read by Fuse Tune)",
+      "settings": { "file": "{install}/fallout.cfg" }
     },
     {
       "id": "ja2-stracciatella",
@@ -3468,7 +3497,8 @@
         "It makes oot.o2r (or oot-mq.o2r) from your ROM on that first start and never changes the ROM itself.",
         "Its saves, settings and the game data it made from your ROM are its own, kept by Fuse in its home."
       ],
-      "source": "Shipwright 9.3.1: README.md (provide a supported copy of the game, select it when prompted; saves, settings and oot.o2r in the app folder, SHIP_HOME to choose another); soh/soh/OTRGlobals.cpp (shipofharkinian.json, RunExtract writing oot.o2r or oot-mq.o2r into GetAppDirectoryPath, SetAppImageHome leaving SHIP_HOME as set); soh/soh/SaveManager.cpp (saves in Save in the app folder); libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "Shipwright 9.3.1: README.md (provide a supported copy of the game, select it when prompted; saves, settings and oot.o2r in the app folder, SHIP_HOME to choose another); soh/soh/OTRGlobals.cpp (shipofharkinian.json, RunExtract writing oot.o2r or oot-mq.o2r into GetAppDirectoryPath, SetAppImageHome leaving SHIP_HOME as set); soh/soh/SaveManager.cpp (saves in Save in the app folder); libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); soh/soh/OTRGlobals.cpp (its settings in shipofharkinian.json in the folder SHIP_HOME names, libultraship Context::InitConfiguration; each CVar under CVars, ConsoleVariable::Save, read by Fuse Tune from its menus)",
+      "settings": { "file": "{home}/shipofharkinian.json" }
     },
     {
       "id": "2ship2harkinian",
@@ -3507,7 +3537,8 @@
         "It makes mm.o2r from your ROM on that first start and never changes the ROM itself.",
         "Its saves, settings and the game data it made from your ROM are its own, kept by Fuse in its home."
       ],
-      "source": "2ship2harkinian 5.0.1: README.md (provide a supported copy of the game, select it when prompted; custom assets in mods); mm/2s2h/BenPort.cpp (2ship2harkinian.json, mm.o2r and the mods folder in the app folder); mm/2s2h/SaveManager/SaveManager.cpp (saves in the app folder); libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "2ship2harkinian 5.0.1: README.md (provide a supported copy of the game, select it when prompted; custom assets in mods); mm/2s2h/BenPort.cpp (2ship2harkinian.json, mm.o2r and the mods folder in the app folder); mm/2s2h/SaveManager/SaveManager.cpp (saves in the app folder); libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); mm/2s2h/BenPort.cpp (its settings in 2ship2harkinian.json in the folder SHIP_HOME names, libultraship Context::InitConfiguration; each CVar under CVars, ConsoleVariable::Save, read by Fuse Tune from its menus)",
+      "settings": { "file": "{home}/2ship2harkinian.json" }
     },
     {
       "id": "starship",
@@ -3545,7 +3576,8 @@
         "It makes sf64.o2r from your ROM on that first start and never changes the ROM itself.",
         "Its saves, settings and the game data it made from your ROM are its own, kept by Fuse in its home."
       ],
-      "source": "Starship v2.0.0: README.md (a US 1.0 or 1.1 ROM in .z64 form, selected on the first run; EU or JP for voices); src/port/Engine.cpp (sf64.o2r in the app folder, made by GenAssetFile when missing; starship.cfg.json; the mods folder made in the folder it starts from); src/port/extractor/GameExtractor.cpp (SelectGameFromUI, the file picker for the ROM); libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "Starship v2.0.0: README.md (a US 1.0 or 1.1 ROM in .z64 form, selected on the first run; EU or JP for voices); src/port/Engine.cpp (sf64.o2r in the app folder, made by GenAssetFile when missing; starship.cfg.json; the mods folder made in the folder it starts from); src/port/extractor/GameExtractor.cpp (SelectGameFromUI, the file picker for the ROM); libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/port/Engine.cpp (its settings in starship.cfg.json in the folder SHIP_HOME names, libultraship Context::InitConfiguration; each CVar under CVars, ConsoleVariable::Save, read by Fuse Tune from its menus)",
+      "settings": { "file": "{home}/starship.cfg.json" }
     },
     {
       "id": "spaghettikart",
@@ -3590,7 +3622,8 @@
         "It makes mk64.o2r from your ROM on that first start and never changes the ROM itself.",
         "Its saves, settings and the game data it made from your ROM are its own, kept by Fuse in its home."
       ],
-      "source": "SpaghettiKart 1.0.0: README.md (a US ROM in .z64 form, selected on the first run; mk64.o2r made beside the program); src/port/Engine.cpp (spaghettify.cfg.json, mk64.o2r and mods in the app folder); src/port/pak.cpp (the Controller Pak's controllerPak_header.sav and controllerPak_file_N.sav in the app folder); libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "SpaghettiKart 1.0.0: README.md (a US ROM in .z64 form, selected on the first run; mk64.o2r made beside the program); src/port/Engine.cpp (spaghettify.cfg.json, mk64.o2r and mods in the app folder); src/port/pak.cpp (the Controller Pak's controllerPak_header.sav and controllerPak_file_N.sav in the app folder); libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/port/Engine.cpp (its settings in spaghettify.cfg.json in the folder SHIP_HOME names, libultraship Context::InitConfiguration; each CVar under CVars, ConsoleVariable::Save, read by Fuse Tune from its menus)",
+      "settings": { "file": "{home}/spaghettify.cfg.json" }
     },
     {
       "id": "ghostship",
@@ -3629,7 +3662,8 @@
         "It makes sm64.o2r from your ROM on that first start and never changes the ROM itself.",
         "Its saves, settings and the game data it made from your ROM are its own, kept by Fuse in its home."
       ],
-      "source": "Ghostship 3.0.0: README.md (a US or JP ROM in .z64 form, selected on the first run); src/port/Engine.cpp (sm64.o2r, ghostship.cfg.json and logs in the app folder; the ROM picked when sm64.o2r is missing); saves and randomizer in the app folder; libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "Ghostship 3.0.0: README.md (a US or JP ROM in .z64 form, selected on the first run); src/port/Engine.cpp (sm64.o2r, ghostship.cfg.json and logs in the app folder; the ROM picked when sm64.o2r is missing); saves and randomizer in the app folder; libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/port/Engine.cpp (its settings in ghostship.cfg.json in the folder SHIP_HOME names, libultraship Context::InitConfiguration; each CVar under CVars, ConsoleVariable::Save, read by Fuse Tune from its menus)",
+      "settings": { "file": "{home}/ghostship.cfg.json" }
     },
     {
       "id": "lighthouse",
@@ -3668,7 +3702,8 @@
         "It makes bk.o2r from your ROM on that first start and never changes the ROM itself.",
         "Its saves, settings and the game data it made from your ROM are its own, kept by Fuse in its home."
       ],
-      "source": "Lighthouse 1.1.0: README.md (the four ROMs it accepts, by SHA-1, in .z64 form); src/port/Engine.cpp (lighthouse.cfg.json, bk.o2r and mods in the app folder); saves in the app folder; libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "Lighthouse 1.1.0: README.md (the four ROMs it accepts, by SHA-1, in .z64 form); src/port/Engine.cpp (lighthouse.cfg.json, bk.o2r and mods in the app folder); saves in the app folder; libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/port/Engine.cpp (its settings in lighthouse.cfg.json in the folder SHIP_HOME names, libultraship Context::InitConfiguration; each CVar under CVars, ConsoleVariable::Save, read by Fuse Tune from its menus)",
+      "settings": { "file": "{home}/lighthouse.cfg.json" }
     },
     {
       "id": "paperboat",
@@ -3707,7 +3742,8 @@
         "It makes pm64.o2r from your ROM on that first start and never changes the ROM itself.",
         "Its saves, settings and the game data it made from your ROM are its own, kept by Fuse in its home."
       ],
-      "source": "PaperBoat 1.0.3: README.md (provide a supported copy of the game, select it when prompted; custom assets in mods); src/port/Engine.cpp (paperboat.cfg.json, pm64.o2r, mods and saves/ in the app folder); libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "PaperBoat 1.0.3: README.md (provide a supported copy of the game, select it when prompted; custom assets in mods); src/port/Engine.cpp (paperboat.cfg.json, pm64.o2r, mods and saves/ in the app folder); libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/port/Engine.cpp (its settings in paperboat.cfg.json in the folder SHIP_HOME names, libultraship Context::InitConfiguration; each CVar under CVars, ConsoleVariable::Save, read by Fuse Tune from its menus)",
+      "settings": { "file": "{home}/paperboat.cfg.json" }
     },
     {
       "id": "sm64coopdx",
@@ -3742,7 +3778,8 @@
         "It asks for your own Super Mario 64 ROM (the US cartridge's, in .z64 form) on its first start: drop the file onto its window, and it keeps its own copy.",
         "Its saves, settings, mods and its copy of your ROM are its own, kept by Fuse in its home."
       ],
-      "source": "sm64coopdx v1.5.1: src/pc/cliopts.c (--savepath, the save and settings folder; --skip-update-check); src/pc/pc_main.c (fs_init with the save path); src/pc/rom_checker.cpp (a US ROM found by MD5 in the save folder or beside the program, or dropped on the window, copied into the save folder as baserom.us.z64); src/pc/loading.c render_rom_setup_screen (the drop prompt); src/pc/fs/fs.h (sm64_save_file.bin); src/pc/configfile.h (sm64config.txt); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "sm64coopdx v1.5.1: src/pc/cliopts.c (--savepath, the save and settings folder; --skip-update-check); src/pc/pc_main.c (fs_init with the save path); src/pc/rom_checker.cpp (a US ROM found by MD5 in the save folder or beside the program, or dropped on the window, copied into the save folder as baserom.us.z64); src/pc/loading.c render_rom_setup_screen (the drop prompt); src/pc/fs/fs.h (sm64_save_file.bin); src/pc/configfile.h (sm64config.txt); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/pc/configfile.c options and configfile_save (sm64config.txt in the save path, name value lines; read by Fuse Tune)",
+      "settings": { "file": "{home}/sm64config.txt" }
     },
     {
       "id": "perfect-dark-dabs-mod",
@@ -3787,7 +3824,8 @@
         "It reads the ROM where it is and never changes it; the ROM must be the US Rev 1 (ntsc-final) one, named pd.ntsc-final.z64.",
         "Your saves and settings (pd.ini) are its own, kept by Fuse in its home."
       ],
-      "source": "perfect-dark-dabs-mod v3.15.1: README.md (You need a ROM: Perfect Dark (USA) (Rev 1), named exactly pd.ntsc-final.z64 in the data folder); port/src/fs.c fsInit (--basedir for the folder with the ROM, --savedir for saves and settings); port/include/config.h (pd.ini in the save folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "perfect-dark-dabs-mod v3.15.1: README.md (You need a ROM: Perfect Dark (USA) (Rev 1), named exactly pd.ntsc-final.z64 in the data folder); port/src/fs.c fsInit (--basedir for the folder with the ROM, --savedir for saves and settings); port/include/config.h (pd.ini in the save folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); port/src/config.c configRegisterInt, UInt, Float and String and configSave (pd.ini in the save folder, [Section] and key=value lines; read by Fuse Tune)",
+      "settings": { "file": "{home}/pd.ini" }
     },
     {
       "id": "rsdkv3",
@@ -3832,7 +3870,8 @@
         "Its saves (SData.bin) and settings.ini are written in Fuse's copy, never in your folder, and carried into the new copy when Fuse updates it; its mods folder is kept in its home.",
         "On Linux it takes SDL2, GLEW and the Ogg, Vorbis and Theora libraries from your system."
       ],
-      "source": "RSDKv3-Decompilation 1.3.3: README.md (without assets from the official release it will not run; the Steam release or Sonic Origins); RSDKv3/RetroEngine.hpp (BASE_PATH empty: the folder it starts from); RSDKv3/Userdata.cpp (Data.rsdk, settings.ini and SData.bin in that folder); RSDKv3/ModAPI.cpp (mods/); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "RSDKv3-Decompilation 1.3.3: README.md (without assets from the official release it will not run; the Steam release or Sonic Origins); RSDKv3/RetroEngine.hpp (BASE_PATH empty: the folder it starts from); RSDKv3/Userdata.cpp (Data.rsdk, settings.ini and SData.bin in that folder); RSDKv3/ModAPI.cpp (mods/); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); RSDKv3/Userdata.cpp InitUserdata (settings.ini, every key with its default, key=value; read by Fuse Tune)",
+      "settings": { "file": "{install}/settings.ini" }
     },
     {
       "id": "rsdkv4",
@@ -3877,7 +3916,8 @@
         "Its saves (SData.bin) and settings.ini are written in Fuse's copy, never in your folder, and carried into the new copy when Fuse updates it; its mods folder is kept in its home.",
         "On Linux it takes SDL2, GLEW and the Ogg, Vorbis and Theora libraries from your system."
       ],
-      "source": "RSDKv4-Decompilation 1.3.3: README.md (without assets from the official releases it will not run; Sonic Origins or the mobile versions; SData.bin in the decompilation's folder); RSDKv4/RetroEngine.cpp (Data.rsdk in BASE_PATH, the folder it starts from); RSDKv4/Userdata.cpp (settings.ini, SData.bin and SGame.bin there); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "RSDKv4-Decompilation 1.3.3: README.md (without assets from the official releases it will not run; Sonic Origins or the mobile versions; SData.bin in the decompilation's folder); RSDKv4/RetroEngine.cpp (Data.rsdk in BASE_PATH, the folder it starts from); RSDKv4/Userdata.cpp (settings.ini, SData.bin and SGame.bin there); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); RSDKv4/Userdata.cpp InitUserdata (settings.ini, every key with its default, key=value; read by Fuse Tune)",
+      "settings": { "file": "{install}/settings.ini" }
     },
     {
       "id": "lain-psx",
@@ -4157,7 +4197,8 @@
         "It makes BattleShip.o2r from your ROM on that first start and never changes the ROM itself.",
         "Its saves, settings and the game data it made from your ROM are its own, kept by Fuse in its home."
       ],
-      "source": "BattleShip v1.6: README.md (you supply your own ROM, US NTSC-U v1.0; the first-run ROM-extraction wizard); port/port.cpp (BattleShip.cfg.json and BattleShip.o2r in the app folder, mods); port/port_save.cpp (ssb64_save.bin in the app folder); scripts/package-windows.ps1 (the Windows build portable: saves and config beside BattleShip.exe); its libultraship's src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "BattleShip v1.6: README.md (you supply your own ROM, US NTSC-U v1.0; the first-run ROM-extraction wizard); port/port.cpp (BattleShip.cfg.json and BattleShip.o2r in the app folder, mods); port/port_save.cpp (ssb64_save.bin in the app folder); scripts/package-windows.ps1 (the Windows build portable: saves and config beside BattleShip.exe); its libultraship's src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); port/port.cpp (its settings in BattleShip.cfg.json in the folder SHIP_HOME names, libultraship Context::InitConfiguration; each CVar under CVars, ConsoleVariable::Save, read by Fuse Tune from its menus)",
+      "settings": { "file": "{home}/BattleShip.cfg.json" }
     },
     {
       "id": "strikers",
@@ -5205,7 +5246,8 @@
         "Its saves and settings are its own, kept by Fuse in its home.",
         "Windows only for now: its Linux build needs a newer system than most have (glibc 2.43)."
       ],
-      "source": "PerfectDarkRemasterRecomp 1,4: README.md (Getting the game data: the extracted files with default.xex; --game_data_root); src/perfectdarkremasterrecomp_app.h, OnConfigurePaths (game_data_root, else assets beside the program; settings/hardware.toml); src/utils.h, SettingsDir; ReXGlue SDK src/ui/rex_app.cpp, ReXApp::SetupEnvironment, and src/system/runtime.cpp (the game_data_root and user_data_root options; without them the user folder is the system's own); src/core/cvar.cpp, Init (--name=value on the command line); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "PerfectDarkRemasterRecomp 1,4: README.md (Getting the game data: the extracted files with default.xex; --game_data_root); src/perfectdarkremasterrecomp_app.h, OnConfigurePaths (game_data_root, else assets beside the program; settings/hardware.toml); src/utils.h, SettingsDir; ReXGlue SDK src/ui/rex_app.cpp, ReXApp::SetupEnvironment, and src/system/runtime.cpp (the game_data_root and user_data_root options; without them the user folder is the system's own); src/core/cvar.cpp, Init (--name=value on the command line); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/utils.h SettingsDir and LoadSettingsFiles (settings/hardware.toml, flat TOML of the ReXGlue SDK's and the game's cvars, rewritten by its Save to config; read by Fuse Tune)",
+      "settings": { "file": "{install}/settings/hardware.toml" }
     },
     {
       "id": "wet-recomp",
@@ -5243,7 +5285,8 @@
         "Its saves and settings are its own, kept by Fuse in its home.",
         "Windows only for now: its Linux build needs a newer system than most have (glibc 2.43)."
       ],
-      "source": "WetRecomp 1.4: README.md (Game data: extract-xiso -x WET.iso, default.xex and the rest; Configuration: settings/hardware.toml and settings/mapping.toml); src/wetrecomp_app.h, OnConfigurePaths (game_data_root, else assets beside the program); ReXGlue SDK src/ui/rex_app.cpp, ReXApp::SetupEnvironment, and src/system/runtime.cpp (the game_data_root and user_data_root options; without them the user folder is the system's own); src/core/cvar.cpp, Init (--name=value on the command line); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "WetRecomp 1.4: README.md (Game data: extract-xiso -x WET.iso, default.xex and the rest; Configuration: settings/hardware.toml and settings/mapping.toml); src/wetrecomp_app.h, OnConfigurePaths (game_data_root, else assets beside the program); ReXGlue SDK src/ui/rex_app.cpp, ReXApp::SetupEnvironment, and src/system/runtime.cpp (the game_data_root and user_data_root options; without them the user folder is the system's own); src/core/cvar.cpp, Init (--name=value on the command line); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/utils.h SettingsDir and LoadSettingsFiles (settings/hardware.toml, flat TOML of the ReXGlue SDK's and the game's cvars, rewritten by its Save to config; read by Fuse Tune)",
+      "settings": { "file": "{install}/settings/hardware.toml" }
     },
     {
       "id": "gen2recomped",

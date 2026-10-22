@@ -32,8 +32,13 @@ only"). A build that starts only with a library most desktops have but its proje
 5. Give it a `check` the nightly job can run without the game's files: `args` and the `expect`ed
    output (a regular expression), or `stay` seconds it keeps running.
 6. Name its own settings file in `settings` (`{"file": "{home}/config/diablo.ini"}`, under
-   `{home}` or `{install}`) and add a reader for its settings code to `tools/tune` with the port's
-   id as its family, so Fuse Tune offers every setting the port reads.
+   `{home}` or `{install}`) and add the port to `PortSources.PORTS` in `tools/tune` with a reader
+   for its settings code, so Fuse Tune offers every setting the port reads, read at the release
+   this list names. A port whose engine Fuse Tune already reads (the N64 recompilations,
+   libultraship, id Tech 4, the Quake III engine, ReXGlue) needs only its line there. How its file
+   is written (`json`, `toml`, `seta`, `words`, `ini-tight`) goes in that line, never in this list:
+   an older Fuse skips a port whose `settings` names a form it doesn't know. A port with several
+   files (the N64 recompilations' tabs) names one; the others are beside it.
 7. Give its game's box art in `cover` (an HTTPS picture: the one Open Ports Games' entry for the
    game points to, Wikipedia's or the libretro thumbnails' box) and whom it is from in
    `coverCredit`.

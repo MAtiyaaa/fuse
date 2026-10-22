@@ -75,11 +75,18 @@ internal class NativeSettingsStore(
         val toml: Boolean = false,
         /** Its files are MAME's ini, an option a line with its name padded before its value. */
         val mameIni: Boolean = false,
+        /**
+         * Its file is one setting a line, its name then its value ([io.github.matiyaaa.fuse.launch.settings.WordsText]):
+         * after this command (`seta`, the Quake engines'), or alone (`""`, the Doom ports'); null for neither.
+         */
+        val words: String? = null,
         /** Its files are Eden's, each value kept in two or three keys ([io.github.matiyaaa.fuse.launch.settings.EdenConfig]). */
         val eden: Boolean = false,
         /** Its files are Azahar's, each value kept in two keys ([io.github.matiyaaa.fuse.launch.settings.AzaharConfig]). */
         val azahar: Boolean = false,
-        /** Its file is Supermodel.ini, its values read with their quotes and comments off ([io.github.matiyaaa.fuse.launch.settings.SupermodelIni]). */
+        /** Its ini has no spaces around `=` (the Retro Engine's settings.ini, which its reader needs so). */
+        val tight: Boolean = false,
+                /** Its file is Supermodel.ini, its values read with their quotes and comments off ([io.github.matiyaaa.fuse.launch.settings.SupermodelIni]). */
         val supermodel: Boolean = false,
         /** The installed version, for which of every setting it has. */
         val version: String? = null,
@@ -105,6 +112,8 @@ internal class NativeSettingsStore(
         val gameRecords: String? = null,
         /** A RetroArch game's core options, beside RetroArch's own settings. */
         val core: CoreTarget? = null,
+        /** Shown by the tabs its own settings have (a port's menus), not by where in its file each is kept. */
+        val byTab: Boolean = false,
     ) {
         val forGame: Boolean get() = gamePath != null
 
@@ -114,11 +123,16 @@ internal class NativeSettingsStore(
             yaml -> YamlText(content ?: "")
             cfg -> io.github.matiyaaa.fuse.launch.settings.CfgText(content ?: "")
             // A text setting is written as a JSON string, whatever it holds.
-            json -> io.github.matiyaaa.fuse.launch.settings.JsonText(content ?: "") { section, key -> Tune.find(family, null, section, key)?.kind == TuneKind.TEXT }
-            toml -> io.github.matiyaaa.fuse.launch.settings.TomlText(content ?: "") { section, key -> Tune.find(family, null, section, key)?.kind == TuneKind.TEXT }
+            json -> io.github.matiyaaa.fuse.launch.settings.JsonText(content ?: "") { section, key -> isText(section, key) }
+            toml -> io.github.matiyaaa.fuse.launch.settings.TomlText(content ?: "") { section, key -> isText(section, key) }
             mameIni -> io.github.matiyaaa.fuse.launch.settings.MameIniText(content ?: "")
-            else -> IniText(content ?: "", spaced = !(eden || azahar))
+            words != null -> io.github.matiyaaa.fuse.launch.settings.WordsText(content ?: "", words.takeIf { it.isNotEmpty() && it != BARE }, bare = words == BARE) { key -> isText("", key) }
+            else -> IniText(content ?: "", spaced = !(eden || azahar || tight))
         }
+
+        /** Whether the setting at [section] and [key] (in any of the emulator's files) holds text. */
+        private fun isText(section: String, key: String): Boolean =
+            Tune.forEmulator(family).any { it.kind == TuneKind.TEXT && it.section.equals(section, ignoreCase = true) && it.key.equals(key, ignoreCase = true) }
 
         /** What [file] holds for [key] as the emulator reads it: Eden's from its keys together, every other's as written. */
         fun valueIn(file: SettingsText?, section: String, key: String, game: Boolean, default: String?): String? = when {
@@ -199,7 +213,24 @@ internal class NativeSettingsStore(
         val portFiles = ctx.services.portFiles ?: return no("Not on this device", "Ports' settings can be changed from Fuse on a computer.")
         val layout = io.github.matiyaaa.fuse.launch.ports.PortLayout(root, id)
         val path = own.file.replace(io.github.matiyaaa.fuse.model.PortTokens.HOME, layout.home).replace(io.github.matiyaaa.fuse.model.PortTokens.INSTALL, layout.install)
-        return Target(id, port.name, files, path, null, port.game, version = port.version, writer = PortWriter(portFiles)) to null
+        // A port that keeps a file per tab (the N64 recompilations' general.json, graphics.json) keeps them together, beside the one the list names.
+        val folder = path.substringBeforeLast('/')
+        val others = Tune.forEmulator(id).mapNotNull { it.file }.distinct().associateWith { "$folder/$it" }
+        return Target(
+            id, port.name, files, path, null, port.game, globals = others,
+            // As Fuse Tune read the port's code, whatever an older list says (it names only ini).
+            json = Tune.format(id) == "json",
+            toml = Tune.format(id) == "toml",
+            tight = Tune.format(id) == "ini-tight",
+            words = when (Tune.format(id)) {
+                "seta" -> "seta"
+                "words" -> ""
+                "words-bare" -> BARE
+                "edge" -> io.github.matiyaaa.fuse.launch.settings.WordsText.SLASH
+                else -> null
+            },
+            version = port.version, writer = PortWriter(portFiles), byTab = true,
+        ) to null
     }
 
     private suspend fun target(id: GameId?, emulator: EmulatorId?): Pair<Target?, EmulatorSettingsView.Unavailable?> {
@@ -550,11 +581,15 @@ internal class NativeSettingsStore(
         }
         val game = read(t, t.gamePath)
         // Grouped as the emulator's own settings group them: its tabs where its file has no sections (RetroArch's).
-        val sections = all.groupBy { it.file to (it.tab?.takeIf { _ -> it.section.isEmpty() } ?: it.section) }.map { (where, settings) ->
+        val sections = all.groupBy { it.file to (it.tab?.takeIf { _ -> it.section.isEmpty() || t.byTab } ?: it.section) }.map { (where, settings) ->
             val (file, section) = where
+            val first = settings.first()
             TuneSection(
                 id = "${file.orEmpty()}|$section",
-                title = if (settings.first().section.isEmpty()) section.ifEmpty { "Other" } else sectionTitle(t.family, file, settings.first().path),
+                title = when {
+                    first.section.isEmpty() || (t.byTab && first.tab != null) -> section.ifEmpty { "Other" }
+                    else -> sectionTitle(t.family, file, first.path)
+                },
                 values = settings.map { valueOf(t, it, if (t.forGame) game else null, files[it.file]).copy(locked = locks[it.id]) },
             )
         }
@@ -796,7 +831,10 @@ internal class NativeSettingsStore(
 
         val FAMILIES = NativeSettings.changeable
 
-        /** Those whose TOML reads a decimal only with its point. */
+        /** [Target.words] for a file whose text is written as it is, never quoted (sm64coopdx's). */
+        const val BARE = "\u0000bare"
+
+                /** Those whose TOML reads a decimal only with its point. */
         val TOML_POINT = setOf("melonds", "xenia")
 
         /** A Vita game's title id: four letters, five digits (PCSE00082). */

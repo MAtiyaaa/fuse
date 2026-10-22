@@ -890,7 +890,12 @@ format `port.<id>`), kept in step like any other game's and only ever put back i
 Ports keep no achievements Fuse can read. Play With on the original game's page offers the ports
 set up for it beside its emulators; chosen, Play, Fast Start and its Direct entry start the port's
 game in its place. Each port's own settings file (`settings` in the list) is Fuse Tune's, read
-from the port's settings code by `tools/tune`. A Windows build marked to run through umu-launcher runs on
+from the port's settings code by `tools/tune` at the release the list names (the tag its downloads
+come from, and the commit that release pins of each submodule it reads), 46 of them in 0.4.3.10.
+How the file is written is Fuse Tune's (`TUNE_FORMATS`: JSON keyed at the top or in nested objects,
+`seta` lines, `name value` lines, TOML, or ini without spaces), never the list's, so an older Fuse
+never skips a port for a form it doesn't know; a port with a file per tab names one and the others
+are beside it. Its settings are shown under its own menus' names. A Windows build marked to run through umu-launcher runs on
 Linux as `umu-run <program>` with `WINEPREFIX` (a prefix in the port's home) and `GAMEID=umu-default`
 (umu-launcher's README), and the paths it is given as Windows sees them through Proton (`Z:`). As
 it starts, it gets the Proton the person uses as `PROTONPATH` (umu-launcher's README, a path to a

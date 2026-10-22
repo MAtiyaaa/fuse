@@ -2,12 +2,14 @@ package io.github.matiyaaa.fuse.launch.settings
 
 /**
  * A JSON settings file of groups (shadPS4's `config.json` and a game's `custom_configs/<serial>.json`:
- * `{ "GPU": { "readbacks_mode": 0, ... }, ... }`), edited without disturbing anything else in it:
- * every other member, its order, spacing and line breaks stay as they were, byte for byte. A
- * section is a top-level member that is an object, a key one of its members. A value is read as
- * written (a string's text unescaped); one Fuse writes is a string when [isText] says the setting
- * holds text, else as it is (`true`, `0`, `1.5`). New members go last in their object, indented as
- * the ones beside them, the way nlohmann's `dump(2)` lays them out.
+ * `{ "GPU": { "readbacks_mode": 0, ... }, ... }`) or of keys alone (the N64 recompilations'
+ * `graphics.json`: `{ "res_option": "Auto", ... }`), edited without disturbing anything else in it:
+ * every other member, its order, spacing and line breaks stay as they were, byte for byte. A section
+ * is the path of objects a key is in, their names joined by `/` (`GPU`, or `CVars/gSettings`); the
+ * empty section is the top-level object itself. A value is read as written (a string's text
+ * unescaped); one Fuse writes is a string when [isText] says the setting holds text, else as it is
+ * (`true`, `0`, `1.5`). New members go last in their object, indented as the ones beside them, the
+ * way nlohmann's `dump` lays them out.
  */
 class JsonText(text: String, private val isText: (section: String, key: String) -> Boolean = { _, _ -> false }) : SettingsText {
     private var doc = text
@@ -34,45 +36,76 @@ class JsonText(text: String, private val isText: (section: String, key: String) 
             doc = doc.substring(0, m.valueStart) + written + doc.substring(m.valueEnd)
             return
         }
+        val parts = if (section.isEmpty()) emptyList() else section.split('/')
         val top = top() ?: run {
-            doc = "{\n  ${quote(section)}: {\n    ${quote(key)}: $written\n  }\n}\n" + doc.trimStart()
+            val step = "  "
+            doc = "{\n$step" + nest(parts, key, written, step, step) + "\n}\n" + doc.trimStart()
             return
         }
-        val group = top.members.firstOrNull { it.key == section && it.members != null }
-        if (group == null) {
-            val indent = indentOf(top.members.lastOrNull()?.start) ?: "  "
-            insert(top.open, top.close, top.members.lastOrNull()?.valueEnd, indent, "${quote(section)}: {\n$indent  ${quote(key)}: $written\n$indent}")
-        } else {
-            val open = group.valueStart
-            val close = group.valueEnd - 1
-            val indent = indentOf(group.members!!.lastOrNull()?.start) ?: ((indentOf(group.start) ?: "") + "  ")
-            insert(open, close, group.members.lastOrNull()?.valueEnd, indent, "${quote(key)}: $written")
+        // The deepest object of the path that is there; the rest is made inside it.
+        var node = Node(top.open, top.close, top.members)
+        var depth = 0
+        while (depth < parts.size) {
+            node = node.members.firstOrNull { it.key == parts[depth] && it.members != null }?.node() ?: break
+            depth++
         }
+        val step = step(top)
+        val indent = indentOf(node.members.lastOrNull()?.start) ?: (lineIndentAt(node.open) + step)
+        insert(node.open, node.close, node.members.lastOrNull()?.valueEnd, indent, nest(parts.drop(depth), key, written, indent, step))
     }
 
     override fun removeKey(section: String, key: String): Boolean {
-        val group = top()?.members?.firstOrNull { it.key == section && it.members != null } ?: return false
-        val list = group.members!!
-        val i = list.indexOfFirst { it.key == key }.takeIf { it >= 0 } ?: return false
-        remove(list, i, group.valueStart, group.valueEnd - 1)
+        val node = node(section) ?: return false
+        val i = node.members.indexOfFirst { it.key == key }.takeIf { it >= 0 } ?: return false
+        remove(node.members, i, node.open, node.close)
         return true
     }
 
     override fun hasEntries(): Boolean = top()?.members?.any { it.members == null || it.members.isNotEmpty() } == true
 
-    override fun hasSection(section: String): Boolean = top()?.members?.any { it.key == section } == true
+    override fun hasSection(section: String): Boolean =
+        if (section.isEmpty() || '/' in section) node(section) != null else top()?.members?.any { it.key == section } == true
 
     override fun removeEmptySection(section: String, blankBefore: Boolean): Boolean {
-        val top = top() ?: return false
-        val i = top.members.indexOfFirst { it.key == section && it.members?.isEmpty() == true }.takeIf { it >= 0 } ?: return false
-        remove(top.members, i, top.open, top.close)
+        if (section.isEmpty()) return false
+        val parent = node(section.substringBeforeLast('/', "")) ?: return false
+        val name = section.substringAfterLast('/')
+        val i = parent.members.indexOfFirst { it.key == name && it.members?.isEmpty() == true }.takeIf { it >= 0 } ?: return false
+        remove(parent.members, i, parent.open, parent.close)
         return true
     }
 
     override fun toString(): String = doc
 
-    private fun find(section: String, key: String): Member? =
-        top()?.members?.firstOrNull { it.key == section && it.members != null }?.members?.firstOrNull { it.key == key }
+    private fun find(section: String, key: String): Member? = node(section)?.members?.firstOrNull { it.key == key }
+
+    /** An object: where its braces are, and its members. */
+    private class Node(val open: Int, val close: Int, val members: List<Member>)
+
+    private fun Member.node(): Node? = members?.let { Node(valueStart, valueEnd - 1, it) }
+
+    /** The object at [section]'s path (the top-level one for the empty section). */
+    private fun node(section: String): Node? {
+        val top = top() ?: return null
+        var n = Node(top.open, top.close, top.members)
+        if (section.isEmpty()) return n
+        for (part in section.split('/')) n = n.members.firstOrNull { it.key == part && it.members != null }?.node() ?: return null
+        return n
+    }
+
+    /** The objects of [parts] made one inside the next around `"key": value`, the first at [indent], each deeper by [step]. */
+    private fun nest(parts: List<String>, key: String, written: String, indent: String, step: String): String {
+        if (parts.isEmpty()) return "${quote(key)}: $written"
+        val inner = indent + step
+        return "${quote(parts.first())}: {\n$inner${nest(parts.drop(1), key, written, inner, step)}\n$indent}"
+    }
+
+    /** How far the file indents each level: as its first member is from the top-level brace's line, else two spaces. */
+    private fun step(top: Obj): String {
+        val first = top.members.firstOrNull()?.start ?: return "  "
+        val own = indentOf(first) ?: return "  "
+        return own.removePrefix(lineIndentAt(top.open)).ifEmpty { "  " }
+    }
 
     /** [entry] as the last member of the object whose braces are at [open] and [close], after [last]'s value (none when it is empty). */
     private fun insert(open: Int, close: Int, last: Int?, indent: String, entry: String) {
@@ -127,7 +160,7 @@ class JsonText(text: String, private val isText: (section: String, key: String) 
         return Obj(i, end, members)
     }
 
-    /** The members of the object whose brace is at [open], and where its closing brace is; only the top two levels are read as members. */
+    /** The members of the object whose brace is at [open] (and of every object inside it), and where its closing brace is. */
     private fun obj(open: Int, depth: Int): Pair<List<Member>, Int>? {
         val out = ArrayList<Member>()
         var i = skip(open + 1)
@@ -141,7 +174,7 @@ class JsonText(text: String, private val isText: (section: String, key: String) 
             j = skip(j + 1)
             if (j >= doc.length) return null
             val valueStart = j
-            val (members, valueEnd) = if (doc[j] == '{' && depth < 1) {
+            val (members, valueEnd) = if (doc[j] == '{') {
                 val (inner, close) = obj(j, depth + 1) ?: return null
                 inner to close + 1
             } else {
