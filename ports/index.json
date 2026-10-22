@@ -1613,45 +1613,6 @@
       "source": "Starfox64Recomp 1.0.3: src/main/main.cpp supported_games (rom_hash 0x163fd3fc3813f54e, game_id sf64.n64.us.1.1); its get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
     },
     {
-      "id": "btga-recomp",
-      "name": "BattleTanx: Global Assault Recompiled",
-      "game": "BattleTanx: Global Assault",
-      "cover": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/BattleTanx%20-%20Global%20Assault%20(USA).png",
-      "coverCredit": "Box art",
-      "about": "BattleTanx: Global Assault recompiled from the N64 cartridge's own code with N64: Recompiled to run natively, at any resolution and frame rate, made from your own ROM as it starts.",
-      "homepage": "https://github.com/wootbeer/btgarecomp",
-      "licence": "GPL-3.0",
-      "version": "0.1.3",
-      "builds": [
-        {
-          "os": "linux",
-          "url": "https://github.com/wootbeer/btgarecomp/releases/download/0.1.3/BattleTanxGARecompiled-0.1.3-linux-x86_64.tar.gz",
-          "size": 5685069,
-          "sha256": "45933d9ea64b040fb6e2c1d99f29820b0f71a0f38222cd21a5018bd9d22bf67a",
-          "kind": "TAR_GZ",
-          "run": "BattleTanxGARecompiled-0.1.3-linux-x86_64/BattleTanxGARecompiled"
-        }
-      ],
-      "data": [
-        {
-          "id": "rom",
-          "name": "BattleTanx: Global Assault's ROM",
-          "about": "The ROM of the North American N64 cartridge (.z64, .n64 or .v64), the only one it is made from.",
-          "needs": [],
-          "rom": { "system": "n64", "xxh3": "9c7467e763553529", "place": "btga.n64.us.1.0.z64" }
-        }
-      ],
-      "env": { "APP_FOLDER_PATH": "{home}" },
-      "saves": "saves",
-      "check": { "stay": 5 },
-      "notes": [
-        "It is made from the North American ROM of BattleTanx: Global Assault only; Fuse puts yours where it looks for it, linked or as a copy in the form it reads, and never changes your file.",
-        "Its saves, settings and mods are its own, kept by Fuse in its home.",
-        "Linux only for now: on Windows it keeps everything in your own AppData, where Fuse doesn't set it up."
-      ],
-      "source": "btgarecomp 0.1.3: src/main/main.cpp supported_games (rom_hash 0x9c7467e763553529, game_id btga.n64.us.1.0); RecompFrontend get_app_folder_path (APP_FOLDER_PATH on Linux); N64ModernRuntime librecomp (the ROM kept as <game_id>.z64 in its app folder, checked by XXH3-64; saves in that folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
-    },
-    {
       "id": "battlezone-recomp",
       "name": "Battlezone Recompiled",
       "game": "Battlezone: Rise of the Black Dogs",

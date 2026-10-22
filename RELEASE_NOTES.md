@@ -1,12 +1,12 @@
 # Fuse 0.4.3.8 - The Overdrive Update
 
-Fuse Ports grows from 5 games to 147 on a computer and 116 on Android, each checked every night on
+Fuse Ports grows from 5 games to 146 on a computer and 116 on Android, each checked every night on
 the system it's for: that it installs and starts there, or on Android that Android would install it.
 No check plays a game, which needs your files.
 
 ## New
 
-- 142 more ports on a computer, for 147 in Addons, Ports: 143 with a Linux build and 128 with a
+- 141 more ports on a computer, for 146 in Addons, Ports: 142 with a Linux build and 128 with a
   Windows build. Each is the program its own project publishes, and what it needs from your game,
   where it keeps your saves and how it starts are read from that project's own code at the release
   listed, and cited. Among them: Ship of Harkinian, 2 Ship 2 Harkinian, Starship, SpaghettiKart,
