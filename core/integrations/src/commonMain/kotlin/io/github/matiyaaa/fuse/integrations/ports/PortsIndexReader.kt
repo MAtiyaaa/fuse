@@ -105,6 +105,7 @@ object PortsIndexReader {
         }
         if (port.data.count { it.overlay != null } > 1) return "it links more than one folder in"
         port.saves?.let { if (it.isNotEmpty() && !safe(it)) return "its saves would go outside it" }
+        if (port.keep.any { !safe(it.trimEnd('/')) }) return "what it keeps would go outside it"
         if (port.env.keys.any { !ENV.matches(it) }) return "it names a variable oddly"
         for (arg in port.args + port.env.values) {
             for (m in PLACEHOLDER.findAll(arg)) {

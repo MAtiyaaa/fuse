@@ -120,6 +120,10 @@ class PortsIndexTest {
         assertEquals("its settings file would be outside it", PortsIndexReader.problem(port.copy(settings = io.github.matiyaaa.fuse.model.PortSettings("/etc/config.ini"))))
         assertEquals("its settings file would be outside it", PortsIndexReader.problem(port.copy(settings = io.github.matiyaaa.fuse.model.PortSettings("{home}/../x.ini"))))
         assertEquals("its settings are in a form Fuse doesn't write", PortsIndexReader.problem(port.copy(settings = io.github.matiyaaa.fuse.model.PortSettings("{home}/x.json", "json"))))
+        assertEquals(null, PortsIndexReader.problem(port.copy(keep = listOf("saves/", "config.ini", "data/user/"))))
+        assertEquals("what it keeps would go outside it", PortsIndexReader.problem(port.copy(keep = listOf("../saves/"))))
+        assertEquals("what it keeps would go outside it", PortsIndexReader.problem(port.copy(keep = listOf("/etc/passwd"))))
+        assertEquals("its check can't be read", PortsIndexReader.problem(port.copy(check = io.github.matiyaaa.fuse.model.PortCheck(windows = io.github.matiyaaa.fuse.model.PortCheck(expect = "(")))), "a system's own check is read too")
     }
 
     @Test

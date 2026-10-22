@@ -970,7 +970,7 @@
       "repo": "https://github.com/Buku313/Skate3-Mobile",
       "about": "The Skate 3 recompilation for phones and handhelds, with its native Vulkan renderer on ARM64 and Android input and audio.",
       "needs": "An ISO dumped from your own copy of Skate 3, chosen with Select My Skate 3 ISO; it extracts and verifies the game on the phone (about 8 GiB free, Android 13 or newer).",
-      "package": "chat.buku.skate3.qa",
+      "package": "chat.buku.skate3.dev",
       "source": "Skate3-Mobile v2.1.0: README.md (No retail game files are included; Select My Skate 3 ISO; it extracts and verifies the game; Requirements: Android 13, ARM64, Vulkan, 8 GiB free); release v2.1.0 (Skate3-Mobile-QA.apk, its package read by Android's aapt2)"
     },
     {
@@ -1207,7 +1207,8 @@
       "about": "Knuckles' Chaotix (32X) statically recompiled to native C++, with true widescreen and no 32X BIOS needed.",
       "needs": "Your own ROM of Knuckles' Chaotix (SHA-1 0c2fff7b...); no 32X BIOS is needed.",
       "package": "org.chaotixrecompiled",
-      "source": "ChaotixRecompiled v0.4.9: README.md (No game data is included: your own legally obtained ROM, its SHA-1; No 32X BIOS is needed; LEGAL.md); release v0.4.9 (ChaotixRecompiled-0.4.9-android.apk, its package read by Android's aapt2)"
+      "source": "ChaotixRecompiled v0.4.9: README.md (No game data is included: your own legally obtained ROM, its SHA-1; No 32X BIOS is needed; LEGAL.md); release v0.4.9 (ChaotixRecompiled-0.4.9-android.apk, its arm64 build beside an armeabi-v7a one, its package read by Android's aapt2)",
+      "asset": "-android\\.apk$"
     },
     {
       "id": "megaman64-recomp-android",
@@ -1222,7 +1223,7 @@
       "licence": "GPL-3.0",
       "about": "Mega Man 64 statically recompiled with N64: Recompiled, for phones and handhelds with editable touch layouts, controller support and persistent saves.",
       "needs": "Your own Mega Man 64 USA ROM (.z64, .v64 or .n64), imported with the launcher's file picker (Downloads will do).",
-      "package": "com.devz.megaman64.quest",
+      "package": "com.devz.megaman64",
       "source": "MegaMan64Recompiled-Mobile v0.9.1-mobile.1: README.md (ARM64, Android 8.0, a Vulkan GPU; ROM requirement: your own Mega Man 64 USA N64 ROM, any byte order; import it with the launcher's file picker); release v0.9.1-mobile.1 (MegaMan64-Android-v0.9.1-mobile.1.apk, its package read by Android's aapt2)"
     },
     {

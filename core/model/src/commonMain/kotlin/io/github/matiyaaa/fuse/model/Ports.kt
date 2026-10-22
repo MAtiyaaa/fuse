@@ -54,6 +54,14 @@ data class Port(
     val env: Map<String, String> = emptyMap(),
     /** Where the port keeps its saves, relative to its home ([PortTokens.HOME]); null when it keeps none there. */
     val saves: String? = null,
+    /**
+     * What the port writes beside its own program, relative to the program's folder (a folder ends
+     * with `/`): each folder is a link to the same path in its home, so what it writes there (its
+     * saves, often) outlives an update and a reinstall; each file (its settings) is carried from the
+     * old copy to the new one on an update. For a port that keeps everything beside itself and takes
+     * no folder of the person's to lay its own paths over ([PortOverlay.own]).
+     */
+    val keep: List<String> = emptyList(),
     /** How the nightly check sees it start ([PortCheck]); null when it isn't checked. */
     val check: PortCheck? = null,
     /** What to know before playing, in the port's own terms. */

@@ -236,6 +236,14 @@ class PortsStoreTest {
         assertTrue(File(files.folder, "wasteport/home/data/SAVEGAME/SLOT02.SAV").isFile)
         assertEquals(before, game.walkTopDown().filter { it.isFile }.associate { it.relativeTo(game).path to it.readText() }, "nothing in the person's folder changed")
 
+        // An update carries what the port wrote, never what a link leads to: the person's folder stays whole.
+        store.ports.install("wasteport")
+        store.until("updated") { it.port("wasteport")?.ready == true && it.port("wasteport")?.job == null }
+        assertEquals("the port's settings", Files.readString(copy.resolve("game.cfg")), "what it wrote beside itself is carried")
+        assertTrue(link("MASTER.DAT") && link("DATA/SAVEGAME"), "the links are made again")
+        assertEquals(before, game.walkTopDown().filter { it.isFile }.associate { it.relativeTo(game).path to it.readText() }, "nothing of the person's moved")
+        assertTrue(File(files.folder, "wasteport/home/data/SAVEGAME/SLOT02.SAV").isFile)
+
         // Choosing again replaces exactly the links made; removing never follows one out.
         assertNull(store.ports.chooseFolder("wasteport", "game", game.absolutePath))
         assertTrue(store.ports.remove("wasteport"))
@@ -471,6 +479,51 @@ class PortsStoreTest {
         store.until("updated") { it.port("skyport")?.ready == true && it.port("skyport")?.job == null }
         assertTrue(File(root, "build/skyport").isFile)
         assertFalse(File(root, "build.old").exists())
+    }
+
+    @Test
+    fun whatAPortKeepsBesideItselfOutlivesAnUpdate(): Unit = runBlocking {
+        // A port that asks for its game itself and writes everything beside its program, as many recompilations do.
+        val list = """
+            {"format":1,"revision":2,"ports":[
+              {"id":"keepport","name":"KeepPort","game":"Keep Racer","about":"Made up.","homepage":"https://example.org/keepport","version":"1.0",
+               "builds":[{"os":"linux","url":"https://example.org/keepport-1.0.zip","size":${build.size},"sha256":"${sha(build)}","kind":"ZIP","run":"skyport"}],
+               "keep":["saves/","config.ini"],"saves":"saves","source":"made up"}
+            ]}
+        """.trimIndent()
+        val (services, files) = services(list)
+        val store = createFuseStore(services, scope)
+        store.ports.open()
+        store.until("listed") { it.loaded }
+        store.ports.install("keepport")
+        store.until("set up without a folder of the person's") { it.port("keepport")?.ready == true }
+        val root = File(files.folder, "keepport")
+        val copy = File(root, "build").toPath()
+        assertTrue(Files.isSymbolicLink(copy.resolve("saves")), "its saves' folder is a link")
+        assertEquals(File(root, "home/saves").toPath(), Files.readSymbolicLink(copy.resolve("saves")))
+        assertFalse(Files.exists(copy.resolve("config.ini"), LinkOption.NOFOLLOW_LINKS), "a file is the port's to make")
+
+        // It plays: its save lands in its home, its settings in its copy, and it writes more beside itself.
+        Files.writeString(copy.resolve("saves/slot1.sav"), "a save")
+        Files.writeString(copy.resolve("config.ini"), "fullscreen=1")
+        Files.createDirectories(copy.resolve("shots"))
+        Files.writeString(copy.resolve("shots/one.png"), "a screenshot")
+        Files.writeString(copy.resolve("engine.dat"), "changed by the port")
+        assertTrue(File(root, "home/saves/slot1.sav").isFile)
+
+        // An update replaces the copy: the save stays in its home, the settings and what else it wrote
+        // are carried into the new copy, and a file of the build's own comes new with it.
+        store.ports.install("keepport")
+        store.until("updated") { it.port("keepport")?.ready == true && it.port("keepport")?.job == null }
+        assertEquals("fullscreen=1", Files.readString(copy.resolve("config.ini")))
+        assertEquals("a screenshot", Files.readString(copy.resolve("shots/one.png")))
+        assertTrue(Files.readAllBytes(copy.resolve("engine.dat")).all { it == 1.toByte() }, "the build's own file is the new build's")
+        assertTrue(Files.isSymbolicLink(copy.resolve("saves")))
+        assertEquals("a save", Files.readString(copy.resolve("saves/slot1.sav")))
+
+        // Removed: the copy and its settings go; the saves stay in its home.
+        assertTrue(store.ports.remove("keepport"))
+        assertTrue(File(root, "home/saves/slot1.sav").isFile)
     }
 
     @Test
