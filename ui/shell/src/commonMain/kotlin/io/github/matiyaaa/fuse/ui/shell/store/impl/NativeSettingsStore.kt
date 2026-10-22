@@ -226,6 +226,7 @@ internal class NativeSettingsStore(
                 "seta" -> "seta"
                 "words" -> ""
                 "words-bare" -> BARE
+                "edge" -> io.github.matiyaaa.fuse.launch.settings.WordsText.SLASH
                 else -> null
             },
             version = port.version, writer = PortWriter(portFiles), byTab = true,

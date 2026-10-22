@@ -8,6 +8,8 @@ package io.github.matiyaaa.fuse.launch.settings
  * - The Doom ports (Woof!, Nugget Doom, dsda-doom: `M_SaveDefaults`): `name   value`, the name
  *   padded, a number bare and text in double quotes. [command] is null.
  * - sm64coopdx (`configfile_save`): `name value`, text as it is, never quoted ([bare]).
+ * - EDGE-Classic (`WriteConsoleVariables`): `/name<tab>"value"`, every value in quotes. [command]
+ *   is [SLASH]: the name is the first word's, after its slash.
  * - The Quake engines (`Cvar_WriteVariables`): `seta name "value"`, every value in quotes. [command]
  *   is `seta`; a line set with `set` is read too.
  *
@@ -54,7 +56,9 @@ class WordsText(
     /** The name a line sets and its value, or null. */
     private fun entry(line: String): Pair<String, String>? {
         val w = words(line) ?: return null
-        return if (command == null) {
+        return if (command == SLASH) {
+            w.getOrNull(0)?.takeIf { it.length > 1 && it.startsWith("/") }?.let { it.substring(1) to w.getOrElse(1) { "" } }
+        } else if (command == null) {
             w.getOrNull(0)?.let { it to w.drop(1).joinToString(" ") }
         } else {
             if (w.size < 2 || !(w[0].equals(command, ignoreCase = true) || w[0].equals("set", ignoreCase = true))) return null
@@ -87,14 +91,22 @@ class WordsText(
             val indent = line.takeWhile { it.isWhitespace() }
             val body = line.trimStart()
             // Keep its name, and its padding (Woof! pads every name to the longest), and put the value after it.
-            val head = if (command != null) {
+            val head = if (command == SLASH) {
+                Regex("""^(\S+\s+)""").find(body)?.value ?: "/$key\t"
+            } else if (command != null) {
                 Regex("""^(\S+\s+\S+\s+)""").find(body)?.value ?: "$command $key "
             } else {
                 Regex("""^(\S+\s+)""").find(body)?.value ?: "$key "
             }
             lines[at] = indent + head + written
         } else {
-            lines.add(if (command != null) "$command $key $written" else "$key $written")
+            lines.add(
+                when (command) {
+                    SLASH -> "/$key\t$written"
+                    null -> "$key $written"
+                    else -> "$command $key $written"
+                },
+            )
         }
     }
 
@@ -112,5 +124,10 @@ class WordsText(
         if (lines.isEmpty()) return ""
         val sep = if (crlf) "\r\n" else "\n"
         return lines.joinToString(sep) + if (endsWithBreak) sep else ""
+    }
+
+    companion object {
+        /** [command] for EDGE-Classic's lines, each name after a slash. */
+        const val SLASH = "/"
     }
 }

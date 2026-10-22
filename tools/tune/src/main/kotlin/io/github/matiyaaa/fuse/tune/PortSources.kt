@@ -37,6 +37,9 @@ object PortSources {
     private fun rexglue(id: String) = Port(id, Rexglue::parse, Rexglue.TREE, Rexglue.SUBMODULES, format = "toml")
 
     val PORTS: List<Port> = listOf(
+        Port("perfect-dark-dabs-mod", PerfectDark::parse, PerfectDark.TREE, format = "ini-tight", switches = "1" to "0"),
+        Port("edge-classic", EdgeClassic::parse, EdgeClassic.TREE, format = "edge", switches = "1" to "0"),
+        Port("arx-libertatis", ArxLibertatis::parse, ArxLibertatis.TREE, format = "ini-tight"),
         Port("sm64coopdx", Sm64CoopDx::parse, Sm64CoopDx.TREE, format = "words-bare"),
         // The Retro Engine decompilations: settings.ini as InitUserdata writes it, key=value without spaces.
         Port("rsdkv3", Rsdk::parse, Rsdk.files("/RSDKv3"), format = "ini-tight"),

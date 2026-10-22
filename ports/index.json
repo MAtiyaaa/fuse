@@ -1906,7 +1906,8 @@
         "Your saves and settings are Arx Libertatis' own, kept by Fuse beside its copy.",
         "On Linux it takes OpenAL from your system, which SteamOS and most desktops have."
       ],
-      "source": "ArxLibertatis 1.2.1: src/io/fs/SystemPaths.cpp (the --data-dir, --user-dir and --config-dir options); README.md; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "ArxLibertatis 1.2.1: src/io/fs/SystemPaths.cpp (the --data-dir, --user-dir and --config-dir options); README.md; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/core/ArxGame.cpp (cfg.ini in the config folder) and src/core/Config.cpp Config::init (each key with its default; read by Fuse Tune)",
+      "settings": { "file": "{home}/config/cfg.ini" }
     },
     {
       "id": "dhewm3",
@@ -2543,7 +2544,8 @@
         "EDGE-Classic finds the IWAD in your folder by its contents; it never changes it.",
         "Your saves, settings and screenshots are EDGE-Classic's own, kept by Fuse in its home."
       ],
-      "source": "EDGE-classic 1.53: source_files/edge/e_main.cc, InitializeDirectories (-home for its config, cache, savegame and screenshot folders, unless -portable or a config beside the program) and CollectSearchPaths (DOOMWADDIR and DOOMWADPATH searched); source_files/edge/w_wad.cc (the games it knows by their lumps: Doom, Doom II, Plutonia, TNT, Heretic, Freedoom, Chex Quest and more); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "EDGE-classic 1.53: source_files/edge/e_main.cc, InitializeDirectories (-home for its config, cache, savegame and screenshot folders, unless -portable or a config beside the program) and CollectSearchPaths (DOOMWADDIR and DOOMWADPATH searched); source_files/edge/w_wad.cc (the games it knows by their lumps: Doom, Doom II, Plutonia, TNT, Heretic, Freedoom, Chex Quest and more); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); source_files/edge/con_var.cc WriteConsoleVariables (each archived console variable, /name and its value in edge-classic.cfg; read by Fuse Tune)",
+      "settings": { "file": "{home}/edge-classic.cfg" }
     },
     {
       "id": "psydoom",
@@ -3822,7 +3824,8 @@
         "It reads the ROM where it is and never changes it; the ROM must be the US Rev 1 (ntsc-final) one, named pd.ntsc-final.z64.",
         "Your saves and settings (pd.ini) are its own, kept by Fuse in its home."
       ],
-      "source": "perfect-dark-dabs-mod v3.15.1: README.md (You need a ROM: Perfect Dark (USA) (Rev 1), named exactly pd.ntsc-final.z64 in the data folder); port/src/fs.c fsInit (--basedir for the folder with the ROM, --savedir for saves and settings); port/include/config.h (pd.ini in the save folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "perfect-dark-dabs-mod v3.15.1: README.md (You need a ROM: Perfect Dark (USA) (Rev 1), named exactly pd.ntsc-final.z64 in the data folder); port/src/fs.c fsInit (--basedir for the folder with the ROM, --savedir for saves and settings); port/include/config.h (pd.ini in the save folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); port/src/config.c configRegisterInt, UInt, Float and String and configSave (pd.ini in the save folder, [Section] and key=value lines; read by Fuse Tune)",
+      "settings": { "file": "{home}/pd.ini" }
     },
     {
       "id": "rsdkv3",
