@@ -1,0 +1,41 @@
+name: Ports scout
+
+# Gathers, for the candidate ports in tools/ports/scout/candidates.json, the facts Fuse's list needs
+# (licences, releases, each build's SHA-256 and programs, each APK's package) through GitHub's API,
+# and commits the report to the branch it ran on. Only on the scouting branch.
+on:
+  push:
+    branches: [claude/ports-scout]
+    paths: [tools/ports/scout/candidates.json, tools/ports/scout/scout.py, .github/workflows/ports-scout.yml]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ports-scout
+  cancel-in-progress: false
+
+jobs:
+  scout:
+    name: Scout the candidate ports
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Scout
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 tools/ports/scout/scout.py --out tools/ports/scout/report.json
+
+      - name: Keep the report on the branch
+        if: always()
+        run: |
+          set -euo pipefail
+          test -f tools/ports/scout/report.json || exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tools/ports/scout/report.json
+          git commit -m "Ports scout report" || exit 0
+          git push origin HEAD:${GITHUB_REF_NAME}

@@ -1,0 +1,10514 @@
+{
+"repos": [
+{
+"repo": "0c0de/splatterhouse-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"splatterhouse"
+]
+},
+{
+"repo": "0lvin/heretic2",
+"want": [
+"desktop"
+],
+"listings": [
+"heretic2"
+]
+},
+{
+"repo": "1oom-fork/1oom",
+"want": [
+"desktop"
+],
+"listings": [
+"1oom"
+]
+},
+{
+"repo": "1superchip/ty-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"ty-the-tasmanian-tiger"
+]
+},
+{
+"repo": "2003scape/rsc-c",
+"want": [
+"desktop"
+],
+"listings": [
+"runescape-2003"
+]
+},
+{
+"repo": "2gifts/george-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"george-of-the-jungle-and-the-search-for-the-secret"
+]
+},
+{
+"repo": "2ship2harkinian/2ship2harkinian",
+"want": [
+"desktop"
+],
+"listings": [
+"2ship2harkinian"
+]
+},
+{
+"repo": "3dsdecomp/RedPepper",
+"want": [
+"desktop"
+],
+"listings": [
+"super-mario-3d-land"
+]
+},
+{
+"repo": "722rsr/gtadv3-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"gt-advance-3-pro-concept-racing"
+]
+},
+{
+"repo": "999sian/melee-pc",
+"want": [
+"desktop"
+],
+"listings": [
+"meleepc"
+]
+},
+{
+"repo": "999sian/tmc",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"project-picori"
+]
+},
+{
+"repo": "aaaaaaaaaaway/chulip-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"chulip"
+]
+},
+{
+"repo": "aaaaaaaaaaway/kaze-no-notam-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"kaze-no-notam"
+]
+},
+{
+"repo": "aabrole/HuntersRecomp",
+"want": [
+"android"
+],
+"listings": [
+"hunters-recomp-dual-screen"
+]
+},
+{
+"repo": "AARosson48/SummonerDecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"summoner"
+]
+},
+{
+"repo": "abedegno/underworld-exhumed",
+"want": [
+"desktop"
+],
+"listings": [
+"underworld-exhumed"
+]
+},
+{
+"repo": "abelbriggs1/tmb_decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"twisted-metal-black"
+]
+},
+{
+"repo": "ABrandau/Shattered-Paradise-SDK",
+"want": [
+"desktop"
+],
+"listings": [
+"shattered-paradise"
+]
+},
+{
+"repo": "AbuN64/battletanx-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"battletanx"
+]
+},
+{
+"repo": "ACatWithEbola/playstunts",
+"want": [
+"desktop"
+],
+"listings": [
+"playstunts"
+]
+},
+{
+"repo": "acoto87/war1",
+"want": [
+"desktop"
+],
+"listings": [
+"war1"
+]
+},
+{
+"repo": "ACreTeam/afe-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"animal-forest-e"
+]
+},
+{
+"repo": "adamcolquhoun/Creatures-2-Decompilation",
+"want": [
+"desktop"
+],
+"listings": [
+"creatures-2"
+]
+},
+{
+"repo": "adamkulik/pocket-wormhole",
+"want": [
+"android"
+],
+"listings": [
+"ftl-pocket-wormhole"
+]
+},
+{
+"repo": "Admiral-Billy/Pokerogue-App",
+"want": [
+"android"
+],
+"listings": [
+"pokerogue-app"
+]
+},
+{
+"repo": "adonis-singh/re4",
+"want": [
+"desktop"
+],
+"listings": [
+"resident-evil-4"
+]
+},
+{
+"repo": "AdventureT/OpenJPOG",
+"want": [
+"desktop"
+],
+"listings": [
+"jurassic-park-operation-genesis"
+]
+},
+{
+"repo": "AdventureT/OpenToshi",
+"want": [
+"desktop"
+],
+"listings": [
+"de-blob"
+]
+},
+{
+"repo": "afritz1/OpenTESArena",
+"want": [
+"desktop"
+],
+"listings": [
+"open-tes-arena"
+]
+},
+{
+"repo": "afsenovilla/Tombi-Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"tombi"
+]
+},
+{
+"repo": "Afterflash/HappyWheels",
+"want": [
+"desktop"
+],
+"listings": [
+"happy-wheels"
+]
+},
+{
+"repo": "afwbkbc/glsmac",
+"want": [
+"desktop"
+],
+"listings": [
+"glsmac"
+]
+},
+{
+"repo": "aharonahdoot/StrikersRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"super-mario-strikers-recomp"
+]
+},
+{
+"repo": "akiramusic000/Rhae",
+"want": [
+"desktop"
+],
+"listings": [
+"wii-play"
+]
+},
+{
+"repo": "alanwoolley/CorsixTH-Android",
+"want": [
+"android"
+],
+"listings": [
+"corsixth-android"
+]
+},
+{
+"repo": "alariq/mc2",
+"want": [
+"desktop"
+],
+"listings": [
+"mc2"
+]
+},
+{
+"repo": "Aleph-One-Marathon/alephone",
+"want": [
+"desktop"
+],
+"listings": [
+"aleph-one"
+]
+},
+{
+"repo": "alexbatalov/fallout1-ce",
+"want": [
+"desktop"
+],
+"listings": [
+"fallout1-ce"
+]
+},
+{
+"repo": "alexbatalov/fallout2-ce",
+"want": [
+"desktop"
+],
+"listings": [
+"fallout2-ce"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/ace-combat-3-electrosphere-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"ace-combat-3-electrosphere-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/ace-combat-3-electrosphere-usa-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"ace-combat-3-electrosphere-usa-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/alien-resurrection-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"alien-resurrection-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/alone-in-the-dark-the-new-nightmare-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"alone-in-the-dark-the-new-nightmare-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/alundra-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"alundra-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/apocalypse-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"apocalypse-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/armored-core-master-of-arena-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"armored-core-master-of-arena-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/armored-core-project-phantasma-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"armored-core-project-phantasma-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/armored-core-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"armored-core-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/azure-dreams-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"azure-dreams-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/blood-omen-legacy-of-kain-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"blood-omen-legacy-of-kain-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/bloody-roar-ii-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"bloody-roar-ii-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/brave-fencer-musashi-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"brave-fencer-musashi-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/bushido-blade-2-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"bushido-blade-2-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/colin-mcrae-rally-2-0-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"colin-mcrae-rally-2-0-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/colony-wars-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"colony-wars-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/colony-wars-red-sun-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"colony-wars-red-sun-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/crash-bandicoot-3-warped-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"crash-bandicoot-3-warped-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/destruction-derby-2-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"destruction-derby-2-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/destruction-derby-raw-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"destruction-derby-raw-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/devil-dice-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"devil-dice-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/diablo-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"diablo-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/die-hard-trilogy-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"die-hard-trilogy-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/digimon-world-2-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"digimon-world-2-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/digimon-world-2003-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"digimon-world-2003-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/dino-crisis-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"dino-crisis-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/dragon-ball-z-ultimate-battle-22-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"dragon-ball-z-ultimate-battle-22-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/driver-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"driver-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/duke-nukem-land-of-the-babes-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"duke-nukem-land-of-the-babes-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/duke-nukem-time-to-kill-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"duke-nukem-time-to-kill-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/fade-to-black-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"fade-to-black-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/fear-effect-2-retro-helix-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"fear-effect-2-retro-helix-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/fear-effect-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"fear-effect-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/fighting-force-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"fighting-force-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/final-fantasy-ix-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"final-fantasy-ix-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/final-fantasy-viii-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"final-fantasy-viii-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/future-cop-lapd-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"future-cop-lapd-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/g-police-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"g-police-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/g-police-weapons-of-justice-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"g-police-weapons-of-justice-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/galerians-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"galerians-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/ghost-in-the-shell-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"ghost-in-the-shell-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/in-cold-blood-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"in-cold-blood-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/incredible-crisis-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"incredible-crisis-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/jackie-chan-stuntmaster-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"jackie-chan-stuntmaster-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/jade-cocoon-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"jade-cocoon-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/kartia-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"kartia-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/koudelka-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"koudelka-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/kula-world-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"kula-world-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/legacy-of-kain-soul-reaver-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"legacy-of-kain-soul-reaver-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/martian-gothic-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"martian-gothic-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/mdk-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"mdk-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/medievil-ii-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"medievil-ii-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/medievil-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"medievil-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/mega-man-legends-2-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"mega-man-legends-2-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/mega-man-legends-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"mega-man-legends-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/men-in-black-the-game-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"men-in-black-the-game-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/metal-gear-solid-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"metal-gear-solid-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/metal-slug-x-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"metal-slug-x-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/misadventures-of-tron-bonne-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"misadventures-of-tron-bonne-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/monster-rancher-2-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"monster-rancher-2-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/monster-rancher-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"monster-rancher-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/mortal-kombat-4-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"mortal-kombat-4-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/mortal-kombat-trilogy-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"mortal-kombat-trilogy-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/nightmare-creatures-ii-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"nightmare-creatures-ii-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/nightmare-creatures-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"nightmare-creatures-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/oddworld-abe-s-oddysee-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"oddworld-abe-s-oddysee-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/parasite-eve-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"parasite-eve-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/pro-pinball-timeshock-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"pro-pinball-timeshock-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/psxrecomp-ports",
+"want": [
+"desktop"
+],
+"listings": [
+"alexbeavs-ps1-recomps-psxrecomp-ports"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/quake-ii-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"quake-ii-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/r-type-delta-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"r-type-delta-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/resident-evil-3-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"resident-evil-3-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/rival-schools-evolution-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"rival-schools-evolution-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/rival-schools-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"rival-schools-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/rollcage-stage-ii-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"rollcage-stage-ii-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/silent-bomber-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"silent-bomber-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/spider-man-2-enter-electro-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"spider-man-2-enter-electro-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/spider-man-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"spider-man-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/spyro-the-dragon-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"spyro-the-dragon-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/star-wars-episode-i-the-phantom-menace-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"star-wars-episode-i-the-phantom-menace-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/suikoden-ii-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"suikoden-ii-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/suikoden-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"suikoden-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/syphon-filter-3-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"syphon-filter-3-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/tail-concerto-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"tail-concerto-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/team-buddies-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"team-buddies-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/tenchu-stealth-assassins-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"tenchu-stealth-assassins-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/the-fifth-element-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"the-fifth-element-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/the-lost-world-jurassic-park-special-edition-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"the-lost-world-jurassic-park-special-edition-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/the-mummy-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"the-mummy-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/threads-of-fate-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"threads-of-fate-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/tokyo-highway-battle-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"tokyo-highway-battle-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/tony-hawk-s-pro-skater-2-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"tony-hawk-s-pro-skater-2-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/tony-hawk-s-pro-skater-3-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"tony-hawk-s-pro-skater-3-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/tony-hawk-s-pro-skater-4-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"tony-hawk-s-pro-skater-4-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/tony-hawk-s-pro-skater-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"tony-hawk-s-pro-skater-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/valkyrie-profile-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"valkyrie-profile-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/vampire-hunter-d-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"vampire-hunter-d-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/vib-ribbon-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"vib-ribbon-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/vigilante-8-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"vigilante-8-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/wild-arms-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"wild-arms-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/wipeout-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"wipeout-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/wipeout-xl-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"wipeout-xl-recomp"
+]
+},
+{
+"repo": "alexbeavs-ps1-ports/xena-warrior-princess-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"xena-warrior-princess-recomp"
+]
+},
+{
+"repo": "Alice-2010/Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"alice-in-wonderland"
+]
+},
+{
+"repo": "AlisterT/openjazz",
+"want": [
+"desktop"
+],
+"listings": [
+"openjazz"
+]
+},
+{
+"repo": "AliveTeam/alive_reversing",
+"want": [
+"desktop"
+],
+"listings": [
+"oddworld-1-2"
+]
+},
+{
+"repo": "aloaf812/GD",
+"want": [
+"desktop"
+],
+"listings": [
+"geometry-dash"
+]
+},
+{
+"repo": "alondero/aerogauge-recomp",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"aerogauge-recomp"
+]
+},
+{
+"repo": "alondero/automobililamborghini-recomp",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"automobili-lamborghini-recomp"
+]
+},
+{
+"repo": "alphanu1/daytona-arcade-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"daytona-arcade-recomp"
+]
+},
+{
+"repo": "am2r-android/AM2R-Autopatcher-Android",
+"want": [
+"android"
+],
+"listings": [
+"am2r-android"
+]
+},
+{
+"repo": "Andiweli/Unreal-Android",
+"want": [
+"android"
+],
+"listings": [
+"unreal-android"
+]
+},
+{
+"repo": "Andiweli/UT99-Android",
+"want": [
+"android"
+],
+"listings": [
+"unreal-tournament-android"
+]
+},
+{
+"repo": "Andiweli/ZGloom-Android",
+"want": [
+"android"
+],
+"listings": [
+"gloom-android"
+]
+},
+{
+"repo": "andreapavoni/parabellum",
+"want": [
+"desktop"
+],
+"listings": [
+"parabellum"
+]
+},
+{
+"repo": "andrei-drexler/ironwail",
+"want": [
+"desktop"
+],
+"listings": [
+"ironwail"
+]
+},
+{
+"repo": "andresj-sanchez/frfi-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"freedom-fighters"
+]
+},
+{
+"repo": "andrewnakas/skate3-android",
+"want": [
+"android"
+],
+"listings": [
+"skate-3-android"
+]
+},
+{
+"repo": "AngheloAlf/puzzleleague64",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-puzzle-league"
+]
+},
+{
+"repo": "animaone/star-ocean-blue-sphere-source-code",
+"want": [
+"desktop"
+],
+"listings": [
+"star-ocean-blue-sphere"
+]
+},
+{
+"repo": "ant0-blase/MOHFrontline-GC-RECOMP",
+"want": [
+"desktop"
+],
+"listings": [
+"medal-of-honor-frontline-recomp"
+]
+},
+{
+"repo": "ant0-blase/Saw2-X360-ReXGlue",
+"want": [
+"desktop"
+],
+"listings": [
+"saw-ii-flesh-and-blood"
+]
+},
+{
+"repo": "AnthonyBongers/GhostsAndGraves",
+"want": [
+"desktop"
+],
+"listings": [
+"ghosts-and-graves"
+]
+},
+{
+"repo": "arcanite24/pinyon-shift",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"pinyon-shift"
+]
+},
+{
+"repo": "arescentral/antares",
+"want": [
+"desktop"
+],
+"listings": [
+"antares"
+]
+},
+{
+"repo": "ArmageddonGames/ZeldaClassic",
+"want": [
+"desktop"
+],
+"listings": [
+"zelda-classic"
+]
+},
+{
+"repo": "ArnoAnsems/CatacombGL",
+"want": [
+"desktop"
+],
+"listings": [
+"catacombgl"
+]
+},
+{
+"repo": "arx/ArxLibertatis",
+"want": [
+"desktop"
+],
+"listings": [
+"arx-libertatis"
+]
+},
+{
+"repo": "AshfordFamily/recvx-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"resident-evil-code-veronica-decomp"
+]
+},
+{
+"repo": "Asphaltian/pmd-green",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-mystery-dungeon-red-recomp"
+]
+},
+{
+"repo": "astola-studio/ZumaDeluxeAndroid",
+"want": [
+"android"
+],
+"listings": [
+"zuma-deluxe-android"
+]
+},
+{
+"repo": "atasro2/pwaa1",
+"want": [
+"desktop"
+],
+"listings": [
+"pwaa1"
+]
+},
+{
+"repo": "atasro2/pwaa2",
+"want": [
+"desktop"
+],
+"listings": [
+"phoenix-wright-ace-attorney-justice-for-all"
+]
+},
+{
+"repo": "Atomk/ancient-empires-1-decompilation",
+"want": [
+"desktop"
+],
+"listings": [
+"ancient-empires"
+]
+},
+{
+"repo": "AurelioB/BanjoRecomp-Android",
+"want": [
+"desktop"
+],
+"listings": [
+"banjorecomp-android"
+]
+},
+{
+"repo": "Avenze/ios_reverse_engineering",
+"want": [
+"desktop"
+],
+"listings": [
+"idle-office-tycoon"
+]
+},
+{
+"repo": "azmawee/EmperorReborn",
+"want": [
+"desktop"
+],
+"listings": [
+"emperorreborn"
+]
+},
+{
+"repo": "b3dgs/lionheart-remake",
+"want": [
+"desktop"
+],
+"listings": [
+"lionheart-remake"
+]
+},
+{
+"repo": "BanjoRecomp/BanjoRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"banjo-kazooie-recomp"
+]
+},
+{
+"repo": "banteg/crimson",
+"want": [
+"desktop"
+],
+"listings": [
+"crimsonland"
+]
+},
+{
+"repo": "banteg/harvest",
+"want": [
+"desktop"
+],
+"listings": [
+"harvest-massive-encounter"
+]
+},
+{
+"repo": "banteg/snail",
+"want": [
+"desktop"
+],
+"listings": [
+"snail-mail"
+]
+},
+{
+"repo": "BelmanteGu/BroforceAndroid",
+"want": [
+"android"
+],
+"listings": [
+"broforce-android"
+]
+},
+{
+"repo": "BelmanteGu/CelesteAndroid",
+"want": [
+"android"
+],
+"listings": [
+"celeste-android"
+]
+},
+{
+"repo": "BelmanteGu/SuperMarioWonderRecomp",
+"want": [
+"android"
+],
+"listings": [
+"super-mario-bros-wonder-recomp"
+]
+},
+{
+"repo": "bfbbdecomp/tssm",
+"want": [
+"desktop"
+],
+"listings": [
+"the-spongebob-squarepants-movie"
+]
+},
+{
+"repo": "bibendovsky/bstone",
+"want": [
+"desktop"
+],
+"listings": [
+"bstone"
+]
+},
+{
+"repo": "Bingies24/cuttherope-dx",
+"want": [
+"desktop"
+],
+"listings": [
+"cut-the-rope"
+]
+},
+{
+"repo": "birabittoh/EternalSonataReprise",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"eternal-sonata-reprise"
+]
+},
+{
+"repo": "birabittoh/KameoRePowered",
+"want": [
+"desktop"
+],
+"listings": [
+"kameo-repowered"
+]
+},
+{
+"repo": "birabittoh/NocturneRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"castlevania-sotn-recomp-nocturne"
+]
+},
+{
+"repo": "Bishop-333/OmegA-engine",
+"want": [
+"desktop"
+],
+"listings": [
+"omega-engine"
+]
+},
+{
+"repo": "bitten2up/RingRacers",
+"want": [
+"android"
+],
+"listings": [
+"ring-racers-android"
+]
+},
+{
+"repo": "bitten2up/SRB2-Android",
+"want": [
+"android"
+],
+"listings": [
+"srb2-android"
+]
+},
+{
+"repo": "bIue9076r/fate-extella-decompilation",
+"want": [
+"desktop"
+],
+"listings": [
+"fate-extella"
+]
+},
+{
+"repo": "blackgamma7/Aidyn",
+"want": [
+"desktop"
+],
+"listings": [
+"aidyn-chronicles-the-first-mage"
+]
+},
+{
+"repo": "BlackLabelHQ/MediEvilRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"medievil-recomp-blacklabel"
+]
+},
+{
+"repo": "BlackLabelHQ/SymphonyRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"symphony-recomp"
+]
+},
+{
+"repo": "bluisblu/cttr",
+"want": [
+"desktop"
+],
+"listings": [
+"crash-tag-team-racing"
+]
+},
+{
+"repo": "bmbelo87/ddr-1st-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"dance-dance-revolution-1st-mix"
+]
+},
+{
+"repo": "BodbDearg/PsyDoom",
+"want": [
+"desktop"
+],
+"listings": [
+"psydoom"
+]
+},
+{
+"repo": "boricuapab/snowboardkids-recompiled",
+"want": [
+"desktop"
+],
+"listings": [
+"snowboard-kids-recompiled"
+]
+},
+{
+"repo": "Brawmario/infinite-mario-64-ever",
+"want": [
+"desktop"
+],
+"listings": [
+"infinite-mario-64-ever"
+]
+},
+{
+"repo": "break-core/doshin-gc",
+"want": [
+"desktop"
+],
+"listings": [
+"doshin-the-giant"
+]
+},
+{
+"repo": "brian-oblivion/lsddecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"lsd-decomp"
+]
+},
+{
+"repo": "BrokenRegistry/Rotp-Fusion",
+"want": [
+"desktop"
+],
+"listings": [
+"rotp-fusion"
+]
+},
+{
+"repo": "bryanthaboi/gen1recomp",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"gen1recomp"
+]
+},
+{
+"repo": "bryantmh/rush2recompiled",
+"want": [
+"desktop"
+],
+"listings": [
+"rush-2-recomp"
+]
+},
+{
+"repo": "Bsquo/pcopter_wii",
+"want": [
+"desktop"
+],
+"listings": [
+"radio-helicopter"
+]
+},
+{
+"repo": "Buku313/Skate3-Mobile",
+"want": [
+"android"
+],
+"listings": [
+"skate-3-mobile"
+]
+},
+{
+"repo": "burnedpopcorn/UnderTale-Yellow-Decompilation",
+"want": [
+"desktop"
+],
+"listings": [
+"undertale-yellow"
+]
+},
+{
+"repo": "BurnoutDecomp/b5-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"burnout-paradise-b5-decomp"
+]
+},
+{
+"repo": "BurnoutHints/b5-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"burnout-paradise"
+]
+},
+{
+"repo": "bvschaik/julius",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"julius"
+]
+},
+{
+"repo": "C7-Game/OpenCiv3",
+"want": [
+"desktop"
+],
+"listings": [
+"openciv3"
+]
+},
+{
+"repo": "CacaBueno64/ie3ogres",
+"want": [
+"desktop"
+],
+"listings": [
+"inazuma-eleven-3-sekai-e-no-chousen-the-ogre"
+]
+},
+{
+"repo": "Cacodemontube/DoomSNESRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"doom-snes-recomp"
+]
+},
+{
+"repo": "Caesar0007/NFSHS-PSX-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"need-for-speed-high-stakes-ps1"
+]
+},
+{
+"repo": "cakehonolulu/Bullseye",
+"want": [
+"desktop"
+],
+"listings": [
+"resident-evil-dead-aim"
+]
+},
+{
+"repo": "CalebPancake/Taiko-No-Tatsujin-Wii-Ketteiban",
+"want": [
+"desktop"
+],
+"listings": [
+"taiko-no-tatsujin-wii-ketteiban"
+]
+},
+{
+"repo": "canassa/betrayal-at-krondor",
+"want": [
+"desktop"
+],
+"listings": [
+"betrayal-at-krondor"
+]
+},
+{
+"repo": "caos-obliquo/tboi-recomp",
+"want": [
+"android"
+],
+"listings": [
+"isaac-rebirth-android"
+]
+},
+{
+"repo": "cardanawandra/th06",
+"want": [
+"android"
+],
+"listings": [
+"touhou-6-android"
+]
+},
+{
+"repo": "Carlox33/The-Simpsons-Hit-and-Run-Android",
+"want": [
+"android"
+],
+"listings": [
+"the-simpsons-hit-and-run-android"
+]
+},
+{
+"repo": "castdrian/showdown-ds",
+"want": [
+"android"
+],
+"listings": [
+"showdown-ds-dual-screen"
+]
+},
+{
+"repo": "cdlewis/snowboardkids2-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"snowboard-kids-2-decomp"
+]
+},
+{
+"repo": "cdlewis/snowboardkids2-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"snowboard-kids-2-recomp"
+]
+},
+{
+"repo": "Cellenseres/SSSV_Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"space-station-silicon-valley-recomp"
+]
+},
+{
+"repo": "celophi/lom-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"legend-of-mana-decomp"
+]
+},
+{
+"repo": "celophi/so3-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"star-ocean-till-the-end-of-time"
+]
+},
+{
+"repo": "Charlese2/sgr",
+"want": [
+"desktop"
+],
+"listings": [
+"summoner-a-goddess-reborn"
+]
+},
+{
+"repo": "charlieduzstuf/pokesword",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-sword"
+]
+},
+{
+"repo": "ChimpsAtSea/Reach",
+"want": [
+"desktop"
+],
+"listings": [
+"halo-reach"
+]
+},
+{
+"repo": "Chokage/Fear-and-Hunger-2-Termina-Mobile",
+"want": [
+"android"
+],
+"listings": [
+"fear-and-hunger-termina-android"
+]
+},
+{
+"repo": "Chokage/Fear-And-Hunger-Android-Application",
+"want": [
+"android"
+],
+"listings": [
+"fear-and-hunger-android"
+]
+},
+{
+"repo": "chris43123/PaperBoat",
+"want": [
+"android"
+],
+"listings": [
+"paperboat-android"
+]
+},
+{
+"repo": "chrissotraidis/bluewake",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"bluewake"
+]
+},
+{
+"repo": "chrissotraidis/kartpad",
+"want": [
+"android"
+],
+"listings": [
+"kartpad"
+]
+},
+{
+"repo": "citrongames/Dora64-3",
+"want": [
+"android"
+],
+"listings": [
+"dora64-3"
+]
+},
+{
+"repo": "clover-moe/lilium-voyager",
+"want": [
+"desktop"
+],
+"listings": [
+"lilium-voyager"
+]
+},
+{
+"repo": "clover-moe/mint-arena",
+"want": [
+"desktop"
+],
+"listings": [
+"mint-arena"
+]
+},
+{
+"repo": "clover-moe/spearmint",
+"want": [
+"desktop"
+],
+"listings": [
+"spearmint"
+]
+},
+{
+"repo": "Coaltergeist/goldensun-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"golden-sun-the-broken-seal"
+]
+},
+{
+"repo": "coccofresco/TriAevum",
+"want": [
+"desktop"
+],
+"listings": [
+"triaevum"
+]
+},
+{
+"repo": "codenamecpp/carnage3d",
+"want": [
+"desktop"
+],
+"listings": [
+"carnage3d"
+]
+},
+{
+"repo": "codenamecpp/GLKeeper",
+"want": [
+"desktop"
+],
+"listings": [
+"glkeeper"
+]
+},
+{
+"repo": "codepdbh/CBFD-Recompiled-Android-Evolved",
+"want": [
+"android"
+],
+"listings": [
+"cbfd-recompiled-android-evolved"
+]
+},
+{
+"repo": "codepdbh/NFS-CARBON-360-ANDROID-RECOMP",
+"want": [
+"desktop"
+],
+"listings": [
+"need-for-speed-carbon-codepdbh"
+]
+},
+{
+"repo": "codepdbh/nfsmw-android",
+"want": [
+"android"
+],
+"listings": [
+"nfs-most-wanted-android"
+]
+},
+{
+"repo": "codepdbh/nfsu2-recompiled",
+"want": [
+"android"
+],
+"listings": [
+"nfs-underground-2-recompiled"
+]
+},
+{
+"repo": "codepdbh/PSPRecomp-LCS-Android",
+"want": [
+"android"
+],
+"listings": [
+"psprecomp-liberty-city-stories"
+]
+},
+{
+"repo": "codepdbh/PSPRecomp-VCS-Android",
+"want": [
+"android"
+],
+"listings": [
+"psprecomp-vice-city-stories"
+]
+},
+{
+"repo": "codepdbh/re3-android-port-evolved",
+"want": [
+"android"
+],
+"listings": [
+"re3-android-evolved"
+]
+},
+{
+"repo": "codepdbh/revc-android-port-evolved",
+"want": [
+"android"
+],
+"listings": [
+"revc-android-evolved"
+]
+},
+{
+"repo": "collinsmith/riiablo",
+"want": [
+"desktop"
+],
+"listings": [
+"riiablo"
+]
+},
+{
+"repo": "conhlee/rhf",
+"want": [
+"desktop"
+],
+"listings": [
+"rhythm-heaven-fever"
+]
+},
+{
+"repo": "cookgreen/OpenMB",
+"want": [
+"desktop"
+],
+"listings": [
+"openmb"
+]
+},
+{
+"repo": "coole42-pixel/PSPRecomp-MSAE",
+"want": [
+"android"
+],
+"listings": [
+"psp-recomp-msae"
+]
+},
+{
+"repo": "coop-deluxe/sm64coopdx",
+"want": [
+"desktop"
+],
+"listings": [
+"sm64coopdx"
+]
+},
+{
+"repo": "CorsixTH/CorsixTH",
+"want": [
+"desktop"
+],
+"listings": [
+"corsixth"
+]
+},
+{
+"repo": "CosmicScribe64/eds-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"yu-gi-oh-the-eternal-duelist-soul"
+]
+},
+{
+"repo": "CosmicScribe64/tokimemo-ps1-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"tokimeki-memorial-forever-with-you"
+]
+},
+{
+"repo": "Costume-Quest-Modding/CostumeQuest-Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"costume-quest"
+]
+},
+{
+"repo": "CriminalRETeam/gta2_re",
+"want": [
+"desktop"
+],
+"listings": [
+"gta2-re"
+]
+},
+{
+"repo": "crimsonmagick/lotr-rotk",
+"want": [
+"desktop"
+],
+"listings": [
+"the-lord-of-the-rings-return-of-the-king"
+]
+},
+{
+"repo": "crowded-street/3sx",
+"want": [
+"desktop"
+],
+"listings": [
+"street-fighter-iii-3rd-strike-3sx"
+]
+},
+{
+"repo": "cScarletter/Drakan-The-Ancient-Gates-Decompilation-",
+"want": [
+"desktop"
+],
+"listings": [
+"drakan-the-ancients-gates"
+]
+},
+{
+"repo": "csinkers/ualbion",
+"want": [
+"desktop"
+],
+"listings": [
+"ualbion"
+]
+},
+{
+"repo": "CTR-tools/ctr-native",
+"want": [
+"desktop"
+],
+"listings": [
+"ctr-native"
+]
+},
+{
+"repo": "curiosity-led-me-here/fireemblem8j",
+"want": [
+"desktop"
+],
+"listings": [
+"fire-emblem-seima-no-kouseki"
+]
+},
+{
+"repo": "cxong/cdogs-sdl",
+"want": [
+"desktop"
+],
+"listings": [
+"c-dogs-sdl"
+]
+},
+{
+"repo": "cybersecurity/halo-ce-universal",
+"want": [
+"android"
+],
+"listings": [
+"halo-1-decomp"
+]
+},
+{
+"repo": "cypressru/SonicBattleDecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"sonic-battle"
+]
+},
+{
+"repo": "daanhenke/persona-psx",
+"want": [
+"desktop"
+],
+"listings": [
+"megami-ibunroku-persona"
+]
+},
+{
+"repo": "DabDavis/perfect-dark-dabs-mod",
+"want": [
+"desktop"
+],
+"listings": [
+"perfect-dark-dabs-mod"
+]
+},
+{
+"repo": "Daniel-McCarthy/SPPS",
+"want": [
+"desktop"
+],
+"listings": [
+"shaun-palmers-pro-snowboarder"
+]
+},
+{
+"repo": "daniele-rapagnani/alephone-android",
+"want": [
+"android"
+],
+"listings": [
+"marathon-android"
+]
+},
+{
+"repo": "danielgomesvieira2000/body-harvest-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"body-harvest-recomp"
+]
+},
+{
+"repo": "danielgomesvieira2000/pilotwings-64-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"pilotwings-64-recomp"
+]
+},
+{
+"repo": "danillogical/GZSelaco-android",
+"want": [
+"android"
+],
+"listings": [
+"gzselaco-android-dual-screen"
+]
+},
+{
+"repo": "darchap/Skate3-Port",
+"want": [
+"android"
+],
+"listings": [
+"skate-3-port"
+]
+},
+{
+"repo": "Darhkfox/BusterBustsLoose",
+"want": [
+"desktop"
+],
+"listings": [
+"tiny-toon-adventures-buster-busts-loose-pc-port"
+]
+},
+{
+"repo": "dashr9230/Caper",
+"want": [
+"desktop"
+],
+"listings": [
+"the-italian-job"
+]
+},
+{
+"repo": "dashr9230/Gt2",
+"want": [
+"desktop"
+],
+"listings": [
+"ford-racing"
+]
+},
+{
+"repo": "davidadas/rebellion2",
+"want": [
+"desktop"
+],
+"listings": [
+"rebellion2"
+]
+},
+{
+"repo": "DavidGrice/knightskingdom",
+"want": [
+"desktop"
+],
+"listings": [
+"lego-creator-knights-kingdom"
+]
+},
+{
+"repo": "dbalatoni13/nfsmw",
+"want": [
+"desktop"
+],
+"listings": [
+"nfs-most-wanted-decomp"
+]
+},
+{
+"repo": "dbalatoni13/nfsug",
+"want": [
+"desktop"
+],
+"listings": [
+"nfsug"
+]
+},
+{
+"repo": "deadinside28/bloodborne_pc",
+"want": [
+"desktop"
+],
+"listings": [
+"bloodborne-pc"
+]
+},
+{
+"repo": "deathkiller/jazz2",
+"want": [
+"android"
+],
+"listings": [
+"jazz-2-ressurection"
+]
+},
+{
+"repo": "deathkiller/jazz2-native",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"jazz2-native"
+]
+},
+{
+"repo": "Decomp-And-Recomp/Samurai-Vs-Zombies",
+"want": [
+"desktop"
+],
+"listings": [
+"samurai-vs-zombies"
+]
+},
+{
+"repo": "decompfrontier/client",
+"want": [
+"desktop"
+],
+"listings": [
+"brave-frontier"
+]
+},
+{
+"repo": "deivid22srk/dk64-recomp-android",
+"want": [
+"android"
+],
+"listings": [
+"dk64-recomp-android"
+]
+},
+{
+"repo": "deivid22srk/naughtybear-restuff-android",
+"want": [
+"android"
+],
+"listings": [
+"naughty-bear-restuff-android-port"
+]
+},
+{
+"repo": "deivid22srk/ReChan-Android",
+"want": [
+"android"
+],
+"listings": [
+"rechan"
+]
+},
+{
+"repo": "DerrickGold/ar-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"actraiser-recomp"
+]
+},
+{
+"repo": "DescentDevelopers/Descent3",
+"want": [
+"desktop"
+],
+"listings": [
+"descent-3"
+]
+},
+{
+"repo": "dethrace-labs/dethrace",
+"want": [
+"desktop"
+],
+"listings": [
+"carmageddon-recomp"
+]
+},
+{
+"repo": "dev-camo/shadow-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"shadow-the-hedgehog"
+]
+},
+{
+"repo": "devint1/Descent-Mobile",
+"want": [
+"android"
+],
+"listings": [
+"descent-mobile"
+]
+},
+{
+"repo": "devint1/Descent2-Mobile",
+"want": [
+"android"
+],
+"listings": [
+"descent-2-mobile"
+]
+},
+{
+"repo": "DevZer0D4Y/MegaMan64Recompiled-Mobile",
+"want": [
+"android"
+],
+"listings": [
+"megaman-64-recomp-mobile"
+]
+},
+{
+"repo": "Dexx-io/Splatoon-Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"splatoon"
+]
+},
+{
+"repo": "dfdx047/Tenkaichi3DecompAndroid",
+"want": [
+"android"
+],
+"listings": [
+"tenkaichi3decomp-android"
+]
+},
+{
+"repo": "dgcor/DGEngine",
+"want": [
+"desktop"
+],
+"listings": [
+"dgengine"
+]
+},
+{
+"repo": "dhewm/dhewm3",
+"want": [
+"desktop"
+],
+"listings": [
+"dhewm3"
+]
+},
+{
+"repo": "DiaLight/Flame",
+"want": [
+"desktop"
+],
+"listings": [
+"flame"
+]
+},
+{
+"repo": "diasurgical/devilutionX",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"devilutionx"
+]
+},
+{
+"repo": "DifferentNet/barony-android-port",
+"want": [
+"android"
+],
+"listings": [
+"barony-android"
+]
+},
+{
+"repo": "DinosaurPlanetRecomp/dino-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"dinosaur-planet-recomp"
+]
+},
+{
+"repo": "disinvite/jman-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"the-journeyman-project-turbo"
+]
+},
+{
+"repo": "dism-exe/bn6f",
+"want": [
+"desktop"
+],
+"listings": [
+"mega-man-battle-network-6"
+]
+},
+{
+"repo": "distilledorion-sketch/Initial-D-Arcade-Stage-3-Native-SH-4-Recompilation-WIP-",
+"want": [
+"desktop"
+],
+"listings": [
+"initial-d-arcade-stage-ver-3"
+]
+},
+{
+"repo": "djsaunde/1080-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"1080-snowboarding"
+]
+},
+{
+"repo": "djultra64/Blocksphere",
+"want": [
+"desktop"
+],
+"listings": [
+"tetrisphere-recomp"
+]
+},
+{
+"repo": "djultra64/Power-Dozer",
+"want": [
+"desktop"
+],
+"listings": [
+"blast-corps-power-dozer"
+]
+},
+{
+"repo": "djyt/cannonball",
+"want": [
+"desktop"
+],
+"listings": [
+"cannonball"
+]
+},
+{
+"repo": "doctormajid7-ux/z2rs-android-2p-splitscreen",
+"want": [
+"android"
+],
+"listings": [
+"zelda-ii-2p-splitscreen-android"
+]
+},
+{
+"repo": "doldecomp/forecast",
+"want": [
+"desktop"
+],
+"listings": [
+"forecast-channel"
+]
+},
+{
+"repo": "doldecomp/kar",
+"want": [
+"desktop"
+],
+"listings": [
+"kirby-air-ride"
+]
+},
+{
+"repo": "doldecomp/mkdd",
+"want": [
+"desktop"
+],
+"listings": [
+"mkdd"
+]
+},
+{
+"repo": "doldecomp/ogws",
+"want": [
+"desktop"
+],
+"listings": [
+"wii-sports"
+]
+},
+{
+"repo": "dorPXP/driftdroid",
+"want": [
+"android"
+],
+"listings": [
+"mario-kart-wii-android"
+]
+},
+{
+"repo": "dothacktranslate/okamiden-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"okamiden"
+]
+},
+{
+"repo": "dougchansan/pkmn-colosseum",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-colosseum"
+]
+},
+{
+"repo": "doukutsu-rs/doukutsu-rs",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"doukutsu-rs"
+]
+},
+{
+"repo": "DoutorRaposo/moonpearl",
+"want": [
+"android"
+],
+"listings": [
+"moon-pearl"
+]
+},
+{
+"repo": "dpjudas/SurrealEngine",
+"want": [
+"desktop"
+],
+"listings": [
+"surrealengine"
+]
+},
+{
+"repo": "dpt/The-Great-Escape-in-C",
+"want": [
+"desktop"
+],
+"listings": [
+"the-great-escape-in-c"
+]
+},
+{
+"repo": "DQIX/dqix-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"dragon-quest-ix"
+]
+},
+{
+"repo": "Drahsid/gauntlet-legends",
+"want": [
+"desktop"
+],
+"listings": [
+"gauntlet-legends"
+]
+},
+{
+"repo": "DrDecki/psychonauts-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"psychonauts-decomp"
+]
+},
+{
+"repo": "dreamingmoths/memory-of-alessa",
+"want": [
+"desktop"
+],
+"listings": [
+"silent-hill-3-decomp"
+]
+},
+{
+"repo": "drodin/Stratagus",
+"want": [
+"android"
+],
+"listings": [
+"warcraft-orcs-and-humans-android"
+]
+},
+{
+"repo": "dsda-org/dsda-doom",
+"want": [
+"desktop"
+],
+"listings": [
+"dsda-doom",
+"dsda-doom-dsda-org"
+]
+},
+{
+"repo": "ducvd89/Bloodborne-Android",
+"want": [
+"android"
+],
+"listings": [
+"bloodborne-android"
+]
+},
+{
+"repo": "dulsi/btbuilder",
+"want": [
+"desktop"
+],
+"listings": [
+"btbuilder"
+]
+},
+{
+"repo": "dxx-rebirth/dxx-rebirth",
+"want": [
+"desktop"
+],
+"listings": [
+"dxx-rebirth",
+"d1x-rebirth"
+]
+},
+{
+"repo": "dxx-redux/dxx-redux",
+"want": [
+"desktop"
+],
+"listings": [
+"dxx-redux"
+]
+},
+{
+"repo": "Dyotson/ForzaHorizon1-ReImagined",
+"want": [
+"desktop"
+],
+"listings": [
+"forza-horizon-reimagined"
+]
+},
+{
+"repo": "Dyotson/RecompiledHaloReach",
+"want": [
+"desktop"
+],
+"listings": [
+"halo-reach-recomp"
+]
+},
+{
+"repo": "eavpsp/cbr_decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"chibi-robo"
+]
+},
+{
+"repo": "eboody/Castlevania-ReVamped-Open-Source-Edition",
+"want": [
+"android"
+],
+"listings": [
+"castlevania-revamped"
+]
+},
+{
+"repo": "eboody/UFO50AndroidUnofficial",
+"want": [
+"android"
+],
+"listings": [
+"ufo-50-android-unofficial"
+]
+},
+{
+"repo": "ec-/Quake3e",
+"want": [
+"desktop"
+],
+"listings": [
+"quake3e"
+]
+},
+{
+"repo": "ECWolfEngine/ECWolf",
+"want": [
+"desktop"
+],
+"listings": [
+"ecwolf"
+]
+},
+{
+"repo": "edge-classic/EDGE-classic",
+"want": [
+"desktop"
+],
+"listings": [
+"edge-classic"
+]
+},
+{
+"repo": "eduard-permyakov/permafrost-engine",
+"want": [
+"desktop"
+],
+"listings": [
+"permafrost-engine"
+]
+},
+{
+"repo": "Edwin2929/sma3-recomp-android.",
+"want": [
+"android"
+],
+"listings": [
+"sma3-recomp-android"
+]
+},
+{
+"repo": "Eebit/aw2bhr",
+"want": [
+"desktop"
+],
+"listings": [
+"advance-wars-2-black-hole-rising"
+]
+},
+{
+"repo": "Eebit/fe11-us",
+"want": [
+"desktop"
+],
+"listings": [
+"fire-emblem-shadow-dragon"
+]
+},
+{
+"repo": "EiscremeWaffle/bubsy3d-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"bubsy-3d-furbitten-planet"
+]
+},
+{
+"repo": "Ekyso/Cinderbox",
+"want": [
+"android"
+],
+"listings": [
+"stardew-cinderbox"
+]
+},
+{
+"repo": "Ekyso/StS2-Launcher",
+"want": [
+"android"
+],
+"listings": [
+"slay-the-spire-2-android"
+]
+},
+{
+"repo": "ElectroDeoxys/warioland3",
+"want": [
+"desktop"
+],
+"listings": [
+"wario-land-3"
+]
+},
+{
+"repo": "EliasFever/MarioTeachesTyping3Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"mario-teaches-typing-3"
+]
+},
+{
+"repo": "elliotttate/DKC2Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"dkc2-recomp"
+]
+},
+{
+"repo": "elliotttate/DKC3Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"dkc3-recomp"
+]
+},
+{
+"repo": "elmasas/lcs-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"lcs-recomp"
+]
+},
+{
+"repo": "elprogramadorloco-arch/korokoro-recomp",
+"want": [
+"android"
+],
+"listings": [
+"kokororecomp"
+]
+},
+{
+"repo": "ElspethThePict/S1Forever",
+"want": [
+"android"
+],
+"listings": [
+"sonic-1-forever"
+]
+},
+{
+"repo": "EltaleLibrarian/Amazing",
+"want": [
+"desktop"
+],
+"listings": [
+"amazing-island"
+]
+},
+{
+"repo": "EltyDev/MSM-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"mario-sport-mix"
+]
+},
+{
+"repo": "elyosh/OpenTIE",
+"want": [
+"desktop"
+],
+"listings": [
+"opentie"
+]
+},
+{
+"repo": "elyosh/OpenXvT",
+"want": [
+"desktop"
+],
+"listings": [
+"openxvt"
+]
+},
+{
+"repo": "elyosh/OpenXW",
+"want": [
+"desktop"
+],
+"listings": [
+"openxw"
+]
+},
+{
+"repo": "elyosh/OpenXWA",
+"want": [
+"desktop"
+],
+"listings": [
+"openxwa"
+]
+},
+{
+"repo": "emoluvjd2/oregontrail-win32-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"the-oregon-trail-windows-95"
+]
+},
+{
+"repo": "entriphy/kl2_lv_decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"klonoa-2-lunateas-veil"
+]
+},
+{
+"repo": "Erizur/slpm86183",
+"want": [
+"desktop"
+],
+"listings": [
+"popn-music"
+]
+},
+{
+"repo": "ernestbuffington/freeking",
+"want": [
+"desktop"
+],
+"listings": [
+"freeking-kingpin"
+]
+},
+{
+"repo": "ethteck/kh1",
+"want": [
+"desktop"
+],
+"listings": [
+"kh1"
+]
+},
+{
+"repo": "etlegacy/etlegacy",
+"want": [
+"desktop"
+],
+"listings": [
+"etlegacy"
+]
+},
+{
+"repo": "etonedemid/zomdroid-",
+"want": [
+"android"
+],
+"listings": [
+"zomdroid-etonedemid"
+]
+},
+{
+"repo": "EuclidVsGauss/HazardRevenge",
+"want": [
+"desktop"
+],
+"listings": [
+"hazard-1998"
+]
+},
+{
+"repo": "Eukaryot/sonic3air",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"sonic-3-air"
+]
+},
+{
+"repo": "EXL/Gish",
+"want": [
+"android"
+],
+"listings": [
+"gish"
+]
+},
+{
+"repo": "ExpansionPak/ModernGekko",
+"want": [
+"desktop"
+],
+"listings": [
+"kirbys-return-to-dream-land-kirby-wii-recomp"
+]
+},
+{
+"repo": "exult/exult",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"exult"
+]
+},
+{
+"repo": "fabiangreffrath/taradino",
+"want": [
+"desktop"
+],
+"listings": [
+"taradino"
+]
+},
+{
+"repo": "fabiangreffrath/woof",
+"want": [
+"desktop"
+],
+"listings": [
+"woof"
+]
+},
+{
+"repo": "Fancy2209/wog-wiiware",
+"want": [
+"desktop"
+],
+"listings": [
+"world-of-goo"
+]
+},
+{
+"repo": "fancypantalons/Amphitere",
+"want": [
+"android"
+],
+"listings": [
+"amphitere"
+]
+},
+{
+"repo": "Fantaskink/SOTC",
+"want": [
+"desktop"
+],
+"listings": [
+"sotc"
+]
+},
+{
+"repo": "farisawan-2000/evangelion",
+"want": [
+"desktop"
+],
+"listings": [
+"neon-genesis-evangelion-64"
+]
+},
+{
+"repo": "FatalDecomp/ROLLER",
+"want": [
+"desktop"
+],
+"listings": [
+"roller"
+]
+},
+{
+"repo": "FireEmblemUniverse/fireemblem8u",
+"want": [
+"desktop"
+],
+"listings": [
+"fire-emblem-the-sacred-stones",
+"fire-emblem-the-sacred-stones-fireemblem"
+]
+},
+{
+"repo": "Fixatron/TFRom-Recreation",
+"want": [
+"desktop"
+],
+"listings": [
+"transformers-mystery-of-convoy"
+]
+},
+{
+"repo": "fliperama86/cvlod_recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"castlevania-lod-recomp"
+]
+},
+{
+"repo": "florinp93/hells-gate-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"dantes-inferno-recomp"
+]
+},
+{
+"repo": "florinp93/xmd-recompiled",
+"want": [
+"desktop"
+],
+"listings": [
+"x-men-destiny-recomp"
+]
+},
+{
+"repo": "FluffyQuack/ReXGlue-EXIT",
+"want": [
+"desktop"
+],
+"listings": [
+"exit-recomp"
+]
+},
+{
+"repo": "flyngmt/ACGC-PC-Port",
+"want": [
+"desktop"
+],
+"listings": [
+"animal-crossing-pc-port"
+]
+},
+{
+"repo": "fmil95/recv-dc-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"resident-evil-code-veronica"
+]
+},
+{
+"repo": "fmil95/recvx-gc-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"resident-evil-code-veronica-x"
+]
+},
+{
+"repo": "ForNeVeR/O21",
+"want": [
+"desktop"
+],
+"listings": [
+"o21"
+]
+},
+{
+"repo": "FortuneStreetModding/boom-street-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"fortune-street"
+]
+},
+{
+"repo": "fr3dsp/FlappyBird-Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"flappy-bird"
+]
+},
+{
+"repo": "fr3dsp/FNaF-2-Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"five-nights-at-freddys-2"
+]
+},
+{
+"repo": "fr3dsp/FNaF-Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"five-nights-at-freddys"
+]
+},
+{
+"repo": "fragglet/sdl-sopwith",
+"want": [
+"desktop"
+],
+"listings": [
+"sopwith-sdl-sopwith"
+]
+},
+{
+"repo": "FredYeye/Super-Ghouls-n-Ghosts-Disassembly",
+"want": [
+"desktop"
+],
+"listings": [
+"super-ghouls-n-ghosts"
+]
+},
+{
+"repo": "freeciv/freeciv",
+"want": [
+"desktop"
+],
+"listings": [
+"freeciv"
+]
+},
+{
+"repo": "freedoom/freedoom",
+"want": [
+"desktop"
+],
+"listings": [
+"freedoom"
+]
+},
+{
+"repo": "freefrank/LostOdysseyRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"lost-odyssey-recomp"
+]
+},
+{
+"repo": "fuddlesworth/pokebw2",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-black-2-and-white-2"
+]
+},
+{
+"repo": "FWGS/xash3d-fwgs",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"xash3d-fwgs"
+]
+},
+{
+"repo": "g-guthrie/mvc2-ps2-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"marvel-vs-capcom-2"
+]
+},
+{
+"repo": "GabeRealB/parasite-eve-2-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"parasite-eve-ii-decomp"
+]
+},
+{
+"repo": "Gabrick75/fh2-recompiled",
+"want": [
+"android"
+],
+"listings": [
+"forza-horizon-2-android"
+]
+},
+{
+"repo": "gamboozino/ngbrecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"ninja-gaiden-black-recomp"
+]
+},
+{
+"repo": "gamemasterplc/bltouch2",
+"want": [
+"desktop"
+],
+"listings": [
+"bomberman-land-touch-2"
+]
+},
+{
+"repo": "gays-studio/ChikisChaseAPK",
+"want": [
+"desktop"
+],
+"listings": [
+"chikis-chase"
+]
+},
+{
+"repo": "gemrb/gemrb",
+"want": [
+"desktop"
+],
+"listings": [
+"gemrb"
+]
+},
+{
+"repo": "GensokyoClub/th06",
+"want": [
+"desktop"
+],
+"listings": [
+"touhou-koumakyou-the-embodiment-of-scarlet-devil"
+]
+},
+{
+"repo": "GensokyoClub/th08",
+"want": [
+"desktop"
+],
+"listings": [
+"touhou-08-imperishable-night"
+]
+},
+{
+"repo": "GeReV/bumpy-reverse",
+"want": [
+"desktop"
+],
+"listings": [
+"bumpys-arcade-fantasy"
+]
+},
+{
+"repo": "GirianSeed/zoe1",
+"want": [
+"desktop"
+],
+"listings": [
+"zone-of-the-enders-1"
+]
+},
+{
+"repo": "GirianSeed/zoe2",
+"want": [
+"desktop"
+],
+"listings": [
+"zone-of-the-enders-2"
+]
+},
+{
+"repo": "GirianSeed/zoe3",
+"want": [
+"desktop"
+],
+"listings": [
+"zone-of-the-enders-3-guy-savage-from-metal-gear-solid-3"
+]
+},
+{
+"repo": "GlitchedDeveloper/Babil-Decompilation-Project",
+"want": [
+"desktop"
+],
+"listings": [
+"final-fantasy-iv-3d-remake"
+]
+},
+{
+"repo": "glKarin/com.n0n3m4.diii4a",
+"want": [
+"desktop"
+],
+"listings": [
+"idtech4a-harmattan-edition"
+]
+},
+{
+"repo": "Gmon20/makethedecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"are-you-smarter-than-a-5th-grader-make-the-grade"
+]
+},
+{
+"repo": "GoldieLeGenie/DQIV-DECOMP",
+"want": [
+"desktop"
+],
+"listings": [
+"dragon-quest-iv"
+]
+},
+{
+"repo": "Goldoire/pokeemerald-dualscreen",
+"want": [
+"android"
+],
+"listings": [
+"pokemon-emerald-dual-screen"
+]
+},
+{
+"repo": "goliathret/EdgeOfTimeRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"spider-man-edge-of-time-recomp"
+]
+},
+{
+"repo": "goshavindtburg/NX1recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"call-of-duty-future-warfare"
+]
+},
+{
+"repo": "gradenGnostic/pokemoon",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-moon"
+]
+},
+{
+"repo": "GRAnimated/MinecraftLCE",
+"want": [
+"desktop"
+],
+"listings": [
+"minecraft-lce-decomp"
+]
+},
+{
+"repo": "GrantBenR/YsViDecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"ys-vi"
+]
+},
+{
+"repo": "GrasonHumphrey/Earthbound-Zero-Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"earthbound-beginnings"
+]
+},
+{
+"repo": "GreenNaugahyde/ZeldaWWHDRecompAndroid",
+"want": [
+"android"
+],
+"listings": [
+"zelda-wwhd-recomp-android"
+]
+},
+{
+"repo": "griches/EternalDarknessRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"eternal-darkness-recomp"
+]
+},
+{
+"repo": "GTTeancum/OpenGTPS1",
+"want": [
+"desktop"
+],
+"listings": [
+"opengtps1"
+]
+},
+{
+"repo": "GTTeancum/SpideyPS1recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"openspideyps1"
+]
+},
+{
+"repo": "Guixs232/Look-Outside-Recomp",
+"want": [
+"android"
+],
+"listings": [
+"look-outside-android"
+]
+},
+{
+"repo": "gurrhack/NetHack-Android",
+"want": [
+"android"
+],
+"listings": [
+"nethack-android"
+]
+},
+{
+"repo": "gurrhack/SlashEM-Android",
+"want": [
+"android"
+],
+"listings": [
+"slashem-android"
+]
+},
+{
+"repo": "gurrhack/UnNetHack-Android",
+"want": [
+"android"
+],
+"listings": [
+"unnethack-android"
+]
+},
+{
+"repo": "gustavocanepa/gt4-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"gran-turismo-4"
+]
+},
+{
+"repo": "gustavocanepa/tt-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"tourist-trophy"
+]
+},
+{
+"repo": "h4mu/rott94",
+"want": [
+"android"
+],
+"listings": [
+"rott94"
+]
+},
+{
+"repo": "halkuncode/anothermind-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"another-mind"
+]
+},
+{
+"repo": "HalmyLyseas/VandalHearts-PcPort",
+"want": [
+"desktop"
+],
+"listings": [
+"vandal-hearts-recomp"
+]
+},
+{
+"repo": "Hamzaxx370/Ogre-Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"yakuza"
+]
+},
+{
+"repo": "hankmorgan/UnderworldGodot",
+"want": [
+"desktop"
+],
+"listings": [
+"underworldgodot"
+]
+},
+{
+"repo": "HarbourMasters/Ghostship",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"ghostship"
+]
+},
+{
+"repo": "HarbourMasters/Lighthouse",
+"want": [
+"desktop"
+],
+"listings": [
+"lighthouse"
+]
+},
+{
+"repo": "HarbourMasters/PaperBoat",
+"want": [
+"desktop"
+],
+"listings": [
+"paper-mario-paperboat"
+]
+},
+{
+"repo": "HarbourMasters/Shipwright",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"ship-of-harkinian"
+]
+},
+{
+"repo": "HarbourMasters/SpaghettiKart",
+"want": [
+"desktop"
+],
+"listings": [
+"spaghettikart"
+]
+},
+{
+"repo": "HarbourMasters/Starship",
+"want": [
+"desktop"
+],
+"listings": [
+"starship"
+]
+},
+{
+"repo": "Harskov/stretch-panic-usa",
+"want": [
+"desktop"
+],
+"listings": [
+"stretch-panic"
+]
+},
+{
+"repo": "HarvestMoon64Recomp/HarvestMoon64Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"harvest-moon-64-recomp"
+]
+},
+{
+"repo": "HaydnTrigg/Castaway",
+"want": [
+"desktop"
+],
+"listings": [
+"the-sims-2-castaway"
+]
+},
+{
+"repo": "HaydnTrigg/Homeworld2Classic",
+"want": [
+"desktop"
+],
+"listings": [
+"homeworld-2"
+]
+},
+{
+"repo": "Hdmaniak/DishSoap",
+"want": [
+"android"
+],
+"listings": [
+"dishsoap"
+]
+},
+{
+"repo": "hedge-dev/UnleashedRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"unleashed-recompiled"
+]
+},
+{
+"repo": "hellow554/RustyBlazer",
+"want": [
+"desktop"
+],
+"listings": [
+"rusty-blazer"
+]
+},
+{
+"repo": "Henrique194/chocolate-quake",
+"want": [
+"desktop"
+],
+"listings": [
+"chocolate-quake"
+]
+},
+{
+"repo": "Herringway/ebsrc",
+"want": [
+"desktop"
+],
+"listings": [
+"earthbound-mother-2"
+]
+},
+{
+"repo": "HighwayFrogs/frogger-psx",
+"want": [
+"desktop"
+],
+"listings": [
+"frogger-hes-back"
+]
+},
+{
+"repo": "HLLArtyParty/WaveRace64RecompForAndroid",
+"want": [
+"android"
+],
+"listings": [
+"wave-racer-64-recomp-for-android"
+]
+},
+{
+"repo": "holly-hacker/hp3-gba-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"harry-potter-and-the-prisoner-of-azkaban"
+]
+},
+{
+"repo": "huderlem/carrotcrazy",
+"want": [
+"desktop"
+],
+"listings": [
+"looney-tunes-carrot-crazy"
+]
+},
+{
+"repo": "hunkstalker/hybrid-heaven-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"hybrid-heaven-recomp"
+]
+},
+{
+"repo": "IceReaper/OpenKrush",
+"want": [
+"desktop"
+],
+"listings": [
+"openkrush"
+]
+},
+{
+"repo": "ieee802dot11ac/amp",
+"want": [
+"desktop"
+],
+"listings": [
+"amplitude"
+]
+},
+{
+"repo": "iestyn129/DOMADays",
+"want": [
+"desktop"
+],
+"listings": [
+"doma-days"
+]
+},
+{
+"repo": "igawa6/ctr-native-android",
+"want": [
+"android"
+],
+"listings": [
+"crt-native-ds-dual-screen"
+]
+},
+{
+"repo": "igawa6/dualsouls",
+"want": [
+"android"
+],
+"listings": [
+"hollow-knight-android"
+]
+},
+{
+"repo": "igawa6/HarvestMoon64Recomp",
+"want": [
+"android"
+],
+"listings": [
+"harvest-moon-64-android"
+]
+},
+{
+"repo": "igawa6/Tomba2RecompDS",
+"want": [
+"android"
+],
+"listings": [
+"tomba-recomp-ds-dual-screen"
+]
+},
+{
+"repo": "ihhub/fheroes2",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"fh2"
+]
+},
+{
+"repo": "imjustadudegamer/VoyagerHM-Android",
+"want": [
+"android"
+],
+"listings": [
+"voyager-elite-force-holomatch"
+]
+},
+{
+"repo": "imjustadudegamer/VoyagerSP-Android",
+"want": [
+"android"
+],
+"listings": [
+"voyager-elite-force-android"
+]
+},
+{
+"repo": "induktio/thinker",
+"want": [
+"desktop"
+],
+"listings": [
+"thinker"
+]
+},
+{
+"repo": "InfiniteC0re/OpenBarnyard",
+"want": [
+"desktop"
+],
+"listings": [
+"barnyard"
+]
+},
+{
+"repo": "Inkub0/dude",
+"want": [
+"desktop"
+],
+"listings": [
+"doom3-dude"
+]
+},
+{
+"repo": "Innersargento/Renut-Android",
+"want": [
+"android"
+],
+"listings": [
+"renut-android"
+]
+},
+{
+"repo": "Interkarma/daggerfall-unity",
+"want": [
+"desktop"
+],
+"listings": [
+"daggerfall-unity"
+]
+},
+{
+"repo": "Interrupt/systemshock",
+"want": [
+"desktop"
+],
+"listings": [
+"shockolate"
+]
+},
+{
+"repo": "ioquake/ioq3",
+"want": [
+"desktop"
+],
+"listings": [
+"ioquake3"
+]
+},
+{
+"repo": "iortcw/iortcw",
+"want": [
+"desktop"
+],
+"listings": [
+"return-to-castle-wolfenstein"
+]
+},
+{
+"repo": "isledecomp/isle-portable",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"isle-portable"
+]
+},
+{
+"repo": "isledecomp/racers",
+"want": [
+"desktop"
+],
+"listings": [
+"lego-racers"
+]
+},
+{
+"repo": "istornz/bowsers-inside-story-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"mario-and-luigi-bowsers-inside-story"
+]
+},
+{
+"repo": "itskenny0/titanic-godot",
+"want": [
+"android"
+],
+"listings": [
+"titanic-godot-30th-anniversary-edition"
+]
+},
+{
+"repo": "IWILLCRAFT-M0d/dogcomp",
+"want": [
+"desktop"
+],
+"listings": [
+"dogs-life"
+]
+},
+{
+"repo": "izzy2lost/Ghostship",
+"want": [
+"android"
+],
+"listings": [
+"ghostship-android"
+]
+},
+{
+"repo": "izzy2lost/Lighthouse",
+"want": [
+"android"
+],
+"listings": [
+"lighthouse-android"
+]
+},
+{
+"repo": "izzy2lost/perfect_dark",
+"want": [
+"android"
+],
+"listings": [
+"perfect-dark-android"
+]
+},
+{
+"repo": "izzy2lost/SpaghettiKart",
+"want": [
+"android"
+],
+"listings": [
+"spaghettikart-android"
+]
+},
+{
+"repo": "izzy2lost/Starship",
+"want": [
+"android"
+],
+"listings": [
+"starship-android"
+]
+},
+{
+"repo": "ja2-stracciatella/ja2-stracciatella",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"ja2-stracciatella"
+]
+},
+{
+"repo": "JackandBeans/Snap64Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-snap-recomp"
+]
+},
+{
+"repo": "jackpoison-prog/RingOut",
+"want": [
+"desktop"
+],
+"listings": [
+"ringout"
+]
+},
+{
+"repo": "JackPriceBurns/foxhollow",
+"want": [
+"desktop"
+],
+"listings": [
+"star-fox-adventures-recomp"
+]
+},
+{
+"repo": "JackRushante/DBZ-Super-Saiya-Densetsu-Rust",
+"want": [
+"android"
+],
+"listings": [
+"dragon-ball-z-super-saiya-densetsu-snes-decomp"
+]
+},
+{
+"repo": "jacobleeharris/tmhc",
+"want": [
+"desktop"
+],
+"listings": [
+"twisted-metal-harbor-city"
+]
+},
+{
+"repo": "JACoders/OpenJK",
+"want": [
+"desktop"
+],
+"listings": [
+"openjk"
+]
+},
+{
+"repo": "jakobkhansen/SilksongAndroid",
+"want": [
+"android"
+],
+"listings": [
+"silksongandroid-dual-scren"
+]
+},
+{
+"repo": "Jameriquiah/2ship2harkinian",
+"want": [
+"android"
+],
+"listings": [
+"2-ship-2-harkinian-2s2h"
+]
+},
+{
+"repo": "james2doyle/ffta-recomp",
+"want": [
+"android"
+],
+"listings": [
+"ftta-recomp"
+]
+},
+{
+"repo": "Javanaise/mrboom-libretro",
+"want": [
+"desktop"
+],
+"listings": [
+"mr-boom"
+]
+},
+{
+"repo": "jbcgames/sms-android",
+"want": [
+"android"
+],
+"listings": [
+"super-mario-sunshine-android"
+]
+},
+{
+"repo": "jdperos/chrono-cross-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"chrono-cross"
+]
+},
+{
+"repo": "JeanxPereira/CrystalOSD",
+"want": [
+"desktop"
+],
+"listings": [
+"ps2-osdsys"
+]
+},
+{
+"repo": "jeff-strutb/brally",
+"want": [
+"desktop"
+],
+"listings": [
+"boss-rally"
+]
+},
+{
+"repo": "jeffory/GoldenEye-Recomp",
+"want": [
+"android"
+],
+"listings": [
+"golden-eye-recomp-dual-screen"
+]
+},
+{
+"repo": "jellees/mlss",
+"want": [
+"desktop"
+],
+"listings": [
+"mlss"
+]
+},
+{
+"repo": "jelqedagain/ib-2-3-android",
+"want": [
+"android"
+],
+"listings": [
+"infinite-blade-2-android"
+]
+},
+{
+"repo": "jessetbh/WCWnWoRevengeRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"wcw-nwo-revenge-recomp"
+]
+},
+{
+"repo": "JGRennison/OpenTTD-patches",
+"want": [
+"desktop"
+],
+"listings": [
+"openttd-openttd-patches"
+]
+},
+{
+"repo": "JHDev2006/Super-Mario-Bros.-Remastered-Public",
+"want": [
+"desktop"
+],
+"listings": [
+"super-mario-bros-remastered"
+]
+},
+{
+"repo": "JHGuitarFreak/UQM-MegaMod-Archived",
+"want": [
+"android"
+],
+"listings": [
+"uqm-megamod"
+]
+},
+{
+"repo": "Jhuyghue/donburi-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"twinbee-paradise-in-donburi-shima"
+]
+},
+{
+"repo": "jiangzhengwenjz/katam",
+"want": [
+"desktop"
+],
+"listings": [
+"kirby-and-the-amazing-mirror"
+]
+},
+{
+"repo": "jjmhalew/WoodyRE",
+"want": [
+"android"
+],
+"listings": [
+"woodyre"
+]
+},
+{
+"repo": "jkdansereau/goldeneye-pc-port",
+"want": [
+"desktop"
+],
+"listings": [
+"goldeneye-pc-port"
+]
+},
+{
+"repo": "jmacato/ZoidsLegacyDecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"zoids-legacy"
+]
+},
+{
+"repo": "JonathanDC64/FFCCEOT-Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"ffcc-echoes-of-time-recomp"
+]
+},
+{
+"repo": "jonof/jfsw",
+"want": [
+"desktop"
+],
+"listings": [
+"jfsw"
+]
+},
+{
+"repo": "jonof/jftekwar",
+"want": [
+"desktop"
+],
+"listings": [
+"jftekwar"
+]
+},
+{
+"repo": "jonof/jfwhaven",
+"want": [
+"desktop"
+],
+"listings": [
+"jfwhaven"
+]
+},
+{
+"repo": "JoppieToppie/Galaxy-on-Fire-2-Unity-Remake",
+"want": [
+"android"
+],
+"listings": [
+"galaxy-on-fire-2-unity-remake"
+]
+},
+{
+"repo": "Jorge262007/FFTARecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"final-fantasy-tactics-advance-recomp"
+]
+},
+{
+"repo": "josiahg2502-glitch/Mother3Recomp",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"mother-3-recomp-android"
+]
+},
+{
+"repo": "Jovinull/sonicheroes",
+"want": [
+"desktop"
+],
+"listings": [
+"sonic-heroes"
+]
+},
+{
+"repo": "JRickey/BattleShip",
+"want": [
+"desktop"
+],
+"listings": [
+"battleship"
+]
+},
+{
+"repo": "JRickey/frog-adv-temple-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"froggers-adventures-temple-of-the-frog"
+]
+},
+{
+"repo": "Juanen100/SBMI-Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"spongebob-moves-in"
+]
+},
+{
+"repo": "JuMatt/JetSetRadioFuture-Unleashed",
+"want": [
+"android"
+],
+"listings": [
+"jet-set-radio-future-unleashed"
+]
+},
+{
+"repo": "Junior-Jones/Adventure-Island-II-NES-Static-Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"adventure-island-ii"
+]
+},
+{
+"repo": "katstasaph/otii",
+"want": [
+"desktop"
+],
+"listings": [
+"oregon-trail-ii"
+]
+},
+{
+"repo": "KawaiiBunga/MKVDCU-Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"mortal-kombat-vs-dc-universe"
+]
+},
+{
+"repo": "kazuyette/rr-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"ridge-racer-ps1-decomp"
+]
+},
+{
+"repo": "Keriew/augustus",
+"want": [
+"android"
+],
+"listings": [
+"augustus"
+]
+},
+{
+"repo": "kh-recoded-decomp/kh-recoded-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"kingdom-hearts-re-coded"
+]
+},
+{
+"repo": "khasinski/rage-racer-pc",
+"want": [
+"desktop"
+],
+"listings": [
+"rage-racer-pc"
+]
+},
+{
+"repo": "kirby-letsgo/oracles-decomp",
+"want": [
+"android"
+],
+"listings": [
+"oraclesrecomp"
+]
+},
+{
+"repo": "kirklandsig/halo2-decompiled",
+"want": [
+"desktop"
+],
+"listings": [
+"halo-2-decomp"
+]
+},
+{
+"repo": "Kitrinx/Ultima7_Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"ultima-7-decomp"
+]
+},
+{
+"repo": "kittibyte/UndertaleDecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"undertale-xbox-one"
+]
+},
+{
+"repo": "kittycache9/OpenSA2",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"sonic-adventure-2-recomp"
+]
+},
+{
+"repo": "kiwidoggie/breadflowerdos",
+"want": [
+"desktop"
+],
+"listings": [
+"battlefield-2"
+]
+},
+{
+"repo": "Klisee/pokemon-reloaded-android",
+"want": [
+"android"
+],
+"listings": [
+"pokemon-reloaded-en-android"
+]
+},
+{
+"repo": "klorfmorf/Goemon64Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"goemon-64-recompiled"
+]
+},
+{
+"repo": "KoboDev/BBR2Decompile",
+"want": [
+"desktop"
+],
+"listings": [
+"blasterball-revolution-2"
+]
+},
+{
+"repo": "konovalov-aleks/reSL",
+"want": [
+"desktop"
+],
+"listings": [
+"shortline-railroad"
+]
+},
+{
+"repo": "KranX/Vangers",
+"want": [
+"desktop"
+],
+"listings": [
+"vangers"
+]
+},
+{
+"repo": "krystalgamer/spidey-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"spider-man-2000-decomp"
+]
+},
+{
+"repo": "kugelrund/Speed-Academy",
+"want": [
+"desktop"
+],
+"listings": [
+"speed-academy"
+]
+},
+{
+"repo": "kvark/vange-rs",
+"want": [
+"desktop"
+],
+"listings": [
+"vange-rs"
+]
+},
+{
+"repo": "Kweepa/OpenUnderground",
+"want": [
+"desktop"
+],
+"listings": [
+"unity-underground"
+]
+},
+{
+"repo": "lace22l/sheep-dog-n-wolf-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"sheep-dog-n-wolf-sheep-raider"
+]
+},
+{
+"repo": "lamb2k/re4dc",
+"want": [
+"desktop"
+],
+"listings": [
+"resident-evil-4-dreamcast-port-re4dc"
+]
+},
+{
+"repo": "LBALab/lba2-classic-community",
+"want": [
+"desktop"
+],
+"listings": [
+"lba2-classic-community"
+]
+},
+{
+"repo": "LBALab/lba2remake",
+"want": [
+"desktop"
+],
+"listings": [
+"lba2-remake"
+]
+},
+{
+"repo": "LBALab/twin-e",
+"want": [
+"desktop"
+],
+"listings": [
+"twin-e"
+]
+},
+{
+"repo": "Legend-of-Dragoon-Modding/Severed-Chains",
+"want": [
+"desktop"
+],
+"listings": [
+"legend-of-dragoon-severed-chains"
+]
+},
+{
+"repo": "lemiur/AVP2-Reconstructed",
+"want": [
+"desktop"
+],
+"listings": [
+"alien-vs-predator-2"
+]
+},
+{
+"repo": "lemooz/MKVDCU-Android",
+"want": [
+"android"
+],
+"listings": [
+"mkvdcu-android"
+]
+},
+{
+"repo": "lethal-guitar/BioMenaceDecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"bio-menace"
+]
+},
+{
+"repo": "lethal-guitar/RigelEngine",
+"want": [
+"desktop"
+],
+"listings": [
+"rigel-engine"
+]
+},
+{
+"repo": "lfarroco/ogre-battle-64-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"ogre-battle-64-recomp"
+]
+},
+{
+"repo": "lhsazevedo/akmw",
+"want": [
+"desktop"
+],
+"listings": [
+"alex-kidd-in-miracle-world"
+]
+},
+{
+"repo": "lhsazevedo/tbg-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"tokyo-bus-guide"
+]
+},
+{
+"repo": "liamelui/zomdroid",
+"want": [
+"android"
+],
+"listings": [
+"zomdroid-liamelui"
+]
+},
+{
+"repo": "libretro/tyrquake",
+"want": [
+"desktop"
+],
+"listings": [
+"tyrquake"
+]
+},
+{
+"repo": "lifewillbeokay/moh-rising-sun",
+"want": [
+"desktop"
+],
+"listings": [
+"medal-of-honor-rising-sun"
+]
+},
+{
+"repo": "Lindarychwalski/Defenders-Dragons",
+"want": [
+"desktop"
+],
+"listings": [
+"defenders-and-dragons"
+]
+},
+{
+"repo": "linkssy2/RoadRash64Recompiled",
+"want": [
+"desktop"
+],
+"listings": [
+"road-rash-64-recompiled"
+]
+},
+{
+"repo": "linkzenic/2ship2harkinian-Android",
+"want": [
+"android"
+],
+"listings": [
+"2-ship-2-harkinian-android"
+]
+},
+{
+"repo": "linkzenic/Shipwright-Android",
+"want": [
+"android"
+],
+"listings": [
+"ship-of-harkinian-android"
+]
+},
+{
+"repo": "linkzenic/Zelda64Recomp-Android",
+"want": [
+"android"
+],
+"listings": [
+"zelda64-recomp-android"
+]
+},
+{
+"repo": "LiruJ/Lego-Battles-Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"lego-battles"
+]
+},
+{
+"repo": "Llamaware/age-of-speed2",
+"want": [
+"desktop"
+],
+"listings": [
+"age-of-speed-2"
+]
+},
+{
+"repo": "LLONSIT-glitch/wonder",
+"want": [
+"desktop"
+],
+"listings": [
+"wonder-project-j2-josette-of-the-corlo-forest"
+]
+},
+{
+"repo": "LLONSIT/Wave-Race-64",
+"want": [
+"desktop"
+],
+"listings": [
+"wave-race-64-decomp"
+]
+},
+{
+"repo": "lombyte-project/Lombyte",
+"want": [
+"desktop"
+],
+"listings": [
+"ratchet-and-clank-usa"
+]
+},
+{
+"repo": "Lordingard/SacredStonesRecomp",
+"want": [
+"android"
+],
+"listings": [
+"fire-emblem-sacred-stones-recomp"
+]
+},
+{
+"repo": "LoreanXavier/pt-pc",
+"want": [
+"desktop"
+],
+"listings": [
+"pt-pc"
+]
+},
+{
+"repo": "LostArtefacts/TRX",
+"want": [
+"desktop"
+],
+"listings": [
+"trx"
+]
+},
+{
+"repo": "lubomyr/freespace2",
+"want": [
+"android"
+],
+"listings": [
+"freespace"
+]
+},
+{
+"repo": "LucasPicoli/god-hand-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"god-hand-decomp"
+]
+},
+{
+"repo": "luisxl15/Strikers-Android-Port",
+"want": [
+"android"
+],
+"listings": [
+"strikers-android"
+]
+},
+{
+"repo": "lunarmeadow/barrett",
+"want": [
+"desktop"
+],
+"listings": [
+"barrett"
+]
+},
+{
+"repo": "m-x-d/Heretic2R",
+"want": [
+"desktop"
+],
+"listings": [
+"heretic2r"
+]
+},
+{
+"repo": "madelrandel-blip/NFSMW-Recompiled",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"nfs-most-wanted-recomp"
+]
+},
+{
+"repo": "ManIsCat2/sm64coopdx",
+"want": [
+"android"
+],
+"listings": [
+"sm64coopdx-android"
+]
+},
+{
+"repo": "marijnvdwerf/gba-beyblade-vforce",
+"want": [
+"desktop"
+],
+"listings": [
+"beyblade-vforce-ultimate-blader-jam"
+]
+},
+{
+"repo": "marijnvdwerf/legoland",
+"want": [
+"desktop"
+],
+"listings": [
+"legoland"
+]
+},
+{
+"repo": "marijnvdwerf/paperboy-n64",
+"want": [
+"desktop"
+],
+"listings": [
+"paperboy"
+]
+},
+{
+"repo": "mariopartyrd/marioparty",
+"want": [
+"desktop"
+],
+"listings": [
+"mario-party-1"
+]
+},
+{
+"repo": "mariopartyrd/marioparty2",
+"want": [
+"desktop"
+],
+"listings": [
+"mario-party-2"
+]
+},
+{
+"repo": "mariopartyrd/marioparty4",
+"want": [
+"desktop"
+],
+"listings": [
+"mario-party-4-recomp"
+]
+},
+{
+"repo": "mariopartyrd/marioparty5",
+"want": [
+"desktop"
+],
+"listings": [
+"mario-party-5"
+]
+},
+{
+"repo": "mariopartyrd/marioparty6",
+"want": [
+"desktop"
+],
+"listings": [
+"mario-party-6"
+]
+},
+{
+"repo": "mariopartyrd/marioparty7",
+"want": [
+"desktop"
+],
+"listings": [
+"mario-party-7"
+]
+},
+{
+"repo": "mariopartyrd/marioparty8",
+"want": [
+"desktop"
+],
+"listings": [
+"mario-party-8"
+]
+},
+{
+"repo": "mariopartyrd/marioparty9",
+"want": [
+"desktop"
+],
+"listings": [
+"mario-party-9"
+]
+},
+{
+"repo": "mariopartyrd/mariopartyDS",
+"want": [
+"desktop"
+],
+"listings": [
+"mario-party-ds"
+]
+},
+{
+"repo": "martinbean/nitro",
+"want": [
+"desktop"
+],
+"listings": [
+"wcw-nitro"
+]
+},
+{
+"repo": "martinbean/thunder",
+"want": [
+"desktop"
+],
+"listings": [
+"wcw-nwo-thunder"
+]
+},
+{
+"repo": "Marvisak/mafia-re",
+"want": [
+"desktop"
+],
+"listings": [
+"mafia-the-city-of-lost-heaven"
+]
+},
+{
+"repo": "MaryNCRT/Ultimate-Mortal-Kombat-3-iOS-Decompiled",
+"want": [
+"desktop"
+],
+"listings": [
+"ultimate-mk3-ios"
+]
+},
+{
+"repo": "Masterllgod/naruto-rise-of-a-ninja-port-nativo",
+"want": [
+"android"
+],
+"listings": [
+"naruto-rise-of-a-ninja-recomp"
+]
+},
+{
+"repo": "Masterllgod/naruto-storm-2-port-nativo",
+"want": [
+"android"
+],
+"listings": [
+"naruto-ultimate-ninja-storm-2-recomp"
+]
+},
+{
+"repo": "Masterllgod/naruto-storm-3-full-burst-port-nativo",
+"want": [
+"android"
+],
+"listings": [
+"naruto-ultimate-ninja-storm-3-full-burst-recomp"
+]
+},
+{
+"repo": "Masterllgod/naruto-storm-generations-port-nativo",
+"want": [
+"android"
+],
+"listings": [
+"naruto-ultimate-ninja-storm-generations-recomp"
+]
+},
+{
+"repo": "Masterllgod/naruto-storm-revolution-port-nativo",
+"want": [
+"android"
+],
+"listings": [
+"naruto-ultimate-ninja-storm-revolution-recomp"
+]
+},
+{
+"repo": "Masterllgod/naruto-the-broken-bond-port-nativo",
+"want": [
+"android"
+],
+"listings": [
+"naruto-the-broken-bond-recomp"
+]
+},
+{
+"repo": "masterspike52/reDAHM",
+"want": [
+"desktop"
+],
+"listings": [
+"redahm"
+]
+},
+{
+"repo": "masterspike52/reNut",
+"want": [
+"desktop"
+],
+"listings": [
+"renut"
+]
+},
+{
+"repo": "MatBourgon/Gex64Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"gex-64-enter-the-gecko"
+]
+},
+{
+"repo": "matiaszanolli/aerobiz-disasm",
+"want": [
+"desktop"
+],
+"listings": [
+"aerobiz-supersonic-disasm"
+]
+},
+{
+"repo": "matiaszanolli/sega-vr-disasm",
+"want": [
+"desktop"
+],
+"listings": [
+"virtua-racing"
+]
+},
+{
+"repo": "Matteo842/CrashBandicoot-Launcher",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"crash-bandicoot"
+]
+},
+{
+"repo": "MaxDeadBear/NaughtyBear_ReStuff",
+"want": [
+"desktop"
+],
+"listings": [
+"naughty-bear-restuff"
+]
+},
+{
+"repo": "MaxDeadBear/Re-Cherry",
+"want": [
+"desktop"
+],
+"listings": [
+"re-cherry"
+]
+},
+{
+"repo": "maxr-dot-org/maxr",
+"want": [
+"desktop"
+],
+"listings": [
+"maxr"
+]
+},
+{
+"repo": "mchughalex/skate3recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"skate-3-recomp"
+]
+},
+{
+"repo": "mcolom/arkanoid_msx_disasm",
+"want": [
+"desktop"
+],
+"listings": [
+"arkanoid"
+]
+},
+{
+"repo": "mechakotik/tails-adventure",
+"want": [
+"desktop"
+],
+"listings": [
+"tails-adventure-tails-adventure-remake"
+]
+},
+{
+"repo": "MegaGlest/megaglest-source",
+"want": [
+"desktop"
+],
+"listings": [
+"megaglest"
+]
+},
+{
+"repo": "MegaMan64Recomp/MegaMan64Recompiled",
+"want": [
+"desktop"
+],
+"listings": [
+"mega-man-64-recomp"
+]
+},
+{
+"repo": "Megami-Decomps/dds-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"shin-megami-tensei-digital-devil-saga"
+]
+},
+{
+"repo": "Meridian59/Meridian59",
+"want": [
+"desktop"
+],
+"listings": [
+"meridian-59"
+]
+},
+{
+"repo": "metroidret/mzm",
+"want": [
+"desktop"
+],
+"listings": [
+"metroid-zero-mission-decomp"
+]
+},
+{
+"repo": "mgrz18/turok2-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"turok-2-seeds-of-evil"
+]
+},
+{
+"repo": "Mhanna112-code/RatDecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"ratatouille"
+]
+},
+{
+"repo": "mhvuze/mh4u-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"monster-hunter-4-ultimate"
+]
+},
+{
+"repo": "MidacoYT/HarryPotterAndTheHalfBloodPrince-Decompilation",
+"want": [
+"desktop"
+],
+"listings": [
+"harry-potter-and-the-half-blood-prince"
+]
+},
+{
+"repo": "MikeRavenelle/DigimonWorld3-Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"digimon-world-3-recomp"
+]
+},
+{
+"repo": "MikeSemicolonD/RogueSquadron64Recomp",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"rogue-squadron-64-recomp"
+]
+},
+{
+"repo": "miki151/keeperrl",
+"want": [
+"desktop"
+],
+"listings": [
+"keeperrl"
+]
+},
+{
+"repo": "Mikompilation/MikuPan",
+"want": [
+"desktop"
+],
+"listings": [
+"fatal-frame-recomp"
+]
+},
+{
+"repo": "mircey/super-mario-bros.-remastered-android",
+"want": [
+"android"
+],
+"listings": [
+"super-mario-bros-remastered-android"
+]
+},
+{
+"repo": "mircowuffwuff/super-mario-bros.-remastered-android",
+"want": [
+"android"
+],
+"listings": [
+"sma-remastered-android"
+]
+},
+{
+"repo": "misterjdrg/Bouncer",
+"want": [
+"desktop"
+],
+"listings": [
+"bounce"
+]
+},
+{
+"repo": "mitsevox/mvp2005",
+"want": [
+"desktop"
+],
+"listings": [
+"mvp-baseball-2005"
+]
+},
+{
+"repo": "mitsevox/nflstreet2",
+"want": [
+"desktop"
+],
+"listings": [
+"nfl-street-2"
+]
+},
+{
+"repo": "mitsevox/tw2004",
+"want": [
+"desktop"
+],
+"listings": [
+"tiger-woods-pga-tour-2004"
+]
+},
+{
+"repo": "mkst/esa",
+"want": [
+"desktop"
+],
+"listings": [
+"evos-space-adventures"
+]
+},
+{
+"repo": "mmzret/rmz3",
+"want": [
+"desktop"
+],
+"listings": [
+"megaman-zero-3"
+]
+},
+{
+"repo": "moddedrounds/RB2-Android",
+"want": [
+"android"
+],
+"listings": [
+"dragon-ball-raging-blast-2-android"
+]
+},
+{
+"repo": "moddedrounds/THP8-Android",
+"want": [
+"android"
+],
+"listings": [
+"project8recomp"
+]
+},
+{
+"repo": "ModinMobileSTS/SlayTheAmethystModded",
+"want": [
+"android"
+],
+"listings": [
+"slaytheamethyst"
+]
+},
+{
+"repo": "MokhaLeee/FireEmblem7J",
+"want": [
+"desktop"
+],
+"listings": [
+"fire-emblem-the-blazing-blade"
+]
+},
+{
+"repo": "MonsterDruide1/OdysseyDecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"super-mario-odyssey"
+]
+},
+{
+"repo": "moozilla/boktai3-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"shin-bokura-no-taiyou-gyakushuu-no-sabata"
+]
+},
+{
+"repo": "moronigranja/alabaster-android",
+"want": [
+"android"
+],
+"listings": [
+"alabaster-dawn-android"
+]
+},
+{
+"repo": "MorsGames/sm64plus",
+"want": [
+"desktop"
+],
+"listings": [
+"sm64plus"
+]
+},
+{
+"repo": "mr-finster/stunts-hd",
+"want": [
+"desktop"
+],
+"listings": [
+"stunts-hd"
+]
+},
+{
+"repo": "mr-finster/vf1-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"vf1-recomp"
+]
+},
+{
+"repo": "mr-finster/vf2-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"virtua-fighter-2-recomp"
+]
+},
+{
+"repo": "Mr-Shizzy/PacManRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"pac-man-nes-recomp"
+]
+},
+{
+"repo": "MrAlaux/Nugget-Doom",
+"want": [
+"desktop"
+],
+"listings": [
+"nugget-doom"
+]
+},
+{
+"repo": "mrcook/jetpac-disassembly",
+"want": [
+"desktop"
+],
+"listings": [
+"jetpac"
+]
+},
+{
+"repo": "MrPowerUp82/superman_returns_recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"superman-returns-recomp"
+]
+},
+{
+"repo": "mschienbein/shiren2-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"fushigi-no-dungeon-furai-no-shiren-2-oni-shurai-shiren-jo"
+]
+},
+{
+"repo": "mstan/ApeEscapeRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"ape-escape-recomp"
+]
+},
+{
+"repo": "mstan/DrMarioNesRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"dr-mario-nes-recomp"
+]
+},
+{
+"repo": "mstan/DuckHuntNESRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"duck-hunt-nes-recomp"
+]
+},
+{
+"repo": "mstan/EmeraldRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-emerald-recomp"
+]
+},
+{
+"repo": "mstan/FaxanaduRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"faxanadu-recomp"
+]
+},
+{
+"repo": "mstan/FZeroSNESRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"f-zero-snes-recompiled"
+]
+},
+{
+"repo": "mstan/GumshoeNESRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"gumshoe-nes-recomp"
+]
+},
+{
+"repo": "mstan/LegendOfZeldaNESRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"zelda-nes-recomp"
+]
+},
+{
+"repo": "mstan/MarioKartSuperCircuitRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"mario-kart-super-circuit-recomp"
+]
+},
+{
+"repo": "mstan/Megaman3NESRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"mega-man-3-nes-recomp"
+]
+},
+{
+"repo": "mstan/MegaManX2Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"mega-man-x2-recomp"
+]
+},
+{
+"repo": "mstan/MegaManX4Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"mega-man-x4-recomp"
+]
+},
+{
+"repo": "mstan/MegaManX5Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"mega-man-x5-recomp"
+]
+},
+{
+"repo": "mstan/MegaManX6Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"mega-man-x6-recomp"
+]
+},
+{
+"repo": "mstan/MegaManXSNESRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"mega-man-x-snes-recomp"
+]
+},
+{
+"repo": "mstan/MetroidNESRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"metroid-nes-recomp"
+]
+},
+{
+"repo": "mstan/MetroidPrimeHuntersRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"metroid-prime-hunters-recompiled"
+]
+},
+{
+"repo": "mstan/Sonic3AndKnucklesRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"sonic-3-and-knuckles"
+]
+},
+{
+"repo": "mstan/SonicTheHedgehogRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"sonic-1-genesis-recomp"
+]
+},
+{
+"repo": "mstan/StarFoxSNESRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"starfox-recomp"
+]
+},
+{
+"repo": "mstan/SuperMarioBrosNESRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"super-mario-bros-nes-recomp"
+]
+},
+{
+"repo": "mstan/SuperMarioWorldRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"super-mario-world-recomp"
+]
+},
+{
+"repo": "mstan/SuperMetroidRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"super-metroid-snes-recomp"
+]
+},
+{
+"repo": "mstan/Tomba2Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"tomba2-recomp"
+]
+},
+{
+"repo": "mstan/TombaRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"tomba-recomp"
+]
+},
+{
+"repo": "mstan/TsumuLightRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"tsumu-light-recomp"
+]
+},
+{
+"repo": "mstan/WarioWareTwistedRecomp",
+"want": [
+"android"
+],
+"listings": [
+"warioware-twisted-recomp"
+]
+},
+{
+"repo": "mstan/YoshiNESRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"yoshi-nes-recomp"
+]
+},
+{
+"repo": "mstan/YoshisCookieRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"yoshis-cookie-recomp"
+]
+},
+{
+"repo": "mstan/ZeldaAlttPSNESRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"zelda-alttp-snes-recomp"
+]
+},
+{
+"repo": "MustaphaTR/Romanovs-Vengeance",
+"want": [
+"desktop"
+],
+"listings": [
+"romanovs-vengeance"
+]
+},
+{
+"repo": "MYSOREZ/GeneralsZH-Android-Port",
+"want": [
+"android"
+],
+"listings": [
+"generalszh-android-port"
+]
+},
+{
+"repo": "nadult/FreeFT",
+"want": [
+"desktop"
+],
+"listings": [
+"freeft"
+]
+},
+{
+"repo": "NagyD/SDLPoP",
+"want": [
+"desktop"
+],
+"listings": [
+"sdlpop"
+]
+},
+{
+"repo": "nahalewski/DBZBL-Android-LAN",
+"want": [
+"android"
+],
+"listings": [
+"dbz-burst-limit-android"
+]
+},
+{
+"repo": "Narishma-gb/pokeblue",
+"want": [
+"desktop"
+],
+"listings": [
+"jpn-pokemon-blue"
+]
+},
+{
+"repo": "natebag/Sims2DECOMP",
+"want": [
+"desktop"
+],
+"listings": [
+"the-sims-2"
+]
+},
+{
+"repo": "Nathan-R-Og/mother",
+"want": [
+"desktop"
+],
+"listings": [
+"mother-earthbound-zero-earthbound-beginnings"
+]
+},
+{
+"repo": "nathanialf/ico-pc",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"ico-pc"
+]
+},
+{
+"repo": "NBlood/Duke64-RE",
+"want": [
+"desktop"
+],
+"listings": [
+"duke-nukem-64"
+]
+},
+{
+"repo": "NBlood/NBlood",
+"want": [
+"desktop"
+],
+"listings": [
+"nblood"
+]
+},
+{
+"repo": "NearlyTRex/NocturneDecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"nocturne"
+]
+},
+{
+"repo": "neuromancer/wc1-re",
+"want": [
+"desktop"
+],
+"listings": [
+"wc1-re"
+]
+},
+{
+"repo": "neuromancer/wc2-re",
+"want": [
+"desktop"
+],
+"listings": [
+"wc2-re"
+]
+},
+{
+"repo": "neuviemeporte/f15se2-ex",
+"want": [
+"desktop"
+],
+"listings": [
+"f-15-ii-enhanced"
+]
+},
+{
+"repo": "neuviemeporte/f15se2-re",
+"want": [
+"desktop"
+],
+"listings": [
+"f-15-ii"
+]
+},
+{
+"repo": "new-coke/strikers",
+"want": [
+"desktop"
+],
+"listings": [
+"strikers"
+]
+},
+{
+"repo": "nhaar/Waddle-Forever",
+"want": [
+"desktop"
+],
+"listings": [
+"club-penguin-waddle-forever"
+]
+},
+{
+"repo": "nikolaygorb/ArmyOfTwoRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"army-of-two-recomp"
+]
+},
+{
+"repo": "nikolaygorb/PerfectDarkRemasterRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"perfect-dark-remaster-recomp"
+]
+},
+{
+"repo": "nikolaygorb/WetRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"wet-recomp"
+]
+},
+{
+"repo": "Nintendocustom/Lego-City-Undercover-Decompilation",
+"want": [
+"desktop"
+],
+"listings": [
+"lego-city-undercover"
+]
+},
+{
+"repo": "NiyaDev/DWM",
+"want": [
+"desktop"
+],
+"listings": [
+"dragon-warrior-monsters"
+]
+},
+{
+"repo": "NJH-1001/FinFanTacRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"final-fantasy-tactics-recomp"
+]
+},
+{
+"repo": "NJH-1001/SexyParoRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"sexy-parodius"
+]
+},
+{
+"repo": "NKHook/BTD5-Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"bloons-td-5"
+]
+},
+{
+"repo": "nlopez99/mssb-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"mario-superstar-baseball"
+]
+},
+{
+"repo": "nmlgc/ReC98",
+"want": [
+"desktop"
+],
+"listings": [
+"rec98"
+]
+},
+{
+"repo": "NoahVl/Birdman64",
+"want": [
+"desktop"
+],
+"listings": [
+"pilotwings-64-birdman64"
+]
+},
+{
+"repo": "nolffan/nolfsrc",
+"want": [
+"desktop"
+],
+"listings": [
+"the-operative-no-one-lives-forever-nolfsrc"
+]
+},
+{
+"repo": "NoRain211/doaxvb-re",
+"want": [
+"desktop"
+],
+"listings": [
+"doaxbv-re"
+]
+},
+{
+"repo": "Normmatt/m12",
+"want": [
+"desktop"
+],
+"listings": [
+"mother-1-2-japan"
+]
+},
+{
+"repo": "Normmatt/unarmoredunit",
+"want": [
+"desktop"
+],
+"listings": [
+"armored-unit"
+]
+},
+{
+"repo": "NotExactlySiev/aloha",
+"want": [
+"desktop"
+],
+"listings": [
+"jumping-flash"
+]
+},
+{
+"repo": "Novum/vkQuake",
+"want": [
+"desktop"
+],
+"listings": [
+"vkquake"
+]
+},
+{
+"repo": "Nugetinc/MixelsRushDecompilation",
+"want": [
+"desktop"
+],
+"listings": [
+"mixels-rush"
+]
+},
+{
+"repo": "nukep/SMB-Vanilla",
+"want": [
+"desktop"
+],
+"listings": [
+"smb-vanilla-port"
+]
+},
+{
+"repo": "nxengine/nxengine-evo",
+"want": [
+"desktop"
+],
+"listings": [
+"nxengine-evo"
+]
+},
+{
+"repo": "Nycolazs/WindWakerHD-Android-Plus",
+"want": [
+"android"
+],
+"listings": [
+"wind-waker-hd-android-plus"
+]
+},
+{
+"repo": "odamex/odamex",
+"want": [
+"desktop"
+],
+"listings": [
+"odamex"
+]
+},
+{
+"repo": "Odrannnn/MetroidPrimePort",
+"want": [
+"desktop"
+],
+"listings": [
+"metroid-prime-port"
+]
+},
+{
+"repo": "official-kryo-to/ctw-native",
+"want": [
+"desktop"
+],
+"listings": [
+"ctw-native"
+]
+},
+{
+"repo": "officialmelon/Buckshot-Roulette-Mobile",
+"want": [
+"android"
+],
+"listings": [
+"buckshot-roulette-mobile"
+]
+},
+{
+"repo": "officialmelon/OpenWheels",
+"want": [
+"android"
+],
+"listings": [
+"open-wheels"
+]
+},
+{
+"repo": "ogdanimal/Goemon64Recomp-Android",
+"want": [
+"android"
+],
+"listings": [
+"goemon-64-recompiled-android"
+]
+},
+{
+"repo": "ogdanimal/HybridHeaven-Recomp",
+"want": [
+"android"
+],
+"listings": [
+"hybrid-heaven-recompiled"
+]
+},
+{
+"repo": "olcayseygan/CnCGeneralsZH-Reforged",
+"want": [
+"desktop"
+],
+"listings": [
+"zero-hour-reforged"
+]
+},
+{
+"repo": "omarma/tekken3-expanded",
+"want": [
+"android"
+],
+"listings": [
+"tekken-3-expanded"
+]
+},
+{
+"repo": "omegakatana92/GuiltyGearRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"guilty-gear-recomp"
+]
+},
+{
+"repo": "omegakatana92/GundamBattleAssault2Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"gundam-battle-assault-2-recomp"
+]
+},
+{
+"repo": "omegakatana92/GundamBattleMaster2Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"gundam-battle-master-2-recomp"
+]
+},
+{
+"repo": "omegakatana92/GundamBattleMasterRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"gundam-battle-master-recomp"
+]
+},
+{
+"repo": "omegakatana92/Kirby-Pinball-Land-Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"kirbys-pinball-land"
+]
+},
+{
+"repo": "omegakatana92/MadStalkerRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"mad-stalker-recomp"
+]
+},
+{
+"repo": "omegakatana92/Super-Mario-Land-3-Wario-Land-Recomp-",
+"want": [
+"desktop"
+],
+"listings": [
+"super-mario-land-3-wario-land"
+]
+},
+{
+"repo": "OmegaUwUr/SilksongAndroid-Achievements",
+"want": [
+"android"
+],
+"listings": [
+"silksongandroidachievements-dual-screen"
+]
+},
+{
+"repo": "omf2097/openomf",
+"want": [
+"desktop"
+],
+"listings": [
+"openomf"
+]
+},
+{
+"repo": "open-annihilation/open-annihilation",
+"want": [
+"desktop"
+],
+"listings": [
+"open-annihilation"
+]
+},
+{
+"repo": "open-goal/jak-project",
+"want": [
+"desktop"
+],
+"listings": [
+"open-goal"
+]
+},
+{
+"repo": "open-ribbon/open-ribbon",
+"want": [
+"desktop"
+],
+"listings": [
+"vib-ribbon-decomp"
+]
+},
+{
+"repo": "openApoc/OpenApoc",
+"want": [
+"desktop"
+],
+"listings": [
+"openapoc"
+]
+},
+{
+"repo": "OpenBiohazard2/OpenBiohazard2",
+"want": [
+"desktop"
+],
+"listings": [
+"resident-evil-2"
+]
+},
+{
+"repo": "openblack/bw1-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"black-and-white"
+]
+},
+{
+"repo": "openblack/openblack",
+"want": [
+"desktop"
+],
+"listings": [
+"openblack"
+]
+},
+{
+"repo": "OpenCommunityEdition/OpenCE",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"halo-ce-universal",
+"opence"
+]
+},
+{
+"repo": "OpenCrystalCaves/OpenCrystalCaves",
+"want": [
+"desktop"
+],
+"listings": [
+"open-crystal-caves"
+]
+},
+{
+"repo": "OpenDriver2/REDRIVER2",
+"want": [
+"desktop"
+],
+"listings": [
+"redriver2"
+]
+},
+{
+"repo": "OpenDUNE/OpenDUNE",
+"want": [
+"desktop"
+],
+"listings": [
+"opendune"
+]
+},
+{
+"repo": "OpenE2140/OpenE2140",
+"want": [
+"desktop"
+],
+"listings": [
+"opene2140"
+]
+},
+{
+"repo": "OpenEnroth/OpenEnroth",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"open-enroth"
+]
+},
+{
+"repo": "OpenLoco/OpenLoco",
+"want": [
+"desktop"
+],
+"listings": [
+"openloco"
+]
+},
+{
+"repo": "openmoh/openmohaa",
+"want": [
+"desktop"
+],
+"listings": [
+"openmohaa"
+]
+},
+{
+"repo": "OpenMW/openmw",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"openmw"
+]
+},
+{
+"repo": "OpenNFS/OpenNFS",
+"want": [
+"desktop"
+],
+"listings": [
+"need-for-speed-1-6"
+]
+},
+{
+"repo": "OpenPort-Labs/Galaxy-Android",
+"want": [
+"android"
+],
+"listings": [
+"super-mario-galaxy-android"
+]
+},
+{
+"repo": "OpenPort-Labs/mw2-android",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"call-of-duty-mw2-android"
+]
+},
+{
+"repo": "OpenRA/OpenRA",
+"want": [
+"desktop"
+],
+"listings": [
+"openra"
+]
+},
+{
+"repo": "OpenRAC/rac-deadlocked-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"ratchet-deadlocked"
+]
+},
+{
+"repo": "OpenRAC/rac1-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"ratchet-and-clank-pal"
+]
+},
+{
+"repo": "OpenRAC/rac2-gc-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"ratchet-and-clank-going-commando-usa-v1-01"
+]
+},
+{
+"repo": "OpenRAC/rac3-uya-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"ratchet-and-clank-up-your-arsenal"
+]
+},
+{
+"repo": "OpenRCT2/OpenRCT2",
+"want": [
+"desktop"
+],
+"listings": [
+"openrct2"
+]
+},
+{
+"repo": "OpenReliant/openreliant",
+"want": [
+"desktop"
+],
+"listings": [
+"openreliant"
+]
+},
+{
+"repo": "OpenSC2K/OpenSC2K",
+"want": [
+"desktop"
+],
+"listings": [
+"opensc2k"
+]
+},
+{
+"repo": "opentestdriveunlimited/OpenTestDriveUnlimited",
+"want": [
+"desktop"
+],
+"listings": [
+"open-test-drive-unlimited"
+]
+},
+{
+"repo": "OpenTPW/OpenTPW",
+"want": [
+"desktop"
+],
+"listings": [
+"opentpw"
+]
+},
+{
+"repo": "OpenTTD/OpenTTD",
+"want": [
+"desktop"
+],
+"listings": [
+"openttd"
+]
+},
+{
+"repo": "opentyrian/opentyrian",
+"want": [
+"desktop"
+],
+"listings": [
+"opentyrian"
+]
+},
+{
+"repo": "OpenXcom/OpenXcom",
+"want": [
+"desktop"
+],
+"listings": [
+"openxcom"
+]
+},
+{
+"repo": "OpokXeno/xenogears-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"xenogears-recomp"
+]
+},
+{
+"repo": "OpokXeno/xsg-i-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"xenosaga-episode-i-der-wille-zur-macht"
+]
+},
+{
+"repo": "orangedude27/excite-truck",
+"want": [
+"desktop"
+],
+"listings": [
+"excite-truck"
+]
+},
+{
+"repo": "OutpostUniverse/OPHD",
+"want": [
+"desktop"
+],
+"listings": [
+"ophd"
+]
+},
+{
+"repo": "overjt/knidl",
+"want": [
+"desktop"
+],
+"listings": [
+"kirby-nightmare-in-dream-land"
+]
+},
+{
+"repo": "OZORDI/LibertyRecomp",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"gta-iv-liberty-recomp"
+]
+},
+{
+"repo": "OZORDI/tt-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"rockstar-games-presents-table-tennis"
+]
+},
+{
+"repo": "pakompom/SpaceRangers1_decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"space-rangers"
+]
+},
+{
+"repo": "pakompom/SpaceRangersHD_decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"space-rangers-hd-a-war-apart"
+]
+},
+{
+"repo": "palaceswitcher/Diamond-Rush-Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"diamond-rush"
+]
+},
+{
+"repo": "Panzerschrek/Chasm-Reverse",
+"want": [
+"desktop"
+],
+"listings": [
+"chasm-reverse"
+]
+},
+{
+"repo": "parappadev/parappa2",
+"want": [
+"desktop"
+],
+"listings": [
+"parappa2"
+]
+},
+{
+"repo": "PascalPixel/alchemy",
+"want": [
+"desktop"
+],
+"listings": [
+"golden-sun"
+]
+},
+{
+"repo": "patataofcourse/rhgold",
+"want": [
+"desktop"
+],
+"listings": [
+"rhythm-heaven"
+]
+},
+{
+"repo": "PaulCombal/mw2-recompiled",
+"want": [
+"desktop"
+],
+"listings": [
+"call-of-duty-mw2-recomp"
+]
+},
+{
+"repo": "pbr-ret/pbr-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-battle-revolution"
+]
+},
+{
+"repo": "pditincho/mm-explained",
+"want": [
+"desktop"
+],
+"listings": [
+"maniac-mansion"
+]
+},
+{
+"repo": "perfect-dark-pc-port/perfect_dark",
+"want": [
+"desktop"
+],
+"listings": [
+"perfect-dark-port"
+]
+},
+{
+"repo": "PeriBluGaming/ToyStory2Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"toy-story-2-recomp"
+]
+},
+{
+"repo": "petarov/alleycat.exe",
+"want": [
+"desktop"
+],
+"listings": [
+"alleycat-x86-64-recomp"
+]
+},
+{
+"repo": "Pheenoh/khcom",
+"want": [
+"desktop"
+],
+"listings": [
+"kingdom-hearts-chain-of-memories-decomp"
+]
+},
+{
+"repo": "phoboslab/wipeout-rewrite",
+"want": [
+"desktop"
+],
+"listings": [
+"wipeout-rewrite"
+]
+},
+{
+"repo": "pizdex/robogx",
+"want": [
+"desktop"
+],
+"listings": [
+"custom-robo-gx"
+]
+},
+{
+"repo": "Player124413/MarathonRecomp_android-test-edition",
+"want": [
+"android"
+],
+"listings": [
+"marathon-recompiled"
+]
+},
+{
+"repo": "Player124413/NearChuckle-android-edition",
+"want": [
+"android"
+],
+"listings": [
+"far-cry-nearchuckle"
+]
+},
+{
+"repo": "Player124413/Sonic-Generations-Recomp",
+"want": [
+"android"
+],
+"listings": [
+"sonic-generations-recomp"
+]
+},
+{
+"repo": "please-be-nice/Shipwright-android",
+"want": [
+"android"
+],
+"listings": [
+"shipwright-android"
+]
+},
+{
+"repo": "plinkr/Wild9-Decompilation",
+"want": [
+"desktop"
+],
+"listings": [
+"wild-9"
+]
+},
+{
+"repo": "plowteam/donut",
+"want": [
+"desktop"
+],
+"listings": [
+"donut"
+]
+},
+{
+"repo": "pmret/papermario",
+"want": [
+"desktop"
+],
+"listings": [
+"paper-mario-decomp"
+]
+},
+{
+"repo": "PolyhedronStudio/Q2RTXPerimental",
+"want": [
+"desktop"
+],
+"listings": [
+"q2rtxperimental"
+]
+},
+{
+"repo": "PPrism/TerrariaOGC",
+"want": [
+"desktop"
+],
+"listings": [
+"terraria"
+]
+},
+{
+"repo": "PranchaD/re-Sonic06Demo",
+"want": [
+"desktop"
+],
+"listings": [
+"sonic-06-demo"
+]
+},
+{
+"repo": "pret/pmd-red",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-md-red"
+]
+},
+{
+"repo": "pret/pmd-sky",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-md-sky"
+]
+},
+{
+"repo": "pret/pokecrystal",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-crystal"
+]
+},
+{
+"repo": "pret/pokediamond",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-diamond"
+]
+},
+{
+"repo": "pret/pokeemerald",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-emerald"
+]
+},
+{
+"repo": "pret/pokefirered",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-firered"
+]
+},
+{
+"repo": "pret/pokegold",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-gold"
+]
+},
+{
+"repo": "pret/pokegold-spaceworld",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-gold-spaceworld-demo"
+]
+},
+{
+"repo": "pret/pokeheartgold",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-heartgold"
+]
+},
+{
+"repo": "pret/pokepinball",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-pinball"
+]
+},
+{
+"repo": "pret/pokepinballrs",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-pinball-ruby-and-sapphire"
+]
+},
+{
+"repo": "pret/pokeplatinum",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-platinum"
+]
+},
+{
+"repo": "pret/pokepuzzle",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-puzzle-challenge"
+]
+},
+{
+"repo": "pret/pokered",
+"want": [
+"desktop"
+],
+"listings": [
+"pokered"
+]
+},
+{
+"repo": "pret/pokeruby",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-ruby"
+]
+},
+{
+"repo": "pret/pokestadium",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-stadium-1"
+]
+},
+{
+"repo": "pret/pokestadiumgs",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-stadium-2"
+]
+},
+{
+"repo": "pret/poketcg",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-tcg-1"
+]
+},
+{
+"repo": "pret/poketcg2",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-tcg-2"
+]
+},
+{
+"repo": "pret/pokeyellow",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-yellow"
+]
+},
+{
+"repo": "previouslevelgames/recharged",
+"want": [
+"desktop"
+],
+"listings": [
+"mario-strikers-charged-recomp"
+]
+},
+{
+"repo": "PrimeDecomp/prime",
+"want": [
+"desktop"
+],
+"listings": [
+"metroid-prime-decomp"
+]
+},
+{
+"repo": "projectPiki/pik1wii",
+"want": [
+"desktop"
+],
+"listings": [
+"new-play-control-pikmin"
+]
+},
+{
+"repo": "projectPiki/pik2wii",
+"want": [
+"desktop"
+],
+"listings": [
+"new-play-control-pikmin-2"
+]
+},
+{
+"repo": "projectPiki/pikmin",
+"want": [
+"desktop"
+],
+"listings": [
+"pikmin"
+]
+},
+{
+"repo": "projectPiki/pikmin2",
+"want": [
+"desktop"
+],
+"listings": [
+"pikmin-2-decomp"
+]
+},
+{
+"repo": "psdwizzard/Eternal-Darkness---Decompile",
+"want": [
+"desktop"
+],
+"listings": [
+"eternal-darkness-sanitys-requiem"
+]
+},
+{
+"repo": "psi29a/thirdeye",
+"want": [
+"desktop"
+],
+"listings": [
+"thirdeye"
+]
+},
+{
+"repo": "puckhead73/nhl-legacy-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"nhl-legacy-edition"
+]
+},
+{
+"repo": "Pyrdacor/Ambermoon.net",
+"want": [
+"desktop"
+],
+"listings": [
+"ambermoon"
+]
+},
+{
+"repo": "Pyrdacor/freeserf.net",
+"want": [
+"desktop"
+],
+"listings": [
+"freeserf-net"
+]
+},
+{
+"repo": "qbism/q2tools-220",
+"want": [
+"desktop"
+],
+"listings": [
+"q2tools-220"
+]
+},
+{
+"repo": "quakeforge/quakeforge",
+"want": [
+"desktop"
+],
+"listings": [
+"quakeforge"
+]
+},
+{
+"repo": "QW-Group/ezquake-source",
+"want": [
+"desktop"
+],
+"listings": [
+"ezquake"
+]
+},
+{
+"repo": "raceintospace/raceintospace",
+"want": [
+"desktop"
+],
+"listings": [
+"race-into-space"
+]
+},
+{
+"repo": "Raekwon1603/super_metroid-android",
+"want": [
+"android"
+],
+"listings": [
+"super-metroid-dual-screen"
+]
+},
+{
+"repo": "Raikaru/Persona4-Decompilation",
+"want": [
+"desktop"
+],
+"listings": [
+"shin-megami-tensei-persona-4"
+]
+},
+{
+"repo": "Rainchus/ChameleonTwist1-JP-Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"chameleon-twist-recomp"
+]
+},
+{
+"repo": "Rainchus/ChameleonTwist2-JP-Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"chameleon-twist-2-recomp"
+]
+},
+{
+"repo": "Rainchus/Donkey-Kong-64-Recompiled",
+"want": [
+"desktop"
+],
+"listings": [
+"dk64-recompiled"
+]
+},
+{
+"repo": "Rainchus/PartnersInTime-Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"mario-and-luigi-partners-in-time"
+]
+},
+{
+"repo": "Rainchus/SkiesOfArcadiaLegends",
+"want": [
+"desktop"
+],
+"listings": [
+"skies-of-arcadia-legends"
+]
+},
+{
+"repo": "RandomityGuy/MBHaxe",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"mbhaxe"
+]
+},
+{
+"repo": "raposomiguel50/system-shock-android",
+"want": [
+"android"
+],
+"listings": [
+"system-shock-android"
+]
+},
+{
+"repo": "rayanht/mwcc",
+"want": [
+"desktop"
+],
+"listings": [
+"mwcc"
+]
+},
+{
+"repo": "rbxrootx/MissionFleet",
+"want": [
+"desktop"
+],
+"listings": [
+"navyfield-2000-pc"
+]
+},
+{
+"repo": "RedZeroGotcha/BlueDroid",
+"want": [
+"android"
+],
+"listings": [
+"blue-droid"
+]
+},
+{
+"repo": "RedZeroGotcha/OpenNevada-Android",
+"want": [
+"android"
+],
+"listings": [
+"opennevada"
+]
+},
+{
+"repo": "ReGame-Labs/dcb_decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"digimon-digital-card-battle"
+]
+},
+{
+"repo": "ReGame-Labs/dtbe_decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"digimon-rumble-arena"
+]
+},
+{
+"repo": "regratka/mkp",
+"want": [
+"desktop"
+],
+"listings": [
+"komputerowa-gratka-3d-magiczna-kula-papatki"
+]
+},
+{
+"repo": "reindance/ssx-tricky-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"ssx-tricky-xbox-recomp"
+]
+},
+{
+"repo": "Return-To-The-Roots/s25client",
+"want": [
+"desktop"
+],
+"listings": [
+"settlers-2"
+]
+},
+{
+"repo": "RevoSucks/BM64Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"bomberman-64-recomp"
+]
+},
+{
+"repo": "riperiperi/FreeSO",
+"want": [
+"desktop"
+],
+"listings": [
+"free-so"
+]
+},
+{
+"repo": "rjkiv/dc3-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"dance-central-3"
+]
+},
+{
+"repo": "RobGreenUK/Ridge-Racer-PS1-Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"ridge-racer-ps1-recomp"
+]
+},
+{
+"repo": "RobGreenUK/Ridge-Racer-Revolution-PS1-Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"ridge-racer-revolution-recomp"
+]
+},
+{
+"repo": "RohanBhattacharyya/oSBM",
+"want": [
+"android"
+],
+"listings": [
+"starbound-android"
+]
+},
+{
+"repo": "rohit-n/NearChuckle",
+"want": [
+"desktop"
+],
+"listings": [
+"nearchuckle"
+]
+},
+{
+"repo": "rrika/cdcEngineDXHR",
+"want": [
+"desktop"
+],
+"listings": [
+"dxhr-decomp"
+]
+},
+{
+"repo": "RSDKModding/RSDKv3-Decompilation",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"rsdkv3-decompilation"
+]
+},
+{
+"repo": "RSDKModding/RSDKv4-Decompilation",
+"want": [
+"desktop"
+],
+"listings": [
+"sonic-1-2-2013"
+]
+},
+{
+"repo": "RSDKModding/RSDKv5-Decompilation",
+"want": [
+"android"
+],
+"listings": [
+"sonic-mania-decompilation-android"
+]
+},
+{
+"repo": "RSDKModding/Sonic-Mania-Decompilation",
+"want": [
+"desktop"
+],
+"listings": [
+"sonic-mania-decomp"
+]
+},
+{
+"repo": "rsigristc/DW3-DS-Android",
+"want": [
+"android"
+],
+"listings": [
+"dw-2003-dual-screen"
+]
+},
+{
+"repo": "RuiNelson/StreetsOfRageProject",
+"want": [
+"desktop"
+],
+"listings": [
+"streets-of-rage-recomp"
+]
+},
+{
+"repo": "rwengine/openrw",
+"want": [
+"desktop"
+],
+"listings": [
+"open-rw"
+]
+},
+{
+"repo": "Ryan-Myers/Jet-Force-Gemini",
+"want": [
+"desktop"
+],
+"listings": [
+"jet-force-gemini"
+]
+},
+{
+"repo": "Ryan-Myers/onegaimonsters",
+"want": [
+"desktop"
+],
+"listings": [
+"onegai-monsters"
+]
+},
+{
+"repo": "ryzom/ryzomcore",
+"want": [
+"desktop"
+],
+"listings": [
+"ryzom-core"
+]
+},
+{
+"repo": "s-macke/starflight-reverse",
+"want": [
+"desktop"
+],
+"listings": [
+"starflight"
+]
+},
+{
+"repo": "sabishii-bit/Gauntlet-Dark-Legacy-Decompilation",
+"want": [
+"desktop"
+],
+"listings": [
+"gauntlet-dark-legacy"
+]
+},
+{
+"repo": "sabishii-bit/wwdcmp",
+"want": [
+"desktop"
+],
+"listings": [
+"wario-world"
+]
+},
+{
+"repo": "salvadorc17/Prince-Monogame",
+"want": [
+"desktop"
+],
+"listings": [
+"prince-monogame"
+]
+},
+{
+"repo": "Sampreeth004/nfs-carbon-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"need-for-speed-carbon"
+]
+},
+{
+"repo": "samwhosung/benilla",
+"want": [
+"desktop"
+],
+"listings": [
+"world-of-warcraft-1-12-benilla"
+]
+},
+{
+"repo": "samyost1/tmc-android",
+"want": [
+"android"
+],
+"listings": [
+"minish-cap-android"
+]
+},
+{
+"repo": "samyost1/zelda3-android",
+"want": [
+"android"
+],
+"listings": [
+"zelda3-android"
+]
+},
+{
+"repo": "sandstranger/com.mobilerpgpack.phone",
+"want": [
+"android"
+],
+"listings": [
+"doom-playstation-classic-core-engines",
+"final-doom-playstation-classic-core-engines",
+"chex-quest-classic-core-engines",
+"doom-classic-core-engines",
+"doom-ii-classic-core-engines",
+"doom-3-bfg-edition-classic-core-engines",
+"doom-64-remastered-classic-core-engines",
+"hacx-classic-core-engines",
+"heretic-classic-core-engines",
+"hexen-classic-core-engines",
+"hexen-ii-classic-core-engines",
+"hexen-ii-portal-of-praevus-classic-core-engines",
+"quake-classic-core-engines",
+"quake-scourge-of-armagon-classic-core-engines",
+"quake-dissolution-of-eternity-classic-core-engines",
+"quake-ii-classic-core-engines",
+"quake-iii-arena-classic-core-engines",
+"openarena-classic-core-engines",
+"wolfenstein-rpg-classic-core-engines"
+]
+},
+{
+"repo": "SanGraphic/PostVoidMobile",
+"want": [
+"android"
+],
+"listings": [
+"post-void-mobile"
+]
+},
+{
+"repo": "SansNope/UnleashedRecomp-Android",
+"want": [
+"android"
+],
+"listings": [
+"unleashed-recomp"
+]
+},
+{
+"repo": "sasja-san/atc",
+"want": [
+"desktop"
+],
+"listings": [
+"air-traffic-chaos"
+]
+},
+{
+"repo": "SAT-R/sa2",
+"want": [
+"desktop"
+],
+"listings": [
+"sonic-advance-2-decomp"
+]
+},
+{
+"repo": "SAT-R/sa3",
+"want": [
+"desktop"
+],
+"listings": [
+"sonic-advance-3"
+]
+},
+{
+"repo": "saulob/geometry-wars-retro-evolved-2-recompiled",
+"want": [
+"desktop"
+],
+"listings": [
+"geometry-wars-retro-evolved-2"
+]
+},
+{
+"repo": "saulob/hard-corps-uprising-recompiled",
+"want": [
+"desktop"
+],
+"listings": [
+"hard-corps-uprising"
+]
+},
+{
+"repo": "sciaschi/CBFD-Recompiled",
+"want": [
+"desktop"
+],
+"listings": [
+"conker-bad-fur-day-recomp"
+]
+},
+{
+"repo": "scp-fs2open/fs2open.github.com",
+"want": [
+"desktop"
+],
+"listings": [
+"freespace-2"
+]
+},
+{
+"repo": "scummvm/scummvm",
+"want": [
+"desktop"
+],
+"listings": [
+"scummvm"
+]
+},
+{
+"repo": "sdlpal/sdlpal",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"sdlpal"
+]
+},
+{
+"repo": "SDW-Community/sdw-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"sheep-dog-n-wolf"
+]
+},
+{
+"repo": "SDW-Community/Sheep-Dog-n-Wolf-Rewooled",
+"want": [
+"desktop"
+],
+"listings": [
+"sheep-dog-n-wolf-rewooled"
+]
+},
+{
+"repo": "SebaaMG/Kinect-Sports-Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"kinect-sports"
+]
+},
+{
+"repo": "second-impressions/caesar2-port",
+"want": [
+"desktop"
+],
+"listings": [
+"caesar-2"
+]
+},
+{
+"repo": "seedhartha/reone",
+"want": [
+"desktop"
+],
+"listings": [
+"reone-kotor"
+]
+},
+{
+"repo": "SephDB/pokepark-wii-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"pokepark-wii-pikachus-adventure"
+]
+},
+{
+"repo": "ser-pounce/rood-reverse",
+"want": [
+"desktop"
+],
+"listings": [
+"vagrant-story"
+]
+},
+{
+"repo": "sergiomanzur/cvlod_recomp",
+"want": [
+"android"
+],
+"listings": [
+"castlevania-legacy-of-darkness-recomp"
+]
+},
+{
+"repo": "sergiomanzur/issd-native",
+"want": [
+"android"
+],
+"listings": [
+"issd-native"
+]
+},
+{
+"repo": "sergiomanzur/regaiden-recomp",
+"want": [
+"android"
+],
+"listings": [
+"regaiden-recomp"
+]
+},
+{
+"repo": "sergiomanzur/SymphonyRecomp",
+"want": [
+"android"
+],
+"listings": [
+"castlevania-sotn-recomp-sergiomanzur"
+]
+},
+{
+"repo": "setupwitch/Pizza-Tower-EXtracted",
+"want": [
+"desktop"
+],
+"listings": [
+"pizza-tower"
+]
+},
+{
+"repo": "sezero/quakespasm",
+"want": [
+"desktop"
+],
+"listings": [
+"quakespasm"
+]
+},
+{
+"repo": "Sezzary/SilentEngine",
+"want": [
+"desktop"
+],
+"listings": [
+"silent-engine"
+]
+},
+{
+"repo": "sfalexrog/openxcom-android",
+"want": [
+"android"
+],
+"listings": [
+"open-xcom-android"
+]
+},
+{
+"repo": "sfall-team/sfall",
+"want": [
+"desktop"
+],
+"listings": [
+"sfall"
+]
+},
+{
+"repo": "SFTtech/openage",
+"want": [
+"desktop"
+],
+"listings": [
+"openage"
+]
+},
+{
+"repo": "ShadowPilotX/Abuse-Android",
+"want": [
+"android"
+],
+"listings": [
+"abuse-android"
+]
+},
+{
+"repo": "ShaffySwitcher/wariowareinc",
+"want": [
+"desktop"
+],
+"listings": [
+"warioware-inc-mega-microgames"
+]
+},
+{
+"repo": "shdecompilations/silent-hill-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"silent-hill-decomp"
+]
+},
+{
+"repo": "shibbo/3DWDecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"super-mario-3d-world-bowsers-fury"
+]
+},
+{
+"repo": "ShiningForceCentral/SF1DISASM",
+"want": [
+"desktop"
+],
+"listings": [
+"shining-force"
+]
+},
+{
+"repo": "ShiningForceCentral/SF2DISASM",
+"want": [
+"desktop"
+],
+"listings": [
+"shining-force-ii"
+]
+},
+{
+"repo": "Shintensu/OkamiHD-Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"okami-hd"
+]
+},
+{
+"repo": "shinyquagsire23/OpenJKDF2",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"openjkdf2"
+]
+},
+{
+"repo": "shipa-2/Xerenge",
+"want": [
+"desktop"
+],
+"listings": [
+"burnout-revenge-recomp"
+]
+},
+{
+"repo": "Shmargus/GSRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"gsrecomp"
+]
+},
+{
+"repo": "shohamc1/heat2002",
+"want": [
+"desktop"
+],
+"listings": [
+"nascar-heat-2002"
+]
+},
+{
+"repo": "ShulkMaster/mk-da",
+"want": [
+"desktop"
+],
+"listings": [
+"mortal-kombat-deadly-alliance"
+]
+},
+{
+"repo": "ShulkMaster/mk-deception",
+"want": [
+"desktop"
+],
+"listings": [
+"mortal-kombat-deception"
+]
+},
+{
+"repo": "Simon358/ctr-native-android",
+"want": [
+"android"
+],
+"listings": [
+"ctr-native-android"
+]
+},
+{
+"repo": "SimsAdvanceRet/BustinOutGBADecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"the-sims-bustin-out"
+]
+},
+{
+"repo": "SimsAdvanceRet/S2GBADecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"the-sims-2-gba"
+]
+},
+{
+"repo": "SimsAdvanceRet/UrbzGBADecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"the-urbz-sims-in-the-city"
+]
+},
+{
+"repo": "simutrans/simutrans",
+"want": [
+"desktop"
+],
+"listings": [
+"simutrans"
+]
+},
+{
+"repo": "sirdankz/Undead-Neighbor-Eaters-Droid",
+"want": [
+"android"
+],
+"listings": [
+"undead-neighbor-eaters-android-native-port"
+]
+},
+{
+"repo": "SirHenricus/DrBrainActionReaction_PackageDecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"dr-brain-action-reaction"
+]
+},
+{
+"repo": "Sisah2/openmw-android",
+"want": [
+"android"
+],
+"listings": [
+"openmw-android"
+]
+},
+{
+"repo": "skoolkid/manicminer",
+"want": [
+"desktop"
+],
+"listings": [
+"manic-miner"
+]
+},
+{
+"repo": "Skyline969/UFO50AndroidUnofficial",
+"want": [
+"android"
+],
+"listings": [
+"ufo50-android"
+]
+},
+{
+"repo": "Skyrimus/Serious-Sam-Android",
+"want": [
+"android"
+],
+"listings": [
+"serious-sam-android"
+]
+},
+{
+"repo": "SlaveOfIDO/blastcorps",
+"want": [
+"desktop"
+],
+"listings": [
+"blast-corps"
+]
+},
+{
+"repo": "SlickAmogus/silent-hill-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"silent-hill-pc"
+]
+},
+{
+"repo": "sm64pc/sm64ex",
+"want": [
+"desktop"
+],
+"listings": [
+"sm64ex"
+]
+},
+{
+"repo": "SMGCommunity/Petari",
+"want": [
+"desktop"
+],
+"listings": [
+"petari"
+]
+},
+{
+"repo": "smitelli/cosmore",
+"want": [
+"desktop"
+],
+"listings": [
+"cosmos-cosmic-adventure"
+]
+},
+{
+"repo": "SmithGoll/Greenier-Farm-3-Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"green-farm-3"
+]
+},
+{
+"repo": "smolkrieger/nuclear-neighbor",
+"want": [
+"desktop"
+],
+"listings": [
+"chernobyl-neighbor-clown-gang"
+]
+},
+{
+"repo": "snesrev/zelda3",
+"want": [
+"desktop"
+],
+"listings": [
+"zelda3"
+]
+},
+{
+"repo": "SolarCookies/TiP-Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"tip-recomp"
+]
+},
+{
+"repo": "SolomonNumb1/space-station-14-mobile",
+"want": [
+"android"
+],
+"listings": [
+"space-station-14-mobile"
+]
+},
+{
+"repo": "some100/th07",
+"want": [
+"desktop"
+],
+"listings": [
+"touhou-youyoumu-perfect-cherry-blossom"
+]
+},
+{
+"repo": "SomeJakeGuy/lm-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"luigis-mansion"
+]
+},
+{
+"repo": "sonicdcer/DNZHRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"dnzh-recomp"
+]
+},
+{
+"repo": "sonicdcer/MarioKart64Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"mario-kart-64-recomp"
+]
+},
+{
+"repo": "sonicdcer/Starfox64Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"star-fox-64-recomp"
+]
+},
+{
+"repo": "sonicfreak1337/SARecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"sonic-adventure-recomp"
+]
+},
+{
+"repo": "sonicnext-dev/MarathonRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"marathon-recomp"
+]
+},
+{
+"repo": "sonicretro/kid-chameleon-disasm",
+"want": [
+"desktop"
+],
+"listings": [
+"kid-chameleon"
+]
+},
+{
+"repo": "sonicretro/skdisasm",
+"want": [
+"desktop"
+],
+"listings": [
+"sonic-and-knuckles"
+]
+},
+{
+"repo": "southcitycapture/hybridheaven-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"hybrid-heaven"
+]
+},
+{
+"repo": "SoVRHere/TheForceEngineVR",
+"want": [
+"android"
+],
+"listings": [
+"the-force-engine-vr"
+]
+},
+{
+"repo": "sp00nznet/epicpinball",
+"want": [
+"desktop"
+],
+"listings": [
+"epic-pinball-recomp"
+]
+},
+{
+"repo": "sp00nznet/flow",
+"want": [
+"desktop"
+],
+"listings": [
+"flow-ps3-recomp"
+]
+},
+{
+"repo": "sp00nznet/heavymetal",
+"want": [
+"desktop"
+],
+"listings": [
+"heavymetal"
+]
+},
+{
+"repo": "sp00nznet/LinksAwakening",
+"want": [
+"desktop"
+],
+"listings": [
+"links-awakening-recomp"
+]
+},
+{
+"repo": "sp00nznet/oracle-recompiled",
+"want": [
+"desktop"
+],
+"listings": [
+"oracle-recompiled"
+]
+},
+{
+"repo": "sp00nznet/simpsonsarcade-ps3",
+"want": [
+"desktop"
+],
+"listings": [
+"simpsons-arcade-ps3"
+]
+},
+{
+"repo": "sp00nznet/tokyojungle",
+"want": [
+"desktop"
+],
+"listings": [
+"tokyo-jungle-recompiled"
+]
+},
+{
+"repo": "sp00nznet/ww",
+"want": [
+"desktop"
+],
+"listings": [
+"wind-waker-recomp"
+]
+},
+{
+"repo": "sp00nznet/youdontknowjack",
+"want": [
+"desktop"
+],
+"listings": [
+"youdontknowjack-recomp"
+]
+},
+{
+"repo": "space-wizards/space-station-14",
+"want": [
+"desktop"
+],
+"listings": [
+"space-station-14"
+]
+},
+{
+"repo": "spacefarergames/AloneInTheDarkReHaunted",
+"want": [
+"desktop"
+],
+"listings": [
+"alone-in-the-dark-rehaunted"
+]
+},
+{
+"repo": "spacestate1/namco22-decompile",
+"want": [
+"desktop"
+],
+"listings": [
+"namco-system-22-prop-cycle",
+"namco-system-22-rave-racer",
+"namco-system-22-tokyo-wars",
+"namco-system-22-dirt-dash"
+]
+},
+{
+"repo": "spannerisms/jpdasm",
+"want": [
+"desktop"
+],
+"listings": [
+"zelda-no-densetsu-kamigami-no-triforce"
+]
+},
+{
+"repo": "SpeedBreakerProject/speedbreaker",
+"want": [
+"desktop"
+],
+"listings": [
+"speedbreaker"
+]
+},
+{
+"repo": "squiddonaut/pokeblack",
+"want": [
+"desktop"
+],
+"listings": [
+"black"
+]
+},
+{
+"repo": "SrBananaMan/Hamster64Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"hamster-monogatari-64-recomp"
+]
+},
+{
+"repo": "SSunnKing/Open-Nectar---Pikmin-Native-PC-Mobile-Port",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"open-nectar"
+]
+},
+{
+"repo": "SSunnKing/ZeldaWWHDRecompAndroid---ENHANCED",
+"want": [
+"android"
+],
+"listings": [
+"zeldawwhdrecompandroid"
+]
+},
+{
+"repo": "ssxdecomp/ssx",
+"want": [
+"desktop"
+],
+"listings": [
+"ssx"
+]
+},
+{
+"repo": "ssxdecomp/ssx3",
+"want": [
+"desktop"
+],
+"listings": [
+"ssx-3"
+]
+},
+{
+"repo": "ssxdecomp/ssxtricky",
+"want": [
+"desktop"
+],
+"listings": [
+"ssx-tricky-decomp"
+]
+},
+{
+"repo": "StanHash/fe6",
+"want": [
+"desktop"
+],
+"listings": [
+"fire-emblem-the-binding-blade"
+]
+},
+{
+"repo": "StanHash/fomt",
+"want": [
+"desktop"
+],
+"listings": [
+"harvest-moon-friends-of-mineral-town"
+]
+},
+{
+"repo": "Stewmath/oracles-disasm",
+"want": [
+"desktop"
+],
+"listings": [
+"oracle-of-ages-and-seasons"
+]
+},
+{
+"repo": "StoneColdOS/pt-pc",
+"want": [
+"android"
+],
+"listings": [
+"p-t-for-android-dual-screen"
+]
+},
+{
+"repo": "strider973/Einhander-Recompiled",
+"want": [
+"desktop"
+],
+"listings": [
+"einhander"
+]
+},
+{
+"repo": "Styd051/DOOM64-EX-Plus-Enhanced",
+"want": [
+"desktop"
+],
+"listings": [
+"doom64-ex-plus-enhanced"
+]
+},
+{
+"repo": "Subarasheese/daytona-xbla-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"daytona-usa-recomp"
+]
+},
+{
+"repo": "sulix/omnispeak",
+"want": [
+"desktop"
+],
+"listings": [
+"omnispeak"
+]
+},
+{
+"repo": "swfans/syndwarsfx",
+"want": [
+"desktop"
+],
+"listings": [
+"syndicate-wars"
+]
+},
+{
+"repo": "Swiftshine/kdc",
+"want": [
+"desktop"
+],
+"listings": [
+"kirbys-dream-collection-special-edition"
+]
+},
+{
+"repo": "Swiftshine/key",
+"want": [
+"desktop"
+],
+"listings": [
+"kirbys-epic-yarn"
+]
+},
+{
+"repo": "Swiftshine/wlsi",
+"want": [
+"desktop"
+],
+"listings": [
+"wario-land-shake-it"
+]
+},
+{
+"repo": "swstegall/meteor-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"final-fantasy-xiv-1-0"
+]
+},
+{
+"repo": "tangosdev/sm64ds-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"super-mario-64-ds-decomp"
+]
+},
+{
+"repo": "Tanline666/veryfat-dungeon",
+"want": [
+"desktop"
+],
+"listings": [
+"wii-fit-plus"
+]
+},
+{
+"repo": "taxicat1/dsprot",
+"want": [
+"desktop"
+],
+"listings": [
+"ds-protect"
+]
+},
+{
+"repo": "tclamb/mhp2g-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"monster-hunter-portable-2nd-g"
+]
+},
+{
+"repo": "TeamBlossomDevs/DeltaruneDecomp_beta",
+"want": [
+"desktop"
+],
+"listings": [
+"deltarune"
+]
+},
+{
+"repo": "TeamGDB/Tenkawa",
+"want": [
+"desktop"
+],
+"listings": [
+"dragon-ball-z-tenkaichi-tag-team"
+]
+},
+{
+"repo": "TeamGDB/Yakumo",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"yakumo"
+]
+},
+{
+"repo": "TeamOrre/xd-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"xd-gale-of-darkness"
+]
+},
+{
+"repo": "teampopwork/Thunderball",
+"want": [
+"desktop"
+],
+"listings": [
+"peggle-deluxe"
+]
+},
+{
+"repo": "TekRantGaming/outpost-kaloki-x-recompiled",
+"want": [
+"desktop"
+],
+"listings": [
+"outpost-kaloki-x"
+]
+},
+{
+"repo": "TekRantGaming/simpsons-wrestling-recompiled",
+"want": [
+"desktop"
+],
+"listings": [
+"simpsons-wrestling-recompiled"
+]
+},
+{
+"repo": "TekRantGaming/sms-pc-port",
+"want": [
+"desktop"
+],
+"listings": [
+"super-mario-sunshine-pc"
+]
+},
+{
+"repo": "Teofil98/OpenHopmon",
+"want": [
+"desktop"
+],
+"listings": [
+"hopmon"
+]
+},
+{
+"repo": "TerryCavanagh/VVVVVV",
+"want": [
+"desktop"
+],
+"listings": [
+"vvvvvv"
+]
+},
+{
+"repo": "testyourmine/kleod",
+"want": [
+"desktop"
+],
+"listings": [
+"klonoa-empire-of-dreams"
+]
+},
+{
+"repo": "tetrisgm/RidgeRacerType4Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"ridge-racer-type-4-recomp"
+]
+},
+{
+"repo": "Teyliu/PVZF-Translation",
+"want": [
+"android"
+],
+"listings": [
+"pvz-fusion-android"
+]
+},
+{
+"repo": "tgsm/pbg",
+"want": [
+"desktop"
+],
+"listings": [
+"disney-piglets-big-game"
+]
+},
+{
+"repo": "ThatGuyMcd/DKR-R",
+"want": [
+"desktop"
+],
+"listings": [
+"dkr-r"
+]
+},
+{
+"repo": "ThatGuyMcd/Glover-R",
+"want": [
+"desktop"
+],
+"listings": [
+"glover"
+]
+},
+{
+"repo": "ThatGuyMcd/Rocket-R",
+"want": [
+"desktop"
+],
+"listings": [
+"rocket-r"
+]
+},
+{
+"repo": "TheAssemblyArmada/Thyme",
+"want": [
+"desktop"
+],
+"listings": [
+"thyme"
+]
+},
+{
+"repo": "TheAssemblyArmada/Vanilla-Conquer",
+"want": [
+"desktop"
+],
+"listings": [
+"vanilla-conquer"
+]
+},
+{
+"repo": "theboy181/drmario64_recomp_plus",
+"want": [
+"desktop"
+],
+"listings": [
+"drmario64-recomp-plus"
+]
+},
+{
+"repo": "TheFlyingFoool/DuckGameRebuilt",
+"want": [
+"desktop"
+],
+"listings": [
+"duck-game"
+]
+},
+{
+"repo": "TheGh0stShip/BattleTanx-Global-Assault",
+"want": [
+"desktop"
+],
+"listings": [
+"battletanx-global-assault"
+]
+},
+{
+"repo": "TheGh0stShip/BattleTanx-Global-Assault-PC-Port",
+"want": [
+"desktop"
+],
+"listings": [
+"battletanx-global-assault-pc-port"
+]
+},
+{
+"repo": "thelinkin3000/halo-ce-universal",
+"want": [
+"android"
+],
+"listings": [
+"halo-1-decomp-fork"
+]
+},
+{
+"repo": "theLlamaNet/halo-ce-android",
+"want": [
+"android"
+],
+"listings": [
+"halo-1-touch-control-fork"
+]
+},
+{
+"repo": "TheMobyCollective/spyro-3",
+"want": [
+"desktop"
+],
+"listings": [
+"spyro-3-decomp"
+]
+},
+{
+"repo": "themuffinator/openQ4",
+"want": [
+"desktop"
+],
+"listings": [
+"openq4"
+]
+},
+{
+"repo": "theokyr/Project8Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"tony-hawks-project-8-recomp"
+]
+},
+{
+"repo": "TheOnlyZac/sly1",
+"want": [
+"desktop"
+],
+"listings": [
+"sly-cooper-decomp"
+]
+},
+{
+"repo": "ThePlayerRolo/LegoCloneWarsWii",
+"want": [
+"desktop"
+],
+"listings": [
+"lego-star-wars-iii-the-clone-wars"
+]
+},
+{
+"repo": "TheRunaway5/Phase-Distorter",
+"want": [
+"desktop"
+],
+"listings": [
+"earthbound-phase-distorter"
+]
+},
+{
+"repo": "TheSuperHackers/GeneralsGameCode",
+"want": [
+"desktop"
+],
+"listings": [
+"generalsgamecode"
+]
+},
+{
+"repo": "thewierdnut/endless-mobile",
+"want": [
+"android"
+],
+"listings": [
+"endless-sky-android"
+]
+},
+{
+"repo": "thextictac/Too-Human-Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"too-human-recomp"
+]
+},
+{
+"repo": "ThiagoLira/trouble-makers-pc-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"mischief-makers-recomp"
+]
+},
+{
+"repo": "thibautbus/top",
+"want": [
+"android"
+],
+"listings": [
+"the-oracles-project"
+]
+},
+{
+"repo": "tim-tim707/SW_RACER_RE",
+"want": [
+"desktop"
+],
+"listings": [
+"star-wars-episode-1-racer"
+]
+},
+{
+"repo": "tinsarfal/GDroid",
+"want": [
+"android"
+],
+"listings": [
+"gdroid"
+]
+},
+{
+"repo": "Tmcg2/rogue_squadron64",
+"want": [
+"desktop"
+],
+"listings": [
+"rogue-squadron-decomp"
+]
+},
+{
+"repo": "tmcleroy/muscle-march-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"muscle-march-recomp"
+]
+},
+{
+"repo": "tokeneffortports/ReCompiledSteel",
+"want": [
+"android"
+],
+"listings": [
+"recompiled-steel"
+]
+},
+{
+"repo": "tonihele/OpenKeeper",
+"want": [
+"desktop"
+],
+"listings": [
+"openkeeper"
+]
+},
+{
+"repo": "TotallyNotMichael-GH/dbz2",
+"want": [
+"desktop"
+],
+"listings": [
+"dragon-ball-z-budokai-2"
+]
+},
+{
+"repo": "Tribal-Trouble/tribaltrouble",
+"want": [
+"desktop"
+],
+"listings": [
+"tribal-trouble"
+]
+},
+{
+"repo": "triplea-game/triplea",
+"want": [
+"desktop"
+],
+"listings": [
+"triplea"
+]
+},
+{
+"repo": "tripplyons/pokeemerald-3d",
+"want": [
+"desktop"
+],
+"listings": [
+"pokemon-emerald-3d-pokeemerald-3d"
+]
+},
+{
+"repo": "Try/OpenGothic",
+"want": [
+"desktop"
+],
+"listings": [
+"open-gothic"
+]
+},
+{
+"repo": "TryTheSauceBoss/pokemon-survivorburst-android",
+"want": [
+"android"
+],
+"listings": [
+"pokemon-survivor-burst-android"
+]
+},
+{
+"repo": "TryTheSauceBoss/Pokewilds-Godot",
+"want": [
+"android"
+],
+"listings": [
+"pokewilds-android"
+]
+},
+{
+"repo": "TsilaAllaoui/warioland4",
+"want": [
+"desktop"
+],
+"listings": [
+"warioland4"
+]
+},
+{
+"repo": "turican0/remc2",
+"want": [
+"desktop"
+],
+"listings": [
+"remc2"
+]
+},
+{
+"repo": "TwilitRealm/dusklight",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"dusklight"
+]
+},
+{
+"repo": "tx00100xt/SeriousSamAlphaRemake",
+"want": [
+"desktop"
+],
+"listings": [
+"serioussamalpharemake"
+]
+},
+{
+"repo": "tx00100xt/SeriousSamClassic-VK",
+"want": [
+"desktop"
+],
+"listings": [
+"serioussamclassic-vk"
+]
+},
+{
+"repo": "udarmolota/pridroid",
+"want": [
+"android"
+],
+"listings": [
+"prison-architect-android"
+]
+},
+{
+"repo": "udarmolota/rimdroid",
+"want": [
+"android"
+],
+"listings": [
+"rimworld-android"
+]
+},
+{
+"repo": "udarmolota/ValDroid",
+"want": [
+"android"
+],
+"listings": [
+"valdroid"
+]
+},
+{
+"repo": "udarmolota/zomdroid",
+"want": [
+"android"
+],
+"listings": [
+"project-zomboid-android"
+]
+},
+{
+"repo": "Unchiga/Yu-Gi-Oh-Forbidden-Memories-Recompiled",
+"want": [
+"desktop"
+],
+"listings": [
+"yu-gi-oh-forbidden-memories-recomp"
+]
+},
+{
+"repo": "UNDERdecoded/Gen2Recomped",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"gen2recomp"
+]
+},
+{
+"repo": "Unkzittys/TherapyWithDrAlbertKrueger_AndroidPort",
+"want": [
+"android"
+],
+"listings": [
+"therapy-with-dr-albert-krueger-android"
+]
+},
+{
+"repo": "Unnunu/darkrift",
+"want": [
+"desktop"
+],
+"listings": [
+"dark-rift"
+]
+},
+{
+"repo": "Unvanquished/Unvanquished",
+"want": [
+"desktop"
+],
+"listings": [
+"unvanquished"
+]
+},
+{
+"repo": "USED255/artonelico2-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"ar-tonelico-ii-melody-of-metafalica"
+]
+},
+{
+"repo": "vabold/bba-wd",
+"want": [
+"desktop"
+],
+"listings": [
+"big-brain-academy-wii-degree"
+]
+},
+{
+"repo": "vaduur/LibertyRecompAndroid",
+"want": [
+"android"
+],
+"listings": [
+"libertyrecompandroid"
+]
+},
+{
+"repo": "vcmi/vcmi",
+"want": [
+"desktop"
+],
+"listings": [
+"vcmi"
+]
+},
+{
+"repo": "Velaron/cs16-client",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"cs16-client"
+]
+},
+{
+"repo": "Velaron/tf15-client",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"tf15-client"
+]
+},
+{
+"repo": "Veradictus/Thief3-Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"thief-deadly-shadows"
+]
+},
+{
+"repo": "veritr1x/nfsmw-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"nfs-most-wanted-black-edition-recomp"
+]
+},
+{
+"repo": "vermiceli/nes-contra-us",
+"want": [
+"desktop"
+],
+"listings": [
+"contra"
+]
+},
+{
+"repo": "vgrichina/battlecity",
+"want": [
+"desktop"
+],
+"listings": [
+"battle-city"
+]
+},
+{
+"repo": "vibecodekun/shantaerecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"shantae-recomp"
+]
+},
+{
+"repo": "Vindirect/WinFish",
+"want": [
+"desktop"
+],
+"listings": [
+"insaniquarium-deluxe"
+]
+},
+{
+"repo": "Voicedrew11/verdite1",
+"want": [
+"desktop"
+],
+"listings": [
+"kings-field-recomp"
+]
+},
+{
+"repo": "Voicedrew11/verdite2",
+"want": [
+"desktop"
+],
+"listings": [
+"verdite2"
+]
+},
+{
+"repo": "vonhoff/lemball-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"lemmings-paintball"
+]
+},
+{
+"repo": "Vwing/daggerfall-unity-android",
+"want": [
+"android"
+],
+"listings": [
+"daggerfall-unity-android"
+]
+},
+{
+"repo": "vyanhursky/DefJamFFNY-recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"def-jam-fight-for-ny-recomp"
+]
+},
+{
+"repo": "vzepec/ac3-decomp",
+"want": [
+"android"
+],
+"listings": [
+"ac3-decomp"
+]
+},
+{
+"repo": "Wannamingo/DoAXBV",
+"want": [
+"android"
+],
+"listings": [
+"dead-or-alive-xtreme-beach-volleyball-android"
+]
+},
+{
+"repo": "Warsow/qfusion",
+"want": [
+"desktop"
+],
+"listings": [
+"qfusion"
+]
+},
+{
+"repo": "Warzone2100/warzone2100",
+"want": [
+"desktop"
+],
+"listings": [
+"warzone-2100"
+]
+},
+{
+"repo": "wasdhjklxyz/lbtvg",
+"want": [
+"desktop"
+],
+"listings": [
+"lego-batman-the-videogame"
+]
+},
+{
+"repo": "Waterdish/2ship2harkinian-Android",
+"want": [
+"android"
+],
+"listings": [
+"2-ship-2-harkinian-outdated"
+]
+},
+{
+"repo": "Waterdish/Shipwright-Android",
+"want": [
+"android"
+],
+"listings": [
+"shipwright-android-outdated"
+]
+},
+{
+"repo": "Waterdish/zelda3-android",
+"want": [
+"android"
+],
+"listings": [
+"zelda3launcher"
+]
+},
+{
+"repo": "Wemino/MadnessPatch",
+"want": [
+"desktop"
+],
+"listings": [
+"madnesspatch"
+]
+},
+{
+"repo": "Wemino/VorpalFix",
+"want": [
+"desktop"
+],
+"listings": [
+"vorpalfix"
+]
+},
+{
+"repo": "whylurking/IsaacRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"isaac-flash-recomp"
+]
+},
+{
+"repo": "widberg/FUELDecompilation",
+"want": [
+"desktop"
+],
+"listings": [
+"fuel"
+]
+},
+{
+"repo": "WINDROID-EMU/RECOMP-ZELDA-3DS-ANDROID",
+"want": [
+"android"
+],
+"listings": [
+"zelda-3ds-android-triaevum"
+]
+},
+{
+"repo": "WiredForWar/machines",
+"want": [
+"desktop"
+],
+"listings": [
+"machines"
+]
+},
+{
+"repo": "WitherBlitz/NSMB-Wii-Multiplayer-Recompilation",
+"want": [
+"android"
+],
+"listings": [
+"new-super-mario-bros-wii-recomp"
+]
+},
+{
+"repo": "wivi514/Dead_Rising_2_Case_West_Xenon_Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"dead-rising-2-case-west-recomp"
+]
+},
+{
+"repo": "wivi514/Dead_Rising_2_Case_Zero_Xenon_Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"dead-rising-2-case-zero-recomp"
+]
+},
+{
+"repo": "wootbeer/btgarecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"battletanx-global-assault-recomp"
+]
+},
+{
+"repo": "wootbeer/bzrecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"battlezone-rise-of-the-black-dogs-recomp"
+]
+},
+{
+"repo": "wootbeer/Descent-Android",
+"want": [
+"android"
+],
+"listings": [
+"descent-android"
+]
+},
+{
+"repo": "wootbeer/Descent2-Android",
+"want": [
+"android"
+],
+"listings": [
+"descent-2-android"
+]
+},
+{
+"repo": "wootbeer/dinotale",
+"want": [
+"desktop"
+],
+"listings": [
+"dinotale"
+]
+},
+{
+"repo": "wootbeer/gotandroid",
+"want": [
+"android"
+],
+"listings": [
+"god-of-thunder-android"
+]
+},
+{
+"repo": "wootbeer/gsrandroid",
+"want": [
+"android"
+],
+"listings": [
+"golden-sun-android"
+]
+},
+{
+"repo": "wootbeer/jillandroid",
+"want": [
+"android"
+],
+"listings": [
+"jill-of-the-jungle-android"
+]
+},
+{
+"repo": "wootbeer/pbfandroid",
+"want": [
+"android"
+],
+"listings": [
+"pinball-fantasies-android"
+]
+},
+{
+"repo": "wszqkzqk/PvZ-Portable",
+"want": [
+"android"
+],
+"listings": [
+"pvz-portable"
+]
+},
+{
+"repo": "Wyrelade/KKND-Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"kknd-krush-kill-n-destroy"
+]
+},
+{
+"repo": "x86matthew/Playable3DMaze",
+"want": [
+"desktop"
+],
+"listings": [
+"3d-maze"
+]
+},
+{
+"repo": "xbret/xenoblade",
+"want": [
+"desktop"
+],
+"listings": [
+"xenoblade"
+]
+},
+{
+"repo": "Xeeynamo/sotn-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"castlevania-sotn-decomp"
+]
+},
+{
+"repo": "xoreos/xoreos",
+"want": [
+"desktop"
+],
+"listings": [
+"xoreos"
+]
+},
+{
+"repo": "XorTroll/mkds-re",
+"want": [
+"desktop"
+],
+"listings": [
+"mario-kart-ds"
+]
+},
+{
+"repo": "XProger/OpenLara",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"open-lara"
+]
+},
+{
+"repo": "xtreme8000/BetterSpades",
+"want": [
+"desktop"
+],
+"listings": [
+"betterspades"
+]
+},
+{
+"repo": "Y0oshi/lain-psx-decompiled",
+"want": [
+"desktop"
+],
+"listings": [
+"serial-experiments-lain"
+]
+},
+{
+"repo": "yairm210/Unciv",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"unciv"
+]
+},
+{
+"repo": "Yanis002/pm4",
+"want": [
+"desktop"
+],
+"listings": [
+"princess-maker-4"
+]
+},
+{
+"repo": "yannicksuter/smstrikers-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"super-mario-strikers-decomp"
+]
+},
+{
+"repo": "yaz0r/Azel",
+"want": [
+"desktop"
+],
+"listings": [
+"panzer-dragoon-saga"
+]
+},
+{
+"repo": "yell0wsuit/cuttherope-dx",
+"want": [
+"desktop"
+],
+"listings": [
+"cut-the-rope-cut-the-rope-dx"
+]
+},
+{
+"repo": "YesterMester/TheSimpsonsGameRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"the-simpsons-game-recomp"
+]
+},
+{
+"repo": "Yharnam-Hunters/Paleblood",
+"want": [
+"desktop"
+],
+"listings": [
+"bloodborne-decomp"
+]
+},
+{
+"repo": "YoshiCrystal9/re-gh2",
+"want": [
+"desktop"
+],
+"listings": [
+"guitar-hero-2"
+]
+},
+{
+"repo": "Yotona/twewy",
+"want": [
+"desktop"
+],
+"listings": [
+"the-world-ends-with-you"
+]
+},
+{
+"repo": "yquake2/yquake2",
+"want": [
+"desktop"
+],
+"listings": [
+"yamagi-quake2"
+]
+},
+{
+"repo": "yugenmagan/elfen-lied-fighting-android",
+"want": [
+"android"
+],
+"listings": [
+"elfen-lied-fighting-android"
+]
+},
+{
+"repo": "YuriPlanet/vera20k",
+"want": [
+"desktop"
+],
+"listings": [
+"vera20k"
+]
+},
+{
+"repo": "YuutaTsubasa/ChaotixRecompiled",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"chaotix-recompiled"
+]
+},
+{
+"repo": "YuutaTsubasa/Free-Riders-Recompiled",
+"want": [
+"desktop"
+],
+"listings": [
+"sonic-free-riders-recomp"
+]
+},
+{
+"repo": "z3xox/BT3-Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"bt3-recomp"
+]
+},
+{
+"repo": "z64a/star-rod",
+"want": [
+"desktop"
+],
+"listings": [
+"star-rod"
+]
+},
+{
+"repo": "ZackWilde27/FlatOut-2-decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"flatout-2"
+]
+},
+{
+"repo": "ZackWilde27/FlatOut-UC-Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"flatout-ultimate-carnage"
+]
+},
+{
+"repo": "zaps166/NFSIISE",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"nfsiise"
+]
+},
+{
+"repo": "Zaxaerith/CastlevaniaCircleOfTheMoonRecomp",
+"want": [
+"desktop"
+],
+"listings": [
+"castlevania-circle-of-the-moon-recomp"
+]
+},
+{
+"repo": "zcanann/bfbb",
+"want": [
+"desktop"
+],
+"listings": [
+"bfbb-decomp"
+]
+},
+{
+"repo": "zcanann/FFCC-Decomp",
+"want": [
+"desktop"
+],
+"listings": [
+"ffcc-decomp"
+]
+},
+{
+"repo": "ZDoom/gzdoom",
+"want": [
+"android",
+"desktop"
+],
+"listings": [
+"gzdoom"
+]
+},
+{
+"repo": "Zelda64Recomp/Zelda64Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"zelda64-recomp"
+]
+},
+{
+"repo": "zeldaret/af",
+"want": [
+"desktop"
+],
+"listings": [
+"animal-forest"
+]
+},
+{
+"repo": "zeldaret/botw",
+"want": [
+"desktop"
+],
+"listings": [
+"breath-of-the-wild-decomp"
+]
+},
+{
+"repo": "zeldaret/mm",
+"want": [
+"desktop"
+],
+"listings": [
+"majoras-mask-decomp"
+]
+},
+{
+"repo": "zeldaret/oot-gc",
+"want": [
+"desktop"
+],
+"listings": [
+"oot-gc-decomp"
+]
+},
+{
+"repo": "zeldaret/tmc",
+"want": [
+"desktop"
+],
+"listings": [
+"minish-cap"
+]
+},
+{
+"repo": "ZeroK-RTS/Zero-K",
+"want": [
+"desktop"
+],
+"listings": [
+"zero-k"
+]
+},
+{
+"repo": "zFitness/gow3_android",
+"want": [
+"android"
+],
+"listings": [
+"god-of-war-3-android"
+]
+},
+{
+"repo": "Zhes-20/R.E.P.O.E.V.R",
+"want": [
+"android"
+],
+"listings": [
+"repo-ev-r"
+]
+},
+{
+"repo": "ZinexDa/sonic-r-android",
+"want": [
+"android"
+],
+"listings": [
+"sonic-r-android"
+]
+},
+{
+"repo": "ZloiKILLER/nfs3recompiled-android",
+"want": [
+"android"
+],
+"listings": [
+"nfs3-android"
+]
+},
+{
+"repo": "zolaware/reblue",
+"want": [
+"desktop"
+],
+"listings": [
+"reblue"
+]
+},
+{
+"repo": "Zorkats/G-Diffuser",
+"want": [
+"desktop"
+],
+"listings": [
+"f-zero-x-recomp"
+]
+},
+{
+"repo": "Zumbo06/Crash2Recomp",
+"want": [
+"desktop"
+],
+"listings": [
+"crash2-recomp"
+]
+},
+{
+"repo": "zwaetschge/ACGC-Android-Port",
+"want": [
+"android"
+],
+"listings": [
+"animal-crossing-gc-android"
+]
+},
+{
+"repo": "zxyandreay/azazel6",
+"want": [
+"android"
+],
+"listings": [
+"tekken-6-android"
+]
+}
+]
+}
