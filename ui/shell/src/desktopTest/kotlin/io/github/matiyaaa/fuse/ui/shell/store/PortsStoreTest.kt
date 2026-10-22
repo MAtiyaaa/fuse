@@ -406,6 +406,78 @@ class PortsStoreTest {
         assertEquals(before, ini.readText(), "put back exactly")
     }
 
+    /** Installs a made-up port with Fuse Tune's [id] and its settings at [settings] in its home, and gives its game. */
+    private suspend fun tunedPort(id: String, settings: String): Triple<FuseStore, File, io.github.matiyaaa.fuse.model.GameId> {
+        File(game, "SKY.DAT").writeBytes(ByteArray(16) { 7 })
+        val list = """
+            {"format":1,"revision":2,"ports":[
+              {"id":"$id","name":"Tuned","game":"Sky Racer","about":"Made up.","homepage":"https://example.org/tuned","version":"1.0",
+               "builds":[{"os":"linux","url":"https://example.org/tuned.zip","size":${build.size},"sha256":"${sha(build)}","kind":"ZIP","run":"skyport"}],
+               "data":[{"id":"game","name":"Its files","about":"From the CD.","needs":[["SKY.DAT"]]}],
+               "source":"made up","settings":{"file":"{home}/$settings"}}
+            ]}
+        """.trimIndent()
+        val (services, files) = services(list = list)
+        val store = createFuseStore(services, scope)
+        store.ports.open()
+        store.until("listed") { it.loaded }
+        assertNull(store.ports.chooseFolder(id, "game", game.absolutePath))
+        store.ports.install(id)
+        val gameId = store.until("set up") { it.port(id)?.ready == true }.port(id)!!.game!!
+        return Triple(store, File(files.folder, "$id/home"), gameId)
+    }
+
+    @Test
+    fun aHarbourMastersPortsCVarsAreChangedInsideTheirObjectsUnderTheMenusOwnNames(): Unit = runBlocking {
+        val (store, home, id) = tunedPort("shipwright", "shipofharkinian.json")
+        // As libultraship wrote it: every CVar under CVars, its name's dots as objects.
+        val json = File(home, "shipofharkinian.json").apply { parentFile.mkdirs(); writeText("{\n    \"CVars\": {\n        \"gSettings\": {\n            \"ControlNav\": 1\n        }\n    },\n    \"Window\": {\n        \"Width\": 640\n    }\n}\n") }
+        val before = json.readText()
+        val view = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(id, null))
+        val general = view.sections.single { it.title == "Settings / General" }
+        val nav = general.values.single { it.setting.key == "ControlNav" }
+        assertEquals("true", nav.value, "its 1 shown as on")
+        assertEquals("Menu Controller Navigation", nav.setting.label)
+        val boot = general.values.single { it.setting.key == "BootSequence" }
+        assertEquals("0", boot.value, "the menu's default where the file says nothing")
+        assertTrue(store.library.setEveryEmulatorSetting(id, null, nav.setting.id, "false"))
+        assertTrue(store.library.setEveryEmulatorSetting(id, null, boot.setting.id, "2"))
+        assertEquals(
+            "{\n    \"CVars\": {\n        \"gSettings\": {\n            \"ControlNav\": 0,\n            \"BootSequence\": 2\n        }\n    },\n    \"Window\": {\n        \"Width\": 640\n    }\n}\n",
+            json.readText(),
+            "a switch written 1 or 0, as libultraship keeps it; everything else as it was",
+        )
+        assertTrue(store.library.restoreEmulatorSettings(id, null))
+        assertEquals(before, json.readText(), "put back exactly")
+    }
+
+    @Test
+    fun anN64RecompilationsTabsAreEachTheirOwnFileBesideTheOthers(): Unit = runBlocking {
+        val (store, home, id) = tunedPort("banjorecomp", "general.json")
+        val graphics = File(home, "graphics.json").apply { parentFile.mkdirs(); writeText("{\n    \"res_option\": \"Auto\"\n}") }
+        val view = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(id, null))
+        val res = view.sections.single { it.title == "Graphics" }.values.single { it.setting.key == "res_option" }
+        assertEquals(listOf("Auto", "Resolution"), listOf(res.value, res.setting.label))
+        assertTrue(store.library.setEveryEmulatorSetting(id, null, res.setting.id, "Original2x"))
+        assertEquals("{\n    \"res_option\": \"Original2x\"\n}", graphics.readText(), "in the tab's own file")
+        val rumble = view.sections.single { it.title == "General" }.values.single { it.setting.key == "rumble_strength" }
+        assertTrue(store.library.setEveryEmulatorSetting(id, null, rumble.setting.id, "60"))
+        assertEquals("{\n  \"rumble_strength\": 60\n}\n", File(home, "general.json").readText(), "a file the game hasn't made yet, made with the one key")
+    }
+
+    @Test
+    fun anIdTech4PortsConsoleVariablesAreWrittenAsItsSetaLines(): Unit = runBlocking {
+        val (store, home, id) = tunedPort("dhewm3", "base/dhewm.cfg")
+        val cfg = File(home, "base/dhewm.cfg").apply { parentFile.mkdirs(); writeText("unbindall\nbind \"TAB\" \"_impulse19\"\nseta r_mode \"5\"\nseta r_fullscreen \"0\"\n") }
+        val view = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(id, null))
+        val renderer = view.sections.single { it.title == "Renderer" }
+        val full = renderer.values.single { it.setting.key == "r_fullscreen" }
+        assertEquals("false", full.value)
+        assertTrue(store.library.setEveryEmulatorSetting(id, null, full.setting.id, "true"))
+        assertTrue(store.library.setEveryEmulatorSetting(id, null, renderer.values.single { it.setting.key == "r_mode" }.setting.id, "7"))
+        assertEquals("unbindall\nbind \"TAB\" \"_impulse19\"\nseta r_mode \"7\"\nseta r_fullscreen \"1\"\n", cfg.readText())
+    }
+
     @Test
     fun aRecompilationIsMadeFromThePersonsRomInTheLibraryLinkedOrTurnedNeverChanged(): Unit = runBlocking {
         // A made-up N64 ROM in its own order (.z64), and the same ROM with its pairs swapped (.v64).
