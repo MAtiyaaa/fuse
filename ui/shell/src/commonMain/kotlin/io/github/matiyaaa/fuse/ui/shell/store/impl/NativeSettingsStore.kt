@@ -75,6 +75,11 @@ internal class NativeSettingsStore(
         val toml: Boolean = false,
         /** Its files are MAME's ini, an option a line with its name padded before its value. */
         val mameIni: Boolean = false,
+        /**
+         * Its file is one setting a line, its name then its value ([io.github.matiyaaa.fuse.launch.settings.WordsText]):
+         * after this command (`seta`, the Quake engines'), or alone (`""`, the Doom ports'); null for neither.
+         */
+        val words: String? = null,
         /** Its files are Eden's, each value kept in two or three keys ([io.github.matiyaaa.fuse.launch.settings.EdenConfig]). */
         val eden: Boolean = false,
         /** Its files are Azahar's, each value kept in two keys ([io.github.matiyaaa.fuse.launch.settings.AzaharConfig]). */
@@ -105,6 +110,8 @@ internal class NativeSettingsStore(
         val gameRecords: String? = null,
         /** A RetroArch game's core options, beside RetroArch's own settings. */
         val core: CoreTarget? = null,
+        /** Shown by the tabs its own settings have (a port's menus), not by where in its file each is kept. */
+        val byTab: Boolean = false,
     ) {
         val forGame: Boolean get() = gamePath != null
 
@@ -117,6 +124,7 @@ internal class NativeSettingsStore(
             json -> io.github.matiyaaa.fuse.launch.settings.JsonText(content ?: "") { section, key -> isText(section, key) }
             toml -> io.github.matiyaaa.fuse.launch.settings.TomlText(content ?: "") { section, key -> isText(section, key) }
             mameIni -> io.github.matiyaaa.fuse.launch.settings.MameIniText(content ?: "")
+            words != null -> io.github.matiyaaa.fuse.launch.settings.WordsText(content ?: "", words.ifEmpty { null }) { key -> isText("", key) }
             else -> IniText(content ?: "", spaced = !(eden || azahar))
         }
 
@@ -210,7 +218,12 @@ internal class NativeSettingsStore(
             id, port.name, files, path, null, port.game, globals = others,
             // As Fuse Tune read the port's code, whatever an older list says (it names only ini).
             json = Tune.format(id) == "json",
-            version = port.version, writer = PortWriter(portFiles),
+            words = when (Tune.format(id)) {
+                "seta" -> "seta"
+                "words" -> ""
+                else -> null
+            },
+            version = port.version, writer = PortWriter(portFiles), byTab = true,
         ) to null
     }
 
@@ -562,11 +575,15 @@ internal class NativeSettingsStore(
         }
         val game = read(t, t.gamePath)
         // Grouped as the emulator's own settings group them: its tabs where its file has no sections (RetroArch's).
-        val sections = all.groupBy { it.file to (it.tab?.takeIf { _ -> it.section.isEmpty() } ?: it.section) }.map { (where, settings) ->
+        val sections = all.groupBy { it.file to (it.tab?.takeIf { _ -> it.section.isEmpty() || t.byTab } ?: it.section) }.map { (where, settings) ->
             val (file, section) = where
+            val first = settings.first()
             TuneSection(
                 id = "${file.orEmpty()}|$section",
-                title = if (settings.first().section.isEmpty()) section.ifEmpty { "Other" } else sectionTitle(t.family, file, settings.first().path),
+                title = when {
+                    first.section.isEmpty() || (t.byTab && first.tab != null) -> section.ifEmpty { "Other" }
+                    else -> sectionTitle(t.family, file, first.path)
+                },
                 values = settings.map { valueOf(t, it, if (t.forGame) game else null, files[it.file]).copy(locked = locks[it.id]) },
             )
         }

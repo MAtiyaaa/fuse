@@ -27,7 +27,35 @@ object PortSources {
     private fun classic(id: String) = Port(id, N64Recomp.Classic::parse, N64Recomp.CLASSIC_TREE, N64Recomp.CLASSIC_SUBMODULES, format = "json")
     private fun frontend(id: String) = Port(id, N64Recomp.Frontend::parse, N64Recomp.FRONTEND_TREE, N64Recomp.FRONTEND_SUBMODULES, format = "json")
 
+    private fun ship(id: String) = Port(id, Libultraship::parse, Libultraship.TREE, format = "json", switches = "1" to "0")
+
+    private fun idTech4(id: String) = Port(id, IdTech4::parse, IdTech4.TREE, format = "seta", switches = "1" to "0")
+
+    private fun quake3(id: String, vararg tree: String) = Port(id, Quake3::parse, tree.toList(), format = "seta", switches = "1" to "0")
+    private val Q3 = arrayOf("/code/**/*.c", "/code/**/*.cpp", "/code/**/*.h")
+
     val PORTS: List<Port> = listOf(
+        // The Quake III engine's: each archived console variable it and its game modules make.
+        quake3("quake3e", *Q3),
+        quake3("lilium-voyager", *Q3),
+        quake3("spearmint", *Q3),
+        quake3("openmohaa", *Q3),
+        quake3("iortcw", "/SP/code/**/*.c", "/SP/code/**/*.h"),
+        // OpenJK's single-player builds: Jedi Academy's game from code/, Jedi Outcast's from codeJK2/.
+        quake3("openjk", *Q3, "/shared/**/*.c", "/shared/**/*.cpp", "/shared/**/*.h"),
+        quake3("openjo", *Q3, "!/code/game/**", "!/code/cgame/**", "!/code/ui/**", "/codeJK2/**/*.cpp", "/codeJK2/**/*.c", "/codeJK2/**/*.h", "/shared/**/*.c", "/shared/**/*.cpp", "/shared/**/*.h"),
+        // id Tech 4's: each archived console variable, as the engine declares it.
+        idTech4("dhewm3"),
+        idTech4("openq4"),
+        // The Harbour Masters' ports and those on their libultraship: each CVar its menus show.
+        ship("shipwright"),
+        ship("2ship2harkinian"),
+        ship("starship"),
+        ship("spaghettikart"),
+        ship("ghostship"),
+        ship("lighthouse"),
+        ship("paperboat"),
+        ship("battleship"),
         // N64ModernRuntime's games from Zelda64Recomp's template: their own config.cpp.
         classic("zelda64recomp"),
         classic("dino-recomp"),

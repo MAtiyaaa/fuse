@@ -1953,7 +1953,8 @@
         "Its Windows build is 32-bit, which 64-bit Windows runs.",
         "On Linux it takes OpenAL from your system, which SteamOS and most desktops have."
       ],
-      "source": "dhewm3 1.5.5: neo/framework/FileSystem.cpp (fs_basepath for the game's files, fs_savepath for what it writes, set with +set on the command line); README.md (no game data in the source release); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "dhewm3 1.5.5: neo/framework/FileSystem.cpp (fs_basepath for the game's files, fs_savepath for what it writes, set with +set on the command line); README.md (no game data in the source release); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); neo/framework/Licensee.h CONFIG_FILE and BASE_GAMEDIR; neo/framework/CVarSystem.cpp WriteFlaggedVariables (seta lines of the archived variables) (its settings in base/dhewm.cfg under the folder it writes to, read by Fuse Tune)",
+      "settings": { "file": "{home}/base/dhewm.cfg" }
     },
     {
       "id": "corsixth",
@@ -2033,7 +2034,8 @@
         "OpenJK reads Jedi Academy's files where they are; it never changes them.",
         "Your saves and settings are OpenJK's own, kept by Fuse beside its copy."
       ],
-      "source": "OpenJK latest: shared/sys/sys_main.cpp (its game modules from beside the program, then fs_basepath); qcommon/files.cpp (fs_basepath for the game's files, fs_homepath for what it writes); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "OpenJK latest: shared/sys/sys_main.cpp (its game modules from beside the program, then fs_basepath); qcommon/files.cpp (fs_basepath for the game's files, fs_homepath for what it writes); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); code/qcommon/q_shared.h Q3CONFIG_NAME (PRODUCT_NAME openjk_sp) and BASEGAME; code/qcommon/cvar.cpp Cvar_WriteVariables (its settings in base/openjk_sp.cfg under the folder it writes to, read by Fuse Tune)",
+      "settings": { "file": "{home}/base/openjk_sp.cfg" }
     },
     {
       "id": "openjo",
@@ -2078,7 +2080,8 @@
         "OpenJO reads Jedi Outcast's files where they are; it never changes them.",
         "Your saves and settings are OpenJO's own, kept by Fuse beside its copy."
       ],
-      "source": "OpenJK latest: shared/sys/sys_main.cpp (its game modules from beside the program, then fs_basepath); code/qcommon/files.cpp (fs_basepath, fs_homepath); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "OpenJK latest: shared/sys/sys_main.cpp (its game modules from beside the program, then fs_basepath); code/qcommon/files.cpp (fs_basepath, fs_homepath); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); code/qcommon/q_shared.h Q3CONFIG_NAME (PRODUCT_NAME openjo_sp, JK2_MODE) and BASEGAME; code/qcommon/cvar.cpp Cvar_WriteVariables (its settings in base/openjo_sp.cfg under the folder it writes to, read by Fuse Tune)",
+      "settings": { "file": "{home}/base/openjo_sp.cfg" }
     },
     {
       "id": "iortcw",
@@ -2124,7 +2127,8 @@
         "iortcw reads the game's files from beside itself, through links in Fuse's copy, beside its own game modules.",
         "Your saves and settings are iortcw's own, kept by Fuse beside its copy."
       ],
-      "source": "iortcw 1.51c: SP/code/qcommon/files.c (fs_basepath, the folder it starts from, and fs_homepath for what it writes); the release (its own game modules in Main beside the program); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "iortcw 1.51c: SP/code/qcommon/files.c (fs_basepath, the folder it starts from, and fs_homepath for what it writes); the release (its own game modules in Main beside the program); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); SP/code/qcommon/qcommon.h Q3CONFIG_CFG, SP/code/qcommon/q_shared.h BASEGAME; SP/code/qcommon/cvar.c Cvar_WriteVariables (its settings in Main/wolfconfig.cfg under the folder it writes to, read by Fuse Tune)",
+      "settings": { "file": "{home}/Main/wolfconfig.cfg" }
     },
     {
       "id": "openmohaa",
@@ -2169,7 +2173,8 @@
         "OpenMoHAA reads Medal of Honor's files where they are; it never changes them.",
         "Your saves and settings are OpenMoHAA's own, kept by Fuse beside its copy."
       ],
-      "source": "openmohaa v0.82.1: code/qcommon/files.cpp (fs_basepath for the game's files, fs_homepath for what it writes); the release (its game and cgame modules beside the program); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "openmohaa v0.82.1: code/qcommon/files.cpp (fs_basepath for the game's files, fs_homepath for what it writes); the release (its game and cgame modules beside the program); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); code/qcommon/qcommon.h Q3CONFIG_CFG, code/qcommon/q_shared.h BASEGAME; code/qcommon/cvar.c Cvar_WriteVariables (its settings in main/q3config.cfg under the folder it writes to, read by Fuse Tune)",
+      "settings": { "file": "{home}/main/q3config.cfg" }
     },
     {
       "id": "quake3e",
@@ -2213,7 +2218,8 @@
         "Quake3e reads Quake III Arena's files where they are; it never changes them.",
         "Its settings are its own, kept by Fuse beside its copy."
       ],
-      "source": "Quake3e latest: code/qcommon/files.c (fs_basepath for the game's files, fs_homepath for what it writes); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "Quake3e latest: code/qcommon/files.c (fs_basepath for the game's files, fs_homepath for what it writes); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); code/qcommon/qcommon.h Q3CONFIG_CFG, code/qcommon/q_shared.h BASEGAME; code/qcommon/cvar.c Cvar_WriteVariables (seta lines of the archived variables) (its settings in baseq3/q3config.cfg under the folder it writes to, read by Fuse Tune)",
+      "settings": { "file": "{home}/baseq3/q3config.cfg" }
     },
     {
       "id": "lilium-voyager",
@@ -2257,7 +2263,8 @@
         "Lilium Voyager reads Elite Force's files where they are; it never changes them.",
         "Its settings are its own, kept by Fuse beside its copy."
       ],
-      "source": "lilium-voyager v1.40: code/qcommon/files.c (fs_basepath, fs_homepath, ioquake3's); README; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "lilium-voyager v1.40: code/qcommon/files.c (fs_basepath, fs_homepath, ioquake3's); README; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); code/qcommon/qcommon.h Q3CONFIG_CFG (ELITEFORCE), code/qcommon/q_shared.h BASEGAME; code/qcommon/cvar.c Cvar_WriteVariables (its settings in baseEF/hmconfig.cfg under the folder it writes to, read by Fuse Tune)",
+      "settings": { "file": "{home}/baseEF/hmconfig.cfg" }
     },
     {
       "id": "woof",
@@ -2654,7 +2661,8 @@
         "Your saves and settings are openQ4's own, kept by Fuse in its home.",
         "On Linux it takes OpenAL from your system, which SteamOS and most desktops have."
       ],
-      "source": "openQ4 v0.13.2: docs/user/getting-started.md (If Auto-Detection Fails: +set fs_basepath at the Quake 4 folder holding q4base); src/framework/FileSystem.cpp, idFileSystemLocal::Init (fs_basepath kept when it holds q4base/pak001.pk4, fs_homepath the writable root and fs_savepath following it, fs_cdpath the folder it starts from) and FS_HasGameFilesAtGameDirPath (pak001.pk4); src/framework/licensee.h (q4base, baseoq4); src/framework/Session.cpp (savegames/); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "openQ4 v0.13.2: docs/user/getting-started.md (If Auto-Detection Fails: +set fs_basepath at the Quake 4 folder holding q4base); src/framework/FileSystem.cpp, idFileSystemLocal::Init (fs_basepath kept when it holds q4base/pak001.pk4, fs_homepath the writable root and fs_savepath following it, fs_cdpath the folder it starts from) and FS_HasGameFilesAtGameDirPath (pak001.pk4); src/framework/licensee.h (q4base, baseoq4); src/framework/Session.cpp (savegames/); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/framework/licensee.h CONFIG_FILE; src/framework/Common.cpp WriteConfigToFile; src/framework/CVarSystem.cpp (seta lines of the archived variables) (its settings in baseoq4/openQ4Config.cfg under the folder it writes to, read by Fuse Tune)",
+      "settings": { "file": "{home}/baseoq4/openQ4Config.cfg" }
     },
     {
       "id": "spearmint",
@@ -2698,7 +2706,8 @@
         "Spearmint reads Quake III's files where they are, below its own game code beside itself; it never changes them.",
         "Your settings and downloads are Spearmint's own, kept by Fuse in its home."
       ],
-      "source": "spearmint release-1.0.3: code/qcommon/files.c, FS_Startup (fs_cdpath, fs_basepath the program's folder, fs_homepath for what it writes) and FS_AddGame (cdpath, then basepath, then homepath, in rising priority); code/sys/sys_main.c (DEFAULT_BASEDIR, the program's folder); the release (its game code in baseq3/spearmint-baseq3-1.0.3.pk3 beside the program); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "spearmint release-1.0.3: code/qcommon/files.c, FS_Startup (fs_cdpath, fs_basepath the program's folder, fs_homepath for what it writes) and FS_AddGame (cdpath, then basepath, then homepath, in rising priority); code/sys/sys_main.c (DEFAULT_BASEDIR, the program's folder); the release (its game code in baseq3/spearmint-baseq3-1.0.3.pk3 beside the program); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); code/qcommon/qcommon.h Q3CONFIG_CFG and BASEGAME; code/qcommon/cvar.c Cvar_WriteVariables (its settings in baseq3/config.cfg under the folder it writes to, read by Fuse Tune)",
+      "settings": { "file": "{home}/baseq3/config.cfg" }
     },
     {
       "id": "fallout1-ce",
@@ -3485,7 +3494,8 @@
         "It makes oot.o2r (or oot-mq.o2r) from your ROM on that first start and never changes the ROM itself.",
         "Its saves, settings and the game data it made from your ROM are its own, kept by Fuse in its home."
       ],
-      "source": "Shipwright 9.3.1: README.md (provide a supported copy of the game, select it when prompted; saves, settings and oot.o2r in the app folder, SHIP_HOME to choose another); soh/soh/OTRGlobals.cpp (shipofharkinian.json, RunExtract writing oot.o2r or oot-mq.o2r into GetAppDirectoryPath, SetAppImageHome leaving SHIP_HOME as set); soh/soh/SaveManager.cpp (saves in Save in the app folder); libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "Shipwright 9.3.1: README.md (provide a supported copy of the game, select it when prompted; saves, settings and oot.o2r in the app folder, SHIP_HOME to choose another); soh/soh/OTRGlobals.cpp (shipofharkinian.json, RunExtract writing oot.o2r or oot-mq.o2r into GetAppDirectoryPath, SetAppImageHome leaving SHIP_HOME as set); soh/soh/SaveManager.cpp (saves in Save in the app folder); libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); soh/soh/OTRGlobals.cpp (its settings in shipofharkinian.json in the folder SHIP_HOME names, libultraship Context::InitConfiguration; each CVar under CVars, ConsoleVariable::Save, read by Fuse Tune from its menus)",
+      "settings": { "file": "{home}/shipofharkinian.json" }
     },
     {
       "id": "2ship2harkinian",
@@ -3524,7 +3534,8 @@
         "It makes mm.o2r from your ROM on that first start and never changes the ROM itself.",
         "Its saves, settings and the game data it made from your ROM are its own, kept by Fuse in its home."
       ],
-      "source": "2ship2harkinian 5.0.1: README.md (provide a supported copy of the game, select it when prompted; custom assets in mods); mm/2s2h/BenPort.cpp (2ship2harkinian.json, mm.o2r and the mods folder in the app folder); mm/2s2h/SaveManager/SaveManager.cpp (saves in the app folder); libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "2ship2harkinian 5.0.1: README.md (provide a supported copy of the game, select it when prompted; custom assets in mods); mm/2s2h/BenPort.cpp (2ship2harkinian.json, mm.o2r and the mods folder in the app folder); mm/2s2h/SaveManager/SaveManager.cpp (saves in the app folder); libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); mm/2s2h/BenPort.cpp (its settings in 2ship2harkinian.json in the folder SHIP_HOME names, libultraship Context::InitConfiguration; each CVar under CVars, ConsoleVariable::Save, read by Fuse Tune from its menus)",
+      "settings": { "file": "{home}/2ship2harkinian.json" }
     },
     {
       "id": "starship",
@@ -3562,7 +3573,8 @@
         "It makes sf64.o2r from your ROM on that first start and never changes the ROM itself.",
         "Its saves, settings and the game data it made from your ROM are its own, kept by Fuse in its home."
       ],
-      "source": "Starship v2.0.0: README.md (a US 1.0 or 1.1 ROM in .z64 form, selected on the first run; EU or JP for voices); src/port/Engine.cpp (sf64.o2r in the app folder, made by GenAssetFile when missing; starship.cfg.json; the mods folder made in the folder it starts from); src/port/extractor/GameExtractor.cpp (SelectGameFromUI, the file picker for the ROM); libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "Starship v2.0.0: README.md (a US 1.0 or 1.1 ROM in .z64 form, selected on the first run; EU or JP for voices); src/port/Engine.cpp (sf64.o2r in the app folder, made by GenAssetFile when missing; starship.cfg.json; the mods folder made in the folder it starts from); src/port/extractor/GameExtractor.cpp (SelectGameFromUI, the file picker for the ROM); libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/port/Engine.cpp (its settings in starship.cfg.json in the folder SHIP_HOME names, libultraship Context::InitConfiguration; each CVar under CVars, ConsoleVariable::Save, read by Fuse Tune from its menus)",
+      "settings": { "file": "{home}/starship.cfg.json" }
     },
     {
       "id": "spaghettikart",
@@ -3607,7 +3619,8 @@
         "It makes mk64.o2r from your ROM on that first start and never changes the ROM itself.",
         "Its saves, settings and the game data it made from your ROM are its own, kept by Fuse in its home."
       ],
-      "source": "SpaghettiKart 1.0.0: README.md (a US ROM in .z64 form, selected on the first run; mk64.o2r made beside the program); src/port/Engine.cpp (spaghettify.cfg.json, mk64.o2r and mods in the app folder); src/port/pak.cpp (the Controller Pak's controllerPak_header.sav and controllerPak_file_N.sav in the app folder); libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "SpaghettiKart 1.0.0: README.md (a US ROM in .z64 form, selected on the first run; mk64.o2r made beside the program); src/port/Engine.cpp (spaghettify.cfg.json, mk64.o2r and mods in the app folder); src/port/pak.cpp (the Controller Pak's controllerPak_header.sav and controllerPak_file_N.sav in the app folder); libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/port/Engine.cpp (its settings in spaghettify.cfg.json in the folder SHIP_HOME names, libultraship Context::InitConfiguration; each CVar under CVars, ConsoleVariable::Save, read by Fuse Tune from its menus)",
+      "settings": { "file": "{home}/spaghettify.cfg.json" }
     },
     {
       "id": "ghostship",
@@ -3646,7 +3659,8 @@
         "It makes sm64.o2r from your ROM on that first start and never changes the ROM itself.",
         "Its saves, settings and the game data it made from your ROM are its own, kept by Fuse in its home."
       ],
-      "source": "Ghostship 3.0.0: README.md (a US or JP ROM in .z64 form, selected on the first run); src/port/Engine.cpp (sm64.o2r, ghostship.cfg.json and logs in the app folder; the ROM picked when sm64.o2r is missing); saves and randomizer in the app folder; libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "Ghostship 3.0.0: README.md (a US or JP ROM in .z64 form, selected on the first run); src/port/Engine.cpp (sm64.o2r, ghostship.cfg.json and logs in the app folder; the ROM picked when sm64.o2r is missing); saves and randomizer in the app folder; libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/port/Engine.cpp (its settings in ghostship.cfg.json in the folder SHIP_HOME names, libultraship Context::InitConfiguration; each CVar under CVars, ConsoleVariable::Save, read by Fuse Tune from its menus)",
+      "settings": { "file": "{home}/ghostship.cfg.json" }
     },
     {
       "id": "lighthouse",
@@ -3685,7 +3699,8 @@
         "It makes bk.o2r from your ROM on that first start and never changes the ROM itself.",
         "Its saves, settings and the game data it made from your ROM are its own, kept by Fuse in its home."
       ],
-      "source": "Lighthouse 1.1.0: README.md (the four ROMs it accepts, by SHA-1, in .z64 form); src/port/Engine.cpp (lighthouse.cfg.json, bk.o2r and mods in the app folder); saves in the app folder; libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "Lighthouse 1.1.0: README.md (the four ROMs it accepts, by SHA-1, in .z64 form); src/port/Engine.cpp (lighthouse.cfg.json, bk.o2r and mods in the app folder); saves in the app folder; libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/port/Engine.cpp (its settings in lighthouse.cfg.json in the folder SHIP_HOME names, libultraship Context::InitConfiguration; each CVar under CVars, ConsoleVariable::Save, read by Fuse Tune from its menus)",
+      "settings": { "file": "{home}/lighthouse.cfg.json" }
     },
     {
       "id": "paperboat",
@@ -3724,7 +3739,8 @@
         "It makes pm64.o2r from your ROM on that first start and never changes the ROM itself.",
         "Its saves, settings and the game data it made from your ROM are its own, kept by Fuse in its home."
       ],
-      "source": "PaperBoat 1.0.3: README.md (provide a supported copy of the game, select it when prompted; custom assets in mods); src/port/Engine.cpp (paperboat.cfg.json, pm64.o2r, mods and saves/ in the app folder); libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "PaperBoat 1.0.3: README.md (provide a supported copy of the game, select it when prompted; custom assets in mods); src/port/Engine.cpp (paperboat.cfg.json, pm64.o2r, mods and saves/ in the app folder); libultraship src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux; on Windows the folder it starts from, Fuse's copy) and GetPathRelativeToAppDirectory; the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); src/port/Engine.cpp (its settings in paperboat.cfg.json in the folder SHIP_HOME names, libultraship Context::InitConfiguration; each CVar under CVars, ConsoleVariable::Save, read by Fuse Tune from its menus)",
+      "settings": { "file": "{home}/paperboat.cfg.json" }
     },
     {
       "id": "sm64coopdx",
@@ -4174,7 +4190,8 @@
         "It makes BattleShip.o2r from your ROM on that first start and never changes the ROM itself.",
         "Its saves, settings and the game data it made from your ROM are its own, kept by Fuse in its home."
       ],
-      "source": "BattleShip v1.6: README.md (you supply your own ROM, US NTSC-U v1.0; the first-run ROM-extraction wizard); port/port.cpp (BattleShip.cfg.json and BattleShip.o2r in the app folder, mods); port/port_save.cpp (ssb64_save.bin in the app folder); scripts/package-windows.ps1 (the Windows build portable: saves and config beside BattleShip.exe); its libultraship's src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "BattleShip v1.6: README.md (you supply your own ROM, US NTSC-U v1.0; the first-run ROM-extraction wizard); port/port.cpp (BattleShip.cfg.json and BattleShip.o2r in the app folder, mods); port/port_save.cpp (ssb64_save.bin in the app folder); scripts/package-windows.ps1 (the Windows build portable: saves and config beside BattleShip.exe); its libultraship's src/ship/Context.cpp, GetAppDirectoryPath (SHIP_HOME on Linux); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it); port/port.cpp (its settings in BattleShip.cfg.json in the folder SHIP_HOME names, libultraship Context::InitConfiguration; each CVar under CVars, ConsoleVariable::Save, read by Fuse Tune from its menus)",
+      "settings": { "file": "{home}/BattleShip.cfg.json" }
     },
     {
       "id": "strikers",
