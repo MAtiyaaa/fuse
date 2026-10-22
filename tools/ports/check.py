@@ -224,10 +224,14 @@ def check(index_path, out_path, system=SYSTEM, arch="x86_64", allow_file=False):
             program = os.path.join(install, build["run"])
             if not os.path.isfile(program):
                 raise ValueError(f"no {build['run']} in it")
-            if port.get("check") is None:
+            how = port.get("check")
+            # A system's own way where it differs (a Windows build that prints nothing to a console).
+            if isinstance(how, dict) and isinstance(how.get(system), dict):
+                how = how[system]
+            if how is None:
                 result.update(passed=False, detail="it has no check")
             else:
-                ok, seen = started(program, port["check"], install)
+                ok, seen = started(program, how, install)
                 result.update(passed=ok, detail=seen)
         except Exception as e:  # every failure is this port's result, never the job's end
             result.update(passed=False, detail=str(e))

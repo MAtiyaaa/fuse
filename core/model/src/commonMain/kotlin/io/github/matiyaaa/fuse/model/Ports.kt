@@ -166,10 +166,17 @@ data class PortOverlay(val into: String = "", val own: List<String> = emptyList(
 /**
  * How the nightly check sees a port start without the game's files: run with [args], it prints
  * something matching [expect] (a regular expression) and ends; or, with [stay], it is still running
- * after that many seconds, or ended by itself without crashing.
+ * after that many seconds, or ended by itself without crashing. [linux] and [windows] are that
+ * system's own way where it differs (a Windows build that prints nothing to a console).
  */
 @Serializable
-data class PortCheck(val args: List<String> = emptyList(), val expect: String? = null, val stay: Int? = null)
+data class PortCheck(
+    val args: List<String> = emptyList(),
+    val expect: String? = null,
+    val stay: Int? = null,
+    val linux: PortCheck? = null,
+    val windows: PortCheck? = null,
+)
 
 /** The placeholders [Port.args] may use. */
 object PortTokens {

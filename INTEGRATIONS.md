@@ -888,12 +888,22 @@ the first time. Read at every start, so a change in Steam counts at once. None o
 now needs it.
 
 **The nightly check** (`.github/workflows/ports.yml`, `tools/ports/check.py`): every night on main
-each port's Linux build is downloaded, checked against the list, unpacked the same way and started
-without the game's files on a virtual screen: DevilutionX and OpenRCT2 print their versions,
-Fallout 2 Community Edition must still be running after five seconds or end by itself, never by a
-crash. The list is then marked with what passed, its revision raised, signed and put on the `ports`
-pre-release (never the latest release, and never taken as a version of Fuse). Windows builds aren't
-checked yet, so they never show as verified.
+each port's Linux build is downloaded on Linux and its Windows build on Windows, checked against the
+list, unpacked the same way and started without the game's files (on Linux, on a virtual screen). It
+must print what its entry's `check` expects (DevilutionX and OpenRCT2 print their versions), or still
+be running after the seconds it says, or end by itself. A crash (a signal, or a Windows crash code
+such as 0xC0000005), a library the system lacks (the loader's word, exit 127, or 0xC0000135 for a
+missing DLL) and a program the system can't run are failures, never an ending of its own; on Windows
+no error dialog waits for an answer (`SetErrorMode`). A check can say a system's own way where it
+differs (`check.windows`: DevilutionX's Windows build prints nothing to a console). Each Android
+port's APK, the one Fuse would install (the newest release with an APK for an arm64 device, by its
+`asset`, as `ApkPicker` chooses), is downloaded and read by the Android SDK's own tools: apksigner
+must verify its signature, so Android installs it; aapt2 must read it as the list's `package`; and
+its native code, when it has any, must include arm64-v8a. The list is then marked with what passed
+(a build's `verified` for exactly its file, an Android port's `verified` and `verifiedVersion` for
+that night's APK), its revision raised, signed and put on the `ports` pre-release (never the latest
+release, and never taken as a version of Fuse). A night when one system's check didn't finish
+publishes nothing, so the list before it stands, and the issue says which check it was.
 
 **PlayStation 5 games recompiled with AnyPS5** (`core:launch` `AnyPs5Recompile`, `ui:shell`
 `AnyPs5Recompiler`; Linux and Windows): from a PS5 dump's Play With list, and only then. AnyPS5's
@@ -1009,6 +1019,12 @@ releases when the newest has none, such as a data release); the APK is downloade
 checked against GitHub's digest, read by Android's package manager, and handed to Android's
 installer, which asks the person (one install at a time, shared with the Store). The package it
 installs as is kept (`ports.androidInstalled`): a later download that is another app is refused.
+
+**Verified.** A checked entry shows Verified when the signed list says the nightly check read its APK
+(see Fuse Ports, the nightly check): the app listed, signed so Android installs it, with code for an
+arm64 device, on that day and of that version; Checked otherwise, and a listing Unchecked. Only a
+signed list's word counts (`PortsIndexReader` drops it from any other), and Play With offers a
+game's verified ports first.
 
 **Playing.** The app attached to a game is kept per game (`ports.androidPlayWith`, this device's
 own) and per app (`app_override.plays_game`). Play then plays the game as the app (`LibraryStore`

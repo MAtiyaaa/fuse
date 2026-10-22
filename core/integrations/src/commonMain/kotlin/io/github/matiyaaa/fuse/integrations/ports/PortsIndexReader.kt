@@ -114,7 +114,7 @@ object PortsIndexReader {
                 if (!known) return "its command names $token, which Fuse doesn't fill"
             }
         }
-        port.check?.expect?.let { if (runCatching { Regex(it) }.isFailure) return "its check can't be read" }
+        listOfNotNull(port.check, port.check?.linux, port.check?.windows).mapNotNull { it.expect }.forEach { if (runCatching { Regex(it) }.isFailure) return "its check can't be read" }
         port.settings?.let { st ->
             val inside = listOf(PortTokens.HOME, PortTokens.INSTALL).firstOrNull { st.file.startsWith("$it/") }?.let { st.file.removePrefix("$it/") }
             if (inside == null || !safe(inside)) return "its settings file would be outside it"
