@@ -7,8 +7,9 @@
 # looks for it. Without the secret, nothing is signed or published, and the summary says so. When
 # a port didn't pass (or a check didn't finish), the night's run opens an issue labelled
 # ports-broken, or adds to the one open, and closes it once every port passes again. On a pull
-# request that changes the list or the tool, only the checks run. The native job checks the
-# PlayStation ports Fuse finds (ports/native.json) the same nights.
+# request that changes the list or the tool, only the checks run, and each fails when any of its
+# ports didn't pass. The native job checks the PlayStation ports Fuse finds (ports/native.json) the
+# same nights.
 
 name: Ports
 
@@ -70,6 +71,12 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      # On a pull request every port must pass, so one that doesn't is fixed or taken out before the
+      # list merges; each night the results stand, and only what passed is marked verified.
+      - name: Every port passed
+        if: github.event_name == 'pull_request'
+        run: python3 tools/ports/check.py gate --results build/ports/results-linux.json
+
   # The same check of every port's Windows build, on Windows.
   check-windows:
     name: Every port installs and starts on Windows
@@ -115,6 +122,12 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      # On a pull request every port must pass, so one that doesn't is fixed or taken out before the
+      # list merges; each night the results stand, and only what passed is marked verified.
+      - name: Every port passed
+        if: github.event_name == 'pull_request'
+        run: python tools/ports/check.py gate --results build/ports/results-windows.json
+
   # Every Android port's APK, the one Fuse installs, read by the Android SDK's aapt2 and apksigner.
   check-android:
     name: Every Android port's APK is the app Fuse lists
@@ -140,6 +153,12 @@ jobs:
           path: build/ports/results-android.json
           if-no-files-found: error
           retention-days: 14
+
+      # On a pull request every port must pass, so one that doesn't is fixed or taken out before the
+      # list merges; each night the results stand, and only what passed is marked verified.
+      - name: Every port passed
+        if: github.event_name == 'pull_request'
+        run: python3 tools/ports/check.py gate --results build/ports/results-android.json
 
   # The PlayStation games' native ports Fuse finds (ports/native.json): each project's newest release
   # still has its builds by name, and its zips still hold the files Fuse finds the port by. Apart

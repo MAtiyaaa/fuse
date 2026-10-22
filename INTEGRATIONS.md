@@ -835,7 +835,14 @@ HTTPS (each redirect followed by Fuse and checked), compared with the list's siz
 other file is deleted, never installed), unpacked by Fuse into a new folder beside the copy in use
 (an AppImage kept as it is and made runnable; zips and tarballs without links of their own, never
 outside their folder, nothing in them run; the program the list names made runnable, as a zip made
-on Windows keeps no Unix permissions), and only then put in place. Fuse's folder of ports is in
+on Windows keeps no Unix permissions), and only then put in place. An update carries what the port
+wrote in the copy in use into the new one (its `keep` files first, then each file its build didn't
+have, by the list of the build's own files kept at the install, `build.files`, or without one each
+file the new build doesn't have), every move checked; the copy in use is kept until the new one is
+in place, and when any of that fails, everything carried goes back before the new copy is removed,
+so nothing the port wrote goes with it, and no cancel stops it halfway (`carryAndReplace`). A `keep`
+folder is a link into the port's home; when the build has that folder itself, what it holds goes
+into the home, never over a file there, and the link takes its place. Fuse's folder of ports is in
 its own data folder: `ports/<id>/build` (the copy, replaced by an update), `ports/<id>/home` (its
 saves and settings, kept from one version to the next and when the port is removed) and
 `ports/<id>/<id>.fuseport` (how it starts).
@@ -899,12 +906,18 @@ screen with the libraries a desktop has that some ports take from the system (SD
 mixer libraries, GLEW, OpenGL's own; each such port's notes name them). GitHub's Windows runner has
 no graphics card and only Windows' own OpenGL 1.1, so Mesa's software OpenGL (llvmpipe, from
 pal1000/mesa-dist-win at a pinned version and SHA-256) is put beside each program that brings none of
-its own, as the virtual screen gives it on Linux (`lend_gl`). It
+its own, as the virtual screen gives it on Linux (`lend_gl`). What a program prints goes to a file,
+never a pipe, so a launcher's game left running never holds the check, and on Windows what a program
+started is ended with it. It
 must print what its entry's `check` expects (DevilutionX and OpenRCT2 print their versions), or still
 be running after the seconds it says, or end by itself. A crash (a signal, or a Windows crash code
 such as 0xC0000005), a library the system lacks (the loader's word, exit 127, or 0xC0000135 for a
 missing DLL) and a program the system can't run are failures, never an ending of its own; on Windows
-no error dialog waits for an answer (`SetErrorMode`). A check can say a system's own way where it
+no error dialog waits for an answer (`SetErrorMode`). An ending of its own may be an error code: most
+ports end so without the game's files. So a pass says a build installs and starts where it is for,
+never that a game plays, which needs the person's files. On a pull request, a port that didn't pass
+fails its system's check (`check.py gate`); each night the results stand, and only what passed is
+marked verified. A check can say a system's own way where it
 differs (`check.windows`: DevilutionX's Windows build prints nothing to a console). Each Android
 port's APK, the one Fuse would install (the newest release with an APK for an arm64 device, by its
 `asset`, as `ApkPicker` chooses), is downloaded and read by the Android SDK's own tools: apksigner

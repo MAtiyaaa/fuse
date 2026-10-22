@@ -439,7 +439,8 @@ Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 > RomM both ways and Fuse Ports. 0.4.3.5 brought ports and recomps to Android and a Ports system;
 > 0.4.3.6 draws every port with its game's box art and says where your copy of each game is, bringing
 > it here from RomM or another device; 0.4.3.7 follows the Obtainium Emulation Pack's one pack;
-> 0.4.3.8 brings Fuse Ports to 147 ports on a computer and 116 on Android, each checked every night.
+> 0.4.3.8 brings Fuse Ports to 147 ports on a computer and 116 on Android, each checked every night
+> that it installs and starts.
 > See [the release notes](docs/releases/0.4.3.8.md); every earlier
 > release is in [CHANGELOG.md](CHANGELOG.md).
 

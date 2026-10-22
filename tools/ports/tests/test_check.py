@@ -340,6 +340,13 @@ class ReportTest(unittest.TestCase):
     def test_a_check_that_didnt_finish_is_said(self):
         self.assertIn("didn't finish", check.report(os.path.join(self.dir, "missing.json")))
 
+    def test_a_pull_requests_gate_names_every_port_that_didnt_pass(self):
+        linux = self.results({"devilutionx": {"os": "linux", "sha256": "a", "at": "2026-10-19", "passed": True, "detail": "ok"},
+                              "quake3e": {"os": "linux", "sha256": "b", "at": "2026-10-19", "passed": False, "detail": "Permission denied"}})
+        self.assertEqual(["quake3e (linux): Permission denied", "results-windows.json: the check didn't finish"],
+                         check.gate([linux, os.path.join(self.dir, "results-windows.json")]))
+        self.assertEqual([], check.gate([self.results({"devilutionx": {"os": "linux", "passed": True, "detail": "ok"}})]))
+
     def test_every_systems_results_are_reported_together(self):
         linux = self.results({"devilutionx": {"os": "linux", "sha256": "a", "at": "2026-10-19", "passed": True, "detail": "ok"}})
         android = os.path.join(self.dir, "results-android.json")

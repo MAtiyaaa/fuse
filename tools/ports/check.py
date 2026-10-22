@@ -17,6 +17,8 @@ publish: the list with each build's "verified" set to the day it passed (and tak
          Without the key nothing is signed, and the step says so.
 report:  what to say in the issue the nightly run opens when a port broke (an empty file when
          every port passed), from each system's results, or which check didn't finish.
+gate:    on a pull request, a failure when any port in the results didn't pass (or a check didn't
+         finish), each said, so a broken port never merges behind a green check.
 
 Only the Python standard library, the openssl command and (for android) the Android SDK's
 build tools are used.
@@ -531,6 +533,23 @@ def publish(index_path, results_paths, out_dir, revision=None):
 SYSTEM_NAMES = {"linux": "Linux", "windows": "Windows", "macos": "macOS", "android": "Android"}
 
 
+def gate(results_paths):
+    """What didn't pass in results_paths, one line each (a missing file is a check that didn't finish).
+
+    A pull request's check fails on any, so a port that doesn't pass is fixed or taken out before the
+    list is merged; each night the results stand as they are, and only what passed is verified.
+    """
+    broken = []
+    for path in results_paths:
+        if not os.path.exists(path):
+            broken.append(f"{os.path.basename(path)}: the check didn't finish")
+            continue
+        for pid, r in sorted(read_json(path).items()):
+            if not r.get("passed"):
+                broken.append(f"{pid} ({r.get('os', '')}): {r.get('detail', '')}")
+    return broken
+
+
 def report(results_paths, run_url=None):
     """The issue's text when a port didn't pass (or a system's check didn't finish), else None."""
     if isinstance(results_paths, str):
@@ -579,6 +598,8 @@ def main():
     s.add_argument("--index", default="ports/index.json")
     s.add_argument("--results", nargs="*", default=[])
     s.add_argument("--out", required=True)
+    g = sub.add_parser("gate")
+    g.add_argument("--results", nargs="+", required=True)
     r = sub.add_parser("report")
     r.add_argument("--results", nargs="+", required=True)
     r.add_argument("--out", required=True)
@@ -590,6 +611,13 @@ def main():
     elif a.command == "android":
         results = check_android(a.index, a.out)
         print(f"{sum(r['passed'] for r in results.values())} of {len(results)} passed.")
+    elif a.command == "gate":
+        broken = gate(a.results)
+        for line in broken:
+            print(line)
+        if broken:
+            sys.exit(f"{len(broken)} didn't pass, and on a pull request every port must.")
+        print("Every port passed.")
     elif a.command == "report":
         text = report(a.results, a.run_url)
         with open(a.out, "w", encoding="utf-8") as f:

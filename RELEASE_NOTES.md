@@ -1,7 +1,8 @@
 # Fuse 0.4.3.8 - The Overdrive Update
 
 Fuse Ports grows from 5 games to 147 on a computer and 116 on Android, each checked every night on
-the system it's for.
+the system it's for: that it installs and starts there, or on Android that Android would install it.
+No check plays a game, which needs your files.
 
 ## New
 
@@ -22,7 +23,12 @@ the system it's for.
 ## Changed
 
 - The nightly check of Fuse Ports also runs every port's Windows build on Windows, and reads every
-  Android port's APK. Only a build that passed is marked Verified.
+  Android port's APK. Only a build that passed is marked Verified. A computer port passes when its
+  build, the list's file to the byte, unpacks as Fuse unpacks it and starts without your game: it
+  prints its version, is still running after a few seconds, or ends by itself (most end saying the
+  game's files are missing), never by a crash or a library the system lacks. An Android port passes
+  when its APK is signed so Android installs it, is the app the list names and has code for an arm64
+  device; it isn't started. On a pull request, a port that doesn't pass fails the check.
 - What a port writes beside itself (its saves and settings, for the ports that keep them there)
   outlives an update, and its own folders can live in its home.
 - A port whose build for one system can't run there as its project publishes it (it needs a newer

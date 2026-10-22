@@ -501,15 +501,7 @@ class PortsStoreTest {
 
     @Test
     fun whatAPortKeepsBesideItselfOutlivesAnUpdate(): Unit = runBlocking {
-        // A port that asks for its game itself and writes everything beside its program, as many recompilations do.
-        val list = """
-            {"format":1,"revision":2,"ports":[
-              {"id":"keepport","name":"KeepPort","game":"Keep Racer","about":"Made up.","homepage":"https://example.org/keepport","version":"1.0",
-               "builds":[{"os":"linux","url":"https://example.org/keepport-1.0.zip","size":${build.size},"sha256":"${sha(build)}","kind":"ZIP","run":"skyport"}],
-               "keep":["saves/","config.ini"],"saves":"saves","source":"made up"}
-            ]}
-        """.trimIndent()
-        val (services, files) = services(list)
+        val (services, files) = services(keepList())
         val store = createFuseStore(services, scope)
         store.ports.open()
         store.until("listed") { it.loaded }
@@ -541,6 +533,119 @@ class PortsStoreTest {
         // Removed: the copy and its settings go; the saves stay in its home.
         assertTrue(store.ports.remove("keepport"))
         assertTrue(File(root, "home/saves/slot1.sav").isFile)
+    }
+
+    /** A port that asks for its game itself and writes everything beside its program, as many recompilations do. */
+    private fun keepList(body: ByteArray = build) = """
+        {"format":1,"revision":2,"ports":[
+          {"id":"keepport","name":"KeepPort","game":"Keep Racer","about":"Made up.","homepage":"https://example.org/keepport","version":"1.0",
+           "builds":[{"os":"linux","url":"https://example.org/keepport-1.0.zip","size":${body.size},"sha256":"${sha(body)}","kind":"ZIP","run":"skyport"}],
+           "keep":["saves/","config.ini"],"saves":"saves","source":"made up"}
+        ]}
+    """.trimIndent()
+
+    /** A zip of [entries] (path to contents), as a project's build would be. */
+    private fun zipOf(vararg entries: Pair<String, ByteArray>): ByteArray = ByteArrayOutputStream().also { out ->
+        ZipOutputStream(out).use { z -> for ((name, bytes) in entries) { z.putNextEntry(ZipEntry(name)); z.write(bytes) } }
+    }.toByteArray()
+
+    /** KeepPort installed and played: a save through its link into its home; its settings, a screenshot and a changed file of the build's own in its copy. */
+    private suspend fun played(services: FakeServices, files: TestPortFiles): Triple<FuseStore, File, java.nio.file.Path> {
+        val store = createFuseStore(services, scope)
+        store.ports.open()
+        store.until("listed") { it.loaded }
+        store.ports.install("keepport")
+        store.until("set up") { it.port("keepport")?.ready == true }
+        val root = File(files.folder, "keepport")
+        val copy = File(root, "build").toPath()
+        Files.writeString(copy.resolve("saves/slot1.sav"), "a save")
+        Files.writeString(copy.resolve("config.ini"), "fullscreen=1")
+        Files.createDirectories(copy.resolve("shots"))
+        Files.writeString(copy.resolve("shots/one.png"), "a screenshot")
+        Files.writeString(copy.resolve("engine.dat"), "changed by the port")
+        return Triple(store, root, copy)
+    }
+
+    /** Everything KeepPort wrote is in the copy in use, which is the one it had, and nothing is left beside it. */
+    private fun assertAsItWas(root: File, copy: java.nio.file.Path) {
+        assertEquals("fullscreen=1", Files.readString(copy.resolve("config.ini")), "its settings are in the copy in use")
+        assertEquals("a screenshot", Files.readString(copy.resolve("shots/one.png")), "and what else it wrote")
+        assertEquals("changed by the port", Files.readString(copy.resolve("engine.dat")), "the copy in use is the one it had")
+        assertEquals("a save", Files.readString(copy.resolve("saves/slot1.sav")))
+        assertFalse(File(root, "build.new").exists() || File(root, "build.old").exists(), "nothing is left beside it")
+        assertTrue(root.listFiles().orEmpty().none { it.name.startsWith("carried-") }, "nothing had to be kept aside")
+    }
+
+    @Test
+    fun anUpdateThatCantGoInPutsBackEverythingThePortWroteFirst(): Unit = runBlocking {
+        val (services, files) = services(keepList())
+        val (store, root, copy) = played(services, files)
+        // The new copy, which its settings and screenshot were carried into, can't be moved in.
+        files.refuse = { from, _ -> from.endsWith("/build.new") }
+        store.ports.install("keepport")
+        val failed = store.until("the update failed") { it.port("keepport")?.job is PortJob.Failed }.port("keepport")!!
+        assertTrue("as it was" in (failed.job as PortJob.Failed).message, (failed.job as PortJob.Failed).message)
+        assertAsItWas(root, copy)
+    }
+
+    @Test
+    fun aFileThatCantBeCarriedStopsTheUpdateWithWhatWasCarriedPutBack(): Unit = runBlocking {
+        val (services, files) = services(keepList())
+        val (store, root, copy) = played(services, files)
+        // Its settings go first; then the screenshot can't be moved (a file in use): the update stops.
+        files.refuse = { from, _ -> from.endsWith("/shots/one.png") }
+        store.ports.install("keepport")
+        val failed = store.until("the update stopped") { it.port("keepport")?.job is PortJob.Failed }.port("keepport")!!
+        val message = (failed.job as PortJob.Failed).message
+        assertTrue("shots/one.png" in message && "as it was" in message, message)
+        assertAsItWas(root, copy)
+        // Once it can be moved, the update goes in with everything.
+        files.refuse = { _, _ -> false }
+        store.ports.cancel("keepport")
+        store.update("keepport", root) { Files.isSymbolicLink(copy.resolve("saves")) }
+        assertEquals("fullscreen=1", Files.readString(copy.resolve("config.ini")))
+        assertEquals("a screenshot", Files.readString(copy.resolve("shots/one.png")))
+    }
+
+    @Test
+    fun whatThePortWroteIsCarriedWithoutTheListOfItsBuildsOwnFiles(): Unit = runBlocking {
+        val (services, files) = services(keepList())
+        val (store, root, copy) = played(services, files)
+        // Installed by a Fuse that kept no list of the build's own files: what the new build doesn't have is the port's.
+        assertTrue(File(root, "build.files").delete())
+        store.update("keepport", root) { Files.isSymbolicLink(copy.resolve("saves")) }
+        assertEquals("a screenshot", Files.readString(copy.resolve("shots/one.png")), "what it wrote is carried all the same")
+        assertEquals("fullscreen=1", Files.readString(copy.resolve("config.ini")))
+        assertEquals("a save", Files.readString(copy.resolve("saves/slot1.sav")))
+    }
+
+    @Test
+    fun aFolderItKeepsThatTheBuildHasItselfIsTheHomesWithTheBuildsFilesInIt(): Unit = runBlocking {
+        // The build ships its save folder with a file in it.
+        val body = zipOf("skyport" to "#!/bin/sh\necho keepport\n".toByteArray(), "engine.dat" to ByteArray(32) { 1 }, "saves/README.txt" to "from the build".toByteArray())
+        val (services, files) = services(keepList(body), body)
+        val store = createFuseStore(services, scope)
+        store.ports.open()
+        store.until("listed") { it.loaded }
+        store.ports.install("keepport")
+        store.until("set up") { it.port("keepport")?.ready == true }
+        val root = File(files.folder, "keepport")
+        val copy = File(root, "build").toPath()
+        assertTrue(Files.isSymbolicLink(copy.resolve("saves")), "its save folder is a link into its home, though the build had one")
+        assertEquals(File(root, "home/saves").toPath(), Files.readSymbolicLink(copy.resolve("saves")))
+        assertEquals("from the build", File(root, "home/saves/README.txt").readText(), "the build's file in it went into the home")
+
+        // A save lands in the home; the build's file, changed by the port, is never put back over at an update.
+        Files.writeString(copy.resolve("saves/slot1.sav"), "a save")
+        File(root, "home/saves/README.txt").writeText("the port's own now")
+        store.update("keepport", root) { Files.isSymbolicLink(copy.resolve("saves")) }
+        assertEquals("the port's own now", File(root, "home/saves/README.txt").readText())
+        assertEquals("a save", File(root, "home/saves/slot1.sav").readText())
+
+        // Removed: the copy goes, the saves stay.
+        assertTrue(store.ports.remove("keepport"))
+        assertFalse(File(root, "build").exists())
+        assertEquals("a save", File(root, "home/saves/slot1.sav").readText())
     }
 
     @Test

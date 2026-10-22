@@ -27,6 +27,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.recover
 import io.github.matiyaaa.fuse.ui.shell.store.replace
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,6 +38,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * Fuse Ports on a computer ([PortsOps]). The list is the one inside Fuse, or a newer one kept in
@@ -248,19 +250,17 @@ internal class PortsStore(
                 files.remove(stage)
                 return fail(id, "Fuse couldn't make ${build.run} runnable, so it wasn't installed.")
             }
-            // What the port wrote in the copy in use (its saves and settings, beside itself) goes into the new one.
             val shipped = filesIn(stage)
-            ctx.settings.value.ports.installed[id]?.let { old -> carryWritten(old, layout, stage) }
-            carryKept(port, ctx.settings.value.ports.installed[id]?.build, build, layout, stage)
-            // Only now is the copy in use replaced, and it is kept until the new one is in place (its
-            // links go with it; setting up makes them again).
-            if (!files.replace(stage, layout.install)) {
-                files.remove(stage)
-                return fail(id, "Fuse couldn't put ${port.name} in place. The copy you had is as it was.")
+            // From the first file carried until the new copy is in place (or everything is back), nothing
+            // stops this part, not even a cancel: what the port wrote is always whole in one copy or the other.
+            val stopped = withContext(NonCancellable) {
+                carryAndReplace(port, build, layout, stage)?.let { return@withContext it }
+                // Which files the build itself has, to tell them from what the port writes at the next update.
+                if (shipped == null || !files.writeText(manifest(layout), shipped.joinToString("\n"))) files.remove(manifest(layout))
+                write { s -> s.copy(ports = s.ports.copy(installed = s.ports.installed + (id to InstalledPort(port, build, emptyList(), ctx.now())))) }
+                null
             }
-            // Which files the build itself has, to tell them from what the port writes at the next update.
-            if (shipped == null || !files.writeText(manifest(layout), shipped.joinToString("\n"))) files.remove(manifest(layout))
-            write { s -> s.copy(ports = s.ports.copy(installed = s.ports.installed + (id to InstalledPort(port, build, emptyList(), ctx.now())))) }
+            if (stopped != null) return fail(id, stopped)
             jobs.update { it - id }
             // Installed, and shown so: setting it up is all that's left, which never makes an install
             // asked for now (an update) do nothing. That one waits for it, then runs.
@@ -540,22 +540,42 @@ internal class PortsStore(
 
     /**
      * The folders [port] keeps beside its program ([io.github.matiyaaa.fuse.model.Port.keep]): each a
-     * link to the same path in its home, made there first, unless the build has that path itself.
-     * Each link made is added to [made].
+     * link to the same path in its home, made there first. When the build has that folder itself (a
+     * save folder it ships with a file in it), what it holds goes into the home, never over a file
+     * already there, and the link takes its place: what the port writes there is never only in the
+     * copy an update or Remove takes out. Each link made is added to [made].
      */
     private suspend fun keepFolders(port: io.github.matiyaaa.fuse.model.Port, build: io.github.matiyaaa.fuse.model.PortBuild, layout: PortLayout, made: MutableList<String>): String? {
         val fs = ctx.services.fs
         val beside = PortPlan.programFolder(build).let { if (it.isEmpty()) layout.install else "${layout.install}/$it" }
         for (folder in PortPlan.ownFolders(port.keep)) {
             val at = "$beside/$folder"
-            if (fs.stat(at) != null || files.isLink(at)) continue
+            if (files.isLink(at)) continue
+            val there = fs.stat(at)
+            // A file where it keeps a folder: the port can't write one there either.
+            if (there != null && !there.isDirectory) continue
             val home = "${layout.home}/$folder"
             if (!files.makeFolder(home)) return "Fuse couldn't make ${port.name}'s own folder."
+            if (there != null) absorb(port, at, home)?.let { return it }
             if (!files.makeFolder(at.substringBeforeLast('/'))) return "Fuse couldn't make a folder in its copy."
             files.link(home, at)?.let { return it }
             made += at.removePrefix("${layout.install}/")
         }
         return null
+    }
+
+    /**
+     * What the build's own folder [at] holds moved into [home] (a file already there is the port's own,
+     * from before, and stays), then [at] removed so a link can take its place. Null when done.
+     */
+    private suspend fun absorb(port: io.github.matiyaaa.fuse.model.Port, at: String, home: String): String? {
+        val inside = filesIn(at) ?: return "${port.name}'s own folder in its copy has more files than Fuse goes through."
+        for (rel in inside) {
+            val to = "$home/$rel"
+            if (ctx.services.fs.stat(to) != null) continue
+            if (!files.makeFolder(to.substringBeforeLast('/')) || !files.move("$at/$rel", to)) return "Fuse couldn't move $rel into ${port.name}'s home."
+        }
+        return if (files.remove(at)) null else "Fuse couldn't make way for ${port.name}'s own folder in its copy."
     }
 
     /** Where the list of the files a port's build has itself is kept, beside its copy. */
@@ -586,43 +606,97 @@ internal class PortsStore(
         return if (walk(dir, "")) out else null
     }
 
+    /** A file carried from the copy in use ([from]) into the new one ([to]), put back if the new one doesn't go in. */
+    private class Carried(val from: String, val to: String)
+
+    /**
+     * What the port wrote in the copy in use (its saves and settings, beside itself) carried into the
+     * new copy ([stage]), then [stage] put in place of the copy in use, which is kept until it is:
+     * null when the new copy is in. When anything of that can't be done, everything carried goes
+     * back into the copy in use before the new copy is removed, so nothing the port wrote goes with
+     * it; the reason is returned.
+     */
+    private suspend fun carryAndReplace(port: io.github.matiyaaa.fuse.model.Port, build: io.github.matiyaaa.fuse.model.PortBuild, layout: PortLayout, stage: String): String? {
+        val old = ctx.settings.value.ports.installed[port.id]
+        val carried = ArrayList<Carried>()
+        val problem = try {
+            // Its kept files first, as each goes where the new build has its program; then what else it wrote.
+            carryKept(port, old?.build, build, layout, stage, carried)
+                ?: old?.let { carryWritten(port, it, layout, stage, carried) }
+                ?: if (files.replace(stage, layout.install)) null else "Fuse couldn't put ${port.name} in place. The copy you had is as it was."
+        } catch (e: Exception) {
+            "Fuse couldn't update ${port.name} (${e.message ?: "a file couldn't be moved"}). The copy you had is as it was."
+        }
+        return problem?.let { putBack(port, layout, stage, carried, it) }
+    }
+
+    /**
+     * Everything [carried] moved back into the copy in use (or the copy aside, when the replacing
+     * stopped between its two moves), and only then [stage] removed. What can't go back is never
+     * removed: [stage] is kept whole in a folder of its own, and [problem] says where.
+     */
+    private suspend fun putBack(port: io.github.matiyaaa.fuse.model.Port, layout: PortLayout, stage: String, carried: List<Carried>, problem: String): String {
+        val into = if (files.exists(layout.install)) layout.install else "${layout.install}.old"
+        val left = carried.asReversed().filterNot { c ->
+            val back = into + c.from.removePrefix(layout.install)
+            files.makeFolder(back.substringBeforeLast('/')) && files.move(c.to, back)
+        }
+        if (left.isEmpty()) {
+            files.remove(stage)
+            return problem
+        }
+        val kept = "${layout.root}/carried-${ctx.now()}"
+        val at = if (files.move(stage, kept)) kept else stage
+        return "$problem What ${port.name} wrote that Fuse couldn't put back is in $at: take it out before installing it again."
+    }
+
     /**
      * On an update, every file the port wrote in the copy in use ([old]: its saves and settings,
-     * when it keeps them beside itself) moved into the new copy ([stage]): a file its build didn't
-     * have (the list kept at its install, [manifest]), never one inside a link Fuse made, and never
-     * over a file the new build has. Without that list (a port installed before Fuse kept one),
-     * nothing is moved.
+     * when it keeps them beside itself) moved into the new copy ([stage]) and added to [carried]: a
+     * file its build didn't have (the list kept at its install, [manifest]; without one, as for a
+     * port installed before Fuse kept it, a file the new build doesn't have), never one inside a link
+     * Fuse made, and never over a file the new build has. A file that can't be carried stops the
+     * update, as does a copy with more files than Fuse lists: its reason is returned.
      */
-    private suspend fun carryWritten(old: InstalledPort, layout: PortLayout, stage: String) {
+    private suspend fun carryWritten(port: io.github.matiyaaa.fuse.model.Port, old: InstalledPort, layout: PortLayout, stage: String, carried: MutableList<Carried>): String? {
         val fs = ctx.services.fs
-        val shipped = fs.readText(manifest(layout), maxBytes = MANIFEST_BYTES)?.lineSequence()?.filter { it.isNotEmpty() }?.toHashSet() ?: return
-        val written = filesIn(layout.install, old.links.toHashSet()) ?: return
+        val shipped = fs.readText(manifest(layout), maxBytes = MANIFEST_BYTES)?.lineSequence()?.filter { it.isNotEmpty() }?.toHashSet().orEmpty()
+        val written = filesIn(layout.install, old.links.toHashSet())
+            ?: return "${port.name}'s copy has more files than Fuse goes through, so it wasn't updated. The copy you had is as it was."
         for (rel in written) {
             if (rel in shipped) continue
+            val from = "${layout.install}/$rel"
             val to = "$stage/$rel"
             if (fs.stat(to) != null) continue
-            files.makeFolder(to.substringBeforeLast('/'))
-            files.move("${layout.install}/$rel", to)
+            if (!files.makeFolder(to.substringBeforeLast('/')) || !files.move(from, to)) {
+                return "Fuse couldn't carry $rel into ${port.name}'s new copy, so it wasn't updated. The copy you had is as it was."
+            }
+            carried += Carried(from, to)
         }
+        return null
     }
 
     /**
      * On an update, the files [port] keeps beside its program (its settings) moved from the copy in
      * use ([old] its build, null on a first install) into the new one ([stage], of [build]), in place
-     * of the file the new build has there.
+     * of the file the new build has there, each added to [carried]. One that can't be stops the
+     * update: its reason is returned.
      */
-    private suspend fun carryKept(port: io.github.matiyaaa.fuse.model.Port, old: io.github.matiyaaa.fuse.model.PortBuild?, build: io.github.matiyaaa.fuse.model.PortBuild, layout: PortLayout, stage: String) {
-        if (old == null) return
+    private suspend fun carryKept(port: io.github.matiyaaa.fuse.model.Port, old: io.github.matiyaaa.fuse.model.PortBuild?, build: io.github.matiyaaa.fuse.model.PortBuild, layout: PortLayout, stage: String, carried: MutableList<Carried>): String? {
+        if (old == null) return null
         val fs = ctx.services.fs
         fun under(root: String, b: io.github.matiyaaa.fuse.model.PortBuild) = PortPlan.programFolder(b).let { if (it.isEmpty()) root else "$root/$it" }
         for (file in PortPlan.keptFiles(port.keep)) {
             val from = "${under(layout.install, old)}/$file"
             val to = "${under(stage, build)}/$file"
             if (fs.stat(from) == null || files.isLink(from)) continue
-            files.remove(to)
-            files.makeFolder(to.substringBeforeLast('/'))
-            files.move(from, to)
+            // The new build's own file there gives way; the whole new copy goes if the update doesn't.
+            if (!files.remove(to) || !files.makeFolder(to.substringBeforeLast('/')) || !files.move(from, to)) {
+                return "Fuse couldn't carry $file into ${port.name}'s new copy, so it wasn't updated. The copy you had is as it was."
+            }
+            carried += Carried(from, to)
         }
+        return null
     }
 
     /**
