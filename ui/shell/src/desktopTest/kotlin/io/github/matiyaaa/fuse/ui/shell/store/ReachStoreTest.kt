@@ -146,6 +146,22 @@ class ReachStoreTest {
     }
 
     @Test
+    fun aGameComesFromTheCopyThePersonPicked(): Unit = runBlocking {
+        val (pc, deck) = linked()
+        eventually("the PC's files are read") { deck.store.reach.games(null).first().isNotEmpty() && pc.sync.household.mine.value.all { it.hashed } }
+        val wars = deck.store.reach.games(null).first().single()
+        val copy = assertNotNull(deck.store.reach.availability(wars.id).first { it != null }).devices.single()
+        assertEquals("Gaming PC", copy.name)
+        // A device that doesn't have it is never stood in for by another.
+        assertEquals("That device doesn't have this game any more.", deck.store.reach.downloadFrom(wars.id, copy.copy(id = "elsewhere")))
+        assertNull(deck.store.reach.downloadFrom(wars.id, copy))
+        eventually("downloaded from the PC", seconds = 60) {
+            deck.store.transfers.rows.value.any { it.item.source == "reach" && it.item.status == TransferStatus.DONE }
+        }
+        assertContentEquals(bytesOf("Advance Wars "), File(deck.roms, "Advance Wars (USA).gba").readBytes())
+    }
+
+    @Test
     fun aDeviceIsAskedToFetchAGameAndDoes(): Unit = runBlocking {
         val (pc, deck) = linked()
         eventually("listed", seconds = 60) { pc.store.reach.games(null).first().isNotEmpty() && deck.sync.household.mine.value.all { it.hashed } }

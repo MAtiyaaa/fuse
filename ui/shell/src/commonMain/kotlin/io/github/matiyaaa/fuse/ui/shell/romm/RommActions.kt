@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.romm
 
+import io.github.matiyaaa.fuse.ui.shell.reach.downloadAsking
 import io.github.matiyaaa.fuse.model.ContentKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
@@ -67,11 +68,16 @@ fun AppState.rommUpload(card: GameCard) {
 
 /** Queues [what] of RomM game [romId] and says so. */
 fun AppState.rommDownload(romId: Long, title: String, what: RommDownloadWhat = RommDownloadWhat.Game) {
+    // With the household's devices linked, the game comes from wherever is best (another device at
+    // home with exactly RomM's files first), RomM itself when no device has it. Copies of different
+    // sizes (RomM's with its DLC, a device's without) are the person's to pick between.
+    if (what == RommDownloadWhat.Game && store.reach.state.value.supported) {
+        val id = io.github.matiyaaa.fuse.ui.shell.store.rommGameId(romId)
+        downloadAsking(id, title) { store.reach.download(id) }
+        return
+    }
     scope.launch {
-        // With the household's devices linked, the game comes from wherever is best (another device
-        // at home with exactly RomM's files first), RomM itself when no device has it.
-        val why = if (what == RommDownloadWhat.Game && store.reach.state.value.supported) store.reach.download(io.github.matiyaaa.fuse.ui.shell.store.rommGameId(romId))
-        else store.romm.download(romId, what)
+        val why = store.romm.download(romId, what)
         if (why != null) toasts.show(why, ToastKind.WARNING)
         else toasts.show("$title is on its way", ToastKind.SUCCESS, icon = FuseIcons.Download)
     }

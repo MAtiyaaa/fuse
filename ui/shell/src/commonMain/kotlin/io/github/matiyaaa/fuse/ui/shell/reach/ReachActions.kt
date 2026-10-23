@@ -16,6 +16,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.CopyPlace
 import io.github.matiyaaa.fuse.ui.shell.store.CopyView
 import io.github.matiyaaa.fuse.ui.shell.store.SendState
 import io.github.matiyaaa.fuse.ui.shell.store.SendTarget
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 internal fun nowMs(): Long = kotlin.time.Clock.System.now().toEpochMilliseconds()
@@ -81,13 +82,51 @@ private fun civil(days: Long): Triple<Int, Int, Int> {
     return Triple((if (m <= 2) y + 1 else y).toInt(), m.toInt(), d.toInt())
 }
 
-/** Brings [id] here from wherever is best, and says so. */
-fun AppState.reachDownload(id: GameId, title: String) {
+/** Brings [id] here from wherever is best, and says so; asks where from when its copies differ. */
+fun AppState.reachDownload(id: GameId, title: String) = downloadAsking(id, title) { store.reach.download(id) }
+
+/**
+ * Downloads [id], from [best] when every copy is the same, else from the copy the person picks:
+ * copies of different sizes are different games to them (one with its updates and DLC, one
+ * without), so Fuse never picks for them.
+ */
+fun AppState.downloadAsking(id: GameId, title: String, best: suspend () -> String?) {
     scope.launch {
-        val why = store.reach.download(id)
-        if (why != null) toasts.show(why, ToastKind.WARNING)
-        else toasts.show("$title is on its way", ToastKind.SUCCESS, icon = FuseIcons.Download)
+        val copies = kotlinx.coroutines.withTimeoutOrNull(3_000) { store.reach.availability(id).first { it != null } }
+        val sources = copies?.copies.orEmpty().filter { it.place != CopyPlace.HERE }
+        val sizes = sources.map { it.sizeBytes }.filter { it > 0 }.toSet()
+        if (sources.size < 2 || sizes.size < 2) {
+            downloaded(title, best())
+            return@launch
+        }
+        val largest = sizes.max()
+        val now = nowMs()
+        choice = ChoiceSpec(
+            title = "Download $title From",
+            message = "Your copies aren't the same size. A larger one may have updates or DLC the others don't.",
+            icon = FuseIcons.Download,
+            options = sources.map { c ->
+                val where = when (c.place) {
+                    CopyPlace.ROMM -> "Your RomM server"
+                    else -> if (c.online) "Online now" else "Away" + (if (c.lastSeen > 0) " since ${agoText(c.lastSeen, now)}" else "")
+                }
+                MenuAction(
+                    "from.${c.place}.${c.id}", if (c.place == CopyPlace.ROMM) "RomM" else c.name,
+                    if (c.place == CopyPlace.ROMM) FuseIcons.CloudDownload else deviceIcon(c.platform),
+                    detail = listOfNotNull(c.sizeBytes.takeIf { it > 0 }?.let(::bytesText), where, "Largest".takeIf { c.sizeBytes == largest }).joinToString("  ·  "),
+                    onSelect = {
+                        choice = null
+                        scope.launch { downloaded(title, store.reach.downloadFrom(id, c)) }
+                    },
+                )
+            },
+        )
     }
+}
+
+private fun AppState.downloaded(title: String, why: String?) {
+    if (why != null) toasts.show(why, ToastKind.WARNING)
+    else toasts.show("$title is on its way", ToastKind.SUCCESS, icon = FuseIcons.Download)
 }
 
 /**

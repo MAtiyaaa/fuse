@@ -185,6 +185,9 @@ interface ReachOps {
     /** Brings [id] here from wherever is best; null when it was queued, else why not. */
     suspend fun download(id: GameId): String?
 
+    /** Brings [id] here from the one [copy] the person picked (a device's library, or RomM); null when queued, else why not. */
+    suspend fun downloadFrom(id: GameId, copy: CopyView): String? = download(id)
+
     /** The updates and DLC another device's copy of [id] (a game here) has and this copy hasn't; null when none. */
     suspend fun extras(id: GameId): GameExtras? = null
 
