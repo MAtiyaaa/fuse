@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.4.3.11 is the <b>Overdrive Update</b>: recomps beside your emulators, ports and recomps on Android, themes that move and resize things, and Steam changed while it runs</sub><br>
+<sub>0.4.3.12 is the <b>Overdrive Update</b>: recomps beside your emulators, ports and recomps on Android, themes that move and resize things, and Steam changed while it runs</sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -430,7 +430,7 @@ Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.4.3.11 "The Overdrive Update"**: Fuse changes Steam's library while Steam runs, with no
+> **Fuse 0.4.3.12 "The Overdrive Update"**: Fuse changes Steam's library while Steam runs, with no
 > plugin. The N64 recomps and PlayStation games' native ports you installed are found and played
 > from each game's Play With, one entry each, saves kept in step; recomps' mods, graphics and
 > controls are set from Fuse. Themes can move the bar into a dock and resize tiles, emulators get
@@ -442,8 +442,8 @@ Everything Fuse does, part by part, is in [docs/features.md](docs/features.md).
 > 0.4.3.8 brings Fuse Ports to 146 ports on a computer and 116 on Android, each checked every night
 > that it installs and starts; 0.4.3.9 shows them all as box art; 0.4.3.10 changes the settings of
 > 46 of them from Fuse Tune, each read from the port's own code; 0.4.3.11 downloads PS4 games from
-> RomM and offers BachataS4 in the Store.
-> See [the release notes](docs/releases/0.4.3.11.md); every earlier
+> RomM and offers BachataS4 in the Store; 0.4.3.12 stops a PS4 game from RomM closing Fuse on Android.
+> See [the release notes](docs/releases/0.4.3.12.md); every earlier
 > release is in [CHANGELOG.md](CHANGELOG.md).
 
 Fuse runs on Android handhelds and phones, Linux (including SteamOS and its Game Mode), Windows and

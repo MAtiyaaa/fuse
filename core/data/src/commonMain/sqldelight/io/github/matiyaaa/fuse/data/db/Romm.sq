@@ -113,6 +113,11 @@ SELECT id FROM romm_rom WHERE server = ? AND on_server = 1;
 rom:
 SELECT * FROM romm_rom WHERE server = ? AND id = ?;
 
+-- A file list too long for Android to read back (a cursor window holds 2 MB) is dropped: the game
+-- then downloads whole, and its row can be read again.
+trimHugeFiles:
+UPDATE romm_rom SET files_json = '[]' WHERE length(files_json) > :max;
+
 romsOnPlatform:
 SELECT * FROM romm_rom WHERE server = :server AND platform_slug = :slug AND on_server = 1 ORDER BY sort_name LIMIT :limit OFFSET :offset;
 

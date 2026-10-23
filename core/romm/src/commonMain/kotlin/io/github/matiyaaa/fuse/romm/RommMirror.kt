@@ -25,7 +25,15 @@ class RommMirror(
     private val clock: () -> Long,
     private val dispatcher: CoroutineDispatcher = ioDispatcher,
 ) {
-    private val q get() = db.rommQueries
+    private val q get() = db.rommQueries.also { trimOnce(it) }
+    private var trimmed = false
+
+    /** Rows written before file lists were capped can be too big to read on Android; they are trimmed first. */
+    private fun trimOnce(queries: io.github.matiyaaa.fuse.data.db.RommQueries) {
+        if (trimmed) return
+        trimmed = true
+        runCatching { queries.trimHugeFiles(MAX_FILES_JSON.toLong()) }
+    }
     private val filesSerializer = ListSerializer(RommFile.serializer())
 
     /** When the mirror last caught up with [server] (server time of the newest change seen), or 0. */
@@ -149,7 +157,9 @@ class RommMirror(
 
     private fun write(server: String, r: RommRom, now: Long, markNew: Boolean, keepFiles: String? = null) {
         // A page of the library comes without files: the ones already brought for this game stay.
-        val files = if (r.files.isEmpty() && keepFiles != null) keepFiles else RommParse.json.encodeToString(filesSerializer, r.files)
+        val files = (if (r.files.isEmpty() && keepFiles != null) keepFiles else RommParse.json.encodeToString(filesSerializer, r.files))
+            // A game of tens of thousands of files (a PS4 game's folder) keeps no list: it downloads whole.
+            .takeIf { it.length <= MAX_FILES_JSON } ?: "[]"
         q.insertRomIfAbsent(
             server, r.id, r.platformId, r.platformSlug, r.name, sortName(r.name), r.fsName, r.sizeBytes, r.md5, r.sha1, r.crc,
             r.titleId, r.regions.joinToString(SEP), r.revision, r.year?.toLong(), r.summary, r.genres.joinToString(SEP), r.developer,
@@ -258,6 +268,8 @@ class RommMirror(
     companion object {
         private const val NS = "romm"
         private const val SEP = "|"
+        /** The longest file list kept, in characters: well under the 2 MB Android reads a row through. */
+        private const val MAX_FILES_JSON = 512_000
 
         /** A server's clock and this device's can disagree: changes are asked for a little before the last seen. */
         private const val CLOCK_SKEW_MS = 5 * 60_000L

@@ -1,18 +1,18 @@
-# Fuse 0.4.3.11 - The Overdrive Update
+# Fuse 0.4.3.12 - The Overdrive Update
 
-PS4 games from RomM download, and the Store offers a PS4 emulator for Android.
+A PS4 game from RomM no longer closes Fuse on Android.
 
 ## New
 
-- BachataS4, the PS4 emulator for Android built on shadPS4, is in the Store (from its own GitHub
-  releases), so a PS4 game has something to play in. Fuse starts games installed in it by their
-  title id. shadPS4 has no Android build to download; installed, Fuse opens it.
+- Nothing new in this release.
 
 ## Changed
 
-- Downloading a game from RomM no longer waits on an emulator for its system being installed.
+- A RomM game of tens of thousands of files downloads whole, as one archive, instead of file by file.
 
 ## Fixed
 
-- A PS4 game (or any game RomM hadn't listed the files of) wouldn't download from RomM: Fuse said
-  it needed RomM to list the game's files first. It now asks RomM for the whole game by its name.
+- Opening a PS4 game from RomM closed Fuse on Android. A game kept as a folder of tens of thousands
+  of files (as PS4 games are) had a file list too big for Android to read back from Fuse's copy of
+  the RomM library. Such a game now keeps no file list and downloads whole, and lists already kept
+  that are too big are dropped the first time Fuse opens its RomM library.

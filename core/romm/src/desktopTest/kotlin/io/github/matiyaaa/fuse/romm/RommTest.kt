@@ -239,6 +239,20 @@ class RommTest {
     }
 
     @Test
+    fun `a game of tens of thousands of files keeps no list, so its row can be read on Android`() = runBlocking<Unit> {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY).also { FuseDatabase.Schema.create(it) }
+        val db = FuseDatabase(driver)
+        val mirror = RommMirror(db, System::currentTimeMillis)
+        val files = (1L..40_000L).map { RommFile(it, "sce_sys/about/file-$it.bin") }
+        mirror.put("main", RommRom(7, 1, "ps4", "Bloodborne", "Bloodborne", multi = true, files = files))
+        assertEquals(emptyList(), mirror.rom("main", 7)?.files)
+        // A row written before the cap is trimmed the first time the mirror is used.
+        val huge = "[" + files.joinToString(",") { "{\"id\":${it.id},\"name\":\"${it.name}\"}" } + "]"
+        driver.execute(null, "UPDATE romm_rom SET files_json = ? WHERE id = 7", 1) { bindString(0, huge) }
+        assertEquals(emptyList(), RommMirror(db, System::currentTimeMillis).rom("main", 7)?.files)
+    }
+
+    @Test
     fun `a server that is away leaves the mirror as it was`() = runBlocking<Unit> {
         val fake = server()
         val c = client(fake)
