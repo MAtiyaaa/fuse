@@ -1,18 +1,18 @@
-# Fuse 0.4.3.12 - The Overdrive Update
+# Fuse 0.4.3.13 - The Overdrive Update
 
-A PS4 game from RomM no longer closes Fuse on Android.
+Download asks where from when your copies of a game differ.
 
 ## New
 
-- Nothing new in this release.
+- When a game's copies aren't the same size (RomM's with its DLC, a device's without, or two
+  devices' libraries), Download asks which one to bring here: RomM or a device in Fuse One, each
+  with its size, the largest marked. Copies that are all the same still come from wherever is best.
 
 ## Changed
 
-- A RomM game of tens of thousands of files downloads whole, as one archive, instead of file by file.
+- A copy picked by hand comes only from there. Fuse no longer brings another copy in its place.
 
 ## Fixed
 
-- Opening a PS4 game from RomM closed Fuse on Android. A game kept as a folder of tens of thousands
-  of files (as PS4 games are) had a file list too big for Android to read back from Fuse's copy of
-  the RomM library. Such a game now keeps no file list and downloads whole, and lists already kept
-  that are too big are dropped the first time Fuse opens its RomM library.
+- Download on a RomM game brought a different copy from a device in Fuse One (without the DLC
+  RomM had), even though RomM's was pressed.

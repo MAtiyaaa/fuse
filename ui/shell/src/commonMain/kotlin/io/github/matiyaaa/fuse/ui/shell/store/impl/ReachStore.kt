@@ -491,16 +491,31 @@ internal class DefaultReachOps(
 
     override suspend fun download(id: GameId): String? = withContext(Dispatchers.Default) { downloadFor(id, command = null) }
 
+    override suspend fun downloadFrom(id: GameId, copy: io.github.matiyaaa.fuse.ui.shell.store.CopyView): String? = withContext(Dispatchers.Default) {
+        when (copy.place) {
+            io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.ROMM -> {
+                val keys = keysOf(id)
+                val romId = id.rommOnly ?: (if (keys.isEmpty()) emptyList() else copiesOf(keys)).firstNotNullOfOrNull { it.second.rommRomId }
+                    ?: return@withContext "Fuse can't find this game on RomM any more."
+                romm.download(romId)
+            }
+            io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.DEVICE -> downloadFor(id, command = null, onlyDevice = copy.id)
+            io.github.matiyaaa.fuse.ui.shell.store.CopyPlace.HERE -> "It's already here."
+        }
+    }
+
     /**
      * Queues [id] to come here from wherever is best: another device's copy (and every other copy
      * with the same files), with RomM's when it has exactly those files too. A RomM game no device
      * has comes from RomM as ever. Null when queued, else why not.
      */
-    private suspend fun downloadFor(id: GameId, command: String?): String? {
+    private suspend fun downloadFor(id: GameId, command: String?, onlyDevice: String? = null): String? {
         if (id.value > 0 && command == null) return "It's already here."
         val keys = keysOf(id)
-        val copies = if (keys.isEmpty()) emptyList() else copiesOf(keys)
-        if (id.rommOnly != null && copies.none { it.second.hashed }) {
+        // A device the person picked: only its copy, never another's or RomM's in its place.
+        val copies = (if (keys.isEmpty()) emptyList() else copiesOf(keys)).filter { onlyDevice == null || it.first.device == onlyDevice }
+        if (onlyDevice != null && copies.isEmpty()) return "That device doesn't have this game any more."
+        if (onlyDevice == null && id.rommOnly != null && copies.none { it.second.hashed }) {
             return romm.download(id.rommOnly!!)
         }
         if (localIds.value.any { (_, k) -> k.any { it in keys } } && command != null) return "It's already on ${ctx.services.deviceName}."
@@ -513,7 +528,7 @@ internal class DefaultReachOps(
         val platform = ctx.platforms.byId(PlatformId(ref.platform)) ?: ctx.platforms.resolveFolder(ref.platform)
             ?: return "Fuse doesn't know the system \"${ref.platform}\", so it can't tell where this goes."
         // RomM, when it has exactly these files.
-        val rom = (id.rommOnly ?: ref.rommRomId ?: romm.sameOnServer(null, ref.files.mapNotNull { it.md5 })?.id)?.let { romm.romWithFiles(it) }
+        val rom = if (onlyDevice != null) null else (id.rommOnly ?: ref.rommRomId ?: romm.sameOnServer(null, ref.files.mapNotNull { it.md5 })?.id)?.let { romm.romWithFiles(it) }
         val rommFiles = rom?.let { r ->
             ref.files.associate { f ->
                 f.path to r.files.firstOrNull { rf -> rf.sizeBytes == f.size && ((f.sha1 != null && rf.sha1.equals(f.sha1, true)) || (f.md5 != null && rf.md5.equals(f.md5, true))) }
