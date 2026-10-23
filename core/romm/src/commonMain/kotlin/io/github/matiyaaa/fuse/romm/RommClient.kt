@@ -319,7 +319,9 @@ class RommClient(
 
     /** Where a game's file downloads from: one file at a time, so each can carry on by range. */
     fun fileUrl(base: String, rom: Long, file: RommFile): String =
-        "$base/api/roms/$rom/content/${file.name.encodeURLPathPart()}?file_ids=${file.id}"
+        // A file RomM didn't list (id 0): the whole game, as RomM serves it by its own name.
+        if (file.id <= 0) "$base/api/roms/$rom/content/${file.name.encodeURLPathPart()}"
+        else "$base/api/roms/$rom/content/${file.name.encodeURLPathPart()}?file_ids=${file.id}"
 
     fun firmwareUrl(base: String, firmware: RommFirmware): String =
         "$base/api/firmware/${firmware.id}/content/${firmware.fileName.encodeURLPathPart()}"
