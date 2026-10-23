@@ -278,6 +278,7 @@ internal object AndroidConsoleDefs {
             capabilities = installedContent(FolderSupport.NONE),
             titleIdMode = TitleIdMode.REQUIRED,
             limitations = listOf("Starts games installed in BachataS4 by title id (a .ps4 file containing e.g. CUSA00001)."),
+            homepage = "https://github.com/JICA98/Bachata-S4",
         ),
         AndroidEmulatorDef(
             id = "shadps4", name = "shadPS4",

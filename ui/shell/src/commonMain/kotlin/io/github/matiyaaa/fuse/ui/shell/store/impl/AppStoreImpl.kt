@@ -805,8 +805,24 @@ internal class DefaultAppStoreOps(
             ),
         )
 
+        /** BachataS4, the PS4 emulator for Android (shadPS4's code), from its own releases. */
+        val BACHATAS4 = PackApp(
+            id = "com.bachatas4.android.github",
+            url = "https://github.com/JICA98/Bachata-S4",
+            name = "BachataS4",
+            author = "JICA98",
+            categories = listOf("Sony - PlayStation 4"),
+            source = PackSourceKind.GITHUB,
+            allowIdChange = true,
+            preferredApkIndex = null,
+            rules = io.github.matiyaaa.fuse.integrations.obtainium.PackRules(
+                about = "A PlayStation 4 emulator for Android, built on shadPS4. Experimental: not every game plays. Fuse starts games installed in it by their title id.",
+                fallbackToOlderReleases = true,
+            ),
+        )
+
         /** Apps Fuse offers in every edition of the Store, beside the pack's. */
-        val COMPANIONS = listOf(SYNCTHING_FORK, CARTRIDGE)
+        val COMPANIONS = listOf(SYNCTHING_FORK, CARTRIDGE, BACHATAS4)
 
         /** The Store's key for Syncthing-Fork. */
         val SYNCTHING_KEY: String get() = keyOf(SYNCTHING_FORK)
