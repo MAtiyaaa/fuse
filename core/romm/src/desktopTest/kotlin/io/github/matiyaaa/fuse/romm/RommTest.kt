@@ -556,6 +556,22 @@ class RommTest {
     }
 
     @Test
+    fun `a whole game RomM zips as it sends may be bigger than its files`() = runBlocking<Unit> {
+        val fake = server()
+        val c = client(fake).also { it.detect() }
+        val mirror = RommMirror(db(), System::currentTimeMillis).also { it.sync(c, "main") }
+        val m = manager()
+        m.register(RommDownloadHandler(fake.client, Host(fake, c, mirror)))
+        val ff7 = mirror.withFiles(c, "main", 2)!!
+        val whole = RommFile(0, "Final Fantasy VII (USA).zip", sizeBytes = ff7.files.sumOf { it.sizeBytes })
+        val dest = File(root, "roms/psx")
+        val job = RommDownloadJob("main", ff7.id, listOf(RommDownloadFile(whole, whole.name)), platform = "psx")
+        val id = m.enqueue(TransferItem("", "romm:rom:2z", ROMM_SOURCE, TransferDirection.DOWNLOAD, TransferKind.GAME, ff7.name, place = TransferPlace(dest.path), totalBytes = whole.sizeBytes, payload = job.encode()))
+        m.await(id, TransferStatus.DONE)
+        assertEquals(whole.sizeBytes + 512, File(dest, whole.name).length())
+    }
+
+    @Test
     fun `BIOS from RomM is put in place, and never over the person's own file`() = runBlocking<Unit> {
         val fake = server().apply { firmware += Triple(5L, "scph5501.bin", ByteArray(512) { 9 }) }
         val c = client(fake).also { it.detect() }

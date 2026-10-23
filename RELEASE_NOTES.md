@@ -1,18 +1,17 @@
-# Fuse 0.4.3.13 - The Overdrive Update
+# Fuse 0.4.3.14 - The Overdrive Update
 
-Download asks where from when your copies of a game differ.
+A whole game from RomM finishes downloading.
 
 ## New
 
-- When a game's copies aren't the same size (RomM's with its DLC, a device's without, or two
-  devices' libraries), Download asks which one to bring here: RomM or a device in Fuse One, each
-  with its size, the largest marked. Copies that are all the same still come from wherever is best.
+- Nothing new in this release.
 
 ## Changed
 
-- A copy picked by hand comes only from there. Fuse no longer brings another copy in its place.
+- A game RomM sends whole (zipped as it sends, like a PS4 game) is no longer held to the size of
+  its files: a zip is a little bigger than what is in it.
 
 ## Fixed
 
-- Download on a RomM game brought a different copy from a device in Fuse One (without the DLC
-  RomM had), even though RomM's was pressed.
+- A PS4 game from RomM reached 99% and then failed with "The server sent more than the file's
+  size". Try Again on it now finishes.
