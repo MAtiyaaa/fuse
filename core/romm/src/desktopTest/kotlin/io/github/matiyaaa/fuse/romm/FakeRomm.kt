@@ -134,7 +134,8 @@ class FakeRomm(var version: String = "4.4.0") {
                 val id = path.removePrefix("/api/roms/").substringBefore('/').toLong()
                 val fileId = req.url.parameters["file_ids"]?.toLong()
                 val game = games.firstOrNull { it.id == id } ?: return respond("", HttpStatusCode.NotFound)
-                val bytes = game.files.first { it.first == fileId }.third
+                // No file named: the whole game, zipped as it is sent (a little bigger than its files).
+                val bytes = if (fileId == null) game.files.fold(ByteArray(0)) { a, f -> a + f.third } + ByteArray(512) else game.files.first { it.first == fileId }.third
                 val range = req.headers[HttpHeaders.Range]
                 val from = range?.removePrefix("bytes=")?.substringBefore('-')?.toInt() ?: 0
                 val body = bytes.copyOfRange(from, bytes.size)

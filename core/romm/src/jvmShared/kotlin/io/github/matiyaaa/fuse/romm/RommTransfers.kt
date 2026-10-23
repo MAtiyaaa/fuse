@@ -53,11 +53,14 @@ class RommDownloadHandler(private val http: HttpClient, private val host: RommTr
                 continue
             }
             val part = partOf(root, job, f)
-            RangedDownload.fetch(http, { client.fileUrl(client.base(), job.romId, f.file) }, part, f.file.sizeBytes.takeIf { it > 0 }, io, doneBefore = done, totalOverall = total) {
+            // A whole game RomM zips as it sends (a game it lists no files for) comes out a little
+            // bigger than the game's files: its size is only a guide, never a limit.
+            val exact = f.file.sizeBytes.takeIf { it > 0 && f.file.id > 0 }
+            RangedDownload.fetch(http, { client.fileUrl(client.base(), job.romId, f.file) }, part, exact, io, doneBefore = done, totalOverall = total) {
                 client.authorize(this)
             }
             io.phase(TransferPhase.VERIFYING)
-            TransferFiles.verify(part, f.file.sizeBytes.takeIf { it > 0 }, f.file.sha1?.let { ExpectedHash("sha1", it) } ?: f.file.md5?.let { ExpectedHash("md5", it) })
+            TransferFiles.verify(part, exact, f.file.sha1?.let { ExpectedHash("sha1", it) } ?: f.file.md5?.let { ExpectedHash("md5", it) })
             io.phase(TransferPhase.PLACING)
             TransferFiles.place(part, finalDest)
             done += f.file.sizeBytes
