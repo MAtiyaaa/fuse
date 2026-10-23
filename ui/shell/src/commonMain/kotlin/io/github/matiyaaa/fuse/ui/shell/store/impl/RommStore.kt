@@ -1341,8 +1341,12 @@ internal class DefaultRommOps(
 
     override suspend fun download(romId: Long, what: RommDownloadWhat): String? = withContext(Dispatchers.Default) {
         if (!settings.enabled) return@withContext "Turn on RomM in Settings, Addons, RomM."
-        val r = mirror.withFiles(clientFor(server), server, romId) ?: return@withContext "That game isn't in your RomM library any more."
-        if (r.files.isEmpty()) return@withContext "Fuse needs RomM to list this game's files first. Try again once the server answers."
+        val listed = mirror.withFiles(clientFor(server), server, romId) ?: return@withContext "That game isn't in your RomM library any more."
+        // RomM didn't list its files (a PS4 package, a folder it hasn't scanned yet): the whole game, by its own name.
+        val r = if (listed.files.isNotEmpty() || listed.fsName.isBlank()) listed else listed.copy(
+            files = listOf(RommFile(id = 0, name = if (listed.multi && !listed.fsName.endsWith(".zip")) listed.fsName + ".zip" else listed.fsName, sizeBytes = listed.sizeBytes)),
+        )
+        if (r.files.isEmpty()) return@withContext "RomM has no file for this game to send."
         val platform = ctx.platforms.resolveFolder(r.platformSlug) ?: return@withContext "Fuse doesn't know RomM's system \"${r.platformSlug}\", so it can't tell where this goes."
         val game = matches.value[romId]?.first
         val here = game?.let { localNames(it) }.orEmpty()
