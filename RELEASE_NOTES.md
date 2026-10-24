@@ -1,6 +1,6 @@
-# Fuse 0.4.3.14 - The Overdrive Update
+# Fuse 0.4.3.15 - The Overdrive Update
 
-A whole game from RomM finishes downloading.
+Desktop updates download again.
 
 ## New
 
@@ -8,10 +8,9 @@ A whole game from RomM finishes downloading.
 
 ## Changed
 
-- A game RomM sends whole (zipped as it sends, like a PS4 game) is no longer held to the size of
-  its files: a zip is a little bigger than what is in it.
+- Desktop uses the same HTTP engine as Android for its shared network client.
 
 ## Fixed
 
-- A PS4 game from RomM reached 99% and then failed with "The server sent more than the file's
-  size". Try Again on it now finishes.
+- Downloading a Fuse update on Linux, Windows or macOS no longer fails with
+  "Line exceeds limit of 8192 bytes" when GitHub sends a long redirect header.

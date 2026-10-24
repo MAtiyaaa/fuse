@@ -21,7 +21,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.GameLauncher
 import io.github.matiyaaa.fuse.ui.shell.store.ReleaseInstaller
 import io.github.matiyaaa.fuse.ui.shell.store.VolumeMonitor
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
+import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,7 +52,8 @@ class DesktopFuseServices private constructor(
     override val secrets: SecretStore = DesktopSecretStore(dirs.data)
 
     // Made the first time something goes on the network: a Fast Start that needs none never makes it.
-    private val engine = lazy { CIO.create() }
+    // GitHub release redirects can exceed CIO's 8 KiB response-header line limit.
+    private val engine = lazy { OkHttp.create() }
     override val http: HttpClient by lazy { FuseHttp.client(engine.value, FuseHttpConfig(appVersion = appVersion)) }
     override val cacheDir: String = dirs.cache
     override val dataDir: String = dirs.data
