@@ -23,6 +23,7 @@ dependencies {
     implementation(compose.desktop.currentOs)
     implementation(libs.kotlinx.coroutines.swing)
     implementation(libs.ktor.client.cio)
+    implementation(libs.ktor.client.okhttp)
     implementation(libs.coil.compose)
     implementation(libs.coil.svg)
     // MP3 decoding for menu music (LGPL-2.1-or-later, see THIRD_PARTY_NOTICES.md).
