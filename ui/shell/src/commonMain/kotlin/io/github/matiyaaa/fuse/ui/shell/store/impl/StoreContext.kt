@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.retryWhen
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -83,6 +84,18 @@ internal class StoreContext(
 
     /** The game being played on this device right now, if any (transfers ease off or pause meanwhile). */
     val playing = MutableStateFlow<GameId?>(null)
+
+    /**
+     * Whether Fuse's own optional rounds on the network may run: the device awake ([FuseServices.awake])
+     * and no game in front. A game has the device: Jellyfin's and RomM's checks every half minute
+     * kept its Wi-Fi and processor busy under every game, which on a handheld was battery the game
+     * could have had. They catch up the moment the game ends. Saves are never held by this.
+     */
+    val rounds: kotlinx.coroutines.flow.StateFlow<Boolean> by lazy {
+        combine(services.awake, playing) { awake, game -> awake && game == null }
+            .distinctUntilChanged()
+            .stateIn(scope, kotlinx.coroutines.flow.SharingStarted.Eagerly, services.awake.value && playing.value == null)
+    }
 
     /** Strong household identity evidence, supplied by Reach before an external scraper search. */
     var householdProviderClaims: suspend (io.github.matiyaaa.fuse.model.Game) -> List<io.github.matiyaaa.fuse.model.ProviderClaim> = { emptyList() }

@@ -123,7 +123,7 @@ internal class DefaultFuseStore private constructor(
             ctx.scope,
             disk = JellyfinFiles(ctx.services),
             discovery = ctx.services.jellyfinDiscovery,
-            awake = ctx.services.awake,
+            awake = ctx.rounds,
         )
     }
     private val mediaFeed = MutableStateFlow(io.github.matiyaaa.fuse.jellyfin.MediaFeed())
@@ -761,8 +761,8 @@ internal class DefaultFuseStore private constructor(
                     return@collectLatest
                 }
                 while (true) {
-                    // Asleep, Home isn't looked at: the feed is asked for again when the device wakes.
-                    ctx.services.awake.first { it }
+                    // Asleep, or under a game, Home isn't looked at: the feed is asked for again after.
+                    ctx.rounds.first { it }
                     val got = runCatching { jellyfin.widgetFeed() }.onSuccess { mediaFeed.value = it }.getOrNull()
                     // Nothing came (the server not answering yet): soon again, not in five minutes.
                     delay(if (got == null || got.isEmpty) MEDIA_FEED_RETRY_MS else MEDIA_FEED_EVERY_MS)

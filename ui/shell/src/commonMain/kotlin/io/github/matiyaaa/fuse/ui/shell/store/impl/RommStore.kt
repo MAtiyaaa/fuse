@@ -433,8 +433,9 @@ internal class DefaultRommOps(
             // Fuseline 4.2: the first refresh waits for the first screen to settle.
             io.github.matiyaaa.fuse.ui.designsystem.effects.StartupGate.settled()
             while (true) {
-                // Asleep, RomM isn't asked anything (an unreachable one was knocked on every minute all night).
-                ctx.services.awake.first { it }
+                // Asleep, or under a game, RomM isn't asked anything (an unreachable one was knocked
+                // on every minute all night); it catches up the moment the game ends.
+                ctx.rounds.first { it }
                 val link = _state.value.link
                 if (link == RommLink.ONLINE) {
                     if (first || ctx.now() - mirror.syncedAt(server) >= settings.refreshMinutes.coerceIn(5, 1440) * 60_000L) syncNow(full = false)

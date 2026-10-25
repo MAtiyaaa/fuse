@@ -163,10 +163,15 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
     val prefs by store.prefs.collectAsState()
     val standby by session.standby.collectAsState()
     val spec = prefs.theme
+    // A game on the main screen has the device: this screen keeps its picture and words but stops
+    // moving (no drifting art, moving background or Fusi), as in Low Power. It drew every frame at
+    // the panel's full rate under every game, which on a two-screen handheld was battery the game
+    // could have had. A touch still turns its pages.
+    val gameOn = store.homeFeed.collectAsState().value.playtime.currentGame != null
     FuseTheme(
         spec = spec,
         motion = prefs.motion,
-        quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower),
+        quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower || gameOn),
         glass = prefs.glass,
         highContrastFocus = prefs.highContrastFocus,
         colorVision = prefs.colorVision,
@@ -237,7 +242,7 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
                 HeroBackdrop(hero, Modifier.fillMaxSize(), dim = if (cinema) 0.38f else 0.25f, gradient = if (cinema) 0.9f else 0.75f, settleMs = 30)
             }
             // Fusi, when she is down here, plays in front of the art.
-            if (prefs.display.companionFollowsBackground && spec.background == io.github.matiyaaa.fuse.model.BackgroundStyle.FUSI && !cinema) {
+            if (prefs.display.companionFollowsBackground && spec.background == io.github.matiyaaa.fuse.model.BackgroundStyle.FUSI && !cinema && !gameOn) {
                 io.github.matiyaaa.fuse.ui.designsystem.background.FusiPet(io.github.matiyaaa.fuse.ui.designsystem.background.FusiScreen.BOTTOM)
             }
             // Status and controls sit on a deeper shade, so their cards read over any art.

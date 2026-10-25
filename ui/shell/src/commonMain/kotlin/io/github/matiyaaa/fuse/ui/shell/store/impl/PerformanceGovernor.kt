@@ -59,10 +59,12 @@ internal class PerformanceGovernor(
         scope.launch {
             var last = wallClock()
             while (true) {
-                delay(TICK_MS)
+                // Behind a game or another app nothing here is seen, so it looks far less often.
+                val tick = if (foreground.value) TICK_MS else BACKGROUND_TICK_MS
+                delay(tick)
                 val now = wallClock()
                 // The clock ran on far past one tick: the device slept in between.
-                if (now - last > TICK_MS + SLEEP_GAP_MS) woke()
+                if (now - last > tick + SLEEP_GAP_MS) woke()
                 last = now
                 idle.value = sinceInput()?.let { it > IDLE_NANOS } ?: false
             }
@@ -113,6 +115,7 @@ internal class PerformanceGovernor(
         const val QUIET_NANOS = 1_500_000_000L
         const val MIN_QUIET_WAIT_MS = 50L
         const val TICK_MS = 5_000L
+        const val BACKGROUND_TICK_MS = 30_000L
         const val SLEEP_GAP_MS = 25_000L
         const val RESUME_SETTLE_MS = 8_000L
         const val IDLE_NANOS = 180_000_000_000L

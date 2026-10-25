@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -108,7 +109,18 @@ class JvmSyncService(
 
     /** The household's games through this device's host (see [Household]). */
     val householdHere: JvmHousehold by lazy {
-        JvmHousehold(File(dir, "household"), scope, { client }, { cached.deviceId }, { cached }, busy = { _nowPlaying.value != null || !mayHash() }, clock = clock, awake = awake)
+        JvmHousehold(File(dir, "household"), scope, { client }, { cached.deviceId }, { cached }, busy = { _nowPlaying.value != null || !mayHash() }, clock = clock, awake = roundsMayRun)
+    }
+
+    /**
+     * Fuse One's own rounds may run: the device awake, and no game it follows in front. Under a game
+     * the wait for the host's news and the household's lists hold (each answer woke the Wi-Fi and the
+     * processor again under the game, every half minute for as long as it was played) and catch up
+     * the moment it ends. The game's save still goes as it is written ([watchWhilePlaying]).
+     */
+    private val roundsMayRun: StateFlow<Boolean> by lazy {
+        kotlinx.coroutines.flow.combine(awake, _nowPlaying) { a, playing -> a && playing == null }
+            .stateIn(scope, kotlinx.coroutines.flow.SharingStarted.Eagerly, awake.value && _nowPlaying.value == null)
     }
     override val household: Household get() = householdHere
     private var hostServer: SyncHost? = null
@@ -402,8 +414,8 @@ class JvmSyncService(
             var backoff = 2_000L
             var joinsChecked = false
             while (true) {
-                // Asleep, nothing is asked of the host: the first round after waking catches up on everything.
-                awake.awaitAwake()
+                // Asleep, or under a game, nothing is asked of the host: the first round after catches up on everything.
+                roundsMayRun.awaitAwake()
                 val c = client ?: break
                 try {
                     // Sends what is waiting and catches up, then waits for the host to say something changed.
@@ -421,8 +433,8 @@ class JvmSyncService(
                         scope.launch(Dispatchers.IO) { runCatching { convergeAll() } }
                         scope.launch(Dispatchers.IO) { householdConnect() }
                     }
-                    // The wait ends when the device goes to sleep: its answer would only wake it again.
-                    val page = awake.untilAsleep { c.events(since, waitSeconds = 25) } ?: continue
+                    // The wait ends when the device goes to sleep or a game starts: its answer would only wake it again.
+                    val page = roundsMayRun.untilAsleep { c.events(since, waitSeconds = 25) } ?: continue
                     householdHere.woken(page.wake)
                     if (HouseholdHost.WAKE_PLAYING in page.wake) scope.launch(Dispatchers.IO) { runCatching { lookForHosted(c) } }
                     // A device checking in is no event, so when each was last seen (and so which are

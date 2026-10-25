@@ -864,8 +864,14 @@ private fun Room(
                     Appear(videoReady, enter = fadeIn(Fuse.motion.fade(Durations.DELIBERATE)), exit = fadeOut(Fuse.motion.fade(Durations.FAST))) {
                         Box(Modifier.fillMaxSize())
                     }
+                    // Never under a game: the preview went on playing behind every game started from its
+                    // page (nothing showed it, yet it decoded every frame for as long as the game ran).
+                    val gameOn = app.store.homeFeed.collectAsState().value.playtime.currentGame != null
+                    // Nor with Fuse out of sight (another app in front, the window minimised).
+                    val shown = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState().value
+                        .isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
                     Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (videoReady) 1f else 0f }) {
-                        player.Player(src, playing = app.launching == null && !app.overlayOpen, modifier = Modifier.fillMaxSize(), onFirstFrame = { videoReady = true })
+                        player.Player(src, playing = app.launching == null && !app.overlayOpen && !gameOn && shown, modifier = Modifier.fillMaxSize(), onFirstFrame = { videoReady = true })
                     }
                 }
             },
