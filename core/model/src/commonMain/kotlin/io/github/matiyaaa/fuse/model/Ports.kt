@@ -173,13 +173,25 @@ data class PortData(
 )
 
 /**
- * The one ROM a recompilation is made from, of the library's [system] ("n64"): known by the
- * XXH3-64 hash of its big-endian form ([xxh3], 16 hex digits, as N64: Recompiled's runtime checks
- * it), and put where the port looks for it ([place], relative to its home): a link to the person's
- * file when it is already in that form, else a copy turned into it. The person's file never changes.
+ * The one ROM a recompilation is made from, of the library's [system] ("n64"), known the way the
+ * port itself checks it: an N64 ROM by the XXH3-64 hash of its big-endian form ([xxh3], 16 hex
+ * digits, as N64: Recompiled's runtime checks it); another system's by the CRC32 ([crc32], 8 hex
+ * digits) or SHA-1 ([sha1]) of its data, a NES file's iNES header and a SNES file's copier header
+ * left out as the port leaves them out; and a port that checks nothing by its system alone.
+ *
+ * With a [place] (relative to its home) it is put where the port looks for it: a link to the
+ * person's file when it is already in that form, else a copy turned into it. Without one the port
+ * is handed the person's file by its path (`{data:<id>}` in [Port.args]), which it only reads. The
+ * person's file never changes.
  */
 @Serializable
-data class PortRom(val system: String, val xxh3: String, val place: String)
+data class PortRom(
+    val system: String,
+    val xxh3: String = "",
+    val place: String = "",
+    val crc32: String? = null,
+    val sha1: String? = null,
+)
 
 /**
  * The person's folder linked into Fuse's copy at [into] (relative; empty for its top), entry by

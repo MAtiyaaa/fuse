@@ -721,6 +721,8 @@ internal class PortsStore(
      * that is already in the form it reads, else a copy turned into it. The person's file stays as it is.
      */
     private suspend fun placeRom(rom: io.github.matiyaaa.fuse.model.PortRom, file: String, layout: PortLayout): String? {
+        // A port handed the ROM by its path ({data:<id>}) reads the person's own file: nothing is put anywhere.
+        if (rom.place.isEmpty()) return null
         val at = "${layout.home}/${rom.place}"
         val bytes = romBytes(file) ?: return "Fuse can't read that ROM."
         files.makeFolder(at.substringBeforeLast('/'))
@@ -744,7 +746,7 @@ internal class PortsStore(
         val fs = ctx.services.fs
         d.rom?.let { rom ->
             val bytes = romBytes(folder) ?: return "Choose the ROM file itself."
-            return if (PortPlan.isRom(rom, bytes)) null else "That isn't the ROM it is made from. ${d.about}"
+            return if (io.github.matiyaaa.fuse.launch.ports.PortRomCheck.matches(rom, bytes)) null else "That isn't the ROM it is made from. ${d.about}"
         }
         if (runCatching { fs.stat(folder) }.getOrNull()?.isDirectory != true) return "Fuse can't open that folder."
         // As PortPlan.missing says, with the folder looked at here (each need: any one of its names).

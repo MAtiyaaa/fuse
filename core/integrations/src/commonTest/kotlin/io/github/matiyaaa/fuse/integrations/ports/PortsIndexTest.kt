@@ -143,6 +143,22 @@ class PortsIndexTest {
     }
 
     @Test
+    fun aRomHandedOverByItsPathIsKnownByTheHashItsPortChecks() {
+        val build = io.github.matiyaaa.fuse.model.PortBuild("linux", url = "https://example.org/r.AppImage", size = 10, sha256 = "a".repeat(64), kind = PortFileKind.APPIMAGE, run = "r.AppImage")
+        val rom = io.github.matiyaaa.fuse.model.PortData("rom", "Its ROM", "The US one.", needs = emptyList(), rom = io.github.matiyaaa.fuse.model.PortRom("snes", crc32 = "b19ed489"))
+        val port = io.github.matiyaaa.fuse.model.Port(
+            id = "snes-recomp", name = "Recomp", game = "A Game", about = "", homepage = "https://example.org", version = "1.0",
+            builds = listOf(build), data = listOf(rom), args = listOf("{data:rom}"), source = "made up",
+        )
+        assertEquals(null, PortsIndexReader.problem(port))
+        assertEquals(null, PortsIndexReader.problem(port.copy(data = listOf(rom.copy(rom = rom.rom!!.copy(crc32 = null, sha1 = "d3efd32b68f1fe37a82db9d9929b7ca7cc1a3af4"))))))
+        assertEquals(null, PortsIndexReader.problem(port.copy(data = listOf(rom.copy(rom = rom.rom!!.copy(crc32 = null))))), "a port that checks none")
+        assertEquals("the ROM it needs isn't said", PortsIndexReader.problem(port.copy(data = listOf(rom.copy(rom = rom.rom!!.copy(crc32 = "b19ed48"))))))
+        assertEquals("the ROM it needs isn't said", PortsIndexReader.problem(port.copy(data = listOf(rom.copy(rom = rom.rom!!.copy(sha1 = "xyz"))))))
+        assertEquals("the ROM it needs isn't given to it", PortsIndexReader.problem(port.copy(args = emptyList())))
+    }
+
+    @Test
     fun aFetchedIndexIsUsedOnlyWhenSignedAndNewer() = runTest {
         var body = SIGNED
         var sig = signature

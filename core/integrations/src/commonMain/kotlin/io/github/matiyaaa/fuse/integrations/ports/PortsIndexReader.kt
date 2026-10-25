@@ -40,6 +40,8 @@ object PortsIndexReader {
     private val SHA256 = Regex("^[0-9a-f]{64}$")
     private val PLACEHOLDER = Regex("\\{[^}]*\\}")
     private val XXH3 = Regex("^[0-9a-f]{16}$")
+    private val CRC32 = Regex("^[0-9a-f]{8}$")
+    private val SHA1 = Regex("^[0-9a-f]{40}$")
     private val ENV = Regex("^[A-Z_][A-Z0-9_]{0,63}$")
 
     /** The largest build Fuse downloads (2 GiB). */
@@ -98,8 +100,15 @@ object PortsIndexReader {
             val r = d.rom
             if (r != null) {
                 if (d.needs.isNotEmpty() || d.overlay != null) return "it needs a ROM and a folder at once"
-                if (!XXH3.matches(r.xxh3) || !ID.matches(r.system)) return "the ROM it needs isn't said"
-                if (!safe(r.place)) return "its ROM would go outside it"
+                // Known by one hash its port checks, or by none where the port checks none.
+                val known = when {
+                    r.xxh3.isNotEmpty() -> XXH3.matches(r.xxh3)
+                    else -> (r.crc32 == null || CRC32.matches(r.crc32!!)) && (r.sha1 == null || SHA1.matches(r.sha1!!))
+                }
+                if (!known || !ID.matches(r.system)) return "the ROM it needs isn't said"
+                if (r.place.isNotEmpty() && !safe(r.place)) return "its ROM would go outside it"
+                // Handed to the port by its path when it isn't put anywhere.
+                if (r.place.isEmpty() && (port.args + port.env.values).none { "${PortTokens.DATA_PREFIX}${d.id}}" in it }) return "the ROM it needs isn't given to it"
                 continue
             }
             if (d.needs.isEmpty() || d.needs.any { names -> names.isEmpty() || names.any { !safe(it) } }) return "what it needs from the game isn't said"
