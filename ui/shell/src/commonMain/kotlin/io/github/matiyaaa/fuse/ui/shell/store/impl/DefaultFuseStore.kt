@@ -866,13 +866,19 @@ internal class DefaultFuseStore private constructor(
         desktopStoreOps?.startAutomatic()
         if (data.sources.all().isNotEmpty()) engine.rescan(ScanScope.QUICK)
         achievements.refresh(force = false)
-        data.cache.purgeExpired(ctx.now())
+        // Only what ran out long ago goes: an answer past its time is still what's shown offline
+        // (RetroAchievements' progress runs out in minutes, so purging at once left nothing to show
+        // after a start without a connection).
+        data.cache.purgeExpired(ctx.now() - STALE_KEPT_MS)
         runCatching { updates.checkIfDue() }
     }
 
     companion object {
         /** New games at once whose saves are looked for (a whole folder added stays a few calls). */
         const val MAX_ARRIVALS = 200
+
+        /** How long an answer is kept past its time, for showing offline, before it is purged. */
+        const val STALE_KEPT_MS = 60L * 24 * 60 * 60 * 1000
 
         /** Version of [DisplayNameCleaner]'s rules; existing names are cleaned again when it grows. */
         const val CLEAN_RULES = 2
