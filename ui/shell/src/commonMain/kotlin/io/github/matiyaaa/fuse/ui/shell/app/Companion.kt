@@ -689,32 +689,7 @@ private fun SystemShowcase(card: PlatformCard) {
 /** The game being played: its logo over its room, how long this session has run, and its achievements. */
 @Composable
 private fun NowPlaying(store: FuseStore, game: GameCard, since: Long?, onAchievements: (GameId) -> Unit) {
-    var now by remember { mutableLongStateOf(kotlin.time.Clock.System.now().toEpochMilliseconds()) }
-    LaunchedEffect(since) {
-        while (since != null) {
-            now = kotlin.time.Clock.System.now().toEpochMilliseconds()
-            delay(15_000)
-        }
-    }
-    val flow = remember(game.id) { store.library.game(game.id) }
-    val detail by flow.collectAsState(initial = null)
-    GameLogo(game.art.logo, game.title) {
-        // Clear air between the logo and the session pill, so neither crowds the other.
-        Spacer(Modifier.height(Space.xxl))
-        val session = since?.let { "  ·  ${playtimeText(((now - it) / 1000).coerceAtLeast(0))}" }.orEmpty()
-        Row(
-            Modifier.clip(PillShape).background(Fuse.colors.ink.copy(alpha = 0.55f)).padding(horizontal = Space.m, vertical = Space.xs + 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Space.s),
-        ) {
-            Box(Modifier.size(7.dp).clip(CircleShape).background(Fuse.colors.accent))
-            FText("Playing$session", Fuse.type.label, maxLines = 1)
-        }
-        detail?.achievements?.takeIf { it.total > 0 }?.let { a ->
-            Spacer(Modifier.height(Space.l))
-            AchievementBar(a, onOpen = { onAchievements(game.id) })
-        }
-    }
+    SessionPage(store, game, since, onAchievements)
 }
 
 /**

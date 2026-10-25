@@ -20,6 +20,11 @@ import io.github.matiyaaa.fuse.ui.shell.settings.settingsSectionId
 import io.github.matiyaaa.fuse.ui.shell.settings.settingsSections
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import io.github.matiyaaa.fuse.ui.shell.store.LocationHint
+import io.github.matiyaaa.fuse.ui.shell.store.withUnlocks
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.unit.dp
 import java.io.File
 import kotlin.time.Clock
 import kotlinx.coroutines.flow.first
@@ -1131,6 +1136,24 @@ internal fun AuditDriver.companionScreens() {
         val store = libraryStore
         val card = runBlocking { store.library.games(GameQuery()).first().first { it.title == "Velvet Orbit" } }
         val start = Clock.System.now().toEpochMilliseconds() - 42 * 60_000L
+        // Its RetroAchievements set, as Fuse caches it (the audit has no network).
+        val names = listOf("First Light", "Orbit Keeper", "Velvet Touch", "Long Way Round", "Gravity Well", "No Fuel Left", "Night Run", "Star Chart", "Perfect Drift", "Event Horizon", "Last Signal", "Home Again")
+        val achievements = names.mapIndexed { i, name ->
+            io.github.matiyaaa.fuse.model.Achievement(
+                id = 9_101L + i, gameId = 9_001L, title = name, description = "Finish chapter ${i + 1} without losing a ship",
+                points = listOf(5, 10, 10, 25, 5, 10, 25, 50, 10, 25, 10, 50)[i], badgeUrl = "", badgeLockedUrl = "",
+                earnedAt = if (i < 7) 1_700_000_000_000L + i * 86_400_000L else null, earnedHardcoreAt = null, displayOrder = i + 1,
+            )
+        }
+        val set = io.github.matiyaaa.fuse.model.AchievementState(
+            raGameId = 9_001L, title = "Velvet Orbit", consoleName = "Dreamcast", iconUrl = null,
+            total = 12, earned = 7, earnedHardcore = 0, points = 235, pointsEarned = 90, highestAward = null,
+            achievements = achievements, fetchedAt = Clock.System.now().toEpochMilliseconds(),
+        )
+        runBlocking {
+            libraryData.cache.put("retroachievements", "game:9001", set, io.github.matiyaaa.fuse.model.AchievementState.serializer(), 0L, null)
+            libraryData.games.updateLinks(card.id) { it.copy(retroAchievementsGameId = 9_001L) }
+        }
         val session = runBlocking { libraryData.playSessions.start(card.id, io.github.matiyaaa.fuse.model.EmulatorId("linux.flycast"), start) }
         try {
             pumpUntil("the open session to show", 20_000) { store.library.home.value.playtime.currentGame != null }
@@ -1145,8 +1168,22 @@ internal fun AuditDriver.companionScreens() {
             CompanionPage.current.value = 2
             shoot("controls while Fuse is in the background", 1_500)
             CompanionPage.current.value = 0
+            // Two unlocked this session, as the store hears of them while the game runs.
+            val unlocked = listOf(achievements[7], achievements[8]).map {
+                io.github.matiyaaa.fuse.model.RecentAchievement(it.copy(earnedAt = start + 20 * 60_000L), "Velvet Orbit", "Dreamcast", null, hardcore = false, earnedAt = start + 20 * 60_000L)
+            }
+            val after = set.withUnlocks(unlocked)
+            view = AuditView.Piece {
+                androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().padding(24.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                    io.github.matiyaaa.fuse.ui.shell.app.SessionAchievements(after, unlocked, next = 3, androidx.compose.ui.Modifier.widthIn(max = 560.dp)) {}
+                }
+            }
+            shoot("achievements unlocked this session", 1_200)
         } finally {
-            runBlocking { libraryData.playSessions.end(session, Clock.System.now().toEpochMilliseconds()) }
+            runBlocking {
+                libraryData.playSessions.end(session, Clock.System.now().toEpochMilliseconds())
+                libraryData.games.updateLinks(card.id) { it.copy(retroAchievementsGameId = null) }
+            }
         }
     }
 

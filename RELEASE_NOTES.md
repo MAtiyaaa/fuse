@@ -63,6 +63,9 @@ it runs, and Low Power turns fully off again.
   far through the set it leaves you, in gold for hardcore and for a set's last. Fuse asks
   RetroAchievements about new ones once a minute while that screen shows them, and only for a game
   whose set it already knows. Back in Fuse, a line says what the game gave you.
+- **The second screen while you play.** It shows how long the session has run and when it began,
+  the game's time this week and in all, and, for a game with achievements, how far through the set
+  you are, what this session unlocked and the next few to go for. Touch them for the whole list.
 - **More on the screen above.** On a two-screen handheld with the menus below, a game keeps its
   few lines about it, its series, this week's play and what plays it. With nothing chosen, the
   week's play sits beside the clock with a bar a day, and a system shows its games, those played
