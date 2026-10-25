@@ -336,7 +336,7 @@ class EverySettingStoreTest {
 
         // DuckStation's are in its private Android/data folder.
         val no = assertIs<EverySettingView.Unavailable>(store.library.everyEmulatorSetting(null, duck.id))
-        assertEquals("Fuse can't reach DuckStation's settings here", no.title)
+        assertEquals("DuckStation's settings are in DuckStation", no.title)
         // PPSSPP's memory stick is in shared storage.
         val every = assertIs<EverySettingView.Ready>(store.library.everyEmulatorSetting(null, psp.id))
         val res = every.value("Graphics", "InternalResolution")

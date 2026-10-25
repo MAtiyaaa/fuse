@@ -35,7 +35,10 @@ fun AppState.everySettingSheet(
     val place = Place(game, gameTitle, emulator, from)
     scope.launch {
         when (val view = store.library.everyEmulatorSetting(game, emulator)) {
-            is EverySettingView.Unavailable -> showProblem(Problem(view.title, view.reason, ProblemKind.EMULATOR, Severity.INFO, reassurance = null))
+            is EverySettingView.Unavailable -> showProblem(Problem(
+                view.title, view.reason, ProblemKind.EMULATOR, Severity.INFO, reassurance = null,
+                actions = listOfNotNull(view.open?.let { (id, name) -> io.github.matiyaaa.fuse.ui.shell.store.ProblemAction.OpenEmulator(id, name) }),
+            ))
             is EverySettingView.Ready -> when {
                 query != null -> searchResults(place, view, query)
                 section != null && view.sections.any { it.id == section } -> sectionSheet(place, view, section)

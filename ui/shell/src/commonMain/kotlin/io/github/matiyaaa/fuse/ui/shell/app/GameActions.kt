@@ -1098,6 +1098,7 @@ fun AppState.emulatorSettingsSheet(game: GameId?, gameTitle: String?, emulator: 
         when (val view = store.library.emulatorSettings(game, emulator)) {
             is io.github.matiyaaa.fuse.ui.shell.store.EmulatorSettingsView.Unavailable -> showProblem(Problem(
                 view.title, view.reason, ProblemKind.EMULATOR, Severity.INFO, reassurance = null,
+                actions = listOfNotNull(view.open?.let { (id, name) -> io.github.matiyaaa.fuse.ui.shell.store.ProblemAction.OpenEmulator(id, name) }),
             ))
             is io.github.matiyaaa.fuse.ui.shell.store.EmulatorSettingsView.Ready -> {
                 // Only Every Setting (RPCS3): straight there.

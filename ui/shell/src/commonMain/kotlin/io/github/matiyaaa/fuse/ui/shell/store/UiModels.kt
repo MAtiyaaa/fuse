@@ -720,7 +720,8 @@ sealed interface EmulatorSettingsView {
         val profiles: List<SettingProfileView> = emptyList(),
     ) : EmulatorSettingsView
 
-    data class Unavailable(val title: String, val reason: String) : EmulatorSettingsView
+    /** Fuse can't change them here; [open] is the emulator to change them in, when it is installed here. */
+    data class Unavailable(val title: String, val reason: String, val open: Pair<EmulatorId, String>? = null) : EmulatorSettingsView
 }
 
 /** One of every setting (Fuse Tune), with its value here and where that comes from. */
@@ -756,7 +757,7 @@ sealed interface EverySettingView {
         val count: Int get() = sections.sumOf { it.values.size }
     }
 
-    data class Unavailable(val title: String, val reason: String) : EverySettingView
+    data class Unavailable(val title: String, val reason: String, val open: Pair<EmulatorId, String>? = null) : EverySettingView
 }
 
 /** Places [FamilyMoves.offers] to bring an emulator's family's things from, and what was brought already. */
