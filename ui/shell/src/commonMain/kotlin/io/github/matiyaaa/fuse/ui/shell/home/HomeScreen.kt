@@ -585,7 +585,8 @@ private fun ShelfRow(
         }
         Spacer(Modifier.height(Space.s))
         val height = when (shelf.style) {
-            ShelfStyle.WIDE -> metrics.icon * 1.25f
+            // Never wider than the screen: on a phone held upright a TV's height made it run off the side.
+            ShelfStyle.WIDE -> (metrics.icon * 1.25f).coerceAtMost(widgetMax / io.github.matiyaaa.fuse.ui.shell.components.WIDE_ASPECT)
             else -> metrics.icon
         }
         LazyRow(

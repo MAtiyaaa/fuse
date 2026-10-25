@@ -743,7 +743,7 @@ private const val COVER_CORNER = 0.55f
 private const val WIDE_CORNER = 0.7f
 
 /** Wide tiles are a little wider than 16:9, so a logo and a caption fit beside each other. */
-private const val WIDE_ASPECT = 1.78f
+internal const val WIDE_ASPECT = 1.78f
 
 /** Blur of the soft copy behind art drawn whole. */
 private val BACKDROP_BLUR = 14.dp
