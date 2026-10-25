@@ -208,6 +208,16 @@ internal fun AuditDriver.flippedMenus() {
         shoot("another shelf, Favourites")
         pressLabelled("All")
         shoot("every game, All")
+        // A system's filter fills with its colour, opening from its middle, a light runs across it,
+        // and it says how many games; frame by frame, then at rest.
+        pressLabelled("PS1", 0)
+        advanceExactly(140)
+        shoot("a system chosen: its colour opening in its filter", 0)
+        advanceExactly(260)
+        shoot("the light running across it", 0)
+        shoot("a system's games, its filter in its colour", 1_200)
+        pressLabelled("Recent")
+        shoot("back to Recent", 1_000)
         tab(io.github.matiyaaa.fuse.model.Destination.LIBRARY)
         settle(1_200)
         shoot("the Library, its stage one line")

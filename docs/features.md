@@ -202,10 +202,11 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
   a system shows its games; with nothing chosen, the clock, the week's play a bar a day, and the
   games played last.
 - **Home below, as a DS has it**: with the menus on the touch screen, Home there is a grid of game
-  icons that runs sideways under a row of shelves (Recent, Favourites, New, All, each system). The
-  first touch chooses a game for the screen above, a second starts it, and a hold opens its options.
-  A slim bar shows where the grid is and slides it under a finger; Options, the icons' size and a
-  wide Play along the foot each show their controller button.
+  icons that runs sideways under a row of filters (Recent, Favourites, New, All, then each system by
+  its logo, which fills with the system's colour and picture when chosen). The first touch chooses a
+  game for the screen above, a second starts it, and a hold opens its options. A slim bar shows
+  where the grid is and slides it under a finger; a dock along the foot holds the chosen game,
+  Options, the icons' size and Play, each with its controller button.
 - **Twenty themes** and community themes from a link or a file ([docs/THEMES.md](docs/THEMES.md)), square
   box art or tall posters, four motion levels including Reduced, High contrast focus, optional glass
   panels and CRT effect, and interface sounds synthesised on the fly.

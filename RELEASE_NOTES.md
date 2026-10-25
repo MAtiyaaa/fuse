@@ -33,14 +33,16 @@ it runs, and Low Power turns fully off again.
   device from that game on the phone, marks favourites, and asks the device to look for new games.
   Phone Link may now open games in Fuse; starting one is still never the phone's.
 - **Home below, as a DS has it.** With the menus on the touch screen of a two-screen handheld, Home
-  there is now a grid of game icons that runs sideways, under a row of shelves to touch (Recent,
-  Favourites, New, All and each system). The first touch chooses a game and the screen above shows
-  it; a second touch, or Play, starts it, and a hold opens its options. A slim bar shows where the
-  grid is and slides it under a finger, and along the foot Options, the icons' size (one row of
-  large icons, two or three, kept for the device) and a wide Play naming its game each show their
-  controller button. The D-pad moves through the grid, the right stick changes shelf and the
-  triggers page by a screen. The touch screen keeps the theme's own room and leaves the game's art
-  to the screen above.
+  there is now a grid of game icons that runs sideways, a ring round the chosen one, under a row of
+  filters to touch (Recent, Favourites, New, All, then each system by its logo). A system's filter,
+  chosen, fills with its colour and picture from the middle out, gives a small bounce and a glow, a
+  light runs across it, and it says how many games the system has. The first touch chooses a game
+  and the screen above shows it; a second touch, or Play, starts it, and a hold opens its options. A
+  slim bar shows where the grid is and slides it under a finger, and a dock along the foot holds the
+  chosen game's cover and name, Options, the icons' size (one row of large icons, two or three, kept
+  for the device) and Play, each with its controller button. The D-pad moves through the grid, the
+  right stick changes shelf and the triggers page by a screen. The touch screen keeps the theme's
+  own room, lit softly in the chosen game's colour, and leaves the game's art to the screen above.
 - **More on the screen above.** On a two-screen handheld with the menus below, a game keeps its
   few lines about it, its series, this week's play and what plays it. With nothing chosen, the
   week's play sits beside the clock with a bar a day, and a system shows its games, those played
