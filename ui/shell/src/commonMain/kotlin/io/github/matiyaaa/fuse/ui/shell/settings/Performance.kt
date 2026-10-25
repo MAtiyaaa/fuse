@@ -35,4 +35,5 @@ fun performanceLabel(profile: PerformanceProfile): String = when (profile) {
 }
 
 /** The profile one press of a Performance tile moves to. */
-fun PerformanceProfile.next(): PerformanceProfile = PerformanceProfile.entries[(ordinal + 1) % PerformanceProfile.entries.size]
+fun PerformanceProfile.next(): PerformanceProfile =
+    PerformanceProfile.choosable.let { all -> all[(all.indexOf(this).coerceAtLeast(0) + 1) % all.size] }

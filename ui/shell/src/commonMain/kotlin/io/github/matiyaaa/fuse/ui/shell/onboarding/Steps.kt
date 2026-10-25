@@ -800,9 +800,9 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             "Automatic suits this device. Low Power keeps navigation just as quick but skips video, blur and moving backgrounds, with calmer motion; High quality adds richer motion too.",
             icon = FuseIcons.Leaf, chapter = Chapters.YOURS,
             actions = listOf(
-                StepAction("Automatic", primary = prefs.performance == PerformanceProfile.AUTOMATIC) { store.updatePrefs { it.copy(performance = PerformanceProfile.AUTOMATIC) }; next() },
-                StepAction("Low power", primary = prefs.performance == PerformanceProfile.LOW_POWER) { store.updatePrefs { it.copy(performance = PerformanceProfile.LOW_POWER) }; next() },
-                StepAction("High quality", primary = prefs.performance == PerformanceProfile.HIGH_QUALITY) { store.updatePrefs { it.copy(performance = PerformanceProfile.HIGH_QUALITY) }; next() },
+                StepAction("Automatic", primary = !prefs.lowPower && prefs.performance == PerformanceProfile.AUTOMATIC) { store.updatePrefs { it.copy(performance = PerformanceProfile.AUTOMATIC, lowPower = false) }; next() },
+                StepAction("Low power", primary = prefs.lowPower) { store.updatePrefs { it.copy(performance = PerformanceProfile.AUTOMATIC, lowPower = true) }; next() },
+                StepAction("High quality", primary = !prefs.lowPower && prefs.performance == PerformanceProfile.HIGH_QUALITY) { store.updatePrefs { it.copy(performance = PerformanceProfile.HIGH_QUALITY, lowPower = false) }; next() },
             ),
             content = { PerformancePreview(state.button) },
         ))

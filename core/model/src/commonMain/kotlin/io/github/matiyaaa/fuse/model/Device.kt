@@ -32,8 +32,19 @@ data class CapabilityProfile(
 @Serializable
 enum class DeviceTier { LOW, MID, HIGH }
 
+/**
+ * How hard Fuse works. [LOW_POWER] is never chosen as a profile: it is what Low Power Mode (and
+ * Automatic on a low-end device) comes to, and a profile saved as it by an older Fuse is read as
+ * Low Power Mode on ([choosable] are the ones offered).
+ */
 @Serializable
-enum class PerformanceProfile { AUTOMATIC, LOW_POWER, BALANCED, HIGH_QUALITY }
+enum class PerformanceProfile {
+    AUTOMATIC, LOW_POWER, BALANCED, HIGH_QUALITY;
+
+    companion object {
+        val choosable: List<PerformanceProfile> = listOf(AUTOMATIC, BALANCED, HIGH_QUALITY)
+    }
+}
 
 /** Concrete switches the UI reads; derived from profile + capability + Low Power Mode. */
 @Serializable

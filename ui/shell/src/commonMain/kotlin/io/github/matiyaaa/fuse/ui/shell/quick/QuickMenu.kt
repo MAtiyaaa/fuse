@@ -533,7 +533,7 @@ fun QuickMenu(app: AppState) {
 
     // Performance: how hard Fuse works, Low Power, and the overlay, as in Settings.
     val performanceActions = buildList {
-        PerformanceProfile.entries.forEach { profile ->
+        PerformanceProfile.choosable.forEach { profile ->
             val on = prefs.performance == profile
             add(
                 MenuAction(
