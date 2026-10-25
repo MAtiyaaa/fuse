@@ -6499,22 +6499,6 @@
       "source": "nfs3recompiled-android v0.77: README.md (It is not an emulator; the game's data from your own disc; You need: the FEDATA and GAMEDATA folders; import the folder, a ZIP or the image); release v0.77 (nfs3hp-release-0.77.apk, its package read by Android's aapt2)"
     },
     {
-      "id": "nfsmw-recompiled-android",
-      "name": "NFSMW Recompiled",
-      "game": "Need for Speed: Most Wanted",
-      "cover": "https://upload.wikimedia.org/wikipedia/en/8/8e/Need_for_Speed_Most_Wanted_Box_Art.jpg",
-      "coverCredit": "Wikipedia",
-      "systems": ["xbox360"],
-      "kind": "recompilation",
-      "status": "beta",
-      "repo": "https://github.com/madelrandel-blip/NFSMW-Recompiled",
-      "licence": "GPL-3.0",
-      "about": "Need for Speed: Most Wanted (2005), the Xbox 360 version's PowerPC code statically recompiled with the ReXGlue SDK, not an emulator.",
-      "needs": "Your own ISO or GOD dump of Need for Speed: Most Wanted for Xbox 360, whose default.xex and files it reads.",
-      "package": "com.ea.nfsmw",
-      "source": "NFSMW-Recompiled latest: README.md (not an emulator; the PowerPC code inside the game's default.xex; You need your own copy of the game; What you need: your own ISO or GOD dump); release latest (NFSMW-Android-release.apk, its package read by Android's aapt2)"
-    },
-    {
       "id": "unleashedrecomp-android",
       "name": "Unleashed Recompiled for Android",
       "game": "Sonic Unleashed",

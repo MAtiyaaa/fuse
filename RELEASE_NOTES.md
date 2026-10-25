@@ -90,6 +90,9 @@ it runs, and Low Power turns fully off again.
   PS5 or PS3 dump shows its full size (Bloodborne's 29 GB, not a tenth of it), and RomM's dlc/ and
   update/ folders inside a dump become the game's content. The first scan after updating reads
   every folder again to put sizes right.
+- **NFSMW Recompiled leaves Android's Ports.** Its project now releases only for Windows, so there
+  is no Android app to install. NFSMW Android Evolved still brings Need for Speed: Most Wanted to
+  Android.
 - **A shorter README.**
 
 ## Fixed
