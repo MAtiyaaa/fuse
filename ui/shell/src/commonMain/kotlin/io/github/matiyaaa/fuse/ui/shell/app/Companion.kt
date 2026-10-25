@@ -325,8 +325,12 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Space.s),
                 )
             }
+            // Achievements unlocked in the game being played, big as they come (not while this
+            // screen is put away or off, when nothing would see them).
+            val putAway = prefs.display.secondScreenHidden && !prefs.display.flipped && !pictureHere
+            if (!putAway && !CompanionControls.screenOff) AchievementMoments(store)
             // Put away (Settings, Display, or the quick menu): dark, until it is shown again.
-            if (prefs.display.secondScreenHidden && !prefs.display.flipped && !pictureHere) HiddenScreen(store)
+            if (putAway) HiddenScreen(store)
             // Screen off: black until touched, saying so for a moment.
             if (CompanionControls.screenOff) {
                 Box(

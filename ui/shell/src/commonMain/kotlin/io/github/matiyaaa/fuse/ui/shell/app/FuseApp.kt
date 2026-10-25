@@ -457,6 +457,8 @@ private fun FuseAppContent(
     val hintFlash = rememberHintFlash()
     MenuMusic(app, platform.music)
     FillFinishedToast(app)
+    // Back from a game: what was unlocked in it, said once.
+    AchievementRecap(store) { app.toasts.show(it, ToastKind.SUCCESS, FuseIcons.Trophy, durationMs = 6_000) }
     io.github.matiyaaa.fuse.ui.shell.cartridge.UploadFinishedToasts(app)
     DisposableEffect(router) {
         router.feedback = InputFeedback { event, result ->
@@ -618,6 +620,9 @@ private fun FuseAppContent(
                     QuickMenu(app)
                     OverlayHost(app)
                     CalibrationOverlay(app)
+                    // With the menus on the touch screen below, a game runs on the screen above, and
+                    // its achievements show here, big, as they unlock.
+                    if (LocalShowcaseElsewhere.current) AchievementMoments(store)
                     ToastHost(app.toasts)
                     app.capture?.let { CaptureOverlay(it) }
                     LaunchVeilView(app)

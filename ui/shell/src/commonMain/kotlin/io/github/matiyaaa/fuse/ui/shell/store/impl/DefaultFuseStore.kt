@@ -596,6 +596,8 @@ internal class DefaultFuseStore private constructor(
         offlineMedia.start()
         streaming.start()
         ctx.scope.launch { ctx.playing.collect { transfers.conditions(playing = it != null) } }
+        // The achievements unlocked in the game being played, for the screens that show them.
+        achievements.followPlay()
         // Fuse Engine's Performance Governor: decorative motion follows what Fuse is doing.
         ctx.governor.start()
         ctx.scope.launch {

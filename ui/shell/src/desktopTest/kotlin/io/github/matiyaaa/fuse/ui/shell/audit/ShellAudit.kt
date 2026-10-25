@@ -1150,6 +1150,26 @@ internal fun AuditDriver.companionScreens() {
         }
     }
 
+    scenario("companion", "an achievement unlocked") {
+        val badge = java.io.File(cache, "achievement-badge.png").also { AuditCovers.square(it, "", 0xFF7A4DFF) }
+        val star = io.github.matiyaaa.fuse.model.Achievement(
+            id = 9_108L, gameId = 9_001L, title = "Star Chart", description = "Map every system in the Velvet Belt without refuelling",
+            points = 50, badgeUrl = badge.absolutePath, badgeLockedUrl = "", earnedAt = 1L, earnedHardcoreAt = null,
+        )
+        val unlock = io.github.matiyaaa.fuse.model.RecentAchievement(star, "Velvet Orbit", "Dreamcast", null, hardcore = false, earnedAt = 1L)
+        val set = io.github.matiyaaa.fuse.model.AchievementState(
+            raGameId = 9_001L, title = "Velvet Orbit", consoleName = "Dreamcast", iconUrl = null,
+            total = 12, earned = 8, earnedHardcore = 0, points = 235, pointsEarned = 140, highestAward = null,
+            fetchedAt = 1L,
+        )
+        view = AuditView.Piece { io.github.matiyaaa.fuse.ui.shell.app.AchievementMoment(unlock, set, waiting = 1) {} }
+        shoot("as it lands", 380)
+        shoot("settled, one more waiting", 2_000)
+        val last = unlock.copy(achievement = star.copy(id = 9_112L, title = "Home Again", description = "Bring the whole fleet home"), hardcore = true)
+        view = AuditView.Piece { io.github.matiyaaa.fuse.ui.shell.app.AchievementMoment(last, set.copy(earned = 12, earnedHardcore = 12, pointsEarned = 235), waiting = 0) {} }
+        shoot("the set's last, in hardcore", 2_000)
+    }
+
     scenario("companion", "a transfer focused on Downloads") {
         val base = libraryStore
         val velvet = runBlocking { base.library.games(GameQuery()).first().first { it.title == "Velvet Orbit" } }

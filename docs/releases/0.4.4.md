@@ -58,6 +58,11 @@ it runs, and Low Power turns fully off again.
   shown: in a system's filter on the screen below, on game pages, in the Library and on Home. A GIF
   logo keeps its own colours. Moving pictures hold their first frame under Reduced motion, in Low
   Power Mode and on the second screen while a game runs.
+- **Achievements as they unlock.** On a two-screen handheld, an achievement you unlock while playing
+  fills the other screen: its badge in a ring of light, its name, what it asked, its points and how
+  far through the set it leaves you, in gold for hardcore and for a set's last. Fuse asks
+  RetroAchievements about new ones once a minute while that screen shows them, and only for a game
+  whose set it already knows. Back in Fuse, a line says what the game gave you.
 - **More on the screen above.** On a two-screen handheld with the menus below, a game keeps its
   few lines about it, its series, this week's play and what plays it. With nothing chosen, the
   week's play sits beside the clock with a bar a day, and a system shows its games, those played

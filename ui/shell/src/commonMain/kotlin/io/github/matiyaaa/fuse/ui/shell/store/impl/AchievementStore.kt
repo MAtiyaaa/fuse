@@ -28,14 +28,19 @@ import io.github.matiyaaa.fuse.model.RecentAchievement
 import io.github.matiyaaa.fuse.ui.shell.store.AchievementOps
 import io.github.matiyaaa.fuse.ui.shell.store.AchievementsFeed
 import io.github.matiyaaa.fuse.ui.shell.store.LocalGameAchievements
+import io.github.matiyaaa.fuse.ui.shell.store.PlayUnlocks
 import kotlin.time.Duration
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.sync.Mutex
@@ -60,6 +65,95 @@ internal class DefaultAchievementOps(
     override val feed: StateFlow<AchievementsFeed?> = feedState
     private val configuredState = MutableStateFlow(false)
     override val configured: StateFlow<Boolean> = configuredState
+
+    private val playState = MutableStateFlow(PlayUnlocks())
+    override val playing: StateFlow<PlayUnlocks> = playState
+
+    /** How many things on screen show unlocks as they come ([showLive]). */
+    private val live = MutableStateFlow(0)
+
+    override fun showLive(): () -> Unit {
+        live.update { it + 1 }
+        var done = false
+        return {
+            if (!done) {
+                done = true
+                live.update { it - 1 }
+            }
+        }
+    }
+
+    /**
+     * Follows the game being played ([StoreContext.playing]): its set once it starts; then, while
+     * something shows unlocks as they come, RetroAchievements' word on new ones every [WATCH_MS]
+     * (one small request, and only while the device is awake); and once more as it closes, for its
+     * recap. A game without a set Fuse already knows, or one already mastered, asks nothing: a game
+     * has the device, so no ROM is hashed and no list fetched while it runs.
+     */
+    fun followPlay() {
+        ctx.scope.launch {
+            var current: Pair<GameId, Long>? = null
+            var follow: Job? = null
+            ctx.playing.collect { game ->
+                val ended = current
+                if (ended != null && ended.first != game) {
+                    follow?.cancel()
+                    current = null
+                    launch { wrapUp(ended.first) }
+                }
+                if (game != null && current?.first != game) {
+                    val since = ctx.now()
+                    current = game to since
+                    playState.value = PlayUnlocks(game, since)
+                    follow = launch { follow(game) }
+                }
+            }
+        }
+    }
+
+    /** RetroAchievements and the running game's set there, when both are known. */
+    private suspend fun watchable(game: GameId): Pair<RetroAchievementsClient, Long>? {
+        val client = client() ?: return null
+        val raId = ctx.data.games.get(game)?.links?.retroAchievementsGameId ?: return null
+        return client to raId
+    }
+
+    private suspend fun follow(game: GameId) {
+        val (client, raId) = watchable(game) ?: return
+        val set = fetch("$KEY_GAME$raId", AchievementState.serializer(), RaCachePolicy.GAME_PROGRESS, force = false) { client.gameProgress(raId) }
+        playState.update { if (it.game == game) it.copy(set = set) else it }
+        if (set == null || set.total == 0 || set.earned >= set.total) return
+        val shown = combine(live, ctx.services.awake) { n, awake -> n > 0 && awake }
+        while (true) {
+            shown.first { it }
+            delay(WATCH_MS)
+            if (live.value > 0 && ctx.services.awake.value) notice(client, raId, game)
+        }
+    }
+
+    /** The game closed: asked once more, so its recap has every unlock, then marked ended. */
+    private suspend fun wrapUp(game: GameId) {
+        val before = playState.value.takeIf { it.game == game } ?: return
+        val mastered = before.set?.let { it.total == 0 || it.earned >= it.total } == true
+        if (!mastered) watchable(game)?.let { (client, raId) -> notice(client, raId, game) }
+        playState.update { if (it.game == game) it.copy(endedAt = ctx.now()) else it }
+        // The Achievements page and Home show them too.
+        if (playState.value.unlocks.isNotEmpty()) refresh(force = true)
+    }
+
+    /** Asks RetroAchievements what was unlocked since [game] started, and adds what is new. */
+    private suspend fun notice(client: RetroAchievementsClient, raId: Long, game: GameId) {
+        val since = playState.value.takeIf { it.game == game }?.since ?: return
+        val minutes = ((ctx.now() - since) / 60_000 + 3).coerceIn(3, MAX_RECENT_MINUTES)
+        val recent = (client.recentAchievements(minutes = minutes.toInt()) as? ApiResult.Success)?.value ?: return
+        val before = playState.value
+        playState.update { if (it.game == game) it.with(recent, raId) else it }
+        val after = playState.value
+        if (after.game == game && after.unlocks.size > before.unlocks.size) {
+            // The game's page shows them at once, not after its cache runs out.
+            after.set?.let { runCatching { cache.put(userNs(), "$KEY_GAME$raId", it, AchievementState.serializer(), ctx.now(), RaCachePolicy.GAME_PROGRESS.inWholeMilliseconds) } }
+        }
+    }
 
     /** The Fuse profile in use, whose RetroAchievements account is shown; null without profiles. */
     private fun profile(): String? = ctx.settings.value.sync.activeProfile.takeIf { it.isNotBlank() }
@@ -650,6 +744,12 @@ internal class DefaultAchievementOps(
         /** How long a game's page waits for RomM's note of its trophies before showing what it has. */
         const val SHARE_WAIT_MS = 4_000L
         const val RECENT_WINDOW_MINUTES = 60 * 24 * 14
+
+        /** How often RetroAchievements is asked about new unlocks while they are shown as they come. */
+        const val WATCH_MS = 60_000L
+
+        /** The longest look back for one game's unlocks: a day of play. */
+        const val MAX_RECENT_MINUTES = 24 * 60L
         val RecentList = ListSerializer(RecentAchievement.serializer())
         val CompletionList = ListSerializer(RaCompletionEntry.serializer())
         val GameList = ListSerializer(RaGameListEntry.serializer())
