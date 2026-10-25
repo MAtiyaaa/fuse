@@ -2691,7 +2691,7 @@ class JvmSyncService(
                 }
                 // Never silent: a save that couldn't be kept says why, once per game while Fuse runs
                 // (only with a host: without one, nothing is sent anywhere).
-                if (!keepsOwn && cached.saves && here.any { sendsFor(ownerOf(query, it, profile), query.game.id) } && captured.none { it.kind != SaveKind.STATE }) whyNotKept(query, here)?.let { why ->
+                if (!keepsOwn && cached.saves && here.any { sendsFor(ownerOf(query, it, profile), query.game.id) } && captured.none { it.kind != SaveKind.STATE }) whyNotKept(query, here, endedAt - startedAt)?.let { why ->
                     if (explained.add("${query.game.id}|$why")) {
                         log("${query.title}: save not sent. $why", query.game.id, SyncActivity.FAILED)
                         _notices.tryEmit(SyncNotice.NotSynced(query.title, SaveKind.SAVE, why))
@@ -2906,11 +2906,14 @@ class JvmSyncService(
     }
 
     /**
-     * Why nothing of [query]'s save could be kept after it was played, or null when there is nothing
-     * to say (it simply didn't change, saves don't sync, or the game keeps its own saves).
+     * Why nothing of [query]'s save could be kept after it was played for [playedMs], or null when
+     * there is nothing to say (it simply didn't change, saves don't sync, the game keeps its own
+     * saves, or it was only opened and closed: a game started for a minute has usually not saved
+     * yet, and saying "no save found" then reads as a lost save).
      */
-    private fun whyNotKept(query: SaveQuery, here: List<LocalSlot>): String? {
+    private fun whyNotKept(query: SaveQuery, here: List<LocalSlot>, playedMs: Long): String? {
         if (!cached.saves || query.platform in OWN_SAVES_PLATFORMS) return null
+        if (playedMs in 0 until SHORT_PLAY_MS) return null
         val adapter = SaveAdapters.forEmulator(query.emulatorId)
             ?: return SaveAdapters.whyNot(query.emulatorId).takeIf { SaveAdapters.baseId(query.emulatorId) !in OWN_SAVES_EMULATORS }
         val spots = runCatching { adapter.locate(query, saveEnv) }.getOrDefault(emptyList()).filter { it.kind != SaveKind.STATE }
@@ -3373,6 +3376,9 @@ class JvmSyncService(
 
         /** How long after an emulator closes its saves are read (it may still be writing them). */
         const val SETTLE_MS = 1_500L
+
+        /** A play shorter than this that left no save says nothing about it (see [whyNotKept]). */
+        const val SHORT_PLAY_MS = 5 * 60_000L
 
         /** When a device's records joining a profile already in use count as made: before anything real. */
         const val ADOPTED_AT = 1L
