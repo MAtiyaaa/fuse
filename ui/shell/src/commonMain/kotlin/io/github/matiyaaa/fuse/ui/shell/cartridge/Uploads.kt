@@ -112,7 +112,7 @@ private fun AppState.gamePicker(platform: io.github.matiyaaa.fuse.model.Platform
                         g.dlc.takeIf { it > 0 }?.let { "$it DLC" },
                         g.updates.takeIf { it > 0 }?.let { "$it ${if (it == 1) "update" else "updates"}" },
                     ).joinToString("  ·  ").ifEmpty { null },
-                    art = MenuArt(g.art.tile, square = true, fallbackTitle = g.title, accent = g.accent, wide = false),
+                    art = io.github.matiyaaa.fuse.ui.shell.components.gameMenuArt(g.art, g.title, g.accent, store.prefs.value.gameArt),
                     onSelect = { uploadToRomm(g) },
                 )
             },

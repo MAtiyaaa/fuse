@@ -75,7 +75,7 @@ fun PlayTimeScreen(app: AppState) {
                 "g${g.id.value}", g.title, null,
                 detail = "${g.platformShort}  ·  ${share(seconds, r.monthSeconds)} of ${r.month}",
                 trailing = Trailing.Value(playtimeText(seconds)),
-                art = MenuArt(g.art.tile, square = true, fallbackTitle = g.title, accent = g.accent, wide = false),
+                art = io.github.matiyaaa.fuse.ui.shell.components.gameMenuArt(g.art, g.title, g.accent, app.store.prefs.value.gameArt),
                 section = "Most played in ${r.month}",
                 onSelect = { app.activateGame(g) },
             ))

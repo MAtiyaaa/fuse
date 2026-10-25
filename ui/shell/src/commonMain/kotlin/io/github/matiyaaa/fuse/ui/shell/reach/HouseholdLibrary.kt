@@ -111,10 +111,14 @@ fun HouseholdCard(app: AppState, selected: Boolean, modifier: Modifier = Modifie
         val covers = recent.take(4)
         if (covers.isNotEmpty()) {
             Spacer(Modifier.width(Space.m))
-            Box(Modifier.width(36.dp * (covers.size - 1) + 48.dp).height(48.dp)) {
+            // Posters fan out as cases when Game art is set to posters.
+            val posters = io.github.matiyaaa.fuse.ui.shell.components.LocalGameArt.current == io.github.matiyaaa.fuse.model.GameArtStyle.POSTER
+            val coverW = if (posters) 34.dp else 48.dp
+            val step = if (posters) 26.dp else 36.dp
+            Box(Modifier.width(step * (covers.size - 1) + coverW).height(48.dp)) {
                 covers.forEachIndexed { i, g ->
-                    Box(Modifier.offset(x = 36.dp * i).size(48.dp).clip(RoundedCornerShape(Fuse.geometry.control)).border(1.dp, c.surface, RoundedCornerShape(Fuse.geometry.control))) {
-                        Artwork(g.card.art.tile, Modifier.fillMaxSize(), fallback = { GeneratedArt(g.card.title, g.card.accent.toColor(), slot = ArtSlot.BOX, label = g.card.platformShort) })
+                    Box(Modifier.offset(x = step * i).size(coverW, 48.dp).clip(RoundedCornerShape(Fuse.geometry.control)).border(1.dp, c.surface, RoundedCornerShape(Fuse.geometry.control))) {
+                        Artwork(if (posters) g.card.art.boxart ?: g.card.art.tile else g.card.art.tile, Modifier.fillMaxSize(), fallback = { GeneratedArt(g.card.title, g.card.accent.toColor(), slot = ArtSlot.BOX, label = g.card.platformShort) })
                     }
                 }
             }

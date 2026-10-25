@@ -337,11 +337,14 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     }
     val selectedCard = list?.getOrNull(state.grid.index)
     // The next tiles' art and the stage logos are ready before the selection reaches them.
-    val tileArt = remember(list, layout) {
+    val posters = LocalGameArt.current == io.github.matiyaaa.fuse.model.GameArtStyle.POSTER
+    val tileArt = remember(list, layout, posters) {
         list.orEmpty().map { a ->
-            when (layout) {
-                LibraryLayout.COVER_GRID -> a.art.boxart ?: a.art.grid ?: a.art.square ?: a.art.icon
-                LibraryLayout.CAPSULE -> a.art.hero ?: a.art.grid ?: a.art.boxart
+            when {
+                layout == LibraryLayout.COVER_GRID -> a.art.boxart ?: a.art.grid ?: a.art.square ?: a.art.icon
+                layout == LibraryLayout.CAPSULE -> a.art.hero ?: a.art.grid ?: a.art.boxart
+                // The art a poster tile shows ([PosterGameArt]), so the right picture is the one ready.
+                posters -> a.art.boxart ?: a.art.square ?: a.art.icon ?: a.art.grid
                 else -> a.art.square ?: a.art.icon ?: a.art.boxart ?: a.art.grid
             }
         }

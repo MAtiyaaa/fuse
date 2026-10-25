@@ -155,6 +155,8 @@ data class MenuArt(
     val accent: Long = 0xFF8A93A6,
     /** The slot is logo-wide, so labels line up with rows that show a logo; off in lists of square art only. */
     val wide: Boolean = true,
+    /** A poster (a game case, taller than wide), for lists of games when Game art is set to posters. */
+    val portrait: Boolean = false,
 )
 
 /**
@@ -245,15 +247,16 @@ fun MenuRow(
         }
         action.art?.let { art ->
             Box(Modifier.width(if (art.wide) MENU_ART_WIDTH else MENU_ART_HEIGHT).height(MENU_ART_HEIGHT), contentAlignment = Alignment.CenterStart) {
-                val square = Modifier.size(MENU_ART_HEIGHT).clip(RoundedCornerShape(Fuse.geometry.control))
+                val square = (if (art.portrait) Modifier.size(MENU_ART_HEIGHT * PORTRAIT_WIDTH, MENU_ART_HEIGHT) else Modifier.size(MENU_ART_HEIGHT))
+                    .clip(RoundedCornerShape(Fuse.geometry.control))
                 val generated: @Composable () -> Unit = {
                     art.fallbackTitle?.let { GeneratedArt(it, Color(art.accent), square, slot = ArtSlot.ICON) }
                 }
                 if (art.model != null) {
                     Artwork(
                         art.model,
-                        if (art.square) square else Modifier.fillMaxSize(),
-                        contentScale = if (art.square) ContentScale.Crop else ContentScale.Fit,
+                        if (art.square || art.portrait) square else Modifier.fillMaxSize(),
+                        contentScale = if (art.square || art.portrait) ContentScale.Crop else ContentScale.Fit,
                         focusX = 0f,
                         fallback = generated,
                     )
@@ -802,6 +805,9 @@ private const val REVEAL_ROWS = FuselineMotion.STAGGER_MAX
 
 private val MENU_ART_WIDTH = 104.dp
 private val MENU_ART_HEIGHT = 44.dp
+
+/** A portrait thumbnail's width as a share of its height: a game case (2:3, as posters are). */
+private const val PORTRAIT_WIDTH = 0.68f
 private val BAR_WIDTH = 3.dp
 private val BAR_HEIGHT = 22.dp
 private val ICON_WELL = 32.dp

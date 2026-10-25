@@ -508,7 +508,7 @@ fun AppState.addGamesPicker(id: io.github.matiyaaa.fuse.model.CollectionId, name
                     MenuAction(
                         "g${g.id.value}", g.title, null, detail = g.platformShort, trailing = Trailing.Check(inIt),
                         // Every game shows its art, so a long list is quick to scan.
-                        art = MenuArt(g.art.square ?: g.art.icon ?: g.art.boxart, square = true, fallbackTitle = g.title, accent = g.accent, wide = false),
+                        art = io.github.matiyaaa.fuse.ui.shell.components.gameMenuArt(g.art, g.title, g.accent, store.prefs.value.gameArt),
                         section = "Your library",
                         onSelect = {
                         scope.launch {

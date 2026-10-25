@@ -97,6 +97,30 @@ internal fun GameArtStyle.cornerFraction(): Float =
 internal fun coverCornerFraction(): Float = Fuse.geometry.tileCornerFraction * COVER_CORNER
 
 /**
+ * A game's picture for a list row: its square art, or its poster (a case's shape) when Game art is
+ * set to posters, so a list of games looks as its grids do.
+ */
+fun gameMenuArt(art: Art, title: String, accent: Long, style: GameArtStyle): io.github.matiyaaa.fuse.ui.designsystem.components.MenuArt =
+    if (style == GameArtStyle.POSTER) {
+        io.github.matiyaaa.fuse.ui.designsystem.components.MenuArt(art.boxart ?: art.tile, portrait = true, fallbackTitle = title, accent = accent, wide = false)
+    } else {
+        io.github.matiyaaa.fuse.ui.designsystem.components.MenuArt(art.tile, square = true, fallbackTitle = title, accent = accent, wide = false)
+    }
+
+/**
+ * A game's art in a small picture of [size] (search results, lists): a square, or a poster as tall
+ * as [size] when Game art is set to posters.
+ */
+@Composable
+fun GameThumb(art: Art, size: Dp, shape: androidx.compose.ui.graphics.Shape, modifier: Modifier = Modifier, fallback: @Composable () -> Unit = {}) {
+    if (LocalGameArt.current == GameArtStyle.POSTER) {
+        PosterGameArt(art, modifier.size(size * POSTER_WIDTH / POSTER_HEIGHT, size).clip(shape), fallback = fallback)
+    } else {
+        SquareGameArt(art, modifier.size(size).clip(shape), fallback = fallback)
+    }
+}
+
+/**
  * A game's art as a poster: its portrait cover, else its square art or icon drawn whole over a soft
  * copy of itself, else its wide art the same way.
  */
