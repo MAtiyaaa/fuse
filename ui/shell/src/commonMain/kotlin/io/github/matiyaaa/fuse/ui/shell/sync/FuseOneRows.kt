@@ -463,7 +463,7 @@ private fun profileChoices(app: AppState, title: String, message: String, profil
  * Signing this device in as the host: the host account's username, then its password. Said plainly
  * when it works, and when it doesn't, why.
  */
-private fun signInAsHost(app: AppState, svc: SyncService, hostName: String) {
+internal fun signInAsHost(app: AppState, svc: SyncService, hostName: String) {
     app.textInput = TextInputSpec("The host's username", "", "The username set on $hostName", capitalize = false, doneLabel = "Next") { user ->
         if (user.isBlank()) return@TextInputSpec
         app.textInput = TextInputSpec("Password for ${user.trim()}", "", "", secret = true, capitalize = false, doneLabel = "Sign In") { pass ->

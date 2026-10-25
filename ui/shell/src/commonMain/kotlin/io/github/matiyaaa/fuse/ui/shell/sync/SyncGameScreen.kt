@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import io.github.matiyaaa.fuse.sync.SaveKind
 import io.github.matiyaaa.fuse.sync.SlotReport
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
@@ -88,6 +89,8 @@ internal fun SyncGameScreen(app: AppState, game: String, name: String) {
     val g = report?.games?.firstOrNull { it.game == game }
     val devices by svc.devices.collectAsState()
     val names = devices.associate { it.id to it.name }
+    // Each device in the colour it has on the Sync page.
+    val tints = DeviceTints.of(devices, Fuse.colors.accent)
     val covers = rememberSyncCovers(app)
     val card = covers.of(game, g?.name ?: name)
     val sel = remember(game) { LinearSelection() }
@@ -139,11 +142,12 @@ internal fun SyncGameScreen(app: AppState, game: String, name: String) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 980.dp
         val compact = maxHeight < 560.dp
+        val narrow = maxWidth < NARROW
         val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
         val offset = localOffsetMillis(now)
         Column(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {
             Spacer(Modifier.height(Size.hudHeight + if (compact) Space.s else Space.l))
-            GameHeader(g, name, card, compact, now, offset, local = report?.local == true)
+            GameHeader(g, name, card, compact, narrow, now, offset, local = report?.local == true)
             Spacer(Modifier.height(if (compact) Space.m else Space.l))
             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(Space.l)) {
                 LazyColumn(
@@ -169,7 +173,7 @@ internal fun SyncGameScreen(app: AppState, game: String, name: String) {
                                         val at = n++
                                         item("v.${entry.version.id}") {
                                             VersionRow(
-                                                entry.version, entry.last, now, offset,
+                                                entry.version, tints.of(entry.version.deviceId), entry.last, now, offset,
                                                 selected = focused && sel.index == at, compact = compact,
                                                 onClick = { sel.index = at; open(at) },
                                             )
@@ -181,7 +185,7 @@ internal fun SyncGameScreen(app: AppState, game: String, name: String) {
                     }
                     if (!wide && g != null) {
                         convergence?.takeIf { it.slots.isNotEmpty() }?.let { cv -> item("devices") { DevicesCard(cv, Modifier.padding(top = Space.l)) } }
-                        if (g.devicePlay.size > 1 && report?.local != true) item("play") { Card("Play time by device", FuseIcons.ChartPie, Modifier.padding(top = Space.l)) { PlayBars(g.devicePlay, names) } }
+                        if (g.devicePlay.size > 1 && report?.local != true) item("play") { Card("Play time by device", FuseIcons.ChartPie, Modifier.padding(top = Space.l)) { PlayRing(g.devicePlay, names, tints) } }
                         if (report != null) item("kept") { KeptCard(g, report.storePath, report.local, Modifier.padding(top = Space.s)) }
                     }
                 }
@@ -191,7 +195,7 @@ internal fun SyncGameScreen(app: AppState, game: String, name: String) {
                         verticalArrangement = Arrangement.spacedBy(Space.m),
                     ) {
                         convergence?.takeIf { it.slots.isNotEmpty() }?.let { DevicesCard(it) }
-                        if (g.devicePlay.isNotEmpty() && report?.local != true) Card("Play time by device", FuseIcons.ChartPie) { PlayBars(g.devicePlay, names) }
+                        if (g.devicePlay.isNotEmpty() && report?.local != true) Card("Play time by device", FuseIcons.ChartPie) { PlayRing(g.devicePlay, names, tints) }
                         if (report != null) KeptCard(g, report.storePath, report.local)
                     }
                 }
@@ -211,7 +215,7 @@ private sealed interface TimelineEntry {
  * screens, so the timeline keeps its room).
  */
 @Composable
-private fun GameHeader(g: GameReport?, name: String, card: io.github.matiyaaa.fuse.ui.shell.store.GameCard?, compact: Boolean, now: Long, offset: Long, local: Boolean = false) {
+private fun GameHeader(g: GameReport?, name: String, card: io.github.matiyaaa.fuse.ui.shell.store.GameCard?, compact: Boolean, narrow: Boolean, now: Long, offset: Long, local: Boolean = false) {
     val where = if (local) "on this device" else "on the host"
     val c = Fuse.colors
     val title = card?.title ?: g?.name ?: name
@@ -225,6 +229,43 @@ private fun GameHeader(g: GameReport?, name: String, card: io.github.matiyaaa.fu
         g?.lastPlayed?.let { HeroFact(FuseIcons.CalendarClock, TimeWords.relative(it, now, offset).replaceFirstChar { ch -> ch.uppercase() }, "last played") },
         bytes.takeIf { it > 0 }?.let { HeroFact(FuseIcons.HardDrive, sizeText(it), where) },
     )
+    val line = listOfNotNull(
+        "$saves ${if (saves == 1) "save" else "saves"}".takeIf { saves > 0 },
+        "$states ${if (states == 1) "state" else "states"}".takeIf { states > 0 },
+        "Favourite".takeIf { g?.favorite == true },
+    ).plus(
+        if (!compact) emptyList() else listOfNotNull(
+            g?.playSeconds?.takeIf { it > 0 }?.let { "${playtimeText(it)} played" },
+            g?.lastPlayed?.let { "last played ${TimeWords.relative(it, now, offset)}" },
+            bytes.takeIf { it > 0 }?.let { sizeText(it) },
+        ),
+    ).joinToString("  ·  ").ifEmpty { where.replaceFirstChar { it.uppercase() } }
+    if (narrow && !compact) {
+        // A phone held upright: the cover beside a title on up to two lines, the figures two by two under them.
+        Column(verticalArrangement = Arrangement.spacedBy(Space.m)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SyncCover(g?.name ?: name, card, 80.dp, corner = Fuse.geometry.panel)
+                Spacer(Modifier.width(Space.l))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    FText(title, Fuse.type.title, maxLines = 2, modifier = Modifier.semantics { heading() })
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (system != null) {
+                            SystemTag(system)
+                            Spacer(Modifier.width(Space.s))
+                        }
+                        FText(line, Fuse.type.caption, color = c.textMuted, maxLines = 1)
+                    }
+                }
+            }
+            for (pair in facts.chunked(2)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                    for (f in pair) FactTile(f, Modifier.weight(1f))
+                    if (pair.size == 1) Spacer(Modifier.weight(1f))
+                }
+            }
+        }
+        return
+    }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box {
             SyncCover(g?.name ?: name, card, if (compact) 64.dp else 104.dp, corner = Fuse.geometry.panel)
@@ -235,23 +276,10 @@ private fun GameHeader(g: GameReport?, name: String, card: io.github.matiyaaa.fu
                 FText(title, if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1, modifier = Modifier.weight(1f, fill = false).semantics { heading() })
                 if (system != null) {
                     Spacer(Modifier.width(Space.m))
-                    FText(system, Fuse.type.label, color = c.textMuted, maxLines = 1, modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(c.text.copy(alpha = 0.08f)).padding(horizontal = Space.s, vertical = 2.dp))
+                    SystemTag(system)
                 }
             }
-            FText(
-                listOfNotNull(
-                    "$saves ${if (saves == 1) "save" else "saves"}".takeIf { saves > 0 },
-                    "$states ${if (states == 1) "state" else "states"}".takeIf { states > 0 },
-                    "Favourite".takeIf { g?.favorite == true },
-                ).plus(
-                    if (!compact) emptyList() else listOfNotNull(
-                        g?.playSeconds?.takeIf { it > 0 }?.let { "${playtimeText(it)} played" },
-                        g?.lastPlayed?.let { "last played ${TimeWords.relative(it, now, offset)}" },
-                        bytes.takeIf { it > 0 }?.let { sizeText(it) },
-                    ),
-                ).joinToString("  ·  ").ifEmpty { where.replaceFirstChar { it.uppercase() } },
-                Fuse.type.body, color = c.textMuted, maxLines = 1,
-            )
+            FText(line, Fuse.type.body, color = c.textMuted, maxLines = 1)
             if (!compact && facts.isNotEmpty()) {
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.s), modifier = Modifier.padding(top = Space.xs)) {
                     for (f in facts) FactTile(f)
@@ -261,12 +289,19 @@ private fun GameHeader(g: GameReport?, name: String, card: io.github.matiyaaa.fu
     }
 }
 
+/** The game's system, short, on a soft tag. */
+@Composable
+private fun SystemTag(system: String) {
+    val c = Fuse.colors
+    FText(system, Fuse.type.label, color = c.textMuted, maxLines = 1, modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(c.text.copy(alpha = 0.08f)).padding(horizontal = Space.s, vertical = 2.dp))
+}
+
 /** One of the game's figures: an icon, the value, and what it counts, on a soft tile. */
 @Composable
-private fun FactTile(f: HeroFact) {
+private fun FactTile(f: HeroFact, modifier: Modifier = Modifier) {
     val c = Fuse.colors
     Row(
-        Modifier.clip(RoundedCornerShape(12.dp)).background(c.text.copy(alpha = 0.05f)).border(1.dp, c.hairline, RoundedCornerShape(12.dp))
+        modifier.clip(RoundedCornerShape(12.dp)).background(c.text.copy(alpha = 0.05f)).border(1.dp, c.hairline, RoundedCornerShape(12.dp))
             .padding(horizontal = Space.m, vertical = Space.s),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -284,11 +319,11 @@ private fun FactTile(f: HeroFact) {
  * for good), when and on which device, how far in and why it was kept, and its size.
  */
 @Composable
-private fun VersionRow(v: VersionReport, last: Boolean, now: Long, offset: Long, selected: Boolean, compact: Boolean, onClick: () -> Unit) {
+private fun VersionRow(v: VersionReport, tint: Color, last: Boolean, now: Long, offset: Long, selected: Boolean, compact: Boolean, onClick: () -> Unit) {
     val c = Fuse.colors
     val shape = RoundedCornerShape(Fuse.geometry.control)
     val kept = v.kept || v.reason == RevisionReason.MILESTONE
-    val bg by fuselineColor(if (selected) c.surfaceRaised else androidx.compose.ui.graphics.Color.Transparent, Fuse.motion.tween(Durations.FAST), label = "version")
+    val bg by fuselineColor(if (selected) c.surfaceRaised else Color.Transparent, Fuse.motion.tween(Durations.FAST), label = "version")
     val line = c.hairline
     Row(
         Modifier.fillMaxWidth().height(if (compact) 56.dp else 64.dp),
@@ -319,23 +354,27 @@ private fun VersionRow(v: VersionReport, last: Boolean, now: Long, offset: Long,
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     FText(TimeWords.relative(v.at, now, offset).replaceFirstChar { it.uppercase() }, Fuse.type.bodyStrong, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
-                    Spacer(Modifier.width(Space.s))
-                    Pill(v.device, FuseIcons.MonitorSmartphone)
+                    if (v.current) {
+                        Spacer(Modifier.width(Space.s))
+                        FText("In use", Fuse.type.caption, color = c.accent, maxLines = 1, modifier = Modifier.clip(CircleShape).background(c.accent.copy(alpha = 0.14f)).padding(horizontal = Space.s + 2.dp, vertical = 2.dp))
+                    }
                 }
-                FText(
-                    listOfNotNull(
-                        v.playSeconds.takeIf { it > 0 }?.let { "${playtimeText(it)} in" },
-                        count(v.files.size, "file"),
-                        reasonText(v),
-                    ).joinToString("  ·  "),
-                    Fuse.type.caption, color = c.textMuted, maxLines = 1,
-                )
+                // The device that made it, in its colour on the Sync page, then how far in and why.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(tint))
+                    Spacer(Modifier.width(6.dp))
+                    FText(
+                        listOfNotNull(
+                            v.device,
+                            v.playSeconds.takeIf { it > 0 }?.let { "${playtimeText(it)} in" },
+                            count(v.files.size, "file"),
+                            reasonText(v),
+                        ).joinToString("  ·  "),
+                        Fuse.type.caption, color = c.textMuted, maxLines = 1,
+                    )
+                }
             }
             Spacer(Modifier.width(Space.m))
-            if (v.current) {
-                FText("In use", Fuse.type.caption, color = c.accent, maxLines = 1, modifier = Modifier.clip(CircleShape).background(c.accent.copy(alpha = 0.14f)).padding(horizontal = Space.s + 2.dp, vertical = 3.dp))
-                Spacer(Modifier.width(Space.m))
-            }
             FText(sizeText(v.bytes), Fuse.type.label, color = c.textMuted, maxLines = 1)
         }
     }
@@ -434,3 +473,6 @@ private fun DevicesCard(cv: io.github.matiyaaa.fuse.sync.Convergence, modifier: 
         }
     }
 }
+
+/** Narrower than this (a phone held upright), the header stacks: a title gets two lines, the figures go two by two. */
+private val NARROW = 600.dp

@@ -72,6 +72,12 @@ it runs, and Low Power turns fully off again.
 
 ## Changed
 
+- **The Sync page, redesigned.** It opens on you and your household: who is playing, how things
+  stand and your totals, beside a live map of the household with the host in the middle and every
+  device linked to it in its own colour (a light runs along each link while it syncs). Each game
+  shows a strip of its save versions in the colours of the devices that made them, play time by
+  device is a ring, the history is a timeline, and a device in the household can sign in as the
+  host from there. On a short screen it keeps to one line, so the games keep their room.
 - **Settings in cards.** Each group of settings sits on a card of its own with its name above it,
   and each section's heading carries its mark. Fuse One's page no longer repeats Playing As and
   Profiles, which lead Settings, Profiles.
