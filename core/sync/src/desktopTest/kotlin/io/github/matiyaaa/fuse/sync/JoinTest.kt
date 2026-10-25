@@ -180,6 +180,44 @@ class JoinTest {
     }
 
     @Test
+    fun aHubSignInOutlastsARestartUntilThePasswordChanges(): Unit = runBlocking {
+        suspend fun hub(cookie: String): String = http.request {
+            method = HttpMethod.Get
+            url.takeFrom("http://$address/hub")
+            header("CF-Connecting-IP", "203.0.113.9")
+            header("X-Forwarded-Proto", "https")
+            header("Cookie", cookie)
+        }.bodyAsText()
+        store.setAccount("mo", "correct horse")
+        val ok = http.request {
+            method = HttpMethod.Post
+            url.takeFrom("http://$address/hub/login")
+            header("CF-Connecting-IP", "203.0.113.9")
+            header("X-Forwarded-Proto", "https")
+            header("Content-Type", "application/x-www-form-urlencoded")
+            setBody("username=mo&password=correct+horse")
+        }
+        val cookie = assertNotNull(ok.headers["Set-Cookie"]).substringBefore(';')
+        val token = cookie.substringAfter('=')
+        // Kept with the host as a hash only: the token itself is never on its disk.
+        val kept = File(root, "host/hub-sessions.json")
+        assertTrue(kept.isFile)
+        assertFalse(token in kept.readText())
+
+        // An update restarts the host: still signed in.
+        host.stop()
+        store = HostStore(File(root, "host"), hostName = "Living Room PC")
+        host = SyncHost(store, port = 0, bind = "127.0.0.1", callsPerMinute = 100_000).start()
+        port = host.boundPort()
+        assertTrue("Sign Out" in hub(cookie))
+
+        // A new password signs everyone out, on disk too.
+        store.setAccount("mo", "battery staple")
+        assertTrue("Sign Out" !in hub(cookie))
+        assertFalse(kept.exists())
+    }
+
+    @Test
     fun aDeviceComingThroughATunnelTeachesTheHostItsOutsideAddress(): Unit = runBlocking {
         val pc = pair("Gaming PC")
         assertEquals("", store.outsideAddress())

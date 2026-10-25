@@ -24,6 +24,10 @@ internal data class ProfileRecord(
 /** A map of sign-ins, by key ("romm", "jellyfin:<profile>"). */
 internal val SignInsSerializer = kotlinx.serialization.builtins.MapSerializer(String.serializer(), String.serializer())
 
+/** The Hub's sign-ins, kept with the host but never in a backup of it (a backup signs nobody in). */
+internal const val HUB_SESSIONS_FILE = "hub-sessions.json"
+private val HubSessionsSerializer = kotlinx.serialization.builtins.MapSerializer(String.serializer(), Long.serializer())
+
 /**
  * A key the whole household uses (a scraper's API key, RetroAchievements' username and key):
  * "key:" and the name Fuse keeps it under on each device. Any trusted device may share one.
@@ -88,6 +92,12 @@ class HostStore(
     private val sharedFile = File(dir, "shared-games.json")
     private val aliasFile = File(dir, "game-aliases.json")
     private val accountFile = File(dir, "account.json")
+    /**
+     * The Hub's sign-ins from away, each kept as its token's SHA-256 (never the token) with when it
+     * ends: kept in memory alone, an update or a restart of the host signed everyone out.
+     */
+    private val hubSessionsFile = File(dir, HUB_SESSIONS_FILE)
+    private val hubSessions = HashMap<String, Long>()
     private val outsideFile = File(dir, "outside.json")
     /** The household's RomM and Jellyfin: addresses, and sign-ins sealed with [servicesKey]. */
     private val servicesFile = File(dir, "services.json")
@@ -165,6 +175,7 @@ class HostStore(
             revisions[SHARED_SAVES] = f.readLines().mapNotNull { line -> runCatching { json.decodeFromString(SaveRevision.serializer(), line) }.getOrNull() }.toMutableList()
         }
         if (accountFile.isFile) account = runCatching { json.decodeFromString(HostAccount.serializer(), accountFile.readText()) }.getOrNull()
+        if (hubSessionsFile.isFile) runCatching { json.decodeFromString(HubSessionsSerializer, hubSessionsFile.readText()) }.getOrNull()?.let(hubSessions::putAll)
         if (outsideFile.isFile) outside = runCatching { json.decodeFromString(OutsideAddress.serializer(), outsideFile.readText()) }.getOrDefault(OutsideAddress())
         if (aliasFile.isFile) runCatching { json.decodeFromString(GameAliasesSerializer, aliasFile.readText()) }.getOrNull()?.let(aliases::putAll)
         if (sharedFile.isFile) runCatching { json.decodeFromString(SharedGames.serializer(), sharedFile.readText()).games }.getOrNull()?.let(shared::addAll)
@@ -398,11 +409,53 @@ class HostStore(
         writeAtomically(accountFile, json.encodeToString(HostAccount.serializer(), next).toByteArray())
         runCatching { accountFile.setReadable(false, false); accountFile.setReadable(true, true) }
         account = next
+        // A new password ends every Hub sign-in made with the old one.
+        if (password != null) closeHubSessions()
     }
 
     fun clearAccount() = synchronized(lock) {
         accountFile.delete()
         account = null
+        closeHubSessions()
+    }
+
+    /** Signs the Hub in for [token] until [until], letting go of sign-ins that ended before [now]. */
+    fun openHubSession(token: String, until: Long, now: Long) = synchronized(lock) {
+        hubSessions.entries.removeIf { it.value < now }
+        hubSessions[hubKey(token)] = until
+        saveHubSessions()
+    }
+
+    /** True while [token] is a Hub sign-in that hasn't ended at [now]. */
+    fun hubSessionOpen(token: String, now: Long): Boolean = synchronized(lock) {
+        val key = hubKey(token)
+        val until = hubSessions[key] ?: return false
+        if (until >= now) return true
+        hubSessions.remove(key)
+        saveHubSessions()
+        false
+    }
+
+    /** Ends [token]'s Hub sign-in (Sign Out). */
+    fun closeHubSession(token: String) = synchronized(lock) {
+        if (hubSessions.remove(hubKey(token)) != null) saveHubSessions()
+    }
+
+    /** Ends every Hub sign-in. */
+    fun closeHubSessions() = synchronized(lock) {
+        hubSessions.clear()
+        hubSessionsFile.delete()
+    }
+
+    private fun hubKey(token: String): String = SyncCrypto.sha256(token.toByteArray())
+
+    private fun saveHubSessions() {
+        if (hubSessions.isEmpty()) {
+            hubSessionsFile.delete()
+            return
+        }
+        writeAtomically(hubSessionsFile, json.encodeToString(HubSessionsSerializer, hubSessions).toByteArray())
+        runCatching { hubSessionsFile.setReadable(false, false); hubSessionsFile.setReadable(true, true) }
     }
 
     /** True for the account's username (any case) and password. */
@@ -1131,7 +1184,7 @@ object HostFiles {
     private val OWN = setOf(
         "host.json", "devices.json", "profiles.json", "shared-games.json", "game-aliases.json", "account.json", "outside.json",
         "journal.jsonl", "applied.json", "admin.token", "objects", "profiles", "services.json", "services.key",
-        "household", HostLeadership.HOSTS_FILE, HostLeadership.NODE_FILE, HostLeadership.SECRET_FILE,
+        "household", HostLeadership.HOSTS_FILE, HostLeadership.NODE_FILE, HostLeadership.SECRET_FILE, HUB_SESSIONS_FILE,
     )
 
     /** The host's own files and folders in [dir] (with any write a crash left half done). */

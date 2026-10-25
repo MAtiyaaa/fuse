@@ -309,9 +309,6 @@ class SyncHost(
         if (misses.size > 10_000) misses.clear()
     }
 
-    /** Signed-in Hub sessions from away: token to when it ends. */
-    private val hubSessions = ConcurrentHashMap<String, Long>()
-
     /** Requests to join still waiting for someone to let them in, newest first. */
     fun joinRequests(): List<JoinAsk> {
         val now = clock()
@@ -416,8 +413,8 @@ class SyncHost(
             }
             val token = SyncCrypto.token(32)
             val now = clock()
-            hubSessions.entries.removeIf { it.value < now }
-            hubSessions[token] = now + HUB_SESSION_MS
+            // Kept with the host, so an update or a restart doesn't sign anyone out.
+            store.openHubSession(token, now + HUB_SESSION_MS, now)
             val secure = call.request.headers["X-Forwarded-Proto"] == "https" || call.request.headers["CF-Visitor"]?.contains("https") == true
             call.response.headers.append(
                 "Set-Cookie",
@@ -428,7 +425,7 @@ class SyncHost(
         }
         post("/hub/logout") {
             if (limited()) return@post
-            hubToken()?.let { hubSessions.remove(it) }
+            hubToken()?.let { store.closeHubSession(it) }
             call.response.headers.append("Set-Cookie", "$HUB_COOKIE=; Path=/hub; Max-Age=0; HttpOnly; SameSite=Strict")
             call.response.headers.append("Location", "/hub")
             call.respondText("", ContentType.Text.Plain, HttpStatusCode.SeeOther)
@@ -713,7 +710,6 @@ class SyncHost(
                 delete("/account") {
                     if (!admin()) return@delete
                     store.clearAccount()
-                    hubSessions.clear()
                     bump()
                     call.respondText("{}", ContentType.Application.Json)
                 }
@@ -1280,12 +1276,7 @@ class SyncHost(
 
     private fun RoutingContext.hubSignedIn(): Boolean {
         val token = hubToken() ?: return false
-        val until = hubSessions[token] ?: return false
-        if (until < clock()) {
-            hubSessions.remove(token)
-            return false
-        }
-        return store.accountName() != null
+        return store.hubSessionOpen(token, clock()) && store.accountName() != null
     }
 
     private fun RoutingContext.route(): String = call.request.headers["X-Fuse-Route"]?.takeIf { it == "LOCAL" || it == "REMOTE" } ?: ""

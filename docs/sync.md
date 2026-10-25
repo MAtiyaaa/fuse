@@ -609,7 +609,9 @@ times nobody is at a screen:
   stretches the password itself and proves it knows it over the key exchange of that one request,
   so the password never travels, and a recorded request can't be replayed.
 - **The Hub from away.** The Hub at the outside address asks to sign in; the session lasts twelve
-  hours and is kept in a cookie only the browser sends back to that page.
+  hours and is kept in a cookie only the browser sends back to that page. The host keeps only a
+  hash of it, in its data folder (never in a backup), so updating or restarting the host doesn't
+  sign you out; a new password or Sign Out ends it.
 
 Five wrong passwords in ten minutes make that caller wait. Without an account, devices join only
 with someone at a screen, and the Hub opens on the host computer only.
