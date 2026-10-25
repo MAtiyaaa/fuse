@@ -126,7 +126,12 @@ private val COMPACT_LOGO = 72.dp
 @Composable
 fun HomeScreen(app: AppState) {
     val prefs by app.store.prefs.collectAsState()
-    if (prefs.home.mode == HomeMode.CHANNELS) ChannelHome(app) else FlowHome(app)
+    when {
+        // The menus on the touch screen below, the chosen game above: Home as a DS's lower screen.
+        io.github.matiyaaa.fuse.ui.shell.app.LocalShowcaseElsewhere.current -> DualHome(app)
+        prefs.home.mode == HomeMode.CHANNELS -> ChannelHome(app)
+        else -> FlowHome(app)
+    }
 }
 
 /** Asks which Home style to use (Fused or Network); see [chooseHomeStyle]. */

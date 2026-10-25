@@ -564,7 +564,9 @@ private fun FuseAppContent(
             ) {
                 // The room fills the whole screen; everything on it keeps clear of edges a TV cuts off.
                 Box(Modifier.fillMaxSize().unseenUnderOpening(app)) {
-                    Room(app, prefs.showHero, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds, spec.ambient, spec.wallpaper)
+                    // With the menus below and the chosen game large above, the touch screen keeps the
+                    // theme's own room, as a DS's lower screen does, and leaves the game's art to the screen above.
+                    Room(app, prefs.showHero && !LocalShowcaseElsewhere.current, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds, spec.ambient, spec.wallpaper)
                 }
                 val margin = (calibration?.margin ?: prefs.screenMargin).coerceIn(0, 10) / 100f
                 // On an ultrawide screen (wider than about 21:9) the interface keeps a 21:9-like frame

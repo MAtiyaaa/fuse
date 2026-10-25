@@ -169,6 +169,11 @@ data class DisplayProfile(
      * main screen a showcase of what is chosen. Only on a device with a second screen.
      */
     val flipped: Boolean = false,
+    /**
+     * Flipped, how big Home's icons are on the touch screen: 0 fewer and larger (one row at the
+     * most), 1 as many as fit comfortably, 2 more and smaller.
+     */
+    val flippedZoom: Int = 1,
     /** The second screen shows the main screen's background (its scene or picture) behind what it shows. */
     val companionFollowsBackground: Boolean = true,
     /** Which way round Fuse turns on a device that rotates (Android). */

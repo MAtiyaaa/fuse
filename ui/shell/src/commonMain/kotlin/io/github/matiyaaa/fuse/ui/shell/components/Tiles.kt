@@ -87,6 +87,12 @@ fun GameArtStyle.baseForWidth(width: Dp): Dp = when (this) {
     GameArtStyle.POSTER -> width / POSTER_WIDTH
 }
 
+/** The base size whose [tileSize] is exactly [height] tall: for grids whose rows set the height. */
+fun GameArtStyle.baseForHeight(height: Dp): Dp = when (this) {
+    GameArtStyle.BOX_ART -> height
+    GameArtStyle.POSTER -> height / POSTER_HEIGHT
+}
+
 /** Corner of a game tile in this art style, as a fraction of its short side. Posters are softer, like a case. */
 @Composable
 internal fun GameArtStyle.cornerFraction(): Float =
