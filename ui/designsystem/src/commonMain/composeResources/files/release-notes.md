@@ -1,4 +1,4 @@
-# Fuse 0.4.4: The Tune-Up Update
+# Fuse 0.4.4 - The Tune-Up Update
 
 A tune-up from a whole-app audit. The Library's All view is rebuilt around what you can do with each
 game, Settings are set out in cards with nothing in two places, RomM brings a game's files several at
@@ -110,6 +110,4 @@ it runs, and Low Power turns fully off again.
   changes, and on the AYN Thor at its largest text a game's page no longer runs up under the top
   line.
 - On a phone held upright, Home's rows keep the chosen game's wide tile inside the screen.
-- Updating or restarting the Fuse One Host no longer signs you out of its Hub. A new host password
-  still ends every sign-in.
 - Phone Link says only how big a transfer still waiting its turn is, instead of "0 B of" it.
