@@ -52,8 +52,8 @@ object Extensions {
     /** A phone signed in to Phone Link with the account set on this device. */
     val PHONE_LINK = Extension(
         "phone-link", "Phone Link", "a phone", "A phone signed in with this device's Phone Link account",
-        scopes = listOf(ExtensionScope.STATUS, ExtensionScope.LIBRARY, ExtensionScope.CHANGE_LIBRARY, ExtensionScope.CONTROL, ExtensionScope.CAPTURES),
-        defaults = setOf(ExtensionScope.STATUS, ExtensionScope.LIBRARY, ExtensionScope.CHANGE_LIBRARY, ExtensionScope.CONTROL, ExtensionScope.CAPTURES),
+        scopes = listOf(ExtensionScope.STATUS, ExtensionScope.LIBRARY, ExtensionScope.PLAY, ExtensionScope.CHANGE_LIBRARY, ExtensionScope.CONTROL, ExtensionScope.CAPTURES),
+        defaults = setOf(ExtensionScope.STATUS, ExtensionScope.LIBRARY, ExtensionScope.PLAY, ExtensionScope.CHANGE_LIBRARY, ExtensionScope.CONTROL, ExtensionScope.CAPTURES),
     )
 
     val all: List<Extension> = listOf(DECKY, PHONE_LINK)

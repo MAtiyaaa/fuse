@@ -292,6 +292,11 @@ class PhoneLinkServer(
             post("/api/fill") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.fill(call.body())) } }
             post("/api/fill/cancel") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.cancelFill()) } }
             post("/api/system-art") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.systemArt()) } }
+            post("/api/games/{id}/open") { call.signedIn(ExtensionScope.PLAY) { call.reply(api.openOnDevice(call.gameId())) } }
+            put("/api/games/{id}/favorite") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.setFavorite(call.gameId(), call.body())) } }
+            post("/api/rescan") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.rescan()) } }
+            post("/api/transfers/pause") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.pauseTransfers(true)) } }
+            post("/api/transfers/resume") { call.signedIn(ExtensionScope.CHANGE_LIBRARY) { call.reply(api.pauseTransfers(false)) } }
             get("/api/img/{token}") {
                 call.signedIn(ExtensionScope.LIBRARY) {
                     val image = api.image(call.parameters["token"].orEmpty())

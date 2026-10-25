@@ -923,6 +923,13 @@ button.playing:active { transform: scale(.985); transition-duration: var(--d-ins
 .dl-pct { font: 600 26px/30px var(--display); letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--text); flex: none; }
 .dl-pct small { font-size: 14px; color: var(--muted); margin-left: 1px; letter-spacing: 0; }
 .dl-current .bar { margin-top: 14px; }
+.section > .dl-current + .dl-current { margin-top: var(--s-s); }
+.dl-actions { display: flex; justify-content: flex-end; margin-top: var(--s-s); }
+
+/* A game's page: what the phone can do with it on the device. */
+.game-actions { display: flex; flex-wrap: wrap; gap: var(--s-s); margin-top: 20px; }
+.game-actions .btn { flex: 1 1 160px; }
+.game-actions .btn.is-fav .i { color: var(--accent); fill: currentColor; stroke-width: 0; }
 
 /* A system's mark: its short name on generated art in its colour. */
 .plat {
@@ -2106,3 +2113,5 @@ a.btn { text-decoration: none; }
 /* Switch saves sent from the phone */
 .send-bar { margin-top: var(--s-m); }
 .send-status { margin-top: var(--s-s); }
+
+#lib-rescan { margin-left: auto; }

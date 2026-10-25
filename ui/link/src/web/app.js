@@ -1942,15 +1942,17 @@ function renderNow() {
   if (!nowUI) {
     nowUI = {
       playing: h('section.section', { 'aria-label': 'Playing now' }),
+      transfers: h('section.section', { 'aria-label': 'Downloads' }),
       cart: h('section.section', { 'aria-label': 'Cartridge downloads' }),
       fill: h('section.section', { 'aria-label': 'Art fill' }),
       fillCard: createFillCard(),
     };
     nowUI.fill.append(sectionHead('Art fill'), nowUI.fillCard.el);
-    E.nowBody.replaceChildren(nowUI.playing, nowUI.cart, nowUI.fill);
+    E.nowBody.replaceChildren(nowUI.playing, nowUI.transfers, nowUI.cart, nowUI.fill);
     arriving = true;
   }
   updatePlaying();
+  updateTransfers();
   updateCartridge();
   updateFillViews();
   // What replaces the placeholders rises in, card by card; later updates change in place.
@@ -1995,6 +1997,70 @@ function playingEmpty() {
     h('div.card-head-main',
       h('p.card-title', 'Nothing is playing'),
       h('p.card-text', `Start a game on ${deviceName()} and it shows up here.`)));
+}
+
+/** Fuse's own downloads and uploads on the device (RomM's, the household's): what moves and how far along. */
+function updateTransfers() {
+  const slot = nowUI.transfers;
+  const t = S.now && S.now.transfers && typeof S.now.transfers === 'object' ? S.now.transfers : null;
+  const items = t && Array.isArray(t.items) ? t.items.filter((i) => i && typeof i === 'object') : [];
+  if (!t || (!items.length && !(num(t.queued) > 0))) {
+    slot.hidden = true;
+    slot._key = null;
+    slot.replaceChildren();
+    return;
+  }
+  slot.hidden = false;
+  const key = JSON.stringify([items.map((i) => [i.title, !!i.upload, i.state]), num(t.queued), !!t.paused, num(t.failed)]);
+  keyed(slot, key, () => transfersSection(slot, t, items));
+  (slot._rows || []).forEach((r, i) => {
+    const it = items[i];
+    if (!it) return;
+    setBar(r.bar, it.progress == null ? null : num(it.progress));
+    r.sub.textContent = transferWords(it);
+  });
+}
+
+function transferWords(it) {
+  const state = { active: it.upload ? 'Uploading' : 'Downloading', queued: 'Waiting', waiting: 'Waiting', paused: 'Paused', failed: 'Stopped' }[it.state] || '';
+  const size = num(it.total) > 0 ? `${fmtBytes(it.done)} of ${fmtBytes(it.total)}` : '';
+  return [state, size].filter(Boolean).join(' \u00B7 ');
+}
+
+function transfersSection(slot, t, items) {
+  slot._rows = [];
+  const paused = !!t.paused;
+  const toggle = btn(paused ? 'Resume all' : 'Pause all', {
+    icon: paused ? 'play' : 'pause', size: 'sm',
+    onClick: async (b) => {
+      setBusy(b, true);
+      try {
+        await api(paused ? '/api/transfers/resume' : '/api/transfers/pause', { method: 'POST' });
+        toast(paused ? 'Everything carries on' : 'Everything is paused', 'success');
+        refreshNow();
+      } catch (e) {
+        toast(e.message || "Couldn't reach the device", 'error');
+      } finally {
+        setBusy(b, false);
+      }
+    },
+  });
+  const moving = num(t.active);
+  const status = moving > 0 ? h('span.pill.pill-success', h('span.pill-dot'), `${nf.format(moving)} moving`) : h('span.pill', paused ? 'Paused' : 'Waiting');
+  const rows = items.map((it) => {
+    const bar = progressBar(`${it.upload ? 'Uploading' : 'Downloading'} ${it.title || 'a game'}`, it.state === 'paused' ? 'is-warning' : '');
+    const sub = h('p.dl-sub');
+    slot._rows.push({ bar, sub });
+    return h('div.card.dl-current',
+      h('div.dl-row',
+        h('div.card-icon', icon(it.upload ? 'file-up' : 'download')),
+        h('div.dl-main', h('p.dl-title', it.title || 'Unknown game'), sub)),
+      bar);
+  });
+  const more = num(t.queued) > 0 && items.length === 0
+    ? h('div.card', h('p.card-text', `${plural(num(t.queued), 'transfer is', 'transfers are')} waiting on ${deviceName()}.`))
+    : null;
+  return [sectionHead('Downloads', status), ...rows, more, h('div.dl-actions', toggle)];
 }
 
 function setBar(bar, frac) {
@@ -2645,6 +2711,42 @@ function gameSections(d) {
   const players = fmtPlayers(d.players);
   const rating = fmtRating(d.rating);
   const genres = (Array.isArray(d.genres) ? d.genres : []).filter((x) => x != null && x !== '').map(String);
+
+  // What the phone can do with it on the device: show its page there (Play is then a press away,
+  // on the device or the Remote), and keep it as a favourite.
+  const show = btn(`Show on ${deviceName()}`, {
+    icon: 'send', kind: 'primary',
+    onClick: async (b) => {
+      setBusy(b, true);
+      try {
+        const r = await api(gamePath(d.id, '/open'), { method: 'POST' });
+        if (r && r.error) throw new Error(r.error);
+        toast(`Its page is open on ${deviceName()}. Press Play there, or on the Remote.`, 'success', 4800);
+      } catch (e) {
+        toast(e.message || "Couldn't reach the device", 'error');
+      } finally {
+        setBusy(b, false);
+      }
+    },
+  });
+  const fav = btn(d.favorite ? 'Favourite' : 'Add to favourites', {
+    icon: 'heart', kind: d.favorite ? 'secondary is-fav' : 'secondary',
+    aria: d.favorite ? 'Remove from favourites' : 'Add to favourites',
+    onClick: async (b) => {
+      setBusy(b, true);
+      try {
+        const r = await api(gamePath(d.id, '/favorite'), { method: 'PUT', body: { favorite: !d.favorite } });
+        if (r && r.error) throw new Error(r.error);
+        d.favorite = !d.favorite;
+        toast(d.favorite ? 'Added to favourites' : 'Taken out of favourites', 'success');
+        renderGame();
+      } catch (e) {
+        toast(e.message || "Couldn't reach the device", 'error');
+        setBusy(b, false);
+      }
+    },
+  });
+  out.push(h('div.game-actions', show, fav));
 
   const chips = [];
   if (d.favorite) chips.push(metaPill('heart', 'Favorite', 'is-fav'));
@@ -3849,6 +3951,20 @@ function init() {
   });
   E.capDownload.addEventListener('click', () => downloadCaptures(C.items.filter((c) => C.selected.has(c.id)).map((c) => c.id), E.capDownload));
 
+  // A quick look through the device's game folders; what it finds arrives as the library changes.
+  $('#lib-rescan').addEventListener('click', async (e) => {
+    const b = e.currentTarget;
+    setBusy(b, true);
+    try {
+      const r = await api('/api/rescan', { method: 'POST' });
+      if (r && r.error) throw new Error(r.error);
+      toast(`${deviceName()} is looking for new games`, 'success');
+    } catch (err) {
+      toast(err.message || "Couldn't reach the device", 'error');
+    } finally {
+      setBusy(b, false);
+    }
+  });
   E.libSort.addEventListener('click', () => {
     openMenu({
       title: 'Sort by',

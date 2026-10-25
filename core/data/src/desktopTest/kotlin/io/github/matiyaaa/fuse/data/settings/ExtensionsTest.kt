@@ -17,7 +17,9 @@ class ExtensionsTest {
         assertFalse(Extensions.allows(none, Extensions.DECKY, ExtensionScope.CONTROL))
         val forced = ExtensionSettings(mapOf("phone-link" to setOf(ExtensionScope.EMULATORS, ExtensionScope.LIBRARY)))
         assertEquals(setOf(ExtensionScope.LIBRARY), Extensions.granted(forced, Extensions.PHONE_LINK))
-        assertEquals(forced, Extensions.set(forced, Extensions.PHONE_LINK, ExtensionScope.PLAY, true))
+        assertEquals(forced, Extensions.set(forced, Extensions.PHONE_LINK, ExtensionScope.EMULATORS, true))
+        // A phone may show a game's page on the device; starting it stays a press there.
+        assertTrue(Extensions.allows(none, Extensions.PHONE_LINK, ExtensionScope.PLAY))
     }
 
     @Test

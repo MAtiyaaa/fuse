@@ -161,6 +161,39 @@ internal class LinkApi(
                 }
             })
             put("fill", fill?.let { fillJson(it) } ?: JsonNull)
+            put("transfers", transfersJson())
+        }
+    }
+
+    /**
+     * Fuse's own downloads and uploads on this device (RomM's, the household's, the Store's): how
+     * many are moving and how far along, the first few, and whether everything is paused.
+     */
+    private fun transfersJson(): JsonObject {
+        val summary = store.transfers.summary.value
+        val rows = store.transfers.rows.value.filter { it.device == null && !it.item.status.finished }
+        return buildJsonObject {
+            put("active", summary.active)
+            put("queued", summary.queued + summary.waiting)
+            put("failed", summary.failed)
+            put("progress", summary.progress)
+            put("paused", rows.isNotEmpty() && rows.all { it.item.status == io.github.matiyaaa.fuse.transfer.TransferStatus.PAUSED })
+            putJsonArray("items") {
+                rows.take(TRANSFERS_SHOWN).forEach { r ->
+                    val t = r.item
+                    val live = store.transfers.live(t.id).value
+                    val done = live.doneBytes.takeIf { it > 0 } ?: t.doneBytes
+                    val total = live.totalBytes ?: t.totalBytes
+                    add(buildJsonObject {
+                        put("title", t.title)
+                        put("upload", t.upload)
+                        put("state", t.status.name.lowercase())
+                        put("done", done)
+                        put("total", total)
+                        put("progress", total?.takeIf { it > 0 }?.let { (done.toDouble() / it).coerceIn(0.0, 1.0) })
+                    })
+                }
+            }
         }
     }
 
@@ -172,9 +205,39 @@ internal class LinkApi(
         store.cartridge.recent,
         store.prefs.map { it.cartridgeEnabled },
         store.media.fillProgress,
-    ) { _, _, _, _, fill -> nowOf(fill) }
+        store.transfers.summary,
+        store.transfers.rows,
+    ) { values -> nowOf(values[4] as FillProgress?) }
         .distinctUntilChanged()
         .sample(500)
+
+    // From the phone -----------------------------------------------------------------------------
+
+    /** Shows the game's page on the device; starting it stays a press there (or on the Remote). */
+    suspend fun openOnDevice(id: Long): Reply {
+        val card = store.library.game(GameId(id)).first() ?: return notFound()
+        val shown = io.github.matiyaaa.fuse.ui.shell.app.ExternalRequests.post(io.github.matiyaaa.fuse.ui.shell.app.ExternalRequest.OpenGame(card.game.id))
+        return if (shown) Reply(buildJsonObject { put("ok", true) }) else Reply(error("$deviceName is busy. Try again in a moment."))
+    }
+
+    suspend fun setFavorite(id: Long, body: JsonElement?): Reply {
+        val favorite = ((body as? JsonObject)?.get("favorite") as? JsonPrimitive)?.contentOrNull?.toBooleanStrictOrNull()
+            ?: return Reply(error("Say whether it is a favourite."), HttpStatusCode.BadRequest)
+        store.library.game(GameId(id)).first() ?: return notFound()
+        store.library.setFavorite(GameId(id), favorite)
+        return Reply(buildJsonObject { put("ok", true); put("favorite", favorite) })
+    }
+
+    fun pauseTransfers(pause: Boolean): Reply {
+        if (pause) store.transfers.pauseAll() else store.transfers.resumeAll()
+        return Reply(buildJsonObject { put("ok", true) })
+    }
+
+    /** A quick look through the game folders for games added since. */
+    fun rescan(): Reply {
+        store.sources.rescan(io.github.matiyaaa.fuse.model.ScanScope.QUICK)
+        return Reply(buildJsonObject { put("ok", true) })
+    }
 
     fun fillUpdates(): Flow<JsonObject?> = store.media.fillProgress.map { it?.let(::fillJson) }.distinctUntilChanged().drop(1)
 
@@ -444,6 +507,9 @@ internal class LinkApi(
     }
 
     companion object {
+        /** The most of Fuse's transfers "now" lists; the device's Downloads page has the rest. */
+        private const val TRANSFERS_SHOWN = 6
+
         private const val MAX_IMAGE = 16 * 1024 * 1024
 
         /** The phone's names for the art slots. */
