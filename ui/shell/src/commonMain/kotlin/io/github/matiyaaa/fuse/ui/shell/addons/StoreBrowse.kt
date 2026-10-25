@@ -326,6 +326,8 @@ private fun StoreShelves(app: AppState, state: StoreState, active: Boolean, topP
     val room = subTabsRoom()
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxHeight < 600.dp
+        // A phone held upright: the spotlight stacks its parts instead of squeezing its words.
+        val narrow = maxWidth < NARROW_STORE
         LazyColumn(
             state = list,
             modifier = Modifier.fillMaxSize().padding(top = topPadding).fadingEdges(top = if (list.canScrollBackward) Space.xl else 0.dp).dragScroll(list),
@@ -336,9 +338,9 @@ private fun StoreShelves(app: AppState, state: StoreState, active: Boolean, topP
                 item(key = r.key) {
                     val chosen = if (focused && sel.row == ri) sel.column(r.key) else -1
                     when (r) {
-                        is StoreRow.Top -> StoreHeader(state, r.buttons, chosen, compact) { i -> tap(r.key, i) }
+                        is StoreRow.Top -> StoreHeader(state, r.buttons, chosen, compact, narrow) { i -> tap(r.key, i) }
                         is StoreRow.Spotlight -> SpotlightCard(
-                            r.app, r.reason, state, storeAction(app, state, r.app), chosen == 0, compact, ops.iconModel(r.app.key),
+                            r.app, r.reason, state, storeAction(app, state, r.app), chosen == 0, compact, narrow, ops.iconModel(r.app.key),
                             onClick = { tap(r.key, 0) }, onDetails = { openApp(r.app) },
                         )
                         is StoreRow.Shelf -> AppShelf(
@@ -392,70 +394,100 @@ internal fun searchApps(apps: List<StoreApp>, query: String): List<StoreApp> {
 
 /**
  * The Store's top: the pack it follows (edition and release), how fresh the catalogue is or why
- * it couldn't be refreshed, and the page's buttons.
+ * it couldn't be refreshed, and the page's buttons. On a short screen (a handheld) it is one band,
+ * the facts in a line under the title and the buttons beside it, so the apps start on the first view.
  */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun StoreHeader(state: StoreState, buttons: List<TopButton>, chosen: Int, compact: Boolean, onClick: (Int) -> Unit) {
+private fun StoreHeader(state: StoreState, buttons: List<TopButton>, chosen: Int, compact: Boolean, narrow: Boolean, onClick: (Int) -> Unit) {
     val c = Fuse.colors
     val catalogue = state.catalogue ?: return
-    Column(Modifier.padding(horizontal = Space.gutter)) {
-        // Where the catalogue comes from, in the theme's accent, then what it is.
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            FText(
-                when {
-                    state.desktop -> "FROM EACH PROJECT'S RELEASES"
-                    state.packRepo != null -> state.packRepo.substringAfter("github.com/").uppercase()
-                    else -> "OBTAINIUM EMULATION PACK"
-                },
-                Fuse.type.overline, color = c.accent, maxLines = 1,
-            )
-            catalogue.packVersion?.let {
-                Spacer(Modifier.width(Space.s))
-                FText(it, Fuse.type.overline, color = c.textFaint, maxLines = 1)
-            }
-        }
-        Spacer(Modifier.height(Space.xxs))
-        FText(if (state.desktop) "Emulators for this computer" else "Emulators and gaming apps", if (compact) Fuse.type.titleSmall else Fuse.type.title, maxLines = 1)
-        Spacer(Modifier.height(if (compact) Space.s else Space.m))
-        val offline = state.refreshProblem != null && !state.refreshing
-        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-            if (state.desktop) {
-                HeaderChip(FuseIcons.Monitor, "Builds for this computer")
-            } else {
-                HeaderChip(
-                    if (catalogue.variant == io.github.matiyaaa.fuse.model.StoreVariant.DUAL_SCREEN) FuseIcons.DualScreen else FuseIcons.Smartphone,
-                    "${catalogue.variant.title()} edition",
-                )
-            }
-            HeaderChip(FuseIcons.Package, if (catalogue.apps.size == 1) "1 app" else "${catalogue.apps.size} apps")
-            HeaderChip(
-                when {
-                    state.refreshing -> FuseIcons.Refresh
-                    offline -> FuseIcons.CloudOff
-                    else -> FuseIcons.Clock
-                },
-                when {
-                    state.refreshing -> "Checking for a newer list"
-                    offline -> "Offline, list from ${agoText(catalogue.fetchedAt)}"
-                    else -> "Updated ${agoText(catalogue.fetchedAt)}"
-                },
-                color = if (offline) c.warning else c.textMuted,
-            )
-        }
-        Spacer(Modifier.height(Space.m))
+    val offline = state.refreshProblem != null && !state.refreshing
+    val source = when {
+        state.desktop -> "FROM EACH PROJECT'S RELEASES"
+        state.packRepo != null -> state.packRepo.substringAfter("github.com/").uppercase()
+        else -> "OBTAINIUM EMULATION PACK"
+    }
+    val title = if (state.desktop) "Emulators for this computer" else "Emulators and gaming apps"
+    val edition = if (state.desktop) "Builds for this computer" else "${catalogue.variant.title()} edition"
+    val count = if (catalogue.apps.size == 1) "1 app" else "${catalogue.apps.size} apps"
+    val fresh = when {
+        state.refreshing -> "Checking for a newer list"
+        offline -> "Offline, list from ${agoText(catalogue.fetchedAt)}"
+        else -> "Updated ${agoText(catalogue.fetchedAt)}"
+    }
+    val buttonRow: @Composable () -> Unit = {
         // The buttons wrap onto a second line rather than run off a narrow screen.
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalArrangement = Arrangement.spacedBy(Space.s)) {
             buttons.forEachIndexed { i, b ->
                 FuseButton(
                     b.label, selected = chosen == i, onClick = { onClick(i) }, icon = b.icon,
                     kind = if (b.primary) ButtonKind.PRIMARY else ButtonKind.SECONDARY,
-                    height = if (compact) 40.dp else Size.touch, loading = b.loading,
+                    height = if (compact) STORE_BUTTON_SHORT else Size.touch, loading = b.loading,
                 )
             }
         }
-        if (!state.canInstall) {
+    }
+    Column(Modifier.padding(horizontal = Space.gutter)) {
+        if (compact) {
+            val words: @Composable () -> Unit = {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        FText(source, Fuse.type.overline, color = c.accent, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                        catalogue.packVersion?.let {
+                            Spacer(Modifier.width(Space.s))
+                            FText(it, Fuse.type.overline, color = c.textFaint, maxLines = 1)
+                        }
+                    }
+                    FText(title, Fuse.type.titleSmall, maxLines = 1)
+                    FText("$edition  ·  $count  ·  $fresh", Fuse.type.caption, color = if (offline) c.warning else c.textMuted, maxLines = 1)
+                }
+            }
+            if (narrow) {
+                words()
+                Spacer(Modifier.height(Space.s))
+                buttonRow()
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) { words() }
+                    Spacer(Modifier.width(Space.l))
+                    buttonRow()
+                }
+            }
+        } else {
+            // Where the catalogue comes from, in the theme's accent, then what it is.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                FText(source, Fuse.type.overline, color = c.accent, maxLines = 1)
+                catalogue.packVersion?.let {
+                    Spacer(Modifier.width(Space.s))
+                    FText(it, Fuse.type.overline, color = c.textFaint, maxLines = 1)
+                }
+            }
+            Spacer(Modifier.height(Space.xxs))
+            FText(title, Fuse.type.title, maxLines = 1)
             Spacer(Modifier.height(Space.m))
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                if (state.desktop) {
+                    HeaderChip(FuseIcons.Monitor, edition)
+                } else {
+                    HeaderChip(if (catalogue.variant == io.github.matiyaaa.fuse.model.StoreVariant.DUAL_SCREEN) FuseIcons.DualScreen else FuseIcons.Smartphone, edition)
+                }
+                HeaderChip(FuseIcons.Package, count)
+                HeaderChip(
+                    when {
+                        state.refreshing -> FuseIcons.Refresh
+                        offline -> FuseIcons.CloudOff
+                        else -> FuseIcons.Clock
+                    },
+                    fresh,
+                    color = if (offline) c.warning else c.textMuted,
+                )
+            }
+            Spacer(Modifier.height(Space.m))
+            buttonRow()
+        }
+        if (!state.canInstall) {
+            Spacer(Modifier.height(if (compact) Space.s else Space.m))
             Row(
                 Modifier.clip(RoundedCornerShape(Fuse.geometry.control)).background(c.text.copy(alpha = 0.05f)).padding(horizontal = Space.m, vertical = Space.s),
                 verticalAlignment = Alignment.CenterVertically,
@@ -672,6 +704,7 @@ private fun SpotlightCard(
     action: StoreAction,
     selected: Boolean,
     compact: Boolean,
+    narrow: Boolean,
     icon: Any?,
     onClick: () -> Unit,
     onDetails: () -> Unit,
@@ -679,10 +712,48 @@ private fun SpotlightCard(
     val c = Fuse.colors
     val tint = item.tint()
     val shape = remember { SquircleShape.fraction(0.08f) }
+    val buttons: @Composable () -> Unit = {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            FuseButton(action.label, selected = selected, onClick = onClick, icon = action.icon, kind = action.kind, height = if (compact || narrow) STORE_BUTTON_SHORT else Size.touch, loading = action.busy)
+            FuseButton("Details", selected = false, onClick = onDetails, icon = FuseIcons.Info, kind = ButtonKind.SECONDARY, height = if (compact || narrow) STORE_BUTTON_SHORT else Size.touch)
+        }
+    }
+    val progress: @Composable () -> Unit = {
+        val job = state.jobs[item.key]
+        if (job != null && job.active) {
+            Spacer(Modifier.height(Space.s))
+            ProgressBar(jobProgress(job), Modifier.widthIn(max = 420.dp).fillMaxWidth(), color = lerp(tint, Color.White, 0.3f), height = 3.dp)
+        }
+    }
+    if (narrow) {
+        // Upright on a phone: its mark and name, then what it is, then its buttons, each with the width.
+        Box(Modifier.padding(horizontal = Space.gutter)) {
+            Tile(selected = selected, modifier = Modifier.fillMaxWidth(), shape = shape, cornerFraction = 0.08f, glow = tint, onClick = onClick, onLongClick = onDetails, maxGrow = Space.s) {
+                Box(Modifier.matchParentSize().ditheredBackground(Brush.linearGradient(listOf(lerp(tint, Color.Black, 0.25f), lerp(tint, Color.Black, 0.82f)))))
+                Box(Modifier.matchParentSize().border(1.dp, Color.White.copy(alpha = 0.08f), shape))
+                Column(Modifier.fillMaxWidth().padding(Space.l)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AppMark(item, icon, 64.dp)
+                        Spacer(Modifier.width(Space.m))
+                        Column(Modifier.weight(1f)) {
+                            FText(reason.uppercase(), Fuse.type.overline, color = c.onArtMuted, maxLines = 2)
+                            FText(item.name, Fuse.type.title, color = c.onArt, maxLines = 1)
+                        }
+                    }
+                    Spacer(Modifier.height(Space.s))
+                    FText(item.about ?: item.author, Fuse.type.body, color = c.onArtMuted, maxLines = 3)
+                    Spacer(Modifier.height(Space.m))
+                    buttons()
+                    progress()
+                }
+            }
+        }
+        return
+    }
     Box(Modifier.padding(horizontal = Space.gutter)) {
         Tile(
             selected = selected,
-            modifier = Modifier.widthIn(max = 980.dp).fillMaxWidth().height(if (compact) 180.dp else 220.dp),
+            modifier = Modifier.widthIn(max = 980.dp).fillMaxWidth().height(if (compact) SPOTLIGHT_SHORT else 220.dp),
             shape = shape, cornerFraction = 0.08f, glow = tint,
             onClick = onClick, onLongClick = onDetails,
             // As wide as a page: lifting by the usual share would push it into the margin.
@@ -692,24 +763,17 @@ private fun SpotlightCard(
             // A soft light from the mark's side, so the card reads as one piece, not a flat panel.
             Box(Modifier.fillMaxSize().ditheredBackground(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.10f), Color.Transparent), radius = 900f)))
             Box(Modifier.fillMaxSize().border(1.dp, Color.White.copy(alpha = 0.08f), shape))
-            Row(Modifier.fillMaxSize().padding(if (compact) Space.l else Space.xl), verticalAlignment = Alignment.CenterVertically) {
-                AppMark(item, icon, if (compact) 96.dp else 124.dp)
+            Row(Modifier.fillMaxSize().padding(if (compact) Space.m else Space.xl), verticalAlignment = Alignment.CenterVertically) {
+                AppMark(item, icon, if (compact) 72.dp else 124.dp)
                 Spacer(Modifier.width(if (compact) Space.l else Space.xl))
                 Column(Modifier.weight(1f)) {
                     FText(reason.uppercase(), Fuse.type.overline, color = c.onArtMuted, maxLines = 1)
                     Spacer(Modifier.height(Space.xxs))
-                    FText(item.name, if (compact) Fuse.type.title else Fuse.type.display, color = c.onArt, maxLines = 1)
-                    FText(item.about ?: item.author, Fuse.type.body, color = c.onArtMuted, maxLines = 2)
+                    FText(item.name, if (compact) Fuse.type.titleSmall else Fuse.type.display, color = c.onArt, maxLines = 1)
+                    FText(item.about ?: item.author, if (compact) Fuse.type.caption else Fuse.type.body, color = c.onArtMuted, maxLines = if (compact) 1 else 2)
                     Spacer(Modifier.height(if (compact) Space.s else Space.m))
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                        FuseButton(action.label, selected = selected, onClick = onClick, icon = action.icon, kind = action.kind, height = if (compact) 40.dp else Size.touch, loading = action.busy)
-                        FuseButton("Details", selected = false, onClick = onDetails, icon = FuseIcons.Info, kind = ButtonKind.SECONDARY, height = if (compact) 40.dp else Size.touch)
-                    }
-                    val job = state.jobs[item.key]
-                    if (job != null && job.active) {
-                        Spacer(Modifier.height(Space.s))
-                        ProgressBar(jobProgress(job), Modifier.widthIn(max = 420.dp).fillMaxWidth(), color = lerp(tint, Color.White, 0.3f), height = 3.dp)
-                    }
+                    buttons()
+                    progress()
                 }
             }
         }
@@ -718,3 +782,12 @@ private fun SpotlightCard(
 
 /** Between the cards of a Store shelf: room for a focused card to lift without touching the next. */
 private val STORE_CARD_GAP = 20.dp
+
+/** Narrower than this, the Store's spotlight stacks its parts. */
+private val NARROW_STORE = 600.dp
+
+/** The Store's buttons on a short or narrow screen. */
+private val STORE_BUTTON_SHORT = 40.dp
+
+/** The spotlight's height on a short screen. */
+private val SPOTLIGHT_SHORT = 140.dp
