@@ -2023,7 +2023,8 @@ function updateTransfers() {
 
 function transferWords(it) {
   const state = { active: it.upload ? 'Uploading' : 'Downloading', queued: 'Waiting', waiting: 'Waiting', paused: 'Paused', failed: 'Stopped' }[it.state] || '';
-  const size = num(it.total) > 0 ? `${fmtBytes(it.done)} of ${fmtBytes(it.total)}` : '';
+  // Nothing in yet (one still waiting its turn): only how big it is.
+  const size = num(it.total) > 0 ? (num(it.done) > 0 ? `${fmtBytes(it.done)} of ${fmtBytes(it.total)}` : fmtBytes(it.total)) : '';
   return [state, size].filter(Boolean).join(' \u00B7 ');
 }
 
