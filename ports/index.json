@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "revision": 8,
+  "revision": 9,
   "generated": "2026-10-22",
   "ports": [
     {
@@ -287,13 +287,23 @@
           "run": "DrMarioRecomp.exe"
         }
       ],
+      "data": [
+        {
+          "id": "rom",
+          "name": "Dr. Mario's ROM",
+          "about": "Your own Dr. Mario (USA) .nes ROM, the one it is made from (any iNES header is left out of its check).",
+          "needs": [],
+          "rom": { "system": "nes", "crc32": "de581355" }
+        }
+      ],
+      "args": ["{data:rom}"],
       "check": { "stay": 5 },
       "notes": [
-        "It asks for your own Dr. Mario ROM on its first start, and remembers it.",
+        "Fuse hands it your own Dr. Mario (USA) .nes ROM from your library (or the one you choose), checked as it checks it, so it starts straight into the game; your file is never changed.",
         "Its settings and saves are kept beside it in Fuse's copy, and carried into the new copy when Fuse updates it.",
         "Its Linux build is of v1.2.0, the newest its project publishes for Linux; the Windows one of v1.3.1."
       ],
-      "source": "DrMarioNesRecomp v1.2.0 and v1.3.1: README.md (keybinds.ini auto-generated next to the executable on first run; the ROM it asks for); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "DrMarioNesRecomp v1.2.0: CMakeLists.txt (DRMARIO_REGION usa, DRMARIO_CRC 0xDE581355) and extras.c (the CRC32 of the ROM after its 16-byte header, or it stops); nesrecomp 7f6377b, runner/src/launcher.c main (a ROM path given first opens no launcher and no picker); DrMarioNesRecomp v1.2.0 and v1.3.1: README.md (keybinds.ini auto-generated next to the executable on first run; the ROM it asks for); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
     },
     {
       "id": "emerald-recomp",
@@ -358,12 +368,22 @@
           "run": "FZeroSNESRecomp-1.8.3-windows-x64/FZeroSNESRecomp.exe"
         }
       ],
+      "data": [
+        {
+          "id": "rom",
+          "name": "F-Zero's ROM",
+          "about": "Your own F-Zero (USA) .sfc or .smc ROM, the one it is made from (a copier header is left out of its check).",
+          "needs": [],
+          "rom": { "system": "snes", "sha1": "d3efd32b68f1fe37a82db9d9929b7ca7cc1a3af4" }
+        }
+      ],
+      "args": ["{data:rom}"],
       "check": { "stay": 5 },
       "notes": [
-        "It takes your own F-Zero (USA) ROM, .sfc or .smc, put beside it or chosen in its launcher on the first start, and remembers it.",
+        "Fuse hands it your own F-Zero (USA) .sfc or .smc ROM from your library (or the one you choose), checked as it checks it, so it starts straight into the game; your file is never changed.",
         "Its settings and saves are kept beside it in Fuse's copy, and carried into the new copy when Fuse updates it."
       ],
-      "source": "FZeroSNESRecomp v1.8.3: README.md (Put your own F-Zero (USA) .sfc or .smc ROM next to it; the ROM path remembered; config.ini beside the executable); src/main.c (saves/fzero.srm, rom.cfg); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "FZeroSNESRecomp v1.8.3: src/sdl_main.c main and resolve_rom (a ROM path given, without --launcher, is used as it is; the SHA-1 it checks, a copier header skipped); FZeroSNESRecomp v1.8.3: README.md (Put your own F-Zero (USA) .sfc or .smc ROM next to it; the ROM path remembered; config.ini beside the executable); src/main.c (saves/fzero.srm, rom.cfg); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
     },
     {
       "id": "faxanadu-recomp",
@@ -393,13 +413,23 @@
           "run": "FaxanaduRecomp.exe"
         }
       ],
+      "data": [
+        {
+          "id": "rom",
+          "name": "Faxanadu's ROM",
+          "about": "Your own Faxanadu (USA) .nes ROM, the one it is made from (any iNES header is left out of its check).",
+          "needs": [],
+          "rom": { "system": "nes", "crc32": "57dd23d1" }
+        }
+      ],
+      "args": ["{data:rom}"],
       "check": { "stay": 5 },
       "notes": [
-        "It asks for your own Faxanadu ROM on its first start, and remembers it.",
+        "Fuse hands it your own Faxanadu (USA) .nes ROM from your library (or the one you choose), checked as it checks it, so it starts straight into the game; your file is never changed.",
         "Its settings and saves are kept beside it in Fuse's copy, and carried into the new copy when Fuse updates it.",
         "Its Linux build is of v0.1.0-linux, the newest its project publishes for Linux; the Windows one of v2.3.3."
       ],
-      "source": "FaxanaduRecomp v0.1.0-linux and v2.3.3: README.md (Auto-load: saves.txt next to the exe fills in the most recent mantra); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "FaxanaduRecomp v0.1.0-linux: extras.c game_get_expected_crc32 (0x57DD23D1); nesrecomp.pin fd9894a, runner/src/launcher.c main (a ROM path given first is used without the picker) and verify_rom (CRC32 of the ROM without its iNES header); FaxanaduRecomp v0.1.0-linux and v2.3.3: README.md (Auto-load: saves.txt next to the exe fills in the most recent mantra); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
     },
     {
       "id": "gumshoe-recomp",
@@ -429,13 +459,23 @@
           "run": "GumshoeRecomp.exe"
         }
       ],
+      "data": [
+        {
+          "id": "rom",
+          "name": "Gumshoe's ROM",
+          "about": "Your own Gumshoe (USA, Europe) .nes ROM, the one it is made from (any iNES header is left out of its check).",
+          "needs": [],
+          "rom": { "system": "nes", "crc32": "beb8ab01" }
+        }
+      ],
+      "args": ["{data:rom}"],
       "check": { "stay": 5 },
       "notes": [
-        "It takes your own Gumshoe (USA, Europe).nes ROM, put beside it or chosen when it starts.",
+        "Fuse hands it your own Gumshoe (USA, Europe) .nes ROM from your library (or the one you choose), checked as it checks it, so it starts straight into the game; your file is never changed.",
         "Its settings and saves are kept beside it in Fuse's copy, and carried into the new copy when Fuse updates it.",
         "Its Linux build is of v0.1.0-linux, the newest its project publishes for Linux; the Windows one of v1.5.1."
       ],
-      "source": "GumshoeNESRecomp v0.1.0-linux and v1.5.1: README.md (Place your Gumshoe (USA, Europe).nes ROM in the build directory or select it at runtime); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "GumshoeNESRecomp v0.1.0-linux: extras.c game_get_expected_crc32 (0xBEB8AB01); nesrecomp.pin 47b4ab7, runner/src/launcher.c main (a ROM path given first is used without the picker) and verify_rom (CRC32 of the ROM without its iNES header); GumshoeNESRecomp v0.1.0-linux and v1.5.1: README.md (Place your Gumshoe (USA, Europe).nes ROM in the build directory or select it at runtime); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
     },
     {
       "id": "mario-kart-super-circuit-recomp",
@@ -641,13 +681,23 @@
           "run": "MegaMan3Recomp.exe"
         }
       ],
+      "data": [
+        {
+          "id": "rom",
+          "name": "Mega Man 3's ROM",
+          "about": "Your own Mega Man 3 (USA) .nes ROM.",
+          "needs": [],
+          "rom": { "system": "nes" }
+        }
+      ],
+      "args": ["{data:rom}"],
       "check": { "stay": 5 },
       "notes": [
-        "It takes your own Mega Man 3 (USA) ROM, put beside it or chosen when it starts.",
+        "Fuse hands it your own Mega Man 3 (USA) .nes ROM from your library (or the one you choose), so it starts straight into the game; your file is never changed.",
         "Its settings and saves are kept beside it in Fuse's copy, and carried into the new copy when Fuse updates it.",
         "Its Linux build is of v0.1.0-linux, the newest its project publishes for Linux; the Windows one of v0.1.3."
       ],
-      "source": "Megaman3NESRecomp v0.1.0-linux and v0.1.3: README.md (Place your Mega Man 3 (USA) ROM in the build directory or select it at runtime); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "Megaman3NESRecomp v0.1.0-linux: extras.c game_get_expected_crc32 (0, it checks none); nesrecomp.pin 7d39431, runner/src/launcher.c main (a ROM path given first is used without the picker); Megaman3NESRecomp v0.1.0-linux and v0.1.3: README.md (Place your Mega Man 3 (USA) ROM in the build directory or select it at runtime); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
     },
     {
       "id": "metroid-nes-recomp",
@@ -677,13 +727,23 @@
           "run": "MetroidNESRecomp.exe"
         }
       ],
+      "data": [
+        {
+          "id": "rom",
+          "name": "Metroid's ROM",
+          "about": "Your own Metroid (USA) .nes ROM, the one it is made from (any iNES header is left out of its check).",
+          "needs": [],
+          "rom": { "system": "nes", "crc32": "70080810" }
+        }
+      ],
+      "args": ["{data:rom}"],
       "check": { "stay": 5 },
       "notes": [
-        "It asks for your own Metroid ROM on its first start, and remembers it.",
+        "Fuse hands it your own Metroid (USA) .nes ROM from your library (or the one you choose), checked as it checks it, so it starts straight into the game; your file is never changed.",
         "Its settings and saves are kept beside it in Fuse's copy, and carried into the new copy when Fuse updates it.",
         "Its Linux build is of v0.1.0-linux, the newest its project publishes for Linux; the Windows one of v0.2.3."
       ],
-      "source": "MetroidNESRecomp v0.1.0-linux and v0.2.3: README.md (the diagnostics folder beside the executable); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "MetroidNESRecomp v0.2.3: extras.c game_get_expected_crc32 (0x70080810, the ROM it is made from; v0.1.0-linux checks none); nesrecomp.pin fd9894a, runner/src/launcher.c main (a ROM path given first is used without the picker) and verify_rom (CRC32 of the ROM without its iNES header); MetroidNESRecomp v0.1.0-linux and v0.2.3: README.md (the diagnostics folder beside the executable); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
     },
     {
       "id": "metroid-prime-hunters-recomp",
@@ -723,11 +783,11 @@
     },
     {
       "id": "sonic3-recomp",
-      "name": "Sonic 3 & Knuckles Recompiled",
-      "game": "Sonic 3 & Knuckles",
+      "name": "Sonic 3 Recompiled",
+      "game": "Sonic the Hedgehog 3",
       "cover": "https://upload.wikimedia.org/wikipedia/en/0/07/Sonic3-box-us-225.jpg",
       "coverCredit": "Wikipedia",
-      "about": "Sonic 3 & Knuckles statically recompiled from the Mega Drive cartridge's code to run natively.",
+      "about": "Sonic the Hedgehog 3 statically recompiled from the Mega Drive cartridge's code to run natively.",
       "homepage": "https://github.com/mstan/Sonic3AndKnucklesRecomp",
       "version": "v0.5.3",
       "builds": [
@@ -748,13 +808,23 @@
           "run": "Sonic3Recomp.exe"
         }
       ],
+      "data": [
+        {
+          "id": "rom",
+          "name": "Sonic the Hedgehog 3's ROM",
+          "about": "Your own Sonic the Hedgehog 3 (USA) Mega Drive ROM (the 2 MB cartridge alone), the one it is made from.",
+          "needs": [],
+          "rom": { "system": "genesis", "crc32": "9bc192ce" }
+        }
+      ],
+      "args": ["{data:rom}"],
       "check": { "stay": 5 },
       "notes": [
-        "It asks for your own Sonic 3 & Knuckles ROM on its first start, and remembers it.",
+        "Fuse hands it your own Sonic the Hedgehog 3 (USA) Mega Drive ROM (the 2 MB cartridge alone) from your library (or the one you choose), checked as it checks it, so it starts straight into the game; your file is never changed.",
         "Its settings and saves are kept beside it in Fuse's copy, and carried into the new copy when Fuse updates it.",
         "Its Linux build is of v0.5.2, the newest its project publishes for Linux; the Windows one of v0.5.3."
       ],
-      "source": "Sonic3AndKnucklesRecomp v0.5.2 and v0.5.3: README.md (the ROM it takes, the identity it checks); src (settings.ini); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "Sonic3AndKnucklesRecomp v0.5.2: README.md (Sonic3Recomp: Sonic 3 alone, 2 MB, CRC32 9BC192CE); game/sonic3/sonic3_spec.c; segagenesisrecomp 6e1f74d runner/main.c (a positional ROM opens no launcher; the CRC32 and size of the whole file, or it refuses); Sonic3AndKnucklesRecomp v0.5.2 and v0.5.3: README.md (the ROM it takes, the identity it checks); src (settings.ini); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
     },
     {
       "id": "sonic-the-hedgehog-recomp",
@@ -783,13 +853,23 @@
           "run": "SonicTheHedgehogRecomp.exe"
         }
       ],
+      "data": [
+        {
+          "id": "rom",
+          "name": "Sonic the Hedgehog's ROM",
+          "about": "Your own Sonic the Hedgehog (USA, Europe) .bin, .md or .gen Mega Drive ROM, the one it is made from.",
+          "needs": [],
+          "rom": { "system": "genesis", "crc32": "f9394e97" }
+        }
+      ],
+      "args": ["{data:rom}"],
       "check": { "stay": 5 },
       "notes": [
-        "It asks for your own Sonic the Hedgehog ROM with a file picker when it starts without one.",
+        "Fuse hands it your own Sonic the Hedgehog (USA, Europe) .bin, .md or .gen Mega Drive ROM from your library (or the one you choose), checked as it checks it, so it starts straight into the game; your file is never changed.",
         "Its settings and saves are kept beside it in Fuse's copy, and carried into the new copy when Fuse updates it.",
         "Its Linux build is of v0.1.0-linux, the newest its project publishes for Linux; the Windows one of v0.7.1."
       ],
-      "source": "SonicTheHedgehogRecomp v0.1.0-linux and v0.7.1: README.md (Settings persist next to the executable; pass the ROM path, or omit it to use the file picker); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "SonicTheHedgehogRecomp v0.1.0-linux: README.md (a ROM path is required on Linux, there is no file picker there); segagenesisrecomp sonicthehedgehog/sonic1_spec.c (expected_rom_crc32 0xF9394E97, 512 KB) and runner/main.c (the CRC32 and size of the whole file, or it refuses); SonicTheHedgehogRecomp v0.1.0-linux and v0.7.1: README.md (Settings persist next to the executable; pass the ROM path, or omit it to use the file picker); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
     },
     {
       "id": "star-fox-snes-recomp",
@@ -818,13 +898,23 @@
           "run": "StarFoxSNESRecomp.exe"
         }
       ],
+      "data": [
+        {
+          "id": "rom",
+          "name": "Star Fox's ROM",
+          "about": "Your own Star Fox (USA) .sfc or .smc ROM, the one it is made from (a copier header is left out of its check).",
+          "needs": [],
+          "rom": { "system": "snes", "crc32": "8fc4e6d0" }
+        }
+      ],
+      "args": ["{data:rom}"],
       "check": { "stay": 5 },
       "notes": [
-        "It asks for your own Star Fox ROM on its first start, and remembers it in rom.cfg.",
+        "Fuse hands it your own Star Fox (USA) .sfc or .smc ROM from your library (or the one you choose), checked as it checks it, so it starts straight into the game; your file is never changed.",
         "Its settings and saves are kept beside it in Fuse's copy, and carried into the new copy when Fuse updates it.",
         "Its Linux build is of v0.3.0, the newest its project publishes for Linux; the Windows one of v0.3.2."
       ],
-      "source": "StarFoxSNESRecomp v0.3.0 and v0.3.2: README.md (rom.cfg; keybinds.ini beside the executable); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "StarFoxSNESRecomp v0.3.0: src/main.c main (have_positional: a ROM path given opens no launcher; the CRC32 it checks, a copier header skipped); StarFoxSNESRecomp v0.3.0 and v0.3.2: README.md (rom.cfg; keybinds.ini beside the executable); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
     },
     {
       "id": "super-mario-bros-recomp",
@@ -854,13 +944,23 @@
           "run": "SuperMarioBrosRecomp.exe"
         }
       ],
+      "data": [
+        {
+          "id": "rom",
+          "name": "Super Mario Bros.'s ROM",
+          "about": "Your own Super Mario Bros. (World) .nes ROM, the one it is made from (any iNES header is left out of its check).",
+          "needs": [],
+          "rom": { "system": "nes", "crc32": "d445f698" }
+        }
+      ],
+      "args": ["{data:rom}"],
       "check": { "stay": 5 },
       "notes": [
-        "It asks for your own Super Mario Bros. ROM on its first start, and remembers it.",
+        "Fuse hands it your own Super Mario Bros. (World) .nes ROM from your library (or the one you choose), checked as it checks it, so it starts straight into the game; your file is never changed.",
         "Its settings and saves are kept beside it in Fuse's copy, and carried into the new copy when Fuse updates it.",
         "Its Linux build is of v1.11.0, the newest its project publishes for Linux; the Windows one of v1.12.3."
       ],
-      "source": "SuperMarioBrosNESRecomp v1.11.0 and v1.12.3: README.md (the diagnostics folder beside the executable); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "SuperMarioBrosNESRecomp v1.11.0: src/extras.c game_get_expected_crc32 (0xD445F698); nesrecomp 1dbe574, runner/src/launcher.c main (a ROM path given first opens no launcher and no picker) and verify_rom (CRC32 of the ROM without its iNES header); SuperMarioBrosNESRecomp v1.11.0 and v1.12.3: README.md (the diagnostics folder beside the executable); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
     },
     {
       "id": "super-mario-world-recomp",
@@ -889,12 +989,22 @@
           "run": "SuperMarioWorldSNESRecomp.exe"
         }
       ],
+      "data": [
+        {
+          "id": "rom",
+          "name": "Super Mario World's ROM",
+          "about": "Your own Super Mario World (USA) .sfc or .smc ROM, the one it is made from (a copier header is left out of its check).",
+          "needs": [],
+          "rom": { "system": "snes", "crc32": "b19ed489" }
+        }
+      ],
+      "args": ["{data:rom}"],
       "check": { "stay": 5 },
       "notes": [
-        "It asks for your own Super Mario World (USA) ROM (.sfc or .smc) with a file picker on its first start, and remembers it in rom.cfg.",
+        "Fuse hands it your own Super Mario World (USA) .sfc or .smc ROM from your library (or the one you choose), checked as it checks it, so it starts straight into the game; your file is never changed.",
         "Its settings and saves are kept beside it in Fuse's copy, and carried into the new copy when Fuse updates it."
       ],
-      "source": "SuperMarioWorldRecomp v0.15.0: README.md (Quick start: on first launch a file picker asks for your Super Mario World (USA) ROM, the path remembered in rom.cfg next to the exe; keybinds.ini); src/main.c (config.ini, keybinds.ini, rom.cfg and saves/ in the executable's folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "SuperMarioWorldRecomp v0.15.0: src/main.c main (a positional ROM opens no launcher; the CRC32 of the unheadered 512 KB Super Mario World (USA), a 512-byte copier header skipped); SuperMarioWorldRecomp v0.15.0: README.md (Quick start: on first launch a file picker asks for your Super Mario World (USA) ROM, the path remembered in rom.cfg next to the exe; keybinds.ini); src/main.c (config.ini, keybinds.ini, rom.cfg and saves/ in the executable's folder); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
     },
     {
       "id": "super-metroid-recomp",
@@ -1064,13 +1174,23 @@
           "run": "YoshiRecomp.exe"
         }
       ],
+      "data": [
+        {
+          "id": "rom",
+          "name": "Yoshi's ROM",
+          "about": "Your own Yoshi (USA) .nes ROM, the one it is made from (any iNES header is left out of its check).",
+          "needs": [],
+          "rom": { "system": "nes", "crc32": "9474c09c" }
+        }
+      ],
+      "args": ["{data:rom}"],
       "check": { "stay": 5 },
       "notes": [
-        "It takes your own Yoshi (USA) ROM, put beside it or chosen when it starts.",
+        "Fuse hands it your own Yoshi (USA) .nes ROM from your library (or the one you choose), checked as it checks it, so it starts straight into the game; your file is never changed.",
         "Its settings and saves are kept beside it in Fuse's copy, and carried into the new copy when Fuse updates it.",
         "Its Linux build is of v0.1.0-linux, the newest its project publishes for Linux; the Windows one of v1.2.1."
       ],
-      "source": "YoshiNESRecomp v0.1.0-linux and v1.2.1: README.md (Place your Yoshi (USA) ROM in the build directory or select it at runtime); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "YoshiNESRecomp v0.1.0-linux: extras.c game_get_expected_crc32 (0x9474C09C); nesrecomp.pin fd9894a, runner/src/launcher.c main (a ROM path given first is used without the picker) and verify_rom (CRC32 of the ROM without its iNES header); YoshiNESRecomp v0.1.0-linux and v1.2.1: README.md (Place your Yoshi (USA) ROM in the build directory or select it at runtime); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
     },
     {
       "id": "zelda-alttp-snes-recomp",
@@ -1100,13 +1220,23 @@
           "run": "ZeldaALttPSNESRecomp.exe"
         }
       ],
+      "data": [
+        {
+          "id": "rom",
+          "name": "The Legend of Zelda: A Link to the Past's ROM",
+          "about": "Your own A Link to the Past (USA) .sfc or .smc ROM, the one it is made from (a copier header is left out of its check).",
+          "needs": [],
+          "rom": { "system": "snes", "crc32": "777aac2f" }
+        }
+      ],
+      "args": ["{data:rom}"],
       "check": { "stay": 5 },
       "notes": [
-        "It asks for your own A Link to the Past ROM with a file picker on its first start, and remembers it in rom.cfg.",
+        "Fuse hands it your own A Link to the Past (USA) .sfc or .smc ROM from your library (or the one you choose), checked as it checks it, so it starts straight into the game; your file is never changed.",
         "Its settings and saves are kept beside it in Fuse's copy, and carried into the new copy when Fuse updates it.",
         "Its Linux build is of v0.6.1, the newest its project publishes for Linux; the Windows one of v0.6.5."
       ],
-      "source": "ZeldaAlttPSNESRecomp v0.6.1 and v0.6.5: README.md (Run zelda.exe: on first launch a file picker asks for your ROM; the path cached to rom.cfg next to the exe; keybinds.ini); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
+      "source": "ZeldaAlttPSNESRecomp v0.6.1: src/main.c main (have_positional: a ROM path given opens no launcher; the CRC32 it checks, a copier header skipped); ZeldaAlttPSNESRecomp v0.6.1 and v0.6.5: README.md (Run zelda.exe: on first launch a file picker asks for your ROM; the path cached to rom.cfg next to the exe; keybinds.ini); the release's files read by Fuse's scout (each build's SHA-256 and the programs in it)"
     },
     {
       "id": "sssv-recomp",

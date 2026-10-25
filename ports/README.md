@@ -25,9 +25,15 @@ only"). A build that starts only with a library most desktops have but its proje
 3. Say what it needs from the game (`needs`, each a list of names any one of which will do; `exact`
    when the port reads the names exactly as written) and how they reach it: a placeholder
    `{data:<id>}` in `args` when it takes a folder by its path, else an `overlay` with every path it
-   writes in `own` (folders end with `/`). A port that asks for the game itself on its first start
-   (a file picker or its own importer, as most recompilations do) has no `data`: its `notes` say
-   what it asks for and where it keeps it.
+   writes in `own` (folders end with `/`). A recompilation made from one ROM names it in `rom`
+   (its `system`, Fuse's id for it, and the hash the port itself checks: `xxh3` for N64:
+   Recompiled's runtime, else `crc32` or `sha1` of the ROM's data, an iNES or copier header left
+   out, or none where the port checks none). It reaches the port by its path, `{data:<id>}` in
+   `args`, when the port then opens no picker of its own (read its `main`), else it is put where
+   the port looks for it (`place`, inside its home). An older Fuse skips a port whose ROM is known
+   by `crc32` or `sha1`. A port that asks for the game itself on its first start, its own way
+   (an importer, a disc image Fuse can't hand it), has no `data`: its `notes` say what it asks
+   for and where it keeps it.
 4. Keep its saves and settings in its home: `{home}/...` in `args`, and `saves` relative to it.
 5. Give it a `check` the nightly job can run without the game's files: `args` and the `expect`ed
    output (a regular expression), or `stay` seconds it keeps running.

@@ -815,8 +815,8 @@ file and the program inside it), what it needs from the game (`needs`: names, an
 do, compared as the port itself compares them), how the game's files reach it (by their folder's
 path in its arguments, or an `overlay`), its arguments with `{install}`, `{home}` and `{data:<id>}`,
 where its saves are, and how the nightly check sees it start. A port that asks for the game itself
-on its first start (a file picker or its own importer, as most recompilations do) has no `data`: its
-`notes` say what it asks for and where it keeps it. Every fact about a port is cited in
+on its first start its own way (an importer, a disc image) has no `data`: its `notes` say what it
+asks for and where it keeps it. Every fact about a port is cited in
 its `source`, from the port's own code and documentation at the version listed. A port that fails a
 check (an id, an address that isn't HTTPS, a missing digest, a path out of its folder, a placeholder
 Fuse doesn't fill) is left out; a list of another format is refused whole.
@@ -875,7 +875,11 @@ library, then the library's own art for that game.
 of its system and name, or a file the person picks, are believed only by the XXH3-64 hash of the
 ROM's big-endian form (`Xxh3`, written from xxHash 0.8's scalar code and checked against the
 reference library), as N64: Recompiled's runtime checks it (librecomp `select_rom` and
-`check_stored_rom`: padded to four bytes, `.v64` and `.n64` orders turned round). The ROM goes where
+`check_stored_rom`: padded to four bytes, `.v64` and `.n64` orders turned round). The NES, SNES and
+Mega Drive recompilations (nesrecomp, snesrecomp, segagenesisrecomp) check a CRC32 or SHA-1 of the
+ROM's data instead, an iNES header or a 512-byte copier header left out as their launchers leave
+it out (`PortRomCheck`), and take the ROM's path as their first argument, which opens no launcher
+or file picker of their own, so the game starts as soon as it is set up. An N64 ROM goes where
 the port looks for it in its home: a link to the person's file when it is already in that form,
 else a copy turned into it in the home; the person's file never changes. Its variables
 (`env`, `APP_FOLDER_PATH={home}` for Zelda 64: Recompiled, `src/game/config.cpp`, and Banjo:
