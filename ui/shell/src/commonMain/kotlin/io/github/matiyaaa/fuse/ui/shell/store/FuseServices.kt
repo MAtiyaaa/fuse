@@ -83,6 +83,14 @@ interface FuseServices {
      */
     val awake: StateFlow<Boolean> get() = io.github.matiyaaa.fuse.sync.Awake.always
 
+    /**
+     * Whether the person can be at the screen: on Android its screen is on. Play time stops while it
+     * is off (a handheld put to sleep with a game open isn't being played). A computer that sleeps
+     * stops Fuse with it, which the session sees as its clock jumping ([SessionClock]), so this is
+     * always true there.
+     */
+    val interactive: StateFlow<Boolean> get() = io.github.matiyaaa.fuse.sync.Awake.always
+
     /** lsfg-vk is set up here (Linux, its configuration file there), so games can have frame generation. */
     fun frameGenerationReady(): Boolean = false
 
