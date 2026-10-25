@@ -179,6 +179,13 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
   (on Android), **Search** with filters, game pages, a media manager, a folder browser, the **quick
   menu** you arrange (tiles and widgets moved, resized, added and taken out by controller, touch or
   keyboard), a **Play time** page and a guided setup.
+- **Library, All**: the chosen game in a compact stage with Play and Options, a card for each place
+  your games are (this device, RomM, your other devices, the computers that stream) with its count,
+  Jump Back In, and shelves whose tiles are sized to the screen. A mouse chooses what it points at
+  and pages a shelf with arrows; a finger presses the same buttons.
+- **The quick menu while you play**: a Playing section with the game, how long it has run, its saves,
+  emulator settings, updates, DLC and mods, a screenshot and Sync Now; tiles for Continue,
+  Downloads, Sync Now, Achievements, Favourites, Mute and Text Size.
 - **Stream from your computers**: with streaming on, the Library's All view has a shelf of the apps
   your computers offer through Sunshine or Apollo, each once, streamed through Moonlight from the
   computer you choose. A game or a whole system can stream from a computer instead of playing here,
@@ -191,6 +198,9 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
   it passes under the drag. A real mouse dragged with its button held scrolls the same way.
 - **A second screen with pages**: what's chosen (or the remote while a film plays), Status with the
   battery large, and Controls with brightness, volume and switches, on the screen below or above.
+  Above the menus, a game shows its lines about it, its series, this week's play and what plays it;
+  a system shows its games; with nothing chosen, the clock, the week's play a bar a day, and the
+  games played last.
 - **Twenty themes** and community themes from a link or a file ([docs/THEMES.md](docs/THEMES.md)), square
   box art or tall posters, four motion levels including Reduced, High contrast focus, optional glass
   panels and CRT effect, and interface sounds synthesised on the fly.
