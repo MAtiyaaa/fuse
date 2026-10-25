@@ -14,6 +14,11 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -23,7 +28,8 @@ import java.nio.file.StandardCopyOption
 
 /**
  * Downloads RomM games, their content and BIOS through Fuse's transfers, each file on its own (so
- * each carries on by range after a drop), checked by size and hash, and put in place only whole.
+ * each carries on by range after a drop), a few at once, checked by size and hash, and put in place
+ * only whole.
  */
 class RommDownloadHandler(private val http: HttpClient, private val host: RommTransferHost) : TransferHandler {
     override val source = ROMM_SOURCE
@@ -41,31 +47,37 @@ class RommDownloadHandler(private val http: HttpClient, private val host: RommTr
         val free = TransferFiles.freeSpace(root)
         if (free in 1 until left + SPARE) throw TransferFailure("There isn't room for this on ${place.volume?.label ?: "that drive"}: it needs ${gb(left)} and ${gb(free)} is free.")
 
-        var done = 0L
-        val placed = ArrayList<String>()
-        for (f in job.files) {
+        val placed = job.files.map { File(root, it.relative).path }
+        val waiting = job.files.filter { f ->
             val dest = File(root, f.relative)
             val finalDest = if (job.newFolder) File(staging(root), f.relative) else dest
-            if (dest.isFile && dest.length() == f.file.sizeBytes || finalDest.isFile && finalDest.length() == f.file.sizeBytes && job.newFolder) {
-                done += f.file.sizeBytes
-                io.progress(done, total)
-                placed += dest.path
-                continue
-            }
-            val part = partOf(root, job, f)
-            // A whole game RomM zips as it sends (a game it lists no files for) comes out a little
-            // bigger than the game's files: its size is only a guide, never a limit.
-            val exact = f.file.sizeBytes.takeIf { it > 0 && f.file.id > 0 }
-            RangedDownload.fetch(http, { client.fileUrl(client.base(), job.romId, f.file) }, part, exact, io, doneBefore = done, totalOverall = total) {
-                client.authorize(this)
-            }
-            io.phase(TransferPhase.VERIFYING)
-            TransferFiles.verify(part, exact, f.file.sha1?.let { ExpectedHash("sha1", it) } ?: f.file.md5?.let { ExpectedHash("md5", it) })
-            io.phase(TransferPhase.PLACING)
-            TransferFiles.place(part, finalDest)
-            done += f.file.sizeBytes
-            io.progress(done, total)
-            placed += dest.path
+            !(dest.isFile && dest.length() == f.file.sizeBytes || finalDest.isFile && finalDest.length() == f.file.sizeBytes && job.newFolder)
+        }
+        val moved = SharedProgress(io, total - waiting.sumOf { it.file.sizeBytes }, total)
+        // A few files at once: a game of many small files (a PlayStation 4 folder holds tens of
+        // thousands) spent most of its time between them, one request after another. Each file still
+        // carries on by range on its own, and is hashed as it arrives instead of read again after.
+        val gate = Semaphore(if (waiting.size > 1) PARALLEL_FILES else 1)
+        coroutineScope {
+            waiting.map { f ->
+                async {
+                    gate.withPermit {
+                        val finalDest = if (job.newFolder) File(staging(root), f.relative) else File(root, f.relative)
+                        val part = partOf(root, job, f)
+                        // A whole game RomM zips as it sends (a game it lists no files for) comes out a little
+                        // bigger than the game's files: its size is only a guide, never a limit.
+                        val exact = f.file.sizeBytes.takeIf { it > 0 && f.file.id > 0 }
+                        val fileIo = moved.file(single = waiting.size == 1)
+                        RangedDownload.fetchVerified(
+                            http, { client.fileUrl(client.base(), job.romId, f.file) }, part, exact,
+                            f.file.sha1?.let { ExpectedHash("sha1", it) } ?: f.file.md5?.let { ExpectedHash("md5", it) }, fileIo,
+                        ) { client.authorize(this) }
+                        fileIo.phase(TransferPhase.PLACING)
+                        TransferFiles.place(part, finalDest)
+                        fileIo.whole(f.file.sizeBytes)
+                    }
+                }
+            }.awaitAll()
         }
         if (job.newFolder) {
             io.phase(TransferPhase.PLACING)
@@ -87,9 +99,10 @@ class RommDownloadHandler(private val http: HttpClient, private val host: RommTr
         // A BIOS the person already has is theirs: never replaced.
         if (dest.exists()) throw TransferFailure("${dest.name} is already there, so it was left as it is.", retryable = false)
         val part = TransferFiles.partFor(dest)
-        RangedDownload.fetch(http, { client.firmwareUrl(client.base(), fw) }, part, fw.sizeBytes.takeIf { it > 0 }, io) { client.authorize(this) }
-        io.phase(TransferPhase.VERIFYING)
-        TransferFiles.verify(part, fw.sizeBytes.takeIf { it > 0 }, fw.sha1?.let { ExpectedHash("sha1", it) } ?: fw.md5?.let { ExpectedHash("md5", it) })
+        RangedDownload.fetchVerified(
+            http, { client.firmwareUrl(client.base(), fw) }, part, fw.sizeBytes.takeIf { it > 0 },
+            fw.sha1?.let { ExpectedHash("sha1", it) } ?: fw.md5?.let { ExpectedHash("md5", it) }, io,
+        ) { client.authorize(this) }
         io.phase(TransferPhase.PLACING)
         TransferFiles.place(part, dest)
     }
@@ -118,6 +131,45 @@ class RommDownloadHandler(private val http: HttpClient, private val host: RommTr
     companion object {
         /** Left free on a drive after a download, so it isn't filled to the last byte. */
         const val SPARE = 64L * 1024 * 1024
+
+        /** A game's files fetched at once. */
+        const val PARALLEL_FILES = 4
+    }
+}
+
+/**
+ * One transfer's bytes, while several of its files move at once: each file's own count is added
+ * to the whole, which is what the transfer shows. Only one file at a time says which step it is
+ * on, so the step shown doesn't flicker between them.
+ */
+internal class SharedProgress(private val io: TransferIo, start: Long, private val total: Long) {
+    private var moved = start
+
+    init {
+        io.progress(start, total)
+    }
+
+    fun file(single: Boolean): FileProgress = FileProgress(single)
+
+    inner class FileProgress(private val single: Boolean) : TransferIo by io {
+        private var counted = 0L
+
+        override fun progress(done: Long, total: Long?) = add(done - counted)
+
+        override fun phase(phase: TransferPhase) {
+            if (single || phase == TransferPhase.TRANSFERRING) io.phase(phase)
+        }
+
+        /** The file is in place: it counts as its listed size, whatever came over the line for it. */
+        fun whole(size: Long) = add(size - counted)
+
+        private fun add(delta: Long) {
+            synchronized(this@SharedProgress) {
+                counted += delta
+                moved += delta
+                io.progress(moved, this@SharedProgress.total)
+            }
+        }
     }
 }
 
@@ -165,28 +217,51 @@ class RommUploadHandler(private val host: RommTransferHost) : TransferHandler {
             io.phase(TransferPhase.TRANSFERRING)
             val chunks = if (f.sizeBytes == 0L) 0 else ((f.sizeBytes + RommClient.CHUNK_BYTES - 1) / RommClient.CHUNK_BYTES).toInt()
             // A few pieces at a time: RomM keeps each piece as a file of its own, in any order, and one
-            // at a time left the line idle while RomM stored each (about 5 MB/s at home). What is
-            // noted is only the pieces in before the first one still out, so carrying on after a drop
-            // never skips one.
-            var next = job.chunksDone
-            while (next < chunks) {
-                val batch = (next until minOf(chunks, next + PARALLEL_CHUNKS)).toList()
-                val upload = job.uploadId!!
-                coroutineScope {
-                    batch.map { i ->
-                        val offset = i.toLong() * RommClient.CHUNK_BYTES
-                        val length = minOf(RommClient.CHUNK_BYTES.toLong(), f.sizeBytes - offset).toInt()
+            // at a time left the line idle while RomM stored each (about 5 MB/s at home). A new piece
+            // goes as soon as one is in, never waiting for the slowest of a batch. What is noted is
+            // only the pieces in before the first one still out, so carrying on after a drop never
+            // skips one.
+            val upload = job.uploadId!!
+            val window = Semaphore(PARALLEL_CHUNKS)
+            val noting = Mutex()
+            val arrived = java.util.TreeSet<Int>()
+            var inOrder = job.chunksDone
+            coroutineScope {
+                for (i in job.chunksDone until chunks) {
+                    window.acquire()
+                    val offset = i.toLong() * RommClient.CHUNK_BYTES
+                    val length = minOf(RommClient.CHUNK_BYTES.toLong(), f.sizeBytes - offset).toInt()
+                    val bytes = try {
                         io.throttle(length)
-                        val bytes = TransferFiles.readChunk(file, offset, length)
-                        async {
+                        TransferFiles.readChunk(file, offset, length)
+                    } catch (e: Throwable) {
+                        window.release()
+                        throw e
+                    }
+                    launch {
+                        try {
                             guarded { client.uploadChunk(upload, i, bytes) }
-                            synchronized(this@RommUploadHandler) { done += length }
+                            val upTo = synchronized(arrived) {
+                                done += length
+                                arrived += i
+                                while (inOrder in arrived) arrived.remove(inOrder++)
+                                inOrder
+                            }
                             io.progress(done, total)
+                            noting.withLock {
+                                if (upTo - job.chunksDone >= PARALLEL_CHUNKS) {
+                                    job = job.copy(chunksDone = upTo)
+                                    io.note(job.encode())
+                                }
+                            }
+                        } finally {
+                            window.release()
                         }
-                    }.awaitAll()
+                    }
                 }
-                next = batch.last() + 1
-                job = job.copy(chunksDone = next)
+            }
+            if (job.chunksDone != chunks) {
+                job = job.copy(chunksDone = chunks)
                 io.note(job.encode())
             }
             io.phase(TransferPhase.FINISHING)

@@ -556,6 +556,28 @@ class RommTest {
     }
 
     @Test
+    fun `a game of many files brings several at once, each checked, and counts them all`() = runBlocking<Unit> {
+        val fake = server().apply {
+            games += FakeRomm.Game(3, 30, "ps4", "Bloodborne", "Bloodborne", (1..12).map { n -> Triple(300L + n, "CUSA00900/file$n.bin", ByteArray(2000 + n) { n.toByte() }) })
+            contentDelayMs = 150
+        }
+        val c = client(fake).also { it.detect() }
+        val mirror = RommMirror(db(), System::currentTimeMillis).also { it.sync(c, "main") }
+        val host = Host(fake, c, mirror)
+        val m = manager()
+        m.register(RommDownloadHandler(fake.client, host))
+        val game = mirror.withFiles(c, "main", 3)!!
+        val placement = RommPlacement.layout(game, game.files, File(root, "roms/ps4").path)
+        val job = RommDownloadJob("main", game.id, game.files.map { RommDownloadFile(it, it.name) }, newFolder = true, platform = "ps4")
+        val id = m.enqueue(TransferItem("", "romm:rom:3", ROMM_SOURCE, TransferDirection.DOWNLOAD, TransferKind.GAME, game.name, place = TransferPlace(placement.gamePath), totalBytes = game.sizeBytes, payload = job.encode()))
+        val done = m.await(id, TransferStatus.DONE)
+        assertTrue(fake.mostContentAtOnce in 2..RommDownloadHandler.PARALLEL_FILES, "files at once: ${fake.mostContentAtOnce}")
+        for (n in 1..12) assertContentEquals(ByteArray(2000 + n) { n.toByte() }, File(placement.gamePath, "CUSA00900/file$n.bin").readBytes())
+        assertEquals(game.sizeBytes, done.doneBytes)
+        assertEquals(1, host.landed.size)
+    }
+
+    @Test
     fun `a whole game RomM zips as it sends may be bigger than its files`() = runBlocking<Unit> {
         val fake = server()
         val c = client(fake).also { it.detect() }

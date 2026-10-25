@@ -59,7 +59,25 @@ class FakeRomm(var version: String = "4.4.0") {
     @Volatile var slowChunks = 0
     @Volatile var pairingApproved = false
 
-    val client = HttpClient(MockEngine { req -> handle(req) })
+    /** Each file asked for takes this long to start coming (a server far away). */
+    @Volatile var contentDelayMs = 0L
+    private val contentAtOnce = java.util.concurrent.atomic.AtomicInteger()
+    /** The most files asked for at once. */
+    @Volatile var mostContentAtOnce = 0
+
+    val client = HttpClient(
+        MockEngine { req ->
+            if ("/content/" !in req.url.encodedPath) return@MockEngine handle(req)
+            val now = contentAtOnce.incrementAndGet()
+            synchronized(this@FakeRomm) { mostContentAtOnce = maxOf(mostContentAtOnce, now) }
+            try {
+                if (contentDelayMs > 0) kotlinx.coroutines.delay(contentDelayMs)
+                handle(req)
+            } finally {
+                contentAtOnce.decrementAndGet()
+            }
+        },
+    )
 
     private fun md5(b: ByteArray) = MessageDigest.getInstance("MD5").digest(b).joinToString("") { "%02x".format(it) }
 
