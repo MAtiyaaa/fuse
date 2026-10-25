@@ -1419,6 +1419,10 @@ private fun viewActions(
         },
     )
     return steam + listOf(
+        MenuAction("surprise", "Surprise Me", FuseIcons.Dice, detail = if (platform != null) "A game from this system you have barely touched" else "A game from your backlog", onSelect = {
+            app.closeOverlays()
+            app.surprise = io.github.matiyaaa.fuse.ui.shell.app.SurpriseSpec(platform)
+        }),
         MenuAction("sort", "Sort by", FuseIcons.Sort, trailing = Trailing.Value(sortLabel(sort)), onSelect = {
             app.contextMenu = null
             app.choice = sortPicker(app, sort)

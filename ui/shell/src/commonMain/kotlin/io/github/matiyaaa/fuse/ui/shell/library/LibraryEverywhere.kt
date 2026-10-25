@@ -366,7 +366,15 @@ internal fun LibraryEverywhere(app: AppState, view: LibraryViewState, focused: B
         is EverywhereGame.Streamed -> streamFrom(app, e.app)
     }
     fun options(e: EverywhereGame) = when (e) {
-        is EverywhereGame.Here -> app.openContextMenu(app.gameMenu(e.card))
+        is EverywhereGame.Here -> app.openContextMenu(
+            app.gameMenu(e.card).let { menu ->
+                // For when nothing in view calls: a reel that lands on a game from the backlog.
+                menu.copy(actions = menu.actions + io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction("surprise", "Surprise Me", FuseIcons.Dice, detail = "A game from your backlog", onSelect = {
+                    app.closeOverlays()
+                    app.surprise = io.github.matiyaaa.fuse.ui.shell.app.SurpriseSpec()
+                }))
+            },
+        )
         is EverywhereGame.OnRomm -> app.openContextMenu(io.github.matiyaaa.fuse.ui.shell.romm.gameMenu(app, e.game))
         is EverywhereGame.Elsewhere -> app.openContextMenu(householdMenu(app, e.game, romm = rommState.canUpload))
         is EverywhereGame.Streamed -> streamFrom(app, e.app, always = true)

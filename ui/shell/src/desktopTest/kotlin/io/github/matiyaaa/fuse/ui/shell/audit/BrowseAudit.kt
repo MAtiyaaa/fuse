@@ -213,6 +213,35 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
         }
     }
 
+    scenario("library", "surprise me") {
+        useLibrary()
+        libraryTab()
+        waitFor("Recently played")
+        settle(1_200)
+        // Into the first row, then a game's options, which end with Surprise Me.
+        tap(PadButton.DPAD_DOWN)
+        settle(600)
+        tap(PadButton.X)
+        settle(600)
+        // Its last tab, View, holds it.
+        repeat(6) { if (!hasText("Surprise Me")) tap(PadButton.R1) }
+        waitFor("Surprise Me")
+        tapText("Surprise Me")
+        waitFor("SURPRISE ME")
+        shoot("the reel spinning", 1_400)
+        waitFor("Spin Again")
+        // The spin's own time, frame by frame (slow frames here would undercount it).
+        advanceExactly(3_000)
+        pumpUntil("the reel to stop", 10_000) { !hasText("Choosing") }
+        shoot("landed: the game, why it, and Play", 800)
+        // X spins again, and never to the same game.
+        tap(PadButton.X)
+        advanceExactly(3_000)
+        pumpUntil("the reel to stop again", 10_000) { !hasText("Choosing") }
+        shoot("spun again", 800)
+        tap(PadButton.B)
+    }
+
     scenario("library", "system folding") {
         withSnesRows {
             viewAs(LibraryLayout.ICON)

@@ -58,6 +58,10 @@ it runs, and Low Power turns fully off again.
   shown: in a system's filter on the screen below, on game pages, in the Library and on Home. A GIF
   logo keeps its own colours. Moving pictures hold their first frame under Reduced motion, in Low
   Power Mode and on the second screen while a game runs.
+- **Surprise Me.** For when nothing comes to mind: from the quick menu, or a game's options in the
+  Library or on a system's page, a reel of covers spins and slows to a stop on a game you've barely
+  touched (never played first, then barely played and left a while, then not played for months).
+  It says why, and Play, Spin Again and its page are a press away. It never lands twice on one game.
 - **Achievements as they unlock.** On a two-screen handheld, an achievement you unlock while playing
   fills the other screen: its badge in a ring of light, its name, what it asked, its points and how
   far through the set it leaves you, in gold for hardcore and for a set's last. Fuse asks

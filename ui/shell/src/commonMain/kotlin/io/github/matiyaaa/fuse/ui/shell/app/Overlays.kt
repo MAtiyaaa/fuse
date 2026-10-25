@@ -83,6 +83,7 @@ fun OverlayHost(app: AppState) {
     io.github.matiyaaa.fuse.ui.shell.sync.SwitchImportOverlay(app)
     io.github.matiyaaa.fuse.ui.shell.stream.StreamProgressOverlay(app)
     TextPreviewOverlay(app)
+    SurpriseOverlay(app)
     ReorderOverlay(app)
     ScreenPromptOverlay(app)
     io.github.matiyaaa.fuse.ui.shell.sync.WhoAreYouOverlay(app)

@@ -792,6 +792,7 @@ private fun BoxScope.HintLine(app: AppState, hintFlash: HintFlash, dockRoom: Dp)
     val hints = when {
         app.contextMenu != null || app.choice != null || app.problem != null || app.confirm != null -> MENU_HINTS
         app.liftedTab != null -> LIFTED_TAB_HINTS
+        app.surprise != null -> SURPRISE_HINTS
         else -> app.hints
     }
     // Content fades out under the hint line, so hints never sit on top of tiles; with a dock, on
@@ -810,6 +811,7 @@ private fun BoxScope.HintLine(app: AppState, hintFlash: HintFlash, dockRoom: Dp)
 
 private val MENU_HINTS = listOf(Hint(HintButton.CONFIRM, "Select"), Hint(HintButton.BACK, "Back"))
 private val LIFTED_TAB_HINTS = listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Done"))
+private val SURPRISE_HINTS = listOf(Hint(HintButton.CONFIRM, "Select"), Hint(HintButton.OPTIONS, "Spin Again"), Hint(HintButton.SEARCH, "Details"), Hint(HintButton.BACK, "Close"))
 
 /** The background: theme renderer, then the selected item's art with video after it rests. */
 /** Not drawn while an opening covers the whole screen ([AppState.openingCovers]); read while drawing, so it never recomposes. */

@@ -445,14 +445,10 @@ fun QuickMenu(app: AppState) {
                 windows?.setMode(if (full) WindowStyle.WINDOWED else WindowStyle.FULLSCREEN)
             }
         }
-        // A random game's page, as ES-DE and Daijishō offer: for when nothing comes to mind.
-        QuickId.SURPRISE -> QuickTile("Surprise me", FuseIcons.Dice, detail = "A random game") {
+        // For when nothing comes to mind: a reel that lands on a game you have barely touched.
+        QuickId.SURPRISE -> QuickTile("Surprise me", FuseIcons.Dice, detail = "A game from your backlog") {
             close()
-            app.scope.launch {
-                val games = app.store.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).first()
-                val pick = games.filter { it.platformId.value != "android" }.ifEmpty { games }.randomOrNull()
-                if (pick == null) app.toasts.show("No games in your library yet") else app.go(Route.GameInfo(pick.id))
-            }
+            app.surprise = io.github.matiyaaa.fuse.ui.shell.app.SurpriseSpec()
         }
         // Who is playing, a press from switching; held, someone new.
         QuickId.PROFILES -> QuickTile(
