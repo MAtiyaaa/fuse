@@ -392,7 +392,8 @@ private fun claimSaves(app: AppState, svc: io.github.matiyaaa.fuse.sync.SyncServ
 /**
  * A game on the host: its cover, its name and system, how long it has been played, its saves and
  * where the newest came from (that device's colour beside it), the strip of its versions in the
- * colours of the devices that made them, and the room it takes. Lifted and lit when chosen.
+ * colours of the devices that made them, and the room it takes (on a narrow screen, in its second
+ * line, with no strip). Lifted and lit when chosen.
  */
 @Composable
 private fun GameRow(g: GameReport, card: io.github.matiyaaa.fuse.ui.shell.store.GameCard?, tints: DeviceTints, selected: Boolean, height: Dp, strip: Boolean, onClick: () -> Unit) {
@@ -440,6 +441,8 @@ private fun GameRow(g: GameReport, card: io.github.matiyaaa.fuse.ui.shell.store.
                             "$saves ${if (saves == 1) "save" else "saves"}".takeIf { saves > 0 },
                             "$states ${if (states == 1) "state" else "states"}".takeIf { states > 0 },
                         ).joinToString(", ").ifEmpty { null },
+                        // Without the strip (a narrow screen) the size is told here, so the name keeps the room.
+                        sizeText(bytes).takeIf { !strip && bytes > 0 },
                         newest?.let { "newest from ${it.device}, ${TimeWords.relative(it.at, now, localOffsetMillis(now))}" },
                     ).joinToString("  ·  ").ifEmpty { "No saves kept yet" },
                     Fuse.type.caption, color = c.textMuted, maxLines = 1,
@@ -450,8 +453,8 @@ private fun GameRow(g: GameReport, card: io.github.matiyaaa.fuse.ui.shell.store.
             Spacer(Modifier.width(Space.l))
             VersionStrip(versions, tints)
         }
-        Spacer(Modifier.width(Space.l))
-        if (bytes > 0) FText(sizeText(bytes), Fuse.type.label, color = c.textMuted, maxLines = 1)
+        Spacer(Modifier.width(if (strip) Space.l else Space.m))
+        if (strip && bytes > 0) FText(sizeText(bytes), Fuse.type.label, color = c.textMuted, maxLines = 1)
         else FuseIcon(FuseIcons.ChevronRight, size = Size.iconS, tint = c.textFaint)
     }
 }

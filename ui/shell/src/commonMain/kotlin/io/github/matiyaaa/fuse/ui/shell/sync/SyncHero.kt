@@ -219,8 +219,8 @@ internal fun SyncHero(
                         if (look.detail.isNotEmpty()) FText(look.detail, Fuse.type.caption, color = c.textMuted, maxLines = 2)
                     }
                 }
-                // The totals, as large figures (on a narrow screen, three even columns with a hairline
-                // between, so they keep to one line).
+                // The totals, as large figures (on a narrow screen, three columns with a hairline between:
+                // the size as wide as it is, the other two sharing the rest, their words on two lines if need be).
                 if (!compact && report != null) {
                     val figures = listOf(
                         (playtimeText(report.playSeconds).takeIf { report.playSeconds > 0 } ?: "0 h") to "played",
@@ -235,7 +235,7 @@ internal fun SyncHero(
                         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
                             figures.forEachIndexed { i, (value, label) ->
                                 if (i > 0) Box(Modifier.padding(horizontal = Space.m).width(1.dp).fillMaxHeight().background(c.hairline))
-                                Figure(value, label, small = true, modifier = Modifier.weight(1f))
+                                Figure(value, label, small = true, modifier = if (i < figures.lastIndex) Modifier.weight(1f) else Modifier)
                             }
                         }
                     }
