@@ -67,6 +67,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -194,10 +195,13 @@ internal class DefaultReachOps(
         ctx.scope.launch { devices.map { list -> list.filter { online(it.id, list) }.map { it.id }.toSet() }.distinctUntilChanged().collect { transfers.devicesChanged() } }
         // This device's transfers, for the others' Downloads.
         ctx.scope.launch { transfers.items.collect { household.transfersChanged() } }
+        // While one moves, its progress every two seconds; with none moving, nothing wakes the device.
         ctx.scope.launch {
-            while (true) {
-                delay(2_000)
-                if (transfers.items.value.any { it.status == TransferStatus.ACTIVE }) household.transfersChanged()
+            transfers.items.map { list -> list.any { it.status == TransferStatus.ACTIVE } }.distinctUntilChanged().collectLatest { moving ->
+                while (moving) {
+                    delay(2_000)
+                    household.transfersChanged()
+                }
             }
         }
         // A game another device asked for that couldn't come: that device hears why.
