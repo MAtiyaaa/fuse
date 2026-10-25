@@ -45,6 +45,13 @@ internal enum class QuickId(val title: String, val kind: QuickKind, val spans: L
     FULLSCREEN("Full screen", QuickKind.TILE, listOf(1, 2, 3), 1, "Full screen or a window"),
     SURPRISE("Surprise me", QuickKind.TILE, listOf(1, 2, 3), 1, "A random game from your library"),
     PROFILES("Profiles", QuickKind.TILE, listOf(1, 2, 3), 1, "Who's playing, or someone new (Fuse One)"),
+    CONTINUE("Continue", QuickKind.TILE, listOf(1, 2, 3), 1, "The game you played last, in one press"),
+    DOWNLOADS("Downloads", QuickKind.TILE, listOf(1, 2, 3), 1, "What is moving, and how far along; held, pause or resume"),
+    SYNC("Sync now", QuickKind.TILE, listOf(1, 2, 3), 1, "Your saves and play time, brought up to date (Fuse One)"),
+    ACHIEVEMENTS("Achievements", QuickKind.TILE, listOf(1, 2, 3), 1, "Every achievement, on one page"),
+    FAVOURITES("Favourites", QuickKind.TILE, listOf(1, 2, 3), 1, "Your favourite games"),
+    MUTE("Mute", QuickKind.TILE, listOf(1, 2, 3), 1, "Every sound Fuse makes, off and back"),
+    TEXT_SIZE("Text size", QuickKind.TILE, listOf(1, 2, 3), 1, "Default, Large or Extra large"),
     ;
 
     /** The next width, after the widest the smallest. */
@@ -70,6 +77,7 @@ internal object QuickLayout {
     /** As Fuse comes: the switches people reach for most first, then what is playing and the sliders. */
     val default: List<QuickSlot> = listOf(
         QuickId.WIFI, QuickId.BLUETOOTH, QuickId.CAPTURE,
+        QuickId.CONTINUE, QuickId.DOWNLOADS, QuickId.SYNC,
         QuickId.SECOND_SCREEN,
         QuickId.HIDE_SECOND, QuickId.DISPLAY, QuickId.CONTROLLER,
         QuickId.PERFORMANCE, QuickId.LOW_POWER, QuickId.FIND_GAMES,

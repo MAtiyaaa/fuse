@@ -107,6 +107,12 @@ import io.github.matiyaaa.fuse.ui.fuseline.togetherWith
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
+import io.github.matiyaaa.fuse.ui.shell.app.activateGame
+import io.github.matiyaaa.fuse.ui.shell.app.calibration
+import io.github.matiyaaa.fuse.ui.shell.app.changeScreenCalibration
+import io.github.matiyaaa.fuse.ui.shell.app.emulatorSettingsSheet
+import io.github.matiyaaa.fuse.ui.shell.sync.syncWords
+import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
 import io.github.matiyaaa.fuse.ui.shell.app.formatDate
 import io.github.matiyaaa.fuse.ui.shell.app.offers
@@ -155,6 +161,8 @@ private enum class QuickZone { GRID, LIST, ADD }
  * Fuse's own is drawn with Fuse's mark rather than an icon.
  */
 internal enum class QuickPage(val label: String, val icon: ImageVector?) {
+    /** The game running now, while one is: only listed then, first. */
+    PLAYING("Playing", FuseIcons.Gamepad),
     QUICK("Quick settings", FuseIcons.Sliders),
     DOWNLOADS("Downloads", FuseIcons.Download),
     PERFORMANCE("Performance", FuseIcons.Gauge),
@@ -203,6 +211,17 @@ fun QuickMenu(app: AppState) {
     val recordingTime = rememberRecordingTime(capture)
     val windows = platform.windowControls
     val sections = app.sections
+    val home by app.store.homeFeed.collectAsState()
+    // The game running now, and the one to carry on with.
+    val playingCard = home.playtime.currentGame
+    val lastCard = home.continuePlaying.firstOrNull() ?: home.recentlyPlayed.firstOrNull()
+    val transferSummary by app.store.transfers.summary.collectAsState()
+    val syncService = app.store.sync.service
+    val syncStatus = syncService?.status?.collectAsState()?.value
+    val syncOn = syncService != null && prefs.sync.enabled && prefs.sync.role.isNotEmpty()
+    val screensHere by platform.displays.collectAsState()
+    // The sections there are: Playing only while a game runs.
+    val pages = QuickPage.entries.filter { it != QuickPage.PLAYING || playingCard != null }
 
     // The arrangement: what the user stored, or Fuse's own. While the menu is open, changes show at
     // once from here and are saved behind it.
@@ -220,6 +239,8 @@ fun QuickMenu(app: AppState) {
         QuickId.FULLSCREEN -> windows != null
         // Profiles with a host, or this device's own without one.
         QuickId.PROFILES -> (prefs.sync.enabled && prefs.sync.role.isNotEmpty()) || app.syncProfileCount > 0
+        QuickId.SYNC -> syncOn
+        QuickId.ACHIEVEMENTS -> app.offers(Destination.ACHIEVEMENTS)
         else -> true
     }
     val visible = all.filter { available(it.id) }
@@ -442,6 +463,73 @@ fun QuickMenu(app: AppState) {
             if (now.off) toggleSong() else skipSong(1)
         }
         QuickId.BRIGHTNESS, QuickId.VOLUME -> QuickTile(id.title, iconFor(id), detail = "${(sliderValue(id) * 100).roundToInt()}%") { adjusting = !adjusting }
+        // The last game played, started in one press, as it would be from its tile.
+        QuickId.CONTINUE -> QuickTile("Continue", FuseIcons.Play, detail = lastCard?.title ?: "Nothing played yet") {
+            val card = lastCard
+            if (card == null) {
+                app.toasts.show("Play a game and it waits here")
+            } else {
+                close()
+                app.activateGame(card)
+            }
+        }
+        // What is moving, at a glance; a press shows the list here, held pauses or resumes it all.
+        QuickId.DOWNLOADS -> {
+            val active = transferSummary.active
+            val paused = active == 0 && transferSummary.queued == 0 && transferSummary.waiting > 0
+            QuickTile(
+                "Downloads", if (paused) FuseIcons.Pause else FuseIcons.Download, active = active > 0,
+                detail = when {
+                    active > 0 -> listOfNotNull("$active moving", transferSummary.progress?.let { "${(it * 100).roundToInt()}%" }).joinToString("  ·  ")
+                    paused -> "Paused"
+                    transferSummary.queued > 0 -> "${transferSummary.queued} waiting"
+                    else -> "Idle"
+                },
+                hold = {
+                    when {
+                        active > 0 -> { app.store.transfers.pauseAll(); app.toasts.show("Everything is paused") }
+                        paused -> { app.store.transfers.resumeAll(); app.toasts.show("Everything carries on") }
+                        else -> app.toasts.show("Nothing is moving")
+                    }
+                },
+            ) {
+                // Its list, in this menu's Downloads section.
+                pageDirection = 1
+                page = QuickPage.DOWNLOADS
+                adjusting = false
+                listRow = 0
+                zone = QuickZone.LIST
+            }
+        }
+        QuickId.SYNC -> QuickTile("Sync now", FuseIcons.RefreshCcw, detail = syncStatus?.let { syncWords(it).title } ?: "Fuse One") {
+            val svc = syncService ?: return@QuickTile
+            app.toasts.show("Syncing")
+            app.scope.launch {
+                svc.syncNow().onSuccess { app.toasts.show("Up to date", ToastKind.SUCCESS, icon = FuseIcons.CloudCheck) }
+                    .onFailure { app.toasts.show(it.message ?: "The host isn't answering", ToastKind.WARNING) }
+            }
+        }
+        QuickId.ACHIEVEMENTS -> QuickTile("Achievements", FuseIcons.Trophy) { close(); app.selectTab(Destination.ACHIEVEMENTS) }
+        QuickId.FAVOURITES -> QuickTile("Favourites", FuseIcons.Heart) {
+            close()
+            app.librarySegment = io.github.matiyaaa.fuse.ui.shell.library.LibrarySegment.FAVORITES
+            app.selectTab(Destination.LIBRARY)
+        }
+        QuickId.MUTE -> QuickTile("Mute", if (prefs.muted) FuseIcons.VolumeOff else FuseIcons.Volume, active = prefs.muted, toggle = true) {
+            val on = !prefs.muted
+            app.store.updatePrefs { it.copy(muted = on) }
+            app.toasts.show(if (on) "Fuse is quiet" else "Fuse's sounds are back")
+        }
+        // The same three sizes as Settings, Accessibility, for this screen when it is calibrated.
+        QuickId.TEXT_SIZE -> {
+            val calibrated = prefs.calibration(screensHere)
+            val scale = calibrated?.textScale ?: prefs.textScale
+            val (next, word) = TEXT_SIZES.firstOrNull { it.first > scale + 0.01f } ?: TEXT_SIZES.first()
+            QuickTile("Text size", FuseIcons.TextSize, detail = TEXT_SIZES.lastOrNull { it.first <= scale + 0.01f }?.second ?: "Default") {
+                if (calibrated != null) app.changeScreenCalibration { it.copy(textScale = next) } else app.store.updatePrefs { it.copy(textScale = next) }
+                app.toasts.show("Text size: $word")
+            }
+        }
     }
 
     // ---------------------------------------------------------------- each section's rows
@@ -574,9 +662,39 @@ fun QuickMenu(app: AppState) {
         add(MenuAction("perf.more", "More in Settings", FuseIcons.Settings, detail = "This device, its displays and drawing", trailing = Trailing.Chevron, section = "", onSelect = { close(); app.go(Route.Settings("performance")) }))
     }
 
+    // Playing: the game running now, and what can be done for it from here.
+    val playingActions = buildList {
+        val card = playingCard ?: return@buildList
+        val since = home.playtime.currentSince
+        val minutes = since?.let { ((System.currentTimeMillis() - it) / 60_000L).coerceAtLeast(0) }
+        add(MenuAction(
+            "play.page", card.title, FuseIcons.Gamepad,
+            detail = listOfNotNull(card.platformShort, minutes?.let { if (it < 1) "Started just now" else "Playing for ${playTimeWords(it)}" }).joinToString("  ·  "),
+            trailing = Trailing.Chevron, section = "Now",
+            onSelect = { close(); app.go(Route.GameInfo(card.id)) },
+        ))
+        add(MenuAction("play.saves", "Its saves", FuseIcons.Save, detail = "Every version kept, from every device", section = "This game", onSelect = { close(); app.go(Route.SaveHistory(card.id, card.title)) }))
+        add(MenuAction("play.emulator", "Emulator settings", FuseIcons.Sliders, detail = "For this game, or every game", section = "This game", onSelect = { close(); app.emulatorSettingsSheet(card) }))
+        add(MenuAction("play.content", "Updates, DLC and mods", FuseIcons.Package, section = "This game", onSelect = { close(); app.go(Route.GameContent(card.id)) }))
+        capture?.let { cap ->
+            add(MenuAction("play.shot", "Screenshot", FuseIcons.Camera, detail = "Three seconds after this closes", section = "This game", onSelect = { close(); cap.screenshot(delayed = true) }))
+        }
+        if (syncOn) {
+            add(MenuAction("play.sync", "Sync saves now", FuseIcons.RefreshCcw, detail = syncStatus?.let { syncWords(it).title }, section = "This game", onSelect = {
+                val svc = syncService ?: return@MenuAction
+                app.toasts.show("Syncing")
+                app.scope.launch {
+                    svc.syncNow().onSuccess { app.toasts.show("Up to date", ToastKind.SUCCESS, icon = FuseIcons.CloudCheck) }
+                        .onFailure { app.toasts.show(it.message ?: "The host isn't answering", ToastKind.WARNING) }
+                }
+            }))
+        }
+    }
+
     // Each section's rows. Quick settings has the grid instead, and with nothing in the grid, one
     // row that starts filling it.
     fun rowsFor(p: QuickPage): List<MenuAction> = when (p) {
+        QuickPage.PLAYING -> playingActions
         QuickPage.QUICK -> if (visible.isEmpty()) {
             listOf(MenuAction("fill", "Put things in the quick menu", FuseIcons.Plus, detail = "Switches, sliders and Now playing", onSelect = { editing = true; zone = QuickZone.ADD; addRow = 0 }))
         } else {
@@ -588,8 +706,8 @@ fun QuickMenu(app: AppState) {
     }
     val actions = rowsFor(page)
     fun showPage(next: QuickPage) {
-        if (next == page) return
-        pageDirection = if (next.ordinal > page.ordinal) 1 else -1
+        if (next == page || next !in pages) return
+        pageDirection = if (pages.indexOf(next) > pages.indexOf(page)) 1 else -1
         page = next
         adjusting = false
         listRow = 0
@@ -627,8 +745,12 @@ fun QuickMenu(app: AppState) {
         dragging = null
         if (zone == QuickZone.ADD) zone = QuickZone.GRID
     }
+    // A game that ends takes its section with it.
+    LaunchedEffect(playingCard?.id) { if (page !in pages) page = QuickPage.QUICK }
     LaunchedEffect(open) {
         if (open) {
+            // While a game runs, the menu opens on it; otherwise where it was left.
+            if (playingCard != null) page = QuickPage.PLAYING else if (page == QuickPage.PLAYING) page = QuickPage.QUICK
             // Each opening starts at the top, on the first item.
             zone = if (page != QuickPage.QUICK || visible.isEmpty()) QuickZone.LIST else QuickZone.GRID
             cell = 0; listRow = 0; anchor = null
@@ -725,9 +847,9 @@ fun QuickMenu(app: AppState) {
                     NavAction.BACK, NavAction.QUICK_MENU -> { close(); platform.sounds.play(SoundCue.CLOSE); NavResult.CONSUMED }
                     // LB and RB: the section before or after, stopping at the ends as the tabs do.
                     NavAction.PREVIOUS_SECTION, NavAction.NEXT_SECTION -> {
-                        val next = page.ordinal + if (e.action == NavAction.NEXT_SECTION) 1 else -1
-                        if (next !in QuickPage.entries.indices) return@InputLayer NavResult.BLOCKED
-                        showPage(QuickPage.entries[next])
+                        val next = pages.indexOf(page) + if (e.action == NavAction.NEXT_SECTION) 1 else -1
+                        if (next !in pages.indices) return@InputLayer NavResult.BLOCKED
+                        showPage(pages[next])
                         NavResult.MOVED
                     }
                     // Editing is the grid's, so only Quick settings offers it.
@@ -858,7 +980,7 @@ fun QuickMenu(app: AppState) {
                         label = "quick sections",
                     ) {
                         QuickSections(
-                            page,
+                            page, pages,
                             badges = mapOf(QuickPage.DOWNLOADS to moving.count { it.item.status == TransferStatus.ACTIVE || it.item.status == TransferStatus.QUEUED }),
                             modifier = Modifier.padding(start = Space.l, end = Space.l, top = Space.m).reveal(reveal, 0),
                             onPick = ::showPage,
@@ -1242,11 +1364,10 @@ private fun EditHeader(adding: Boolean, onDone: () -> Unit) {
  * top line's tabs. A count rides a section with something under way (downloads moving).
  */
 @Composable
-private fun QuickSections(page: QuickPage, badges: Map<QuickPage, Int>, modifier: Modifier = Modifier, onPick: (QuickPage) -> Unit) {
-    val pages = QuickPage.entries
+private fun QuickSections(page: QuickPage, pages: List<QuickPage>, badges: Map<QuickPage, Int>, modifier: Modifier = Modifier, onPick: (QuickPage) -> Unit) {
     io.github.matiyaaa.fuse.ui.shell.components.SectionStrip(
         sections = pages.map { io.github.matiyaaa.fuse.ui.shell.components.StripSection(it.label, it.icon, badge = (badges[it] ?: 0) > 0) },
-        active = page.ordinal,
+        active = pages.indexOf(page).coerceAtLeast(0),
         modifier = modifier,
         onPick = { onPick(pages[it]) },
     )
@@ -1404,6 +1525,13 @@ private fun iconFor(id: QuickId): ImageVector = when (id) {
     QuickId.FULLSCREEN -> FuseIcons.Maximize
     QuickId.SURPRISE -> FuseIcons.Dice
     QuickId.PROFILES -> FuseIcons.Users
+    QuickId.CONTINUE -> FuseIcons.Play
+    QuickId.DOWNLOADS -> FuseIcons.Download
+    QuickId.SYNC -> FuseIcons.RefreshCcw
+    QuickId.ACHIEVEMENTS -> FuseIcons.Trophy
+    QuickId.FAVOURITES -> FuseIcons.Heart
+    QuickId.MUTE -> FuseIcons.VolumeOff
+    QuickId.TEXT_SIZE -> FuseIcons.TextSize
 }
 
 /** How a connection stands, for a tile's state line; nothing when the platform doesn't say. */
@@ -1427,4 +1555,14 @@ internal fun nextSecondScreen(mode: DualScreenMode): DualScreenMode = when (mode
     DualScreenMode.OFF -> DualScreenMode.LIBRARY_COMPANION
     DualScreenMode.LIBRARY_COMPANION -> DualScreenMode.GAME_COMPANION
     DualScreenMode.GAME_COMPANION, DualScreenMode.REVERSE -> DualScreenMode.OFF
+}
+
+/** The text sizes the Text size tile steps through, as Settings, Accessibility offers them. */
+private val TEXT_SIZES = listOf(1f to "Default", 1.15f to "Large", 1.3f to "Extra large")
+
+/** Minutes played, said as people say them ("1 hr 5 min"). */
+private fun playTimeWords(minutes: Long): String = when {
+    minutes < 60 -> "$minutes min"
+    minutes % 60 == 0L -> "${minutes / 60} hr"
+    else -> "${minutes / 60} hr ${minutes % 60} min"
 }
