@@ -397,7 +397,6 @@ private fun rommRows(
 /** Downloads' own settings, shared by Settings, Downloads and RomM's page. */
 internal fun transferRows(app: AppState, dl: DownloadSettings, setDl: ((DownloadSettings) -> DownloadSettings) -> Unit, section: String?): List<MenuAction> {
     val counts = (1..5).map { it to "$it at once" }
-    val modes = listOf("FULL" to "Full speed", "REDUCED" to "Slower", "PAUSE" to "Pause")
     val limits = listOf(0 to "No limit", 1024 to "1 MB/s", 2048 to "2 MB/s", 5120 to "5 MB/s", 10240 to "10 MB/s", 25600 to "25 MB/s", 51200 to "50 MB/s")
     return listOf(
         app.choiceRow("dl.max", "Simultaneous downloads", FuseIcons.Download, if (dl.chosen) dl.maxDownloads else 0, listOf(0 to "Automatic") + counts,
@@ -406,9 +405,10 @@ internal fun transferRows(app: AppState, dl: DownloadSettings, setDl: ((Download
             detail = "Counted apart from downloads, up to five") { v -> setDl { if (v == 0) it.copy(chosen = false) else it.copy(maxUploads = v, chosen = true) } },
         app.choiceRow("dl.limit", "Bandwidth limit", FuseIcons.Gauge, limits.minBy { kotlin.math.abs(it.first - dl.bandwidthKbps) }.first, limits,
             detail = "For every transfer together") { v -> setDl { it.copy(bandwidthKbps = v) } },
-        app.choiceRow("dl.play", "Downloads while playing", FuseIcons.Gamepad, dl.downloadsWhilePlaying, modes,
-            optionDetail = { when (it) { "REDUCED" -> "Kept slow so games online stay smooth"; "PAUSE" -> "Held until the game closes"; else -> "As fast as the connection goes" } }) { v -> setDl { it.copy(downloadsWhilePlaying = v) } },
-        app.choiceRow("ul.play", "Uploads while playing", FuseIcons.Gamepad, dl.uploadsWhilePlaying, modes) { v -> setDl { it.copy(uploadsWhilePlaying = v) } },
+        toggleRow(
+            "dl.play", "Downloads and uploads while playing", FuseIcons.Gamepad, dl.transfersWhilePlaying,
+            if (dl.transfersWhilePlaying) "They carry on at full speed while you play" else "They wait while you play, and carry on by themselves when the game closes",
+        ) { v -> setDl { it.withTransfersWhilePlaying(v) } },
         toggleRow("dl.wifi", "Only on Wi-Fi", FuseIcons.Wifi, dl.wifiOnly, "Waits for Wi-Fi or a cable rather than using mobile data") { v -> setDl { it.copy(wifiOnly = v) } },
         toggleRow("dl.charging", "Only while charging", FuseIcons.Zap, dl.chargingOnly, "On battery, transfers wait for a charger. Saves always go: they are small") { v -> setDl { it.copy(chargingOnly = v) } },
         app.choiceRow("dl.battery", "On battery, wait below", FuseIcons.BatteryLow, dl.minBattery, listOf(0 to "Never wait", 20 to "20%", 30 to "30%", 50 to "50%"),

@@ -79,6 +79,9 @@ it runs, and Low Power turns fully off again.
   is hashed as it arrives instead of read back in full afterwards, and written a megabyte at a
   time. An upload sends its next piece as soon as one is in, never waiting for the slowest of a
   batch.
+- **Downloads and uploads while playing, one switch.** Settings, Downloads has one switch for both,
+  on by default: they carry on at full speed while you play. Off, they wait until the game closes
+  and carry on by themselves. It replaces the two separate choices, whose slower setting is gone.
 - **A game has the device while it runs.** Under a game, a video preview pauses, the second screen
   keeps its picture but stops moving, Fuse One's, the household's, Jellyfin's and RomM's rounds hold
   and catch up when the game ends, and Fuse's own pacing ticks every thirty seconds. The game's save

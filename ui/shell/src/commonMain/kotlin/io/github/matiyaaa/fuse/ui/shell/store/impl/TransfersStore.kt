@@ -329,13 +329,14 @@ internal class DefaultTransfersOps(
 /** The person's Downloads settings as the queue reads them. */
 internal fun DownloadSettings.toTransferSettings(cores: Int = defaultCores(), lowMemory: Boolean = false): TransferSettings {
     val auto = TransferSettings.defaults(cores, lowMemory)
-    fun mode(s: String) = runCatching { WhilePlaying.valueOf(s) }.getOrDefault(WhilePlaying.REDUCED)
+    // One switch for both directions (0.4.4): on, they carry on at full speed while a game is played.
+    val whilePlaying = if (transfersWhilePlaying) WhilePlaying.FULL else WhilePlaying.PAUSE
     return TransferSettings(
         maxDownloads = if (chosen) maxDownloads.coerceIn(1, TransferSettings.MAX_PARALLEL) else auto.maxDownloads,
         maxUploads = if (chosen) maxUploads.coerceIn(1, TransferSettings.MAX_PARALLEL) else auto.maxUploads,
         bandwidthLimit = bandwidthKbps.coerceAtLeast(0) * 1024L,
-        downloadsWhilePlaying = mode(downloadsWhilePlaying),
-        uploadsWhilePlaying = mode(uploadsWhilePlaying),
+        downloadsWhilePlaying = whilePlaying,
+        uploadsWhilePlaying = whilePlaying,
         wifiOnly = wifiOnly,
         chargingOnly = chargingOnly,
         minBattery = minBattery.coerceIn(0, 100),
