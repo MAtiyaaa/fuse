@@ -46,6 +46,14 @@ private fun AuditDriver.openSyncPage() {
     settle(900)
 }
 
+/** Settings, Profiles: who is playing here, and every profile. */
+private fun AuditDriver.openProfilesPage() {
+    openSettings()
+    tap(PadButton.DPAD_DOWN, sectionIndex("profiles"))
+    tap(PadButton.DPAD_RIGHT)
+    settle(900)
+}
+
 /**
  * Fuse Sync by Fuse, every screen: off (and nothing of it anywhere), turned on, the two ways in,
  * setting up a host to "Fuse One is ready", connecting from "Fuse One found" to the code and
@@ -115,7 +123,7 @@ internal fun AuditDriver.syncScreens() {
 
     scenario("sync", "who's playing") {
         useSync(asHost = false)
-        openSyncPage()
+        openProfilesPage()
         tapText("Playing As")
         waitFor("Who's playing?")
         shoot("everyone on the host, Mo playing here", 1_200)
@@ -221,7 +229,7 @@ internal fun AuditDriver.syncScreens() {
     scenario("sync", "settings as the host") {
         useSync(asHost = true)
         openSyncPage()
-        waitFor("Playing As")
+        waitFor("Save Folders")
         shoot("set up as the host: the household, who's playing and what syncs", 1_200)
         focusText("Save States")
         shoot("Fuse Save Sync: what syncs")
@@ -280,13 +288,13 @@ internal fun AuditDriver.syncScreens() {
     scenario("sync", "settings on a device") {
         useSync(asHost = false)
         openSyncPage()
-        waitFor("Playing As")
+        waitFor("Save Folders")
         shoot("a device connected to the host", 1_200)
         tapText("Home on This Device")
         waitFor("All devices on this profile")
         shoot("Home: the profile's everywhere, or this device's own")
         tap(PadButton.B)
-        tapText("Profiles", step = PadButton.DPAD_UP)
+        openProfilesPage()
         waitFor("Add Profile")
         shoot("the profiles on the host")
         tap(PadButton.A)

@@ -69,20 +69,7 @@ internal fun syncRows(
         return@buildList
     }
 
-    // You ------------------------------------------------------------------------------------------
-    val you = "You"
-    add(MenuAction(
-        "who", "Playing As", FuseIcons.UserRound,
-        detail = if (active == null) "Choose who is playing on this device" else "Switching brings in their library, saves, Home and theme, without a restart",
-        trailing = Trailing.Value(active?.name ?: "No one yet"), section = you,
-        onSelect = { app.whoAreYou = WhoMode.SWITCH },
-    ))
-    add(MenuAction(
-        "profiles", "Profiles", FuseIcons.Users,
-        detail = "Add someone, edit or reorder profiles, and who Fuse starts as",
-        trailing = Trailing.Value(count(profiles.size, "profile")), section = you,
-        onSelect = { app.go(Route.Settings("profiles")) },
-    ))
+    // Who is playing, and every profile, are in Settings, Profiles: never a second place for them here.
 
     // What syncs -----------------------------------------------------------------------------------
     val what = "What syncs"
