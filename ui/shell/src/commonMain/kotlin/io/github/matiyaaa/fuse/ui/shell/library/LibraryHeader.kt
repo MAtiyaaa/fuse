@@ -104,8 +104,10 @@ internal fun LibraryHeader(
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // Every button names its value when there is room; on narrow screens only the focused one does.
         val roomy = maxWidth >= ROOMY_WIDTH
-        // On a portrait phone the tabs keep the whole width and the toolbar takes a line of its own.
-        val stacked = maxWidth < STACK_WIDTH
+        // On a portrait phone the tabs keep the whole width and the toolbar takes a line of its own,
+        // unless it is a button or two beside the Library's tabs, which scroll: a line for one round
+        // button left a band of nothing between the tabs and the games.
+        val stacked = maxWidth < STACK_WIDTH && !(scope == LibraryScope.All && header.count { it is HeaderItem.Button } <= 2)
         val title: @Composable () -> Unit = {
             when {
                 scope == LibraryScope.All -> LibraryTabs(header, state.segment, count, counts, ::focused, onView)

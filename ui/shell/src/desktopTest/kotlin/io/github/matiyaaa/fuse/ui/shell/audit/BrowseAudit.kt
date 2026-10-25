@@ -101,14 +101,14 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
         useLibrary()
         libraryTab()
         waitFor("Recently played")
-        // All, where the Library opens: every game wherever it is, in shelves.
+        // All, where the Library opens: every game wherever it is, in rows.
         settle(1_200)
-        tap(PadButton.DPAD_DOWN)
-        settle()
-        shoot("All, Recently Added focused")
-        tap(PadButton.DPAD_DOWN)
-        settle()
-        shoot("All, Systems shelf")
+        shoot("All, as it opens")
+        for (n in 1..3) {
+            tap(PadButton.DPAD_DOWN)
+            settle()
+            shoot("All, $n ${if (n == 1) "row" else "rows"} down")
+        }
     }
 
     scenario("library", "streamed apps") {
