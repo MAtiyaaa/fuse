@@ -242,6 +242,8 @@ internal fun AuditDriver.flippedShowcase() {
         settle(800)
         view = AuditView.Piece { io.github.matiyaaa.fuse.ui.shell.app.ShowcaseApp(libraryStore, platform) }
         shoot("a game, large", 2_000)
+        io.github.matiyaaa.fuse.ui.shell.app.Spotlight.set(io.github.matiyaaa.fuse.model.PlatformId("snes"))
+        shoot("a system, with its games played last", 1_500)
         io.github.matiyaaa.fuse.ui.shell.app.Spotlight.set(null)
         shoot("nothing chosen: the time and the games played last", 1_500)
         io.github.matiyaaa.fuse.ui.shell.app.ShowcasePage.current.value = 1
