@@ -366,8 +366,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     // The rooms of the games next to the selection, decoded as the background decodes them, so
     // moving on shows them at once.
     val heroDp = with(androidx.compose.ui.platform.LocalDensity.current) { Fuse.quality.heroDecodePx.toDp() }
-    PrefetchArt(remember(list, systems) { list.orEmpty().map { roomArt(it.art, systems[it.platformId]) } }, state.grid.index, size = heroDp, limit = 2)
-    val gameSystem = selectedCard?.let { systems[it.platformId] }
+    PrefetchArt(remember(list, systems) { list.orEmpty().map { roomArt(it.art, systems[it.shownPlatform]) } }, state.grid.index, size = heroDp, limit = 2)
+    val gameSystem = selectedCard?.let { systems[it.shownPlatform] }
 
     fun choose(s: LibrarySegment) {
         if (state.segment != s) {

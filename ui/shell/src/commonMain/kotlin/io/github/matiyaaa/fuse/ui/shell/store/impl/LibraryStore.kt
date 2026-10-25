@@ -625,10 +625,18 @@ internal class DefaultLibraryOps(
                         ctx.portPlaces,
                     ) { lasts, chosenAt, places ->
                         lasts.filter { (id, last) -> playsAsApp(last, chosenAt[id.value.toString()]) }
-                            .associate { (id, _) -> id to (places[id] ?: io.github.matiyaaa.fuse.launch.ports.PortAdapter.PLATFORM).let { p -> ctx.platform(p)?.shortName ?: "Ports" } }
+                            .associate { (id, _) -> id to (places[id] ?: io.github.matiyaaa.fuse.launch.ports.PortAdapter.PLATFORM) }
                     }
                 }
-            }.distinctUntilChanged().resilient().collect { ctx.playedAs.value = it }
+            }.combine(
+                // On a computer, the games Play starts with the port chosen for them (Play With) show
+                // as Ports outside their own system too.
+                ctx.settings.map { s ->
+                    s.ports.playWith.filter { (_, port) -> port in s.ports.installed || port.startsWith(RecompKeeper.YOURS_PREFIX) }
+                        .keys.mapNotNull { it.toLongOrNull()?.let(::GameId) }
+                }.distinctUntilChanged(),
+            ) { android, chosen -> chosen.associateWith { io.github.matiyaaa.fuse.launch.ports.PortAdapter.PLATFORM } + android }
+                .distinctUntilChanged().resilient().collect { ctx.playedAs.value = it }
         }
     }
 

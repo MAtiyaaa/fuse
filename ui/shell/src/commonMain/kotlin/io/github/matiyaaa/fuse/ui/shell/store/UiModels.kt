@@ -103,9 +103,17 @@ data class GameCard(
     val pinned: Boolean = false,
     /** How Play starts it from the list it is in: with its port (in Ports or Android), its emulator (in its own system), or as chosen. */
     val via: PlayVia = PlayVia.DEFAULT,
+    /**
+     * The system it plays as from outside a system's own list, when that isn't its own: Ports (or
+     * Android) for a game played with its port. Its icon, name and colour are shown then.
+     */
+    val playsOn: PlatformId? = null,
 ) {
     /** Drawn dimmed: its file is gone, or its drive can't be reached right now. */
     val dimmed: Boolean get() = missing || unavailable != null
+
+    /** The system the card shows: the one it plays as ([playsOn]), else its own. */
+    val shownPlatform: PlatformId get() = playsOn ?: platformId
 }
 
 /**

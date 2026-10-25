@@ -524,7 +524,7 @@ private fun ShelfRow(
     val heroDp = with(androidx.compose.ui.platform.LocalDensity.current) { Fuse.quality.heroDecodePx.toDp() }
     PrefetchArt(
         remember(shelf.items, systems) {
-            shelf.items.map { item -> (item as? ShelfItem.Game)?.card?.let { io.github.matiyaaa.fuse.ui.shell.app.roomArt(it.art, systems[it.platformId]) } }
+            shelf.items.map { item -> (item as? ShelfItem.Game)?.card?.let { io.github.matiyaaa.fuse.ui.shell.app.roomArt(it.art, systems[it.shownPlatform]) } }
         },
         focus,
         size = heroDp,
@@ -679,7 +679,7 @@ private fun ShelfItem.stage(shelf: Shelf?, feed: HomeFeed, cartridge: CartridgeS
 
 /** The backdrop for an item, keyed by its game or system (the second screen shows what the key names). */
 private fun ShelfItem.hero(systems: Map<io.github.matiyaaa.fuse.model.PlatformId, io.github.matiyaaa.fuse.ui.shell.store.PlatformCard>): HeroSource? = when (this) {
-    is ShelfItem.Game -> card.room(systems[card.platformId])
+    is ShelfItem.Game -> card.room(systems[card.shownPlatform])
     is ShelfItem.System -> HeroSource(card.platform.id, card.art.hero, card.platform.accent.toColor())
     else -> null
 }

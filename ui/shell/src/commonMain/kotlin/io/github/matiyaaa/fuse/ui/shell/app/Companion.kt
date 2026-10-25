@@ -453,7 +453,7 @@ internal fun List<PlatformCard>.withRomm(romm: List<io.github.matiyaaa.fuse.ui.s
 /** The backdrop for what the companion shows: the game's background art, or the system's. */
 @Composable
 internal fun companionHero(store: FuseStore, systems: List<PlatformCard>, target: Any?): HeroSource? = when (target) {
-    is GameCard -> target.room(systems.firstOrNull { it.platform.id == target.platformId })
+    is GameCard -> target.room(systems.firstOrNull { it.platform.id == target.shownPlatform })
     is GameId -> {
         val flow = remember(target) { store.library.game(target) }
         val detail by flow.collectAsState(initial = null)

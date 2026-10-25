@@ -169,7 +169,7 @@ fun GameIconTile(
     ) {
         val art = Modifier.fillMaxSize().alpha(if (card.dimmed) MISSING_ART_ALPHA else 1f)
         val label = card.platformShort.takeIf { LocalTileShowsSystem.current }
-        val border = LocalTileBorders.current.of(card.platformId)
+        val border = LocalTileBorders.current.of(card.shownPlatform)
         // A border that names the system takes the tag; generated art then leaves it out.
         val artLabel = label.takeUnless { border.carriesTag }
         if (poster) {
@@ -199,7 +199,7 @@ fun GameCoverTile(
     val corner = coverCornerFraction()
     val shape = remember(corner) { SquircleShape.fraction(corner) }
     val label = card.platformShort.takeIf { LocalTileShowsSystem.current }
-    val border = LocalTileBorders.current.of(card.platformId)
+    val border = LocalTileBorders.current.of(card.shownPlatform)
     val artLabel = label.takeUnless { border.carriesTag }
     Tile(
         selected = selected,
