@@ -26,6 +26,7 @@ import kotlinx.coroutines.runBlocking
 import okio.Buffer
 import okio.FileSystem
 import java.io.File
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -102,9 +103,14 @@ class MovingPicturesTest {
 
     private fun shows(motion: MotionProfile, lowPower: Boolean = false, block: androidx.compose.ui.test.ComposeUiTest.() -> Unit) = runComposeUiTest {
         val gif = file("three-colours.gif")
-        // This test's own loader, whatever another test left as the one every picture uses.
+        // This test's own loader, whatever another test left as the one every picture uses. It loads
+        // on the test's own thread: here, unlike in the app, Coil would carry on from its decode on a
+        // worker thread and set the painter's state there, racing the recompositions the test's clock
+        // drives ("a state object was modified by composition as well as outside composition").
         SingletonImageLoader.setUnsafe(
-            ImageLoader.Builder(PlatformContext.INSTANCE).components { addMovingPictures() }.memoryCache(null).diskCache(null).build(),
+            ImageLoader.Builder(PlatformContext.INSTANCE).components { addMovingPictures() }.memoryCache(null).diskCache(null)
+                .coroutineContext(EmptyCoroutineContext)
+                .build(),
         )
         try {
             setContent {
