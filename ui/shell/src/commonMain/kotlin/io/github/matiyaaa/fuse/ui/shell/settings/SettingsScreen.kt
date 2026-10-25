@@ -531,22 +531,40 @@ private fun SearchHeading(query: String, count: Int, modifier: Modifier, compact
     }
 }
 
-/** The chosen section's name with its summary: under it, or after it on one line when space is short. */
+/**
+ * The chosen section's mark, name and summary: the summary under the name, or after it on one line
+ * when space is short.
+ */
 @Composable
 private fun SectionHeading(section: SettingsSection, modifier: Modifier, compact: Boolean) {
-    if (compact) {
-        Row(modifier, verticalAlignment = Alignment.Bottom) {
-            FText(section.label, Fuse.type.titleSmall, maxLines = 1, modifier = Modifier.alignByBaseline())
-            Spacer(Modifier.width(Space.m))
-            FText(section.summary, Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false).alignByBaseline())
+    val c = Fuse.colors
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        val well = if (compact) SECTION_MARK_SHORT else SECTION_MARK
+        Box(
+            Modifier.size(well).clip(RoundedCornerShape(Fuse.geometry.control)).background(c.accentSoft),
+            contentAlignment = Alignment.Center,
+        ) {
+            FuseIcon(section.icon, size = well * 0.5f, tint = c.accent)
         }
-    } else {
-        Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-            FText(section.label, Fuse.type.title, maxLines = 1)
-            FText(section.summary, Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 1)
+        Spacer(Modifier.width(Space.m))
+        if (compact) {
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
+                FText(section.label, Fuse.type.titleSmall, maxLines = 1, modifier = Modifier.alignByBaseline())
+                Spacer(Modifier.width(Space.m))
+                FText(section.summary, Fuse.type.caption, color = c.textMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false).alignByBaseline())
+            }
+        } else {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                FText(section.label, Fuse.type.title, maxLines = 1)
+                FText(section.summary, Fuse.type.body, color = c.textMuted, maxLines = 1)
+            }
         }
     }
 }
+
+/** The section's mark beside its heading. */
+private val SECTION_MARK = 52.dp
+private val SECTION_MARK_SHORT = 36.dp
 
 /** The rows of a section on their panel; Appearance leads with the theme in use. */
 @Composable
@@ -565,7 +583,8 @@ private fun SectionPanel(
             showSelection = focused,
             header = openThemes?.let { open -> { ThemeCard(short, open, Modifier.padding(bottom = Space.s)) } },
             modifier = Modifier.padding(Space.s),
-                            fadeEdges = true,
+            fadeEdges = true,
+            grouped = true,
         )
     }
 }
