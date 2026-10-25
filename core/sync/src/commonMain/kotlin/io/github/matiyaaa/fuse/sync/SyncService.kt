@@ -396,6 +396,17 @@ interface SyncService {
     /** Joins the host asked with [askToJoin] using its account, when nobody is at a screen. The host's name. */
     suspend fun joinWithAccount(username: String, password: String): Result<String> = Result.failure(UnsupportedOperationException("Fuse One isn't part of this build."))
 
+    /**
+     * Signs this device in as the host with the host account's username and password: it then
+     * manages the household (the other devices, the account, the address from outside) and stays
+     * signed in for good, through updates and restarts of the host and of this device. Joining with
+     * the host account signs in as the host too.
+     */
+    suspend fun signInAsHost(username: String, password: String): Result<Unit> = Result.failure(UnsupportedOperationException("Fuse One isn't connected."))
+
+    /** Stops managing the household from this device; it stays linked and keeps syncing. */
+    suspend fun signOutAsHost(): Result<Unit> = Result.failure(UnsupportedOperationException("Fuse One isn't connected."))
+
     /** On the host: its account for joining and the Hub from away ([password] null keeps the one it has). */
     suspend fun setHostAccount(username: String, password: String?): Result<Unit> = Result.failure(UnsupportedOperationException("This device isn't a host."))
 

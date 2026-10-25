@@ -221,10 +221,12 @@ fun fuseOneRows(app: AppState): List<MenuAction> {
             val rows = io.github.matiyaaa.fuse.ui.shell.sync.syncRows(app, svc, prefs.sync, status, profiles, active, host, devices, hostsView, backups)
             fun part(vararg from: String?, under: String) = rows.filter { it.section in from }.map { it.copy(section = under) }
             addAll(part(null, "Set up", "Connection", under = "Household"))
+            // Signing in as the host from this device, right under the household: easy to find.
+            addAll(part("The host", under = "The host"))
             addAll(part("You", under = "Fuse Profiles"))
             addAll(part("What syncs", under = "What syncs"))
             if (prefs.sync.enabled) addAll(remoteLibraryRows(app, prefs.sync).map { it.copy(id = "reach.${it.id}", section = "Fuse Library Sync") })
-            addAll(rows.filter { it.section != null && it.section !in setOf("Set up", "Connection", "You", "What syncs", "Leave") })
+            addAll(rows.filter { it.section != null && it.section !in setOf("Set up", "Connection", "The host", "You", "What syncs", "Leave") })
             if (syncthing != null) addAll(syncthingRows(app, syncthing))
             addAll(part("Leave", under = "Leave"))
         } else if (syncthing != null) {

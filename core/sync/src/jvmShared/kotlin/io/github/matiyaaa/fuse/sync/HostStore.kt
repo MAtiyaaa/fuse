@@ -54,6 +54,11 @@ internal data class DeviceRecord(
     /** The Fuse it last called from, and that Fuse's protocol (0 before 0.4.2). */
     val fuseVersion: String = "",
     val protocol: Int = 0,
+    /**
+     * Signed in as the host with the host account: it manages the household from its own link, which
+     * never runs out, so updating or restarting the host never signs it out. Only unlinking it does.
+     */
+    val manager: Boolean = false,
 )
 
 @Serializable
@@ -436,6 +441,19 @@ class HostStore(
         false
     }
 
+    /**
+     * Carries [token]'s Hub sign-in on to [until] when it is used: a browser that opens the Hub now
+     * and then stays signed in for good. Written at most once a day per sign-in.
+     */
+    fun renewHubSession(token: String, until: Long): Boolean = synchronized(lock) {
+        val key = hubKey(token)
+        val was = hubSessions[key] ?: return false
+        if (until - was < RENEW_EVERY_MS) return false
+        hubSessions[key] = until
+        saveHubSessions()
+        true
+    }
+
     /** Ends [token]'s Hub sign-in (Sign Out). */
     fun closeHubSession(token: String) = synchronized(lock) {
         if (hubSessions.remove(hubKey(token)) != null) saveHubSessions()
@@ -548,13 +566,24 @@ class HostStore(
     /** Unlinks a device: its secret stops working at once. What it synced stays. */
     fun revokeDevice(id: String): Boolean = synchronized(lock) {
         val d = devices[id] ?: return@synchronized false
-        devices[id] = d.copy(revoked = true, secret = "", opened = emptyMap())
+        devices[id] = d.copy(revoked = true, secret = "", opened = emptyMap(), manager = false)
         saveDevices()
         event(JournalEvent.DEVICE, device = id)
         true
     }
 
-    private fun deviceInfoOf(d: DeviceRecord) = DeviceInfo(d.id, d.name, d.platform, d.profile, d.lastSeen, d.lastSync, d.connection, d.revoked, d.fuseVersion, d.protocol)
+    /** Signs device [id] in (or out) as the host; false for a device that isn't linked. */
+    fun setManager(id: String, on: Boolean): Boolean = synchronized(lock) {
+        val d = devices[id]?.takeIf { !it.revoked } ?: return@synchronized false
+        if (d.manager != on) {
+            devices[id] = d.copy(manager = on)
+            saveDevices()
+            event(JournalEvent.DEVICE, device = id)
+        }
+        true
+    }
+
+    private fun deviceInfoOf(d: DeviceRecord) = DeviceInfo(d.id, d.name, d.platform, d.profile, d.lastSeen, d.lastSync, d.connection, d.revoked, d.fuseVersion, d.protocol, d.manager)
 
     /** Notes the Fuse [id] calls from, kept only when it changed (an update, or the first call from 0.4.2). */
     internal fun noteVersion(id: String, fuseVersion: String, protocol: Int) = synchronized(lock) {
@@ -1224,6 +1253,9 @@ internal const val MIN_PASSWORD = 8
 
 /** How hard the account's password is stretched (it guards joining and the Hub from away). */
 internal const val ACCOUNT_ITERATIONS = 210_000
+
+/** A Hub sign-in is carried on when used, at most this often. */
+private const val RENEW_EVERY_MS = 24 * 60 * 60_000L
 
 /** applied.json: device id to `profile|game|kind` to what it reported. */
 private val AppliedFileSerializer: kotlinx.serialization.KSerializer<Map<String, Map<String, AppliedNote>>> = kotlinx.serialization.builtins.MapSerializer(

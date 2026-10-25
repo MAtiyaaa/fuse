@@ -689,14 +689,14 @@ private fun AskingToJoin(
     val first = if (waiting.account) 1 else 0
     Row(horizontalArrangement = Arrangement.spacedBy(Space.m)) {
         if (waiting.account) {
-            FuseButton("Use the Host's Account", selected = index == 0, modifier = Modifier.keptInView(index == 0), onClick = { signIn() }, icon = FuseIcons.UserRound, kind = ButtonKind.PRIMARY, loading = signing)
+            FuseButton("Sign In as the Host", selected = index == 0, modifier = Modifier.keptInView(index == 0), onClick = { signIn() }, icon = FuseIcons.UserRound, kind = ButtonKind.PRIMARY, loading = signing)
         }
         FuseButton("Use a Code Instead", selected = index == first, modifier = Modifier.keptInView(index == first), onClick = onCode, icon = FuseIcons.Keyboard)
         FuseButton("Cancel", selected = index == first + 1, modifier = Modifier.keptInView(index == first + 1), onClick = onCancel)
     }
     if (waiting.account) {
         Spacer(Modifier.height(Space.s))
-        FText("Nobody there? Sign in with the username and password set on the host.", Fuse.type.caption, color = c.textMuted, maxLines = 2)
+        FText("Nobody there? Sign in with the host's username and password: this device joins signed in as the host, and stays signed in.", Fuse.type.caption, color = c.textMuted, maxLines = 2)
     }
     StepInput(app, keys, actions)
 }

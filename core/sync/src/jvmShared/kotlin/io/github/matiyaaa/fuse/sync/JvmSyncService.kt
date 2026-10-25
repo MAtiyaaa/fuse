@@ -1721,9 +1721,36 @@ class JvmSyncService(
             val (session, outside) = joining ?: error("Ask the host first.")
             val link = SyncClient.joinWithAccount(session, username, password)
             joining = null
+            // The host account's own username and password: this device is signed in as the host,
+            // not only let in. A host from before 0.4.4 has no such call, and the device is simply in.
+            val probe = SyncClient(link)
+            runCatching { probe.signInAsHost(username, password) }
+                .onSuccess { log("Signed in as the host", kind = SyncActivity.HOST) }
+            probe.close()
             linkUp(if (outside != null) link.copy(remoteAddress = SyncClient.normalise(outside)) else link)
         }
     }
+
+    override suspend fun signInAsHost(username: String, password: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val c = client ?: throw SyncException("Connect this device to the host first.", "not-connected", 0)
+            runCatching { c.signInAsHost(username, password) }.getOrElse { e ->
+                // A host from before 0.4.4 doesn't know this call.
+                throw if (e is SyncException && e.status == 404) SyncException("The host runs a Fuse from before 0.4.4. Update it first, then sign in here.", "old-host", 404) else e
+            }
+            refreshLists()
+            log("Signed in as the host", kind = SyncActivity.HOST)
+        }
+    }
+
+    override suspend fun signOutAsHost(): Result<Unit> = withClient { c ->
+        c.signOutAsHost()
+        refreshLists()
+        log("No longer signed in as the host here", kind = SyncActivity.HOST)
+    }
+
+    /** True when this device is signed in as the host (it manages the household from here). */
+    private fun managing(): Boolean = _devices.value.any { it.id == cached.deviceId && it.manager }
 
     // ---------------------------------------------------------------- the host's account and outside address
 
@@ -1736,6 +1763,7 @@ class JvmSyncService(
             when {
                 store != null -> store.setAccount(username, password)
                 hostAdmin != null -> hostAdmin!!.setAccount(username, password)
+                managing() -> checkNotNull(client) { "Fuse One isn't connected." }.setAccountAsHost(username, password)
                 else -> error("Start the host first.")
             }
             adminAccount = username.trim()
@@ -1764,6 +1792,7 @@ class JvmSyncService(
             when {
                 store != null -> store.setOutsideAddress(clean)
                 hostAdmin != null -> hostAdmin!!.setOutside(clean)
+                managing() -> checkNotNull(client) { "Fuse One isn't connected." }.setOutsideAsHost(clean)
                 else -> error("Start the host first.")
             }
             adminStatus = runCatching { hostAdmin?.status() }.getOrNull() ?: adminStatus
@@ -3246,6 +3275,7 @@ class JvmSyncService(
             when {
                 s != null -> s.changeDevice(id, DeviceChange(name = name))
                 hostAdmin != null -> hostAdmin!!.rename(id, name)
+                id != cached.deviceId && managing() -> client?.renameDevice(id, name)
                 else -> client?.renameSelf(name)
             }
             refreshLists()
@@ -3258,7 +3288,8 @@ class JvmSyncService(
             when {
                 s != null -> s.revokeDevice(id)
                 hostAdmin != null -> hostAdmin!!.revoke(id)
-                else -> error("Unlink other devices on the host.")
+                managing() -> checkNotNull(client) { "Fuse One isn't connected." }.unlinkDevice(id)
+                else -> error("Unlink other devices on the host, or sign in as the host here.")
             }
             refreshLists()
             refreshHostView()

@@ -43,6 +43,12 @@ it runs, and Low Power turns fully off again.
   for the device) and Play, each with its controller button. The D-pad moves through the grid, the
   right stick changes shelf and the triggers page by a screen. The touch screen keeps the theme's
   own room, lit softly in the chosen game's colour, and leaves the game's art to the screen above.
+- **Sign in as the host from any device.** On a device in your household, Settings, Fuse One, Sign
+  In as the Host asks for the host's username and password once. That device then manages the host:
+  renaming and unlinking devices, changing the host account and setting the address from outside.
+  It stays signed in through every update and restart, of the host and of the device; only Sign Out
+  as the Host on it, or unlinking it, ends that. Joining with the host's account signs you in as
+  the host too, and the Hub in a browser stays signed in for as long as you keep opening it.
 - **GIFs that move.** Choose a GIF (or an animated WebP) as a game's or a system's background
   picture, as its logo, or as your theme's picture behind everything, and it plays wherever it is
   shown: in a system's filter on the screen below, on game pages, in the Library and on Home. A GIF
@@ -99,6 +105,8 @@ it runs, and Low Power turns fully off again.
 
 - A game opened for a few minutes and closed before it saved no longer says Fuse found no save for
   it. A play under five minutes that leaves no save says nothing.
+- Updating or restarting the Fuse One Host no longer signs you out of its Hub, and a Hub sign-in no
+  longer runs out after twelve hours.
 - Play time no longer counts the time a handheld's screen was off or a computer slept with its game
   open, and a session Fuse didn't see end ends where Fuse last saw it going.
 - RetroAchievements progress shows offline again: answers past their time are kept for sixty days

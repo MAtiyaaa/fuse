@@ -215,6 +215,70 @@ internal fun syncRows(
         },
     ))
 
+    // Signed in as the host, from this device ---------------------------------------------------
+    if (c.role != "HOST") {
+        val hostName = c.hostName.ifBlank { "the host" }
+        val hostSection = "The host"
+        val me = devices.firstOrNull { it.id == c.deviceId }
+        if (me?.manager == true) {
+            add(infoRow(
+                "managing", "Signed In as the Host",
+                detail = "This device manages $hostName: its devices, its account and its address from outside. It stays signed in through updates and restarts, of the host and of this device",
+                icon = FuseIcons.ShieldCheck,
+            ).copy(section = hostSection))
+            val linked = devices.filterNot { it.revoked }
+            add(MenuAction(
+                "hostdevices", "Devices", FuseIcons.MonitorSmartphone,
+                detail = linked.joinToString(", ") { it.name }.ifBlank { "Only this one so far" },
+                trailing = Trailing.Value(count(linked.size, "device")), section = hostSection,
+                onSelect = { manageDevices(app, svc, linked, c.deviceId, svc.hostFuse.value) },
+            ))
+            add(MenuAction(
+                "hostoutside", "Address From Outside, for Every Device", FuseIcons.Globe,
+                detail = "Every device uses it away from home, and the Hub opens there after signing in",
+                trailing = Trailing.Value(c.remoteAddress.removePrefix("https://").removePrefix("http://").ifBlank { "Not set" }), section = hostSection,
+                onSelect = {
+                    app.textInput = TextInputSpec("Address from outside", c.remoteAddress, "https://sync.example.com", capitalize = false) { v ->
+                        app.scope.launch {
+                            svc.setOutsideAddress(v).onSuccess { app.toasts.show(if (v.isBlank()) "No address from outside" else "Every device will use it away from home", ToastKind.SUCCESS) }
+                                .onFailure { app.toasts.show(it.message ?: "Couldn't set it", ToastKind.ERROR) }
+                        }
+                    }
+                },
+            ))
+            add(MenuAction(
+                "hostaccount", "Host Account", FuseIcons.UserRound,
+                detail = "Change its username or password. This device stays signed in either way",
+                trailing = Trailing.Chevron, section = hostSection,
+                onSelect = { hostAccount(app, svc, current = "", canRemove = false) },
+            ))
+            add(MenuAction(
+                "hostsignout", "Sign Out as the Host", FuseIcons.LogOut,
+                detail = "This device keeps syncing; it just stops managing $hostName",
+                section = hostSection,
+                onSelect = {
+                    app.confirm = ConfirmSpec(
+                        "Sign out as the host here?",
+                        "This device stays linked and keeps syncing. You can sign in as the host again any time with the host's username and password.",
+                        "Sign Out",
+                    ) {
+                        app.scope.launch {
+                            svc.signOutAsHost().onSuccess { app.toasts.show("Signed out as the host. Everything keeps syncing", icon = FuseIcons.LogOut) }
+                                .onFailure { app.toasts.show(it.message ?: "Couldn't sign out", ToastKind.ERROR) }
+                        }
+                    }
+                },
+            ))
+        } else {
+            add(MenuAction(
+                "hostsignin", "Sign In as the Host", FuseIcons.LogIn,
+                detail = "With the host's username and password, once. This device then manages $hostName, and stays signed in through updates and restarts",
+                trailing = Trailing.Chevron, section = hostSection,
+                onSelect = { signInAsHost(app, svc, hostName) },
+            ))
+        }
+    }
+
     // Host -----------------------------------------------------------------------------------------
     if (c.role == "HOST") {
         val hostSection = "This computer is the host"
@@ -395,7 +459,25 @@ private fun profileChoices(app: AppState, title: String, message: String, profil
     )
 }
 
-private fun hostAccount(app: AppState, svc: SyncService, current: String?) {
+/**
+ * Signing this device in as the host: the host account's username, then its password. Said plainly
+ * when it works, and when it doesn't, why.
+ */
+private fun signInAsHost(app: AppState, svc: SyncService, hostName: String) {
+    app.textInput = TextInputSpec("The host's username", "", "The username set on $hostName", capitalize = false, doneLabel = "Next") { user ->
+        if (user.isBlank()) return@TextInputSpec
+        app.textInput = TextInputSpec("Password for ${user.trim()}", "", "", secret = true, capitalize = false, doneLabel = "Sign In") { pass ->
+            if (pass.isEmpty()) return@TextInputSpec
+            app.scope.launch {
+                svc.signInAsHost(user, pass)
+                    .onSuccess { app.toasts.show("Signed in as the host. This device stays signed in", ToastKind.SUCCESS, icon = FuseIcons.ShieldCheck) }
+                    .onFailure { app.toasts.show(it.message ?: "Couldn't sign in as the host", ToastKind.ERROR) }
+            }
+        }
+    }
+}
+
+private fun hostAccount(app: AppState, svc: SyncService, current: String?, canRemove: Boolean = true) {
     fun askPassword(user: String) {
         app.textInput = TextInputSpec("A password for $user", "", "At least 8 characters", secret = true, capitalize = false, doneLabel = "Next") { first ->
             if (first.length < 8) return@TextInputSpec app.toasts.show("Choose a password of at least 8 characters", ToastKind.WARNING)
@@ -418,7 +500,7 @@ private fun hostAccount(app: AppState, svc: SyncService, current: String?) {
         title = "Host Account",
         icon = FuseIcons.UserRound,
         message = if (current.isNotBlank()) "Signed in as $current from away" else null,
-        options = listOf(
+        options = listOfNotNull(
             MenuAction("pw", "Change the Password", FuseIcons.Lock, onSelect = {
                 app.choice = null
                 // The background service's host doesn't say its username: ask for it with the new password.
@@ -435,7 +517,7 @@ private fun hostAccount(app: AppState, svc: SyncService, current: String?) {
                     "Devices then join only with someone at a screen to let them in, and the Hub opens on this computer only. Devices already in stay in.",
                     "Remove", destructive = true,
                 ) { app.scope.launch { svc.clearHostAccount() } }
-            }),
+            }).takeIf { canRemove },
         ),
     )
 }

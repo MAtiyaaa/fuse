@@ -371,6 +371,7 @@ class SyncHost(
                     call.respondText("The Hub opens on the host computer. To open it from away, set up a host account in Fuse on the host.", ContentType.Text.Plain, HttpStatusCode.Forbidden)
                 }
             }
+            if (away) keepHubSignedIn()
             val status = status()
             call.html(HubPage.render(status, status.profiles.mapNotNull { store.report(it.id) }, clock(), away = away, formToken = hubFormToken))
         }
@@ -413,13 +414,10 @@ class SyncHost(
             }
             val token = SyncCrypto.token(32)
             val now = clock()
-            // Kept with the host, so an update or a restart doesn't sign anyone out.
+            // Kept with the host, so an update or a restart doesn't sign anyone out, and carried on
+            // each time the Hub is opened, so it never runs out while it is used.
             store.openHubSession(token, now + HUB_SESSION_MS, now)
-            val secure = call.request.headers["X-Forwarded-Proto"] == "https" || call.request.headers["CF-Visitor"]?.contains("https") == true
-            call.response.headers.append(
-                "Set-Cookie",
-                "$HUB_COOKIE=$token; Path=/hub; Max-Age=${HUB_SESSION_MS / 1000}; HttpOnly; SameSite=Strict" + if (secure) "; Secure" else "",
-            )
+            setHubCookie(token)
             call.response.headers.append("Location", "/hub")
             call.respondText("", ContentType.Text.Plain, HttpStatusCode.SeeOther)
         }
@@ -869,6 +867,7 @@ class SyncHost(
                 call.respondText("{}", ContentType.Application.Json)
             }
             post("/pairing") { device() ?: return@post; call.json(String.serializer(), newPairingCode()) }
+            manageApi()
             get("/shared-games") { device() ?: return@get; call.json(SharedGames.serializer(), store.sharedGames()) }
             post("/shared-games") {
                 val d = device() ?: return@post
@@ -882,8 +881,8 @@ class SyncHost(
                 val d = device() ?: return@patch
                 val req = signedBody(d, DeviceChange.serializer()) ?: return@patch
                 val id = call.parameters["id"].orEmpty()
-                // A device renames itself; others are renamed from the Hub on the host.
-                if (id != d.id) return@patch call.fail(HttpStatusCode.Forbidden, "Only this device's own name can be changed from it.", "not-yours")
+                // A device renames itself; others are renamed on the host, or by a device signed in as the host.
+                if (id != d.id && !d.manager) return@patch call.fail(HttpStatusCode.Forbidden, "Only this device's own name can be changed from it.", "not-yours")
                 val info = store.changeDevice(id, req.copy(profile = null)) ?: return@patch call.fail(HttpStatusCode.NotFound, "No such device.", "no-device")
                 bump()
                 call.json(DeviceInfo.serializer(), info)
@@ -891,14 +890,78 @@ class SyncHost(
             delete("/devices/{id}") {
                 val d = device() ?: return@delete
                 val id = call.parameters["id"].orEmpty()
-                // A device can always unlink itself.
-                if (id != d.id) return@delete call.fail(HttpStatusCode.Forbidden, "Unlink other devices from the host's Hub.", "not-yours")
+                // A device can always unlink itself; others only the host, or a device signed in as the host.
+                if (id != d.id && !d.manager) return@delete call.fail(HttpStatusCode.Forbidden, "Unlink other devices from the host's Hub.", "not-yours")
                 store.revokeDevice(id)
                 household.forget(id)
                 bump()
                 call.respondText("{}", ContentType.Application.Json)
             }
             householdApi()
+        }
+    }
+
+    // ---------------------------------------------------------------- signed in as the host
+
+    /** Challenges for signing in as the host, by device: one at a time, for [HOST_SIGN_IN_TTL_MS]. */
+    private val hostSignIns = ConcurrentHashMap<String, Pair<String, Long>>()
+
+    /**
+     * A device signed in as the host, with the host account's username and password: the password
+     * proves itself over a challenge for this one try, so it never travels. From then on the device
+     * manages the household (the other devices, the account, the address from outside) through its
+     * own link, which never runs out: updating or restarting the host, from here or from away, never
+     * signs it out. Unlinking the device, or signing out on it, does.
+     */
+    private fun Route.manageApi() {
+        get("/manage") {
+            val d = device() ?: return@get
+            val challenge = SyncCrypto.token(24)
+            hostSignIns[d.id] = challenge to clock()
+            val stretch = store.accountStretch()
+            call.json(HostSignInChallenge.serializer(), HostSignInChallenge(challenge, stretch?.first, stretch?.second ?: 0, d.manager))
+        }
+        post("/manage/sign-in") {
+            val d = device() ?: return@post
+            val who = caller() + "|" + d.id
+            if (lockedOut(who)) return@post call.fail(HttpStatusCode.TooManyRequests, "Too many wrong passwords. Try again in a few minutes.", "locked-out")
+            val req = signedBody(d, HostSignIn.serializer()) ?: return@post
+            val (challenge, at) = hostSignIns.remove(d.id) ?: return@post call.fail(HttpStatusCode.Gone, "That sign-in ran out. Try again.", "gone")
+            if (clock() - at > HOST_SIGN_IN_TTL_MS || !SyncCrypto.constantEquals(challenge, req.challenge)) {
+                return@post call.fail(HttpStatusCode.Gone, "That sign-in ran out. Try again.", "gone")
+            }
+            if (store.accountName() == null) return@post call.fail(HttpStatusCode.Forbidden, "The host has no account yet. Set one up in Fuse on the host computer.", "no-account")
+            if (!store.accountProofOk(req.username, challenge, req.proof)) {
+                missed(who)
+                return@post call.fail(HttpStatusCode.Forbidden, "That username or password isn't the host's.", "wrong-account")
+            }
+            store.setManager(d.id, true)
+            bump()
+            call.respondText("{}", ContentType.Application.Json)
+        }
+        post("/manage/sign-out") {
+            val d = device() ?: return@post
+            store.setManager(d.id, false)
+            bump()
+            call.respondText("{}", ContentType.Application.Json)
+        }
+        post("/manage/account") {
+            val d = device() ?: return@post
+            if (!d.manager) return@post call.fail(HttpStatusCode.Forbidden, "Sign in as the host on this device first.", "not-manager")
+            val req = signedBody(d, SealedAccountChange.serializer()) ?: return@post
+            val password = req.sealedPassword?.let { SyncCrypto.open(it, d.secret, req.salt)?.decodeToString() ?: return@post call.fail(HttpStatusCode.BadRequest, "The new password couldn't be opened.", "seal") }
+            runCatching { store.setAccount(req.username, password) }
+                .onFailure { return@post call.fail(HttpStatusCode.BadRequest, it.message ?: "Bad account", "bad-account") }
+            bump()
+            call.respondText("{}", ContentType.Application.Json)
+        }
+        post("/manage/outside") {
+            val d = device() ?: return@post
+            if (!d.manager) return@post call.fail(HttpStatusCode.Forbidden, "Sign in as the host on this device first.", "not-manager")
+            val req = signedBody(d, OutsideChange.serializer()) ?: return@post
+            store.setOutsideAddress(req.address)
+            bump()
+            call.respondText("{}", ContentType.Application.Json)
         }
     }
 
@@ -1279,6 +1342,20 @@ class SyncHost(
         return store.hubSessionOpen(token, clock()) && store.accountName() != null
     }
 
+    /** Carries the Hub sign-in on from today, in the host's keeping and the browser's (at most once a day). */
+    private fun RoutingContext.keepHubSignedIn() {
+        val token = hubToken() ?: return
+        if (store.renewHubSession(token, clock() + HUB_SESSION_MS)) setHubCookie(token)
+    }
+
+    private fun RoutingContext.setHubCookie(token: String) {
+        val secure = call.request.headers["X-Forwarded-Proto"] == "https" || call.request.headers["CF-Visitor"]?.contains("https") == true
+        call.response.headers.append(
+            "Set-Cookie",
+            "$HUB_COOKIE=$token; Path=/hub; Max-Age=${HUB_SESSION_MS / 1000}; HttpOnly; SameSite=Strict" + if (secure) "; Secure" else "",
+        )
+    }
+
     private fun RoutingContext.route(): String = call.request.headers["X-Fuse-Route"]?.takeIf { it == "LOCAL" || it == "REMOTE" } ?: ""
 
     /** True (after answering) when this address has made too many calls this minute. */
@@ -1408,7 +1485,13 @@ class SyncHost(
         /** Wrong passwords allowed in [MISS_WINDOW_MS] before that caller waits. */
         private const val MAX_MISSES = 5
         private const val MISS_WINDOW_MS = 10 * 60_000L
-        private const val HUB_SESSION_MS = 12 * 60 * 60_000L
+        /**
+         * How long a Hub sign-in lasts from the last time the Hub was opened with it: the longest a
+         * browser keeps a cookie (400 days), so one in use is never signed out.
+         */
+        private const val HUB_SESSION_MS = 400L * 24 * 60 * 60_000L
+        /** How long a device has to answer the challenge for signing in as the host. */
+        private const val HOST_SIGN_IN_TTL_MS = 2 * 60_000L
         private const val HUB_COOKIE = "fuse_hub"
 
         /** Headers a tunnel or reverse proxy adds for the caller it carries. */

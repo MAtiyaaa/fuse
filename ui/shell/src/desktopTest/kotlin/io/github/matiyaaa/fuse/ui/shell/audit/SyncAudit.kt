@@ -288,8 +288,15 @@ internal fun AuditDriver.syncScreens() {
     scenario("sync", "settings on a device") {
         useSync(asHost = false)
         openSyncPage()
-        waitFor("Save Folders")
+        waitFor("Use Fuse One")
         shoot("a device connected to the host", 1_200)
+        // Signing in as the host, from here: one row, then its username and password.
+        focusText("Sign In as the Host")
+        shoot("signing in as the host from this device", 900)
+        sync.devices.value = sync.devices.value.map { if (it.id == "deck") it.copy(manager = true) else it }
+        settle(900)
+        focusText("Signed In as the Host")
+        shoot("signed in as the host: the devices, the account and the address, from here", 900)
         tapText("Home on This Device")
         waitFor("All devices on this profile")
         shoot("Home: the profile's everywhere, or this device's own")

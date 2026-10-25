@@ -455,6 +455,29 @@ class SyncClient(
     suspend fun renameSelf(name: String): DeviceInfo = send(HttpMethod.Patch, "/devices/${link.deviceId}", DeviceChange(name = name), DeviceChange.serializer(), DeviceInfo.serializer())
     suspend fun unlinkSelf() = call<Unit>(HttpMethod.Delete, "/devices/${link.deviceId}", ByteArray(0), null)
 
+    // Signed in as the host (see SyncHost's manageApi) ---------------------------------------------
+
+    /**
+     * Signs this device in as the host with the host account: the password is stretched here and
+     * proves itself over the host's challenge for this one try, so it never travels.
+     */
+    suspend fun signInAsHost(username: String, password: String) {
+        val c = get("/manage", HostSignInChallenge.serializer())
+        val salt = c.salt ?: throw SyncException("${link.hostName} has no account yet. Set one up in Fuse on the host computer.", "no-account", 403)
+        val key = SyncCrypto.stretch(password, salt, c.iterations)
+        send(HttpMethod.Post, "/manage/sign-in", HostSignIn(username.trim(), c.challenge, SyncCrypto.hmac(key, c.challenge)), HostSignIn.serializer(), kotlinx.serialization.json.JsonObject.serializer())
+    }
+    suspend fun signOutAsHost() { send(HttpMethod.Post, "/manage/sign-out", kotlinx.serialization.json.JsonObject(emptyMap()), kotlinx.serialization.json.JsonObject.serializer(), kotlinx.serialization.json.JsonObject.serializer()) }
+    /** Changes the host account; a new [password] goes sealed with this device's own secret. */
+    suspend fun setAccountAsHost(username: String, password: String?) {
+        val salt = SyncCrypto.token(16)
+        val sealed = password?.let { SyncCrypto.seal(it.toByteArray(), link.deviceSecret, salt) }
+        send(HttpMethod.Post, "/manage/account", SealedAccountChange(username.trim(), sealed, salt), SealedAccountChange.serializer(), kotlinx.serialization.json.JsonObject.serializer())
+    }
+    suspend fun setOutsideAsHost(address: String) { send(HttpMethod.Post, "/manage/outside", OutsideChange(address), OutsideChange.serializer(), kotlinx.serialization.json.JsonObject.serializer()) }
+    suspend fun renameDevice(id: String, name: String): DeviceInfo = send(HttpMethod.Patch, "/devices/$id", DeviceChange(name = name), DeviceChange.serializer(), DeviceInfo.serializer())
+    suspend fun unlinkDevice(id: String) = call<Unit>(HttpMethod.Delete, "/devices/$id", ByteArray(0), null)
+
     suspend fun missing(hashes: List<String>): List<String> =
         send(HttpMethod.Post, "/blobs/missing", MissingBlobs(hashes), MissingBlobs.serializer(), MissingBlobs.serializer()).hashes
 
