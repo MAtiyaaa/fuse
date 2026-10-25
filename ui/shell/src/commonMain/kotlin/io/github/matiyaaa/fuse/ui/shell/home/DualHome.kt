@@ -128,6 +128,10 @@ fun DualHome(app: AppState) {
     val count = games?.size ?: 0
     val index = (sel.index[shelf.key] ?: 0).coerceIn(0, (count - 1).coerceAtLeast(0))
     val chosen = games?.getOrNull(index)
+    // Each shelf keeps its own scroll, made before the grid and its position bar first read it, and
+    // its games, so a shelf on its way out shows them to the end instead of a spinner.
+    val grid = sel.grids.getOrPut(shelf.key) { LazyGridState(firstVisibleItemIndex = (index - 2).coerceAtLeast(0)) }
+    androidx.compose.runtime.SideEffect { if (games != null) sel.lists[shelf.key] = games }
     val systems = rememberSystems(app)
     val content = app.focusZone == FocusZone.CONTENT
 
@@ -223,35 +227,41 @@ fun DualHome(app: AppState) {
                 },
                 label = "dual shelf",
             ) { key ->
-                val list = if (key == shelf.key) games else null
+                val current = key == shelf.key
+                val list = if (current) games ?: sel.lists[key] else sel.lists[key]
+                val at = if (current) index else sel.index[key] ?: 0
                 when {
                     list == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner() }
                     list.isEmpty() -> EmptyState(FuseIcons.Library, "Nothing here yet", Modifier.fillMaxSize(), message = "Games you add show up here")
                     else -> IconGrid(
-                        app, list, key, index, rows, gutter, content,
-                        grid = sel.grids.getOrPut(key) { LazyGridState(firstVisibleItemIndex = (index - rows).coerceAtLeast(0)) },
+                        app, list, key, at, rows, gutter, content && current,
+                        grid = sel.grids.getOrPut(key) { LazyGridState() },
+                        // A shelf on its way out takes no touches.
                         onTap = { i ->
-                            app.focusZone = FocusZone.CONTENT
-                            // A DS's way: the first touch chooses, the second starts it.
-                            if (i == index) {
-                                list.getOrNull(i)?.let(app::activateGame)
-                            } else {
-                                choose(i)
-                                app.platform.sounds.play(SoundCue.MOVE)
-                                app.platform.haptics.tick()
+                            if (current) {
+                                app.focusZone = FocusZone.CONTENT
+                                // A DS's way: the first touch chooses, the second starts it.
+                                if (i == index) {
+                                    list.getOrNull(i)?.let(app::activateGame)
+                                } else {
+                                    choose(i)
+                                    app.platform.sounds.play(SoundCue.MOVE)
+                                    app.platform.haptics.tick()
+                                }
                             }
                         },
                         onHold = { i ->
-                            app.focusZone = FocusZone.CONTENT
-                            choose(i)
-                            list.getOrNull(i)?.let(::options)
+                            if (current) {
+                                app.focusZone = FocusZone.CONTENT
+                                choose(i)
+                                list.getOrNull(i)?.let(::options)
+                            }
                         },
                     )
                 }
             }
             Spacer(Modifier.height(Space.s))
-            val grid = sel.grids[shelf.key]
-            if (grid != null && count > 0) {
+            if (count > 0) {
                 PositionBar(grid, rows, count, Modifier.fillMaxWidth().padding(horizontal = gutter).height(POSITION))
             } else {
                 Spacer(Modifier.height(POSITION))
@@ -278,6 +288,7 @@ internal class DualSelection {
     /** Which way the last change of shelf went, for the grid's slide. */
     var direction by mutableIntStateOf(0)
     val grids = HashMap<String, LazyGridState>()
+    val lists = HashMap<String, List<GameCard>>()
 }
 
 /** One shelf of Home below: its games when Home's feed has them, else they are asked for ([platform], or the whole library). */
