@@ -349,7 +349,7 @@ class FolderInterpreter(
         return folderGame(folder, children, folder.path, FolderInterpretation.FOLDER_IS_GAME, walk)
     }
 
-    private fun browserGame(folder: FsEntry, children: List<FsEntry>, walk: Walk): ScannedGame =
+    private suspend fun browserGame(folder: FsEntry, children: List<FsEntry>, walk: Walk): ScannedGame =
         folderGame(folder, children, folder.path, FolderInterpretation.FOLDER_BROWSER, walk)
 
     /**
@@ -377,14 +377,17 @@ class FolderInterpreter(
         val title = folderTitle(folder, walk)
         val content = ArrayList<ChildContent>()
         val extraGroups = ArrayList<FileGroup>()
-        var sizeBytes = directFileSize(children)
+        // Every file in the folder, every level down, as RomM counts a game made of a folder; each
+        // category folder is counted once, below, by its entries.
+        var sizeBytes = topFileSize(children) + children
+            .filter { it.isDirectory && it !in layout.categoryDirs && !it.isSymlink && !it.name.startsWith(".") }
+            .sumOf { treeSize(it.path) }
         var modifiedAt = maxOf(folder.modifiedAt, children.maxOfOrNull { it.modifiedAt } ?: 0L)
 
         var main = pickMain(grouping.groups.filter { walk.kindOf(it) == null }, title, walk.platform)
         extraGroups += grouping.groups.filter { it !== main }
         for (baseDir in layout.baseDirs) {
             val entries = walk.list(baseDir.path) ?: continue
-            sizeBytes += entries.filter { !it.isDirectory }.sumOf { it.sizeBytes }
             modifiedAt = maxOf(modifiedAt, entries.maxOfOrNull { it.modifiedAt } ?: 0L)
             val baseGroups = readPackages(grouper.group(baseDir.path, entries, walk::isGameFile).groups, walk)
             val candidate = if (main == null) {
@@ -410,8 +413,10 @@ class FolderInterpreter(
             val entries = walk.list(dir.path) ?: continue
             for (entry in entries.sortedBy { it.name.lowercase() }) {
                 if (entry.name.startsWith(".") || (!entry.isDirectory && ScanRules.isIgnoredFile(entry.name))) continue
-                content += LooseContent.child(kind, entry)
-                sizeBytes += entry.sizeBytes
+                // An update or DLC kept as a folder (`update/CUSA00001-patch/`) is as big as what's in it.
+                val sized = if (entry.isDirectory && !entry.isSymlink) entry.copy(sizeBytes = treeSize(entry.path)) else entry
+                content += LooseContent.child(kind, sized)
+                sizeBytes += sized.sizeBytes
                 modifiedAt = maxOf(modifiedAt, entry.modifiedAt)
             }
         }
@@ -508,7 +513,13 @@ class FolderInterpreter(
             // All descendants belong to this recognized title, regardless of their names/extensions.
             // This also retires legacy resource entries even when no deeper directory was walked.
             walk.skipped += children.filter { it.isDirectory }.map { it.path }
-            return folderGame(folder, children, launch, FolderInterpretation.FOLDER_IS_GAME, walk, serial = serial)
+            val game = folderGame(folder, children, launch, FolderInterpretation.FOLDER_IS_GAME, walk, serial = serial)
+            // RomM's category folders right inside the title (`dlc/`, `update/`, `patch/`), as RomM
+            // files a multi-file game's content: listed as the game's own, each with its size.
+            val extra = Layout(children, options).categoryDirs.map { dir ->
+                LooseContent.child(ContentKind.ofFolder(dir.name)!!, dir.copy(sizeBytes = treeSize(dir.path)))
+            }
+            return if (extra.isEmpty()) game else game.copy(content = game.content + extra)
         }
 
         // PlayStation 3: disc layout, or PSN/HDD layout (USRDIR + PARAM.SFO / EBOOT.BIN).
@@ -680,7 +691,7 @@ class FolderInterpreter(
         return if (ext.isNotEmpty() && ext in walk.platform.extensions) FsPath.stem(folder.name) else folder.name
     }
 
-    private fun folderGame(
+    private suspend fun folderGame(
         folder: FsEntry,
         children: List<FsEntry>,
         launchPath: String,
@@ -699,10 +710,46 @@ class FolderInterpreter(
             title = folderTitle(folder, walk),
             tags = if (tags.serial == null && serial != null) tags.copy(serial = serial) else tags,
             discs = discs,
-            sizeBytes = directFileSize(children),
+            sizeBytes = folderSize(children),
             modifiedAt = maxOf(folder.modifiedAt, children.maxOfOrNull { it.modifiedAt } ?: 0L),
             interpretation = interpretation,
         )
+    }
+
+    /**
+     * A folder game's size from its listed [children]: every file in it, every level down. RomM
+     * counts a game made of a folder this way (each of its files, whatever folder it sits in), and a
+     * PS4 dump keeps nearly all of itself below the top (Bloodborne's 29 GB is in `dvdroot_ps4/`,
+     * its top level a few hundred megabytes), so counting only the top made it look a tenth its size.
+     */
+    private suspend fun folderSize(children: List<FsEntry>): Long =
+        topFileSize(children) + children.filter { it.isDirectory && !it.isSymlink && !it.name.startsWith(".") }.sumOf { treeSize(it.path) }
+
+    /**
+     * Every file under [dir], every level down. Links to folders are not followed and hidden folders
+     * are left out, so a loop can't count anything twice; a folder that can't be read counts nothing
+     * (the size is then as much as could be read, never a guess).
+     */
+    private suspend fun treeSize(dir: String, depth: Int = 0): Long {
+        if (depth > TREE_DEPTH) return 0
+        currentCoroutineContext().ensureActive()
+        val entries = try {
+            fs.list(dir)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return 0
+        }
+        if (depth % 4 == 3) yield()
+        var size = 0L
+        for (e in entries) {
+            size += when {
+                e.isDirectory -> if (e.isSymlink || e.name.startsWith(".")) 0 else treeSize(e.path, depth + 1)
+                isClutter(e.name) -> 0
+                else -> e.sizeBytes
+            }
+        }
+        return size
     }
 
     /**
@@ -880,12 +927,17 @@ class FolderInterpreter(
             NameFlags.CRACKED, NameFlags.PIRATE, NameFlags.VIRUS, NameFlags.BAD_CHECKSUM, NameFlags.UPDATE, NameFlags.DLC,
         )
 
-        /**
-         * Size of the files directly in a folder game (saves and temp files excluded). Folder
-         * structures such as PS3 titles are not walked for size, so their size is a lower bound.
-         */
-        fun directFileSize(children: List<FsEntry>): Long =
-            children.filter { !it.isDirectory && !ScanRules.isIgnoredFile(it.name) }.sumOf { it.sizeBytes }
+        /** How deep [treeSize] goes: deeper than any game's own folders. */
+        const val TREE_DEPTH = 32
+
+        /** System clutter a folder game's size leaves out, as its upload to RomM does ([io.github.matiyaaa.fuse.library.storage.UploadFiles]). */
+        private val CLUTTER = setOf(".ds_store", "thumbs.db", "desktop.ini")
+
+        fun isClutter(name: String): Boolean = name.lowercase() in CLUTTER || name.startsWith("._")
+
+        /** Size of the files at the top of a folder game (system clutter excluded). */
+        fun topFileSize(children: List<FsEntry>): Long =
+            children.filter { !it.isDirectory && !isClutter(it.name) }.sumOf { it.sizeBytes }
 
         fun isBaseFolder(name: String): Boolean {
             val n = name.trim().lowercase()

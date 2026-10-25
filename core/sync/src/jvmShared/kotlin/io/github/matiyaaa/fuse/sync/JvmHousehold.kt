@@ -278,7 +278,8 @@ class JvmHousehold(
 
     private suspend fun resolve(game: String, file: String): File? {
         val g = shared[game] ?: return null
-        if (file !in g.entry.files.map { it.path }) return null
+        // Only the game's own files, by their place in it ([SharedGame.paths] holds exactly those):
+        // a lookup, not a list made again for every file of a PS4 game's twenty-eight thousand.
         return g.paths[file]?.let(::File)?.also(::hashSoon)
     }
 

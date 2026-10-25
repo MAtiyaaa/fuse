@@ -150,6 +150,52 @@ class FolderInterpreterTest {
         assertEquals("$game/sce_sys/icon0.png", single.localMedia[MediaKind.SQUARE])
     }
 
+    // RomM counts a game made of a folder by every file in it, every level down: a PS4 dump keeps
+    // nearly all of itself below the top (Bloodborne's dvdroot_ps4/), which once read a tenth its size.
+    @Test
+    fun folderGameIsAsBigAsEverythingInIt() = runTest {
+        val game = "/ROMs/ps4/Bloodborne"
+        fs.file("$game/eboot.bin", size = 90_000_000)
+        fs.file("$game/sce_sys/param.sfo", content = "\u0000PSF\u0001TITLE_ID\u0000CUSA00900")
+        fs.file("$game/sce_module/libc.prx", size = 900_000)
+        fs.file("$game/dvdroot_ps4/map/m21_00_00_00.mapbnd.dcx", size = 21_000_000_000)
+        fs.file("$game/dvdroot_ps4/sound/frpg_main.fsb", size = 3_700_000_000)
+        fs.file("$game/.DS_Store", size = 6_000)
+        val single = scan("ps4", "/ROMs/ps4").games.single()
+        assertEquals(game, single.path)
+        val sfo = fs.stat("$game/sce_sys/param.sfo")!!.sizeBytes
+        assertEquals(90_000_000L + 900_000 + 21_000_000_000 + 3_700_000_000 + sfo, single.sizeBytes)
+    }
+
+    // RomM's category folders inside a dump (God of War III's dlc/) are the game's content, with their sizes.
+    @Test
+    fun categoryFoldersInsideAFolderGameAreItsContent() = runTest {
+        val game = "/ROMs/ps4/God of War III"
+        fs.file("$game/eboot.bin", size = 11_000_000)
+        fs.file("$game/sce_sys/param.sfo", content = "\u0000PSF\u0001TITLE_ID\u0000CUSA01623")
+        fs.file("$game/EXEC/WAD/core.wad", size = 48_000_000_000)
+        fs.file("$game/dlc/Costumes/sce_sys/param.sfo", content = "x")
+        fs.file("$game/dlc/Costumes/costume.wad", size = 300_000_000)
+        fs.file("$game/update/CUSA01623-patch/eboot.bin", size = 12_000_000)
+        val single = scan("ps4", "/ROMs/ps4").games.single()
+        assertEquals(game, single.path)
+        val kinds = single.content.associate { it.kind to it.sizeBytes }
+        assertEquals(300_000_001L, kinds[ContentKind.DLC])
+        assertEquals(12_000_000L, kinds[ContentKind.UPDATE])
+        assertTrue(single.sizeBytes > 48_300_000_000)
+    }
+
+    // A multi-file game's update kept as a folder counts its files, not nothing.
+    @Test
+    fun updateFolderInAMultiFileGameHasItsSize() = runTest {
+        val game = "/ROMs/switch/Mario Kart 8 Deluxe"
+        fs.file("$game/Mario Kart 8 Deluxe.nsp", size = 7_000_000_000)
+        fs.file("$game/update/v3.0.1/Mario Kart 8 Deluxe [v196608].nsp", size = 900_000_000)
+        val single = scan("switch", "/ROMs/switch").games.single()
+        assertEquals(900_000_000L, single.content.single { it.kind == ContentKind.UPDATE }.sizeBytes)
+        assertEquals(7_900_000_000L, single.sizeBytes)
+    }
+
     @Test
     fun ps4UpdateFolderBelongsToItsGame() = runTest {
         for (id in listOf("CUSA00900", "CUSA00900-UPDATE")) {

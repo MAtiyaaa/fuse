@@ -445,8 +445,11 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
 private const val RULES_NS = "scan.rules"
 private const val RULES_KEY = "version"
 
-/** Moves when the scanner's idea of what a game is changes (2: a game's own folders are never games). */
-private const val SCAN_RULES = 2
+/**
+ * Moves when the scanner's idea of what a game is changes (2: a game's own folders are never games;
+ * 3: a folder game is as big as everything in it, as RomM counts it, with its category folders).
+ */
+private const val SCAN_RULES = 3
 
 private val STEAM = PlatformId("steam")
 private const val STEAM_NS = "library.steam"
