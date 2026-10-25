@@ -1073,13 +1073,23 @@ internal class DefaultLibraryOps(
         return service.bringIntoUse(plainSaveQuery(game, emulator, coreFor(emulator, game, core)), old)
     }
 
+    /**
+     * A game played as its Android port (its app in its emulator's place): the port's own saves,
+     * by the port's package, never the emulator's. Null for anything else.
+     */
+    private fun androidPortEmulator(game: io.github.matiyaaa.fuse.model.Game): String? {
+        if (game.platformId == io.github.matiyaaa.fuse.model.AppGames.PLATFORM) return null
+        val app = io.github.matiyaaa.fuse.model.AppGames.appId(game.location.launchPath) ?: return null
+        return io.github.matiyaaa.fuse.sync.AndroidPorts.saveEmulator(app.substringBefore('/'))
+    }
+
     /** [game]'s saves for [emulator], as Syncthing looks for them: by the game's own name and system, no profile needed. */
     private suspend fun plainSaveQuery(game: io.github.matiyaaa.fuse.model.Game, emulator: InstalledEmulator, core: String?): io.github.matiyaaa.fuse.sync.SaveQuery =
         io.github.matiyaaa.fuse.sync.SaveQuery(
             game = householdKeyOf(game),
             platform = game.platformId.value,
             romPath = game.location.launchPath,
-            emulatorId = emulator.id.value,
+            emulatorId = androidPortEmulator(game) ?: emulator.id.value,
             emulatorPath = emulator.appId,
             core = core,
             serial = game.tags.serial,
@@ -1093,8 +1103,18 @@ internal class DefaultLibraryOps(
     internal suspend fun saveSamples(): List<io.github.matiyaaa.fuse.sync.SaveQuery> {
         if (ctx.installed.value.isEmpty()) emulators.detectNow()
         val settings = data.scopedSettings
+        // Android ports keep their saves apart from their emulators': each port its own row, by its name.
+        val ports = ctx.portApps.value.keys.mapNotNull { id ->
+            val (app, name) = androidPort?.invoke(id) ?: return@mapNotNull null
+            val game = data.games.get(id) ?: return@mapNotNull null
+            io.github.matiyaaa.fuse.sync.SaveQuery(
+                game = householdKeyOf(game), platform = game.platformId.value, romPath = io.github.matiyaaa.fuse.model.AppGames.path(app),
+                emulatorId = io.github.matiyaaa.fuse.sync.AndroidPorts.saveEmulator(app.substringBefore('/')), emulatorPath = app.substringBefore('/'),
+                core = null, serial = game.tags.serial, title = name,
+            )
+        }.distinctBy { it.emulatorId }
         // Every system at once: each is a lookup and a launch plan, and a big library has many.
-        return kotlinx.coroutines.coroutineScope {
+        return ports + kotlinx.coroutines.coroutineScope {
             data.games.platformCounts().first().keys.map { pid ->
                 async {
                     val summary = data.games.observeByPlatform(pid).first().firstOrNull() ?: return@async null
@@ -1129,7 +1149,7 @@ internal class DefaultLibraryOps(
             game = key,
             platform = game.platformId.value,
             romPath = game.location.launchPath,
-            emulatorId = emulator.id.value,
+            emulatorId = androidPortEmulator(game) ?: emulator.id.value,
             emulatorPath = emulator.appId,
             core = core,
             // Emulators that keep saves by a game's id (RPCS3, PPSSPP, the 3DS and Switch) need it.

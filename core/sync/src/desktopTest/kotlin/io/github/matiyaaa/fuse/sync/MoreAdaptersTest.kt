@@ -648,9 +648,14 @@ class MoreAdaptersTest {
         )
         val spot = SaveAdapters.forEmulator("linux.port")!!.locate(game, env).single()
         assertEquals("/home/ana/.local/share/fuse/ports/skyport/home/saves", spot.root)
-        assertEquals("port.skyport", spot.format, "another port's engine never reads it")
+        assertEquals("port.skyport.linux", spot.format, "another port's engine never reads it, nor its build for another system")
         assertEquals(SaveKind.SAVE, spot.kind)
         assertSame(SaveAdapters.forEmulator("windows.port"), SaveAdapters.forEmulator("linux.port"), "the same on every computer")
+        val windows = FakeEnv("WINDOWS", "C:/Users/ana", files = mapOf(launcher to env.files.getValue(launcher)))
+        assertEquals("port.skyport.windows", SaveAdapters.forEmulator("windows.port")!!.locate(game, windows).single().format)
+        assertFalse(SaveSlotFormats.compatible("port.skyport.linux", "port.skyport.windows"), "a Linux build's save stays on Linux")
+        assertTrue(SaveSlotFormats.compatible("port.skyport", "port.skyport.windows"), "a save from before saves were kept per system is taken once")
+        assertFalse(SaveSlotFormats.compatible("port.other", "port.skyport.linux"), "never another port's")
         // A port that keeps no saves of its own, and a launcher Fuse can't read, are said.
         val none = FakeEnv("LINUX", "/home/ana", files = mapOf(launcher to """{"port":"skyport","version":"2.1","argv":["/p/skyport"],"cwd":"/p"}"""))
         assertFalse(SaveAdapters.forEmulator("linux.port")!!.locate(game, none).single().available)
@@ -668,6 +673,24 @@ class MoreAdaptersTest {
         val spot = SaveAdapters.forEmulator("linux.port")!!.locate(game, env).single()
         assertEquals(null, spot.root, "not the whole folder: its settings, logs and caches stay")
         assertEquals(listOf("PT_Save_Data0" to "/home/ana/Games/PT/data/PT_Save_Data0", "PT_Save_Data1" to "/home/ana/Games/PT/data/PT_Save_Data1"), spot.files.map { it.name to it.path })
-        assertEquals("port.pt-pc", spot.format)
+        assertEquals("port.pt-pc.linux", spot.format)
+    }
+
+    @Test
+    fun anAndroidPortsSavesAreItsOwnOnAndroidOnlyFromTheFolderChosenForIt() {
+        val emulator = AndroidPorts.saveEmulator("com.linkzenic.soh")
+        val game = q("n64", "app:com.linkzenic.soh/.MainActivity", emulator, title = "Ship of Harkinian")
+        val adapter = assertNotNull(SaveAdapters.forEmulator(emulator))
+        // Its own folder on Android is private: said, never guessed.
+        val none = adapter.locate(game, FakeEnv("ANDROID", "/storage/emulated/0")).single()
+        assertFalse(none.available)
+        assertTrue(none.note!!.contains("Save folders"), none.note)
+        // The folder chosen for it is its save, by its own format.
+        val chosen = FakeEnv("ANDROID", "/storage/emulated/0", chosen = mapOf("androidport.com.linkzenic.soh" to "/storage/emulated/0/SoH/Save"))
+        val spot = adapter.locate(game, chosen).single()
+        assertEquals("/storage/emulated/0/SoH/Save", spot.root)
+        assertEquals("androidport.com.linkzenic.soh", spot.format)
+        assertFalse(SaveSlotFormats.compatible(spot.format, "port.soh.linux"), "never a computer's build of the port")
+        assertFalse(adapter.locate(game, FakeEnv("LINUX", "/home/ana", chosen = mapOf("androidport.com.linkzenic.soh" to "/x"))).single().available, "Android only")
     }
 }
