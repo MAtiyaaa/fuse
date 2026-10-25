@@ -174,6 +174,10 @@ fun ShowcaseApp(store: FuseStore, platform: PlatformUi, displaySession: io.githu
                     ) {
                         BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = Space.gutter, vertical = Space.l)) {
                             val compact = maxHeight < 380.dp
+                            // The room left for the page under the top line and over the dots: a
+                            // two-screen handheld's upper screen at its largest text (AYN Thor) has
+                            // about 220 dp, where a logo, a few lines and the numbers can't all fit.
+                            val tight = maxHeight - Size.hudLine - SHOWCASE_DOTS < TIGHT_BELOW
                             val wide = maxWidth >= 640.dp
                             val motion = Fuse.motion
                             Swap(
@@ -194,12 +198,12 @@ fun ShowcaseApp(store: FuseStore, platform: PlatformUi, displaySession: io.githu
                                 label = "showcase",
                             ) { content ->
                                 when (val t = content.target) {
-                                    is GameCard -> ShowcaseGame(store, t.id, playingSince = home.playtime.currentSince, compact = compact)
-                                    is GameId -> ShowcaseGame(store, t, playingSince = null, compact = compact)
-                                    is PlatformId -> systems.firstOrNull { it.platform.id == t }?.let { ShowcaseSystem(store, it, compact) }
-                                    is CollectionId -> ShowcaseCollection(store, t, compact)
+                                    is GameCard -> ShowcaseGame(store, t.id, playingSince = home.playtime.currentSince, compact = compact, tight = tight)
+                                    is GameId -> ShowcaseGame(store, t, playingSince = null, compact = compact, tight = tight)
+                                    is PlatformId -> systems.firstOrNull { it.platform.id == t }?.let { ShowcaseSystem(store, it, compact, tight) }
+                                    is CollectionId -> ShowcaseCollection(store, t, compact, tight)
                                     is io.github.matiyaaa.fuse.jellyfin.MediaItem -> ShowcaseMedia(t, compact, minimal = prefs.jellyfin.browsingCompanion == "MINIMAL")
-                                    else -> ShowcaseIdle(time, home.recentlyPlayed.ifEmpty { home.continuePlaying }, home.playtime, compact, wide)
+                                    else -> ShowcaseIdle(time, home.recentlyPlayed.ifEmpty { home.continuePlaying }, home.playtime, compact, wide, tight)
                                 }
                             }
                         }
@@ -260,6 +264,16 @@ internal object ShowcasePage {
 /** Room kept at the bottom of the first page for the page dots. */
 private val SHOWCASE_DOTS = 28.dp
 
+/** Below this much room for the page, it leaves out a game's lines and draws its logo and covers smaller. */
+private val TIGHT_BELOW = 260.dp
+
+/** Covers' height: on a tight page, a compact one, and with room. */
+private fun coverHeight(compact: Boolean, tight: Boolean): Dp = when {
+    tight -> 72.dp
+    compact -> 96.dp
+    else -> 150.dp
+}
+
 private data class ShowcaseContent(val target: Any?, val direction: Int)
 
 /**
@@ -294,7 +308,7 @@ private fun ShowcaseMedia(item: io.github.matiyaaa.fuse.jellyfin.MediaItem, comp
 
 /** A game, large: logo, facts, a few lines about it, then its numbers, with its cover at the right. */
 @Composable
-private fun ShowcaseGame(store: FuseStore, id: GameId, playingSince: Long?, compact: Boolean) {
+private fun ShowcaseGame(store: FuseStore, id: GameId, playingSince: Long?, compact: Boolean, tight: Boolean) {
     val flow = remember(id) { store.library.game(id) }
     val detail by flow.collectAsState(initial = null)
     val d = detail ?: return
@@ -330,7 +344,7 @@ private fun ShowcaseGame(store: FuseStore, id: GameId, playingSince: Long?, comp
                 if (d.art.logo != null) {
                     Artwork(
                         d.art.logo,
-                        Modifier.widthIn(max = 520.dp).fillMaxWidth(0.55f).height(if (compact) 96.dp else 150.dp),
+                        Modifier.widthIn(max = 520.dp).fillMaxWidth(0.55f).height(if (tight) 64.dp else if (compact) 96.dp else 150.dp),
                         contentScale = ContentScale.Fit,
                         focusX = 0f,
                         fadeIn = true,
@@ -351,7 +365,7 @@ private fun ShowcaseGame(store: FuseStore, id: GameId, playingSince: Long?, comp
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s), maxLines = 1) {
                     facts.forEachIndexed { i, f -> Fact(f, dot = if (i == 0) Color(d.platform.accent) else null) }
                 }
-                meta.description?.takeIf { it.isNotBlank() }?.let {
+                meta.description?.takeIf { it.isNotBlank() && !tight }?.let {
                     FText(it, Fuse.type.body, color = c.text.copy(alpha = 0.82f), maxLines = if (compact) 2 else 3, modifier = Modifier.widthIn(max = 720.dp))
                 }
                 // What you have done with it, and what plays it: the first that fit, on one line.
@@ -403,14 +417,14 @@ private fun ShowcaseGame(store: FuseStore, id: GameId, playingSince: Long?, comp
  * played last first.
  */
 @Composable
-private fun ShowcaseSystem(store: FuseStore, card: PlatformCard, compact: Boolean) {
+private fun ShowcaseSystem(store: FuseStore, card: PlatformCard, compact: Boolean, tight: Boolean) {
     val c = Fuse.colors
     val flow = remember(card.platform.id) { store.library.games(GameQuery(platform = card.platform.id, sort = io.github.matiyaaa.fuse.model.SortOrder.RECENTLY_PLAYED)) }
     val games by flow.collectAsState(initial = emptyList())
-    Column(Modifier.fillMaxSize().padding(bottom = Space.s), verticalArrangement = Arrangement.spacedBy(Space.m, Alignment.Bottom)) {
+    Column(Modifier.fillMaxSize().padding(bottom = Space.s), verticalArrangement = Arrangement.spacedBy(if (tight) Space.s else Space.m, Alignment.Bottom)) {
         val name: @Composable () -> Unit = { FText(card.platform.name, if (compact) Fuse.type.display else Fuse.type.hero, maxLines = 2) }
         if (card.art.logo != null) {
-            Artwork(card.art.logo, Modifier.widthIn(max = 520.dp).fillMaxWidth(0.5f).height(if (compact) 80.dp else 140.dp), contentScale = ContentScale.Fit, focusX = 0f, tint = Color.White, fallback = name)
+            Artwork(card.art.logo, Modifier.widthIn(max = 520.dp).fillMaxWidth(0.5f).height(if (tight) 56.dp else if (compact) 80.dp else 140.dp), contentScale = ContentScale.Fit, focusX = 0f, tint = Color.White, fallback = name)
         } else {
             name()
         }
@@ -423,14 +437,14 @@ private fun ShowcaseSystem(store: FuseStore, card: PlatformCard, compact: Boolea
         if (games.isNotEmpty()) {
             Spacer(Modifier.height(if (compact) 0.dp else Space.s))
             FText(if (games.first().lastPlayedAt != null) "PLAYED LAST" else "IN YOUR LIBRARY", Fuse.type.overline, color = c.textMuted, maxLines = 1)
-            Covers(games.take(8), if (compact) 96.dp else 150.dp)
+            Covers(games.take(8), coverHeight(compact, tight))
         }
     }
 }
 
 /** A collection: its name and how many games, over its first game's room. */
 @Composable
-private fun ShowcaseCollection(store: FuseStore, id: CollectionId, compact: Boolean) {
+private fun ShowcaseCollection(store: FuseStore, id: CollectionId, compact: Boolean, tight: Boolean) {
     val collections by store.collections.collections.collectAsState()
     val collection = collections.firstOrNull { it.id == id } ?: return
     val flow = remember(id) { store.library.games(GameQuery(collection = id)) }
@@ -438,7 +452,7 @@ private fun ShowcaseCollection(store: FuseStore, id: CollectionId, compact: Bool
     Column(Modifier.fillMaxSize().padding(bottom = Space.s), verticalArrangement = Arrangement.spacedBy(Space.m, Alignment.Bottom)) {
         Fact(if (collection.kind == io.github.matiyaaa.fuse.model.CollectionKind.SERIES) "Series" else "Collection")
         FText(collection.name, if (compact) Fuse.type.display else Fuse.type.hero, maxLines = 2)
-        Covers(games.take(6), if (compact) 96.dp else 150.dp)
+        Covers(games.take(8), coverHeight(compact, tight))
     }
 }
 
@@ -447,7 +461,7 @@ private fun ShowcaseCollection(store: FuseStore, id: CollectionId, compact: Bool
  * and the games played last.
  */
 @Composable
-private fun ShowcaseIdle(time: String, recent: List<GameCard>, playtime: io.github.matiyaaa.fuse.ui.shell.store.PlaytimeSummary, compact: Boolean, wide: Boolean) {
+private fun ShowcaseIdle(time: String, recent: List<GameCard>, playtime: io.github.matiyaaa.fuse.ui.shell.store.PlaytimeSummary, compact: Boolean, wide: Boolean, tight: Boolean) {
     val c = Fuse.colors
     Column(Modifier.fillMaxSize().padding(bottom = Space.s), verticalArrangement = Arrangement.spacedBy(Space.s, Alignment.Bottom)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
@@ -461,9 +475,9 @@ private fun ShowcaseIdle(time: String, recent: List<GameCard>, playtime: io.gith
             }
         }
         if (recent.isNotEmpty()) {
-            Spacer(Modifier.height(if (compact) Space.s else Space.l))
+            if (!tight) Spacer(Modifier.height(if (compact) Space.s else Space.l))
             FText("PLAYED LAST", Fuse.type.overline, color = c.textMuted, maxLines = 1)
-            Covers(recent.take(8), if (compact) 96.dp else 150.dp)
+            Covers(recent.take(8), coverHeight(compact, tight))
         }
     }
 }
