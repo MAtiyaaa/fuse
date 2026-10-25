@@ -155,9 +155,8 @@ class TransferTest {
         override suspend fun run(item: TransferItem, io: TransferIo) {
             val dest = File(io.resolve(item.place!!))
             val part = TransferFiles.partFor(dest)
-            RangedDownload.fetch(server.client, { "https://server/file" }, part, payload.size.toLong(), io)
-            io.phase(TransferPhase.VERIFYING)
-            TransferFiles.verify(part, payload.size.toLong(), ExpectedHash("sha256", sha256(payload)))
+            // Hashed as it arrives: a paused, resumed or restarted file is still checked whole.
+            RangedDownload.fetchVerified(server.client, { "https://server/file" }, part, payload.size.toLong(), ExpectedHash("sha256", sha256(payload)), io)
             io.phase(TransferPhase.PLACING)
             TransferFiles.place(part, dest)
         }
