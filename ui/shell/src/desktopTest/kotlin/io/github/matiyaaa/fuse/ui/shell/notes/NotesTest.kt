@@ -68,5 +68,11 @@ class NotesTest {
     fun versionAndNameComeFromTheTitle() {
         assertEquals("0.2.7", releaseVersionOf(notes))
         assertEquals("The Swap & Clean Update", releaseNameOf(notes))
+        // From 0.4.4 a colon, with no dash; GitHub's titles too.
+        assertEquals("The Tune-Up Update", releaseNameOf("# Fuse 0.4.4: The Tune-Up Update\n\nA tune-up."))
+        assertEquals("0.4.4", releaseVersionOf("# Fuse 0.4.4: The Tune-Up Update"))
+        assertEquals("The Overdrive Update", releaseNameInTitle("Fuse 0.4.3.15 - The Overdrive Update"))
+        assertEquals("The Tune-Up Update", releaseNameInTitle("Fuse 0.4.4: The Tune-Up Update"))
+        assertNull(releaseNameInTitle("Fuse 0.4.4"))
     }
 }

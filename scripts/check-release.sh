@@ -23,7 +23,7 @@ if [ ! -f "$notes" ]; then
   fail "$notes is missing"
 else
   first="$(head -n 1 "$notes")"
-  [ "$first" = "# Fuse $version - $name" ] || fail "$notes starts with '$first', expected '# Fuse $version - $name'"
+  [ "$first" = "# Fuse $version: $name" ] || fail "$notes starts with '$first', expected '# Fuse $version: $name'"
   for section in "## New" "## Changed" "## Fixed"; do
     grep -qx "$section" "$notes" || fail "$notes has no '$section' section"
   done

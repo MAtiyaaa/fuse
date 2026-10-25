@@ -2107,7 +2107,7 @@ fun updateRows(app: AppState): List<MenuAction> {
                 ))
             }
             if (r.notes.isNotBlank()) add(MenuAction("notes", "What's new in ${r.name}", FuseIcons.Sparkles, trailing = Trailing.Chevron, onSelect = {
-                val name = io.github.matiyaaa.fuse.ui.shell.notes.releaseNameOf(r.notes) ?: r.name.substringAfter(" - ", "").ifBlank { null }
+                val name = io.github.matiyaaa.fuse.ui.shell.notes.releaseNameOf(r.notes) ?: io.github.matiyaaa.fuse.ui.shell.notes.releaseNameInTitle(r.name)
                 app.go(Route.ReleaseNotes(r.tag.removePrefix("v"), name, r.notes, installed = false))
             }))
         }

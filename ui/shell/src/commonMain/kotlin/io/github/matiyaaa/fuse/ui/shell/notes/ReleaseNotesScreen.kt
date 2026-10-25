@@ -68,9 +68,18 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.dragVerticalScroll
 internal suspend fun bundledReleaseNotes(): String? =
     runCatching { Res.readBytes("files/release-notes.md").decodeToString() }.getOrNull()?.takeIf { it.isNotBlank() }
 
-/** "The Swap & Clean Update" from notes titled "# Fuse 0.2.7 - The Swap & Clean Update". */
+/** "The Tune-Up Update" from notes titled "# Fuse 0.4.4: The Tune-Up Update" (or an older "# Fuse 0.2.7 - The Swap & Clean Update"). */
 fun releaseNameOf(markdown: String): String? =
-    markdown.lineSequence().firstOrNull { it.startsWith("# ") }?.substringAfter(" - ", "")?.trim()?.takeIf { it.isNotEmpty() }
+    markdown.lineSequence().firstOrNull { it.startsWith("# ") }?.let(::releaseNameInTitle)
+
+/**
+ * The name in a release's title after its version: "Fuse 0.4.4: The Tune-Up Update", or a title
+ * from before 0.4.4, which put a hyphen there ("Fuse 0.4.3 - The Overdrive Update").
+ */
+fun releaseNameInTitle(title: String): String? =
+    TITLE_NAME.find(title)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotEmpty() }
+
+private val TITLE_NAME = Regex("""\d+(?:\.\d+){2,3}(?::| -)\s+(.+)$""")
 
 /** "0.2.7" from notes titled "# Fuse 0.2.7 - The Swap & Clean Update". */
 internal fun releaseVersionOf(markdown: String): String? =

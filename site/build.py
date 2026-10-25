@@ -94,7 +94,8 @@ def inline(text: str) -> str:
 def release_notes(path: Path):
     """A release's notes (docs/releases/<version>.md) as the update viewer reads them."""
     lines = path.read_text(encoding="utf-8").splitlines()
-    m = re.match(r"# Fuse (\S+) - (.+)", lines[0] if lines else "")
+    # "# Fuse 0.4.4: The Tune-Up Update", or a hyphen before 0.4.4.
+    m = re.match(r"# Fuse (\S+?)(?::| -) (.+)", lines[0] if lines else "")
     if not m:
         return None
     intro, sections = [], []
@@ -236,7 +237,8 @@ def main():
     props = gradle_props()
     rel = release_file(args.release, out)
     version = rel["tag_name"].lstrip("v") if rel else props.get("fuse.version", "")
-    name = rel["name"].split(" - ", 1)[1] if rel and " - " in rel.get("name", "") else props.get("fuse.releaseName", "")
+    titled = re.match(r"Fuse \S+?(?::| -) (.+)", rel.get("name", "")) if rel else None
+    name = titled.group(1) if titled else props.get("fuse.releaseName", "")
     url = rel["html_url"] if rel else f"https://github.com/{REPO}/releases/latest"
 
     page = (SITE / "index.html").read_text()

@@ -60,7 +60,9 @@
   function applyRelease(rel) {
     if (!rel || !rel.tag_name) return;
     const version = rel.tag_name.replace(/^v/, "");
-    const name = (rel.name || "").split(" - ").slice(1).join(" - ").trim();
+    // "Fuse 0.4.4: The Tune-Up Update", or a hyphen before 0.4.4.
+    const titled = /^Fuse \S+?(?::| -) (.+)$/.exec(rel.name || "");
+    const name = titled ? titled[1].trim() : "";
     const url = rel.html_url || RELEASES;
     const assets = rel.assets || [];
     const find = (suffix) => assets.find((a) => a.name.endsWith(suffix));

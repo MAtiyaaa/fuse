@@ -173,7 +173,7 @@ Losing the key means existing installs cannot update to your builds.
 - a tag `v*` is pushed (the tag must equal `v<fuse.version>`); or
 - it is started by hand (Actions, Release, Run workflow), again only if the release does not exist.
 
-It creates the release `v<version>` titled `Fuse <version> - <releaseName>`, with the notes from
+It creates the release `v<version>` titled `Fuse <version>: <releaseName>`, with the notes from
 `docs/releases/<version>.md`, as soon as the Android APK is built. The AppImage, the Windows MSI and
 zip, and the macOS disk images (Apple silicon on `macos-15`, Intel on `macos-15-intel`) build at the
 same time and are attached to the release as each finishes; one failing doesn't hold back the

@@ -131,7 +131,7 @@ jobs:
             echo "desktop=$desktop"
             echo "rename=$rename"
           } >> "$GITHUB_OUTPUT"
-          echo "Fuse $version - $release_name ($tag), publish: $publish, desktop builds: $desktop"
+          echo "Fuse $version: $release_name ($tag), publish: $publish, desktop builds: $desktop"
 
   rename:
     name: Rename the release
@@ -151,8 +151,8 @@ jobs:
           TAG: ${{ needs.prepare.outputs.tag }}
         run: |
           set -euo pipefail
-          gh release edit "$TAG" --title "Fuse $VERSION - $RELEASE_NAME" --notes-file "docs/releases/$VERSION.md" --repo "$GITHUB_REPOSITORY"
-          echo "Release $TAG is now titled \"Fuse $VERSION - $RELEASE_NAME\"."
+          gh release edit "$TAG" --title "Fuse $VERSION: $RELEASE_NAME" --notes-file "docs/releases/$VERSION.md" --repo "$GITHUB_REPOSITORY"
+          echo "Release $TAG is now titled \"Fuse $VERSION: $RELEASE_NAME\"."
 
   android:
     name: Android APK
@@ -319,7 +319,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
-          name: Fuse ${{ needs.prepare.outputs.version }} - ${{ needs.prepare.outputs.release_name }}
+          name: Fuse ${{ needs.prepare.outputs.version }}: ${{ needs.prepare.outputs.release_name }}
           body_path: docs/releases/${{ needs.prepare.outputs.version }}.md
           target_commitish: ${{ github.sha }}
           draft: false
