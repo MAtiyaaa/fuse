@@ -667,7 +667,16 @@ private fun SystemFilter(shelf: DualShelf, picture: ShelfPicture, selected: Bool
         ) {
             val name: @Composable () -> Unit = { FText(shelf.title, Fuse.type.label, color = { ink }, maxLines = 1) }
             if (picture.logo != null) {
-                Artwork(picture.logo, Modifier.height(FILTER_LOGO).widthIn(min = FILTER_LOGO, max = FILTER_LOGO_WIDE), contentScale = ContentScale.Fit, tint = ink, fallback = name)
+                // As wide as the logo is at its height, once its shape is known.
+                var aspect by remember(picture.logo) { mutableStateOf(FILTER_LOGO_ASPECT) }
+                Artwork(
+                    picture.logo,
+                    Modifier.height(FILTER_LOGO).width((FILTER_LOGO * aspect).coerceIn(FILTER_LOGO, FILTER_LOGO_WIDE)),
+                    contentScale = ContentScale.Fit,
+                    tint = ink,
+                    onAspect = { aspect = it },
+                    fallback = name,
+                )
             } else {
                 name()
             }
@@ -962,6 +971,8 @@ private val RAIL = 48.dp
 private val FILTER = 40.dp
 private val FILTER_LOGO = 18.dp
 private val FILTER_LOGO_WIDE = 84.dp
+/** A logo's shape until its own is known: as most system logos are, a little over twice as wide as high. */
+private const val FILTER_LOGO_ASPECT = 2.4f
 /** A chosen system filter's glow in its colour, and how long its light takes to run across. */
 private val GLOW = 10.dp
 private const val SWEEP_MS = 640

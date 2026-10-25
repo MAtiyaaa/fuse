@@ -141,6 +141,9 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
 - Media already in **ES-DE and Batocera** layouts is used first.
 - **Square box art** for every game, from SteamGridDB, your own folders or a file; games without it
   show their cover whole instead of cropped.
+- **GIFs that move**: a GIF (or an animated WebP) chosen as a game's or a system's picture, its logo,
+  or your theme's picture behind everything plays wherever it is shown, and holds its first frame
+  under Reduced motion, in Low Power Mode and on the second screen while a game runs.
 - **SteamGridDB, IGDB, TheGamesDB and libretro thumbnails** fill the rest, with your own keys where a
   service needs one, by themselves after a scan if you like. When a source runs out of requests,
   the others take over. The ScreenScraper client is built in and waits for developer credentials, so in

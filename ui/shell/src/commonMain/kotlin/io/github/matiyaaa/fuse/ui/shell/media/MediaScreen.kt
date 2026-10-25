@@ -394,7 +394,7 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
                 },
             ))
         }
-        add(MenuAction("file", "Choose a file", FuseIcons.Folder, onSelect = {
+        add(MenuAction("file", "Choose a file", FuseIcons.Folder, detail = if (k == MediaKind.VIDEO) null else "A picture, or a GIF that moves", onSelect = {
             app.choice = null
             app.scope.launch {
                 val path = app.platform.storage.pickImage("Choose ${slotName(k).lowercase()}") ?: return@launch

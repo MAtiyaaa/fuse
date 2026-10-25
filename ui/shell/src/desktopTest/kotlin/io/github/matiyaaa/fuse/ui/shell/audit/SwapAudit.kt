@@ -7,6 +7,7 @@ import io.github.matiyaaa.fuse.model.DualScreenMode
 import io.github.matiyaaa.fuse.model.HomeLayoutConfig
 import io.github.matiyaaa.fuse.model.HomeMode
 import io.github.matiyaaa.fuse.model.PadButton
+import io.github.matiyaaa.fuse.ui.designsystem.media.addMovingPictures
 
 /**
  * What 0.2.7 changed, one quick pass each: Undo and Reset while arranging Home, the Library's
@@ -225,6 +226,49 @@ internal fun AuditDriver.flippedMenus() {
         settle(1_200)
         shoot("Systems")
         show(libraryStore)
+    }
+    scenario("flipped", "filters with system art") {
+        useLibrary()
+        // Each system with its logo and art, as the art pack gives them, and PS1 with a GIF chosen as
+        // its picture; Fuse's own image loader, which plays moving pictures.
+        coil3.SingletonImageLoader.setUnsafe(
+            coil3.ImageLoader.Builder(coil3.PlatformContext.INSTANCE)
+                .components { addMovingPictures() }
+                .build(),
+        )
+        val dir = java.io.File(cache, "system-art").apply { mkdirs() }
+        val systems = libraryStore.library.platforms.value.filter { it.gameCount > 0 }
+        val ps1 = systems.first { it.platform.shortName == "PS1" }
+        kotlinx.coroutines.runBlocking {
+            for (card in systems) {
+                val owner = io.github.matiyaaa.fuse.model.MediaOwner.OfPlatform(card.platform.id)
+                val panel = java.io.File(dir, "${card.platform.id.value}-panel.png").also { AuditSystemArt.panel(it, card.platform.accent) }
+                val logo = java.io.File(dir, "${card.platform.id.value}-logo.png").also { AuditSystemArt.logo(it, card.platform.shortName) }
+                libraryStore.media.setFromFile(owner, io.github.matiyaaa.fuse.model.MediaKind.BOXART, panel.absolutePath)
+                libraryStore.media.setFromFile(owner, io.github.matiyaaa.fuse.model.MediaKind.LOGO, logo.absolutePath)
+            }
+            val moving = java.io.File(dir, "ps1-moving.gif").also { AuditSystemArt.movingPicture(it, ps1.platform.accent) }
+            libraryStore.media.setFromFile(io.github.matiyaaa.fuse.model.MediaOwner.OfPlatform(ps1.platform.id), io.github.matiyaaa.fuse.model.MediaKind.HERO, moving.absolutePath)
+        }
+        try {
+            show(libraryStore, twoScreens, flipped = true)
+            waitFor("Recent")
+            shoot("the filters, each system by its logo", 1_500)
+            pressLabelled("PS1", 0)
+            advanceExactly(160)
+            shoot("PS1 chosen: its picture opening in its filter", 0)
+            shoot("PS1's moving picture in its filter", 1_200)
+            advanceExactly(300)
+            shoot("PS1's moving picture, a few frames on", 0)
+            pressLabelled("PS2")
+            shoot("another system: its own colour and art", 1_200)
+        } finally {
+            show(libraryStore)
+            kotlinx.coroutines.runBlocking {
+                for (card in systems) libraryStore.media.reset(io.github.matiyaaa.fuse.model.MediaOwner.OfPlatform(card.platform.id), null)
+            }
+            coil3.SingletonImageLoader.reset()
+        }
     }
     scenario("flipped", "systems arranged below") {
         useLibrary()

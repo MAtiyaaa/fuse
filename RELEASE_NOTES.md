@@ -43,6 +43,11 @@ it runs, and Low Power turns fully off again.
   for the device) and Play, each with its controller button. The D-pad moves through the grid, the
   right stick changes shelf and the triggers page by a screen. The touch screen keeps the theme's
   own room, lit softly in the chosen game's colour, and leaves the game's art to the screen above.
+- **GIFs that move.** Choose a GIF (or an animated WebP) as a game's or a system's background
+  picture, as its logo, or as your theme's picture behind everything, and it plays wherever it is
+  shown: in a system's filter on the screen below, on game pages, in the Library and on Home. A GIF
+  logo keeps its own colours. Moving pictures hold their first frame under Reduced motion, in Low
+  Power Mode and on the second screen while a game runs.
 - **More on the screen above.** On a two-screen handheld with the menus below, a game keeps its
   few lines about it, its series, this week's play and what plays it. With nothing chosen, the
   week's play sits beside the clock with a bar a day, and a system shows its games, those played
