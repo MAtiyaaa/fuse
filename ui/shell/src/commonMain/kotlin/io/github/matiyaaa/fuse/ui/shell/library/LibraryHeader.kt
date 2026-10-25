@@ -137,6 +137,7 @@ internal fun LibraryHeader(
                         LibraryButton.COLLECTIONS -> "Collections" to FuseIcons.LibraryBig
                         LibraryButton.ADD_GAMES -> "Add or remove games" to FuseIcons.ListPlus
                         LibraryButton.EMULATOR -> "No emulator installed" to FuseIcons.Warning
+                        LibraryButton.FILTERS -> "Smart filters" to FuseIcons.Wand
                         LibraryButton.SYSTEM -> (system?.platform?.shortName ?: "All systems") to FuseIcons.Filter
                         LibraryButton.SORT -> sortLabel(sort) to FuseIcons.Sort
                     }
@@ -144,12 +145,14 @@ internal fun LibraryHeader(
                         button == LibraryButton.EMULATOR -> ToolTone.WARNING
                         button == LibraryButton.SPOTLIGHT -> ToolTone.ON
                         button == LibraryButton.SYSTEM && system != null -> ToolTone.ON
+                        button == LibraryButton.FILTERS && state.segment.smart != null -> ToolTone.ON
                         else -> ToolTone.PLAIN
                     }
                     ToolButton(
                         label, icon, focused = focused(i), tone = tone,
-                        // The spotlight names its game where there is room, like the plain buttons.
-                        showLabel = roomy || focused(i) || (tone != ToolTone.PLAIN && button != LibraryButton.SPOTLIGHT),
+                        // The spotlight names its game where there is room, like the plain buttons; a
+                        // smart filter in use is named by its tab already.
+                        showLabel = roomy || focused(i) || (tone != ToolTone.PLAIN && button != LibraryButton.SPOTLIGHT && button != LibraryButton.FILTERS),
                     ) { onButton(i, button) }
                 }
             }
@@ -228,7 +231,8 @@ private fun LibraryTabs(
         items = views.map { s ->
             ViewTab(
                 label = s.label,
-                icon = if (s == LibrarySegment.MISSING) FuseIcons.FileQuestion else null,
+                // A smart filter's tab wears its mark, so the lists Fuse keeps read apart from the views.
+                icon = if (s == LibrarySegment.MISSING) FuseIcons.FileQuestion else s.smart?.let(::smartIcon),
                 warn = s == LibrarySegment.MISSING,
                 badge = (if (s == active && s != LibrarySegment.EVERYWHERE) count else counts[s] ?: count.takeIf { s == active })?.toString(),
             )

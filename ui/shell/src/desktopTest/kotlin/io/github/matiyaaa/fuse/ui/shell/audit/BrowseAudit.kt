@@ -242,6 +242,35 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
         tap(PadButton.B)
     }
 
+    scenario("library", "smart filters") {
+        useLibrary(prefs = { it.copy(libraryOpensOn = "INSTALLED", libraryPinnedFilters = emptyList()) })
+        libraryTab()
+        waitFor("Recently played")
+        settle(1_200)
+        // Up to the tabs, then along to the toolbar's Smart filters.
+        if (nav(NavAction.UP) != NavResult.MOVED) throw NotCovered("Up did not reach the tabs")
+        tapText("Smart filters", step = PadButton.DPAD_RIGHT)
+        waitFor("Pinned to the tabs")
+        settle(600)
+        shoot("each list with what it holds, and a pin for each")
+        // Five lists, then a switch for each: the third switch is Gathering dust's, flipped in place.
+        tap(PadButton.DPAD_DOWN, 7)
+        tap(PadButton.A)
+        settle(500)
+        shoot("Gathering dust pinned")
+        tap(PadButton.DPAD_UP, 7)
+        tap(PadButton.A)
+        waitFor("Unplayed")
+        settle(1_200)
+        shoot("Unplayed open: its tab beside the pinned one")
+        // Its tab, then the pinned one beside it.
+        if (nav(NavAction.UP) != NavResult.MOVED) throw NotCovered("Up did not reach the tabs")
+        tap(PadButton.DPAD_RIGHT)
+        tap(PadButton.DPAD_DOWN)
+        settle(1_200)
+        shoot("Gathering dust, from its pinned tab")
+    }
+
     scenario("library", "system folding") {
         withSnesRows {
             viewAs(LibraryLayout.ICON)

@@ -62,6 +62,12 @@ it runs, and Low Power turns fully off again.
   Library or on a system's page, a reel of covers spins and slows to a stop on a game you've barely
   touched (never played first, then barely played and left a while, then not played for months).
   It says why, and Play, Spin Again and its page are a press away. It never lands twice on one game.
+- **Your week.** Play Time opens on your week: its time in large figures, how it stands beside last
+  week at the same point, its sessions and achievements, a bar a day and the games it went to most.
+  The week on Home says how it compares too, and its largest size lists this week's games.
+- **Smart filters.** The Library's Smart filters open lists Fuse keeps from how you play: Unplayed,
+  Barely played, Gathering dust, Play together and Added lately, each with how many games it holds.
+  Pin the ones you use and they stay among the Library's tabs, with their counts.
 - **Achievements as they unlock.** On a two-screen handheld, an achievement you unlock while playing
   fills the other screen: its badge in a ring of light, its name, what it asked, its points and how
   far through the set it leaves you, in gold for hardcore and for a set's last. Fuse asks

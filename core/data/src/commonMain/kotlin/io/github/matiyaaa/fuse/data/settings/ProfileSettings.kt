@@ -27,7 +27,7 @@ object ProfileSettings {
         "library.cleanDisplayNames", "library.systemOrder", "library.sort", "library.systemArtStyle",
         "library.selectOpensGamePage", "library.collectionsEnabled", "library.autoSeries", "library.hiddenSeries", "library.systemSpotlight",
         "library.systemColors", "library.systemTiles", "library.appsFilter", "library.gameArt", "library.opensOn",
-        "library.settingProfiles",
+        "library.pinnedFilters", "library.settingProfiles",
         // Games whose saves they sync on none of their devices.
         "sync.offEverywhereGames",
         "videoPreview.enabled", "videoPreview.delaySeconds",

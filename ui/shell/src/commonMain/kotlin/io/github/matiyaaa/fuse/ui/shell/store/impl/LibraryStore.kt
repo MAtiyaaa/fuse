@@ -50,6 +50,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.LibraryOps
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 import io.github.matiyaaa.fuse.ui.shell.store.PlayTimeReport
 import io.github.matiyaaa.fuse.ui.shell.store.PlaytimeSummary
+import io.github.matiyaaa.fuse.ui.shell.store.WeekRecap
 import io.github.matiyaaa.fuse.ui.shell.store.RunResult
 import io.github.matiyaaa.fuse.ui.shell.store.SearchResults
 import io.github.matiyaaa.fuse.ui.shell.store.StorageSummary
@@ -283,8 +284,25 @@ internal class DefaultLibraryOps(
         data.playSessions.dailyTotals(7, ctx.services.utcOffsetMillis()),
         // Following what it plays as too, which its start can change a moment after.
         combine(data.playSessions.openSession(), ctx.playedAs) { open, _ -> open }.mapLatest { open -> open?.let { ctx.card(it.gameId)?.to(it.startedAt) } },
-    ) { totals, week, daily, current ->
-        PlaytimeSummary(totals.totalSeconds, week, daily.map { it.seconds }, current?.first, current?.second)
+        weekRecap(),
+    ) { totals, week, daily, current, recap ->
+        PlaytimeSummary(totals.totalSeconds, week, daily.map { it.seconds }, current?.first, current?.second, recap)
+    }
+
+    /** This week beside the last, with its three most played games as cards. */
+    private fun weekRecap(): Flow<WeekRecap> {
+        val start = ctx.weekStart()
+        return data.playSessions.week(start, ctx::now).mapLatest { w ->
+            val cards = ctx.cardsOnce(w.games.take(WEEK_GAMES).mapNotNull { data.games.summary(it.first) }).associateBy { it.id }
+            WeekRecap(
+                start = start,
+                seconds = w.seconds,
+                lastWeekSeconds = w.lastWeekSeconds,
+                lastWeekSoFar = w.lastWeekSoFar,
+                sessions = w.sessions,
+                games = w.games.take(WEEK_GAMES).mapNotNull { (id, s) -> cards[id]?.let { it to s } },
+            )
+        }
     }
 
     private val storage: Flow<StorageSummary?> = combine(
@@ -314,8 +332,14 @@ internal class DefaultLibraryOps(
      * counts as "a while ago" moves.
      */
     @OptIn(kotlinx.coroutines.FlowPreview::class)
-    private val recGames: Flow<List<RecGame<GameId>>> = flow { io.github.matiyaaa.fuse.ui.designsystem.effects.StartupGate.settled(); emitAll(data.games.observeRecommendationInputs()) }
-        .debounce(RECOMMEND_SETTLE_MS)
+    /** Every game with its details and play, as suggestions and the Play together list read them. */
+    private val recRows: Flow<List<io.github.matiyaaa.fuse.data.repo.RecommendationRow>> =
+        flow { io.github.matiyaaa.fuse.ui.designsystem.effects.StartupGate.settled(); emitAll(data.games.observeRecommendationInputs()) }
+            .debounce(RECOMMEND_SETTLE_MS)
+            .flowOn(Dispatchers.Default)
+            .shareIn(ctx.scope, SharingStarted.WhileSubscribed(RECOMMEND_KEEP_MS), replay = 1)
+
+    private val recGames: Flow<List<RecGame<GameId>>> = recRows
         .map { rows -> rows.map { it.toRecGame() } }
         .flowOn(Dispatchers.Default)
         .shareIn(ctx.scope, SharingStarted.WhileSubscribed(RECOMMEND_KEEP_MS), replay = 1)
@@ -463,12 +487,31 @@ internal class DefaultLibraryOps(
             query.platform != null -> withPlaced(query.platform, games.observeByPlatform(query.platform, query.sort, query.includeHidden), query.sort)
             else -> games.observeAll(query.sort, query.includeHidden)
         }
-        return if (query.collection != null || query.favoritesOnly) {
+        val listed = if (query.collection != null || query.favoritesOnly) {
             summaries.map { list -> list.filter { query.platform == null || it.platformId == query.platform }.sortedWith(query.sort.comparator()) }
         } else {
             summaries
         }
+        val smart = query.smart ?: return listed
+        return combine(listed, if (smart == io.github.matiyaaa.fuse.ui.shell.store.SmartFilter.TOGETHER) together else flowOf(emptySet()), hourly) { list, together, _ ->
+            val now = ctx.now()
+            list.filter { smart.matches(it.id, it.lastPlayedAt, it.totalSeconds, it.addedAt, now, together) }
+        }.distinctUntilChanged()
     }
+
+    override fun smartCounts(platform: PlatformId?): Flow<Map<io.github.matiyaaa.fuse.ui.shell.store.SmartFilter, Int>> =
+        combine(summaries(GameQuery(platform = platform)), together, hourly) { list, together, _ ->
+            val now = ctx.now()
+            io.github.matiyaaa.fuse.ui.shell.store.SmartFilter.entries.associateWith { f ->
+                list.count { f.matches(it.id, it.lastPlayedAt, it.totalSeconds, it.addedAt, now, together) }
+            }
+        }.distinctUntilChanged().flowOn(Dispatchers.Default)
+
+    /** The games more than one person can play at once, as their details say. */
+    private val together: Flow<Set<GameId>> = recRows
+        .map { rows -> rows.filter { (it.players ?: 0) > 1 }.mapTo(HashSet()) { it.id } }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
 
     /**
      * A system's [own] games, with the games played with a port that show in it too (the Ports or
@@ -1927,6 +1970,9 @@ private fun SortOrder.comparator(): Comparator<io.github.matiyaaa.fuse.data.repo
 }
 
 private const val HOUR_MS = 3_600_000L
+
+/** How many of the week's games its recap names. */
+private const val WEEK_GAMES = 3
 
 /** How long the library stays still before suggestions are worked out again (a scan changes many games). */
 private const val RECOMMEND_SETTLE_MS = 2_000L

@@ -333,6 +333,7 @@ object FuseIcons {
     val Trash: ImageVector by lazy { lineIcon("Trash", "M10 11v6", "M14 11v6", "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6", "M3 6h18", "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2") }
     val Trees: ImageVector by lazy { lineIcon("Trees", "M10 10v.2A3 3 0 0 1 8.9 16H5a3 3 0 0 1-1-5.8V10a3 3 0 0 1 6 0Z", "M7 16v6", "M13 19v3", "M12 19h8.3a1 1 0 0 0 .7-1.7L18 14h.3a1 1 0 0 0 .7-1.7L16 9h.2a1 1 0 0 0 .8-1.7L13 3l-1.4 1.5") }
     val TrendingUp: ImageVector by lazy { lineIcon("TrendingUp", "M16 7h6v6", "m22 7-8.5 8.5-5-5L2 17") }
+    val TrendingDown: ImageVector by lazy { lineIcon("TrendingDown", "M16 17h6v-6", "m22 17-8.5-8.5-5 5L2 7") }
     val Trophy: ImageVector by lazy { lineIcon("Trophy", "M10 14.66V17a1 1 0 0 1-1 1 2 2 0 0 0-2 2v2", "M14 14.66V17a1 1 0 0 0 1 1 2 2 0 0 1 2 2v2", "M17.916 10H19.5A2.5 2.5 0 0 0 22 7.5V5a1 1 0 0 0-1-1h-3", "M4 22h16", "M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z", "M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3") }
     val Tv: ImageVector by lazy { lineIcon("Tv", "m17 2-5 5-5-5", "M4 7h16a2 2 0 0 1 2 2v11a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2v-11a2 2 0 0 1 2 -2Z") }
     val Type: ImageVector by lazy { lineIcon("Type", "M12 4v16", "M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2", "M9 20h6") }

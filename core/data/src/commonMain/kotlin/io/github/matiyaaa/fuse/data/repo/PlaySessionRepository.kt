@@ -37,6 +37,18 @@ data class PlayReport(
     val platforms: List<Pair<String, Long>> = emptyList(),
 )
 
+/**
+ * One week of play: its seconds so far, last week's in all and up to the same day and hour, the
+ * sessions played in it, and its games by time, most first.
+ */
+data class WeekReport(
+    val seconds: Long = 0,
+    val lastWeekSeconds: Long = 0,
+    val lastWeekSoFar: Long = 0,
+    val sessions: Int = 0,
+    val games: List<Pair<GameId, Long>> = emptyList(),
+)
+
 /** Library-wide play time. Imported time is kept apart from what Fuse observed. */
 data class PlaytimeTotals(val trackedSeconds: Long, val importedSeconds: Long) {
     val totalSeconds: Long get() = trackedSeconds + importedSeconds
@@ -166,6 +178,41 @@ class PlaySessionRepository(
     fun secondsSince(epochMs: Long): Flow<Long> = q.endedAfter(epochMs).asFlow().mapToList(dispatcher)
         .map { rows -> rows.sumOf { (it.ended_at - maxOf(it.started_at, epochMs)).coerceAtLeast(0) } / 1000 }
         .flowOn(dispatcher)
+
+    /**
+     * The week from [weekStart] (a Monday's local midnight): its time, and last week's, both in all
+     * and up to the same moment ([now] less a week), for a fair comparison partway through.
+     */
+    fun week(weekStart: Long, now: () -> Long = { currentTimeMillis() }): Flow<WeekReport> {
+        val lastStart = weekStart - 7 * DAY_MS
+        return q.endedAfterWithGame(lastStart).asFlow().mapToList(dispatcher).map { rows ->
+            val sameMoment = now() - 7 * DAY_MS
+            fun overlap(from: Long, to: Long, start: Long, end: Long) = (minOf(to, end) - maxOf(from, start)).coerceAtLeast(0)
+            var week = 0L
+            var last = 0L
+            var lastSoFar = 0L
+            var sessions = 0
+            val perGame = HashMap<Long, Long>()
+            for (r in rows) {
+                val end = r.ended_at ?: continue
+                val inWeek = overlap(r.started_at, end, weekStart, Long.MAX_VALUE)
+                week += inWeek
+                last += overlap(r.started_at, end, lastStart, weekStart)
+                lastSoFar += overlap(r.started_at, end, lastStart, minOf(weekStart, sameMoment))
+                if (inWeek > 0) {
+                    sessions++
+                    perGame[r.game_id] = (perGame[r.game_id] ?: 0) + inWeek
+                }
+            }
+            WeekReport(
+                seconds = week / 1000,
+                lastWeekSeconds = last / 1000,
+                lastWeekSoFar = lastSoFar / 1000,
+                sessions = sessions,
+                games = perGame.entries.sortedByDescending { it.value }.map { GameId(it.key) to it.value / 1000 },
+            )
+        }.flowOn(dispatcher)
+    }
 
     /** Games by total play time, highest first. */
     fun mostPlayed(limit: Int = 10): Flow<List<GameSummary>> =

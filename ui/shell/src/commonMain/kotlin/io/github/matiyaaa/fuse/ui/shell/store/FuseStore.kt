@@ -427,6 +427,8 @@ data class GameQuery(
     val includeHidden: Boolean = false,
     val sort: SortOrder = SortOrder.TITLE,
     val set: GameSet = GameSet.LIBRARY,
+    /** Only the library's games in this list (Unplayed, Play together...). */
+    val smart: SmartFilter? = null,
 )
 
 /** Which games a [GameQuery] lists: the library, or games whose files are gone, hidden or removed. */
@@ -489,6 +491,9 @@ interface LibraryOps {
     fun counts(query: GameQuery): Flow<GameCounts> = games(query).map { list ->
         GameCounts(list.size, list.count { it.favorite }, list.count { it.lastPlayedAt != null })
     }
+
+    /** How many of the library's games (of [platform], or every system) each [SmartFilter] holds, from the games alone. */
+    fun smartCounts(platform: PlatformId?): Flow<Map<SmartFilter, Int>> = kotlinx.coroutines.flow.flowOf(emptyMap())
 
     /**
      * [platform]'s play here ([SystemActivity]): worked out from its games without their art, the

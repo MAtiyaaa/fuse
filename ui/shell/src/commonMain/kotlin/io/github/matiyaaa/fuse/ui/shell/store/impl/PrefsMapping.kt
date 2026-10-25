@@ -64,6 +64,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         defaultLayout = scoped.layout,
         gameArt = library.gameArt,
         libraryOpensOn = library.opensOn,
+        libraryPinnedFilters = library.pinnedFilters,
         steam = steam,
         extensions = extensions,
         showHero = scoped.showHero,
@@ -205,6 +206,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             gameArt = prefs.gameArt,
             systemTiles = prefs.systemTiles,
             opensOn = prefs.libraryOpensOn,
+            pinnedFilters = prefs.libraryPinnedFilters,
         ),
         sound = sound.copy(
             enabled = prefs.sound != SoundProfile.OFF,

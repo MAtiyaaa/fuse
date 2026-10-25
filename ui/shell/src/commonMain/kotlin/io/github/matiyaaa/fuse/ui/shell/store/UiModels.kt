@@ -233,6 +233,23 @@ data class PlaytimeSummary(
     val currentGame: GameCard? = null,
     /** When the open session started (epoch millis), while a game is running. */
     val currentSince: Long? = null,
+    /** This week beside the last, and its games ([WeekRecap]). */
+    val week: WeekRecap = WeekRecap(),
+)
+
+/**
+ * The week so far: its time, last week's in all and up to the same moment (for a fair comparison
+ * partway through), the sessions played, and its games by time, most first. [start] is when it
+ * began (a Monday's local midnight), so its achievements can be told from older ones.
+ */
+@Immutable
+data class WeekRecap(
+    val start: Long = 0,
+    val seconds: Long = 0,
+    val lastWeekSeconds: Long = 0,
+    val lastWeekSoFar: Long = 0,
+    val sessions: Int = 0,
+    val games: List<Pair<GameCard, Long>> = emptyList(),
 )
 
 /** Where play time went: today, this week, this month, all of it, per day, per game and per system. */

@@ -54,6 +54,30 @@ class PlaySessionRepositoryTest {
     }
 
     @Test
+    fun aWeekBesideLastWeekUpToTheSameMoment(): Unit = runBlocking {
+        TestDb().use { t ->
+            val (a, b) = t.twoGames()
+            val sessions = t.data.playSessions
+            val monday = TestDb.BASE_TIME - 12 * hour
+            val day = 24 * hour
+            // Last week: an hour on Monday, two on Friday.
+            sessions.end(sessions.start(a, null, now = monday - 7 * day + 10 * hour), now = monday - 7 * day + 11 * hour)
+            sessions.end(sessions.start(b, null, now = monday - 3 * day + 10 * hour), now = monday - 3 * day + 12 * hour)
+            // This week: half an hour of A on Monday, two hours of B on Tuesday.
+            sessions.end(sessions.start(a, null, now = monday + 9 * hour), now = monday + 9 * hour + 30 * minute)
+            sessions.end(sessions.start(b, null, now = monday + day + 9 * hour), now = monday + day + 11 * hour)
+            // Seen on Wednesday morning.
+            val w = sessions.week(monday) { monday + 2 * day + 8 * hour }.first()
+            assertEquals(2 * 3_600L + 1_800, w.seconds)
+            assertEquals(3 * 3_600L, w.lastWeekSeconds)
+            // By last Wednesday morning, only Monday's hour had been played.
+            assertEquals(3_600L, w.lastWeekSoFar)
+            assertEquals(2, w.sessions)
+            assertEquals(listOf(b to 7_200L, a to 1_800L), w.games)
+        }
+    }
+
+    @Test
     fun aSessionFromSteamCountsOnceAndLeavesAnOpenOneAlone(): Unit = runBlocking {
         TestDb().use { t ->
             val (a, b) = t.twoGames()

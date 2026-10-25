@@ -588,6 +588,8 @@ data class LibraryPreferences(
     val purgedGames: List<Long> = emptyList(),
     /** Which view the Library opens on: "INSTALLED" (games on this device) or "ALL" (everywhere they are). */
     val opensOn: String = "ALL",
+    /** The smart filters pinned among the Library's tabs ("UNPLAYED", "TOGETHER"...), by name. */
+    val pinnedFilters: List<String> = emptyList(),
     /** Emulator settings a person saved to give their games at once; theirs on every device. */
     val settingProfiles: List<OwnSettingProfile> = emptyList(),
 )

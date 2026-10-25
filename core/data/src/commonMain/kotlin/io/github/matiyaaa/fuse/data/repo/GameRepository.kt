@@ -106,6 +106,7 @@ class GameRepository(
                 developer = meta?.developer?.trim()?.ifEmpty { null },
                 franchise = meta?.franchise?.trim()?.ifEmpty { null },
                 rating = meta?.rating,
+                players = mostPlayers(meta?.players),
             )
         }
     }.flowOn(dispatcher)
@@ -570,4 +571,15 @@ internal data class PickDetails(
     val genres: List<String> = emptyList(),
     val franchise: String? = null,
     val rating: Int? = null,
+    val players: String? = null,
 )
+
+/**
+ * The most people who can play at once, from a game's players as its details give them ("1-4",
+ * "2", "Up to 8", "1-2 (co-op)"); null when they give no number. Numbers past 64 are taken for
+ * something else (a year, a model) and ignored.
+ */
+fun mostPlayers(players: String?): Int? =
+    players?.let { s -> Regex("\\d+").findAll(s).mapNotNull { it.value.toIntOrNull()?.takeIf { n -> n in 1..MAX_PLAYERS } }.maxOrNull() }
+
+private const val MAX_PLAYERS = 64

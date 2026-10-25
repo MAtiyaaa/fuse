@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.data
 
 import io.github.matiyaaa.fuse.data.repo.GameSummary
+import io.github.matiyaaa.fuse.data.repo.mostPlayers
 import io.github.matiyaaa.fuse.model.ExternalLinks
 import io.github.matiyaaa.fuse.model.GameMetadata
 import io.github.matiyaaa.fuse.model.MetadataSource
@@ -66,6 +67,26 @@ class GameRepositoryTest {
             assertEquals(listOf(c, b), games.observeRecentlyPlayed(5).first().map { it.id })
             assertEquals(listOf(a), games.observeUnplayed().first().map { it.id })
             assertEquals(3, games.observeRecentlyAdded(10).first().size)
+        }
+    }
+
+    @Test
+    fun howManyCanPlayComesFromTheDetails() = runBlocking {
+        assertEquals(4, mostPlayers("1-4"))
+        assertEquals(2, mostPlayers("2"))
+        assertEquals(8, mostPlayers("Up to 8"))
+        assertEquals(2, mostPlayers("1-2 (co-op)"))
+        assertEquals(1, mostPlayers("1"))
+        assertEquals(null, mostPlayers("Single player"))
+        assertEquals(null, mostPlayers(null))
+        // A year or a model number is not a count of players.
+        assertEquals(4, mostPlayers("1-4 (2004 edition)"))
+        TestDb().use { t ->
+            val (a, b, c) = t.seed()
+            t.data.games.applyMetadata(a, GameMetadata(players = "1-4"), onlyFillEmpty = false)
+            t.data.games.applyMetadata(b, GameMetadata(players = "1"), onlyFillEmpty = false)
+            val players = t.data.games.observeRecommendationInputs().first().associate { it.id to it.players }
+            assertEquals(mapOf(a to 4, b to 1, c to null), players)
         }
     }
 
