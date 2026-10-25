@@ -23,7 +23,8 @@ Everything Fuse does, part by part. The [README](../README.md) has the tour; thi
   folders, picked with Fuse's own file picker.
 - **Quick rescans** only read the folders that changed.
 - **Your files, left alone.** Fuse never moves or renames your files, and deletes a game's files only
-  when you ask in Settings, Storage and backups and confirm (never from Phone Link). Missing games are marked,
+  when you ask (Delete Game in its options, or Settings, Storage and backups) and confirm a question
+  that names how many files go, how much and where (never from Phone Link). Missing games are marked,
   not removed, and playlists for multi-disc games are written to Fuse's own cache.
 - **BIOS checks** report Unknown, never Missing, when a location cannot be read.
 - **Transfers that follow your rules**: how many at once, a bandwidth limit, slower or paused while

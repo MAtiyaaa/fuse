@@ -49,6 +49,10 @@ it runs, and Low Power turns fully off again.
   It stays signed in through every update and restart, of the host and of the device; only Sign Out
   as the Host on it, or unlinking it, ends that. Joining with the host's account signs you in as
   the host too, and the Hub in a browser stays signed in for as long as you keep opening it.
+- **Delete a game from its options.** A game's options have Delete Game, beside Remove from Fuse.
+  It first says how many files go, how much space they take and where they are, with Cancel chosen,
+  and only Delete Game there deletes every disc, track and folder of the game. Fuse forgets it, with
+  its play time; saves your emulators keep elsewhere are never touched.
 - **GIFs that move.** Choose a GIF (or an animated WebP) as a game's or a system's background
   picture, as its logo, or as your theme's picture behind everything, and it plays wherever it is
   shown: in a system's filter on the screen below, on game pages, in the Library and on Home. A GIF

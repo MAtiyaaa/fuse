@@ -288,7 +288,7 @@ interface ThemeOps {
 
 /**
  * Space on the drives the library lives on, what each game takes (every disc, track and folder
- * file) and deleting games' files. Deleting is only offered on the device, in Settings, Storage.
+ * file) and deleting games' files: in Settings, Storage, and from a game's own options.
  */
 interface StorageOps {
     /** The latest measurement; null until [refresh] first runs. Updates as games are measured. */
@@ -297,6 +297,8 @@ interface StorageOps {
     fun refresh()
     /** What [game] takes on disk, or null when it is gone. */
     suspend fun size(game: GameId): Long?
+    /** Every file [game] is made of on disk (what deleting it removes), or null when it is gone. */
+    suspend fun files(game: GameId): io.github.matiyaaa.fuse.library.storage.GameFileSet? = null
     /**
      * Deletes the games' files (all discs, tracks and folder contents; never saves next to them)
      * and forgets the games. Only paths inside the game's library folder are touched.

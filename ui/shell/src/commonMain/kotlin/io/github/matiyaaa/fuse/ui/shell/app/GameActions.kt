@@ -597,16 +597,56 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
                 onConfirm = { scope.launch { lib.removeFromFuse(card.id) } },
             )
         }))
+        // Its files gone from this device for good, after saying exactly what goes.
+        if (!card.isApp && !card.dimmed && card.platformId.value != "steam") {
+            add(MenuAction("deletefiles", "Delete Game", FuseIcons.Trash, destructive = true, detail = "Deletes its files from this device, after asking", onSelect = {
+                closeOverlays()
+                deleteGameFiles(card)
+            }))
+        }
     }
     return ContextMenuSpec(
         title = card.title, subtitle = card.platformShort, art = card.art.tile, actions = actions, accent = card.accent,
         tabs = listOf(
-            MenuTab("Game", FuseIcons.Gamepad, listOf("play", "together", "info", "fav", "collection", "pin", "steam", "reach.send", "hide", "notgame", "remove") + extra.map { it.id }),
+            MenuTab("Game", FuseIcons.Gamepad, listOf("play", "together", "info", "fav", "collection", "pin", "steam", "reach.send", "hide", "notgame", "remove", "deletefiles") + extra.map { it.id }),
             MenuTab("Saves", FuseIcons.Save, listOf("savesync", "saves")),
             MenuTab("Setup", FuseIcons.Sliders, listOf("system", "emulator", "emusettings", "patches", "parts", "packages", "screen", "compat", "folder", "patch", "move")),
             MenuTab("Details", FuseIcons.Images, listOf("media", "rescrape", "rename", "restoretitle", "reset", "romm.upload", "cartridge", "find", "upload")),
         ),
     )
+}
+
+/**
+ * Deletes a game's files from this device: first it says what goes (how many files, how much, and
+ * where), and only Delete Game in that question does it. Every disc, track and folder of the game
+ * goes, and Fuse forgets it with its play time; saves the emulators keep elsewhere are never touched.
+ */
+fun AppState.deleteGameFiles(card: GameCard) {
+    scope.launch {
+        val set = store.storage.files(card.id)
+        if (set == null) {
+            toasts.show("Fuse can't find ${card.title}'s files on this device", ToastKind.WARNING)
+            return@launch
+        }
+        val where = set.paths.singleOrNull() ?: io.github.matiyaaa.fuse.library.FsPath.parent(set.paths.first()) ?: set.paths.first()
+        val files = if (set.fileCount == 1) "1 file" else "${set.fileCount} files"
+        confirm = ConfirmSpec(
+            title = "Delete ${card.title}?",
+            message = "Deletes $files (${io.github.matiyaaa.fuse.ui.shell.home.bytesText(set.sizeBytes)}) from this device: every disc, track and folder of this game, at $where. " +
+                "Fuse forgets it, with its play time. Saves your emulators keep elsewhere are not touched. This can't be undone.",
+            confirmLabel = "Delete Game",
+            destructive = true,
+        ) {
+            scope.launch {
+                val report = store.storage.delete(listOf(card.id))
+                if (report.deleted > 0) {
+                    toasts.show("${card.title} is deleted. ${io.github.matiyaaa.fuse.ui.shell.home.bytesText(report.freedBytes)} freed", ToastKind.SUCCESS, icon = FuseIcons.Trash)
+                } else {
+                    toasts.show("Couldn't delete ${card.title}. Check that Fuse may change its folder", ToastKind.ERROR)
+                }
+            }
+        }
+    }
 }
 
 fun AppState.collectionPicker(game: GameId, title: String) {

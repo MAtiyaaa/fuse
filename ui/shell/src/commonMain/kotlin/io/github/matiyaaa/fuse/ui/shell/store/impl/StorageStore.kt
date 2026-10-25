@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.store.impl
 
 import io.github.matiyaaa.fuse.library.FsPath
+import io.github.matiyaaa.fuse.library.storage.GameFileSet
 import io.github.matiyaaa.fuse.library.storage.GameFiles
 import io.github.matiyaaa.fuse.library.storage.Volumes
 import io.github.matiyaaa.fuse.model.GameId
@@ -144,6 +145,11 @@ internal class DefaultStorageOps(
     override suspend fun size(game: GameId): Long? {
         val g = ctx.data.games.get(game) ?: return null
         return runCatching { GameFiles.resolve(ctx.services.fs, g.location, g.discs) }.getOrNull()?.takeIf { !it.isEmpty }?.sizeBytes
+    }
+
+    override suspend fun files(game: GameId): GameFileSet? {
+        val g = ctx.data.games.get(game) ?: return null
+        return runCatching { GameFiles.resolve(ctx.services.fs, g.location, g.discs) }.getOrNull()?.takeIf { !it.isEmpty }
     }
 
     override suspend fun delete(games: List<GameId>): DeleteReport {
